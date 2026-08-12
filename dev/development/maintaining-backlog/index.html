@@ -3145,7 +3145,10 @@ That key is not a new convention: <a href="https://github.com/actions-gateway/gi
 <p>The public roadmap is bound to the backlog one bullet at a time: each forward-looking bullet carries a <code>&lt;!-- q:QN --&gt;</code> annotation naming the rows behind it, and shipping the work deletes the bullet.
 That makes every gate PR the same edit in the same two sections.
 Measured on <code>docs/roadmap.md</code> at 61cf54e7b: two branches each deleting their own bullet from the near-term list conflict under a plain three-way merge, while the same two deletions ten bullets apart merge clean.
-<a href="https://github.com/actions-gateway/github-actions-gateway/pull/1392">Q715</a>'s PR was evicted from the merge queue three times in one session on exactly that shape.</p>
+<a href="https://github.com/actions-gateway/github-actions-gateway/pull/1392">Q715</a>'s PR met that shape three times in one session, each time as a merge-queue eviction followed by a hand-resolved rebase.</p>
+<p><strong>What the driver buys is the rebase, not the eviction.</strong> A merge driver is per-clone <code>git config</code>, and GitHub builds the merge queue's candidate itself, so the server-side conflict recurs exactly as before (<a href="../../plan/merge-queue/">merge-queue.md</a> measured the same thing for <code>docs/STATUS.md</code>, which has had a driver since Q611).
+What changes is the heal: the rebase that follows an eviction resolves silently instead of by hand.
+Fewer evictions is a different problem, and serializing the batch is the only lever a branch has on it.</p>
 <p><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/docs/git-merge-roadmap.sh"><code>scripts/docs/git-merge-roadmap.sh</code></a> decides the bullets by that <strong>annotation</strong>, normalized to a comma-joined ID list.
 The key is not a new convention either: <code>devtools/docs/roadmapcheck</code> already parses the same comment, so the driver and the gate cannot disagree about what a bullet is.</p>
 <p>Two things differ from the other two drivers:</p>

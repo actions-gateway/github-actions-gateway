@@ -2824,6 +2824,14 @@
 </thead>
 <tbody>
 <tr>
+<td><a id="Q806"></a>Q806</td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/security-scan.yml"><code>anchore/sbom-action</code> downloads syft with no retry, so a transient fetch fails the security scan</a></td>
+<td><code>flake</code> <code>ci</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>Measured 2026-08-12: <code>trivy (proxy, 1)</code> failed on <code>main</code> (480f79d1a) and on #1406, both <code>HTTP status=000</code> fetching syft v1.42.3; <code>main</code> passed 8m later unchanged. The action's installer has no retry, and <code>scripts/fetch/</code> wraps this class.</td>
+</tr>
+<tr>
 <td><a id="Q801"></a>Q801</td>
 <td><a href="../plan/release-1.5/#the-scoping-question-settled">Reconcile the marketing surfaces, starting with an unverified state for the comparison table</a></td>
 <td><code>docs</code> <code>ci</code> <code>1.5-gate</code></td>
@@ -2854,14 +2862,6 @@
 <td>🔲</td>
 <td>M</td>
 <td>No <code>api-surface-since.sh</code> counterpart for Event reasons. A v1.4.0 regex matching only <code>Event(obj, type, reason)</code> missed the <code>recordEvent(type, reason, action)</code> shape and returned a false no-change, caught by a positive control. Needs a self-test.</td>
-</tr>
-<tr>
-<td><a id="Q751"></a>Q751</td>
-<td><a href="../development/bash-style/#set--e-stops-at-a-command-substitution">Nothing declares the bash 4.4+ floor <code>inherit_errexit</code> makes load-bearing</a></td>
-<td><code>debt</code> <code>tests</code></td>
-<td>🔲</td>
-<td>S</td>
-<td>Measured 2026-08-08 under Q733: 170 <code>scripts/</code> files now need <code>inherit_errexit</code> (bash 4.4+), stock macOS ships 3.2 at <code>/bin/bash</code>, and <code>check-tools.sh</code> checks no bash version. The 3 hooks fail open, the rest die confusingly. New required-tier prereq.</td>
 </tr>
 <tr>
 <td><a id="Q742"></a>Q742</td>

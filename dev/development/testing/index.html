@@ -4062,7 +4062,12 @@ Q343 concluded from that there was "no supported knob to share test results acro
   <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/go/go-test.sh"><code>scripts/go/go-test.sh</code></a> and <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/go/coverage.sh"><code>scripts/go/coverage.sh</code></a> pass it, so a fresh worktree at an already-tested commit re-runs only the packages whose content actually changed.</li>
 <li><strong>Do not promote it to a global <code>GOFLAGS</code>.</strong> <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/test/e2e/e2e_suite_test.go"><code>cmd/gmc/test/e2e</code></a> resolves the v2 CRD chart directory from <code>runtime.Caller(0)</code>, which a trimmed path breaks.
   The unit tier does no such thing, and the release images already build with <code>-trimpath</code>.</li>
-<li><strong>Two cosmetic consequences.</strong> Adopting the flag changes the build-cache keys, so the first unit run after it lands recompiles from scratch once, machine-wide.
+<li><strong>Two cosmetic consequences.</strong> Adopting the flag changes the build-cache keys, so the first unit run after it lands recompiles from scratch once, machine-wide.</li>
+<li><strong>A test that reads a repo file outside its own module keeps its cached result when that file changes</strong>, so the package prints <code>(cached)</code> and green while the thing it asserts on is broken.
+  Measured 2026-08-11 on <code>devtools/agent/pipedgate</code>, whose <code>TestShippedRegistryCarriesRepoStateSettings</code> reconciles <code>.claude/piped-gate-guard.json</code> against the repo-root <code>.gitattributes</code>: appending a line to <code>.gitattributes</code> and re-running left it <code>(cached)</code>.
+  Q799 shipped a <code>.gitattributes</code> entry without its registry half that way: <code>make check</code> green locally, <code>coverage</code> red in CI on a cold cache.
+  This bites the <code>devtools/</code> gates hardest, because they are exactly the ones that read repo-root config as data.
+  Run the package with <code>-count=1</code> (or <code>go clean -testcache</code> in that module) whenever the change under test is a file the test <em>reads</em> rather than one it compiles.
   And a failing test's stack frames read as module-relative paths (<code>github.com/actions-gateway/…/listener.go:42</code>) rather than absolute ones, so they are no longer click-to-open in some terminals.</li>
 </ul>
 <p>What a fresh worktree still pays, and why it stays:</p>
@@ -5015,6 +5020,11 @@ It costs one edit and one run.</p>
   Q624 first stubbed a whole word-classification branch to <code>true</code> and took 22 of 22 red, which discriminated nothing; flipping the single condition that made command position load-bearing took exactly one assertion red, which is the answer.</li>
 <li><strong>Read the failure, not just the colour.</strong> Red for the wrong reason (a compile error, a fixture that no longer builds, an unrelated timeout) is not evidence.
   The test must fail on the assertion that names the behaviour.</li>
+<li><strong>A green after the deletion can mean the assertion cannot see the defect class</strong>, not that the mechanism is unnecessary, and the two look identical.
+  Ask what an assertion actually observes before believing it: one that compares a <em>set</em> of keys is blind to ordering, spacing, formatting and everything else the surrounding bytes carry.
+  Q799 deleted the mechanism that holds a roadmap bullet's blank lines outside the merged record, a defect already reproduced by hand, and the suite stayed green, because every assertion compared the surviving bullet IDs and none compared the rendered page.
+  Two byte-exact whole-file comparisons made the same deletion red.
+  The fix is generally to assert on the artifact the defect damages, not on a projection of it.</li>
 <li><strong>Round-trip it.</strong> Restore the mechanism and confirm green in the same sitting, so the check cannot end with a half-reverted tree.</li>
 <li><strong>Assert that the deletion applied</strong>, when a script drives it rather than your hands.
   A mutation that matched nothing leaves the mechanism intact, so the test passes and reads as "this assertion does not bite", which is the exact conclusion the check exists to rule out, reached backwards.
