@@ -261,6 +261,11 @@ Wait for the queue to land or evict it, then push; never dequeue to make room fo
 This bites hardest when a maintainer enqueues while you are mid-rebase, so the rejection arrives on a heal you were asked to perform.
 A state you read ten minutes ago is not the state you are pushing into.
 
+What the rejected push *carries* matters as much as the rejection.
+If it holds a correction to something the merging head asserts, the queue lands the uncorrected claim and the fix needs its own follow-up.
+Measured 2026-08-12 on #1436: a one-line `scripts/README.md` narrowing was rejected while the PR merged, so `main` took the overstated row and the correction became #1459.
+So read your unpushed commits before waiting the queue out, and say in the handback what the merged head is missing; the wait is also a decision about what ships.
+
 `MERGED` is the state worth naming separately, because the push *appears to work*.
 The merge deletes the branch, so pushing to it **recreates** it — git says `* [new branch]`, you get a branch with no PR and a commit that will never reach `main`, and nothing errors.
 Two tells: the `new branch` line on a branch you have pushed to before, and `git status` reporting `your upstream is gone`.
