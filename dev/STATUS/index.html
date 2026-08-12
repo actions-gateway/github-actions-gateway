@@ -2843,6 +2843,14 @@
 <td>Measured 2026-08-10: <code>overlap_ignore</code> discounts <code>docs/STATUS.md</code> as row-ID resolved, but <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/docs/git-merge-status-test.sh">the driver</a> yields markers for delete-vs-edit of one row. #1384 left #1383 dirty; every flake-row move is that shape.</td>
 </tr>
 <tr>
+<td><a id="Q800"></a>Q800</td>
+<td><a href="../plan/">Gate a plan index status cell that names Queue rows which no longer exist</a></td>
+<td><code>ci</code> <code>debt</code> <code>retro</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>Three times across 1.4 and 1.5: the cell named rows that had landed. The rollup only changes when the last row closes, and that worker cannot tell it was the last. A cell naming a QNNN absent from the Queue is stale by construction, so gate it.</td>
+</tr>
+<tr>
 <td><a id="Q785"></a>Q785</td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/devtools/agent/gothrottle/main.go">A failed throttle probe silently disables the go-throttle hook for that call</a></td>
 <td><code>bug</code> <code>debt</code></td>
