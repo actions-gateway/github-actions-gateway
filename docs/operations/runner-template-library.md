@@ -43,7 +43,7 @@ A privileged dockerd exposes the host kernel to every job that lands on that tem
 - **GPU builds are the clearest case.** Getting a GPU into a Kata guest needs VFIO/IOMMU passthrough, which a cloud instance does not expose to a nested guest; NVIDIA's GPU Operator supports Kata in single-GPU-passthrough mode only, and does not support configuring only some GPUs on a node for it.
   If your jobs build on GPU instances, `privileged-dind` is the realistic path, not a concession.
 - **CPU architecture and machine family.** Google Compute Engine excludes E2, memory-optimized, H4D, and every AMD- and Arm-powered VM from nested virtualisation.
-  On AWS, nested virtualisation means a `.metal` instance.
+  On AWS it is a per-instance opt-in confined to selected Intel families, so an AMD, Graviton, or GPU instance still means `.metal` or nothing (the [current list](kata-dind-workloads.md#prerequisite--nested-virtualization-nodes), fetched 2026-08-12).
 - Where nested virtualisation does work, expect a measured performance cost: GCE documents 10% or more for CPU-bound work, potentially more for I/O-bound.
 
 So treat this as a real choice rather than a fallback with a bad reputation.

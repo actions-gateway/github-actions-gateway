@@ -28,7 +28,7 @@ Pick by what the job does, not by what the template is called.
 Reach for `kata-dind` first, and for a rootless builder before either: a privileged dockerd exposes the host kernel to every job that lands on it, so an escape reaches the node.
 
 `privileged-dind` is not merely a fallback for the unlucky, though.
-Kata needs nested virtualisation or bare metal, which rules out GPU builds (a GPU cannot be passed through into a nested guest), every AMD- and Arm-powered GCE machine family, and any AWS instance that is not `.metal`.
+Kata needs nested virtualisation or bare metal, which rules out GPU builds (a GPU cannot be passed through into a nested guest), every AMD- and Arm-powered GCE machine family, and every AWS instance outside the Intel families EC2 enables it on.
 The operator doc [sets out where Kata is and is not an option](../../docs/operations/runner-template-library.md#choosing-an-entry).
 
 ## Before you apply

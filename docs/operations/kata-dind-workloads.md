@@ -80,6 +80,18 @@ On a managed cloud you must run the workload on a node pool with nested virtuali
 The repo ships a parameterized provisioning script — [`scripts/dev/kata-node-pool.sh`](../../scripts/dev/kata-node-pool.sh) — that wraps the `gcloud container node-pools create` call with these flags.
 Preview it with `DRY_RUN=1` before spending cloud time; see [runbook step 1](kata-ci-spike-runbook.md#step-1--create-a-nested-virt-cluster).
 
+**Amazon Web Services (EC2).** Bare metal is no longer the only option, and the unit of configuration is the instance rather than the node pool.
+Nested virtualization is a CPU option that is **off by default**: pass `--cpu-options "NestedVirtualization=enabled"` to `run-instances`, or run `aws ec2 modify-instance-cpu-options --nested-virtualization enabled` against a stopped instance.
+
+| Requirement | Detail |
+|---|---|
+| Instance family | AWS's [nested virtualization guide](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/amazon-ec2-nested-virtualization.html) (fetched 2026-08-12) lists **C8i, M8i, R8i, C8id, R8id, M8id, C8i-flex, R8i-flex, M8i-flex, X8i, C7i, R7i, M7i, C7i-flex, M7i-flex, and I7i**. Every one is Intel; no AMD or Graviton family is on it, and **no P or G family is either**, so on EC2 nested virtualization *is* what stops GPU workloads under Kata, unlike GKE, where A2, A3, and G2 carry it. It shipped in two steps: C8i/M8i/R8i on 2026-02-16, the rest plus GovCloud (US) on 2026-06-18. |
+| Hypervisor | KVM and Hyper-V are the supported L1 hypervisors, so Kata's QEMU path is in scope. |
+| Performance | AWS recommends bare metal for hardware-virtualization workloads that are performance-sensitive or latency-bound. Kata boots a guest per pod, so treat a virtual family as the cheaper tier rather than a like-for-like substitute, and measure pod-`Ready` latency before committing a build fleet to it. |
+
+Azure exposes nested virtualization on `Dv3`/`Ev3` and later.
+On owned hardware none is needed at all.
+
 **Verify `/dev/kvm` is present** on a labelled node before going further — if it is missing, nested virtualization is not actually enabled and the guest VM cannot boot:
 
 ```bash
@@ -89,7 +101,6 @@ kubectl debug node/"$NODE" -it --image=busybox -- ls -l /host/dev/kvm
 ```
 
 Expect a character device.
-Other clouds expose nested virtualization differently (AWS bare-metal `*.metal` instances; Azure `Dv3`/`Ev3` and later); on owned hardware no nested virtualization is needed at all.
 
 ## Cluster setup — Kata runtime and RuntimeClass
 

@@ -9,9 +9,9 @@
 # But Kata is not always available, and this entry is the answer when it is not:
 # it needs nested virtualisation or bare metal, which excludes GPU builds (no
 # GPU passthrough into a nested guest), every AMD- and Arm-powered GCE machine
-# family, and any AWS instance that is not `.metal`. Where that is your
-# situation, run this on a dedicated node pool with trusted jobs only, never a
-# fork's pull request. Detail:
+# family, and every AWS instance outside the Intel families EC2 enables it on.
+# Where that is your situation, run this on a dedicated node pool with trusted
+# jobs only, never a fork's pull request. Detail:
 # docs/operations/runner-template-library.md#choosing-an-entry
 #
 # ClusterRunnerTemplate rather than a namespaced RunnerTemplate is not a
