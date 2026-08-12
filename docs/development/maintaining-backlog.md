@@ -148,6 +148,21 @@ What that cost in practice, and the one case rule 12 still cannot see: [queue-id
 
 `TARGET=<link>` is optional and worth passing when the Item cell's link is already decided.
 
+### Escalating a class observation is filing, so search first
+
+`make queue-id` is a chokepoint for *filed* rows only.
+Raising "these N failures look like one shared cause" in a message to the maintainer, or to a dispatcher, reaches the same reader with the same weight and passes through no matcher at all.
+A message to a human is a filing with the safety rail removed.
+
+It fired twice on 2026-08-12, in both directions.
+A worker raised the "X-test fails under `make check`, passes standalone" family as an unfiled class; a dispatcher relayed it, citing Q596's 2418 runs and Q703's 240 as evidence that no class row existed.
+[Q738](../STATUS.md#Q738) already said "measured across this family" and already named those two rows, so the maintainer was asked to decide something on the premise that it was unfiled.
+The observation was real and the escalation still cost a wrong premise, which is the same shape as the three duplicate filings above: right finding, no matcher in the path.
+
+Before escalating, run the search you would run before filing, and say what it returned.
+The cheap version is to pass the title you would have used to `make queue-id`, which prints its candidates to stderr and claims an ID you can throw away.
+Naming the near-miss rows is what lets the reader tell a genuinely new class from the half that is already tracked.
+
 ### What it keys on, and why
 
 From the three pairs, not from a guess about what similarity means here:
