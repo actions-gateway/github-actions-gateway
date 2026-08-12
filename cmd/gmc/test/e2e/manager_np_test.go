@@ -88,10 +88,14 @@ var _ = Describe("Manager NetworkPolicy", Ordered, func() {
 	// Ginkgo runs every AfterEach before any DeferCleanup, so this dump sees the
 	// probe pods and the namespace the failing spec used, whichever that is —
 	// the dump skips the two it never created (Q666).
+	// The enforcer state rides along for the same reason as in the provisioning
+	// container: the two ManagerMetricsNP specs assert a scrape is dropped, so a
+	// spurious allow needs the enforcer read alongside the policy (Q747/Q809).
 	AfterEach(func() {
 		if CurrentSpecReport().Failed() {
 			utils.DumpProvisioningDiagnostics(gmcNamespace, managerDeployment,
 				metricsNPUnlabeledNS, metricsNPLabeledNS, webhookNPNamespace)
+			utils.DumpCNIEnforcerState()
 		}
 	})
 

@@ -10,6 +10,10 @@
 #   - E2E_GMC_TenantProvisioning_WorkerCannotReachK8sAPI            (calico-only)
 #   - E2E_GMC_ManagerMetricsNP_DeniesUnlabeledNamespace            (calico-only, Q83)
 #   - E2E_GMC_ManagerMetricsNP_AllowsLabeledNamespace             (calico-only, Q83)
+#   - E2E_V2_DirectEgress_NonGitHubBlocked                        (calico-only)
+# egressEnforcingCNI() is the authoritative list — this comment omitted the
+# direct-egress spec from the v2 work until Q809, and testing.md's copy had the
+# same gap, so grep the call sites rather than trusting either count.
 #
 # The Calico leg only does real work when the diff touches code that can affect
 # NetworkPolicy enforcement — the GMC (which generates the tenant + manager

@@ -2156,9 +2156,12 @@ After the run, [`scripts/e2e/e2e-report-summary.sh`](../../scripts/e2e/e2e-repor
 It runs `if: always()` in `e2e-reusable.yml` and never exits non-zero, because it runs on the path where the suite may have died before writing a report.
 Run it locally against any report to get the same table.
 
-**Egress-enforcing CNI profile.** `make e2e-cluster KIND_CNI=calico` builds the cluster with Calico instead of kindnet (see [kind-iteration.md § CNI selection](kind-iteration.md#cni-selection-kindnet-default-vs-calico)).
-The two runtime egress-negative specs (`E2E_GMC_TenantProvisioning_WorkloadEgressBlockedToNonProxyPod`, `E2E_GMC_TenantProvisioning_WorkerCannotReachK8sAPI`) and the two manager metrics-NP specs (`E2E_GMC_ManagerMetricsNP_DeniesUnlabeledNamespace`, `E2E_GMC_ManagerMetricsNP_AllowsLabeledNamespace`) skip themselves on kindnet — whose enforcer does not drop egress — and only assert real packet drops on a Calico/Cilium cluster.
+**Egress-enforcing CNI profile.** `make e2e-cluster KIND_CNI=calico` builds the cluster with Calico instead of kindnet (see [kind-iteration.md § CNI selection](kind-iteration.md#cni-selection-kindnet-default-vs-calico)). **Five** specs gate on `egressEnforcingCNI()`, skipping themselves on kindnet (whose enforcer does not drop egress) and asserting real packet drops only on a Calico/Cilium cluster: the two runtime egress negatives (`E2E_GMC_TenantProvisioning_WorkloadEgressBlockedToNonProxyPod`, `E2E_GMC_TenantProvisioning_WorkerCannotReachK8sAPI`), the two manager metrics-NP specs (`E2E_GMC_ManagerMetricsNP_DeniesUnlabeledNamespace`, `E2E_GMC_ManagerMetricsNP_AllowsLabeledNamespace`), and `E2E_V2_DirectEgress_NonGitHubBlocked`. `egressEnforcingCNI()` is the authoritative list; prose copies of it have gone stale twice, so grep the call sites rather than trusting a count.
 Run them with the Calico profile when validating NetworkPolicy enforcement changes (Q7b/Q83).
+
+**A spurious allow is a claim about the enforcer, not only the policy.** All five containers therefore call `utils.DumpCNIEnforcerState()` from their failure path, which reads both lanes' enforcers (`app=kindnet`, `k8s-app=calico-node`) and prints restart attribution, termination reason, and cgroup pressure.
+The `e2e-reusable.yml` diagnostic step reads the same two selectors for the case where the suite process died before its `AfterEach` could run, the same two-probe split as the [Runner→GitHub egress attribution](#runnergithub-egress-attribution-q352).
+Both read kindnet only until Q809, which is the lane where these five specs *skip*: three failures across `main` and two merge-queue entries captured no enforcer state at all.
 CI runs this profile per-PR whenever a change touches NetworkPolicy/proxy code — see [the Calico e2e lane](#the-calico-e2e-lane) below.
 
 **Curl test image.** The connectivity, isolation, and metrics specs run a `curlimages/curl` pod.
