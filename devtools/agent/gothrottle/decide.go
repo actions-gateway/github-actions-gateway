@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"regexp"
 	"sort"
 	"strings"
@@ -27,6 +28,13 @@ const (
 		"hook cannot insert the throttle prefix unambiguously. Give each `go ... -race` its own " +
 		"throttle prefix ($(scripts/agent/local-throttle.sh prefix)), run each go line on its own, " +
 		"or use the matching `make` target (it throttles itself). See CLAUDE.md."
+
+	// probeFailedReason takes the probe's error, which is where a real
+	// occurrence gets to see it: the trace is off in every real invocation.
+	probeFailedReason = "Blocked: the throttle probe could not run, so this `go ... -race` cannot be " +
+		"throttled, and an unthrottled -race run can saturate the machine and freeze the local GUI. " +
+		"Use the matching `make` target (it throttles itself), or retry — a probe that failed under " +
+		"load usually answers on the next call. See CLAUDE.md. Probe error: %v"
 )
 
 // Decision is the hook's verdict. Command is the rewritten command an allow or
@@ -53,13 +61,14 @@ type invocation struct {
 }
 
 // Decide returns the verdict for a Bash command, or nil to stay silent. prefix
-// resolves the platform throttle prefix; it is called only once an invocation
-// is found, because it costs a subprocess and this runs on every Bash call.
+// resolves the platform throttle prefix, returning an error when the probe could
+// not run at all; it is called only once an invocation is found, because it
+// costs a subprocess and this runs on every Bash call.
 //
-// Every failure path returns nil. A hook that cannot parse a command has
-// nothing to say about it, and one that fires on every Bash call must never be
-// the reason one fails.
-func Decide(cmd string, prefix func() string) *Decision {
+// Failure paths return nil. A hook that cannot parse a command has nothing to
+// say about it, and one that fires on every Bash call must never be the reason
+// one fails — except for a `-race` it cannot throttle, which is denied.
+func Decide(cmd string, prefix func() (string, error)) *Decision {
 	f, err := syntax.NewParser(syntax.Variant(syntax.LangBash)).Parse(strings.NewReader(cmd), "")
 	if err != nil {
 		// A zsh-ism bash cannot parse, or a truncated string. Silence is the
@@ -88,13 +97,21 @@ func Decide(cmd string, prefix func() string) *Decision {
 		wrapped = wrapped || inv.wrapped
 	}
 
-	// An empty prefix means throttling is off (CI, headless, SSH, unsupported
-	// OS), so there is nothing to apply. It also means a probe that could not
-	// run, which throttlePrefix traces apart: this is the one silent path a
-	// contended machine can reach mid-suite, and so the first thing a Q703
-	// occurrence has to rule in or out.
-	p := prefix()
-	if p == "" {
+	// An empty prefix with no error is the script's verdict that throttling is
+	// off (CI, headless, SSH, unsupported OS), so there is nothing to apply. An
+	// error is no verdict at all: throttling may be on, and a `-race` is exactly
+	// the run that must not slip through unthrottled and unremarked (Q785). This
+	// is also the one silent path a contended machine can reach mid-suite, and so
+	// the first thing a Q703 occurrence has to rule in or out.
+	p, err := prefix()
+	switch {
+	case err != nil:
+		if !race {
+			trace("silent: throttle probe failed, and nothing here carries -race: %v", err)
+			return nil
+		}
+		return &Decision{Permission: deny, Reason: fmt.Sprintf(probeFailedReason, err)}
+	case p == "":
 		trace("silent: no throttle prefix")
 		return nil
 	}

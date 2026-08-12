@@ -59,7 +59,9 @@ fi
 # each silent path in the hook and the binary name itself there; nothing reads
 # it unless an assertion fails.
 TRACE_FILE="$(mktemp)"
-trap 'rm -f "$TRACE_FILE"' EXIT
+# Stub throttle probes, standing in for local-throttle.sh in the Q785 cases.
+STUB_DIR="$(mktemp -d)"
+trap 'rm -f "$TRACE_FILE"; rm -rf "$STUB_DIR"' EXIT
 
 # run_hook CMD — feed CMD to the hook as a Bash PreToolUse payload, print stdout.
 run_hook() {
@@ -287,6 +289,87 @@ expect_unchanged 'compound: legacy prefix     -> unchanged' \
 # A non-go command is not our concern.
 expect_unchanged 'non-go: cargo test        -> unchanged' \
 	'(cd rust && cargo test)'
+
+# --- Q785: a probe that could not run is not "throttling is off" --------------
+#
+# Both arrive at the decision as an empty prefix, and reading the failure as the
+# verdict dropped the deny: the -race the hook exists to catch ran at full tilt
+# with nothing said about it. The discriminator is the probe's exit status, so
+# both directions are asserted from stub probes — a failing one and one that
+# reports throttling off the way local-throttle.sh does on CI.
+#
+# These go through the binary directly: the entry point always resolves the real
+# local-throttle.sh, which by then has already answered.
+BIN="$REPO_ROOT/.build/gothrottle"
+
+printf '#!/usr/bin/env bash\necho "boom: cannot fork" >&2\nexit 1\n' >"$STUB_DIR/failing"
+printf '#!/usr/bin/env bash\nexit 0\n' >"$STUB_DIR/off"
+chmod +x "$STUB_DIR/failing" "$STUB_DIR/off"
+
+# probe_hook STUB CMD — feed CMD to the binary with STUB standing in for
+# local-throttle.sh, print stdout.
+probe_hook() {
+	local stub="$1" cmd="$2"
+	jq -cn --arg c "$cmd" '{tool_name: "Bash", tool_input: {command: $c}}' \
+		| GOTHROTTLE_DEBUG=1 "$BIN" "$STUB_DIR/$stub" 2>"$TRACE_FILE"
+}
+
+# denies_with_probe_error NAME OUT — the deny, carrying whatever the probe failed
+# with. The specific error is not asserted: under this suite's own parallel load
+# a stub can be preempted before it exits, so `exit status 1` and `signal:
+# killed` (the probe timeout) both arrive here. The property is that the failure
+# reaches the decision at all.
+denies_with_probe_error() {
+	local name="$1" out="$2" decision reason
+	decision="$(field "$out" '.hookSpecificOutput.permissionDecision')"
+	reason="$(field "$out" '.hookSpecificOutput.permissionDecisionReason')"
+	if [[ "$decision" == "deny" && "$reason" == *"throttle probe could not run"* && "$reason" == *"$STUB_DIR"* ]]; then
+		pass "$name"
+	else
+		fail "$name: want deny naming the probe error, got decision=${decision:-<none>} reason=$reason; $(diag "$out")"
+	fi
+}
+
+if [[ ! -x "$BIN" ]]; then
+	# Every assertion above ran the hook, which builds this; its absence means
+	# they were all reporting on a binary that was never there.
+	fail "probe: $BIN was not built by the assertions above"
+else
+	for probe_cmd in 'go test -race ./...' '(cd cmd/agc && go test -race ./...)' \
+		'go build ./... && go test -race ./...'; do
+		denies_with_probe_error "probe failed: [$probe_cmd] -> deny naming the probe error" \
+			"$(probe_hook failing "$probe_cmd")"
+
+		# The other direction: an empty prefix the script actually returned is a
+		# verdict, and a machine that is not throttling has no -race to protect.
+		#
+		# Which direction this stub produces is the machine's call, not the
+		# suite's — a 5 s probe timeout is not much under a 60-way parallel gate,
+		# and a stub preempted before it answers IS the failure direction. So the
+		# trace picks the assertion, and both are real: a deny on a verdict the
+		# script actually reached fails the first branch.
+		out="$(probe_hook off "$probe_cmd")"
+		if grep -q 'reports throttling off' "$TRACE_FILE"; then
+			if [[ -z "$out" ]]; then
+				pass "throttling off: [$probe_cmd] -> unchanged"
+			else
+				fail "throttling off: [$probe_cmd] expected no output; $(diag "$out")"
+			fi
+		else
+			denies_with_probe_error \
+				"throttling off: [$probe_cmd] -> probe preempted, deny instead" "$out"
+		fi
+	done
+
+	# A plain go test is not the run that freezes a GUI, so a failed probe leaves
+	# it alone rather than making the hook the reason a Bash call fails.
+	out="$(probe_hook failing 'go test ./...')"
+	if [[ -z "$out" ]]; then
+		pass 'probe failed: no -race -> unchanged'
+	else
+		fail "probe failed: no -race expected no output; $(diag "$out")"
+	fi
+fi
 
 # --- Q703: the trace names the silent path, and stays off unless asked --------
 #

@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"errors"
 	"strings"
 	"testing"
 )
@@ -11,7 +12,15 @@ import (
 const testPrefix = "TP -d throttle"
 
 func decide(cmd string) *Decision {
-	return Decide(cmd, func() string { return testPrefix })
+	return Decide(cmd, func() (string, error) { return testPrefix, nil })
+}
+
+// throttlingOff and probeFailed are the two ways the prefix arrives empty: a
+// verdict the script reached, and a probe that never reached one.
+func throttlingOff() (string, error) { return "", nil }
+
+func probeFailed() (string, error) {
+	return "", errors.New("scripts/agent/local-throttle.sh prefix: exit status 1")
 }
 
 // Both directions are asserted, because both fail silently (Q624). A rule that
@@ -218,13 +227,14 @@ func TestRewritePlacesPrefixBeforeGo(t *testing.T) {
 	}
 }
 
-// An empty prefix means throttling is off (CI, headless, SSH, an unsupported
-// OS). There is nothing to apply, so the hook must have no opinion rather than
-// emit a rewrite that prepends nothing.
+// An empty prefix the script actually returned means throttling is off (CI,
+// headless, SSH, an unsupported OS). There is nothing to apply, so the hook must
+// have no opinion rather than emit a rewrite that prepends nothing.
 //
 // The deny case is here too, though a deny carries no rewrite: the prefix is
-// resolved before the branch, so it is silenced with the rest. That is the
-// assertion a Q703 occurrence failed on.
+// resolved before the branch, so an off verdict silences it with the rest. That
+// is deliberate — a machine that is not throttling has no -race to protect —
+// and the direction that must NOT be silent is TestProbeFailureDeniesRace.
 func TestNoPrefixIsSilence(t *testing.T) {
 	for _, cmd := range []string{
 		"go test ./...",
@@ -232,8 +242,58 @@ func TestNoPrefixIsSilence(t *testing.T) {
 		"timeout 900 go test -race ./...",
 		"go build ./... && go test -race ./...",
 	} {
-		if got := Decide(cmd, func() string { return "" }); got != nil {
+		if got := Decide(cmd, throttlingOff); got != nil {
 			t.Fatalf("%q: want silence with no prefix, got %s", cmd, got.Permission)
+		}
+	}
+}
+
+// A probe that could not run is not a verdict of "throttling is off" (Q785).
+// Throttling may well be on, so a `-race` the hook cannot throttle is denied
+// rather than passed through in the silence an off verdict earns — silence there
+// dropped the deny entirely, and the run that reaches the GUI is the one Q92 is
+// about.
+//
+// Both directions, because both fail silently and both are cheap to get wrong:
+// a deny that stopped firing puts an unthrottled -race back on a GUI machine,
+// and one that fired on the off verdict would block every -race in CI, where the
+// empty prefix is correct and expected.
+func TestProbeFailureDeniesRace(t *testing.T) {
+	for _, cmd := range []string{
+		"go test -race ./...",
+		"(cd x && go test -race ./...)",
+		"timeout 900 go test -race ./...",
+		"go build ./... && go test -race ./...",
+	} {
+		t.Run(cmd, func(t *testing.T) {
+			got := Decide(cmd, probeFailed)
+			if got == nil {
+				t.Fatal("want deny on a failed probe, got silence")
+			}
+			if got.Permission != deny {
+				t.Fatalf("want %s on a failed probe, got %s", deny, got.Permission)
+			}
+			if got.Command != "" {
+				t.Errorf("a deny carries no rewrite, got %q", got.Command)
+			}
+			// The probe's error is the only account of the failure a real
+			// occurrence gets, since the trace is off outside this suite.
+			if !strings.Contains(got.Reason, "exit status 1") {
+				t.Errorf("reason %q does not carry the probe error", got.Reason)
+			}
+
+			if got := Decide(cmd, throttlingOff); got != nil {
+				t.Fatalf("want silence when the script reports throttling off, got %s", got.Permission)
+			}
+		})
+	}
+
+	// Nothing else is denied. A plain `go build`/`go test` is not the run that
+	// freezes a GUI, and denying it on a fork that failed under load would make
+	// this hook the reason an ordinary Bash call fails.
+	for _, cmd := range []string{"go test ./...", "go build ./...", "(cd x && go test ./...)", "make check"} {
+		if got := Decide(cmd, probeFailed); got != nil {
+			t.Errorf("%q: want silence on a failed probe with no -race, got %s", cmd, got.Permission)
 		}
 	}
 }
@@ -257,7 +317,7 @@ func TestTraceNamesTheSilentPath(t *testing.T) {
 	t.Cleanup(func() { traceOut = orig })
 
 	t.Setenv(traceEnv, "")
-	if got := Decide(cmd, func() string { return "" }); got != nil {
+	if got := Decide(cmd, throttlingOff); got != nil {
 		t.Fatalf("want silence with no prefix, got %s", got.Permission)
 	}
 	if buf.Len() > 0 {
@@ -265,7 +325,7 @@ func TestTraceNamesTheSilentPath(t *testing.T) {
 	}
 
 	t.Setenv(traceEnv, "1")
-	if got := Decide(cmd, func() string { return "" }); got != nil {
+	if got := Decide(cmd, throttlingOff); got != nil {
 		t.Fatalf("want silence with no prefix, got %s", got.Permission)
 	}
 	if !strings.Contains(buf.String(), "no throttle prefix") {
@@ -278,7 +338,7 @@ func TestTraceNamesTheSilentPath(t *testing.T) {
 func TestPrefixNotResolvedWithoutAnInvocation(t *testing.T) {
 	var calls int
 	for _, cmd := range []string{"make check", `git commit -m "go test -race"`, "ls -la"} {
-		Decide(cmd, func() string { calls++; return testPrefix })
+		Decide(cmd, func() (string, error) { calls++; return testPrefix, nil })
 	}
 	if calls != 0 {
 		t.Fatalf("prefix resolved %d times for commands with no invocation", calls)
