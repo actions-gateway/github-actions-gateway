@@ -439,6 +439,15 @@ It now appends what it measured to `tmp/requeue/<pr>.verdict`: the two commit OI
   A dispatcher reasoning from "they touch different cells" got the first one wrong and would have got the second one right by luck.
   Measure the pair rather than predicting it, and say which you did when you tell a worker.
 
+- **A clean merge proves the absence of a textual conflict and nothing else.** Two PRs can edit one file in regions that merge perfectly and still assert incompatible things, and nothing flags it: the merge succeeds, both gates are green, and `main` lands holding both claims.
+  So a textual overlap measurement answers half the question, and it is the half that looks complete.
+  "Disjoint regions, ~L145 vs ~L222" is accurate, and it settles nothing about whether the two changes agree.
+  The other half is what each change *claims*, and the discriminator is the referent rather than the term.
+  Measured 2026-08-12 across one batch: three open PRs asserted about a thing called "quota", carrying two referents between them, a Kubernetes `ResourceQuota` tenant cap in two of them and a global, project-wide GCE CPU limit in the third.
+  A keyword scan reads a single collision across the three where there are really two referents.
+  A topic-level glance happens to group them correctly, because the two sharing a referent are also the two competitor-analysis PRs, and that is the more dangerous result: the grouping is a coincidence of this batch, and a method that succeeds by coincidence gets trusted on the next one.
+  When overriding piped-gate's overlap denial, say what the other PR claims, not only where it sits.
+
 - **A ref pair is not a measurement**, because both refs move.
   The OIDs make the probe re-runnable: `git merge-tree --write-tree <base_oid> <head_oid>` re-derives the same conflict set from the objects at any later time, so a disagreement is settled by re-running it rather than argued from memory.
   That command is printed as well as recorded, which is what puts it in the session transcript the worker reports from.
