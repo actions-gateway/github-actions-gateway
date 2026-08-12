@@ -2756,6 +2756,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#one-investigation-two-rows-say-which-one-owns-the-measurement" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        One investigation, two rows: say which one owns the measurement
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -3286,6 +3297,18 @@ Measured 2026-08-05, <code>main</code> takes 47 merges a day against a local gat
 The shipped check fires instead on the overlap between what the base gained and what the branch changes, the part the row's own Notes called the waste.
 State roughly how often the condition holds in the tree as it stands, or say the rate is unmeasured; selectivity is what decides whether a warning is worth building, and it costs one <code>git log</code> before filing against a rebuild after.</p>
 <p>This is the same reason a gate's own tests assert both directions (<a href="../testing/#a-bulk-mechanical-change-proves-itself-by-reconciliation-not-by-an-empty-leftover-query">testing.md</a>): a gate that cannot go red is unfalsifiable, and a gate that cannot stay green is unshippable.</p>
+<h3 id="one-investigation-two-rows-say-which-one-owns-the-measurement">One investigation, two rows: say which one owns the measurement<a class="headerlink" href="#one-investigation-two-rows-say-which-one-owns-the-measurement" title="Permanent link">&para;</a></h3>
+<p>A reproduce campaign that pins a flake often measures the production defect underneath it, and the result is two rows: the test fix and the product fix.
+They get filed minutes apart, out of one run, by someone holding all of it at once, which is exactly why neither row records that the other exists.</p>
+<p><strong>Each row names the other, and one of them owns the measurement.</strong> The owner is the row whose Notes or linked doc hold the run itself: the counts, the date, the correlation.
+The other cites it by ID instead of restating the figure, because a bare number with no provenance reads as a second, independent measurement, and a later session cannot tell that both rows rest on one campaign.</p>
+<p>Q685 and Q689 were one window seen from two sides.
+Q685's campaign correlated 60 stops taken at maximum pressure: the 4 taken before the delete all replayed, the 56 taken after it did not.
+That single correlation established both the test's bad wait and the production window the test was landing in.
+Q689 was filed carrying "4/60 graceful stops" with nothing naming where the 60 came from, Q685's flake-watch row named no successor, and the correlation itself sat in a parenthetical inside Q685's <a href="../testing/#synchronize-on-the-signal-you-assert-on">testing.md paragraph</a>.
+Q685 gained the pointer only in the commit that closed Q689, so it was missing for the whole window in which Q689 was open work someone might pick up; the Q689 retro records a dispatcher having to ask which row owned the number.</p>
+<p><strong>Nothing gates this, and the obvious proxy does not transfer.</strong> The linter can see a <code>(#QN)</code> link that resolves to no row (rule 5); it cannot see a relationship nobody stated.
+The nearest rule that does exist is <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/docs/check-plan-index.sh"><code>check-plan-index</code></a>'s linked-iff-live check on <code>plan/README.md</code> Status cells (Q800), and extending it to Queue Notes cells would still miss this omission while breaking rows that are correct: measured on 2026-08-12 it fires on six, incidental mentions of the "distinct from Q695's alert gap" shape, each of which would then spend link characters against the 250-character cap.</p>
 <h2 id="flake-fixes-go-first">Flake fixes go first<a class="headerlink" href="#flake-fixes-go-first" title="Permanent link">&para;</a></h2>
 <p>When a CI flake is observed (test passes on rerun, no code change in between), file it as a Queue item <strong>and move it to the top of the Queue</strong> before continuing other work.
 Then pick it up next.
@@ -3297,6 +3320,7 @@ Annotate the row's Notes with "<strong>Top of queue per flakes-first rule</stron
 Sweep it in the fixing PR and state what the sweep found, "nothing" included: a stated empty sweep is evidence, while an unstated one is indistinguishable from not having looked.
 Q602 taught one scale-set listener test to wait on a listener-produced signal and left a comment explaining why; four days later <a href="../../STATUS/#Q685">Q685</a> was the same defect in a sibling test in the same file, and the sweep it finally prompted found a third case.
 That one never flaked: its positive assertion held whether or not the listener ever observed the completion, so waiting for CI would never have surfaced it.</p>
+<p><strong>A campaign that pins a flake often measures a production defect too.</strong> File both rows, cross-link them, and <a href="#one-investigation-two-rows-say-which-one-owns-the-measurement">say which one owns the measurement</a>.</p>
 <p><strong>Once the mitigation ships, move the row to <a href="../../STATUS/#flake-watch">Flake watch</a></strong> — a Deferred subsection whose revive mechanic differs from the rest of the table: the trigger is always <code>**Event:** recurs on main after the fix</code>, and on recurrence the row returns to the <strong>top</strong> of the Queue, escalated (the first mitigation didn't hold).
 Keeping the row (rather than closing it) preserves the memory that a fix was already attempted, so a second occurrence reads as a recurrence, not a fresh find.
 The lifecycle:</p>
