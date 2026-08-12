@@ -2824,14 +2824,6 @@
 </thead>
 <tbody>
 <tr>
-<td><a id="Q809"></a>Q809</td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/e2e-calico.yml">e2e-calico NetworkPolicy enforcement negatives intermittently see traffic that should be blocked</a></td>
-<td><code>flake</code> <code>ci</code> <code>tests</code></td>
-<td>🔲</td>
-<td>M</td>
-<td>Measured 2026-08-12: 3 of 100 runs failed in one 3h window (main, and the pr-1405/pr-1415 queue entries), each a different calico-gated enforcement negative, and each evicted its PR. Q747's enforcer dump greps <code>app=kindnet</code>, so calico dumps nothing.</td>
-</tr>
-<tr>
 <td><a id="Q803"></a>Q803</td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/go/coverage.sh"><code>cmd/proxy</code> coverage is nondeterministic, and its floor has no headroom to absorb it</a></td>
 <td><code>flake</code> <code>ci</code> <code>tests</code></td>
@@ -2920,12 +2912,12 @@
 <td>Measured 2026-08-12: <code>doc-links</code> sat at 161s in CI, 38s locally, unseen through three CI-speed rounds, because 30 fast gates run concurrently and the runner labels output without timing it. Emit per-label wall time; <code>run-parallel-test.sh</code> pins it.</td>
 </tr>
 <tr>
-<td><a id="Q758"></a>Q758</td>
-<td><a href="../design/appendix-b-worker-isolation/#b2-operational-cost">The AWS nested-virt framing predates EC2 shipping it on virtual instances</a></td>
+<td><a id="Q813"></a>Q813</td>
+<td><a href="../operations/in-runner-image-builds/#approach-5--kata-containers-micro-vm-dind-no-privileged-container">Approach 5's GCP nested-virt family list contradicts the API-measured one</a></td>
 <td><code>docs</code></td>
 <td>🔲</td>
 <td>S</td>
-<td>AWS launched it on virtual instances 2026-02-16 (C7i/C8i, M7i/M8i, R7i/R8i, X8i, I7i and flex variants), so "requires bare metal" is stale in B.2 and in kata-dind-workloads.md. No P or G family is on the list, so the GPU argument is unaffected.</td>
+<td>Its node-prerequisite bullet names N1/N2/N2D/C2/C2D and excludes the GPU families. kata-dind-workloads.md § Prerequisite has the measured list: N2D and C2D are absent, and A2/A3/G2 are present, which is load-bearing for the Kata GPU argument.</td>
 </tr>
 <tr>
 <td><a id="Q757"></a>Q757</td>
@@ -3903,11 +3895,18 @@
 <td><strong>Event:</strong> it fails <code>expected 1, actual 0</code> on <code>main</code> after the Q600 fix (the test now waits on <code>handlerMax &gt;= 1</code>, the counter the invariant reads, not only on the losers' dedup metric). → top of Queue, escalated.</td>
 </tr>
 <tr>
+<td><a id="Q809"></a>Q809</td>
+<td><a href="../plan/q549-scaleset-rerun-flake/#mode-b-attributed-2026-08-12-the-claim-was-made-and-lost"><code>E2E_AGC_ScaleSetDrainedWorkerClaimAndRerunLandUnderChartRBAC</code>: a drained worker's recovery is detected and then lost at the claim</a></td>
+<td><code>flake</code> <code>tests</code></td>
+<td>M</td>
+<td><strong>Event:</strong> the re-run wait fails on <code>main</code> after the claim fix. <a href="#Q549">Q549</a> mode B; this row owns the 2026-08-12 measurement: the pod outran the claim (<code>NotFound</code>), or the kubelet's status write took the lock. → top of Queue, escalated.</td>
+</tr>
+<tr>
 <td><a id="Q549"></a>Q549</td>
 <td><a href="../plan/q549-scaleset-rerun-flake/"><code>E2E_AGC_ScaleSetDrainedWorkerClaimAndRerunLandUnderChartRBAC</code> times out waiting for the disrupted run's re-run</a></td>
 <td><code>flake</code> <code>tests</code></td>
 <td>S</td>
-<td><strong>Event:</strong> the re-run wait fails on <code>main</code> post-fix. Two modes (<a href="../plan/q549-scaleset-rerun-flake/">triage</a>): A, AGC replaced mid-window (pinned); B, undiagnosed; PR sightings 2026-08-01, 2026-08-04, soak from the later. → top of Queue, escalated.</td>
+<td><strong>Event:</strong> the re-run wait fails on <code>main</code> in a shape neither mode covers (<a href="../plan/q549-scaleset-rerun-flake/">triage</a>). A, AGC replaced mid-window, pinned; B, the claim lost, measured and fixed under <a href="#Q809">Q809</a>. → top of Queue, escalated.</td>
 </tr>
 <tr>
 <td><a id="Q570"></a>Q570</td>

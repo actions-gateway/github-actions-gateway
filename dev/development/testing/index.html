@@ -3039,6 +3039,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#a-correct-check-can-pass-without-looking-at-what-was-wrong" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        A correct check can pass without looking at what was wrong
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#check-for-a-committed-capture-before-booking-a-live-measurement" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -4771,6 +4782,9 @@ Two shortcuts recur and both produce confident-but-wrong diagnoses:</p>
   Recover the original with <code>gh run view &lt;id&gt; --attempt N --log</code>, and — since an empty result is only evidence of absence once the command is known to have run — grep for a string you <em>know</em> that log contains before reading any emptiness as a finding.
   Q648 was only findable this way: the attribution banner it turns on was present in attempt 1 and absent from the post-re-run view.
   Capture the evidence <strong>before</strong> spending the re-run where you can.</li>
+<li><strong>Waiting out a matrix to read a leg that already failed.</strong> <code>gh run view --job &lt;id&gt; --log-failed</code> refuses while the <em>run</em> is in progress ("logs will be available when it is complete"), so one slow leg withholds every finished leg's log, and pr-sentinel's captured excerpt reads <code>(no failed-step log available for run &lt;id&gt;)</code> for the same reason. <code>gh api "repos/&lt;owner&gt;/&lt;repo&gt;/actions/jobs/&lt;id&gt;/logs"</code> reads a completed job's log immediately, whatever its run is doing; get the ids from <code>gh run view &lt;run-id&gt; --json jobs --jq '.jobs[] | select(.conclusion=="failure") | .databaseId'</code>.
+  Measured 2026-08-12 on run <code>31622300898</code>, job <code>94201728982</code>: <code>--log-failed</code> answered <code>run 31622300898 is still in progress; logs will be available when it is complete</code> while that job had read <code>completed failure</code> for minutes and <code>trivy (proxy, 1)</code> was still <code>in_progress</code>; <code>gh api</code> returned the job's 1,639-line log in the same minute, naming a syft download that exhausted its retry budget against a release-CDN <code>503</code>.
+  Reach for it whenever a red job's cause decides what you do next, rather than treating the wait as unavoidable.</li>
 </ul>
 <h3 id="the-status-you-report-is-a-claim-too">The status you report is a claim too<a class="headerlink" href="#the-status-you-report-is-a-claim-too" title="Permanent link">&para;</a></h3>
 <p>The rules above govern <em>why</em> something failed.
@@ -4851,6 +4865,24 @@ A hand-rolled probe standing in for a gate answers a slightly different question
 <p>The shape they share: the probe exits 0 with a plausible value, and nothing in the result announces that it answered a different question.
 When a probe's answer is about to decide something, run the gate itself.
 When the gate is too slow for the loop, keep the probe but give it a case whose answer you already know, and disbelieve it when the two disagree.</p>
+<h3 id="a-correct-check-can-pass-without-looking-at-what-was-wrong">A correct check can pass without looking at what was wrong<a class="headerlink" href="#a-correct-check-can-pass-without-looking-at-what-was-wrong" title="Permanent link">&para;</a></h3>
+<p>The section above is about running the wrong instrument.
+This one is about running the right one and still learning nothing: the check is sound, its answer is correct, and what it validates sits <em>adjacent</em> to what actually broke.
+Nothing in a pass announces the gap, because the pass is not a mistake.</p>
+<p><strong>A gate built for exactly this staleness missed an instance of it.</strong> <code>check-plan-index.sh</code>'s third invariant (Q800) requires a <code>QNNN</code> in a plan's Status cell to be a link while its Queue row lives and bare once the row is gone, so a closing row cannot leave a cell claiming live work.
+The <code>release-1.3.md</code> cell read <code>❌ Open — one gate left from the pre-release API review, Q484</code>. <code>Q484</code> is bare and its row was gone, so the invariant held and <code>make plan-index-check</code> passed, on <code>main</code>, every day for the nine days after <code>v1.3.0</code> shipped as a final release (Q802).
+The gate reads the <em>form of an ID</em>; the staleness was in the prose around it.</p>
+<p><strong>The same shape at the tool level: a refusal whose stated reason is not the one it has.</strong> <code>pr-requeue-eligible.sh --confirm</code> fails closed on a verdict record it cannot parse, which is right.
+Against a record written before #1431 changed the format it reports <code>the recorded assessment was ''</code> (Q828), which describes a corrupt or missing file.
+The actual condition is a version skew between the assess and the confirm, and it sends the reader to repair the wrong thing.</p>
+<p>So when you build or trust a check:</p>
+<ul>
+<li><strong>Ask what it would still pass on</strong>, then check whether the thing you care about is in that set.
+  A gate named for a class covers one mechanism inside that class, and its name is what makes the rest of the class feel guarded.</li>
+<li><strong>Say in the script what it does not read.</strong> <code>check-plan-index.sh</code> already scopes itself to "Column 3 only" and says why, which is the right instinct one level too high: within that column it validates IDs, not the sentences containing them.</li>
+<li><strong>A fail-closed refusal must name the condition it actually detected</strong>, not the symptom the parse produced.
+  "Unrecognised record format" routes the reader at a migration; "was ''" routes them at a corrupt file they do not have.</li>
+</ul>
 <h3 id="check-for-a-committed-capture-before-booking-a-live-measurement">Check for a committed capture before booking a live measurement<a class="headerlink" href="#check-for-a-committed-capture-before-booking-a-live-measurement" title="Permanent link">&para;</a></h3>
 <p>"Measure it" does not always mean "run it".
 Before scheduling a Tier C run, a dogfood dispatch, or anything else that costs a credential and a wall-clock hour, check whether the repo already holds a <strong>recorded observation</strong> of the same interface. <code>cmd/probe</code> exists to capture exactly that, and <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/testdata/README.md"><code>testdata/README.md</code></a> documents what each capture contains.</p>

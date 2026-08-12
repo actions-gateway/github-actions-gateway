@@ -3460,6 +3460,12 @@ Kubelet probes are unaffected by that rule: node-sourced traffic is exempt from 
 <td>Evicted scale-set workers carrying no workflow-run identity, so no automatic re-run was possible</td>
 </tr>
 <tr>
+<td><code>actions_gateway_eviction_recovery_evidence_lost_total</code></td>
+<td>Counter</td>
+<td><code>namespace</code>, <code>runner_group</code>, <code>cause</code></td>
+<td>Disrupted scale-set workers whose pod was deleted before the recovery could be claimed, so no automatic re-run was attempted and none can be attempted later; the pod is the disruption's only record (Q809). The <code>preemption</code> and <code>deletion</code> arms are the exposed ones, since both act on a pod that is already terminating</td>
+</tr>
+<tr>
 <td><code>actions_gateway_quota_retries_total</code></td>
 <td>Counter</td>
 <td><code>namespace</code>, <code>runner_group</code></td>
@@ -3612,6 +3618,12 @@ Each <code>Reason</code> mirrors the corresponding metric name so the two correl
 <td>Warning</td>
 <td><code>actions_gateway_eviction_recovery_identity_unknown_total</code></td>
 <td>An evicted scale-set worker carried no workflow-run identity, so there was no run to re-run; manual re-run required (Q417)</td>
+</tr>
+<tr>
+<td><code>EvictionRecoveryEvidenceLost</code></td>
+<td>Warning</td>
+<td><code>actions_gateway_eviction_recovery_evidence_lost_total</code></td>
+<td>A disrupted scale-set worker's pod was deleted before its recovery could be claimed, so the run cannot be re-run automatically by this or any later reconcile; manual re-run required (Q809)</td>
 </tr>
 </tbody>
 </table>

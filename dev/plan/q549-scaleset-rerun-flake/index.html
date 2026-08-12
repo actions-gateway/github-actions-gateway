@@ -2589,6 +2589,34 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#mode-b-attributed-2026-08-12-the-claim-was-made-and-lost" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Mode B, attributed (2026-08-12): the claim was made, and lost
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Mode B, attributed (2026-08-12): the claim was made, and lost">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#the-fix" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The fix
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#open-questions" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2635,10 +2663,9 @@
 Two distinct failure modes now sit behind that one timeout.
 This file exists so the next occurrence is classified before anything is changed.</p>
 <p><strong>Status:</strong> watching.
-Mode A is diagnosed and mitigated (PR #1120).
-Mode B has been seen twice — 2026-08-01 and 2026-08-04 — and is <strong>undiagnosed</strong>; no mechanism is asserted below.
-<a href="../../STATUS/#Q549">Q549</a> stays in <a href="../../STATUS/#flake-watch">Flake watch</a> rather than escalating: the documented revive trigger is recurrence on <code>main</code>, and both mode-B sightings were on PR branches.
-Each resets the <a href="../../development/maintaining-backlog/#retiring-a-flake-watch-row">soak clock</a> — count green runs from <strong>2026-08-04</strong>, not from the fix.</p>
+Mode A is diagnosed and mitigated (PR #1120). <strong>Mode B is diagnosed as of 2026-08-12 and fixed under <a href="../../STATUS/#Q809">Q809</a></strong>; see <a href="#mode-b-attributed-2026-08-12-the-claim-was-made-and-lost">Mode B, attributed</a> below.
+It recurred three times that day, once on <code>main</code>, which fired this row's revive trigger; those three runs are the first with an AGC log line that names the failure, and it is not either cause the spec's own message guesses at.
+Reset the <a href="../../development/maintaining-backlog/#retiring-a-flake-watch-row">soak clock</a> to <strong>2026-08-12</strong>: count green runs from the claim fix, not from PR #1120.</p>
 <h2 id="the-two-modes">The two modes<a class="headerlink" href="#the-two-modes" title="Permanent link">&para;</a></h2>
 <table>
 <thead>
@@ -2655,14 +2682,13 @@ Each resets the <a href="../../development/maintaining-backlog/#retiring-a-flake
 <td>Diagnosed on run <a href="https://github.com/actions-gateway/github-actions-gateway/actions/runs/30658951388">30658951388</a>, mitigated by the UID pin + re-stage (PR #1120). Worked case in <a href="../../development/testing/#pin-the-process-when-the-signal-comes-out-of-its-memory">testing.md § Pin the process when the signal comes out of its memory</a></td>
 </tr>
 <tr>
-<td><strong>B</strong> — the window was undisturbed and the re-run still never fired</td>
+<td><strong>B</strong>: the window was undisturbed and the re-run still never fired</td>
 <td>the pin is <strong>unchanged</strong>, so the spec takes its <code>Fail()</code> branch, with zero <code>Q549 re-staging</code> entries</td>
-<td>Seen twice (below). Cause unverified</td>
+<td><strong>Diagnosed 2026-08-12</strong>: the disruption was detected and the <em>claim</em> failed. Fixed under Q809; the spec now re-stages on the unwinnable half</td>
 </tr>
 </tbody>
 </table>
-<p>The spec's own failure text names two candidate causes for the <code>Fail()</code> branch — a chart role missing a verb, or a regressed deletion-mark discriminator.
-Neither is established for the 2026-08-01 sighting; both remain open alongside anything else.</p>
+<p>The spec's own failure text names two candidate causes for the <code>Fail()</code> branch — a chart role missing a verb, or a regressed deletion-mark discriminator. <strong>Both are wrong</strong>, and the 2026-08-12 evidence rules them out directly: detection reached <code>cause: deletion</code> every time, so the discriminator was working, and the claim never returned a <code>Forbidden</code>, so the role was not short a verb.</p>
 <h2 id="mode-b-what-run-30724186342-shows">Mode B: what run 30724186342 shows<a class="headerlink" href="#mode-b-what-run-30724186342-shows" title="Permanent link">&para;</a></h2>
 <p>Run <a href="https://github.com/actions-gateway/github-actions-gateway/actions/runs/30724186342">30724186342</a> attempt 1, job <code>e2e / e2e</code>, branch <code>claude/q547-537615</code> (PR #1140, an unrelated change — v2 gateway-teardown worker reap), 2026-08-02 00:01–00:03 UTC.
 Attempt 2 passed with no code change.</p>
@@ -2767,24 +2793,88 @@ The mode does not belong to one CNI.</p>
   As on 2026-08-01, the entire re-run wait ran inside that silence.</li>
 <li><strong>The RunnerSet reconcile was erroring across the disruption window</strong>, not converged — <a href="#what-to-capture-on-the-next-occurrence">capture item 4</a> below.</li>
 </ul>
-<p><strong>The listener error is by design, and is not a signal.</strong> Open question 2 below guessed it "may well be routine in this e2e"; it is. <code>scaleSetRecoveryManifest</code> sets <code>githubURL: https://ghes.invalid/ssrecorg</code> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/test/e2e/worker_scaleset_recovery_test.go">worker_scaleset_recovery_test.go</a>), deliberately choosing an unresolvable host so the bootstrap fails on NXDOMAIN — that failure is the precondition the spec needs.
+<p><strong>The listener error is by design, and is not a signal.</strong> The open question below guessed it "may well be routine in this e2e"; it is. <code>scaleSetRecoveryManifest</code> sets <code>githubURL: https://ghes.invalid/ssrecorg</code> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/test/e2e/worker_scaleset_recovery_test.go">worker_scaleset_recovery_test.go</a>), deliberately choosing an unresolvable host so the bootstrap fails on NXDOMAIN — that failure is the precondition the spec needs.
 So a reconcile erroring on the scale-set listener is the normal state of this tenant and cannot distinguish a failing run from a passing one.
 What remains open is whether the recovery scan is <em>reachable</em> while that is happening.</p>
-<h2 id="open-questions">Open questions<a class="headerlink" href="#open-questions" title="Permanent link">&para;</a></h2>
-<p>None of these is answered; each names what would answer it.</p>
+<h2 id="mode-b-attributed-2026-08-12-the-claim-was-made-and-lost">Mode B, attributed (2026-08-12): the claim was made, and lost<a class="headerlink" href="#mode-b-attributed-2026-08-12-the-claim-was-made-and-lost" title="Permanent link">&para;</a></h2>
+<p>Three <code>e2e-calico</code> failures in one three-hour window, all mode B, all this spec, all on attempt 1:</p>
+<table>
+<thead>
+<tr>
+<th>Run</th>
+<th>Trigger</th>
+<th>Claim error in the AGC log</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/actions/runs/31555321326">31555321326</a></td>
+<td>push <code>main</code>, 01:57</td>
+<td><code>pods "ssrec-drain-probe-1" not found</code></td>
+</tr>
+<tr>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/actions/runs/31556806760">31556806760</a></td>
+<td>merge queue, pr-1405, 02:25</td>
+<td><code>Operation cannot be fulfilled on pods "…": the object has been modified</code></td>
+</tr>
+<tr>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/actions/runs/31564438316">31564438316</a></td>
+<td>merge queue, pr-1415, 04:48</td>
+<td><code>pods "ssrec-drain-probe-1" not found</code></td>
+</tr>
+</tbody>
+</table>
+<p>Each run reported <code>Summarizing 1 Failure</code>: this spec and nothing else.
+Each carried exactly one AGC line about the probe pod, at <code>Debug</code>:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>&quot;msg&quot;:&quot;scale-set worker disruption already claimed elsewhere; skipping&quot;,&quot;cause&quot;:&quot;deletion&quot;, …
+</code></pre></div>
+<p><strong>That message was wrong in all three cases, and it is why the mode stayed undiagnosed for eleven days.</strong> The <a href="#what-to-capture-on-the-next-occurrence">capture list</a> below asked for <code>could not claim scale-set worker disruption</code>, the <code>Warn</code> line for an unrecognised error.
+The <code>Debug</code> line above is what a <code>Conflict</code> or a <code>NotFound</code> actually produced, and it asserts a claimant that never existed.</p>
+<p>What the three runs establish:</p>
+<ul>
+<li><strong>Detection worked.</strong> <code>disruptionAwaitingRecovery</code> returned <code>cause: deletion</code> every time, so the Q502 discriminator was not regressed.</li>
+<li><strong>The role was not short a verb.</strong> A refused claim is a <code>Forbidden</code>, and none of the three was.</li>
+<li><strong>Nobody else had claimed the pod.</strong> The spec's own sampler recorded <code>actions-gateway.com/eviction-handled-at</code> empty throughout, the same contrast the 2026-08-01 and 2026-08-04 runs showed.</li>
+<li><strong>The claim raced the pod's own teardown.</strong> Two runs found the object already gone; the delete was issued at ≈02:07:40 and the pod was unreadable by 02:07:42, well inside its 30 s grace period, because the probe container traps <code>TERM</code> and exits at once.
+  The recovery scan lists from the informer cache and patches through the live client, so that gap is exactly where the claim falls.</li>
+<li><strong>The third was a conflict from a writer that was not a claimant.</strong> The kubelet publishing the terminal phase is guaranteed to be racing here, because that transition is the edge that triggers the reconcile.
+  The optimistic lock cannot tell it from a rival replica.</li>
+</ul>
+<p>This also settles what the 2026-08-04 window could not: an 11.3 s observation window with no claim "weakened the pod vanished before the claim could land" only because both flavours were being read as one.
+The conflict flavour needs no vanished pod.</p>
+<p><strong>Lane asymmetry, measured over the same window</strong> (<code>merge_group</code> and <code>push</code> runs only; the <code>pull_request</code> entries are gate no-ops, Q675): <code>e2e-test.yml</code> 0 failures in 87, <code>e2e-calico.yml</code> 3 in 80.
+The spec carries no CNI gate and runs on both, and the 2026-08-01 sighting was on kindnet, so the mechanism is not calico's.
+Calico's heavier per-node load is a plausible amplifier of the race and is <strong>not</strong> measured.</p>
+<h3 id="the-fix">The fix<a class="headerlink" href="#the-fix" title="Permanent link">&para;</a></h3>
+<p><strong>AGC</strong> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/provisioner/eviction_scaleset.go">eviction_scaleset.go</a>): the claim settles its own verdict instead of handing back a raw error:</p>
 <ol>
-<li><strong>Did the claim ever land?</strong> The pod is gone by 00:01:25, so it cannot be read back after the fact — the sampler's ~2.2 s is the only window there ever was.
-   The passing run stamped the claim inside a window of the same width, so "too slow to claim before the pod vanished" and "never scanned" both fit what was captured, and nothing here separates them.</li>
-<li><strong>Is the recovery scan reachable while the RunnerSet reconcile is failing on the scale-set listener?</strong> Unchecked — neither the code path nor a repro has been looked at.
-   The listener error itself is settled: it is deliberate (<code>ghes.invalid</code>, see the 2026-08-04 section), so it is the tenant's normal state and discriminates nothing.
-   Whether the scan survives it is still open.</li>
-<li><strong>Is the AGC's silence after 00:01:24Z the reconcile loop going quiet, or something broader?</strong> Unknown from the dump alone.</li>
+<li>A <code>Conflict</code> is retried against a re-read pod, bounded, and only while the fresh object shows the claim still unstamped.
+   A fresh object that <em>does</em> carry it is the genuine rival the optimistic lock exists to lose to, and is still skipped at <code>Debug</code>.</li>
+<li>A <code>NotFound</code> is reported as a lost recovery: <code>Warn</code>, an <code>EvictionRecoveryEvidenceLost</code> Event, and <code>actions_gateway_eviction_recovery_evidence_lost_total</code>.</li>
+</ol>
+<p>At-most-once is deliberately <strong>not</strong> relaxed.
+Recovering from the in-memory pod copy after the object is gone would let two AGC replicas each spend a slot of one run's retry budget for a single disruption, which is the regression the claim exists to prevent.
+A drain whose evidence outruns the claim stays unrecovered, but stops being silent.
+Design boundary: <a href="../../design/04-operational-flows/#detecting-a-disruption-is-not-the-same-as-claiming-it">04-operational-flows.md § Detecting a disruption is not the same as claiming it</a>.</p>
+<p><strong>Spec</strong>: a lost claim means the attempt never exercised the chart role, exactly like mode A's replaced control plane, so it re-stages under the same <code>maxAttempts</code> budget rather than failing.
+It reads the verdict from the AGC log, because the pod is gone either way and an unclaimed pod looks identical whether the claim was refused or never got to be made.</p>
+<p>Deliberately not done: a finalizer on the probe pod to widen the window.
+The real teardown window is what distinguishes this spec from its envtest twin, which simulates it with a finalizer; adding one here would delete the spec's reason to exist.</p>
+<h2 id="open-questions">Open questions<a class="headerlink" href="#open-questions" title="Permanent link">&para;</a></h2>
+<ol>
+<li><strong>Is the recovery scan reachable while the RunnerSet reconcile is failing on the scale-set listener?</strong> Still unchecked, and now much less likely to matter: the 2026-08-12 runs show the scan running and reaching the claim while that error is the tenant's steady state.
+   The listener error itself is settled: it is deliberate (<code>ghes.invalid</code>, see the 2026-08-04 section), so it is normal and discriminates nothing.</li>
+<li><strong>Is the AGC's silence after the disruption the reconcile loop going quiet, or something broader?</strong> Unknown from the 2026-08-01 dump alone.
+   The 2026-08-12 runs were not silent, so this may have been an artifact of that one run's log capture rather than a property of the mode.</li>
 </ol>
 <h2 id="what-to-capture-on-the-next-occurrence">What to capture on the next occurrence<a class="headerlink" href="#what-to-capture-on-the-next-occurrence" title="Permanent link">&para;</a></h2>
 <ul>
 <li>Whether the failure is mode A or mode B — read the pin and the presence of a <code>Q549 re-staging</code> entry first, before anything else.</li>
-<li>The AGC log <strong>for the full wait window</strong>, not just up to the failure dump: whether the recovery scan runs at all during those 90 s is the fork the triage above cannot pass.</li>
-<li>The claim annotation's fate: the sampler sequence, plus whether the AGC emitted any claim attempt (<code>could not claim scale-set worker disruption</code> is the refusal line).</li>
+<li>Whether it is the mode B <strong>above</strong>: grep the AGC log for <code>disruption was lost before it could be claimed</code> and for <code>already claimed elsewhere</code>, and note that a <code>Q809 re-staging</code> entry means the spec classified it and kept going.
+  A mode-B failure with neither line is a genuinely new shape.</li>
+<li>The AGC log <strong>for the full wait window</strong>, not just up to the failure dump.</li>
+<li>The claim annotation's fate: the sampler sequence, plus which claim line the AGC emitted.
+  All three of <code>Forbidden</code> (the role), <code>Conflict</code>, and <code>NotFound</code> now say so distinctly.</li>
 <li>The RunnerSet reconcile's state across the window — erroring, or converged.</li>
 </ul>
 

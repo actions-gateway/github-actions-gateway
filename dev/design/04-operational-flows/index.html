@@ -1138,6 +1138,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Which disruptions are recovered, and which are not">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#detecting-a-disruption-is-not-the-same-as-claiming-it" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Detecting a disruption is not the same as claiming it
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
         
           <li class="md-nav__item">
@@ -2963,6 +2980,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Which disruptions are recovered, and which are not">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#detecting-a-disruption-is-not-the-same-as-claiming-it" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Detecting a disruption is not the same as claiming it
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
         
           <li class="md-nav__item">
@@ -3465,6 +3499,19 @@ The residual ambiguity is deliberate: an operator's bare <code>kubectl delete po
 Its sharpest edge is a run the operator <em>cancelled</em>, because the cancel runbook's own remedy for a worker that will not stop is to delete the pod, which supplies by hand the mark the measurement above found absent.
 A <code>cancelled</code> conclusion then accepts <code>rerun-failed-jobs</code> rather than refusing it the way a <code>success</code> conclusion does (measured 2026-08-05, <a href="../../plan/q645-abandoned-completion/#q683--the-fast-ending-measurement-2026-08-05">the Q683 measurement</a>), so the job is re-queued and the cancel is undone, bounded by the shared retry budget.
 The runbook states that consequence; whether this arm should read the run's conclusion before re-running is <a href="../../STATUS/#Q811">Q811</a>.</p>
+<h5 id="detecting-a-disruption-is-not-the-same-as-claiming-it">Detecting a disruption is not the same as claiming it<a class="headerlink" href="#detecting-a-disruption-is-not-the-same-as-claiming-it" title="Permanent link">&para;</a></h5>
+<p>The two deleted-pod rows above are readable only until the kubelet finishes tearing the object down, and the recovery scan lists from the informer cache while it claims through the live API.
+So a pod can pass the discriminator and still be gone before its claim patch lands, and the run is then unrecoverable by any reconcile, in any replica, because the pod <em>is</em> the disruption's record.
+Measured on three <code>e2e-calico</code> runs on 2026-08-12, where a drained worker was removed within about two seconds of the delete request, well inside its 30-second grace period, because the container exits as soon as it is signalled (<a href="../../plan/q549-scaleset-rerun-flake/#mode-b-attributed-2026-08-12-the-claim-was-made-and-lost">Q809</a>).</p>
+<p>Two things follow, and both are deliberate:</p>
+<ul>
+<li><strong>The loss is reported, not swallowed.</strong> <code>actions_gateway_eviction_recovery_evidence_lost_total</code> increments and an <code>EvictionRecoveryEvidenceLost</code> Warning Event names the pod, so a dropped re-run is visible rather than indistinguishable from no disruption having happened.</li>
+<li><strong>It is not recovered from the cached copy.</strong> The claim is what makes recovery at-most-once, and acting on an in-memory pod after the object is gone would let two AGC replicas each spend a slot of one run's retry budget for a single disruption.
+  A visible manual re-run is the better trade than a silently doubled budget.</li>
+</ul>
+<p>A conflict on that patch is a different thing and <em>is</em> retried.
+The optimistic lock exists to arbitrate between claimants, but the apiserver raises the same conflict for any concurrent write, and the kubelet publishing the terminal phase is guaranteed to be racing, since that transition is the edge that triggers the reconcile.
+Only a re-read showing the claim annotation already set ends the attempt.</p>
 <p>Note that the <code>DisruptionTarget</code> <strong>condition type</strong> alone is not the discriminator for either deleted-pod row: the eviction API stamps it too, with reason <code>EvictionByEvictionAPI</code>, and a bare <code>kubectl delete pod</code> stamps nothing.
 Preemption detection matches the full type/status/reason triple; drain detection keys on the deletion mark at terminal publish, ordered on both tiers against the container's recorded <code>finishedAt</code> — as the deletion <em>request</em> time, <code>deletionTimestamp</code> minus the grace period the apiserver folds into it.</p>
 <p>The raw mark sits a whole grace period after the request, so comparing it directly recognises only a worker that ignored SIGTERM to its SIGKILL and misses every runner that shuts down cleanly — the shipped Q502 form, caught by <code>E2E_AGC_ScaleSetRecovery</code> on a real kubelet (Q519; envtest never sees the offset because unscheduled pods delete with grace collapsed to zero).</p>

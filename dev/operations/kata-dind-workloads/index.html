@@ -3009,13 +3009,38 @@ On a managed cloud you must run the workload on a node pool with nested virtuali
 </table>
 <p>The repo ships a parameterized provisioning script — <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/dev/kata-node-pool.sh"><code>scripts/dev/kata-node-pool.sh</code></a> — that wraps the <code>gcloud container node-pools create</code> call with these flags.
 Preview it with <code>DRY_RUN=1</code> before spending cloud time; see <a href="../kata-ci-spike-runbook/#step-1--create-a-nested-virt-cluster">runbook step 1</a>.</p>
+<p><strong>Amazon Web Services (EC2).</strong> Bare metal is no longer the only option, and the unit of configuration is the instance rather than the node pool.
+Nested virtualization is a CPU option that is <strong>off by default</strong>: pass <code>--cpu-options "NestedVirtualization=enabled"</code> to <code>run-instances</code>, or run <code>aws ec2 modify-instance-cpu-options --nested-virtualization enabled</code> against a stopped instance.</p>
+<table>
+<thead>
+<tr>
+<th>Requirement</th>
+<th>Detail</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Instance family</td>
+<td>AWS's <a href="https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/amazon-ec2-nested-virtualization.html">nested virtualization guide</a> (fetched 2026-08-12) lists <strong>C8i, M8i, R8i, C8id, R8id, M8id, C8i-flex, R8i-flex, M8i-flex, X8i, C7i, R7i, M7i, C7i-flex, M7i-flex, and I7i</strong>. Every one is Intel; no AMD or Graviton family is on it, and <strong>no P or G family is either</strong>, so on EC2 nested virtualization <em>is</em> what stops GPU workloads under Kata, unlike GKE, where A2, A3, and G2 carry it. It shipped in two steps: C8i/M8i/R8i on 2026-02-16, the rest plus GovCloud (US) on 2026-06-18.</td>
+</tr>
+<tr>
+<td>Hypervisor</td>
+<td>KVM and Hyper-V are the supported L1 hypervisors, so Kata's QEMU path is in scope.</td>
+</tr>
+<tr>
+<td>Performance</td>
+<td>AWS recommends bare metal for hardware-virtualization workloads that are performance-sensitive or latency-bound. Kata boots a guest per pod, so treat a virtual family as the cheaper tier rather than a like-for-like substitute, and measure pod-<code>Ready</code> latency before committing a build fleet to it.</td>
+</tr>
+</tbody>
+</table>
+<p>Azure exposes nested virtualization on <code>Dv3</code>/<code>Ev3</code> and later.
+On owned hardware none is needed at all.</p>
 <p><strong>Verify <code>/dev/kvm</code> is present</strong> on a labelled node before going further — if it is missing, nested virtualization is not actually enabled and the guest VM cannot boot:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="nv">NODE</span><span class="o">=</span><span class="k">$(</span>kubectl<span class="w"> </span>get<span class="w"> </span>nodes<span class="w"> </span>-l<span class="w"> </span>katacontainers.io/kata-runtime<span class="o">=</span><span class="nb">true</span><span class="w"> </span><span class="se">\</span>
 <a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="w">  </span>-o<span class="w"> </span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">&#39;{.items[0].metadata.name}&#39;</span><span class="k">)</span>
 <a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>kubectl<span class="w"> </span>debug<span class="w"> </span>node/<span class="s2">&quot;</span><span class="nv">$NODE</span><span class="s2">&quot;</span><span class="w"> </span>-it<span class="w"> </span>--image<span class="o">=</span>busybox<span class="w"> </span>--<span class="w"> </span>ls<span class="w"> </span>-l<span class="w"> </span>/host/dev/kvm
 </code></pre></div>
-<p>Expect a character device.
-Other clouds expose nested virtualization differently (AWS bare-metal <code>*.metal</code> instances; Azure <code>Dv3</code>/<code>Ev3</code> and later); on owned hardware no nested virtualization is needed at all.</p>
+<p>Expect a character device.</p>
 <h2 id="cluster-setup--kata-runtime-and-runtimeclass">Cluster setup — Kata runtime and RuntimeClass<a class="headerlink" href="#cluster-setup--kata-runtime-and-runtimeclass" title="Permanent link">&para;</a></h2>
 <p>Installing a runtime handler and creating a <code>RuntimeClass</code> is a <strong>cluster-admin</strong> operation.
 As with the gVisor/Kata sandbox runtimes in <a href="../../design/appendix-b-worker-isolation/">Appendix B — Worker isolation</a>, GAG's controllers never install runtime handlers or <code>RuntimeClass</code> objects; the Gateway Manager Controller (GMC) and Actions Gateway Controllers (AGCs) only <em>honour</em> a <code>runtimeClassName</code> a tenant sets.
