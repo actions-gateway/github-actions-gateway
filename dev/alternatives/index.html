@@ -2836,8 +2836,10 @@
 <p class="admonition-title">On-premises, most of this list is already gone</p>
 <p>Only the last row is left, ruled out by the same constraint that made you self-host in the first place, before a single feature is compared.</p>
 </div>
-<p>That also breaks account-per-tenant isolation, which is ForgeMT's model and the serious argument against a shared cluster: an AWS account is a free API call, but its bare-metal equivalent is a hardware purchase, and partitioned capacity cannot be shifted between tenants.
-<a href="../design/appendix-d-alternatives-considered/#d9-forgemt-and-account-per-tenant-runner-platforms">Appendix D.9</a> takes it seriously and states both trade-offs.</p>
+<p>On-premises also removes the isolation boundaries those options are built from, which is the serious argument against a shared cluster.
+ForgeMT, the one other multi-tenant platform on the list, draws its tenant boundary in IAM and OIDC role scope, GitHub App scope, and runner labels, and offers a VM per job when a pod is not enough (its docs, read 2026-08-12).
+Every one of those is an AWS API, and on your own hardware the equivalent is a hardware purchase rather than a free call.
+<a href="../design/appendix-d-alternatives-considered/#d9-forgemt-and-cloud-identity-tenant-boundaries">Appendix D.9</a> states both trade-offs, including the one this design loses.</p>
 <h2 id="multi-tenant-platforms-are-an-order-of-magnitude-more-complex">Multi-tenant platforms are an order of magnitude more complex<a class="headerlink" href="#multi-tenant-platforms-are-an-order-of-magnitude-more-complex" title="Permanent link">&para;</a></h2>
 <p>Adding teams does not add a feature, it adds roles.
 Three end up in the room, each with different powers and a different blast radius, and holding them apart is most of the work.
@@ -2918,7 +2920,7 @@ ARC models the first two as one person, which is coherent for a single-owner clu
 <tbody>
 <tr>
 <td>Install base</td>
-<td>ARC 6,417 stars, ForgeMT 211, GAG 3 (2026-08-06)</td>
+<td>ARC 6,430 stars, ForgeMT 211, GAG 3 (2026-08-12)</td>
 <td>see below</td>
 </tr>
 <tr>

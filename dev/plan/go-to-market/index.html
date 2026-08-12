@@ -2867,11 +2867,11 @@ The earlier two-lane version of this section placed RunsOn in the managed lane, 
 </tr>
 </tbody>
 </table>
-<p><strong>GAG competes in the third lane only, and ARC is not alone there.</strong> ForgeMT (Cisco, 211 stars) attacks the same multi-tenant problem with account-per-tenant on AWS, which is a genuinely stronger isolation boundary and unavailable on-premises.
+<p><strong>GAG competes in the third lane only, and ARC is not alone there.</strong> ForgeMT (Cisco, 211 stars on 2026-08-12) attacks the same multi-tenant problem on AWS, drawing its tenant boundary in IAM and OIDC role scope, GitHub App scope, and runner labels, with an EC2 lane when a pod is not a strong enough boundary (its docs, read 2026-08-12).
 Call ARC the <strong>closest</strong> competitor, never the only one; the research contradicts the stronger claim and the shipped alternatives page names the rest.</p>
 <p><strong>Location is the filter that removes most of the field</strong>, and no published comparison in this space applies it: "self-hosted" almost always means "self-hosted on AWS".
 On-premises, air-gapped, or on reserved hardware, only ARC and GAG remain, by the same constraint that made the ICP self-host.
-This is also why account-per-tenant is not a universal answer: an AWS account is a free API call, its bare-metal equivalent is a hardware purchase, and partitioned capacity cannot be shifted between tenants.</p>
+This is also why the AWS-native answer is not a universal one: every enforcement point it uses is an AWS API, its bare-metal equivalent is a hardware purchase, and a VM per job cannot draw from a pool that is already bought.</p>
 <p>Implication: market GAG <strong>as the multi-tenant answer in the self-hosted Kubernetes lane</strong>, never as "another fast-CI option".
 Naming the other two lanes honestly is not a concession, it is the router that makes the third lane's claims believable.
 The <a href="https://github.com/orgs/community/discussions/182089">GitHub Actions self-hosted pricing backlash</a> (the now-postponed control-plane fee) is a tailwind for self-hosting in general, but it pushes price-sensitive teams toward the SaaS lane, so do <strong>not</strong> over-index the messaging on it.</p>
