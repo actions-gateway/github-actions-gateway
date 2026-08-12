@@ -35,8 +35,10 @@ Where each option can actually run is the fastest filter, and most comparisons o
 
     Only the last row is left, ruled out by the same constraint that made you self-host in the first place, before a single feature is compared.
 
-That also breaks account-per-tenant isolation, which is ForgeMT's model and the serious argument against a shared cluster: an AWS account is a free API call, but its bare-metal equivalent is a hardware purchase, and partitioned capacity cannot be shifted between tenants.
-[Appendix D.9](design/appendix-d-alternatives-considered.md#d9-forgemt-and-account-per-tenant-runner-platforms) takes it seriously and states both trade-offs.
+On-premises also removes the isolation boundaries those options are built from, which is the serious argument against a shared cluster.
+ForgeMT, the one other multi-tenant platform on the list, draws its tenant boundary in IAM and OIDC role scope, GitHub App scope, and runner labels, and offers a VM per job when a pod is not enough (its docs, read 2026-08-12).
+Every one of those is an AWS API, and on your own hardware the equivalent is a hardware purchase rather than a free call.
+[Appendix D.9](design/appendix-d-alternatives-considered.md#d9-forgemt-and-cloud-identity-tenant-boundaries) states both trade-offs, including the one this design loses.
 
 ## Multi-tenant platforms are an order of magnitude more complex
 
@@ -74,7 +76,7 @@ Here is where GAG loses, and to whom. **No single alternative holds all of these
 
 | What GAG lacks | Who has it | Tracked |
 |---|---|---|
-| Install base | ARC 6,417 stars, ForgeMT 211, GAG 3 (2026-08-06) | see below |
+| Install base | ARC 6,430 stars, ForgeMT 211, GAG 3 (2026-08-12) | see below |
 | Commercial support | ARC, and every managed service | none planned, by design |
 | `container:`/`services:` without privilege | ARC, via `containerMode: kubernetes` | Q727 |
 | In-cluster cache | GitLab Runner, managed services. **Not ARC** | [worker cache backend](roadmap.md) |

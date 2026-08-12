@@ -61,12 +61,12 @@ The earlier two-lane version of this section placed RunsOn in the managed lane, 
 | Self-hosted without Kubernetes | [RunsOn](https://runs-on.com), [terraform-aws-github-runner](https://github.com/github-aws-runners/terraform-aws-github-runner), [Actuated](https://actuated.com) | yes: AWS, or your hardware with a vendor control plane (Actuated) | no |
 | Self-hosted Kubernetes control plane | ARC, GAG, [ForgeMT](https://github.com/cisco-open/forge) | yes, any conformant cluster | yes |
 
-**GAG competes in the third lane only, and ARC is not alone there.** ForgeMT (Cisco, 211 stars) attacks the same multi-tenant problem with account-per-tenant on AWS, which is a genuinely stronger isolation boundary and unavailable on-premises.
+**GAG competes in the third lane only, and ARC is not alone there.** ForgeMT (Cisco, 211 stars on 2026-08-12) attacks the same multi-tenant problem on AWS, drawing its tenant boundary in IAM and OIDC role scope, GitHub App scope, and runner labels, with an EC2 lane when a pod is not a strong enough boundary (its docs, read 2026-08-12).
 Call ARC the **closest** competitor, never the only one; the research contradicts the stronger claim and the shipped alternatives page names the rest.
 
 **Location is the filter that removes most of the field**, and no published comparison in this space applies it: "self-hosted" almost always means "self-hosted on AWS".
 On-premises, air-gapped, or on reserved hardware, only ARC and GAG remain, by the same constraint that made the ICP self-host.
-This is also why account-per-tenant is not a universal answer: an AWS account is a free API call, its bare-metal equivalent is a hardware purchase, and partitioned capacity cannot be shifted between tenants.
+This is also why the AWS-native answer is not a universal one: every enforcement point it uses is an AWS API, its bare-metal equivalent is a hardware purchase, and a VM per job cannot draw from a pool that is already bought.
 
 Implication: market GAG **as the multi-tenant answer in the self-hosted Kubernetes lane**, never as "another fast-CI option".
 Naming the other two lanes honestly is not a concession, it is the router that makes the third lane's claims believable.

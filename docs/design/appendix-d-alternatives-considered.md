@@ -278,9 +278,9 @@ Sections D.1–D.8 cover the alternatives that were weighed while designing this
 The sections below cover *other runner control planes and CI systems* an adopter may already be running or actively evaluating.
 They were added after a competitive review on 2026-08-06; each records what the alternative does, where it overlaps, the differentiator, and a verdict, on the same terms as the sections above. **Every claim about a third-party system is dated, because they move.**
 
-## D.9. ForgeMT and Account-per-Tenant Runner Platforms
+## D.9. ForgeMT and Cloud-Identity Tenant Boundaries
 
-[ForgeMT](https://github.com/cisco-open/forge) (Cisco, Apache-2.0; measured 2026-08-06: 211 stars, created 2025-05-12, actively pushed) is the closest *positional* competitor found: an explicitly multi-tenant, self-hosted GitHub Actions runner platform aimed at platform teams serving many internal tenants.
+[ForgeMT](https://github.com/cisco-open/forge) (Cisco, Apache-2.0; measured 2026-08-12: 211 stars, created 2025-05-12, last pushed the same day) is the closest *positional* competitor found: an explicitly multi-tenant, self-hosted GitHub Actions runner platform aimed at platform teams serving many internal tenants.
 
 **What it does.** Terraform and Terragrunt deliver a runner control plane and an operating model across an AWS organization.
 It runs two execution backends in parallel: ephemeral EC2 runners, and ARC runner scale sets on EKS.
@@ -290,23 +290,23 @@ Per its README it enforces tenant boundaries for labels, IAM and OIDC role acces
 **Where it overlaps.** The problem statement is nearly identical to this design's: many tenants, one platform team, self-hosted runners, governance and onboarding automation as first-class concerns.
 It also ships cost-attribution and observability integrations, which this design addresses through [cost attribution](../operations/cost-attribution.md).
 
-**The differentiator, and it is a genuine architectural disagreement.** ForgeMT isolates tenants with **separate AWS accounts**, on the explicit reasoning that Kubernetes namespaces are not a strong enough security boundary.
-That reasoning is sound as far as it goes, and an account boundary *is* stronger than a namespace.
+**The differentiator, and it is a genuine architectural disagreement.** ForgeMT draws the tenant boundary in cloud identity and forge scope rather than in the cluster (its docs, read 2026-08-12).
+Its own vocabulary defines a tenant as the isolation and configuration boundary for a team: labels, runner settings, GitHub App scope, and AWS access, under a stated model of shared platform, isolated execution (`docs/architecture.md`).
+The AWS account layout is an operator input, not a product decision: onboarding intake asks for the account IDs the operator already runs, and tenants are Terragrunt directories under one shared environment, region, and VPC root (`docs/operations/tenant-onboarding.md`).
+Where a job needs a harder boundary than a pod, the answer is the EC2 lane, a full VM per job from a platform-owned AMI.
+On the ARC lane tenants share an EKS cluster selected by `arc_cluster_name`, and whether they also share nodes is one of the decisions the security guide hands to the operator, alongside namespaces, service accounts, pod identity, and network policy (`docs/security.md`).
 Two things follow, and both are trade-offs rather than refutations:
 
-* **Partitioned capacity cannot be shifted.** An account per tenant means each tenant is provisioned for its own peak and every trough is stranded.
-  That is the cost of the stronger boundary, and it is the opposite trade from this design, which shares one pool and arbitrates it with a platform-owned `ResourceQuota` plus `priorityTiers`.
-  Where nodes are large and expensive (GPU, large-memory, reserved capacity), that difference dominates.
-* **The boundary has no cheap on-premises analogue.** In AWS an account is a free API call inheriting a pre-built control plane.
-  On bare metal the equivalent is a hardware purchase, or building the hypervisor, software-defined-networking, and self-service storage layer that would make accounts possible.
-  Compliance, data residency, and reserved GPU capacity are precisely the constraints that put an adopter on-premises, so for that adopter the model does not apply at all.
+* **Every enforcement point is an AWS API, so the boundary does not port.** IAM and OIDC role scope, VPC and subnet placement, AMIs, SSM for the GitHub App key, and ECR for images are what hold one ForgeMT tenant apart from the next.
+  Off AWS there is no substitute for any of them, and compliance, data residency, and reserved GPU capacity are precisely the constraints that put an adopter on-premises, so for that adopter the platform does not apply at all.
+  This design's enforcement points are Kubernetes API objects, so they land wherever a conformant cluster does, including air-gapped.
+* **The boundary is applied rather than reconciled, and it stops at the cluster edge.** A ForgeMT tenant is correct as of the last `terragrunt apply`, which buys a reviewable diff per onboarding that a single `ActionsGateway` CR does not match.
+  What it does not buy is a floor that re-asserts itself, and on the ARC lane the in-cluster half is a checklist rather than a default: namespaces, network policy, pod identity, privileged containers, and node sharing are all left to the operator to decide and review.
+  This design reconciles that floor instead ([Pod Security Admission, default-deny NetworkPolicy, per-tenant egress](05-security.md)), keeps the cap in a platform-owned `ResourceQuota` the tenant controller has no verb to write, and makes kernel isolation a per-workload choice inside the shared pool ([validated](../operations/kata-dind-workloads.md)) rather than a second lane provisioned per job.
+  See [appendix B](appendix-b-worker-isolation.md) for the full worker-isolation analysis.
 
-This design's answer to the namespace objection is not that namespaces are sufficient alone.
-It is that the isolation floor is [reconciled rather than assembled](05-security.md) (Pod Security Admission, default-deny NetworkPolicy, per-tenant egress), and that kernel isolation is available and [validated](../operations/kata-dind-workloads.md) for the workloads that need it.
-See [appendix B](appendix-b-worker-isolation.md) for the full worker-isolation analysis.
-
-**Verdict:** ForgeMT is a strong fit for an AWS-native organization willing to trade shared-capacity utilization for account-level isolation.
-This design is the right choice when the compute is expensive enough that sharing it is the point, when the cluster is not on AWS, or when it is not in a cloud at all.
+**Verdict:** ForgeMT is a strong fit for an AWS-native organization that wants its tenant boundary in cloud identity and its hard-isolation lane in VMs.
+This design is the right choice when the boundary has to hold inside a cluster, when the compute is expensive enough that sharing it beats provisioning a VM per job, or when the cluster is not in a cloud at all.
 
 ## D.10. Prow, and the Prior Art for Automatic Re-Run
 
