@@ -1,12 +1,15 @@
 #!/usr/bin/env bash
-# check-tools.sh — verify the CLI tools this project needs are installed and on
-# PATH, and tell you how to fix any that are not.
+# check-tools.sh — verify the CLI tools this project needs are installed, on
+# PATH, and new enough, and tell you how to fix any that are not.
 #
 # For each tool that does not resolve on PATH, it reports whether the tool is:
 #   * installed but not on PATH  -> the exact dir to add, and where to add it
 #   * not installed              -> an install command for your OS (+ docs URL)
+# A tool that resolves but reports less than its registered minimum version is
+# reported the same way, with the version found and the upgrade command.
 #
-# Tiers (checked in order; only a missing REQUIRED tool fails the command):
+# Tiers (checked in order; only a REQUIRED tool missing or below its declared
+# minimum version fails the command):
 #   required  — the fast dev loop: `make check` (gofmt/lint/shellcheck/unit)
 #   e2e       — local cluster + image builds: `make e2e-up`
 #   extended  — heavier gates and optional workflows (security scans, dogfood)
@@ -23,7 +26,23 @@
 #                                       # each missing tool (interactive)
 #   scripts/ci/check-tools.sh go kubectl   # check only the named tools
 #
-# Exit status: number of missing REQUIRED tools (0 = the dev loop is ready).
+# Exit status: number of REQUIRED tools missing or below their floor (0 = the
+# dev loop is ready).
+
+# The bash floor is checked before the prologue that depends on it. Every script
+# under scripts/ declares `shopt -s inherit_errexit` (bash 4.4+), and on the
+# bash 3.2 stock macOS still ships at /bin/bash that shopt fails, `set -e` turns
+# it into an immediate exit, and the only message is `invalid shell option
+# name`. This script is the one that has to name the real problem, so it must
+# run on the shell that has it: 3.2-safe syntax only, above the prologue.
+if (( BASH_VERSINFO[0] < 4 || (BASH_VERSINFO[0] == 4 && BASH_VERSINFO[1] < 4) )); then
+  printf 'check-tools.sh: bash %s is too old; this project requires bash 4.4+.\n' "${BASH_VERSION%%(*}" >&2
+  printf '  install: brew install bash   (Apple will not update /bin/bash past 3.2)\n' >&2
+  printf '  then put the new bash ahead of /bin on your PATH and re-run this.\n' >&2
+  printf '  docs: https://www.gnu.org/software/bash/\n' >&2
+  exit 1
+fi
+
 set -euo pipefail
 shopt -s inherit_errexit
 
@@ -38,16 +57,21 @@ shopt -s inherit_errexit
 #   * Go build-/codegen-time tools do NOT belong here — pin them in the vendored
 #     tools/ module (tools/tools.go, built by `make tools`) instead.
 #
-# One line per tool:  name | tier | brew pkg | apt pkg | docs url | custom cmd
+# One line per tool:  name | tier | brew pkg | apt pkg | docs url | custom cmd | min version
 #   brew pkg / apt pkg : package name for `brew install` / `apt-get install`;
 #                        empty when that manager can't cleanly provide it (the
 #                        docs url is then the fallback).
 #   custom cmd         : an exact install command that overrides brew/apt (e.g.
 #                        a gcloud component). Empty for the common case.
+#   min version        : dotted minimum, compared against the first version
+#                        number `<tool> --version` prints. Empty (the common
+#                        case) accepts whatever is installed; declare one only
+#                        for a floor the project actually depends on.
 # Cross-platform by construction: brew covers macOS, apt covers Debian/Ubuntu
 # and containers, and every tool carries a docs url for everything else.
 tools_registry() {
   cat <<'EOF'
+bash|required|bash|bash|https://www.gnu.org/software/bash/||4.4
 go|required|go||https://go.dev/dl/|
 make|required|make|make|https://www.gnu.org/software/make/|
 git|required|git|git|https://git-scm.com/downloads|
@@ -94,7 +118,10 @@ while (( $# )); do
   case "$1" in
     --fix)       fix=true ;;
     --required)  tiers=(required) ;;
-    -h|--help)   sed -n '2,29p' "$0"; exit 0 ;;
+    # The header block, up to the first line that is not a comment. A line range
+    # would need re-counting every time the header grows, and silently truncates
+    # the help when it does not get it.
+    -h|--help)   awk 'NR > 1 && !/^#/ { exit } NR > 1' "$0"; exit 0 ;;
     -*)          printf 'unknown option: %s\n' "$1" >&2; exit 2 ;;
     *)           wanted+=("$1") ;;
   esac
@@ -126,6 +153,54 @@ recommend_install() {
   printf 'see %s' "$url"
 }
 
+# tool_version NAME — print the first dotted version number NAME reports, or
+# nothing when it reports none. Only the first is taken: a `--version` banner
+# routinely carries a second (bash names its build platform, e.g.
+# "5.3.15(1)-release (aarch64-apple-darwin25.4.0)").
+tool_version() {
+  "$1" --version 2>/dev/null | grep -oE '[0-9]+(\.[0-9]+)+' | head -1 || true
+}
+
+# version_ge HAVE WANT — true when dotted version HAVE is at least WANT.
+# Compared component by component so 4.10 sorts above 4.4; a component missing
+# from HAVE reads as 0, and a non-numeric suffix (5.2-rc1) is dropped.
+version_ge() {
+  local have="$1" want="$2" h w i
+  local -a hp=() wp=()
+  IFS=. read -r -a hp <<<"$have"
+  IFS=. read -r -a wp <<<"$want"
+  for (( i = 0; i < ${#wp[@]}; i++ )); do
+    h="${hp[i]:-0}"; h="${h%%[!0-9]*}"
+    w="${wp[i]:-0}"; w="${w%%[!0-9]*}"
+    if (( 10#${h:-0} > 10#${w:-0} )); then return 0; fi
+    if (( 10#${h:-0} < 10#${w:-0} )); then return 1; fi
+  done
+  return 0
+}
+
+# tool_ok NAME MINVER — true when NAME is on PATH and, when MINVER is non-empty,
+# reports at least that version. A tool that reports no parseable version at all
+# fails the check rather than passing unverified.
+tool_ok() {
+  local name="$1" minver="$2" have
+  command -v "$name" >/dev/null 2>&1 || return 1
+  [[ -n "$minver" ]] || return 0
+  have="$(tool_version "$name")"
+  [[ -n "$have" ]] || return 1
+  version_ge "$have" "$minver"
+}
+
+# offer_install CMD — with --fix, an interactive terminal, and a runnable
+# command, offer to run CMD.
+offer_install() {
+  local cmd="$1" reply
+  if ! $fix || [[ "$cmd" == "see "* ]] || [[ ! -e /dev/tty ]]; then return 0; fi
+  read -r -p "       run it now? [y/N] " reply < /dev/tty || reply=''
+  if [[ "$reply" == [yY]* ]]; then
+    eval "$cmd" || printf '       %sinstall failed%s\n' "$red" "$rst"
+  fi
+}
+
 # find_offpath NAME — print the first offpath dir containing an executable NAME.
 find_offpath() {
   local name="$1" d
@@ -148,7 +223,7 @@ profile_file() {
 missing_required=0
 current_tier=''
 
-while IFS='|' read -r name tier brew apt url custom; do
+while IFS='|' read -r name tier brew apt url custom minver; do
   [[ -z "$name" ]] && continue
   in_list "$tier" "${tiers[@]}" || continue
   if (( ${#wanted[@]} )) && ! in_list "$name" "${wanted[@]}"; then continue; fi
@@ -158,13 +233,26 @@ while IFS='|' read -r name tier brew apt url custom; do
     printf '\n%s%s tools%s\n' "$bold" "$tier" "$rst"
   fi
 
-  if command -v "$name" >/dev/null 2>&1; then
-    printf '  %sOK%s   %-24s %s%s%s\n' "$grn" "$rst" "$name" "$dim" "$(command -v "$name")" "$rst"
+  if tool_ok "$name" "$minver"; then
+    # Only a tool with a declared floor gets its version echoed; probing every
+    # tool would add a `--version` fork per row for nothing.
+    found=''
+    if [[ -n "$minver" ]]; then found="$(tool_version "$name")"; fi
+    printf '  %sOK%s   %-24s %s%s%s%s\n' "$grn" "$rst" "$name" "$dim" \
+      "$(command -v "$name")" "${found:+ ($found)}" "$rst"
     continue
   fi
 
-  # Not on PATH. Distinguish "installed but off PATH" from "not installed".
-  if dir="$(find_offpath "$name")"; then
+  # Present but below the floor, installed off PATH, or not installed at all.
+  if command -v "$name" >/dev/null 2>&1; then
+    found="$(tool_version "$name")"
+    local_cmd="$(recommend_install "$brew" "$apt" "$url" "$custom")"
+    printf '  %sOLD%s  %-24s %s at %s, need %s+\n' "$red" "$rst" "$name" \
+      "${found:-no version reported}" "$(command -v "$name")" "$minver"
+    printf '       %supgrade:%s %s\n' "$bold" "$rst" "$local_cmd"
+    printf '       %sthen put its directory ahead of the old one on your PATH%s\n' "$dim" "$rst"
+    offer_install "$local_cmd"
+  elif dir="$(find_offpath "$name")"; then
     printf '  %sPATH%s %-24s installed at %s but not on PATH\n' "$ylw" "$rst" "$name" "$dir"
     printf "       %sadd it:%s export PATH=\"%s:\$PATH\"   %s(in %s)%s\n" \
       "$bold" "$rst" "$dir" "$dim" "$(profile_file)" "$rst"
@@ -173,15 +261,10 @@ while IFS='|' read -r name tier brew apt url custom; do
     printf '  %sMISS%s %-24s not installed\n' "$red" "$rst" "$name"
     printf '       %sinstall:%s %s\n' "$bold" "$rst" "$local_cmd"
     [[ -n "$url" && "$local_cmd" != "see "* ]] && printf '       %sdocs: %s%s\n' "$dim" "$url" "$rst"
-    if $fix && [[ "$local_cmd" != "see "* ]] && [[ -e /dev/tty ]]; then
-      read -r -p "       run it now? [y/N] " reply < /dev/tty || reply=''
-      if [[ "$reply" == [yY]* ]]; then
-        eval "$local_cmd" || printf '       %sinstall failed%s\n' "$red" "$rst"
-      fi
-    fi
+    offer_install "$local_cmd"
   fi
 
-  if command -v "$name" >/dev/null 2>&1; then continue; fi
+  if tool_ok "$name" "$minver"; then continue; fi
   [[ "$tier" == required ]] && missing_required=$((missing_required + 1))
 done < <(tools_registry)
 
@@ -189,7 +272,7 @@ echo
 if (( missing_required == 0 )); then
   printf '%sRequired toolchain is ready.%s\n' "$grn" "$rst"
 else
-  printf '%s%d required tool(s) missing — the dev loop will not work until they are installed.%s\n' \
+  printf '%s%d required tool(s) missing or too old — the dev loop will not work until they are fixed.%s\n' \
     "$red" "$missing_required" "$rst"
   printf 'After a PATH change, restart your shell (or re-source the profile) and re-run this script.\n'
 fi

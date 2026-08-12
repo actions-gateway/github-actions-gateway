@@ -63,6 +63,18 @@ repo="$(build)"
 shellcheck's SC2155 already rejects the combined form, and `make shellcheck` runs in the same `make check`, so this half of the class is closed by a gate that predates the rule.
 The prologue gate deliberately leaves it alone rather than half-duplicating it.
 
+### bash 4.4 is a declared host prerequisite
+
+Requiring the shopt everywhere makes the shell version it needs a hard dependency, and until Q751 nothing said so.
+Measured on 2026-08-11: 175 of the 185 scripts under `scripts/` carry the strict line, 3 carry the tolerant form below, and 7 are sourced `lib/` files that inherit their caller's options.
+
+bash is therefore a `required`-tier entry in [`check-tools.sh`](../../scripts/ci/check-tools.sh) with a declared minimum of 4.4, and a prerequisite in [`CONTRIBUTING.md`](../../CONTRIBUTING.md#the-bash-floor).
+The registry gained a seventh field for that minimum; leave it empty for a tool with no floor the project actually depends on, because it costs a `--version` fork per check.
+
+`check-tools.sh` is itself one of the scripts that needs 4.4, so its own floor check sits **above** its prologue in 3.2-safe syntax.
+Without that the tool meant to diagnose an old bash would die of the old bash first, reporting `invalid shell option name` like everything else.
+Both directions are asserted by [`check-tools-test.sh`](../../scripts/ci/check-tools-test.sh), which stubs a `bash` on `PATH` to fake the version and, where the host has a real pre-4.4 bash to measure with, runs the checker under it.
+
 ### The Claude Code hooks swallow the shopt's own failure
 
 `inherit_errexit` arrived in bash 4.4, and stock macOS still ships 3.2 at `/bin/bash`.

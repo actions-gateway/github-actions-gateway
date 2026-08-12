@@ -3,6 +3,7 @@
 ## Prerequisites
 
 - Go 1.26+
+- **bash 4.4 or newer, ahead of `/bin/bash` on your `PATH`** ([why, and how to get one](#the-bash-floor))
 - Docker (for e2e tests and image builds)
 - [kind](https://kind.sigs.k8s.io/) (for the local e2e cluster)
 - `make`
@@ -10,7 +11,28 @@
 
 Verify your toolchain at any time with `scripts/ci/check-tools.sh` (or `make doctor`).
 It checks the tools the project needs — grouped into `required` (the fast `make check` loop), `e2e`, and `extended` (heavier gates, dogfood) tiers — and for anything missing prints a per-OS install command or, when a tool is installed but not on your `PATH`, the exact directory to add.
-It exits nonzero if a required tool is missing, so it also works as a CI/setup preflight.
+A tool below a version floor the registry declares is reported the same way, with the version it found.
+It exits nonzero if a required tool is missing or too old, so it also works as a CI/setup preflight.
+
+### The bash floor
+
+Every script under `scripts/` opens with `shopt -s inherit_errexit`, without which `set -e` does not reach inside a command substitution and a failed builder yields a truncated value and exit 0 ([bash-style.md](docs/development/bash-style.md#set--e-stops-at-a-command-substitution)).
+That shopt arrived in **bash 4.4**, and 175 of the 185 scripts under `scripts/` declare it today.
+
+Apple still ships bash 3.2 at `/bin/bash` and has no plan to update it, so on stock macOS `/usr/bin/env bash` finds a shell below the floor and every one of those scripts exits before doing anything, saying only:
+
+```
+shopt: inherit_errexit: invalid shell option name
+```
+
+Three `PreToolUse` hooks under `scripts/agent/` are the exception, and they fail the other way: they swallow the shopt's own failure so a hook can never block a tool call, which means on bash 3.2 they keep running with the protection silently switched off.
+
+```bash
+brew install bash
+```
+
+Homebrew installs to `/opt/homebrew/bin` (Apple silicon) or `/usr/local/bin` (Intel), which must come before `/bin` on your `PATH`.
+Current Linux distributions are all well past 4.4, so this is a macOS concern in practice. `make doctor` reports the version it found and, on a bash below the floor, names it instead of failing on the shopt.
 
 That registry is also the project's **approved list of host CLI dependencies**.
 If new work needs a tool that isn't listed, raise it before relying on it — once agreed, add a row to [`scripts/ci/check-tools.sh`](scripts/ci/check-tools.sh) (and to the prerequisites above when it's a hard requirement) so every contributor and `make doctor` stay in sync.
