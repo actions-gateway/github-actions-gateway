@@ -1299,9 +1299,13 @@ body[data-md-color-scheme="slate"] {
 }
 
 /* Verdict icons in the comparison table: green for a GAG win, warm red for an
-   ARC shortfall (matching the proof-card and problem-card colour language). */
+   ARC shortfall (matching the proof-card and problem-card colour language), and
+   muted for the third state, which asserts nothing. Unverified is deliberately
+   the quietest of the three: it is an absence of a claim, so it must not read as
+   a fourth verdict competing with the other two. */
 .md-typeset .gag-yes,
-.md-typeset .gag-no {
+.md-typeset .gag-no,
+.md-typeset .gag-unverified {
   margin-right: 0.15rem;
   vertical-align: text-bottom;
 }
@@ -1312,6 +1316,26 @@ body[data-md-color-scheme="slate"] {
 
 .md-typeset .gag-no {
   color: var(--gag-bad-ink);
+}
+
+.md-typeset .gag-unverified {
+  color: var(--gag-muted);
+}
+
+/* The measurement stamp a competitor-side verdict rests on: the upstream version
+   it was read at, and when. One per verdict cell, enforced by
+   scripts/docs/check-comparison-stamps.sh, so the column's staleness is visible
+   per cell rather than hidden behind one blanket note under the table. Sized and
+   coloured to sit under the claim without competing with it. */
+.md-typeset .gag-asof {
+  display: inline-block;
+  margin-top: 0.2rem;
+  padding-left: 1.5em;
+  font-size: 0.62rem;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+  color: var(--gag-muted);
+  white-space: nowrap;
 }
 
 /* Scroll reveals — only when JS adds .gag-reveal-ready. No-JS and reduced-motion
