@@ -275,8 +275,26 @@ var _ = Describe("E2E_AGC_ScaleSetRecovery", Ordered, func() {
 			}
 
 			// No re-run. Whether that is the defect this spec exists to catch depends
-			// entirely on whether the AGC that could have produced it is still the one
-			// the attempt was pinned to.
+			// entirely on whether the attempt got a window in which the recovery could
+			// have run at all. Two ways it does not, both re-staged rather than failed.
+
+			// The kubelet removed the pod between the AGC's cached List and its claim
+			// patch, so the disruption's only record was gone before anything could be
+			// claimed (Q809). No AGC can recover that, under any role — the attempt says
+			// nothing about the RBAC question, exactly like a replaced control plane
+			// below. Read from the AGC rather than inferred: an unclaimed pod looks
+			// identical whether the claim was refused with a Forbidden (the defect) or
+			// lost to the deletion (not the defect), and only the AGC knows which.
+			if evictionRecoveryEvidenceLost(tenantNS, agcDeploy, probePod) {
+				AddReportEntry("Q809 re-staging", fmt.Sprintf(
+					"attempt %d: the worker pod was deleted before the AGC could claim its recovery, so no "+
+						"re-run was possible and the chart role was never exercised", attempt))
+				Expect(attempt).To(BeNumerically("<", maxAttempts),
+					"the disrupted pod was deleted before the claim could land on every one of %d attempts; "+
+						"the drain-recovery window is not reachable on this cluster at all", maxAttempts)
+				continue
+			}
+
 			if agcPodIdentity(tenantNS, agcDeploy) == pinnedAGC {
 				Fail("a deleted scale-set worker's run was never re-run under the chart role, and the AGC " +
 					"that observed the disruption is still running; either the role lost a verb the recovery " +
@@ -303,6 +321,33 @@ var _ = Describe("E2E_AGC_ScaleSetRecovery", Ordered, func() {
 		}, 30*time.Second, 3*time.Second).Should(Succeed())
 	})
 })
+
+// evictionRecoveryEvidenceLost reports whether the AGC found probePod's disruption and
+// then lost it because the pod was deleted before the claim patch could land — the Q809
+// race, measured on three e2e-calico runs on 2026-08-12. The kubelet removes a drained
+// worker's object seconds after its container exits, and the recovery scan lists from
+// the informer cache and patches through the live client, so the window is real and
+// narrow.
+//
+// The AGC is the only witness. The pod is gone either way, and an unclaimed pod looks
+// the same whether the claim was refused (the RBAC defect this spec exists to catch) or
+// never got to be made. The AGC logs the second case at Warn with the pod's name, which
+// is what makes the two separable at all.
+func evictionRecoveryEvidenceLost(ns, deploy, probePod string) bool {
+	GinkgoHelper()
+	out, err := utils.Run(exec.Command("kubectl", "logs",
+		"-n", ns, "-l", "app="+deploy, "--tail=-1", "--prefix"))
+	if err != nil {
+		return false // no logs to read is not evidence of a lost claim
+	}
+	for _, line := range strings.Split(out, "\n") {
+		if strings.Contains(line, "disruption was lost before it could be claimed") &&
+			strings.Contains(line, probePod) {
+			return true
+		}
+	}
+	return false
+}
 
 // scaleSetRecoveryManifest renders the tenant: one gateway, one template, one
 // ScaleSet-protocol RunnerSet. The gateway's githubURL deliberately names a host

@@ -108,8 +108,16 @@ type Metrics struct {
 	// into it: a sustained non-zero rate means GitHub is not sending the assignment
 	// fields the mechanism depends on, not that a tenant is being disrupted too often.
 	EvictionRecoveryIdentityUnknown *prometheus.CounterVec
-	QuotaRetries                    *prometheus.CounterVec
-	QuotaRetriesExhausted           *prometheus.CounterVec
+	// EvictionRecoveryEvidenceLost counts disrupted scale-set workers whose pod was
+	// deleted before the recovery could be claimed, so no automatic re-run was
+	// attempted and no later reconcile can attempt one — the pod is the only record
+	// the disruption has. The preemption and deletion arms are the exposed ones: both
+	// act on a pod that is already terminating (Q809). A sustained rate means
+	// disrupted jobs are being dropped rather than re-run, which is otherwise
+	// indistinguishable from no disruptions happening at all.
+	EvictionRecoveryEvidenceLost *prometheus.CounterVec
+	QuotaRetries                 *prometheus.CounterVec
+	QuotaRetriesExhausted        *prometheus.CounterVec
 	// Q223: worker-pod creation-rate limit (anti-stampede). Incremented when the
 	// opt-in per-RunnerGroup scale-up token bucket makes a pod creation wait for a
 	// token (the burst was spent). Only non-zero when a group sets spec.scaleUp; a
@@ -249,6 +257,11 @@ func NewMetrics() *Metrics {
 			Help: "Disrupted scale-set worker pods carrying no workflow-run identity, so no automatic re-run could be attempted, by cause (eviction, preemption, deletion).",
 		}, []string{"namespace", "runner_group", "cause"}),
 
+		EvictionRecoveryEvidenceLost: prometheus.NewCounterVec(prometheus.CounterOpts{
+			Name: "actions_gateway_eviction_recovery_evidence_lost_total",
+			Help: "Disrupted scale-set worker pods deleted before their recovery could be claimed, so no automatic re-run was attempted and none can be attempted later — the pod is the disruption's only record (Q809). By cause (eviction, preemption, deletion); preemption and deletion are the exposed arms, since both act on a pod that is already terminating.",
+		}, []string{"namespace", "runner_group", "cause"}),
+
 		QuotaRetries: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: "actions_gateway_quota_retries_total",
 			Help: "Pod creation attempts retried due to namespace ResourceQuota exhaustion.",
@@ -316,6 +329,7 @@ func NewMetrics() *Metrics {
 		m.AbandonedRunForceCancels,
 		m.AbandonedRunRerunWaits,
 		m.EvictionRecoveryIdentityUnknown,
+		m.EvictionRecoveryEvidenceLost,
 		m.QuotaRetries,
 		m.QuotaRetriesExhausted,
 		m.ScaleUpThrottled,

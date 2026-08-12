@@ -411,6 +411,22 @@ Its sharpest edge is a run the operator *cancelled*, because the cancel runbook'
 A `cancelled` conclusion then accepts `rerun-failed-jobs` rather than refusing it the way a `success` conclusion does (measured 2026-08-05, [the Q683 measurement](../plan/q645-abandoned-completion.md#q683--the-fast-ending-measurement-2026-08-05)), so the job is re-queued and the cancel is undone, bounded by the shared retry budget.
 The runbook states that consequence; whether this arm should read the run's conclusion before re-running is [Q811](../STATUS.md#Q811).
 
+##### Detecting a disruption is not the same as claiming it
+
+The two deleted-pod rows above are readable only until the kubelet finishes tearing the object down, and the recovery scan lists from the informer cache while it claims through the live API.
+So a pod can pass the discriminator and still be gone before its claim patch lands, and the run is then unrecoverable by any reconcile, in any replica, because the pod *is* the disruption's record.
+Measured on three `e2e-calico` runs on 2026-08-12, where a drained worker was removed within about two seconds of the delete request, well inside its 30-second grace period, because the container exits as soon as it is signalled ([Q809](../plan/q549-scaleset-rerun-flake.md#mode-b-attributed-2026-08-12-the-claim-was-made-and-lost)).
+
+Two things follow, and both are deliberate:
+
+* **The loss is reported, not swallowed.** `actions_gateway_eviction_recovery_evidence_lost_total` increments and an `EvictionRecoveryEvidenceLost` Warning Event names the pod, so a dropped re-run is visible rather than indistinguishable from no disruption having happened.
+* **It is not recovered from the cached copy.** The claim is what makes recovery at-most-once, and acting on an in-memory pod after the object is gone would let two AGC replicas each spend a slot of one run's retry budget for a single disruption.
+  A visible manual re-run is the better trade than a silently doubled budget.
+
+A conflict on that patch is a different thing and *is* retried.
+The optimistic lock exists to arbitrate between claimants, but the apiserver raises the same conflict for any concurrent write, and the kubelet publishing the terminal phase is guaranteed to be racing, since that transition is the edge that triggers the reconcile.
+Only a re-read showing the claim annotation already set ends the attempt.
+
 Note that the `DisruptionTarget` **condition type** alone is not the discriminator for either deleted-pod row: the eviction API stamps it too, with reason `EvictionByEvictionAPI`, and a bare `kubectl delete pod` stamps nothing.
 Preemption detection matches the full type/status/reason triple; drain detection keys on the deletion mark at terminal publish, ordered on both tiers against the container's recorded `finishedAt` — as the deletion *request* time, `deletionTimestamp` minus the grace period the apiserver folds into it.
 

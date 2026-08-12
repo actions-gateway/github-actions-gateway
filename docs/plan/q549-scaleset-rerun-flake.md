@@ -5,20 +5,18 @@ Two distinct failure modes now sit behind that one timeout.
 This file exists so the next occurrence is classified before anything is changed.
 
 **Status:** watching.
-Mode A is diagnosed and mitigated (PR #1120).
-Mode B has been seen twice — 2026-08-01 and 2026-08-04 — and is **undiagnosed**; no mechanism is asserted below.
-[Q549](../STATUS.md#Q549) stays in [Flake watch](../STATUS.md#flake-watch) rather than escalating: the documented revive trigger is recurrence on `main`, and both mode-B sightings were on PR branches.
-Each resets the [soak clock](../development/maintaining-backlog.md#retiring-a-flake-watch-row) — count green runs from **2026-08-04**, not from the fix.
+Mode A is diagnosed and mitigated (PR #1120). **Mode B is diagnosed as of 2026-08-12 and fixed under [Q809](../STATUS.md#Q809)**; see [Mode B, attributed](#mode-b-attributed-2026-08-12-the-claim-was-made-and-lost) below.
+It recurred three times that day, once on `main`, which fired this row's revive trigger; those three runs are the first with an AGC log line that names the failure, and it is not either cause the spec's own message guesses at.
+Reset the [soak clock](../development/maintaining-backlog.md#retiring-a-flake-watch-row) to **2026-08-12**: count green runs from the claim fix, not from PR #1120.
 
 ## The two modes
 
 | Mode | Discriminator in the spec | State |
 |---|---|---|
 | **A** — the AGC control plane was replaced inside the claim window | `agcPodIdentity() != pinnedAGC` at the wait's expiry: the spec records a `Q549 re-staging` report entry and retries the whole staging | Diagnosed on run [30658951388](https://github.com/actions-gateway/github-actions-gateway/actions/runs/30658951388), mitigated by the UID pin + re-stage (PR #1120). Worked case in [testing.md § Pin the process when the signal comes out of its memory](../development/testing.md#pin-the-process-when-the-signal-comes-out-of-its-memory) |
-| **B** — the window was undisturbed and the re-run still never fired | the pin is **unchanged**, so the spec takes its `Fail()` branch, with zero `Q549 re-staging` entries | Seen twice (below). Cause unverified |
+| **B**: the window was undisturbed and the re-run still never fired | the pin is **unchanged**, so the spec takes its `Fail()` branch, with zero `Q549 re-staging` entries | **Diagnosed 2026-08-12**: the disruption was detected and the *claim* failed. Fixed under Q809; the spec now re-stages on the unwinnable half |
 
-The spec's own failure text names two candidate causes for the `Fail()` branch — a chart role missing a verb, or a regressed deletion-mark discriminator.
-Neither is established for the 2026-08-01 sighting; both remain open alongside anything else.
+The spec's own failure text names two candidate causes for the `Fail()` branch — a chart role missing a verb, or a regressed deletion-mark discriminator. **Both are wrong**, and the 2026-08-12 evidence rules them out directly: detection reached `cause: deletion` every time, so the discriminator was working, and the claim never returned a `Forbidden`, so the role was not short a verb.
 
 ## Mode B: what run 30724186342 shows
 
@@ -79,24 +77,79 @@ Measured:
   As on 2026-08-01, the entire re-run wait ran inside that silence.
 - **The RunnerSet reconcile was erroring across the disruption window**, not converged — [capture item 4](#what-to-capture-on-the-next-occurrence) below.
 
-**The listener error is by design, and is not a signal.** Open question 2 below guessed it "may well be routine in this e2e"; it is. `scaleSetRecoveryManifest` sets `githubURL: https://ghes.invalid/ssrecorg` ([worker_scaleset_recovery_test.go](../../cmd/gmc/test/e2e/worker_scaleset_recovery_test.go)), deliberately choosing an unresolvable host so the bootstrap fails on NXDOMAIN — that failure is the precondition the spec needs.
+**The listener error is by design, and is not a signal.** The open question below guessed it "may well be routine in this e2e"; it is. `scaleSetRecoveryManifest` sets `githubURL: https://ghes.invalid/ssrecorg` ([worker_scaleset_recovery_test.go](../../cmd/gmc/test/e2e/worker_scaleset_recovery_test.go)), deliberately choosing an unresolvable host so the bootstrap fails on NXDOMAIN — that failure is the precondition the spec needs.
 So a reconcile erroring on the scale-set listener is the normal state of this tenant and cannot distinguish a failing run from a passing one.
 What remains open is whether the recovery scan is *reachable* while that is happening.
 
+## Mode B, attributed (2026-08-12): the claim was made, and lost
+
+Three `e2e-calico` failures in one three-hour window, all mode B, all this spec, all on attempt 1:
+
+| Run | Trigger | Claim error in the AGC log |
+|---|---|---|
+| [31555321326](https://github.com/actions-gateway/github-actions-gateway/actions/runs/31555321326) | push `main`, 01:57 | `pods "ssrec-drain-probe-1" not found` |
+| [31556806760](https://github.com/actions-gateway/github-actions-gateway/actions/runs/31556806760) | merge queue, pr-1405, 02:25 | `Operation cannot be fulfilled on pods "…": the object has been modified` |
+| [31564438316](https://github.com/actions-gateway/github-actions-gateway/actions/runs/31564438316) | merge queue, pr-1415, 04:48 | `pods "ssrec-drain-probe-1" not found` |
+
+Each run reported `Summarizing 1 Failure`: this spec and nothing else.
+Each carried exactly one AGC line about the probe pod, at `Debug`:
+
+```
+"msg":"scale-set worker disruption already claimed elsewhere; skipping","cause":"deletion", …
+```
+
+**That message was wrong in all three cases, and it is why the mode stayed undiagnosed for eleven days.** The [capture list](#what-to-capture-on-the-next-occurrence) below asked for `could not claim scale-set worker disruption`, the `Warn` line for an unrecognised error.
+The `Debug` line above is what a `Conflict` or a `NotFound` actually produced, and it asserts a claimant that never existed.
+
+What the three runs establish:
+
+- **Detection worked.** `disruptionAwaitingRecovery` returned `cause: deletion` every time, so the Q502 discriminator was not regressed.
+- **The role was not short a verb.** A refused claim is a `Forbidden`, and none of the three was.
+- **Nobody else had claimed the pod.** The spec's own sampler recorded `actions-gateway.com/eviction-handled-at` empty throughout, the same contrast the 2026-08-01 and 2026-08-04 runs showed.
+- **The claim raced the pod's own teardown.** Two runs found the object already gone; the delete was issued at ≈02:07:40 and the pod was unreadable by 02:07:42, well inside its 30 s grace period, because the probe container traps `TERM` and exits at once.
+  The recovery scan lists from the informer cache and patches through the live client, so that gap is exactly where the claim falls.
+- **The third was a conflict from a writer that was not a claimant.** The kubelet publishing the terminal phase is guaranteed to be racing here, because that transition is the edge that triggers the reconcile.
+  The optimistic lock cannot tell it from a rival replica.
+
+This also settles what the 2026-08-04 window could not: an 11.3 s observation window with no claim "weakened the pod vanished before the claim could land" only because both flavours were being read as one.
+The conflict flavour needs no vanished pod.
+
+**Lane asymmetry, measured over the same window** (`merge_group` and `push` runs only; the `pull_request` entries are gate no-ops, Q675): `e2e-test.yml` 0 failures in 87, `e2e-calico.yml` 3 in 80.
+The spec carries no CNI gate and runs on both, and the 2026-08-01 sighting was on kindnet, so the mechanism is not calico's.
+Calico's heavier per-node load is a plausible amplifier of the race and is **not** measured.
+
+### The fix
+
+**AGC** ([eviction_scaleset.go](../../cmd/agc/internal/provisioner/eviction_scaleset.go)): the claim settles its own verdict instead of handing back a raw error:
+
+1. A `Conflict` is retried against a re-read pod, bounded, and only while the fresh object shows the claim still unstamped.
+   A fresh object that *does* carry it is the genuine rival the optimistic lock exists to lose to, and is still skipped at `Debug`.
+2. A `NotFound` is reported as a lost recovery: `Warn`, an `EvictionRecoveryEvidenceLost` Event, and `actions_gateway_eviction_recovery_evidence_lost_total`.
+
+At-most-once is deliberately **not** relaxed.
+Recovering from the in-memory pod copy after the object is gone would let two AGC replicas each spend a slot of one run's retry budget for a single disruption, which is the regression the claim exists to prevent.
+A drain whose evidence outruns the claim stays unrecovered, but stops being silent.
+Design boundary: [04-operational-flows.md § Detecting a disruption is not the same as claiming it](../design/04-operational-flows.md#detecting-a-disruption-is-not-the-same-as-claiming-it).
+
+**Spec**: a lost claim means the attempt never exercised the chart role, exactly like mode A's replaced control plane, so it re-stages under the same `maxAttempts` budget rather than failing.
+It reads the verdict from the AGC log, because the pod is gone either way and an unclaimed pod looks identical whether the claim was refused or never got to be made.
+
+Deliberately not done: a finalizer on the probe pod to widen the window.
+The real teardown window is what distinguishes this spec from its envtest twin, which simulates it with a finalizer; adding one here would delete the spec's reason to exist.
+
 ## Open questions
 
-None of these is answered; each names what would answer it.
-
-1. **Did the claim ever land?** The pod is gone by 00:01:25, so it cannot be read back after the fact — the sampler's ~2.2 s is the only window there ever was.
-   The passing run stamped the claim inside a window of the same width, so "too slow to claim before the pod vanished" and "never scanned" both fit what was captured, and nothing here separates them.
-2. **Is the recovery scan reachable while the RunnerSet reconcile is failing on the scale-set listener?** Unchecked — neither the code path nor a repro has been looked at.
-   The listener error itself is settled: it is deliberate (`ghes.invalid`, see the 2026-08-04 section), so it is the tenant's normal state and discriminates nothing.
-   Whether the scan survives it is still open.
-3. **Is the AGC's silence after 00:01:24Z the reconcile loop going quiet, or something broader?** Unknown from the dump alone.
+1. **Is the recovery scan reachable while the RunnerSet reconcile is failing on the scale-set listener?** Still unchecked, and now much less likely to matter: the 2026-08-12 runs show the scan running and reaching the claim while that error is the tenant's steady state.
+   The listener error itself is settled: it is deliberate (`ghes.invalid`, see the 2026-08-04 section), so it is normal and discriminates nothing.
+2. **Is the AGC's silence after the disruption the reconcile loop going quiet, or something broader?** Unknown from the 2026-08-01 dump alone.
+   The 2026-08-12 runs were not silent, so this may have been an artifact of that one run's log capture rather than a property of the mode.
 
 ## What to capture on the next occurrence
 
 - Whether the failure is mode A or mode B — read the pin and the presence of a `Q549 re-staging` entry first, before anything else.
-- The AGC log **for the full wait window**, not just up to the failure dump: whether the recovery scan runs at all during those 90 s is the fork the triage above cannot pass.
-- The claim annotation's fate: the sampler sequence, plus whether the AGC emitted any claim attempt (`could not claim scale-set worker disruption` is the refusal line).
+- Whether it is the mode B **above**: grep the AGC log for `disruption was lost before it could be claimed` and for `already claimed elsewhere`, and note that a `Q809 re-staging` entry means the spec classified it and kept going.
+  A mode-B failure with neither line is a genuinely new shape.
+- The AGC log **for the full wait window**, not just up to the failure dump.
+- The claim annotation's fate: the sampler sequence, plus which claim line the AGC emitted.
+  All three of `Forbidden` (the role), `Conflict`, and `NotFound` now say so distinctly.
 - The RunnerSet reconcile's state across the window — erroring, or converged.

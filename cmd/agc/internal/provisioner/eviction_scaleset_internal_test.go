@@ -2,6 +2,7 @@ package provisioner
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"sync/atomic"
@@ -19,6 +20,7 @@ import (
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 )
 
 // Q417: eviction recovery on the scale-set tier. The capability existed only on
@@ -40,6 +42,9 @@ func evictionRecoveryMetrics() *runnercore.Metrics {
 		}, []string{"namespace", "runner_group", "tier", "cause"}),
 		EvictionRecoveryIdentityUnknown: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: "t_q417_eviction_recovery_identity_unknown_total",
+		}, []string{"namespace", "runner_group", "cause"}),
+		EvictionRecoveryEvidenceLost: prometheus.NewCounterVec(prometheus.CounterOpts{
+			Name: "t_q809_eviction_recovery_evidence_lost_total",
 		}, []string{"namespace", "runner_group", "cause"}),
 	}
 }
@@ -81,6 +86,13 @@ func identityAnnotations() map[string]string {
 // the rerun-failed-jobs endpoint, returning the paths it was called with.
 func recoveryFixture(t *testing.T, pods ...*corev1.Pod) (*Provisioner, *stubTarget, *runnercore.Metrics, *atomic.Int64, chan string) {
 	t.Helper()
+	return recoveryFixtureWith(t, interceptor.Funcs{}, pods...)
+}
+
+// recoveryFixtureWith is recoveryFixture with the fake client's calls intercepted, for
+// the apiserver races the claim path has to classify (Q809).
+func recoveryFixtureWith(t *testing.T, ic interceptor.Funcs, pods ...*corev1.Pod) (*Provisioner, *stubTarget, *runnercore.Metrics, *atomic.Int64, chan string) {
+	t.Helper()
 
 	rerunCount := &atomic.Int64{}
 	paths := make(chan string, 8)
@@ -98,7 +110,7 @@ func recoveryFixture(t *testing.T, pods ...*corev1.Pod) (*Provisioner, *stubTarg
 	for _, pod := range pods {
 		builder = builder.WithObjects(pod)
 	}
-	fc := builder.Build()
+	fc := builder.WithInterceptorFuncs(ic).Build()
 
 	m := evictionRecoveryMetrics()
 	p := NewProvisioner(fc, m, nil)
@@ -369,6 +381,127 @@ func TestClaimEvictionRecovery_OptimisticLockRejectsStaleWriter(t *testing.T) {
 	require.Error(t, err, "the second claim must be rejected, not silently applied")
 	assert.True(t, apierrors.IsConflict(err),
 		"a lost claim must be a Conflict so the caller recognises it and skips: got %v", err)
+}
+
+// drainedWorker builds the disruption arm Q809's flake lives on: a scale-set worker
+// deleted while running, whose container then recorded an exit — the drain shape
+// externallyDeletedBeforeTerminal admits.
+func drainedWorker(name string) *corev1.Pod {
+	pod := scaleSetWorkerPod(name, identityAnnotations())
+	deletedAt := metav1.NewTime(time.Now().Add(-40 * time.Second))
+	grace := int64(30)
+	pod.DeletionTimestamp = &deletedAt
+	pod.DeletionGracePeriodSeconds = &grace
+	pod.Finalizers = []string{"test.actions-gateway.com/hold"} // a fake client rejects a deletionTimestamp without one
+	pod.Status.Phase = corev1.PodFailed
+	pod.Status.ContainerStatuses = []corev1.ContainerStatus{{
+		Name: "runner",
+		State: corev1.ContainerState{Terminated: &corev1.ContainerStateTerminated{
+			ExitCode:   1,
+			FinishedAt: metav1.NewTime(deletedAt.Add(-25 * time.Second)),
+		}},
+	}}
+	return pod
+}
+
+// TestClaimEvictionRecovery_RetriesAConflictFromANonClaimant is the Q809 fix on the
+// conflict arm. The optimistic lock is there to arbitrate between claimants, but the
+// apiserver raises the same Conflict for any concurrent write — and the kubelet
+// publishing the terminal phase is guaranteed to be racing, because that transition is
+// the edge that triggers the reconcile. Before the fix that conflict was read as
+// "already claimed elsewhere" and the recovery was dropped, which is how run
+// 31556806760 lost a drained worker's re-run.
+func TestClaimEvictionRecovery_RetriesAConflictFromANonClaimant(t *testing.T) {
+	ctx := context.Background()
+	var patches atomic.Int64
+	p, target, _, rerunCount, _ := recoveryFixtureWith(t, interceptor.Funcs{
+		Patch: func(ctx context.Context, c client.WithWatch, obj client.Object, patch client.Patch, opts ...client.PatchOption) error {
+			if patches.Add(1) == 1 {
+				// The kubelet's status write landing between our read and our patch.
+				return apierrors.NewConflict(
+					corev1.Resource("pods"), obj.GetName(), errors.New("the object has been modified"))
+			}
+			return c.Patch(ctx, obj, patch, opts...)
+		},
+	}, drainedWorker("runner-gpu-drained"))
+
+	done, err := p.RecoverEvictedScaleSetWorkers(ctx, target)
+	require.NoError(t, err)
+	<-done
+
+	assert.Equal(t, int64(1), rerunCount.Load(),
+		"a conflict raised by a writer that is not a claimant must not cost the disruption its re-run")
+	var pod corev1.Pod
+	require.NoError(t, p.Client.Get(ctx, client.ObjectKey{Namespace: "team-a", Name: "runner-gpu-drained"}, &pod))
+	assert.Contains(t, pod.Annotations, AnnotationEvictionHandledAt)
+}
+
+// TestClaimEvictionRecovery_ConflictFromARealClaimantStillSkips is the other half, and
+// the one the retry must not break: when the fresh object shows someone else already
+// stamped the claim, this is the replica race the optimistic lock exists to lose, and
+// retrying would spend a second slot of the run's retry budget on one disruption.
+func TestClaimEvictionRecovery_ConflictFromARealClaimantStillSkips(t *testing.T) {
+	ctx := context.Background()
+	var patches atomic.Int64
+	p, target, _, rerunCount, _ := recoveryFixtureWith(t, interceptor.Funcs{
+		Patch: func(ctx context.Context, c client.WithWatch, obj client.Object, patch client.Patch, opts ...client.PatchOption) error {
+			if patches.Add(1) > 1 {
+				return c.Patch(ctx, obj, patch, opts...)
+			}
+			// The other replica wins the claim, then our stale patch is rejected.
+			var winner corev1.Pod
+			if err := c.Get(ctx, client.ObjectKeyFromObject(obj), &winner); err != nil {
+				return err
+			}
+			winner.Annotations[AnnotationEvictionHandledAt] = "2026-08-12T00:00:00Z"
+			if err := c.Update(ctx, &winner); err != nil {
+				return err
+			}
+			return apierrors.NewConflict(
+				corev1.Resource("pods"), obj.GetName(), errors.New("the object has been modified"))
+		},
+	}, drainedWorker("runner-gpu-raced"))
+
+	done, err := p.RecoverEvictedScaleSetWorkers(ctx, target)
+	require.NoError(t, err)
+	<-done
+
+	assert.Equal(t, int64(0), rerunCount.Load(),
+		"the replica that lost the claim must not also re-run the job")
+	assert.Equal(t, int64(1), patches.Load(), "a claim already held elsewhere must not be retried")
+	var pod corev1.Pod
+	require.NoError(t, p.Client.Get(ctx, client.ObjectKey{Namespace: "team-a", Name: "runner-gpu-raced"}, &pod))
+	assert.Equal(t, "2026-08-12T00:00:00Z", pod.Annotations[AnnotationEvictionHandledAt],
+		"the winner's stamp must survive")
+}
+
+// TestRecoverEvictedScaleSetWorkers_EvidenceLostIsSurfaced covers the arm that cost
+// Q809 two of its three CI failures: the kubelet finished tearing the drained pod down
+// between the cached List and the claim patch. The pod is the disruption's only record,
+// so nothing recovers it and no later reconcile can — which makes silence the whole
+// problem. It must be loud, exactly as an unknown identity is.
+//
+// Deliberately still not recovered: recovering from the in-memory copy would let two
+// replicas each spend a slot of one run's retry budget for one disruption, which is the
+// regression the claim exists to prevent.
+func TestRecoverEvictedScaleSetWorkers_EvidenceLostIsSurfaced(t *testing.T) {
+	ctx := context.Background()
+	p, target, m, rerunCount, _ := recoveryFixtureWith(t, interceptor.Funcs{
+		Patch: func(_ context.Context, _ client.WithWatch, obj client.Object, _ client.Patch, _ ...client.PatchOption) error {
+			return apierrors.NewNotFound(corev1.Resource("pods"), obj.GetName())
+		},
+	}, drainedWorker("runner-gpu-vanished"))
+
+	done, err := p.RecoverEvictedScaleSetWorkers(ctx, target)
+	require.NoError(t, err)
+	<-done
+
+	assert.Equal(t, int64(0), rerunCount.Load(), "an unclaimable disruption must not be re-run")
+	assert.Equal(t, float64(1),
+		testutil.ToFloat64(m.EvictionRecoveryEvidenceLost.WithLabelValues("team-a", "gpu", recoveryCauseDeletion)))
+	assert.Contains(t, target.events, "EvictionRecoveryEvidenceLost")
+	assert.NotContains(t, target.events, "EvictionRecoveryIdentityUnknown",
+		"the identity was fine; only the pod went away")
 }
 
 // TestRunIdentityFromPod rejects every partial identity. A run is addressed by all three
