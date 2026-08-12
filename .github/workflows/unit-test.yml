@@ -73,7 +73,6 @@ jobs:
       pull-requests: read
     outputs:
       code: ${{ steps.filter.outcome == 'success' && steps.filter.outputs.code || 'true' }}
-      status: ${{ steps.filter.outcome == 'success' && steps.filter.outputs.status || 'true' }}
       scripts: ${{ steps.filter.outcome == 'success' && steps.filter.outputs.scripts || 'true' }}
       vendor: ${{ steps.filter.outcome == 'success' && steps.filter.outputs.vendor || 'true' }}
       modules: ${{ steps.filter.outcome == 'success' && steps.filter.outputs.modules || 'true' }}
@@ -136,10 +135,6 @@ jobs:
               # pattern must re-run this job's Go tests too.
               - '.claude/piped-gate-guard.json'
               - 'coverage-baseline.txt'
-              - '.github/workflows/unit-test.yml'
-            status:
-              - 'docs/STATUS.md'
-              - 'scripts/docs/lint-backlog.sh'
               - '.github/workflows/unit-test.yml'
             scripts:
               - 'scripts/**'
@@ -253,8 +248,12 @@ jobs:
 
   lint:
     needs: [changes]
-    # gofmt/golangci need code; lint-backlog needs the STATUS.md filter.
-    if: needs.changes.outputs.code == 'true' || needs.changes.outputs.status == 'true' || github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    # `code` is the whole trigger set: every gate below is driven by a Go
+    # change. The backlog format gate lives in status-lint.yml's `lint-status`
+    # job, which covers every path that can change how docs/STATUS.md lints, so
+    # a second copy here would charge a docs/STATUS.md-only PR ~170s of Go
+    # linting for a check already running beside it (Q808).
+    if: needs.changes.outputs.code == 'true' || github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     runs-on: ${{ (github.event_name == 'workflow_dispatch' && inputs.target_gag) && fromJSON(vars.GAG_RUNNER || '"ubuntu-latest"') || 'ubuntu-latest' }}
     timeout-minutes: 10
     steps:
@@ -278,8 +277,6 @@ jobs:
       # module first; its local throttle is a no-op here (CI env var is set).
       - name: gofmt + golangci-lint (make lint)
         run: make lint
-      - name: lint STATUS.md
-        run: make lint-backlog
       # Enforce a single Go version across go.work / all go.mod / all go.work.gen
       # (Q68). The go.work.gen files feed `make manifests` and have drifted before.
       - name: single Go version (make go-version-check)
