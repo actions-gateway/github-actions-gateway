@@ -2970,6 +2970,9 @@ The repo vendors the skill's tooling so the rules hold for every contributor, wi
 A plan doc, a roadmap bullet and the row deletion they belong to are three commits, in whatever order.
 That literal shape is also the shape practice already has: across the last 80 merged PRs, all 74 commits touching the file were backlog-only, so encoding the sentence as written breaks no workflow anyone is using.
 Several isolated backlog commits in one PR is ordinary and stays green — <a href="https://github.com/actions-gateway/github-actions-gateway/pull/1239">#1239</a> landed three.</p>
+<p><strong><code>git commit --amend</code> after the row change amends the row change.</strong> Order is free to the gates, but the backlog commit is usually the last one written, so it sits at <code>HEAD</code>; a later fix to the other half lands on it and builds exactly the mixed commit this rule forbids.
+Nothing warns you, because the amend is a perfectly ordinary command that did what you asked.
+Read <code>git show --stat HEAD</code> before amending anything, and write the row change once the rest is settled rather than mid-iteration. <code>check-status-isolation.sh</code> does catch the mix, but on the pushed branch, a CI cycle after the cheap moment to notice.</p>
 <p>Two mechanisms enforce it, and neither subsumes the other:</p>
 <table>
 <thead>
