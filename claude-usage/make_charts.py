@@ -139,6 +139,27 @@ def event_label(ax, x, y, label, col, yc="data"):
                 path_effects=[pe.Stroke(linewidth=2.5, foreground="white"), pe.Normal()])
 
 
+def stagger_labels(fig, texts, step):
+    """Step a label down until it clears the ones already placed.
+
+    Horizontal event labels share one height, so two events close together on the
+    x axis collide, and they get closer every time the timeline lengthens under a
+    fixed figure width. Overlap is measured in display space, so a pair that fits
+    is left alone at any date spacing.
+    """
+    fig.canvas.draw()  # a renderer must exist before a text can be measured
+    rend = fig.canvas.get_renderer()
+    placed = []
+    for t in texts:
+        for _ in range(len(texts)):
+            box = t.get_window_extent(rend)
+            if not any(box.overlaps(p) for p in placed):
+                break
+            x, y = t.get_position()
+            t.set_position((x, y - step))
+        placed.append(t.get_window_extent(rend))
+
+
 def save(fig, stem):
     os.makedirs(CHARTS, exist_ok=True)
     fig.savefig(os.path.join(CHARTS, f"{stem}.png"), dpi=160, bbox_inches="tight")
@@ -202,6 +223,7 @@ def chart_tokens_by_model():
     handles = [mpatches.Patch(facecolor=MODEL_COLORS[m], hatch=MODEL_HATCH[m] or None,
                               edgecolor="white", label=m) for m in drawn]
     handles.append(mpatches.Patch(facecolor="#cccccc", hatch="////", edgecolor="white", label="estimated"))
+    labels = []
     for ev_date, label, col, ls in event_markers():
         ev = ev_date.isoformat()
         if ev not in days:
@@ -210,9 +232,9 @@ def chart_tokens_by_model():
         ax.axvline(xi - 0.5, color=col, ls=ls, lw=1.4)
         # Labels near the right edge read inward so they stay on the axes.
         right = xi > len(days) * 0.78
-        ax.text(xi + (-0.9 if right else -0.4), max(bottom) * 0.92, label,
-                ha="right" if right else "left",
-                fontsize=10, fontweight="bold", color=col)
+        labels.append(ax.text(xi + (-0.9 if right else -0.4), max(bottom) * 0.92, label,
+                              ha="right" if right else "left",
+                              fontsize=10, fontweight="bold", color=col))
     ax.set_title("Daily Claude Code token usage by model", fontsize=14, fontweight="bold", loc="left")
     ax.set_ylabel("tokens / day  (millions)", fontsize=11)
     ax.set_xticks(xs)
@@ -225,6 +247,7 @@ def chart_tokens_by_model():
     ax.grid(axis="y", alpha=0.25)
     fig.text(0.012, 0.005, "hatched bars (May 16–18) estimated from archived sessions", fontsize=7.5, color="#999")
     fig.tight_layout()
+    stagger_labels(fig, labels, max(bottom) * 0.075)  # after layout: it measures the final axes box
     save(fig, "tokens_by_model")
 
 
