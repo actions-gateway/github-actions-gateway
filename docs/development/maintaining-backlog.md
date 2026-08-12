@@ -69,6 +69,10 @@ A plan doc, a roadmap bullet and the row deletion they belong to are three commi
 That literal shape is also the shape practice already has: across the last 80 merged PRs, all 74 commits touching the file were backlog-only, so encoding the sentence as written breaks no workflow anyone is using.
 Several isolated backlog commits in one PR is ordinary and stays green — [#1239](https://github.com/actions-gateway/github-actions-gateway/pull/1239) landed three.
 
+**`git commit --amend` after the row change amends the row change.** Order is free to the gates, but the backlog commit is usually the last one written, so it sits at `HEAD`; a later fix to the other half lands on it and builds exactly the mixed commit this rule forbids.
+Nothing warns you, because the amend is a perfectly ordinary command that did what you asked.
+Read `git show --stat HEAD` before amending anything, and write the row change once the rest is settled rather than mid-iteration. `check-status-isolation.sh` does catch the mix, but on the pushed branch, a CI cycle after the cheap moment to notice.
+
 Two mechanisms enforce it, and neither subsumes the other:
 
 | | pre-commit hook (`lint-backlog.sh --staged`) | `make status-isolation-check`, and status-lint.yml |
