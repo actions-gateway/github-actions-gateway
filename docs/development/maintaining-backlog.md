@@ -235,7 +235,11 @@ Everything else is the Queue driver's behaviour: a row changed on both sides, a 
 The public roadmap is bound to the backlog one bullet at a time: each forward-looking bullet carries a `<!-- q:QN -->` annotation naming the rows behind it, and shipping the work deletes the bullet.
 That makes every gate PR the same edit in the same two sections.
 Measured on `docs/roadmap.md` at 61cf54e7b: two branches each deleting their own bullet from the near-term list conflict under a plain three-way merge, while the same two deletions ten bullets apart merge clean.
-[Q715](https://github.com/actions-gateway/github-actions-gateway/pull/1392)'s PR was evicted from the merge queue three times in one session on exactly that shape.
+[Q715](https://github.com/actions-gateway/github-actions-gateway/pull/1392)'s PR met that shape three times in one session, each time as a merge-queue eviction followed by a hand-resolved rebase.
+
+**What the driver buys is the rebase, not the eviction.** A merge driver is per-clone `git config`, and GitHub builds the merge queue's candidate itself, so the server-side conflict recurs exactly as before ([merge-queue.md](../plan/merge-queue.md) measured the same thing for `docs/STATUS.md`, which has had a driver since Q611).
+What changes is the heal: the rebase that follows an eviction resolves silently instead of by hand.
+Fewer evictions is a different problem, and serializing the batch is the only lever a branch has on it.
 
 [`scripts/docs/git-merge-roadmap.sh`](../../scripts/docs/git-merge-roadmap.sh) decides the bullets by that **annotation**, normalized to a comma-joined ID list.
 The key is not a new convention either: `devtools/docs/roadmapcheck` already parses the same comment, so the driver and the gate cannot disagree about what a bullet is.
