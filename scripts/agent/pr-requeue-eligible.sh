@@ -52,6 +52,8 @@ DRIVER_OWNED=(
 	docs/STATUS.md
 	docs/plan/README.md
 	docs/roadmap.md
+	mk/gate-lists.mk
+	scripts/README.md
 )
 
 STATE_DIR="tmp/requeue"
