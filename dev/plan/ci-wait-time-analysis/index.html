@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/plan/merge-queue/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/plan/ci-wait-time-analysis/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>Merge queue: kill the freshness-invalidation loop - GitHub Actions Gateway</title>
+        <title>CI wait-time analysis - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#merge-queue-kill-the-freshness-invalidation-loop" class="md-skip">
+        <a href="#ci-wait-time-analysis" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Merge queue: kill the freshness-invalidation loop
+              CI wait-time analysis
             
           </span>
         </div>
@@ -2567,10 +2567,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#the-measurement-2026-08-03" class="md-nav__link">
+  <a href="#finding-1-ci-execution-is-5-of-pr-latency" class="md-nav__link">
     <span class="md-ellipsis">
       
-        The measurement (2026-08-03)
+        Finding 1: CI execution is 5% of PR latency
       
     </span>
   </a>
@@ -2578,63 +2578,13 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#phase-1-merge_group-triggers-this-pr" class="md-nav__link">
+  <a href="#finding-2-the-critical-path-is-maxkindnet-calico" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Phase 1: merge_group triggers (this PR)
+        Finding 2: the critical path is max(kindnet, calico)
       
     </span>
   </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#phase-2-activation-post-merge-ordering-matters" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Phase 2: activation (post-merge, ordering matters)
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#phase-3-re-measure-then-decide" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Phase 3: re-measure, then decide
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Phase 3: re-measure, then decide">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#the-re-measurement-2026-08-12" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        The re-measurement (2026-08-12)
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#the-decision" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        The decision
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
   
 </li>
       
@@ -2658,148 +2608,208 @@
   
 
 
-<h1 id="merge-queue-kill-the-freshness-invalidation-loop">Merge queue: kill the freshness-invalidation loop<a class="headerlink" href="#merge-queue-kill-the-freshness-invalidation-loop" title="Permanent link">&para;</a></h1>
-<p><strong>Goal:</strong> stop paying a full heavy-gate re-run (e2e ~9–30 min × two CNI lanes) every time <code>main</code> moves under an in-flight PR, without weakening the nothing-red-reaches-<code>main</code> guarantee.</p>
-<p><strong>Approach:</strong> adopt GitHub's merge queue on <code>main</code>.
-The queue constructs each candidate merge result and runs the required checks on <em>that</em> (the <code>merge_group</code> event), so the jointly-red hazard the manual freshness rule guards against is checked by machine, once per batch, instead of by every session rebasing and re-running CI on every push.
-Decision approved 2026-08-03: adopt, and keep e2e per-PR (sessions keep early signal while iterating; the queue run is the authoritative combined check).
-Revised 2026-08-12 by the Phase 3 re-measure below: e2e is now merge-group-only, because the early signal was measurably not worth its multiplier.</p>
+<h1 id="ci-wait-time-analysis">CI wait-time analysis<a class="headerlink" href="#ci-wait-time-analysis" title="Permanent link">&para;</a></h1>
+<p>Measurements behind the question "how do we spend less time waiting for CI tests".
+Every number here came from <code>gh</code> against this repo on 2026-08-12; nothing is inferred from workflow source.</p>
 <h2 id="status">Status<a class="headerlink" href="#status" title="Permanent link">&para;</a></h2>
+<p>Analysis complete, and Option 1 shipped.
+Q675's re-measure ran on these numbers and demoted e2e to merge-group-only on both lanes; the decision and the re-measurement table live in <a href="../merge-queue/#phase-3-re-measure-then-decide">merge-queue.md</a>.
+Options 2 through 4 remain open and un-started.
+Finding 1's segment, the largest one, is owned by separate in-flight work and is not an option here.</p>
+<h2 id="finding-1-ci-execution-is-5-of-pr-latency">Finding 1: CI execution is 5% of PR latency<a class="headerlink" href="#finding-1-ci-execution-is-5-of-pr-latency" title="Permanent link">&para;</a></h2>
+<p>Across the 12 most recently merged PRs:</p>
 <table>
 <thead>
 <tr>
-<th>Phase</th>
-<th>State</th>
+<th>Segment</th>
+<th>Minutes</th>
+<th>Share</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<td>1. <code>merge_group</code> triggers on the 9 required-check workflows</td>
-<td>✅ #1256, merged 2026-08-03</td>
+<td>CI actually executing</td>
+<td>195</td>
+<td>5%</td>
 </tr>
 <tr>
-<td>2. Activation: add the <code>merge_queue</code> rule to the <code>default-protect</code> ruleset</td>
-<td>✅ 2026-08-03 — rule live, verified by GET after PUT; queue-era process-doc rewrite in the same change as this row</td>
+<td>PR green, not yet landed</td>
+<td>2,226</td>
+<td>59%</td>
 </tr>
 <tr>
-<td>3. Re-measure after ~1 week; decide follow-ups</td>
-<td>✅ 2026-08-12 — re-measured, e2e demoted to merge-group-only; the other three candidates declined</td>
-</tr>
-</tbody>
-</table>
-<h2 id="the-measurement-2026-08-03">The measurement (2026-08-03)<a class="headerlink" href="#the-measurement-2026-08-03" title="Permanent link">&para;</a></h2>
-<p>Taken from the last 30 days of CI runs, merged PRs, and <code>git log</code> contention:</p>
-<ul>
-<li>26–34 PRs merge per day: <code>main</code> advances roughly every 25–30 min during active hours.</li>
-<li>The e2e gate averages ~9 min on success (13.2 min on a representative executed run, 7.6 min of it <code>make e2e</code> proper; max observed 30 min). <code>e2e-gate</code> and <code>e2e-calico-gate</code> are both required checks.</li>
-<li>18 of 51 recent branches needed ≥2 e2e runs (worst: 5); 10 of the last 50 e2e runs were cancelled mid-flight by a superseding push.
-  A third or more of e2e compute is redo, not first-run validation.</li>
-<li>Contention is process files, not code: <code>docs/STATUS.md</code> appears in 542 of 702 commits (77%), <code>docs/plan/README.md</code> in 22%.
-  No component source file is in the top-20 contention list, which also answers "should we split the monorepo": no, the conflict surface wouldn't move.</li>
-<li>The ruleset's <code>strict_required_status_checks_policy</code> is already <code>false</code>; the freshness requirement is process (CONTRIBUTING.md's re-check rule), not GitHub.
-  The queue replaces the process rule's mechanism, not a GitHub setting.</li>
-</ul>
-<p>The constraint is therefore not e2e duration but the multiplier on it: every merge invalidates every in-flight green PR, and re-validation costs a full gate cycle whose duration matches the inter-merge interval, so re-runs cascade.
-Amortizing one combined run per batch removes the quadratic term.</p>
-<h2 id="phase-1-merge_group-triggers-this-pr">Phase 1: <code>merge_group</code> triggers (this PR)<a class="headerlink" href="#phase-1-merge_group-triggers-this-pr" title="Permanent link">&para;</a></h2>
-<p>All nine workflows behind required checks gain a <code>merge_group:</code> trigger: <code>e2e-test</code>, <code>e2e-calico</code>, <code>integration-test</code>, <code>unit-test</code>, <code>license-notices</code>, <code>manifest-validate</code>, <code>plan-hygiene</code>, <code>security-scan</code>, <code>status-lint</code>.</p>
-<p>Why this is the whole change:</p>
-<ul>
-<li>Every workflow already uses the always-trigger + internal <code>changes</code> paths-filter + aggregate-gate pattern, so the gate contexts report on any event the workflow triggers on.</li>
-<li>dorny/paths-filter v4 supports <code>merge_group</code> natively: <code>base</code>/<code>ref</code> default to the event's commit hashes and detection runs via git against the already-present checkout (verified against the v4 README).
-  Docs-only queue entries therefore stay cheap: the heavy legs skip exactly as they do on a docs-only PR.</li>
-<li>Every heavy job's condition has the shape <code>needs.changes.outputs.X == 'true' || push || workflow_dispatch</code>, so a <code>merge_group</code> run takes the path-filtered branch, the desired behavior.</li>
-<li>Concurrency groups key on <code>github.ref</code>; merge-group refs (<code>gh-readonly-queue/...</code>) are unique per queue entry, and <code>cancel-in-progress</code> stays scoped to <code>pull_request</code>.</li>
-<li>status-lint's per-PR isolation check reads <code>github.event.pull_request</code>; it is already gated <code>if: github.event_name == 'pull_request'</code> and simply skips on the queue run (the PR event already enforced it).</li>
-</ul>
-<h2 id="phase-2-activation-post-merge-ordering-matters">Phase 2: activation (post-merge, ordering matters)<a class="headerlink" href="#phase-2-activation-post-merge-ordering-matters" title="Permanent link">&para;</a></h2>
-<p>Enabling the queue before Phase 1 reaches <code>main</code> wedges every merge: the required checks would never report on <code>merge_group</code> refs.
-After Phase 1 merges, add the rule to the existing <code>default-protect</code> ruleset (id 17350763):</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>gh<span class="w"> </span>api<span class="w"> </span>-X<span class="w"> </span>PUT<span class="w"> </span>repos/actions-gateway/github-actions-gateway/rulesets/17350763<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="w">  </span>--input<span class="w"> </span>tmp/ruleset.json
-</code></pre></div>
-<p>where <code>tmp/ruleset.json</code> is the current ruleset body (GET it first) plus:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="p">{</span>
-<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="w">  </span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;merge_queue&quot;</span><span class="p">,</span>
-<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="w">  </span><span class="nt">&quot;parameters&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
-<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="w">    </span><span class="nt">&quot;merge_method&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;SQUASH&quot;</span><span class="p">,</span>
-<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="w">    </span><span class="nt">&quot;grouping_strategy&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;ALLGREEN&quot;</span><span class="p">,</span>
-<a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="w">    </span><span class="nt">&quot;max_entries_to_build&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">5</span><span class="p">,</span>
-<a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="w">    </span><span class="nt">&quot;max_entries_to_merge&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">5</span><span class="p">,</span>
-<a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a><span class="w">    </span><span class="nt">&quot;min_entries_to_merge&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span>
-<a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a><span class="w">    </span><span class="nt">&quot;min_entries_to_merge_wait_minutes&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">5</span><span class="p">,</span>
-<a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a><span class="w">    </span><span class="nt">&quot;check_response_timeout_minutes&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">60</span>
-<a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a><span class="w">  </span><span class="p">}</span>
-<a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a><span class="p">}</span>
-</code></pre></div>
-<ul>
-<li><code>SQUASH</code> preserves the repo's squash-merge convention and satisfies the ruleset's <code>required_linear_history</code>.</li>
-<li><code>min_entries_to_merge: 1</code> with a 5-minute wait lets batches form at the observed merge rate (~2 PRs per 5-min window at peak) without stalling a lone PR.</li>
-<li><code>check_response_timeout_minutes: 60</code> clears the worst observed e2e run (30 min) with headroom for queue-time image-cache misses.</li>
-</ul>
-<p>After activation, <code>gh pr merge --squash</code> enqueues instead of merging directly; a PR whose queue run fails is kicked back out with the failure on the PR, which is the self-heal signal pr-sentinel already reacts to.</p>
-<p>Rollback: delete the <code>merge_queue</code> rule from the ruleset; behavior reverts to direct merges and the process rules in CONTRIBUTING.md.</p>
-<h2 id="phase-3-re-measure-then-decide">Phase 3: re-measure, then decide<a class="headerlink" href="#phase-3-re-measure-then-decide" title="Permanent link">&para;</a></h2>
-<h3 id="the-re-measurement-2026-08-12">The re-measurement (2026-08-12)<a class="headerlink" href="#the-re-measurement-2026-08-12" title="Permanent link">&para;</a></h3>
-<p>Same three measurements as 2026-08-03, over the last 200 <code>e2e-test.yml</code> runs:</p>
-<table>
-<thead>
-<tr>
-<th>Measurement</th>
-<th>2026-08-03</th>
-<th>2026-08-12</th>
-<th></th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>Branches needing ≥2 e2e runs</td>
-<td>18 of 51 (35%), worst 5</td>
-<td>23 of 57 (40%), worst 9</td>
-<td>worse</td>
+<td>PR open, final push not yet made</td>
+<td>1,326</td>
+<td>36%</td>
 </tr>
 <tr>
-<td>Runs cancelled mid-flight</td>
-<td>10 of 50 (20%)</td>
-<td>8 of 200 (4%)</td>
-<td>much better</td>
-</tr>
-<tr>
-<td>Median PR open→merge</td>
-<td>—</td>
-<td>45 min (p25 22, p75 131, max 878)</td>
+<td><strong>Total open → merge</strong></td>
+<td><strong>3,747</strong></td>
 <td></td>
 </tr>
 </tbody>
 </table>
-<p>The queue removed the cancellation churn it was adopted to remove, and did not touch per-branch redo, which got slightly worse.
-The e2e volume split explains why: of those 200 runs, 116 (58%) were <code>pull_request</code>, 57 <code>merge_group</code>, 25 push, 2 dispatch.
-Every one of the 116 was a second verdict on a commit the queue would validate again, and the branches that pushed repeatedly paid for it repeatedly.</p>
-<p>Two supporting numbers, from the same window: e2e failed on 1% of runs (2 of 200), and CI execution accounts for only ~5% of PR open→merge latency.
-Full workings in <a href="../ci-wait-time-analysis/">ci-wait-time-analysis.md</a>.</p>
-<h3 id="the-decision">The decision<a class="headerlink" href="#the-decision" title="Permanent link">&para;</a></h3>
-<p><strong>Adopted: demote e2e to merge-group-only</strong> (both lanes), implemented by gating each heavy job on <code>github.event_name == 'merge_group'</code> so a pull request leaves it skipped and the <code>gate</code> job still reports its required check.
-That removes 58% of e2e runs and takes the PR-side critical path from ~870s to ~630s (<code>integration-test</code>, the next longest).
-The trade-off the candidate named is accepted on the 1% failure rate: an e2e break now costs a queue kickback on roughly 1 push in 100, against ~4 minutes saved on the other 99.</p>
-<p><strong>Declined, all three, and not merely deferred again:</strong> the STATUS.md-contention candidates (per-item backlog files, GitHub Issues + Projects, split status PRs + <code>pr-deps-gate</code>) all address the cost of a <em>kickback</em>, and the measured kickback driver was cancellation churn, which the queue already fixed at 20% → 4%.
-Revisit only if that fraction climbs.</p>
-<p>The candidate list as recorded on 2026-08-03:</p>
+<p>Median open→merge 45 min; p25 22, p75 131, max 878.
+PR #1382 spent 4 minutes in CI and 875 waiting; #1385, 4 and 759.
+Both single-push, no re-runs.</p>
+<p>The gate is that enqueueing is the maintainer's action taken after review (<a href="../../development/parallel-dispatch/">parallel-dispatch.md</a>, Q692), combined with <code>allow_auto_merge=false</code> on the repo.
+The landing decision therefore cannot be made until after CI is already green, which forces review latency and CI time into series.</p>
+<p><code>reviewDecision</code> is empty on every PR sampled and the ruleset requires no approving review, so the gate is the enqueue action itself, not a review step.</p>
+<p><strong>This segment is owned elsewhere and this doc proposes no mechanism for it.</strong> Closing it is in flight in separate work, on the attention side rather than by relaxing the enqueue gate, so do not scope an auto-merge change from the numbers above.
+They are recorded here because they set the scale of every other finding: anything that shortens CI is working on the 5%.</p>
+<h2 id="finding-2-the-critical-path-is-maxkindnet-calico">Finding 2: the critical path is <code>max(kindnet, calico)</code><a class="headerlink" href="#finding-2-the-critical-path-is-maxkindnet-calico" title="Permanent link">&para;</a></h2>
+<p><code>e2e</code> and <code>e2e-calico</code> are separate workflows on the same PR event, so they run concurrently.
+Calico is the longer lane and already skips the chart checks.</p>
+<table>
+<thead>
+<tr>
+<th>Lane</th>
+<th>Job</th>
+<th>Test step</th>
+<th>Chart checks</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>e2e</code> (kindnet)</td>
+<td>804s</td>
+<td>468s</td>
+<td>104s</td>
+</tr>
+<tr>
+<td><code>e2e-calico</code></td>
+<td>870s</td>
+<td>548s</td>
+<td>disabled (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/e2e-calico.yml">e2e-calico.yml</a>)</td>
+</tr>
+</tbody>
+</table>
+<p>Calico runs on 21 of 30 sampled PR branches (70%).
+Observed finish times:</p>
 <ul>
-<li>Demote e2e from per-PR to merge-group-only (halves e2e volume again; trade-off: sessions learn of an e2e failure only at queue time). <strong>Adopted 2026-08-12.</strong></li>
-<li><code>docs/STATUS.md</code> contention (77% of commits) still forces manual conflict resolution before a PR can enqueue; a per-item-file backlog format would remove it structurally, but is a large format change touching the backlog skill and lint, and only worth it if post-queue measurement shows it binding.</li>
-<li>GitHub Issues + a Projects board would also zero the conflicts, but trades them for a sync problem: today a Queue row is deleted in the same PR that ships the work (atomic with the code, reviewable in the diff, greppable in one file, and the bare-Q-ID anchor fabric across docs and code depends on it), while an issue close is a separate mutation that can drift from code state.
-  Priority ordering is also weaker through <code>gh</code> (Projects v2 positions are drag-first, not CLI-first).
-  Considered 2026-08-03; behind the same re-measurement, and per-item files in-repo rank ahead of it because they keep every property above.</li>
-<li>Splitting the STATUS.md edit out of a code PR into its own docs-only PR is the cheap half of the same idea.
-  The backlog merge driver is local-only (<code>.gitattributes</code> maps <code>docs/STATUS.md</code> to <code>merge=backlog</code>; GitHub cannot run custom drivers), so the queue builds candidates with plain 3-way and an adjacent-row edit conflicts server-side even though it auto-resolves locally.
-  A combined PR kicked back that way re-runs its e2e on the fixup push; a split status PR re-runs only the cheap path-filtered gates, and the code PR stays queued.
-  Cost: GitHub has no native PR dependency ordering, so a completion row's deletion trails the code merge as a follow-up PR, with a short window where the row is open and no PR covers it.
-  Same re-measurement decides; per-item files dominate this too, closing the conflict itself rather than routing around it.</li>
-<li>The ordering gap above has a buildable fix, parked 2026-08-03 behind the same re-measurement: a <code>pr-deps-gate</code> required check that reads <code>Depends-on: #N</code> from the PR body, reports green when no dependency is named, and red while any named PR is unmerged.
-  The queue enforces the sequencing for free, since a PR cannot enqueue until its required checks pass; the one extra piece is a push-to-main workflow that re-requests the check on open PRs whose dependencies just merged, because GitHub emits no event to a dependent PR.
-  This closes the no-covering-PR window (the status PR is open, just unqueueable) and makes the split machine-enforced.
-  Build it only if the measured kickback rate says split PRs are worth having.</li>
+<li>
+<h1 id="1402-kindnet-032424-calico-032430-6s-apart">1402: kindnet 03:24:24, calico 03:24:30, 6s apart<a class="headerlink" href="#1402-kindnet-032424-calico-032430-6s-apart" title="Permanent link">&para;</a></h1>
+</li>
+<li>
+<h1 id="1401-calico-finished-375s-after-kindnet">1401: calico finished 375s <em>after</em> kindnet<a class="headerlink" href="#1401-calico-finished-375s-after-kindnet" title="Permanent link">&para;</a></h1>
+</li>
+<li>
+<h1 id="1405-kindnet-90s-after-calico">1405: kindnet 90s after calico<a class="headerlink" href="#1405-kindnet-90s-after-calico" title="Permanent link">&para;</a></h1>
+</li>
 </ul>
+<p>So removing the kindnet lane's 104s of chart checks saves ~0 on the 70% of PRs where calico runs, and ~50s per PR weighted across the split.</p>
+<h2 id="finding-3-suite-parallelism-is-already-tuned-do-not-re-open-it">Finding 3: suite parallelism is already tuned, do not re-open it<a class="headerlink" href="#finding-3-suite-parallelism-is-already-tuned-do-not-re-open-it" title="Permanent link">&para;</a></h2>
+<p>A naive read of the calico JUnit artifact gives 1,519s of spec time in 548s of wall, which looks like 2.77× against <code>--procs 6</code> and therefore like ~295s of lost parallelism. <strong>That number is wrong as a parallelism figure</strong> and no work should be scoped from it: the 548s step covers compile, the parallel phase, and the <code>Serial</code> tail, so dividing total spec time by it mixes three phases.</p>
+<p><a href="../e2e-ci-speed-round-2/">e2e-ci-speed-round-2.md</a> already measured this properly.
+The parallel phase does 646s of spec time in ~144s, i.e. <strong>4.5× on <code>--procs 6</code> against 4 vCPUs</strong>, and that round records it as "healthy and not worth further tuning".
+It targeted the two real poles instead, the image bake (~570s of contended compile) and the <code>Serial</code> tail (150s, over half the suite wall), and shipped both.</p>
+<p>Two speed rounds have already run here (<a href="../e2e-tests-speed/">e2e-tests-speed.md</a>, <a href="../e2e-ci-speed-round-2/">e2e-ci-speed-round-2.md</a>).
+The lever they left explicitly open is a <strong>larger runner</strong>: both poles are CPU-bound on a 4-vCPU <code>ubuntu-latest</code>, both scale close to linearly, and <code>vars.GAG_E2E_RUNNER</code> already routes the job when set, so it is a config decision rather than a code change.</p>
+<p>CPU starvation on this runner is separately documented as the mechanism behind the Q300/Q747 kindnet flake family, which is why <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/e2e-reusable.yml">e2e-reusable.yml</a> dumps <code>cpu.stat</code> CFS throttle ratios on failure.</p>
+<h2 id="finding-4-five-specs-are-cni-gated-not-four">Finding 4: five specs are CNI-gated, not four<a class="headerlink" href="#finding-4-five-specs-are-cni-gated-not-four" title="Permanent link">&para;</a></h2>
+<p><code>egressEnforcingCNI()</code> gates exactly five specs:</p>
+<table>
+<thead>
+<tr>
+<th>Spec</th>
+<th>Spec time</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>ManagerMetricsNP_DeniesUnlabeledNamespace</code> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/test/e2e/manager_np_test.go">manager_np_test.go:106</a>)</td>
+<td>40.9s</td>
+</tr>
+<tr>
+<td><code>V2_DirectEgress_NonGitHubBlocked</code> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/test/e2e/direct_egress_test.go">direct_egress_test.go:204</a>)</td>
+<td>41.8s</td>
+</tr>
+<tr>
+<td><code>TenantProvisioning_WorkloadEgressBlockedToNonProxyPod</code> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/test/e2e/provisioning_test.go">provisioning_test.go:478</a>)</td>
+<td>21.0s</td>
+</tr>
+<tr>
+<td><code>TenantProvisioning_WorkerCannotReachK8sAPI</code> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/test/e2e/provisioning_test.go">provisioning_test.go:516</a>)</td>
+<td>18.0s</td>
+</tr>
+<tr>
+<td><code>ManagerMetricsNP_AllowsLabeledNamespace</code> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/test/e2e/manager_np_test.go">manager_np_test.go:123</a>)</td>
+<td>18.1s</td>
+</tr>
+<tr>
+<td><strong>Total</strong></td>
+<td><strong>139.8s</strong></td>
+</tr>
+</tbody>
+</table>
+<p><code>e2e-calico.yml</code>'s header comment lists only four.
+It misses <code>V2_DirectEgress_NonGitHubBlocked</code>, added with the v2 direct-egress work, so the comment is stale regardless of what else changes here.</p>
+<p><code>E2E_GMC_CrossTenantNetworkBlocked</code> looks like a sixth but is not: it asserts <em>ingress</em> blocking, which kindnet does enforce, and carries its own FailOpen retry logic for the Q747 enforcer-restart case.</p>
+<h3 id="why-narrowing-the-calico-lane-costs-real-coverage">Why narrowing the calico lane costs real coverage<a class="headerlink" href="#why-narrowing-the-calico-lane-costs-real-coverage" title="Permanent link">&para;</a></h3>
+<p>Scoping calico to those five specs would cut its test step from 548s to roughly 150–250s.
+But the other 75 specs are not redundant there: they are the only proof that the product still <em>functions</em> when NetworkPolicy is actually enforced.
+Kindnet accepts policy objects without dropping egress, so a NetworkPolicy allowlist that is too narrow for legitimate traffic passes kindnet and fails only under Calico.</p>
+<p>That is a real bug class for a repo whose security posture is secure-by-default, and narrowing the lane retires the only gate that covers it.</p>
+<h2 id="finding-5-q675-is-due-and-these-measurements-are-its-inputs">Finding 5: Q675 is due, and these measurements are its inputs<a class="headerlink" href="#finding-5-q675-is-due-and-these-measurements-are-its-inputs" title="Permanent link">&para;</a></h2>
+<p>Q675 deferred the merge-queue Phase 3 re-measure behind an event trigger of "~1 week of queue operation, on/after 2026-08-10".
+That trigger fired, the re-measure ran on the numbers above, and the row is closed.
+Its first recorded candidate was:</p>
+<blockquote>
+<p>Demote e2e from per-PR to merge-group-only (halves e2e volume again; trade-off: sessions learn of an e2e failure only at queue time).</p>
+</blockquote>
+<p>That candidate is the one change on the list that directly targets session wait, because the session's blocking wait <em>is</em> the PR-side e2e.
+Demoting it would take the PR-side critical path from ~870s (e2e-calico) to ~630s (integration-test, the next longest), and drop each branch's heavy-gate runs from two e2e cycles to one.</p>
+<p>The measured failure rates below are what <a href="../merge-queue/#phase-3-re-measure-then-decide">merge-queue.md</a> asks the re-measure to establish, so the decision no longer needs them re-derived:</p>
+<table>
+<thead>
+<tr>
+<th>Workflow</th>
+<th>Runs sampled</th>
+<th>Failures</th>
+<th>Rate</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>e2e</code></td>
+<td>100</td>
+<td>1</td>
+<td>1%</td>
+</tr>
+<tr>
+<td><code>integration-test</code></td>
+<td>100</td>
+<td>1</td>
+<td>1%</td>
+</tr>
+<tr>
+<td><code>unit-test</code></td>
+<td>100</td>
+<td>5</td>
+<td>5%</td>
+</tr>
+</tbody>
+</table>
+<p>At a 1% e2e failure rate, the trade the candidate names, paying a queue kickback instead of a PR-time failure, costs a full cycle on 1 push in 100 and saves ~4 minutes on the other 99.</p>
+<h2 id="options">Options<a class="headerlink" href="#options" title="Permanent link">&para;</a></h2>
+<p>Ordered by return per unit of risk.</p>
+<ol>
+<li>~~<strong>Work Q675.</strong>~~ <strong>Shipped 2026-08-12.</strong> Both e2e lanes are merge-group-only; the decision and the re-measurement table are in <a href="../merge-queue/#phase-3-re-measure-then-decide">merge-queue.md</a>.</li>
+<li><strong>Larger e2e runner.</strong> The lever round 2 left open, unchanged by this analysis.
+   Elevate rather than exploit: it costs money on a public repo.</li>
+<li><strong>Narrow the calico lane.</strong> Takes ~420s off the longer lane, but retires the full-product-under-enforcement gate described in Finding 4.
+   Not recommended without a replacement for that coverage.</li>
+<li><strong>Split the kindnet chart checks into a parallel job.</strong> Takes ~104s off the kindnet lane, but saves ~0 while calico is the critical path (Finding 2).
+   Only worth doing once calico is shorter than kindnet, and it adds a job plus a required status check to a workflow with documented wedging history (Q363).</li>
+</ol>
+<p>Not on the list: re-tuning <code>--procs</code> or the suite's parallel phase.
+Finding 3 explains why.</p>
+<h2 id="reproducing">Reproducing<a class="headerlink" href="#reproducing" title="Permanent link">&para;</a></h2>
+<div class="highlight"><pre><span></span><code>gh pr list --state merged --limit 40 --json number,createdAt,mergedAt
+gh pr view &lt;n&gt; --json statusCheckRollup
+gh api repos/{owner}/{repo}/actions/runs/&lt;id&gt;/jobs
+gh api repos/{owner}/{repo}/actions/artifacts/&lt;id&gt;/zip &gt; report.zip
+</code></pre></div>
 
 
 
