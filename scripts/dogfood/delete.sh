@@ -52,6 +52,8 @@ REPO_ROOT="$(git rev-parse --show-toplevel)"
 source "${REPO_ROOT}/scripts/lib/common.sh"
 # shellcheck source=scripts/dogfood/lib/workers.sh
 source "${REPO_ROOT}/scripts/dogfood/lib/workers.sh"
+# shellcheck source=scripts/dogfood/lib/nodes.sh
+source "${REPO_ROOT}/scripts/dogfood/lib/nodes.sh"
 
 # ---------------------------------------------------------------------------
 # Existence + occupancy probes. The confirmation below quotes these back, so an
@@ -61,17 +63,6 @@ source "${REPO_ROOT}/scripts/dogfood/lib/workers.sh"
 cluster_exists() {
 	gcloud container clusters describe "${CLUSTER}" \
 		--project="${PROJECT}" --zone="${ZONE}" >/dev/null 2>&1
-}
-
-# current_node_count — total nodes across every pool, or "unknown" if the
-# cluster cannot be described. A non-zero count means this is NOT the at-rest
-# state and something may still be running.
-current_node_count() {
-	local count
-	count="$(gcloud container clusters describe "${CLUSTER}" \
-		--project="${PROJECT}" --zone="${ZONE}" \
-		--format='value(currentNodeCount)' 2>/dev/null)" || { echo "unknown"; return; }
-	echo "${count:-0}"
 }
 
 # inflight_worker_count — worker pods in a non-terminal phase, best-effort, via
@@ -145,11 +136,15 @@ report_orphans() {
 	echo "  Review these — delete them by hand if they are not intentional."
 }
 
+# The instance count is project-wide (lib/nodes.sh has why it is unfiltered),
+# which for the dogfood project is this cluster's own nodes. Over-reporting is
+# the safe direction: this confirmation exists to stop a delete on a busy
+# cluster, and a count that can only be too high never permits one.
 confirm_target() {
 	local nodes workers
-	nodes="$(current_node_count)"
+	nodes="$(count_dogfood_instances)"
 	workers="$(inflight_worker_count)"
-	confirm_or_exit "$(printf 'About to DELETE the dogfood cluster:\n  Project: %s\n  Cluster: %s  (zone %s)\n  Repo:    %s\n\n  Nodes currently up:      %s\n  Worker pods in flight:   %s\n\nThis destroys the GAG install, every tenant namespace and CR, the\ncert-manager CA, and the in-cluster GitHub App secret. Recreate is a full\nsetup.sh bootstrap, NOT a resume. To merely take the cluster offline and\nkeep all of it, run stop.sh instead.' \
+	confirm_or_exit "$(printf 'About to DELETE the dogfood cluster:\n  Project: %s\n  Cluster: %s  (zone %s)\n  Repo:    %s\n\n  Compute instances up:    %s\n  Worker pods in flight:   %s\n\nThis destroys the GAG install, every tenant namespace and CR, the\ncert-manager CA, and the in-cluster GitHub App secret. Recreate is a full\nsetup.sh bootstrap, NOT a resume. To merely take the cluster offline and\nkeep all of it, run stop.sh instead.' \
 		"${PROJECT}" "${CLUSTER}" "${ZONE}" "${REPO}" "${nodes}" "${workers}")"
 }
 

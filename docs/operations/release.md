@@ -243,6 +243,24 @@ Two gaps remain, both by design.
 A cluster left up by something *other* than this gate is not visible to the reclaim — nothing claims it, so nothing reclaims it; take it down with `scripts/dogfood/stop.sh`.
 And a killed gate that is never followed by another run or a `--reclaim` still bills: the state is recorded, but nothing reads it until someone runs one of the two.
 
+##### Confirming the cluster is actually at rest
+
+The teardown reports what it did, not what the cluster is.
+Every step in it is guarded so one failure cannot skip the rest, so `Teardown complete` prints even for a run whose `stop.sh` refused to scale down (a drain that will not converge is the usual reason).
+After a failed gate, a killed one, or a `--reclaim`, ask the cluster separately:
+
+```bash
+PROJECT=… CLUSTER=… ZONE=… scripts/dogfood/ops.sh at-rest
+```
+
+It exits **0** at rest, **1** with instances still up, which it names, and **2** when the project could not be read.
+That third status is the point: an unreadable project is not an idle one, and only one of the two is safe to walk away from.
+
+**Do not read a node count off the cluster object instead.** `gcloud container clusters describe --format='value(currentNodeCount)'` prints an empty line for a cluster at 0 nodes.
+The field is output-only and deprecated in the GKE API, and proto3 JSON omits an integer holding its default, so at zero the key is absent from the describe output rather than present and zero. gcloud prints empty for any absent key and exits 0 (measured on 577.0.0), which is also what it prints when the projection never resolved at all.
+At rest and answered-nothing are then the same reading, and the safe-looking one wins: on 2026-08-09, just after a DNS outage, a teardown was nearly reported at rest on it (Q779).
+The instance list has no such hole, because every instance carries a name: an empty list means no instances, and the check reads the probe's own exit status rather than inferring it from the emptiness.
+
 ##### Run it detached; the sentinel reports it back
 
 **This is the default path.** Nobody should spend an hour watching a terminal for a gate built to be walked away from.
