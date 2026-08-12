@@ -94,6 +94,33 @@ else
 	fails=$((fails + 1))
 fi
 
+# expect_tol NAME NSTMT WANT — assert effective_tolerance NSTMT rounds to WANT pp.
+expect_tol() {
+	local name="$1" nstmt="$2" want="$3" got
+	got="$(printf '%.2f' "$(effective_tolerance "$nstmt")")"
+	if [[ "$got" == "$want" ]]; then
+		printf 'ok   tolerance %-20s -> %spp\n' "$name" "$got"
+	else
+		printf 'FAIL tolerance %-20s want=[%s] got=[%s]\n' "$name" "$want" "$got" >&2
+		fails=$((fails + 1))
+	fi
+}
+
+# The tolerance is the larger of the fixed pp floor and TOLERANCE_STMT statements,
+# and BOTH directions matter: a rule that always took the statement figure would
+# tighten every large module (0.17pp on 1800 statements), and one that always took
+# the fixed figure is the Q803 defect. With the defaults (0.5pp, 3 statements) the
+# crossover is at 600 statements.
+expect_tol large-module-fixed-pp 1800 0.50   # 3 stmt = 0.17pp, so 0.5pp wins
+expect_tol crossover 600 0.50                # 3 stmt = 0.50pp exactly
+expect_tol small-module-statements 348 0.86  # cmd/proxy: 3 stmt = 0.86pp wins
+expect_tol tiny-module 100 3.00              # 3 stmt = 3pp
+
+# A module with no measurable coverage reports 0 statements; dividing by that
+# denominator must not produce inf/NaN and silently disable the gate.
+expect_tol no-statements 0 0.50
+expect_tol non-numeric n/a 0.50
+
 # Every go.work module must actually declare a module path, or the split would
 # silently attribute its packages to nothing and report a false "n/a".
 while read -r dir; do

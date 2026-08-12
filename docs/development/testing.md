@@ -386,20 +386,28 @@ Excluding `brokerstub` in the same pass moved the `broker` floor 85.3 → 84.0: 
 We deliberately **do not** exclude `main.go`: in this repo several binaries (`cmd/worker`, `cmd/proxy`) keep real, unit-tested logic in their `package main`, so a blanket entrypoint exclusion would hide tested logic and leave those modules ungated.
 The genuinely-thin entrypoints (`cmd/agc`, `cmd/gmc`) instead contribute a lower but still-defended floor — which costs the ratchet nothing, since a lower floor never causes a false failure.
 
-**How it gates.** [`coverage-baseline.txt`](../../coverage-baseline.txt) records each module's floor. `make cover-check` fails only if a module drops **more than 0.5 percentage points** below its floor.
-Coverage is deterministic (the gate runs without `-race`), so this small tolerance is not for flake — it absorbs benign denominator drift (adding a couple of uncovered boilerplate lines marginally dilutes the ratio) while still catching a real regression (deleting a tested function, gutting a test) on any module of meaningful size.
+**How it gates.** [`coverage-baseline.txt`](../../coverage-baseline.txt) records each module's floor, and `make cover-check` fails when a module drops further below its floor than the tolerance allows.
+The tolerance is the **larger of 0.5 percentage points and 3 statements**, sized per module against its own statement count; the gate prints which figure applied on every row.
+It absorbs two kinds of benign movement: denominator drift, where a couple of added uncovered boilerplate lines dilute the ratio without removing any test, and the handful of blocks in shutdown and timeout paths whose coverage tracks machine load because the test tolerates a race deliberately rather than pinning which arm wins.
+A real regression (deleting a tested function, gutting a test) costs far more than 3 statements and still fails.
 When coverage rises well above a floor, the gate prints a note suggesting `make cover-update`.
+
+**Why the tolerance carries two units.** A tolerance fixed in percentage points does not mean the same thing on every module, because what it absorbs is statements and a statement is worth `100/N` points.
+The measured modules span 192 statements (`api`) to 5,523 (`cmd/agc`), a 29-fold range, so a flat 0.5pp buys `cmd/agc` 27.6 statements of slack and `api` **0.96**: one statement flipping fails the gate on the small module and is invisible on the large one.
+Q803 measured both halves of that on `cmd/proxy`.
+Two CI runs of byte-identical source read 78.7% and 79.3% with the package reporting `ok` both times, so two statements went unexercised without any test failing; 22 uncached local runs across three regimes (the package alone, workspace-wide, and workspace-wide pinned to 2 cores to emulate the runner) all read 79.3%, which is why the flip shows up only on a contended runner.
+Meanwhile the recorded floor of 79.5% had become unreachable, since 348 statements can only produce 79.31% or 79.60%.
+It was correct when recorded, at 356 statements; #1013 then removed 8 of them, which moved the number to 79.3% and left the floor eating 0.19pp of a 0.5pp tolerance before any noise arrived, so one statement of slack remained and the observed flip cost two.
+The gate now prints a `note:` when a module sits below its floor but inside tolerance, because a bare `ok` is what hid that shortfall for the 13 days between #1013 and Q803.
+Re-record when you see it: the tolerance is for transient noise, not for a floor the tree can no longer reach.
+The statement-denominated floor gives a small module the slack a large one always had, and the crossover is 600 statements, so `cmd/agc`, `cmd/gmc` and `cmd/probe` are unaffected.
+Both directions are asserted in [`coverage-test.sh`](../../scripts/go/coverage-test.sh): a rule that always took the statement figure would tighten `cmd/agc` to 0.05pp, which is the opposite defect.
 
 **Updating the floor.** When you intentionally add tests and coverage goes up, run `make cover-update` and commit the new `coverage-baseline.txt` — the ratchet then defends the higher number.
 Lowering a floor is allowed but lands as an explicit, reviewable diff in that file rather than silently.
-The current baseline (helper-package exclusion added in Q110):
 
-| Module | Floor | Module | Floor |
-|---|---|---|---|
-| `broker` | 81.3% | `cmd/proxy` | 72.8% |
-| `cmd/agc` | 78.1% | `cmd/worker` | 72.0% |
-| `cmd/gmc` | 57.1% | `githubapp` | 82.6% |
-| `cmd/probe` | 45.4% (compat suite) | `test/fakegithub` | n/a (helper-only module) |
+**Read the floors from [`coverage-baseline.txt`](../../coverage-baseline.txt), which is the only record of them.** This page used to copy the table and the copy drifted twice, through the re-records in #779 and #877: by the time Q803 read it, seven of its eight numbers were wrong (`cmd/gmc` by 23 points) and `api` and `scaleset` were missing entirely.
+A floor is one `grep` away in a file the gate itself reads, so a second copy earns nothing and misleads whoever trusts it.
 
 Unlike `make test-race` and `make vulncheck`, `cover-check` **is** the unit-test step of `make check`: it supersets `make test` — the same unit-test packages, the same single workspace-wide invocation, streamed as the same `ok <pkg>` lines (honouring `V=1`), just run with `-cover` and then gated against the floors — so the local gate runs the suite a single time, not twice, and never lets a coverage regression slip past a green `make check`.
 It carries the same [local throttle](#resource-auto-throttle-on-gui-dev-machines) and machine-wide serialize lock as `make test`, so a GUI run stays desktop-safe; on CI the prefix is a no-op. `make test` remains the no-coverage target for the fastest inner loop, and `make cover-check` runs standalone when you just want the ratchet.

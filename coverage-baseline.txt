@@ -1,13 +1,14 @@
 # Per-module unit-test coverage baseline (no-regression ratchet floor).
 # Regenerate with: make cover-update   (or scripts/go/coverage.sh update)
 # Format: <module-disk-path><TAB><percent>   (n/a = no measurable coverage)
-# The gate (make cover-check) fails if a module drops > 0.5pp below its floor.
+# The gate (make cover-check) fails if a module drops more than the
+# larger of 0.5pp and 3 statements below its floor.
 ./api	95.9
 ./broker	84.0
 ./cmd/agc	77.7
 ./cmd/gmc	80.2
 ./cmd/probe	81.8
-./cmd/proxy	79.5
+./cmd/proxy	79.3
 ./cmd/worker	82.9
 ./githubapp	84.9
 ./scaleset	84.7
