@@ -29,9 +29,11 @@
 //     command a guard might care about. But the throttle must still reach the
 //     dangerous form, so it is applied and the decision downgraded to ask rather
 //     than the command blocked.
-//   - A `-race` form with more than one invocation to throttle and one prefix to
-//     place is denied with that reason, rather than throttling one invocation
-//     and leaving the other at full tilt.
+//   - A `-race` the throttle cannot be applied to is denied with the reason:
+//     more than one invocation to throttle and one prefix to place, or a probe
+//     that could not resolve the prefix at all (Q785). Throttling one invocation
+//     and leaving the other at full tilt, and passing the run through in
+//     silence, both end in an unthrottled -race.
 //
 // A non-race compound stays on the normal permission flow untouched.
 //
@@ -61,13 +63,14 @@
 //	gothrottle <local-throttle.sh>   # PreToolUse payload on stdin, decision on stdout
 //
 // Silence means "proceed": Claude Code reads an empty stdout as no opinion.
-// Every failure path is silent — a missing throttle script, an unparseable
-// command, a payload for another tool. A hook that runs on every Bash call must
-// never be the reason one fails.
+// Failure paths are silent — a missing throttle script, an unparseable command,
+// a payload for another tool. A hook that runs on every Bash call must never be
+// the reason one fails. The one exception is a `-race` whose prefix could not be
+// resolved, which is denied rather than let through unthrottled (Q785, below).
 //
 // # Naming the silent path (Q703)
 //
-// That contract also makes a failure here unattributable. Nine silent paths in
+// That contract also makes a failure here unattributable. Ten silent paths in
 // this program and five in the entry-point script all produce one observable:
 // exit 0, empty stdout. The suite that fires the hook can only report `got
 // decision= reason=`, which is what a Q703 occurrence looked like — a symptom
@@ -81,6 +84,23 @@
 // either way, so the decision contract is unchanged and the variable is off in
 // every real hook invocation; claude-go-throttle-hook-test.sh sets it and
 // reports the trace with any failure.
+//
+// # A probe that could not run is not a verdict (Q785)
+//
+// throttlePrefix returns an empty prefix for two unrelated things: a script that
+// answered "throttling is off" (CI, headless, an unsupported OS), and a probe
+// that never ran at all. The first is a verdict, and silence is the right
+// reading of it. The second is not — the throttle may well be on — so reading it
+// as one dropped the deny above, and the `-race` the hook exists to catch ran at
+// full tilt with nothing said about it. Only the trace told them apart, and the
+// trace is off in every real invocation.
+//
+// The probe's error is the discriminator: local-throttle.sh exits 0 with empty
+// stdout to say "off", and non-zero only when it broke. A `-race` under a failed
+// probe is now denied, carrying that error as its reason. Everything else still
+// passes: a plain `go build`/`go test` is not the run that freezes a GUI, and
+// denying it on a fork that failed under load would make this hook the reason an
+// ordinary Bash call fails.
 package main
 
 import (
@@ -153,7 +173,7 @@ func run(throttlePath string, stdin io.Reader, stdout io.Writer) int {
 		return 0
 	}
 
-	d := Decide(p.ToolInput.Command, func() string { return throttlePrefix(throttlePath) })
+	d := Decide(p.ToolInput.Command, func() (string, error) { return throttlePrefix(throttlePath) })
 	if d == nil {
 		return 0 // Decide has already named which of its paths it took.
 	}
@@ -177,16 +197,17 @@ func run(throttlePath string, stdin io.Reader, stdout io.Writer) int {
 // then silence.
 const throttleTimeout = 5 * time.Second
 
-// throttlePrefix asks local-throttle.sh for the platform prefix. An empty
-// string — no such script, a non-zero exit, an unsupported OS, throttling off
-// in CI or over SSH — means there is nothing to apply.
+// throttlePrefix asks local-throttle.sh for the platform prefix. An empty string
+// with no error is the script's verdict that there is nothing to apply — an
+// unsupported OS, throttling off in CI or over SSH.
 //
-// The two ways of arriving at empty are traced apart. "Throttling is off" is a
-// verdict the script reached; a probe that could not run at all — the timeout
-// above, a fork that failed under load, a signal — is not, and the whole
-// decision goes silent on it. That distinction is the one a Q703 occurrence
-// needs, and it is invisible from the outside.
-func throttlePrefix(path string) string {
+// An error means the probe never reached a verdict: the timeout above, a missing
+// script, a fork that failed under load, a signal. Decide needs that apart from
+// the verdict, because the empty prefix reads the same either way and only one
+// of the two is a reason to let a `-race` through (Q785). The error carries the
+// exec failure alone; the script's own stderr can be any length, and it goes to
+// the trace rather than into a decision reason.
+func throttlePrefix(path string) (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), throttleTimeout)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, path, "prefix") //nolint:gosec // G204: the path is this hook's own sibling script, passed by the entry point; no shell is involved
@@ -197,12 +218,12 @@ func throttlePrefix(path string) string {
 	if err := cmd.Run(); err != nil {
 		trace("throttle probe failed after %s: %s prefix: %v: %s",
 			time.Since(start).Round(time.Millisecond), path, err, strings.TrimSpace(stderr.String()))
-		return ""
+		return "", fmt.Errorf("%s prefix: %w", path, err)
 	}
 	p := strings.TrimSpace(stdout.String())
 	if p == "" {
 		trace("throttle probe reports throttling off after %s: %s prefix",
 			time.Since(start).Round(time.Millisecond), path)
 	}
-	return p
+	return p, nil
 }
