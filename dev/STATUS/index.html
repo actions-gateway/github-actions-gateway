@@ -2848,6 +2848,14 @@
 <td>Measured 2026-08-11: 15 of 17 comparison rows carry no ARC version and no date, and two have already gone false. Settled: a competitor cell renders a verdict only with both, else unverified. Gate the rule, then date the cells.</td>
 </tr>
 <tr>
+<td><a id="Q812"></a>Q812</td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/docs/check-plan-index.sh">A plan index Status cell can claim an open release the gate reads as closed</a></td>
+<td><code>ci</code> <code>docs</code> <code>debt</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>Measured 2026-08-12 closing Q802: invariant 3 compares link-vs-bare form only, so a bare <code>Q484</code> reads as closed while the cell around it said ❌ Open nine days after <code>v1.3.0</code> shipped. A release cell whose tag exists cannot be ❌.</td>
+</tr>
+<tr>
 <td><a id="Q807"></a>Q807</td>
 <td><a href="../development/parallel-dispatch/#the-dispatcher-owns-assignment-not-coordination-files">Batch STATUS.md row deletions conflict server-side, where no merge driver runs</a></td>
 <td><code>ci</code> <code>debt</code> <code>retro</code></td>
@@ -2902,6 +2910,14 @@
 <td>🔲</td>
 <td>S</td>
 <td>Measured 2026-08-08: 9 of 25 workflows declare it; not this one, so its 5 gates never see the candidate merge. Q742 ratchets the em-dash ceiling; this covers the other 4 gates and any later ratchet. Needs Q574's paths-filter <code>changes</code> job.</td>
+</tr>
+<tr>
+<td><a id="Q819"></a>Q819</td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/ci/run-parallel.sh"><code>run-parallel.sh</code> labels gate output but never times it, so a slow gate hides</a></td>
+<td><code>ci</code> <code>debt</code> <code>retro</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>Measured 2026-08-12: <code>doc-links</code> sat at 161s in CI, 38s locally, unseen through three CI-speed rounds, because 30 fast gates run concurrently and the runner labels output without timing it. Emit per-label wall time; <code>run-parallel-test.sh</code> pins it.</td>
 </tr>
 <tr>
 <td><a id="Q758"></a>Q758</td>
@@ -3062,6 +3078,22 @@
 <td>🔲</td>
 <td>S</td>
 <td>The checker gates an unattended merge, but the stub returns post-<code>--jq</code> text, so a malformed <code>--jq</code> in <code>human_enqueued</code> or <code>in_queue</code> fails as a live crash, not a red suite. Only <code>gh pr view</code>'s read has run against a real PR.</td>
+</tr>
+<tr>
+<td><a id="Q816"></a>Q816</td>
+<td><a href="../development/maintaining-backlog/#search-before-you-file">A Queue row's site list is a floor, not a census of the defect</a></td>
+<td><code>docs</code> <code>retro</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>Q758 named 2 sites; 5 carried the claim, and fixing only the named 2 ships a self-contradictory tree. dispatch-worker §1 covers a row's mechanism and cause, not its extent, and "stay in scope" reads as license to stop at the named sites.</td>
+</tr>
+<tr>
+<td><a id="Q817"></a>Q817</td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/CONTRIBUTING.md#pushing-to-a-pr-that-is-already-open">Docs teach bare two-dot <code>git diff origin/main</code> for verifying a branch's own scope</a></td>
+<td><code>docs</code> <code>retro</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>Two-dot against a moving ref shows main's commits as yours: measured 2026-08-12, a post-rebase read listed 9 files the branch never touched. The merge-base rule is scoped to backlog lint; CONTRIBUTING teaches the bare form with no caveat.</td>
 </tr>
 <tr>
 <td><a id="Q693"></a>Q693</td>
