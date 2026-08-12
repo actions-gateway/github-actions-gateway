@@ -916,6 +916,24 @@ Two constraints come with it.
 The run must not read stdin, because a background process group that reads the terminal takes SIGTTIN and stops, which is why the example redirects to a log, the shape a background run wants anyway.
 And the wrapper owns the run: killing the wrapper stops the run, because a live process whose record has just been deleted is the state the record exists to prevent.
 
+##### The pr-sentinel watcher is the exception: no wrapper, no redirect
+
+Both halves of the shape above break the PR watcher, so it is the one long background run that goes neither through `record-launch.sh` nor into a log.
+Launch it as the bare three tokens the pr-sentinel nudge prints, `bash "<absolute path>" <PR>`, as a background task; [parallel-dispatch.md](parallel-dispatch.md#primary-the-pr-sentinel-background-watcher) has the rest of the launch-form rules.
+Measured 2026-08-11 against pr-sentinel 0.8.0 (`scripts/pr-sentinel-stop-hook.py`, `scripts/pr-sentinel-guard.py`):
+
+- **A redirect is the silent one.** The stop hook learns each watcher's output file from the `<output-file>` field of the harness task-notification and reads that file directly, accepting a `PR-SENTINEL EVENT: ready`/`closed`/`blocked` marker only above the first CI-log excerpt banner.
+  That marker is the entire handoff signal; the notification's status is read only as "the task exited", never for its value.
+  A backgrounded command whose stdout is redirected leaves that file **empty** (measured: zero bytes, while the notification still reports `completed`, exit code 0), so the report lands in the log and the hook sees no handoff.
+  The watcher is then no longer live and the PR is still owned and unconcluded, so the stop is blocked again over a PR the watcher already reported green.
+  Reading the log afterwards does not recover it: the hook's only fallback is a transcript read of the task output file's own path, not of wherever the report was sent.
+- **A foreground launch is not recorded at all.** The hook counts a watcher launch only on a Bash call carrying `run_in_background`, so a foreground run leaves the PR with no watcher on record however the run itself goes.
+- **A wrapper or a redirect also costs the auto-approval.** The guard auto-allows only a single simple command of exactly three tokens whose `argv[0]` is `bash`, carrying no operator, redirect, substitution, or glob, so either one drops the launch to the base Bash permission prompt, where an unattended worker stalls with its PR unwatched.
+  Foregrounding does not: the guard reads the command string alone, so a foreground launch is auto-approved and still invisible to the stop hook.
+
+Skipping the wrapper costs nothing here.
+The launch record exists to keep a compute-heavy run killable after a compaction drops its task id, and a watcher that sleeps between polls is neither worth reclaiming nor something to kill by pattern.
+
 ### Ad-hoc shell varies: don't rely on word-splitting
 
 Committed scripts under `scripts/` are `#!/usr/bin/env bash` and follow [bash-style.md](bash-style.md), so their behaviour is pinned by the shebang. **Ad-hoc commands are not pinned** — they run in whatever login shell the contributor has: zsh on macOS (the default since Catalina), bash on most Linux distributions and CI images.
