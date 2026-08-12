@@ -69,7 +69,8 @@ LAST_OUT=""
 
 # new_repo NAME CONFLICT_KIND — a throwaway repo whose HEAD and origin/main have
 # diverged. CONFLICT_KIND picks which file both sides edited: status (a
-# driver-owned file), code (not), both, or none.
+# driver-owned file), code (not), both, none, or driver (a driver-owned file
+# with a live merge driver installed for it).
 new_repo() {
 	local name="$1" kind="$2"
 	local dir="$FIXTURE_DIR/$name"
@@ -82,6 +83,17 @@ new_repo() {
 		printf 'row one\n' >docs/STATUS.md
 		printf 'plan one\n' >docs/plan/README.md
 		printf 'echo one\n' >scripts/thing.sh
+		printf 'script one\n' >scripts/README.md
+		if [[ "$kind" == driver ]]; then
+			# A live merge driver for scripts/README.md, resolving to "theirs"
+			# and exiting clean. It stands in for the repo's own scriptindex
+			# driver: installed in this clone, never run by GitHub. The probe
+			# must switch it off, or the conflict disappears from what it
+			# measures and the record under-reports.
+			printf 'scripts/README.md merge=scriptindex\n' >.gitattributes
+			git config merge.scriptindex.name 'test stand-in'
+			git config merge.scriptindex.driver 'cp %B %A'
+		fi
 		git add -A && git commit -qm base
 
 		git checkout -qb feature
@@ -90,6 +102,11 @@ new_repo() {
 		esac
 		case "$kind" in
 		code | both) printf 'echo changed by the branch\n' >scripts/thing.sh ;;
+		esac
+		case "$kind" in
+		driver)
+			printf 'row one changed by the branch\n' >scripts/README.md
+			;;
 		esac
 		printf 'unrelated\n' >feature-only.txt
 		git add -A && git commit -qm feature
@@ -101,6 +118,9 @@ new_repo() {
 		esac
 		case "$kind" in
 		code | both) printf 'echo changed by main\n' >scripts/thing.sh ;;
+		esac
+		case "$kind" in
+		driver) printf 'script one changed by main\n' >scripts/README.md ;;
 		esac
 		printf 'main only\n' >main-only.txt
 		git add -A && git commit -qm main-advance
@@ -283,6 +303,29 @@ assert_eq last-record-kept-both \
 expect last-record-confirm-refuses 1 "$LAST_REPO" --confirm 42
 assert_output last-record-confirm-refuses "was 'WAKE'"
 
+# An installed merge driver must not resolve a conflict out of the record. A
+# driver left live is the one error that cannot be caught afterwards: it removes
+# a path, and a short conflict set reads exactly like a complete one. Found on
+# #1431's second heal, where the probe disabled 2 of the 5 drivers
+# .gitattributes declares and `scripts/README.md` vanished from a set GitHub
+# reported as real — the same rebase later hit a keyed collision in that file,
+# so the conflict was genuine rather than an artefact.
+#
+# This asserts the path is reported, not that the report equals GitHub's merge:
+# the failing-command form over-reports for a touched driver-owned path
+# (parallel-dispatch.md#conflict-policy), which the discount absorbs.
+DRIVER_REPO="$(new_repo live-driver driver)"
+expect driver-live-assess 0 "$DRIVER_REPO" --assess 42
+assert_output driver-live-assess 'conflicts: scripts/README.md'
+assert_eq driver-live-recorded "$(field "$DRIVER_REPO" conflict)" scripts/README.md
+
+# Control: the driver really is live in that repo, so the assertion above is
+# measuring the probe's suppression of it rather than a driver that never ran.
+driver_resolved="$(cd "$DRIVER_REPO" &&
+	git merge-tree --write-tree origin/main HEAD |
+	grep -c '^CONFLICT' || true)"
+assert_eq driver-live-control "$driver_resolved" 0
+
 # The point of the whole record (Q810): once the branch heals, the conflict is
 # unreconstructable from the refs — but the two OIDs the assessment recorded
 # still re-derive it. Without this the eviction's cause dies with the rebase,
@@ -343,6 +386,36 @@ listed="$(awk '
 	inside && /^\)/ { exit }
 	inside { gsub(/[ \t]/, ""); if ($0 != "") print }
 ' "$CHECKER" | sort)"
+# DRIVER_NAMES is the same list one column over, and it failed the same way:
+# `conflicting_paths` disabled two of the five declared drivers, so in a clone
+# that ran `make merge-driver` the other three quietly resolved their files
+# inside the probe and dropped them from the measured conflict set. The verdict
+# survived that (every such path is discounted as driver-owned anyway) but the
+# recorded set did not, and a conflict set that under-reports is worse than none
+# because it reads as a measurement. Reconciled in both directions for the same
+# reason the paths are.
+named="$(awk '
+	/^[ \t]*#/ { next }
+	match($0, /merge=[A-Za-z0-9_-]+/) {
+		print substr($0, RSTART + 6, RLENGTH - 6)
+	}
+' "$REPO_ROOT/.gitattributes" | sort -u)"
+disabled="$(awk '
+	/^DRIVER_NAMES=\(/ { inside = 1; next }
+	inside && /^\)/ { exit }
+	inside { gsub(/[ \t]/, ""); if ($0 != "") print }
+' "$CHECKER" | sort)"
+if [[ -z "$named" ]]; then
+	printf 'FAIL %-26s .gitattributes declares no merge drivers\n' driver-names-source >&2
+	fails=$((fails + 1))
+elif [[ "$named" == "$disabled" ]]; then
+	printf 'ok   %-26s matches .gitattributes (%s)\n' driver-names-reconciled "$(tr '\n' ' ' <<<"$disabled")"
+else
+	printf 'FAIL %-26s DRIVER_NAMES and .gitattributes disagree\n  .gitattributes: %s\n  DRIVER_NAMES:   %s\n' \
+		driver-names-reconciled "$(tr '\n' ' ' <<<"$named")" "$(tr '\n' ' ' <<<"$disabled")" >&2
+	fails=$((fails + 1))
+fi
+
 if [[ -z "$attributed" ]]; then
 	printf 'FAIL %-26s .gitattributes lists no merge-driver-owned paths\n' driver-owned-source >&2
 	fails=$((fails + 1))

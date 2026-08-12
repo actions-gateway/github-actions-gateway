@@ -73,6 +73,18 @@ DRIVER_OWNED=(
 	scripts/README.md
 )
 
+# The driver names behind those paths, switched off for the merge probe below.
+# Every `merge=` value in .gitattributes belongs here: a name missing from this
+# list stays live in a clone that ran `make merge-driver`, quietly resolves its
+# file inside the probe, and drops it from the measured conflict set.
+DRIVER_NAMES=(
+	backlog
+	gatelists
+	planindex
+	roadmap
+	scriptindex
+)
+
 STATE_DIR="tmp/requeue"
 REPO=""
 MODE=""
@@ -262,17 +274,28 @@ resolve_probe_commits() {
 	PROBE_HEAD_OID="$(git rev-parse HEAD)"
 }
 
-# conflicting_paths — the files that conflict merging the resolved base into
-# HEAD with the repo's merge drivers disabled. Disabled deliberately: the
-# drivers are per-clone config that GitHub's servers never run, so this measures
-# what the merge queue will see, not what this clone can quietly resolve.
+# conflicting_paths — the driver-owned files this merge cannot resolve without
+# a driver, plus every other file that genuinely conflicts.
+#
+# Each declared driver is replaced by a failing command, not unset: `-c
+# merge.<name>.driver=false` runs /usr/bin/false, so git records a conflict for
+# any driver-owned path both sides touched rather than attempting the built-in
+# merge. That is deliberate here and it is not a driverless merge — `-c` cannot
+# express one (measured 2026-08-12; parallel-dispatch.md#conflict-policy). It
+# errs toward reporting: a driver left live resolves its own file inside the
+# probe and drops a real conflict from the record, which is the direction that
+# cannot be detected afterwards. Every such path is discounted by
+# is_driver_owned, so the verdict does not turn on either error.
 #
 # A probe that never ran yields no CONFLICT lines, which reads as a clean merge
 # and hands back ELIGIBLE. The output is therefore required to open with the
 # merged tree's OID, which merge-tree prints only when it actually merged.
 conflicting_paths() {
-	local out rc=0
-	out=$(git -c merge.backlog.driver=false -c merge.planindex.driver=false \
+	local out rc=0 name off=()
+	for name in "${DRIVER_NAMES[@]}"; do
+		off+=(-c "merge.$name.driver=false")
+	done
+	out=$(git "${off[@]}" \
 		merge-tree --write-tree "$PROBE_BASE_OID" "$PROBE_HEAD_OID" 2>&1) || rc=$?
 	if ((rc > 1)) || [[ ! "$(head -n 1 <<<"$out")" =~ ^[0-9a-f]{40}$ ]]; then
 		printf 'pr-requeue-eligible.sh: merge-tree of %s into %s did not run (rc=%s): %s\n' \
