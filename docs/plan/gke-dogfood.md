@@ -955,9 +955,13 @@ scripts/dogfood/ops.sh kata-install               # (re)install kata-deploy + `k
 scripts/dogfood/ops.sh agc-bounce [ci|e2e]        # roll-restart the CI (default) or e2e AGC + wait
 scripts/dogfood/ops.sh debug-pod [--kata]         # interactive shell pod on the e2e pool (bisecting)
 scripts/dogfood/ops.sh kvm-check [<node>]         # verify /dev/kvm on the e2e node(s)
+scripts/dogfood/ops.sh at-rest                    # is anything still billing? 0 at rest, 1 not, 2 unreadable
 ```
 
 `kata-install` reuses exactly the install logic `e2e-setup.sh` runs (both source `scripts/dogfood/lib/kata.sh`), so it re-applies the DaemonSet + RuntimeClass without re-running the full billable one-time setup. `debug-pod`/`kvm-check` target the `e2e` pool, which autoscales from 0 — scale a node up first (`ops.sh pool-scale e2e 1`) or run them during an in-flight e2e session.
+
+`at-rest` is the read-only one: it answers "did the teardown actually land" by counting the project's Compute Engine instances, and reports an unreadable project as `UNKNOWN` (exit 2) rather than as zero.
+Reading `currentNodeCount` off the cluster object cannot make that distinction, because gcloud prints the same empty string for a cluster at 0 nodes and for a projection that resolved to nothing ([release.md](../operations/release.md#confirming-the-cluster-is-actually-at-rest), Q779).
 
 ## Operations quick-reference
 
@@ -971,6 +975,7 @@ scripts/dogfood/ops.sh kvm-check [<node>]         # verify /dev/kvm on the e2e n
 | Disable e2e on GAG | `scripts/dogfood/e2e-stop.sh` |
 | One-time e2e pool + Kata setup | `scripts/dogfood/e2e-setup.sh` |
 | Recurring maintenance + debug ops (pool resize, kata reinstall, AGC bounce, debug pod, `/dev/kvm` check) | `scripts/dogfood/ops.sh <subcommand>` |
+| Confirm nothing is still billing after a stop, a delete, or a killed release gate | `scripts/dogfood/ops.sh at-rest` |
 
 All scripts read `PROJECT`, `CLUSTER`, `ZONE`, `REPO` (and `APP_ID`, `INSTALLATION_ID` for the setup scripts) from the environment.
 Export the Variables block once per shell session.

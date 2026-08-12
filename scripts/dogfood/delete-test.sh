@@ -62,9 +62,12 @@ CONFIRM_REPLY=""
 gcloud() {
 	printf 'gcloud %s\n' "$*" >>"${CALL_LOG}"
 	case "$*" in
-	*currentNodeCount*)
+	compute\ instances\ list*)
 		((NODE_COUNT_OK)) || return 1
-		echo "${NODE_COUNT}"
+		local i
+		for ((i = 1; i <= NODE_COUNT; i++)); do
+			echo "gke-node-${i} us-east1-b e2-standard-2 RUNNING"
+		done
 		;;
 	container\ clusters\ describe*) ((CLUSTER_EXISTS)) || return 1 ;;
 	compute\ disks\ list*) cat "${DISKS_FILE}" ;;
@@ -215,7 +218,7 @@ check_before "resets routing before deleting the cluster" \
 # --- the confirmation quotes what is actually running ------------------------
 
 check_contains "quotes the cluster being deleted" "Cluster: ${CLUSTER}" "${MAIN_OUT}"
-check_contains "quotes the live node count" "Nodes currently up:      3" "${MAIN_OUT}"
+check_contains "quotes the live instance count" "Compute instances up:    3" "${MAIN_OUT}"
 check_contains "quotes the in-flight worker count" "Worker pods in flight:   0" "${MAIN_OUT}"
 
 reset_stubs
@@ -240,8 +243,20 @@ check_not_contains "never reports an unreadable cluster as idle" \
 reset_stubs
 NODE_COUNT_OK=0
 run_main
-check_contains "reports an unreadable node count as unknown" \
-	"Nodes currently up:      unknown" "${MAIN_OUT}"
+check_contains "reports an unreadable instance count as unknown" \
+	"Compute instances up:    unknown" "${MAIN_OUT}"
+check_not_contains "never reports an unreadable instance count as idle" \
+	"Compute instances up:    0" "${MAIN_OUT}"
+
+# The other direction, and the reason the probe counts instances rather than
+# reading `currentNodeCount` off the cluster (Q779): a genuinely idle cluster
+# still has to read as 0 rather than as unknown, or the confirmation cries wolf
+# on the normal at-rest state.
+reset_stubs
+NODE_COUNT=0
+run_main
+check_contains "reports a genuinely idle cluster as 0" \
+	"Compute instances up:    0" "${MAIN_OUT}"
 
 # The occupancy read happens on a path that may abort, so it pins the context
 # per call instead of making it active — a delete that the operator declines

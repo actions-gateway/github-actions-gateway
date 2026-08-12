@@ -22,6 +22,8 @@
 #   agc-bounce [ci|e2e]         Roll-restart the CI (default) or e2e AGC + wait.
 #   debug-pod [--kata]          Interactive throwaway shell pod on the e2e pool.
 #   kvm-check [<node>]          Verify /dev/kvm on the e2e node(s).
+#   at-rest                     Is anything still billing? 0 at rest, 1 not,
+#                               2 unreadable.
 #
 # Required env vars (export before running):
 #   PROJECT   GCP project ID (e.g. actions-gateway-dogfood)
@@ -35,6 +37,8 @@ REPO_ROOT="$(git rev-parse --show-toplevel)"
 source "${REPO_ROOT}/scripts/lib/common.sh"
 # shellcheck source=scripts/dogfood/lib/kata.sh
 source "${REPO_ROOT}/scripts/dogfood/lib/kata.sh"
+# shellcheck source=scripts/dogfood/lib/nodes.sh
+source "${REPO_ROOT}/scripts/dogfood/lib/nodes.sh"
 
 # Tenant coordinates. The AGC Deployment the GMC provisions for a gateway is
 # `<gateway-name>-agc` in the gateway's namespace (agcResourceSuffix in
@@ -60,6 +64,8 @@ Usage: scripts/dogfood/ops.sh <subcommand> [args]
   agc-bounce [ci|e2e]         Roll-restart the CI (default) or e2e AGC + wait.
   debug-pod [--kata]          Interactive throwaway shell pod on the e2e pool.
   kvm-check [<node>]          Verify /dev/kvm on the e2e node(s).
+  at-rest                     Is anything still billing? Exits 0 at rest, 1 with
+                              instances up, 2 when the project cannot be read.
 EOF
 }
 
@@ -192,6 +198,19 @@ op_kvm_check() {
 	prune_node_debuggers
 }
 
+# op_at_rest — say whether anything in the project is still billing, the check
+# to run after a teardown, a killed gate, or a `--reclaim` (Q779). Read-only: it
+# touches neither the cluster nor the kubeconfig, so it is safe on a target
+# another session owns.
+#
+# Its exit status is the answer — 0 at rest, 1 instances up, 2 unreadable — so a
+# caller can distinguish a cluster that is down from one that could not be read.
+# lib/nodes.sh has why that distinction needs a probe of this shape.
+op_at_rest() {
+	echo "Checking whether ${PROJECT} is at rest (cluster ${CLUSTER}, zone ${ZONE})..."
+	report_dogfood_at_rest
+}
+
 main() {
 	local cmd="${1:-}"
 
@@ -204,7 +223,7 @@ main() {
 			usage >&2
 			exit 1
 			;;
-		pool-scale|kata-install|agc-bounce|debug-pod|kvm-check) ;;
+		pool-scale|kata-install|agc-bounce|debug-pod|kvm-check|at-rest) ;;
 		*)
 			echo "error: unknown subcommand '${cmd}'" >&2
 			usage >&2
@@ -228,6 +247,7 @@ main() {
 		agc-bounce) op_agc_bounce "$@" ;;
 		debug-pod) op_debug_pod "$@" ;;
 		kvm-check) op_kvm_check "$@" ;;
+		at-rest) op_at_rest ;;
 	esac
 }
 
