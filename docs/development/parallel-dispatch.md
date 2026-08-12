@@ -443,6 +443,13 @@ It is the same command the checker would have run, and the rebase is the only de
   Two traps sit here, both measured 2026-08-12 and both silent. **A misspelled driver name fails open**: git ignores the unknown config key, runs the driver anyway, and exits 0, so a probe written against a guessed name (`merge.status` for `docs/STATUS.md`, whose driver is `backlog`) produces byte-identical output to no probe at all. **The driver writes to stderr**, and its advisory line names the file it resolved, so a reader scanning the combined output for a path finds one and reports a conflict list from chatter that says the opposite.
   Read the stage lines only (`^[0-9]{6} <sha> [123]`); a run with no conflict prints the merged tree OID and nothing else.
 
+- **Driver-owned does not mean auto-resolving.
+  It means resolved *by key*.** A keyed merge still conflicts when both sides change the same key, and [`merge-keyed-records.awk`](../../scripts/lib/merge-keyed-records.awk) refuses rather than guessing in three enumerated cases: changed differently on both sides, deleted on one side and changed on the other, and the same new ID added on both sides with different text.
+  It leaves ordinary conflict markers by design, because a wrongly resolved row loses backlog state while a marker costs a minute.
+  Measured 2026-08-12: two PRs edited the same two rows of the `scripts/README.md` registry, and the script-index driver refused the file while the backlog driver resolved `docs/STATUS.md` alongside it, in the same rebase.
+  So "the conflict is confined to the driver-owned files" answers who owns the resolution, not whether one is needed, and a plan resting on the rebase coming out clean has to survive the case where it does not.
+  Resolve a keyed conflict by keeping **both** sides and verifying each survives, not by picking one; two sides changing one row usually means two facts about it, not a disagreement.
+
 - **"Same file" and "different sections" both predict badly; diff context is what decides.** Two hunks in one file merge cleanly when they are further apart than the three lines of context around each, and conflict when they are not, whatever the document structure says.
   Measured 2026-08-12 on one file in one batch: two edits to adjacent rows of a Markdown table conflicted, while two edits to sections 180 lines apart rebased as a pure line offset.
   A dispatcher reasoning from "they touch different cells" got the first one wrong and would have got the second one right by luck.
