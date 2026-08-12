@@ -399,6 +399,20 @@ Healing is the worker's job — the dispatcher only steps in when a worker is go
 
 - **Doc-only / trivial conflicts** the dispatcher can resolve directly (a small helper that rebases the PR branch onto `origin/main` in a throwaway worktree and force-pushes with lease works well).
   The `docs/STATUS.md` [merge driver](maintaining-backlog.md#the-merge-driver-resolve-queue-rows-by-id-not-by-line-position) runs during rebase too, so Queue-row conflicts usually resolve on their own, as do the `docs/plan/README.md` and `docs/roadmap.md` ones.
+- **Semantic / code conflicts** go back to a worker: spawn a small resolve chip that takes over the PR branch, rebases onto `main`, resolves with full judgment, re-runs the gate, and force-pushes with lease.
+  The dispatcher does not hand-edit code conflicts on another session's branch.
+
+### The heal destroys the evidence, so the wake records it
+
+A rebase is the fix and the erasure at once.
+Afterwards the branch merges clean, so `git merge-tree origin/main HEAD` reports no conflict whatever the eviction was about.
+Ask later why the PR was evicted, or whether the worker and the dispatcher saw the same thing, and there is no answer left to read.
+That is not hypothetical: a dispatcher's post-hoc read once contradicted a worker's contemporaneous `--assess`, and by then neither could be confirmed (Q810).
+
+The capture therefore belongs on the wake that reports the conflict, not on a later sweep, and the hook for it was already there.
+[`pr-requeue-eligible.sh --assess`](../../scripts/agent/pr-requeue-eligible.sh) runs before the rebase and had measured all of this already, then kept only its verdict.
+It now appends what it measured to `tmp/requeue/<pr>.verdict`: the two commit OIDs it merged, and the paths that conflicted.
+
 - **A by-hand `merge-tree` in a driver-installed clone answers a different question than GitHub's merge.** `.gitattributes` is committed, but the `merge.<name>.driver` command it names is per-clone config that `make merge-driver` installs, and GitHub never runs it.
   So a probe run in a clone that has the drivers reads *resolved*, while the queue sees the raw conflict.
   Measured 2026-08-12 on two PRs: drivers on, `exit 0`; drivers off, `exit 1` naming `docs/STATUS.md`.
@@ -415,20 +429,6 @@ Healing is the worker's job — the dispatcher only steps in when a worker is go
   Measured 2026-08-12 on one file in one batch: two edits to adjacent rows of a Markdown table conflicted, while two edits to sections 180 lines apart rebased as a pure line offset.
   A dispatcher reasoning from "they touch different cells" got the first one wrong and would have got the second one right by luck.
   Measure the pair rather than predicting it, and say which you did when you tell a worker.
-
-- **Semantic / code conflicts** go back to a worker: spawn a small resolve chip that takes over the PR branch, rebases onto `main`, resolves with full judgment, re-runs the gate, and force-pushes with lease.
-  The dispatcher does not hand-edit code conflicts on another session's branch.
-
-### The heal destroys the evidence, so the wake records it
-
-A rebase is the fix and the erasure at once.
-Afterwards the branch merges clean, so `git merge-tree origin/main HEAD` reports no conflict whatever the eviction was about.
-Ask later why the PR was evicted, or whether the worker and the dispatcher saw the same thing, and there is no answer left to read.
-That is not hypothetical: a dispatcher's post-hoc read once contradicted a worker's contemporaneous `--assess`, and by then neither could be confirmed (Q810).
-
-The capture therefore belongs on the wake that reports the conflict, not on a later sweep, and the hook for it was already there.
-[`pr-requeue-eligible.sh --assess`](../../scripts/agent/pr-requeue-eligible.sh) runs before the rebase and had measured all of this already, then kept only its verdict.
-It now appends what it measured to `tmp/requeue/<pr>.verdict`: the two commit OIDs it merged, and the paths that conflicted.
 
 - **A ref pair is not a measurement**, because both refs move.
   The OIDs make the probe re-runnable: `git merge-tree --write-tree <base_oid> <head_oid>` re-derives the same conflict set from the objects at any later time, so a disagreement is settled by re-running it rather than argued from memory.
