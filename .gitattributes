@@ -19,12 +19,11 @@ docs/STATUS.md merge=backlog
 # below; without it git falls back to its built-in three-way merge.
 scripts/README.md merge=scriptindex
 
-# And for the Makefile's gate and suite lists, merged entry by entry. Only the
-# variables the driver names are treated specially; a conflict anywhere else in
-# the file gets git's ordinary three-way merge and ordinary markers. Adding a
-# gated script means appending to a backslash-continued list here, so two PRs
-# doing it collide on adjacent lines. Per-clone and opt-in, same as the rest.
-Makefile merge=gatelists
+# And the gate and suite lists, merged entry by entry. They live in their own
+# file rather than in the Makefile precisely so this line can exist: routing is
+# per file, and routing the whole Makefile would make every ordinary change to
+# it count as driver-owned downstream. Per-clone and opt-in, same as the rest.
+mk/gate-lists.mk merge=gatelists
 
 # Same treatment for the plan index, keyed on the plan path in column 1 rather
 # than a backlog row ID: every plan that lands adds one long row near the same

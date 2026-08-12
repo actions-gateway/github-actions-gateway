@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 #
-# git-merge-gate-lists.sh — a git merge driver for the Makefile that resolves
-# its gate and suite list variables entry by entry, and falls back to ordinary
-# conflict markers for anything it is not certain about. The Markdown siblings
+# git-merge-gate-lists.sh — a git merge driver for mk/gate-lists.mk that
+# resolves its gate and suite list variables entry by entry, and falls back to
+# ordinary conflict markers for anything it is not certain about. The Markdown siblings
 # are scripts/docs/git-merge-status.sh, git-merge-plan-index.sh and
 # git-merge-script-index.sh.
 #
@@ -32,6 +32,11 @@
 # Confining the clever part to a sentinel is the whole safety argument: a
 # conflict anywhere else in the Makefile never reaches this driver's list logic,
 # it reaches git's ordinary merge and gets ordinary markers.
+#
+# The lists live in their own file rather than in the Makefile precisely so
+# this driver can own the routed path outright: .gitattributes routes per file,
+# and routing the whole Makefile would make every ordinary change to it count
+# as driver-owned wherever that matters, piped-gate's overlap discount included.
 #
 # WHAT IT REFUSES TO DO. Any uncertainty ends the same way: re-run the plain
 # three-way merge and leave its conflict markers, with a one-line reason on
@@ -80,11 +85,11 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 DRIVER_NAME='gatelists'
 DRIVER_LOG='merge-gate-lists'
 DRIVER_PATH='scripts/ci/git-merge-gate-lists.sh'
-DRIVER_DESC='Makefile: merge gate/suite list entries as a set, else conflict markers'
+DRIVER_DESC='mk/gate-lists.mk: merge gate/suite list entries as a set, else conflict markers'
 DRIVER_INSTALL_NOTE='  Makefile gate-list conflicts now resolve entry by entry during merge/rebase;
   anything else in the file still gets ordinary conflict markers.'
 DRIVER_SELF="${BASH_SOURCE[0]}"
-DEFAULT_PATH='Makefile'
+DEFAULT_PATH='mk/gate-lists.mk'
 
 # The lists this driver owns. Every one is a whitespace-separated, order-
 # insensitive set that PRs append to, and every one is reconciled by

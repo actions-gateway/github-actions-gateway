@@ -18,7 +18,9 @@
   "overlap_ignore": [
     "docs/STATUS.md",
     "docs/plan/README.md",
-    "docs/roadmap.md"
+    "docs/roadmap.md",
+    "scripts/README.md",
+    "mk/gate-lists.mk"
   ],
   "doc": "docs/development/testing.md#the-status-you-report-is-a-claim-too"
 }
