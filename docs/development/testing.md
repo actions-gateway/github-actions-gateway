@@ -1100,6 +1100,12 @@ Each is a claim about state, and each has a cheap way of being wrong:
   Q710 shipped a wrong sentence twice this way.
   A token-multiset reconciliation over a prose edit came back clean and was reported as "no qualifier was lost", which was true, and as "the split preserved the meaning", which it cannot see, because the defect was a pronoun the edit *added*.
   Then a scan for damaged paragraph labels reported 22 sites by finding every label with an unlabelled paragraph after it, never asking which of those *this change* produced; the answer was 8, and two structural edits had already been made on the 22. **A claim about what a change did needs a before-and-after measurement, not a scan of the after.** Run the probe against the base tree too, and diff the two.
+  The discriminator is to **ask what the signal would read if the alternative were true**: when the answer is "the same", the reading cannot settle the question however sound the instrument is.
+  Two instances from 2026-08-12, blunter than Q710's and both in tooling used to check tooling.
+  A `gh pr view <n> --json state` read returned `MERGED` and was taken as merged to `main`; the field is true and carries no base, and `baseRefName` was already on the object fetched (Q805 retro).
+  A `git merge-tree --write-tree` probe exited 0 for a branch the merge queue then rejected, because a local clone has this repo's merge drivers installed and GitHub runs none; the driver announced itself in the very output being quoted as a clean merge (Q828).
+  Nothing was absent in either case, so "check more" would not have helped.
+  Note also that a **hedge on the conclusion does not rescue a measurement that answered a different question**, it only makes the wrong answer look appropriately humble: the Q828 reading was hedged carefully, on the inference drawn *from* the probe, while the error sat upstream in the probe itself.
 
 - **A gate that fails on your branch is not yours until it fails on the base too.** The bullet above asks for a before-and-after when you are claiming what a change *did*; this is the same move aimed at the more common question, *is this failure even mine*.
   A red gate on a working branch reads as caused by that branch, because that is the only thing you changed, and a plausible mechanism is always available: a test you touched, a list you widened, the runs you had going in parallel.
