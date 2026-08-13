@@ -3112,22 +3112,6 @@
 <td>Blocked by <a href="#Q539">Q539</a>. Validate the composed stack: node-level P2P for pod images, in-guest mirror for job pulls; confirm the P2P mesh stays unreachable from worker pods. One deployment for both classes? <a href="../plan/caching-and-worker-storage/">scope</a></td>
 </tr>
 <tr>
-<td><a id="Q818"></a>Q818</td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/deploy/monitoring/prometheusrule.yaml">The shipped <code>PrometheusRule</code> has drifted from the doc that reproduces it</a></td>
-<td><code>docs</code> <code>ci</code> <code>debt</code></td>
-<td>🔲</td>
-<td>S</td>
-<td>Measured 2026-08-12: <code>ActionsGatewayScaleSetJobsDeferred</code> is in <code>observability-alerting.md</code> and <code>runbook.md</code> but not in the rule file, and <code>ActionsGatewayReconcileErrors</code>' summary differs. Nothing gates the pair, so "the same rules" is untrue.</td>
-</tr>
-<tr>
-<td><a id="Q827"></a>Q827</td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/deploy/monitoring/prometheusrule.yaml">Nothing validates the shipped alerts' PromQL</a></td>
-<td><code>ci</code> <code>debt</code></td>
-<td>🔲</td>
-<td>S</td>
-<td>YAML/JSON half shipped: <code>manifest-validate</code> yamllints the rule file and <code>jq</code>s both dashboards. A wrong expression still fails silently. Measured: <code>promql/parser</code> vendors 14M/27 modules, devtools is 1.2M; a checker there also gates <a href="#Q818">Q818</a>.</td>
-</tr>
-<tr>
 <td><a id="Q701"></a>Q701</td>
 <td><a href="../development/testing/#synchronize-on-the-signal-you-assert-on">No doc records how to hold the scale-set poll loop out of its own poll</a></td>
 <td><code>tests</code> <code>docs</code> <code>retro</code></td>
