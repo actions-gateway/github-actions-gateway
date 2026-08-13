@@ -1123,6 +1123,13 @@ Each is a claim about state, and each has a cheap way of being wrong:
   This is the sibling of the pipe traps above: there the status is misread, here it is read correctly and then ignored.
   Bind the mutation to the check that authorizes it, `scripts/docs/lint-backlog.sh && git add docs/STATUS.md && git commit`, or branch on `$?` explicitly.
   The pre-commit hook backstops this particular file, and a backstop is not a reason to write the chain so that it depends on one.
+- **A completion predicate must key on what ends the run, not on a string that appears in it.** A `Monitor` armed on `make check` for `check-dep-advisory`, the advisory that runs last, fired while the gate was still inside `scripts-test`, because `ci/check-dep-advisory-test` is a suite name that phase prints as it works.
+  The report went out as "run complete" with `build-tags-check`, `lint` and `cover-check` not yet started (measured 2026-08-12).
+  The trap is the run's own vocabulary: a marker chosen to mean "finished" is usually also a word the run says while working, and the false fire looks exactly like the real one.
+  Grep the marker against a full log of an earlier run before arming a watcher on it, and prefer the process exiting, since a background task's completion notification cannot fire early.
+- **Green checks say the run passed, never that your change is gated.** The two come apart exactly when a gate is new, which is when nobody thinks to look. `comparison-stamps-check` shipped into `CHECK_FAST_GATES` and into no workflow, so it ran under a local `make check` and never on a PR: `unit-test.yml` path-ignores docs, and `doc-links.yml` names each docs gate as its own job rather than running `make check`.
+  Ten green checks on the head SHA said nothing about it, and `gate-lists-check` stayed green throughout, because it reconciles the Makefile, the tree and this file, never `.github/workflows/` (Q831).
+  Verify a new gate by naming its **job** in the run's job list (`gh run view <id> --json jobs`) rather than by the workflow's conclusion, and grep the target across `.github/workflows/` beside a known-wired control, so an empty result cannot read as a bad query.
 
 
 The failure mode these share is reporting a conclusion from a signal that does not carry it.
