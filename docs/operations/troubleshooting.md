@@ -521,6 +521,10 @@ A set with no `capacityGate` (the default) never carries this condition at all �
 >
 > A latched set is invisible to the scheduler-side signals: the pod that produced the verdict is gone, so `WorkersUnschedulable` — and its gauge — is back to `0` while intake is still throttled. `worker_capacity_declined{reason="AwaitingProbe"}` is the series that stays `1`, which is why the gauge carries the reason.
 
+**What alerts on this.** Two ticket-severity rules cover the gate, one per acquisition tier: [`ActionsGatewayCapacityGateRejectingJobs`](runbook.md#actionsgatewaycapacitygaterejectingjobs) on the classic tier and [`ActionsGatewayScaleSetCapacityWithheld`](runbook.md#actionsgatewayscalesetcapacitywithheld) on the default `ScaleSet` one.
+Both watch the *cost* series above rather than `worker_capacity_declined` itself, and the scale-set rule additionally requires the set to have been assigned work in the last hour.
+That is deliberate: the gauge alone cannot tell a gate that is costing throughput from the harmless latched state this section describes, so alerting on it directly would open a ticket against an idle set doing exactly what it should.
+
 **Diagnostics.**
 
 ```sh

@@ -230,6 +230,32 @@ Every increment is an explicit allowlist denial (sharper than `dial_errors`, whi
 2. If the destinations are unexpected, treat it as SSRF probing or a compromised workload — inspect the workflow acquiring the affected runner and correlate with `proxy_dial_errors_total`.
 3. If a legitimate egress target is missing, add it to the platform-owned egress allowlist rather than to the workflow — see [security-operations.md § Worker egress destinations](security-operations.md#worker-egress-destinations-the-egress-allowlist).
 
+### ActionsGatewayCapacityGateRejectingJobs
+
+**Ticket.** A runner set opted into [`spec.capacityGate`](troubleshooting.md#runnerset-reports-workercapacitydeclined-the-gateway-stopped-claiming-jobs) and the gate has been leaving delivered jobs queued at GitHub for half an hour, because the cluster cannot place another worker pod of that set's shape.
+This is the **classic** acquisition tier, where every increment is one job GitHub delivered and the AGC declined to claim.
+
+Refusing is the gate working: claiming a job the cluster cannot run spends a single-use JIT runner record and ends in a cancelled workflow run.
+What the alert reports is that the refusal is not clearing.
+The gate throttles rather than seals, so intake continues at roughly one claim per `pendingPodDeadline` window; over 30 minutes that is at least three probes that failed to find capacity.
+
+1. Read the gate's evidence: `max by (namespace, runner_set, reason) (actions_gateway_runnerset_worker_capacity_declined == 1)`. `ScaleUpDeclined` is the cluster autoscaler's own refusal, `PodsUnschedulable` is the scheduler's verdict, and `AwaitingProbe` is the latched state that outlives the pod which produced it.
+   The gauge keys on `runner_set` while this alert's series keys on `runner_group`; both carry the same set's name, because the rejection counter is shared with v1 `RunnerGroup` owners.
+2. Work the reason with [RunnerSet Reports WorkerCapacityDeclined](troubleshooting.md#runnerset-reports-workercapacitydeclined-the-gateway-stopped-claiming-jobs), which maps each one to the node, taint, or quota fix that restores placement.
+3. The one-line rollback, if the gate is wrong about the cluster, is `spec.capacityGate.mode: Off`; the same section covers when that is the right call.
+
+### ActionsGatewayScaleSetCapacityWithheld
+
+**Ticket.** The same gate on the **scale-set** (default) tier, where a declined job is never assigned at all, so there is no rejected delivery to count.
+The gate shows up instead as slots removed from the ceiling the set advertises to GitHub, and runs wait in the queue for capacity the set is declining to offer.
+
+The alert requires the set to have been assigned work in the last hour, which is what separates a gate doing its job from one worth a ticket.
+An idle gated set whose worker shape stays unplaceable holds a latched `AwaitingProbe` decline indefinitely; that reading is truthful and costs nothing, so on its own it must not raise a ticket.
+Under a real withhold the per-window probe job is still assigned, so a set with work waiting keeps `actions_gateway_scaleset_jobs_assigned_total` moving while an idle one does not.
+
+1. Read `actions_gateway_scaleset_advertised_capacity` for what the set is still offering and `actions_gateway_scaleset_capacity_withheld` by `reason` for who took the rest; a `quota` share alongside the `capacity` one means the [ResourceQuota](troubleshooting.md#jobs-failing-due-to-namespace-resourcequota-exhaustion) is binding too.
+2. Then follow the same evidence and remediation path as [ActionsGatewayCapacityGateRejectingJobs](#actionsgatewaycapacitygaterejectingjobs) above.
+
 ---
 
 ## SLO Breach Response

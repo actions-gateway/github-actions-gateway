@@ -18,6 +18,7 @@ For SLO targets, see [Appendix A — Capacity Targets & SLOs](../design/appendix
 | One scale-set job never starts, the rest do | `scaleset_jobs_deferred{reason="name_conflict"}` > 0 | Its runner name will not register; the listener re-offers it on a backoff. Read the `RunnerSet`'s `JobProvisionStalled` condition for the job ids; see the [runbook](troubleshooting.md#scale-set-job-stranded-by-a-stale-runner-record-runner-name-409) |
 | Scale-set assignments give up without running | `rate(scaleset_jobs_abandoned_total[15m])` > 0 | GitHub stopped holding jobs the listener was still trying to place, so those runs will not start. Expected in a burst around a mass cancellation or a drain; investigate a sustained rate. See the [runbook](troubleshooting.md#scale-set-assignments-abandoned-assignmentabandoned) |
 | Scale-set jobs queue while its workers all run | `scaleset_jobs_deferred{reason="ceiling"}` > 0 | Expected: the set is at the worker ceiling its spec declares, and the held jobs start as workers finish. Alert only on it being sustained; see the [runbook](troubleshooting.md#scale-set-jobs-waiting-at-the-worker-ceiling-workerceilingreached) |
+| A gated set has stopped claiming work | `runnerset_worker_capacity_declined` grouped by `reason`; the cost shows as `jobs_admission_rejected_total{reason="capacity"}` (classic) or `scaleset_capacity_withheld{reason="capacity"}` (scale set) | The opt-in capacity gate is refusing intake because the cluster cannot place another worker of this set's shape. Alert on the two cost series rather than the gauge: a latched `AwaitingProbe` decline sits `True` indefinitely on an idle set and costs nothing. See the [runbook](troubleshooting.md#runnerset-reports-workercapacitydeclined-the-gateway-stopped-claiming-jobs) |
 | Runner credentials are broken | `token_refresh_errors_total` | Spikes indicate Secret or GitHub App issue |
 | Evictions causing re-runs | `eviction_retries_total`, `eviction_retries_exhausted_total` | Exhausted budget requires manual intervention |
 | Quota rejecting worker pods | `quota_retries_total`, `quota_retries_exhausted_total` | Sustained retries mean tight quota headroom; exhausted budget requires manual intervention |
@@ -324,6 +325,45 @@ groups:
           runbook_url: "https://actions-gateway.com/operations/runbook/#actionsgatewayscalesetjobsdeferred"
           summary: "Scale-set job cannot register a runner name for {{ $labels.runner_set }} in {{ $labels.namespace }}"
           description: "One or more jobs assigned to the scale set cannot register their runner name (generate-jitconfig 409), so no worker is running them; the listener keeps re-offering them. Each is a workflow run queued at GitHub. Read the RunnerSet's JobProvisionStalled condition for the job ids, then free the conflicting runner records."
+
+      # Ticket: an opted-in capacity gate has been refusing job intake for
+      # 30+ minutes without clearing (Q695). Classic tier only: every
+      # increment is a job GitHub delivered and the gate left queued, so the
+      # counter is its own demand signal and needs no second conjunct.
+      - alert: ActionsGatewayCapacityGateRejectingJobs
+        expr: |
+          rate(actions_gateway_jobs_admission_rejected_total{reason="capacity"}[15m]) > 0
+        for: 30m
+        labels:
+          severity: warning
+        annotations:
+          runbook_url: "https://actions-gateway.com/operations/runbook/#actionsgatewaycapacitygaterejectingjobs"
+          summary: "Capacity gate refusing job intake for {{ $labels.runner_group }} in {{ $labels.namespace }}"
+          description: "A runner set opted into spec.capacityGate and the gate has been leaving delivered jobs queued at GitHub for 30+ minutes because the cluster cannot place another worker pod of its shape. The gate throttles rather than seals, so expect roughly one claim per pendingPodDeadline window — but over this long it is not clearing on its own. Read the reason label on actions_gateway_runnerset_worker_capacity_declined for the evidence it is holding."
+
+      # Ticket: the scale-set tier's half of the same gate (Q695). A job the
+      # ladder declines here is never assigned, so jobs_admission_rejected_total
+      # is structurally unreachable (Q443) and the withheld gauge is the signal.
+      # That gauge alone cannot say the gate is costing anything: an idle set
+      # whose worker shape stays unplaceable holds a latched AwaitingProbe
+      # decline indefinitely, truthfully and harmlessly (Q512, Q658). Recent
+      # assignments are the demand conjunct that tells the two apart — under a
+      # full withhold the per-window probe job still lands, so a set with work
+      # waiting keeps this counter moving while an idle one does not.
+      - alert: ActionsGatewayScaleSetCapacityWithheld
+        expr: |
+          actions_gateway_scaleset_capacity_withheld{reason="capacity"} > 0
+          and on (namespace, runner_set)
+          (
+            increase(actions_gateway_scaleset_jobs_assigned_total[1h]) > 0
+          )
+        for: 30m
+        labels:
+          severity: warning
+        annotations:
+          runbook_url: "https://actions-gateway.com/operations/runbook/#actionsgatewayscalesetcapacitywithheld"
+          summary: "Capacity gate withholding advertised capacity for {{ $labels.runner_set }} in {{ $labels.namespace }}"
+          description: "The opt-in capacity gate has held slots back from the set's advertised ceiling for 30+ minutes while GitHub was still assigning it work, so runs are waiting on capacity the set is declining to advertise. Read the reason label on actions_gateway_runnerset_worker_capacity_declined for the evidence, and actions_gateway_scaleset_advertised_capacity for what is left."
 ```
 
 ---

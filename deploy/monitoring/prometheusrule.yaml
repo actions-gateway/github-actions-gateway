@@ -290,6 +290,45 @@ spec:
             summary: "Egress proxy denying CONNECTs in {{ $labels.namespace }}"
             description: "The egress proxy is refusing CONNECT requests to off-allowlist destinations at >0.1/s for 10m — an SSRF / egress-policy signal (a workload probing blocked destinations, or a misconfigured egress target). Unlike dial errors, every denial here is an explicit allowlist rejection."
 
+        # Ticket: an opted-in capacity gate has been refusing job intake for
+        # 30+ minutes without clearing (Q695). Classic tier only: every
+        # increment is a job GitHub delivered and the gate left queued, so the
+        # counter is its own demand signal and needs no second conjunct.
+        - alert: ActionsGatewayCapacityGateRejectingJobs
+          expr: |
+            rate(actions_gateway_jobs_admission_rejected_total{reason="capacity"}[15m]) > 0
+          for: 30m
+          labels:
+            severity: warning
+          annotations:
+            runbook_url: "https://actions-gateway.com/operations/runbook/#actionsgatewaycapacitygaterejectingjobs"
+            summary: "Capacity gate refusing job intake for {{ $labels.runner_group }} in {{ $labels.namespace }}"
+            description: "A runner set opted into spec.capacityGate and the gate has been leaving delivered jobs queued at GitHub for 30+ minutes because the cluster cannot place another worker pod of its shape. The gate throttles rather than seals, so expect roughly one claim per pendingPodDeadline window — but over this long it is not clearing on its own. Read the reason label on actions_gateway_runnerset_worker_capacity_declined for the evidence it is holding."
+
+        # Ticket: the scale-set tier's half of the same gate (Q695). A job the
+        # ladder declines here is never assigned, so jobs_admission_rejected_total
+        # is structurally unreachable (Q443) and the withheld gauge is the signal.
+        # That gauge alone cannot say the gate is costing anything: an idle set
+        # whose worker shape stays unplaceable holds a latched AwaitingProbe
+        # decline indefinitely, truthfully and harmlessly (Q512, Q658). Recent
+        # assignments are the demand conjunct that tells the two apart — under a
+        # full withhold the per-window probe job still lands, so a set with work
+        # waiting keeps this counter moving while an idle one does not.
+        - alert: ActionsGatewayScaleSetCapacityWithheld
+          expr: |
+            actions_gateway_scaleset_capacity_withheld{reason="capacity"} > 0
+            and on (namespace, runner_set)
+            (
+              increase(actions_gateway_scaleset_jobs_assigned_total[1h]) > 0
+            )
+          for: 30m
+          labels:
+            severity: warning
+          annotations:
+            runbook_url: "https://actions-gateway.com/operations/runbook/#actionsgatewayscalesetcapacitywithheld"
+            summary: "Capacity gate withholding advertised capacity for {{ $labels.runner_set }} in {{ $labels.namespace }}"
+            description: "The opt-in capacity gate has held slots back from the set's advertised ceiling for 30+ minutes while GitHub was still assigning it work, so runs are waiting on capacity the set is declining to advertise. Read the reason label on actions_gateway_runnerset_worker_capacity_declined for the evidence, and actions_gateway_scaleset_advertised_capacity for what is left."
+
     - name: actions-gateway-slos
       interval: 30s
       rules:
