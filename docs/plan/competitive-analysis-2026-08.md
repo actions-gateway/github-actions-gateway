@@ -75,9 +75,14 @@ Those decide real evaluations and no capability offsets them.
 
 ## Under-claims not yet fixed
 
-Nine capabilities reach `features.md` and no other marketing surface.
+**The "nine" below never reconciled, and the list is the trustworthy half.** The headline said nine reach `features.md` and no other surface, then named five as addressed and listed five as remaining, which is ten.
+[go-to-market](go-to-market.md) §"Under-claims not yet fixed" already carried five rather than nine.
+Re-derived on 2026-08-12 against each page's own vocabulary rather than against the words this list uses, which is what the first pass got wrong: **three of the five reached no marketing surface at all, `features.md` included**, so "reach `features.md` and no other" was wrong in that direction too; and item 4 was already on `README.md`, `docs/index.md` and `features.md` before the pass started.
+Q821 shipped items 1, 2 and 5 to `features.md` and `README.md`.
+Item 3 is the only one still outstanding, and item 4 never was.
+
 Five were addressed on 2026-08-06 (workload identity, per-tenant egress validation, Q683 fast-cancel, the `PriorityClassAllowlist` CR, and the paved-road framing).
-These remain:
+The list as it stood:
 
 1. **The scale-set message-queue correctness body** (`design/02-architecture.md`): write-ahead conclusion persistence, deletes withheld until every named job concludes, drain-before-flush measured over 60 stops at maximum pressure.
    Nothing sells it.

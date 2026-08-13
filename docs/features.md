@@ -25,6 +25,10 @@ No tier badge means both tiers, and a gate removes the badge when the gap closes
 - **[Worker scale-up rate limiting](operations/tenant-onboarding.md#step-2-create-the-actionsgateway-resource)**: opt-in token bucket capping how *fast* workers start, distinct from the count ceiling, to smooth cold-start stampedes on shared egress.
 - **[Scale-to-zero workers](design/02-architecture.md)**: worker pods exist only while a job runs; listeners are ~12 KiB goroutines in one shared pod, not a listener pod per runner group.
 - **[Unmodified upstream runner images](operations/tenant-onboarding.md#step-2-create-the-actionsgateway-resource)**: the wrapper is injected into each worker pod at runtime (an OCI image volume on Kubernetes 1.33+, an initContainer below), so the stock `actions/runner` image, or any derivative, runs with no rebuild.
+- **[A job conclusion survives losing the process](design/02-architecture.md)**: conclusions are persisted before any message delete is issued, so a hard kill leaves the message to be replayed rather than the conclusion lost.
+  Measured over 60 graceful stops at maximum pressure.
+- **[Orphaned workers are bounded without a live controller](design/02-architecture.md)**: `maxWorkerLifetime` is stamped on each worker pod as its `activeDeadlineSeconds`, so the **kubelet** enforces it.
+  The motivating incident stranded 82 spot node-hours across 16 hours with the controller down.
 
 ## Capacity, cost, and right-sizing
 
@@ -100,5 +104,7 @@ No tier badge means both tiers, and a gate removes the badge when the gap closes
 - **[`gag-migrate`](operations/migration-v1-to-v2.md)**: a one-shot fan-out that moves a tenant off `v1alpha1` without changing how jobs are acquired: dry-run, review, apply.
 - **[Deprecations and the `v2.0.0` removal](operations/v1alpha1-deprecation.md)**: what `v2.0.0` removes, what keeps working until then, and the pre-upgrade checklist.
 - **[Migrating from ARC](operations/migration-from-arc.md)**: concept mapping, behavioral differences, and a worked zero-downtime migration of one runner group.
+- **[The GitHub protocol dependency register](design/github-protocol-dependencies.md)**: each GitHub runner-facing protocol this system speaks, its source of truth, a stability tier, and the drift-watch trigger for revisiting it.
+  One of the two is Public Preview with no wire specification.
 - **[Getting started](getting-started.md)**: first-time GitHub App setup, the v2 object set, and credential rotation.
   There is also a [recorded demo](demo.md) of one real job on a local kind cluster.

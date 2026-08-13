@@ -77,6 +77,9 @@ These ladder up one way: **safe quotas and self-healing disruption make shared c
   </div>
 </div>
 
+This page makes two claims about how ARC behaves, the listener footprint above and the shared acquisition protocol below, and the [comparison table](why-gag.md#gag-vs-arc-scale-set-mode) makes both.
+Each cell there carries the chart version and the date it was read at, so read them there rather than trusting a landing page.
+
 <div class="gag-pillars" markdown>
 <div class="grid cards" markdown>
 
