@@ -122,7 +122,8 @@ Not gaps, and not for the next audit to re-litigate:
 
 - GitHub's session rejection for a too-old runner version stays classic-only, because the scale-set protocol carries no runner version at session creation.
   Q715 gives the ScaleSet tier a reconcile-time warning instead, so both tiers carry a signal and only classic has the forge-side rejection.
-- Neither preemption nor drain recovery is restart-safe on the scale-set tier, which is inherent to the signal rather than to the implementation.
+- Preemption and drain recovery both work on the scale-set tier, ported by Q417 and pinned at unit, envtest and fake-GitHub, so `priorityTiers` buys the recovery guarantee on both tiers.
+  What differs is restart-safety: a preempted or drained pod is readable only while it terminates, so an AGC down for that window loses the run, where a kubelet-evicted pod persists in `PodFailed` and stays recoverable by a late scan.
 - The capacity ceiling uses a different pre-check and a different fallback on the scale-set tier (Q576), because a ScaleSet states its capacity as one integer per poll rather than as a decision per job.
 - Several counters are absent from the scale-set tier by construction, being artifacts of the many-acquirers and JIT-agent models `ScaleSet` removes.
   [v2-ga.md](v2-ga.md#capability-parity-is-a-precondition-of-the-removal) holds the list, and Q776 reconciles against it.
