@@ -265,6 +265,23 @@ One clause tells the next session where to start, instead of handing it somethin
 Every claim in the table above shipped as a flat assertion instead.
 On a surface that renders verdicts rather than sentences, the same admission has a rendering of its own (previous section).
 
+## A rule written from one instance names its second one
+
+A process rule gets written when the incident that motivated it is freshest, from exactly one example, by someone who has just spent a session inside that example.
+That is the worst moment to tell which parts of it are the rule and which are the instance, so the rule carries the example's accidents forward as though they were the mechanism.
+
+**Check it against a second, unlike instance before it ships, or say in the rule that it is single-sourced.** The second instance is what separates the two: what the pair share is the rule, what only one has was scenery.
+Shipping a single-sourced rule is fine; shipping one that reads like a general rule is not.
+
+Two here.
+Q702's first version, in [maintaining-backlog.md](maintaining-backlog.md), explained one defect landing on two Queue rows as two rows filed minutes apart out of one campaign, which was true of the pair it was written from.
+A session applying it to a different pair found the opposite cause, a row filed eleven days later by someone who did not know there was a pair, and neither the rationale nor the ownership test fitted.
+That second pair had been sitting in the Queue the whole time.
+The `CLAUDE.md` scratchpad bullet in the table above is the same shape and the more expensive one: it generalised a single prompt in a friction log, and sessions routed temp files away from a directory they were allowed to use until someone probed the guard.
+
+The cost is what makes the check worth its minutes.
+Finding a second instance costs a grep, while a rule that shipped narrow reads as settled, gets followed, and is questioned only when somebody applies it somewhere it does not fit.
+
 ## Conventions
 
 | Convention | Rule |
