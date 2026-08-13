@@ -269,6 +269,20 @@ What GAG does **not** own: creating runner groups, and configuring which reposit
 Both are the platform admin's, at GitHub.
 See [tenant onboarding](../operations/tenant-onboarding.md#bind-a-runner-set-to-a-github-runner-group).
 
+**The scale-set name is a forge-side namespace too (Q791, shipped).** The runner group bounds who may *target* a set; this bounds who may *be* it.
+A `ScaleSet` set's first `runnerLabel` is its scale-set name, and the AGC adopts a scale set **by name** against the Actions service its gateway's `githubURL` reaches, creating one only when no such name exists.
+That name is therefore unique per GitHub org, enterprise, or repo, and a Kubernetes namespace is invisible to it.
+Two `RunnerSet`s in different namespaces whose gateways name one org and one first label are two AGCs driving a single scale set, each opening a session on it and acquiring the other tenant's jobs, with that tenant's pods, quota, and egress IP.
+It is not only an adversarial shape: [Appendix E.6](appendix-e-capacity-planning.md#e6-when-to-shard-across-installations) shards one org across namespaces and asks for consistent labels, which is exactly the collision.
+
+Admission enforces it cluster-wide, and, like the Q322 `noProxyCIDRs` guard, from both sides, because the pair is assembled from two objects: the label lives on the `RunnerSet`, the scope on its gateway.
+A `RunnerSet` write resolves its own gateway's scope and rejects a first label already claimed in it; an `ActionsGateway` write resolves the scope its referrers would land in.
+The gateway half is what makes the guard hold rather than merely usually hold: a `RunnerSet` applied before its gateway has no scope to resolve and is admitted (§H.7), so without it the guard is bypassable by apply order alone.
+Two sets naming one gateway still collide even before that gateway exists, since they share whatever scope it turns out to bind.
+
+Scopes compare case-insensitively on host and path, matching how GitHub resolves owner names, and the port is dropped; both err toward rejecting, the safe direction for a guard against sharing.
+The rejection names the conflicting set only when it sits in the applying tenant's own namespace; a cross-tenant holder is withheld from the API error and written to the GMC log, so the message cannot be used to enumerate other tenants' namespaces and label usage. `Classic` sets are unaffected throughout: they register no scale-set object, so they claim no name.
+
 **Per-gateway AGC resources — `agcResources` (Q171, shipped).** The AGC control-plane container is sized by an optional `ActionsGateway.spec.agcResources` of the standard `corev1.ResourceRequirements` shape.
 It is an additive, per-key overlay of the platform default — the [Appendix A](appendix-a-capacity-slos.md) sizing (`requests {cpu: 500m, memory: 2Gi}`, `limits {cpu: 2, memory: 4Gi}`): the GMC stamps the default and replaces only the request/limit keys the tenant sets, so an unset field reproduces the default unchanged (non-breaking) and a value that sets one knob keeps the default for the rest.
 There is no admission-time floor on the values — sizing guidance and the recommended floor (don't set a memory limit below the working set; don't request more than a node/quota can schedule) are operator-owned in [tenant-onboarding](../operations/tenant-onboarding.md#tuning-agc-control-plane-resources). v1alpha1 has no equivalent field; its AGC carries no GMC-stamped resources (unchanged).

@@ -15,11 +15,13 @@ import (
 
 // +kubebuilder:webhook:path=/validate-actions-gateway-com-v2alpha1-runnerset,mutating=false,failurePolicy=fail,sideEffects=None,groups=actions-gateway.com,resources=runnersets,verbs=create;update,versions=v2alpha1,name=vrunnerset-v2alpha1.kb.io,admissionReviewVersions=v1
 
-// The validator lists sibling RunnerSets to enforce ScaleSet label uniqueness, so the
-// GMC ServiceAccount needs read access to them (the AGC — not the GMC — owns their
-// lifecycle, hence read-only here). Since a ScaleSet set fails closed if this List is
-// denied, the permission is mandatory once ScaleSet is the default (Q264 P5): without
-// it every ScaleSet RunnerSet is rejected `cannot list resource "runnersets"`.
+// The validator lists RunnerSets cluster-wide to enforce ScaleSet label uniqueness
+// within a GitHub scope (Q791), so the GMC ServiceAccount needs read access to them
+// (the AGC — not the GMC — owns their lifecycle, hence read-only here). The GMC's
+// role is already a ClusterRole, so the existing rule covers the wider read. Since a
+// ScaleSet set fails closed if this List is denied, the permission is mandatory once
+// ScaleSet is the default (Q264 P5): without it every ScaleSet RunnerSet is rejected
+// `cannot list resource "runnersets"`.
 // +kubebuilder:rbac:groups=actions-gateway.com,resources=runnersets,verbs=get;list;watch
 
 // RunnerSetCustomValidator enforces the RunnerSet invariants a spec-scoped CRD CEL
@@ -40,10 +42,10 @@ type RunnerSetCustomValidator struct {
 	// class (the secure default), matching the v1 ActionsGateway validator.
 	PriorityClasses *allowlist.PriorityClassAllowlist
 
-	// reader lists sibling RunnerSets for the label-uniqueness guard and resolves
-	// the gatewayRef/proxyRef pair for the noProxyCIDRs GitHub-bypass guard
-	// (Q322, validateProxyGitHubBypass). It is the
-	// manager's uncached API reader in production (wired by
+	// reader lists RunnerSets and the ActionsGateways that give them a GitHub scope
+	// for the label-uniqueness guard (Q791), and resolves the gatewayRef/proxyRef pair
+	// for the noProxyCIDRs GitHub-bypass guard (Q322, validateProxyGitHubBypass). It is
+	// the manager's uncached API reader in production (wired by
 	// SetupRunnerSetWebhookWithManager): a just-created sibling may not be in the
 	// informer cache yet, and admitting a colliding scale-set label through a stale
 	// cache is exactly the race the guard exists to prevent — mirroring the v1
@@ -123,10 +125,18 @@ func (v *RunnerSetCustomValidator) ValidateDelete(_ context.Context, _ *agcv2alp
 }
 
 // validateScaleSetLabelUniqueness rejects a ScaleSet-protocol RunnerSet whose FIRST
-// runnerLabel is already claimed by another ScaleSet-protocol RunnerSet targeting the
-// same gateway in the same namespace. The first label is the scale set's name at
-// GitHub, so two sets sharing it are two controllers driving one scale-set object.
-// It is a no-op for Classic sets, which have no scale-set object.
+// runnerLabel is already claimed by another ScaleSet-protocol RunnerSet in the same
+// GitHub scope — the org, enterprise, or repo its gateway's githubURL names. The first
+// label is the scale set's name at GitHub, so two sets sharing it are two controllers
+// driving one scale-set object. It is a no-op for Classic sets, which have no
+// scale-set object.
+//
+// The scope, NOT the namespace, is the uniqueness boundary (Q791): the AGC adopts a
+// scale set by name against the Actions service the gateway's githubURL reaches, so
+// two tenants in different namespaces under one org collide. A same-gateway claim also
+// counts even when that gateway is not yet applied — two sets naming one gateway share
+// its scope whatever it resolves to. See scaleset_scope.go for both halves of the
+// guard and the create-order gap the gateway webhook closes.
 //
 // Labels after the first are deliberately NOT checked. They are ordinary match
 // targets, so "linux" on a dozen sets is the expected shape, and which set an
@@ -134,9 +144,9 @@ func (v *RunnerSetCustomValidator) ValidateDelete(_ context.Context, _ *agcv2alp
 // collision (Q726). For a single-label set this is the same comparison it has
 // always been.
 //
-// The check is fail-closed: if the sibling List errors, the request is rejected
-// rather than admitted on faith — admitting a possible collision is the failure mode
-// this guards against.
+// The check is fail-closed: if the List errors, the request is rejected rather than
+// admitted on faith — admitting a possible collision is the failure mode this guards
+// against.
 func (v *RunnerSetCustomValidator) validateScaleSetLabelUniqueness(ctx context.Context, rs *agcv2alpha1.RunnerSet) error {
 	if rs.Spec.AcquisitionProtocol != agcv2alpha1.AcquisitionProtocolScaleSet {
 		return nil
@@ -150,32 +160,27 @@ func (v *RunnerSetCustomValidator) validateScaleSetLabelUniqueness(ctx context.C
 		// and production paths always wire the uncached API reader.
 		return nil
 	}
-	label := rs.Spec.RunnerLabels[0]
-	var existing agcv2alpha1.RunnerSetList
-	if err := v.reader.List(ctx, &existing, client.InNamespace(rs.Namespace)); err != nil {
+	inv, err := scaleSetInventoryOf(ctx, v.reader, nil)
+	if err != nil {
 		return fmt.Errorf(
 			"cannot verify ScaleSet runnerLabel uniqueness for %q in namespace %q: %w",
 			rs.Name, rs.Namespace, err)
 	}
-	for i := range existing.Items {
-		other := &existing.Items[i]
+	self := scaleSetClaim{
+		namespace:  rs.Namespace,
+		name:       rs.Name,
+		gatewayRef: rs.Spec.GatewayRef.Name,
+		label:      rs.Spec.RunnerLabels[0],
+		scope:      inv.scopeOf(rs.Namespace, rs.Spec.GatewayRef.Name),
+	}
+	for _, other := range inv.claims {
 		// On CREATE the new object is not yet persisted; on UPDATE it appears in the
-		// list. Either way, skip the object being admitted by name.
-		if other.Name == rs.Name {
+		// inventory. Either way, skip the object being admitted.
+		if other.namespace == self.namespace && other.name == self.name {
 			continue
 		}
-		if other.Spec.AcquisitionProtocol != agcv2alpha1.AcquisitionProtocolScaleSet {
-			continue
-		}
-		if other.Spec.GatewayRef.Name != rs.Spec.GatewayRef.Name {
-			continue
-		}
-		if len(other.Spec.RunnerLabels) > 0 && other.Spec.RunnerLabels[0] == label {
-			return fmt.Errorf(
-				"ScaleSet runnerLabels[0] %q is already used by RunnerSet %q under gateway %q in namespace %q; "+
-					"a ScaleSet set's FIRST runnerLabel is its scale-set name at GitHub, so two sets sharing it would collide — "+
-					"pick a distinct first label (later labels may overlap freely)",
-				label, other.Name, rs.Spec.GatewayRef.Name, rs.Namespace)
+		if self.collidesWith(other) {
+			return scaleSetConflictError(self, other)
 		}
 	}
 	return nil

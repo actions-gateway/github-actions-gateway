@@ -338,6 +338,90 @@ func TestWebhookAdmission_ScaleSetUniquenessIsOnTheFirstLabelOnly(t *testing.T) 
 	t.Cleanup(func() { _ = client.IgnoreNotFound(k8sClient.Delete(context.Background(), claimsLinux)) })
 }
 
+// TestWebhookAdmission_ScaleSetLabelIsUniquePerGitHubScope drives the Q791 guard
+// through the real apiserver, where the webhook's reader is the manager's uncached
+// API reader and the cluster-wide List actually has to be permitted by the GMC's
+// ClusterRole — neither of which a fake reader can observe.
+//
+// A scale set is adopted BY NAME against the Actions service its gateway's githubURL
+// reaches, so two tenants in different namespaces under ONE org that claim one first
+// runnerLabel drive a single scale set, each AGC acquiring the other's jobs. Under two
+// different orgs the same label is free.
+func TestWebhookAdmission_ScaleSetLabelIsUniquePerGitHubScope(t *testing.T) {
+	const (
+		nsA   = "team-scaleset-scope-a"
+		nsB   = "team-scaleset-scope-b"
+		nsC   = "team-scaleset-scope-c"
+		acme  = "https://github.com/acme-scope"
+		other = "https://github.com/other-scope"
+	)
+	for _, ns := range []string{nsA, nsB, nsC} {
+		createNamespace(t, ns)
+	}
+
+	create := func(t *testing.T, obj client.Object) error {
+		t.Helper()
+		err := k8sClient.Create(ctx, obj)
+		t.Cleanup(func() { _ = client.IgnoreNotFound(k8sClient.Delete(context.Background(), obj)) })
+		return err
+	}
+
+	// Two tenants on one org, one tenant on a different org.
+	require.NoError(t, create(t, ghesAdmissionGateway("gw", nsA, acme, "")))
+	require.NoError(t, create(t, ghesAdmissionGateway("gw", nsB, acme, "")))
+	require.NoError(t, create(t, ghesAdmissionGateway("gw", nsC, other, "")))
+
+	require.NoError(t, create(t, newScaleSetRunnerSet("first-set", nsA, "gw", "linux")),
+		"the first set claiming a scale-set name must be admitted")
+
+	err := create(t, newScaleSetRunnerSet("stealer", nsB, "gw", "linux"))
+	require.Error(t, err, "a second tenant claiming that name under the SAME GitHub org must be rejected")
+	assert.Contains(t, err.Error(), "already claimed by another RunnerSet")
+	assert.NotContains(t, err.Error(), "first-set", "the other tenant's set must not be disclosed")
+	assert.NotContains(t, err.Error(), nsA, "the other tenant's namespace must not be disclosed")
+
+	require.NoError(t, create(t, newScaleSetRunnerSet("free-set", nsC, "gw", "linux")),
+		"the same name under a DIFFERENT GitHub org registers into a different scale-set namespace")
+
+	require.NoError(t, create(t, newScaleSetRunnerSet("distinct", nsB, "gw", "windows")),
+		"a distinct name in the same org must stay admissible")
+}
+
+// TestWebhookAdmission_ScaleSetScopeClosesApplyOrderGap is the gateway half of Q791
+// through the apiserver. A RunnerSet applied before its gateway has no resolvable
+// GitHub scope and admits unchecked (§H.7), so the arriving gateway is the first
+// object that can see the conflict — without that half the guard is bypassable by
+// simply applying the RunnerSet first.
+func TestWebhookAdmission_ScaleSetScopeClosesApplyOrderGap(t *testing.T) {
+	const (
+		nsA  = "team-scaleset-order-a"
+		nsB  = "team-scaleset-order-b"
+		acme = "https://github.com/acme-order"
+	)
+	createNamespace(t, nsA)
+	createNamespace(t, nsB)
+
+	create := func(t *testing.T, obj client.Object) error {
+		t.Helper()
+		err := k8sClient.Create(ctx, obj)
+		t.Cleanup(func() { _ = client.IgnoreNotFound(k8sClient.Delete(context.Background(), obj)) })
+		return err
+	}
+
+	require.NoError(t, create(t, ghesAdmissionGateway("gw", nsA, acme, "")))
+	require.NoError(t, create(t, newScaleSetRunnerSet("held", nsA, "gw", "linux")))
+
+	// Applied before its gateway exists: no scope to compare, so §H.7 admits it.
+	require.NoError(t, create(t, newScaleSetRunnerSet("sneaky", nsB, "gw", "linux")),
+		"a set whose gateway is not yet applied must be admitted (§H.7)")
+
+	// The gateway that would put it in the same scope is what gets rejected.
+	err := create(t, ghesAdmissionGateway("gw", nsB, acme, ""))
+	require.Error(t, err, "the gateway binding the colliding scope must be rejected")
+	assert.Contains(t, err.Error(), "spec.githubURL")
+	assert.Contains(t, err.Error(), "sneaky", "its own namespace's referrer is named")
+}
+
 // newScaleSetRunnerSet builds a ScaleSet-protocol RunnerSet bound to the named gateway,
 // whose first runnerLabel names its scale set (references are resolved at runtime, so
 // no template need exist for admission).

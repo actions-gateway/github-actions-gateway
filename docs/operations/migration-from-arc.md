@@ -101,7 +101,8 @@ Rules worth knowing:
 
 - **The first label is the identity.** It names the scale set at GitHub, so reordering the list renames the scale set and orphans the old one.
   Append rather than prepend.
-- **The first label is unique per gateway.** Two `RunnerSet`s under one `ActionsGateway` may not share `runnerLabels[0]`; they would register the same scale-set name and collide.
+- **The first label is unique per GitHub org, enterprise, or repo.** Two `RunnerSet`s whose gateways name the same `githubURL` may not share `runnerLabels[0]`; they would register the same scale-set name and collide.
+  This spans namespaces, because the scale-set name is unique at GitHub rather than in the cluster.
   Keeping your ARC names gives you uniqueness for free, since ARC already required distinct install names.
   Later labels **may** overlap, and `linux` across every set is the normal shape; which set an ambiguous `runs-on` reaches is GitHub's decision.
 - **Labels are registered once, at creation.** Adding one to a live set does not register it; the set reports [`RunnerLabelsIncomplete`](troubleshooting.md#jobs-targeting-one-of-a-runner-sets-labels-never-start-runnerlabelsincomplete) instead of failing silently.

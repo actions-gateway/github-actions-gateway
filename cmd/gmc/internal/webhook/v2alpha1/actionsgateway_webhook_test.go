@@ -207,3 +207,78 @@ func TestV2ActionsGatewayWebhook_RejectsMalformedGitHubURL(t *testing.T) {
 		require.NoError(t, err)
 	}
 }
+
+// TestV2ActionsGatewayWebhook_ScaleSetLabelScope is the gateway corner of the Q791
+// guard. A RunnerSet applied before its gateway has no resolvable GitHub scope and
+// admits unchecked (§H.7), so without this half the guard is bypassable by apply
+// order: the arriving gateway is the first object that can see the conflict.
+func TestV2ActionsGatewayWebhook_ScaleSetLabelScope(t *testing.T) {
+	ctx := context.Background()
+
+	t.Run("gateway create closes the apply-order gap", func(t *testing.T) {
+		v := &ActionsGatewayCustomValidator{reader: fakeReader(t,
+			v2Gateway("tenant-a", "gw-a", "https://github.com/acme", ""),
+			scaleSetRS("held", "tenant-a", "gw-a", "linux"),
+			// Applied before its gateway existed, so it was admitted unchecked.
+			scaleSetRS("sneaky", "tenant-b", "gw-b", "linux"))}
+
+		_, err := v.ValidateCreate(ctx, v2Gateway("tenant-b", "gw-b", "https://github.com/acme", ""))
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "spec.githubURL")
+		assert.Contains(t, err.Error(), "github.com/acme")
+		assert.Contains(t, err.Error(), "sneaky", "the referrer in this gateway's own namespace is named")
+		assert.NotContains(t, err.Error(), "held", "the other tenant's set is not disclosed")
+		assert.NotContains(t, err.Error(), "tenant-a")
+	})
+
+	t.Run("a different org admits the same referrer label", func(t *testing.T) {
+		v := &ActionsGatewayCustomValidator{reader: fakeReader(t,
+			v2Gateway("tenant-a", "gw-a", "https://github.com/acme", ""),
+			scaleSetRS("held", "tenant-a", "gw-a", "linux"),
+			scaleSetRS("mine", "tenant-b", "gw-b", "linux"))}
+
+		_, err := v.ValidateCreate(ctx, v2Gateway("tenant-b", "gw-b", "https://github.com/other", ""))
+		require.NoError(t, err)
+	})
+
+	t.Run("a collision between unrelated sets is not this gateway's to reject", func(t *testing.T) {
+		// Two sets elsewhere already share a name; a gateway with no referrer of its
+		// own must not inherit their conflict.
+		v := &ActionsGatewayCustomValidator{reader: fakeReader(t,
+			v2Gateway("tenant-a", "gw-a", "https://github.com/acme", ""),
+			v2Gateway("tenant-b", "gw-b", "https://github.com/acme", ""),
+			scaleSetRS("one", "tenant-a", "gw-a", "linux"),
+			scaleSetRS("two", "tenant-b", "gw-b", "linux"))}
+
+		_, err := v.ValidateCreate(ctx, v2Gateway("tenant-c", "gw-c", "https://github.com/acme", ""))
+		require.NoError(t, err)
+	})
+
+	t.Run("a gateway with no ScaleSet referrers admits", func(t *testing.T) {
+		v := &ActionsGatewayCustomValidator{reader: fakeReader(t,
+			v2Gateway("tenant-a", "gw-a", "https://github.com/acme", ""),
+			scaleSetRS("held", "tenant-a", "gw-a", "linux"),
+			classicRS("classic", "tenant-b", "gw-b", "linux"))}
+
+		_, err := v.ValidateCreate(ctx, v2Gateway("tenant-b", "gw-b", "https://github.com/acme", ""))
+		require.NoError(t, err)
+	})
+
+	t.Run("update re-checks", func(t *testing.T) {
+		gw := v2Gateway("tenant-b", "gw-b", "https://github.com/acme", "")
+		v := &ActionsGatewayCustomValidator{reader: fakeReader(t,
+			v2Gateway("tenant-a", "gw-a", "https://github.com/acme", ""),
+			scaleSetRS("held", "tenant-a", "gw-a", "linux"),
+			scaleSetRS("mine", "tenant-b", "gw-b", "linux"), gw)}
+
+		_, err := v.ValidateUpdate(ctx, gw, gw)
+		require.Error(t, err)
+	})
+
+	t.Run("read error fails closed", func(t *testing.T) {
+		v := &ActionsGatewayCustomValidator{reader: failingReader{}}
+		_, err := v.ValidateCreate(ctx, v2Gateway("tenant-b", "gw-b", "https://github.com/acme", ""))
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "cannot verify")
+	})
+}
