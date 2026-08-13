@@ -2832,6 +2832,14 @@
 <td>Measured 2026-08-12 on #1440: six 2 s <code>curl</code> attempts spanning 10.3 s against a syft release 503, then security-scan dies. Q460 gave <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/fetch/pull-image-with-retry.sh">the sibling</a> exponential jittered backoff; this never got it.</td>
 </tr>
 <tr>
+<td><a id="Q834"></a>Q834</td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/agent/pr-requeue-eligible.sh">A requeue assessment probes the local checkout, not the PR it names</a></td>
+<td><code>debt</code> <code>ci</code> <code>bug</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>Measured 2026-08-12: the probe head is local <code>git rev-parse HEAD</code>; <code>headRefOid</code> is absent. <code>--assess 1438</code> then <code>--assess 1447</code> from one worktree gave identical output, exit 0 ELIGIBLE. Fix: read the head from <code>gh pr view --json headRefOid</code>.</td>
+</tr>
+<tr>
 <td><a id="Q803"></a>Q803</td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/go/coverage.sh"><code>cmd/proxy</code> coverage is nondeterministic, and its floor has no headroom to absorb it</a></td>
 <td><code>flake</code> <code>ci</code> <code>tests</code></td>
