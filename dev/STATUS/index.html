@@ -2848,6 +2848,14 @@
 <td><code>:98</code> hardcodes "rebase onto origin/main" and never reads <code>baseRefName</code> (grep: 0), so a stacked PR is told to absorb its base. <code>--onto</code> needs an old-base head <code>merge-base</code> cannot recover after a force-push (measured); emit the shape, never a command.</td>
 </tr>
 <tr>
+<td><a id="Q840"></a>Q840</td>
+<td><a href="../development/maintaining-backlog/#the-merge-driver-resolve-queue-rows-by-id-not-by-line-position">A hand-resolved keyed merge can drop neighbouring rows with no marker left behind</a></td>
+<td><code>docs</code> <code>debt</code> <code>retro</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>Measured on #1471: the driver refused a keyed Q738 row, and the resolution deleted Q823/Q822 and dropped Q836/Q837 while <code>git rebase</code> reported success and no marker remained. Reconcile the diffstat against <code>main</code>; markers cannot see it.</td>
+</tr>
+<tr>
 <td><a id="Q829"></a>Q829</td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/fetch/download-verified.sh"><code>download-verified.sh</code> retries a pinned download for 10 s flat, where its sibling backs off for 135-202 s</a></td>
 <td><code>flake</code> <code>ci</code></td>
@@ -3166,6 +3174,14 @@
 <td>🔲</td>
 <td>S</td>
 <td>Two-dot against a moving ref shows main's commits as yours: measured 2026-08-12, a post-rebase read listed 9 files the branch never touched. The merge-base rule is scoped to backlog lint; CONTRIBUTING teaches the bare form with no caveat.</td>
+</tr>
+<tr>
+<td><a id="Q841"></a>Q841</td>
+<td><a href="../development/testing/#the-make-check-pre-review-gate">A doc-gate run is void the moment you edit again, and nothing says finish first</a></td>
+<td><code>docs</code> <code>retro</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>Measured 2026-08-12: 4 <code>make check</code> runs in one session, 3 voided by one-line prose edits made while the gate ran. The rule says run the doc gates once the prose is written; nothing says stop editing first, so both halves read as compliant.</td>
 </tr>
 <tr>
 <td><a id="Q693"></a>Q693</td>
