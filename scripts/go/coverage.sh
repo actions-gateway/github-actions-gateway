@@ -44,14 +44,19 @@ source "$REPO_ROOT/scripts/lib/common.sh"
 
 BASELINE_FILE="${BASELINE_FILE:-coverage-baseline.txt}"
 
-# Tolerance, in percentage points, that a module may drop below its recorded
-# floor without failing the gate. Coverage is deterministic (the unit gate runs
-# without -race), so this is not for flake: it absorbs benign denominator drift
-# — e.g. adding a couple of uncovered boilerplate lines to an otherwise-covered
-# package marginally dilutes the ratio without removing any test. 0.5pp is small
-# enough to still catch a real regression (deleting a tested function, gutting a
-# test) on any module of meaningful size.
+# How far a module may drop below its recorded floor without failing the gate:
+# the LARGER of TOLERANCE percentage points and TOLERANCE_STMT statements, sized
+# per module by effective_tolerance below.
+#
+# Two units because a statement is worth 100/N pp, so a flat pp figure buys the
+# 5,523-statement cmd/agc 27.6 statements of slack and the 192-statement api
+# 0.96. Both knobs are needed: pp alone fails a small module on one flipped
+# block (Q803), statements alone would tighten cmd/agc to 0.05pp. Rationale and
+# the measurement: docs/development/testing.md (§"Coverage measurement and the
+# ratchet"). TOLERANCE_STMT sits above the observed noise (Q803's two
+# statements; Q377's 1-3 load-dependent blocks) and under any real regression.
 TOLERANCE="${COVERAGE_TOLERANCE:-0.5}"
+TOLERANCE_STMT="${COVERAGE_TOLERANCE_STMT:-3}"
 
 # Files excluded from the coverage profile before the percentage is computed, so
 # the floor reflects production logic rather than code that churns the number
@@ -88,6 +93,17 @@ TOLERANCE="${COVERAGE_TOLERANCE:-0.5}"
 # only thing that grows mechanically without a test change (generated code) is
 # already filtered above.
 EXCLUDE_RE='(zz_generated.*\.go|groupversion_info\.go|/[a-z]+test/|/[a-z]+stub/|/test/)'
+
+# effective_tolerance NSTMT — echo how many percentage points a module of NSTMT
+# statements may drop below its floor: the larger of TOLERANCE and what
+# TOLERANCE_STMT statements are worth on that denominator. NSTMT of 0 or "n/a"
+# yields TOLERANCE, which defends nothing anyway on a module with no statements.
+effective_tolerance() {
+	awk -v t="$TOLERANCE" -v s="$TOLERANCE_STMT" -v n="$1" 'BEGIN {
+		per_stmt = (n + 0 > 0) ? s * 100 / (n + 0) : 0
+		printf "%.4f\n", (per_stmt > t + 0) ? per_stmt : t + 0
+	}'
+}
 
 # module_import_path DIR — echo the module path declared by DIR/go.mod. The
 # coverage profile identifies packages by import path, so this is what maps a
@@ -161,17 +177,20 @@ run_coverage() {
 	done
 }
 
-# measure_all — echo "DIR<TAB>PCT" per go.work module, in go.work order. PCT is
-# "n/a" when the module has no statements covered by any test (e.g. a module
-# with no _test.go files, or one whose every profiled file is excluded).
+# measure_all — echo "DIR<TAB>PCT<TAB>NSTMT" per go.work module, in go.work
+# order. PCT is "n/a" when the module has no statements covered by any test (e.g.
+# a module with no _test.go files, or one whose every profiled file is excluded),
+# and NSTMT is then 0. NSTMT is the module's statement denominator, which is what
+# sizes the gate's tolerance (see effective_tolerance); the baseline file records
+# only the first two fields.
 measure_all() {
 	local profile="$RUN_TMP/merged.out"
 	run_coverage "$profile"
 
-	local dir modpath filtered pct
+	local dir modpath filtered pct nstmt
 	for dir in $(workspace_modules); do
 		if [[ ! -s "$profile" ]]; then
-			printf '%s\t%s\n' "$dir" "n/a"
+			printf '%s\t%s\t%s\n' "$dir" "n/a" 0
 			continue
 		fi
 		modpath="$(module_import_path "$dir")"
@@ -180,18 +199,20 @@ measure_all() {
 		if [[ "$(wc -l <"$filtered")" -le 1 ]]; then
 			# Header only — the module has no profiled lines, or every covered
 			# statement was in an excluded file.
-			printf '%s\t%s\n' "$dir" "n/a"
+			printf '%s\t%s\t%s\n' "$dir" "n/a" 0
 			continue
 		fi
 		pct="$(go tool cover -func="$filtered" | tail -n1 | awk '{print $NF}' | tr -d '%')"
-		printf '%s\t%s\n' "$dir" "$pct"
+		nstmt="$(awk 'NR > 1 { n += $(NF - 1) } END { print n + 0 }' "$filtered")"
+		printf '%s\t%s\t%s\n' "$dir" "$pct" "$nstmt"
 	done
 }
 
 cmd_report() {
 	echo "Per-module unit-test coverage (generated/wiring code excluded):"
-	measure_all | while IFS=$'\t' read -r dir pct; do
-		printf '  %-20s %s\n' "$dir" "${pct}$([[ "$pct" != "n/a" ]] && echo '%')"
+	measure_all | while IFS=$'\t' read -r dir pct nstmt; do
+		printf '  %-20s %-7s (%s statements)\n' \
+			"$dir" "${pct}$([[ "$pct" != "n/a" ]] && echo '%')" "$nstmt"
 	done
 }
 
@@ -202,8 +223,12 @@ cmd_update() {
 		echo "# Per-module unit-test coverage baseline (no-regression ratchet floor)."
 		echo "# Regenerate with: make cover-update   (or scripts/go/coverage.sh update)"
 		echo "# Format: <module-disk-path><TAB><percent>   (n/a = no measurable coverage)"
-		echo "# The gate (make cover-check) fails if a module drops > ${TOLERANCE}pp below its floor."
-		measure_all
+		echo "# The gate (make cover-check) fails if a module drops more than the"
+		echo "# larger of ${TOLERANCE}pp and ${TOLERANCE_STMT} statements below its floor."
+		# Drop measure_all's statement-count column: the gate re-measures it, and
+		# recording it here would make every refactor of a module's shape a
+		# baseline diff even when its coverage did not move.
+		measure_all | cut -f1,2
 	} >"$tmp"
 	mv "$tmp" "$BASELINE_FILE"
 	echo "wrote $BASELINE_FILE"
@@ -222,10 +247,11 @@ cmd_check() {
 	current="$(measure_all)"
 
 	# Compare each baseline floor against the current measurement.
-	local dir floor now
+	local dir floor now nstmt tol
 	while IFS=$'\t' read -r dir floor; do
 		[[ "$dir" =~ ^#.*$ || -z "$dir" ]] && continue
 		now="$(awk -F'\t' -v d="$dir" '$1==d{print $2}' <<<"$current")"
+		nstmt="$(awk -F'\t' -v d="$dir" '$1==d{print $3}' <<<"$current")"
 		if [[ -z "$now" ]]; then
 			echo "coverage: FAIL $dir — in baseline but not measured (module removed from go.work?)" >&2
 			failed=1
@@ -244,18 +270,32 @@ cmd_check() {
 			failed=1
 			continue
 		fi
-		# now >= floor - TOLERANCE ?
-		if awk -v n="$now" -v f="$floor" -v t="$TOLERANCE" 'BEGIN{exit !(n + t < f)}'; then
-			printf '  %-20s %s%%  FAIL (floor %s%%, tolerance %spp)\n' "$dir" "$now" "$floor" "$TOLERANCE" >&2
+		# now >= floor - tol ? tol is sized against this module's own denominator,
+		# and is printed either way so the output says what was actually allowed.
+		tol="$(effective_tolerance "$nstmt")"
+		if awk -v n="$now" -v f="$floor" -v t="$tol" 'BEGIN{exit !(n + t < f)}'; then
+			printf '  %-20s %s%%  FAIL (floor %s%%, tolerance %spp over %s statements)\n' \
+				"$dir" "$now" "$floor" "$tol" "$nstmt" >&2
 			failed=1
 		else
-			printf '  %-20s %s%%  ok (floor %s%%)\n' "$dir" "$now" "$floor"
+			printf '  %-20s %s%%  ok (floor %s%%, tolerance %spp)\n' "$dir" "$now" "$floor" "$tol"
+			# Below the floor but inside tolerance. This is the state Q803 sat in
+			# for 13 days: #1013 removed 8 statements from cmd/proxy, its number
+			# moved 79.5 -> 79.3, and the gate printed a bare "ok" while the
+			# shortfall ate the budget that transient noise needed. The tolerance
+			# is for noise, so a floor the tree can no longer reach is a stale
+			# record, not a pass.
+			if awk -v n="$now" -v f="$floor" 'BEGIN{exit !(n + 0 < f + 0)}'; then
+				# shellcheck disable=SC2016  # backticks are literal text in the message
+				printf '  note: %s is BELOW its floor (%s%% < %s%%) and passing only on tolerance — re-record with `make cover-update`\n' \
+					"$dir" "$now" "$floor"
+			fi
 		fi
 	done <"$BASELINE_FILE"
 
 	# Warn (do not fail) when a module's coverage has risen well above its floor:
 	# a good moment to ratchet the baseline up with `make cover-update`.
-	while IFS=$'\t' read -r dir now; do
+	while IFS=$'\t' read -r dir now _; do
 		floor="$(awk -F'\t' -v d="$dir" '!/^#/ && $1==d{print $2}' "$BASELINE_FILE")"
 		[[ -z "$floor" || "$floor" == "n/a" || "$now" == "n/a" ]] && continue
 		if awk -v n="$now" -v f="$floor" 'BEGIN{exit !(n > f + 2)}'; then
