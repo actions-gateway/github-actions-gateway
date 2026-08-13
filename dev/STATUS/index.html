@@ -2840,6 +2840,14 @@
 <td>Measured 2026-08-12: <code>signal 15, exit 143</code> is an external kill, and <code>run-parallel.sh</code> waits on every pid rather than killing siblings. Count primary failures by <code>(exit N)</code> with N &lt; 128, or a contention kill reads as a real gate failure.</td>
 </tr>
 <tr>
+<td><a id="Q839"></a>Q839</td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/agent/pr-mergeability-watch.sh">A conflict wake tells a stacked PR to rebase onto <code>main</code>, absorbing its base</a></td>
+<td><code>bug</code> <code>debt</code> <code>ci</code></td>
+<td>🔲</td>
+<td>S</td>
+<td><code>:98</code> hardcodes "rebase onto origin/main" and never reads <code>baseRefName</code> (grep: 0), so a stacked PR is told to absorb its base. <code>--onto</code> needs an old-base head <code>merge-base</code> cannot recover after a force-push (measured); emit the shape, never a command.</td>
+</tr>
+<tr>
 <td><a id="Q829"></a>Q829</td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/fetch/download-verified.sh"><code>download-verified.sh</code> retries a pinned download for 10 s flat, where its sibling backs off for 135-202 s</a></td>
 <td><code>flake</code> <code>ci</code></td>
