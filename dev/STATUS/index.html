@@ -2864,6 +2864,14 @@
 <td>Measured 2026-08-12: the probe head is local <code>git rev-parse HEAD</code>; <code>headRefOid</code> is absent. <code>--assess 1438</code> then <code>--assess 1447</code> from one worktree gave identical output, exit 0 ELIGIBLE. Fix: read the head from <code>gh pr view --json headRefOid</code>.</td>
 </tr>
 <tr>
+<td><a id="Q844"></a>Q844</td>
+<td><a href="../design/04-operational-flows/#why-preemption-deletes-rather-than-evicts-and-what-that-costs-us">Persist an owed-rerun tombstone so a preemption survives an AGC restart</a></td>
+<td><code>bug</code> <code>feature</code></td>
+<td>🔲</td>
+<td>M</td>
+<td>A preempted scale-set worker is readable only while terminating, so an AGC down for that window never issues <code>rerun-failed-jobs</code> and the run needs a manual one. Replay cannot cover it: the Q385 relay concludes the job. Home: the Q606 guard ConfigMap.</td>
+</tr>
+<tr>
 <td><a id="Q811"></a>Q811</td>
 <td><a href="../design/04-operational-flows/#which-disruptions-are-recovered-and-which-are-not">Graceful-deletion recovery cannot see a cancel, so a hand-deleted worker re-runs a cancelled run</a></td>
 <td><code>bug</code></td>
