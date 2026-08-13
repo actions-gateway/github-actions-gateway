@@ -282,6 +282,21 @@ The `CLAUDE.md` scratchpad bullet in the table above is the same shape and the m
 The cost is what makes the check worth its minutes.
 Finding a second instance costs a grep, while a rule that shipped narrow reads as settled, gets followed, and is questioned only when somebody applies it somewhere it does not fit.
 
+## Naming a trap and applying it are different acts
+
+Writing down a failure mode feels like having guarded against it, and the feeling arrives immediately while the guarding does not.
+So the riskiest claim in a session is often the one made just after articulating the trap it falls into, by the person who articulated it.
+
+**When you flag a trap, the next claim you make in that same conversation is the one to re-derive rather than assert.** That is the check; the observation on its own is not one, because "notice when you feel covered" is not something anyone can run.
+
+Two instances, an hour apart, on 2026-08-12.
+A worker flagged that a merge driver writes its advisory to stderr naming the file it resolved, so a reader scanning combined output assembles a conflict list out of chatter.
+They then read a filename off that same advisory and reported it as a measured conflict set.
+The dispatcher wrote that trap into the playbook on the worker's evidence, then read a `MERGED` field as merged-to-`main` without checking `baseRefName` on the object it had already fetched, and reported a contradiction on `main` that did not exist.
+
+Neither was carelessness, which is the point: both had the mechanism in working memory, and that is what made the next check feel redundant.
+If the check does not fire on real cases, demote this to an observation rather than leaving it stated as a rule.
+
 ## Conventions
 
 | Convention | Rule |
