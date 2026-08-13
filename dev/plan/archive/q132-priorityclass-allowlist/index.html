@@ -2756,13 +2756,9 @@ Rejected for the cost above.</p>
   when <code>priorityClassName</code> is not in the allowlist. Error names the offending
   class <strong>and</strong> the permitted set, e.g.
   <code>runnerGroups[0].priorityTiers[1]: priorityClassName "evil-preempt" is not in the platform allowlist [runner-standard runner-opportunistic]</code>.</li>
-<li>Residual (documented, not coded here): a tenant with <em>direct</em> <code>runnergroups</code>
-  RBAC bypasses the ActionsGateway webhook. RunnerGroup authoring is a
-  GMC-ServiceAccount path guarded by <code>tenant-resource-guard</code>; tenants are not
-  expected to hold direct <code>runnergroups</code> create. A <code>ValidatingAdmissionPolicy</code> on
-  <code>runnergroups</code> (defense-in-depth, like the GMC-SA guards) is a possible future
-  enhancement — note in appendix-g, do not build now (keeps scope contained and
-  matches scope item 2: "GMC validating webhook and/or CEL").</li>
+<li>Residual (documented, not coded here): a tenant with <em>direct</em> <code>runnergroups</code> RBAC bypasses the ActionsGateway webhook.
+  RunnerGroup authoring is a GMC-ServiceAccount path guarded by <code>tenant-resource-guard</code>; tenants are not expected to hold direct <code>runnergroups</code> create.
+  A <code>ValidatingAdmissionPolicy</code> on <code>runnergroups</code> (defense-in-depth, like the GMC-SA guards) is a possible future enhancement — note in appendix-g, do not build now (keeps scope contained and matches scope item 2: "GMC validating webhook and/or CEL").</li>
 </ul>
 <h3 id="preemptionpolicy-guidance-secure-by-default-operational">preemptionPolicy guidance (secure-by-default, operational)<a class="headerlink" href="#preemptionpolicy-guidance-secure-by-default-operational" title="Permanent link">&para;</a></h3>
 <ul>

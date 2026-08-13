@@ -3213,13 +3213,21 @@ That payoff is large here: 263 non-vendored Markdown files carry roughly 82,000 
 <a href="https://github.com/jbeda/mdreflow">mdreflow</a> is vendored in <code>tools/</code> at a pinned version and does it:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>make<span class="w"> </span>md-reflow
 </code></pre></div>
-<p><code>make md-reflow-check</code> reports what is unformatted without writing, and <code>make md-reflow-diff</code> prints the change.
+<p><code>make md-reflow-check</code> reports what is unformatted without writing, <code>make md-reflow-diff</code> prints the change, and <code>make md-reflow-explain</code> names every paragraph the formatter declines, where it is, and why.
 The check is in <code>make check</code> and costs about a second for the whole tree. <code>.mdreflow.yaml</code> at the repo root holds the configuration: <code>sentence</code> mode at <code>max-width: 0</code>, excluding the two generated docs, <code>docs/STATUS.md</code>, and the <code>AGENTS.md</code> symlink. mdreflow always excludes <code>vendor/</code>, so the 471 tracked vendored Markdown files are never walked.</p>
 <h3 id="what-stays-hard-wrapped-and-why-it-stays-that-way">What stays hard-wrapped, and why it stays that way<a class="headerlink" href="#what-stays-hard-wrapped-and-why-it-stays-that-way" title="Permanent link">&para;</a></h3>
-<p>Measured 2026-08-10: 99.81% of in-scope prose lines end at a sentence boundary, leaving 25.
-"In-scope" excludes the generated docs and <code>docs/STATUS.md</code>, which <code>.mdreflow.yaml</code> skips.</p>
-<p>What remains is one guard, and it is a correctness property rather than a defect.
-Moving a break inside a link construct is where render changes come from, so mdreflow passes over any paragraph where a link's text or destination is left open at a line end:</p>
+<p>Measured 2026-08-13 on mdreflow v0.1.7: 99.70% of interior line breaks in the docset's prose sit at a sentence boundary, 13,746 of 13,787, leaving 41.
+The formatter declines 38 paragraphs across 8 files, spanning 90 source lines.
+"In-scope" excludes the generated docs and <code>docs/STATUS.md</code>, which <code>.mdreflow.yaml</code> skips.
+Re-derive both rather than quoting them: <code>make md-reflow-coverage</code> recomputes the percentage and <code>ARGS=-v</code> lists all 41, while <code>make md-reflow-explain</code> names each declined paragraph with a stable reason code.
+Neither number is this page's to hold, and the classification below is reproducible without re-diagnosing anything.</p>
+<p>That figure reads lower than the 99.81% this section carried before, and the tree did not get worse: the measurement got wider.
+The 41 split two ways, and the split is the finding.
+Twenty sit in paragraphs mdreflow declines and reports, which <code>--explain</code> accounts for exactly.
+The other 21 sit in two MkDocs admonition bodies mdreflow never sees at all: an admonition body reflows while it holds a single block and silently leaves scope once it holds two, reported neither as a change nor as a decline.
+A hand-derived count could not see the second group, because nothing named it.</p>
+<p>What remains is a small set of guards, each a correctness property rather than a defect, and <code>--explain</code> names which one fired.
+The one an author must not fight is the link guard: moving a break inside a link construct is where render changes come from, so mdreflow passes over any paragraph where a link's text or destination is left open at a line end:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>Control plane (GMC rolls to
 <a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>rc.6, [self-hosted] ready). Second sentence.       → reflows
 <a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>
@@ -3241,16 +3249,21 @@ One sentence per line cannot.</p>
 It counts YAML front matter, <code>&lt;details&gt;</code> blocks, <code>[label]: target</code> definitions and immovable marker lines as prose the formatter failed to split, and it misses a sentence ending <code>.)</code> or <code>."</code>.
 Corrected against one tree, that metric read 97.1% where the honest number was 99.34%.
 Measure by excluding the constructs mdreflow never reflows, and treat a closing delimiter after terminal punctuation as a sentence end.</p>
-<p>Six mdreflow bugs surfaced while adopting this, all fixed upstream: <a href="https://github.com/jbeda/mdreflow/issues/14">#14</a>, <a href="https://github.com/jbeda/mdreflow/issues/15">#15</a>, <a href="https://github.com/jbeda/mdreflow/issues/16">#16</a>, <a href="https://github.com/jbeda/mdreflow/issues/33">#33</a>, and pull requests <a href="https://github.com/jbeda/mdreflow/pull/29">#29</a> and <a href="https://github.com/jbeda/mdreflow/pull/31">#31</a>.
-Between them they took this tree from roughly two thirds converted to 99.81%, and stopped callouts being destroyed.
-The last was fixed structurally rather than by another narrowing: deriving no-break spans from a goldmark parse means linkify is modeled by the parser instead of mirrored by hand, which is what let a code span ending in a URL stop skipping its paragraph.</p>
-<p>The 25 lines that still do not reflow fall into three classes, and all three are settled, so a later session need not re-diagnose them.
-Thirteen sit three or more containers deep, which mdreflow declines by design (<a href="https://github.com/jbeda/mdreflow/issues/1">#1</a>).
+<p>Seven mdreflow bugs surfaced while adopting this, all fixed upstream: <a href="https://github.com/jbeda/mdreflow/issues/14">#14</a>, <a href="https://github.com/jbeda/mdreflow/issues/15">#15</a>, <a href="https://github.com/jbeda/mdreflow/issues/16">#16</a>, <a href="https://github.com/jbeda/mdreflow/issues/33">#33</a>, <a href="https://github.com/jbeda/mdreflow/issues/37">#37</a>, and pull requests <a href="https://github.com/jbeda/mdreflow/pull/29">#29</a> and <a href="https://github.com/jbeda/mdreflow/pull/31">#31</a>.
+Between them they took this tree from roughly two thirds converted to its current 20 residue lines, and stopped callouts being destroyed.
+<a href="https://github.com/jbeda/mdreflow/issues/33">#33</a> was fixed structurally rather than by another narrowing: deriving no-break spans from a goldmark parse means linkify is modeled by the parser instead of mirrored by hand, which is what let a code span ending in a URL stop skipping its paragraph.
+<a href="https://github.com/jbeda/mdreflow/issues/37">#37</a> landed in v0.1.7, and the tree reconciles exactly: narrowing the definition zone freed one seven-line bullet in an archived plan doc, worth six residue lines, and one deep-nesting line arrived with prose written since the previous count.
+Two more fixes ride along in that release, both found by upstream's own fuzzing rather than here: hard breaks are now confirmed against goldmark's AST (<a href="https://github.com/jbeda/mdreflow/issues/39">#39</a>) and a footnote body under definition machinery stays frozen (<a href="https://github.com/jbeda/mdreflow/issues/41">#41</a>).
+Neither changes a line in this tree.</p>
+<p>The 20 lines that still do not reflow fall into two classes, both settled, so a later session need not re-diagnose them.
+Fourteen sit three or more containers deep, which mdreflow declines by design (<code>deep-nesting</code>, <a href="https://github.com/jbeda/mdreflow/issues/1">#1</a>).
 That one is written off rather than merely unfixed: raising the depth cap locally corrupted structure, moving content out of its list item into a sibling blockquote, so a human deciding where the breaks go is the right default at that depth.
-Two are a paragraph in <a href="../website/">website.md</a> that documents <code>[label]: target</code> syntax, where skipping is the correct answer and no exclusion is warranted, since excluding the file would stop reflowing its other 658 lines.
-The remaining ten are a <code>[label]:</code> shape inside an inline code span arming the link-reference-definition zone, filed upstream as <a href="https://github.com/jbeda/mdreflow/issues/37">#37</a>.
-Six of those ten are in a neighboring bullet holding no bracket at all.
-Do not patch around it here: the one-line fix breaks fuzz idempotency, which is why <a href="https://github.com/jbeda/mdreflow/pull/36">#36</a> was withdrawn.</p>
+The other six are <code>link-ref-def-shape</code>, and two of them are a paragraph in <a href="../website/">website.md</a> that documents <code>[label]: target</code> syntax, where skipping is the correct answer and no exclusion is warranted, since excluding the file would stop reflowing its other 658 lines.
+Do not patch around that zone here: the one-line fix breaks fuzz idempotency, which is why <a href="https://github.com/jbeda/mdreflow/pull/36">#36</a> was withdrawn.</p>
+<p>A third reason code appears in <code>--explain</code> and costs no residue: every bullet in <a href="../../roadmap/">roadmap.md</a> carrying a <code>&lt;!-- q:QNNN --&gt;</code> marker holds a raw <code>&lt;!</code> opener, so mdreflow declines it (<code>raw-html-decl-opener</code>) even though each is already one sentence per line.
+The correspondence is one-to-one, so that count tracks the roadmap and is not a figure this page has to hold.
+The gate therefore cannot catch a hand-wrap in those bullets.
+It is not worth chasing, because <code>roadmap-check</code> already enforces their shape and word cap.</p>
 <p>Two lessons worth keeping.
 A narrowing this repo proposed was wrong in a way a 2.8M-execution fuzz run did not catch: it armed only at paren depth zero, so a link destination opened inside an outer prose paren escaped it and was corrupted.
 A large execution count over a corpus that never contained the shape is weaker evidence than one deliberately constructed case.
