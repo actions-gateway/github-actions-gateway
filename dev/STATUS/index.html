@@ -2896,6 +2896,14 @@
 <td>Seen once 2026-08-12 at load 101-111 on 18 cores (41 go procs, 8 siblings): passed one <code>make check</code>, failed the next on an identical tree (<code>Could not apply ... # topic appends</code>), passed standalone. Mechanism unverified, not clock-bound like Q642.</td>
 </tr>
 <tr>
+<td><a id="Q831"></a>Q831</td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/ci/gate-list.sh">A gate can join <code>CHECK_FAST_GATES</code> and never join CI, and <code>gate-lists-check</code> stays green</a></td>
+<td><code>ci</code> <code>debt</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>Measured 2026-08-12 on #1440: <code>comparison-stamps-check</code> shipped gating nothing on a PR; the reconciler never reads <code>.github/workflows/</code>. Disproof: grep the target beside a wired control. Only that gate was checked, so the other 30 are unmeasured.</td>
+</tr>
+<tr>
 <td><a id="Q812"></a>Q812</td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/docs/check-plan-index.sh">A plan index Status cell can claim an open release the gate reads as closed</a></td>
 <td><code>ci</code> <code>docs</code> <code>debt</code></td>
