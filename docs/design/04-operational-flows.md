@@ -461,7 +461,8 @@ Q423 measured all of this rather than assuming it: the worker carried every mark
 
 **What it does cost us** is an asymmetry with no clean fix: a kubelet-evicted pod *persists* in `PodFailed` until the reaper takes it, while a preempted pod is *deleted*.
 Recovery evidence therefore survives an AGC restart on one path and not the other, which is the root of the scale-set restart-safety residual noted above.
-Nothing short of preemption leaving a tombstone would close it, so it is documented as a property of the signal rather than tracked as a bug.
+Nothing short of preemption leaving a tombstone would close it, and the tombstone is ours to write rather than upstream's: the AGC already persists per-job state across a process boundary in the per-`RunnerSet` guard ConfigMap (Q606), so recording the runs it owes a re-run is an extension of a mechanism that exists rather than a new dependency.
+That is [Q844](../STATUS.md#Q844), and until it lands the asymmetry stands as described.
 
 #### Why re-running a preempted job is not a double report
 
@@ -490,9 +491,14 @@ The consequence for the published claim is that `priorityTiers` now buys both ha
 Pinned at three tiers — unit (`TestProvisioner_PreemptionAutoRetry` on classic, the `preemption_internal_test.go` set on scale-set), envtest (`TestAGC_Preemption_ScaleSetWorker_IsRecovered`, whose deliberate twin `TestAGC_Drain_ScaleSetWorkerEviction_DoesNotRecover` differs only in the condition's `reason`), and fake-GitHub (`E2E_AGC_PreemptedWorkerIsRecovered`, plus `E2E_AGC_PreemptedRunningPodPhaseFollowsItsExitCode` for the phase finding).
 Full result: [the experiment](../plan/eviction-oversubscription-validation.md#result-measured-2026-07-29-preemption-is-not-eviction).
 
-One residual, inherent to the signal rather than the implementation: on the scale-set tier neither a preemption recovery nor a drain recovery is restart-safe.
+One residual, in the signal rather than in the recovery: on the scale-set tier neither a preemption recovery nor a drain recovery is restart-safe.
 An evicted pod sits in `PodFailed` until the reaper takes it, so a late scan still finds it; a preempted or drained pod is being deleted and is readable only until the kubelet finishes tearing it down — the whole termination grace period for a preemption victim (the condition is stamped before the delete), only the tail of it for a drain (the terminal phase publishes as the container exits, shortly before the object goes away).
 An AGC down for that window loses the evidence and the displaced run needs a manual re-run.
+
+**What is lost is the discriminator, not the run.** GitHub still holds the run, concluded `failure` by the Q385 relay within the measured 15–26s, and `rerun-failed-jobs` still accepts it.
+What no later reader can reconstruct is *why* it failed: once the pod is gone, a preemption-induced `failure` is indistinguishable from a job that failed on its own.
+That is also why the listener's assignment replay does not cover this path — replay recovers a job still assigned at GitHub, and the relay's conclusion is precisely what stops it being one.
+So a durable record has to be written while the AGC still owns the run and cleared when it concludes normally, which is [Q844](../STATUS.md#Q844).
 
 What keeps the windows reachable in normal operation is the worker-pod watch predicate: it admits the update where a pod *newly becomes* a preemption victim (a preemption changes no phase), and the drain shape arrives on the phase-change edge itself.
 The classic tier has no such window: its provisioning goroutine is already watching the pod and reads both markers off the resolving event, including the informer's delete event.
