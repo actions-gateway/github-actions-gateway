@@ -422,6 +422,53 @@ The capture therefore belongs on the wake that reports the conflict, not on a la
 [`pr-requeue-eligible.sh --assess`](../../scripts/agent/pr-requeue-eligible.sh) runs before the rebase and had measured all of this already, then kept only its verdict.
 It now appends what it measured to `tmp/requeue/<pr>.verdict`: the two commit OIDs it merged, and the paths that conflicted.
 
+**On an ordinary `DIRTY` wake it captures nothing, so take the measurement by hand first.** The eligibility checks run before the probe, and the first of them is whether a human has ever enqueued the PR.
+A worker healing its own not-yet-enqueued PR is the common case and fails that check, so `--assess` refuses and records a verdict carrying no OIDs and no conflict set — the measurement the capture exists to preserve, lost on exactly the wake that prompted it (Q814, hit independently by two workers on 2026-08-12).
+Until the ordering changes, run the driverless-clone `merge-tree` below yourself **before** rebasing.
+It is the same command the checker would have run, and the rebase is the only deadline: afterwards the branch merges clean and there is nothing left to measure.
+
+- **`-c merge.<name>.driver=false` does not emulate a driverless merge, it fabricates conflicts.** The value is a *command line*, so `false` runs `/usr/bin/false`, which exits non-zero, and git records a conflict for every driver-owned path both sides touched without ever attempting the built-in three-way merge. `true` and other no-ops fail the opposite way: they exit 0 having written nothing, so the merge silently keeps *ours* and every probe reads clean.
+  Measured 2026-08-12 against GitHub as the control, on two PRs it reported `CLEAN`: `driver=false` gave `rc=1`, `driver=true` gave `rc=0`, and a bare clone with no driver configured gave `rc=0`, matching GitHub.
+  There is no `-c` form that unsets a driver, so a clone that has run `make merge-driver` cannot answer this question at all.
+
+- **Ask GitHub whether a branch is dirty, and use a driverless clone only for the conflict set.** `gh pr view <n> --json mergeStateStatus` is the server's own verdict rather than a model of it, and it costs one call.
+  When you need the *paths* rather than the verdict, take them where no driver is configured:
+
+  ```bash
+  git clone --quiet --bare . /tmp/nodrv        # or any clone that never ran make merge-driver
+  git --git-dir=/tmp/nodrv fetch --quiet "$(pwd)" <base_oid> <head_oid>
+  git --git-dir=/tmp/nodrv merge-tree --write-tree <base_oid> <head_oid>
+  ```
+
+  [`pr-requeue-eligible.sh`](../../scripts/agent/pr-requeue-eligible.sh) uses the `driver=false` form, and its comment claims to measure "what the merge queue will see".
+  It does not; it measures which driver-owned files both sides touched, a superset.
+  That is conservative for its own `ELIGIBLE` rule, which discounts those paths anyway, so it cannot manufacture a false `ELIGIBLE` — but read as "does this branch need a heal" it is a false positive every time a branch and `main` both touch `docs/STATUS.md`.
+
+  Two further traps made the `-c` form look like it was working, both measured 2026-08-12 and both silent. **A misspelled driver name fails open**: git ignores the unknown config key, runs the real driver anyway, and exits 0, so a probe written against a guessed name (`merge.status` for `docs/STATUS.md`, whose driver is `backlog`) produces byte-identical output to no probe at all.
+  Together with the fabricated conflicts above, that is a probe whose two spellings are wrong in opposite directions and neither of which is ever an error. **The driver writes to stderr**, and its advisory line names the file it resolved, so a reader scanning the combined output for a path finds one and reports a conflict list assembled from chatter that says the opposite.
+  Read the stage lines only (`^[0-9]{6} <sha> [123]`) whichever way you probe; a run with no conflict prints the merged tree OID and nothing else.
+
+- **Driver-owned does not mean auto-resolving.
+  It means resolved *by key*.** A keyed merge still conflicts when both sides change the same key, and [`merge-keyed-records.awk`](../../scripts/lib/merge-keyed-records.awk) refuses rather than guessing in three enumerated cases: changed differently on both sides, deleted on one side and changed on the other, and the same new ID added on both sides with different text.
+  It leaves ordinary conflict markers by design, because a wrongly resolved row loses backlog state while a marker costs a minute.
+  Measured 2026-08-12: two PRs edited the same two rows of the `scripts/README.md` registry, and the script-index driver refused the file while the backlog driver resolved `docs/STATUS.md` alongside it, in the same rebase.
+  So "the conflict is confined to the driver-owned files" answers who owns the resolution, not whether one is needed, and a plan resting on the rebase coming out clean has to survive the case where it does not.
+  Resolve a keyed conflict by keeping **both** sides and verifying each survives, not by picking one; two sides changing one row usually means two facts about it, not a disagreement.
+
+- **"Same file" and "different sections" both predict badly; diff context is what decides.** Two hunks in one file merge cleanly when they are further apart than the three lines of context around each, and conflict when they are not, whatever the document structure says.
+  Measured 2026-08-12 on one file in one batch: two edits to adjacent rows of a Markdown table conflicted, while two edits to sections 180 lines apart rebased as a pure line offset.
+  A dispatcher reasoning from "they touch different cells" got the first one wrong and would have got the second one right by luck.
+  Measure the pair rather than predicting it, and say which you did when you tell a worker.
+
+- **A clean merge proves the absence of a textual conflict and nothing else.** Two PRs can edit one file in regions that merge perfectly and still assert incompatible things, and nothing flags it: the merge succeeds, both gates are green, and `main` lands holding both claims.
+  So a textual overlap measurement answers half the question, and it is the half that looks complete.
+  "Disjoint regions, ~L145 vs ~L222" is accurate, and it settles nothing about whether the two changes agree.
+  The other half is what each change *claims*, and the discriminator is the referent rather than the term.
+  Measured 2026-08-12 across one batch: three open PRs asserted about a thing called "quota", carrying two referents between them, a Kubernetes `ResourceQuota` tenant cap in two of them and a global, project-wide GCE CPU limit in the third.
+  A keyword scan reads a single collision across the three where there are really two referents.
+  A topic-level glance happens to group them correctly, because the two sharing a referent are also the two competitor-analysis PRs, and that is the more dangerous result: the grouping is a coincidence of this batch, and a method that succeeds by coincidence gets trusted on the next one.
+  When overriding piped-gate's overlap denial, say what the other PR claims, not only where it sits.
+
 - **A ref pair is not a measurement**, because both refs move.
   The OIDs make the probe re-runnable: `git merge-tree --write-tree <base_oid> <head_oid>` re-derives the same conflict set from the objects at any later time, so a disagreement is settled by re-running it rather than argued from memory.
   That command is printed as well as recorded, which is what puts it in the session transcript the worker reports from.
