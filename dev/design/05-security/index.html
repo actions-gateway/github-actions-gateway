@@ -1283,6 +1283,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#cross-tenant-job-acquisition-via-a-shared-scale-set-name" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Cross-tenant job acquisition via a shared scale-set name
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -3245,6 +3256,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#cross-tenant-job-acquisition-via-a-shared-scale-set-name" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Cross-tenant job acquisition via a shared scale-set name
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -3648,6 +3670,11 @@ See <a href="../appendix-h-v2-api-decomposition/#h9-cross-namespace-proxy-sharin
 <td>High</td>
 <td><code>priorityClassName</code> stamps a <strong>cluster-scoped</strong> <code>PriorityClass</code>, so the platform owns which classes a tenant may reference: the GMC webhook rejects any name not on <code>--allowed-priority-classes</code> (empty = forbid all, the secure default; optional additive, fail-safe ConfigMap source). Both tenant-reachable routes are gated on every tenant-authored kind — <code>priorityTiers[]</code> (v1 <code>ActionsGateway</code>, v2 <code>RunnerSet</code>) and <code>podTemplate.spec</code> (v1 <code>ActionsGateway</code>, v2 <code>RunnerTemplate</code>) — the latter otherwise admitting <code>system-cluster-critical</code> from any namespace. Platform should create allowlisted classes <code>preemptionPolicy: Never</code> unless cross-tenant preemption is intended. Infra pods (<code>EgressProxy</code>/<code>ActionsGateway</code> <code>spec.scheduling.priorityClassName</code>) are gated by a <strong>separate, disjoint</strong> allowlist <code>--allowed-infra-priority-classes</code> (Q284), which takes the same watched-CR augmentation (Q298) behind a four-point disjointness check. <strong>Closed (Q132 v1 tiers, Q289 podTemplate + v2 RunnerSet tiers; Q284 infra allowlist); watched-CR source Q188/Q492, infra parity Q298.</strong> Full detail: <a href="#cross-tenant-pod-preemption-via-priorityclass">see below</a>.</td>
 </tr>
+<tr>
+<td><strong>Cross-Tenant Job Acquisition via a Shared Scale-Set Name</strong></td>
+<td>High</td>
+<td>A <code>ScaleSet</code> set's first <code>runnerLabel</code> is its scale-set <em>name</em>, and the AGC adopts a scale set by that name against the Actions service its gateway's <code>githubURL</code> reaches, so the name is unique per GitHub org/enterprise/repo and <strong>not</strong> per namespace. Two <code>RunnerSet</code>s under one org sharing a first label are two AGCs driving one scale set, each acquiring the other tenant's jobs into its own namespace, quota, and egress IPs. The uniqueness guard was namespace-scoped and could not see it; it is now keyed on the gateway's GitHub binding and enforced cluster-wide, from <strong>both</strong> admission paths (the label is on the <code>RunnerSet</code>, the scope on its gateway, so either object can complete the pair, the same shape as the Q322 <code>noProxyCIDRs</code> guard). Unverifiable reads fail closed, scope comparison is lossy toward rejecting, and a cross-tenant conflict is withheld from the rejection message (logged for the admin) so it cannot be used to enumerate other tenants. <code>Classic</code> sets register no scale set and are unaffected. <strong>Closed (Q791).</strong> Full detail: <a href="#cross-tenant-job-acquisition-via-a-shared-scale-set-name">see below</a>.</td>
+</tr>
 </tbody>
 </table>
 <h3 id="the-agcs-cluster-scoped-read-surface">The AGC's cluster-scoped read surface<a class="headerlink" href="#the-agcs-cluster-scoped-read-surface" title="Permanent link">&para;</a></h3>
@@ -3857,6 +3884,25 @@ So the guarantee is exactly "the tenant's runners live in the group you named" a
 See <a href="../../operations/tenant-onboarding/#bind-a-runner-set-to-a-github-runner-group">tenant onboarding</a>.</p>
 <p>The field is tenant-authored, and the <a href="../../development/api-review/#ask-whose-fact-it-is">whose-fact</a> question resolves benignly: a tenant naming a group that is not theirs volunteers <em>its own</em> runners to that group's repositories.
 It costs the tenant that lied and escalates nothing across tenants, which is why it is not gated by a platform allowlist the way <code>priorityClassName</code> is. <strong>Closed (Q712).</strong></p>
+<h3 id="cross-tenant-job-acquisition-via-a-shared-scale-set-name">Cross-tenant job acquisition via a shared scale-set name<a class="headerlink" href="#cross-tenant-job-acquisition-via-a-shared-scale-set-name" title="Permanent link">&para;</a></h3>
+<p>The second forge-side namespace, and the one where the whose-fact question does <em>not</em> resolve benignly.
+A <code>ScaleSet</code> set's first <code>runnerLabel</code> is its scale-set name, and the AGC adopts a scale set <strong>by name</strong> against the Actions service its gateway's <code>githubURL</code> reaches, creating one only when the name is free.
+That name is unique per GitHub org, enterprise, or repo; the Kubernetes namespace is invisible to it.</p>
+<p>Two <code>RunnerSet</code>s in different namespaces whose gateways name one org and one first label are therefore two AGCs driving a <strong>single</strong> scale set.
+Both open a session on it, and GitHub distributes that scale set's jobs across both: each tenant acquires jobs belonging to the other, executing another organization's workflow content in its own namespace, against its own quota, egressing from its own attributed IPs.
+It is the runner-group threat's mirror image.
+That one lets an outside repository reach <em>in</em> to a tenant's runners; this one lets a tenant reach <em>out</em> and take another tenant's jobs, and unlike the runner group it costs the <em>other</em> tenant rather than the one that misconfigured.</p>
+<p>The uniqueness guard predated this and was <strong>namespace-scoped</strong>, so it did not see the case at all.
+It is now scoped to the GitHub binding and enforced cluster-wide, from both admission paths (Q791, §H.4): the label lives on the <code>RunnerSet</code> and the scope on its gateway, so exactly like the <code>noProxyCIDRs</code> bypass pair (Q322), either object can complete the collision and each is checked from its own side.
+The gateway half is load-bearing rather than defensive: a <code>RunnerSet</code> applied before its gateway has no resolvable scope and is admitted (§H.7), so a RunnerSet-only guard would be bypassable by apply order alone.</p>
+<p>Two properties matter for the guard being a boundary:</p>
+<ul>
+<li><strong>Unverifiable fails closed.</strong> If the cluster-wide read errors, the write is rejected rather than admitted on faith, and the scope comparison is deliberately lossy in the <em>rejecting</em> direction (case-insensitive host and path, port dropped), so a near-miss encoding of one org cannot slip between two keys.</li>
+<li><strong>The rejection does not enumerate tenants.</strong> A conflicting set in the applying tenant's own namespace is named; a cross-tenant one is withheld from the API error and written to the GMC log instead.
+  The <code>RunnerSet</code> is tenant-authored, so a message naming the holder would let anyone able to create one in their own namespace probe another tenant's namespaces and label usage.</li>
+</ul>
+<p><strong>What stays outside GAG's control.</strong> A scale set registered at GitHub by something <em>other</em> than GAG (ARC, or a hand-registered set) is not in the cluster and cannot be seen at admission.
+The AGC adopts such a set by name rather than failing, which is the intended behaviour for migration (<a href="../../operations/migration-from-arc/">migrating from ARC</a>) and the reason ARC and GAG must not run one scale-set name concurrently. <strong>Closed (Q791).</strong></p>
 <hr />
 <h2 id="53-security-profiles-and-the-privileged-opt-in">5.3. Security Profiles and the Privileged Opt-In<a class="headerlink" href="#53-security-profiles-and-the-privileged-opt-in" title="Permanent link">&para;</a></h2>
 <p>Worker pod security is defense-in-depth: PSA enforcement at the API server, AGC-enforced invariants on the PodSpec, and an optional sandbox runtime layer.

@@ -3209,7 +3209,8 @@ So both ARC shapes carry across unchanged:</p>
 <ul>
 <li><strong>The first label is the identity.</strong> It names the scale set at GitHub, so reordering the list renames the scale set and orphans the old one.
   Append rather than prepend.</li>
-<li><strong>The first label is unique per gateway.</strong> Two <code>RunnerSet</code>s under one <code>ActionsGateway</code> may not share <code>runnerLabels[0]</code>; they would register the same scale-set name and collide.
+<li><strong>The first label is unique per GitHub org, enterprise, or repo.</strong> Two <code>RunnerSet</code>s whose gateways name the same <code>githubURL</code> may not share <code>runnerLabels[0]</code>; they would register the same scale-set name and collide.
+  This spans namespaces, because the scale-set name is unique at GitHub rather than in the cluster.
   Keeping your ARC names gives you uniqueness for free, since ARC already required distinct install names.
   Later labels <strong>may</strong> overlap, and <code>linux</code> across every set is the normal shape; which set an ambiguous <code>runs-on</code> reaches is GitHub's decision.</li>
 <li><strong>Labels are registered once, at creation.</strong> Adding one to a live set does not register it; the set reports <a href="../troubleshooting/#jobs-targeting-one-of-a-runner-sets-labels-never-start-runnerlabelsincomplete"><code>RunnerLabelsIncomplete</code></a> instead of failing silently.

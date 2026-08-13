@@ -3144,8 +3144,15 @@ If multiple shards are needed within a single team, the standard pattern is one 
 <div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>team-a/                    ← namespace 1, ActionsGateway CR, GitHub App install 1
 <a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>team-a-overflow/           ← namespace 2, ActionsGateway CR, GitHub App install 2
 </code></pre></div>
-<p>Label the RunnerGroups consistently across installations (<code>gpu-2x</code>, <code>gpu-8x</code>, etc.) and split workflows between them based on priority or throughput class.
+<p>Label the RunnerGroups consistently across installations (<code>gpu-2x</code>, <code>gpu-8x</code>, etc.) and split workflows between them based on priority or throughput class.</p>
+<blockquote>
+<p><strong>v2 <code>ScaleSet</code> sets shard differently.</strong> The advice above holds for <code>Classic</code> acquisition, where a label is only a match target.
+Under the <code>ScaleSet</code> protocol a set's <strong>first</strong> <code>runnerLabel</code> is its scale-set <em>name</em> at GitHub, and that name is unique per org, enterprise, or repo rather than per namespace.
+Two shards of one org therefore cannot reuse a first label, however far apart their namespaces are: they would drive one scale set from two controllers, each shard acquiring the other's jobs.
+Admission rejects it (Q791).
+Give each shard a distinct first label (<code>gpu-2x-a</code>, <code>gpu-2x-b</code>) and put the shared class in a later label, which may overlap freely.
 There is no cross-installation load balancing built into this system; job routing is determined solely by which repos are covered by each installation's scope.</p>
+</blockquote>
 <hr />
 <h2 id="e7-per-tenant-vs-per-team-partitioning">E.7. Per-Tenant vs. Per-Team Partitioning<a class="headerlink" href="#e7-per-tenant-vs-per-team-partitioning" title="Permanent link">&para;</a></h2>
 <p>The Gateway Manager Controller (GMC) multi-tenant model provisions one <code>ActionsGateway</code> per namespace.

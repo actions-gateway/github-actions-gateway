@@ -4073,7 +4073,8 @@ It is the only protocol the graduated version serves, because it removes a many-
   Concurrency is governed by <code>maxWorkers</code>/<code>priorityTiers</code> (advertised to GitHub as the scale set's capacity), not by a listener count.</li>
 <li><strong>The first label names the scale set</strong>, which makes it the set's identity at GitHub.
   Reordering the list renames the scale set and orphans the old one, so append rather than prepend.</li>
-<li><strong>The first label is unique under one gateway.</strong> Two sets claiming the same <code>runnerLabels[0]</code> would register the same scale-set name at GitHub; the second is rejected.
+<li><strong>The first label is unique per GitHub org, enterprise, or repo.</strong> Two sets claiming the same <code>runnerLabels[0]</code> would register the same scale-set name at GitHub; the second is rejected.
+  The boundary is the <code>githubURL</code> the set's gateway names, <strong>not the namespace</strong>: two sets in different namespaces whose gateways point at the same org still collide, so a shard of one org across namespaces needs distinct first labels per shard.
   Later labels may overlap freely.</li>
 <li><strong>Declare the full list up front.</strong> Labels are registered when the scale set is created and are not reconciled afterwards, so a label added to a live set never reaches GitHub — the set reports <a href="../troubleshooting/#jobs-targeting-one-of-a-runner-sets-labels-never-start-runnerlabelsincomplete"><code>RunnerLabelsIncomplete</code></a> rather than failing silently.
   On GitHub Enterprise Server below 3.21 the same condition covers an appliance that dropped the extra labels because <code>DistributedTask.AllowRunnerScaleSetCustomLabels</code> is off.</li>

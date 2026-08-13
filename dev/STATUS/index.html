@@ -2824,14 +2824,6 @@
 </thead>
 <tbody>
 <tr>
-<td><a id="Q791"></a>Q791</td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/webhook/v2alpha1/runnerset_webhook.go">Scale-set label uniqueness is namespace-scoped, so two tenants can claim one scale set</a></td>
-<td><code>security</code> <code>bug</code></td>
-<td>🔲</td>
-<td>M</td>
-<td><code>validateScaleSetLabelUniqueness</code> lists <code>client.InNamespace</code>, so two RunnerSets in different namespaces under one org may share a <code>runnerLabel</code>. A scale set is adopted by name, so the second AGC acquires the first tenant's jobs. Found wiring Q712.</td>
-</tr>
-<tr>
 <td><a id="Q408"></a>Q408</td>
 <td><a href="../plan/q408-untrusted-pr-egress/">Untrusted-PR egress posture for Kata workers</a></td>
 <td><code>security</code></td>
