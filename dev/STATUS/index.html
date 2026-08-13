@@ -2840,6 +2840,30 @@
 <td>Measured 2026-08-12: the probe head is local <code>git rev-parse HEAD</code>; <code>headRefOid</code> is absent. <code>--assess 1438</code> then <code>--assess 1447</code> from one worktree gave identical output, exit 0 ELIGIBLE. Fix: read the head from <code>gh pr view --json headRefOid</code>.</td>
 </tr>
 <tr>
+<td><a id="Q825"></a>Q825</td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/agent/claude-piped-gate-hook-test.sh">The no-toolchain assertion reads the pipeline's status, not the hook's</a></td>
+<td><code>flake</code> <code>tests</code> <code>bug</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>Measured 2026-08-12: <code>set +e</code> at line 150 drops errexit, not <code>pipefail</code>, so <code>rc=$?</code> is the pipeline's status while the assertion claims the hook's. The hook never reads stdin (hook.sh:78), so <code>jq</code> can take SIGPIPE. Seen twice, both green on rerun.</td>
+</tr>
+<tr>
+<td><a id="Q823"></a>Q823</td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/go/coverage.sh"><code>agc/internal/controller</code>'s runtime swings 5x against a fixed 2m coverage budget</a></td>
+<td><code>flake</code> <code>ci</code> <code>tests</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>Measured 2026-08-12, same package instrumented: one cover-check panicked at the 2m budget, the next ran 21.951s; an uninstrumented run took 120.895s. A 5x swing under concurrent load, not a fixed overrun. Needs an at-rest baseline before a fix.</td>
+</tr>
+<tr>
+<td><a id="Q822"></a>Q822</td>
+<td><a href="../development/testing/#resource-auto-throttle-on-gui-dev-machines">Three unrelated suites fail under concurrent load and pass on rerun</a></td>
+<td><code>flake</code> <code>ci</code> <code>tests</code></td>
+<td>🔲</td>
+<td>M</td>
+<td>Measured 2026-08-12 under 8 workers: <code>provisioner</code> eviction-window and <code>controller</code> 2m timeout failed in one window with piped-gate rc=141 (<a href="#Q825">Q825</a>), all green on rerun. Contention suspected, unproven: <code>scripts-test</code> runs past the semaphore.</td>
+</tr>
+<tr>
 <td><a id="Q803"></a>Q803</td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/go/coverage.sh"><code>cmd/proxy</code> coverage is nondeterministic, and its floor has no headroom to absorb it</a></td>
 <td><code>flake</code> <code>ci</code> <code>tests</code></td>
