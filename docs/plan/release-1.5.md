@@ -118,10 +118,17 @@ The 2026-08-06 review traced the undated cells to the format: a green-check/red-
 The format had nowhere to put "we believe this but have not checked it", so unverified became a red X. Patching cells does not fix that; either every competitor-side cell carries a version and a date, or the page stops rendering competitor claims as verdicts.
 
 **Settled 2026-08-11: the table keeps its shape and gains a third state.** A competitor-side cell carries a verdict only when it also carries an ARC version and a measurement date; without both it renders as unverified.
-Tracked as [Q801](../STATUS.md#Q801).
+Tracked as Q801, and **shipped 2026-08-12**: `make comparison-stamps-check` enforces the rule, `.gag-unverified` is the state, and all 17 ARC cells were re-read at 0.14.2 / `9bb16ae` and stamped.
+The rule is [documentation-standards.md § A competitor-side verdict carries its own stamp](../development/documentation-standards.md#a-competitor-side-verdict-carries-its-own-stamp); the per-cell evidence is [in the competitive analysis](competitive-analysis-2026-08.md#per-cell-evidence-for-the-arc-column-2026-08-12).
 
 Measured the same day, which is what makes this a format decision rather than a cleanup: **15 of the 17 comparison rows carry neither an ARC version nor a date.** Only two do.
 Dating them is the work either way, so the question is only what the page asserts while that is outstanding.
+
+**How the dating actually went, 2026-08-12.** All 17 came back with a verdict rather than some falling to unverified, because re-reading them at one pinned commit was cheaper than the row assumed: eleven of the twelve gap-asserting cells were settled from two chart `values.yaml` files, four controller source files and one recursive file listing.
+Two corrections fell out of it.
+The quota row now names the 30 s retry beside the 10 min registration burn, both read at `9bb16ae`, and the "three rules, all `patch`" reading behind the pre-claim-seat argument is two rules at that commit.
+The unverified state therefore ships with no cell using it, which is the right way round: the format can express doubt before it needs to, and the gate is what stops the next unmeasured cell rendering as a verdict.
+The one claim that stayed weaker than the rest is the auto-re-run negative, which is a keyword-and-surface reading rather than an exhaustive one and says so in the evidence table.
 
 The argument is the asymmetry between the two ways of being wrong.
 Two cells have already gone false at datable upstream releases, and a reader who checks one and finds it wrong has no reason to trust the other sixteen; the page's whole value is that a sceptical evaluator can spot-check it.

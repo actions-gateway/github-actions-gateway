@@ -235,11 +235,35 @@ Growing a provenance paragraph in the source is not the compliant form.
 
 **A live gate beats a date.** Where a gate re-measures the claim on every run, name the gate instead: it is fresher than any date, and it turns red when upstream moves. `make test-autoscaler` and `make test-karpenter` drive real autoscalers and assert the matcher's verdict on the events that come back, which is why the reason constants they pin carry no per-claim date.
 
+### A competitor-side verdict carries its own stamp
+
+The marketing case, and the one where the prose form of the rule is not enough.
+[why-gag.md](../why-gag.md) renders competitor claims as green checks and red X's, and a verdict table needs a definite cell in every row.
+The working notes it was built from had marked most ARC-side facts unverified, and the format had nowhere to put "we believe this but have not checked it", so eleven unverified facts shipped as red X's ([#308](https://github.com/actions-gateway/github-actions-gateway/pull/308)).
+Two then went false at datable upstream releases with nothing going red.
+
+One blanket "measured on DATE against VERSION" note under the table does not fix it: under a blanket note a checked claim and an assumed one render identically, so staleness accumulates invisibly and re-verification is all-or-nothing.
+The rule is therefore per cell, and mechanical enough to gate:
+
+- a **verdict** carries exactly one `<span class="gag-asof">VERSION · DATE</span>`, naming the upstream version it was read at and the day it was read;
+- **`.gag-unverified`** is the state for a claim we believe and have not checked, and it carries no stamp, because a stamp is what a verdict rests on;
+- there is no third case. `make comparison-stamps-check` fails the page, in `make check`.
+
+Only the competitor column is stamped.
+A wrong claim about this repo's own behaviour goes red in a test, which is the "our own behaviour is not upstream" exemption above; requiring a citation there would add nothing to that gate and would make every GAG cell unfixable without one nobody can produce.
+
+**Staleness is reported, never failed.** A gate that reds on a date nobody committed turns `main` red with no change to revert, so `check-comparison-stamps.sh --report` prints the stamps oldest-first and [release pre-flight](../operations/release.md#1-pre-flight) reads it.
+That is what turns pre-flight from "re-verify everything" into "re-check what went stale".
+
+**Pin the ref beside the version.** A tag names what the stamp claims; a commit is what makes it re-checkable, since a link to a branch drifts out from under the claim it was cited for (#1422).
+The page carries the commit once, under the table, and the per-cell evidence lives in [the competitive analysis](../plan/competitive-analysis-2026-08.md#per-cell-evidence-for-the-arc-column-2026-08-12).
+
 ### When you cannot measure it
 
 Say so in the same clause: "unverified, source inspection only".
 One clause tells the next session where to start, instead of handing it something it will trust for months.
 Every claim in the table above shipped as a flat assertion instead.
+On a surface that renders verdicts rather than sentences, the same admission has a rendering of its own (previous section).
 
 ## Conventions
 

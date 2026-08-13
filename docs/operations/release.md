@@ -145,7 +145,15 @@ Reviewing it at the first RC and recording the verdict then is what keeps that c
   1. **Does anything shipped since the last tag belong on a marketing surface?** `docs/features.md` is the accurate inventory; the other three are curated.
      Nothing propagates upward on its own, so a capability that lands only in `features.md` is a capability nobody selling the project knows about.
   2. **Does every claim about GAG still describe GAG?** Check especially claims written against an older acquisition tier or API version, and any "by default" wording against the actual kubebuilder defaults in `api/`.
-  3. **Does every claim about an alternative still hold, and does it say when it was measured?** A competitive claim without a version and a date cannot be re-checked, so it silently becomes false rather than becoming stale.
+  3. **Does every claim about an alternative still hold?** Whether each one *says* when it was measured is no longer a question you have to ask of `why-gag.md`'s comparison table: `make comparison-stamps-check` fails the page if a verdict there carries no version and date.
+     What is left is deciding which stamps have aged out, oldest first:
+
+     ```bash
+     scripts/docs/check-comparison-stamps.sh --report
+     ```
+
+     Re-read a stale cell at the current upstream version and re-stamp it, or drop it to the unverified state until someone can.
+     Prose claims outside that table (the "where ARC is ahead" bullets, `README.md`, `docs/index.md`) are not gated and still need the eye.
 
   Record the verdict in the release's plan doc and file corrections as Queue rows carrying this release's gate label.
 

@@ -32,8 +32,10 @@ Rated by what a competitor would have to change, not by how good the feature is.
 This corrected an earlier conclusion in this same research, and it is the single most important thing on this page.
 
 1. **ARC's listener already holds a Kubernetes clientset.** `scaler.New()` builds one from `rest.InClusterConfig()`.
-   It has the client and lacks the permissions: `rulesForListenerRole()` grants three rules, all `patch`, zero read verbs.
+   It has the client and lacks the permissions: `rulesForListenerRole()` grants two rules, both `patch`, zero read verbs.
    Adding `get`/`list`/`watch` on `resourcequotas` and `pods` is a small change, not a redesign.
+   (This said three rules until 2026-08-12, when re-reading it at `9bb16ae` found two.
+   Whether the function changed or the original count was wrong is not established, and does not move the load-bearing half, which is the zero read verbs.)
 2. **`actions/scaleset` already exposes `Listener.SetMaxRunners(count)`**, documented as safe to call during `Run`.
    Nothing in ARC calls it.
 3. **Open PR `actions/scaleset#113`** removes `acquireAvailableJobs` from the library and hands acquisition to the consumer, making selective acquisition a first-class extension point in GitHub's own client.
@@ -108,8 +110,10 @@ The format had nowhere to put "we believe this but have not checked it", so **11
 
 Two went false at datable releases without anyone noticing: 0.13.1 changed quota-blocked pod retry, and 0.14.0 added multi-label scale sets.
 
-The structural fix is the dated measurement stamp now under the table, and the recurring pre-flight step in [release.md](../operations/release.md#1-pre-flight).
-Patching cells alone would have reproduced the failure.
+The first fix was a dated measurement stamp under the table, plus the recurring pre-flight step in [release.md](../operations/release.md#1-pre-flight).
+That was not enough: one note for the whole column still renders a checked claim and an assumed one identically, so the format could go back to asserting things nobody measured with nothing to notice.
+The structural fix is the per-cell stamp and its gate (Q801, 2026-08-12), documented in [documentation-standards.md](../development/documentation-standards.md#a-competitor-side-verdict-carries-its-own-stamp).
+Patching cells alone would have reproduced the failure either way.
 
 **A related process defect:** `plan/README.md` recorded Q60 as "verified + folded into appendix-d".
 The Q60-closing commit added 34 lines about Kueue and Exostellar and contained zero ARC per-claim verification.
@@ -128,6 +132,36 @@ Two confident findings in this research were wrong, and both had the same shape:
 
 Both would have been caught by reading the claim's own surrounding prose first.
 Every negative assertion here carries a positive control for that reason.
+
+## Per-cell evidence for the ARC column, 2026-08-12
+
+What each competitor-side cell of the [comparison table](../why-gag.md#gag-vs-arc-scale-set-mode) was read against, so a re-check starts from a file rather than from the claim.
+Every row was read on **2026-08-12** at ARC `gha-runner-scale-set` **0.14.2**, commit [`9bb16ae`](https://github.com/actions/actions-runner-controller/tree/9bb16ae49d0ce585d8e682aa7e2668a6e832d5d8).
+Blob links are pinned to that commit rather than to `master`, so the quoted lines stay at the cited coordinates (the [#1422](https://github.com/actions-gateway/github-actions-gateway/pull/1422) precedent).
+
+The 2026-08-06 research above is the reasoning; this is the file-and-line layer under it, which is what [Q60's false closure](#why-the-marketing-drifted-and-the-fix) turned out not to have.
+
+| Cell | Read at `9bb16ae` |
+|---|---|
+| Scale-set acquisition, ephemeral pods | `go.mod` names [`github.com/actions/scaleset v0.4.0`](https://github.com/actions/actions-runner-controller/blob/9bb16ae49d0ce585d8e682aa7e2668a6e832d5d8/go.mod), the same client library GAG acquires with; `EphemeralRunner` is the per-job object |
+| Custom pod template and image, reusable templates | [`charts/gha-runner-scale-set/values.yaml`](https://github.com/actions/actions-runner-controller/blob/9bb16ae49d0ce585d8e682aa7e2668a6e832d5d8/charts/gha-runner-scale-set/values.yaml) takes one `template:` PodSpec per release, inline. No shared template object exists |
+| Scale to zero, guaranteed floor | Same file: `maxRunners` and `minRunners` are per scale set, and `minRunners` is a warm-pool floor rather than a reservation another set cannot spend |
+| Safe under a `ResourceQuota` | [`ephemeralrunner_controller.go`](https://github.com/actions/actions-runner-controller/blob/9bb16ae49d0ce585d8e682aa7e2668a6e832d5d8/controllers/actions.github.com/ephemeralrunner_controller.go): on `exceeded quota:` it requeues after `30 * time.Second`, and once the runner passes `CreationTimestamp + 10 * time.Minute` it deletes and re-creates it, spending a fresh single-use registration each cycle |
+| Stop claiming when the cluster can't place | [`scaler.go`](https://github.com/actions/actions-runner-controller/blob/9bb16ae49d0ce585d8e682aa7e2668a6e832d5d8/cmd/ghalistener/scaler/scaler.go): `HandleDesiredRunnerCount` patches `EphemeralRunnerSet.spec.replicas` and consults no cluster state. `rulesForListenerRole` in [`resourcebuilder.go`](https://github.com/actions/actions-runner-controller/blob/9bb16ae49d0ce585d8e682aa7e2668a6e832d5d8/controllers/actions.github.com/resourcebuilder.go) grants two rules, both `patch`, so it could not read a quota if it wanted to |
+| Auto-re-run | ARC's own client, [`github/actions/actions.go`](https://github.com/actions/actions-runner-controller/blob/9bb16ae49d0ce585d8e682aa7e2668a6e832d5d8/github/actions/actions.go), exposes no `/actions/runs` path, and no controller or client file calls a re-run endpoint. **The negative is a keyword-and-surface reading, not an exhaustive one**, so a mechanism under another name would not have been found |
+| Anti-stampede throttling | [`charts/gha-runner-scale-set-controller/values.yaml`](https://github.com/actions/actions-runner-controller/blob/9bb16ae49d0ce585d8e682aa7e2668a6e832d5d8/charts/gha-runner-scale-set-controller/values.yaml): `flags.rateLimiter`, `k8sClientRateLimiterQPS`/`Burst`, `runnerMaxConcurrentReconciles`. All controller-wide, all metering reconciles and API calls |
+| Per-tenant egress IPs | Scale-set `values.yaml` `proxy:` takes an `http`/`https`/`noProxy` URL plus a credential secret, for a proxy the operator already runs. Nothing provisions or reconciles a pool |
+| App private key in the cluster | `newScaleSetListenerConfig` in `resourcebuilder.go` writes `config.AppConfig` into the listener's `config.json` Secret; `appconfig.FromSecret` reads `github_app_private_key`. With `vaultConfig` set, only the vault coordinates are written and the listener resolves the key itself |
+| Listener footprint | Scale-set `values.yaml` `listenerTemplate` is "the PodSpec for each listener Pod"; [`autoscalinglistener_controller.go`](https://github.com/actions/actions-runner-controller/blob/9bb16ae49d0ce585d8e682aa7e2668a6e832d5d8/controllers/actions.github.com/autoscalinglistener_controller.go) mirrors its secrets "in the Controller namespace" |
+| Per-tenant utilization metrics | Both charts ship the metrics blocks commented out, disabling metrics unless uncommented. [`cmd/ghalistener/metrics/metrics.go`](https://github.com/actions/actions-runner-controller/blob/9bb16ae49d0ce585d8e682aa7e2668a6e832d5d8/cmd/ghalistener/metrics/metrics.go) carries a `namespace` label and no quota series |
+| Right-sizing | `AutoscalingRunnerSetStatus` in [`autoscalingrunnerset_types.go`](https://github.com/actions/actions-runner-controller/blob/9bb16ae49d0ce585d8e682aa7e2668a6e832d5d8/apis/actions.github.com/v1alpha1/autoscalingrunnerset_types.go) is five fields: a phase and four runner counts. No recommendation surface, and no `recommend`/`rightsize`/`vpa` path anywhere in the tree |
+| Cross-tenant fleet health | One sample dashboard, `docs/gha-runner-scale-set-controller/samples/grafana-dashboard/`, and zero alert-rule files in the tree |
+
+Two things this pass did not settle, kept as claims rather than promoted to verdicts elsewhere on the page:
+
+- the auto-re-run negative, above;
+- the three "[where ARC is ahead](../why-gag.md#where-arc-is-ahead)" bullets, which still carry the 2026-08-06 blanket date and no version.
+  They concede rather than assert a gap, so they are not gated, but they age the same way.
 
 ## Raw research artifacts
 

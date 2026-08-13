@@ -265,7 +265,7 @@ Every custom class is namespaced `gag-`, in two families:
 
 - **Components** use BEM — `gag-hero`, `gag-hero__logo`, `gag-hero__phrase`.
   The block name matches the wrapper `<div>` in the Markdown.
-- **Utilities** are bare and reusable — `gag-nowrap` (keeps a short code chip on one line inside a narrow table column), `gag-cont`.
+- **Utilities** are bare and reusable — `gag-nowrap` (keeps a short code chip on one line inside a narrow table column), `gag-cont`, `gag-asof`.
 
 **Grep the name before adding a class.** A collision does not error — it resolves by specificity, silently. `.md-typeset .gag-nowrap` (0,2,0) beats a plain `.gag-nowrap` (0,1,0), so a new rule reusing that name has no effect and the symptom is "my CSS does nothing," with nothing in the build to explain it.
 A utility that must never change behaviour and a component that must change it at a breakpoint are different classes, even when the declaration is identical.
@@ -280,6 +280,16 @@ The comparison table's scope also owns the **last-column accent** (the tinted `t
 "Last column" means GAG on that one table; everywhere else it is whatever the author put rightmost.
 The accent was global once, which put it on all ~660 tables in the tree, tinting Validation on the API reference and Fix on the troubleshooting page.
 Nothing in the build catches that, because the reveal JS classes every plain table (see [§ Progressive enhancement](#progressive-enhancement-docsjavascriptsextrajs)), so the rule reaches far past the "marketing tables" its comment claimed. **A new table rule that means something about a specific column belongs in a page scope, not in the global block.**
+
+**The ARC column carries three verdict states, not two.** `gag-yes` and `gag-no` are the verdicts; `gag-unverified` is the muted third, for a claim the project believes and has not checked.
+A verdict cell also ends in a `gag-asof` stamp naming the upstream version and the date it was read, which is a content rule rather than a style one and is enforced by `make comparison-stamps-check`.
+The reasoning is in [documentation-standards.md](documentation-standards.md#a-competitor-side-verdict-carries-its-own-stamp).
+The stamp inherits `--gag-muted` and tabular digits, per the interface rules below; keep it quieter than the claim it sits under, since it is provenance rather than argument.
+
+**What the stamps cost the page, measured on the built site 2026-08-12.** One stamp is 139px on a single line and never wraps, which is what keeps it out of the fixed columns' way: at 1280px the ARC column is 354px and at 375px the whole table is 343px, and neither width introduces horizontal scroll.
+It adds ~26px per row, so the table went from roughly 2,010px to 2,453px at 1280px.
+The worst ratio is a one-word `yes` row, 53px to 79px, which is also the cell where a bare verdict was least defensible.
+Keep a stamp to one line if the format ever grows: a wrapping stamp would pay that cost twice on every row.
 
 ### Changing the hero headline
 

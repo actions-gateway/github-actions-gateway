@@ -148,6 +148,16 @@ page-density-check: ## Fail on an admonition wall, or a stat tile saying the sam
 script-docs-check: ## Fail when a script under scripts/ has no scripts/README.md entry
 	scripts/docs/check-script-docs.sh
 
+# Comparison-table stamp gate (Q801). why-gag.md renders competitor claims as
+# green checks and red X's, and eleven of them shipped with no ARC version and no
+# date because the format had nowhere to put "unverified" — two then went false
+# at datable upstream releases with nothing going red. The gate enforces the rule
+# that settled it: no version and date, no verdict. Staleness is reported by
+# `--report` rather than failed, so a stamp aging out never reds main.
+.PHONY: comparison-stamps-check
+comparison-stamps-check: ## Fail when an ARC-column verdict in why-gag.md carries no version and date
+	scripts/docs/check-comparison-stamps.sh
+
 .PHONY: em-dash-baseline
 em-dash-baseline: ## Re-record the per-file em-dash ceilings; the diff is what the cleanup cleared
 	scripts/docs/check-em-dash.sh --write
