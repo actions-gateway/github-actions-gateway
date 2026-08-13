@@ -223,6 +223,10 @@ So the prompt carries only what the skill and the Queue row cannot:
 - **The trap worth naming** — the tempting wrong fix, the control the test needs, the decision the row leaves open.
   A trap is a claim too, and the most load-bearing one in the prompt, since it tells the worker what *not* to look at.
 - **Contention** with work in flight, by file.
+  When several workers will touch one large doc, say so **and** say what the resulting `gh pr create` denial means: *read the other PR and override with the reading*, never *re-scope this change*.
+  A worker who shrinks a good change to get past the guard reports that as scoping, not as friction, so it never appears in a friction report afterwards and cannot be found retrospectively.
+  It has to be in the prompt or it stays invisible.
+  Measured across one batch: five overrides, each recorded with a reading, one of which caught a cross-PR contradiction nothing else would have.
 
 A prompt that fits in a few lines is one a maintainer can scan a whole wave of.
 If it is running long, the excess is usually contract that belongs in the skill, or task detail that belongs in the Queue row.
@@ -431,6 +435,11 @@ It is the same command the checker would have run, and the rebase is the only de
   Measured 2026-08-12 against GitHub as the control, on two PRs it reported `CLEAN`: `driver=false` gave `rc=1`, `driver=true` gave `rc=0`, and a bare clone with no driver configured gave `rc=0`, matching GitHub.
   There is no `-c` form that unsets a driver, so a clone that has run `make merge-driver` cannot answer this question at all.
 
+- **`mergeStateStatus` lags a force-push, so pair it with the head OID.** The branch ref updates immediately and the PR object does not: measured 2026-08-12, `git ls-remote` showed the new head while `gh pr view` still returned the *superseded* OID with `DIRTY` for minutes, and pr-sentinel read it in that window and fired `conflict` on a branch that was already healed.
+  Ask for `headRefOid` alongside the status and compare it to `git ls-remote origin refs/heads/<branch>`; differing OIDs mean the verdict is about something you no longer have, so re-read rather than act.
+  Same discipline as requiring a tree OID to prove a probe ran. **`UNKNOWN` with *matching* OIDs is a third case**: the read is fresh and GitHub is still computing.
+  Rebase anyway rather than waiting, because a no-op rebase costs nothing and acting on an uncomputed field costs a cycle — the asymmetry decides it, not the field.
+
 - **Ask GitHub whether a branch is dirty, and use a driverless clone only for the conflict set.** `gh pr view <n> --json mergeStateStatus` is the server's own verdict rather than a model of it, and it costs one call.
   When you need the *paths* rather than the verdict, take them where no driver is configured:
 
@@ -485,6 +494,11 @@ If you build your own watcher, it must:
 - Gate "mergeable" on **both** all-checks-green **and** the `mergeable` field — not checks alone (a green PR can still be conflicting).
 - Re-emit on **state transitions** (failed → green, conflicting → mergeable), not once-and-forever, because PRs flip-flop as siblings merge.
 - Handle **docs-only PRs that trigger zero CI checks** — treat zero-checks + mergeable as ready (and keep a periodic backstop poll, since an event-only watcher can miss them).
+
+**Do not arm a watch during a known-dirty window.** [`pr-mergeability-watch.sh`](../../scripts/agent/pr-mergeability-watch.sh) polls before its first sleep, so a watch armed against a PR that is already `DIRTY` fires `conflict` and exits within one `gh` call, spending the watch on a state you already knew.
+Arm it after the heal reports `CLEAN`.
+The inverse is not a symptom: an instant fire *after* a clean read means the PR went dirty in between, which is the watch working.
+The rule is about the window, not about the speed of the wake.
 
 ## The no-secrets rule
 
