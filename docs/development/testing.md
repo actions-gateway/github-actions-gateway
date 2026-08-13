@@ -2528,16 +2528,20 @@ CI must use the same commands as [Running tests](#running-tests) above — per-m
 
 ### Pinned tool installs: always via `download-verified.sh`
 
-Every CI step that installs a pinned third-party binary — kind (`e2e-reusable.yml`, `autoscaler-drift.yml`), shellcheck (`unit-test.yml`), kubeconform (`manifest-validate.yml`), polaris (`security-scan.yml`) — and the local `$(COSIGN)` rule fetch it through [`scripts/fetch/download-verified.sh`](../../scripts/fetch/download-verified.sh) (`<url> <sha256> <output-path>`).
+Every CI step that installs a pinned third-party binary — kind (`e2e-reusable.yml`, `autoscaler-drift.yml`), shellcheck (`unit-test.yml`), kubeconform (`manifest-validate.yml`), polaris and syft (`security-scan.yml`, `publish.yml`) — and the local `$(COSIGN)` rule fetch it through [`scripts/fetch/download-verified.sh`](../../scripts/fetch/download-verified.sh) (`<url> <sha256> <output-path>`).
 Do not hand-roll `curl` + `sha256sum -c` in a new step; use the script, and keep the version and its digest pinned side by side in the workflow `env:` block.
 
 The script exists because both halves of that fetch are easy to get subtly wrong:
 
-- **Retry.** `curl --retry` covers 408/429/5xx and connection failures **only**, so a GitHub releases-CDN **403** — the denial the CDN actually serves under load — fails the download instantly, in well under a second, with `curl: (22)`.
-  That reddened a whole PR run via `security-scan-gate` (Q433, PR #828). `--retry-all-errors` widens the retry to any error, including that 403; the script always passes it (`DOWNLOAD_RETRIES`/`DOWNLOAD_RETRY_DELAY`, default 5×2s).
+- **Retry.** Two ways to get this wrong, both measured here. `curl --retry` covers 408/429/5xx and connection failures **only**, so a GitHub releases-CDN **403** (the denial the CDN actually serves under load) fails the download instantly, in well under a second, with `curl: (22)`.
+  That reddened a whole PR run via `security-scan-gate` (Q433, PR #828).
+  And `curl --retry-delay` pins the wait flat, so six attempts spent the entire budget in 10.3s against a syft release 503 that was still going (Q829, #1440).
+  So the schedule lives in the script rather than in `curl`: it retries **any** nonzero `curl` exit, which is wider than `--retry-all-errors`, on the same exponential jittered backoff as [`pull-image-with-retry.sh`](#registry-pulls-always-via-pull-image-with-retrysh) below (`DOWNLOAD_RETRIES`/`DOWNLOAD_RETRY_DELAY`/`DOWNLOAD_RETRY_MAX_DELAY`, default 5 retries, a 5s base doubling to a 60s cap, plus up to 50% jitter, so 135–202s).
+  The jitter earns its place for the same reason it does there: the syft and kind installs run from concurrent matrix shards, so one brown-out denies them all in the same second.
 - **Integrity.** GitHub release assets are mutable for an existing tag, so the bytes must be checked against a pinned digest (Q126/Q127).
   The digest is a required argument, the download lands in a temp file, and the output path is written only after the digest matches — there is no flag or environment variable that skips the check.
-  [`scripts/fetch/download-verified-test.sh`](../../scripts/fetch/download-verified-test.sh) (under `make scripts-test`) asserts that: a mismatch fails and leaves nothing at the output path, a malformed digest is rejected outright, and the `curl` line still carries `--retry-all-errors`.
+  [`scripts/fetch/download-verified-test.sh`](../../scripts/fetch/download-verified-test.sh) (under `make scripts-test`) asserts that: a mismatch fails and leaves nothing at the output path, a malformed digest is rejected outright, and a mismatch is **not** retried, since bytes that miss the pin will not become the pinned ones.
+  It asserts the retry half off a stubbed `curl` and `sleep`, so none of it waits: a `curl: (22)` is retried rather than fatal, a download that recovers on a later attempt is still digest-verified, and the schedule doubles, jitters and caps.
 
 ### Registry pulls: always via `pull-image-with-retry.sh`
 
