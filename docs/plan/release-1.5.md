@@ -2,7 +2,8 @@
 
 > **Status: scope opening 2026-08-06.** [Release 1.4](release-1.4.md) is already scoped and its gating rows are fixed; 1.5 is where work identified after that line lands.
 > Four gating Queue rows so far, labelled `1.5-gate`: Q712, Q713, and Q726, admitted 2026-08-09 from the candidate list below, plus Q715, admitted the same day off an external date.
-> All four shipped 2026-08-11.
+> All four shipped 2026-08-11, and the marketing reconciliation closed 2026-08-12 (Q801, Q821).
+> A fifth row, Q776, was admitted 2026-08-13 to back the parity claim the other four earned: see [the parity axis](#the-parity-axis-what-closed-and-what-backs-it).
 
 ## Why these gate a release rather than riding along
 
@@ -84,6 +85,52 @@ The fix adds the second number instead of changing the first: both reconcilers r
 
 What the image reference cannot answer, the worker now does: the upstream runner image carries no `RUNNER_VERSION` env var and no version label — its `org.opencontainers.image.version` is the Ubuntu base's `24.04` — but `bin/Runner.Listener.deps.json` names the real version, so the injected wrapper reads it and logs it once per pod.
 Reporting that reading back to the AGC, rather than only to `kubectl logs`, is deferred: it needs a channel out of the worker and a status field, and it reports nothing until a set's first job finishes.
+
+## The parity axis: what closed, and what backs it
+
+The four gating rows above were each argued on their own terms, but they land on one axis.
+Every one is a capability the classic tier had and the ScaleSet tier did not, or a shape `v1alpha1` allowed and `v2beta1` refused.
+Recorded here because the release notes need the through-line, and because a future audit should not re-derive it.
+
+**Two axes, measured 2026-08-13.**
+
+Classic to ScaleSet acquisition tier: **closed, in this release.** [features.md](../features.md) marks any capability that does not reach the ScaleSet tier with a `partly classic-only` badge, and no capability carries one.
+The last two came off with Q713, on Alerting and SLOs and on Grafana dashboards.
+[v2-ga.md § Capability parity](v2-ga.md#capability-parity-is-a-precondition-of-the-removal), which exists because removing classic at `v2.0.0` must not delete a capability along with it, reads Both tiers on all five rows.
+
+`v1alpha1` to `v2beta1` API: **closed, but mostly before the 1.4 tag.** All eight gaps in the [gap analysis](v2-api-gap-analysis.md) are closed and it declared its own scope closed 2026-08-09; the last v2 API milestone, Q166 cross-namespace sharing, is an ancestor of `v1.4.0`.
+1.5 contributed the one surviving capability drop, Q726: `v1alpha1` set `MinItems=1` with no ceiling while `v2beta1` CEL-enforced `size(self) == 1`, and that field's godoc offered staying on a `v2alpha1` Classic set as the migration path, which `v2.0.0` removes.
+
+### What parity does not yet have: a backstop
+
+Both results rest on a one-time manual walk, and on the tier axis that walk has already gone stale three times.
+Q683, Q691 and Q713 each arrived classic-only from birth *after* the 2026-07-26 tier-seam walk declared parity, and nothing re-walks it.
+
+The tier badge gate is one-directional by construction.
+It fails a badge whose Queue row already shipped, a badge with no `<!-- tier:QN -->` annotation, and a badge linking no `operations/` page, so a badge cannot outlive its gap.
+It cannot see the case that actually recurs: a capability that is classic-only and was never badged at all.
+
+**[Q776](../STATUS.md#Q776) is admitted as a `1.5-gate` row on 2026-08-13** for that reason, and it is the whole of the remaining parity work.
+It reconciles the `actions_gateway_*` names across both sides against the absent-by-design list in [v2-ga.md](v2-ga.md#capability-parity-is-a-precondition-of-the-removal), which both re-establishes the measurement as current and leaves behind the gate that keeps it so.
+Landing it is what lets the release notes say parity rather than name four ports.
+
+The v1 to v2 axis gets no equivalent row, and that is a decision rather than an omission. `cmd/agc/api/v1alpha1/conditions_parity_test.go` already pins the listener vocabulary across all three packages by value (Q309), and new drift can only come from someone adding to `v1alpha1`, which is frozen and comes out in the `v2.0.0` bundle ([Q264](../STATUS.md#Q264)).
+
+### Differences that survive parity, and should
+
+Not gaps, and not for the next audit to re-litigate:
+
+- GitHub's session rejection for a too-old runner version stays classic-only, because the scale-set protocol carries no runner version at session creation.
+  Q715 gives the ScaleSet tier a reconcile-time warning instead, so both tiers carry a signal and only classic has the forge-side rejection.
+- Neither preemption nor drain recovery is restart-safe on the scale-set tier, which is inherent to the signal rather than to the implementation.
+- The capacity ceiling uses a different pre-check and a different fallback on the scale-set tier (Q576), because a ScaleSet states its capacity as one integer per poll rather than as a decision per job.
+- Several counters are absent from the scale-set tier by construction, being artifacts of the many-acquirers and JIT-agent models `ScaleSet` removes.
+  [v2-ga.md](v2-ga.md#capability-parity-is-a-precondition-of-the-removal) holds the list, and Q776 reconciles against it.
+
+### What the notes should not claim yet
+
+Until Q776 lands, the notes name the four ports rather than asserting parity.
+A published parity claim resting on a walk with a three-times-stale record is the same failure Q801 spent this release fixing, one surface over.
 
 ## Candidates not yet accepted
 
