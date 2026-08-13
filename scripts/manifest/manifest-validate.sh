@@ -61,7 +61,21 @@ kubeconform_flags="-strict -summary -kubernetes-version $MANIFEST_K8S_VERSION -i
 # half is covered where a real apiserver is available instead
 # (TestTemplateLibrary_Admitted in the AGC integration suite), and the
 # shipped-vs-exercised half by `make template-library-check`.
-yamllint_paths="charts/actions-gateway charts/actions-gateway-crds-v2 cmd/agc/config cmd/gmc/config deploy/kata-ci deploy/templates"
+# deploy/monitoring/prometheusrule.yaml is the shipped reference PrometheusRule
+# (Q827), same class as deploy/templates above: deploy/monitoring/README.md tells
+# an operator to kubectl apply it, so malformed YAML reaches them. kubeconform
+# cannot add to that either — PrometheusRule is a Prometheus Operator kind, which
+# -ignore-missing-schemas skips. The rules' PromQL is still unvalidated; that
+# needs a promql parser and is the open half of Q827.
+# preview/ is deliberately excluded: it is a throwaway kind-cluster harness for
+# screenshotting the dashboards, "not part of the chart or any install path" per
+# its own README, and its fixtures use flow mappings this config rejects.
+yamllint_paths="charts/actions-gateway charts/actions-gateway-crds-v2 cmd/agc/config cmd/gmc/config deploy/kata-ci deploy/templates deploy/monitoring/prometheusrule.yaml"
+
+# The shipped Grafana dashboards. Nothing parsed them before Q827, so a stray
+# comma survived to whoever imported the file. jq is required-tier already.
+dashboards="$REPO_ROOT/deploy/monitoring/grafana-dashboard-tenant.json
+$REPO_ROOT/deploy/monitoring/grafana-dashboard-platform.json"
 
 # The plain-YAML files retained under cmd/*/config/: the controller-gen outputs
 # (CRDs, manager RBAC role, webhook config) that are the codegen substrate and
@@ -94,6 +108,11 @@ deploy/kata-ci/runner-pod.yaml"
 echo "==> yamllint (static manifests + chart metadata)"
 # shellcheck disable=SC2086  # path and flag lists word-split intentionally
 yamllint --strict -c "$REPO_ROOT/.yamllint.yaml" $yamllint_paths
+
+echo "==> jq: shipped Grafana dashboards parse as JSON (Q827)"
+while IFS= read -r dashboard; do
+	jq empty "$dashboard"
+done <<<"$dashboards"
 
 echo "==> kubeconform: controller-gen manifests (codegen substrate; k8s $MANIFEST_K8S_VERSION)"
 # shellcheck disable=SC2086
