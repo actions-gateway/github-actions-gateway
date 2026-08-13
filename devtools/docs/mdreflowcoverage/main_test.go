@@ -28,6 +28,34 @@ func TestEndsSentence(t *testing.T) {
 	}
 }
 
+// A break the format requires is not a break the author failed to place. Each
+// of these was a false residue line on the real tree before the rule existed.
+func TestAuthoredBreak(t *testing.T) {
+	cases := []struct {
+		name string
+		line string
+		want bool
+	}{
+		{"br tag", "**Package:** `cmd/agc/internal/token`<br>", true},
+		{"self-closing br", "Label<br/>", true},
+		{"spaced self-closing br", "Label<br />", true},
+		{"uppercase br", "Label<BR>", true},
+		{"two trailing spaces", "A hard break here  ", true},
+		{"trailing backslash", `A hard break here\`, true},
+		{"github alert note", "[!NOTE]", true},
+		{"github alert important", "[!IMPORTANT]", true},
+		{"ordinary mid-sentence line", "A line that runs on", false},
+		{"link reference definition", "[label]: /target", false},
+		{"single trailing space", "Not a hard break ", false},
+		{"br in the middle", "Text <br> more text", false},
+	}
+	for _, c := range cases {
+		if got := authoredBreak(c.line); got != c.want {
+			t.Errorf("%s: authoredBreak(%q) = %v, want %v", c.name, c.line, got, c.want)
+		}
+	}
+}
+
 // The denominator is the claim worth pinning: a line classifier over-counts by
 // reading headings, tables, fences and list markers as prose. Each fixture
 // states the interior-break count a parser must reach.

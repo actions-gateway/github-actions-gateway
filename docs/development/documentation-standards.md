@@ -332,9 +332,17 @@ The check is in `make check` and costs about a second for the whole tree. `.mdre
 
 ### What stays hard-wrapped, and why it stays that way
 
-Measured 2026-08-13 on mdreflow v0.1.7: the formatter declines 38 paragraphs across 8 files, spanning 90 source lines, of which 20 are interior lines that do not end at a sentence boundary.
+Measured 2026-08-13 on mdreflow v0.1.7: 99.70% of interior line breaks in the docset's prose sit at a sentence boundary, 13,746 of 13,787, leaving 41.
+The formatter declines 38 paragraphs across 8 files, spanning 90 source lines.
 "In-scope" excludes the generated docs and `docs/STATUS.md`, which `.mdreflow.yaml` skips.
-Re-derive that rather than quoting it: `make md-reflow-explain` prints every declined paragraph with a stable reason code, so the count is one command instead of a hand-classified diff, and the classification below is reproducible without re-diagnosing anything.
+Re-derive both rather than quoting them: `make md-reflow-coverage` recomputes the percentage and `ARGS=-v` lists all 41, while `make md-reflow-explain` names each declined paragraph with a stable reason code.
+Neither number is this page's to hold, and the classification below is reproducible without re-diagnosing anything.
+
+That figure reads lower than the 99.81% this section carried before, and the tree did not get worse: the measurement got wider.
+The 41 split two ways, and the split is the finding.
+Twenty sit in paragraphs mdreflow declines and reports, which `--explain` accounts for exactly.
+The other 21 sit in two MkDocs admonition bodies mdreflow never sees at all: an admonition body reflows while it holds a single block and silently leaves scope once it holds two, reported neither as a change nor as a decline.
+A hand-derived count could not see the second group, because nothing named it.
 
 What remains is a small set of guards, each a correctness property rather than a defect, and `--explain` names which one fired.
 The one an author must not fight is the link guard: moving a break inside a link construct is where render changes come from, so mdreflow passes over any paragraph where a link's text or destination is left open at a line end:

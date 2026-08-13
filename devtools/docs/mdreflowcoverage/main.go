@@ -22,10 +22,23 @@
 // (" ' ) ] ` * _). The colon is deliberate: this docset ends lead-ins with one
 // before a code block, and mdreflow treats those as sentence ends too.
 //
-// Residue is interior breaks that do not sit at a boundary. Those come from
-// paragraphs mdreflow declines to touch (`make md-reflow-explain` names each
-// one and why). A residue line in a paragraph mdreflow would reflow means the
-// tree is simply unformatted: run `make md-reflow`.
+// A break the author placed on purpose is not residue. CommonMark hard breaks
+// (two trailing spaces, a trailing backslash), a trailing <br>, and a GitHub
+// alert marker on its own line all render as a break, so mdreflow keeps them.
+// Counting them blames an author for a break the format requires: on a
+// 2026-08-12 tree they were 17 of 59 apparent residue lines, and every one was
+// correct as written.
+//
+// Residue is what remains: interior breaks that sit mid-sentence. Those come
+// from paragraphs mdreflow declines to touch (`make md-reflow-explain` names
+// each one and why). A residue line in a paragraph mdreflow would reflow means
+// the tree is simply unformatted: run `make md-reflow`.
+//
+// The two counts should reconcile, and where they do not the gap is a finding
+// rather than a rounding error. On that same tree, 20 residue lines matched
+// --explain exactly and 22 sat in MkDocs admonition bodies mdreflow never
+// reports: an admonition reflows while it holds one block and silently leaves
+// scope once it holds two.
 //
 // Usage:
 //
@@ -40,6 +53,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"regexp"
 	"sort"
 	"strings"
 
@@ -59,6 +73,30 @@ type residueLine struct {
 	Path string
 	Line int
 	Text string
+}
+
+// alertMarker matches a GitHub alert opener, which occupies its own line
+// inside a blockquote paragraph and is never prose.
+var alertMarker = regexp.MustCompile(`^\[![A-Za-z]+\]$`)
+
+// authoredBreak reports whether a break was placed on purpose rather than left
+// mid-sentence. CommonMark hard breaks (two trailing spaces, a trailing
+// backslash) and a trailing <br> all render as a line break, so mdreflow keeps
+// them; counting them as residue would blame an author for a break the format
+// requires.
+func authoredBreak(line string) bool {
+	s := strings.TrimRight(line, "\r\n")
+	if strings.HasSuffix(s, "  ") || strings.HasSuffix(s, `\`) {
+		return true
+	}
+	s = strings.TrimRight(s, " \t")
+	if alertMarker.MatchString(s) {
+		return true
+	}
+	lower := strings.ToLower(s)
+	return strings.HasSuffix(lower, "<br>") ||
+		strings.HasSuffix(lower, "<br/>") ||
+		strings.HasSuffix(lower, "<br />")
 }
 
 // endsSentence reports whether a source line ends at a sentence boundary.
@@ -101,7 +139,7 @@ func measure(path string, src []byte) (breaks int, residue []residueLine) {
 			breaks++
 			seg := lines.At(i)
 			text := string(seg.Value(src))
-			if endsSentence(text) {
+			if endsSentence(text) || authoredBreak(text) {
 				continue
 			}
 			residue = append(residue, residueLine{
