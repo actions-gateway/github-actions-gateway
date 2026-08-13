@@ -3636,18 +3636,50 @@ protocol
 
 ```
 admission webhook "vrunnerset-v2alpha1.kb.io" denied the request: ScaleSet
-runnerLabels[0] "linux" is already used by RunnerSet "other-set" under gateway "gw" in
-namespace "tenant"; a ScaleSet set's FIRST runnerLabel is its scale-set name at GitHub,
-so two sets sharing it would collide. Pick a distinct first label (later labels may
-overlap freely)
+runnerLabels[0] "linux" is already used by RunnerSet "other-set" registered against
+GitHub scope "github.com/acme"; a ScaleSet set's FIRST runnerLabel is its scale-set
+name at GitHub, so two sets sharing it would drive one scale set. Pick a distinct
+first label (later labels may overlap freely)
+```
+
+```
+admission webhook "vrunnerset-v2alpha1.kb.io" denied the request: ScaleSet
+runnerLabels[0] "linux" is already claimed by another RunnerSet registered against
+GitHub scope "github.com/acme"; a ScaleSet set's FIRST runnerLabel is its scale-set
+name at GitHub, so two sets sharing it would drive one scale set, each acquiring the
+other's jobs. Pick a distinct first label (ask your platform administrator which
+scale-set names that GitHub scope already holds)
 ```
 
 **Likely cause & resolution.**
 
-- **Duplicate first label under one gateway (GMC webhook).** A `ScaleSet` set's **first** `runnerLabel` is the name of its scale-set object at GitHub, so two sets under one gateway may not share it: they would drive one scale set from two controllers.
+- **Duplicate first label in one GitHub scope (GMC webhook).** A `ScaleSet` set's **first** `runnerLabel` is the name of its scale-set object at GitHub, so two sets may not share it: they would drive one scale set from two controllers.
   Give each set a distinct *first* label.
   Labels after the first are ordinary match targets and **may** be shared: `[gpu, linux]` and `[arm64, linux]` coexist happily, and a job asking for `runs-on: linux` alone reaches whichever GitHub picks.
-  (Two `Classic` sets, or the same label under a *different* gateway or namespace, are unaffected — they register no colliding scale set.)
+  (Two `Classic` sets are unaffected: they register no scale set at all.)
+
+  **The uniqueness boundary is the GitHub org, enterprise, or repo that the set's gateway `githubURL` names, not the namespace.** A scale set is adopted by name against the Actions service that URL reaches, so two `RunnerSet`s in *different namespaces* whose gateways point at the *same* org still collide, and each tenant's AGC would acquire the other's jobs.
+  That is why the second message names a GitHub scope but not the holding set: the conflicting `RunnerSet` may belong to another tenant, so it is withheld from the rejection and written to the GMC controller log instead.
+  A platform admin can find it there, or with:
+
+  ```bash
+  kubectl get runnersets -A -o jsonpath='{range .items[?(@.spec.acquisitionProtocol=="ScaleSet")]}{.metadata.namespace}{"\t"}{.metadata.name}{"\t"}{.spec.runnerLabels[0]}{"\n"}{end}'
+  ```
+
+  The same label under a gateway bound to a **different** org, enterprise, or repo is free, because that is a different scale-set namespace at GitHub.
+  Org names are matched case-insensitively (`github.com/Acme` and `github.com/acme` are one scope), matching how GitHub resolves them.
+
+- **The rejection can land on the `ActionsGateway` instead.** If a `RunnerSet` is applied *before* its gateway exists, admission has no `githubURL` to resolve and the set is admitted (references resolve at runtime).
+  The conflict is then caught when the gateway arrives:
+
+  ```
+  admission webhook "vactionsgateway-v2alpha1.kb.io" denied the request:
+  spec.githubURL binds GitHub scope "github.com/acme", where RunnerSet "linux-set" in
+  this namespace would claim scale-set name "linux" — a name already claimed by another
+  RunnerSet registered against that scope
+  ```
+
+  Rename the named set's first `runnerLabel`, or bind the gateway to a different GitHub org, enterprise, or repo.
 - **Immutable (CRD CEL).** Switching a live set between `Classic` and `ScaleSet` is a full re-registration storm, so the field is frozen after creation.
   To change it, create a **new** `RunnerSet` (with a distinct name and first label) and delete the old one.
 - **More than one label is no longer rejected.** Until Q726 a `ScaleSet` set had to declare exactly one `runnerLabel` and a multi-label set had to set `acquisitionProtocol: Classic`; both CEL rules are gone.

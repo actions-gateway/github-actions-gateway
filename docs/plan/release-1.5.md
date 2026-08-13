@@ -36,7 +36,8 @@ An **undeclared** group still leaves an existing scale set where it is, so widen
 GAG does not create runner groups and does not manage their repository access, so there is nothing for it to assert *against*: a tenant naming a group only volunteers its own runners to that group's repositories, which costs the tenant and escalates nothing across tenants.
 What the platform admin still owns at GitHub is documented in [tenant onboarding](../operations/tenant-onboarding.md#bind-a-runner-set-to-a-github-runner-group) and [appendix H](../design/appendix-h-v2-api-decomposition.md).
 
-Adjacent hole found while measuring, filed rather than fixed: the `RunnerSet` webhook's scale-set label-uniqueness guard is **namespace-scoped**, so two tenants under one GitHub org can claim one scale-set name across namespaces ([Q791](../STATUS.md#Q791)).
+Adjacent hole found while measuring, filed rather than fixed at the time, and since closed (Q791): the `RunnerSet` webhook's scale-set label-uniqueness guard was **namespace-scoped**, so two tenants under one GitHub org could claim one scale-set name across namespaces.
+It is now keyed on the gateway's GitHub binding and enforced cluster-wide from both admission paths ([appendix H](../design/appendix-h-v2-api-decomposition.md), [security](../design/05-security.md#cross-tenant-job-acquisition-via-a-shared-scale-set-name)).
 
 ### Q713 — the shipped tier emits no duration or latency series ✅ landed 2026-08-11
 

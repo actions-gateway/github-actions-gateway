@@ -147,17 +147,137 @@ func TestRunnerSetWebhook_AllowsDistinctScaleSetLabels(t *testing.T) {
 }
 
 func TestRunnerSetWebhook_SameLabelDifferentGatewayIsAllowed(t *testing.T) {
-	// Two gateways register their scale sets against different GitHub bindings, so
-	// the same label under different gateways cannot collide.
-	v := runnerSetValidatorWith(t, scaleSetRS("existing", "tenant", "gw-a", "linux"))
+	// Two gateways bound to DIFFERENT GitHub orgs register into different scale-set
+	// namespaces, so the same label under each cannot collide. The distinct githubURLs
+	// are what makes this safe — same-org gateways are rejected (Q791, below).
+	v := &RunnerSetCustomValidator{reader: fakeReader(t,
+		v2Gateway("tenant", "gw-a", "https://github.com/org-a", ""),
+		v2Gateway("tenant", "gw-b", "https://github.com/org-b", ""),
+		scaleSetRS("existing", "tenant", "gw-a", "linux"))}
 	_, err := v.ValidateCreate(context.Background(), scaleSetRS("newset", "tenant", "gw-b", "linux"))
 	require.NoError(t, err)
 }
 
 func TestRunnerSetWebhook_SameLabelDifferentNamespaceIsAllowed(t *testing.T) {
-	v := runnerSetValidatorWith(t, scaleSetRS("existing", "tenant-a", "gw", "linux"))
+	// Different namespaces AND different GitHub orgs. The namespace alone does not
+	// make this safe; the distinct orgs do (Q791).
+	v := &RunnerSetCustomValidator{reader: fakeReader(t,
+		v2Gateway("tenant-a", "gw", "https://github.com/org-a", ""),
+		v2Gateway("tenant-b", "gw", "https://github.com/org-b", ""),
+		scaleSetRS("existing", "tenant-a", "gw", "linux"))}
 	_, err := v.ValidateCreate(context.Background(), scaleSetRS("newset", "tenant-b", "gw", "linux"))
 	require.NoError(t, err)
+}
+
+// TestRunnerSetWebhook_ScaleSetLabelScope covers Q791: a scale set is adopted BY NAME
+// against the Actions service the gateway's githubURL reaches, so the uniqueness
+// boundary is that GitHub scope and not the namespace. Two tenants under one org
+// claiming one first runnerLabel would drive a single scale set, each AGC acquiring
+// the other's jobs.
+func TestRunnerSetWebhook_ScaleSetLabelScope(t *testing.T) {
+	ctx := context.Background()
+
+	t.Run("one org across two namespaces is rejected", func(t *testing.T) {
+		v := &RunnerSetCustomValidator{reader: fakeReader(t,
+			v2Gateway("tenant-a", "gw-a", "https://github.com/acme", ""),
+			v2Gateway("tenant-b", "gw-b", "https://github.com/acme", ""),
+			scaleSetRS("existing", "tenant-a", "gw-a", "linux"))}
+		_, err := v.ValidateCreate(ctx, scaleSetRS("newset", "tenant-b", "gw-b", "linux"))
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "linux")
+		assert.Contains(t, err.Error(), "github.com/acme")
+	})
+
+	t.Run("cross-namespace rejection does not name the holder", func(t *testing.T) {
+		// The RunnerSet is tenant-authored, so the message must not disclose another
+		// tenant's namespace or object; logRejection keeps the detail for the admin.
+		v := &RunnerSetCustomValidator{reader: fakeReader(t,
+			v2Gateway("tenant-a", "gw-a", "https://github.com/acme", ""),
+			v2Gateway("tenant-b", "gw-b", "https://github.com/acme", ""),
+			scaleSetRS("secret-set", "tenant-a", "gw-a", "linux"))}
+		_, err := v.ValidateCreate(ctx, scaleSetRS("newset", "tenant-b", "gw-b", "linux"))
+		require.Error(t, err)
+		assert.NotContains(t, err.Error(), "secret-set")
+		assert.NotContains(t, err.Error(), "tenant-a")
+	})
+
+	t.Run("same-namespace rejection still names the holder", func(t *testing.T) {
+		// The tenant owns both objects, so naming the sibling leaks nothing and is
+		// what makes the rejection actionable.
+		v := &RunnerSetCustomValidator{reader: fakeReader(t,
+			v2Gateway("tenant", "gw-a", "https://github.com/acme", ""),
+			v2Gateway("tenant", "gw-b", "https://github.com/acme", ""),
+			scaleSetRS("sibling", "tenant", "gw-a", "linux"))}
+		_, err := v.ValidateCreate(ctx, scaleSetRS("newset", "tenant", "gw-b", "linux"))
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "sibling")
+	})
+
+	t.Run("org casing and trailing slash are one scope", func(t *testing.T) {
+		// GitHub owner names are case-insensitive, so these reach one Actions service.
+		v := &RunnerSetCustomValidator{reader: fakeReader(t,
+			v2Gateway("tenant-a", "gw-a", "https://github.com/Acme", ""),
+			v2Gateway("tenant-b", "gw-b", "https://GitHub.com/acme/", ""),
+			scaleSetRS("existing", "tenant-a", "gw-a", "linux"))}
+		_, err := v.ValidateCreate(ctx, scaleSetRS("newset", "tenant-b", "gw-b", "linux"))
+		require.Error(t, err)
+	})
+
+	t.Run("a repo scope is distinct from its org scope", func(t *testing.T) {
+		// An org-level and a repo-level registration are separate config URLs, so
+		// their scale-set names do not share a namespace.
+		v := &RunnerSetCustomValidator{reader: fakeReader(t,
+			v2Gateway("tenant-a", "gw-a", "https://github.com/acme", ""),
+			v2Gateway("tenant-b", "gw-b", "https://github.com/acme/repo", ""),
+			scaleSetRS("existing", "tenant-a", "gw-a", "linux"))}
+		_, err := v.ValidateCreate(ctx, scaleSetRS("newset", "tenant-b", "gw-b", "linux"))
+		require.NoError(t, err)
+	})
+
+	t.Run("distinct labels in one scope admit", func(t *testing.T) {
+		v := &RunnerSetCustomValidator{reader: fakeReader(t,
+			v2Gateway("tenant-a", "gw-a", "https://github.com/acme", ""),
+			v2Gateway("tenant-b", "gw-b", "https://github.com/acme", ""),
+			scaleSetRS("existing", "tenant-a", "gw-a", "linux"))}
+		_, err := v.ValidateCreate(ctx, scaleSetRS("newset", "tenant-b", "gw-b", "windows"))
+		require.NoError(t, err)
+	})
+
+	t.Run("a classic set in the same scope claims no name", func(t *testing.T) {
+		v := &RunnerSetCustomValidator{reader: fakeReader(t,
+			v2Gateway("tenant-a", "gw-a", "https://github.com/acme", ""),
+			v2Gateway("tenant-b", "gw-b", "https://github.com/acme", ""),
+			classicRS("existing", "tenant-a", "gw-a", "linux"))}
+		_, err := v.ValidateCreate(ctx, scaleSetRS("newset", "tenant-b", "gw-b", "linux"))
+		require.NoError(t, err)
+	})
+
+	t.Run("update onto a cross-namespace collision is rejected", func(t *testing.T) {
+		self := scaleSetRS("self", "tenant-b", "gw-b", "windows")
+		v := &RunnerSetCustomValidator{reader: fakeReader(t,
+			v2Gateway("tenant-a", "gw-a", "https://github.com/acme", ""),
+			v2Gateway("tenant-b", "gw-b", "https://github.com/acme", ""),
+			scaleSetRS("existing", "tenant-a", "gw-a", "linux"), self)}
+		_, err := v.ValidateUpdate(ctx, self, scaleSetRS("self", "tenant-b", "gw-b", "linux"))
+		require.Error(t, err)
+	})
+
+	t.Run("a set whose gateway is not applied admits", func(t *testing.T) {
+		// §H.7: with no resolvable scope there is no pair to conflict. The arriving
+		// gateway is what closes this gap (TestV2ActionsGatewayWebhook_ScaleSetLabelScope).
+		v := &RunnerSetCustomValidator{reader: fakeReader(t,
+			v2Gateway("tenant-a", "gw-a", "https://github.com/acme", ""),
+			scaleSetRS("existing", "tenant-a", "gw-a", "linux"))}
+		_, err := v.ValidateCreate(ctx, scaleSetRS("newset", "tenant-b", "gw-b", "linux"))
+		require.NoError(t, err)
+	})
+
+	t.Run("read error fails closed", func(t *testing.T) {
+		v := &RunnerSetCustomValidator{reader: failingReader{}}
+		_, err := v.ValidateCreate(ctx, scaleSetRS("newset", "tenant", "gw", "linux"))
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "cannot verify ScaleSet runnerLabel uniqueness")
+	})
 }
 
 func TestRunnerSetWebhook_DuplicateAgainstClassicSiblingIsAllowed(t *testing.T) {

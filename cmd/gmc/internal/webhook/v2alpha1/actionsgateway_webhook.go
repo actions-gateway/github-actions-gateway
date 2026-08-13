@@ -20,9 +20,12 @@ import (
 // control-plane pod runs at — against the infra-only PriorityClass allowlist (Q284),
 // rejects a gitHubURL whose host falls in a bound EgressProxy's noProxyCIDRs
 // (Q322 — the gateway is the object that binds the GitHub host, so a gateway write
-// can assemble the GitHub-bypass pair from its side), rejects a structurally
-// malformed gitHubURL, and rejects creation in a reserved namespace (both Q323 —
-// the same guards the v1 webhook enforces, via the shared validation package).
+// can assemble the GitHub-bypass pair from its side), rejects a gitHubURL whose
+// GitHub scope would put two ScaleSet RunnerSets on one scale-set name (Q791 — the
+// same both-sides shape, since the gateway binds the scope the label is unique in),
+// rejects a structurally malformed gitHubURL, and rejects creation in a reserved
+// namespace (both Q323 — the same guards the v1 webhook enforces, via the shared
+// validation package).
 //
 // +kubebuilder:object:generate=false
 type ActionsGatewayCustomValidator struct {
@@ -34,10 +37,11 @@ type ActionsGatewayCustomValidator struct {
 
 	// reader resolves the EgressProxies this gateway's gitHubURL host is bound to —
 	// via its own defaultProxyRef and via the proxyRef of every RunnerSet under it —
-	// for the noProxyCIDRs GitHub-bypass guard (Q322, noproxy_referrers.go). It is
-	// the manager's uncached API reader in production (wired by
-	// SetupActionsGatewayWebhookWithManager). A nil reader disables the check
-	// (direct-construction unit tests not exercising it).
+	// for the noProxyCIDRs GitHub-bypass guard (Q322, noproxy_referrers.go), and the
+	// cluster's ScaleSet claims for the label-uniqueness guard (Q791,
+	// scaleset_scope.go). It is the manager's uncached API reader in production (wired
+	// by SetupActionsGatewayWebhookWithManager). A nil reader disables both checks
+	// (direct-construction unit tests not exercising them).
 	reader client.Reader
 
 	// reservedNamespaces is the set of namespaces where a v2 ActionsGateway may
@@ -95,10 +99,58 @@ func (v *ActionsGatewayCustomValidator) validateGitHubHostVsProxies(ctx context.
 	return nil
 }
 
+// validateScaleSetLabelsVsScope rejects a gateway write whose GitHub scope would put
+// two ScaleSet RunnerSets on one scale-set name (Q791). The gateway is the object that
+// binds the scope — the label lives on the RunnerSet — so this closes the create-order
+// gap the way the Q322 guard's RunnerSet half does: a RunnerSet applied before its
+// gateway has no resolvable scope and admits unchecked (§H.7), leaving the arriving
+// gateway the first object that can see the conflict. Only this gateway's own
+// referrers are judged; a collision between two sets elsewhere is not this write's to
+// reject. gitHubURL is immutable (CRD CEL), so only create can introduce one — update
+// re-checks as version-agnostic defense, matching validateGitHubHostVsProxies. List
+// errors fail closed.
+func (v *ActionsGatewayCustomValidator) validateScaleSetLabelsVsScope(ctx context.Context, gw *agcv2alpha1.ActionsGateway) error {
+	if v.reader == nil {
+		return nil
+	}
+	scope := gitHubScope(gw.Spec.GitHubURL)
+	if scope == "" {
+		return nil
+	}
+	inv, err := scaleSetInventoryOf(ctx, v.reader, &pendingGateway{
+		key:   client.ObjectKey{Namespace: gw.Namespace, Name: gw.Name},
+		scope: scope,
+	})
+	if err != nil {
+		return fmt.Errorf("cannot verify ScaleSet runnerLabel uniqueness for GitHub scope %q: %w", scope, err)
+	}
+	for i, mine := range inv.claims {
+		if mine.namespace != gw.Namespace || mine.gatewayRef != gw.Name {
+			continue
+		}
+		for j, other := range inv.claims {
+			if i == j || !mine.collidesWith(other) {
+				continue
+			}
+			// The holder is named only when it sits in this gateway's own namespace;
+			// see scaleSetConflictError for why a cross-tenant one is not.
+			return fmt.Errorf(
+				"spec.githubURL binds GitHub scope %q, where RunnerSet %q in this namespace would claim "+
+					"scale-set name %q — a name already claimed by another RunnerSet registered against that "+
+					"scope; a ScaleSet set's FIRST runnerLabel is its scale-set name at GitHub, so the two "+
+					"would drive one scale set, each acquiring the other's jobs. Give RunnerSet %q a distinct "+
+					"first runnerLabel, or bind this gateway to a different GitHub org/enterprise/repo",
+				scope, mine.name, mine.label, mine.name)
+		}
+	}
+	return nil
+}
+
 // ValidateCreate rejects a v2 ActionsGateway created in a reserved namespace, with a
 // structurally malformed gitHubURL, whose spec.scheduling.priorityClassName is
-// not on the infra allowlist, or whose gitHubURL host a bound EgressProxy's
-// noProxyCIDRs would route around the proxy.
+// not on the infra allowlist, whose gitHubURL host a bound EgressProxy's
+// noProxyCIDRs would route around the proxy, or whose GitHub scope would put two
+// ScaleSet RunnerSets on one scale-set name.
 func (v *ActionsGatewayCustomValidator) ValidateCreate(ctx context.Context, obj *agcv2alpha1.ActionsGateway) (admission.Warnings, error) {
 	if v.reservedNamespaces[obj.Namespace] {
 		return nil, logRejection(ctx, "ActionsGateway", "create", obj.Namespace, obj.Name,
@@ -111,6 +163,9 @@ func (v *ActionsGatewayCustomValidator) ValidateCreate(ctx context.Context, obj 
 		return nil, logRejection(ctx, "ActionsGateway", "create", obj.Namespace, obj.Name, err)
 	}
 	if err := v.validateGitHubHostVsProxies(ctx, obj); err != nil {
+		return nil, logRejection(ctx, "ActionsGateway", "create", obj.Namespace, obj.Name, err)
+	}
+	if err := v.validateScaleSetLabelsVsScope(ctx, obj); err != nil {
 		return nil, logRejection(ctx, "ActionsGateway", "create", obj.Namespace, obj.Name, err)
 	}
 	return nil, nil
@@ -135,6 +190,9 @@ func (v *ActionsGatewayCustomValidator) ValidateUpdate(ctx context.Context, oldO
 		return nil, logRejection(ctx, "ActionsGateway", "update", newObj.Namespace, newObj.Name, err)
 	}
 	if err := v.validateGitHubHostVsProxies(ctx, newObj); err != nil {
+		return nil, logRejection(ctx, "ActionsGateway", "update", newObj.Namespace, newObj.Name, err)
+	}
+	if err := v.validateScaleSetLabelsVsScope(ctx, newObj); err != nil {
 		return nil, logRejection(ctx, "ActionsGateway", "update", newObj.Namespace, newObj.Name, err)
 	}
 	return nil, nil

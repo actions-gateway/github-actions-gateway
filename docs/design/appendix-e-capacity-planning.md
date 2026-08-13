@@ -153,7 +153,13 @@ team-a-overflow/           ← namespace 2, ActionsGateway CR, GitHub App instal
 ```
 
 Label the RunnerGroups consistently across installations (`gpu-2x`, `gpu-8x`, etc.) and split workflows between them based on priority or throughput class.
-There is no cross-installation load balancing built into this system; job routing is determined solely by which repos are covered by each installation's scope.
+
+> **v2 `ScaleSet` sets shard differently.** The advice above holds for `Classic` acquisition, where a label is only a match target.
+> Under the `ScaleSet` protocol a set's **first** `runnerLabel` is its scale-set *name* at GitHub, and that name is unique per org, enterprise, or repo rather than per namespace.
+> Two shards of one org therefore cannot reuse a first label, however far apart their namespaces are: they would drive one scale set from two controllers, each shard acquiring the other's jobs.
+> Admission rejects it (Q791).
+> Give each shard a distinct first label (`gpu-2x-a`, `gpu-2x-b`) and put the shared class in a later label, which may overlap freely.
+> There is no cross-installation load balancing built into this system; job routing is determined solely by which repos are covered by each installation's scope.
 
 ---
 
