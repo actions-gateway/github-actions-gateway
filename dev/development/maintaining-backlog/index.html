@@ -2618,6 +2618,17 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
+  <a href="#escalating-a-class-observation-is-filing-so-search-first" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Escalating a class observation is filing, so search first
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#what-it-keys-on-and-why" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3052,6 +3063,21 @@ Nothing automated calls the target, so making the title mandatory changed only t
 It is gone, and rule 12 catches the other way to obtain an unreserved ID (reading the file's highest and adding one) at the commit that files the row rather than at the rebase that collides.
 What that cost in practice, and the one case rule 12 still cannot see: <a href="../queue-id-allocation/#reserving-not-reporting">queue-id-allocation.md § Reserving, not reporting</a>.</p>
 <p><code>TARGET=&lt;link&gt;</code> is optional and worth passing when the Item cell's link is already decided.</p>
+<h3 id="escalating-a-class-observation-is-filing-so-search-first">Escalating a class observation is filing, so search first<a class="headerlink" href="#escalating-a-class-observation-is-filing-so-search-first" title="Permanent link">&para;</a></h3>
+<p><code>make queue-id</code> is a chokepoint for <em>filed</em> rows only.
+Raising "these N failures look like one shared cause" in a message to the maintainer, or to a dispatcher, reaches the same reader with the same weight and passes through no matcher at all.
+A message to a human is a filing with the safety rail removed.</p>
+<p>It fired twice on 2026-08-12, in both directions.
+A worker raised the "X-test fails under <code>make check</code>, passes standalone" family as an unfiled class; a dispatcher relayed it, citing Q596's 2418 runs and Q703's 240 as evidence that no class row existed.
+<a href="../../STATUS/#Q738">Q738</a> already said "measured across this family" and already named those two rows, so the maintainer was asked to decide something on the premise that it was unfiled.
+The observation was real and the escalation still cost a wrong premise, which is the same shape as the three duplicate filings above: right finding, no matcher in the path.</p>
+<p>Before escalating, run the search you would run before filing, and say what it returned.
+The cheap version is to pass the title you would have used to <code>make queue-id</code>, which prints its candidates to stderr and claims an ID you can throw away.
+Naming the near-miss rows is what lets the reader tell a genuinely new class from the half that is already tracked.</p>
+<p><strong>A clean <code>make queue-id</code> is not an all-clear, because the matcher is lexical and a duplicate is semantic.</strong> It keys on shared content words and the Item link, <a href="#what-it-keys-on-and-why">calibrated below</a> against three pairs that had both.
+Two rows describing one page's defect in different vocabulary share neither.
+Q835 was filed on 2026-08-12 after <code>make queue-id</code> returned no candidates at all; reading the Queue by hand found Q832, filed the same day, measuring a third cause of the same undercount on the same page.
+The search narrows the set worth reading, and reading is still what recognises the duplicate.</p>
 <h3 id="what-it-keys-on-and-why">What it keys on, and why<a class="headerlink" href="#what-it-keys-on-and-why" title="Permanent link">&para;</a></h3>
 <p>From the three pairs, not from a guess about what similarity means here:</p>
 <table>

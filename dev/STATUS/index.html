@@ -2936,6 +2936,14 @@
 <td>Measured 2026-08-12 on mdreflow v0.1.7: 21 markers, 21 declined paragraphs, one-to-one. <code>roadmapcheck</code> asserts annotations, IDs, placement and word caps, never line breaks, so a hand-wrapped bullet passes every gate. Arrives with #1462.</td>
 </tr>
 <tr>
+<td><a id="Q835"></a>Q835</td>
+<td><a href="../development/documentation-standards/#what-stays-hard-wrapped-and-why-it-stays-that-way"><code>documentation-standards</code> names one mdreflow guard, but emphasis opening a sentence blocks the break too</a></td>
+<td><code>docs</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>Measured 2026-08-12: a break is also declined before a sentence opening with <code>code</code>, <code>**bold**</code> or <code>*italic*</code>, and after one whose period sits inside bold. With <a href="#Q832">Q832</a>'s <code>q:</code> markers that is three causes, not the one the page names.</td>
+</tr>
+<tr>
 <td><a id="Q813"></a>Q813</td>
 <td><a href="../operations/in-runner-image-builds/#approach-5--kata-containers-micro-vm-dind-no-privileged-container">Approach 5's GCP nested-virt family list contradicts the API-measured one</a></td>
 <td><code>docs</code></td>
