@@ -185,7 +185,7 @@ groups:
           severity: warning
         annotations:
           runbook_url: "https://actions-gateway.com/operations/runbook/#actionsgatewayreconcileerrors"
-          summary: "Reconcile errors in {{ $labels.controller }} for {{ $labels.resource }}"
+          summary: "Reconcile errors in {{ $labels.controller }}"
           description: "Reconcile errors at >2/minute for 10+ minutes. Resources may be stale."
 
       # Page: worker pods can't be scheduled — capacity is not materializing (Q157)

@@ -277,6 +277,20 @@ spec:
             summary: "Scale-set provision errors for {{ $labels.runner_set }} in {{ $labels.namespace }}"
             description: "The scale-set acquisition tier is failing to provision worker pods (JIT-config mint or pod create) at >0.1/s for 10m. A transient failure retries on a later poll, but a sustained rate means provisioning is degraded — check the run service's generate-jitconfig responses and namespace quota headroom."
 
+        # Ticket: a job's runner name will not register, so nothing can run it (Q551).
+        # Scoped to reason="name_conflict": reason="ceiling" is a set running at the
+        # concurrency its spec declares, which is not an incident (Q576).
+        - alert: ActionsGatewayScaleSetJobsDeferred
+          expr: |
+            actions_gateway_scaleset_jobs_deferred{reason="name_conflict"} > 0
+          for: 15m
+          labels:
+            severity: warning
+          annotations:
+            runbook_url: "https://actions-gateway.com/operations/runbook/#actionsgatewayscalesetjobsdeferred"
+            summary: "Scale-set job cannot register a runner name for {{ $labels.runner_set }} in {{ $labels.namespace }}"
+            description: "One or more jobs assigned to the scale set cannot register their runner name (generate-jitconfig 409), so no worker is running them; the listener keeps re-offering them. Each is a workflow run queued at GitHub. Read the RunnerSet's JobProvisionStalled condition for the job ids, then free the conflicting runner records."
+
         # Ticket: egress proxy denying CONNECTs to off-allowlist destinations —
         # an SSRF / egress-policy signal, sharper than dial_errors (Q316)
         - alert: ActionsGatewayProxyConnectDenied
