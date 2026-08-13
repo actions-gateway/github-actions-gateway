@@ -139,6 +139,14 @@ em-dash-check: ## Fail when a doc gains em-dashes above its baseline, or a new d
 page-density-check: ## Fail on an admonition wall, or a stat tile saying the same thing on two pages
 	scripts/docs/check-page-density.sh
 
+# The shipped PrometheusRule is an appliable artifact whose PromQL nothing parsed
+# (Q827) and whose docs drifted from it unnoticed (Q818). Both failures are
+# silent: a wrong expression never fires, and a documented-but-unshipped rule
+# sends on-call to a procedure for an alert that cannot exist.
+.PHONY: promql-check
+promql-check: ## Fail on unparseable PromQL, or alert rules that have drifted from their docs
+	scripts/manifest/check-promql.sh
+
 # scripts/README.md coverage gate (Q688). That page is the only map from a
 # script to the gate that runs it, and listing the sixteen *-test.sh files that
 # had drifted off it fixes the day rather than the week — so the gate is the

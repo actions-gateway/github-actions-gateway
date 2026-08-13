@@ -48,7 +48,7 @@ CHECK_FAST_GATES := lint-backlog status-isolation-check roadmap-check \
                     codegen-check api-reference-check scripts-test claude-usage-test \
                     doc-links release-pins-check em-dash-check page-density-check \
                     script-docs-check semver-floor-sources-check template-library-check \
-                    md-reflow-check comparison-stamps-check
+                    md-reflow-check comparison-stamps-check promql-check
 
 CHECK_HEAVY_GATES := build-tags-check lint cover-check
 
@@ -171,6 +171,7 @@ SCRIPTS_TESTS := agent/claude-go-throttle-hook-test agent/local-throttle-test \
                  e2e/e2e-github-cleanup-test e2e/e2e-report-summary-test \
                  e2e/progress-watch-test e2e/validate-cluster-test \
                  fetch/download-verified-test fetch/pull-image-with-retry-test \
+                 manifest/check-promql-test \
                  go/check-codegen-drift-test go/check-v2-api-sync-test \
                  go/coverage-test go/go-lint-scope-test go/go-test-run-filter-test \
                  go/go-test-integration-test \

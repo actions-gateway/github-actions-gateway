@@ -65,8 +65,8 @@ kubeconform_flags="-strict -summary -kubernetes-version $MANIFEST_K8S_VERSION -i
 # (Q827), same class as deploy/templates above: deploy/monitoring/README.md tells
 # an operator to kubectl apply it, so malformed YAML reaches them. kubeconform
 # cannot add to that either — PrometheusRule is a Prometheus Operator kind, which
-# -ignore-missing-schemas skips. The rules' PromQL is still unvalidated; that
-# needs a promql parser and is the open half of Q827.
+# -ignore-missing-schemas skips. The rules' PromQL and their agreement with the
+# docs are checked separately, by `make promql-check`, which needs no host tool.
 # preview/ is deliberately excluded: it is a throwaway kind-cluster harness for
 # screenshotting the dashboards, "not part of the chart or any install path" per
 # its own README, and its fixtures use flow mappings this config rejects.
