@@ -2824,6 +2824,22 @@
 </thead>
 <tbody>
 <tr>
+<td><a id="Q836"></a>Q836</td>
+<td><a href="../development/maintaining-backlog/#closing-a-row-what-else-moves">A Queue row can be repurposed to a different defect, losing the original silently</a></td>
+<td><code>docs</code> <code>debt</code> <code>retro</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>#1441 overwrote Q809 in place: a <code>flake</code> row on e2e-calico NetworkPolicy negatives (3 of 100 runs, 3 PR evictions) became an unrelated scaleset flake, and "calico" is now absent from this file. Not <a href="#Q816">Q816</a>, which is an incomplete site list.</td>
+</tr>
+<tr>
+<td><a id="Q837"></a>Q837</td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/ci/run-parallel.sh">A <code>run-parallel</code> exit 143 means the gate was terminated, not that it failed</a></td>
+<td><code>docs</code> <code>ci</code> <code>retro</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>Measured 2026-08-12: <code>signal 15, exit 143</code> is an external kill, and <code>run-parallel.sh</code> waits on every pid rather than killing siblings. Count primary failures by <code>(exit N)</code> with N &lt; 128, or a contention kill reads as a real gate failure.</td>
+</tr>
+<tr>
 <td><a id="Q829"></a>Q829</td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/fetch/download-verified.sh"><code>download-verified.sh</code> retries a pinned download for 10 s flat, where its sibling backs off for 135-202 s</a></td>
 <td><code>flake</code> <code>ci</code></td>
@@ -2864,12 +2880,12 @@
 <td>Measured 2026-08-12 under 8 workers: <code>provisioner</code> eviction-window and <code>controller</code> 2m timeout failed in one window with piped-gate rc=141 (<a href="#Q825">Q825</a>), all green on rerun. Contention suspected, unproven: <code>scripts-test</code> runs past the semaphore.</td>
 </tr>
 <tr>
-<td><a id="Q803"></a>Q803</td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/go/coverage.sh"><code>cmd/proxy</code> coverage is nondeterministic, and its floor has no headroom to absorb it</a></td>
+<td><a id="Q826"></a>Q826</td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/ci/git-merge-gate-lists-test.sh"><code>git-merge-gate-lists-test</code>'s real-rebase case fails under the <code>make check</code> fan-out, passes standalone</a></td>
 <td><code>flake</code> <code>ci</code> <code>tests</code></td>
 <td>🔲</td>
 <td>S</td>
-<td>Measured 2026-08-12 on #1403, a docs-only diff: 78.7% against 79.5%. Four <code>main</code> runs and a local run all read 79.3%, which itself clears only on the 0.5pp tolerance, so a 0.6pp dip is red. The package passed; some branch went unexercised.</td>
+<td>Seen once 2026-08-12 at load 101-111 on 18 cores (41 go procs, 8 siblings): passed one <code>make check</code>, failed the next on an identical tree (<code>Could not apply ... # topic appends</code>), passed standalone. Mechanism unverified, not clock-bound like Q642.</td>
 </tr>
 <tr>
 <td><a id="Q812"></a>Q812</td>
@@ -2933,7 +2949,7 @@
 <td><code>tests</code> <code>retro</code></td>
 <td>🔲</td>
 <td>S</td>
-<td>Measured across this family: Q596 spent 2418 runs, Q703 240, Q803 5 at GOMAXPROCS=2, none reproducing a trigger seen only on CI. GOMAXPROCS caps Go's scheduler, not CPU contention, so an 18-core Mac is the wrong shape. A <code>--cpus=2</code> container is not.</td>
+<td>Measured across this family: Q596 2418 runs, Q703 240, Q803 5 at GOMAXPROCS=2, none reproducing a CI-only trigger. GOMAXPROCS caps Go's scheduler, not CPU contention; an 18-core Mac is the wrong shape, a <code>--cpus=2</code> container is not. Owns the class.</td>
 </tr>
 <tr>
 <td><a id="Q743"></a>Q743</td>
@@ -3876,6 +3892,13 @@
 <td><code>flake</code> <code>ci</code></td>
 <td>S</td>
 <td><strong>Event:</strong> it fails on <code>main</code>. First sighting 2026-08-12 under <code>make check</code>: git printed <code>unable to create temporary file</code>, rc=128; it passed standalone right after. Sibling sessions run <code>make check</code> concurrently here: suspect host temp pressure.</td>
+</tr>
+<tr>
+<td><a id="Q803"></a>Q803</td>
+<td><a href="../development/testing/#coverage-measurement-and-the-ratchet"><code>cmd/proxy</code> coverage is nondeterministic, and its floor has no headroom to absorb it</a></td>
+<td><code>flake</code> <code>ci</code> <code>tests</code></td>
+<td>S</td>
+<td><strong>Event:</strong> <code>cmd/proxy</code> fails <code>cover-check</code> on <code>main</code> after the fix. Tolerance is now max(0.5pp, 3 statements) = 0.86pp here, against a floor of 79.3 that runs actually reach, so a breach costs 3 statements, not Q803's 2. → top of Queue, escalated.</td>
 </tr>
 <tr>
 <td><a id="Q797"></a>Q797</td>

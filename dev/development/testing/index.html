@@ -4171,48 +4171,25 @@ The <code>&lt;pkg&gt;stub</code> half was added with Q528: moving the scale-set 
 Excluding <code>brokerstub</code> in the same pass moved the <code>broker</code> floor 85.3 → 84.0: the helper had been scoring above its module's production average and inflating it.
 We deliberately <strong>do not</strong> exclude <code>main.go</code>: in this repo several binaries (<code>cmd/worker</code>, <code>cmd/proxy</code>) keep real, unit-tested logic in their <code>package main</code>, so a blanket entrypoint exclusion would hide tested logic and leave those modules ungated.
 The genuinely-thin entrypoints (<code>cmd/agc</code>, <code>cmd/gmc</code>) instead contribute a lower but still-defended floor — which costs the ratchet nothing, since a lower floor never causes a false failure.</p>
-<p><strong>How it gates.</strong> <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/coverage-baseline.txt"><code>coverage-baseline.txt</code></a> records each module's floor. <code>make cover-check</code> fails only if a module drops <strong>more than 0.5 percentage points</strong> below its floor.
-Coverage is deterministic (the gate runs without <code>-race</code>), so this small tolerance is not for flake — it absorbs benign denominator drift (adding a couple of uncovered boilerplate lines marginally dilutes the ratio) while still catching a real regression (deleting a tested function, gutting a test) on any module of meaningful size.
+<p><strong>How it gates.</strong> <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/coverage-baseline.txt"><code>coverage-baseline.txt</code></a> records each module's floor, and <code>make cover-check</code> fails when a module drops further below its floor than the tolerance allows.
+The tolerance is the <strong>larger of 0.5 percentage points and 3 statements</strong>, sized per module against its own statement count; the gate prints which figure applied on every row.
+It absorbs two kinds of benign movement: denominator drift, where a couple of added uncovered boilerplate lines dilute the ratio without removing any test, and the handful of blocks in shutdown and timeout paths whose coverage tracks machine load because the test tolerates a race deliberately rather than pinning which arm wins.
+A real regression (deleting a tested function, gutting a test) costs far more than 3 statements and still fails.
 When coverage rises well above a floor, the gate prints a note suggesting <code>make cover-update</code>.</p>
+<p><strong>Why the tolerance carries two units.</strong> A tolerance fixed in percentage points does not mean the same thing on every module, because what it absorbs is statements and a statement is worth <code>100/N</code> points.
+The measured modules span 192 statements (<code>api</code>) to 5,523 (<code>cmd/agc</code>), a 29-fold range, so a flat 0.5pp buys <code>cmd/agc</code> 27.6 statements of slack and <code>api</code> <strong>0.96</strong>: one statement flipping fails the gate on the small module and is invisible on the large one.
+Q803 measured both halves of that on <code>cmd/proxy</code>.
+Two CI runs of byte-identical source read 78.7% and 79.3% with the package reporting <code>ok</code> both times, so two statements went unexercised without any test failing; 22 uncached local runs across three regimes (the package alone, workspace-wide, and workspace-wide pinned to 2 cores to emulate the runner) all read 79.3%, which is why the flip shows up only on a contended runner.
+Meanwhile the recorded floor of 79.5% had become unreachable, since 348 statements can only produce 79.31% or 79.60%.
+It was correct when recorded, at 356 statements; #1013 then removed 8 of them, which moved the number to 79.3% and left the floor eating 0.19pp of a 0.5pp tolerance before any noise arrived, so one statement of slack remained and the observed flip cost two.
+The gate now prints a <code>note:</code> when a module sits below its floor but inside tolerance, because a bare <code>ok</code> is what hid that shortfall for the 13 days between #1013 and Q803.
+Re-record when you see it: the tolerance is for transient noise, not for a floor the tree can no longer reach.
+The statement-denominated floor gives a small module the slack a large one always had, and the crossover is 600 statements, so <code>cmd/agc</code>, <code>cmd/gmc</code> and <code>cmd/probe</code> are unaffected.
+Both directions are asserted in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/go/coverage-test.sh"><code>coverage-test.sh</code></a>: a rule that always took the statement figure would tighten <code>cmd/agc</code> to 0.05pp, which is the opposite defect.</p>
 <p><strong>Updating the floor.</strong> When you intentionally add tests and coverage goes up, run <code>make cover-update</code> and commit the new <code>coverage-baseline.txt</code> — the ratchet then defends the higher number.
-Lowering a floor is allowed but lands as an explicit, reviewable diff in that file rather than silently.
-The current baseline (helper-package exclusion added in Q110):</p>
-<table>
-<thead>
-<tr>
-<th>Module</th>
-<th>Floor</th>
-<th>Module</th>
-<th>Floor</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>broker</code></td>
-<td>81.3%</td>
-<td><code>cmd/proxy</code></td>
-<td>72.8%</td>
-</tr>
-<tr>
-<td><code>cmd/agc</code></td>
-<td>78.1%</td>
-<td><code>cmd/worker</code></td>
-<td>72.0%</td>
-</tr>
-<tr>
-<td><code>cmd/gmc</code></td>
-<td>57.1%</td>
-<td><code>githubapp</code></td>
-<td>82.6%</td>
-</tr>
-<tr>
-<td><code>cmd/probe</code></td>
-<td>45.4% (compat suite)</td>
-<td><code>test/fakegithub</code></td>
-<td>n/a (helper-only module)</td>
-</tr>
-</tbody>
-</table>
+Lowering a floor is allowed but lands as an explicit, reviewable diff in that file rather than silently.</p>
+<p><strong>Read the floors from <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/coverage-baseline.txt"><code>coverage-baseline.txt</code></a>, which is the only record of them.</strong> This page used to copy the table and the copy drifted twice, through the re-records in #779 and #877: by the time Q803 read it, seven of its eight numbers were wrong (<code>cmd/gmc</code> by 23 points) and <code>api</code> and <code>scaleset</code> were missing entirely.
+A floor is one <code>grep</code> away in a file the gate itself reads, so a second copy earns nothing and misleads whoever trusts it.</p>
 <p>Unlike <code>make test-race</code> and <code>make vulncheck</code>, <code>cover-check</code> <strong>is</strong> the unit-test step of <code>make check</code>: it supersets <code>make test</code> — the same unit-test packages, the same single workspace-wide invocation, streamed as the same <code>ok &lt;pkg&gt;</code> lines (honouring <code>V=1</code>), just run with <code>-cover</code> and then gated against the floors — so the local gate runs the suite a single time, not twice, and never lets a coverage regression slip past a green <code>make check</code>.
 It carries the same <a href="#resource-auto-throttle-on-gui-dev-machines">local throttle</a> and machine-wide serialize lock as <code>make test</code>, so a GUI run stays desktop-safe; on CI the prefix is a no-op. <code>make test</code> remains the no-coverage target for the fastest inner loop, and <code>make cover-check</code> runs standalone when you just want the ratchet.</p>
 <h3 id="gates-scan-present-files-not-just-tracked-ones">Gates scan present files, not just tracked ones<a class="headerlink" href="#gates-scan-present-files-not-just-tracked-ones" title="Permanent link">&para;</a></h3>
