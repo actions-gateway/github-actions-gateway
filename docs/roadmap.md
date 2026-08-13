@@ -30,6 +30,14 @@ The pill beside each title names the release it blocks, read from the backlog ra
   One worker pod per job means the path here is Docker-in-Docker, unprivileged only under Kata.
   Sequenced behind the `ReadWriteMany` validation above, which it depends on; documenting Kata Docker-in-Docker as the permanent answer is a valid outcome.
 
+- **[CI for untrusted pull requests on Kata workers](plan/q408-untrusted-pr-egress.md)** <!-- q:Q408 --> [Kata workers](operations/kata-dind-workloads.md) are validated for *trusted* CI only: the micro-VM bounds the guest kernel, the runner's egress stays permissive.
+  Untrusted PRs need an in-cluster pull-through registry mirror plus egress scoped to it, GitHub, and DNS.
+  Phase 1 gates hosted-only egress; a measurement grades the posture before Phase 2 builds the mirrors.
+
+- **[Proxy-side audit logging](design/appendix-g-future-enhancements.md#g3-proxy-side-audit-logging)** <!-- q:Q564 --> A structured line per accepted CONNECT: tenant, host and port, bytes each way, duration.
+  The proxy emits counters only today, so per-tenant egress is reconstructable just from cluster flow logs.
+  Off by default, and the audit-persona dashboard depends on it.
+
 ## Exploring / longer-term
 
 Directions we expect to pursue as demand and validated evidence accumulate.
@@ -43,10 +51,6 @@ The first entry is the exception: a firm commitment, waiting only on the release
 - **[Validate GHES against a real appliance](plan/arc-parity.md#where-arc-is-actually-ahead)** <!-- q:Q765 --> Both GitHub Enterprise Server (GHES) capabilities ship marked untested against real hardware: the appliance-addressing path and the private-CA bundle.
   They are believed correct and unproven, which is not the same thing.
   Waits on access to an appliance.
-
-- **[CI for untrusted pull requests on Kata workers](plan/q408-untrusted-pr-egress.md)** <!-- q:Q408 --> [Kata workers](operations/kata-dind-workloads.md) are validated for *trusted* CI only: the micro-VM bounds the guest kernel, the runner's egress stays permissive.
-  Untrusted PRs need an in-cluster pull-through registry mirror plus egress scoped to it, GitHub, and DNS.
-  Waits on an operator's ask, then a measurement.
 
 - **[Opt-in auto-retry for flaky jobs](design/appendix-g-future-enhancements.md#g17-opt-in-auto-retry-for-flaky-jobs-beyond-disruptions)** <!-- q:Q555 --> A job the cluster disrupts already [re-runs itself](operations/troubleshooting.md#which-disruptions-auto-re-run-a-job-and-which-never-do); a flaky failure does not.
   Same machinery, opted in per runner set with its own budget so a broken test cannot loop.
@@ -70,12 +74,8 @@ The first entry is the exception: a firm commitment, waiting only on the release
 - **An Operator Lifecycle Manager bundle.** <!-- q:Q217 --> [Helm-only](operations/install.md) is the deliberate install stance; an OperatorHub catalog entry waits on OpenShift demand.
 - **A published benchmark and case study.** <!-- q:Q198 --> Real GitHub-at-scale numbers behind the [cost model](design/appendix-f-cost-model.md), which needs a funded scale run rather than a local cluster.
 
-The last four are opt-in additions to the [per-tenant proxy](design/network-architecture.md), shelved together because none has demand recorded against it.
+The last three are opt-in additions to the [per-tenant proxy](design/network-architecture.md), shelved together because none has demand recorded against it.
 A coherent theme is not a release.
-
-- **[Proxy-side audit logging](design/appendix-g-future-enhancements.md#g3-proxy-side-audit-logging)** <!-- q:Q564 --> A structured line per accepted CONNECT: tenant, host and port, bytes each way, duration.
-  The proxy emits counters only today, so per-tenant egress is reconstructable just from cluster flow logs.
-  Off by default.
 
 - **[Per-tenant proxy rate limiting](design/appendix-g-future-enhancements.md#g2-proxy-enforced-per-tenant-rate-limiting)** <!-- q:Q565 --> A token bucket at the proxy, so one looping tenant is slowed before it reaches GitHub's ceiling; today the only feedback is a 429 and Actions Gateway Controller (AGC) backoff.
   Per-pod state, since global limits would need a shared backend.
@@ -85,7 +85,7 @@ A coherent theme is not a release.
 
 - **[A dedicated proxy pool per runner group](design/appendix-g-future-enhancements.md#g5-per-runnergroup-dedicated-proxy-pool)** <!-- q:Q567 --> One pool per gateway today, so a bandwidth-heavy group can saturate a co-tenant's.
   Give an opted-in group its own Deployment, Service, and autoscaler.
-  Largest of the four; needs a plan doc before code.
+  Largest of the three; needs a plan doc before code.
 
 ## How priorities are set
 
