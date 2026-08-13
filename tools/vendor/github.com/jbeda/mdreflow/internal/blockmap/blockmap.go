@@ -63,6 +63,64 @@ type Paragraph struct {
 	Boundary []bool
 }
 
+// SkipReason says which guard froze a paragraph — which distinct branch
+// in build (or collect's depth cap) decided the paragraph passes through
+// byte-for-byte instead of reflowing. SkipNone means the paragraph is
+// reflow-eligible. Each reason's meaning is documented at the branch that
+// returns it; user-facing wording lives in the root package's Explain.
+type SkipReason uint8
+
+const (
+	SkipNone SkipReason = iota
+	// SkipDeepNesting: nested beyond maxContainerDepth container levels.
+	SkipDeepNesting
+	// SkipDegenerateBlank: the paragraph (or one of its lines) trims to
+	// nothing — a control-character parser artifact, never real prose.
+	SkipDegenerateBlank
+	// SkipDialectBlock: a dialect whole-node rule matched (front-matter
+	// fence, math block, MDX construct, shortcode) — not prose at all.
+	SkipDialectBlock
+	// SkipFrontMatter: the paragraph sits inside the document's front
+	// matter block.
+	SkipFrontMatter
+	// SkipHiddenLineGap: another node's bytes hide between this
+	// paragraph's line segments.
+	SkipHiddenLineGap
+	// SkipDoubleOwnedLine: a sibling link-reference-definition node owns
+	// bytes inside this paragraph's range (duplicate-label extraction).
+	SkipDoubleOwnedLine
+	// SkipControlBytes: a C0 control byte other than tab/LF/CR in the
+	// paragraph's raw range.
+	SkipControlBytes
+	// SkipLinkRefDefShape: the paragraph itself contains a
+	// definition-shaped line (the zone's contains check).
+	SkipLinkRefDefShape
+	// SkipLinkRefDefNeighbor: definition machinery directly above puts
+	// the paragraph inside a definition's reach (the zone's neighbor and
+	// defAbove checks).
+	SkipLinkRefDefNeighbor
+	// SkipRawHTMLDeclOpener: a raw "<?" or "<!" opener outside code spans.
+	SkipRawHTMLDeclOpener
+	// SkipPossibleLinkRefDef: an unbalanced "[" (with a def-plausible
+	// shape) or an unclosed destination that a reflow join could complete
+	// into a link reference definition.
+	SkipPossibleLinkRefDef
+	// SkipUnterminatedTag: the first line looks like an HTML/JSX tag
+	// whose closing ">" is on a later line.
+	SkipUnterminatedTag
+	// SkipTableAdjacency: the paragraph sits directly under a GFM table
+	// with no blank line between them.
+	SkipTableAdjacency
+)
+
+// Skip records one frozen paragraph: the byte range its raw source lines
+// span (same convention as Paragraph.Start/End) and the guard that froze
+// it.
+type Skip struct {
+	Start, End int
+	Reason     SkipReason
+}
+
 // Paragraphs walks doc (at any depth) and returns every reflow-eligible
 // Paragraph node, in source order, skipping any paragraph a dialect
 // whole-node rule matches.
@@ -80,32 +138,56 @@ func Paragraphs(doc ast.Node, source []byte) []Paragraph {
 func ParagraphsForDialect(doc ast.Node, source []byte, mkdocs bool) []Paragraph {
 	var out []Paragraph
 	fmEnd := frontMatterEnd(source)
-	collect(doc, source, false, 0, fmEnd, defRunAbove(source), &out, mkdocs)
+	collect(doc, source, false, 0, fmEnd, scanLineFacts(source), &out, nil, mkdocs)
 	return out
 }
 
-// defRunAbove reports, per physical line (keyed by the line's start byte
-// offset), whether a definition-shaped line — the same shapes
-// inLinkRefDefZone checks on the immediately preceding line — occurs
-// anywhere ABOVE that line within its contiguous run of non-blank lines.
-// A blank line resets the run.
+// SkipsForDialect walks doc exactly as ParagraphsForDialect does and
+// returns, in source order, every paragraph the walk froze and why —
+// the diagnostic mirror of the eligible set (--explain). Skips with no
+// reportable source range (an empty paragraph node) and front-matter
+// interiors (metadata by construction, not frozen prose) are omitted.
+func SkipsForDialect(doc ast.Node, source []byte, mkdocs bool) []Skip {
+	var out []Paragraph
+	var skips []Skip
+	fmEnd := frontMatterEnd(source)
+	collect(doc, source, false, 0, fmEnd, scanLineFacts(source), &out, &skips, mkdocs)
+	return skips
+}
+
+// lineFacts holds the per-physical-line verdicts inLinkRefDefZone needs,
+// keyed by the line's start byte offset in scanLineFacts's returned map.
+// chainStart, orphanCloser, and bareCaretOpener are the direct regex
+// verdicts for the line itself (defChainStartRE, orphanDefCloserRE, and
+// bareCaretOpenerRE respectively); defAbove is the transitive seen-above
+// bit described below.
+type lineFacts struct {
+	chainStart, orphanCloser, bareCaretOpener, defAbove bool
+}
+
+// scanLineFacts computes, per physical line (keyed by the line's start byte
+// offset), the facts inLinkRefDefZone needs about that line and about
+// whether a definition-shaped line — the same shapes inLinkRefDefZone
+// checks on the immediately preceding line — occurs anywhere ABOVE that
+// line within its contiguous run of non-blank lines. A blank line resets
+// the run.
 //
-// This exists because a definition's reach downward is not limited to one
-// line: its title alone may span arbitrarily many lines, so a paragraph
-// can sit several lines below the "[label]:" opener yet still be the next
-// text the definition's own scan touches — reflowing that paragraph moves
-// the title's closing boundary and re-carves every line in between on the
-// next parse. Found by FuzzFormat on
-// "[0]:\n1\n\"\n\"[0]:0\n[1]:0\n\"20\n0\n00\n\"" (seed 97329a80dd2cb7d4):
-// the only reflow-eligible paragraph was the two-line tail of a title
-// spanning three lines below its def, one line beyond the neighbor check.
-// The transitive rule is verdict-stable by construction: every paragraph
-// inside a def-containing run is in-zone, so nothing in such a run ever
-// reflows, so the run's line layout — and with it every verdict keyed on
-// it — cannot change between passes. Computed in one top-down pass so the
-// zone check stays O(1) per paragraph.
-func defRunAbove(source []byte) map[int]bool {
-	m := make(map[int]bool)
+// The transitive defAbove bit exists because a definition's reach downward
+// is not limited to one line: its title alone may span arbitrarily many
+// lines, so a paragraph can sit several lines below the "[label]:" opener
+// yet still be the next text the definition's own scan touches —
+// reflowing that paragraph moves the title's closing boundary and
+// re-carves every line in between on the next parse. Found by FuzzFormat
+// on "[0]:\n1\n\"\n\"[0]:0\n[1]:0\n\"20\n0\n00\n\"" (seed
+// 97329a80dd2cb7d4): the only reflow-eligible paragraph was the two-line
+// tail of a title spanning three lines below its def, one line beyond the
+// neighbor check. The transitive rule is verdict-stable by construction:
+// every paragraph inside a def-containing run is in-zone, so nothing in
+// such a run ever reflows, so the run's line layout — and with it every
+// verdict keyed on it — cannot change between passes. Computed in one
+// top-down pass so the zone check stays O(1) per paragraph.
+func scanLineFacts(source []byte) map[int]lineFacts {
+	m := make(map[int]lineFacts)
 	seen := false
 	for ls := 0; ls < len(source); {
 		end := ls
@@ -113,10 +195,16 @@ func defRunAbove(source []byte) map[int]bool {
 			end++
 		}
 		line := bytes.TrimRight(source[ls:end], "\r")
-		m[ls] = seen
+		f := lineFacts{
+			chainStart:      defChainStartRE.Match(line),
+			orphanCloser:    orphanDefCloserRE.Match(line),
+			bareCaretOpener: bareCaretOpenerRE.Match(line),
+			defAbove:        seen,
+		}
+		m[ls] = f
 		if len(bytes.Trim(line, " \t")) == 0 {
 			seen = false
-		} else if defLineOpenerRE.Match(line) || bareCaretOpenerRE.Match(line) || orphanDefCloserRE.Match(line) {
+		} else if f.chainStart || f.bareCaretOpener || f.orphanCloser {
 			seen = true
 		}
 		ls = end + 1
@@ -153,7 +241,26 @@ const maxContainerDepth = 2
 // through untouched — no reflow is always render-preserving by
 // construction. Found by FuzzFormat on "000000000000000000\n>* >! 0"
 // (blockquote > list > blockquote, three levels).
-func collect(n ast.Node, source []byte, inBlockquote bool, depth int, fmEnd int, zoneAbove map[int]bool, out *[]Paragraph, mkdocs bool) {
+func collect(n ast.Node, source []byte, inBlockquote bool, depth int, fmEnd int, facts map[int]lineFacts, out *[]Paragraph, skips *[]Skip, mkdocs bool) {
+	// recordSkip reports c's line range under reason to the skips
+	// collector (nil when the caller only wants the eligible set). An
+	// empty node has no source range to report; front-matter interiors
+	// are metadata by construction, not frozen prose — neither is a
+	// diagnostic anyone can act on.
+	recordSkip := func(c ast.Node, reason SkipReason) {
+		if skips == nil || reason == SkipFrontMatter {
+			return
+		}
+		lines := c.Lines()
+		if lines.Len() == 0 {
+			return
+		}
+		*skips = append(*skips, Skip{
+			Start:  lines.At(0).Start,
+			End:    lines.At(lines.Len() - 1).Stop,
+			Reason: reason,
+		})
+	}
 	for c := n.FirstChild(); c != nil; c = c.NextSibling() {
 		if cb, ok := c.(*ast.CodeBlock); ok {
 			*out = append(*out, admonitionBodies(cb, source, mkdocs)...)
@@ -162,7 +269,9 @@ func collect(n ast.Node, source []byte, inBlockquote bool, depth int, fmEnd int,
 		switch c.(type) {
 		case *ast.Paragraph, *ast.TextBlock:
 			if depth > maxContainerDepth {
-				continue // pass through byte-for-byte; see collect's doc comment
+				// Pass through byte-for-byte; see collect's doc comment.
+				recordSkip(c, SkipDeepNesting)
+				continue
 			}
 			// Only when directly adjacent (no blank line): a table
 			// properly terminated by a blank line before the next
@@ -182,8 +291,10 @@ func collect(n ast.Node, source []byte, inBlockquote bool, depth int, fmEnd int,
 			// shape, from build's own raw-byte scan (see
 			// inLinkRefDefZone) — design.md's "The link-reference-
 			// definition zone: skip bluntly, by shape".
-			if pp, skip := build(c, source, inBlockquote, fmEnd, precededByTable, zoneAbove); !skip {
+			if pp, reason := build(c, source, inBlockquote, fmEnd, precededByTable, facts); reason == SkipNone {
 				*out = append(*out, pp)
+			} else {
+				recordSkip(c, reason)
 			}
 			continue
 		}
@@ -196,21 +307,25 @@ func collect(n ast.Node, source []byte, inBlockquote bool, depth int, fmEnd int,
 		case *ast.List:
 			childDepth++
 		}
-		collect(c, source, childInBQ, childDepth, fmEnd, zoneAbove, out, mkdocs)
+		collect(c, source, childInBQ, childDepth, fmEnd, facts, out, skips, mkdocs)
 	}
 }
 
 // build derives a Paragraph from p (an *ast.Paragraph or *ast.TextBlock),
-// or reports skip == true if a whole-node dialect rule matches p's text.
-// fmEnd is the document's front-matter end offset (frontMatterEnd(source),
-// or -1 if source has no front matter) — see its use below. precededByTable
-// is true when p's immediately preceding sibling in the AST is a GFM
-// *ast.Table — see its use below for why.
-func build(p ast.Node, source []byte, inBlockquote bool, fmEnd int, precededByTable bool, zoneAbove map[int]bool) (pp Paragraph, skip bool) {
+// or reports the reason p must instead pass through byte-for-byte
+// (SkipNone means eligible). fmEnd is the document's front-matter end
+// offset (frontMatterEnd(source), or -1 if source has no front matter) —
+// see its use below. precededByTable is true when p's immediately
+// preceding sibling in the AST is a GFM *ast.Table — see its use below
+// for why.
+func build(p ast.Node, source []byte, inBlockquote bool, fmEnd int, precededByTable bool, facts map[int]lineFacts) (pp Paragraph, reason SkipReason) {
 	lines := p.Lines()
 	n := lines.Len()
 	if n == 0 {
-		return Paragraph{}, true // empty paragraph; nothing to emit specially
+		// Empty paragraph; nothing to emit specially. Reported under
+		// SkipDegenerateBlank, though recordSkip drops it anyway (no
+		// source range to point at).
+		return Paragraph{}, SkipDegenerateBlank
 	}
 
 	trimmed := make([]string, n)
@@ -234,7 +349,7 @@ func build(p ast.Node, source []byte, inBlockquote bool, fmEnd int, precededByTa
 		// reparse. Passing it through byte-for-byte — as if no dialect
 		// rule matched, since none of them is really about this — is the
 		// only content-preserving choice.
-		return Paragraph{}, true
+		return Paragraph{}, SkipDegenerateBlank
 	}
 	if !allBlank && hasEmptyLine(trimmed) {
 		// Fuzz-found idempotency hazard, related to (but distinct from)
@@ -249,10 +364,10 @@ func build(p ast.Node, source []byte, inBlockquote bool, fmEnd int, precededByTa
 		// guarantee byte-for-byte reproduction on a second pass for every
 		// shape a parser artifact can take. Skipping the whole paragraph
 		// is the safe, general answer once again.
-		return Paragraph{}, true
+		return Paragraph{}, SkipDegenerateBlank
 	}
 	if wholeNodeSkip(trimmed) {
-		return Paragraph{}, true
+		return Paragraph{}, SkipDialectBlock
 	}
 	if fmEnd >= 0 && lines.At(0).Start < fmEnd {
 		// Front matter's interior lines: excluded from reflow by a pure
@@ -264,7 +379,7 @@ func build(p ast.Node, source []byte, inBlockquote bool, fmEnd int, precededByTa
 		// closing delimiter line, so this paragraph's own first line
 		// starting before fmEnd is sufficient to know it is entirely
 		// contained in the front-matter block.
-		return Paragraph{}, true
+		return Paragraph{}, SkipFrontMatter
 	}
 	start0 := lines.At(0).Start
 	end := lines.At(n - 1).Stop
@@ -293,7 +408,7 @@ func build(p ast.Node, source []byte, inBlockquote bool, fmEnd int, precededByTa
 		// span, and reflowing (or even just splicing straight through) is
 		// unsafe. The safe general answer, same as every other check in
 		// this function: skip the whole paragraph, byte-for-byte.
-		return Paragraph{}, true
+		return Paragraph{}, SkipHiddenLineGap
 	}
 	if overlapsSiblingDef(p, start0, end) {
 		// hasHiddenLineGap's sibling case, found by FuzzFormat on
@@ -310,7 +425,7 @@ func build(p ast.Node, source []byte, inBlockquote bool, fmEnd int, precededByTa
 		// definition node's raw lines overlap this paragraph's own byte
 		// range, the parse has double-owned bytes and no reflow of them can
 		// be stable; skip the whole paragraph, byte-for-byte.
-		return Paragraph{}, true
+		return Paragraph{}, SkipDoubleOwnedLine
 	}
 	if hasControlByte(source[start0:end]) {
 		// design.md, "Control-character paragraphs pass through": a C0
@@ -323,9 +438,9 @@ func build(p ast.Node, source []byte, inBlockquote bool, fmEnd int, precededByTa
 		// stays allowed (CRLF line endings and bare-CR paragraphs keep
 		// reflowing, since the '\r' of a CRLF pair is line-ending
 		// machinery, not paragraph interior).
-		return Paragraph{}, true
+		return Paragraph{}, SkipControlBytes
 	}
-	if inLinkRefDefZone(source, trimmed, start0, zoneAbove) {
+	if zone := inLinkRefDefZone(source, trimmed, start0, facts); zone != SkipNone {
 		// design.md, "The link-reference-definition zone: skip bluntly, by
 		// shape": a link reference definition renders nothing (it is URL
 		// metadata) and its grammar is the least reflow-compatible
@@ -344,9 +459,34 @@ func build(p ast.Node, source []byte, inBlockquote bool, fmEnd int, precededByTa
 		// rare, ambiguity-laden, and worthless to reflow next to invisible
 		// metadata. inLinkRefDefZone replaces all of that with one blunt,
 		// shape-based predicate — see its own doc comment.
-		return Paragraph{}, true
+		return Paragraph{}, zone
 	}
 	masked := maskCodeSpans(trimmed)
+	if hasRawHTMLDeclOpener(masked) {
+		// A "<?" (processing instruction) or "<!" (comment, CDATA,
+		// declaration) raw-HTML opener anywhere in the paragraph, outside
+		// code spans, makes reflow structurally unstable — found by
+		// FuzzFormat on "\r<?0\n000000000000000000000000?>" (seed
+		// unterminated_pi_first_line), with the mid-line variants confirmed
+		// by hand. Two facts collide. goldmark's inline grammar lets these
+		// constructs span soft line breaks, and segment's ask-goldmark walk
+		// faithfully protects the whole construct as one no-break span — so
+		// a join can put the opener at an output line's start. There, HTML
+		// blocks of types 2-5 interrupt an open paragraph from any line
+		// position (reflow.blockInterruptTriggers), so emission MUST
+		// backslash-escape the opener — and the escaped spelling no longer
+		// parses as raw HTML at all, so the next pass computes different
+		// no-break spans and different breaks: a parse discontinuity across
+		// reflow's own escape, oscillating instead of converging. Inline
+		// tags ("<" + letter) don't need this: their guard
+		// (segment.htmlTagOpenerSpans) is a raw-text regex that matches the
+		// escaped and unescaped spellings alike, so its verdict is
+		// escape-stable. The blunt, safe answer is the zone playbook's:
+		// pass the whole paragraph through byte-for-byte. Prose that
+		// carries a bare PI/declaration opener outside a code span is
+		// vanishingly rare, so the coverage cost is negligible.
+		return Paragraph{}, SkipRawHTMLDeclOpener
+	}
 	if (hasUnbalancedBracket(masked) && couldFormLinkRefDef(masked)) ||
 		hasUnclosedDestParen(masked) ||
 		hasUnclosedAngleDestOpener(masked) {
@@ -393,7 +533,7 @@ func build(p ast.Node, source []byte, inBlockquote bool, fmEnd int, precededByTa
 		// not actually a definition attempt at all), which is an
 		// acceptable trade for correctness on a construct this
 		// fine-grained to get right per-line.
-		return Paragraph{}, true
+		return Paragraph{}, SkipPossibleLinkRefDef
 	}
 	if looksLikeUnterminatedTag(trimmed[0]) {
 		// The one construct m0-spike-findings.md documents as unrecoverable
@@ -415,7 +555,7 @@ func build(p ast.Node, source []byte, inBlockquote bool, fmEnd int, precededByTa
 		// AST-only (not a raw source pre-pass) mitigation: no reflow can
 		// never corrupt anything, at the cost of not reflowing prose that
 		// happens to open with what looks like an unterminated tag.
-		return Paragraph{}, true
+		return Paragraph{}, SkipUnterminatedTag
 	}
 	if precededByTable {
 		// Fuzz-found idempotency hazard: whether a GFM table forms at all
@@ -446,7 +586,7 @@ func build(p ast.Node, source []byte, inBlockquote bool, fmEnd int, precededByTa
 		// same one used throughout this file: skip reflowing any
 		// paragraph directly after a real table, so its own shape never
 		// changes at all.
-		return Paragraph{}, true
+		return Paragraph{}, SkipTableAdjacency
 	}
 
 	boundary := make([]bool, n)
@@ -487,7 +627,7 @@ func build(p ast.Node, source []byte, inBlockquote bool, fmEnd int, precededByTa
 		End:        end,
 		ContPrefix: contPrefix,
 		Boundary:   boundary,
-	}, false
+	}, SkipNone
 }
 
 // hasControlByte reports whether b contains a C0 control byte other than
@@ -575,7 +715,7 @@ func overlapsSiblingDef(p ast.Node, start, end int) bool {
 // design.md's "Footnote definitions are exempt and keep reflowing"): the
 // caret exemption applies uniformly to every zone check, contains and
 // neighbor alike, because verdict stability demands it (see
-// defLineOpenerRE's doc comment).
+// defChainStartRE's doc comment).
 const nonCaretLabelBody = `(?:\\.|[^\^\[\]])(?:\\.|[^\[\]])*`
 
 // nonFootnoteCaretLabelAlt matches the caret-led labels that are NOT
@@ -617,23 +757,41 @@ const caretLabelBody = `\^[^ \t\[\]][^\[\]]*`
 // shape the neighbor itself was allowed to reshape.
 var nonCaretDefShapeRE = regexp.MustCompile(`\\?\[(?:` + nonCaretLabelBody + `|` + nonFootnoteCaretLabelAlt + `)?\]:`)
 
-// defLineOpenerRE is nonCaretDefShapeRE's counterpart for judging the
-// raw source line directly above a paragraph (see inLinkRefDefZone). It
-// excludes caret-led labels, the same exemption as the contains check —
-// NOT because an adjacent "[^label]:" line is harmless (to a parser with
-// no footnote extension it is an ordinary definition shape), but because
-// deferring to a caret line can never be verdict-stable: a footnote body
-// is exempt from the zone precisely so it can reflow, and its reflow
-// legitimately rewrites the physical line a neighbor would key on — found
-// by FuzzFormat on ")B[^1]: 78\n  + ,b X2nx1" (seed 86487504c2bddd82),
-// where the list deferred on pass 1 to a caret line the exempt paragraph
-// above then split. Caret-shape hazards are owned instead by the
-// emission escapes (package reflow's isCompleteLinkRefDefLine and the
-// bare-opener escape), the harness's documented caret scope gate, and
-// the public convergence backstop — see design.md's zone section.
-var defLineOpenerRE = regexp.MustCompile(`^[ \t>]*\\?\[(?:` + nonCaretLabelBody + `|` + nonFootnoteCaretLabelAlt + `)?\]:`)
+// defChainStartRE is nonCaretDefShapeRE's counterpart for judging whether
+// the raw source line directly above a paragraph (see inLinkRefDefZone)
+// OPENS a definition chain — used for the chainStart fact (see
+// scanLineFacts), which feeds both inLinkRefDefZone's direct
+// immediately-preceding-line check and, transitively, the defAbove reach
+// across intervening lines.
+//
+// It excludes caret-led labels, the same exemption as the contains check
+// — NOT because an adjacent "[^label]:" line is harmless (to a parser
+// with no footnote extension it is an ordinary definition shape), but
+// because deferring to a caret line can never be verdict-stable: a
+// footnote body is exempt from the zone precisely so it can reflow, and
+// its reflow legitimately rewrites the physical line a neighbor would key
+// on — found by FuzzFormat on ")B[^1]: 78\n  + ,b X2nx1" (seed
+// 86487504c2bddd82), where the list deferred on pass 1 to a caret line
+// the exempt paragraph above then split. Caret-shape hazards are owned
+// instead by the emission escapes (package reflow's
+// isCompleteLinkRefDefLine and the bare-opener escape), the harness's
+// documented caret scope gate, and the public convergence backstop — see
+// design.md's zone section.
+//
+// The label may sit after any number of list-marker segments:
+// definitions are extracted starting at a paragraph's first content,
+// which inside a list item sits after the marker, so "- [a]: /url" opens
+// a definition chain exactly as a bare "[a]: /url" line does. The
+// marker-segment group repeats to cover nested items
+// ("- - [a]: /url"). A marker glyph not followed by whitespace is not a
+// marker and stops the prefix match there, so "* *emphasis* [x]:" does
+// not match (the "*" before "emphasis" has no trailing whitespace of its
+// own to close the marker segment, and once the alternation gives up on
+// consuming it as a marker the fixed "[ \t>]*" prefix cannot skip over
+// the intervening "*emphasis* " prose either).
+var defChainStartRE = regexp.MustCompile(`^[ \t>]*(?:(?:[-+*]|\d{1,9}[.)])[ \t]+[ \t>]*)*\\?\[(?:` + nonCaretLabelBody + `|` + nonFootnoteCaretLabelAlt + `)?\]:`)
 
-// defShapeAnywhereRE is defLineOpenerRE's counterpart with no left-
+// defShapeAnywhereRE is defChainStartRE's counterpart with no left-
 // boundary requirement at all — used only for the "spans the boundary"
 // check (see inLinkRefDefZone's (c)): a chain of link reference
 // definitions can legitimately continue immediately after a previous one's
@@ -644,11 +802,17 @@ var defLineOpenerRE = regexp.MustCompile(`^[ \t>]*\\?\[(?:` + nonCaretLabelBody 
 // definition's own destination scan reaches into a following paragraph
 // that is otherwise just a lone quote character, sitting directly after
 // "[00]:0" with no separating whitespace at all. Broader than
-// defLineOpenerRE on purpose: the boundary requirement that keeps rules
+// defChainStartRE on purpose: the boundary requirement that keeps rules
 // (a)/(b) from flagging ordinary prose like "word[key]: text" doesn't hold
 // once a definition can start immediately after another already-consumed
 // one, so this check accepts some extra false-positive skips as the price
-// of staying blunt rather than tracking definition-chain state.
+// of staying blunt rather than tracking definition-chain state. A match
+// wholly inside the preceding line is only chain-relevant when everything
+// to its left on that line is container-prefix-plausible — see
+// inLinkRefDefZone's (c) and plausibleDefPrefix — since a mid-line shape
+// with prose to its left (e.g. an inline-code error message quoted in a
+// bullet) can never be reached by a definition chain, which must start at
+// a paragraph's first content.
 var defShapeAnywhereRE = regexp.MustCompile(`\\?\[(?:` + nonCaretLabelBody + `|` + nonFootnoteCaretLabelAlt + `)?\]:`)
 
 // footnoteDefFirstLineRE matches a footnote definition's own opening
@@ -722,49 +886,81 @@ var bareCaretOpenerRE = regexp.MustCompile(`\\?\[` + caretLabelBody + `\]:[ \t\r
 // unchanged, and a shape starting at trimmed's own start still matches the
 // "^" alternative.
 //
-// A paragraph whose own first line IS a footnote definition's opener
-// (footnoteDefFirstLineRE) is exempt from everything below: it is a
-// footnote body, deliberately reflow-eligible per design.md, and treating
-// an adjacent (possibly also caret-led) preceding line as hazardous here
-// would defeat that exemption for the ordinary back-to-back layout
-// ("[^1]: ...\n[^2]: ..." with no blank line between).
+// A paragraph whose own first line IS a footnote definition's opener is a
+// footnote body, deliberately reflow-eligible per design.md. That needs no
+// exemption from the neighbor checks below: the ordinary back-to-back
+// layout ("[^1]: ...\n[^2]: ..." with no blank line between) sets none of
+// the facts they consult, while the caret-shaped lines that DO set one
+// (bare openers, orphaned closers) are live definition machinery hazardous
+// to any paragraph beneath them — see the no-exemption comment in the body
+// (#41 and its bare-caret sibling).
 //
 // (b) checks the raw source line immediately above contentStart with
 // anyDefLineOpenerRE (caret-inclusive — see its own doc comment for why):
 // a blank line there can never match a "[...]:" shape, so "no blank line
 // between" falls out for free.
-// (c) checks whether a def shape spans the boundary itself, anywhere in
-// the preceding-raw-line-plus-this-paragraph's-own-first-line window, with
-// no left-boundary requirement (anyDefShapeAnywhereRE — see its own doc
-// comment for why "opens with" alone is not enough): the label can open on
-// the preceding raw line and close on this paragraph's own first line
+// (c) checks whether a def shape occurs anywhere in the
+// preceding-raw-line-plus-this-paragraph's-own-first-line window
+// (defShapeAnywhereRE — see its own doc comment for why "opens with"
+// alone is not enough), classified by where the match falls. A match
+// spanning the boundary itself fires unconditionally: the label can open
+// on the preceding raw line and close on this paragraph's own first line
 // (found by FuzzFormat/issue#11 on "[\]\n]:0\n\"\"0"), or a definition can
 // open immediately after a previous one's title closes with no separating
 // whitespace at all (found by FuzzFormat on
-// "[0]:0\n\"0\"[00]:0\n\"\n\"[0]:0", seed a651ae68822c7c5c).
-func inLinkRefDefZone(source []byte, trimmed []string, contentStart int, zoneAbove map[int]bool) bool {
+// "[0]:0\n\"0\"[00]:0\n\"\n\"[0]:0", seed a651ae68822c7c5c). A match
+// wholly inside the preceding line fires only when everything to its left
+// on that line is container-prefix-plausible (plausibleDefPrefix): only
+// then could a definition chain have started at that line's own first
+// content and reached the shape, since a chain's opener must pass
+// defChainStartRE, which requires nothing but markers and padding before
+// the label. A mid-line shape with prose to its left — e.g. a bullet
+// quoting an inline-code error message like "runnerGroups[0]: ..." — can
+// never be reached by a chain and no longer freezes its neighbor (issue
+// #37).
+func inLinkRefDefZone(source []byte, trimmed []string, contentStart int, facts map[int]lineFacts) SkipReason {
 	for _, t := range trimmed {
 		if nonCaretDefShapeRE.MatchString(t) || bareCaretOpenerRE.MatchString(t) || orphanDefCloserRE.MatchString(t) {
-			return true
+			return SkipLinkRefDefShape
 		}
 	}
-	if len(trimmed) > 0 && footnoteDefFirstLineRE.MatchString(trimmed[0]) {
-		return false
-	}
+	// There is deliberately NO footnote-body exemption from the neighbor
+	// checks below (there was one; issue #41 removed it). A paragraph
+	// whose own first line opens "[^label]:" is a footnote body and must
+	// keep reflowing — but that is already guaranteed by the facts
+	// themselves: a COMPLETE footnote-body line ("[^1]: body text", the
+	// line above in the ordinary back-to-back layout) matches none of
+	// them (defChainStartRE and defShapeAnywhereRE exclude caret labels;
+	// bareCaretOpenerRE requires a bare colon-at-EOL opener;
+	// orphanDefCloserRE requires no "[" before the "]:"), so nothing
+	// fires and back-to-back footnotes stay eligible with no special
+	// case. The evidence that DOES fire is machinery hazardous to any
+	// paragraph below it, footnote-shaped or not: a titleless "[label]:"
+	// or bare "[^label]:" line completes its destination from the line
+	// below, so joining that paragraph's lines changes whether the
+	// definition forms at all — found by FuzzFormat on
+	// " [0]:\n [^0]:0\n\"\"0" (non-caret, issue #41) and
+	// " [^0]:\n [^0]:0\n\"\"0" (bare caret opener, its sibling found
+	// four minutes into the post-fix soak), both reflowed under the old
+	// blanket exemption. Every evidence line is itself frozen (the
+	// contains check freezes def-shaped and bare-caret-opener paragraph
+	// lines; complete defs never reach reflow as paragraphs), so keying
+	// on one is verdict-stable.
 	ls := lineStart(source, contentStart)
 	if ls == 0 {
-		return false
+		return SkipNone
 	}
-	if zoneAbove[ls] {
+	if facts[ls].defAbove {
 		// A def-shaped line anywhere above, in this line's contiguous
 		// non-blank run — not just on the immediately preceding line: a
 		// definition's title scan can reach the paragraph across any
-		// number of intervening machinery lines. See defRunAbove.
-		return true
+		// number of intervening machinery lines. See scanLineFacts.
+		return SkipLinkRefDefNeighbor
 	}
 	prevStart := lineStart(source, ls-1)
 	prevLine := bytes.TrimRight(source[prevStart:ls], "\r\n")
-	if defLineOpenerRE.Match(prevLine) || bareCaretOpenerRE.Match(prevLine) || orphanDefCloserRE.Match(prevLine) {
+	pf := facts[prevStart]
+	if pf.chainStart || pf.bareCaretOpener || pf.orphanCloser {
 		// orphanDefCloserRE on the neighbor too, not just this
 		// paragraph's own lines: when a multi-line label's "]:" tail is
 		// the line directly ABOVE, this paragraph's own first line is
@@ -772,15 +968,54 @@ func inLinkRefDefZone(source []byte, trimmed []string, contentStart int, zoneAbo
 		// what follows invalidates the whole definition — found by
 		// FuzzFormat on "[\]\n]:\n0\n\"\"0" (seed 0767a5cc905fe38b),
 		// the mirror of seed 0df31d8ad2438ba6's contains-side case.
-		return true
+		return SkipLinkRefDefNeighbor
 	}
 	if len(trimmed) > 0 {
 		window := string(prevLine) + "\n" + trimmed[0]
-		if defShapeAnywhereRE.MatchString(window) {
-			return true
+		for _, m := range defShapeAnywhereRE.FindAllStringIndex(window, -1) {
+			if m[1] > len(prevLine) {
+				// Spans the boundary, or sits wholly inside trimmed[0]:
+				// fires unconditionally, as before. (A match wholly
+				// inside trimmed[0] is already caught by the contains
+				// check (a) above — same pattern applied to the same
+				// line — so firing here too is harmless parity.)
+				return SkipLinkRefDefNeighbor
+			}
+			// Wholly inside prevLine: a definition chain can only reach
+			// this shape if it could have started at prevLine's own
+			// first content, i.e. everything to the shape's left is
+			// container-prefix-plausible. Prose to its left (the
+			// runnerGroups[0] mid-sentence case) means no chain can
+			// reach it, and any chain reaching from further above is
+			// already covered by the defAbove check earlier in this
+			// function.
+			if plausibleDefPrefix(prevLine[:m[0]]) {
+				return SkipLinkRefDefNeighbor
+			}
 		}
 	}
-	return false
+	return SkipNone
+}
+
+// plausibleDefPrefix reports whether prefix — the bytes of a line to the
+// left of a def-shaped match — could plausibly be a container prefix
+// (blockquote/list markers and padding) rather than prose, for
+// inLinkRefDefZone's (c). It is deliberately loose in the freezing
+// direction: it accepts every byte in the set space, tab, '>', '-', '+',
+// '*', '0'-'9', '.', ')' , so a non-marker run like "3.5) " still counts
+// as plausible and the paragraph below stays frozen — conservatism here
+// is free. Only a clearly-prose prefix (letters, quotes, backticks, and
+// the like) makes it return false and lets the paragraph unfreeze.
+func plausibleDefPrefix(prefix []byte) bool {
+	for _, b := range prefix {
+		switch {
+		case b == ' ' || b == '\t' || b == '>' || b == '-' || b == '+' || b == '*' || b == '.' || b == ')':
+		case b >= '0' && b <= '9':
+		default:
+			return false
+		}
+	}
+	return true
 }
 
 // continuationPrefix derives the container-prefix bytes for every output
@@ -865,6 +1100,20 @@ var unterminatedTagStartRE = regexp.MustCompile(`^<[A-Za-z]`)
 // why this triggers a whole-paragraph skip.
 func looksLikeUnterminatedTag(firstLineTrimmed string) bool {
 	return unterminatedTagStartRE.MatchString(firstLineTrimmed) && !strings.ContainsRune(firstLineTrimmed, '>')
+}
+
+// hasRawHTMLDeclOpener reports whether any masked line contains a "<?"
+// or "<!" raw-HTML opener — see its call site in build for why either
+// triggers a whole-paragraph skip. It runs on code-span-masked lines so
+// an opener inside inline code (`<?php ...`, the common legitimate way
+// prose mentions one) never costs the paragraph its reflow.
+func hasRawHTMLDeclOpener(maskedLines []string) bool {
+	for _, l := range maskedLines {
+		if strings.Contains(l, "<?") || strings.Contains(l, "<!") {
+			return true
+		}
+	}
+	return false
 }
 
 // hasUnbalancedBracket reports whether trimmedLines, taken together (a
