@@ -3292,7 +3292,7 @@ If you add a weight that appears above the fold, preload it too, or it may brief
 <ul>
 <li><strong>Components</strong> use BEM — <code>gag-hero</code>, <code>gag-hero__logo</code>, <code>gag-hero__phrase</code>.
   The block name matches the wrapper <code>&lt;div&gt;</code> in the Markdown.</li>
-<li><strong>Utilities</strong> are bare and reusable — <code>gag-nowrap</code> (keeps a short code chip on one line inside a narrow table column), <code>gag-cont</code>.</li>
+<li><strong>Utilities</strong> are bare and reusable — <code>gag-nowrap</code> (keeps a short code chip on one line inside a narrow table column), <code>gag-cont</code>, <code>gag-asof</code>.</li>
 </ul>
 <p><strong>Grep the name before adding a class.</strong> A collision does not error — it resolves by specificity, silently. <code>.md-typeset .gag-nowrap</code> (0,2,0) beats a plain <code>.gag-nowrap</code> (0,1,0), so a new rule reusing that name has no effect and the symptom is "my CSS does nothing," with nothing in the build to explain it.
 A utility that must never change behaviour and a component that must change it at a breakpoint are different classes, even when the declaration is identical.</p>
@@ -3304,6 +3304,14 @@ Pin the columns with <code>table-layout: fixed</code> rather than tuning the pro
 "Last column" means GAG on that one table; everywhere else it is whatever the author put rightmost.
 The accent was global once, which put it on all ~660 tables in the tree, tinting Validation on the API reference and Fix on the troubleshooting page.
 Nothing in the build catches that, because the reveal JS classes every plain table (see <a href="#progressive-enhancement-docsjavascriptsextrajs">§ Progressive enhancement</a>), so the rule reaches far past the "marketing tables" its comment claimed. <strong>A new table rule that means something about a specific column belongs in a page scope, not in the global block.</strong></p>
+<p><strong>The ARC column carries three verdict states, not two.</strong> <code>gag-yes</code> and <code>gag-no</code> are the verdicts; <code>gag-unverified</code> is the muted third, for a claim the project believes and has not checked.
+A verdict cell also ends in a <code>gag-asof</code> stamp naming the upstream version and the date it was read, which is a content rule rather than a style one and is enforced by <code>make comparison-stamps-check</code>.
+The reasoning is in <a href="../documentation-standards/#a-competitor-side-verdict-carries-its-own-stamp">documentation-standards.md</a>.
+The stamp inherits <code>--gag-muted</code> and tabular digits, per the interface rules below; keep it quieter than the claim it sits under, since it is provenance rather than argument.</p>
+<p><strong>What the stamps cost the page, measured on the built site 2026-08-12.</strong> One stamp is 139px on a single line and never wraps, which is what keeps it out of the fixed columns' way: at 1280px the ARC column is 354px and at 375px the whole table is 343px, and neither width introduces horizontal scroll.
+It adds ~26px per row, so the table went from roughly 2,010px to 2,453px at 1280px.
+The worst ratio is a one-word <code>yes</code> row, 53px to 79px, which is also the cell where a bare verdict was least defensible.
+Keep a stamp to one line if the format ever grows: a wrapping stamp would pay that cost twice on every row.</p>
 <h3 id="changing-the-hero-headline">Changing the hero headline<a class="headerlink" href="#changing-the-hero-headline" title="Permanent link">&para;</a></h3>
 <p>The headline's type size and its two breakpoints are <strong>derived from the longest unbreakable phrase</strong>, not chosen for looks.
 The display face is monospace, so a phrase's width is arithmetic: <code>characters × 0.61em</code>. <code>Self-hosted GitHub Actions</code> is 26 characters — 15.86em, or 920px at the 2.9rem the headline used to cap at, against a headline column of only 718px.

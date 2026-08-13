@@ -4851,6 +4851,13 @@ Each is a claim about state, and each has a cheap way of being wrong:</p>
   This is the sibling of the pipe traps above: there the status is misread, here it is read correctly and then ignored.
   Bind the mutation to the check that authorizes it, <code>scripts/docs/lint-backlog.sh &amp;&amp; git add docs/STATUS.md &amp;&amp; git commit</code>, or branch on <code>$?</code> explicitly.
   The pre-commit hook backstops this particular file, and a backstop is not a reason to write the chain so that it depends on one.</li>
+<li><strong>A completion predicate must key on what ends the run, not on a string that appears in it.</strong> A <code>Monitor</code> armed on <code>make check</code> for <code>check-dep-advisory</code>, the advisory that runs last, fired while the gate was still inside <code>scripts-test</code>, because <code>ci/check-dep-advisory-test</code> is a suite name that phase prints as it works.
+  The report went out as "run complete" with <code>build-tags-check</code>, <code>lint</code> and <code>cover-check</code> not yet started (measured 2026-08-12).
+  The trap is the run's own vocabulary: a marker chosen to mean "finished" is usually also a word the run says while working, and the false fire looks exactly like the real one.
+  Grep the marker against a full log of an earlier run before arming a watcher on it, and prefer the process exiting, since a background task's completion notification cannot fire early.</li>
+<li><strong>Green checks say the run passed, never that your change is gated.</strong> The two come apart exactly when a gate is new, which is when nobody thinks to look. <code>comparison-stamps-check</code> shipped into <code>CHECK_FAST_GATES</code> and into no workflow, so it ran under a local <code>make check</code> and never on a PR: <code>unit-test.yml</code> path-ignores docs, and <code>doc-links.yml</code> names each docs gate as its own job rather than running <code>make check</code>.
+  Ten green checks on the head SHA said nothing about it, and <code>gate-lists-check</code> stayed green throughout, because it reconciles the Makefile, the tree and this file, never <code>.github/workflows/</code> (Q831).
+  Verify a new gate by naming its <strong>job</strong> in the run's job list (<code>gh run view &lt;id&gt; --json jobs</code>) rather than by the workflow's conclusion, and grep the target across <code>.github/workflows/</code> beside a known-wired control, so an empty result cannot read as a bad query.</li>
 </ul>
 <p>The failure mode these share is reporting a conclusion from a signal that does not carry it.
 The fix is the same each time: name the signal the claim actually depends on, confirm it could have shown you the opposite, and read that one.</p>

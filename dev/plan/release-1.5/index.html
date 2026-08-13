@@ -2747,9 +2747,15 @@ It touches no shipped artifact, so individual corrections can land continuously 
 The 2026-08-06 review traced the undated cells to the format: a green-check/red-X table needs a definite cell in every row, and the working notes it was built from had marked most competitor-side facts as unverified.
 The format had nowhere to put "we believe this but have not checked it", so unverified became a red X. Patching cells does not fix that; either every competitor-side cell carries a version and a date, or the page stops rendering competitor claims as verdicts.</p>
 <p><strong>Settled 2026-08-11: the table keeps its shape and gains a third state.</strong> A competitor-side cell carries a verdict only when it also carries an ARC version and a measurement date; without both it renders as unverified.
-Tracked as <a href="../../STATUS/#Q801">Q801</a>.</p>
+Tracked as Q801, and <strong>shipped 2026-08-12</strong>: <code>make comparison-stamps-check</code> enforces the rule, <code>.gag-unverified</code> is the state, and all 17 ARC cells were re-read at 0.14.2 / <code>9bb16ae</code> and stamped.
+The rule is <a href="../../development/documentation-standards/#a-competitor-side-verdict-carries-its-own-stamp">documentation-standards.md § A competitor-side verdict carries its own stamp</a>; the per-cell evidence is <a href="../competitive-analysis-2026-08/#per-cell-evidence-for-the-arc-column-2026-08-12">in the competitive analysis</a>.</p>
 <p>Measured the same day, which is what makes this a format decision rather than a cleanup: <strong>15 of the 17 comparison rows carry neither an ARC version nor a date.</strong> Only two do.
 Dating them is the work either way, so the question is only what the page asserts while that is outstanding.</p>
+<p><strong>How the dating actually went, 2026-08-12.</strong> All 17 came back with a verdict rather than some falling to unverified, because re-reading them at one pinned commit was cheaper than the row assumed: eleven of the twelve gap-asserting cells were settled from two chart <code>values.yaml</code> files, four controller source files and one recursive file listing.
+Two corrections fell out of it.
+The quota row now names the 30 s retry beside the 10 min registration burn, both read at <code>9bb16ae</code>, and the "three rules, all <code>patch</code>" reading behind the pre-claim-seat argument is two rules at that commit.
+The unverified state therefore ships with no cell using it, which is the right way round: the format can express doubt before it needs to, and the gate is what stops the next unmeasured cell rendering as a verdict.
+The one claim that stayed weaker than the rest is the auto-re-run negative, which is a keyword-and-surface reading rather than an exhaustive one and says so in the evidence table.</p>
 <p>The argument is the asymmetry between the two ways of being wrong.
 Two cells have already gone false at datable upstream releases, and a reader who checks one and finds it wrong has no reason to trust the other sixteen; the page's whole value is that a sceptical evaluator can spot-check it.
 An unverified cell costs nothing by comparison, and next to cells that do carry a version and a date it reads as rigour rather than as a gap.</p>

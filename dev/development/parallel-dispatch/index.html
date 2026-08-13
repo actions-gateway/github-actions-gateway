@@ -3059,7 +3059,11 @@ It also made the chips themselves unreviewable, which matters because the chip l
   Mark an unverified claim as unverified, or leave it out.</li>
 <li><strong>The trap worth naming</strong> — the tempting wrong fix, the control the test needs, the decision the row leaves open.
   A trap is a claim too, and the most load-bearing one in the prompt, since it tells the worker what <em>not</em> to look at.</li>
-<li><strong>Contention</strong> with work in flight, by file.</li>
+<li><strong>Contention</strong> with work in flight, by file.
+  When several workers will touch one large doc, say so <strong>and</strong> say what the resulting <code>gh pr create</code> denial means: <em>read the other PR and override with the reading</em>, never <em>re-scope this change</em>.
+  A worker who shrinks a good change to get past the guard reports that as scoping, not as friction, so it never appears in a friction report afterwards and cannot be found retrospectively.
+  It has to be in the prompt or it stays invisible.
+  Measured across one batch: five overrides, each recorded with a reading, one of which caught a cross-PR contradiction nothing else would have.</li>
 </ul>
 <p>A prompt that fits in a few lines is one a maintainer can scan a whole wave of.
 If it is running long, the excess is usually contract that belongs in the skill, or task detail that belongs in the Queue row.</p>
@@ -3241,6 +3245,12 @@ It is the same command the checker would have run, and the rebase is the only de
   There is no <code>-c</code> form that unsets a driver, so a clone that has run <code>make merge-driver</code> cannot answer this question at all.</p>
 </li>
 <li>
+<p><strong><code>mergeStateStatus</code> lags a force-push, so pair it with the head OID.</strong> The branch ref updates immediately and the PR object does not: measured 2026-08-12, <code>git ls-remote</code> showed the new head while <code>gh pr view</code> still returned the <em>superseded</em> OID with <code>DIRTY</code> for minutes, and pr-sentinel read it in that window and fired <code>conflict</code> on a branch that was already healed.
+  Ask for <code>headRefOid</code> alongside the status and compare it to <code>git ls-remote origin refs/heads/&lt;branch&gt;</code>; differing OIDs mean the verdict is about something you no longer have, so re-read rather than act.
+  Same discipline as requiring a tree OID to prove a probe ran. <strong><code>UNKNOWN</code> with <em>matching</em> OIDs is a third case</strong>: the read is fresh and GitHub is still computing.
+  Rebase anyway rather than waiting, because a no-op rebase costs nothing and acting on an uncomputed field costs a cycle — the asymmetry decides it, not the field.</p>
+</li>
+<li>
 <p><strong>Ask GitHub whether a branch is dirty, and use a driverless clone only for the conflict set.</strong> <code>gh pr view &lt;n&gt; --json mergeStateStatus</code> is the server's own verdict rather than a model of it, and it costs one call.
   When you need the <em>paths</em> rather than the verdict, take them where no driver is configured:</p>
 </li>
@@ -3298,6 +3308,10 @@ If you build your own watcher, it must:</p>
 <li>Re-emit on <strong>state transitions</strong> (failed → green, conflicting → mergeable), not once-and-forever, because PRs flip-flop as siblings merge.</li>
 <li>Handle <strong>docs-only PRs that trigger zero CI checks</strong> — treat zero-checks + mergeable as ready (and keep a periodic backstop poll, since an event-only watcher can miss them).</li>
 </ul>
+<p><strong>Do not arm a watch during a known-dirty window.</strong> <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/agent/pr-mergeability-watch.sh"><code>pr-mergeability-watch.sh</code></a> polls before its first sleep, so a watch armed against a PR that is already <code>DIRTY</code> fires <code>conflict</code> and exits within one <code>gh</code> call, spending the watch on a state you already knew.
+Arm it after the heal reports <code>CLEAN</code>.
+The inverse is not a symptom: an instant fire <em>after</em> a clean read means the PR went dirty in between, which is the watch working.
+The rule is about the window, not about the speed of the wake.</p>
 <h2 id="the-no-secrets-rule">The no-secrets rule<a class="headerlink" href="#the-no-secrets-rule" title="Permanent link">&para;</a></h2>
 <p>Workers must never read, print, log, or pass any secret to a model, and the campaign must not introduce stored credentials.
 Where a task seems to need a secret (e.g. image signing), prefer the keyless/OIDC path; if that is genuinely infeasible, the worker <strong>flags it</strong> rather than introducing a key.

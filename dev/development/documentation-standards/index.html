@@ -2700,6 +2700,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#a-competitor-side-verdict-carries-its-own-stamp" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        A competitor-side verdict carries its own stamp
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#when-you-cannot-measure-it" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2712,6 +2723,17 @@
         
       </ul>
     </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#a-rule-written-from-one-instance-names-its-second-one" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        A rule written from one instance names its second one
+      
+    </span>
+  </a>
   
 </li>
       
@@ -3068,10 +3090,41 @@ The second names the input as well as the version, because the answer depended o
 When the measurement needs more than a clause, it goes in <code>docs/</code> and the comment links there.
 Growing a provenance paragraph in the source is not the compliant form.</p>
 <p><strong>A live gate beats a date.</strong> Where a gate re-measures the claim on every run, name the gate instead: it is fresher than any date, and it turns red when upstream moves. <code>make test-autoscaler</code> and <code>make test-karpenter</code> drive real autoscalers and assert the matcher's verdict on the events that come back, which is why the reason constants they pin carry no per-claim date.</p>
+<h3 id="a-competitor-side-verdict-carries-its-own-stamp">A competitor-side verdict carries its own stamp<a class="headerlink" href="#a-competitor-side-verdict-carries-its-own-stamp" title="Permanent link">&para;</a></h3>
+<p>The marketing case, and the one where the prose form of the rule is not enough.
+<a href="../../why-gag/">why-gag.md</a> renders competitor claims as green checks and red X's, and a verdict table needs a definite cell in every row.
+The working notes it was built from had marked most ARC-side facts unverified, and the format had nowhere to put "we believe this but have not checked it", so eleven unverified facts shipped as red X's (<a href="https://github.com/actions-gateway/github-actions-gateway/pull/308">#308</a>).
+Two then went false at datable upstream releases with nothing going red.</p>
+<p>One blanket "measured on DATE against VERSION" note under the table does not fix it: under a blanket note a checked claim and an assumed one render identically, so staleness accumulates invisibly and re-verification is all-or-nothing.
+The rule is therefore per cell, and mechanical enough to gate:</p>
+<ul>
+<li>a <strong>verdict</strong> carries exactly one <code>&lt;span class="gag-asof"&gt;VERSION · DATE&lt;/span&gt;</code>, naming the upstream version it was read at and the day it was read;</li>
+<li><strong><code>.gag-unverified</code></strong> is the state for a claim we believe and have not checked, and it carries no stamp, because a stamp is what a verdict rests on;</li>
+<li>there is no third case. <code>make comparison-stamps-check</code> fails the page, in <code>make check</code>.</li>
+</ul>
+<p>Only the competitor column is stamped.
+A wrong claim about this repo's own behaviour goes red in a test, which is the "our own behaviour is not upstream" exemption above; requiring a citation there would add nothing to that gate and would make every GAG cell unfixable without one nobody can produce.</p>
+<p><strong>Staleness is reported, never failed.</strong> A gate that reds on a date nobody committed turns <code>main</code> red with no change to revert, so <code>check-comparison-stamps.sh --report</code> prints the stamps oldest-first and <a href="../../operations/release/#1-pre-flight">release pre-flight</a> reads it.
+That is what turns pre-flight from "re-verify everything" into "re-check what went stale".</p>
+<p><strong>Pin the ref beside the version.</strong> A tag names what the stamp claims; a commit is what makes it re-checkable, since a link to a branch drifts out from under the claim it was cited for (#1422).
+The page carries the commit once, under the table, and the per-cell evidence lives in <a href="../../plan/competitive-analysis-2026-08/#per-cell-evidence-for-the-arc-column-2026-08-12">the competitive analysis</a>.</p>
 <h3 id="when-you-cannot-measure-it">When you cannot measure it<a class="headerlink" href="#when-you-cannot-measure-it" title="Permanent link">&para;</a></h3>
 <p>Say so in the same clause: "unverified, source inspection only".
 One clause tells the next session where to start, instead of handing it something it will trust for months.
-Every claim in the table above shipped as a flat assertion instead.</p>
+Every claim in the table above shipped as a flat assertion instead.
+On a surface that renders verdicts rather than sentences, the same admission has a rendering of its own (previous section).</p>
+<h2 id="a-rule-written-from-one-instance-names-its-second-one">A rule written from one instance names its second one<a class="headerlink" href="#a-rule-written-from-one-instance-names-its-second-one" title="Permanent link">&para;</a></h2>
+<p>A process rule gets written when the incident that motivated it is freshest, from exactly one example, by someone who has just spent a session inside that example.
+That is the worst moment to tell which parts of it are the rule and which are the instance, so the rule carries the example's accidents forward as though they were the mechanism.</p>
+<p><strong>Check it against a second, unlike instance before it ships, or say in the rule that it is single-sourced.</strong> The second instance is what separates the two: what the pair share is the rule, what only one has was scenery.
+Shipping a single-sourced rule is fine; shipping one that reads like a general rule is not.</p>
+<p>Two here.
+Q702's first version, in <a href="../maintaining-backlog/">maintaining-backlog.md</a>, explained one defect landing on two Queue rows as two rows filed minutes apart out of one campaign, which was true of the pair it was written from.
+A session applying it to a different pair found the opposite cause, a row filed eleven days later by someone who did not know there was a pair, and neither the rationale nor the ownership test fitted.
+That second pair had been sitting in the Queue the whole time.
+The <code>CLAUDE.md</code> scratchpad bullet in the table above is the same shape and the more expensive one: it generalised a single prompt in a friction log, and sessions routed temp files away from a directory they were allowed to use until someone probed the guard.</p>
+<p>The cost is what makes the check worth its minutes.
+Finding a second instance costs a grep, while a rule that shipped narrow reads as settled, gets followed, and is questioned only when somebody applies it somewhere it does not fit.</p>
 <h2 id="conventions">Conventions<a class="headerlink" href="#conventions" title="Permanent link">&para;</a></h2>
 <table>
 <thead>

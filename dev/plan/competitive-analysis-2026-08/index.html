@@ -2650,6 +2650,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#per-cell-evidence-for-the-arc-column-2026-08-12" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Per-cell evidence for the ARC column, 2026-08-12
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#raw-research-artifacts" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2763,8 +2774,10 @@ Rated by what a competitor would have to change, not by how good the feature is.
 <p>This corrected an earlier conclusion in this same research, and it is the single most important thing on this page.</p>
 <ol>
 <li><strong>ARC's listener already holds a Kubernetes clientset.</strong> <code>scaler.New()</code> builds one from <code>rest.InClusterConfig()</code>.
-   It has the client and lacks the permissions: <code>rulesForListenerRole()</code> grants three rules, all <code>patch</code>, zero read verbs.
-   Adding <code>get</code>/<code>list</code>/<code>watch</code> on <code>resourcequotas</code> and <code>pods</code> is a small change, not a redesign.</li>
+   It has the client and lacks the permissions: <code>rulesForListenerRole()</code> grants two rules, both <code>patch</code>, zero read verbs.
+   Adding <code>get</code>/<code>list</code>/<code>watch</code> on <code>resourcequotas</code> and <code>pods</code> is a small change, not a redesign.
+   (This said three rules until 2026-08-12, when re-reading it at <code>9bb16ae</code> found two.
+   Whether the function changed or the original count was wrong is not established, and does not move the load-bearing half, which is the zero read verbs.)</li>
 <li><strong><code>actions/scaleset</code> already exposes <code>Listener.SetMaxRunners(count)</code></strong>, documented as safe to call during <code>Run</code>.
    Nothing in ARC calls it.</li>
 <li><strong>Open PR <code>actions/scaleset#113</code></strong> removes <code>acquireAvailableJobs</code> from the library and hands acquisition to the consumer, making selective acquisition a first-class extension point in GitHub's own client.</li>
@@ -2829,8 +2842,10 @@ All were generated as moat candidates and killed on review:</p>
 The working notes it was built from had marked most competitor-side facts <code>VERIFY</code>.
 The format had nowhere to put "we believe this but have not checked it", so <strong>11 unverified ARC-side facts shipped as red X's</strong>, none of them citing an ARC version or a measurement date.</p>
 <p>Two went false at datable releases without anyone noticing: 0.13.1 changed quota-blocked pod retry, and 0.14.0 added multi-label scale sets.</p>
-<p>The structural fix is the dated measurement stamp now under the table, and the recurring pre-flight step in <a href="../../operations/release/#1-pre-flight">release.md</a>.
-Patching cells alone would have reproduced the failure.</p>
+<p>The first fix was a dated measurement stamp under the table, plus the recurring pre-flight step in <a href="../../operations/release/#1-pre-flight">release.md</a>.
+That was not enough: one note for the whole column still renders a checked claim and an assumed one identically, so the format could go back to asserting things nobody measured with nothing to notice.
+The structural fix is the per-cell stamp and its gate (Q801, 2026-08-12), documented in <a href="../../development/documentation-standards/#a-competitor-side-verdict-carries-its-own-stamp">documentation-standards.md</a>.
+Patching cells alone would have reproduced the failure either way.</p>
 <p><strong>A related process defect:</strong> <code>plan/README.md</code> recorded Q60 as "verified + folded into appendix-d".
 The Q60-closing commit added 34 lines about Kueue and Exostellar and contained zero ARC per-claim verification.
 A row asserting verification that did not happen is worse than an open row: an open row invites the work, a falsely-closed one forecloses it.
@@ -2846,6 +2861,79 @@ The rule this produced is <a href="../../development/maintaining-backlog/#a-comp
 </ul>
 <p>Both would have been caught by reading the claim's own surrounding prose first.
 Every negative assertion here carries a positive control for that reason.</p>
+<h2 id="per-cell-evidence-for-the-arc-column-2026-08-12">Per-cell evidence for the ARC column, 2026-08-12<a class="headerlink" href="#per-cell-evidence-for-the-arc-column-2026-08-12" title="Permanent link">&para;</a></h2>
+<p>What each competitor-side cell of the <a href="../../why-gag/#gag-vs-arc-scale-set-mode">comparison table</a> was read against, so a re-check starts from a file rather than from the claim.
+Every row was read on <strong>2026-08-12</strong> at ARC <code>gha-runner-scale-set</code> <strong>0.14.2</strong>, commit <a href="https://github.com/actions/actions-runner-controller/tree/9bb16ae49d0ce585d8e682aa7e2668a6e832d5d8"><code>9bb16ae</code></a>.
+Blob links are pinned to that commit rather than to <code>master</code>, so the quoted lines stay at the cited coordinates (the <a href="https://github.com/actions-gateway/github-actions-gateway/pull/1422">#1422</a> precedent).</p>
+<p>The 2026-08-06 research above is the reasoning; this is the file-and-line layer under it, which is what <a href="#why-the-marketing-drifted-and-the-fix">Q60's false closure</a> turned out not to have.</p>
+<table>
+<thead>
+<tr>
+<th>Cell</th>
+<th>Read at <code>9bb16ae</code></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Scale-set acquisition, ephemeral pods</td>
+<td><code>go.mod</code> names <a href="https://github.com/actions/actions-runner-controller/blob/9bb16ae49d0ce585d8e682aa7e2668a6e832d5d8/go.mod"><code>github.com/actions/scaleset v0.4.0</code></a>, the same client library GAG acquires with; <code>EphemeralRunner</code> is the per-job object</td>
+</tr>
+<tr>
+<td>Custom pod template and image, reusable templates</td>
+<td><a href="https://github.com/actions/actions-runner-controller/blob/9bb16ae49d0ce585d8e682aa7e2668a6e832d5d8/charts/gha-runner-scale-set/values.yaml"><code>charts/gha-runner-scale-set/values.yaml</code></a> takes one <code>template:</code> PodSpec per release, inline. No shared template object exists</td>
+</tr>
+<tr>
+<td>Scale to zero, guaranteed floor</td>
+<td>Same file: <code>maxRunners</code> and <code>minRunners</code> are per scale set, and <code>minRunners</code> is a warm-pool floor rather than a reservation another set cannot spend</td>
+</tr>
+<tr>
+<td>Safe under a <code>ResourceQuota</code></td>
+<td><a href="https://github.com/actions/actions-runner-controller/blob/9bb16ae49d0ce585d8e682aa7e2668a6e832d5d8/controllers/actions.github.com/ephemeralrunner_controller.go"><code>ephemeralrunner_controller.go</code></a>: on <code>exceeded quota:</code> it requeues after <code>30 * time.Second</code>, and once the runner passes <code>CreationTimestamp + 10 * time.Minute</code> it deletes and re-creates it, spending a fresh single-use registration each cycle</td>
+</tr>
+<tr>
+<td>Stop claiming when the cluster can't place</td>
+<td><a href="https://github.com/actions/actions-runner-controller/blob/9bb16ae49d0ce585d8e682aa7e2668a6e832d5d8/cmd/ghalistener/scaler/scaler.go"><code>scaler.go</code></a>: <code>HandleDesiredRunnerCount</code> patches <code>EphemeralRunnerSet.spec.replicas</code> and consults no cluster state. <code>rulesForListenerRole</code> in <a href="https://github.com/actions/actions-runner-controller/blob/9bb16ae49d0ce585d8e682aa7e2668a6e832d5d8/controllers/actions.github.com/resourcebuilder.go"><code>resourcebuilder.go</code></a> grants two rules, both <code>patch</code>, so it could not read a quota if it wanted to</td>
+</tr>
+<tr>
+<td>Auto-re-run</td>
+<td>ARC's own client, <a href="https://github.com/actions/actions-runner-controller/blob/9bb16ae49d0ce585d8e682aa7e2668a6e832d5d8/github/actions/actions.go"><code>github/actions/actions.go</code></a>, exposes no <code>/actions/runs</code> path, and no controller or client file calls a re-run endpoint. <strong>The negative is a keyword-and-surface reading, not an exhaustive one</strong>, so a mechanism under another name would not have been found</td>
+</tr>
+<tr>
+<td>Anti-stampede throttling</td>
+<td><a href="https://github.com/actions/actions-runner-controller/blob/9bb16ae49d0ce585d8e682aa7e2668a6e832d5d8/charts/gha-runner-scale-set-controller/values.yaml"><code>charts/gha-runner-scale-set-controller/values.yaml</code></a>: <code>flags.rateLimiter</code>, <code>k8sClientRateLimiterQPS</code>/<code>Burst</code>, <code>runnerMaxConcurrentReconciles</code>. All controller-wide, all metering reconciles and API calls</td>
+</tr>
+<tr>
+<td>Per-tenant egress IPs</td>
+<td>Scale-set <code>values.yaml</code> <code>proxy:</code> takes an <code>http</code>/<code>https</code>/<code>noProxy</code> URL plus a credential secret, for a proxy the operator already runs. Nothing provisions or reconciles a pool</td>
+</tr>
+<tr>
+<td>App private key in the cluster</td>
+<td><code>newScaleSetListenerConfig</code> in <code>resourcebuilder.go</code> writes <code>config.AppConfig</code> into the listener's <code>config.json</code> Secret; <code>appconfig.FromSecret</code> reads <code>github_app_private_key</code>. With <code>vaultConfig</code> set, only the vault coordinates are written and the listener resolves the key itself</td>
+</tr>
+<tr>
+<td>Listener footprint</td>
+<td>Scale-set <code>values.yaml</code> <code>listenerTemplate</code> is "the PodSpec for each listener Pod"; <a href="https://github.com/actions/actions-runner-controller/blob/9bb16ae49d0ce585d8e682aa7e2668a6e832d5d8/controllers/actions.github.com/autoscalinglistener_controller.go"><code>autoscalinglistener_controller.go</code></a> mirrors its secrets "in the Controller namespace"</td>
+</tr>
+<tr>
+<td>Per-tenant utilization metrics</td>
+<td>Both charts ship the metrics blocks commented out, disabling metrics unless uncommented. <a href="https://github.com/actions/actions-runner-controller/blob/9bb16ae49d0ce585d8e682aa7e2668a6e832d5d8/cmd/ghalistener/metrics/metrics.go"><code>cmd/ghalistener/metrics/metrics.go</code></a> carries a <code>namespace</code> label and no quota series</td>
+</tr>
+<tr>
+<td>Right-sizing</td>
+<td><code>AutoscalingRunnerSetStatus</code> in <a href="https://github.com/actions/actions-runner-controller/blob/9bb16ae49d0ce585d8e682aa7e2668a6e832d5d8/apis/actions.github.com/v1alpha1/autoscalingrunnerset_types.go"><code>autoscalingrunnerset_types.go</code></a> is five fields: a phase and four runner counts. No recommendation surface, and no <code>recommend</code>/<code>rightsize</code>/<code>vpa</code> path anywhere in the tree</td>
+</tr>
+<tr>
+<td>Cross-tenant fleet health</td>
+<td>One sample dashboard, <code>docs/gha-runner-scale-set-controller/samples/grafana-dashboard/</code>, and zero alert-rule files in the tree</td>
+</tr>
+</tbody>
+</table>
+<p>Two things this pass did not settle, kept as claims rather than promoted to verdicts elsewhere on the page:</p>
+<ul>
+<li>the auto-re-run negative, above;</li>
+<li>the three "<a href="../../why-gag/#where-arc-is-ahead">where ARC is ahead</a>" bullets, which still carry the 2026-08-06 blanket date and no version.
+  They concede rather than assert a gap, so they are not gated, but they age the same way.</li>
+</ul>
 <h2 id="raw-research-artifacts">Raw research artifacts<a class="headerlink" href="#raw-research-artifacts" title="Permanent link">&para;</a></h2>
 <p>The full evidence lives under <code>tmp/compete/</code> in the worktree this was run from.
 It is <strong>gitignored and workstation-local</strong>, so it survives a session but not a fresh clone, and nobody else has it.
