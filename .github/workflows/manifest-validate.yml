@@ -78,6 +78,10 @@ jobs:
               # The shipped runner template library, yamllint'd by this gate as
               # hand-authored YAML an operator applies directly (Q554).
               - 'deploy/templates/**'
+              # The shipped monitoring artifacts, for the same reason (Q827):
+              # the reference PrometheusRule and the two Grafana dashboards
+              # reached operators with nothing in CI having parsed them.
+              - 'deploy/monitoring/**'
               - '.yamllint.yaml'
               - 'Makefile'
               # scripts/manifest/ is exactly this gate's backends — the validator
