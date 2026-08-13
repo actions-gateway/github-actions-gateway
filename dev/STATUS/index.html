@@ -2880,6 +2880,14 @@
 <td>Measured 2026-08-12 on #1431: <code>--assess</code> refuses at <code>human_enqueued</code>, ahead of the probe, so it records <code>base_oid -</code>. Q810 captures a queue eviction only, not an ordinary DIRTY wake (<a href="../development/parallel-dispatch/#conflict-policy">the class</a>).</td>
 </tr>
 <tr>
+<td><a id="Q828"></a>Q828</td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/agent/pr-requeue-eligible.sh">A verdict record written before the format change is refused as if it were corrupt</a></td>
+<td><code>bug</code> <code>ci</code> <code>retro</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>Measured 2026-08-12 on #1426: an <code>--assess</code> predating #1431 writes <code>ELIGIBLE main</code>, but <code>record()</code> now writes keyed <code>verdict</code> lines, so <code>--confirm</code> reads '' and refuses. Fails closed, but reads as corruption, not skew (Q805's class).</td>
+</tr>
+<tr>
 <td><a id="Q780"></a>Q780</td>
 <td><a href="../operations/release/#writing-the-curated-notes">Enumerate Kubernetes Event reasons mechanically for the release notes</a></td>
 <td><code>debt</code> <code>ci</code> <code>retro</code></td>
@@ -2901,7 +2909,7 @@
 <td><code>tests</code> <code>retro</code></td>
 <td>🔲</td>
 <td>S</td>
-<td>Measured across this family: Q596 spent 2418 runs and Q703 240, neither reproducing a trigger seen only on CI. An 18-core Mac is the wrong shape. A <code>--cpus=2</code> container around <code>make scripts-test</code> would make the negative mean something.</td>
+<td>Measured across this family: Q596 spent 2418 runs, Q703 240, Q803 5 at GOMAXPROCS=2, none reproducing a trigger seen only on CI. GOMAXPROCS caps Go's scheduler, not CPU contention, so an 18-core Mac is the wrong shape. A <code>--cpus=2</code> container is not.</td>
 </tr>
 <tr>
 <td><a id="Q743"></a>Q743</td>
@@ -3032,12 +3040,12 @@
 <td>Blocked by <a href="#Q539">Q539</a>. Validate the composed stack: node-level P2P for pod images, in-guest mirror for job pulls; confirm the P2P mesh stays unreachable from worker pods. One deployment for both classes? <a href="../plan/caching-and-worker-storage/">scope</a></td>
 </tr>
 <tr>
-<td><a id="Q695"></a>Q695</td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/deploy/monitoring/prometheusrule.yaml">No alert covers a capacity gate throttling intake</a></td>
-<td><code>docs</code> <code>debt</code></td>
+<td><a id="Q818"></a>Q818</td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/deploy/monitoring/prometheusrule.yaml">The shipped <code>PrometheusRule</code> has drifted from the doc that reproduces it</a></td>
+<td><code>docs</code> <code>ci</code> <code>debt</code></td>
 <td>🔲</td>
 <td>S</td>
-<td>Measured 2026-08-05: none of the 20 alerts reference <code>worker_capacity_declined</code>, <code>jobs_admission_rejected_total</code>, or <code>scaleset_capacity_withheld</code>, so a gated set throttling intake is invisible. Q658 settled that <code>AwaitingProbe</code> alone must not alert.</td>
+<td>Measured 2026-08-12: <code>ActionsGatewayScaleSetJobsDeferred</code> is in <code>observability-alerting.md</code> and <code>runbook.md</code> but not in the rule file, and <code>ActionsGatewayReconcileErrors</code>' summary differs. Nothing gates the pair, so "the same rules" is untrue.</td>
 </tr>
 <tr>
 <td><a id="Q701"></a>Q701</td>
@@ -3237,7 +3245,7 @@
 <td><code>feature</code> <code>docs</code></td>
 <td>🔲</td>
 <td>S</td>
-<td><code>adv.Withheld</code> reaches Prometheus only, so a tenant without metrics access cannot see why intake is throttled. Add <code>advertisedCapacity</code> and a per-reason withheld list to <code>RunnerSetStatus</code>. Distinct from Q695's alert gap.</td>
+<td><code>adv.Withheld</code> reaches Prometheus only, so a tenant without metrics access cannot see why intake is throttled. Add <code>advertisedCapacity</code> and a per-reason withheld list to <code>RunnerSetStatus</code>. Q695's alerts cover the operator side; this is the tenant's.</td>
 </tr>
 <tr>
 <td><a id="Q724"></a>Q724</td>

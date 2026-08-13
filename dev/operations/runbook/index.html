@@ -2617,6 +2617,28 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#actionsgatewaycapacitygaterejectingjobs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ActionsGatewayCapacityGateRejectingJobs
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#actionsgatewayscalesetcapacitywithheld" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ActionsGatewayScaleSetCapacityWithheld
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -3440,6 +3462,28 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#actionsgatewaycapacitygaterejectingjobs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ActionsGatewayCapacityGateRejectingJobs
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#actionsgatewayscalesetcapacitywithheld" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ActionsGatewayScaleSetCapacityWithheld
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -3815,6 +3859,28 @@ Every increment is an explicit allowlist denial (sharper than <code>dial_errors<
 <li>Identify the denied destinations from the proxy's <code>CONNECT destination not allowed</code> warning logs, which record the rejected <code>host</code>: <code>kubectl logs -n &lt;namespace&gt; deploy/&lt;proxy-deployment&gt; | grep "destination not allowed"</code>.</li>
 <li>If the destinations are unexpected, treat it as SSRF probing or a compromised workload — inspect the workflow acquiring the affected runner and correlate with <code>proxy_dial_errors_total</code>.</li>
 <li>If a legitimate egress target is missing, add it to the platform-owned egress allowlist rather than to the workflow — see <a href="../security-operations/#worker-egress-destinations-the-egress-allowlist">security-operations.md § Worker egress destinations</a>.</li>
+</ol>
+<h3 id="actionsgatewaycapacitygaterejectingjobs">ActionsGatewayCapacityGateRejectingJobs<a class="headerlink" href="#actionsgatewaycapacitygaterejectingjobs" title="Permanent link">&para;</a></h3>
+<p><strong>Ticket.</strong> A runner set opted into <a href="../troubleshooting/#runnerset-reports-workercapacitydeclined-the-gateway-stopped-claiming-jobs"><code>spec.capacityGate</code></a> and the gate has been leaving delivered jobs queued at GitHub for half an hour, because the cluster cannot place another worker pod of that set's shape.
+This is the <strong>classic</strong> acquisition tier, where every increment is one job GitHub delivered and the AGC declined to claim.</p>
+<p>Refusing is the gate working: claiming a job the cluster cannot run spends a single-use JIT runner record and ends in a cancelled workflow run.
+What the alert reports is that the refusal is not clearing.
+The gate throttles rather than seals, so intake continues at roughly one claim per <code>pendingPodDeadline</code> window; over 30 minutes that is at least three probes that failed to find capacity.</p>
+<ol>
+<li>Read the gate's evidence: <code>max by (namespace, runner_set, reason) (actions_gateway_runnerset_worker_capacity_declined == 1)</code>. <code>ScaleUpDeclined</code> is the cluster autoscaler's own refusal, <code>PodsUnschedulable</code> is the scheduler's verdict, and <code>AwaitingProbe</code> is the latched state that outlives the pod which produced it.
+   The gauge keys on <code>runner_set</code> while this alert's series keys on <code>runner_group</code>; both carry the same set's name, because the rejection counter is shared with v1 <code>RunnerGroup</code> owners.</li>
+<li>Work the reason with <a href="../troubleshooting/#runnerset-reports-workercapacitydeclined-the-gateway-stopped-claiming-jobs">RunnerSet Reports WorkerCapacityDeclined</a>, which maps each one to the node, taint, or quota fix that restores placement.</li>
+<li>The one-line rollback, if the gate is wrong about the cluster, is <code>spec.capacityGate.mode: Off</code>; the same section covers when that is the right call.</li>
+</ol>
+<h3 id="actionsgatewayscalesetcapacitywithheld">ActionsGatewayScaleSetCapacityWithheld<a class="headerlink" href="#actionsgatewayscalesetcapacitywithheld" title="Permanent link">&para;</a></h3>
+<p><strong>Ticket.</strong> The same gate on the <strong>scale-set</strong> (default) tier, where a declined job is never assigned at all, so there is no rejected delivery to count.
+The gate shows up instead as slots removed from the ceiling the set advertises to GitHub, and runs wait in the queue for capacity the set is declining to offer.</p>
+<p>The alert requires the set to have been assigned work in the last hour, which is what separates a gate doing its job from one worth a ticket.
+An idle gated set whose worker shape stays unplaceable holds a latched <code>AwaitingProbe</code> decline indefinitely; that reading is truthful and costs nothing, so on its own it must not raise a ticket.
+Under a real withhold the per-window probe job is still assigned, so a set with work waiting keeps <code>actions_gateway_scaleset_jobs_assigned_total</code> moving while an idle one does not.</p>
+<ol>
+<li>Read <code>actions_gateway_scaleset_advertised_capacity</code> for what the set is still offering and <code>actions_gateway_scaleset_capacity_withheld</code> by <code>reason</code> for who took the rest; a <code>quota</code> share alongside the <code>capacity</code> one means the <a href="../troubleshooting/#jobs-failing-due-to-namespace-resourcequota-exhaustion">ResourceQuota</a> is binding too.</li>
+<li>Then follow the same evidence and remediation path as <a href="#actionsgatewaycapacitygaterejectingjobs">ActionsGatewayCapacityGateRejectingJobs</a> above.</li>
 </ol>
 <hr />
 <h2 id="slo-breach-response">SLO Breach Response<a class="headerlink" href="#slo-breach-response" title="Permanent link">&para;</a></h2>

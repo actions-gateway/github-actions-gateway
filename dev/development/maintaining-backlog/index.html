@@ -3266,6 +3266,11 @@ The real defect had the opposite sign: a valid reformat made the gate emit twelv
 <p>Rows that name an unknown are honest and useful — several in the Queue say "unmeasured live — confirm X before building".
 That phrasing is the pattern: it tells the next session where to start, instead of sending it to repair something that already works.
 Only a stated <em>mechanism</em> needs this; a symptom ("this test flaked on run N, passed on rerun") is already an observation.</p>
+<p><strong>A CI observation cites the run or job, not the PR number.</strong> A PR is not a stable pointer to a measurement: its head moves, and the run that failed can end up on a head nobody can reach while the merged head reads green.
+Q803's Notes said "Measured 2026-08-12 on #1403, a docs-only diff: 78.7% against 79.5%".
+Reading #1403's coverage job returned <code>./cmd/proxy 79.3% ok (floor 79.5%)</code>, so the cited artifact contradicted the row rather than supporting it.
+The real evidence was on superseded head <code>8c67e281</code>, and recovering it took a scan of every failed <code>unit-test</code> run in the window to reach job <code>93978702603</code>.
+The row was right and still cost that scan, which is the point: cite the job id, or the run id and head SHA, so <code>gh run view --job &lt;id&gt; --log</code> re-reads the evidence instead of the next session re-deriving it.</p>
 <p><strong>The title carries a claim too, and it is the half that gets read.</strong> A picker reads the Item cell, names the branch, commit and PR after it, and may never re-read the Notes.
 Q656 was filed with a sound measurement in its Notes (two rows took Q644; the loser renumbered across a commit, a PR body and a plan doc) under a title asserting a mechanism nobody had checked: "<code>make queue-id</code> reports a free ID but reserves nothing".
 The reservation existed and worked, an atomic ref claim with 240 live IDs, so the title named a defect the code did not have while the Notes named one it did.
