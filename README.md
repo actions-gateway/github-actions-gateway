@@ -29,8 +29,8 @@ Each team self-serves a fully isolated gateway from a single `ActionsGateway` cu
 | **0** | Idle GPU pods between jobs. Workers exist only while a job runs |
 | **20** | Alert rules shipped as code, with a tenant dashboard and a platform dashboard beside them |
 
-ARC-side claims were measured on 2026-08-06 against the then-current ARC `gha-runner-scale-set` chart release and its `master` branch.
-[Capability by capability](docs/why-gag.md) names that exact version and carries the method.
+ARC-side claims were re-read on 2026-08-12, against the `gha-runner-scale-set` chart at commit [`9bb16ae`](https://github.com/actions/actions-runner-controller/tree/9bb16ae49d0ce585d8e682aa7e2668a6e832d5d8).
+[Capability by capability](docs/why-gag.md) names the chart version, stamps every competitor cell with the version and date it was read at, and fails our own build if one of them is missing.
 
 ## Is this for you?
 
@@ -49,7 +49,7 @@ ARC-side claims were measured on 2026-08-06 against the then-current ARC `gha-ru
 
 Running many runner groups for one tenant in a shared Kubernetes namespace creates four problems.
 
-**No automatic recovery when the cluster takes a worker away.** When a runner pod is preempted, drained, or evicted under node pressure, ARC has no re-run flow: `deleteEphemeralRunnerOrPod` deletes the `EphemeralRunner` and calls `RemoveRunner`, so the job is given up on (measured against ARC `master`, 2026-08-06).
+**No automatic recovery when the cluster takes a worker away.** When a runner pod is preempted, drained, or evicted under node pressure, ARC has no re-run flow: `deleteEphemeralRunnerOrPod` deletes the `EphemeralRunner` and calls `RemoveRunner`, so the job is given up on (read at ARC [`9bb16ae`](https://github.com/actions/actions-runner-controller/blob/9bb16ae49d0ce585d8e682aa7e2668a6e832d5d8/controllers/actions.github.com/ephemeralrunner_controller.go), 2026-08-12).
 Re-running it is a manual step.
 GitHub's own backstop is the queue timeout: a job can sit queued for 24 hours before it is automatically cancelled.
 
@@ -134,6 +134,17 @@ Opt-in profiles then apply the measurement at pod-build time: `Binpack` and `Thr
 All of them clamp to `minRequests`/`maxRequests`, fall back to the template until there are enough samples, and never touch GPU resources.
 Validated on GKE: a worker took a derived `1500m` where its templates asked for 2 and 3 CPU.
 Ephemeral runner pods are structurally out of reach for stock Vertical Pod Autoscaler (one job, minutes long, nothing to group them), so the loop closes inside the controller that builds the pods ([guide](docs/operations/worker-rightsizing.md), [Appendix D.7](docs/design/appendix-d-alternatives-considered.md#d7-worker-right-sizing-why-built-in-not-bolted-on)).
+
+**A job's conclusion outlives the process that reached it.** Concluding a job and acknowledging it at GitHub cannot be made atomic from here, so the ordering is write-ahead: conclusions are persisted to a per-`RunnerSet` ConfigMap before any message delete is issued, and the listener refuses to issue a delete while that state cannot be saved (Q606).
+A hard kill in the gap therefore leaves the message in the queue to be replayed rather than losing the conclusion, and a graceful stop drains the conclusions it already owes before flushing (Q689).
+Correlated over 60 stops at maximum pressure: all 4 taken before the completion was read replayed, none of the 56 taken after it did.
+
+That ordering came out of a durability programme rather than a design review.
+Its motivating incident ran 16 hours with the AGC down for all of them and stranded 82 spot node-hours, which is why `maxWorkerLifetime` (default 12 h) is stamped on each worker pod at provision time as its `activeDeadlineSeconds` and enforced by the **kubelet**: a bound that does not depend on the controller is the only kind that would have held during that incident (Q438).
+
+**The GitHub protocol dependency register.** GAG speaks GitHub's runner-facing protocols directly, and one of the two is Public Preview with no published wire specification.
+[The register](docs/design/github-protocol-dependencies.md) names each one, what it is used for, its source of truth, a stability tier, and the drift-watch trigger that should make us revisit it.
+It exists because the risk is not theoretical: a live probe found the backend auto-assigning jobs, deviating from the sources the client was built from, so a protocol assumed stable had already drifted.
 
 **Per-tenant utilization metrics.** Both the GMC and AGC expose Prometheus metrics scoped per tenant and runner group.
 Teams can see their own GPU utilization and argue for quota adjustments without cluster-wide visibility.

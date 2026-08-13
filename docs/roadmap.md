@@ -23,9 +23,6 @@ Every item here blocks a release tag, and nothing else appears in this section: 
 The pill beside each title names the release it blocks, read from the backlog rather than typed here, so it cannot outlive the commitment.
 
 
-- **[Every shipped capability reaches the pages that describe the project](features.md)** <!-- q:Q821 --> Nine reach the feature inventory and nothing else, among them workload identity with no App key in the cluster and the live-validated per-tenant egress IP.
-  The comparison table's competitor claims now carry a version and a date; the prose on the other pages does not.
-
 - **[Persistent and shared worker storage](operations/README.md)** <!-- q:Q719 --> Workers are storage-less by design and nothing validates a `ReadWriteMany` volume mounted into one, so the stance is undocumented rather than decided. `ReadWriteMany` is how jobs share files and what ARC's `containerMode: kubernetes` depends on, so it also matters to anyone migrating off that mode.
   Validation and a reference architecture come before any API.
 

@@ -103,7 +103,9 @@ Three bodies of work, in dependency order:
 1. **Corrections.** Claims that are wrong or stale today.
    The largest are the ARC-side cells of the `why-gag.md` comparison table: 11 of them assert a gap with no ARC version and no measurement date, and two went false at datable upstream releases (0.13.1 fixed quota-blocked pod creation; 0.14.0 added multi-label scale sets, which GAG does not have).
    Also the listener-footprint wording, which is substantively right but uses "cluster IP" to mean a pod IP, inviting a reader to check `Service` objects and conclude the table is wrong.
-2. **Under-claims.** Nine capabilities shipped and appear only in `features.md`.
+2. **Under-claims** ✅ **reconciled 2026-08-12 (Q821).** The count below is wrong and the [inventory](competitive-analysis-2026-08.md#under-claims-not-yet-fixed) now records why: three of the five outstanding items reached *no* surface at all rather than only `features.md`, and one had already shipped to all three.
+   The message-queue conclusion-durability body, the durability programme with its 16-hour/82-spot-node-hour incident, and the GitHub protocol dependency register are now on `features.md` and `README.md`; the worker-quota footprint arithmetic is the one still outstanding.
+   The original framing, kept because it is what the release was scoped against: Nine capabilities shipped and appear only in `features.md`.
    The largest are no-PEM workload identity (the GitHub App private key never enters the cluster), the live-validated per-tenant egress IP result, and the durability programme whose motivating incident was five worker pods running 16 hours on 82 spot node-hours.
 3. **Structure.** Q713 blocked any number-bearing claim, since the shipped tier emitted no latency or duration series to measure; it landed 2026-08-11, so latency and cost claims are now measurable on the default tier.
    Q712 blocked publishing tenant-isolation marketing and landed the same day, so that claim is available too: state it as the runner-group *binding*, not as GAG controlling repository access, which stays the platform admin's at GitHub.
