@@ -2896,12 +2896,12 @@
 <td>Measured 2026-08-12 closing Q802: invariant 3 compares link-vs-bare form only, so a bare <code>Q484</code> reads as closed while the cell around it said ❌ Open nine days after <code>v1.3.0</code> shipped. A release cell whose tag exists cannot be ❌.</td>
 </tr>
 <tr>
-<td><a id="Q821"></a>Q821</td>
-<td><a href="../plan/release-1.5/#in-scope-reconcile-the-marketing-surfaces">Reconcile the marketing surfaces the comparison-table gate does not reach</a></td>
-<td><code>docs</code> <code>1.5-gate</code></td>
+<td><a id="Q838"></a>Q838</td>
+<td><a href="../operations/resourcequota-sizing/">The worker quota-footprint arithmetic is shipped as a sizing guide, never claimed as matching Kubernetes' own evaluator</a></td>
+<td><code>docs</code></td>
 <td>🔲</td>
-<td>M</td>
-<td>Nine capabilities ship and reach no surface but <code>features.md</code>, and <code>index.md</code>/<code>README.md</code> still carry undated competitor prose no gate covers (<a href="../plan/competitive-analysis-2026-08/#under-claims-not-yet-fixed">inventory</a>).</td>
+<td>S</td>
+<td>Measured 2026-08-12 closing Q821: <code>features.md</code> points at the guide and the admission gate reads <code>hard - used</code> against the worker footprint, but no surface claims the arithmetic matches the upstream evaluator or that envtest pins it.</td>
 </tr>
 <tr>
 <td><a id="Q807"></a>Q807</td>

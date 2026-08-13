@@ -2806,6 +2806,10 @@ A capability listed under <code>dev</code> but not under a numbered release has 
 <li><strong><a href="../operations/tenant-onboarding/#step-2-create-the-actionsgateway-resource">Worker scale-up rate limiting</a></strong>: opt-in token bucket capping how <em>fast</em> workers start, distinct from the count ceiling, to smooth cold-start stampedes on shared egress.</li>
 <li><strong><a href="../design/02-architecture/">Scale-to-zero workers</a></strong>: worker pods exist only while a job runs; listeners are ~12 KiB goroutines in one shared pod, not a listener pod per runner group.</li>
 <li><strong><a href="../operations/tenant-onboarding/#step-2-create-the-actionsgateway-resource">Unmodified upstream runner images</a></strong>: the wrapper is injected into each worker pod at runtime (an OCI image volume on Kubernetes 1.33+, an initContainer below), so the stock <code>actions/runner</code> image, or any derivative, runs with no rebuild.</li>
+<li><strong><a href="../design/02-architecture/">A job conclusion survives losing the process</a></strong>: conclusions are persisted before any message delete is issued, so a hard kill leaves the message to be replayed rather than the conclusion lost.
+  Measured over 60 graceful stops at maximum pressure.</li>
+<li><strong><a href="../design/02-architecture/">Orphaned workers are bounded without a live controller</a></strong>: <code>maxWorkerLifetime</code> is stamped on each worker pod as its <code>activeDeadlineSeconds</code>, so the <strong>kubelet</strong> enforces it.
+  The motivating incident stranded 82 spot node-hours across 16 hours with the controller down.</li>
 </ul>
 <h2 id="capacity-cost-and-right-sizing">Capacity, cost, and right-sizing<a class="headerlink" href="#capacity-cost-and-right-sizing" title="Permanent link">&para;</a></h2>
 <ul>
@@ -2881,6 +2885,8 @@ A capability listed under <code>dev</code> but not under a numbered release has 
 <li><strong><a href="../operations/migration-v1-to-v2/"><code>gag-migrate</code></a></strong>: a one-shot fan-out that moves a tenant off <code>v1alpha1</code> without changing how jobs are acquired: dry-run, review, apply.</li>
 <li><strong><a href="../operations/v1alpha1-deprecation/">Deprecations and the <code>v2.0.0</code> removal</a></strong>: what <code>v2.0.0</code> removes, what keeps working until then, and the pre-upgrade checklist.</li>
 <li><strong><a href="../operations/migration-from-arc/">Migrating from ARC</a></strong>: concept mapping, behavioral differences, and a worked zero-downtime migration of one runner group.</li>
+<li><strong><a href="../design/github-protocol-dependencies/">The GitHub protocol dependency register</a></strong>: each GitHub runner-facing protocol this system speaks, its source of truth, a stability tier, and the drift-watch trigger for revisiting it.
+  One of the two is Public Preview with no wire specification.</li>
 <li><strong><a href="../getting-started/">Getting started</a></strong>: first-time GitHub App setup, the v2 object set, and credential rotation.
   There is also a <a href="../demo/">recorded demo</a> of one real job on a local kind cluster.</li>
 </ul>

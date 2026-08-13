@@ -2715,10 +2715,6 @@ Every item here blocks a release tag, and nothing else appears in this section: 
 The pill beside each title names the release it blocks, read from the backlog rather than typed here, so it cannot outlive the commitment.</p>
 <ul>
 <li>
-<p><strong><a href="../features/">Every shipped capability reaches the pages that describe the project</a></strong> <span class="gag-release-chip" title="Blocks the 1.5 release">1.5</span> <!-- q:Q821 --> Nine reach the feature inventory and nothing else, among them workload identity with no App key in the cluster and the live-validated per-tenant egress IP.
-  The comparison table's competitor claims now carry a version and a date; the prose on the other pages does not.</p>
-</li>
-<li>
 <p><strong><a href="../operations/">Persistent and shared worker storage</a></strong> <span class="gag-release-chip" title="Blocks the 1.6 release">1.6</span> <!-- q:Q719 --> Workers are storage-less by design and nothing validates a <code>ReadWriteMany</code> volume mounted into one, so the stance is undocumented rather than decided. <code>ReadWriteMany</code> is how jobs share files and what ARC's <code>containerMode: kubernetes</code> depends on, so it also matters to anyone migrating off that mode.
   Validation and a reference architecture come before any API.</p>
 </li>
