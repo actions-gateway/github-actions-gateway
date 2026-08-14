@@ -11,7 +11,7 @@
 // defines must carry a tier in the ledger, so a metric cannot reach an operator
 // without someone answering which tier emits it.
 //
-// Eleven checks, because the ledger can go stale in eleven ways that all read
+// Twelve checks, because the ledger can go stale in twelve ways that all read
 // healthy. Six are about the series as a whole:
 //
 //	inventory     the AGC's metric names and the ledger's name the same set
@@ -21,14 +21,20 @@
 //	contradiction no single-tier metric is emitted from the tier it excludes
 //	parity        v2-ga.md's absent-by-design list is Classic only in the ledger
 //
-// and five about the label values inside one (Q851), the middle three of which
-// share checkValueRows because they all validate one row against the source:
+// and six about the label values inside one (Q851), of which values-contradiction
+// through values-pinned share checkValueRows, all validating one row:
 //
 //	values-inventory     a value the source shows tier-exclusive has a value row
 //	values-contradiction no value row is refuted by where the source names it
 //	values-vocabulary    every value row names a real series, label and value
 //	values-pinned        an underivable value row cites the guard that holds it
 //	values-help          the Help an operator scrapes names every derived value
+//	values-derivation    every call in a label position places on one declaration
+//
+// values-derivation is the one that reports the tool's own blind spot rather
+// than the ledger's. It is loud because under-derivation is not a missing
+// refusal: a value that stops being derived stops being demanded, so a true row
+// could leave the ledger with everything still green.
 //
 // inventory catches the metric added on one tier and never accounted for.
 // contradiction catches the other direction — a port lands, the series now reaches
@@ -256,7 +262,7 @@ func run(srcDir, metricsDoc, parityDoc string) ([]string, error) {
 	}
 
 	all := byName(defs)
-	values := deriveValues(files, defs)
+	values, gaps := deriveValues(files, defs)
 
 	var findings []string
 	findings = append(findings, checkInventory(all, led, metricsDoc)...)
@@ -268,8 +274,28 @@ func run(srcDir, metricsDoc, parityDoc string) ([]string, error) {
 	findings = append(findings, checkValueInventory(all, values, led, metricsDoc)...)
 	findings = append(findings, checkValueRows(all, values, led, files, metricsDoc)...)
 	findings = append(findings, checkValueHelp(all, values, led)...)
+	findings = append(findings, checkDerivationGaps(gaps)...)
 	sort.Strings(findings)
 	return findings, nil
+}
+
+// checkDerivationGaps fails a label position whose callers could not be placed
+// on one declaration, because two functions share the name and the argument at
+// a given index need not be the same argument.
+//
+// This is reported rather than absorbed. Every other check here is one-sided and
+// silent about what it cannot see, but under-derivation is not a missing refusal:
+// a value that stops being derived stops being demanded, so a true row can leave
+// the ledger with the gate still green. Renaming one of the two functions, or
+// passing the value as a literal at the emission site, restores the derivation.
+func checkDerivationGaps(gaps []string) []string {
+	var findings []string
+	for _, name := range gaps {
+		findings = append(findings, fmt.Sprintf(
+			"cmd/agc: %s has more than one declaration, so a call to it in a label position cannot be placed — the label's vocabulary is derived incompletely, and a value that goes underived also goes undemanded",
+			name))
+	}
+	return findings
 }
 
 // checkValueInventory fails a label value the source shows reaching one tier

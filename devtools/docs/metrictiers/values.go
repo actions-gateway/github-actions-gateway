@@ -23,6 +23,7 @@ import (
 	"go/ast"
 	"go/token"
 	"slices"
+	"sort"
 	"strconv"
 	"strings"
 )
@@ -72,8 +73,9 @@ type labelValue struct {
 // valueSet indexes the derived values by metric name, then label name.
 type valueSet map[string]map[string][]labelValue
 
-// deriveValues resolves the label values the source emits for each series.
-func deriveValues(files []srcFile, defs []metric) valueSet {
+// deriveValues resolves the label values the source emits for each series, and
+// names any callee whose call sites it could not place along the way.
+func deriveValues(files []srcFile, defs []metric) (valueSet, []string) {
 	r := newResolver(files)
 
 	labels := map[string][]string{} // field -> label names
@@ -105,7 +107,12 @@ func deriveValues(files []srcFile, defs []metric) valueSet {
 			}
 		}
 	}
-	return out
+	gaps := make([]string, 0, len(r.unplaceable))
+	for name := range r.unplaceable {
+		gaps = append(gaps, name)
+	}
+	sort.Strings(gaps)
+	return out, gaps
 }
 
 // add folds a value into the set, merging origins for a value seen more than
@@ -157,24 +164,33 @@ type decl struct {
 
 // resolver holds the symbol tables the resolution reads. Constants are scoped by
 // package directory, because that is where Go resolves an unqualified
-// identifier. Functions and their call sites are keyed by bare name across the
-// whole tree, because the seams that carry a label value cross packages: the
-// scale-set listener reaches the shared counter through runnercore's
-// PollErrorRecorder. Pooling two same-named functions can only add origins to a
-// value, and extra origins make a value look *less* tier-exclusive — the safe
-// direction for a check that only ever refutes.
+// identifier. Functions are indexed by bare name across the whole tree, because
+// the seams that carry a label value cross packages: the scale-set listener
+// reaches the shared counter through runnercore's PollErrorRecorder.
+//
+// A bare name is not an identity — 58 of the AGC's 580 function names have more
+// than one declaration — so every call is placed against a declaration before
+// its arguments are read. Reading argument N off a call to a same-named function
+// that holds the value somewhere else would invent a label value, and an invented
+// value produces findings rather than suppressing them.
 type resolver struct {
 	consts    map[string]map[string]string // dir -> ident -> string value
-	funcs     map[string]decl
+	funcs     map[string][]decl            // bare name -> every declaration of it
 	callers   map[string][]callSite
 	emitCalls []emitCall
+	// unplaceable names a callee whose call sites could not be attributed while
+	// resolving a label position. Under-derivation is the silent failure here: a
+	// value that stops being derived stops being demanded, and the ledger loses a
+	// true row with nothing saying so.
+	unplaceable map[string]bool
 }
 
 func newResolver(files []srcFile) *resolver {
 	r := &resolver{
-		consts:  map[string]map[string]string{},
-		funcs:   map[string]decl{},
-		callers: map[string][]callSite{},
+		consts:      map[string]map[string]string{},
+		funcs:       map[string][]decl{},
+		callers:     map[string][]callSite{},
+		unplaceable: map[string]bool{},
 	}
 	for _, f := range files {
 		r.collectConsts(f)
@@ -214,9 +230,30 @@ func (r *resolver) collectConsts(f srcFile) {
 func (r *resolver) collectFuncs(f srcFile) {
 	for _, d := range f.file.Decls {
 		if fn, ok := d.(*ast.FuncDecl); ok && fn.Name != nil {
-			r.funcs[fn.Name.Name] = decl{fn: fn, file: f}
+			r.funcs[fn.Name.Name] = append(r.funcs[fn.Name.Name], decl{fn: fn, file: f})
 		}
 	}
+}
+
+// place reports the declaration a call made from fromDir resolves to. A name
+// declared once anywhere is unambiguous; otherwise only a declaration in the
+// caller's own package can be the target, and two of those cannot be told apart.
+func (r *resolver) place(name, fromDir string) *decl {
+	decls := r.funcs[name]
+	if len(decls) == 1 {
+		return &decls[0]
+	}
+	var local *decl
+	for i := range decls {
+		if decls[i].file.dir != fromDir {
+			continue
+		}
+		if local != nil {
+			return nil
+		}
+		local = &decls[i]
+	}
+	return local
 }
 
 // collectCalls records both the sample-writing calls and every named call, the
@@ -279,7 +316,7 @@ func (r *resolver) resolve(e ast.Expr, f srcFile, fn *ast.FuncDecl, depth int) [
 		if depth >= resolveDepth {
 			return nil
 		}
-		return r.resolveReturns(trailingName(call.Fun), depth+1)
+		return r.resolveReturns(trailingName(call.Fun), f.dir, depth+1)
 	}
 	id, ok := e.(*ast.Ident)
 	if !ok {
@@ -307,9 +344,15 @@ func (r *resolver) resolve(e ast.Expr, f srcFile, fn *ast.FuncDecl, depth int) [
 // listener reaches the shared poll-error counter through one — IncPollError(
 // pollErrorReason(err)) — so without this the classic tier's literals would be
 // the only ones derived and every reason would read classic-only.
-func (r *resolver) resolveReturns(name string, depth int) []labelValue {
-	d, ok := r.funcs[name]
-	if !ok || d.fn.Body == nil {
+func (r *resolver) resolveReturns(name, fromDir string, depth int) []labelValue {
+	d := r.place(name, fromDir)
+	if d == nil {
+		if len(r.funcs[name]) > 0 {
+			r.unplaceable[name] = true
+		}
+		return nil
+	}
+	if d.fn.Body == nil {
 		return nil
 	}
 	var out []labelValue
@@ -354,15 +397,24 @@ func (r *resolver) resolveLocal(name string, f srcFile, fn *ast.FuncDecl) []labe
 	return out
 }
 
-// resolveParam reports the values callers pass in a parameter's position.
+// resolveParam reports the values callers pass in a parameter's position. The
+// index comes off this declaration, so a call site is only read once it has been
+// placed on this declaration too — otherwise the argument at that index belongs
+// to a different function that merely shares the name.
 func (r *resolver) resolveParam(name string, f srcFile, fn *ast.FuncDecl, depth int) []labelValue {
 	idx := paramIndex(fn, name)
 	if idx < 0 {
 		return nil
 	}
+	callee := fn.Name.Name
 	var out []labelValue
-	for _, site := range r.callers[fn.Name.Name] {
-		if idx >= len(site.args) {
+	for _, site := range r.callers[callee] {
+		target := r.place(callee, site.file.dir)
+		if target == nil {
+			r.unplaceable[callee] = true
+			continue
+		}
+		if target.fn != fn || idx >= len(site.args) {
 			continue
 		}
 		out = append(out, r.resolve(site.args[idx], site.file, site.fn, depth+1)...)

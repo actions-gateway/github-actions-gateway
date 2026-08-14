@@ -456,4 +456,46 @@ func (p *P) wrap(cause string) { p.handleEviction("scaleset", cause) }
 			t.Fatalf("eviction reaches both tiers and must not be called single-tier: %s", f)
 		}
 	}
+
+	// A derivation that stopped working entirely would also produce no finding
+	// here, so assert the chain positively rather than reading silence as proof.
+	files, _, parsed, err := scanSource(src)
+	if err != nil {
+		t.Fatalf("scanSource: %v", err)
+	}
+	values, _ := deriveValues(parsed, files)
+	var origins []string
+	for _, v := range values["actions_gateway_eviction_retries_total"]["cause"] {
+		if v.value == "eviction" {
+			origins = v.origins
+		}
+	}
+	if len(origins) < 2 {
+		t.Fatalf("eviction must be derived from both the shared and the scale-set file, got %v", origins)
+	}
+}
+
+// The retro behind #1530: 58 of the AGC's 580 function names have more than one
+// declaration, so reading argument N off a call placed by name alone can invent a
+// value. An unplaceable call is reported because under-derivation is the silent
+// failure — a value that goes underived also goes undemanded.
+func TestAmbiguousCalleeInALabelPositionIsReported(t *testing.T) {
+	src := tree(t, map[string]string{
+		// A second handleEviction on another receiver in the same package, holding
+		// cause at a different index. A call names one of the two and only the
+		// receiver's type says which, so neither can be placed.
+		"internal/provisioner/eviction_twin.go": `package provisioner
+
+func (q *Q) handleEviction(cause, tier string) { _ = cause }
+
+func (q *Q) drive() { q.handleEviction("some_reason", "classic") }
+`,
+	})
+	findings := runCase(t, src, goodReference+goodLedger, goodParity)
+	requireFinding(t, findings, "handleEviction has more than one declaration")
+	for _, f := range findings {
+		if strings.Contains(f, `cause="some_reason"`) {
+			t.Fatalf("a value from the same-named twin must not be attributed: %s", f)
+		}
+	}
 }
