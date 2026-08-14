@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/provisioner"
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/scalesetlistener"
@@ -116,4 +117,49 @@ func (s *scaleSetGuardStore) Save(ctx context.Context, state scalesetlistener.Gu
 	}
 	cm.Data[scaleSetGuardDataKey] = string(data)
 	return s.writer.Update(ctx, &cm)
+}
+
+// recoverOrphanedScaleSetWorkers re-runs the workflow runs whose worker pods were
+// already gone when this process started (Q844). The stored in-flight set is the record
+// a preempted or drained worker cannot leave behind itself; the provisioner decides
+// which entries lost their pod and runs the scan once per process.
+//
+// Read-only on the ConfigMap, deliberately: the listener's poll goroutine stays its
+// single writer, which is what lets Save replace the whole state rather than merge it.
+// Nothing here requeues — a set with no stored state is the overwhelmingly common case,
+// and a read that fails is retried by the next reconcile.
+//
+// The returned channel closes once every recovery this call started has finished. The
+// reconcile ignores it, because it must not stall on GitHub; tests block on it.
+func (r *RunnerSetReconciler) recoverOrphanedScaleSetWorkers(ctx context.Context, log *slog.Logger, rs *v2alpha1.RunnerSet) <-chan struct{} {
+	state, err := r.scaleSetGuardStore(rs).Load(ctx)
+	if err != nil {
+		log.Warn("could not read persisted in-flight jobs; workers lost while this AGC was down will not be recovered", "error", err)
+		return closedChan()
+	}
+	if len(state.InFlight) == 0 {
+		return closedChan()
+	}
+	orphans := make([]provisioner.OrphanedWorker, 0, len(state.InFlight))
+	for _, j := range state.InFlight {
+		orphans = append(orphans, provisioner.OrphanedWorker{
+			JobID:      j.JobID,
+			Owner:      j.Owner,
+			Repository: j.Repository,
+			RunID:      j.RunID,
+		})
+	}
+	done, err := r.Provisioner.RecoverOrphanedScaleSetWorkers(ctx, r.provisionerTarget(rs), orphans)
+	if err != nil {
+		log.Warn("orphaned scale-set worker recovery scan failed", "error", err)
+	}
+	return done
+}
+
+// closedChan returns an already-closed done channel, for the exits that start no
+// recovery, so a caller can always receive without a nil check.
+func closedChan() <-chan struct{} {
+	ch := make(chan struct{})
+	close(ch)
+	return ch
 }

@@ -2848,7 +2848,8 @@ kubectl get secret -n <namespace> actions-gateway-proxy-tls \
      re-runs itself" box). When a row here changes, update that box too. -->
 
 The consolidated boundary for the automatic re-run machinery the sections below troubleshoot individually.
-Every firing case spends one slot of the run's shared `maxEvictionRetries` budget (default 2, max 10) and works on **both acquisition tiers**.
+Every firing case spends one slot of the run's shared `maxEvictionRetries` budget (default 2, max 10).
+All but the last work on **both acquisition tiers**; the `vanished` row is `ScaleSet`-only, because the classic tier's provisioning goroutine watches its own worker pod and never has this window.
 A fifth cause, `abandoned`, works on both tiers too but sits outside this table because it does not re-run directly: the job never ran, so its run is force-cancelled first and re-run only once capacity returns.
 It is covered in [Worker Pod Reaped While Pending](#worker-pod-reaped-while-pending-workerpodstuckpending).
 
@@ -2860,6 +2861,7 @@ It is covered in [Worker Pod Reaped While Pending](#worker-pod-reaped-while-pend
 | Scheduler preemption (a preempting `priorityTiers` floor) | <code class="gag-nowrap">preemption</code> | `DisruptionTarget` condition, reason `PreemptionByScheduler` |
 | Node drain of a running worker | <code class="gag-nowrap">deletion</code> | terminal phase published while the pod carries a `deletionTimestamp` |
 | Bare `kubectl delete pod` of a running worker | <code class="gag-nowrap">deletion</code> | same mark as a drain — indistinguishable, by design |
+| Any of the above that happened while the AGC was down (`ScaleSet` tier) | <code class="gag-nowrap">vanished</code> | a persisted in-flight record whose worker pod is no longer there |
 
 **Never fires, by design:**
 
@@ -2867,9 +2869,12 @@ It is covered in [Worker Pod Reaped While Pending](#worker-pod-reaped-while-pend
 - **A cancelled run.** A cancel is the intended stop — it is the supported way to end a job without triggering recovery (delete the worker pod instead and the job *is* re-run; see [Cancelling a Run Does Not Stop Its Worker Pod](#cancelling-a-run-does-not-stop-its-worker-pod)).
 - **The AGC's own reaper deletions** — the lifetime cap (`maxWorkerLifetime`), the stuck-`Running` reap deadline, orphan cleanup.
   Each is stamped `actions-gateway.com/deletion-reason` before deletion and excluded: the gateway just judged that job stuck, so a re-run would loop it.
+  The stamp is the pod's, so it does not survive the pod: a reaped worker whose job completion a previous AGC process never read is picked up by the `vanished` row above instead, which needs the completion to have gone unread for `completedPodTTL` and then a kill inside that state.
 - **A worker whose container never ran** does not fire *this* recovery.
   A drain catching a still-`Pending` pod, or the `pendingPodDeadline` reap, leaves no reportable failure for `rerun-failed-jobs` to act on.
   It is not lost, though: the run is force-cancelled and then re-run once capacity returns, on **both tiers**, which is the out-of-table `abandoned` cause named above.
+  One case does take the `vanished` row instead: a never-started worker removed while the AGC was down, because whether a container ever ran is a fact about the pod.
+  GitHub refuses a re-run for a run with no failed job, which is logged and dropped, so the outcome is a manual re-run rather than a wrong one.
   See [Worker Pod Reaped While Pending](#worker-pod-reaped-while-pending-workerpodstuckpending).
 
 **Fires but can come up short** — each has its own runbook below:
@@ -3040,12 +3045,14 @@ Expected behaviour is one automatic re-run per preempted run.
 3. **The worker carried no workflow-run identity** (scale-set tier only). `actions_gateway_eviction_recovery_identity_unknown_total{cause="preemption"}` increments and a `Warning` event with reason `EvictionRecoveryIdentityUnknown` is recorded on the `RunnerSet`.
    See [Evicted Scale-Set Jobs Are Not Re-Run Automatically](#evicted-scale-set-jobs-are-not-re-run-automatically) — the cause and the fix are the same for both disruptions.
 4. **The AGC was down for the victim's whole termination grace period** (scale-set tier only).
-   This one has no workaround, and is a property of the signal rather than a bug: the scheduler *deletes* its victim, so unlike an evicted pod — which sits in `Failed` until the reaper takes it — a preempted pod is readable only until its grace period expires (30s by default).
-   An AGC restarting across that window never sees the marker, and the displaced run needs a manual re-run.
+   The scheduler *deletes* its victim, so unlike an evicted pod — which sits in `Failed` until the reaper takes it — a preempted pod is readable only until its grace period expires (30s by default), and an AGC restarting across that window never sees the marker at all.
+   The run is still re-run, but under `cause="vanished"` rather than `cause="preemption"`: the AGC persists the run behind every worker it builds, and on start re-runs any whose pod is no longer there.
+   So check `cause="vanished"` before concluding nothing fired — a preemption counter that stays flat while the vanished one moves is this case, not a defect.
    The classic tier is unaffected: its provisioning goroutine is already watching the pod, and if that goroutine is gone the session is gone with it.
 5. **The AGC saw the victim but lost it before claiming it** (scale-set tier only).
    The same window as (4), missed by a margin rather than entirely: the recovery scan reads pods from the informer cache and claims them through the live API, so a pod removed in between yields a claim that finds nothing. `actions_gateway_eviction_recovery_evidence_lost_total{cause="preemption"}` increments and an `EvictionRecoveryEvidenceLost` Warning Event is recorded.
-   A manual re-run is required, and a sustained rate points at AGC responsiveness — CPU starvation or a backlogged work queue — rather than at the role or the policy.
+   A manual re-run is required unless the AGC restarts, which is the one thing that re-reads the persisted record and picks the run up under `cause="vanished"`.
+   A sustained rate points at AGC responsiveness — CPU starvation or a backlogged work queue — rather than at the role or the policy.
 
 **Diagnostics.**
 
