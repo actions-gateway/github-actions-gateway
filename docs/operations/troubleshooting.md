@@ -2869,9 +2869,12 @@ It is covered in [Worker Pod Reaped While Pending](#worker-pod-reaped-while-pend
 - **A cancelled run.** A cancel is the intended stop — it is the supported way to end a job without triggering recovery (delete the worker pod instead and the job *is* re-run; see [Cancelling a Run Does Not Stop Its Worker Pod](#cancelling-a-run-does-not-stop-its-worker-pod)).
 - **The AGC's own reaper deletions** — the lifetime cap (`maxWorkerLifetime`), the stuck-`Running` reap deadline, orphan cleanup.
   Each is stamped `actions-gateway.com/deletion-reason` before deletion and excluded: the gateway just judged that job stuck, so a re-run would loop it.
+  The stamp is the pod's, so it does not survive the pod: a reaped worker whose job completion a previous AGC process never read is picked up by the `vanished` row above instead, which needs the completion to have gone unread for `completedPodTTL` and then a kill inside that state.
 - **A worker whose container never ran** does not fire *this* recovery.
   A drain catching a still-`Pending` pod, or the `pendingPodDeadline` reap, leaves no reportable failure for `rerun-failed-jobs` to act on.
   It is not lost, though: the run is force-cancelled and then re-run once capacity returns, on **both tiers**, which is the out-of-table `abandoned` cause named above.
+  One case does take the `vanished` row instead: a never-started worker removed while the AGC was down, because whether a container ever ran is a fact about the pod.
+  GitHub refuses a re-run for a run with no failed job, which is logged and dropped, so the outcome is a manual re-run rather than a wrong one.
   See [Worker Pod Reaped While Pending](#worker-pod-reaped-while-pending-workerpodstuckpending).
 
 **Fires but can come up short** — each has its own runbook below:
