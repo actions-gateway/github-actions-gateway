@@ -246,8 +246,15 @@ func EffectiveMaxWorkerLifetime(rg *v1alpha1.RunnerGroup) time.Duration {
 
 // Provisioner creates and manages worker pods for acquired GitHub Actions jobs.
 type Provisioner struct {
-	Client  client.Client
-	Metrics *runnercore.Metrics
+	Client client.Client
+	// APIReader is the manager's uncached reader, used for the one read whose ANSWER
+	// IS AN ABSENCE: the orphaned-worker scan re-runs a job precisely because its
+	// worker pod is not there (Q844), so a cache that has not synced would read as a
+	// whole set's workers having been disrupted. Every other read here is served from
+	// the shared informer cache, where an empty answer only costs a deferred action.
+	// Nil falls back to Client (tests).
+	APIReader client.Reader
+	Metrics   *runnercore.Metrics
 	// Events records owner-scoped Kubernetes Events for v1 RunnerGroup provisioning
 	// incidents (quota/eviction-retry exhaustion), routed through the runnerGroupTarget
 	// seam — the only Target the Provisioner itself constructs. The v2 RunnerSet path
@@ -412,6 +419,12 @@ type Provisioner struct {
 	// when the owner sets spec.scaleUp. Default-off: a nil ScaleUpConfig makes every
 	// wait a no-op. Its zero value is ready to use. See scaleuplimiter.go.
 	scaleUp scaleUpLimiter
+
+	// orphanScans records which owners have already had their persisted in-flight set
+	// adjudicated by this process (Q844), which is what makes that scan a startup
+	// question rather than a per-reconcile one. Its zero value is ready to use. See
+	// orphaned_scaleset.go.
+	orphanScans orphanScanState
 }
 
 // NewProvisioner creates a Provisioner with sensible defaults.

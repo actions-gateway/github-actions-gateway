@@ -433,6 +433,15 @@ func (r *RunnerSetReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 			// the next reconcile retries them. Worth surfacing, not worth requeuing for.
 			log.Warn("scale-set eviction recovery scan failed", "error", err)
 		}
+		// 2b. Recover workers that were already gone when this process started (Q844) —
+		// the preemption and drain victims whose pod, the only record of the disruption,
+		// was deleted while no AGC was watching. Reads the in-flight set the listener
+		// persisted; runs once per process per set, and here rather than later because
+		// both the reaper below and the listener's own first poll retire the evidence it
+		// reads.
+		// Deliberately not waited on, for the same reason the scan above is not: the
+		// recovery waits out evictionRetryDelay before calling GitHub.
+		_ = r.recoverOrphanedScaleSetWorkers(ctx, log, &rs)
 	}
 
 	// 3. Reap expired worker pods (terminal past completedPodTTL, Pending past

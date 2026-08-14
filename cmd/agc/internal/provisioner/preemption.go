@@ -66,9 +66,15 @@ func PreemptedByScheduler(pod *corev1.Pod) bool {
 // recoveryCauseAbandoned is the one whose re-run is not immediate: the worker never
 // started, so the run was force-cancelled (Q683) and the re-run waits for capacity to
 // return before spending its slot (Q691, abandoned_rerun.go).
+//
+// recoveryCauseVanished is the one named for what was observed rather than for what
+// happened: the worker was gone when the AGC came back, and which of the three deleting
+// causes took it is exactly what the missing pod no longer says (Q844,
+// orphaned_scaleset.go).
 const (
 	recoveryCauseEviction   = "eviction"
 	recoveryCausePreemption = "preemption"
 	recoveryCauseDeletion   = "deletion"
 	recoveryCauseAbandoned  = "abandoned"
+	recoveryCauseVanished   = "vanished"
 )

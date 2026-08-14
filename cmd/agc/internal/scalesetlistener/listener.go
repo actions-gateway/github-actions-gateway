@@ -270,9 +270,30 @@ type CleanupFunc func(ctx context.Context, jobID string) error
 // concluded — completed or abandoned — whose queue messages may not all be deleted yet.
 // provisioned is deliberately absent: replaying a still-running job is the recovery
 // path (provisioning is idempotent per jobID), so losing that set costs nothing.
+//
+// InFlight rides along in the same object for a different reader: it is what the owning
+// reconciler consults to recover a worker that went away while no AGC was watching
+// (Q844).
 type GuardState struct {
-	Completed []string `json:"completed,omitempty"`
-	Abandoned []string `json:"abandoned,omitempty"`
+	Completed []string      `json:"completed,omitempty"`
+	Abandoned []string      `json:"abandoned,omitempty"`
+	InFlight  []InFlightJob `json:"inFlight,omitempty"`
+}
+
+// InFlightJob is one job this listener provisioned a worker for and has not seen
+// conclude — the durable record of a run the gateway owes a re-run if its worker
+// disappears unobserved (Q844).
+//
+// It carries the run identity rather than the worker pod's name: the name is derived
+// from (runnerSetName, jobID) at a single site, so re-deriving it cannot drift from what
+// provisioning created, while a stored copy could. ProvisionedAt bounds the set against
+// a job whose conclusion never arrives at all.
+type InFlightJob struct {
+	JobID         string    `json:"jobID"`
+	Owner         string    `json:"owner"`
+	Repository    string    `json:"repository"`
+	RunID         string    `json:"runID"`
+	ProvisionedAt time.Time `json:"provisionedAt"`
 }
 
 // GuardStore persists GuardState across a process boundary (Q606). The in-memory
@@ -284,8 +305,11 @@ type GuardState struct {
 //
 // Load is called once, before the poll loop starts; a Load error fails Start, because
 // polling without the guards silently reopens the window. Save replaces the whole
-// state — it is bounded by the messages still in the queue (Q597), not by history.
-// Both are called from the poll goroutine only. Nil disables persistence.
+// state — the guards are bounded by the messages still in the queue (Q597) and the
+// in-flight set by the jobs whose workers are still running (Q844), neither by history.
+// Both are called from the poll goroutine only, which is what lets Save replace rather
+// than merge; the reconciler reads the same object but never writes it. Nil disables
+// persistence.
 type GuardStore interface {
 	Load(ctx context.Context) (GuardState, error)
 	Save(ctx context.Context, state GuardState) error
@@ -537,15 +561,22 @@ type Listener struct {
 	// and replays the very JobAssigned the check acted on, and a jobID is a job's UUID —
 	// one GitHub has stopped holding is not coming back under the same id.
 	abandoned map[string]bool
+	// inFlight holds the run identity of every job whose worker this listener built and
+	// has not seen conclude, persisted with the guards so a later process can tell that
+	// a vanished worker owed its run a re-run (Q844). Unlike the guards above it is not
+	// a replay guard: nothing here answers a redelivered JobAssigned. An entry is added
+	// on a successful provision and dropped when the job concludes, either way.
+	inFlight map[string]InFlightJob
 	// pending holds every message acked by cursor but not yet deleted, keyed by message
 	// id. An entry whose unsettled set is empty is settled and awaiting its delete, which
 	// flushDeletes issues and retries (Q583).
 	pending       map[int64]*pendingMessage
 	lastStats     scaleset.RunnerScaleSetStatistic
 	lastMessageID int64
-	// guardsDirty is set whenever completed/abandoned membership changes, and cleared
-	// by a successful GuardStore save. flushDeletes refuses to issue any DELETE while
-	// it is set and the save fails — the write-ahead ordering Q606 rests on.
+	// guardsDirty is set whenever completed/abandoned/inFlight membership changes, and
+	// cleared by a successful GuardStore save. flushDeletes refuses to issue any DELETE
+	// while it is set and the save fails — the write-ahead ordering Q606 rests on, which
+	// an in-flight record's removal needs for the same reason its guard does (Q844).
 	guardsDirty bool
 	// retained holds the jobIDs whose guards must survive the drained-queue sweep: a
 	// delete the wire reported as removing nothing dropped their message from pending
@@ -591,6 +622,7 @@ func New(cfg Config) (*Listener, error) {
 		provisioned:        make(map[string]bool),
 		completed:          make(map[string]bool),
 		abandoned:          make(map[string]bool),
+		inFlight:           make(map[string]InFlightJob),
 		pending:            make(map[int64]*pendingMessage),
 		deferred:           make(map[string]*deferredJob),
 		retained:           make(map[string]bool),
@@ -1651,6 +1683,19 @@ func (l *Listener) provisionAssigned(ctx context.Context, ssID int, aj scaleset.
 	}
 	l.mu.Lock()
 	l.provisioned[aj.JobID] = true
+	// Record the run this worker is running, durably, so a later process can recover it
+	// if the pod goes away with nobody watching (Q844). An assignment with no complete
+	// identity records nothing: there would be no run for rerun-failed-jobs to address.
+	if haveIdentity {
+		l.inFlight[aj.JobID] = InFlightJob{
+			JobID:         aj.JobID,
+			Owner:         owner,
+			Repository:    repo,
+			RunID:         runID,
+			ProvisionedAt: time.Now().UTC(),
+		}
+		l.guardsDirty = true
+	}
 	l.mu.Unlock()
 	l.metricsIncProvisioned()
 	return provisionAcked
@@ -1766,7 +1811,13 @@ func (l *Listener) completeJob(ctx context.Context, cj scaleset.JobMessage) bool
 	l.mu.Lock()
 	first := !l.completed[cj.JobID]
 	l.completed[cj.JobID] = true
-	if first {
+	// The job reached a reportable end, so nothing is owed for it (Q844). Dropped here
+	// rather than on the worker pod's terminal phase, which this goroutine never sees;
+	// the removal is persisted ahead of the message delete that follows, so the record
+	// cannot outlive the conclusion that retired it.
+	_, wasInFlight := l.inFlight[cj.JobID]
+	delete(l.inFlight, cj.JobID)
+	if first || wasInFlight {
 		l.guardsDirty = true
 	}
 	l.mu.Unlock()
@@ -1994,6 +2045,14 @@ func (l *Listener) loadGuards(ctx context.Context) error {
 	for _, jobID := range state.Abandoned {
 		l.abandoned[jobID] = true
 	}
+	// state.InFlight is deliberately NOT adopted (Q844). The reconciler has already read
+	// the same object, ahead of this listener starting, and re-run whatever had lost its
+	// worker; carrying those records forward would let a second restart re-run the same
+	// run again off a record nothing here can retire. What rebuilds the set instead is
+	// the assignment replay Q583 rests on: a job still running holds its JobAssigned in
+	// the queue, so this session re-reads it, re-provisions idempotently, and records it
+	// afresh. A job that is over replays its JobCompleted rather than its assignment, and
+	// is owed nothing.
 	return nil
 }
 
@@ -2010,7 +2069,11 @@ func (l *Listener) saveGuards(ctx context.Context) bool {
 		l.mu.Unlock()
 		return true
 	}
-	state := GuardState{Completed: sortedKeys(l.completed), Abandoned: sortedKeys(l.abandoned)}
+	state := GuardState{
+		Completed: sortedKeys(l.completed),
+		Abandoned: sortedKeys(l.abandoned),
+		InFlight:  sortedInFlight(l.inFlight),
+	}
 	l.mu.Unlock()
 	if err := l.cfg.Guards.Save(ctx, state); err != nil {
 		l.log.Warn("scaleset: persist concluded-job guards; holding message deletes until it succeeds",
@@ -2039,6 +2102,7 @@ func (l *Listener) saveGuards(ctx context.Context) bool {
 func (l *Listener) sweepStaleGuards() {
 	l.mu.Lock()
 	defer l.mu.Unlock()
+	l.sweepStaleInFlightLocked()
 	for _, guards := range []map[string]bool{l.completed, l.abandoned} {
 		for jobID := range guards {
 			if l.assignmentPending(jobID) || l.retained[jobID] {
@@ -2046,6 +2110,28 @@ func (l *Listener) sweepStaleGuards() {
 			}
 			delete(guards, jobID)
 			delete(l.provisioned, jobID)
+			l.guardsDirty = true
+		}
+	}
+}
+
+// inFlightRecordTTL bounds how long an in-flight record is kept for a job whose
+// conclusion never arrives at all — the one way the set could otherwise accrete in etcd
+// over a listener's uptime, since every ordinary exit drops its own entry. It is chosen
+// well beyond a realistic GitHub Actions run lifetime, on the same reasoning as the
+// eviction counters' own TTL (Q141): an entry this old belongs to a job whose worker
+// cannot still be running, so nothing live is forgotten by reclaiming it.
+const inFlightRecordTTL = 24 * time.Hour
+
+// sweepStaleInFlightLocked drops in-flight records past inFlightRecordTTL. Called from
+// the drained-queue sweep with mu held, which is the same cadence the guards are swept
+// on; unlike theirs, this judgement needs no 202 to be sound — it is an age bound, not a
+// queue one.
+func (l *Listener) sweepStaleInFlightLocked() {
+	cutoff := time.Now().UTC().Add(-inFlightRecordTTL)
+	for jobID, j := range l.inFlight {
+		if j.ProvisionedAt.Before(cutoff) {
+			delete(l.inFlight, jobID)
 			l.guardsDirty = true
 		}
 	}
@@ -2060,6 +2146,17 @@ func sortedKeys(m map[string]bool) []string {
 	}
 	sort.Strings(keys)
 	return keys
+}
+
+// sortedInFlight returns the in-flight records in a stable jobID order, so a poll cycle
+// that changed nothing marshals to the same bytes and the ConfigMap sees no write.
+func sortedInFlight(m map[string]InFlightJob) []InFlightJob {
+	out := make([]InFlightJob, 0, len(m))
+	for _, j := range m {
+		out = append(out, j)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].JobID < out[j].JobID })
+	return out
 }
 
 // drainConclusionsOnExit reads the conclusions the queue is already holding for the jobs

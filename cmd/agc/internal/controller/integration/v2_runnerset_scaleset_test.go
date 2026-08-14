@@ -88,6 +88,10 @@ func startRunnerSetReconcilerWithScaleSet(t *testing.T, srv *scalesettest.Server
 	_, _ = tm.Token(mgrCtx)
 
 	p := provisioner.NewProvisioner(mgr.GetClient(), nil, slog.Default())
+	// The uncached reader the orphaned-worker scan lists pods through (Q844), exactly as
+	// main.go wires it: that scan acts on a pod's absence, so a cold cache would read as
+	// a whole set's workers having been disrupted.
+	p.APIReader = mgr.GetAPIReader()
 	p.PollInterval = 50 * time.Millisecond
 	p.WorkerSA = agcnames.WorkerSAName
 	p.DefaultWorkerImage = "runner:test"
