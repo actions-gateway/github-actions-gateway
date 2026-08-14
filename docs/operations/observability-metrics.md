@@ -248,6 +248,106 @@ Neither binary acquires jobs, so neither has a tier.
 
 ---
 
+## Condition and Event tier reach
+
+The same question as [Acquisition-tier reach](#acquisition-tier-reach) above, asked of the other two signals an operator reads: the `reason` on a `.status.conditions[]` entry, and the `Reason` on a Kubernetes Event.
+A capability that reaches only one tier is as invisible in a condition as it is in a counter, so the same four values apply and the same gate holds these tables to the source. `make reason-tiers-check` fails a reason the AGC emits without a row here, a row the source refutes, and an Event reason that has no [runbook](troubleshooting.md#job-lifecycle-events-on-a-runnergroup--runnerset) entry.
+
+Two things follow from how the AGC records these, and both are worth knowing before reading the tables:
+
+- **A condition reason is often an Event reason too.** Several reconcile paths record an Event on a genuine condition transition, reusing the condition's own reason string.
+  Those reasons appear in the condition table only; the Event table lists the reasons that are decided at the recording site.
+- **The reasons are the AGC's.** The GMC's own conditions are not listed, for the reason the metric ledger gives: the GMC acquires no jobs, so it has no tier.
+
+### Condition reasons
+
+The `reason` field of a `.status.conditions[]` entry on a `RunnerGroup` (`v1alpha1`) or `RunnerSet` (`v2alpha1`).
+A `RunnerGroup` only ever acquires classically, so a reason no v2 path writes is classic-only by construction.
+
+| Reason | Tier | Why, and what to read on the other tier |
+| --- | --- | --- |
+| `AgentProvisioningFailed` | Classic only | The agent pool is the many-acquirers model's credential machinery. A scale set mints JIT config per assigned job and provisions no agent Secrets, so it reports a start failure as `NoActiveSessions` instead. |
+| `AmbiguousDefault` | Both | Reference resolution runs before the reconciler routes by protocol. |
+| `AwaitingProbe` | Both | The capacity gate's latched state; `applyWorkerCapacityConditions` is called from both arms. |
+| `AwaitingWorkerPods` | Both | The sizing-profile override reads worker pods, which both tiers label identically. |
+| `CPULimitInjected` | Both | As above. |
+| `CapacityAvailable` | Both | The capacity gate's cleared state, from the same shared call. |
+| `CredentialAvailable` | Classic only | A `RunnerGroup` condition, and a `RunnerGroup` only acquires classically. A v2 set reports the same state as `Ready`/`TokenUnavailable`. |
+| `DirectEgress` | Both | Egress mode is recorded before the protocol routing. |
+| `GateModeUnsupported` | Both | The capacity gate refusing an unsupported mode, from the same shared call. |
+| `GatewayNotFound` | Both | Reference resolution, before the routing. |
+| `GatewayTerminating` | Both | Gateway teardown stops both tiers before deleting worker pods. |
+| `InsufficientSamples` | Both | The sizing verdict is computed from worker-pod usage, before the routing. |
+| `JobsProvisioning` | Scale-set only | Clears `JobProvisionStalled`, which only the scale-set queue can raise: it is the state of assignments held for re-offer. The classic tier acquires or does not, with nothing held in between. |
+| `LabelsNotRegistered` | Scale-set only | GitHub registers a scale set's labels at the set, and only that protocol can find them missing. A classic set carries its labels on each session. |
+| `LabelsRegistered` | Scale-set only | As above, cleared. |
+| `ListenerActive` | Both | The `Ready=True` reason on both arms: one multiplexer's goroutines on classic, one scale-set session on the other. |
+| `ListenerStartFailed` | Classic only | Distinguishes a failed multiplexer restart from the benign idle state (Q308). The scale-set arm reports its own start failure as `NoActiveSessions` with the `ScaleSetListenerStartFailed` Event carrying the cause. |
+| `NoActiveSessions` | Both | The benign `Ready=False` reason on both arms. |
+| `NoCPULimitInjected` | Both | The sizing-profile override, before the routing. |
+| `NoReapBlockingSidecar` | Both | Read off the resolved worker template, before the routing. |
+| `PodsUnschedulable` | Both | The scheduler's verdict on worker pods, evaluated for `RunnerGroup` and `RunnerSet` alike. |
+| `PollingHealthy` | Both | Both listeners publish the rate-limit baseline and clear on recovery (Q332). |
+| `ProxiedEgress` | Both | Egress mode, before the routing. |
+| `ProxyDeleted` | Both | Reference resolution, before the routing. |
+| `ProxyNotFound` | Both | As above. |
+| `ProxyShareNotGranted` | Both | As above. |
+| `ReapBlockingSidecar` | Both | Read off the resolved worker template, before the routing. |
+| `RunnerGroupNotFound` | Scale-set only | `spec.runnerGroup` binds a scale set to a GitHub runner group (Q712); the classic tier has no such binding to fail. |
+| `RunnerNameConflict` | Scale-set only | A `generate-jitconfig` 409 no retry cleared. The classic tier registers through the agent pool and meets no runner-name collision. |
+| `ScaleUpDeclined` | Both | The cluster autoscaler's own declination, from the shared capacity call. |
+| `SessionAuthorized` | Both | Both listeners publish the healthy `Degraded=False` baseline (Q332). |
+| `SizingDriftDetected` | Both | The sizing verdict, before the routing. |
+| `SizingProfileActive` | Both | As above. |
+| `SizingWithinRange` | Both | As above. |
+| `SustainedRateLimit` | Both | Both listeners publish it after ten minutes of 429s. |
+| `TemplateDeleted` | Both | Reference resolution, before the routing. |
+| `TemplateNotFound` | Both | As above. |
+| `TokenUnavailable` | Classic only | The classic arm fetches an installation token at reconcile to manage the agent pool, so a token failure lands in status there. The scale-set arm hands the token manager to its listener instead and reports a failure to reach GitHub as `NoActiveSessions`. |
+| `Unauthorized` | Both | The `Degraded=True` reason both listeners push when session creation is rejected as unauthorized. |
+| `VersionTooOld` | Classic only | GitHub rejecting `agent.version` at session creation, which only the classic protocol sends. The scale-set tier reports the same condition *type* from the reconciler's own reading of the worker image, under `WorkerImageBelowMinimum` (Q715). |
+| `WorkerCeilingReached` | Scale-set only | Assignments waiting because the set is at its worker ceiling. The classic tier refuses the claim instead, counted by `actions_gateway_jobs_admission_rejected_total{reason="ceiling"}`. |
+| `WorkerImageBelowMinimum` | Both | The reconciler's own reading of the effective worker image, which asks GitHub nothing and so reports on both tiers (Q715). |
+| `WorkerImageCurrent` | Both | As above. |
+| `WorkerImageVersionUnknown` | Both | As above. |
+| `WorkersSchedulable` | Both | The cleared form of `PodsUnschedulable`, evaluated on both. |
+
+### Event reasons
+
+The `Reason` on a Kubernetes Event the AGC records on the owning `RunnerGroup`/`RunnerSet`, listed by the reason string `kubectl get events --field-selector reason=…` matches.
+Each also has a [runbook entry](troubleshooting.md#job-lifecycle-events-on-a-runnergroup--runnerset) naming the remedy, which the gate holds it to.
+
+| Reason | Tier | Why, and what to read on the other tier |
+| --- | --- | --- |
+| `AgentDeregistrationFailed` | Classic only | Single-use JIT agents are a classic-pool artifact, so only that tier has registrations to clean up on delete. |
+| `AgentPoolError` | Classic only | As above: a scale set provisions no agent Secrets. |
+| `AssignmentAbandoned` | Scale-set only | The listener giving up on assignments the queue stopped reporting. The classic protocol delivers no assignment to abandon. |
+| `EvictionRecoveryEvidenceLost` | Scale-set only | On this tier the disrupted pod is the disruption's only record (Q809); the classic tier holds it in process. |
+| `EvictionRecoveryIdentityUnknown` | Scale-set only | The classic tier reads the run identity from the payload its acquiring goroutine still holds, so it cannot lose it. |
+| `EvictionRerunFailed` | Both | Recorded by the shared re-run path both tiers hand recoveries to (Q503). |
+| `EvictionRetriesExhausted` | Both | Both tiers spend one shared per-run retry budget (Q417). |
+| `JobAcquisitionFailed` | Classic only | Counts a failed `acquirejob`, a call the scale-set protocol does not make. Its counterpart there is `ScaleSetListenerStartFailed` for a session that cannot start, and `actions_gateway_scaleset_provision_errors_total` for a job that cannot be provisioned. |
+| `JobProvisionStalled` | Scale-set only | Assigned jobs that cannot register a runner name, held and re-offered. The classic tier has no held assignment. |
+| `ListenerStartFailed` | Classic only | A failed multiplexer restart; the scale-set arm records `ScaleSetListenerStartFailed` instead. |
+| `OrphanedWorkerRecovered` | Scale-set only | Recovery of a worker already gone at process start, read from the in-flight set the scale-set listener persists (Q844). The classic tier holds that state in process and loses it with the process. |
+| `QuotaRetriesExhausted` | Both | Both provisioning paths create the worker pod through the same quota-retry helper. |
+| `RunnerLabelsNotRegistered` | Scale-set only | GitHub registers a scale set's labels at the set; a classic set carries them per session. |
+| `RunnerVersionTooOld` | Classic only | GitHub rejecting `agent.version` at session creation. The scale-set tier warns ahead of any rejection with `WorkerImageBelowMinimum`, from the reconciler's own image reading (Q715). |
+| `ScaleSetListenerStartFailed` | Scale-set only | A scale-set session that could not start; `ListenerStartFailed` is the classic counterpart. |
+| `SessionUnauthorized` | Both | Both listeners record it when session creation is rejected as unauthorized. |
+| `TokenUnavailable` | Classic only | The classic arm fetches the installation token at reconcile; the scale-set arm delegates it to the listener. |
+| `WorkerCapacityDeclined` | Both | The opt-in capacity gate refusing intake, from the shared capacity call. |
+| `WorkerCeilingReached` | Scale-set only | Expected backpressure while assignments wait for capacity, so `Normal` rather than `Warning`. The classic tier declines the claim instead. |
+| `WorkerPodCompletedPending` | Both | The reaper is protocol-agnostic and runs before the routing. |
+| `WorkerPodCreateFailed` | Both | The API server refusing a worker pod, on the shared provisioning path. |
+| `WorkerPodLifetimeExceeded` | Both | The reaper, as above. |
+| `WorkerPodOrphanedRunning` | Both | The reaper, as above. |
+| `WorkerPodStuckPending` | Both | The reaper, as above. |
+| `WorkerPodsReapedOnGatewayTeardown` | Both | Teardown stops both tiers before deleting their worker pods. |
+| `WorkersUnschedulable` | Both | The scheduler's verdict, recorded for `RunnerGroup` and `RunnerSet` alike. |
+
+---
+
 ## CRD Status Fields (kubectl columns)
 
 `kubectl get runnergroup` and `kubectl get runnerset` print a subset of each CR's `.status` as additional columns.

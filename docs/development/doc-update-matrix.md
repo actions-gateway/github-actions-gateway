@@ -36,6 +36,8 @@ Two places it costs the most:
   Say which tier emits it, and name the signal that substitutes.
   This is the one place the convention is enforced rather than remembered: every `actions_gateway_*` series the AGC defines needs a row in the [acquisition-tier ledger](../operations/observability-metrics.md#acquisition-tier-reach), and `make metric-tiers-check` fails a new series that has none, plus a single-tier row the source refutes (Q776).
   A `Both` claim is still yours to get right, since no static check can confirm one.
+- **Condition and Event reasons.** The same obligation, enforced the same way (Q850): a condition reason or Event reason the AGC emits needs a row in the [condition and Event ledger](../operations/observability-metrics.md#condition-and-event-tier-reach), and `make reason-tiers-check` fails one that has none.
+  An Event reason additionally needs a [runbook](../operations/troubleshooting.md#job-lifecycle-events-on-a-runnergroup--runnerset) entry, because an operator meets it in `kubectl describe` and a tier alone is no remedy.
 - **Positioning copy** (`README.md`, `why-gag.md`, `features.md`, `roadmap.md`).
   A capability claimed for the system but implemented only on the deprecated tier is scheduled for deletion, not shipped — it belongs in the parity table in [v2-ga.md](../plan/v2-ga.md#capability-parity-is-a-precondition-of-the-removal), which gates the `v2.0.0` removal on closing exactly this gap.
 
