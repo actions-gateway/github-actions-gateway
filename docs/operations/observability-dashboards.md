@@ -125,7 +125,7 @@ Labelled by `runner_set` (not `runner_group`), so the `$runner_group` variable d
 
 ## Platform dashboard
 
-![The platform/fleet Grafana dashboard rendered against a live Prometheus: fleet-overview stats, GMC control-plane reconcile health, a per-gateway condition state-timeline, and cross-tenant throughput rows.](../assets/grafana-dashboard-platform.png)
+![The platform/fleet Grafana dashboard rendered against a live Prometheus: fleet-overview stats, GMC control-plane reconcile health, a per-gateway condition state-timeline, cross-tenant throughput, and a build-versions row.](../assets/grafana-dashboard-platform.png)
 
 Fleet-wide; `$namespace` filters the cross-tenant rows.
 
@@ -164,7 +164,7 @@ Fleet-wide; `$namespace` filters the cross-tenant rows.
 
 | Panel | Query | Visualization |
 |-------|-------|---------------|
-| Running versions by component | `count by (component, version) (actions_gateway_build_info)` | Bar gauge, instances per component and version |
+| Running versions by component | `count by (component, version) (actions_gateway_build_info)` | Stat, one tile per component and version with the instance count |
 
 The fleet's version spread during a staggered upgrade, and the answer to which tenants have crossed a semantics change: `job_duration_seconds` changed span at v1.5.0 without a rename ([upgrade note](upgrade.md#non-breaking-job_duration_seconds-now-measures-worker-pod-lifetime-the-classic-tier-span-shrinks)).
 The GMC comes from this dashboard's own scrape; `agc` and `proxy` need the per-tenant scrapes, so a platform-only Prometheus shows one bar. `actions_gateway_build_info` carries no `namespace` label, so `$namespace` does not filter this row. | Pod creation p99 by namespace | `actions_gateway:pod_creation_latency_seconds:p99` | Time series, both acquisition tiers |
