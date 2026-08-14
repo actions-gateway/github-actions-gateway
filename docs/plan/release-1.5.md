@@ -5,7 +5,7 @@
 > All four shipped 2026-08-11, and the marketing reconciliation closed 2026-08-12 (Q801, Q821).
 > Two more were admitted afterwards, both on the [parity axis](#the-parity-axis-what-closed-and-what-backs-it): Q776 on 2026-08-13, to back the parity claim the other four earned, and Q844 on 2026-08-14, a classic-only capability the badge set never recorded and the marketing surface already claims for both tiers.
 > Q844 shipped 2026-08-14 and Q776 has now shipped too, so every gating row is closed.
-> The [API surface review](#pre-flight-the-api-surface-this-tag-publishes) is recorded below, which clears the last item binding at the release candidate; the dogfood validation binds before the stable tag rather than before the RC.
+> The [API surface review](#pre-flight-the-api-surface-this-tag-publishes) is recorded below, which cleared the last item binding at the release candidate. `v1.5.0-rc.1` was cut from `ff3b3ef1` on 2026-08-14 and [its dogfood validation PASSED](#the-rc1-validation-verdict-2026-08-14), so what remains before the stable tag is the stable-tag half of pre-flight: the marketing reconciliation, the operator-caveat pass, the roadmap and features reconciliation, and the announce-bar highlight.
 
 ## Why these gate a release rather than riding along
 
@@ -184,6 +184,52 @@ One bound was not verified and does not need to be: `MaxLength=255` was not chec
 Loosening a length bound later is non-breaking and tightening one is, so a generous bound is the safe error.
 
 Nothing was deferred, so this review adds no gate row.
+
+## The rc.1 validation verdict, 2026-08-14
+
+`validate-release.sh v1.5.0-rc.1` **PASSED**, exit 0, and the cluster was confirmed back at 0 nodes by asking `ops.sh at-rest` rather than by reading the gate's own teardown line.
+These are the receipts the notes' Validation section draws on.
+
+| Leg | Result |
+|---|---|
+| deploy | RC deployed and CI routed to GAG in ~3m |
+| e2e matrix | **75 passed, 0 failed, 12 skipped** in 7m28s ([run 31805454168](https://github.com/actions-gateway/github-actions-gateway/actions/runs/31805454168)) |
+| sizing, `NodeShare` | `sizingProfileState=Active`; worker CPU request derived to **1500m** where the templates ask 2 and 3 |
+| sizing, `Throughput` | `Active`, `sampleCounts=[188]` |
+| CRD smoke | blob signature `Verified OK`; all five v2 CRDs server-side applied and registered |
+
+Artifact verification cleared separately and before the gate: 7/7 OCI signatures (five images, both charts), the `verify-blob` signature on the v2 CRD manifest, an SBOM attestation on the amd64 manifest, and a build-provenance attestation whose `buildSignerURI` ends `publish.yml@refs/tags/v1.5.0-rc.1` with a `sourceRepositoryDigest` equal to `ff3b3ef1`, the tagged commit.
+Following 1.4's practice, the two identity checks were re-run against deliberately wrong identities and both failed: a `refs/heads/` regexp took cosign to exit 12 naming the real subject, and `unit-test.yml` as `--signer-workflow` took `gh attestation verify` to exit 1.
+The provenance pass was read out of `--format json` rather than off the exit status, since that command prints nothing when its output is redirected.
+
+`Throughput` actuating was not expected on this run.
+The [runbook](../operations/release.md#validate-the-release-candidate-on-dogfood) treats it as reported-never-fatal because it needs ~20 samples per template container and the gate's matrix is about seven jobs.
+It reported `Active` on 188 samples, because the sampler tracks every worker pod whatever `spec.sizing` holds and the aggregate re-seeds from the persisted `status.sizingRecommendation`, so the CI tenant's ordinary traffic had already earned them.
+
+### The gate could not start, and the defect was its own
+
+The first launch failed in preflight, before anything was spent, reporting the `e2e` pool as having no autoscale ceiling.
+The cluster was configured correctly: GKE omits `minNodeCount` when it holds its 0 default, so the projected row led with an empty field and a default-IFS `read` slid the ceiling into the floor.
+No IFS could have recovered it, because tab is IFS whitespace and `read` drops a leading run of it unconditionally, so the projection now asks for a comma.
+Fixed in [#1498](https://github.com/actions-gateway/github-actions-gateway/pull/1498) and confirmed against the live cluster before the gate was re-run.
+
+Two things about *when* it was found are worth keeping.
+The reservation preflight merged 2026-08-12 and the previous dogfood run was 2026-08-09, so this code had never executed against a real cluster; both test doubles modelled a literal `0` the API never sends, which is why nine assertions over the arithmetic downstream of that read stayed green.
+That is recorded as the null-vs-absent case in [testing.md](../development/testing.md#generate-a-fixture-with-the-producers-own-code-never-by-hand).
+The class of defect only surfaces when a release is actually being cut, which is the least convenient moment for it.
+
+### `release-sentinel.sh` reported a PASS that was not this run's
+
+Recorded because it nearly ended the session with a false verdict on the gate that decides whether an RC may be promoted.
+
+Launched while the gate was still in preflight, the sentinel read the `v1.4.0-rc.2` stream left in `tmp/` from 2026-08-09, found its terminal `passed` event, and reported `Gate: passed` with a next action of "report the result to the operator".
+The stale RC tag, a 101-hour elapsed time and the placeholder `owner/repo/actions/runs/42` were all in its own report, and none of them stopped it.
+A run that has not yet written its first event is indistinguishable, to the sentinel, from one that finished.
+Worked around here by archiving the three stale files under `v1.4.0-rc.2` names; the fix is a Queue row, and the choice is between matching the stream's `rc` against the tag being watched and scoping or truncating the stream at gate startup.
+
+The `stalled` event later in the run was **not** a defect.
+It fired once the dispatched run was no longer live while the stream was quiet, which is exactly Q630's reconciliation behaving as designed; the gate was mid-transition into `e2e-stop.sh` when it was checked.
+The quiet itself was the documented case where GitHub will not serve the job log: `heartbeat` stayed `null` for the whole 22-minute leg on a run that passed, and the run record was the signal that worked.
 
 ## Candidates not yet accepted
 
