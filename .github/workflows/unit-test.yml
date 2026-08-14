@@ -611,7 +611,7 @@ jobs:
   # and passes only when every needed job succeeded or was legitimately skipped.
   # See docs/development/testing.md#path-gated-workflows-verify-the-heavy-gates-actually-ran.
   unit-test-gate:
-    needs: [changes, lint, shellcheck, actionlint, vendor-check, tidy-check, unit-test, coverage, path-filters, semver-floor-sources, claude-usage-test]
+    needs: [changes, lint, shellcheck, actionlint, uses-pinned, vendor-check, tidy-check, unit-test, coverage, path-filters, semver-floor-sources, claude-usage-test]
     if: ${{ always() }}
     runs-on: ubuntu-latest
     timeout-minutes: 2
