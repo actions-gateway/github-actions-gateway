@@ -86,9 +86,11 @@ check "usage alone can over-subscribe" 0 "$(reserved_pool_max 64 64 20 4)"
 
 # --- global_cpu_budget: stubbed gcloud ---
 
-# FAKE_QUOTA_ROWS models `gcloud compute project-info describe --flatten` output
-# (tab-separated metric/limit/usage, floats as gcloud prints them);
-# FAKE_GCLOUD_FAIL models a project that cannot be read.
+# FAKE_QUOTA_ROWS models whichever gcloud response the assertion below is about:
+# `project-info describe --flatten` rows (tab-separated metric/limit/usage,
+# floats as gcloud prints them) for the budget, and a node pool's projected
+# min/max row for the autoscaling read. FAKE_GCLOUD_FAIL models a project or
+# pool that cannot be read.
 gcloud() {
 	if [[ -n "${FAKE_GCLOUD_FAIL:-}" ]]; then
 		return 1
@@ -123,20 +125,30 @@ unset FAKE_GCLOUD_FAIL
 # --- pool_autoscaling: autoscaling off is a distinct answer from a failed read ---
 
 # Asserted through the `read` the callers do rather than on the raw string:
-# gcloud's `value()` separator is a tab, and what matters is that min and max
-# land in separate fields.
+# what matters is that min and max land in separate fields, whatever the
+# projection does in between.
 read_autoscaling() {
 	local min max
 	read -r min max <<<"$(pool_autoscaling "$1")"
 	echo "${min:-<none>}/${max:-<none>}"
 }
 
-FAKE_QUOTA_ROWS=$'0\t8'
-check "an autoscaled pool reports min and max" "0/8" "$(read_autoscaling workers)"
+# The live shape on every autoscaled pool this gate reads: GKE omits
+# minNodeCount at its 0 default, so the field arrives empty and the row begins
+# with the separator. Measured on the dogfood `e2e` and `workers` pools
+# 2026-08-14; a stub that sent a literal 0 here is what let the leading-empty
+# field reach the gate, where the max landed in min and the preflight refused to
+# run against a cluster that was correctly configured.
+FAKE_QUOTA_ROWS=",8"
+check "an omitted min reads as 0, not as the max" "0/8" "$(read_autoscaling workers)"
 
-# The manually sized pools (default-pool, workers-od) print nothing at all, and
-# the caller must be able to tell that from gcloud falling over.
-FAKE_QUOTA_ROWS=""
+FAKE_QUOTA_ROWS="2,8"
+check "an explicit min is kept" "2/8" "$(read_autoscaling workers)"
+
+# The manually sized pools (default-pool, workers-od) carry no autoscaling block
+# at all, which renders as both fields empty — a bare separator, not an empty
+# string. The caller must be able to tell that from gcloud falling over.
+FAKE_QUOTA_ROWS=","
 check "a manually sized pool reports nothing" "" "$(pool_autoscaling default-pool)"
 
 FAKE_GCLOUD_FAIL=1

@@ -1609,6 +1609,12 @@ Generating it by calling Ginkgo's own `reporters.GenerateJUnitReport` — a thro
 The hand-written fixture would have used the named form, the parser handled only the named form, and the two would have agreed while every spec name containing a quote reached the job summary with raw entities in it.
 The generator cost about five minutes; the bug was invisible to every other gate.
 
+The release gate's CPU reservation is the null-vs-absent instance, measured 2026-08-14. `quota-test.sh` modelled a node pool's autoscaling row as `0\t8`, and `lib/quota.sh` read it back with a default-IFS `read -r min max`; both were written in the same change, and both assumed GKE reports a `minNodeCount` of 0.
+It omits the field instead, since proto3 drops an integer holding its default (the same hole Q779 found in `currentNodeCount`), so the live row arrives as `\t8`. `read` then discards that leading tab whatever IFS is set to, because tab is IFS *whitespace*, and no IFS can recover an empty first field from a tab-separated row.
+The max landed in `min`, and the gate refused to start against a correctly configured cluster, reporting the `e2e` pool as having no autoscale ceiling.
+Nine assertions covered the arithmetic downstream of that read and all nine passed, because the fixture and the parser were wrong in the same direction.
+What let it reach a release is that the preflight merged three days after the last dogfood run, so until `v1.5.0-rc.1` needed validating, the fake was the only thing it had ever run against.
+
 The tell that you are in this situation: you are about to write, from memory, a fixture in a format some *other* program defines.
 Escaping, quoting, numeric precision, field order, and null-vs-absent are where memory is unreliable, and all five are silent.
 
