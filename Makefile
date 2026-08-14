@@ -1057,6 +1057,13 @@ verify-published-docs: ## Verify the published /X.Y.Z/ docs advertise X.Y.Z: mak
 # path differs (the target-specific TOOL_PKG below). ginkgo is the exception: it
 # builds from cmd/gmc (workspace on) so it matches the ginkgo version the e2e
 # suite imports.
+#
+# Every tool rule declares the file that carries its version pin as a prerequisite
+# (Q842). Without one, make treats an existing binary as up to date forever, so a
+# bump serves the old binary against the new target: a stale mdreflow met an
+# unknown --explain flag (loud), then reported four false reflow failures on a
+# clean tree (silent). modules.txt is the vendored version manifest, so it moves
+# on a transitive bump that go.mod alone does not record.
 $(ACTIONLINT):     TOOL_PKG := github.com/rhysd/actionlint/cmd/actionlint
 $(CONTROLLER_GEN): TOOL_PKG := sigs.k8s.io/controller-tools/cmd/controller-gen
 $(CRD_REF_DOCS):   TOOL_PKG := github.com/elastic/crd-ref-docs
@@ -1066,11 +1073,12 @@ $(GOLANGCI_LINT):  TOOL_PKG := github.com/golangci/golangci-lint/v2/cmd/golangci
 $(GOVULNCHECK):    TOOL_PKG := golang.org/x/vuln/cmd/govulncheck
 $(MDREFLOW):       TOOL_PKG := github.com/jbeda/mdreflow/cmd/mdreflow
 
-$(ACTIONLINT) $(CONTROLLER_GEN) $(CRD_REF_DOCS) $(KUBEBUILDER) $(SETUP_ENVTEST) $(GOLANGCI_LINT) $(GOVULNCHECK) $(MDREFLOW):
+$(ACTIONLINT) $(CONTROLLER_GEN) $(CRD_REF_DOCS) $(KUBEBUILDER) $(SETUP_ENVTEST) $(GOLANGCI_LINT) $(GOVULNCHECK) $(MDREFLOW): \
+		$(REPO_ROOT)/tools/go.mod $(REPO_ROOT)/tools/vendor/modules.txt
 	mkdir -p $(REPO_ROOT)/.build
 	cd $(REPO_ROOT)/tools && GOWORK=off go build -mod=vendor -o $@ $(TOOL_PKG)
 
-$(GINKGO):
+$(GINKGO): $(REPO_ROOT)/cmd/gmc/go.mod $(REPO_ROOT)/cmd/gmc/go.sum
 	mkdir -p $(REPO_ROOT)/.build
 	cd $(REPO_ROOT)/cmd/gmc && go build -o $@ github.com/onsi/ginkgo/v2/ginkgo
 
