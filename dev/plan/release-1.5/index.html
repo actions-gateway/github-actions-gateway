@@ -2734,6 +2734,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#scope-reopened-2026-08-14-what-a-question-cost" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scope reopened 2026-08-14: what a question cost
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#candidates-not-yet-accepted" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2793,7 +2804,7 @@ Four gating Queue rows so far, labelled <code>1.5-gate</code>: Q712, Q713, and Q
 All four shipped 2026-08-11, and the marketing reconciliation closed 2026-08-12 (Q801, Q821).
 Two more were admitted afterwards, both on the <a href="#the-parity-axis-what-closed-and-what-backs-it">parity axis</a>: Q776 on 2026-08-13, to back the parity claim the other four earned, and Q844 on 2026-08-14, a classic-only capability the badge set never recorded and the marketing surface already claims for both tiers.
 Q844 shipped 2026-08-14 and Q776 has now shipped too, so every gating row is closed.
-The <a href="#pre-flight-the-api-surface-this-tag-publishes">API surface review</a> is recorded below, which cleared the last item binding at the release candidate. <code>v1.5.0-rc.1</code> was cut from <code>ff3b3ef1</code> on 2026-08-14 and <a href="#the-rc1-validation-verdict-2026-08-14">its dogfood validation PASSED</a>, so what remains before the stable tag is the stable-tag half of pre-flight: the marketing reconciliation, the operator-caveat pass, the roadmap and features reconciliation, and the announce-bar highlight.</p>
+The <a href="#pre-flight-the-api-surface-this-tag-publishes">API surface review</a> is recorded below, which cleared the last item binding at the release candidate. <code>v1.5.0-rc.1</code> was cut from <code>ff3b3ef1</code> on 2026-08-14 and <a href="#the-rc1-validation-verdict-2026-08-14">its dogfood validation PASSED</a>, and the <a href="#the-stable-tag-pre-flight-2026-08-14">stable-tag pre-flight</a> then ran and closed. <strong>Scope reopened the same day</strong>, on <a href="#scope-reopened-2026-08-14-what-a-question-cost">eight further gating rows</a>, two of which change shipped code, so <code>v1.5.0-rc.1</code> is superseded and the line will tag from an rc.2.</p>
 </blockquote>
 <h2 id="why-these-gate-a-release-rather-than-riding-along">Why these gate a release rather than riding along<a class="headerlink" href="#why-these-gate-a-release-rather-than-riding-along" title="Permanent link">&para;</a></h2>
 <p>Q712 and Q713 came out of the 2026-08-06 competitive analysis, and both were defects in capabilities the project already claims, not new features.
@@ -3041,6 +3052,31 @@ A CRD property scan reported a field called <code>identity</code> that does not 
 An Event-reason scan keyed on <code>recordEvent(</code> missed two of the three additions, because <code>provisioner/</code> records through <code>RecordEvent(</code> instead; keying on the argument after the event type finds all three and cannot mistake the adjacent action string for a reason.</p>
 <p><strong>Still outstanding at the tag:</strong> the notes carry no <code>Container images</code> section, because the index digests do not exist until <code>publish.yml</code> has run.
 <a href="../../operations/release/#4-record-the-published-digests">Step 4</a> is where they are read, and the section is appended before <code>gh release edit --notes-file</code> publishes the body.</p>
+<h2 id="scope-reopened-2026-08-14-what-a-question-cost">Scope reopened 2026-08-14: what a question cost<a class="headerlink" href="#scope-reopened-2026-08-14-what-a-question-cost" title="Permanent link">&para;</a></h2>
+<p>The pre-flight above closed and the tag was the next step.
+Then a question — <em>did we finally reach v1→v2 and classic→ScaleSet parity, and should that go in the notes, docs, or marketing?</em> — reopened the release on eight rows.
+Recorded because the sequence, not the rows, is the lesson: each answer was measured, and each measurement found something the pass before it had not.</p>
+<p><strong>Both axes are closed, and only one of them is a 1.5 story.</strong> The <a href="../v2-ga/#capability-parity-is-a-precondition-of-the-removal">capability parity table</a> reads Both tiers on all six rows, <code>features.md</code> carries no <code>partly classic-only</code> badge, and the <a href="../../operations/observability-metrics/#acquisition-tier-reach">tier ledger</a> reconciles all 53 series (26 Both, 16 classic-only, 10 scale-set-only, 1 tier-neutral) under a gate.
+The v1 to v2 axis closed mostly before the 1.4 tag; 1.5 contributed Q726 alone.</p>
+<p><strong>Asking the question found the stale claim the pass had missed</strong>, recorded in the pre-flight section above, and then the same reasoning applied one level up.
+A completeness claim inherits the blind spots of its inventory, so "no capability is lost" cannot rest on a hand-kept list — that is the shape Q844 hid in, and <a href="../../development/testing/">testing.md</a> states the rule outright.
+Q776 made metric <em>series</em> derived and gated.
+Q850 and Q851 extend that to condition reasons, Event reasons, and label values, which is the surface a completeness claim can honestly cover; the marketing claim waits for them.
+Measured while scoping Q851: <code>eviction_retries_total</code> reads Both while <code>cause="vanished"</code> is scale-set-only, and <code>abandoned_run_force_cancels_total</code> reads Both while <code>outcome="identity_unknown"</code> is unreachable there.
+The gate sees series, not values, so two live tier differences sit inside rows marked Both.</p>
+<p><strong>Then a second question — operators do not read release notes, so what are this release's landmines?</strong> Q849 was already admitted for it: Q791's guard runs at admission, which never re-validates a pair that already exists.
+Two more came out of asking the same thing of every caveat.
+Q852 is the sharpest and was not on anyone's list: <code>helm upgrade</code> never applies CRDs, and a structural schema prunes unknown fields with no error, so a skipped step 1 leaves <code>spec.runnerGroup</code> declared and inert — a security control that silently does nothing.
+It generalises past this release, since every future field has the same exposure.
+Q853 covers the other silent one, Q713's classic-tier span change, which renamed nothing and shifts every dashboard and cost figure at upgrade.</p>
+<p>Worth keeping: the two caveats that are <em>not</em> landmines, Q844's budget spend and Q726's inert appended label, each ship a condition or Event that fires exactly when an operator would otherwise be confused.
+That is the pattern Q849, Q852 and Q853 copy.</p>
+<p><strong>Finally, the bar for rc.2: pass without anything needing interpretation.</strong> Q854, Q855 and a promoted Q773 come from that.
+Q854 is the one that already cost a run — a single <code>HTTP 401</code> at 645s of the settle wait killed the first <code>v1.5.0-rc.1</code> attempt after 43 good polls, and the gate has no retry anywhere, while <code>download-verified.sh</code> has had jittered backoff since Q829.
+Q855 is the 22-minute blind spot on the leg that passed.
+Q773 was filed on 2026-08-09 and says the runbook calls a normal <code>Throughput: Active</code> result a surprise; it happened again on rc.1, and this document called it unexpected before the row was found.</p>
+<p><strong>One gate changed on the way.</strong> Labelling release-process work <code>1.5-gate</code> made <code>roadmapcheck</code> demand a public roadmap bullet for a <code>gh</code> retry and a runbook line.
+Rule 7 now obliges a bullet only for a gated row carrying <code>feature</code> or <code>security</code>, so a release can wait on process work without advertising it to adopters (<a href="../../development/maintaining-backlog/#a-gate-label-and-its-roadmap-bullet-are-two-commits-and-the-first-one-is-red">maintaining-backlog.md</a>).</p>
 <h2 id="candidates-not-yet-accepted">Candidates not yet accepted<a class="headerlink" href="#candidates-not-yet-accepted" title="Permanent link">&para;</a></h2>
 <p>Held here so the reasoning is not lost, not committed to the release:</p>
 <ul>

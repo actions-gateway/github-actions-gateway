@@ -2824,6 +2824,62 @@
 </thead>
 <tbody>
 <tr>
+<td><a id="Q854"></a>Q854</td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/dogfood/validate-release.sh">Retry a transient <code>gh</code> failure in the release gate instead of aborting the run</a></td>
+<td><code>1.5-gate</code> <code>dogfood</code> <code>bug</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>Measured 2026-08-14: one <code>HTTP 401: Bad credentials</code> at 645s of the settle wait killed a <code>v1.5.0-rc.1</code> run after 43 good polls; 20+ calls succeeded right after. The gate has no retry. <code>download-verified.sh</code>'s jittered backoff is the pattern.</td>
+</tr>
+<tr>
+<td><a id="Q855"></a>Q855</td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/dogfood/e2e-run-watch.sh">Fall back to run job status when GitHub will not serve the e2e job log</a></td>
+<td><code>1.5-gate</code> <code>dogfood</code> <code>tests</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>Measured 2026-08-14: <code>heartbeat</code> stayed null for the whole 22-minute e2e leg of a passing run, so the only in-flight signal was absent and the sentinel reported a stall it was right to report. The run record answers when the log will not.</td>
+</tr>
+<tr>
+<td><a id="Q849"></a>Q849</td>
+<td><a href="../design/05-security/#cross-tenant-job-acquisition-via-a-shared-scale-set-name">Report an existing scale-set name collision at reconcile, not only at admission</a></td>
+<td><code>1.5-gate</code> <code>security</code> <code>feature</code></td>
+<td>🔲</td>
+<td>M</td>
+<td>Admission runs on create and update, so Q791 never re-validates an existing pair: two controllers drive one scale set and each tenant can acquire the other's jobs until someone re-applies. <code>scaleset_scope.go</code> has the inventory and needs a caller.</td>
+</tr>
+<tr>
+<td><a id="Q852"></a>Q852</td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/cmd/wiring.go">Detect a CRD schema older than the binary at GMC startup</a></td>
+<td><code>1.5-gate</code> <code>security</code> <code>bug</code></td>
+<td>🔲</td>
+<td>M</td>
+<td><code>helm upgrade</code> never applies CRDs and a structural schema prunes unknown fields with no error, so a skipped step 1 makes <code>spec.runnerGroup</code> a tenant boundary that silently does not exist. <code>V2alpha1Installed</code> is the startup-probe precedent.</td>
+</tr>
+<tr>
+<td><a id="Q850"></a>Q850</td>
+<td><a href="../operations/observability-metrics/#acquisition-tier-reach">Extend the acquisition-tier ledger to condition and Event reasons</a></td>
+<td><code>1.5-gate</code> <code>ci</code> <code>docs</code></td>
+<td>🔲</td>
+<td>M</td>
+<td>Q776 derived and gated the 53 metric series. Condition reasons and Event reasons are enumerable the same way and ungated, so a signal reaching one tier only is still invisible. Precondition for claiming completeness rather than metric-surface parity.</td>
+</tr>
+<tr>
+<td><a id="Q851"></a>Q851</td>
+<td><a href="../operations/observability-metrics/#acquisition-tier-reach">Take the acquisition-tier ledger to label-value granularity</a></td>
+<td><code>1.5-gate</code> <code>ci</code> <code>docs</code></td>
+<td>🔲</td>
+<td>M</td>
+<td>Measured 2026-08-14: <code>eviction_retries_total</code> reads Both while <code>cause="vanished"</code> is scale-set-only, and <code>abandoned_run_force_cancels_total</code> reads Both while <code>outcome="identity_unknown"</code> is unreachable there. The gate sees series, not values.</td>
+</tr>
+<tr>
+<td><a id="Q853"></a>Q853</td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/tree/main/deploy/monitoring">Make a metric semantics change visible on the shipped dashboards</a></td>
+<td><code>1.5-gate</code> <code>docs</code> <code>debt</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>Q713 changed the classic <code>job_duration_seconds</code> span with no rename, so dashboards and cost attribution shift at upgrade with nothing marking it. <code>actions_gateway_build_info</code> is emitted by both binaries and read by no dashboard. Plus an upgrade note.</td>
+</tr>
+<tr>
 <td><a id="Q842"></a>Q842</td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/Makefile">A vendored tool bump never rebuilds its binary, so a stale tool serves a newer target</a></td>
 <td><code>ci</code> <code>debt</code> <code>bug</code></td>
@@ -2854,14 +2910,6 @@
 <td>🔲</td>
 <td>S</td>
 <td>Three docs advise denying <code>169.254.169.254/32</code> and Q226 measured HTTP 200 from inside a Kata guest, but no test names the address. Kata bounds the kernel, not the pod network. Add a policy-enforcing-CNI negative assertion.</td>
-</tr>
-<tr>
-<td><a id="Q834"></a>Q834</td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/agent/pr-requeue-eligible.sh">A requeue assessment probes the local checkout, not the PR it names</a></td>
-<td><code>debt</code> <code>ci</code> <code>bug</code></td>
-<td>🔲</td>
-<td>S</td>
-<td>Measured 2026-08-12: the probe head is local <code>git rev-parse HEAD</code>; <code>headRefOid</code> is absent. <code>--assess 1438</code> then <code>--assess 1447</code> from one worktree gave identical output, exit 0 ELIGIBLE. Fix: read the head from <code>gh pr view --json headRefOid</code>.</td>
 </tr>
 <tr>
 <td><a id="Q811"></a>Q811</td>
@@ -3146,10 +3194,10 @@
 <tr>
 <td><a id="Q773"></a>Q773</td>
 <td><a href="../operations/release/#validate-the-release-candidate-on-dogfood">release.md's <code>Throughput</code> expectation is stale: the gate now reports it <code>Active</code></a></td>
-<td><code>docs</code> <code>dogfood</code></td>
+<td><code>1.5-gate</code> <code>docs</code> <code>dogfood</code></td>
 <td>🔲</td>
 <td>S</td>
-<td>Measured on v1.4.0-rc.1 2026-08-09: <code>Throughput</code> reported <code>Active</code>, <code>sampleCounts=[166]</code>, where the runbook calls <code>NOT VALIDATED THIS RUN</code> normal for a ~7-job matrix. The sampler accrues regardless of <code>spec.sizing</code> and re-seeds from persisted status.</td>
+<td>Measured on v1.4.0-rc.1 2026-08-09 and again on v1.5.0-rc.1 2026-08-14 (<code>sampleCounts=[188]</code>), where the runbook calls <code>NOT VALIDATED THIS RUN</code> normal for a ~7-job matrix. Twice now a passing run has read as a surprise.</td>
 </tr>
 <tr>
 <td><a id="Q707"></a>Q707</td>

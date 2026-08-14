@@ -3020,8 +3020,11 @@ So every commit the gate can fail belongs to the branch being failed, and <code>
 When rewriting genuinely costs more than it buys, <code>BACKLOG_ALLOW_MIXED_COMMITS="&lt;sha&gt; ..."</code> admits named commits, the same deliberate-and-reviewable shape as <code>BACKLOG_ALLOW_RESURRECT</code> and friends.
 Merge commits are skipped: their file list depends on which parent you diff against, so "what this commit touched" has no single answer for them.</p>
 <h3 id="a-gate-label-and-its-roadmap-bullet-are-two-commits-and-the-first-one-is-red">A gate label and its roadmap bullet are two commits, and the first one is red<a class="headerlink" href="#a-gate-label-and-its-roadmap-bullet-are-two-commits-and-the-first-one-is-red" title="Permanent link">&para;</a></h3>
-<p><code>roadmapcheck</code> rule 7 requires every row labelled <code>X.Y-gate</code> to be named by a roadmap bullet, so adding the label and adding the bullet are one change in intent.
+<p><code>roadmapcheck</code> rule 7 requires a row labelled <code>X.Y-gate</code> <strong>and</strong> carrying <code>feature</code> or <code>security</code> to be named by a roadmap bullet, so adding the label and adding the bullet are one change in intent.
 Isolation splits them regardless: the label lives in <code>docs/STATUS.md</code> and the bullet in <code>docs/roadmap.md</code>, so they cannot share a commit.</p>
+<p><strong>A gate label answers two questions, and only one of them obliges a bullet.</strong> Release scope is not all one kind: a capability or a security fix is what someone upgrades <em>for</em>, while the CI, test, docs and dogfood work that also blocks a tag is process.
+Requiring a bullet for both put our own release harness on the page people read to evaluate the product, so the obligation follows <code>feature</code>/<code>security</code> rather than the gate label alone.
+Gate a process row freely; it stays out of the roadmap and the release still waits for it.</p>
 <p>Read on its own, the <code>docs(status):</code> commit therefore fails rule 7, which looks alarming enough to go hunting for a way around it.
 There is none, and none is needed: <code>roadmapcheck</code> reads the <strong>working tree</strong>, not each commit in turn, so what <code>make check</code>, CI and the merge queue all judge is the pair together.
 Order the two commits however you like and check the tip.
