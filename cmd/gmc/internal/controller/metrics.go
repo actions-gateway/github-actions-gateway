@@ -179,6 +179,7 @@ type actionsGatewayV2ConditionsCollector struct {
 	agcAvailable              *prometheus.Desc
 	egressUnattributed        *prometheus.Desc
 	agcAutoscalingUnavailable *prometheus.Desc
+	scaleSetNameCollision     *prometheus.Desc
 }
 
 func newActionsGatewayV2ConditionsCollector(reader client.Reader) *actionsGatewayV2ConditionsCollector {
@@ -204,6 +205,11 @@ func newActionsGatewayV2ConditionsCollector(reader client.Reader) *actionsGatewa
 			"1 when the v2 ActionsGateway AGCAutoscalingUnavailable condition is True (the agcAutoscaling opt-in cannot be satisfied, e.g. the VerticalPodAutoscaler CRDs are not installed), else 0. The AGC still runs on its stamped agcResources sizing; this is advisory.",
 			[]string{"namespace", "name"}, nil,
 		),
+		scaleSetNameCollision: prometheus.NewDesc(
+			"actions_gateway_scale_set_name_collision",
+			"1 when the v2 ActionsGateway ScaleSetNameCollision condition is True (a ScaleSet RunnerSet bound to this gateway claims a scale-set name another RunnerSet already claims in the same GitHub scope, so both AGCs drive one scale set and each acquires the other tenant's jobs), else 0. Admission rejects new such pairs, so a 1 is a pair that predates the guard or was applied with the webhook uninstalled — alert on it.",
+			[]string{"namespace", "name"}, nil,
+		),
 	}
 }
 
@@ -213,6 +219,7 @@ func (c *actionsGatewayV2ConditionsCollector) Describe(ch chan<- *prometheus.Des
 	ch <- c.agcAvailable
 	ch <- c.egressUnattributed
 	ch <- c.agcAutoscalingUnavailable
+	ch <- c.scaleSetNameCollision
 }
 
 // Collect implements prometheus.Collector. On a read failure it emits nothing
@@ -238,6 +245,8 @@ func (c *actionsGatewayV2ConditionsCollector) Collect(ch chan<- prometheus.Metri
 			conditionGaugeValue(ag.Status.Conditions, gmcv2alpha1.ConditionEgressUnattributed), ag.Namespace, ag.Name)
 		ch <- prometheus.MustNewConstMetric(c.agcAutoscalingUnavailable, prometheus.GaugeValue,
 			conditionGaugeValue(ag.Status.Conditions, gmcv2alpha1.ConditionAGCAutoscalingUnavailable), ag.Namespace, ag.Name)
+		ch <- prometheus.MustNewConstMetric(c.scaleSetNameCollision, prometheus.GaugeValue,
+			conditionGaugeValue(ag.Status.Conditions, gmcv2alpha1.ConditionScaleSetNameCollision), ag.Namespace, ag.Name)
 	}
 }
 

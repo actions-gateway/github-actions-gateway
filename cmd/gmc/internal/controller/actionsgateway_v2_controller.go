@@ -631,6 +631,7 @@ func (r *ActionsGatewayV2Reconciler) updateStatus(ctx context.Context, ag *gmcv2
 	prevRunnerSets := conditionStatusValue(ag.Status.Conditions, gmcv2alpha1.ConditionRunnerSetsDegraded)
 	prevDegraded := conditionStatusValue(ag.Status.Conditions, gmcv2alpha1.ConditionDegraded)
 	prevAutoscaling := conditionStatusValue(ag.Status.Conditions, gmcv2alpha1.ConditionAGCAutoscalingUnavailable)
+	prevCollision := conditionStatusValue(ag.Status.Conditions, gmcv2alpha1.ConditionScaleSetNameCollision)
 	set := func(condType string, status bool, reason, msg string) {
 		s := metav1.ConditionFalse
 		if status {
@@ -697,6 +698,17 @@ func (r *ActionsGatewayV2Reconciler) updateStatus(ctx context.Context, ag *gmcv2
 	rs := r.evalRunnerSetHealth(ctx, ag)
 	set(gmcv2alpha1.ConditionRunnerSetsDegraded, rs.degraded, rs.reason, rs.message)
 
+	// ScaleSetNameCollision reports a scale-set name shared across the gateway's GitHub
+	// scope that admission never got to reject (Q849) — see
+	// evalScaleSetNameCollisions for which pairs those are and why this reports rather
+	// than enforces. Advisory: it does not gate Ready. An unreadable inventory is left
+	// as the last verdict rather than written False, so a scope is never reported clean
+	// on a read that did not happen.
+	collision := r.evalScaleSetNameCollisions(ctx, ag)
+	if collision.observed {
+		set(gmcv2alpha1.ConditionScaleSetNameCollision, collision.collided, collision.reason, collision.message)
+	}
+
 	readyReason := gmcv2alpha1.ReasonReady
 	readyMsg := "AGC control plane is available"
 	if !agcReady {
@@ -754,6 +766,20 @@ func (r *ActionsGatewayV2Reconciler) updateStatus(ctx context.Context, ag *gmcv2
 			etype = corev1.EventTypeWarning
 		}
 		r.recordEvent(ag, etype, autoscalingReason, "Reconcile", "%s", autoscalingMsg)
+	}
+
+	// A scale-set name became shared, or the last shared one was resolved (Q849). The
+	// absent→False first observation is skipped like the autoscaling one above, but
+	// absent→True is not: a gateway whose first-ever reconcile already sees the
+	// collision is the upgrade case this exists for, and it is precisely the one nobody
+	// is watching for a transition.
+	if newCollision := boolConditionStatus(collision.collided); collision.observed && prevCollision != newCollision &&
+		(prevCollision != "" || collision.collided) {
+		etype := corev1.EventTypeNormal
+		if collision.collided {
+			etype = corev1.EventTypeWarning
+		}
+		r.recordEvent(ag, etype, collision.reason, "Reconcile", "%s", collision.message)
 	}
 
 	if !agcReady {

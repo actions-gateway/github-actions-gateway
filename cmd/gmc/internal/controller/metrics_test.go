@@ -155,7 +155,7 @@ func TestActionsGatewayV2ConditionsCollector_MirrorsConditions(t *testing.T) {
 	scheme := newV2MetricsScheme(t)
 
 	// "degraded": RunnerSetsDegraded=True, AGCAvailable=False, EgressUnattributed=True,
-	// AGCAutoscalingUnavailable=True.
+	// AGCAutoscalingUnavailable=True, ScaleSetNameCollision=True.
 	degraded := v2GatewayWithCondition("degraded", gmcv2alpha1.ConditionRunnerSetsDegraded, metav1.ConditionTrue)
 	meta.SetStatusCondition(&degraded.Status.Conditions, metav1.Condition{
 		Type: gmcv2alpha1.ConditionAGCAvailable, Status: metav1.ConditionFalse, Reason: "Test", Message: "test",
@@ -166,9 +166,12 @@ func TestActionsGatewayV2ConditionsCollector_MirrorsConditions(t *testing.T) {
 	meta.SetStatusCondition(&degraded.Status.Conditions, metav1.Condition{
 		Type: gmcv2alpha1.ConditionAGCAutoscalingUnavailable, Status: metav1.ConditionTrue, Reason: "Test", Message: "test",
 	})
+	meta.SetStatusCondition(&degraded.Status.Conditions, metav1.Condition{
+		Type: gmcv2alpha1.ConditionScaleSetNameCollision, Status: metav1.ConditionTrue, Reason: "Test", Message: "test",
+	})
 
 	// "healthy": RunnerSetsDegraded=False, AGCAvailable=True, EgressUnattributed=False,
-	// AGCAutoscalingUnavailable=False.
+	// AGCAutoscalingUnavailable=False, ScaleSetNameCollision=False.
 	healthy := v2GatewayWithCondition("healthy", gmcv2alpha1.ConditionRunnerSetsDegraded, metav1.ConditionFalse)
 	meta.SetStatusCondition(&healthy.Status.Conditions, metav1.Condition{
 		Type: gmcv2alpha1.ConditionAGCAvailable, Status: metav1.ConditionTrue, Reason: "Test", Message: "test",
@@ -178,6 +181,9 @@ func TestActionsGatewayV2ConditionsCollector_MirrorsConditions(t *testing.T) {
 	})
 	meta.SetStatusCondition(&healthy.Status.Conditions, metav1.Condition{
 		Type: gmcv2alpha1.ConditionAGCAutoscalingUnavailable, Status: metav1.ConditionFalse, Reason: "Test", Message: "test",
+	})
+	meta.SetStatusCondition(&healthy.Status.Conditions, metav1.Condition{
+		Type: gmcv2alpha1.ConditionScaleSetNameCollision, Status: metav1.ConditionFalse, Reason: "Test", Message: "test",
 	})
 
 	deleting := v2ManagedGateway("deleting", true)
@@ -202,6 +208,10 @@ actions_gateway_egress_unattributed{name="healthy",namespace="healthy"} 0
 # TYPE actions_gateway_runnersets_degraded gauge
 actions_gateway_runnersets_degraded{name="degraded",namespace="degraded"} 1
 actions_gateway_runnersets_degraded{name="healthy",namespace="healthy"} 0
+# HELP actions_gateway_scale_set_name_collision 1 when the v2 ActionsGateway ScaleSetNameCollision condition is True (a ScaleSet RunnerSet bound to this gateway claims a scale-set name another RunnerSet already claims in the same GitHub scope, so both AGCs drive one scale set and each acquires the other tenant's jobs), else 0. Admission rejects new such pairs, so a 1 is a pair that predates the guard or was applied with the webhook uninstalled — alert on it.
+# TYPE actions_gateway_scale_set_name_collision gauge
+actions_gateway_scale_set_name_collision{name="degraded",namespace="degraded"} 1
+actions_gateway_scale_set_name_collision{name="healthy",namespace="healthy"} 0
 `
 	// The deleting gateway must not appear as any series — CollectAndCompare fails
 	// if the collected exposition contains anything beyond the lines above.
