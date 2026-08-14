@@ -132,6 +132,7 @@ The habits that avoid most prompts:
   Break-glass for a case the rule reads wrong: re-run prefixed `PIPED_GATE_OVERRIDE=<reason>`, and file a Queue row if the rule itself is the defect.
   Both probes fail silent, so offline costs a missed catch and never a block.
   Gate list and settings: `.claude/piped-gate-guard.json`.
+- **Read background-task and watcher output with the Read tool, not Bash `cat`/`head`.** Only a Read puts the text in the transcript, and hooks that key on it go silent otherwise: pr-sentinel dampens a repeated event by comparing the last report's head SHA, so a Bash read leaves it unable to tell a repeat from a new failure and the Stop hook asks for a relaunch that re-fires the same event (three redundant cycles in Q844; upstream `karlkfi/claude-pr-sentinel` #9 and #14).
 - **no-subagent-workers** fires on `Agent`/`Task` spawns and *asks* (soft) when a spawn looks like a parallel-dispatch worker — workers must be task chips, never sub-agents (`docs/development/parallel-dispatch.md`).
   Read-only agent types (`Explore`, `Plan`) pass untouched.
 
@@ -213,8 +214,9 @@ When in doubt, write the detail in `docs/` and link it; prefer tightening an exi
 - Commit after each task is complete and validated — without asking; committing is automatic in this repo.
   Small, focused commits; Conventional Commits standard; never commit broken code or failing tests.
 - **`docs/STATUS.md` changes always get their own isolated commit**, separate from code and plan-doc changes — it is high-contention across concurrent branches, and isolation keeps rebase conflicts trivial to resolve.
-- **Stage explicit file paths, never a directory** (`git add cmd` and friends), and read `git status` right before committing — every path in the commit must be one you meant.
-  Test and build targets regenerate tracked files as prerequisites (`make test-integration` → `config/crd`), so a directory add silently ships someone else's codegen drift; #847 broke CI that way.
+- **Commit explicit file paths, never a directory** (`git add cmd` and friends), and prefer `git commit -- <paths>` over `git add` plus a bare `git commit`: the pathspec form makes the commit's contents independent of whatever is already staged.
+  Reading `git status` first is not enough on its own — `git mv` stages its rename immediately, and in `--short` output that is `R` in the *staged* column, which is easy to read as pending (Q844 shipped a rename into a `docs/STATUS.md`-only commit that way, caught by `status-isolation-check`).
+  Test and build targets also regenerate tracked files as prerequisites (`make test-integration` → `config/crd`), so a directory add silently ships someone else's codegen drift; #847 broke CI that way.
 - Amending an unpushed commit is fine — fix up the message or staged changes without asking.
   Once pushed (but before a PR exists), prefer a follow-up commit; only amend + force-push (always `--force-with-lease`, never on `main`/`master`) when the user asks for it.
 - **Merges go through the merge queue** — `gh pr merge --squash` enqueues; the queue validates the candidate merge result and a failing entry is kicked back to its PR with the failure attached (the signal pr-sentinel reacts to).
