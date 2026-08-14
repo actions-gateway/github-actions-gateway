@@ -1197,6 +1197,23 @@ The shape they share: the probe exits 0 with a plausible value, and nothing in t
 When a probe's answer is about to decide something, run the gate itself.
 When the gate is too slow for the loop, keep the probe but give it a case whose answer you already know, and disbelieve it when the two disagree.
 
+### A negative result implicates the probe's identifier first
+
+The section above is about a probe that answers a different question.
+This one is about a probe that asks after a name which does not exist, where the answer is indistinguishable from a true absence: no match, no output, a status that reads as "not there".
+The command ran and ran correctly, so "empty output is only evidence once the command is known to have run" passes and tells you nothing.
+
+Three instances measured on 2026-08-14, in one session:
+
+- **A make target that matches no rule reports `Nothing to be done`.** `make .build/mdreflow` was used to demonstrate that a stale tool binary never rebuilds, but the tool rules name their targets by absolute path (`$(REPO_ROOT)/.build/…`), so the relative form matched no rule at all.
+  That message is what make prints for an up-to-date target, so the probe agreed with the defect being investigated and went on agreeing after the fix.
+- **A `git config --get` for the wrong key is indistinguishable from an unset one.** `merge.statusmd.driver` returned nothing and was read as the merge driver not being installed, and reported that way; the key is `merge.backlog.driver` and it was installed throughout.
+- **A `grep` alternation that does not survive quoting matches nothing.** An escaped-quote pattern over two row IDs returned no lines, which briefly read as a Queue row lost in a merge.
+  Re-run against a file, every row was present.
+
+What the three share is that each was about to support a **negative** claim, the direction with no natural contradiction: a wrong positive gets argued with by the thing it names, while a wrong negative simply agrees with whatever was already suspected.
+So before a negative decides anything, run the same probe against a value known to be present. `make --dry-run tools` fired nine rules where the relative target fired none, and `git config --get-regexp '^merge\.'` listed five installed drivers where the guessed key listed nothing.
+
 ### A correct check can pass without looking at what was wrong
 
 The section above is about running the wrong instrument.
