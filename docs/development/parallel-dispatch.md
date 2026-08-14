@@ -288,7 +288,8 @@ This is the key design decision; get it right up front.
   Automating it would buy throughput by spending the only context that makes the throughput worth having.
   So the dispatcher stops at *verified and ready*, and reports.
   Read a request to go faster as a request to shorten everything **before** this step.
-- **The merge queue is the mechanical half, not a delegation of the gate** (active on `main` since 2026-08-03; see [merge-queue.md](../plan/merge-queue.md)). `gh pr merge --squash` enqueues; the queue validates the candidate merge result, including the union with whatever is ahead of it, and kicks a failing entry back to its PR, which pr-sentinel surfaces to the owning session.
+- **The merge queue is the mechanical half, not a delegation of the gate** (active on `main` since 2026-08-03; see [merge-queue.md](../plan/merge-queue.md)).
+  The queue is entered from the PR's web UI, then validates the candidate merge result, including the union with whatever is ahead of it, and kicks a failing entry back to its PR, which pr-sentinel surfaces to the owning session.
   It arbitrates green-ness, freshness, and the jointly-red case.
   It does **not** decide whether a change should land, so enqueueing is the maintainer's action, taken after their review.
   Neither workers nor the dispatcher enqueue.
@@ -297,7 +298,8 @@ This is the key design decision; get it right up front.
   A worker may rebase and re-enqueue **only** when [`scripts/agent/pr-requeue-eligible.sh`](../../scripts/agent/pr-requeue-eligible.sh) says so, which requires a prior human enqueue, an open non-draft PR, no current queue entry, and a rebase whose conflicts fall solely in the merge-driver-owned files.
   A conflict anywhere else changes what was reviewed, so it wakes the maintainer instead.
   A read the checker could not take is a third answer, not a refusal: it exits 2 naming what it could not measure, because a `gh` failure otherwise reads as a measured "not OPEN", "not queued", or "nobody enqueued it", and that reason is what a later reader has instead of the eviction.
-  A **first** enqueue is still never an agent's to make.
+  A **first** enqueue is still never an agent's to make. `ELIGIBLE` also does not make the re-enqueue runnable: `gh pr merge` routes it through `enablePullRequestAutoMerge`, which this repository forbids (`allow_auto_merge: false`), so it fails `Auto merge is not allowed for this repository` (measured 2026-08-14 on #1525, gh 2.96.0).
+  Report the verdict and its `measured:` line, and hand the re-enqueue to the maintainer.
 - **What the dispatcher owes at handoff**, so the review is cheap rather than a re-derivation: which heavy gates ran and on which head SHA, what the scope review found, and the mergeability state as of *now*.
 
 ## Concurrency and contention
