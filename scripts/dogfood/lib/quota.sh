@@ -89,10 +89,23 @@ pool_machine_type() {
 # nothing for a pool with autoscaling off (the manually sized system and
 # benchmark pools), which is a distinct answer from a failed read: that returns
 # 1.
+#
+# GKE omits minNodeCount when it holds its 0 default, so the row arrives with a
+# leading empty field — ",8", not "0,8" — and the max lands in min unless the
+# split preserves it. An absent min is printed as the 0 it stands for. Same
+# proto3 omission as currentNodeCount (Q779).
+#
+# The separator is a comma rather than value()'s default tab because tab is an
+# IFS *whitespace* character: `read` drops leading runs of it whatever IFS is
+# set to, so no IFS can recover the empty first field from a tab-separated row.
 pool_autoscaling() {
-	gcloud container node-pools describe "$1" \
+	local row min max
+	row="$(gcloud container node-pools describe "$1" \
 		--cluster="${CLUSTER}" --zone="${ZONE}" --project="${PROJECT}" \
-		--format='value(autoscaling.minNodeCount,autoscaling.maxNodeCount)' || return 1
+		--format='value[separator=","](autoscaling.minNodeCount,autoscaling.maxNodeCount)')" || return 1
+	IFS=',' read -r min max <<<"${row}"
+	[[ -n "${max}" ]] || return 0
+	echo "${min:-0} ${max}"
 }
 
 # set_pool_autoscale_max POOL MIN MAX — move an autoscaled pool's ceiling.

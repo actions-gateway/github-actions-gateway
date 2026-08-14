@@ -249,11 +249,12 @@ quota_preflight() {
 	sys_nodes="$(required_system_nodes)"
 	e2e_type="$(pool_machine_type "${E2E_POOL}")"
 	e2e_vcpu="$(machine_type_vcpu "${e2e_type}")"
-	local e2e_autoscaling e2e_min
+	local e2e_autoscaling
 	e2e_autoscaling="$(pool_autoscaling "${E2E_POOL}")"
-	read -r e2e_min e2e_max <<<"${e2e_autoscaling}"
+	# Only the ceiling is reserved; the pool's floor is the autoscaler's business.
+	read -r _ e2e_max <<<"${e2e_autoscaling}"
 	if [[ -z "${e2e_max}" ]]; then
-		echo "error: node pool ${E2E_POOL} reports no autoscale ceiling (min '${e2e_min}')." >&2
+		echo "error: node pool ${E2E_POOL} is not autoscaled, so it has no ceiling." >&2
 		echo "  Its ceiling is what this gate reserves, so there is nothing to reserve and" >&2
 		echo "  the e2e leg would compete with CI for the budget unguarded." >&2
 		return 1

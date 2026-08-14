@@ -280,10 +280,14 @@ pool_machine_type() {
 		workers) echo "e2-standard-4" ;;
 	esac
 }
+# The normalized contract, space-separated, and nothing at all for a pool with
+# autoscaling off. What this stub must not do is model gcloud: the real
+# separator and its leading empty field are asserted against the live output in
+# quota-test.sh, and a stub that sent a literal min here is what hid the parse.
 pool_autoscaling() {
 	case "$1" in
-		e2e) printf '0\t2\n' ;;
-		workers) printf '0\t%s\n' "${FAKE_WORKERS_MAX}" ;;
+		e2e) echo "0 2" ;;
+		workers) [[ -z "${FAKE_WORKERS_MAX}" ]] || echo "0 ${FAKE_WORKERS_MAX}" ;;
 	esac
 }
 set_pool_autoscale_max() { echo "set $*" >>"${GCLOUD_LOG}"; }
