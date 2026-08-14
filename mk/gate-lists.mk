@@ -83,6 +83,25 @@ CHECK_HEAVY_GATES := build-tags-check lint cover-check
 STATUS_GATES := lint-backlog status-isolation-check roadmap-check plan-index-check \
                  conflict-markers-check doc-links em-dash-check page-density-check
 
+# The gates a prose change can fail, for the same reason STATUS_GATES exists one
+# rung over: they cost seconds each and they are what a docs change trips at the
+# very END of a ten-minute `make check`, which is the worst possible moment to
+# learn it. CLAUDE.md asked contributors to remember to run them as a set the
+# moment prose was written; that instruction failed four times (Q699, the session
+# that closed it, Q715, and the Q844 session that added this target), so the set
+# becomes one command rather than six things to remember.
+#   doc-links            a relative link re-based by a move, or a dangling #QNNN
+#   plan-index-check     a plan doc left active with no Queue row citing it
+#   no-plan-refs-check   code or a workflow comment citing a plan path that moved
+#   em-dash-check        a file pushed over its baseline ceiling, or a new doc over the density rule
+#   md-reflow-check      prose that is not sentence-per-line
+#   page-density-check   an admonition wall, or a stat tile repeated across pages
+#   release-pins-check   an install/upgrade page pinning a superseded release
+# Every entry is also in CHECK_FAST_GATES, so like STATUS_GATES this is a strict
+# subset of `make check` and never a second opinion.
+DOCS_GATES := doc-links plan-index-check no-plan-refs-check em-dash-check \
+              md-reflow-check page-density-check release-pins-check
+
 # Behavioural assertions for the scripts/ tree that shellcheck (a linter) can't
 # express — the tags-only release signing-identity regexp (Q124), the
 # validate-cluster preflight decision helpers (CNI classification + K8s version

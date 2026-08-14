@@ -116,6 +116,10 @@ gate-lists-check: ## Fail when `make check`'s gate and suite lists disagree with
 status-gates: ## Every gate a docs/STATUS.md-only change can fail — the seconds-long verify for a backlog edit
 	scripts/ci/run-parallel.sh $(foreach gate,$(STATUS_GATES),"$(gate):$(MAKE) $(gate)")
 
+.PHONY: docs-gates
+docs-gates: ## Every gate a prose change can fail — run it when the prose is written, not after the code gate
+	scripts/ci/run-parallel.sh $(foreach gate,$(DOCS_GATES),"$(gate):$(MAKE) $(gate)")
+
 # Markdown link + anchor integrity gate (Q52). scripts/docs/check-doc-links.sh walks
 # every tracked, non-vendored Markdown file and fails on dead relative file
 # links or `#anchors` that match no GitHub heading slug / explicit <a id>. The
