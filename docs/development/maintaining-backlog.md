@@ -275,7 +275,8 @@ Two consequences worth internalising: the driver **cannot resurrect a row the ot
 **The refusal is per row, but the fallback is per file.** Every case in the table ends by re-running `git merge-file` over the whole file, so the hunk it marks spans the refused row *and* every row added beside it on either side: one refused row produced a five-row hunk in [the measurement below](#a-hand-resolved-conflict-drops-rows-the-markers-never-named).
 Picking a side of that hunk is what loses rows neither side disagreed about.
 
-**It does not help GitHub's server-side squash-merge**, which cannot see a clone's config.
+**It does not help GitHub**, which cannot see a clone's config: the server-side squash-merge, the mergeability read behind `mergeStateStatus`, and the merge queue's candidate build all take the plain three-way merge.
+That is why a batch's row deletions are [spaced at assignment](parallel-dispatch.md#the-dispatcher-owns-assignment-not-coordination-files) rather than left to the driver.
 And a driver-resolved merge is still a merge you own: read the resulting row set, then run the three gates below. `make lint-backlog` remains the independent backstop — rules 8, 9 and 10 all still apply to whatever the driver produced.
 
 ### The same treatment for `docs/plan/README.md`
@@ -304,7 +305,7 @@ Measured on `docs/roadmap.md` at 61cf54e7b: two branches each deleting their own
 
 **What the driver buys is the rebase, not the eviction.** A merge driver is per-clone `git config`, and GitHub builds the merge queue's candidate itself, so the server-side conflict recurs exactly as before ([merge-queue.md](../plan/merge-queue.md) measured the same thing for `docs/STATUS.md`, which has had a driver since Q611).
 What changes is the heal: the rebase that follows an eviction resolves silently instead of by hand.
-Fewer evictions is a different problem, and serializing the batch is the only lever a branch has on it.
+Fewer evictions is a different problem, and the lever is spacing before serializing: the same two deletions ten bullets apart merged clean, so a batch whose items sit apart on the page never meets the conflict ([the same rule for Queue rows](parallel-dispatch.md#the-dispatcher-owns-assignment-not-coordination-files)).
 
 [`scripts/docs/git-merge-roadmap.sh`](../../scripts/docs/git-merge-roadmap.sh) decides the bullets by that **annotation**, normalized to a comma-joined ID list.
 The key is not a new convention either: `devtools/docs/roadmapcheck` already parses the same comment, so the driver and the gate cannot disagree about what a bullet is.

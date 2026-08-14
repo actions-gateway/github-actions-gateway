@@ -353,10 +353,19 @@ The real need is preventing two workers from implementing the **same** Queue ite
 - **The dispatcher owns assignment.** It hands each worker exactly one Queue item, so no two pick the same one; the spawn decision *is* the claim (no lock mechanism needed in this assigns model).
 - **Each worker owns its own Queue-row removal.** A worker removes its completed item from `docs/STATUS.md` in its own PR, in an **isolated commit** (per the repo rule that STATUS.md changes get their own commit).
   PRs stay self-contained and the Queue stays current as they merge.
-- **Self-healing absorbs the churn.** When a sibling merges, the trivial STATUS.md conflict is resolved by the worker's `git rebase origin/main` step — and usually before that, by the [merge driver](maintaining-backlog.md#the-merge-driver-resolve-queue-rows-by-id-not-by-line-position), which decides the Queue table by row ID.
-  Picking from the top makes every worker's deletion adjacent to the next one's, which is precisely what a line-position merge cannot absorb.
+- **Self-healing absorbs the resolution, not the cycle it costs.** The [merge driver](maintaining-backlog.md#the-merge-driver-resolve-queue-rows-by-id-not-by-line-position) decides the Queue table by row ID, so a sibling's row deletion resolves silently inside the worker's `git rebase origin/main`.
+  It is per-clone `git config`, so it never runs on GitHub: the mergeability read behind `mergeStateStatus` and the merge queue's candidate build both take the plain three-way merge, where two adjacent row deletions conflict.
+  That server-side half is the expensive one.
+  A PR that is merely *behind* costs nothing, while a `DIRTY` one must rebase and force-push, and the force-push restarts the whole CI cycle whatever the driver did locally.
   The same `make merge-driver` installs the [plan-index driver](maintaining-backlog.md#the-same-treatment-for-docsplanreadmemd), which does the same for `docs/plan/README.md`, where a dispatch batch that files or archives several plans collides the same way, and the [roadmap driver](maintaining-backlog.md#and-for-docsroadmapmd), for a batch whose items each delete their own roadmap bullet.
   One-time, per clone.
+- **So space the assignment: never hand one batch two adjacent Queue rows.** Picking from the top makes every worker's deletion adjacent to the next one's, which is precisely what a line-position merge cannot absorb, and [one untouched row of separation is enough](queue-id-allocation.md#what-this-fixes-and-what-it-does-not) to merge clean.
+  Skip a row rather than pair it; the item you skip leads the next batch.
+  Serializing the batch reaches the same place by idling every worker but one, so spacing is strictly cheaper (Q807).
+  Measured 2026-08-14 against the live 97-row Queue, merged driverless in a fresh repo: adjacent deletions conflict, the same two deletions one row apart merge clean, and a new row inserted directly above a deleted one conflicts too.
+  The control arm is the pair re-run with the backlog driver configured, which resolves, so the probe is measuring the missing driver rather than the file.
+- **Spacing is an assignment rule, not a guarantee.** Any session filing a new row directly above an assigned one re-creates the conflict, and nothing reserves the gap.
+  That shape is rarer than the batch's own top-of-Queue deletions, and self-healing still covers it when it happens.
 
 The earlier rule was "the dispatcher owns the coordination files."
 That was a workaround from before self-healing was robust — every PR editing STATUS.md made each merge invalidate every sibling.
@@ -513,6 +522,7 @@ Some tasks simply cannot run autonomously under this rule (e.g. anything needing
 
 - [ ] Batch chosen; each item is independent and one-PR-sized.
 - [ ] Tasks grouped into streams by shared files; foundational items ordered first.
+- [ ] No two assigned Queue rows adjacent, so the batch's row deletions merge clean on GitHub ([why](#the-dispatcher-owns-assignment-not-coordination-files)).
 - [ ] Concurrency cap taken from `scripts/agent/local-throttle.sh workers`, or a deliberate `GAG_DISPATCH_WORKERS` override.
 - [ ] Model chosen per task (mechanical → faster/cheaper; judgment-heavy → strongest), set in each spawn prompt.
 - [ ] Workers spawned as full Claude Code sessions (task chips), **never** sub-agents of the dispatcher.
