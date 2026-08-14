@@ -2825,7 +2825,7 @@ Uses the <a href="../observability-alerting/#slo-recording-rules">SLO recording 
 <tr>
 <td>Disruption retries</td>
 <td><code>sum by (runner_group, tier, cause) (increase(actions_gateway_eviction_retries_total[1h]))</code></td>
-<td>Bar chart, split by acquisition tier (<code>classic</code>, <code>scaleset</code>) and cause (<code>eviction</code>, <code>preemption</code>, <code>deletion</code>, <code>abandoned</code>). Keep the causes visually distinct: <code>eviction</code> rising means node pressure, <code>preemption</code> rising means a <code>priorityTiers</code> floor is displacing opportunistic work, <code>abandoned</code> rising means workers are not being scheduled at all before <code>pendingPodDeadline</code> reaps them — different investigations entirely</td>
+<td>Bar chart, split by acquisition tier (<code>classic</code>, <code>scaleset</code>) and cause (<code>eviction</code>, <code>preemption</code>, <code>deletion</code>, <code>abandoned</code>, <code>vanished</code>). Keep the causes visually distinct: <code>eviction</code> rising means node pressure, <code>preemption</code> rising means a <code>priorityTiers</code> floor is displacing opportunistic work, <code>abandoned</code> rising means workers are not being scheduled at all before <code>pendingPodDeadline</code> reaps them, <code>vanished</code> rising means the AGC itself keeps missing worker teardowns — different investigations entirely</td>
 </tr>
 <tr>
 <td>Abandoned runs awaiting capacity</td>

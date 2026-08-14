@@ -3143,6 +3143,12 @@ No warm standby pool is needed.
   What the confirmed delete structurally cannot retire (a loaded entry whose messages the predecessor already deleted, and a <code>completed</code> entry re-added by a completion replayed after its assignment's message was gone) is swept whenever a <code>202</code> proves the queue drained: an unacked message redelivers instead of a <code>202</code>, so at that moment a guard no held message assigns has nothing left to answer.
   That sweep is the retirement rule that keeps the persisted set bounded by the queue rather than accreting in etcd.
   The one exemption is Q609's: guards kept because a delete removed nothing are marked retained and survive the sweep too, since their message may still be in the log.</p>
+<p><strong>The same object also records which runs currently have workers, for a reader that is not the listener (Q844).</strong> Beside the guards, the listener persists an <code>inFlight</code> entry per job whose worker it built, carrying the run identity <code>rerun-failed-jobs</code> addresses a run by.
+  It is added on a successful provision and dropped when the job concludes, on the same write-ahead save.
+  It is not a replay guard and answers no redelivered assignment; it exists so the owning reconciler can tell, on the way up, that a worker went away while no AGC was watching, which is the one disruption shape the pod itself cannot record because the disruption deletes the pod.
+  The reconciler only ever <em>reads</em> it, so the poll goroutine remains the single writer and <code>Save</code> can keep replacing the whole state rather than merging it.
+  A restarted listener does not adopt the entries it loads: the reconciler has already adjudicated them, and a still-running job rebuilds its own entry when its held assignment replays.
+  Bounded like the guards are, by the work outstanding rather than by history: every ordinary exit drops its own entry, and a 24-hour age sweep reclaims one whose conclusion never arrives at all.</p>
 <p><strong>A conclusion the listener never read needs no hard kill to strand its message (Q689).</strong> Q583, Q603, and Q606 all start from a conclusion the listener already holds, and Q606's residual was scoped to a hard kill on that basis.
   There is a third window on the other side of the read: a job concludes at GitHub, its <code>JobCompleted</code> is written to the queue, and the process goes away before a poll delivers it.
   Nothing the listener holds says the job is over (<code>completed</code> does not name it, so its assignment is legitimately unsettled and legitimately kept), so the exit flush leaves the message, the persisted guards have nothing to persist, and the next process provisions a worker for a job that already ran.
@@ -3624,6 +3630,12 @@ Each <code>Reason</code> mirrors the corresponding metric name so the two correl
 <td>Warning</td>
 <td><code>actions_gateway_eviction_recovery_evidence_lost_total</code></td>
 <td>A disrupted scale-set worker's pod was deleted before its recovery could be claimed, so the run cannot be re-run automatically by this or any later reconcile; manual re-run required (Q809)</td>
+</tr>
+<tr>
+<td><code>OrphanedWorkerRecovered</code></td>
+<td>Warning</td>
+<td><code>actions_gateway_eviction_retries_total{cause="vanished"}</code></td>
+<td>A scale-set worker pod was already gone when this AGC started and its job had never concluded, so its run is being re-run; which disruption took the worker was lost with the pod (Q844)</td>
 </tr>
 </tbody>
 </table>

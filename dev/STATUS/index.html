@@ -2832,14 +2832,6 @@
 <td>Q683, Q691 and Q713 each arrived classic-only from birth after the 2026-07-26 seam walk; nothing re-walks it. Reconcile <code>actions_gateway_*</code> across both sides against v2-ga.md's absent-by-design list. Gates 1.5 (<a href="../plan/release-1.5/">plan</a>).</td>
 </tr>
 <tr>
-<td><a id="Q844"></a>Q844</td>
-<td><a href="../design/04-operational-flows/#why-preemption-deletes-rather-than-evicts-and-what-that-costs-us">Persist an owed-rerun tombstone so a preemption survives an AGC restart</a></td>
-<td><code>bug</code> <code>feature</code> <code>1.5-gate</code></td>
-<td>🔲</td>
-<td>M</td>
-<td>A preempted scale-set worker is readable only while terminating, so an AGC down for that window never issues <code>rerun-failed-jobs</code> and the run needs a manual one. Replay cannot cover it: the Q385 relay concludes the job. Home: the Q606 guard ConfigMap.</td>
-</tr>
-<tr>
 <td><a id="Q408"></a>Q408</td>
 <td><a href="../plan/q408-untrusted-pr-egress/">Untrusted-PR egress posture for Kata workers</a></td>
 <td><code>security</code></td>

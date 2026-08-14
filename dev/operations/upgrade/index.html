@@ -1727,6 +1727,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#non-breaking-a-worker-lost-while-the-agc-was-down-is-now-re-run-automatically-causevanished" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Non-breaking: a worker lost while the AGC was down is now re-run automatically (cause="vanished")
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#non-breaking-drained-and-hand-deleted-workers-are-now-re-run-automatically-causedeletion" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3303,6 +3314,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#non-breaking-a-worker-lost-while-the-agc-was-down-is-now-re-run-automatically-causevanished" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Non-breaking: a worker lost while the AGC was down is now re-run automatically (cause="vanished")
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#non-breaking-drained-and-hand-deleted-workers-are-now-re-run-automatically-causedeletion" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3846,6 +3868,7 @@ For <strong>initial installation</strong> of the GMC, see <a href="../install/">
 <li><a href="#non-breaking-an-egressproxy-pools-pods-drop-the-app-actions-gateway-proxy-label-its-pool-is-recreated-once">Non-breaking: an EgressProxy pool's pods drop the app: actions-gateway-proxy label (its pool is recreated once)</a></li>
 <li><a href="#non-breaking-github-enterprise-server-gateways-now-reach-their-own-appliance-they-never-did">Non-breaking: GitHub Enterprise Server gateways now reach their own appliance (they never did)</a></li>
 <li><a href="#non-breaking-a-ghes-appliance-behind-a-private-ca-can-now-be-trusted-specgithubcabundleref">Non-breaking: a GHES appliance behind a private CA can now be trusted (<code>spec.githubCABundleRef</code>)</a></li>
+<li><a href="#non-breaking-a-worker-lost-while-the-agc-was-down-is-now-re-run-automatically-causevanished">Non-breaking: a worker lost while the AGC was down is now re-run automatically (cause="vanished")</a></li>
 <li><a href="#non-breaking-drained-and-hand-deleted-workers-are-now-re-run-automatically-causedeletion">Non-breaking: drained and hand-deleted workers are now re-run automatically (cause="deletion")</a></li>
 <li><a href="#non-breaking-an-evicted-jobs-auto-re-run-now-lands-github-refused-it-before">Non-breaking: an evicted job's auto-re-run now lands (GitHub refused it before)</a></li>
 <li><a href="#non-breaking-classic-tier-eviction-auto-retry-now-fires-it-never-did-against-real-github">Non-breaking: classic-tier eviction auto-retry now fires (it never did against real GitHub)</a></li>
@@ -4016,6 +4039,25 @@ The gateway recovers on its own once the <code>ConfigMap</code> is applied.
 Runbook: <a href="../troubleshooting/#a-ghes-appliances-certificate-is-not-trusted">troubleshooting.md § a GHES appliance's certificate is not trusted</a>.</p>
 <p><strong>Egress remains a separate obligation.</strong> Trusting the CA does not put the appliance's address space in the NetworkPolicy; see the CIDR-mode note above.</p>
 <p><strong>Rolling back</strong> restores the defect for these tenants. <code>v1alpha1</code> has no equivalent field and never will — it is frozen and removed at <code>v2.0.0</code>.</p>
+<h3 id="non-breaking-a-worker-lost-while-the-agc-was-down-is-now-re-run-automatically-causevanished">Non-breaking: a worker lost while the AGC was down is now re-run automatically (<code>cause="vanished"</code>)<a class="headerlink" href="#non-breaking-a-worker-lost-while-the-agc-was-down-is-now-re-run-automatically-causevanished" title="Permanent link">&para;</a></h3>
+<p><strong>Who is affected:</strong> every tenant on the <code>ScaleSet</code> acquisition tier.
+No configuration changes; the behaviour fires only on disruptions that previously needed a manual re-run.</p>
+<p>Preemption and drain both <em>delete</em> the worker pod, and on this tier that pod is the only record of which run to re-run.
+An AGC that was down for the pod's teardown (a rollout, an OOM kill, a node loss) therefore saw nothing and issued no re-run.
+The AGC now persists the run identity of every job it builds a worker for, and on start re-runs any run whose worker pod is no longer there.</p>
+<p>Operational consequences:</p>
+<ul>
+<li><strong>An AGC restart can now spend re-run budget.</strong> Each recovered run consumes one slot of its shared <code>maxEvictionRetries</code> budget (default 2), under <code>cause="vanished"</code>.</li>
+<li><strong>New <code>cause</code> label value:</strong> dashboards or alerts enumerating <code>cause</code> on <code>actions_gateway_eviction_retries_total</code> / <code>eviction_retries_exhausted_total</code> should add <code>vanished</code>.
+  A climbing rate is a signal about the <em>controller's</em> availability rather than the workers': it means the AGC keeps missing worker teardowns.</li>
+<li><strong>New Event:</strong> <code>OrphanedWorkerRecovered</code> (Warning) on the <code>RunnerSet</code>, naming the pod and the run.</li>
+<li><strong>The guard ConfigMap grows a field.</strong> <code>scaleset-guards-&lt;set&gt;</code> gains an <code>inFlight</code> list alongside its concluded-job guards, bounded by the jobs currently running and swept at 24 hours.
+  It is owner-ref'd to the <code>RunnerSet</code> as before, so it is still collected with it.</li>
+<li><strong>RBAC:</strong> unchanged.
+  The AGC already reads and writes that ConfigMap and already lists worker pods.</li>
+</ul>
+<p><strong>Rolling back</strong> restores the old behaviour: a worker lost while the AGC is down needs a manual re-run again.
+A leftover <code>inFlight</code> list is inert on older versions, which ignore unknown fields when they load the guards.</p>
 <h3 id="non-breaking-drained-and-hand-deleted-workers-are-now-re-run-automatically-causedeletion">Non-breaking: drained and hand-deleted workers are now re-run automatically (<code>cause="deletion"</code>)<a class="headerlink" href="#non-breaking-drained-and-hand-deleted-workers-are-now-re-run-automatically-causedeletion" title="Permanent link">&para;</a></h3>
 <p><strong>Who is affected:</strong> every tenant on either acquisition tier.
 No configuration changes; the behaviour change fires only on disruptions that previously needed a manual re-run.</p>
