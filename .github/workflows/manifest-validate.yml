@@ -51,6 +51,7 @@ jobs:
       pull-requests: read
     outputs:
       manifests: ${{ steps.filter.outcome == 'success' && steps.filter.outputs.manifests || 'true' }}
+      promql: ${{ steps.filter.outcome == 'success' && steps.filter.outputs.promql || 'true' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
@@ -90,6 +91,21 @@ jobs:
               - 'scripts/manifest/**'
               - 'scripts/fetch/**'
               - 'scripts/lib/**'
+              - '.github/workflows/manifest-validate.yml'
+            # The promql gate compares the shipped PrometheusRule against the two
+            # docs that describe its alerts, so its trigger set spans both — the
+            # `manifests` filter above deliberately covers neither doc. The
+            # workflow's push-to-main trigger path-ignores docs/**, so a
+            # docs-only edit reaches this gate on the PR rather than after the
+            # merge; every change lands through one.
+            promql:
+              - 'deploy/monitoring/**'
+              - 'docs/operations/observability-alerting.md'
+              - 'docs/operations/runbook.md'
+              - 'devtools/monitoring/**'
+              - 'scripts/manifest/check-promql.sh'
+              - 'tools/**'
+              - 'Makefile'
               - '.github/workflows/manifest-validate.yml'
       # A JS action reports failure only as an ::error:: annotation, so a rerun
       # that replaces the check run erases it — leaving a log that simply stops
@@ -148,13 +164,34 @@ jobs:
           export PATH="${HOME}/.local/bin:${PATH}"  # pip --user yamllint
           make manifest-validate
 
+  # Parse the shipped PromQL and reconcile the alert rules with the docs that
+  # describe them (Q827; Q831 wired it). Its own job rather than a step in
+  # `validate`: that job installs helm, kubeconform and yamllint to answer a
+  # different question, and this one needs none of them — only Go, to build
+  # .build/promqlcheck from devtools/. Both failures it catches are silent, so
+  # the verdict has to be readable on its own.
+  promql:
+    needs: [changes]
+    if: needs.changes.outputs.promql == 'true' || github.event_name == 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.work
+      - name: PromQL parses and matches its docs (make promql-check)
+        run: make promql-check
+
   # Aggregate required-status gate. Mark THIS job's check context
   # (`manifest-validate-gate`) required in the branch ruleset — never the
   # path-gated jobs above, because a path-skip leaves them Pending and blocks the
   # merge forever. Passes only when every needed job succeeded or was
   # legitimately skipped. See docs/development/testing.md#path-gated-workflows-verify-the-heavy-gates-actually-ran.
   manifest-validate-gate:
-    needs: [changes, validate]
+    needs: [changes, validate, promql]
     if: ${{ always() }}
     runs-on: ubuntu-latest
     timeout-minutes: 2

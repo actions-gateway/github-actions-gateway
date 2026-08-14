@@ -10,7 +10,12 @@
 # built from, and this workflow file, so a code-only change doesn't trigger it.
 # `scripts/**` is deliberately the whole tree rather than the individual
 # checkers: script-docs-check (Q688) takes the tree itself as an input, so a
-# script added anywhere under it must re-run this workflow.
+# script added anywhere under it must re-run this workflow. `.mdreflow.yaml`
+# and `tools/go.mod` are the md-reflow gate's other two inputs: the
+# formatter's config, and the line that pins the formatter — a version bump
+# changes what the gate accepts, with no Markdown in the diff to route it here
+# otherwise. The pin rather than all of `tools/**`, so an unrelated tool bump
+# does not drag the docs-site build in release-links along with it.
 #
 # The two lists are the same list written twice — GitHub has no anchor syntax
 # across `pull_request` and `push` — so every edit belongs in both.
@@ -24,6 +29,8 @@ on:
       - 'devtools/docs/**'
       - 'mkdocs.yml'
       - 'requirements-docs.txt'
+      - '.mdreflow.yaml'
+      - 'tools/go.mod'
       - 'Makefile'
       - '.github/workflows/doc-links.yml'
   push:
@@ -34,6 +41,8 @@ on:
       - 'devtools/docs/**'
       - 'mkdocs.yml'
       - 'requirements-docs.txt'
+      - '.mdreflow.yaml'
+      - 'tools/go.mod'
       - 'Makefile'
       - '.github/workflows/doc-links.yml'
 
@@ -70,6 +79,39 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: em-dash density (make em-dash-check)
         run: make em-dash-check
+
+  # Enforce the admonition-wall and duplicate-stat-tile rules (Q831 wired it;
+  # the gate itself predates that). Same file walk and the same reasoning as
+  # em-dash above — its only input is Markdown, which unit-test.yml
+  # path-ignores — and its own job so a density failure reads apart from a
+  # dead link. No Go step: unlike the em-dash counter this gate is pure shell.
+  page-density:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: admonition + stat-tile density (make page-density-check)
+        run: make page-density-check
+
+  # Hold tracked Markdown to sentence-per-line (Q831). It belongs here for the
+  # same reason em-dash does, and it is the gate whose absence from CI made
+  # Q831 worth measuring: it lived in CHECK_FAST_GATES alone, so prose that had
+  # never met it could merge on any PR the author did not run `make check` on.
+  #
+  # setup-go because `make md-reflow-check` builds .build/mdreflow from the
+  # vendored tools/ module first. Pinned to go.work for the reason the
+  # shellcheck job gives: it keeps the verdict off whatever the runner image
+  # happens to default to.
+  md-reflow:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.work
+      - name: prose is sentence-per-line (make md-reflow-check)
+        run: make md-reflow-check
 
   # Hold why-gag.md's competitor column to the version-and-date rule (Q801).
   # It belongs here rather than in unit-test.yml for the same reason em-dash

@@ -7,7 +7,7 @@
 # CHECK_HEAVY_GATES, a gate hand-wired into the fan-out line, a target declared
 # .PHONY twice, a STATUS_GATES member outside CHECK_FAST_GATES, a fast gate that
 # scans docs/STATUS.md while STATUS_GATES omits it, a gate whose file set is
-# neither derivable nor declared, a doc that
+# neither derivable nor declared, a gate no workflow runs, a doc that
 # stopped pointing at the list targets, and a scripts/ suite on disk that
 # SCRIPTS_TESTS omits — the one whose symptom is a green `make scripts-test` that
 # never ran it. Reading the Makefile predicts these; only running the checker
@@ -69,6 +69,11 @@ write_makefile() {
 			*) printf '\ttrue\n\n' ;;
 			esac
 		done
+		# Not a gate: a target that runs beta's script, standing in for the way
+		# `manifest-validate` runs the three chart-*-check scripts. A workflow
+		# invoking this covers beta without naming it.
+		printf '.PHONY: wrapper\nwrapper: ## runs beta'"'"'s script\n'
+		printf '\tscripts/one/beta.sh\n\n'
 		printf '%s\n' "$extra"
 		printf 'CHECK_FAST_GATES := alpha beta\n'
 		printf 'CHECK_HEAVY_GATES := heavy-one\n\n'
@@ -114,6 +119,33 @@ write_makefile "$FIXTURE_DIR/Makefile.wide" '' '' 'scripts/one/wide.sh'
 write_makefile "$FIXTURE_DIR/Makefile.opaque" '' '' 'true'
 write_makefile "$FIXTURE_DIR/Makefile.marked" '' '' 'true' \
 	'# status-scope: none - beta reads no Markdown'
+write_makefile "$FIXTURE_DIR/Makefile.ci-marked" '' '' 'true' \
+	'# ci-scope: none - beta is a local-only convenience'
+
+# Workflow trees for rule 8. Every gate has to reach CI somehow, so the default
+# tree runs all three by name and the variants each remove one route.
+# write_workflow PATH BODY
+write_workflow() {
+	local dir="$1"
+	mkdir -p "$dir"
+	printf 'jobs:\n  gate:\n    steps:\n%b' "$2" >"$dir/ci.yml"
+}
+WF_ALL="$FIXTURE_DIR/wf-all"
+write_workflow "$WF_ALL" '      - run: make alpha\n      - run: make beta\n      - run: make heavy-one\n'
+# beta reaches no workflow: the Q831 shape, green under every other rule.
+WF_NO_BETA="$FIXTURE_DIR/wf-no-beta"
+write_workflow "$WF_NO_BETA" '      - run: make alpha\n      - run: make heavy-one\n'
+# beta named only in a comment. A gate a workflow merely mentions gates nothing,
+# and these files describe themselves in prose that names their own targets.
+WF_COMMENT="$FIXTURE_DIR/wf-comment"
+write_workflow "$WF_COMMENT" '      # run: make beta\n      - run: make alpha\n      - run: make heavy-one\n'
+# beta covered by its script rather than its target — the status-lint shape,
+# which runs lint-backlog.sh without going through make.
+WF_SCRIPT="$FIXTURE_DIR/wf-script"
+write_workflow "$WF_SCRIPT" '      - run: scripts/one/beta.sh\n      - run: make alpha\n      - run: make heavy-one\n'
+# beta covered through another make target that runs its script.
+WF_WRAPPER="$FIXTURE_DIR/wf-wrapper"
+write_workflow "$WF_WRAPPER" '      - run: make wrapper\n      - run: make alpha\n      - run: make heavy-one\n'
 
 # expect_check NAME WANT_RC ARGS... — a --check run over the healthy fixture,
 # with ARGS appended. The parser takes the last occurrence of an option, so a
@@ -122,7 +154,7 @@ expect_check() {
 	local name="$1" want_rc="$2"
 	shift 2
 	expect "$name" "$want_rc" --check --makefile "$MK" --doc "$DOC" \
-		--scripts-dir "$SCRIPTS" --suites "$SUITES" "$@"
+		--scripts-dir "$SCRIPTS" --suites "$SUITES" --workflows "$WF_ALL" "$@"
 }
 
 # The healthy fixture passes — without this the red cases below prove nothing.
@@ -173,6 +205,39 @@ assert_output status-scope-underivable 'status-scope'
 expect_check status-scope-declared 0 --fast 'alpha beta' --heavy 'heavy-one' \
 	--status 'alpha' --makefile "$FIXTURE_DIR/Makefile.marked"
 
+# Rule 8 (Q831): a gate can join CHECK_FAST_GATES and be run by no workflow,
+# which every rule above reports as healthy — `make check` enforces it locally
+# while every PR merges without it. Five gates were in that state when this was
+# written, and the one that made it visible (md-reflow-check) had let four
+# unformatted files onto main.
+expect_check gate-not-in-ci 1 --fast 'alpha beta' --heavy 'heavy-one' \
+	--workflows "$WF_NO_BETA"
+assert_output gate-not-in-ci beta
+assert_output gate-not-in-ci 'not in CI'
+
+# A gate named only in a workflow comment is not wired. This is the direction a
+# whole-file grep gets wrong: these workflows explain themselves in prose that
+# names their own targets, so matching anywhere would call every gate covered.
+expect_check gate-in-ci-comment-only 1 --fast 'alpha beta' --heavy 'heavy-one' \
+	--workflows "$WF_COMMENT"
+assert_output gate-in-ci-comment-only beta
+
+# The two indirect routes that are real coverage: the gate's script invoked
+# directly (status-lint runs lint-backlog.sh), and another make target running
+# it (manifest-validate runs the three chart-*-check scripts).
+expect_check gate-in-ci-via-script 0 --fast 'alpha beta' --heavy 'heavy-one' \
+	--workflows "$WF_SCRIPT"
+expect_check gate-in-ci-via-wrapper 0 --fast 'alpha beta' --heavy 'heavy-one' \
+	--workflows "$WF_WRAPPER"
+
+# A gate that runs no scripts/ file has no indirect route to be covered by, so
+# an unwired one must say which side it is on rather than pass by default.
+expect_check ci-scope-underivable 1 --fast 'alpha beta' --heavy 'heavy-one' \
+	--makefile "$FIXTURE_DIR/Makefile.opaque" --workflows "$WF_NO_BETA" --status 'alpha beta'
+assert_output ci-scope-underivable 'ci-scope'
+expect_check ci-scope-declared 0 --fast 'alpha beta' --heavy 'heavy-one' \
+	--makefile "$FIXTURE_DIR/Makefile.ci-marked" --workflows "$WF_NO_BETA" --status 'alpha beta'
+
 # The doc has to keep naming both targets rather than re-transcribing the lists.
 expect_check doc-lost-pointer 1 --fast 'alpha beta' --heavy 'heavy-one' --doc "$STALE_DOC"
 assert_output doc-lost-pointer 'list-gates'
@@ -208,6 +273,9 @@ expect no-mode 2 --makefile "$MK" --fast 'alpha' --heavy 'heavy-one'
 expect no-lists 2 --check --makefile "$MK"
 expect no-suites 2 --check --makefile "$MK" --fast 'alpha' --heavy 'heavy-one'
 expect list-suites-no-suites 2 --list-suites
+# An unreadable workflow tree must refuse rather than report every gate unwired.
+expect_check no-workflow-tree 2 --fast 'alpha beta' --heavy 'heavy-one' \
+	--workflows "$FIXTURE_DIR/absent"
 expect unknown-arg 2 --check --makefile "$MK" --fast 'alpha' --heavy 'heavy-one' --bogus
 
 # --list names every gate it was given, with each one's `##` description.
