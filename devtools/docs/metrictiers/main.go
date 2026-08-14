@@ -11,7 +11,8 @@
 // defines must carry a tier in the ledger, so a metric cannot reach an operator
 // without someone answering which tier emits it.
 //
-// Six checks, because the ledger can go stale in six ways that all read healthy:
+// Eleven checks, because the ledger can go stale in eleven ways that all read
+// healthy. Six are about the series as a whole:
 //
 //	inventory     the AGC's metric names and the ledger's name the same set
 //	reference     every AGC metric also has a row in the metrics reference tables
@@ -20,10 +21,26 @@
 //	contradiction no single-tier metric is emitted from the tier it excludes
 //	parity        v2-ga.md's absent-by-design list is Classic only in the ledger
 //
+// and five about the label values inside one (Q851), the middle three of which
+// share checkValueRows because they all validate one row against the source:
+//
+//	values-inventory     a value the source shows tier-exclusive has a value row
+//	values-contradiction no value row is refuted by where the source names it
+//	values-vocabulary    every value row names a real series, label and value
+//	values-pinned        an underivable value row cites the guard that holds it
+//	values-help          the Help an operator scrapes names every derived value
+//
 // inventory catches the metric added on one tier and never accounted for.
 // contradiction catches the other direction — a port lands, the series now reaches
 // both tiers, and the ledger still calls it single-tier. Those are the two ways
 // the record drifted historically, so both are asserted.
+//
+// The value checks exist because a series can be Both while one of its label
+// values is not: eviction_retries_total is Both and cause="vanished" is emitted
+// from a scale-set-only file, which the series checks cannot see. values-help is
+// the one aimed at the operator rather than the ledger — a stale Help string is
+// what an operator reads off /metrics with no docs open, and seven of them named
+// a vocabulary the source had outgrown, or named none at all.
 //
 // Emission analysis is by field name over the AST rather than by type: the metric
 // structs are shared across packages (a provisioner site writes a runnercore
@@ -48,6 +65,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -103,9 +121,11 @@ var metricNameRE = regexp.MustCompile(`^actions_gateway_[a-z0-9_]+$`)
 // different fields so the two tiers write one series (Q446), which is why the
 // checks aggregate by name rather than taking the first definition.
 type metric struct {
-	name  string
-	field string // struct field or var the collector is held in
-	file  string // repo-relative path of the definition
+	name   string
+	field  string   // struct field or var the collector is held in
+	file   string   // repo-relative path of the definition
+	labels []string // label names, in the order a WithLabelValues call fills them
+	help   string   // the Help text an operator scrapes
 }
 
 // series is every definition of one metric name, folded together.
@@ -113,6 +133,16 @@ type series struct {
 	name   string
 	fields []string
 	files  []string
+	labels []string
+	help   string
+}
+
+// srcFile is one parsed non-test source file, retained so the label-value
+// derivation can resolve an identifier against the package that declares it.
+type srcFile struct {
+	path string // repo-relative, slash-separated
+	dir  string // package directory, the resolution scope
+	file *ast.File
 }
 
 // byName folds the definitions into one entry per metric name, in name order.
@@ -128,6 +158,12 @@ func byName(defs []metric) []series {
 		}
 		out[i].fields = append(out[i].fields, d.field)
 		out[i].files = append(out[i].files, d.file)
+		if len(d.labels) > 0 {
+			out[i].labels = d.labels
+		}
+		if d.help != "" {
+			out[i].help = d.help
+		}
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].name < out[j].name })
 	return out
@@ -155,11 +191,23 @@ type ledgerRow struct {
 	line int
 }
 
-// ledger is the parsed table plus the line span it occupies, so the reference
+// valueRow is one row of the Label-value reach table: a label value inside a
+// series whose own row cannot state its tier.
+type valueRow struct {
+	metric string
+	label  string
+	value  string
+	tier   string
+	note   string
+	line   int
+}
+
+// ledger is the parsed tables plus the line span they occupy, so the reference
 // check can ask whether a metric is described anywhere *else* in the document
 // without depending on where the section sits.
 type ledger struct {
 	rows       []ledgerRow
+	values     []valueRow
 	first, end int // 1-based, half-open
 }
 
@@ -183,7 +231,7 @@ func main() {
 }
 
 func run(srcDir, metricsDoc, parityDoc string) ([]string, error) {
-	defs, sites, err := scanSource(srcDir)
+	defs, sites, files, err := scanSource(srcDir)
 	if err != nil {
 		return nil, err
 	}
@@ -208,6 +256,7 @@ func run(srcDir, metricsDoc, parityDoc string) ([]string, error) {
 	}
 
 	all := byName(defs)
+	values := deriveValues(files, defs)
 
 	var findings []string
 	findings = append(findings, checkInventory(all, led, metricsDoc)...)
@@ -216,14 +265,204 @@ func run(srcDir, metricsDoc, parityDoc string) ([]string, error) {
 	findings = append(findings, checkEmission(all, sites)...)
 	findings = append(findings, checkContradiction(all, sites, led)...)
 	findings = append(findings, checkParityList(string(parityBytes), led, parityDoc)...)
+	findings = append(findings, checkValueInventory(all, values, led, metricsDoc)...)
+	findings = append(findings, checkValueRows(all, values, led, files, metricsDoc)...)
+	findings = append(findings, checkValueHelp(all, values, led)...)
 	sort.Strings(findings)
 	return findings, nil
 }
 
+// checkValueInventory fails a label value the source shows reaching one tier
+// only, inside a series the ledger does not already call single-tier. This is
+// the value-granularity form of the obligation inventory imposes on a series:
+// cause="vanished" is named in a scale-set-only file while
+// eviction_retries_total reads Both, so without a value row the ledger says a
+// series populates on both tiers and stays silent about the value that does not.
+func checkValueInventory(all []series, values valueSet, led ledger, docPath string) []string {
+	tier := map[string]string{}
+	for _, r := range led.rows {
+		tier[r.name] = r.tier
+	}
+	claimed := map[string]string{}
+	for _, v := range led.values {
+		claimed[valueKey(v.metric, v.label, v.value)] = v.tier
+	}
+
+	var findings []string
+	for _, s := range all {
+		if tier[s.name] == tierNeutral {
+			continue
+		}
+		for label, vals := range values[s.name] {
+			for _, v := range vals {
+				derived := derivedTier(v.origins)
+				if derived == "" || derived == tier[s.name] {
+					continue
+				}
+				if claimed[valueKey(s.name, label, v.value)] == derived {
+					continue
+				}
+				findings = append(findings, fmt.Sprintf(
+					"%s: %s{%s=%q} is named only in %s, so it is %q while the ledger calls the series %q — give it a %q row",
+					docPath, s.name, label, v.value, strings.Join(v.origins, ", "), derived, tier[s.name], valueHeading))
+			}
+		}
+	}
+	return findings
+}
+
+// checkValueRows holds the label-value table to the source: every row names a
+// series, a label and a value that exist, states one of the two single-tier
+// answers with a reason, and is not refuted by where the source names the value.
+// A row the file layout cannot derive has to cite the guard instead, so a claim
+// like outcome="identity_unknown" being unreachable on the scale-set tier stays
+// anchored to the early return that makes it so rather than to a reviewer's memory.
+func checkValueRows(all []series, values valueSet, led ledger, files []srcFile, docPath string) []string {
+	labels := map[string][]string{}
+	for _, s := range all {
+		labels[s.name] = s.labels
+	}
+	// Citations are matched by suffix, not equality: the gate is invoked with a
+	// relative source path by the Makefile and an absolute one by its own test
+	// suite, so the scanned paths carry a prefix the doc cannot know.
+	scanned := func(cited string) bool {
+		for _, f := range files {
+			if f.path == cited || strings.HasSuffix(f.path, "/"+cited) {
+				return true
+			}
+		}
+		return false
+	}
+
+	var findings []string
+	for _, v := range led.values {
+		at := fmt.Sprintf("%s:%d", docPath, v.line)
+		byLabel, known := values[v.metric]
+		if !known {
+			findings = append(findings, fmt.Sprintf(
+				"%s: %s has a %q row and no AGC source defines it", at, v.metric, valueHeading))
+			continue
+		}
+		if !slices.Contains(labels[v.metric], v.label) {
+			findings = append(findings, fmt.Sprintf(
+				"%s: %s has no %q label — it carries %s", at, v.metric, v.label, strings.Join(labels[v.metric], ", ")))
+			continue
+		}
+		if v.label == tierLabel {
+			findings = append(findings, fmt.Sprintf(
+				"%s: %s{%s=%q} states the acquisition tier as its own value, which the series row already answers",
+				at, v.metric, v.label, v.value))
+			continue
+		}
+		if v.tier != tierClassic && v.tier != tierScaleSet {
+			findings = append(findings, fmt.Sprintf(
+				"%s: %s{%s=%q} has tier %q — a value row records an exception, so it is %q or %q",
+				at, v.metric, v.label, v.value, v.tier, tierClassic, tierScaleSet))
+			continue
+		}
+		if v.note == "" {
+			findings = append(findings, fmt.Sprintf(
+				"%s: %s{%s=%q} is %q with no reason — say why the other tier never emits it, and what it counts there instead",
+				at, v.metric, v.label, v.value, v.tier))
+		}
+
+		var origins []string
+		found := false
+		for _, dv := range byLabel[v.label] {
+			if dv.value == v.value {
+				origins, found = dv.origins, true
+				break
+			}
+		}
+		if !found {
+			findings = append(findings, fmt.Sprintf(
+				"%s: %s{%s=%q} has a %q row and no site in the AGC source names that value",
+				at, v.metric, v.label, v.value, valueHeading))
+			continue
+		}
+
+		if opposite := oppositeTier(v.tier); opposite != "" {
+			for _, o := range origins {
+				if (opposite == tierClassic && isClassicOnly(o)) || (opposite == tierScaleSet && isScaleSetOnly(o)) {
+					findings = append(findings, fmt.Sprintf(
+						"%s: %s{%s=%q} is named here, and the ledger calls it %q",
+						o, v.metric, v.label, v.value, v.tier))
+				}
+			}
+		}
+
+		// A value the file layout already proves needs no citation; one it does
+		// not is held by a guard in a shared file, and the row must point at it.
+		if derivedTier(origins) == v.tier {
+			continue
+		}
+		cited := citesGoFile(v.note)
+		if len(cited) == 0 {
+			findings = append(findings, fmt.Sprintf(
+				"%s: %s{%s=%q} is %q and the source names it in %s, which does not say so — cite the .go file whose guard does",
+				at, v.metric, v.label, v.value, v.tier, strings.Join(origins, ", ")))
+			continue
+		}
+		for _, c := range cited {
+			if !scanned(c) {
+				findings = append(findings, fmt.Sprintf(
+					"%s: %s{%s=%q} cites %s, which is not a file the AGC scan parsed",
+					at, v.metric, v.label, v.value, c))
+			}
+		}
+	}
+	return findings
+}
+
+// checkValueHelp fails a Help string that has fallen behind the vocabulary the
+// source emits. Help is what an operator reads off /metrics with no docs open,
+// so a value missing from it reads as a value that cannot occur — which is how
+// cause="vanished" and two reap reasons stayed unpublished after they shipped.
+//
+// Tier-neutral series are exempt along with the rest of the value checks: their
+// labels carry identity rather than a vocabulary, and build_info naming its own
+// version string in its Help would be noise, not publication.
+func checkValueHelp(all []series, values valueSet, led ledger) []string {
+	tier := map[string]string{}
+	for _, r := range led.rows {
+		tier[r.name] = r.tier
+	}
+	var findings []string
+	for _, s := range all {
+		if s.help == "" || tier[s.name] == tierNeutral {
+			continue
+		}
+		for label, vals := range values[s.name] {
+			for _, v := range vals {
+				if !strings.Contains(s.help, v.value) {
+					findings = append(findings, fmt.Sprintf(
+						"%s: %s emits %s=%q (%s) and its Help does not name it",
+						s.where(), s.name, label, v.value, strings.Join(v.origins, ", ")))
+				}
+			}
+		}
+	}
+	return findings
+}
+
+func valueKey(metric, label, value string) string { return metric + "\x00" + label + "\x00" + value }
+
+func oppositeTier(t string) string {
+	switch t {
+	case tierClassic:
+		return tierScaleSet
+	case tierScaleSet:
+		return tierClassic
+	}
+	return ""
+}
+
 // scanSource parses every non-test Go file under srcDir, returning the metrics it
-// defines and, keyed by struct-field name, the files that emit them.
-func scanSource(srcDir string) ([]metric, map[string][]string, error) {
+// defines, the files that emit them keyed by struct-field name, and the parsed
+// files themselves for the label-value derivation.
+func scanSource(srcDir string) ([]metric, map[string][]string, []srcFile, error) {
 	var defs []metric
+	var files []srcFile
 	sites := map[string][]string{}
 
 	err := filepath.WalkDir(srcDir, func(path string, d os.DirEntry, err error) error {
@@ -248,13 +487,14 @@ func scanSource(srcDir string) ([]metric, map[string][]string, error) {
 		}
 		rel := filepath.ToSlash(path)
 		collect(file, rel, &defs, sites)
+		files = append(files, srcFile{path: rel, dir: filepath.ToSlash(filepath.Dir(path)), file: file})
 		return nil
 	})
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	sort.Slice(defs, func(i, j int) bool { return defs[i].name < defs[j].name })
-	return defs, sites, nil
+	return defs, sites, files, nil
 }
 
 // collect walks one file for metric definitions and emission sites. The parent
@@ -279,7 +519,8 @@ func collect(file *ast.File, rel string, defs *[]metric, sites map[string][]stri
 			if err != nil || !metricNameRE.MatchString(name) {
 				return true
 			}
-			*defs = append(*defs, metric{name: name, field: holderName(stack), file: rel})
+			labels, help := constructorArgs(stack, name)
+			*defs = append(*defs, metric{name: name, field: holderName(stack), file: rel, labels: labels, help: help})
 		case *ast.CallExpr:
 			if f := emittedField(node); f != "" {
 				sites[f] = append(sites[f], rel)
@@ -322,6 +563,55 @@ func holderName(stack []ast.Node) string {
 	return ""
 }
 
+// constructorArgs reads the label names and the Help text off the prometheus
+// constructor enclosing a metric-name literal. Two shapes carry them here: a Vec
+// takes an Opts struct plus a []string of labels, and NewDesc takes the name,
+// the help and the labels positionally.
+func constructorArgs(stack []ast.Node, name string) ([]string, string) {
+	var call *ast.CallExpr
+	for i := len(stack) - 1; i >= 0; i-- {
+		if c, ok := stack[i].(*ast.CallExpr); ok {
+			call = c
+			break
+		}
+	}
+	if call == nil {
+		return nil, ""
+	}
+
+	var labels []string
+	var help string
+	for _, arg := range call.Args {
+		switch a := arg.(type) {
+		case *ast.BasicLit:
+			if s, ok := stringLit(a); ok && s != name && help == "" {
+				help = s
+			}
+		case *ast.CompositeLit:
+			if _, isSlice := a.Type.(*ast.ArrayType); isSlice {
+				for _, el := range a.Elts {
+					if s, ok := stringLit(el); ok {
+						labels = append(labels, s)
+					}
+				}
+				continue
+			}
+			for _, el := range a.Elts {
+				kv, ok := el.(*ast.KeyValueExpr)
+				if !ok {
+					continue
+				}
+				if id, ok := kv.Key.(*ast.Ident); ok && id.Name == "Help" {
+					if s, ok := stringLit(kv.Value); ok {
+						help = s
+					}
+				}
+			}
+		}
+	}
+	return labels, help
+}
+
 // emittedField reports the field name a call writes a sample through, or "".
 func emittedField(call *ast.CallExpr) string {
 	sel, ok := call.Fun.(*ast.SelectorExpr)
@@ -357,6 +647,11 @@ func trailingName(e ast.Expr) string {
 // reference above it grows another sub-table.
 const ledgerHeading = "## Acquisition-tier reach"
 
+// valueHeading is the sub-section holding the label-value table. It sits inside
+// the ledger section so the reference check keeps treating the whole span as
+// tier bookkeeping rather than as a metric's description.
+const valueHeading = "### Label-value reach"
+
 func parseLedger(doc string) (ledger, error) {
 	lines := strings.Split(doc, "\n")
 	start := -1
@@ -371,13 +666,19 @@ func parseLedger(doc string) (ledger, error) {
 	}
 
 	var rows []ledgerRow
-	inTable := false
+	var values []valueRow
+	inTable, inValues := false, false
 	end := len(lines)
 	for i := start + 1; i < len(lines); i++ {
 		line := strings.TrimSpace(lines[i])
 		if strings.HasPrefix(line, "## ") {
 			end = i
 			break
+		}
+		if strings.HasPrefix(line, "### ") {
+			inValues = line == valueHeading
+			inTable = false
+			continue
 		}
 		if !strings.HasPrefix(line, "|") {
 			continue
@@ -397,12 +698,26 @@ func parseLedger(doc string) (ledger, error) {
 		if !metricNameRE.MatchString(name) {
 			return ledger{}, fmt.Errorf("line %d: %q is not an actions_gateway_* metric name", i+1, cells[0])
 		}
+		if inValues {
+			if len(cells) < 5 {
+				return ledger{}, fmt.Errorf("line %d: a %q row needs metric, label, value, tier and a reason", i+1, valueHeading)
+			}
+			values = append(values, valueRow{
+				metric: name,
+				label:  strings.Trim(cells[1], "`"),
+				value:  strings.Trim(cells[2], "`"),
+				tier:   cells[3],
+				note:   cells[4],
+				line:   i + 1,
+			})
+			continue
+		}
 		rows = append(rows, ledgerRow{name: name, tier: cells[1], note: cells[2], line: i + 1})
 	}
 	if len(rows) == 0 {
 		return ledger{}, fmt.Errorf("the %q table is empty", ledgerHeading)
 	}
-	return ledger{rows: rows, first: start + 1, end: end + 1}, nil
+	return ledger{rows: rows, values: values, first: start + 1, end: end + 1}, nil
 }
 
 func splitRow(line string) []string {

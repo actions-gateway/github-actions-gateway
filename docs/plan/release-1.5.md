@@ -293,6 +293,14 @@ Only Q851's label-value granularity is left before the claim can be made for all
 Measured while scoping Q851: `eviction_retries_total` reads Both while `cause="vanished"` is scale-set-only, and `abandoned_run_force_cancels_total` reads Both while `outcome="identity_unknown"` is unreachable there.
 The gate sees series, not values, so two live tier differences sit inside rows marked Both.
 
+**Q851 shipped, and the count was wrong in both directions.** Deriving the label values out of the source found seven single-tier rows, not two: `cause="vanished"` on all three eviction series rather than one, and three of `worker_pods_reaped_total`'s seven reap reasons — `completed_pending` and `orphaned_running` read a completion annotation the classic tier never stamps, and `job_abandoned` rides the classic renew loop the scale-set tier does not have.
+The operator-facing half was worse than the row said and in a different place: seven `Help` strings named a vocabulary the code had outgrown, or named none at all, and that is what an operator reads off `/metrics` with no docs open.
+And a claim in three places was simply wrong — `worker_pods_reaped_total`'s `runner_set` label was documented as scale-set-only, in the `Help`, the reference table and a Grafana panel, while the code keys it on the owning kind, so a Classic-protocol `RunnerSet` carries it and `{runner_set!=""}` is not the scale-set filter the dashboard calls it.
+
+The lesson repeats the section's: the hand-written claim was not merely incomplete, it was confidently wrong in the direction nobody re-reads.
+Only three of the seven rows were derivable from file layout alone; the other four are held by a guard in a file both tiers run, so those rows cite the guard and the gate holds the citation to a real source file.
+That is the honest floor for a completeness claim at this granularity — derived where the source can prove it, anchored to named code where it cannot, and never a bare list.
+
 **Then a second question — operators do not read release notes, so what are this release's landmines?** Q849 was already admitted for it: Q791's guard runs at admission, which never re-validates a pair that already exists.
 Two more came out of asking the same thing of every caveat.
 Q852 is the sharpest and was not on anyone's list: `helm upgrade` never applies CRDs, and a structural schema prunes unknown fields with no error, so a skipped step 1 leaves `spec.runnerGroup` declared and inert — a security control that silently does nothing.

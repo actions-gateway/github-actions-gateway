@@ -350,9 +350,10 @@ func (t reapTarget) delete(ctx context.Context, pod *corev1.Pod, reason string) 
 	}
 	t.log.Info("reaped worker pod", "pod", pod.Name, "phase", pod.Status.Phase, "reason", reason)
 	if t.metrics != nil {
-		// runner_set aliases name on scale-set reaps so the reap series join the
+		// runner_set aliases name for a RunnerSet so the reap series join the
 		// runner_set-labelled scaleset_* gauges; runner_group carries name on both
-		// tiers unchanged (Q514).
+		// tiers unchanged (Q514). The test is the owning kind, not the acquisition
+		// protocol, so a Classic-protocol RunnerSet's reaps carry it too.
 		runnerSet := ""
 		if t.labelKey == provisioner.LabelRunnerSet {
 			runnerSet = t.name

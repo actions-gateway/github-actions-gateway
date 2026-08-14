@@ -165,7 +165,7 @@ func NewMetrics() *Metrics {
 
 		JobAcquisitionErrors: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: "actions_gateway_job_acquisition_errors_total",
-			Help: "Total number of AcquireJob failures.",
+			Help: "Total number of AcquireJob failures, by reason (already_claimed, delivery_window_expired, version_too_old, acquirejob_failed, other).",
 		}, []string{"namespace", "reason"}),
 
 		JobsAdmissionRejectedTotal: prometheus.NewCounterVec(prometheus.CounterOpts{
@@ -210,7 +210,7 @@ func NewMetrics() *Metrics {
 
 		MessagePollErrorsTotal: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: "actions_gateway_message_poll_errors_total",
-			Help: "Total number of GetMessage errors.",
+			Help: "Total number of GetMessage errors, by reason (rate_limited, timeout, other). Credential rejection and session expiry are heal paths, not poll failures, and are not counted on either acquisition tier.",
 		}, []string{"namespace", "reason"}),
 
 		PodCreationLatency: prometheus.NewHistogramVec(prometheus.HistogramOpts{
@@ -229,17 +229,17 @@ func NewMetrics() *Metrics {
 
 		EvictionRetries: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: "actions_gateway_eviction_retries_total",
-			Help: "Jobs automatically re-queued after a worker pod disruption, by acquisition tier (classic, scaleset) and cause (eviction, preemption, deletion, abandoned).",
+			Help: "Jobs automatically re-queued after a worker pod disruption, by acquisition tier (classic, scaleset) and cause (eviction, preemption, deletion, abandoned, vanished). cause=vanished is scale-set only: it names a worker already gone when the AGC started, which the classic tier cannot observe.",
 		}, []string{"namespace", "runner_group", "tier", "cause"}),
 
 		EvictionRetriesExhausted: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: "actions_gateway_eviction_retries_exhausted_total",
-			Help: "Disrupted jobs where retry budget was exhausted, by acquisition tier (classic, scaleset) and cause (eviction, preemption, deletion, abandoned).",
+			Help: "Disrupted jobs where retry budget was exhausted, by acquisition tier (classic, scaleset) and cause (eviction, preemption, deletion, abandoned, vanished). cause=vanished is scale-set only, as above.",
 		}, []string{"namespace", "runner_group", "tier", "cause"}),
 
 		EvictionRerunFailures: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: "actions_gateway_eviction_rerun_failures_total",
-			Help: "Disruption recoveries whose re-run was never accepted by GitHub, so the job requires a manual re-run despite the spent retry slot, by acquisition tier (classic, scaleset), cause (eviction, preemption, deletion, abandoned), and reason (run_never_concluded, api_error).",
+			Help: "Disruption recoveries whose re-run was never accepted by GitHub, so the job requires a manual re-run despite the spent retry slot, by acquisition tier (classic, scaleset), cause (eviction, preemption, deletion, abandoned, vanished), and reason (run_never_concluded, api_error). cause=vanished is scale-set only, as above.",
 		}, []string{"namespace", "runner_group", "tier", "cause", "reason"}),
 
 		AbandonedRunForceCancels: prometheus.NewCounterVec(prometheus.CounterOpts{
@@ -254,7 +254,7 @@ func NewMetrics() *Metrics {
 
 		EvictionRecoveryIdentityUnknown: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: "actions_gateway_eviction_recovery_identity_unknown_total",
-			Help: "Disrupted scale-set worker pods carrying no workflow-run identity, so no automatic re-run could be attempted, by cause (eviction, preemption, deletion).",
+			Help: "Disrupted scale-set worker pods carrying no workflow-run identity, so no automatic re-run could be attempted, by cause (eviction, preemption, deletion, abandoned). cause=abandoned is the worker removed before it ran, whose force-cancel had no run to address.",
 		}, []string{"namespace", "runner_group", "cause"}),
 
 		EvictionRecoveryEvidenceLost: prometheus.NewCounterVec(prometheus.CounterOpts{
@@ -279,7 +279,7 @@ func NewMetrics() *Metrics {
 
 		WorkerPodsReaped: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: "actions_gateway_worker_pods_reaped_total",
-			Help: "Worker pods the AGC deleted, by reason (completed_ttl, pending_deadline, orphaned_running, lifetime_exceeded, job_abandoned). All but job_abandoned come from the reconciler's reaper; job_abandoned is the provisioner reclaiming the worker of a job the listener gave up on (Q501). runner_group carries the owning CR's name on both acquisition tiers; runner_set additionally carries it on scale-set reaps (empty on classic) so the series join the runner_set-labelled scaleset_* gauges (Q514).",
+			Help: "Worker pods the AGC deleted, by reason (completed_ttl, pending_deadline, completed_pending, orphaned_running, lifetime_exceeded, gateway_deleted, job_abandoned). All but job_abandoned come from the reconciler's reaper; job_abandoned is the provisioner reclaiming the worker of a job the listener gave up on (Q501). Three reasons reach one acquisition tier only: completed_pending and orphaned_running read a completion annotation the classic tier never stamps, and job_abandoned rides the classic renew loop, which the scale-set tier does not have. runner_group carries the owning CR's name on both acquisition tiers; runner_set additionally carries it on every v2 RunnerSet's reaps — of either protocol, since the label keys on the owning kind — and is empty for a v1 RunnerGroup, so the series join the runner_set-labelled scaleset_* gauges (Q514).",
 		}, []string{"namespace", "runner_group", "runner_set", "reason"}),
 
 		AgentRecyclesTotal: prometheus.NewCounterVec(prometheus.CounterOpts{
