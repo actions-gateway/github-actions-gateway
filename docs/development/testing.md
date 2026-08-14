@@ -1145,7 +1145,18 @@ Each is a claim about state, and each has a cheap way of being wrong:
 - **Green checks say the run passed, never that your change is gated.** The two come apart exactly when a gate is new, which is when nobody thinks to look. `comparison-stamps-check` shipped into `CHECK_FAST_GATES` and into no workflow, so it ran under a local `make check` and never on a PR: `unit-test.yml` path-ignores docs, and `doc-links.yml` names each docs gate as its own job rather than running `make check`.
   Ten green checks on the head SHA said nothing about it, and `gate-lists-check` stayed green throughout, because it reconciled the Makefile, the tree and this file, never `.github/workflows/`.
   It reads the workflows now, and finding four more unwired gates when it first did is the measure of how quietly this accumulates (Q831) — but the reconciler only knows the routes it was taught, so verify a new gate by naming its **job** in the run's job list (`gh run view <id> --json jobs`) rather than by the workflow's conclusion.
-
+- **A local gate that disagrees with CI indicts your toolchain before the tree.** CI checks out fresh and builds its tools from the pin; your `.build/` holds whatever it held last time, and the tool rules in the Makefile carry no prerequisites, so a version bump never triggers a rebuild (Q842).
+  Measured 2026-08-14: an `.build/mdreflow` from 2026-08-09 survived #1462's v0.1.7 bump and reported four files as needing reflow against a tree CI read as clean.
+  Nothing about the run looked wrong.
+  It took no flag it did not know, printed plausible output, and named real files, which is what let the verdict reach three merged PR descriptions and the opening instruction of a dispatched worker session before a CI job passing on the same commit forced the comparison.
+  A repeated claim gains authority without gaining evidence, so the second and third uses are the expensive ones.
+  When the same target answers differently in the two places, rebuild the tool and re-run before reporting anything about the repository.
+- **A completeness claim inherits the blind spots of the inventory behind it.** "Every capability reaches both acquisition tiers" was read off `features.md`'s tier badges and the parity table in [v2-ga.md](../plan/v2-ga.md), on 2026-08-13.
+  Both were accurate.
+  Both are hand-authored, so neither can show a gap nobody thought to record, which is the blind spot [Q776](https://github.com/actions-gateway/github-actions-gateway/blob/main/docs/STATUS.md)'s own row describes and which was cited in the same document that leaned on the badges.
+  Q844 was sitting in it: restart-safe disruption recovery is classic-only, and the marketing surface claimed it for both tiers with no badge at all.
+  A derived inventory can answer "nothing is missing"; a curated one answers "nothing that someone recorded is missing", and those diverge exactly where it matters.
+  Say which kind you read before the answer carries a decision.
 
 The failure mode these share is reporting a conclusion from a signal that does not carry it.
 The fix is the same each time: name the signal the claim actually depends on, confirm it could have shown you the opposite, and read that one.
