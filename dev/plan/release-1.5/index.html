@@ -2713,7 +2713,7 @@
 <p><strong>Status: scope opening 2026-08-06.</strong> <a href="../release-1.4/">Release 1.4</a> is already scoped and its gating rows are fixed; 1.5 is where work identified after that line lands.
 Four gating Queue rows so far, labelled <code>1.5-gate</code>: Q712, Q713, and Q726, admitted 2026-08-09 from the candidate list below, plus Q715, admitted the same day off an external date.
 All four shipped 2026-08-11, and the marketing reconciliation closed 2026-08-12 (Q801, Q821).
-A fifth row, Q776, was admitted 2026-08-13 to back the parity claim the other four earned: see <a href="#the-parity-axis-what-closed-and-what-backs-it">the parity axis</a>.</p>
+Two more were admitted afterwards, both on the <a href="#the-parity-axis-what-closed-and-what-backs-it">parity axis</a>: Q776 on 2026-08-13, to back the parity claim the other four earned, and Q844 on 2026-08-14, a classic-only capability the badge set never recorded and the marketing surface already claims for both tiers.</p>
 </blockquote>
 <h2 id="why-these-gate-a-release-rather-than-riding-along">Why these gate a release rather than riding along<a class="headerlink" href="#why-these-gate-a-release-rather-than-riding-along" title="Permanent link">&para;</a></h2>
 <p>Q712 and Q713 came out of the 2026-08-06 competitive analysis, and both were defects in capabilities the project already claims, not new features.
@@ -2776,9 +2776,12 @@ Reporting that reading back to the AGC, rather than only to <code>kubectl logs</
 Every one is a capability the classic tier had and the ScaleSet tier did not, or a shape <code>v1alpha1</code> allowed and <code>v2beta1</code> refused.
 Recorded here because the release notes need the through-line, and because a future audit should not re-derive it.</p>
 <p><strong>Two axes, measured 2026-08-13.</strong></p>
-<p>Classic to ScaleSet acquisition tier: <strong>closed, in this release.</strong> <a href="../../features/">features.md</a> marks any capability that does not reach the ScaleSet tier with a <code>partly classic-only</code> badge, and no capability carries one.
-The last two came off with Q713, on Alerting and SLOs and on Grafana dashboards.
+<p>Classic to ScaleSet acquisition tier: <strong>closed on the tracked inventory, and the inventory turned out to be incomplete.</strong> <a href="../../features/">features.md</a> marks any capability that does not reach the ScaleSet tier with a <code>partly classic-only</code> badge, and no capability carries one; the last two came off with Q713, on Alerting and SLOs and on Grafana dashboards.
 <a href="../v2-ga/#capability-parity-is-a-precondition-of-the-removal">v2-ga.md § Capability parity</a>, which exists because removing classic at <code>v2.0.0</code> must not delete a capability along with it, reads Both tiers on all five rows.</p>
+<p>Neither surface caught <a href="../../STATUS/#Q844">Q844</a>, found 2026-08-14 by asking whether the axis was really shut.
+Restart-safe disruption recovery is classic-only: the classic provisioning goroutine reads the disruption markers off the resolving event it is already watching, while a scale-set worker is readable only while it terminates, so an AGC down for that window never issues the re-run. <code>features.md</code> claims automatic re-run for eviction, preemption, drain and a bare <code>kubectl delete pod</code> with <strong>no tier badge</strong>, and the troubleshooting matrix says outright that every firing case "works on <strong>both acquisition tiers</strong>".
+It is admitted as a <code>1.5-gate</code> row on the same test Q712 and Q713 met: the claim is published and the shipped tier does not honour it.</p>
+<p>That the badge set and the parity table both read clean while this was open is the sharpest available argument for Q776 below, and it is why the tier result is stated here as <em>measured against the inventory</em> rather than as parity full stop.</p>
 <p><code>v1alpha1</code> to <code>v2beta1</code> API: <strong>closed, but mostly before the 1.4 tag.</strong> All eight gaps in the <a href="../v2-api-gap-analysis/">gap analysis</a> are closed and it declared its own scope closed 2026-08-09; the last v2 API milestone, Q166 cross-namespace sharing, is an ancestor of <code>v1.4.0</code>.
 1.5 contributed the one surviving capability drop, Q726: <code>v1alpha1</code> set <code>MinItems=1</code> with no ceiling while <code>v2beta1</code> CEL-enforced <code>size(self) == 1</code>, and that field's godoc offered staying on a <code>v2alpha1</code> Classic set as the migration path, which <code>v2.0.0</code> removes.</p>
 <h3 id="what-parity-does-not-yet-have-a-backstop">What parity does not yet have: a backstop<a class="headerlink" href="#what-parity-does-not-yet-have-a-backstop" title="Permanent link">&para;</a></h3>
@@ -2787,24 +2790,26 @@ Q683, Q691 and Q713 each arrived classic-only from birth <em>after</em> the 2026
 <p>The tier badge gate is one-directional by construction.
 It fails a badge whose Queue row already shipped, a badge with no <code>&lt;!-- tier:QN --&gt;</code> annotation, and a badge linking no <code>operations/</code> page, so a badge cannot outlive its gap.
 It cannot see the case that actually recurs: a capability that is classic-only and was never badged at all.</p>
-<p><strong><a href="../../STATUS/#Q776">Q776</a> is admitted as a <code>1.5-gate</code> row on 2026-08-13</strong> for that reason, and it is the whole of the remaining parity work.
-It reconciles the <code>actions_gateway_*</code> names across both sides against the absent-by-design list in <a href="../v2-ga/#capability-parity-is-a-precondition-of-the-removal">v2-ga.md</a>, which both re-establishes the measurement as current and leaves behind the gate that keeps it so.
-Landing it is what lets the release notes say parity rather than name four ports.</p>
+<p><strong><a href="../../STATUS/#Q776">Q776</a> is admitted as a <code>1.5-gate</code> row on 2026-08-13</strong> for that reason.
+It reconciles the <code>actions_gateway_*</code> names across both sides against the absent-by-design list in <a href="../v2-ga/#capability-parity-is-a-precondition-of-the-removal">v2-ga.md</a>, which both re-establishes the measurement as current and leaves behind the gate that keeps it so.</p>
+<p>Q844 found the fourth instance a day later, and by hand rather than by any gate, which is the argument for Q776 restated as evidence.
+The two together are the remaining parity work: Q844 closes the gap, Q776 makes the next one visible without someone thinking to ask.
+Landing both is what lets the release notes say parity rather than name four ports.</p>
 <p>The v1 to v2 axis gets no equivalent row, and that is a decision rather than an omission. <code>cmd/agc/api/v1alpha1/conditions_parity_test.go</code> already pins the listener vocabulary across all three packages by value (Q309), and new drift can only come from someone adding to <code>v1alpha1</code>, which is frozen and comes out in the <code>v2.0.0</code> bundle (<a href="../../STATUS/#Q264">Q264</a>).</p>
 <h3 id="differences-that-survive-parity-and-should">Differences that survive parity, and should<a class="headerlink" href="#differences-that-survive-parity-and-should" title="Permanent link">&para;</a></h3>
-<p>Not gaps, and not for the next audit to re-litigate:</p>
+<p>Not gaps, and not for the next audit to re-litigate.
+Preemption and drain recovery were listed here until 2026-08-14, on the grounds that only restart-safety differed; Q844 moved them out, because the difference is one the published claim does not make and the classic tier does not have:</p>
 <ul>
 <li>GitHub's session rejection for a too-old runner version stays classic-only, because the scale-set protocol carries no runner version at session creation.
   Q715 gives the ScaleSet tier a reconcile-time warning instead, so both tiers carry a signal and only classic has the forge-side rejection.</li>
-<li>Preemption and drain recovery both work on the scale-set tier, ported by Q417 and pinned at unit, envtest and fake-GitHub, so <code>priorityTiers</code> buys the recovery guarantee on both tiers.
-  What differs is restart-safety: a preempted or drained pod is readable only while it terminates, so an AGC down for that window loses the run, where a kubelet-evicted pod persists in <code>PodFailed</code> and stays recoverable by a late scan.</li>
 <li>The capacity ceiling uses a different pre-check and a different fallback on the scale-set tier (Q576), because a ScaleSet states its capacity as one integer per poll rather than as a decision per job.</li>
 <li>Several counters are absent from the scale-set tier by construction, being artifacts of the many-acquirers and JIT-agent models <code>ScaleSet</code> removes.
   <a href="../v2-ga/#capability-parity-is-a-precondition-of-the-removal">v2-ga.md</a> holds the list, and Q776 reconciles against it.</li>
 </ul>
 <h3 id="what-the-notes-should-not-claim-yet">What the notes should not claim yet<a class="headerlink" href="#what-the-notes-should-not-claim-yet" title="Permanent link">&para;</a></h3>
-<p>Until Q776 lands, the notes name the four ports rather than asserting parity.
-A published parity claim resting on a walk with a three-times-stale record is the same failure Q801 spent this release fixing, one surface over.</p>
+<p>Until Q776 and Q844 land, the notes name the four ports rather than asserting parity.
+A published parity claim resting on a walk with a four-times-stale record is the same failure Q801 spent this release fixing, one surface over.
+Q844 is the case in point: the claim was already published, on <code>features.md</code> and in the troubleshooting matrix, before anyone checked whether the shipped tier honoured it.</p>
 <h2 id="candidates-not-yet-accepted">Candidates not yet accepted<a class="headerlink" href="#candidates-not-yet-accepted" title="Permanent link">&para;</a></h2>
 <p>Held here so the reasoning is not lost, not committed to the release:</p>
 <ul>
