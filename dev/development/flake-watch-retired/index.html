@@ -2574,6 +2574,8 @@ A row lands here when its recurrence-memory has decayed to ~zero — see the ret
 If a retired flake ever recurs, it re-enters the Queue as a fresh find (flakes-first); this row is the pointer back to the original diagnosis, so re-add it to the escalation history rather than starting cold.</p>
 <p>Run counts below are green <code>main</code> runs of the covering workflow since the fix merged, measured with the <code>gh run list</code> recipe in <a href="../maintaining-backlog/#retiring-a-flake-watch-row">maintaining-backlog.md</a>.
 Each is anchored on a date at or after the fix, so every count is a conservative undercount.</p>
+<p>A <strong>refuted</strong> row lands here too, with no fix PR and no soak: the flake it named was never observed, and the record of having looked is worth the same <code>grep</code>.
+A refuted row that was <a href="../maintaining-backlog/#repurposing-an-id-is-a-closure-with-every-step-skipped">repurposed rather than retired</a> has no ID left to carry, since another defect holds it.</p>
 <p>Newest retirement first.</p>
 <table>
 <thead>
@@ -2586,6 +2588,13 @@ Each is anchored on a date at or after the fix, so every count is a conservative
 </tr>
 </thead>
 <tbody>
+<tr>
+<td>none</td>
+<td>e2e-calico NetworkPolicy enforcement negatives intermittently see traffic that should be blocked</td>
+<td>none</td>
+<td>2026-08-14</td>
+<td>Refuted: the three <code>e2e-calico</code> failures of 2026-08-12 it was filed on were all <code>E2E_AGC_ScaleSetDrainedWorkerClaimAndRerunLandUnderChartRBAC</code>, one spec per run (<a href="../../plan/q549-scaleset-rerun-flake/#mode-b-attributed-2026-08-12-the-claim-was-made-and-lost">the measurement</a>); the five enforcement negatives never failed. Filed as Q809 on 2026-08-11, then <a href="../maintaining-backlog/#repurposing-an-id-is-a-closure-with-every-step-skipped">repurposed in place</a> by #1441, so that ID now names the scale-set defect. Its enforcer-dump half was real and shipped in #1417.</td>
+</tr>
 <tr>
 <td>Q350</td>
 <td>scalesetlistener metrics assertions race the provisioner stub</td>

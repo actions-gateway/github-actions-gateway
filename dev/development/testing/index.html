@@ -5840,7 +5840,8 @@ Run it locally against any report to get the same table.</p>
 Run them with the Calico profile when validating NetworkPolicy enforcement changes (Q7b/Q83).</p>
 <p><strong>A spurious allow is a claim about the enforcer, not only the policy.</strong> All five containers therefore call <code>utils.DumpCNIEnforcerState()</code> from their failure path, which reads both lanes' enforcers (<code>app=kindnet</code>, <code>k8s-app=calico-node</code>) and prints restart attribution, termination reason, and cgroup pressure.
 The <code>e2e-reusable.yml</code> diagnostic step reads the same two selectors for the case where the suite process died before its <code>AfterEach</code> could run, the same two-probe split as the <a href="#runnergithub-egress-attribution-q352">Runner→GitHub egress attribution</a>.
-Both read kindnet only until Q809, which is the lane where these five specs <em>skip</em>: three failures across <code>main</code> and two merge-queue entries captured no enforcer state at all.
+Both read kindnet only until #1417, which is the lane where these five specs <em>skip</em>, so a failure on the Calico lane captured no enforcer state at all.
+That PR was filed against a suspected run of enforcement-negative failures which <a href="../maintaining-backlog/#repurposing-an-id-is-a-closure-with-every-step-skipped">turned out to be a different spec entirely</a>; the instrument it added stands on its own.
 CI runs this profile per-PR whenever a change touches NetworkPolicy/proxy code — see <a href="#the-calico-e2e-lane">the Calico e2e lane</a> below.</p>
 <p><strong>Curl test image.</strong> The connectivity, isolation, and metrics specs run a <code>curlimages/curl</code> pod.
 It defaults to the upstream Docker Hub ref (<code>curlimages/curl:8.10.1</code>), which is fine locally.

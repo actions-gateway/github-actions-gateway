@@ -2928,14 +2928,6 @@
 <td><code>podUnschedulable()</code> keys on <code>PodScheduled=False</code>, so an <code>ImagePullBackOff</code> worker trips no rung: it binds, never starts, and each claim spends a JIT record and holds a lock to <code>pendingPodDeadline</code>. Measured; the 1.4 DinD placeholder hits it.</td>
 </tr>
 <tr>
-<td><a id="Q836"></a>Q836</td>
-<td><a href="../development/maintaining-backlog/#closing-a-row-what-else-moves">A Queue row can be repurposed to a different defect, losing the original silently</a></td>
-<td><code>docs</code> <code>debt</code> <code>retro</code></td>
-<td>🔲</td>
-<td>S</td>
-<td>#1441 overwrote Q809 in place: a <code>flake</code> row on e2e-calico NetworkPolicy negatives (3 of 100 runs, 3 PR evictions) became an unrelated scaleset flake, and "calico" is now absent from this file. Not <a href="#Q816">Q816</a>, which is an incomplete site list.</td>
-</tr>
-<tr>
 <td><a id="Q837"></a>Q837</td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/ci/run-parallel.sh">A <code>run-parallel</code> exit 143 means the gate was terminated, not that it failed</a></td>
 <td><code>docs</code> <code>ci</code> <code>retro</code></td>

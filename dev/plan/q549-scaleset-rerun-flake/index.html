@@ -2824,7 +2824,9 @@ What remains open is whether the recovery scan is <em>reachable</em> while that 
 </tr>
 </tbody>
 </table>
-<p>Each run reported <code>Summarizing 1 Failure</code>: this spec and nothing else.
+<p>Each run reported <code>Summarizing 1 Failure</code>: this spec and nothing else.</p>
+<p><strong>These same three runs had already been filed as a calico NetworkPolicy flake, and that reading is refuted here.</strong> Q809 was opened on 2026-08-11 asserting that the five calico-gated enforcement negatives intermittently see traffic the policy should drop; none of them failed in any of the three runs, and the row's remaining half (the enforcer dump reading <code>app=kindnet</code> only, so the Calico lane captured nothing) was real and shipped in #1417.
+The refuted row is in <a href="../../development/flake-watch-retired/">the retired-flake ledger</a> rather than the backlog, because #1441 reused its ID for the defect below instead of closing it (<a href="../../development/maintaining-backlog/#repurposing-an-id-is-a-closure-with-every-step-skipped">why that is now a rule</a>).
 Each carried exactly one AGC line about the probe pod, at <code>Debug</code>:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>&quot;msg&quot;:&quot;scale-set worker disruption already claimed elsewhere; skipping&quot;,&quot;cause&quot;:&quot;deletion&quot;, …
 </code></pre></div>
