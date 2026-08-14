@@ -12,7 +12,9 @@
 #
 # The in-flight log is reachable: `gh run view --log` refuses on a run that is
 # still going, but the jobs/<id>/logs REST endpoint returns partial logs for a
-# running job.
+# running job. When it serves nothing — which it did for a whole 22-minute leg
+# that passed — the relay falls back to job-level progress off the run record
+# (job_progress, Q855), so the leg is never silent for its full duration.
 #
 # Poll cadence defaults to the heartbeat's own 30 s — the log grows to a few
 # hundred KB and each fetch returns all of it, so polling faster costs transfer
@@ -125,6 +127,34 @@ collect_heartbeats() {
 	done
 }
 
+# job_progress RUN_ID — one line of job-level progress read off the run record,
+# or nothing while the run has no jobs yet.
+#
+# The fallback for what the heartbeat relay cannot cover (Q855). The relay needs
+# a fetchable job log, and GitHub served none for the whole 22-minute e2e leg of
+# the v1.5.0-rc.1 run that PASSED — so `heartbeat` stayed null and the operator's
+# only in-flight signal was absent on a healthy run. The jobs endpoint is the run
+# record rather than the log, and the two fail independently: the same split the
+# Q630 measurement turns on.
+#
+# `[e2e run]` rather than the suite's `[e2e t+` marker, so a job-level summary is
+# never mistaken for spec-level detail it does not carry — in the terminal or in
+# the status object. jq runs here rather than through `gh --jq` so the filter is
+# exercised by e2e-run-watch-test.sh against a real payload.
+job_progress() {
+	local jobs
+	jobs="$(gh api "repos/${REPO}/actions/runs/$1/jobs?per_page=100" 2>/dev/null || true)"
+	[[ -n "${jobs}" ]] || return 0
+	printf '%s' "${jobs}" | jq -r '
+		.jobs as $jobs
+		| ($jobs | map(select(.status == "completed"))) as $done
+		| ($jobs | map(select(.status == "in_progress") | .name)) as $running
+		| if ($jobs | length) == 0 then empty
+			else "[e2e run] \($done | length)/\($jobs | length) jobs done (\($done | map(select(.conclusion == "success")) | length) ok)"
+				+ (if ($running | length) > 0 then " | running: \($running | join(", "))" else "" end)
+			end' 2>/dev/null || true
+}
+
 # run_state RUN_ID — "<status> <conclusion>".
 run_state() {
 	gh run view "$1" --repo "${REPO}" --json status,conclusion \
@@ -134,6 +164,7 @@ run_state() {
 watch_run() {
 	local run_id="$1"
 	local seen=0 job_ids="" status conclusion state all new total deadline
+	local progress last_progress=""
 
 	echo "  watching https://github.com/${REPO}/actions/runs/${run_id}"
 	# The sentinel consults this run's own status to tell a quiet-but-healthy leg
@@ -160,6 +191,17 @@ watch_run() {
 				new="$(printf '%s\n' "${all}" | lines_after "${seen}")"
 				relay_heartbeats "${new}"
 				seen="${total}"
+			fi
+		fi
+
+		# Only while the log has yielded nothing at all: a spec heartbeat carries
+		# strictly more, and relaying both would double every poll. Emitted on
+		# change rather than every poll, so the line means a job moved.
+		if ((seen == 0)); then
+			progress="$(job_progress "${run_id}")"
+			if [[ -n "${progress}" && "${progress}" != "${last_progress}" ]]; then
+				relay_heartbeats "${progress}"
+				last_progress="${progress}"
 			fi
 		fi
 
