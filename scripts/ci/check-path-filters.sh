@@ -90,6 +90,7 @@ NARROW_FILTERS=(
 	'security-scan.yml:chart'         # the Helm chart the Polaris posture scan renders
 	'e2e-calico.yml:calico'           # NetworkPolicy/proxy code only; other PRs stay on the kindnet leg
 	'manifest-validate.yml:manifests' # generated YAML, not the Go types behind it
+	'manifest-validate.yml:promql'    # the shipped PrometheusRule and the two docs describing its alerts
 	'license-notices.yml:notices'     # vendor/ and the notices generator
 	'status-lint.yml:status'          # docs/STATUS.md, docs/roadmap.md, and their linters
 	'plan-hygiene.yml:plan'           # the plan index plus any .go file (for plan-ref scanning)

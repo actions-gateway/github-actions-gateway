@@ -740,6 +740,10 @@ It fails when:
 - a fast gate *outside* `STATUS_GATES` selects `docs/STATUS.md`, which is the direction that had no enforcement: `em-dash-check` and `page-density-check` both scanned the file for as long as they had existed, while the comment above the variable called the list complete (Q749).
   Membership is derived from the pathspec each gate's script hands git, the same question the gate itself asks.
   A gate whose recipe runs no `scripts/` file has no derivable file set and declares instead, with a `# status-scope: none` comment and its reason directly above its `.PHONY`, as `md-reflow-check` does;
+- a gate runs in `make check` but in no workflow, so it gates nothing on a PR. `make check` is then the only thing enforcing it, and the failure reports as a clean gate list — every rule above stays green (Q831). `comparison-stamps-check` shipped that way, and by the time the rule was written five gates were unwired: `license-header-check`, `page-density-check`, `semver-floor-sources-check`, `md-reflow-check` and `promql-check`.
+  A gate counts as wired when a workflow runs its own `make` target, or when every `scripts/` file its recipe runs is run by CI another way — through a different make target a workflow invokes (`manifest-validate` runs the three `chart-*-check` scripts) or invoked directly (`status-lint.yml` runs `lint-backlog.sh` without make).
+  Workflow **comments are excluded** from that match: these files explain themselves in prose that names their own targets, so a gate merely mentioned would read as covered.
+  A gate that is deliberately local-only declares `# ci-scope: none` with its reason directly above its `.PHONY`, the same shape the rule above uses;
 - `SCRIPTS_TESTS` and the `scripts/**/*-test.sh` files on disk name different sets.
   A suite written but never listed is the failure worth catching: `make scripts-test` reports green having never run it, so the assertions it carries are disarmed while looking armed.
   The reverse, a listed suite with no file, fails the fan-out on a missing path.
@@ -1136,8 +1140,8 @@ Each is a claim about state, and each has a cheap way of being wrong:
   The trap is the run's own vocabulary: a marker chosen to mean "finished" is usually also a word the run says while working, and the false fire looks exactly like the real one.
   Grep the marker against a full log of an earlier run before arming a watcher on it, and prefer the process exiting, since a background task's completion notification cannot fire early.
 - **Green checks say the run passed, never that your change is gated.** The two come apart exactly when a gate is new, which is when nobody thinks to look. `comparison-stamps-check` shipped into `CHECK_FAST_GATES` and into no workflow, so it ran under a local `make check` and never on a PR: `unit-test.yml` path-ignores docs, and `doc-links.yml` names each docs gate as its own job rather than running `make check`.
-  Ten green checks on the head SHA said nothing about it, and `gate-lists-check` stayed green throughout, because it reconciles the Makefile, the tree and this file, never `.github/workflows/` (Q831).
-  Verify a new gate by naming its **job** in the run's job list (`gh run view <id> --json jobs`) rather than by the workflow's conclusion, and grep the target across `.github/workflows/` beside a known-wired control, so an empty result cannot read as a bad query.
+  Ten green checks on the head SHA said nothing about it, and `gate-lists-check` stayed green throughout, because it reconciled the Makefile, the tree and this file, never `.github/workflows/`.
+  It reads the workflows now, and finding four more unwired gates when it first did is the measure of how quietly this accumulates (Q831) — but the reconciler only knows the routes it was taught, so verify a new gate by naming its **job** in the run's job list (`gh run view <id> --json jobs`) rather than by the workflow's conclusion.
 
 
 The failure mode these share is reporting a conclusion from a signal that does not carry it.

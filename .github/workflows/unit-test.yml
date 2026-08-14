@@ -225,6 +225,9 @@ jobs:
               - 'scripts/ci/check-path-filters.sh'
               - 'scripts/ci/actionlint-workflows.sh'
               - 'scripts/ci/check-uses-pinned.sh'
+              # The semver-floor-sources job below reads publish.yml, covered by
+              # the tree above, but its own checker must re-run the gate too.
+              - 'scripts/release/semver-floor.sh'
               # devtools/ backs the two gates here whose logic outgrew shell:
               # devtools/ci/pathfilters and devtools/ci/usespin.
               - 'devtools/**'
@@ -281,6 +284,12 @@ jobs:
       # (Q68). The go.work.gen files feed `make manifests` and have drifted before.
       - name: single Go version (make go-version-check)
         run: make go-version-check
+      # Assert no first-party .go file carries a per-file Apache header (Q831
+      # wired it). A step here rather than its own job: its input is the Go
+      # tree, which is exactly this job's `code` filter, and it is pure shell —
+      # a separate runner and checkout would cost more than the check.
+      - name: no per-file license headers (make license-header-check)
+        run: make license-header-check
       # Assert the two served v2 API packages hold their shared files identically
       # (Q345, widened in Q374). Ran only under a local `make check` before, so the
       # drift it guards could reach main unnoticed.
@@ -546,6 +555,25 @@ jobs:
       - name: action refs are SHA-pinned (make uses-pinned-check)
         run: make uses-pinned-check
 
+  # Assert the semver floor's surface derivation still covers every release
+  # artifact publish.yml builds (Q831 wired it). Gated on `workflows` rather
+  # than `code` because publish.yml is its subject: an artifact added there is
+  # the drift, and no Go file lands in that diff to route it to `lint`. Its own
+  # job for the reason uses-pinned gives above — a floor that stopped seeing an
+  # artifact must not report as "actionlint failed".
+  semver-floor-sources:
+    needs: [changes]
+    if: needs.changes.outputs.workflows == 'true' || github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    runs-on: ${{ (github.event_name == 'workflow_dispatch' && inputs.target_gag) && fromJSON(vars.GAG_RUNNER || '"ubuntu-latest"') || 'ubuntu-latest' }}
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.work
+      - name: semver floor sees every release artifact (make semver-floor-sources-check)
+        run: make semver-floor-sources-check
+
   # Run the claude-usage/ Python suite (Q437). That module holds the committed
   # record of the project's Claude Code usage — for days whose session transcripts
   # have since been archived, the CSVs under claude-usage/data/ are the only
@@ -583,7 +611,7 @@ jobs:
   # and passes only when every needed job succeeded or was legitimately skipped.
   # See docs/development/testing.md#path-gated-workflows-verify-the-heavy-gates-actually-ran.
   unit-test-gate:
-    needs: [changes, lint, shellcheck, actionlint, vendor-check, tidy-check, unit-test, coverage, path-filters, claude-usage-test]
+    needs: [changes, lint, shellcheck, actionlint, vendor-check, tidy-check, unit-test, coverage, path-filters, semver-floor-sources, claude-usage-test]
     if: ${{ always() }}
     runs-on: ubuntu-latest
     timeout-minutes: 2

@@ -38,7 +38,10 @@
 # `make list-gates` renders them with each gate's own `##` description, so the
 # docs name that target instead of transcribing the list (Q649) — the same
 # reason STATUS_GATES exists below. `gate-lists-check` reconciles the recipe,
-# the .PHONY declarations and the doc pointer against them.
+# the .PHONY declarations and the doc pointer against them — and, since Q831,
+# `.github/workflows/` too: a gate listed here that no workflow runs is enforced
+# by `make check` alone, so it gates nothing on a PR. A gate that is
+# deliberately local-only says so with `# ci-scope: none` above its .PHONY.
 CHECK_FAST_GATES := lint-backlog status-isolation-check roadmap-check \
                     plan-index-check no-plan-refs-check \
                     go-version-check license-header-check conflict-markers-check \

@@ -46,6 +46,19 @@
 #      handed, the same question the gate itself asks. A gate that runs no
 #      scripts/ file has no derivable file set and declares instead, with a
 #      `# status-scope: none` comment directly above its .PHONY.
+#   8. Every gate also runs in CI. A gate can join CHECK_FAST_GATES and be run
+#      by no workflow, and rules 1-7 all stay green: `make check` enforces it
+#      locally while every PR merges without it. comparison-stamps-check
+#      shipped that way (#1440), and by 2026-08-13 five gates were in that
+#      state — license-header-check, page-density-check,
+#      semver-floor-sources-check, md-reflow-check and promql-check (Q831).
+#      A gate is covered when a workflow runs its own `make` target, or when
+#      every scripts/ file its recipe runs is run by CI some other way: through
+#      another make target a workflow invokes (manifest-validate runs the three
+#      chart-*-check scripts) or invoked directly (status-lint runs
+#      lint-backlog.sh without make). A gate that is deliberately local-only
+#      declares `# ci-scope: none` with its reason directly above its .PHONY,
+#      the same shape rule 7 uses.
 #
 # Usage:
 #   gate-list.sh --list        --fast '<names>' --heavy '<names>'
@@ -56,6 +69,7 @@
 #   --makefile PATH    the Makefile to parse
 #   --doc PATH         the doc that must cite the list targets
 #   --scripts-dir PATH the tree scanned for *-test.sh files
+#   --workflows PATH   the workflow tree rule 8 reads
 set -euo pipefail
 shopt -s inherit_errexit
 
@@ -66,6 +80,7 @@ MAKEFILE="Makefile"
 DOC="docs/development/testing.md"
 SCRIPTS_DIR="scripts"
 STATUS_FILE="docs/STATUS.md"
+WORKFLOWS_DIR=".github/workflows"
 MODE=""
 FAST=""
 HEAVY=""
@@ -114,6 +129,10 @@ while (($# > 0)); do
 		SCRIPTS_DIR="$2"
 		shift
 		;;
+	--workflows)
+		WORKFLOWS_DIR="$2"
+		shift
+		;;
 	*)
 		printf 'gate-list.sh: unknown argument: %s\n' "$1" >&2
 		exit 2
@@ -137,6 +156,12 @@ elif [[ -z "$FAST" || -z "$HEAVY" ]]; then
 fi
 if [[ "$MODE" == "check" && -z "$SUITES" ]]; then
 	printf 'gate-list.sh: --check requires --suites\n' >&2
+	exit 2
+fi
+# Rule 8 reads this tree, and an empty read is indistinguishable from a tree
+# where nothing is wired — it would report every gate as unwired. Refuse instead.
+if [[ "$MODE" == "check" && ! -d "$WORKFLOWS_DIR" ]]; then
+	printf 'gate-list.sh: --workflows %s is not a directory\n' "$WORKFLOWS_DIR" >&2
 	exit 2
 fi
 
@@ -204,9 +229,10 @@ disk_suites() {
 }
 
 # The scripts/ files a gate's recipe runs, resolved under SCRIPTS_DIR so a
-# fixture tree can stand in for the real one.
+# fixture tree can stand in for the real one. Rule 8 passes `scripts` instead:
+# what it matches against is workflow text, which spells the real path.
 gate_scripts() {
-	joined_makefile | awk -v target="$1" -v dir="$SCRIPTS_DIR" '
+	joined_makefile | awk -v target="$1" -v dir="${2-$SCRIPTS_DIR}" '
 		$0 ~ "^" target ":" { in_rule = 1; next }
 		in_rule && $0 !~ /^\t/ { in_rule = 0 }
 		in_rule {
@@ -251,16 +277,41 @@ selects_status_file() {
 }
 
 # Whether the comment block directly above a target's .PHONY declares it out of
-# STATUS.md scope. Adjacency is the point: the reason belongs at the declaration.
-status_scope_none() {
-	joined_makefile | awk -v target="$1" '
-		/^#/ { if ($0 ~ /status-scope:[ \t]*none/) marked = 1; next }
+# KEY's scope (`status-scope` for rule 7, `ci-scope` for rule 8). Adjacency is
+# the point: the reason belongs at the declaration.
+scope_none() {
+	joined_makefile | awk -v target="$1" -v key="$2" '
+		/^#/ { if ($0 ~ key ":[ \t]*none") marked = 1; next }
 		/^\.PHONY:/ {
 			for (i = 2; i <= NF; i++) if ($i == target && marked) hit = 1
 		}
 		{ marked = 0 }
 		END { exit(hit ? 0 : 1) }
 	'
+}
+
+# The workflow tree with its comment lines blanked. Dropping them is what keeps
+# rule 8 honest: these files explain themselves in prose that names the very
+# targets and scripts the rule looks for, and a gate named in a comment gates
+# nothing. Anchoring to command position is the same discipline the go-throttle
+# and foreground-guard hooks apply to their own registries.
+workflow_text() {
+	{ cat "$WORKFLOWS_DIR"/*.yml 2>/dev/null || true; } | awk '{ sub(/^[ \t]*#.*$/, ""); print }'
+}
+
+# The make targets the workflows invoke, one per line.
+ci_make_targets() {
+	{ grep -oE '\bmake +(-[A-Za-z-]+ +)*[a-z0-9][a-z0-9-]*' <<<"$(workflow_text)" || true; } |
+		awk '{ print $NF }' | sort -u
+}
+
+# The scripts/ files CI runs by way of a make target it invokes.
+ci_target_scripts() {
+	local target
+	while IFS= read -r target; do
+		[[ -n "$target" ]] || continue
+		gate_scripts "$target" scripts
+	done < <(ci_make_targets) | sort -u
 }
 
 if [[ "$MODE" == "list-suites" ]]; then
@@ -413,9 +464,42 @@ for gate in $FAST; do
 			fi
 		done < <(selection_pathspecs "$script")
 	done < <(gate_scripts "$gate")
-	if ((scanned == 0)) && ! status_scope_none "$gate"; then
+	if ((scanned == 0)) && ! scope_none "$gate" status-scope; then
 		fail "gate '$gate' runs no $SCRIPTS_DIR/ file, so whether a $STATUS_FILE-only change can fail it is not derivable
        add it to STATUS_GATES, or declare \`# status-scope: none\` with the reason directly above its .PHONY"
+	fi
+done
+
+# 8. Every gate also runs in CI, so `make check` is not the only thing enforcing
+# it. A gate nobody wired gates nothing on a PR while every rule above stays
+# green — the failure reports as a clean gate list (Q831).
+ci_targets="$(ci_make_targets)"
+ci_scripts="$(ci_target_scripts)"
+ci_text="$(workflow_text)"
+for gate in $FAST $HEAVY; do
+	if grep -qx -- "$gate" <<<"$ci_targets"; then
+		continue
+	fi
+	if scope_none "$gate" ci-scope; then
+		continue
+	fi
+	uncovered=""
+	scanned=0
+	while IFS= read -r script; do
+		[[ -n "$script" ]] || continue
+		scanned=1
+		# Run by another make target a workflow invokes, or invoked directly.
+		if grep -qxF -- "$script" <<<"$ci_scripts" || grep -qF -- "$script" <<<"$ci_text"; then
+			continue
+		fi
+		uncovered="$uncovered $script"
+	done < <(gate_scripts "$gate" scripts)
+	if ((scanned == 0)); then
+		fail "gate '$gate' runs in \`make check\` but no workflow runs \`make $gate\`, and its recipe runs no scripts/ file to cover it another way — so it gates nothing on a PR
+       run it from a workflow, or declare \`# ci-scope: none\` with the reason directly above its .PHONY"
+	elif [[ -n "$uncovered" ]]; then
+		fail "gate '$gate' runs in \`make check\` but not in CI: no workflow runs \`make $gate\`, and CI runs none of$uncovered
+       run it from a workflow, or declare \`# ci-scope: none\` with the reason directly above its .PHONY"
 	fi
 done
 
