@@ -2824,6 +2824,14 @@
 </thead>
 <tbody>
 <tr>
+<td><a id="Q863"></a>Q863</td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/Dockerfile">A <code>docker buildx</code> base-image pull has no retry, so one registry 403 fails an image build</a></td>
+<td><code>flake</code> <code>ci</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>Measured 2026-08-14 on #1515: <code>trivy (proxy)</code> 403'd HEAD-ing the pinned distroless digest while agc/gmc/fakegithub pulled that same digest green in the same run; green on rerun, no code change. <a href="#Q854">Q854</a> is the class.</td>
+</tr>
+<tr>
 <td><a id="Q854"></a>Q854</td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/dogfood/validate-release.sh">Retry a transient <code>gh</code> failure in the release gate instead of aborting the run</a></td>
 <td><code>1.5-gate</code> <code>dogfood</code> <code>bug</code></td>

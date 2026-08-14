@@ -3039,6 +3039,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#a-negative-result-implicates-the-probes-identifier-first" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        A negative result implicates the probe's identifier first
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#a-correct-check-can-pass-without-looking-at-what-was-wrong" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -4903,6 +4914,20 @@ A hand-rolled probe standing in for a gate answers a slightly different question
 <p>The shape they share: the probe exits 0 with a plausible value, and nothing in the result announces that it answered a different question.
 When a probe's answer is about to decide something, run the gate itself.
 When the gate is too slow for the loop, keep the probe but give it a case whose answer you already know, and disbelieve it when the two disagree.</p>
+<h3 id="a-negative-result-implicates-the-probes-identifier-first">A negative result implicates the probe's identifier first<a class="headerlink" href="#a-negative-result-implicates-the-probes-identifier-first" title="Permanent link">&para;</a></h3>
+<p>The section above is about a probe that answers a different question.
+This one is about a probe that asks after a name which does not exist, where the answer is indistinguishable from a true absence: no match, no output, a status that reads as "not there".
+The command ran and ran correctly, so "empty output is only evidence once the command is known to have run" passes and tells you nothing.</p>
+<p>Three instances measured on 2026-08-14, in one session:</p>
+<ul>
+<li><strong>A make target that matches no rule reports <code>Nothing to be done</code>.</strong> <code>make .build/mdreflow</code> was used to demonstrate that a stale tool binary never rebuilds, but the tool rules name their targets by absolute path (<code>$(REPO_ROOT)/.build/…</code>), so the relative form matched no rule at all.
+  That message is what make prints for an up-to-date target, so the probe agreed with the defect being investigated and went on agreeing after the fix.</li>
+<li><strong>A <code>git config --get</code> for the wrong key is indistinguishable from an unset one.</strong> <code>merge.statusmd.driver</code> returned nothing and was read as the merge driver not being installed, and reported that way; the key is <code>merge.backlog.driver</code> and it was installed throughout.</li>
+<li><strong>A <code>grep</code> alternation that does not survive quoting matches nothing.</strong> An escaped-quote pattern over two row IDs returned no lines, which briefly read as a Queue row lost in a merge.
+  Re-run against a file, every row was present.</li>
+</ul>
+<p>What the three share is that each was about to support a <strong>negative</strong> claim, the direction with no natural contradiction: a wrong positive gets argued with by the thing it names, while a wrong negative simply agrees with whatever was already suspected.
+So before a negative decides anything, run the same probe against a value known to be present. <code>make --dry-run tools</code> fired nine rules where the relative target fired none, and <code>git config --get-regexp '^merge\.'</code> listed five installed drivers where the guessed key listed nothing.</p>
 <h3 id="a-correct-check-can-pass-without-looking-at-what-was-wrong">A correct check can pass without looking at what was wrong<a class="headerlink" href="#a-correct-check-can-pass-without-looking-at-what-was-wrong" title="Permanent link">&para;</a></h3>
 <p>The section above is about running the wrong instrument.
 This one is about running the right one and still learning nothing: the check is sound, its answer is correct, and what it validates sits <em>adjacent</em> to what actually broke.

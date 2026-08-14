@@ -3028,6 +3028,11 @@ That only holds for PRs whose watcher is still running — see <a href="#the-pos
 <p>A PR that reported <code>ready</code> has no watcher, but it is still <strong>open</strong> — it sits through the dispatcher's scope review and merge ordering, and a sibling merge in that window silently turns it <code>DIRTY</code> with nothing left to wake.
 Relaunching pr-sentinel does not close this gap (it would spin on <code>ready</code>; see the event list above).
 The gap belongs to the <strong>dispatcher</strong>, which covers it two ways:</p>
+<blockquote>
+<p><strong>When there is no dispatcher, it belongs to the worker.</strong> A session started straight from a Q-ID rather than by a dispatcher has nobody to hand the window to, and the assignment below silently addresses no one.
+Such a session arms the same watch on its own PR.
+Measured 2026-08-14: three PRs from one dispatcher-less session went <code>DIRTY</code> five times between <code>ready</code> and merge, <code>docs/STATUS.md</code> being the file every one of them touched.</p>
+</blockquote>
 <ul>
 <li><strong>A mergeability-only background watch per handed-off PR</strong>, launched as a background task:</li>
 </ul>
