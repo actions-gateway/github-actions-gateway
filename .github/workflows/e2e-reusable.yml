@@ -714,10 +714,9 @@ jobs:
           # cmd/gmc/test/utils/cni_enforcer.go. That one is authoritative because it fires
           # at failure time; this one covers the case where the suite process died before
           # its AfterEach could run — the same two-probe split as the runner-egress check
-          # above. It read only app=kindnet until Q809, which is the lane where the
-          # enforcement negatives self-SKIP: on calico, the lane that actually asserts
-          # them, three failures across main and two queue entries captured no enforcer
-          # state at all.
+          # above. It read only app=kindnet until #1417, which is the lane where the
+          # enforcement negatives self-SKIP, so a failure on calico, the lane that
+          # actually asserts them, captured no enforcer state at all.
           cs='.status.containerStatuses[0]'
           for sel in app=kindnet k8s-app=calico-node; do
             pods=$(kubectl get pods -n kube-system -l "$sel" -o name)

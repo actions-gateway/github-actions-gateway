@@ -92,6 +92,9 @@ Three `e2e-calico` failures in one three-hour window, all mode B, all this spec,
 | [31564438316](https://github.com/actions-gateway/github-actions-gateway/actions/runs/31564438316) | merge queue, pr-1415, 04:48 | `pods "ssrec-drain-probe-1" not found` |
 
 Each run reported `Summarizing 1 Failure`: this spec and nothing else.
+
+**These same three runs had already been filed as a calico NetworkPolicy flake, and that reading is refuted here.** Q809 was opened on 2026-08-11 asserting that the five calico-gated enforcement negatives intermittently see traffic the policy should drop; none of them failed in any of the three runs, and the row's remaining half (the enforcer dump reading `app=kindnet` only, so the Calico lane captured nothing) was real and shipped in #1417.
+The refuted row is in [the retired-flake ledger](../development/flake-watch-retired.md) rather than the backlog, because #1441 reused its ID for the defect below instead of closing it ([why that is now a rule](../development/maintaining-backlog.md#repurposing-an-id-is-a-closure-with-every-step-skipped)).
 Each carried exactly one AGC line about the probe pod, at `Debug`:
 
 ```

@@ -90,7 +90,7 @@ var _ = Describe("Manager NetworkPolicy", Ordered, func() {
 	// the dump skips the two it never created (Q666).
 	// The enforcer state rides along for the same reason as in the provisioning
 	// container: the two ManagerMetricsNP specs assert a scrape is dropped, so a
-	// spurious allow needs the enforcer read alongside the policy (Q747/Q809).
+	// spurious allow needs the enforcer read alongside the policy (Q747, #1417).
 	AfterEach(func() {
 		if CurrentSpecReport().Failed() {
 			utils.DumpProvisioningDiagnostics(gmcNamespace, managerDeployment,
