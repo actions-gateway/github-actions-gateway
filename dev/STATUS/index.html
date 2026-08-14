@@ -3029,7 +3029,7 @@
 <td><code>ci</code> <code>debt</code> <code>retro</code></td>
 <td>🔲</td>
 <td>S</td>
-<td>Measured 2026-08-14 on #1505: <code>prOverlapWarning</code> intersects path sets only, so PRs whose hunks sit hundreds of lines apart in one file deny a create. Line ranges need a per-PR diff fetch.</td>
+<td>Two sightings: #1505, then #1527, where 2 of 3 named PRs edited disjoint sections of the same two docs. <code>prOverlapWarning</code> intersects path sets only, so hunks hundreds of lines apart deny a create. Line ranges need a per-PR diff fetch.</td>
 </tr>
 <tr>
 <td><a id="Q814"></a>Q814</td>
@@ -3076,8 +3076,8 @@
 <td><a href="../operations/release/#writing-the-curated-notes">Enumerate Kubernetes Event reasons mechanically for the release notes</a></td>
 <td><code>debt</code> <code>ci</code> <code>retro</code></td>
 <td>🔲</td>
-<td>M</td>
-<td>No <code>api-surface-since.sh</code> counterpart for Event reasons. A v1.4.0 regex matching only <code>Event(obj, type, reason)</code> missed the <code>recordEvent(type, reason, action)</code> shape and returned a false no-change, caught by a positive control. Needs a self-test.</td>
+<td>S</td>
+<td>Q850 built the enumeration and its self-test: <code>reasontiers</code> reads each reason's index off the callee's declaration, which is what the v1.4.0 regex got wrong. Remaining work is wiring it into the <code>api-surface-since.sh</code> pre-flight.</td>
 </tr>
 <tr>
 <td><a id="Q846"></a>Q846</td>

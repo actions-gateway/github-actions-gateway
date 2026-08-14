@@ -3204,6 +3204,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#extracting-a-call-argument-by-name-is-wrong-wherever-two-functions-share-one" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Extracting a call argument by name is wrong wherever two functions share one
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#a-credential-gated-spec-that-skips-is-not-defending-anything" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -5174,6 +5185,22 @@ Nothing distinguished that from a fix that worked.</p>
 <li><strong>When the harness cannot be made to work, verify the layer you actually changed.</strong> The hook applies each pattern as <code>re.search(pattern, command)</code>; asserting that step directly is honest and sufficient, as long as you say which layer the evidence covers — and then confirm end-to-end in the smallest possible way (re-running the exact command that had been denied).</li>
 </ul>
 <p><code>scripts/agent/foreground-guard-patterns-test.sh</code> is the durable form of that probe, controls included.</p>
+<h3 id="extracting-a-call-argument-by-name-is-wrong-wherever-two-functions-share-one">Extracting a call argument by name is wrong wherever two functions share one<a class="headerlink" href="#extracting-a-call-argument-by-name-is-wrong-wherever-two-functions-share-one" title="Permanent link">&para;</a></h3>
+<p>A scan that pulls an argument out of a call has to decide which argument, and the cheap way is a table keyed on the callee's name.
+That is correct exactly until two functions share a name and hold the argument at different indexes, which in a codebase with wrappers is the normal case rather than the exception.
+The failure is silent in both directions at once: the scan reports a neighbouring argument as a hit, and reports nothing for the calls whose index it guessed past.</p>
+<p>Three instances in the 1.5 cycle, all on the same argument:</p>
+<ul>
+<li>The v1.4.0 release pre-flight matched <code>Event(obj, type, reason)</code> only, missed the <code>recordEvent(type, reason, action)</code> shape, and returned a false no-change (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/docs/STATUS.md">Q780</a>).</li>
+<li>The 2026-08-14 pre-flight keyed on <code>recordEvent(</code> and missed the two additions recording through <code>RecordEvent(</code>.</li>
+<li><code>reasontiers</code>' first version keyed the reason's index on the function name, read the scale-set listener's <em>action</em> string <code>"ProvisionWorker"</code> as a reason, and missed four reasons entirely.
+  The AGC has two methods named <code>recordEvent</code> and two named <code>Event</code>, with the reason at a different index in each.</li>
+</ul>
+<p><strong>Read the index off the callee's own declaration.</strong> Parse the function and interface declarations, find the parameter by name, and use its position; state by hand only the signatures declared outside the repo.
+Then fail loudly on a call you cannot place, so a new wrapper cannot be added silently: <code>reasontiers</code> treats a call carrying <code>corev1.EventTypeWarning</code>/<code>EventTypeNormal</code> that matches no signature as a finding.
+Two further traps sit under that: a variadic declaration's arity counts the trailing parameter, so a call omitting the varargs matches nothing unless you subtract it; and a parameter of the enclosing function is a <em>forwarder</em>, not the site that decides the value.</p>
+<p>None of the three was caught by the scan reporting a problem.
+Each was caught by comparing its output against values already documented elsewhere, which is <a href="#a-throwaway-probe-needs-a-positive-control-before-its-silence-means-anything">the positive control</a> applied to an inventory: pick a handful the docs already name, and require the scan to find them before believing what it says is absent.</p>
 <h3 id="a-credential-gated-spec-that-skips-is-not-defending-anything">A credential-gated spec that skips is not defending anything<a class="headerlink" href="#a-credential-gated-spec-that-skips-is-not-defending-anything" title="Permanent link">&para;</a></h3>
 <p>A spec that <code>Skip</code>s for want of credentials reports the same colour as one that ran and passed.
 Nothing in CI tells the two apart, so the invariant it asserts stops being enforced the moment the credentials are absent, which for the live-GitHub tier is every PR.</p>
