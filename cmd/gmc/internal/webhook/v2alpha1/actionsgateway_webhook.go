@@ -7,6 +7,7 @@ import (
 
 	agcv2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
 	"github.com/actions-gateway/github-actions-gateway/gmc/internal/allowlist"
+	"github.com/actions-gateway/github-actions-gateway/gmc/internal/scalesetscope"
 	"github.com/actions-gateway/github-actions-gateway/gmc/internal/webhook/validation"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -113,23 +114,23 @@ func (v *ActionsGatewayCustomValidator) validateScaleSetLabelsVsScope(ctx contex
 	if v.reader == nil {
 		return nil
 	}
-	scope := gitHubScope(gw.Spec.GitHubURL)
+	scope := scalesetscope.GitHubScope(gw.Spec.GitHubURL)
 	if scope == "" {
 		return nil
 	}
-	inv, err := scaleSetInventoryOf(ctx, v.reader, &pendingGateway{
-		key:   client.ObjectKey{Namespace: gw.Namespace, Name: gw.Name},
-		scope: scope,
+	inv, err := scalesetscope.Of(ctx, v.reader, &scalesetscope.PendingGateway{
+		Key:   client.ObjectKey{Namespace: gw.Namespace, Name: gw.Name},
+		Scope: scope,
 	})
 	if err != nil {
 		return fmt.Errorf("cannot verify ScaleSet runnerLabel uniqueness for GitHub scope %q: %w", scope, err)
 	}
-	for i, mine := range inv.claims {
-		if mine.namespace != gw.Namespace || mine.gatewayRef != gw.Name {
+	for i, mine := range inv.Claims {
+		if mine.Namespace != gw.Namespace || mine.GatewayRef != gw.Name {
 			continue
 		}
-		for j, other := range inv.claims {
-			if i == j || !mine.collidesWith(other) {
+		for j, other := range inv.Claims {
+			if i == j || !mine.CollidesWith(other) {
 				continue
 			}
 			// The holder is named only when it sits in this gateway's own namespace;
@@ -140,7 +141,7 @@ func (v *ActionsGatewayCustomValidator) validateScaleSetLabelsVsScope(ctx contex
 					"scope; a ScaleSet set's FIRST runnerLabel is its scale-set name at GitHub, so the two "+
 					"would drive one scale set, each acquiring the other's jobs. Give RunnerSet %q a distinct "+
 					"first runnerLabel, or bind this gateway to a different GitHub org/enterprise/repo",
-				scope, mine.name, mine.label, mine.name)
+				scope, mine.Name, mine.Label, mine.Name)
 		}
 	}
 	return nil

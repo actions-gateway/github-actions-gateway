@@ -23,6 +23,7 @@ const (
 	ConditionDegraded                    = apiconditions.ConditionDegraded
 	ConditionEgressUnattributed          = apiconditions.ConditionEgressUnattributed
 	ConditionAGCAutoscalingUnavailable   = apiconditions.ConditionAGCAutoscalingUnavailable
+	ConditionScaleSetNameCollision       = apiconditions.ConditionScaleSetNameCollision
 	ConditionPossibleReapBlockingSidecar = apiconditions.ConditionPossibleReapBlockingSidecar
 	ConditionWorkerQuotaPressure         = apiconditions.ConditionWorkerQuotaPressure
 	ConditionWorkerQuotaExceeded         = apiconditions.ConditionWorkerQuotaExceeded
@@ -116,6 +117,8 @@ const (
 	ReasonRunnerNameConflict      = apiconditions.ReasonRunnerNameConflict
 	ReasonWorkerCeilingReached    = apiconditions.ReasonWorkerCeilingReached
 	ReasonJobsProvisioning        = apiconditions.ReasonJobsProvisioning
+	ReasonScaleSetNameShared      = apiconditions.ReasonScaleSetNameShared
+	ReasonScaleSetNamesUnique     = apiconditions.ReasonScaleSetNamesUnique
 
 	ReasonWorkerImageBelowMinimum   = apiconditions.ReasonWorkerImageBelowMinimum
 	ReasonWorkerImageCurrent        = apiconditions.ReasonWorkerImageCurrent

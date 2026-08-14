@@ -220,6 +220,7 @@ def render():
         L.append(f'actions_gateway_proxy_quota_pressure{{namespace="{ns}",name="{name}"}} 0')
         L.append(f'actions_gateway_proxy_quota_exceeded{{namespace="{ns}",name="{name}"}} 0')
         L.append(f'actions_gateway_github_egress_incomplete{{namespace="{ns}",name="{name}"}} 0')
+        L.append(f'actions_gateway_scale_set_name_collision{{namespace="{ns}",name="{name}"}} 0')
 
     # controller-runtime built-ins: healthy reconcile throughput, no errors.
     for c in CONTROLLERS:

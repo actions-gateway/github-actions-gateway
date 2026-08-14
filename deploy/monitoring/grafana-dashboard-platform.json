@@ -236,7 +236,7 @@
       "datasource": { "type": "prometheus", "uid": "${datasource}" },
       "gridPos": { "h": 8, "w": 24, "x": 0, "y": 16 },
       "id": 21,
-      "description": "GMC-exported condition gauges (1=firing) per gateway: RunnerGroupsDegraded, EgressRulesStale, ProxyQuotaPressure, ProxyQuotaExceeded, GitHubEgressIncomplete (v2 EgressProxy only).",
+      "description": "GMC-exported condition gauges (1=firing) per gateway: RunnerGroupsDegraded, EgressRulesStale, ProxyQuotaPressure, ProxyQuotaExceeded, GitHubEgressIncomplete (v2 EgressProxy only), ScaleSetNameCollision (v2 only).",
       "fieldConfig": {
         "defaults": {
           "color": { "mode": "thresholds" },
@@ -278,6 +278,12 @@
           "expr": "actions_gateway_github_egress_incomplete",
           "legendFormat": "github egress incomplete {{namespace}}/{{name}}",
           "refId": "E"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "expr": "actions_gateway_scale_set_name_collision",
+          "legendFormat": "scale-set name collision {{namespace}}/{{name}}",
+          "refId": "F"
         }
       ]
     },

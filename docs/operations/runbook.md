@@ -185,6 +185,13 @@ See [ActionsGateway Reports EgressRulesStale](troubleshooting.md#actionsgateway-
 The fix is yours to make — the appliance's ranges are knowable only to you, so this will not self-heal: supply them in `spec.destinationCIDRs` (a platform admin must allowlist them first) or switch the pool to an FQDN egress mode.
 See [A GHES Tenant's Traffic Never Reaches the Appliance](troubleshooting.md#a-ghes-tenants-traffic-never-reaches-the-appliance).
 
+### ActionsGatewayScaleSetNameCollision
+
+**Page.** Two tenants are driving one scale set at GitHub right now, and each is acquiring the other's jobs: another organization's workflow content runs in the wrong namespace, against the wrong quota, egressing from the wrong attributed IPs.
+Admission rejects every new such pair, so this one predates the guard (an upgrade from before `v1.5.0`) or was applied while the validating webhook was uninstalled.
+It will not self-heal, and the condition names only the alerting gateway's own runner sets: the other holder is in the GMC log, because gateway status is tenant-readable.
+See [`ActionsGateway` Reports `ScaleSetNameCollision`](troubleshooting.md#actionsgateway-reports-scalesetnamecollision).
+
 ### ActionsGatewayAgentRecycleErrors
 
 **Ticket.** Single-use JIT agent re-registration is failing; sustained growth shrinks listener capacity and decays tenant throughput job by job.

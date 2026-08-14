@@ -6,6 +6,7 @@ import (
 
 	agcv2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
 	"github.com/actions-gateway/github-actions-gateway/gmc/internal/allowlist"
+	"github.com/actions-gateway/github-actions-gateway/gmc/internal/scalesetscope"
 	"github.com/actions-gateway/github-actions-gateway/gmc/internal/webhook/validation"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -160,26 +161,26 @@ func (v *RunnerSetCustomValidator) validateScaleSetLabelUniqueness(ctx context.C
 		// and production paths always wire the uncached API reader.
 		return nil
 	}
-	inv, err := scaleSetInventoryOf(ctx, v.reader, nil)
+	inv, err := scalesetscope.Of(ctx, v.reader, nil)
 	if err != nil {
 		return fmt.Errorf(
 			"cannot verify ScaleSet runnerLabel uniqueness for %q in namespace %q: %w",
 			rs.Name, rs.Namespace, err)
 	}
-	self := scaleSetClaim{
-		namespace:  rs.Namespace,
-		name:       rs.Name,
-		gatewayRef: rs.Spec.GatewayRef.Name,
-		label:      rs.Spec.RunnerLabels[0],
-		scope:      inv.scopeOf(rs.Namespace, rs.Spec.GatewayRef.Name),
+	self := scalesetscope.Claim{
+		Namespace:  rs.Namespace,
+		Name:       rs.Name,
+		GatewayRef: rs.Spec.GatewayRef.Name,
+		Label:      rs.Spec.RunnerLabels[0],
+		Scope:      inv.ScopeOf(rs.Namespace, rs.Spec.GatewayRef.Name),
 	}
-	for _, other := range inv.claims {
+	for _, other := range inv.Claims {
 		// On CREATE the new object is not yet persisted; on UPDATE it appears in the
 		// inventory. Either way, skip the object being admitted.
-		if other.namespace == self.namespace && other.name == self.name {
+		if other.Namespace == self.Namespace && other.Name == self.Name {
 			continue
 		}
-		if self.collidesWith(other) {
+		if self.CollidesWith(other) {
 			return scaleSetConflictError(self, other)
 		}
 	}

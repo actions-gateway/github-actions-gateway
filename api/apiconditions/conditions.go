@@ -59,6 +59,20 @@ const (
 	// what keeps an unsatisfiable opt-in from failing silently, in place of the
 	// alternatives — wedging the gateway, or hot-looping on an apply that cannot succeed.
 	ConditionAGCAutoscalingUnavailable = "AGCAutoscalingUnavailable"
+	// ConditionScaleSetNameCollision is an advisory condition (abnormal-is-True) set
+	// True on an ActionsGateway when a ScaleSet RunnerSet bound to it claims a
+	// scale-set name — its first runnerLabel — that another ScaleSet RunnerSet already
+	// claims in the same GitHub scope (Q849). Both AGCs then drive one scale set at
+	// GitHub and each acquires the other tenant's jobs (§5.2). Admission rejects a
+	// write that would create the pair (Q791), so this reports the pair admission never
+	// saw: one that predates the guard, or was applied while the webhook was not
+	// installed. It does NOT gate Ready, and provisioning is unaffected — GAG cannot
+	// pick which tenant loses the name, and refusing to run the AGC would take down
+	// both tenants rather than the one that is misconfigured. The message names a
+	// conflicting set only when it sits in this gateway's own namespace; a cross-tenant
+	// holder goes to the GMC log, the same non-enumeration rule the admission error
+	// follows.
+	ConditionScaleSetNameCollision = "ScaleSetNameCollision"
 	// ConditionPossibleReapBlockingSidecar is an advisory condition (abnormal-is-True)
 	// set True on a RunnerSet whose resolved worker template carries a regular
 	// (non-native) sidecar container that may keep the worker pod alive after the
@@ -255,6 +269,13 @@ const (
 	// ReasonAGCAutoscalingDisabled is the AGCAutoscalingUnavailable=False reason when the
 	// gateway did not opt in: spec.agcResources alone sizes the AGC, which is the default.
 	ReasonAGCAutoscalingDisabled = "AGCAutoscalingDisabled"
+	// ReasonScaleSetNameShared is the ScaleSetNameCollision=True reason: a ScaleSet
+	// RunnerSet bound to this gateway shares its first runnerLabel — the scale-set name
+	// at GitHub — with another ScaleSet RunnerSet in the same GitHub scope (Q849).
+	ReasonScaleSetNameShared = "ScaleSetNameShared"
+	// ReasonScaleSetNamesUnique is the ScaleSetNameCollision=False reason: every
+	// ScaleSet RunnerSet bound to this gateway holds its scale-set name alone.
+	ReasonScaleSetNamesUnique = "ScaleSetNamesUnique"
 	// ReasonReapBlockingSidecar is the PossibleReapBlockingSidecar=True reason: the
 	// resolved template has one or more regular, unacknowledged sidecar containers.
 	ReasonReapBlockingSidecar = "ReapBlockingSidecar"
