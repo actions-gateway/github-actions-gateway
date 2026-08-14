@@ -2888,6 +2888,14 @@
 <td><code>main.go:188</code> probes the hook's installed worktree by design, assuming it is the session's. <code>EnterWorktree</code> breaks that: the session keeps the launch checkout's hook, and two PRs were refused for overlaps neither branch had. A cwd fix reverses it.</td>
 </tr>
 <tr>
+<td><a id="Q820"></a>Q820</td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/docs/git-merge-plan-index-test.sh"><code>git-merge-plan-index-test</code> dies on a temp-file error under the parallel scripts-test runner</a></td>
+<td><code>flake</code> <code>ci</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>Two sightings, one signature: <code>unable to create temporary file</code>, the repo gone mid-merge. 2026-08-12 local under <code>make check</code>; 2026-08-14 in CI on an ephemeral runner (#1511), which rules out the host temp pressure the first sighting suspected.</td>
+</tr>
+<tr>
 <td><a id="Q408"></a>Q408</td>
 <td><a href="../plan/q408-untrusted-pr-egress/">Untrusted-PR egress posture for Kata workers</a></td>
 <td><code>security</code></td>
@@ -3022,6 +3030,14 @@
 <td>🔲</td>
 <td>S</td>
 <td>#1417 shipped on "3 of 5 calico enforcement negatives failed"; #1441 refuted it next day, yet 3 of the 6 comments #1417 wrote still asserted it 2 days later (swept in #1510). Closing a row sweeps its own citations, not the change's.</td>
+</tr>
+<tr>
+<td><a id="Q862"></a>Q862</td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/devtools/agent/pipedgate/repostate.go">The PR-overlap check intersects file paths, so disjoint hunks in one file read as overlap</a></td>
+<td><code>ci</code> <code>debt</code> <code>retro</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>Measured 2026-08-14 on #1505: <code>prOverlapWarning</code> intersects path sets only, so PRs whose hunks sit hundreds of lines apart in one file deny a create. Line ranges need a per-PR diff fetch.</td>
 </tr>
 <tr>
 <td><a id="Q814"></a>Q814</td>
@@ -3950,13 +3966,6 @@
 <td><code>flake</code> <code>ci</code></td>
 <td>S</td>
 <td><strong>Event:</strong> any <code>download-verified.sh</code> step fails on <code>main</code> after the fix. The schedule is the sibling's (5 retries, 5 s doubling to 60 s, jittered, 135-202 s), so a failure means the denial outlasted ~3 min, not 10 s. → top of Queue, escalated.</td>
-</tr>
-<tr>
-<td><a id="Q820"></a>Q820</td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/docs/git-merge-plan-index-test.sh"><code>git-merge-plan-index-test</code> dies on a temp-file error under the parallel scripts-test runner</a></td>
-<td><code>flake</code> <code>ci</code></td>
-<td>S</td>
-<td><strong>Event:</strong> it fails on <code>main</code>. First sighting 2026-08-12 under <code>make check</code>: git printed <code>unable to create temporary file</code>, rc=128; it passed standalone right after. Sibling sessions run <code>make check</code> concurrently here: suspect host temp pressure.</td>
 </tr>
 <tr>
 <td><a id="Q803"></a>Q803</td>
