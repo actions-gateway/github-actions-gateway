@@ -2656,6 +2656,34 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#pre-flight-the-api-surface-this-tag-publishes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Pre-flight: the API surface this tag publishes
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Pre-flight: the API surface this tag publishes">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#two-that-were-decisions-rather-than-ticks" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Two that were decisions rather than ticks
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#candidates-not-yet-accepted" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2714,7 +2742,8 @@
 Four gating Queue rows so far, labelled <code>1.5-gate</code>: Q712, Q713, and Q726, admitted 2026-08-09 from the candidate list below, plus Q715, admitted the same day off an external date.
 All four shipped 2026-08-11, and the marketing reconciliation closed 2026-08-12 (Q801, Q821).
 Two more were admitted afterwards, both on the <a href="#the-parity-axis-what-closed-and-what-backs-it">parity axis</a>: Q776 on 2026-08-13, to back the parity claim the other four earned, and Q844 on 2026-08-14, a classic-only capability the badge set never recorded and the marketing surface already claims for both tiers.
-Q844 shipped 2026-08-14 and Q776 has now shipped too, so every gating row is closed and only the release-candidate dogfood validation remains.</p>
+Q844 shipped 2026-08-14 and Q776 has now shipped too, so every gating row is closed.
+The <a href="#pre-flight-the-api-surface-this-tag-publishes">API surface review</a> is recorded below, which clears the last item binding at the release candidate; the dogfood validation binds before the stable tag rather than before the RC.</p>
 </blockquote>
 <h2 id="why-these-gate-a-release-rather-than-riding-along">Why these gate a release rather than riding along<a class="headerlink" href="#why-these-gate-a-release-rather-than-riding-along" title="Permanent link">&para;</a></h2>
 <p>Q712 and Q713 came out of the 2026-08-06 competitive analysis, and both were defects in capabilities the project already claims, not new features.
@@ -2821,6 +2850,59 @@ Preemption and drain recovery were listed here until 2026-08-14, on the grounds 
 Q844 is the case in point: the claim was already published, on <code>features.md</code> and in the troubleshooting matrix, before anyone checked whether the shipped tier honoured it.</p>
 <p>Q776 has landed, so the notes may now say parity <strong>on the metric surface</strong>, and should say it in those words.
 The ledger is the evidence and the gate is what keeps it true; a capability with no series behind it is still covered by a manual walk, so an unqualified "full parity" would overstate what is actually enforced.</p>
+<h2 id="pre-flight-the-api-surface-this-tag-publishes">Pre-flight: the API surface this tag publishes<a class="headerlink" href="#pre-flight-the-api-surface-this-tag-publishes" title="Permanent link">&para;</a></h2>
+<p>Recorded 2026-08-14 from <code>scripts/release/api-surface-since.sh</code> over <code>v1.4.0..feabacdc4</code>, per <a href="../../operations/release/#1-pre-flight">release.md § Pre-flight</a>. <strong>Verdict: ship as-is.</strong> Two wire fields, one condition type and five condition reasons are published for the first time; no enum constraint, no default and no label or annotation key changed, and nothing is wire-breaking.</p>
+<p>The surface stopped moving before the review: Q844 landed controller code on 2026-08-14 and added none of it.</p>
+<table>
+<thead>
+<tr>
+<th>Addition</th>
+<th>Carried on</th>
+<th>Why the shape is right</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>runnerGroup</code> (Q712)</td>
+<td><code>RunnerSet</code></td>
+<td><code>+optional</code> with <code>omitempty</code> and <code>MinLength=1</code>, so an explicit <code>""</code> is rejected and unset cannot diverge from empty; no pointer and no CRD default needed. Length bounds sit on the field rather than in a spec-level rule.</td>
+</tr>
+<tr>
+<td><code>defaultRunnerGroup</code> (Q712)</td>
+<td><code>ActionsGateway</code></td>
+<td>Inherited only by RunnerSets that set no <code>runnerGroup</code>, so the narrower field always wins, matching <code>templateRef</code>/<code>proxyRef</code>.</td>
+</tr>
+<tr>
+<td><code>RunnerLabelsIncomplete</code> (Q726)</td>
+<td><code>RunnerSet</code> condition</td>
+<td>Abnormal-true, like the existing <code>RunnerVersionTooOld</code>, and deliberately outside the gateway's <code>RunnerSetsDegraded</code> rollup: a declared label missing at GitHub is a configuration mismatch, not an outage.</td>
+</tr>
+<tr>
+<td><code>LabelsNotRegistered</code> / <code>LabelsRegistered</code> (Q726)</td>
+<td><code>RunnerLabelsIncomplete</code></td>
+<td>The True and False reasons of one condition, named for the state each reports.</td>
+</tr>
+<tr>
+<td><code>RunnerGroupNotFound</code> (Q712)</td>
+<td><code>Ready</code></td>
+<td>Fail-closed is the design, not an error path: falling back to the default group would widen the forge-side boundary at the moment an operator narrows it.</td>
+</tr>
+<tr>
+<td><code>WorkerImageBelowMinimum</code> / <code>WorkerImageCurrent</code> / <code>WorkerImageVersionUnknown</code> (Q715)</td>
+<td><code>RunnerVersionTooOld</code></td>
+<td>Three states rather than two. A digest-only or tenant-tagged image declares no version, and that reports <code>Unknown</code> rather than <code>False</code> because a custom image is where a stale runner hides.</td>
+</tr>
+</tbody>
+</table>
+<h3 id="two-that-were-decisions-rather-than-ticks">Two that were decisions rather than ticks<a class="headerlink" href="#two-that-were-decisions-rather-than-ticks" title="Permanent link">&para;</a></h3>
+<p><strong>The <code>runnerGroup</code> name collides, and keeps the name.</strong> It shares a word with the deprecated <code>v1alpha1</code> <code>RunnerGroup</code> CR, which is a different concept, and the field's godoc says so in its first sentence.
+Two things settle it: GitHub's own term is "runner group" and ARC's <code>gha-runner-scale-set</code> chart already exposes <code>runnerGroup</code> for exactly this, so an operator migrating from ARC meets the name they expect; and the colliding CR comes out in the <code>v2.0.0</code> bundle (<a href="../../STATUS/#Q264">Q264</a>), so the ambiguity is time-boxed. <code>githubRunnerGroup</code> would trade ecosystem familiarity for a collision that resolves itself.</p>
+<p><strong>The default is the wide group, and that is accepted rather than clean.</strong> Unset inherits the gateway's default and then GitHub's own default group, which typically admits the whole organization, so the default is the less isolated value.
+No narrower default exists to choose: GAG does not create runner groups.
+The safety therefore sits where GAG does decide the outcome — an unresolvable name fails closed rather than falling back, and an undeclared group leaves an existing scale set where it is, so widening is always explicit.</p>
+<p>One bound was not verified and does not need to be: <code>MaxLength=255</code> was not checked against GitHub's real limit for a runner group name.
+Loosening a length bound later is non-breaking and tightening one is, so a generous bound is the safe error.</p>
+<p>Nothing was deferred, so this review adds no gate row.</p>
 <h2 id="candidates-not-yet-accepted">Candidates not yet accepted<a class="headerlink" href="#candidates-not-yet-accepted" title="Permanent link">&para;</a></h2>
 <p>Held here so the reasoning is not lost, not committed to the release:</p>
 <ul>
