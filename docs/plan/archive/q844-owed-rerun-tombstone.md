@@ -1,8 +1,8 @@
 # Q844: an owed-rerun tombstone that survives an AGC restart
 
-**Status:** in progress 2026-08-13.
+**Status:** done 2026-08-13.
 Queue item: Q844.
-Origin: [04-operational-flows.md § Why preemption *deletes* rather than *evicts*](../design/04-operational-flows.md#why-preemption-deletes-rather-than-evicts-and-what-that-costs-us).
+Origin: [04-operational-flows.md § Why preemption *deletes* rather than *evicts*](../../design/04-operational-flows.md#why-preemption-deletes-rather-than-evicts-and-what-that-costs-us).
 
 ## The gap
 
@@ -35,7 +35,7 @@ GitHub still holds the run and still accepts `rerun-failed-jobs`; nothing that r
 
 A finalizer on the worker pod would make the evidence durable, since the object would persist in `Terminating` until the AGC cleared it.
 It is deliberately **not** the mechanism.
-A finalizer on a worker pod is exactly what makes `kubectl drain` hang, and drain is one of the causes this recovers; the repo's own posture on finalizers over objects other controllers delete is in [appendix-h § H.8](../design/appendix-h-v2-api-decomposition.md#h8-ownership-gc-and-deletion), which cites stuck-`Terminating` as the recurring failure.
+A finalizer on a worker pod is exactly what makes `kubectl drain` hang, and drain is one of the causes this recovers; the repo's own posture on finalizers over objects other controllers delete is in [appendix-h § H.8](../../design/appendix-h-v2-api-decomposition.md#h8-ownership-gc-and-deletion), which cites stuck-`Terminating` as the recurring failure.
 An AGC that stays down would leave one un-collectable worker pod per interrupted job.
 
 ## The design

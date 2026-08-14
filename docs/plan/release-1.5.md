@@ -4,6 +4,7 @@
 > Four gating Queue rows so far, labelled `1.5-gate`: Q712, Q713, and Q726, admitted 2026-08-09 from the candidate list below, plus Q715, admitted the same day off an external date.
 > All four shipped 2026-08-11, and the marketing reconciliation closed 2026-08-12 (Q801, Q821).
 > Two more were admitted afterwards, both on the [parity axis](#the-parity-axis-what-closed-and-what-backs-it): Q776 on 2026-08-13, to back the parity claim the other four earned, and Q844 on 2026-08-14, a classic-only capability the badge set never recorded and the marketing surface already claims for both tiers.
+> Q844 shipped 2026-08-14, leaving Q776 as the only gating row still open.
 
 ## Why these gate a release rather than riding along
 
@@ -97,9 +98,9 @@ Recorded here because the release notes need the through-line, and because a fut
 Classic to ScaleSet acquisition tier: **closed on the tracked inventory, and the inventory turned out to be incomplete.** [features.md](../features.md) marks any capability that does not reach the ScaleSet tier with a `partly classic-only` badge, and no capability carries one; the last two came off with Q713, on Alerting and SLOs and on Grafana dashboards.
 [v2-ga.md § Capability parity](v2-ga.md#capability-parity-is-a-precondition-of-the-removal), which exists because removing classic at `v2.0.0` must not delete a capability along with it, reads Both tiers on all five rows.
 
-Neither surface caught [Q844](../STATUS.md#Q844), found 2026-08-14 by asking whether the axis was really shut.
-Restart-safe disruption recovery is classic-only: the classic provisioning goroutine reads the disruption markers off the resolving event it is already watching, while a scale-set worker is readable only while it terminates, so an AGC down for that window never issues the re-run. `features.md` claims automatic re-run for eviction, preemption, drain and a bare `kubectl delete pod` with **no tier badge**, and the troubleshooting matrix says outright that every firing case "works on **both acquisition tiers**".
-It is admitted as a `1.5-gate` row on the same test Q712 and Q713 met: the claim is published and the shipped tier does not honour it.
+Neither surface caught Q844, found 2026-08-14 by asking whether the axis was really shut.
+Restart-safe disruption recovery was classic-only: the classic provisioning goroutine reads the disruption markers off the resolving event it is already watching, while a scale-set worker is readable only while it terminates, so an AGC down for that window never issued the re-run. `features.md` claimed automatic re-run for eviction, preemption, drain and a bare `kubectl delete pod` with **no tier badge**, and the troubleshooting matrix said outright that every firing case "works on **both acquisition tiers**".
+It was admitted as a `1.5-gate` row on the same test Q712 and Q713 met — the claim is published and the shipped tier does not honour it — and shipped the same day: the ScaleSet tier now persists the run behind every worker it builds, and re-runs any whose pod is gone when it comes back.
 
 That the badge set and the parity table both read clean while this was open is the sharpest available argument for Q776 below, and it is why the tier result is stated here as *measured against the inventory* rather than as parity full stop.
 
@@ -119,15 +120,14 @@ It cannot see the case that actually recurs: a capability that is classic-only a
 It reconciles the `actions_gateway_*` names across both sides against the absent-by-design list in [v2-ga.md](v2-ga.md#capability-parity-is-a-precondition-of-the-removal), which both re-establishes the measurement as current and leaves behind the gate that keeps it so.
 
 Q844 found the fourth instance a day later, and by hand rather than by any gate, which is the argument for Q776 restated as evidence.
-The two together are the remaining parity work: Q844 closes the gap, Q776 makes the next one visible without someone thinking to ask.
-Landing both is what lets the release notes say parity rather than name four ports.
+It has since closed the gap it found; Q776 is what makes the next one visible without someone thinking to ask, and landing it is what lets the release notes say parity rather than name four ports.
 
 The v1 to v2 axis gets no equivalent row, and that is a decision rather than an omission. `cmd/agc/api/v1alpha1/conditions_parity_test.go` already pins the listener vocabulary across all three packages by value (Q309), and new drift can only come from someone adding to `v1alpha1`, which is frozen and comes out in the `v2.0.0` bundle ([Q264](../STATUS.md#Q264)).
 
 ### Differences that survive parity, and should
 
 Not gaps, and not for the next audit to re-litigate.
-Preemption and drain recovery were listed here until 2026-08-14, on the grounds that only restart-safety differed; Q844 moved them out, because the difference is one the published claim does not make and the classic tier does not have:
+Preemption and drain recovery were listed here until 2026-08-14, on the grounds that only restart-safety differed; Q844 moved them out, because the difference was one the published claim does not make and the classic tier does not have, and then closed it:
 
 - GitHub's session rejection for a too-old runner version stays classic-only, because the scale-set protocol carries no runner version at session creation.
   Q715 gives the ScaleSet tier a reconcile-time warning instead, so both tiers carry a signal and only classic has the forge-side rejection.
@@ -137,7 +137,7 @@ Preemption and drain recovery were listed here until 2026-08-14, on the grounds 
 
 ### What the notes should not claim yet
 
-Until Q776 and Q844 land, the notes name the four ports rather than asserting parity.
+Until Q776 lands, the notes name the ports rather than asserting parity.
 A published parity claim resting on a walk with a four-times-stale record is the same failure Q801 spent this release fixing, one surface over.
 Q844 is the case in point: the claim was already published, on `features.md` and in the troubleshooting matrix, before anyone checked whether the shipped tier honoured it.
 

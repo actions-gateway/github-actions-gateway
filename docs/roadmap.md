@@ -23,10 +23,6 @@ Every item here blocks a release tag, and nothing else appears in this section: 
 The pill beside each title names the release it blocks, read from the backlog rather than typed here, so it cannot outlive the commitment.
 
 
-- **[Disruption re-run that survives a controller restart](operations/troubleshooting.md#which-disruptions-auto-re-run-a-job-and-which-never-do)** <!-- q:Q844 --> A disrupted job re-runs itself on both acquisition tiers.
-  On the scale-set tier the evidence lives only while the worker terminates, so a controller restart in that window drops the re-run.
-  A durable record of the runs it owes closes it.
-
 - **[Capability parity across both acquisition tiers, gated](plan/v2-ga.md#capability-parity-is-a-precondition-of-the-removal)** <!-- q:Q776 --> Every capability reaches the ScaleSet tier as well as classic, which is what makes retiring classic at `v2.0.0` safe.
   That check was a one-time walk, and three capabilities have arrived classic-only since.
   Reconciling both sides mechanically is what stops the next one going unnoticed.
