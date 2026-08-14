@@ -4334,7 +4334,9 @@ It exists because an edit-based conflict resolution can miss a marker sitting ju
 Wired into <code>make check</code>; CI runs the same target from its own lightweight workflow, <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/conflict-markers.yml"><code>.github/workflows/conflict-markers.yml</code></a>, on <strong>every</strong> PR with no path filter — a marker can be left in any file type.
 Only exact seven-character marker lines are flagged, so Markdown setext underlines of any other length stay legal, as do mid-line mentions like the backticked examples in this paragraph; the vendored trees are excluded.
 The pattern logic and the file selection are asserted by <code>scripts/ci/check-conflict-markers-test.sh</code> under <code>make scripts-test</code>.
-When resolving conflicts by hand, <code>git diff --check</code> gives the same signal per-file before you stage.</p>
+When resolving conflicts by hand, <code>git diff --check</code> gives the same signal per-file before you stage.
+That signal is narrow: it proves the resolution is well-formed, not that it kept everything both sides had.
+For a file merged by key, <a href="../maintaining-backlog/#a-hand-resolved-conflict-drops-rows-the-markers-never-named">reconcile the record set too</a>.</p>
 <h3 id="the-v2-api-sync-gate">The v2 API sync gate<a class="headerlink" href="#the-v2-api-sync-gate" title="Permanent link">&para;</a></h3>
 <p><code>make v2-api-sync-check</code> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/go/check-v2-api-sync.sh"><code>scripts/go/check-v2-api-sync.sh</code></a>) holds <code>api/v2alpha1</code> and <code>api/v2beta1</code> identical wherever they share a file.
 Two served versions of one API must duplicate their <em>versioned types</em> — Kubernetes requires it — but the shared spec fragments beside them are identical by contract, and a one-sided edit breaks the storage/hub conversion with nothing to catch it.</p>

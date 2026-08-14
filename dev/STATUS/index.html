@@ -2920,14 +2920,6 @@
 <td><code>externallyDeletedBeforeTerminal</code> cannot see a cancel: the runbook's delete supplies the mark, and a <code>cancelled</code> conclusion accepts <code>rerun-failed-jobs</code> (measured 2026-08-05). Both tiers take it.</td>
 </tr>
 <tr>
-<td><a id="Q840"></a>Q840</td>
-<td><a href="../development/maintaining-backlog/#the-merge-driver-resolve-queue-rows-by-id-not-by-line-position">A hand-resolved keyed merge can drop neighbouring rows with no marker left behind</a></td>
-<td><code>docs</code> <code>debt</code> <code>retro</code></td>
-<td>🔲</td>
-<td>S</td>
-<td>Measured on #1471: the driver refused a keyed Q738 row, and the resolution deleted Q823/Q822 and dropped Q836/Q837 while <code>git rebase</code> reported success and no marker remained. Reconcile the diffstat against <code>main</code>; markers cannot see it.</td>
-</tr>
-<tr>
 <td><a id="Q714"></a>Q714</td>
 <td><a href="../plan/capacity-aware-intake/">Gate intake on workers that schedule but never start</a></td>
 <td><code>bug</code> <code>feature</code></td>
@@ -3038,6 +3030,14 @@
 <td>🔲</td>
 <td>M</td>
 <td>Every worker deletes its own row, so batch PRs conflict on GitHub's merge, which runs no driver (<a href="../plan/merge-queue/">why</a>). 4 of 12 churned: 2-3 rebases at 16-20 min each, against 1 CI failure in 205 runs. Serializing is the lever.</td>
+</tr>
+<tr>
+<td><a id="Q858"></a>Q858</td>
+<td><a href="../development/maintaining-backlog/#a-hand-resolved-conflict-drops-rows-the-markers-never-named">Reconciling a hand-resolved keyed merge's row set has no automated form</a></td>
+<td><code>ci</code> <code>debt</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>Q840 shipped the manual <code>comm</code> against <code>ORIG_HEAD</code>; no CI gate can run it, since <code>ORIG_HEAD</code> is gone by push time. Needs a local form. Measured: rule 8 covers <code>flake</code> only, so every other dropped row passes clean.</td>
 </tr>
 <tr>
 <td><a id="Q814"></a>Q814</td>

@@ -2717,6 +2717,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#a-hand-resolved-conflict-drops-rows-the-markers-never-named" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        A hand-resolved conflict drops rows the markers never named
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -3171,6 +3182,8 @@ It runs on local merges, rebases, cherry-picks and stash applications — everyw
 </table>
 <p>A conflict marker costs a minute; a wrongly resolved row loses backlog state.
 Two consequences worth internalising: the driver <strong>cannot resurrect a row the other side deleted</strong> (a deletion either wins outright or produces markers, never a re-add), and it claims <strong>no</strong> knowledge of the Progress or Deferred tables — those merge as plain text, exactly as before.</p>
+<p><strong>The refusal is per row, but the fallback is per file.</strong> Every case in the table ends by re-running <code>git merge-file</code> over the whole file, so the hunk it marks spans the refused row <em>and</em> every row added beside it on either side: one refused row produced a five-row hunk in <a href="#a-hand-resolved-conflict-drops-rows-the-markers-never-named">the measurement below</a>.
+Picking a side of that hunk is what loses rows neither side disagreed about.</p>
 <p><strong>It does not help GitHub's server-side squash-merge</strong>, which cannot see a clone's config.
 And a driver-resolved merge is still a merge you own: read the resulting row set, then run the three gates below. <code>make lint-backlog</code> remains the independent backstop — rules 8, 9 and 10 all still apply to whatever the driver produced.</p>
 <h3 id="the-same-treatment-for-docsplanreadmemd">The same treatment for <code>docs/plan/README.md</code><a class="headerlink" href="#the-same-treatment-for-docsplanreadmemd" title="Permanent link">&para;</a></h3>
@@ -3217,6 +3230,8 @@ Shrinking the verify step from ~6 minutes to a few seconds is what breaks the lo
 <li>Resolve the conflict in <code>docs/STATUS.md</code>.</li>
 <li>Check for leftover markers before staging: <code>git diff --check</code>.
    An <code>Edit</code>-based resolution can silently leave one behind, and <code>git diff --check</code> catches it in the working tree — before it becomes a commit the gate has to reject.</li>
+<li>If you resolved the hunk by hand rather than letting the driver decide it, <a href="#a-hand-resolved-conflict-drops-rows-the-markers-never-named">reconcile the row set</a>.
+   A clean marker scan says the resolution is well-formed, not that it kept every row.</li>
 <li>Run only the gates that can actually observe a <code>STATUS.md</code> change:</li>
 </ol>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>make<span class="w"> </span>status-gates
@@ -3258,6 +3273,47 @@ Read the branch point, not <code>origin/main</code> — against the tip this pri
 </code></pre></div>
 <p>Every ID it prints should be one <em>you</em> filed.
 Anything else is a row <code>main</code> deleted and your rebase brought back — check whether its work shipped before you push.</p>
+<h3 id="a-hand-resolved-conflict-drops-rows-the-markers-never-named">A hand-resolved conflict drops rows the markers never named<a class="headerlink" href="#a-hand-resolved-conflict-drops-rows-the-markers-never-named" title="Permanent link">&para;</a></h3>
+<p>Rule 10 catches a row that comes <em>back</em>.
+The mirror case is a row that quietly goes <em>away</em>, and no rule catches that one, because deleting a row is how a row closes: a lint pass cannot tell a completed item from a casualty.</p>
+<p>Measured on <a href="https://github.com/actions-gateway/github-actions-gateway/pull/1471">#1471</a>: the driver refused a <code>Q738</code> row both sides had edited, which is correct behaviour for a keyed merge, and the hand resolution that followed <strong>deleted <code>Q823</code> and <code>Q822</code></strong>, rows belonging to <code>main</code> that the PR never touched, while <strong>dropping <code>Q836</code> and <code>Q837</code></strong>, the two rows the PR existed to add. <code>git rebase</code> reported success, no marker remained, and <code>make status-gates</code> passed on the result. <strong>An absent marker proves a resolution is well-formed, never that it is correct.</strong></p>
+<p>Reproduced in a throwaway repo with the driver installed (git 2.55.0), one refused row sitting between two rows added on each side:</p>
+<table>
+<thead>
+<tr>
+<th>Resolving the hunk by</th>
+<th>What it cost</th>
+<th>What reported it</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>keeping the branch's side</td>
+<td>the two rows <code>main</code> had added</td>
+<td>rule 8, and only because both carried <code>flake</code></td>
+</tr>
+<tr>
+<td>keeping <code>main</code>'s side</td>
+<td>the two rows the branch had added</td>
+<td>nothing: the rebase dropped the branch's now-empty commit and printed <code>Successfully rebased</code></td>
+</tr>
+</tbody>
+</table>
+<p><code>git diff --check</code> exits 0 in both.
+The second case is the worse one, because the branch ends up changing nothing at all while its commit subject and PR description still claim two rows.
+Do not lean on rule 8 for the first: it covers one label out of the whole vocabulary, and #1471 recorded <code>status-gates</code> passing on the damaged tree even though both lost rows carried it.
+That tree was repaired before it was ever committed, so which of the two accounts of rule 8 applies there is no longer measurable.</p>
+<p><strong>So reconcile the row set, not the markers.</strong> Two comparisons name every casualty, and neither needs a count you memorised before the rebase started:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="c1"># rows your branch had and no longer has</span>
+<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>comm<span class="w"> </span>-23<span class="w"> </span>&lt;<span class="o">(</span>git<span class="w"> </span>show<span class="w"> </span>ORIG_HEAD:docs/STATUS.md<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>-o<span class="w"> </span><span class="s1">&#39;id=&quot;Q[0-9]*&quot;&#39;</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>sort<span class="w"> </span>-u<span class="o">)</span><span class="w"> </span>&lt;<span class="o">(</span>grep<span class="w"> </span>-o<span class="w"> </span><span class="s1">&#39;id=&quot;Q[0-9]*&quot;&#39;</span><span class="w"> </span>docs/STATUS.md<span class="w"> </span><span class="p">|</span><span class="w"> </span>sort<span class="w"> </span>-u<span class="o">)</span>
+<a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="c1"># rows main has and your branch does not</span>
+<a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a>comm<span class="w"> </span>-13<span class="w"> </span>&lt;<span class="o">(</span>grep<span class="w"> </span>-o<span class="w"> </span><span class="s1">&#39;id=&quot;Q[0-9]*&quot;&#39;</span><span class="w"> </span>docs/STATUS.md<span class="w"> </span><span class="p">|</span><span class="w"> </span>sort<span class="w"> </span>-u<span class="o">)</span><span class="w"> </span>&lt;<span class="o">(</span>git<span class="w"> </span>show<span class="w"> </span>origin/main:docs/STATUS.md<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>-o<span class="w"> </span><span class="s1">&#39;id=&quot;Q[0-9]*&quot;&#39;</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>sort<span class="w"> </span>-u<span class="o">)</span>
+</code></pre></div>
+<p>Every ID the first prints should be one <code>main</code> closed; every ID the second prints should be one <em>you</em> closed.
+Anything else is collateral from the resolution.
+Run them before <code>git rebase --continue</code>, and promptly either way: the next rebase or merge rewrites <code>ORIG_HEAD</code>.</p>
+<p>The diffstat answers the same question and is what actually caught #1471 (<code>1 insertion, 3 deletions</code> on a branch that adds two rows), but it only fires if you knew the expected counts going in, and it names no IDs.
+Either way the principle is <a href="../testing/#a-bulk-mechanical-change-proves-itself-by-reconciliation-not-by-an-empty-leftover-query">the one bulk mechanical changes already use</a>: a scan that finds nothing cannot distinguish "nothing was lost" from "this instrument cannot see the loss".</p>
 <h2 id="when-the-context-doesnt-fit-write-the-doc--whatever-the-items-size">When the context doesn't fit, write the doc — whatever the item's size<a class="headerlink" href="#when-the-context-doesnt-fit-write-the-doc--whatever-the-items-size" title="Permanent link">&para;</a></h2>
 <p>The trigger for writing a doc is <strong>information loss, not item size</strong>: <code>Sz</code> estimates effort, not how much context the work rests on.
 If fitting the caps means dropping a decision the work depends on, an investigation finding a future session would re-derive, or a blocker's rationale — write (or extend) the doc and link it.
@@ -3415,8 +3471,8 @@ Tune per flake — these are floors, not ceilings.</p>
 <p>Soak is counted in <strong>runs, not calendar days</strong>: what proves a flake dead is the spec being <em>exercised</em> green, and calendar time is only a proxy for that — one that breaks whenever merge velocity shifts or the spec is path-gated and runs rarely.
 Counting runs measures the thing directly and never needs re-tuning to velocity; the recurrences seen here (Q300, Q291) surfaced within a few dozen runs, inside even the lower threshold.
 Count green runs of the covering workflow since the fix's merge date:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>gh<span class="w"> </span>run<span class="w"> </span>list<span class="w"> </span>--workflow<span class="w"> </span>&lt;name&gt;.yml<span class="w"> </span>--branch<span class="w"> </span>main<span class="w"> </span>--status<span class="w"> </span>success<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="w">  </span>--created<span class="w"> </span><span class="s1">&#39;&gt;=YYYY-MM-DD&#39;</span><span class="w"> </span>--json<span class="w"> </span>databaseId<span class="w"> </span>--jq<span class="w"> </span><span class="s1">&#39;length&#39;</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>gh<span class="w"> </span>run<span class="w"> </span>list<span class="w"> </span>--workflow<span class="w"> </span>&lt;name&gt;.yml<span class="w"> </span>--branch<span class="w"> </span>main<span class="w"> </span>--status<span class="w"> </span>success<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="w">  </span>--created<span class="w"> </span><span class="s1">&#39;&gt;=YYYY-MM-DD&#39;</span><span class="w"> </span>--json<span class="w"> </span>databaseId<span class="w"> </span>--jq<span class="w"> </span><span class="s1">&#39;length&#39;</span>
 </code></pre></div>
 <p>A run that failed on an <em>unrelated</em> flake is excluded, so this undercounts slightly — conservative, which is what we want.
 One thing run-count can't see: a flake suspected to be <strong>time-correlated</strong> (nightly-load or API-rate-limit windows) should also sit through a few day/night cycles before graduating — judgment, not a fixed number.</p>
