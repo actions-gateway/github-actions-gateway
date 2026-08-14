@@ -17,6 +17,7 @@ The three independently versioned components — GMC, AGC, and worker image — 
   - [Non-breaking: an EgressProxy pool's pods drop the app: actions-gateway-proxy label (its pool is recreated once)](#non-breaking-an-egressproxy-pools-pods-drop-the-app-actions-gateway-proxy-label-its-pool-is-recreated-once)
   - [Non-breaking: GitHub Enterprise Server gateways now reach their own appliance (they never did)](#non-breaking-github-enterprise-server-gateways-now-reach-their-own-appliance-they-never-did)
   - [Non-breaking: a GHES appliance behind a private CA can now be trusted (`spec.githubCABundleRef`)](#non-breaking-a-ghes-appliance-behind-a-private-ca-can-now-be-trusted-specgithubcabundleref)
+  - [Non-breaking: a worker lost while the AGC was down is now re-run automatically (cause="vanished")](#non-breaking-a-worker-lost-while-the-agc-was-down-is-now-re-run-automatically-causevanished)
   - [Non-breaking: drained and hand-deleted workers are now re-run automatically (cause="deletion")](#non-breaking-drained-and-hand-deleted-workers-are-now-re-run-automatically-causedeletion)
   - [Non-breaking: an evicted job's auto-re-run now lands (GitHub refused it before)](#non-breaking-an-evicted-jobs-auto-re-run-now-lands-github-refused-it-before)
   - [Non-breaking: classic-tier eviction auto-retry now fires (it never did against real GitHub)](#non-breaking-classic-tier-eviction-auto-retry-now-fires-it-never-did-against-real-github)
@@ -219,6 +220,29 @@ Runbook: [troubleshooting.md § a GHES appliance's certificate is not trusted](t
 **Egress remains a separate obligation.** Trusting the CA does not put the appliance's address space in the NetworkPolicy; see the CIDR-mode note above.
 
 **Rolling back** restores the defect for these tenants. `v1alpha1` has no equivalent field and never will — it is frozen and removed at `v2.0.0`.
+
+### Non-breaking: a worker lost while the AGC was down is now re-run automatically (`cause="vanished"`)
+
+**Who is affected:** every tenant on the `ScaleSet` acquisition tier.
+No configuration changes; the behaviour fires only on disruptions that previously needed a manual re-run.
+
+Preemption and drain both *delete* the worker pod, and on this tier that pod is the only record of which run to re-run.
+An AGC that was down for the pod's teardown (a rollout, an OOM kill, a node loss) therefore saw nothing and issued no re-run.
+The AGC now persists the run identity of every job it builds a worker for, and on start re-runs any run whose worker pod is no longer there.
+
+Operational consequences:
+
+- **An AGC restart can now spend re-run budget.** Each recovered run consumes one slot of its shared `maxEvictionRetries` budget (default 2), under `cause="vanished"`.
+- **New `cause` label value:** dashboards or alerts enumerating `cause` on `actions_gateway_eviction_retries_total` / `eviction_retries_exhausted_total` should add `vanished`.
+  A climbing rate is a signal about the *controller's* availability rather than the workers': it means the AGC keeps missing worker teardowns.
+- **New Event:** `OrphanedWorkerRecovered` (Warning) on the `RunnerSet`, naming the pod and the run.
+- **The guard ConfigMap grows a field.** `scaleset-guards-<set>` gains an `inFlight` list alongside its concluded-job guards, bounded by the jobs currently running and swept at 24 hours.
+  It is owner-ref'd to the `RunnerSet` as before, so it is still collected with it.
+- **RBAC:** unchanged.
+  The AGC already reads and writes that ConfigMap and already lists worker pods.
+
+**Rolling back** restores the old behaviour: a worker lost while the AGC is down needs a manual re-run again.
+A leftover `inFlight` list is inert on older versions, which ignore unknown fields when they load the guards.
 
 ### Non-breaking: drained and hand-deleted workers are now re-run automatically (`cause="deletion"`)
 

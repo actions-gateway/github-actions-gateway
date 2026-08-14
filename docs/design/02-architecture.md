@@ -289,6 +289,13 @@ It runs with RBAC permissions limited to its own namespace and manages the lifec
   That sweep is the retirement rule that keeps the persisted set bounded by the queue rather than accreting in etcd.
   The one exemption is Q609's: guards kept because a delete removed nothing are marked retained and survive the sweep too, since their message may still be in the log.
 
+  **The same object also records which runs currently have workers, for a reader that is not the listener (Q844).** Beside the guards, the listener persists an `inFlight` entry per job whose worker it built, carrying the run identity `rerun-failed-jobs` addresses a run by.
+  It is added on a successful provision and dropped when the job concludes, on the same write-ahead save.
+  It is not a replay guard and answers no redelivered assignment; it exists so the owning reconciler can tell, on the way up, that a worker went away while no AGC was watching, which is the one disruption shape the pod itself cannot record because the disruption deletes the pod.
+  The reconciler only ever *reads* it, so the poll goroutine remains the single writer and `Save` can keep replacing the whole state rather than merging it.
+  A restarted listener does not adopt the entries it loads: the reconciler has already adjudicated them, and a still-running job rebuilds its own entry when its held assignment replays.
+  Bounded like the guards are, by the work outstanding rather than by history: every ordinary exit drops its own entry, and a 24-hour age sweep reclaims one whose conclusion never arrives at all.
+
   **A conclusion the listener never read needs no hard kill to strand its message (Q689).** Q583, Q603, and Q606 all start from a conclusion the listener already holds, and Q606's residual was scoped to a hard kill on that basis.
   There is a third window on the other side of the read: a job concludes at GitHub, its `JobCompleted` is written to the queue, and the process goes away before a poll delivers it.
   Nothing the listener holds says the job is over (`completed` does not name it, so its assignment is legitimately unsettled and legitimately kept), so the exit flush leaves the message, the persisted guards have nothing to persist, and the next process provisions a worker for a job that already ran.
@@ -566,6 +573,7 @@ Each `Reason` mirrors the corresponding metric name so the two correlate:
 | `EvictionRetriesExhausted` | Warning | `actions_gateway_eviction_retries_exhausted_total` | Disrupted job's auto-retry budget exhausted; manual re-run required. The event names the cause (eviction, preemption, or deletion) |
 | `EvictionRecoveryIdentityUnknown` | Warning | `actions_gateway_eviction_recovery_identity_unknown_total` | An evicted scale-set worker carried no workflow-run identity, so there was no run to re-run; manual re-run required (Q417) |
 | `EvictionRecoveryEvidenceLost` | Warning | `actions_gateway_eviction_recovery_evidence_lost_total` | A disrupted scale-set worker's pod was deleted before its recovery could be claimed, so the run cannot be re-run automatically by this or any later reconcile; manual re-run required (Q809) |
+| `OrphanedWorkerRecovered` | Warning | `actions_gateway_eviction_retries_total{cause="vanished"}` | A scale-set worker pod was already gone when this AGC started and its job had never concluded, so its run is being re-run; which disruption took the worker was lost with the pod (Q844) |
 
 These follow the established reaper precedent (`WorkerPodStuckPending`): they record on the owner an operator would `kubectl describe`, fire on a transition/terminal outcome (never per reconcile, so no spam), and where a status condition already captures the state the Event complements it rather than duplicating it.
 A listener/provisioner goroutine that detects the transition does not hold the live owner object, so it routes the Event back to the reconciler over a buffered channel — mirroring the existing condition-update channel — which records it on the next reconcile.
