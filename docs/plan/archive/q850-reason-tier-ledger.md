@@ -20,7 +20,7 @@ Both get a ledger row naming the tier, and a gate that fails a missing row, a ba
 
 **Out.** The GMC and proxy binaries: neither acquires jobs, so neither has a tier.
 That is the exclusion the metric ledger already states.
-Label values are [Q851](../../STATUS.md#Q851), a separate row; prose surfaces are [Q848](../../STATUS.md#Q848).
+Label values were Q851, a separate row, since shipped as [Label-value reach](../../operations/observability-metrics.md#label-value-reach); prose surfaces are [Q848](../../STATUS.md#Q848).
 
 ## 2. Decisions
 

@@ -289,7 +289,8 @@ The v1 to v2 axis closed mostly before the 1.4 tag; 1.5 contributed Q726 alone.
 A completeness claim inherits the blind spots of its inventory, so "no capability is lost" cannot rest on a hand-kept list — that is the shape Q844 hid in, and [testing.md](../development/testing.md) states the rule outright.
 Q776 made metric *series* derived and gated.
 Q850 and Q851 extend that to condition reasons, Event reasons, and label values, which is the surface a completeness claim can honestly cover; the marketing claim waits for them. **Q850 has since shipped**: 45 condition reasons and 26 Event reasons carry a tier under `make reason-tiers-check`, and its walk found two Events an operator could meet in `kubectl describe` with no runbook entry, but no condition reason single-tier by accident ([plan](archive/q850-reason-tier-ledger.md)).
-Only Q851's label-value granularity is left before the claim can be made for all three signal surfaces.
+Q851 has since shipped too, so all three signal surfaces are now derived and gated and nothing is left blocking the claim.
+What the label-value pass found is why the claim should still be worded off the gates rather than off a summary of them.
 Measured while scoping Q851: `eviction_retries_total` reads Both while `cause="vanished"` is scale-set-only, and `abandoned_run_force_cancels_total` reads Both while `outcome="identity_unknown"` is unreachable there.
 The gate sees series, not values, so two live tier differences sit inside rows marked Both.
 
