@@ -191,11 +191,13 @@ The gap belongs to the **dispatcher**, which covers it two ways:
   scripts/agent/pr-mergeability-watch.sh <pr>
   ```
 
-  It is [fallback 1](#fallback-1-a-self-managed-background-watcher) narrowed to two fields, `state` and `mergeStateStatus`.
-  It never reads the PR body or any comment stream, so nothing a third party can write reaches the session that acts on its exit.
+  It is [fallback 1](#fallback-1-a-self-managed-background-watcher) narrowed to three fields, `state`, `mergeStateStatus` and `baseRefName`.
+  It never reads the PR body or any comment stream, so nothing a third party can write reaches the session that acts on its exit; `baseRefName` is a branch in this repository rather than authored text, and the watch refuses one that is not a plain refname instead of quoting it into the wake.
+  The base is read because the wake has to name a branch, and a stacked PR told to rebase onto `main` absorbs its own base into its diff (Q839).
+  The wake names the base and never a `git rebase --onto` line: that needs the old base head, which `merge-base` cannot recover once the base has been force-pushed.
   It carries no CI output, so a batch of them does not fill the dispatcher's context with logs for failures the owning worker is fixing.
   And it sleeps between polls, which a pr-sentinel relaunch on `ready` cannot.
-  On `conflict` the dispatcher wakes the owning worker (see [Coordination channels](#coordination-channels)); the worker rebases, re-runs the gate, pushes, and relaunches its own pr-sentinel watcher.
+  On `conflict` the dispatcher wakes the owning worker (see [Coordination channels](#coordination-channels)); the worker rebases onto the branch the wake names, re-runs the gate, pushes, and relaunches its own pr-sentinel watcher.
 - **A mergeability re-check at the merge step**, as the backstop for the above.
   No moving parts, and the merge step is already where the dispatcher looks at the PR.
   A stale `ready` is caught there and routed by [conflict policy](#conflict-policy).

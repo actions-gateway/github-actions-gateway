@@ -27,9 +27,13 @@ FIXTURE_DIR="$REPO_ROOT/tmp/pr-mergeability-test.$$"
 mkdir -p "$FIXTURE_DIR/bin"
 trap 'rm -rf "$FIXTURE_DIR"' EXIT INT TERM
 
-# A `gh` stub that walks a scripted sequence of "STATE MERGESTATE" replies, one
-# per call, and repeats the last one forever. GH_FAIL_FIRST makes the leading N
+# A `gh` stub that walks a scripted sequence of "STATE MERGESTATE [BASE]" replies,
+# one per call, and repeats the last one forever. GH_FAIL_FIRST makes the leading N
 # calls fail, so a transient error is distinguishable from a persistent one.
+#
+# Replies are written space-separated and emitted as the tab-separated record the
+# subject parses, so a case reads as prose. BASE defaults to main, which keeps a
+# two-field reply asserting the ordinary main-based wording.
 cat >"$FIXTURE_DIR/bin/gh" <<'STUB'
 #!/usr/bin/env bash
 set -euo pipefail
@@ -46,7 +50,8 @@ IFS='|' read -r -a replies <<<"${GH_REPLIES}"
 if ((idx > ${#replies[@]})); then
 	idx=${#replies[@]}
 fi
-printf '%s\n' "${replies[$((idx - 1))]}"
+read -r -a fields <<<"${replies[$((idx - 1))]}"
+printf '%s\t%s\t%s\n' "${fields[0]}" "${fields[1]}" "${fields[2]:-main}"
 STUB
 chmod +x "$FIXTURE_DIR/bin/gh"
 
@@ -96,6 +101,31 @@ expect_event() {
 	fi
 }
 
+# expect_says / expect_silent_about — the wake's text is the whole product here:
+# the dispatcher acts on the branch it names, so naming the wrong one is as bad
+# as not waking at all.
+expect_says() {
+	local needle="$1" desc="$2"
+	if [[ "$LAST_OUT" == *"$needle"* ]]; then
+		echo "PASS: $desc"
+	else
+		echo "FAIL: $desc — wanted '${needle}' in:"
+		echo "$LAST_OUT"
+		fails=$((fails + 1))
+	fi
+}
+
+expect_silent_about() {
+	local needle="$1" desc="$2"
+	if [[ "$LAST_OUT" != *"$needle"* ]]; then
+		echo "PASS: $desc"
+	else
+		echo "FAIL: $desc — '${needle}' must not appear in:"
+		echo "$LAST_OUT"
+		fails=$((fails + 1))
+	fi
+}
+
 # expect_usage_error ARGS... — a mistyped launch must be distinguishable from an
 # event, because a dispatcher drops the PR from its tracker on either.
 expect_usage_error() {
@@ -131,6 +161,29 @@ expect_event closed "a closed PR ends the watch"
 # merge later is the entire reason this watcher exists.
 run_watch "OPEN CLEAN|OPEN CLEAN|OPEN DIRTY"
 expect_event conflict "a CLEAN PR that later goes DIRTY wakes the dispatcher"
+
+# --- names the branch the PR actually targets (Q839) ------------------------
+
+# The failure this guards against is silent and destructive: a stacked PR told to
+# rebase onto main absorbs its own base into its diff, and the wake reads as
+# routine either way.
+run_watch "OPEN DIRTY claude/q800-base"
+expect_event conflict "a stacked PR still wakes the dispatcher"
+expect_says "origin/claude/q800-base" "the wake names the PR's own base branch"
+expect_says "stacked" "the wake says the PR is stacked"
+
+# The other direction: the ordinary case must not acquire stacked-PR wording.
+run_watch "OPEN DIRTY main"
+expect_says "origin/main" "a main-based PR is still told to rebase onto main"
+expect_silent_about "stacked" "a main-based PR is not described as stacked"
+
+# A base that is not a plain refname never reaches the message, because the
+# dispatcher acts on this text.
+# shellcheck disable=SC2016 # the unexpanded literal IS the fixture
+hostile_base='$(id)'
+run_watch "OPEN DIRTY ${hostile_base}"
+expect_event conflict "an unreadable base still wakes the dispatcher"
+expect_silent_about "$hostile_base" "a base that is not a refname is refused, not quoted"
 
 # --- does NOT exit when it is not ------------------------------------------
 
