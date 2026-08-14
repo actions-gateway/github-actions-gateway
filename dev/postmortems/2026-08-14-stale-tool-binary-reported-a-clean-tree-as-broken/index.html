@@ -2701,7 +2701,8 @@ A clean exit with a plausible file list pointed at the tree, which is where the 
 <ul>
 <li>A rule under <a href="../../development/testing/#the-status-you-report-is-a-claim-too">The status you report is a claim too</a> that a local gate disagreeing with CI indicts the toolchain first, since CI builds its tools from the pin and a developer checkout does not.
   It also names the compounding part, that a repeated claim gains authority without gaining evidence.</li>
-<li>The build rule itself, which is Q842's own fix and the only change here that removes the failure rather than teaching people to expect it.</li>
+<li>The build rule itself, which is Q842's own fix and the only change here that removes the failure rather than teaching people to expect it.
+  Shipped: every tool rule now depends on the file carrying its version pin (<code>tools/go.mod</code> and <code>tools/vendor/modules.txt</code> for the vendored eight, <code>cmd/gmc/go.{mod,sum}</code> for ginkgo), so a bump invalidates the binary the way a source change does.</li>
 </ul>
 <h2 id="what-this-is-not">What this is not<a class="headerlink" href="#what-this-is-not" title="Permanent link">&para;</a></h2>
 <p>Not a CI gap.

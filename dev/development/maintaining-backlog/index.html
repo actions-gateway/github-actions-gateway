@@ -2928,7 +2928,8 @@ It runs on local merges, rebases, cherry-picks and stash applications — everyw
 Two consequences worth internalising: the driver <strong>cannot resurrect a row the other side deleted</strong> (a deletion either wins outright or produces markers, never a re-add), and it claims <strong>no</strong> knowledge of the Progress or Deferred tables — those merge as plain text, exactly as before.</p>
 <p><strong>The refusal is per row, but the fallback is per file.</strong> Every case in the table ends by re-running <code>git merge-file</code> over the whole file, so the hunk it marks spans the refused row <em>and</em> every row added beside it on either side: one refused row produced a five-row hunk in <a href="#a-hand-resolved-conflict-drops-rows-the-markers-never-named">the measurement below</a>.
 Picking a side of that hunk is what loses rows neither side disagreed about.</p>
-<p><strong>It does not help GitHub's server-side squash-merge</strong>, which cannot see a clone's config.
+<p><strong>It does not help GitHub</strong>, which cannot see a clone's config: the server-side squash-merge, the mergeability read behind <code>mergeStateStatus</code>, and the merge queue's candidate build all take the plain three-way merge.
+That is why a batch's row deletions are <a href="../parallel-dispatch/#the-dispatcher-owns-assignment-not-coordination-files">spaced at assignment</a> rather than left to the driver.
 And a driver-resolved merge is still a merge you own: read the resulting row set, then run the three gates below. <code>make lint-backlog</code> remains the independent backstop — rules 8, 9 and 10 all still apply to whatever the driver produced.</p>
 <h3 id="the-same-treatment-for-docsplanreadmemd">The same treatment for <code>docs/plan/README.md</code><a class="headerlink" href="#the-same-treatment-for-docsplanreadmemd" title="Permanent link">&para;</a></h3>
 <p>The plan index has <code>STATUS.md</code>'s contention and the same cause.
@@ -2950,7 +2951,7 @@ Measured on <code>docs/roadmap.md</code> at 61cf54e7b: two branches each deletin
 <a href="https://github.com/actions-gateway/github-actions-gateway/pull/1392">Q715</a>'s PR met that shape three times in one session, each time as a merge-queue eviction followed by a hand-resolved rebase.</p>
 <p><strong>What the driver buys is the rebase, not the eviction.</strong> A merge driver is per-clone <code>git config</code>, and GitHub builds the merge queue's candidate itself, so the server-side conflict recurs exactly as before (<a href="../../plan/merge-queue/">merge-queue.md</a> measured the same thing for <code>docs/STATUS.md</code>, which has had a driver since Q611).
 What changes is the heal: the rebase that follows an eviction resolves silently instead of by hand.
-Fewer evictions is a different problem, and serializing the batch is the only lever a branch has on it.</p>
+Fewer evictions is a different problem, and the lever is spacing before serializing: the same two deletions ten bullets apart merged clean, so a batch whose items sit apart on the page never meets the conflict (<a href="../parallel-dispatch/#the-dispatcher-owns-assignment-not-coordination-files">the same rule for Queue rows</a>).</p>
 <p><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/docs/git-merge-roadmap.sh"><code>scripts/docs/git-merge-roadmap.sh</code></a> decides the bullets by that <strong>annotation</strong>, normalized to a comma-joined ID list.
 The key is not a new convention either: <code>devtools/docs/roadmapcheck</code> already parses the same comment, so the driver and the gate cannot disagree about what a bullet is.</p>
 <p>Two things differ from the other two drivers:</p>

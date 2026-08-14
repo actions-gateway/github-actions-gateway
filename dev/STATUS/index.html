@@ -2888,14 +2888,6 @@
 <td><code>main.go:188</code> probes the hook's installed worktree by design, assuming it is the session's. <code>EnterWorktree</code> breaks that: the session keeps the launch checkout's hook, and two PRs were refused for overlaps neither branch had. A cwd fix reverses it.</td>
 </tr>
 <tr>
-<td><a id="Q842"></a>Q842</td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/Makefile">A vendored tool bump never rebuilds its binary, so a stale tool serves a newer target</a></td>
-<td><code>ci</code> <code>debt</code> <code>bug</code></td>
-<td>🔲</td>
-<td>S</td>
-<td><code>$(MDREFLOW)</code> and 7 siblings have no prerequisites, so make skips the rebuild if one exists. Both modes measured at #1462's v0.1.7 bump: loud (<code>md-reflow-explain</code>, unknown flag, 08-11) and silent (four false reflow failures, clean tree, 08-14).</td>
-</tr>
-<tr>
 <td><a id="Q408"></a>Q408</td>
 <td><a href="../plan/q408-untrusted-pr-egress/">Untrusted-PR egress posture for Kata workers</a></td>
 <td><code>security</code></td>
@@ -2937,11 +2929,11 @@
 </tr>
 <tr>
 <td><a id="Q825"></a>Q825</td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/agent/claude-piped-gate-hook-test.sh">The no-toolchain assertion reads the pipeline's status, not the hook's</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/agent/claude-piped-gate-hook-test.sh">Two mechanisms flake the no-toolchain case: pipeline status, and a shared binary rebuilt under it</a></td>
 <td><code>flake</code> <code>tests</code> <code>bug</code></td>
 <td>🔲</td>
 <td>S</td>
-<td>Measured 2026-08-12: <code>set +e</code> at line 150 drops errexit, not <code>pipefail</code>, so <code>rc=$?</code> is the pipeline's status while the assertion claims the hook's. The hook never reads stdin (hook.sh:78), so <code>jq</code> can take SIGPIPE. Seen twice, both green on rerun.</td>
+<td>2026-08-12: <code>rc=$?</code> at :150 is the pipeline's status, not the hook's (no stdin read, so <code>jq</code> can SIGPIPE). 2026-08-14: the case <code>rm -f</code>s the shared <code>.build/pipedgate</code>, which a concurrent Bash-hook run rebuilds, so <code>out</code> is a real deny. 3 sightings.</td>
 </tr>
 <tr>
 <td><a id="Q823"></a>Q823</td>
@@ -2966,6 +2958,14 @@
 <td>🔲</td>
 <td>S</td>
 <td>Seen once 2026-08-12 at load 101-111 on 18 cores (41 go procs, 8 siblings): passed one <code>make check</code>, failed the next on an identical tree (<code>Could not apply ... # topic appends</code>), passed standalone. Mechanism unverified, not clock-bound like Q642.</td>
+</tr>
+<tr>
+<td><a id="Q857"></a>Q857</td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/Makefile">A <code>COSIGN_VERSION</code> bump never re-downloads cosign, so <code>verify-release</code> runs the old verifier</a></td>
+<td><code>ci</code> <code>debt</code> <code>bug</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>Q842 gave each Go tool rule its pin file; cosign's pin is a make variable, so <code>$(COSIGN)</code> has no file to depend on and make skips an existing binary. The fail-closed digest table in <code>download-cosign.sh</code> only runs if the rule does.</td>
 </tr>
 <tr>
 <td><a id="Q812"></a>Q812</td>
@@ -3006,14 +3006,6 @@
 <td>🔲</td>
 <td>S</td>
 <td>Measured 2026-08-12 closing Q821: <code>features.md</code> points at the guide and the admission gate reads <code>hard - used</code> against the worker footprint, but no surface claims the arithmetic matches the upstream evaluator or that envtest pins it.</td>
-</tr>
-<tr>
-<td><a id="Q807"></a>Q807</td>
-<td><a href="../development/parallel-dispatch/#the-dispatcher-owns-assignment-not-coordination-files">Batch STATUS.md row deletions conflict server-side, where no merge driver runs</a></td>
-<td><code>ci</code> <code>debt</code> <code>retro</code></td>
-<td>🔲</td>
-<td>M</td>
-<td>Every worker deletes its own row, so batch PRs conflict on GitHub's merge, which runs no driver (<a href="../plan/merge-queue/">why</a>). 4 of 12 churned: 2-3 rebases at 16-20 min each, against 1 CI failure in 205 runs. Serializing is the lever.</td>
 </tr>
 <tr>
 <td><a id="Q858"></a>Q858</td>
