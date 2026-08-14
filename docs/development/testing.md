@@ -1158,6 +1158,15 @@ Each is a claim about state, and each has a cheap way of being wrong:
   A derived inventory can answer "nothing is missing"; a curated one answers "nothing that someone recorded is missing", and those diverge exactly where it matters.
   Say which kind you read before the answer carries a decision.
 
+- **An explanation offered to the user is a claim, and this repo has usually already written the answer down.** Every rule above is about command output — an exit code, an empty grep, a backgrounded echo.
+  The claims that went wrong across the 1.5 release cycle were a different shape: prose explaining *why* the system behaved as it did, asserted from reasoning rather than read from anywhere.
+  Four in one session, and three were caught by the user asking a follow-up rather than by any check.
+  A sentinel event was called a defect when it was [Q630's reconciliation working as designed](../operations/release.md#run-it-detached-the-sentinel-reports-it-back), documented in the previous release's plan doc.
+  A tier-parity claim was said to rest on a hand-verified walk when `E2E_Migration_V1ToV2` gates the migration end to end, including reconcile-to-Ready.
+  A `Throughput: Active` result was written up as unexpected in both the release notes and a plan doc, when [Q773](https://github.com/actions-gateway/github-actions-gateway/blob/main/docs/STATUS.md) had said since 2026-08-09 that it is the norm and the runbook is stale.
+  Each was plausible, none was checked, and each reached a document before it reached a doubt.
+  Before explaining a behaviour, grep for it: the Queue, the plan doc of the release that shipped it, and the runbook are where this project keeps answers, and an explanation that contradicts one of them is the finding.
+
 The failure mode these share is reporting a conclusion from a signal that does not carry it.
 The fix is the same each time: name the signal the claim actually depends on, confirm it could have shown you the opposite, and read that one.
 
