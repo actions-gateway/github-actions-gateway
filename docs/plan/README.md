@@ -229,6 +229,9 @@ When writing a plan's Status cell:
   The rollup only changes when a plan's last row closes, and the worker closing that row cannot tell it was the last one, which is how three cells went stale across 1.4 and 1.5 (Q800).
 - Column 3 only.
   A bare ID in the Scope column says what the plan was about and stays true after the row closes.
+- A `release-X.Y.md` row cannot read as open (❌, 🔲, 🚧) once that release is published.
+  The tag is a fact, so `make plan-index-check` fails the cell instead (Q812): mark it ✅, or ⚠️ if a Queue row genuinely remains.
+  Nothing else could see this, and it is not hypothetical: the 1.3 row read `❌ Open` on `main` for the nine days after `v1.3.0` shipped, with every other rule green.
 
 When a plan fully closes:
 

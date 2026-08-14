@@ -1223,6 +1223,8 @@ Nothing in a pass announces the gap, because the pass is not a mistake.
 **A gate built for exactly this staleness missed an instance of it.** `check-plan-index.sh`'s third invariant (Q800) requires a `QNNN` in a plan's Status cell to be a link while its Queue row lives and bare once the row is gone, so a closing row cannot leave a cell claiming live work.
 The `release-1.3.md` cell read `❌ Open — one gate left from the pre-release API review, Q484`. `Q484` is bare and its row was gone, so the invariant held and `make plan-index-check` passed, on `main`, every day for the nine days after `v1.3.0` shipped as a final release (Q802).
 The gate reads the *form of an ID*; the staleness was in the prose around it.
+The gap is now closed by a second, non-overlapping rule (Q812): a `release-X.Y.md` row cannot carry an open marker once the project has published that release, because the tag is a fact the cell cannot argue with.
+The fixtures that pin it replay the real cell and are green with the new rule removed, which is the assertion that the two rules read different things.
 
 **The same shape at the tool level: a refusal whose stated reason is not the one it has.** `pr-requeue-eligible.sh --confirm` fails closed on a verdict record it cannot parse, which is right.
 Against a record written before #1431 changed the format it reports `the recorded assessment was ''` (Q828), which describes a corrupt or missing file.

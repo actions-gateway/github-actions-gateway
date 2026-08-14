@@ -424,7 +424,7 @@ What exists today, and what's proposed:
 
 | Signal | Goal | Status |
 |---|---|---|
-| `make plan-index-check` — every plan doc is indexed/archived | 2 | Wired (`make check`). |
+| `make plan-index-check` — every plan doc is indexed/archived, and no `release-X.Y.md` row still reads as open for a published release (Q812) | 1, 2 | Wired (`make check`). |
 | STATUS.md lint — Queue shape, 250-char Note cap | 1 | Wired (`make check`). |
 | Per-change doc updates via the [doc-update-matrix](doc-update-matrix.md) | 1 | Convention, enforced in review (PR self-check). |
 | `make doc-links` — broken cross-file links + heading anchors, GitHub slugs (Q52) | 1, 2 | Wired (`make check`). The automated guard against link rot. |
