@@ -2,6 +2,7 @@ package provisioner
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
@@ -226,6 +227,9 @@ func rerunLoopMetrics() *runnercore.Metrics {
 		EvictionRerunFailures: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: "t_q503_eviction_rerun_failures_total",
 		}, []string{"namespace", "runner_group", "tier", "cause", "reason"}),
+		EvictionRerunWithheld: prometheus.NewCounterVec(prometheus.CounterOpts{
+			Name: "t_q811_eviction_rerun_withheld_total",
+		}, []string{"namespace", "runner_group", "tier", "cause", "reason"}),
 	}
 }
 
@@ -355,6 +359,173 @@ func TestHandleEviction_TerminalFailuresDoNotRetry(t *testing.T) {
 			assert.Contains(t, target.events, "EvictionRerunFailed")
 		})
 	}
+}
+
+// runAPIStub is a fake of the two run endpoints the Q811 conclusion gate touches: the
+// run GET, answered from states in order (the last one repeats), and the rerun POST,
+// answered 201. It counts both so a test can assert what was NOT called.
+type runAPIStub struct {
+	gets, reruns atomic.Int64
+	// states are the {status, conclusion} pairs the GET returns, one per call, holding
+	// the last for every call past the end — a run winding down and then concluding.
+	states [][2]string
+}
+
+func (s *runAPIStub) server() *httptest.Server {
+	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet {
+			i := int(s.gets.Add(1)) - 1
+			if i >= len(s.states) {
+				i = len(s.states) - 1
+			}
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = fmt.Fprintf(w, `{"status":%q,"conclusion":%q}`, s.states[i][0], s.states[i][1])
+			return
+		}
+		s.reruns.Add(1)
+		w.WriteHeader(http.StatusCreated)
+	}))
+}
+
+// TestHandleEviction_CancelledRunIsNotReRun is the Q811 regression test, and the whole
+// point of the conclusion gate.
+//
+// The graceful-deletion arm keys on a deletion mark no AGC delete stamped, and the
+// cancel runbook's own remedy for a worker that will not stop is to delete its pod —
+// which supplies that mark by hand. GitHub accepts rerun-failed-jobs for a `cancelled`
+// conclusion (measured 2026-08-05, Q683), so recovery used to re-queue the job the
+// operator had just stopped. It must now stand down without calling at all.
+func TestHandleEviction_CancelledRunIsNotReRun(t *testing.T) {
+	stub := &runAPIStub{states: [][2]string{{"completed", "cancelled"}}}
+	srv := stub.server()
+	defer srv.Close()
+
+	m := rerunLoopMetrics()
+	p := &Provisioner{
+		Metrics:                    m,
+		TokenFunc:                  func(context.Context) (string, error) { return "tok", nil },
+		GitHubAPIURL:               srv.URL,
+		HTTPClient:                 srv.Client(),
+		EvictionRerunRetryInterval: time.Millisecond,
+	}
+	target := &stubTarget{key: client.ObjectKey{Namespace: "ns", Name: "g"}}
+	log := slog.New(slog.NewTextHandler(io.Discard, nil))
+
+	<-p.handleEviction(context.Background(), target, "owner", "repo", "811", log, 2, 0, evictionTierClassic, recoveryCauseDeletion)
+
+	assert.Equal(t, int64(0), stub.reruns.Load(), "a cancelled run must never be asked to re-run")
+	assert.Equal(t, float64(1),
+		testutil.ToFloat64(m.EvictionRerunWithheld.WithLabelValues("ns", "g", evictionTierClassic, recoveryCauseDeletion, rerunWithheldReasonRunCancelled)),
+		"a withheld re-run is counted, so it is not indistinguishable from a recovery that never armed")
+	assert.Equal(t, float64(0),
+		testutil.ToFloat64(m.EvictionRerunFailures.WithLabelValues("ns", "g", evictionTierClassic, recoveryCauseDeletion, rerunFailureReasonAPIError)),
+		"honouring a cancel is the correct outcome, not a failure")
+	assert.Contains(t, target.events, "EvictionRerunWithheld",
+		"the operator sees why no re-run happened, rather than a silent no-op")
+	assert.NotContains(t, target.events, "EvictionRerunFailed")
+}
+
+// TestHandleEviction_DrainedRunStillReRuns is the negative control for the gate above:
+// the deletion arm's whole purpose is that a drained worker's job comes back. Its run
+// concludes `failure` (measured, Q459), and the conclusion check must let it through —
+// including across the wait, since at detection the run has not concluded at all and its
+// conclusion is null.
+func TestHandleEviction_DrainedRunStillReRuns(t *testing.T) {
+	stub := &runAPIStub{states: [][2]string{
+		{"in_progress", ""},
+		{"completed", "failure"},
+	}}
+	srv := stub.server()
+	defer srv.Close()
+
+	m := rerunLoopMetrics()
+	p := &Provisioner{
+		Metrics:                    m,
+		TokenFunc:                  func(context.Context) (string, error) { return "tok", nil },
+		GitHubAPIURL:               srv.URL,
+		HTTPClient:                 srv.Client(),
+		EvictionRerunRetryInterval: time.Millisecond,
+	}
+	target := &stubTarget{key: client.ObjectKey{Namespace: "ns", Name: "g"}}
+	log := slog.New(slog.NewTextHandler(io.Discard, nil))
+
+	<-p.handleEviction(context.Background(), target, "owner", "repo", "459", log, 2, 0, evictionTierScaleSet, recoveryCauseDeletion)
+
+	assert.GreaterOrEqual(t, stub.reruns.Load(), int64(1), "a drained worker's job must still be re-run")
+	assert.Equal(t, float64(0),
+		testutil.ToFloat64(m.EvictionRerunWithheld.WithLabelValues("ns", "g", evictionTierScaleSet, recoveryCauseDeletion, rerunWithheldReasonRunCancelled)))
+	assert.Empty(t, target.events, "an accepted re-run is not an operator incident")
+}
+
+// TestHandleEviction_UngatedCausesDoNotReadTheConclusion pins the gate's scope. An
+// eviction, a preemption and a vanished worker are signals only the cluster writes, so
+// no operator action produces them and the check would be a GitHub call per attempt
+// spent discriminating a case that cannot arise. A cancelled conclusion must not stop
+// those recoveries either — the run is concluded, which is exactly when the re-run lands.
+func TestHandleEviction_UngatedCausesDoNotReadTheConclusion(t *testing.T) {
+	for _, cause := range []string{recoveryCauseEviction, recoveryCausePreemption, recoveryCauseVanished, recoveryCauseAbandoned} {
+		t.Run(cause, func(t *testing.T) {
+			stub := &runAPIStub{states: [][2]string{{"completed", "cancelled"}}}
+			srv := stub.server()
+			defer srv.Close()
+
+			m := rerunLoopMetrics()
+			p := &Provisioner{
+				Metrics:                    m,
+				TokenFunc:                  func(context.Context) (string, error) { return "tok", nil },
+				GitHubAPIURL:               srv.URL,
+				HTTPClient:                 srv.Client(),
+				EvictionRerunRetryInterval: time.Millisecond,
+			}
+			target := &stubTarget{key: client.ObjectKey{Namespace: "ns", Name: "g"}}
+			log := slog.New(slog.NewTextHandler(io.Discard, nil))
+
+			<-p.handleEviction(context.Background(), target, "owner", "repo", "497", log, 2, 0, evictionTierClassic, cause)
+
+			assert.Equal(t, int64(0), stub.gets.Load(), "only the deletion arm reads the run's conclusion")
+			assert.Equal(t, int64(1), stub.reruns.Load(), "the re-run must still fire")
+		})
+	}
+}
+
+// TestHandleEviction_UnreadableConclusionWithholdsThenSurfaces pins the gate's failure
+// direction. A conclusion the AGC cannot read says nothing about whether a re-run would
+// undo a cancel, so it must not be read as "not cancelled" — the call is retried inside
+// the existing window and, if it never becomes readable, the recovery ends as a failure
+// the operator can act on rather than as a re-run fired blind.
+func TestHandleEviction_UnreadableConclusionWithholdsThenSurfaces(t *testing.T) {
+	var gets, reruns atomic.Int64
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet {
+			gets.Add(1)
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		reruns.Add(1)
+		w.WriteHeader(http.StatusCreated)
+	}))
+	defer srv.Close()
+
+	m := rerunLoopMetrics()
+	p := &Provisioner{
+		Metrics:                    m,
+		TokenFunc:                  func(context.Context) (string, error) { return "tok", nil },
+		GitHubAPIURL:               srv.URL,
+		HTTPClient:                 srv.Client(),
+		EvictionRerunWindow:        50 * time.Millisecond,
+		EvictionRerunRetryInterval: 5 * time.Millisecond,
+	}
+	target := &stubTarget{key: client.ObjectKey{Namespace: "ns", Name: "g"}}
+	log := slog.New(slog.NewTextHandler(io.Discard, nil))
+
+	<-p.handleEviction(context.Background(), target, "owner", "repo", "812", log, 2, 0, evictionTierClassic, recoveryCauseDeletion)
+
+	assert.Equal(t, int64(0), reruns.Load(), "an unreadable conclusion must not be read as 'not cancelled'")
+	assert.Greater(t, gets.Load(), int64(1), "the window must span several re-reads, not give up on the first error")
+	assert.Equal(t, float64(1),
+		testutil.ToFloat64(m.EvictionRerunFailures.WithLabelValues("ns", "g", evictionTierClassic, recoveryCauseDeletion, rerunFailureReasonConclusionUnknown)),
+		"a recovery that never re-ran needs its own reason, not the still-running one")
+	assert.Contains(t, target.events, "EvictionRerunFailed")
 }
 
 // TestRerunFailedJobs_RequiresAnExplicitBaseURL is the Q504 regression test.

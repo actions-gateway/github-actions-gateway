@@ -115,6 +115,18 @@ The shipped dashboards now mark this: the tenant dashboard's Job-duration panel 
 
 **Rolling back** returns the classic tier to the old, longer span and leaves the scale-set tier emitting nothing.
 
+### Non-breaking: deleting a cancelled run's worker no longer re-queues the job
+
+The remedy for a worker that keeps running after you cancel its run is to delete the pod, and that used to undo the cancel: a hand-deleted worker is the shape graceful-deletion recovery acts on, and `rerun-failed-jobs` is accepted for a `cancelled` conclusion.
+That arm now reads the run's conclusion before it calls, on both acquisition tiers, and stands down when GitHub concluded the run `cancelled` (Q811).
+
+A withheld re-run is visible rather than silent: `actions_gateway_eviction_rerun_withheld_total{reason="run_cancelled"}` is new here, and a **Normal** `EvictionRerunWithheld` Event names the run.
+The disruption's retry slot is still spent, since it is reserved when the disruption is detected, minutes before GitHub has a conclusion to read, so `eviction_retries_total` keeps counting these; read the two together. `actions_gateway_eviction_rerun_failures_total` also gains `reason="conclusion_unknown"`, for a recovery whose re-run window closed with the run's conclusion unreadable: a conclusion the AGC cannot read is not assumed to be uncancelled, so no re-run is fired and the run needs a manual one.
+
+No action is required at upgrade time.
+What changes for an operator is that deleting to reclaim capacity is now safe on a cancelled run, but only once GitHub shows it `completed`/`cancelled`, which takes up to GitHub's ~5-minute cancellation grace; delete before that and the job is re-queued as before.
+Behaviour is covered in [Cancelling a Run Does Not Stop Its Worker Pod](troubleshooting.md#cancelling-a-run-does-not-stop-its-worker-pod).
+
 ### Non-breaking: an abandoned run is force-cancelled and re-run automatically, on both acquisition tiers
 
 This release adds two recoveries for a worker removed before its container ever ran, the `pendingPodDeadline` reap being the common cause: the run is force-cancelled in about a second instead of waiting out GitHub's ~15-minute unstarted-job timeout (Q683), and it is then re-run automatically once the runner set places a worker pod again (Q691).

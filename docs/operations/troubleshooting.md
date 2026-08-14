@@ -1929,6 +1929,7 @@ An event is recorded on the owner's next reconcile, so it can trail the underlyi
 | `WorkerPodCreateFailed` | Warning | The API server refused to create a worker pod (invalid name, admission webhook, pod-security policy). The note carries the API server's own message. No pod exists, so GitHub reports only that the runner lost communication. | ["Runner Lost Communication" and No Worker Pod Was Ever Created](#runner-lost-communication-and-no-worker-pod-was-ever-created) |
 | `EvictionRetriesExhausted` | Warning | An evicted worker pod's auto-retry budget (`maxEvictionRetries`) is exhausted; a manual re-run is required. Emitted on both acquisition tiers, which share one per-run budget. | [Evicted Worker Pods Exhausting Retry Budget](#evicted-worker-pods-exhausting-retry-budget) · [Evicted Scale-Set Jobs Are Not Re-Run Automatically](#evicted-scale-set-jobs-are-not-re-run-automatically) |
 | `EvictionRerunFailed` | Warning | A disrupted run's automatic re-run was never accepted by GitHub — refused past the 15-minute re-run window, or a terminal API error (Q503). The budget slot is spent; the named run needs a manual re-run. | [Evicted Worker Pods Exhausting Retry Budget](#evicted-worker-pods-exhausting-retry-budget) |
+| `EvictionRerunWithheld` | Normal | An externally deleted worker's run had already concluded `cancelled`, so recovery deliberately did not ask GitHub to re-run it and the cancel stands (Q811). The budget slot is spent; no manual re-run is wanted. Normal, because nothing is wrong. | [Cancelling a Run Does Not Stop Its Worker Pod](#cancelling-a-run-does-not-stop-its-worker-pod) |
 | `JobProvisionStalled` | Warning | A scale-set job cannot register its runner name (`generate-jitconfig` 409 that no retry cleared), so no worker can be created for it. The job is held and re-offered on a backoff. Also sets the advisory `JobProvisionStalled` condition, whose message names the job ids. Once per episode. | [Scale-Set Job Stranded by a Stale Runner Record](#scale-set-job-stranded-by-a-stale-runner-record-runner-name-409) |
 | `WorkerCeilingReached` | Normal | Scale-set jobs are waiting because the set is already running as many workers as its spec allows; they are re-offered until capacity frees. Expected backpressure, hence Normal. Also sets the advisory `JobProvisionStalled` condition, whose message names the job ids. Once per episode. | [Scale-Set Jobs Waiting at the Worker Ceiling](#scale-set-jobs-waiting-at-the-worker-ceiling-workerceilingreached) |
 | `AssignmentAbandoned` | Warning | The listener gave up on assigned jobs it was holding, because the scale set reported no assigned jobs at all on two consecutive readings — GitHub is no longer holding them, and never reported them complete. Each is a workflow run that will not run. Clears `JobProvisionStalled` and steps `…_jobs_abandoned_total`. | [Scale-Set Assignments Abandoned](#scale-set-assignments-abandoned-assignmentabandoned) |
@@ -2926,6 +2927,10 @@ It is covered in [Worker Pod Reaped While Pending](#worker-pod-reaped-while-pend
 - A scale-set worker died before GitHub delivered its job — nothing to re-run: ["Runner Lost Communication" and No Worker Pod Was Ever Created](#runner-lost-communication-and-no-worker-pod-was-ever-created).
 - GitHub refuses past the re-run window (`EvictionRerunFailed`): [Evicted Worker Pods Exhausting Retry Budget](#evicted-worker-pods-exhausting-retry-budget).
 
+**Fires and deliberately stands down**, on the `deletion` cause only, and not a fault: the run had already concluded `cancelled`, so re-running it would undo a human's cancel.
+No call is made, `eviction_rerun_withheld_total{reason="run_cancelled"}` increments, and a Normal `EvictionRerunWithheld` Event names the run (Q811).
+See [Cancelling a Run Does Not Stop Its Worker Pod](#cancelling-a-run-does-not-stop-its-worker-pod).
+
 A quota-blocked job is deliberately absent from this table: it is **never claimed** in the first place, so it stays queued at GitHub with no re-run needed — see [Jobs Failing Due to Namespace ResourceQuota Exhaustion](#jobs-failing-due-to-namespace-resourcequota-exhaustion).
 
 ---
@@ -2944,7 +2949,8 @@ A quota-blocked job is deliberately absent from this table: it is **never claime
 > The AGC retries that refusal every 30 seconds inside a 15-minute re-run window (Q503), so expect `disruption auto-retry triggered` in the AGC log **~10 minutes** after the eviction, not seconds, with `rerunCalls` in the tens — that attribute counts the calls the recovery made.
 > A single-digit count is not a fault: it means GitHub had already concluded the run before the recovery started calling — which is what happens when the disrupted runner got its own report out, as a drain or a preemption lets it (15–26s, Q459).
 > One eviction has been seen concluding that fast too (2026-08-03, 17s), but the run could not confirm which worker it disrupted, so do not read a low count after an eviction as proof the runner reported.
-> A recovery that gave up instead logs `disruption auto-retry failed`, increments `actions_gateway_eviction_rerun_failures_total`, and emits an `EvictionRerunFailed` Warning Event naming the run — that job needs a manual re-run. `reason="run_never_concluded"` means the original run outlived the 15-minute window (check whether GitHub still shows it in progress); `reason="api_error"` means the API failed outright — check the AGC log line's error for a permissions 403 or an endpoint problem.
+> A recovery that gave up instead logs `disruption auto-retry failed`, increments `actions_gateway_eviction_rerun_failures_total`, and emits an `EvictionRerunFailed` Warning Event naming the run — that job needs a manual re-run. `reason="run_never_concluded"` means the original run outlived the 15-minute window (check whether GitHub still shows it in progress); `reason="api_error"` means the API failed outright — check the AGC log line's error for a permissions 403 or an endpoint problem. `reason="conclusion_unknown"` is the deletion arm only: its cancel check (Q811) could not read the run's status for the whole window, so no re-run was fired rather than one fired blind against a possible cancel.
+> Check the same error for a permissions or endpoint problem, since the re-run call would have used the same credentials.
 > On an AGC older than the Q503 fix, the single un-retried re-run always lost this race and every evicted job needed a manual re-run.
 
 **Symptoms.** `actions_gateway_eviction_retries_exhausted_total` is incrementing.
@@ -3163,17 +3169,17 @@ kubectl logs -n <namespace> <worker-pod> --tail=50
 ```
 
 **Resolution.**
-- **Deleting the worker pod reclaims the capacity, and re-queues the job you cancelled.** `kubectl delete pod -n <namespace> <worker-pod>` terminates it gracefully: the wrapper relays SIGTERM and the runner stops.
-  Only reach for it when you cancelled to free the slot rather than to stop the work.
+- **Delete the worker pod to reclaim the capacity.** `kubectl delete pod -n <namespace> <worker-pod>` terminates it gracefully: the wrapper relays SIGTERM and the runner stops.
+  The cancel stands, and the job is **not** re-queued.
 
-  > **The delete undoes the cancel.** A hand-deleted worker is the shape graceful-deletion recovery acts on (an external delete ordered before the container's exit), so the AGC asks GitHub to re-run the run's failed jobs.
-  > GitHub honours that for a `cancelled` conclusion: the `rerun-failed-jobs` call is accepted and the job is re-queued, where a `success` conclusion refuses it with a 403 (measured live 2026-08-05, [the Q683 measurement](../plan/q645-abandoned-completion.md#q683--the-fast-ending-measurement-2026-08-05)).
-  > Nothing in the gateway deletes a cancelled run's pod, which is why the deletion mark is trusted as a disruption signal; this remedy is the one case where an operator produces that mark deliberately.
+  > **Why the delete no longer undoes the cancel.** A hand-deleted worker is the shape graceful-deletion recovery acts on (an external delete ordered before the container's exit), so the AGC would otherwise ask GitHub to re-run the run's failed jobs, and GitHub honours that for a `cancelled` conclusion, where a `success` conclusion refuses it with a 403 (measured live 2026-08-05, [the Q683 measurement](../plan/q645-abandoned-completion.md#q683--the-fast-ending-measurement-2026-08-05)).
+  > Since Q811 that arm reads the run's conclusion first and stands down on `cancelled`, counting `actions_gateway_eviction_rerun_withheld_total{reason="run_cancelled"}` and emitting a Normal `EvictionRerunWithheld` Event on the owner instead of calling.
+  > Nothing in the gateway deletes a cancelled run's pod, which is why the deletion mark is trusted as a disruption signal; this remedy is the one case where an operator produces that mark deliberately, and the conclusion check is what separates the two.
   > It applies on ScaleSet too: the tier's own reclaim carries the `actions-gateway.com/deletion-reason` stamp and is excluded, while a hand-delete carries no stamp and takes the recovery path.
-  > Each re-run spends one slot of the run's shared `maxEvictionRetries` budget (default 2, max 10), so a repeated cancel-then-delete cycle is bounded, ending in an `EvictionRetriesExhausted` warning Event on the owner.
-  > Whether recovery should read the run's conclusion before re-running is [Q811](../STATUS.md#Q811).
-- **If you cancelled to stop the work, leave the pod alone** and wait it out, or bound it with `maxWorkerLifetime` below.
-  There is no way today to free the slot *and* keep the run cancelled: the delete re-queues the job, and the new attempt has to be cancelled in turn.
+  > The recovery still spends one slot of the run's shared `maxEvictionRetries` budget (default 2, max 10), because the slot is reserved when the disruption is detected, minutes before GitHub has a conclusion to read.
+  > So a repeated cancel-then-delete cycle ends in an `EvictionRetriesExhausted` warning Event on the owner even though nothing was re-run.
+- **If the run is still `in_progress` at GitHub when you delete, the job *is* re-queued.** The check reads what GitHub has concluded, and a cancel takes up to GitHub's ~5-minute cancellation grace to land (measured 5m02s above); a delete that beats it looks exactly like a drain.
+  Confirm with `gh run view <run-id> --json status,conclusion` before deleting, and expect `status: completed`, `conclusion: cancelled`.
 - **Bound the worst case with `maxWorkerLifetime`** on the runner group, which caps how long any worker — cancelled or not — can hold its slot.
 - Do **not** expect a lower `completedPodTTL` or `pendingPodDeadline` to help: both act on pods that have already stopped or never started, and this pod is running.
 
