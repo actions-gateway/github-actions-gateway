@@ -1130,6 +1130,14 @@ Each is a claim about state, and each has a cheap way of being wrong:
   Q166 spent two wrong hypotheses on this.
   A red envtest suite was blamed first on the session's own concurrent test runs, then on a cluster-wide List the branch had added, which was narrowed on that theory for no improvement; `origin/main` alone then measured 324.5s against a 5m timeout with none of the branch's code, and the failing test's name had moved between runs because what was actually failing was the suite's wall clock (Q741).
   The tell is a failing test whose identity changes run to run, or one in a file the diff never touches: both say the branch is a bystander.
+
+- **A derived gate's green is bounded by what it can still resolve, and a derivation that shrinks says nothing.** The bullet above asks whether a red gate is yours; this is the opposite failure, a gate that stays green because it quietly stopped looking.
+  The blind spots named above are named once, when a measurement is reported.
+  A gate runs forever, and its coverage can regress long after it was written: a rename introduces a second function of the same name, the resolver can no longer place a call, and a value it used to derive stops being demanded.
+  Nothing turns red, because the check that would have fired is the one that went missing.
+  Under-derivation is not a missing refusal, it is a refusal that will never be attempted. **So a gate that derives its own inventory has to fail on an input it cannot place**, as a finding rather than a logged note.
+  Two scanners built in the 1.5 cycle each grew one independently: `metrictiers`' `values-derivation` (Q851) and `reasontiers`' `resolution` (Q850).
+  Converging twice in one cycle is the signal that a derived inventory needs this by construction, not as an afterthought.
   The tier now says it for you: a breach of the [envtest suite budget](#the-envtest-suite-budget) reports that the *suite* ran out of time and names the panic's test as a bystander, rather than leaving the reader to notice that the name moved.
   When it does fail on the base, the fix is not yours to carry either: it gets its own PR, searched for before it is written ([CONTRIBUTING.md § When `main` is broken](../../CONTRIBUTING.md#when-main-is-broken)).
 - **A cause you can watch happening is still only a hypothesis, and a real one does not crowd out a second.** The bullet above asks whether a failure is yours at all; this one asks whether the cause you found is the whole of it, and it is hardest exactly when the first cause is genuine. #1432's `--assess` reported "no human has enqueued this PR" for a PR a human demonstrably had, during a GitHub timeline degradation that was real, concurrent, and sufficient to explain it, so the investigation closed there and the row was filed against it.

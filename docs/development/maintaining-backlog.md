@@ -454,6 +454,10 @@ Q584 was filed asserting that `check-path-filters.sh`'s awk YAML parsing could "
 That was wrong — the gate iterates a hardcoded filter registry against `go.work`, so a parse failure *removes* patterns and fails closed — and the row reached `main` before anyone tried to reproduce it, costing a second PR to correct.
 The real defect had the opposite sign: a valid reformat made the gate emit twelve errors naming patterns that were already present.
 
+**A count of instances in a row is a claim too, and usually the least-verified part of it.** The mechanism gets checked because it reads like an assertion; "two live differences" reads like an observation and invites fixing exactly two.
+Q851 named two label values whose tier the ledger got wrong; deriving the set from source found seven, plus seven stale `Help` strings the row had not mentioned at all.
+Where the row names a small N, prefer deriving the population over repairing the named N: the derivation is what catches the rest, and it keeps catching them after the row is closed.
+
 Rows that name an unknown are honest and useful — several in the Queue say "unmeasured live — confirm X before building".
 That phrasing is the pattern: it tells the next session where to start, instead of sending it to repair something that already works.
 Only a stated *mechanism* needs this; a symptom ("this test flaked on run N, passed on rerun") is already an observation.
