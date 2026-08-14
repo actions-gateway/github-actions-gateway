@@ -4,7 +4,8 @@
 > Four gating Queue rows so far, labelled `1.5-gate`: Q712, Q713, and Q726, admitted 2026-08-09 from the candidate list below, plus Q715, admitted the same day off an external date.
 > All four shipped 2026-08-11, and the marketing reconciliation closed 2026-08-12 (Q801, Q821).
 > Two more were admitted afterwards, both on the [parity axis](#the-parity-axis-what-closed-and-what-backs-it): Q776 on 2026-08-13, to back the parity claim the other four earned, and Q844 on 2026-08-14, a classic-only capability the badge set never recorded and the marketing surface already claims for both tiers.
-> Q844 shipped 2026-08-14 and Q776 has now shipped too, so every gating row is closed and only the release-candidate dogfood validation remains.
+> Q844 shipped 2026-08-14 and Q776 has now shipped too, so every gating row is closed.
+> The [API surface review](#pre-flight-the-api-surface-this-tag-publishes) is recorded below, which clears the last item binding at the release candidate; the dogfood validation binds before the stable tag rather than before the RC.
 
 ## Why these gate a release rather than riding along
 
@@ -154,6 +155,35 @@ Q844 is the case in point: the claim was already published, on `features.md` and
 
 Q776 has landed, so the notes may now say parity **on the metric surface**, and should say it in those words.
 The ledger is the evidence and the gate is what keeps it true; a capability with no series behind it is still covered by a manual walk, so an unqualified "full parity" would overstate what is actually enforced.
+
+## Pre-flight: the API surface this tag publishes
+
+Recorded 2026-08-14 from `scripts/release/api-surface-since.sh` over `v1.4.0..feabacdc4`, per [release.md § Pre-flight](../operations/release.md#1-pre-flight). **Verdict: ship as-is.** Two wire fields, one condition type and five condition reasons are published for the first time; no enum constraint, no default and no label or annotation key changed, and nothing is wire-breaking.
+
+The surface stopped moving before the review: Q844 landed controller code on 2026-08-14 and added none of it.
+
+| Addition | Carried on | Why the shape is right |
+|---|---|---|
+| `runnerGroup` (Q712) | `RunnerSet` | `+optional` with `omitempty` and `MinLength=1`, so an explicit `""` is rejected and unset cannot diverge from empty; no pointer and no CRD default needed. Length bounds sit on the field rather than in a spec-level rule. |
+| `defaultRunnerGroup` (Q712) | `ActionsGateway` | Inherited only by RunnerSets that set no `runnerGroup`, so the narrower field always wins, matching `templateRef`/`proxyRef`. |
+| `RunnerLabelsIncomplete` (Q726) | `RunnerSet` condition | Abnormal-true, like the existing `RunnerVersionTooOld`, and deliberately outside the gateway's `RunnerSetsDegraded` rollup: a declared label missing at GitHub is a configuration mismatch, not an outage. |
+| `LabelsNotRegistered` / `LabelsRegistered` (Q726) | `RunnerLabelsIncomplete` | The True and False reasons of one condition, named for the state each reports. |
+| `RunnerGroupNotFound` (Q712) | `Ready` | Fail-closed is the design, not an error path: falling back to the default group would widen the forge-side boundary at the moment an operator narrows it. |
+| `WorkerImageBelowMinimum` / `WorkerImageCurrent` / `WorkerImageVersionUnknown` (Q715) | `RunnerVersionTooOld` | Three states rather than two. A digest-only or tenant-tagged image declares no version, and that reports `Unknown` rather than `False` because a custom image is where a stale runner hides. |
+
+### Two that were decisions rather than ticks
+
+**The `runnerGroup` name collides, and keeps the name.** It shares a word with the deprecated `v1alpha1` `RunnerGroup` CR, which is a different concept, and the field's godoc says so in its first sentence.
+Two things settle it: GitHub's own term is "runner group" and ARC's `gha-runner-scale-set` chart already exposes `runnerGroup` for exactly this, so an operator migrating from ARC meets the name they expect; and the colliding CR comes out in the `v2.0.0` bundle ([Q264](../STATUS.md#Q264)), so the ambiguity is time-boxed. `githubRunnerGroup` would trade ecosystem familiarity for a collision that resolves itself.
+
+**The default is the wide group, and that is accepted rather than clean.** Unset inherits the gateway's default and then GitHub's own default group, which typically admits the whole organization, so the default is the less isolated value.
+No narrower default exists to choose: GAG does not create runner groups.
+The safety therefore sits where GAG does decide the outcome — an unresolvable name fails closed rather than falling back, and an undeclared group leaves an existing scale set where it is, so widening is always explicit.
+
+One bound was not verified and does not need to be: `MaxLength=255` was not checked against GitHub's real limit for a runner group name.
+Loosening a length bound later is non-breaking and tightening one is, so a generous bound is the safe error.
+
+Nothing was deferred, so this review adds no gate row.
 
 ## Candidates not yet accepted
 
