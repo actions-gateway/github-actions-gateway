@@ -233,7 +233,12 @@ The guard existed but was namespace-scoped, which is the one boundary that does 
 
 **Nothing is re-validated at upgrade time**, because admission runs on create and update.
 A colliding pair keeps running until someone re-applies either set, and the rejection lands then, which may be long after the upgrade and on a tenant who changed nothing.
-Finding it in advance costs one command:
+
+**The GMC now tells you instead of leaving you to find out.** Each affected gateway reconciles into an advisory `ScaleSetNameCollision=True` condition with a `Warning` Event, and `actions_gateway_scale_set_name_collision` reads `1` for it, so a pair carried in from an older release surfaces on the first reconcile after the upgrade rather than at the next unrelated `kubectl apply`.
+The condition does not gate `Ready` and does not stop the AGC: GAG cannot pick which tenant loses the name, and refusing to provision would take down the tenant that was there first as well.
+Resolution steps: [`ActionsGateway` reports `ScaleSetNameCollision`](troubleshooting.md#actionsgateway-reports-scalesetnamecollision).
+
+You can also find it in advance, before upgrading, for one command:
 
 ```bash
 kubectl get runnersets -A -o jsonpath='{range .items[?(@.spec.acquisitionProtocol=="ScaleSet")]}{.metadata.namespace}{"\t"}{.metadata.name}{"\t"}{.spec.runnerLabels[0]}{"\n"}{end}'
@@ -245,7 +250,8 @@ Labels *after* the first may be shared freely.
 The rejection names the GitHub scope but withholds the conflicting set, since it may belong to another tenant; a platform admin finds it in the GMC controller log or with the command above.
 Two `Classic` sets are unaffected, registering no scale set at all.
 
-**Rolling back** restores the namespace-scoped guard, so the colliding configuration is accepted again, along with the cross-tenant job acquisition it allows.
+**Rolling back** restores the namespace-scoped guard, so the colliding configuration is accepted again, along with the cross-tenant job acquisition it allows, and the condition and gauge that would have reported it go away with it.
+A `ScaleSetNameCollision` condition left on a gateway is inert on the older version, which does not set or clear it; delete it by hand if a stale `True` would confuse a dashboard.
 
 ### Non-breaking: a worker lost while the AGC was down is now re-run automatically (`cause="vanished"`)
 

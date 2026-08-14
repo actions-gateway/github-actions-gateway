@@ -23,9 +23,6 @@ Every item here blocks a release tag, and nothing else appears in this section: 
 The pill beside each title names the release it blocks, read from the backlog rather than typed here, so it cannot outlive the commitment.
 
 
-- **[Warn when two runner sets already share a scale-set name](design/05-security.md#cross-tenant-job-acquisition-via-a-shared-scale-set-name)** <!-- q:Q849 --> Admission refuses a new collision, but a pair predating the check keeps running until someone re-applies either set.
-  The gateway will report it instead of waiting.
-
 - **[Detect a CRD schema older than the running controller](operations/upgrade.md)** <!-- q:Q852 --> `helm upgrade` never applies CRDs, and a structural schema drops unknown fields with no error, so a skipped step can leave a declared runner-group boundary with no effect.
 
 - **[Persistent and shared worker storage](operations/README.md)** <!-- q:Q719 --> Workers are storage-less by design and nothing validates a `ReadWriteMany` volume mounted into one, so the stance is undocumented rather than decided. `ReadWriteMany` is how jobs share files and what ARC's `containerMode: kubernetes` depends on, so it also matters to anyone migrating off that mode.

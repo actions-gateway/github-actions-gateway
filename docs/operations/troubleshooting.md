@@ -78,6 +78,7 @@ Each section below covers a specific failure mode: symptoms, likely cause, diagn
 - [Privileged Worker Container Rejected by Admission](#privileged-worker-container-rejected-by-admission)
 - [`RunnerTemplate` Rejected: Reserved Pod Field (`v2alpha1`)](#runnertemplate-rejected-reserved-pod-field-v2alpha1)
 - [`RunnerSet` Rejected: `acquisitionProtocol` (`v2alpha1`, early-adopter)](#runnerset-rejected-acquisitionprotocol-v2alpha1-early-adopter)
+- [`ActionsGateway` Reports `ScaleSetNameCollision`](#actionsgateway-reports-scalesetnamecollision)
 - [`RunnerSet` Rejected: `nodeShare.allocatable` Declares Neither cpu Nor memory](#runnerset-rejected-nodeshareallocatable-declares-neither-cpu-nor-memory)
 - [`RunnerSet` Stuck `Ready=False` With a `NotFound` Reason (`v2alpha1`)](#runnerset-stuck-readyfalse-with-a-notfound-reason-v2alpha1)
 - [`RunnerSet` Stuck `Ready=False` With `RunnerGroupNotFound`](#runnerset-stuck-readyfalse-with-runnergroupnotfound)
@@ -3691,6 +3692,64 @@ scale-set names that GitHub scope already holds)
   To change it, create a **new** `RunnerSet` (with a distinct name and first label) and delete the old one.
 - **More than one label is no longer rejected.** Until Q726 a `ScaleSet` set had to declare exactly one `runnerLabel` and a multi-label set had to set `acquisitionProtocol: Classic`; both CEL rules are gone.
   If you still see one of those messages, the cluster is running an older CRD than the controller; reapply the chart's CRDs.
+
+---
+
+## `ActionsGateway` Reports `ScaleSetNameCollision`
+
+> Applies to the `v2alpha1` (`actions-gateway.com`) API.
+> This is the **already-happening** form of the rejection above: admission stops a new colliding pair, and this reports one that is already stored.
+
+**Symptoms.** A v2 `ActionsGateway` is `Ready=True` and provisioning normally, but carries:
+
+```
+Type:    ScaleSetNameCollision
+Status:  True
+Reason:  ScaleSetNameShared
+Message: 1 RunnerSet(s) bound to this gateway claim a scale-set name another RunnerSet
+         already claims in GitHub scope "github.com/acme": "linux-set" claims "linux".
+         A ScaleSet set's FIRST runnerLabel is its scale-set name at GitHub, so both
+         AGCs drive one scale set and each acquires the other's jobs. Give one side a
+         distinct first runnerLabel; the GMC log names the other holder
+```
+
+`kubectl describe` shows a matching `Warning` Event with reason `ScaleSetNameShared`, and `actions_gateway_scale_set_name_collision` reads `1` for the gateway.
+Tenants may also report jobs disappearing into another tenant's runners, or workflow logs from a repository they do not own.
+
+**Likely cause.** Two `ScaleSet` `RunnerSet`s share a first `runnerLabel` under gateways bound to the same GitHub org, enterprise, or repo: the collision the [`acquisitionProtocol` rejection above](#runnerset-rejected-acquisitionprotocol-v2alpha1-early-adopter) explains in full.
+Admission (Q791) rejects every write that would create such a pair, in any apply order, so a pair that exists anyway got there without being validated.
+Two ways that happens:
+
+- **Upgrade from a release before `v1.5.0`.** The uniqueness guard used to be namespace-scoped, so a cross-namespace pair was admitted then and is still stored now.
+  A webhook only fires on a write, and nothing re-applies these objects, so the guard never sees them. **This is the common case, and it is why the condition exists.**
+- **A window with the validating webhook uninstalled or unreachable.** `failurePolicy: Fail` makes an unreachable webhook block writes rather than admit them, so this needs the `ValidatingWebhookConfiguration` to have been absent: a partial install, or CRDs applied without the chart's webhook resources.
+
+**Resolution.** The two tenants are driving one scale set right now, so treat it as live cross-tenant exposure.
+
+1. **Find the other holder.** The condition names only this gateway's own `RunnerSet`s; the holder may belong to another tenant, so it is withheld from tenant-readable status for the same reason the admission rejection withholds it.
+   As a platform admin, read the GMC log:
+
+   ```bash
+   kubectl logs -n gmc-system deploy/gmc-controller-manager | grep 'ScaleSet name collision'
+   ```
+
+   Or list every claim in the cluster and look for a repeated first label:
+
+   ```bash
+   kubectl get runnersets -A -o jsonpath='{range .items[?(@.spec.acquisitionProtocol=="ScaleSet")]}{.metadata.namespace}{"\t"}{.metadata.name}{"\t"}{.spec.runnerLabels[0]}{"\n"}{end}'
+   ```
+
+   Cross-reference each set's gateway `githubURL`: only sets under gateways bound to the *same* org, enterprise, or repo collide.
+2. **Decide which side keeps the name**, then change the other's **first** `runnerLabel`.
+   GAG does not pick: it cannot know which tenant owns the name, and both sides carry the condition.
+   Renaming re-registers a new scale set, so update the affected workflows' `runs-on` in the same change; see [Jobs Targeting One of a Runner Set's Labels Never Start](#jobs-targeting-one-of-a-runner-sets-labels-never-start-runnerlabelsincomplete).
+3. **Confirm it cleared.** Both gateways flip to `ScaleSetNameCollision=False` / `ScaleSetNamesUnique` within a reconcile, and the gauge drops to `0`.
+
+**Why the gateway still runs.** The condition is advisory: it does not gate `Ready` and does not stop the AGC.
+Refusing to provision would take down *both* tenants, including the one that was there first and did nothing wrong, over a state GAG cannot arbitrate.
+
+**A `0` gauge on an unreadable cluster is not a clean bill.** If the GMC cannot list `ActionsGateway`s or `RunnerSet`s cluster-wide, it leaves the previous condition in place rather than writing `False`, so a gateway that has never reconciled successfully carries no condition at all.
+Check the GMC log for `could not read the cluster's ScaleSet claims` and confirm its RBAC still grants the cluster-wide `runnersets` read.
 
 ---
 
