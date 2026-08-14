@@ -393,6 +393,14 @@ PROJECT=… CLUSTER=… ZONE=… REPO=… scripts/dogfood/validate-release.sh vX
 [e2e t+04:12] 31/73 specs | 29 ok, 1 failed, 1 skipped | running: E2E_GMC_Isolation cross... (3m58s)
 ```
 
+That heartbeat comes out of the run's own job log, and GitHub does not always serve one — it served nothing for the whole 22-minute leg of the `v1.5.0-rc.1` run that passed.
+When that happens the gate relays job-level progress off the run record instead, so the leg is never silent for its full duration:
+
+```
+[e2e run] 3/7 jobs done (3 ok) | running: e2e / e2e (calico)
+```
+
+A `[e2e run]` line means the log is unreadable, not that anything is wrong; it is replaced by the spec heartbeat the moment one arrives.
 The run URL is printed before the watch begins if you would rather follow it in a browser.
 When the e2e leg finishes — pass **or fail** — the run's JUnit report is rendered into your terminal: counts, every failing spec with its message, and the ten slowest specs.
 A red gate names the specs that failed without you having to open the run.
@@ -427,10 +435,10 @@ From a detached checkout of the RC tag (`git switch --detach vX.Y.Z-rc.N`):
    | Profile | Tenant | Behaviour |
    |---|---|---|
    | `NodeShare` | `gag-dogfood-e2e` | **Hard failure.** It needs no sample history, so it must report `sizingProfileState: Active` and derive the envelope's per-worker share. Anything else is a defect. |
-   | `Throughput` | `gag-dogfood` | **Reported, never fatal.** It needs ≥20 samples per template container, supplied by the CI tenant's ordinary traffic — not by this gate's ~7-job matrix. |
+   | `Throughput` | `gag-dogfood` | **Reported, never fatal**, and by now normally `Active`. The ≥20 samples per template container come from the CI tenant's ordinary traffic rather than this gate's ~7-job matrix, and that history is long past the threshold: measured `Active` on `v1.4.0-rc.1` (2026-08-09) and again on `v1.5.0-rc.1` (2026-08-14, `sampleCounts=[188]`). |
    | `Binpack` | — | Not re-asserted; live-validated 2026-07-25. |
 
-   **When Throughput reports `NOT VALIDATED THIS RUN`, read the state before reaching for the sample count** — the two non-`Active` states are different problems, and the leg prints which one you have:
+   **`NOT VALIDATED THIS RUN` is the exception, not the expected reading — and it is two different problems, so read the state before reaching for the sample count.** The leg prints which one you have:
 
    | `sizingProfileState` | What it means | Fix |
    |---|---|---|
