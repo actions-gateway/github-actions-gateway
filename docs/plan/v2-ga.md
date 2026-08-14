@@ -100,6 +100,7 @@ Dropping a served API version is a contract change operators can plan for; silen
 | Pre-claim quota gate (refuse work the namespace `ResourceQuota` cannot place, rather than claim it and stall) | ✅ **Both tiers.** Q443 ported it: the ladder `Provisioner.Admit` walks per delivered job is also expressed as an integer (`AdvertiseCapacity`), and the scale-set tier advertises `min(ceiling, own in-flight pods + quota headroom)` as `X-ScaleSetMaxCapacity` — so a quota-blocked job is never assigned at all. | Cleared. Design: [04-operational-flows.md § The ladder as an integer](../design/04-operational-flows.md#the-ladder-as-an-integer-scale-set-tier-q443). Plan: [capacity-aware-intake.md §9a](capacity-aware-intake.md#9a-the-shipped-quota-rung-was-classic-only-q443). |
 | Abandoned-run force-cancel and automatic re-run (a worker removed before it ran) | ✅ **Both tiers.** Q683 and Q691 shipped classic-only inside 1.4 and Q766 ported both in the same release, before any tag published the asymmetry. The scale-set detection reads the run identity from the worker pod's annotations where classic reads it from the payload it holds, which is what the `tier` label on `abandoned_run_force_cancels_total` splits. | Cleared. Design: [04-operational-flows.md § On the scale-set tier](../design/04-operational-flows.md#on-the-scale-set-tier-q766). Plan: [release-1.4.md](release-1.4.md). |
 | Job duration and pod-creation latency (`job_duration_seconds`, `pod_creation_latency_seconds`) | ✅ **Both tiers.** Both are observed off the shared pod informer, which sees a scale-set worker pod and a classic one identically, so neither depends on the waiter a fire-and-forget provision never registers. `job_duration_seconds` is worker pod lifetime on both tiers, one span rather than one per tier. | **Cleared** by Q713 (2026-08-11). |
+| Restart-safe disruption recovery (a preempted or drained worker whose AGC was down for the teardown) | ✅ **Both tiers.** Q844 ported it: the classic provisioning goroutine reads the disruption off the resolving event it already watches, while a scale-set worker is readable only while it terminates, so an AGC down for that window listed no pod and issued no re-run. The listener now persists the run identity behind every worker it builds in the per-`RunnerSet` guard ConfigMap, and the reconciler re-runs any whose pod is gone at startup, reported as `eviction_retries_total{cause="vanished"}` because which disruption took the worker went with the pod. | Cleared. Design: [04-operational-flows.md](../design/04-operational-flows.md#why-preemption-deletes-rather-than-evicts-and-what-that-costs-us). Plan: [archive/q844-owed-rerun-tombstone.md](archive/q844-owed-rerun-tombstone.md). |
 | Poll-error rate observability (`message_poll_errors_total`) | ✅ **Both tiers.** Q446 closed the counter half: `handlePollError` increments the same `actions_gateway_message_poll_errors_total{namespace, reason}` series the classic listener writes, under the same reason vocabulary (`rate_limited`, `timeout`, `other`), with the 401/403 and 404/410 heal branches counting nothing exactly as classic does — so an existing dashboard or alert keeps its meaning. The conditions (`Degraded`/`Unauthorized`, `RateLimited` after a sustained episode) stay as the state half. | Cleared. Metric: [observability-metrics.md](../operations/observability-metrics.md). |
 
 ### What this audit checked, and found already covered
@@ -109,8 +110,12 @@ Method: walk the tier seams — the `ScaleSet` early return in `runnerset_contro
 
 **Confirmed on both tiers** (wired before the protocol route, or ported): worker-capacity conditions `WorkerQuotaPressure`/`WorkerQuotaExceeded`/ `WorkersUnschedulable` (Q303, explicitly "identical to the classic path"), the opt-in scale-up rate limit `spec.scaleUp`, the measured sizing recommendation and `SizingDrift` condition (Q359), the worker-pod reaper including `orphaned_running` (Q420), and eviction recovery (Q417).
 
-**Correctly absent from the scale-set tier** — artifacts of the many-acquirers and JIT-agent models that `ScaleSet` removes by construction, so they should disappear *with* classic rather than be ported: `jobs_duplicate_delivery_total`, `abandoned_delivery_completions_total`, `fanout_loser_recycle_deferred_total`, `agent_recycles_total`, `agent_recycle_errors_total`, `broker_token_propagation_retries_total`, and `broker_session_leaks_total`.
-Each measures a race or a repair that only exists because many sessions acquire against one pool.
+**Correctly absent from the scale-set tier** — artifacts of the many-acquirers and JIT-agent models that `ScaleSet` removes by construction, so they should disappear *with* classic rather than be ported: `jobs_duplicate_delivery_total`, `abandoned_delivery_completions_total`, `fanout_loser_recycle_deferred_total`, `agent_recycles_total`, `agent_recycle_errors_total`, `broker_token_propagation_retries_total`, `broker_session_leaks_total`, `renew_job_errors_total`, and `renew_job_teardowns_total`.
+Each measures a race or a repair that only exists because many sessions acquire against one pool, or a call the AGC only makes on the classic tier: a scale-set runner renews and completes its own job, so there is no `renewjob` for the gateway to fail at.
+
+The last two joined the list from the Q776 re-walk below.
+That list is prose and this section is archived at the cut, so the machine-readable form is the [acquisition-tier ledger](../operations/observability-metrics.md#acquisition-tier-reach), which carries every `actions_gateway_*` series rather than only the omissions, and which `make metric-tiers-check` holds to the source.
+The two are reconciled by that gate in both directions, so a name here that the ledger does not call classic-only fails.
 
 **Alerting already has its analog:** `job_acquisition_errors_total` is classic-only, but [observability-alerting.md](../operations/observability-alerting.md) ships `actions_gateway:scaleset_provision_success_rate:rate5m` alongside the classic `job_acquisition_success_rate`, so the shipped rules do not go silent at the cut. `active_sessions` is likewise classic-only with `scaleset_jobs_assigned_total` as the documented substitute.
 
@@ -126,14 +131,20 @@ Q435 measured the adjacent orphan-reclaim question and [Q438](archive/q438-worke
 
 Any further capability found to be classic-only before the cut joins this table and gates the same removal.
 
-**Three joined it after the audit, which is the rule working rather than failing.** The abandoned-run recovery opened and closed inside 1.4: Q683 and Q691 shipped classic-only, Q766 ported them, and no tag ever published the asymmetry.
+**Four joined it after the audit, which is the rule working rather than failing.** The abandoned-run recovery opened and closed inside 1.4: Q683 and Q691 shipped classic-only, Q766 ported them, and no tag ever published the asymmetry.
 Q713 was the third and the longest-lived: the duration and latency series were the one capability with no scale-set analog to substitute, so it took a port rather than a caveat, and it closed 2026-08-11 by moving both observations onto the shared pod informer.
+Q844 was the fourth, on 2026-08-14: restart-safe disruption recovery was classic-only because a scale-set worker is readable only while it terminates, and the ScaleSet tier now persists the run behind every worker it builds.
 Read the table, not this section's history, for the state of the gate.
 
 The audit's method has a known blind spot both instances share.
 It walked the tier seams once, in July, and a capability added to `provision()` afterwards is classic-only from birth without anything re-walking them.
-Q683, Q691 and Q713 all arrived that way.
-Until [Q774](../STATUS.md#Q774) gates scope statements mechanically, adding a row here is a manual step in the change that creates the asymmetry, and the [doc-update matrix](../development/doc-update-matrix.md) is where that obligation is written down.
+Q683, Q691 and Q713 all arrived that way, and Q844 made four on 2026-08-14, found by hand rather than by any gate.
+
+**The metric surface now re-walks itself.** Q776 closed that half: every `actions_gateway_*` series the AGC defines carries a tier in the [acquisition-tier ledger](../operations/observability-metrics.md#acquisition-tier-reach), and `make metric-tiers-check` fails a series added without one, a ledger row the source refutes, and a name on the absent-by-design list above that the ledger does not call classic-only.
+The re-walk it required found two: `renew_job_errors_total` and `renew_job_teardowns_total` were classic-only by construction and on no list, and `eviction_recovery_evidence_lost_total` reached no operator doc at all.
+
+That gate covers metrics, not capabilities, so the manual step survives for anything with no series behind it: Q844 had one only because the recovery it ported reports through a counter that already spanned both tiers.
+Until [Q774](../STATUS.md#Q774) gates scope statements mechanically, adding a row to the table above is still a manual step in the change that creates the asymmetry, and the [doc-update matrix](../development/doc-update-matrix.md) is where that obligation is written down.
 
 ## Phase 4 — docs and the cut
 

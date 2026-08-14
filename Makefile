@@ -151,6 +151,16 @@ page-density-check: ## Fail on an admonition wall, or a stat tile saying the sam
 promql-check: ## Fail on unparseable PromQL, or alert rules that have drifted from their docs
 	scripts/manifest/check-promql.sh
 
+# Capability parity between the two acquisition tiers rested on a one-time seam
+# walk that went stale four times (Q683, Q691, Q713, Q844), each a capability
+# classic-only from birth with nothing re-walking it. This inverts the
+# obligation for the metric surface: a series cannot reach an operator without a
+# tier in the ledger, and a ledger row the source refutes fails too.
+# status-scope: none — it selects the AGC source and two named docs, never the backlog.
+.PHONY: metric-tiers-check
+metric-tiers-check: ## Fail on an AGC metric with no acquisition-tier row, or a tier claim the source refutes
+	scripts/docs/check-metric-tiers.sh
+
 # scripts/README.md coverage gate (Q688). That page is the only map from a
 # script to the gate that runs it, and listing the sixteen *-test.sh files that
 # had drifted off it fixes the day rather than the week — so the gate is the

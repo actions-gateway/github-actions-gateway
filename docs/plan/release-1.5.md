@@ -4,7 +4,7 @@
 > Four gating Queue rows so far, labelled `1.5-gate`: Q712, Q713, and Q726, admitted 2026-08-09 from the candidate list below, plus Q715, admitted the same day off an external date.
 > All four shipped 2026-08-11, and the marketing reconciliation closed 2026-08-12 (Q801, Q821).
 > Two more were admitted afterwards, both on the [parity axis](#the-parity-axis-what-closed-and-what-backs-it): Q776 on 2026-08-13, to back the parity claim the other four earned, and Q844 on 2026-08-14, a classic-only capability the badge set never recorded and the marketing surface already claims for both tiers.
-> Q844 shipped 2026-08-14, leaving Q776 as the only gating row still open.
+> Q844 shipped 2026-08-14 and Q776 has now shipped too, so every gating row is closed and only the release-candidate dogfood validation remains.
 
 ## Why these gate a release rather than riding along
 
@@ -109,18 +109,30 @@ That the badge set and the parity table both read clean while this was open is t
 
 ### What parity does not yet have: a backstop
 
-Both results rest on a one-time manual walk, and on the tier axis that walk has already gone stale three times.
+Both results rested on a one-time manual walk, and on the tier axis that walk had already gone stale three times when this section was written.
 Q683, Q691 and Q713 each arrived classic-only from birth *after* the 2026-07-26 tier-seam walk declared parity, and nothing re-walks it.
 
 The tier badge gate is one-directional by construction.
 It fails a badge whose Queue row already shipped, a badge with no `<!-- tier:QN -->` annotation, and a badge linking no `operations/` page, so a badge cannot outlive its gap.
 It cannot see the case that actually recurs: a capability that is classic-only and was never badged at all.
 
-**[Q776](../STATUS.md#Q776) is admitted as a `1.5-gate` row on 2026-08-13** for that reason.
+**Q776 was admitted as a `1.5-gate` row on 2026-08-13** for that reason.
 It reconciles the `actions_gateway_*` names across both sides against the absent-by-design list in [v2-ga.md](v2-ga.md#capability-parity-is-a-precondition-of-the-removal), which both re-establishes the measurement as current and leaves behind the gate that keeps it so.
 
 Q844 found the fourth instance a day later, and by hand rather than by any gate, which is the argument for Q776 restated as evidence.
 It has since closed the gap it found; Q776 is what makes the next one visible without someone thinking to ask, and landing it is what lets the release notes say parity rather than name four ports.
+
+**✅ Q776 shipped.** The re-walk covered all 53 `actions_gateway_*` series the AGC defines, and the [acquisition-tier ledger](../operations/observability-metrics.md#acquisition-tier-reach) is where each one's tier now lives: 26 reach both tiers, 16 are classic-only, 10 are scale-set-only, and one is tier-neutral. `make metric-tiers-check` holds the ledger to the source in both directions, so a series added on one tier fails until someone answers the tier question, and a row the source refutes fails too.
+
+It found two things the one-time walk had not, which is the argument for the gate rather than a fifth walk:
+
+- `renew_job_errors_total` and `renew_job_teardowns_total` are classic-only by construction, since a scale-set runner renews and completes its own job and the AGC never calls `renewjob`.
+  Neither was on the absent-by-design list, and neither row said which tier emits it, so both read as system-wide.
+- `eviction_recovery_evidence_lost_total` (Q809) reached no operator doc at all.
+  It was described in the design docs and the troubleshooting runbook, and the metrics reference an operator actually reads never gained a row.
+
+Neither is a capability gap, so the parity result above stands: **the tier axis is closed on the full metric inventory, not only on the tracked one.** The gate covers metrics rather than capabilities, so a capability with no series behind it still joins the parity table by hand.
+That residual is recorded in [v2-ga.md](v2-ga.md#what-this-audit-checked-and-found-already-covered) and belongs to [Q774](../STATUS.md#Q774).
 
 The v1 to v2 axis gets no equivalent row, and that is a decision rather than an omission. `cmd/agc/api/v1alpha1/conditions_parity_test.go` already pins the listener vocabulary across all three packages by value (Q309), and new drift can only come from someone adding to `v1alpha1`, which is frozen and comes out in the `v2.0.0` bundle ([Q264](../STATUS.md#Q264)).
 
@@ -135,11 +147,13 @@ Preemption and drain recovery were listed here until 2026-08-14, on the grounds 
 - Several counters are absent from the scale-set tier by construction, being artifacts of the many-acquirers and JIT-agent models `ScaleSet` removes.
   [v2-ga.md](v2-ga.md#capability-parity-is-a-precondition-of-the-removal) holds the list, and Q776 reconciles against it.
 
-### What the notes should not claim yet
+### What the notes may claim
 
-Until Q776 lands, the notes name the ports rather than asserting parity.
-A published parity claim resting on a walk with a four-times-stale record is the same failure Q801 spent this release fixing, one surface over.
+The bar was that the notes name the ports rather than asserting parity until Q776 landed, because a published parity claim resting on a walk with a four-times-stale record is the same failure Q801 spent this release fixing, one surface over.
 Q844 is the case in point: the claim was already published, on `features.md` and in the troubleshooting matrix, before anyone checked whether the shipped tier honoured it.
+
+Q776 has landed, so the notes may now say parity **on the metric surface**, and should say it in those words.
+The ledger is the evidence and the gate is what keeps it true; a capability with no series behind it is still covered by a manual walk, so an unqualified "full parity" would overstate what is actually enforced.
 
 ## Candidates not yet accepted
 
