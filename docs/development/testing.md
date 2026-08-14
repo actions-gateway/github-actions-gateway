@@ -1537,6 +1537,26 @@ Nothing distinguished that from a fix that worked.
 
 `scripts/agent/foreground-guard-patterns-test.sh` is the durable form of that probe, controls included.
 
+### Extracting a call argument by name is wrong wherever two functions share one
+
+A scan that pulls an argument out of a call has to decide which argument, and the cheap way is a table keyed on the callee's name.
+That is correct exactly until two functions share a name and hold the argument at different indexes, which in a codebase with wrappers is the normal case rather than the exception.
+The failure is silent in both directions at once: the scan reports a neighbouring argument as a hit, and reports nothing for the calls whose index it guessed past.
+
+Three instances in the 1.5 cycle, all on the same argument:
+
+- The v1.4.0 release pre-flight matched `Event(obj, type, reason)` only, missed the `recordEvent(type, reason, action)` shape, and returned a false no-change ([Q780](https://github.com/actions-gateway/github-actions-gateway/blob/main/docs/STATUS.md)).
+- The 2026-08-14 pre-flight keyed on `recordEvent(` and missed the two additions recording through `RecordEvent(`.
+- `reasontiers`' first version keyed the reason's index on the function name, read the scale-set listener's *action* string `"ProvisionWorker"` as a reason, and missed four reasons entirely.
+  The AGC has two methods named `recordEvent` and two named `Event`, with the reason at a different index in each.
+
+**Read the index off the callee's own declaration.** Parse the function and interface declarations, find the parameter by name, and use its position; state by hand only the signatures declared outside the repo.
+Then fail loudly on a call you cannot place, so a new wrapper cannot be added silently: `reasontiers` treats a call carrying `corev1.EventTypeWarning`/`EventTypeNormal` that matches no signature as a finding.
+Two further traps sit under that: a variadic declaration's arity counts the trailing parameter, so a call omitting the varargs matches nothing unless you subtract it; and a parameter of the enclosing function is a *forwarder*, not the site that decides the value.
+
+None of the three was caught by the scan reporting a problem.
+Each was caught by comparing its output against values already documented elsewhere, which is [the positive control](#a-throwaway-probe-needs-a-positive-control-before-its-silence-means-anything) applied to an inventory: pick a handful the docs already name, and require the scan to find them before believing what it says is absent.
+
 ### A credential-gated spec that skips is not defending anything
 
 A spec that `Skip`s for want of credentials reports the same colour as one that ran and passed.
