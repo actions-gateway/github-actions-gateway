@@ -2832,6 +2832,14 @@
 <td>Q683, Q691 and Q713 each arrived classic-only from birth after the 2026-07-26 seam walk; nothing re-walks it. Reconcile <code>actions_gateway_*</code> across both sides against v2-ga.md's absent-by-design list. Gates 1.5 (<a href="../plan/release-1.5/">plan</a>).</td>
 </tr>
 <tr>
+<td><a id="Q842"></a>Q842</td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/Makefile">A vendored tool bump never rebuilds its binary, so a stale tool serves a newer target</a></td>
+<td><code>ci</code> <code>debt</code> <code>bug</code></td>
+<td>🔲</td>
+<td>S</td>
+<td><code>$(MDREFLOW)</code> and 7 siblings have no prerequisites, so make skips the rebuild if one exists. Both modes measured at #1462's v0.1.7 bump: loud (<code>md-reflow-explain</code>, unknown flag, 08-11) and silent (four false reflow failures, clean tree, 08-14).</td>
+</tr>
+<tr>
 <td><a id="Q408"></a>Q408</td>
 <td><a href="../plan/q408-untrusted-pr-egress/">Untrusted-PR egress posture for Kata workers</a></td>
 <td><code>security</code></td>
@@ -2950,14 +2958,6 @@
 <td>🔲</td>
 <td>S</td>
 <td>Measured 2026-08-12 closing Q802: invariant 3 compares link-vs-bare form only, so a bare <code>Q484</code> reads as closed while the cell around it said ❌ Open nine days after <code>v1.3.0</code> shipped. A release cell whose tag exists cannot be ❌.</td>
-</tr>
-<tr>
-<td><a id="Q842"></a>Q842</td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/Makefile">A vendored tool bump never rebuilds its binary, so a stale tool serves a newer target</a></td>
-<td><code>ci</code> <code>debt</code> <code>bug</code></td>
-<td>🔲</td>
-<td>S</td>
-<td><code>$(MDREFLOW)</code> and 7 siblings have no prerequisites, so make skips the rebuild when the binary exists. One built 2026-08-11 survived #1462's v0.1.7 bump and <code>md-reflow-explain</code> died on an unknown flag; a changed flag fails silently.</td>
 </tr>
 <tr>
 <td><a id="Q401"></a>Q401</td>
