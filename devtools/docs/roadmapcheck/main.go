@@ -345,11 +345,17 @@ func (c *checker) checkHandTypedRelease(file string, b bullet, gates []string) {
 	}
 }
 
-// checkGateCoverage is rule 7: every gated row is bound to a bullet by its
-// `<!-- q:QN -->` annotation. A gate label with nowhere to render is a release
-// commitment published nowhere, and it is the one direction here that reads
-// only machine-readable inputs, so it cannot go quiet when the rendering
-// changes.
+// checkGateCoverage is rule 7: every gated row that an adopter would read
+// about is bound to a bullet by its `<!-- q:QN -->` annotation. A gate label
+// with nowhere to render is a release commitment published nowhere, and it is
+// the one direction here that reads only machine-readable inputs, so it cannot
+// go quiet when the rendering changes.
+//
+// Scoped to rows carrying `feature` or `security`, because a gate label answers
+// two different questions at once. "Blocks the tag" covers the CI, test, docs
+// and dogfood work a release also waits on; "an adopter would upgrade for
+// this" does not. Requiring a bullet for both put our own release harness on
+// the page people read to evaluate the product.
 func (c *checker) checkGateCoverage(statusFile, roadmapFile string, bound map[string]bool) {
 	var uncovered []struct {
 		id  string
@@ -357,7 +363,7 @@ func (c *checker) checkGateCoverage(statusFile, roadmapFile string, bound map[st
 	}
 	for _, table := range []map[string]statusRow{c.queue, c.deferred} {
 		for id, row := range table {
-			if len(row.gates) == 0 || bound[id] {
+			if len(row.gates) == 0 || bound[id] || !row.adopterFacing {
 				continue
 			}
 			uncovered = append(uncovered, struct {
@@ -370,7 +376,7 @@ func (c *checker) checkGateCoverage(statusFile, roadmapFile string, bound map[st
 	sort.Slice(uncovered, func(i, j int) bool { return uncovered[i].row.line < uncovered[j].row.line })
 	for _, u := range uncovered {
 		c.report(statusFile, u.row.line, fmt.Sprintf(
-			"%s is labelled %s but no %s bullet names it, so the release it blocks is committed nowhere an adopter reads. Add a bullet carrying <!-- q:%s -->, or drop the label if it no longer blocks the tag.",
+			"%s is labelled %s and carries `feature` or `security`, but no %s bullet names it, so the release it blocks is committed nowhere an adopter reads. Add a bullet carrying <!-- q:%s -->, drop the label if it no longer blocks the tag, or drop `feature`/`security` if the work is release process rather than something to upgrade for.",
 			u.id, gateLabels(u.row.gates), roadmapFile, u.id))
 	}
 }
@@ -401,7 +407,10 @@ func (c *checker) row(id string) (r statusRow, queued, live bool) {
 type statusRow struct {
 	// gates holds the `major.minor` of each `X.Y-gate` label on the row.
 	gates []string
-	line  int
+	// adopterFacing is whether the row carries `feature` or `security`, which
+	// is what decides whether a gate label also obliges a roadmap bullet.
+	adopterFacing bool
+	line          int
 }
 
 // statusRows returns the rows of one STATUS.md table by Q-ID. A backlog row's
@@ -427,7 +436,11 @@ func statusRows(doc *markdown.Document, heading string) (rows map[string]statusR
 				continue
 			}
 			labelled = true
-			rows[row.Text[0]] = statusRow{gates: gateVersions(row.Cells[labels]), line: row.Line}
+			rows[row.Text[0]] = statusRow{
+				gates:         gateVersions(row.Cells[labels]),
+				adopterFacing: adopterFacingLabelRE.MatchString(row.Cells[labels]),
+				line:          row.Line,
+			}
 		}
 	}
 	return rows, labelled
@@ -573,6 +586,14 @@ var (
 	qIDRE       = regexp.MustCompile(`^Q[0-9]+$`)
 	annotRE     = regexp.MustCompile(`<!--\s*q:([^-]*)-->`)
 	gateLabelRE = regexp.MustCompile("`([0-9]+\\.[0-9]+)-gate`")
+
+	// The labels that make a gated row adopter-facing, and so oblige it to
+	// appear on the roadmap. Release scope is not all one kind: a capability or
+	// a security fix is what someone upgrades FOR, while the CI, test, docs and
+	// dogfood work that also blocks a tag is process. Publishing the latter on
+	// a page adopters read describes our harness to people evaluating the
+	// product.
+	adopterFacingLabelRE = regexp.MustCompile("`(feature|security)`")
 
 	// A gating verb, then a numbered release close enough to be its object.
 	// The `[^.;]` window stops at a sentence or clause boundary so a verb
