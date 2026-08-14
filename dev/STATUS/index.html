@@ -2893,7 +2893,7 @@
 <td><code>ci</code> <code>debt</code> <code>bug</code> <code>retro</code></td>
 <td>🔲</td>
 <td>S</td>
-<td><code>main.go:188</code> probes the hook's installed worktree by design, assuming it is the session's. <code>EnterWorktree</code> breaks that: the session keeps the launch checkout's hook, and two PRs were refused for overlaps neither branch had. A cwd fix reverses it.</td>
+<td><code>main.go:188</code> probes the hook's installed worktree by design, assuming it is the session's. <code>EnterWorktree</code> breaks it: the session keeps the launch checkout's hook, so PR-create and push both flagged overlaps this branch lacks. A cwd fix reverses it.</td>
 </tr>
 <tr>
 <td><a id="Q820"></a>Q820</td>
@@ -2982,14 +2982,6 @@
 <td>🔲</td>
 <td>S</td>
 <td>Q842 gave each Go tool rule its pin file; cosign's pin is a make variable, so <code>$(COSIGN)</code> has no file to depend on and make skips an existing binary. The fail-closed digest table in <code>download-cosign.sh</code> only runs if the rule does.</td>
-</tr>
-<tr>
-<td><a id="Q812"></a>Q812</td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/docs/check-plan-index.sh">A plan index Status cell can claim an open release the gate reads as closed</a></td>
-<td><code>ci</code> <code>docs</code> <code>debt</code></td>
-<td>🔲</td>
-<td>S</td>
-<td>Measured 2026-08-12 closing Q802: invariant 3 compares link-vs-bare form only, so a bare <code>Q484</code> reads as closed while the cell around it said ❌ Open nine days after <code>v1.3.0</code> shipped. A release cell whose tag exists cannot be ❌.</td>
 </tr>
 <tr>
 <td><a id="Q401"></a>Q401</td>

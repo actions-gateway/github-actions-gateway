@@ -3386,7 +3386,8 @@ Two gates (both in <code>make check</code>) enforce it so the omission can't shi
   To clear it: archive the plan (below), or, if it's ongoing spec/strategy/research, mark its README row <code>ⓘ</code>.</li>
 <li><strong><code>make doc-links</code></strong> fails on any broken link the move introduces.</li>
 </ul>
-<p>The same change should also keep the plan's <code>docs/plan/README.md</code> <strong>status text</strong> current: when you delete a Queue row that completes a plan, update that plan's README row in the same edit.</p>
+<p>The same change should also keep the plan's <code>docs/plan/README.md</code> <strong>status text</strong> current: when you delete a Queue row that completes a plan, update that plan's README row in the same edit.
+For a <code>release-X.Y.md</code> row the text is gated rather than remembered: once that release is published, <code>make plan-index-check</code> rejects an open marker (❌, 🔲, 🚧) on it, because the tag settles the question the cell was still arguing (Q812).</p>
 <p><strong>Keep archival a docs-only operation.</strong> Archival must never touch code — a code edit re-triggers the heavy path-gated CI (e2e / integration / trivy) on what should be a <code>docs/**</code>-only move.
 The way to guarantee that: <strong>code never references a plan by path.</strong> A Go comment must not contain <code>docs/plan/&lt;file&gt;.md</code>; cite the durable layer instead — a <code>docs/design/</code> or <code>docs/operations/</code> doc, or a stable <code>Q-ID</code> / appendix <code>§</code>-ref (those survive archival untouched).
 If a plan's conclusion is load-bearing enough that code wants to cite it, promote that conclusion to a durable doc when the plan closes.

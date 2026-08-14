@@ -3546,6 +3546,9 @@ The doc remains available — the rationale is often more valuable than the diff
   The rollup only changes when a plan's last row closes, and the worker closing that row cannot tell it was the last one, which is how three cells went stale across 1.4 and 1.5 (Q800).</li>
 <li>Column 3 only.
   A bare ID in the Scope column says what the plan was about and stays true after the row closes.</li>
+<li>A <code>release-X.Y.md</code> row cannot read as open (❌, 🔲, 🚧) once that release is published.
+  The tag is a fact, so <code>make plan-index-check</code> fails the cell instead (Q812): mark it ✅, or ⚠️ if a Queue row genuinely remains.
+  Nothing else could see this, and it is not hypothetical: the 1.3 row read <code>❌ Open</code> on <code>main</code> for the nine days after <code>v1.3.0</code> shipped, with every other rule green.</li>
 </ul>
 <p>When a plan fully closes:</p>
 <ul>

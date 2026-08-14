@@ -4934,7 +4934,9 @@ This one is about running the right one and still learning nothing: the check is
 Nothing in a pass announces the gap, because the pass is not a mistake.</p>
 <p><strong>A gate built for exactly this staleness missed an instance of it.</strong> <code>check-plan-index.sh</code>'s third invariant (Q800) requires a <code>QNNN</code> in a plan's Status cell to be a link while its Queue row lives and bare once the row is gone, so a closing row cannot leave a cell claiming live work.
 The <code>release-1.3.md</code> cell read <code>❌ Open — one gate left from the pre-release API review, Q484</code>. <code>Q484</code> is bare and its row was gone, so the invariant held and <code>make plan-index-check</code> passed, on <code>main</code>, every day for the nine days after <code>v1.3.0</code> shipped as a final release (Q802).
-The gate reads the <em>form of an ID</em>; the staleness was in the prose around it.</p>
+The gate reads the <em>form of an ID</em>; the staleness was in the prose around it.
+The gap is now closed by a second, non-overlapping rule (Q812): a <code>release-X.Y.md</code> row cannot carry an open marker once the project has published that release, because the tag is a fact the cell cannot argue with.
+The fixtures that pin it replay the real cell and are green with the new rule removed, which is the assertion that the two rules read different things.</p>
 <p><strong>The same shape at the tool level: a refusal whose stated reason is not the one it has.</strong> <code>pr-requeue-eligible.sh --confirm</code> fails closed on a verdict record it cannot parse, which is right.
 Against a record written before #1431 changed the format it reports <code>the recorded assessment was ''</code> (Q828), which describes a corrupt or missing file.
 The actual condition is a version skew between the assess and the confirm, and it sends the reader to repair the wrong thing.</p>
