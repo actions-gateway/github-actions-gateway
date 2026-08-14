@@ -417,7 +417,10 @@ A run GitHub concluded `cancelled` stands the recovery down: no `rerun-failed-jo
 The retry slot is still spent, since it is reserved at detection, minutes before there is a conclusion to read, so a repeated cancel-then-delete cycle remains bounded by `maxEvictionRetries` even though none of it re-runs anything.
 
 Two boundaries make the check safe rather than merely useful.
-A conclusion the AGC cannot read is **not** treated as "not cancelled": the attempt is retried inside the same 15-minute window, and a window that closes on an unreadable conclusion ends as `actions_gateway_eviction_rerun_failures_total{reason="conclusion_unknown"}` and an `EvictionRerunFailed` Warning Event, so a job that lost its recovery is visible rather than silently re-queued against a cancel.
+A conclusion the AGC cannot read is **not** treated as "not cancelled".
+The failures are split the way the re-run call's already are: a request that never completed and a 5xx are retried inside the same 15-minute window, and a window that closes on one ends as `actions_gateway_eviction_rerun_failures_total{reason="conclusion_unknown"}` with an `EvictionRerunFailed` Warning Event.
+A 4xx, and a 2xx carrying something that will not decode as a run, are terminal at once and counted `api_error`, because neither becomes a verdict inside the window: a 2xx that is not a run means the configured endpoint is not the API, and re-asking it thirty times only delays the Event that says so.
+Either way no re-run is fired, so a job that lost its recovery is visible rather than silently re-queued against a cancel.
 And only this arm takes the check: an eviction, a preemption and a vanished worker are signals only the cluster writes, so no operator action produces them, and gating them would spend a GitHub call per attempt discriminating a case that cannot arise.
 The residual is a cancelled run whose worker is *also* evicted or preempted before it stops, which is re-run as before.
 

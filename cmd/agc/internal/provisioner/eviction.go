@@ -79,11 +79,13 @@ var errRunNotConcluded = errors.New("the original run has not concluded")
 // job a human stopped (Q811).
 var errRunCancelled = errors.New("the run was cancelled at GitHub")
 
-// errRunConclusionUnreadable marks a conclusion check that took no verdict, so nothing
-// is known about whether a re-run would undo a cancel. Retried like the still-running
-// refusal, and terminal only when the re-run window closes on it: standing down costs a
-// disrupted job its automatic recovery, and re-running anyway is the harm the check
-// exists to prevent (Q811).
+// errRunConclusionUnreadable marks a conclusion check that took no verdict for a reason
+// a later attempt could answer differently, so nothing is known yet about whether a
+// re-run would undo a cancel. Retried like the still-running refusal, and terminal only
+// when the re-run window closes on it: standing down costs a disrupted job its automatic
+// recovery, and re-running anyway is the harm the check exists to prevent (Q811). A
+// verdict that will not change inside the window is terminal at once instead, and is not
+// marked with this — see runConclusion.
 var errRunConclusionUnreadable = errors.New("the run's conclusion could not be read")
 
 // Reason label values for the EvictionRerunFailures counter: the recovery's re-run
@@ -260,7 +262,7 @@ func (p *Provisioner) attemptRerun(ctx context.Context, owner, repo, runID strin
 		status, conclusion, err := p.runConclusion(ctx, owner, repo, runID)
 		switch {
 		case err != nil:
-			return fmt.Errorf("%w: %v", errRunConclusionUnreadable, err)
+			return fmt.Errorf("read the run's conclusion before re-running it: %w", err)
 		case status == runStatusCompleted && conclusion == runConclusionCancelled:
 			return errRunCancelled
 		}
@@ -448,6 +450,14 @@ func evictionShard(runID string) uint32 {
 // are returned and the caller reads them together. The guards mirror rerunFailedJobs,
 // except that a run this cannot address is an error rather than a warning: the caller
 // asks in order to decide, and a silent empty answer would read as "not cancelled".
+//
+// Failures are split the way the re-run call's are, and for the same reason: only the
+// ones a later attempt could answer differently — the request never completing, and a
+// 5xx — are wrapped errRunConclusionUnreadable for the loop to retry. A 4xx and a body
+// that will not decode are terminal, because neither changes within the re-run window: a
+// 2xx carrying something other than a run is an endpoint that is not the API (a proxy's
+// error page, a misconfigured GHES), and re-asking it thirty times only delays the Event
+// that tells an operator so.
 func (p *Provisioner) runConclusion(ctx context.Context, owner, repo, runID string) (status, conclusion string, err error) {
 	if !repoSegmentRE.MatchString(owner) || !repoSegmentRE.MatchString(repo) {
 		return "", "", fmt.Errorf("invalid owner/repo characters: %q/%q", owner, repo)
@@ -482,10 +492,14 @@ func (p *Provisioner) runConclusion(ctx context.Context, owner, repo, runID stri
 	}
 	resp, err := hc.Do(req)
 	if err != nil {
-		return "", "", fmt.Errorf("run-status API call: %w", err)
+		return "", "", fmt.Errorf("run-status API call: %v: %w", err, errRunConclusionUnreadable)
 	}
 	defer func() { _ = resp.Body.Close() }()
 	body, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+	if resp.StatusCode >= 500 {
+		return "", "", fmt.Errorf("run-status API returned %d: %s: %w",
+			resp.StatusCode, strings.TrimSpace(string(body)), errRunConclusionUnreadable)
+	}
 	if resp.StatusCode < 200 || resp.StatusCode > 299 {
 		return "", "", fmt.Errorf("run-status API returned %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
 	}

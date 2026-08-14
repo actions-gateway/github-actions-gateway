@@ -361,6 +361,25 @@ func TestHandleEviction_TerminalFailuresDoNotRetry(t *testing.T) {
 	}
 }
 
+// runConcludedFailure is the shape a drained or evicted run concludes on, measured at
+// live GitHub (Q459). It is what a fake must answer the Q811 conclusion check with for a
+// recovery to proceed to its re-run.
+const runConcludedFailure = `{"status":"completed","conclusion":"failure"}`
+
+// answeredRunConclusion answers the run GET the Q811 conclusion check makes, reporting
+// whether it did. Every fake a disruption recovery can reach owes this arm: the deletion
+// arm makes two differently-shaped calls where there used to be one, and a fake that
+// answers both alike both miscounts its re-runs and, when its body will not decode,
+// leaves the recovery re-asking for the whole 15-minute window.
+func answeredRunConclusion(w http.ResponseWriter, r *http.Request, body string) bool {
+	if r.Method != http.MethodGet {
+		return false
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_, _ = io.WriteString(w, body)
+	return true
+}
+
 // runAPIStub is a fake of the two run endpoints the Q811 conclusion gate touches: the
 // run GET, answered from states in order (the last one repeats), and the rerun POST,
 // answered 201. It counts both so a test can assert what was NOT called.
@@ -526,6 +545,57 @@ func TestHandleEviction_UnreadableConclusionWithholdsThenSurfaces(t *testing.T) 
 		testutil.ToFloat64(m.EvictionRerunFailures.WithLabelValues("ns", "g", evictionTierClassic, recoveryCauseDeletion, rerunFailureReasonConclusionUnknown)),
 		"a recovery that never re-ran needs its own reason, not the still-running one")
 	assert.Contains(t, target.events, "EvictionRerunFailed")
+}
+
+// TestHandleEviction_UnanswerableConclusionIsTerminal is the other half of the split.
+// A 4xx and a 2xx carrying something that is not a run cannot become a verdict inside
+// the re-run window — the endpoint is not the API, or the run is not there — so
+// re-asking thirty times only delays the Event that tells an operator so. Neither fires
+// a re-run: not knowing is still not a licence to undo a cancel.
+func TestHandleEviction_UnanswerableConclusionIsTerminal(t *testing.T) {
+	cases := []struct {
+		name   string
+		status int
+		body   string
+	}{
+		{name: "404 the run is not there", status: http.StatusNotFound, body: `{"message":"Not Found"}`},
+		{name: "200 carrying something that is not a run", status: http.StatusOK, body: `<html>proxy error</html>`},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var gets, reruns atomic.Int64
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.Method == http.MethodGet {
+					gets.Add(1)
+					w.WriteHeader(tc.status)
+					_, _ = io.WriteString(w, tc.body)
+					return
+				}
+				reruns.Add(1)
+				w.WriteHeader(http.StatusCreated)
+			}))
+			defer srv.Close()
+
+			m := rerunLoopMetrics()
+			p := &Provisioner{
+				Metrics:                    m,
+				TokenFunc:                  func(context.Context) (string, error) { return "tok", nil },
+				GitHubAPIURL:               srv.URL,
+				HTTPClient:                 srv.Client(),
+				EvictionRerunRetryInterval: time.Millisecond,
+			}
+			target := &stubTarget{key: client.ObjectKey{Namespace: "ns", Name: "g"}}
+			log := slog.New(slog.NewTextHandler(io.Discard, nil))
+
+			<-p.handleEviction(context.Background(), target, "owner", "repo", "813", log, 2, 0, evictionTierClassic, recoveryCauseDeletion)
+
+			assert.Equal(t, int64(1), gets.Load(), "a verdict that cannot change must not be re-asked")
+			assert.Equal(t, int64(0), reruns.Load(), "an unanswerable conclusion is not a licence to re-run")
+			assert.Equal(t, float64(1),
+				testutil.ToFloat64(m.EvictionRerunFailures.WithLabelValues("ns", "g", evictionTierClassic, recoveryCauseDeletion, rerunFailureReasonAPIError)))
+			assert.Contains(t, target.events, "EvictionRerunFailed")
+		})
+	}
 }
 
 // TestRerunFailedJobs_RequiresAnExplicitBaseURL is the Q504 regression test.
