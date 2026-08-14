@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
 	"time"
@@ -65,7 +66,9 @@ func newManager(cfg *gmcFlags, rc *resolvedConfig, metricsOpts metricsserver.Opt
 }
 
 // registerControllers wires every GMC controller onto the manager. It detects the
-// opt-in v2 CRDs once (V2alpha1Installed), registers the GMC metrics collectors
+// opt-in v2 CRDs once (V2alpha1Installed), fails closed when an installed CRD's
+// schema is behind this binary on a field that bounds tenant access
+// (VerifyCRDSchemas), registers the GMC metrics collectors
 // and build-info gauge, parses the apiserver-CIDR allowlist, and registers the v1
 // ActionsGateway reconciler, the v2 controllers (only when the CRDs are present),
 // the periodic IP-range reconciler, and the two allowlist ConfigMap watches. It
@@ -99,6 +102,18 @@ func registerControllers(mgr ctrl.Manager, cfg *gmcFlags, rc *resolvedConfig, im
 	} else {
 		setupLog.Info("actions-gateway.com/v2alpha1 CRDs not installed; v2 controllers disabled " +
 			"(install the actions-gateway-crds-v2 chart and restart the GMC to enable them)")
+	}
+
+	// The kinds being served says nothing about their SCHEMA being current, and the
+	// v2 CRDs are applied out-of-band, so `helm upgrade` never carries a field
+	// change into them (Q852). A field the stored schema does not declare is pruned
+	// on write with no error, so a boundary a tenant declared can be inert. Refuse
+	// to start on one rather than provision against it. Bounded so a wedged
+	// apiserver cannot hold startup open indefinitely.
+	crdCtx, cancelCRDCheck := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancelCRDCheck()
+	if err := controller.VerifyCRDSchemas(crdCtx, mgr.GetAPIReader()); err != nil {
+		return fmt.Errorf("verify installed CRD schemas: %w", err)
 	}
 
 	// Register the GMC's custom metrics. The scrape-time collectors list the
