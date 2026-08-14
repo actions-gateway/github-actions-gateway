@@ -123,6 +123,38 @@ Work through all four:
 The cluster is wider than the docs tree: Q790 was the same shape in the merge tooling, where piped-gate's `docs/STATUS.md` overlap exemption discounted the path unconditionally and so stayed silent on exactly the row *deletion* the driver refuses to resolve: a row deleted on one side and edited on the other.
 When something new mishandles a closing row, it belongs with these rather than as a fresh curiosity.
 
+### Repurposing an ID is a closure with every step skipped
+
+A measurement that refutes a row's asserted defect usually hands you a different one, and the cheapest edit is to rewrite the row in place: same anchor, same ID, new title, new Notes.
+That one edit is a closure and a filing wearing a single row, and it skips both halves.
+The four steps above never run, because nothing looks deleted, and `make queue-id` never runs, because no ID is being taken, so [the duplicate search](#search-before-you-file) never happens either.
+
+**An ID is bound to the observations the row was filed on, not to its title.** Retitling is routine and stays inside the row: [a symptom title earns its mechanism](#a-rows-asserted-defect-is-a-claim-not-a-finding) once the mechanism is measured, which is how Q553, Q703 and Q827 all reached their final titles.
+The line is the evidence, not the wording.
+When the measurement leaves the row's own observations describing a *different* defect, that row is finished: retire it with the refutation recorded, and let the new defect take a new ID.
+
+#1441 is the instance.
+Q809 was filed on three `e2e-calico` failures read as NetworkPolicy enforcement negatives; diagnosis attributed all three to one scale-set drain-recovery spec, which is [Q549](../STATUS.md#Q549)'s mode B. The diagnosis was right and the retitle in place cost three things anyway:
+
+- **Every citation of Q809 re-pointed silently.** A repurpose leaves the anchor alive, so `make doc-links` and rule 5 see nothing: they catch a dead anchor, never a live one that has changed meaning.
+  Seven files cited Q809 in its original sense at the moment it changed meaning, and three of them still asserted the refuted failures two days later, in a workflow comment, a spec comment and `testing.md`.
+  A closure would have run `grep -rn Q809` over all seven as [step 1](#closing-a-row-what-else-moves).
+- **The refuted hypothesis left the file.** `calico` appears nowhere in `docs/STATUS.md` afterwards, so nothing recorded that the enforcement negatives had been suspected and cleared, and the next session to see a calico failure starts cold.
+  [The ledger](flake-watch-retired.md) is where that belongs.
+- **The cross-link was care, not mechanism.** #1441 named Q549 by hand.
+  Passing the new title to `make queue-id` returns Q549 at 0.43 on the same target, which is the prompt [nothing else supplies](#two-rows-on-one-defect-cross-link-them-and-say-which-owns-the-measurement).
+
+**Rule 8 pushes toward the repurpose, which is worth knowing before it does.** It keys on the ID being present *anywhere* in the file, so a `flake` row whose defect is swapped out reads as correctly preserved.
+Measured on a two-commit probe against the shipped linter: the repurpose passes, and deleting the same row fails with rule 8 naming `BACKLOG_ALLOW_FLAKE_DELETE`, so the honest closure is the one that hits a red gate and the shortcut is the one that goes green.
+For a flake row whose defect was **refuted rather than fixed**, that override is the correct move: retire the row to [the ledger](flake-watch-retired.md) with no fix PR, which is a third route out of Flake watch alongside [soaked and obsolete](#retiring-a-flake-watch-row).
+
+**Nothing gates this, and a title check is the wrong gate to reach for.** Scoring every Queue row's before/after title across the backlog's whole history with the same matcher `make queue-id` uses (1,108 commits touching `docs/STATUS.md`, 80 title changes) leaves 27 whose new title does not match its old one.
+One is this repurpose.
+Nine are pre-allocator duplicate-ID renumbers across four collisions, the last on 2026-07-05, a class [rule 12](queue-id-allocation.md#reserving-not-reporting) now prevents at filing time.
+The remaining 17 are ordinary retitles of a live row.
+A gate keyed on title distance would therefore be wrong about two thirds of the time, and wrong specifically on the practice the section above asks for.
+The discriminator is whether the row's evidence still describes its defect, and no linter can read that.
+
 ## Search before you file
 
 The rule used to be "grep the Queue and Deferred tables first", and it failed three times: [Q442](https://github.com/actions-gateway/github-actions-gateway/pull/847) and [Q456](https://github.com/actions-gateway/github-actions-gateway/pull/893) both duplicated Q440, and [Q635](https://github.com/actions-gateway/github-actions-gateway/pull/1186) duplicated Q619.

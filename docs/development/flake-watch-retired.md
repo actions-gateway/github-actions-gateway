@@ -9,10 +9,14 @@ If a retired flake ever recurs, it re-enters the Queue as a fresh find (flakes-f
 Run counts below are green `main` runs of the covering workflow since the fix merged, measured with the `gh run list` recipe in [maintaining-backlog.md](maintaining-backlog.md#retiring-a-flake-watch-row).
 Each is anchored on a date at or after the fix, so every count is a conservative undercount.
 
+A **refuted** row lands here too, with no fix PR and no soak: the flake it named was never observed, and the record of having looked is worth the same `grep`.
+A refuted row that was [repurposed rather than retired](maintaining-backlog.md#repurposing-an-id-is-a-closure-with-every-step-skipped) has no ID left to carry, since another defect holds it.
+
 Newest retirement first.
 
 | ID | Item | Fix PR | Retired | Why retired |
 |---|---|---|---|---|
+| none | e2e-calico NetworkPolicy enforcement negatives intermittently see traffic that should be blocked | none | 2026-08-14 | Refuted: the three `e2e-calico` failures of 2026-08-12 it was filed on were all `E2E_AGC_ScaleSetDrainedWorkerClaimAndRerunLandUnderChartRBAC`, one spec per run ([the measurement](../plan/q549-scaleset-rerun-flake.md#mode-b-attributed-2026-08-12-the-claim-was-made-and-lost)); the five enforcement negatives never failed. Filed as Q809 on 2026-08-11, then [repurposed in place](maintaining-backlog.md#repurposing-an-id-is-a-closure-with-every-step-skipped) by #1441, so that ID now names the scale-set defect. Its enforcer-dump half was real and shipped in #1417. |
 | Q350 | scalesetlistener metrics assertions race the provisioner stub | #948 | 2026-08-01 | Soaked: ≥136 green `unit-test` runs since 2026-07-28 (bar ≥50, correctness-guarding). |
 | Q460 | `trivy` shards flake on the Docker Hub buildkit pull | #906 | 2026-08-01 | Soaked: 107 green `security-scan` runs since 2026-07-27 (bar ≥25, infra). |
 | Q461 | `gag-migrate --apply` aborts the fan-out on an unreachable webhook | #904 | 2026-08-01 | Soaked: 94 green `e2e-test` runs since 2026-07-27 (bar ≥25, infra). |
