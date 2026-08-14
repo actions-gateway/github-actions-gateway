@@ -85,6 +85,7 @@ A clean exit with a plausible file list pointed at the tree, which is where the 
 - A rule under [The status you report is a claim too](../development/testing.md#the-status-you-report-is-a-claim-too) that a local gate disagreeing with CI indicts the toolchain first, since CI builds its tools from the pin and a developer checkout does not.
   It also names the compounding part, that a repeated claim gains authority without gaining evidence.
 - The build rule itself, which is Q842's own fix and the only change here that removes the failure rather than teaching people to expect it.
+  Shipped: every tool rule now depends on the file carrying its version pin (`tools/go.mod` and `tools/vendor/modules.txt` for the vendored eight, `cmd/gmc/go.{mod,sum}` for ginkgo), so a bump invalidates the binary the way a source change does.
 
 ## What this is not
 
