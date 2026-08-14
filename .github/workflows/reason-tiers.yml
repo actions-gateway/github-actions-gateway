@@ -1,0 +1,64 @@
+# Reconcile the condition reasons and Event reasons the AGC emits against the
+# acquisition-tier ledger an operator reads (Q850). Its own workflow for the
+# reason metric-tiers.yml has one, and separate from that one because their
+# inputs differ: this gate also reads the shared reason vocabulary under api/
+# and the runbook, so folding the two together would re-run each on the other's
+# triggers.
+#
+# The `paths` below are the gate's actual inputs and nothing else: the AGC source
+# it takes the inventory from, the reason vocabulary the values resolve through,
+# the two docs it reconciles against, the checker and its entry point, the
+# Makefile target, and this file. `scripts/lib/**` is there because the entry
+# point sources common.sh.
+#
+# The two lists are the same list written twice — GitHub has no anchor syntax
+# across `pull_request` and `push` — so every edit belongs in both.
+name: reason-tiers
+
+on:
+  pull_request:
+    paths:
+      - 'cmd/agc/**'
+      - 'api/**'
+      - 'docs/operations/observability-metrics.md'
+      - 'docs/operations/troubleshooting.md'
+      - 'devtools/docs/reasontiers/**'
+      - 'devtools/docs/markdown/**'
+      - 'devtools/go.mod'
+      - 'devtools/go.sum'
+      - 'scripts/docs/check-reason-tiers.sh'
+      - 'scripts/docs/check-reason-tiers-test.sh'
+      - 'scripts/lib/**'
+      - 'Makefile'
+      - '.github/workflows/reason-tiers.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'cmd/agc/**'
+      - 'api/**'
+      - 'docs/operations/observability-metrics.md'
+      - 'docs/operations/troubleshooting.md'
+      - 'devtools/docs/reasontiers/**'
+      - 'devtools/docs/markdown/**'
+      - 'devtools/go.mod'
+      - 'devtools/go.sum'
+      - 'scripts/docs/check-reason-tiers.sh'
+      - 'scripts/docs/check-reason-tiers-test.sh'
+      - 'scripts/lib/**'
+      - 'Makefile'
+      - '.github/workflows/reason-tiers.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  reason-tiers:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.work
+      - name: condition and Event tier ledger (make reason-tiers-check)
+        run: make reason-tiers-check
