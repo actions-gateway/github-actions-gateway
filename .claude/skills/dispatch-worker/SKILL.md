@@ -151,11 +151,15 @@ It prints a `measured: git merge-tree --write-tree <base_oid> <head_oid>` line a
 Then rebase, `make check`, push, relaunch the watcher, and once CI is green:
 
 ```bash
-scripts/agent/pr-requeue-eligible.sh --confirm <pr> && gh pr merge --squash
+scripts/agent/pr-requeue-eligible.sh --confirm <pr>
 ```
 
 `--confirm` re-reads the recorded verdict and fails closed: no record, a recorded `WAKE`, or a base that moved since the assessment all refuse.
 If you lost the assessment, that is a refusal, not a reason to skip the check.
+
+**An `ELIGIBLE` verdict is a permission, not a runnable command.** `gh pr merge` routes a queue enqueue through `enablePullRequestAutoMerge`, which this repository forbids (`allow_auto_merge: false`), so every form of it fails `Auto merge is not allowed for this repository` (measured 2026-08-14 on #1525, gh 2.96.0).
+The queue is entered from the PR's web UI.
+Report the verdict with its `measured:` line and hand the re-enqueue back; the failed `gh` call is the repository's setting, not a defect to route around.
 
 If you cannot get the PR green after about five attempts, post a PR comment summarising the blocker and stop, so the dispatcher can intervene.
 
