@@ -236,6 +236,9 @@ make merge-driver
 A conflict marker costs a minute; a wrongly resolved row loses backlog state.
 Two consequences worth internalising: the driver **cannot resurrect a row the other side deleted** (a deletion either wins outright or produces markers, never a re-add), and it claims **no** knowledge of the Progress or Deferred tables — those merge as plain text, exactly as before.
 
+**The refusal is per row, but the fallback is per file.** Every case in the table ends by re-running `git merge-file` over the whole file, so the hunk it marks spans the refused row *and* every row added beside it on either side: one refused row produced a five-row hunk in [the measurement below](#a-hand-resolved-conflict-drops-rows-the-markers-never-named).
+Picking a side of that hunk is what loses rows neither side disagreed about.
+
 **It does not help GitHub's server-side squash-merge**, which cannot see a clone's config.
 And a driver-resolved merge is still a merge you own: read the resulting row set, then run the three gates below. `make lint-backlog` remains the independent backstop — rules 8, 9 and 10 all still apply to whatever the driver produced.
 
@@ -296,13 +299,15 @@ Shrinking the verify step from ~6 minutes to a few seconds is what breaks the lo
 1. Resolve the conflict in `docs/STATUS.md`.
 2. Check for leftover markers before staging: `git diff --check`.
    An `Edit`-based resolution can silently leave one behind, and `git diff --check` catches it in the working tree — before it becomes a commit the gate has to reject.
-3. Run only the gates that can actually observe a `STATUS.md` change:
+3. If you resolved the hunk by hand rather than letting the driver decide it, [reconcile the row set](#a-hand-resolved-conflict-drops-rows-the-markers-never-named).
+   A clean marker scan says the resolution is well-formed, not that it kept every row.
+4. Run only the gates that can actually observe a `STATUS.md` change:
 
    ```bash
    make status-gates
    ```
 
-4. Commit and push **immediately**.
+5. Commit and push **immediately**.
    Do not wait on `make check`.
 
 `make check` adds nothing here: no gate it runs beyond these reads `docs/STATUS.md`, and CI runs the full gate on the pushed branch regardless. `status-gates` is the complete set a `STATUS.md`-only diff can fail, and every member is also in `make check`, so this is a strict subset and never a second opinion.
@@ -352,6 +357,41 @@ comm -23 <(grep -o 'id="Q[0-9]*"' docs/STATUS.md | sort -u) <(git show "${base}:
 
 Every ID it prints should be one *you* filed.
 Anything else is a row `main` deleted and your rebase brought back — check whether its work shipped before you push.
+
+### A hand-resolved conflict drops rows the markers never named
+
+Rule 10 catches a row that comes *back*.
+The mirror case is a row that quietly goes *away*, and no rule catches that one, because deleting a row is how a row closes: a lint pass cannot tell a completed item from a casualty.
+
+Measured on [#1471](https://github.com/actions-gateway/github-actions-gateway/pull/1471): the driver refused a `Q738` row both sides had edited, which is correct behaviour for a keyed merge, and the hand resolution that followed **deleted `Q823` and `Q822`**, rows belonging to `main` that the PR never touched, while **dropping `Q836` and `Q837`**, the two rows the PR existed to add. `git rebase` reported success, no marker remained, and `make status-gates` passed on the result. **An absent marker proves a resolution is well-formed, never that it is correct.**
+
+Reproduced in a throwaway repo with the driver installed (git 2.55.0), one refused row sitting between two rows added on each side:
+
+| Resolving the hunk by | What it cost | What reported it |
+|---|---|---|
+| keeping the branch's side | the two rows `main` had added | rule 8, and only because both carried `flake` |
+| keeping `main`'s side | the two rows the branch had added | nothing: the rebase dropped the branch's now-empty commit and printed `Successfully rebased` |
+
+`git diff --check` exits 0 in both.
+The second case is the worse one, because the branch ends up changing nothing at all while its commit subject and PR description still claim two rows.
+Do not lean on rule 8 for the first: it covers one label out of the whole vocabulary, and #1471 recorded `status-gates` passing on the damaged tree even though both lost rows carried it.
+That tree was repaired before it was ever committed, so which of the two accounts of rule 8 applies there is no longer measurable.
+
+**So reconcile the row set, not the markers.** Two comparisons name every casualty, and neither needs a count you memorised before the rebase started:
+
+```bash
+# rows your branch had and no longer has
+comm -23 <(git show ORIG_HEAD:docs/STATUS.md | grep -o 'id="Q[0-9]*"' | sort -u) <(grep -o 'id="Q[0-9]*"' docs/STATUS.md | sort -u)
+# rows main has and your branch does not
+comm -13 <(grep -o 'id="Q[0-9]*"' docs/STATUS.md | sort -u) <(git show origin/main:docs/STATUS.md | grep -o 'id="Q[0-9]*"' | sort -u)
+```
+
+Every ID the first prints should be one `main` closed; every ID the second prints should be one *you* closed.
+Anything else is collateral from the resolution.
+Run them before `git rebase --continue`, and promptly either way: the next rebase or merge rewrites `ORIG_HEAD`.
+
+The diffstat answers the same question and is what actually caught #1471 (`1 insertion, 3 deletions` on a branch that adds two rows), but it only fires if you knew the expected counts going in, and it names no IDs.
+Either way the principle is [the one bulk mechanical changes already use](testing.md#a-bulk-mechanical-change-proves-itself-by-reconciliation-not-by-an-empty-leftover-query): a scan that finds nothing cannot distinguish "nothing was lost" from "this instrument cannot see the loss".
 
 ## When the context doesn't fit, write the doc — whatever the item's size
 

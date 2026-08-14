@@ -584,6 +584,8 @@ Wired into `make check`; CI runs the same target from its own lightweight workfl
 Only exact seven-character marker lines are flagged, so Markdown setext underlines of any other length stay legal, as do mid-line mentions like the backticked examples in this paragraph; the vendored trees are excluded.
 The pattern logic and the file selection are asserted by `scripts/ci/check-conflict-markers-test.sh` under `make scripts-test`.
 When resolving conflicts by hand, `git diff --check` gives the same signal per-file before you stage.
+That signal is narrow: it proves the resolution is well-formed, not that it kept everything both sides had.
+For a file merged by key, [reconcile the record set too](maintaining-backlog.md#a-hand-resolved-conflict-drops-rows-the-markers-never-named).
 
 ### The v2 API sync gate
 
