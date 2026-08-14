@@ -2824,6 +2824,14 @@
 </thead>
 <tbody>
 <tr>
+<td><a id="Q862"></a>Q862</td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/devtools/agent/pipedgate/repostate.go">The PR-overlap check intersects file paths, so disjoint hunks in one file read as overlap</a></td>
+<td><code>ci</code> <code>debt</code> <code>retro</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>Three sightings in two days: #1505, #1527, #1531, each denying a create over disjoint hunks and costing a manual <code>git merge-tree</code> plus an override. <code>prOverlapWarning</code> intersects path sets only; line ranges need a per-PR diff fetch.</td>
+</tr>
+<tr>
 <td><a id="Q863"></a>Q863</td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/Dockerfile">A <code>docker buildx</code> base-image pull has no retry, so one registry 403 fails an image build</a></td>
 <td><code>flake</code> <code>ci</code></td>
@@ -2846,14 +2854,6 @@
 <td>🔲</td>
 <td>S</td>
 <td>Measured 2026-08-14: <code>heartbeat</code> stayed null for the whole 22-minute e2e leg of a passing run, so the only in-flight signal was absent and the sentinel reported a stall it was right to report. The run record answers when the log will not.</td>
-</tr>
-<tr>
-<td><a id="Q852"></a>Q852</td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/cmd/wiring.go">Detect a CRD schema older than the binary at GMC startup</a></td>
-<td><code>1.5-gate</code> <code>security</code> <code>bug</code></td>
-<td>🔲</td>
-<td>M</td>
-<td><code>helm upgrade</code> never applies CRDs and a structural schema prunes unknown fields with no error, so a skipped step 1 makes <code>spec.runnerGroup</code> a tenant boundary that silently does not exist. <code>V2alpha1Installed</code> is the startup-probe precedent.</td>
 </tr>
 <tr>
 <td><a id="Q851"></a>Q851</td>
@@ -3022,14 +3022,6 @@
 <td>🔲</td>
 <td>S</td>
 <td>#1417 shipped on "3 of 5 calico enforcement negatives failed"; #1441 refuted it next day, yet 3 of the 6 comments #1417 wrote still asserted it 2 days later (swept in #1510). Closing a row sweeps its own citations, not the change's.</td>
-</tr>
-<tr>
-<td><a id="Q862"></a>Q862</td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/devtools/agent/pipedgate/repostate.go">The PR-overlap check intersects file paths, so disjoint hunks in one file read as overlap</a></td>
-<td><code>ci</code> <code>debt</code> <code>retro</code></td>
-<td>🔲</td>
-<td>S</td>
-<td>Two sightings: #1505, then #1527, where 2 of 3 named PRs edited disjoint sections of the same two docs. <code>prOverlapWarning</code> intersects path sets only, so hunks hundreds of lines apart deny a create. Line ranges need a per-PR diff fetch.</td>
 </tr>
 <tr>
 <td><a id="Q814"></a>Q814</td>

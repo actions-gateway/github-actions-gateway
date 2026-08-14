@@ -4857,7 +4857,16 @@ Each is a claim about state, and each has a cheap way of being wrong:</p>
   Check out the base, run the same gate, and read it before naming a cause.
   Q166 spent two wrong hypotheses on this.
   A red envtest suite was blamed first on the session's own concurrent test runs, then on a cluster-wide List the branch had added, which was narrowed on that theory for no improvement; <code>origin/main</code> alone then measured 324.5s against a 5m timeout with none of the branch's code, and the failing test's name had moved between runs because what was actually failing was the suite's wall clock (Q741).
-  The tell is a failing test whose identity changes run to run, or one in a file the diff never touches: both say the branch is a bystander.
+  The tell is a failing test whose identity changes run to run, or one in a file the diff never touches: both say the branch is a bystander.</p>
+</li>
+<li>
+<p><strong>A derived gate's green is bounded by what it can still resolve, and a derivation that shrinks says nothing.</strong> The bullet above asks whether a red gate is yours; this is the opposite failure, a gate that stays green because it quietly stopped looking.
+  The blind spots named above are named once, when a measurement is reported.
+  A gate runs forever, and its coverage can regress long after it was written: a rename introduces a second function of the same name, the resolver can no longer place a call, and a value it used to derive stops being demanded.
+  Nothing turns red, because the check that would have fired is the one that went missing.
+  Under-derivation is not a missing refusal, it is a refusal that will never be attempted. <strong>So a gate that derives its own inventory has to fail on an input it cannot place</strong>, as a finding rather than a logged note.
+  Two scanners built in the 1.5 cycle each grew one independently: <code>metrictiers</code>' <code>values-derivation</code> (Q851) and <code>reasontiers</code>' <code>resolution</code> (Q850).
+  Converging twice in one cycle is the signal that a derived inventory needs this by construction, not as an afterthought.
   The tier now says it for you: a breach of the <a href="#the-envtest-suite-budget">envtest suite budget</a> reports that the <em>suite</em> ran out of time and names the panic's test as a bystander, rather than leaving the reader to notice that the name moved.
   When it does fail on the base, the fix is not yours to carry either: it gets its own PR, searched for before it is written (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/CONTRIBUTING.md#when-main-is-broken">CONTRIBUTING.md § When <code>main</code> is broken</a>).</p>
 </li>
