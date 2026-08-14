@@ -2856,14 +2856,6 @@
 <td><code>helm upgrade</code> never applies CRDs and a structural schema prunes unknown fields with no error, so a skipped step 1 makes <code>spec.runnerGroup</code> a tenant boundary that silently does not exist. <code>V2alpha1Installed</code> is the startup-probe precedent.</td>
 </tr>
 <tr>
-<td><a id="Q850"></a>Q850</td>
-<td><a href="../operations/observability-metrics/#acquisition-tier-reach">Extend the acquisition-tier ledger to condition and Event reasons</a></td>
-<td><code>1.5-gate</code> <code>ci</code> <code>docs</code></td>
-<td>🔲</td>
-<td>M</td>
-<td>Q776 derived and gated the 53 metric series. Condition reasons and Event reasons are enumerable the same way and ungated, so a signal reaching one tier only is still invisible. Precondition for claiming completeness rather than metric-surface parity.</td>
-</tr>
-<tr>
 <td><a id="Q851"></a>Q851</td>
 <td><a href="../operations/observability-metrics/#acquisition-tier-reach">Take the acquisition-tier ledger to label-value granularity</a></td>
 <td><code>1.5-gate</code> <code>ci</code> <code>docs</code></td>
@@ -2974,6 +2966,14 @@
 <td>🔲</td>
 <td>S</td>
 <td>Q842 gave each Go tool rule its pin file; cosign's pin is a make variable, so <code>$(COSIGN)</code> has no file to depend on and make skips an existing binary. The fail-closed digest table in <code>download-cosign.sh</code> only runs if the rule does.</td>
+</tr>
+<tr>
+<td><a id="Q866"></a>Q866</td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/devtools/docs/metrictiers/main.go"><code>metrictiers</code> reads its ledger table with a hand-rolled scan, not the shared parser</a></td>
+<td><code>ci</code> <code>debt</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>Q612 moved every Markdown gate onto <code>devtools/docs/markdown</code>; this one shipped after and scans for <code>|</code>-prefixed lines instead. Measured 2026-08-14: a fenced example row inside the section is counted as a ledger entry and fails the gate. Q850's sibling uses the parser.</td>
 </tr>
 <tr>
 <td><a id="Q401"></a>Q401</td>

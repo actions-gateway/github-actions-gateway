@@ -3061,7 +3061,8 @@ The v1 to v2 axis closed mostly before the 1.4 tag; 1.5 contributed Q726 alone.<
 <p><strong>Asking the question found the stale claim the pass had missed</strong>, recorded in the pre-flight section above, and then the same reasoning applied one level up.
 A completeness claim inherits the blind spots of its inventory, so "no capability is lost" cannot rest on a hand-kept list — that is the shape Q844 hid in, and <a href="../../development/testing/">testing.md</a> states the rule outright.
 Q776 made metric <em>series</em> derived and gated.
-Q850 and Q851 extend that to condition reasons, Event reasons, and label values, which is the surface a completeness claim can honestly cover; the marketing claim waits for them.
+Q850 and Q851 extend that to condition reasons, Event reasons, and label values, which is the surface a completeness claim can honestly cover; the marketing claim waits for them. <strong>Q850 has since shipped</strong>: 45 condition reasons and 26 Event reasons carry a tier under <code>make reason-tiers-check</code>, and its walk found two Events an operator could meet in <code>kubectl describe</code> with no runbook entry, but no condition reason single-tier by accident (<a href="../archive/q850-reason-tier-ledger/">plan</a>).
+Only Q851's label-value granularity is left before the claim can be made for all three signal surfaces.
 Measured while scoping Q851: <code>eviction_retries_total</code> reads Both while <code>cause="vanished"</code> is scale-set-only, and <code>abandoned_run_force_cancels_total</code> reads Both while <code>outcome="identity_unknown"</code> is unreachable there.
 The gate sees series, not values, so two live tier differences sit inside rows marked Both.</p>
 <p><strong>Then a second question — operators do not read release notes, so what are this release's landmines?</strong> Q849 was already admitted for it: Q791's guard runs at admission, which never re-validates a pair that already exists.

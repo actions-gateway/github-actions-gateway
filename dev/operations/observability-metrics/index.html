@@ -2106,6 +2106,45 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#condition-and-event-tier-reach" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Condition and Event tier reach
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Condition and Event tier reach">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#condition-reasons" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Condition reasons
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#event-reasons" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Event reasons
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#crd-status-fields-kubectl-columns" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2820,6 +2859,45 @@
       
     </span>
   </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#condition-and-event-tier-reach" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Condition and Event tier reach
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Condition and Event tier reach">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#condition-reasons" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Condition reasons
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#event-reasons" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Event reasons
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
   
 </li>
       
@@ -3761,6 +3839,399 @@ Neither binary acquires jobs, so neither has a tier.</p>
 <td><code>actions_gateway_build_info</code></td>
 <td>Tier-neutral</td>
 <td>Build metadata of the running binary.</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="condition-and-event-tier-reach">Condition and Event tier reach<a class="headerlink" href="#condition-and-event-tier-reach" title="Permanent link">&para;</a></h2>
+<p>The same question as <a href="#acquisition-tier-reach">Acquisition-tier reach</a> above, asked of the other two signals an operator reads: the <code>reason</code> on a <code>.status.conditions[]</code> entry, and the <code>Reason</code> on a Kubernetes Event.
+A capability that reaches only one tier is as invisible in a condition as it is in a counter, so the same four values apply and the same gate holds these tables to the source. <code>make reason-tiers-check</code> fails a reason the AGC emits without a row here, a row the source refutes, and an Event reason that has no <a href="../troubleshooting/#job-lifecycle-events-on-a-runnergroup--runnerset">runbook</a> entry.</p>
+<p>Two things follow from how the AGC records these, and both are worth knowing before reading the tables:</p>
+<ul>
+<li><strong>A condition reason is often an Event reason too.</strong> Several reconcile paths record an Event on a genuine condition transition, reusing the condition's own reason string.
+  Those reasons appear in the condition table only; the Event table lists the reasons that are decided at the recording site.</li>
+<li><strong>The reasons are the AGC's.</strong> The GMC's own conditions are not listed, for the reason the metric ledger gives: the GMC acquires no jobs, so it has no tier.</li>
+</ul>
+<h3 id="condition-reasons">Condition reasons<a class="headerlink" href="#condition-reasons" title="Permanent link">&para;</a></h3>
+<p>The <code>reason</code> field of a <code>.status.conditions[]</code> entry on a <code>RunnerGroup</code> (<code>v1alpha1</code>) or <code>RunnerSet</code> (<code>v2alpha1</code>).
+A <code>RunnerGroup</code> only ever acquires classically, so a reason no v2 path writes is classic-only by construction.</p>
+<table>
+<thead>
+<tr>
+<th>Reason</th>
+<th>Tier</th>
+<th>Why, and what to read on the other tier</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>AgentProvisioningFailed</code></td>
+<td>Classic only</td>
+<td>The agent pool is the many-acquirers model's credential machinery. A scale set mints JIT config per assigned job and provisions no agent Secrets, so it reports a start failure as <code>NoActiveSessions</code> instead.</td>
+</tr>
+<tr>
+<td><code>AmbiguousDefault</code></td>
+<td>Both</td>
+<td>Reference resolution runs before the reconciler routes by protocol.</td>
+</tr>
+<tr>
+<td><code>AwaitingProbe</code></td>
+<td>Both</td>
+<td>The capacity gate's latched state; <code>applyWorkerCapacityConditions</code> is called from both arms.</td>
+</tr>
+<tr>
+<td><code>AwaitingWorkerPods</code></td>
+<td>Both</td>
+<td>The sizing-profile override reads worker pods, which both tiers label identically.</td>
+</tr>
+<tr>
+<td><code>CPULimitInjected</code></td>
+<td>Both</td>
+<td>As above.</td>
+</tr>
+<tr>
+<td><code>CapacityAvailable</code></td>
+<td>Both</td>
+<td>The capacity gate's cleared state, from the same shared call.</td>
+</tr>
+<tr>
+<td><code>CredentialAvailable</code></td>
+<td>Classic only</td>
+<td>A <code>RunnerGroup</code> condition, and a <code>RunnerGroup</code> only acquires classically. A v2 set reports the same state as <code>Ready</code>/<code>TokenUnavailable</code>.</td>
+</tr>
+<tr>
+<td><code>DirectEgress</code></td>
+<td>Both</td>
+<td>Egress mode is recorded before the protocol routing.</td>
+</tr>
+<tr>
+<td><code>GateModeUnsupported</code></td>
+<td>Both</td>
+<td>The capacity gate refusing an unsupported mode, from the same shared call.</td>
+</tr>
+<tr>
+<td><code>GatewayNotFound</code></td>
+<td>Both</td>
+<td>Reference resolution, before the routing.</td>
+</tr>
+<tr>
+<td><code>GatewayTerminating</code></td>
+<td>Both</td>
+<td>Gateway teardown stops both tiers before deleting worker pods.</td>
+</tr>
+<tr>
+<td><code>InsufficientSamples</code></td>
+<td>Both</td>
+<td>The sizing verdict is computed from worker-pod usage, before the routing.</td>
+</tr>
+<tr>
+<td><code>JobsProvisioning</code></td>
+<td>Scale-set only</td>
+<td>Clears <code>JobProvisionStalled</code>, which only the scale-set queue can raise: it is the state of assignments held for re-offer. The classic tier acquires or does not, with nothing held in between.</td>
+</tr>
+<tr>
+<td><code>LabelsNotRegistered</code></td>
+<td>Scale-set only</td>
+<td>GitHub registers a scale set's labels at the set, and only that protocol can find them missing. A classic set carries its labels on each session.</td>
+</tr>
+<tr>
+<td><code>LabelsRegistered</code></td>
+<td>Scale-set only</td>
+<td>As above, cleared.</td>
+</tr>
+<tr>
+<td><code>ListenerActive</code></td>
+<td>Both</td>
+<td>The <code>Ready=True</code> reason on both arms: one multiplexer's goroutines on classic, one scale-set session on the other.</td>
+</tr>
+<tr>
+<td><code>ListenerStartFailed</code></td>
+<td>Classic only</td>
+<td>Distinguishes a failed multiplexer restart from the benign idle state (Q308). The scale-set arm reports its own start failure as <code>NoActiveSessions</code> with the <code>ScaleSetListenerStartFailed</code> Event carrying the cause.</td>
+</tr>
+<tr>
+<td><code>NoActiveSessions</code></td>
+<td>Both</td>
+<td>The benign <code>Ready=False</code> reason on both arms.</td>
+</tr>
+<tr>
+<td><code>NoCPULimitInjected</code></td>
+<td>Both</td>
+<td>The sizing-profile override, before the routing.</td>
+</tr>
+<tr>
+<td><code>NoReapBlockingSidecar</code></td>
+<td>Both</td>
+<td>Read off the resolved worker template, before the routing.</td>
+</tr>
+<tr>
+<td><code>PodsUnschedulable</code></td>
+<td>Both</td>
+<td>The scheduler's verdict on worker pods, evaluated for <code>RunnerGroup</code> and <code>RunnerSet</code> alike.</td>
+</tr>
+<tr>
+<td><code>PollingHealthy</code></td>
+<td>Both</td>
+<td>Both listeners publish the rate-limit baseline and clear on recovery (Q332).</td>
+</tr>
+<tr>
+<td><code>ProxiedEgress</code></td>
+<td>Both</td>
+<td>Egress mode, before the routing.</td>
+</tr>
+<tr>
+<td><code>ProxyDeleted</code></td>
+<td>Both</td>
+<td>Reference resolution, before the routing.</td>
+</tr>
+<tr>
+<td><code>ProxyNotFound</code></td>
+<td>Both</td>
+<td>As above.</td>
+</tr>
+<tr>
+<td><code>ProxyShareNotGranted</code></td>
+<td>Both</td>
+<td>As above.</td>
+</tr>
+<tr>
+<td><code>ReapBlockingSidecar</code></td>
+<td>Both</td>
+<td>Read off the resolved worker template, before the routing.</td>
+</tr>
+<tr>
+<td><code>RunnerGroupNotFound</code></td>
+<td>Scale-set only</td>
+<td><code>spec.runnerGroup</code> binds a scale set to a GitHub runner group (Q712); the classic tier has no such binding to fail.</td>
+</tr>
+<tr>
+<td><code>RunnerNameConflict</code></td>
+<td>Scale-set only</td>
+<td>A <code>generate-jitconfig</code> 409 no retry cleared. The classic tier registers through the agent pool and meets no runner-name collision.</td>
+</tr>
+<tr>
+<td><code>ScaleUpDeclined</code></td>
+<td>Both</td>
+<td>The cluster autoscaler's own declination, from the shared capacity call.</td>
+</tr>
+<tr>
+<td><code>SessionAuthorized</code></td>
+<td>Both</td>
+<td>Both listeners publish the healthy <code>Degraded=False</code> baseline (Q332).</td>
+</tr>
+<tr>
+<td><code>SizingDriftDetected</code></td>
+<td>Both</td>
+<td>The sizing verdict, before the routing.</td>
+</tr>
+<tr>
+<td><code>SizingProfileActive</code></td>
+<td>Both</td>
+<td>As above.</td>
+</tr>
+<tr>
+<td><code>SizingWithinRange</code></td>
+<td>Both</td>
+<td>As above.</td>
+</tr>
+<tr>
+<td><code>SustainedRateLimit</code></td>
+<td>Both</td>
+<td>Both listeners publish it after ten minutes of 429s.</td>
+</tr>
+<tr>
+<td><code>TemplateDeleted</code></td>
+<td>Both</td>
+<td>Reference resolution, before the routing.</td>
+</tr>
+<tr>
+<td><code>TemplateNotFound</code></td>
+<td>Both</td>
+<td>As above.</td>
+</tr>
+<tr>
+<td><code>TokenUnavailable</code></td>
+<td>Classic only</td>
+<td>The classic arm fetches an installation token at reconcile to manage the agent pool, so a token failure lands in status there. The scale-set arm hands the token manager to its listener instead and reports a failure to reach GitHub as <code>NoActiveSessions</code>.</td>
+</tr>
+<tr>
+<td><code>Unauthorized</code></td>
+<td>Both</td>
+<td>The <code>Degraded=True</code> reason both listeners push when session creation is rejected as unauthorized.</td>
+</tr>
+<tr>
+<td><code>VersionTooOld</code></td>
+<td>Classic only</td>
+<td>GitHub rejecting <code>agent.version</code> at session creation, which only the classic protocol sends. The scale-set tier reports the same condition <em>type</em> from the reconciler's own reading of the worker image, under <code>WorkerImageBelowMinimum</code> (Q715).</td>
+</tr>
+<tr>
+<td><code>WorkerCeilingReached</code></td>
+<td>Scale-set only</td>
+<td>Assignments waiting because the set is at its worker ceiling. The classic tier refuses the claim instead, counted by <code>actions_gateway_jobs_admission_rejected_total{reason="ceiling"}</code>.</td>
+</tr>
+<tr>
+<td><code>WorkerImageBelowMinimum</code></td>
+<td>Both</td>
+<td>The reconciler's own reading of the effective worker image, which asks GitHub nothing and so reports on both tiers (Q715).</td>
+</tr>
+<tr>
+<td><code>WorkerImageCurrent</code></td>
+<td>Both</td>
+<td>As above.</td>
+</tr>
+<tr>
+<td><code>WorkerImageVersionUnknown</code></td>
+<td>Both</td>
+<td>As above.</td>
+</tr>
+<tr>
+<td><code>WorkersSchedulable</code></td>
+<td>Both</td>
+<td>The cleared form of <code>PodsUnschedulable</code>, evaluated on both.</td>
+</tr>
+</tbody>
+</table>
+<h3 id="event-reasons">Event reasons<a class="headerlink" href="#event-reasons" title="Permanent link">&para;</a></h3>
+<p>The <code>Reason</code> on a Kubernetes Event the AGC records on the owning <code>RunnerGroup</code>/<code>RunnerSet</code>, listed by the reason string <code>kubectl get events --field-selector reason=…</code> matches.
+Each also has a <a href="../troubleshooting/#job-lifecycle-events-on-a-runnergroup--runnerset">runbook entry</a> naming the remedy, which the gate holds it to.</p>
+<table>
+<thead>
+<tr>
+<th>Reason</th>
+<th>Tier</th>
+<th>Why, and what to read on the other tier</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>AgentDeregistrationFailed</code></td>
+<td>Classic only</td>
+<td>Single-use JIT agents are a classic-pool artifact, so only that tier has registrations to clean up on delete.</td>
+</tr>
+<tr>
+<td><code>AgentPoolError</code></td>
+<td>Classic only</td>
+<td>As above: a scale set provisions no agent Secrets.</td>
+</tr>
+<tr>
+<td><code>AssignmentAbandoned</code></td>
+<td>Scale-set only</td>
+<td>The listener giving up on assignments the queue stopped reporting. The classic protocol delivers no assignment to abandon.</td>
+</tr>
+<tr>
+<td><code>EvictionRecoveryEvidenceLost</code></td>
+<td>Scale-set only</td>
+<td>On this tier the disrupted pod is the disruption's only record (Q809); the classic tier holds it in process.</td>
+</tr>
+<tr>
+<td><code>EvictionRecoveryIdentityUnknown</code></td>
+<td>Scale-set only</td>
+<td>The classic tier reads the run identity from the payload its acquiring goroutine still holds, so it cannot lose it.</td>
+</tr>
+<tr>
+<td><code>EvictionRerunFailed</code></td>
+<td>Both</td>
+<td>Recorded by the shared re-run path both tiers hand recoveries to (Q503).</td>
+</tr>
+<tr>
+<td><code>EvictionRetriesExhausted</code></td>
+<td>Both</td>
+<td>Both tiers spend one shared per-run retry budget (Q417).</td>
+</tr>
+<tr>
+<td><code>JobAcquisitionFailed</code></td>
+<td>Classic only</td>
+<td>Counts a failed <code>acquirejob</code>, a call the scale-set protocol does not make. Its counterpart there is <code>ScaleSetListenerStartFailed</code> for a session that cannot start, and <code>actions_gateway_scaleset_provision_errors_total</code> for a job that cannot be provisioned.</td>
+</tr>
+<tr>
+<td><code>JobProvisionStalled</code></td>
+<td>Scale-set only</td>
+<td>Assigned jobs that cannot register a runner name, held and re-offered. The classic tier has no held assignment.</td>
+</tr>
+<tr>
+<td><code>ListenerStartFailed</code></td>
+<td>Classic only</td>
+<td>A failed multiplexer restart; the scale-set arm records <code>ScaleSetListenerStartFailed</code> instead.</td>
+</tr>
+<tr>
+<td><code>OrphanedWorkerRecovered</code></td>
+<td>Scale-set only</td>
+<td>Recovery of a worker already gone at process start, read from the in-flight set the scale-set listener persists (Q844). The classic tier holds that state in process and loses it with the process.</td>
+</tr>
+<tr>
+<td><code>QuotaRetriesExhausted</code></td>
+<td>Both</td>
+<td>Both provisioning paths create the worker pod through the same quota-retry helper.</td>
+</tr>
+<tr>
+<td><code>RunnerLabelsNotRegistered</code></td>
+<td>Scale-set only</td>
+<td>GitHub registers a scale set's labels at the set; a classic set carries them per session.</td>
+</tr>
+<tr>
+<td><code>RunnerVersionTooOld</code></td>
+<td>Classic only</td>
+<td>GitHub rejecting <code>agent.version</code> at session creation. The scale-set tier warns ahead of any rejection with <code>WorkerImageBelowMinimum</code>, from the reconciler's own image reading (Q715).</td>
+</tr>
+<tr>
+<td><code>ScaleSetListenerStartFailed</code></td>
+<td>Scale-set only</td>
+<td>A scale-set session that could not start; <code>ListenerStartFailed</code> is the classic counterpart.</td>
+</tr>
+<tr>
+<td><code>SessionUnauthorized</code></td>
+<td>Both</td>
+<td>Both listeners record it when session creation is rejected as unauthorized.</td>
+</tr>
+<tr>
+<td><code>TokenUnavailable</code></td>
+<td>Classic only</td>
+<td>The classic arm fetches the installation token at reconcile; the scale-set arm delegates it to the listener.</td>
+</tr>
+<tr>
+<td><code>WorkerCapacityDeclined</code></td>
+<td>Both</td>
+<td>The opt-in capacity gate refusing intake, from the shared capacity call.</td>
+</tr>
+<tr>
+<td><code>WorkerCeilingReached</code></td>
+<td>Scale-set only</td>
+<td>Expected backpressure while assignments wait for capacity, so <code>Normal</code> rather than <code>Warning</code>. The classic tier declines the claim instead.</td>
+</tr>
+<tr>
+<td><code>WorkerPodCompletedPending</code></td>
+<td>Both</td>
+<td>The reaper is protocol-agnostic and runs before the routing.</td>
+</tr>
+<tr>
+<td><code>WorkerPodCreateFailed</code></td>
+<td>Both</td>
+<td>The API server refusing a worker pod, on the shared provisioning path.</td>
+</tr>
+<tr>
+<td><code>WorkerPodLifetimeExceeded</code></td>
+<td>Both</td>
+<td>The reaper, as above.</td>
+</tr>
+<tr>
+<td><code>WorkerPodOrphanedRunning</code></td>
+<td>Both</td>
+<td>The reaper, as above.</td>
+</tr>
+<tr>
+<td><code>WorkerPodStuckPending</code></td>
+<td>Both</td>
+<td>The reaper, as above.</td>
+</tr>
+<tr>
+<td><code>WorkerPodsReapedOnGatewayTeardown</code></td>
+<td>Both</td>
+<td>Teardown stops both tiers before deleting their worker pods.</td>
+</tr>
+<tr>
+<td><code>WorkersUnschedulable</code></td>
+<td>Both</td>
+<td>The scheduler's verdict, recorded for <code>RunnerGroup</code> and <code>RunnerSet</code> alike.</td>
 </tr>
 </tbody>
 </table>
