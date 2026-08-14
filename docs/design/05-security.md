@@ -395,11 +395,15 @@ The worker still runs under the namespace's PSA level, its own `NetworkPolicy`, 
 What is unbounded is *intake*: whose workflow content executes there, whose logs and job metadata land in the tenant's namespace, and whose traffic leaves on the IPs an allowlist elsewhere may trust as that tenant's.
 
 `RunnerSet.spec.runnerGroup`, inheriting `ActionsGateway.spec.defaultRunnerGroup`, binds the set to a named group instead (Q712, §H.4).
-Two properties make it a boundary rather than a hint:
+Three properties make it a boundary rather than a hint:
 
 - **Unresolvable fails closed.** A name the installation has no group for leaves the set `Ready=False`/`RunnerGroupNotFound` and registers no scale set.
   The obvious alternative, falling back to the default group, is a silent *widening* triggered by a typo, which is the worst possible direction for a security default.
 - **An adopted scale set is reconciled, not left.** A set registered by an earlier run keeps the group it was created in unless the declared group moves it, so the field means the same thing on an existing set as on a new one.
+- **The apiserver has to still know the field exists.** A structural schema prunes an undeclared field on write with no error, so a cluster serving a CRD older than the controller accepts `runnerGroup` and stores nothing, and the empty value the AGC then reads is GitHub's installation-default group: the widening the first property refuses to do on a typo.
+  The v2 CRDs are the exposed ones because they are applied out-of-band, so `helm upgrade` never carries a schema change into them (Q852).
+  The GMC probes the installed schema at startup and refuses to start on a missing boundary field rather than provisioning tenants against one that is not there; [troubleshooting.md](../operations/troubleshooting.md#gmc-exits-at-startup-an-installed-crd-schema-is-older-than-the-gmc) has the operator's half.
+  The check is curated rather than derived, because which fields fail *open* is a property of the code that reads them: a field whose absence disables a feature or narrows what is permitted is not one of them.
 
 **What stays outside GAG's control, and must stay documented.** GAG never creates a runner group and never edits which repositories one admits; both are the platform admin's, at GitHub.
 So the guarantee is exactly "the tenant's runners live in the group you named" and never "only your repositories can reach them" — a named group whose access policy is *All repositories* is the default group with extra steps.

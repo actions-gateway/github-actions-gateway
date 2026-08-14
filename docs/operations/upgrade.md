@@ -534,6 +534,10 @@ helm template actions-gateway-crds-v2 oci://ghcr.io/actions-gateway/charts/actio
   | kubectl apply --server-side -f -
 ```
 
+**Skipping the re-apply is the one v2 upgrade mistake that is not self-announcing, so the GMC refuses to start on it.** A structural schema prunes an undeclared field on write with no error, so a cluster left on the previous release's CRD accepts a manifest setting a newer field and stores nothing.
+For [`spec.runnerGroup`](../design/05-security.md#unbounded-job-intake-via-the-installations-default-runner-group) that is a tenant boundary silently going away, not a feature going missing, so the GMC probes the installed schema at startup and exits with the field, the version, and this command rather than provisioning against a boundary that is not there.
+Runbook: [troubleshooting.md](troubleshooting.md#gmc-exits-at-startup-an-installed-crd-schema-is-older-than-the-gmc).
+
 The v2 controllers now reconcile these kinds, so a v2 object set provisions a working tenant.
 Both groups are served side by side, so you can stay on the `v1alpha1` (`actions-gateway.github.com`) API until the **`v2.0.0`** release removes it, or migrate a tenant to v2 now with the one-shot fan-out tool: see [migration-v1-to-v2.md](migration-v1-to-v2.md) and the [deprecation and removal notice](v1alpha1-deprecation.md), which lists everything `v2.0.0` removes (`v1alpha1`, `v2alpha1`, and the Classic acquisition protocol) and the pre-upgrade checklist for it.
 Note: v2's `ActionsGateway` reuses the `ag` short name, so once both groups are installed `kubectl get ag` is ambiguous — qualify it as `kubectl get actionsgateways.actions-gateway.github.com` (or `.com`) to disambiguate.
