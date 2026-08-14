@@ -1278,6 +1278,27 @@ func TestMain(m *testing.M) {
 **Add that `TestMain` to any new GMC test package whose code under test logs through controller-runtime**, so the package's output never becomes a function of how long it takes to run.
 Under `-v` (`V=1 make test`, `V=1 make cover-check`) the installed logger writes to stderr, so controller-runtime output is available when you want it; otherwise it discards.
 
+### A package timeout is not the flake row that describes it
+
+A Queue row describing a flake is a ready-made explanation for the next failure that looks like it, and a package that blows its `cover-check` budget looks like every other package that blows its `cover-check` budget.
+Q822 and Q823 both name `provisioner` timing out under concurrent load and passing on rerun, so a genuine regression that hangs one test in that package arrives pre-explained.
+
+The dump is the discriminator, and Go prints it for free:
+
+```bash
+grep -n "running tests:" -A 4 tmp/check.log
+```
+
+That names the test that was still running when the alarm fired, and the question it answers is the whole diagnosis: **does that test exercise what this change touched?** If it does, the row is not yours to reach for, however exactly the symptom matches.
+Measured 2026-08-14 closing Q811: the panic named a pre-existing claim-retry test, whose fixture drove the very arm the change had just added a GitHub call to.
+The hang was that new call re-asking an unroutable fake for its whole retry window, not the load.
+
+Two corollaries:
+
+- **Time the package alone before believing "under load".** Contention is a claim about the *other* work on the host, so it predicts the package is fast by itself.
+  240 s under the gate and 1.6 s standalone is the load story; 240 s both ways is not.
+- **A pre-existing test can hang on new code.** The test being older than the change is not evidence; what matters is whether its fixture reaches the new path.
+
 ### A flake that passed on rerun has two logs â€” diff them
 
 A rerun that passes is not the flake's dismissal; it is **half the evidence**.
@@ -1660,6 +1681,19 @@ When a defect filed from production describes state your suite cannot express â€
 - **Teach the double the real effect, then watch the new test fail.** A regression test written against a fake that cannot hold the state is a test that can never fail, which is worse than no test because it reads as coverage.
 - **Model the effect, not just the response.** `generatejitconfig` returning a blob is the response; creating a record that holds a name until something deletes it is the effect, and the effect is where this class of bug lives.
 - **Expect the faithful fake to reshape the diagnosis.** Q550's Queue row named a mechanism that turned out to be already fixed; only a stub that registered on mint could show which of the two candidate mechanisms actually accumulated records.
+
+**The third variant is the interface growing a call the fake answers anyway.** A fake that replies to every path alike is modelling an interface with one call.
+Add a second (a read before the write, a status check before an action) and that same fake answers it, in the shape it was written for, and nothing goes red: the new call is counted as the old one, and its body is whatever the caller makes of an answer that was never meant for it.
+
+Measured on Q811, which put a run GET ahead of `rerun-failed-jobs` on one recovery arm.
+Two shared unit fakes answered `201` with an empty body for every path, so the GET inflated the `rerunCount` that every "re-run exactly once" assertion reads, and its undecodable body sent the recovery back to re-ask for the whole 15-minute re-run window.
+The package went from 1.6 s to a `cover-check` timeout at the 2-minute budget.
+
+- **Route by method and path the moment the interface has two calls**, and give each its own shape.
+  A helper the fakes share (`answeredRunConclusion` in `internal/provisioner`) is what keeps the next fake from omitting the arm.
+- **A counter named for one call must count only that call.** `rerunCount` did not change meaning when the code grew an endpoint; the fake did, so every assertion resting on it moved without anyone editing it.
+- **Fix the fakes, not the expected numbers.** Raising a count to match what the fake now sees encodes the conflation into the suite permanently.
+- **Add the arm in the same change as the call**, before running anything: what surfaces otherwise is a hang or an off-by-one, neither of which points at the fake.
 
 ### Synchronize on the signal you assert on
 
