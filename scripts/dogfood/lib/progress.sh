@@ -43,7 +43,9 @@ RELEASE_STATUS_FILE="${RELEASE_STATUS_FILE-${RELEASE_PROGRESS_FILE:+$(dirname "$
 # report.
 RELEASE_HEARTBEAT_MAX_CHARS="${RELEASE_HEARTBEAT_MAX_CHARS:-200}"
 
-# progress_init — start a fresh stream and status for this run.
+# progress_init — start a fresh stream and status for this run. Called before
+# the gate's preflight, so no reader can meet the previous run's terminal event
+# during the minutes a preflight can take.
 progress_init() {
 	# No stream, nothing to initialize — including the status file, which a
 	# disabled stream can no longer refresh either (progress_status_write).
@@ -117,8 +119,10 @@ progress_phase() {
 # progress_status_json [STREAM_FILE] — reduce the stream to one status object on
 # stdout. Pure: reads the stream, writes nothing. An absent or empty stream is
 # not an error — it renders gate="preflight", which is the true state of a gate
-# that has not committed to running yet (the stream starts after the settle
-# wait, so a renderer cannot mistake an aborted preflight for an in-flight gate).
+# that has not committed to running yet. The gate empties the stream before its
+# preflight and writes its first event after it, so both an aborted preflight
+# and an in-progress one leave an empty stream, and neither can be mistaken for
+# an in-flight gate or for the previous run's verdict.
 #
 # Malformed lines are skipped rather than fatal: the gate appends while a reader
 # may be mid-read, and a torn final line must cost a field, not the whole object.

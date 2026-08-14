@@ -225,7 +225,8 @@ Recorded because it nearly ended the session with a false verdict on the gate th
 Launched while the gate was still in preflight, the sentinel read the `v1.4.0-rc.2` stream left in `tmp/` from 2026-08-09, found its terminal `passed` event, and reported `Gate: passed` with a next action of "report the result to the operator".
 The stale RC tag, a 101-hour elapsed time and the placeholder `owner/repo/actions/runs/42` were all in its own report, and none of them stopped it.
 A run that has not yet written its first event is indistinguishable, to the sentinel, from one that finished.
-Worked around here by archiving the three stale files under `v1.4.0-rc.2` names; the fix is a Queue row, and the choice is between matching the stream's `rc` against the tag being watched and scoping or truncating the stream at gate startup.
+Worked around at the time by archiving the three stale files under `v1.4.0-rc.2` names, then fixed at the writer rather than at the sentinel, because the same stale stream had already misreported the gate's phase through `release-status.sh` when it was asked directly.
+The gate now empties its stream before preflight instead of after it, so no reader can meet a spent run's terminal event.
 
 The `stalled` event later in the run was **not** a defect.
 It fired once the dispatched run was no longer live while the stream was quiet, which is exactly Q630's reconciliation behaving as designed; the gate was mid-transition into `e2e-stop.sh` when it was checked.

@@ -710,6 +710,55 @@ lease_process_command() { [[ "$1" == "999999" ]] && echo "${GATE_CMD}"; }
 check "a teardown never releases another gate's lease" "held" \
 	"$(lease_state "${PROJECT}" "${ZONE}" "${CLUSTER}")"
 
+# --- progress_reset_unless_held: a spent stream must not outlive its run ---
+#
+# The gate writes no event until after preflight, so until the stream is emptied
+# every reader renders whatever the last run left. That is how release-sentinel
+# reported `passed` for a v1.4.0-rc.2 run while a v1.5.0-rc.1 gate was still in
+# its settle wait, having started nothing.
+#
+# The teardown block above narrowed lease_process_command to one foreign pid, so
+# restore the liveness stub these cases need: without it `held` arms an orphan
+# and the state under test never occurs. Each case asserts the lease state it
+# claims rather than trusting arm_lease.
+lease_process_command() { [[ "$1" == "$$" ]] && echo "${OWNER_ALIVE:+${GATE_CMD}}"; }
+
+STALE_STREAM="${SCRATCH}/stale-progress.jsonl"
+seed_spent_stream() {
+	cat >"${STALE_STREAM}" <<'STREAM'
+{"kind":"phase","t":1786326912,"phase":"gate","state":"start","detail":"v1.4.0-rc.2"}
+{"kind":"phase","t":1786334974,"phase":"gate","state":"done","detail":"validation PASSED for v1.4.0-rc.2"}
+STREAM
+}
+
+reset_with_lease() {
+	arm_lease "$1"
+	seed_spent_stream
+	RELEASE_PROGRESS_FILE="${STALE_STREAM}" RELEASE_STATUS_FILE="" progress_reset_unless_held
+}
+
+reset_with_lease free
+check "the free case really is free" "free" \
+	"$(lease_state "${PROJECT}" "${ZONE}" "${CLUSTER}")"
+check "a spent stream is emptied before preflight" "" "$(cat "${STALE_STREAM}")"
+check "an emptied stream renders preflight, not the last verdict" "preflight" \
+	"$(progress_status_json "${STALE_STREAM}" | jq -r .gate)"
+check "an emptied stream carries no RC" "null" \
+	"$(progress_status_json "${STALE_STREAM}" | jq -r '.rc // "null"')"
+
+# The one state that must not be cleared: that stream belongs to the gate that
+# is still writing it, and lease_acquire refuses this run moments later.
+reset_with_lease held
+check "the held case really is held" "held" \
+	"$(lease_state "${PROJECT}" "${ZONE}" "${CLUSTER}")"
+check_contains "a live gate's stream is left alone" "v1.4.0-rc.2" "$(cat "${STALE_STREAM}")"
+
+# A killed gate has no live owner, so its stream is spent like any other.
+reset_with_lease orphaned
+check "the orphaned case really is orphaned" "orphaned" \
+	"$(lease_state "${PROJECT}" "${ZONE}" "${CLUSTER}")"
+check "an orphaned gate's stream is emptied" "" "$(cat "${STALE_STREAM}")"
+
 if ((fails > 0)); then
 	echo "validate-release-test: ${fails} assertion(s) failed" >&2
 	exit 1
