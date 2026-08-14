@@ -2640,10 +2640,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#what-the-notes-should-not-claim-yet" class="md-nav__link">
+  <a href="#what-the-notes-may-claim" class="md-nav__link">
     <span class="md-ellipsis">
       
-        What the notes should not claim yet
+        What the notes may claim
       
     </span>
   </a>
@@ -2714,7 +2714,7 @@
 Four gating Queue rows so far, labelled <code>1.5-gate</code>: Q712, Q713, and Q726, admitted 2026-08-09 from the candidate list below, plus Q715, admitted the same day off an external date.
 All four shipped 2026-08-11, and the marketing reconciliation closed 2026-08-12 (Q801, Q821).
 Two more were admitted afterwards, both on the <a href="#the-parity-axis-what-closed-and-what-backs-it">parity axis</a>: Q776 on 2026-08-13, to back the parity claim the other four earned, and Q844 on 2026-08-14, a classic-only capability the badge set never recorded and the marketing surface already claims for both tiers.
-Q844 shipped 2026-08-14, leaving Q776 as the only gating row still open.</p>
+Q844 shipped 2026-08-14 and Q776 has now shipped too, so every gating row is closed and only the release-candidate dogfood validation remains.</p>
 </blockquote>
 <h2 id="why-these-gate-a-release-rather-than-riding-along">Why these gate a release rather than riding along<a class="headerlink" href="#why-these-gate-a-release-rather-than-riding-along" title="Permanent link">&para;</a></h2>
 <p>Q712 and Q713 came out of the 2026-08-06 competitive analysis, and both were defects in capabilities the project already claims, not new features.
@@ -2786,15 +2786,25 @@ It was admitted as a <code>1.5-gate</code> row on the same test Q712 and Q713 me
 <p><code>v1alpha1</code> to <code>v2beta1</code> API: <strong>closed, but mostly before the 1.4 tag.</strong> All eight gaps in the <a href="../v2-api-gap-analysis/">gap analysis</a> are closed and it declared its own scope closed 2026-08-09; the last v2 API milestone, Q166 cross-namespace sharing, is an ancestor of <code>v1.4.0</code>.
 1.5 contributed the one surviving capability drop, Q726: <code>v1alpha1</code> set <code>MinItems=1</code> with no ceiling while <code>v2beta1</code> CEL-enforced <code>size(self) == 1</code>, and that field's godoc offered staying on a <code>v2alpha1</code> Classic set as the migration path, which <code>v2.0.0</code> removes.</p>
 <h3 id="what-parity-does-not-yet-have-a-backstop">What parity does not yet have: a backstop<a class="headerlink" href="#what-parity-does-not-yet-have-a-backstop" title="Permanent link">&para;</a></h3>
-<p>Both results rest on a one-time manual walk, and on the tier axis that walk has already gone stale three times.
+<p>Both results rested on a one-time manual walk, and on the tier axis that walk had already gone stale three times when this section was written.
 Q683, Q691 and Q713 each arrived classic-only from birth <em>after</em> the 2026-07-26 tier-seam walk declared parity, and nothing re-walks it.</p>
 <p>The tier badge gate is one-directional by construction.
 It fails a badge whose Queue row already shipped, a badge with no <code>&lt;!-- tier:QN --&gt;</code> annotation, and a badge linking no <code>operations/</code> page, so a badge cannot outlive its gap.
 It cannot see the case that actually recurs: a capability that is classic-only and was never badged at all.</p>
-<p><strong><a href="../../STATUS/#Q776">Q776</a> is admitted as a <code>1.5-gate</code> row on 2026-08-13</strong> for that reason.
+<p><strong>Q776 was admitted as a <code>1.5-gate</code> row on 2026-08-13</strong> for that reason.
 It reconciles the <code>actions_gateway_*</code> names across both sides against the absent-by-design list in <a href="../v2-ga/#capability-parity-is-a-precondition-of-the-removal">v2-ga.md</a>, which both re-establishes the measurement as current and leaves behind the gate that keeps it so.</p>
 <p>Q844 found the fourth instance a day later, and by hand rather than by any gate, which is the argument for Q776 restated as evidence.
 It has since closed the gap it found; Q776 is what makes the next one visible without someone thinking to ask, and landing it is what lets the release notes say parity rather than name four ports.</p>
+<p><strong>✅ Q776 shipped.</strong> The re-walk covered all 53 <code>actions_gateway_*</code> series the AGC defines, and the <a href="../../operations/observability-metrics/#acquisition-tier-reach">acquisition-tier ledger</a> is where each one's tier now lives: 26 reach both tiers, 16 are classic-only, 10 are scale-set-only, and one is tier-neutral. <code>make metric-tiers-check</code> holds the ledger to the source in both directions, so a series added on one tier fails until someone answers the tier question, and a row the source refutes fails too.</p>
+<p>It found two things the one-time walk had not, which is the argument for the gate rather than a fifth walk:</p>
+<ul>
+<li><code>renew_job_errors_total</code> and <code>renew_job_teardowns_total</code> are classic-only by construction, since a scale-set runner renews and completes its own job and the AGC never calls <code>renewjob</code>.
+  Neither was on the absent-by-design list, and neither row said which tier emits it, so both read as system-wide.</li>
+<li><code>eviction_recovery_evidence_lost_total</code> (Q809) reached no operator doc at all.
+  It was described in the design docs and the troubleshooting runbook, and the metrics reference an operator actually reads never gained a row.</li>
+</ul>
+<p>Neither is a capability gap, so the parity result above stands: <strong>the tier axis is closed on the full metric inventory, not only on the tracked one.</strong> The gate covers metrics rather than capabilities, so a capability with no series behind it still joins the parity table by hand.
+That residual is recorded in <a href="../v2-ga/#what-this-audit-checked-and-found-already-covered">v2-ga.md</a> and belongs to <a href="../../STATUS/#Q774">Q774</a>.</p>
 <p>The v1 to v2 axis gets no equivalent row, and that is a decision rather than an omission. <code>cmd/agc/api/v1alpha1/conditions_parity_test.go</code> already pins the listener vocabulary across all three packages by value (Q309), and new drift can only come from someone adding to <code>v1alpha1</code>, which is frozen and comes out in the <code>v2.0.0</code> bundle (<a href="../../STATUS/#Q264">Q264</a>).</p>
 <h3 id="differences-that-survive-parity-and-should">Differences that survive parity, and should<a class="headerlink" href="#differences-that-survive-parity-and-should" title="Permanent link">&para;</a></h3>
 <p>Not gaps, and not for the next audit to re-litigate.
@@ -2806,10 +2816,11 @@ Preemption and drain recovery were listed here until 2026-08-14, on the grounds 
 <li>Several counters are absent from the scale-set tier by construction, being artifacts of the many-acquirers and JIT-agent models <code>ScaleSet</code> removes.
   <a href="../v2-ga/#capability-parity-is-a-precondition-of-the-removal">v2-ga.md</a> holds the list, and Q776 reconciles against it.</li>
 </ul>
-<h3 id="what-the-notes-should-not-claim-yet">What the notes should not claim yet<a class="headerlink" href="#what-the-notes-should-not-claim-yet" title="Permanent link">&para;</a></h3>
-<p>Until Q776 lands, the notes name the ports rather than asserting parity.
-A published parity claim resting on a walk with a four-times-stale record is the same failure Q801 spent this release fixing, one surface over.
+<h3 id="what-the-notes-may-claim">What the notes may claim<a class="headerlink" href="#what-the-notes-may-claim" title="Permanent link">&para;</a></h3>
+<p>The bar was that the notes name the ports rather than asserting parity until Q776 landed, because a published parity claim resting on a walk with a four-times-stale record is the same failure Q801 spent this release fixing, one surface over.
 Q844 is the case in point: the claim was already published, on <code>features.md</code> and in the troubleshooting matrix, before anyone checked whether the shipped tier honoured it.</p>
+<p>Q776 has landed, so the notes may now say parity <strong>on the metric surface</strong>, and should say it in those words.
+The ledger is the evidence and the gate is what keeps it true; a capability with no series behind it is still covered by a manual walk, so an unqualified "full parity" would overstate what is actually enforced.</p>
 <h2 id="candidates-not-yet-accepted">Candidates not yet accepted<a class="headerlink" href="#candidates-not-yet-accepted" title="Permanent link">&para;</a></h2>
 <p>Held here so the reasoning is not lost, not committed to the release:</p>
 <ul>
