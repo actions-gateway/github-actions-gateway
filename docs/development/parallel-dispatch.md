@@ -185,6 +185,10 @@ A PR that reported `ready` has no watcher, but it is still **open** — it sits 
 Relaunching pr-sentinel does not close this gap (it would spin on `ready`; see the event list above).
 The gap belongs to the **dispatcher**, which covers it two ways:
 
+> **When there is no dispatcher, it belongs to the worker.** A session started straight from a Q-ID rather than by a dispatcher has nobody to hand the window to, and the assignment below silently addresses no one.
+> Such a session arms the same watch on its own PR.
+> Measured 2026-08-14: three PRs from one dispatcher-less session went `DIRTY` five times between `ready` and merge, `docs/STATUS.md` being the file every one of them touched.
+
 - **A mergeability-only background watch per handed-off PR**, launched as a background task:
 
   ```bash

@@ -94,6 +94,16 @@ This repo runs the plugin's default `PR_SENTINEL_WATCH_UNTIL=ready`, so the watc
 That is deliberate: a background task makes the session's status indicator read as running, which hides the PR status the maintainer scans the session list for.
 Your watcher covers your PR up to green, and the dispatcher covers the window from green to merged (§8).
 
+**With no dispatcher, that second half is yours.** A session started straight from a Q-ID has no dispatcher to hand the window to, so nothing watches the PR while it sits green awaiting review, which is exactly when a sibling merge turns it `DIRTY`.
+Arm the mergeability-only watch on your own PR instead, as a background task:
+
+```bash
+scripts/agent/pr-mergeability-watch.sh <pr>
+```
+
+It reports one event and exits, so it does not spin the way relaunching pr-sentinel on `ready` would.
+Measured 2026-08-14: three PRs from one session went `DIRTY` five times between `ready` and merge, the first caught only because an unrelated check happened to look.
+
 On each wake:
 
 | Event | Do |
