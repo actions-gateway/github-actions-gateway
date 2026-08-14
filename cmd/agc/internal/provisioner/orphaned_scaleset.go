@@ -92,6 +92,14 @@ func (s *orphanScanState) claim(key string) bool {
 	return true
 }
 
+// release returns an owner's claim so a scan that could not read the cluster is retried
+// rather than silently skipped for the life of the process.
+func (s *orphanScanState) release(key string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	delete(s.seen, key)
+}
+
 // RecoverOrphanedScaleSetWorkers triggers the automatic re-run for every job in inFlight
 // whose worker pod no longer exists, and is a no-op on every reconcile after the first
 // for a given owner. inFlight is the set a previous process persisted; the caller reads
@@ -151,14 +159,6 @@ func (p *Provisioner) RecoverOrphanedScaleSetWorkers(ctx context.Context, target
 		close(done)
 	}()
 	return done, nil
-}
-
-// release returns an owner's claim so a scan that could not read the cluster is retried
-// rather than silently skipped for the life of the process.
-func (s *orphanScanState) release(key string) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	delete(s.seen, key)
 }
 
 // liveScaleSetWorkerPodNames names this owner's scale-set worker pods, in any phase. One
