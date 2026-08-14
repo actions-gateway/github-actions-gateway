@@ -3033,11 +3033,13 @@ The gap belongs to the <strong>dispatcher</strong>, which covers it two ways:</p
 </ul>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>scripts/agent/pr-mergeability-watch.sh<span class="w"> </span>&lt;pr&gt;
 </code></pre></div>
-<p>It is <a href="#fallback-1-a-self-managed-background-watcher">fallback 1</a> narrowed to two fields, <code>state</code> and <code>mergeStateStatus</code>.
-  It never reads the PR body or any comment stream, so nothing a third party can write reaches the session that acts on its exit.
+<p>It is <a href="#fallback-1-a-self-managed-background-watcher">fallback 1</a> narrowed to three fields, <code>state</code>, <code>mergeStateStatus</code> and <code>baseRefName</code>.
+  It never reads the PR body or any comment stream, so nothing a third party can write reaches the session that acts on its exit; <code>baseRefName</code> is a branch in this repository rather than authored text, and the watch refuses one that is not a plain refname instead of quoting it into the wake.
+  The base is read because the wake has to name a branch, and a stacked PR told to rebase onto <code>main</code> absorbs its own base into its diff (Q839).
+  The wake names the base and never a <code>git rebase --onto</code> line: that needs the old base head, which <code>merge-base</code> cannot recover once the base has been force-pushed.
   It carries no CI output, so a batch of them does not fill the dispatcher's context with logs for failures the owning worker is fixing.
   And it sleeps between polls, which a pr-sentinel relaunch on <code>ready</code> cannot.
-  On <code>conflict</code> the dispatcher wakes the owning worker (see <a href="#coordination-channels">Coordination channels</a>); the worker rebases, re-runs the gate, pushes, and relaunches its own pr-sentinel watcher.
+  On <code>conflict</code> the dispatcher wakes the owning worker (see <a href="#coordination-channels">Coordination channels</a>); the worker rebases onto the branch the wake names, re-runs the gate, pushes, and relaunches its own pr-sentinel watcher.
 - <strong>A mergeability re-check at the merge step</strong>, as the backstop for the above.
   No moving parts, and the merge step is already where the dispatcher looks at the PR.
   A stale <code>ready</code> is caught there and routed by <a href="#conflict-policy">conflict policy</a>.</p>

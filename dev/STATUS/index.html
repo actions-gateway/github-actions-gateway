@@ -2904,14 +2904,6 @@
 <td>Phase 1 is built and awaits a green Kata e2e whose log names no non-GitHub non-registry host, then Phase 2 mirrors. The posture is graded from that log, not asserted. <strong>Unblocks <a href="#Q539">Q539</a>.</strong></td>
 </tr>
 <tr>
-<td><a id="Q839"></a>Q839</td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/agent/pr-mergeability-watch.sh">A conflict wake tells a stacked PR to rebase onto <code>main</code>, absorbing its base</a></td>
-<td><code>bug</code> <code>debt</code> <code>ci</code></td>
-<td>🔲</td>
-<td>S</td>
-<td><code>:98</code> hardcodes "rebase onto origin/main" and never reads <code>baseRefName</code> (grep: 0), so a stacked PR is told to absorb its base. <code>--onto</code> needs an old-base head <code>merge-base</code> cannot recover after a force-push (measured); emit the shape, never a command.</td>
-</tr>
-<tr>
 <td><a id="Q716"></a>Q716</td>
 <td><a href="../design/05-security/">Assert a worker pod cannot reach the cloud metadata server</a></td>
 <td><code>security</code> <code>tests</code></td>
