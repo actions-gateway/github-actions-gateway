@@ -9,9 +9,17 @@
 # (docs/development/parallel-dispatch.md#the-post-ready-gap).
 #
 # Deliberately narrower than pr-sentinel rather than a second copy of it:
-#   - It reads `mergeStateStatus` and `state` ONLY. Never the PR body, review
-#     comments or issue comments, so no text a third party can write reaches
-#     the session that acts on the exit.
+#   - It reads `state`, `mergeStateStatus` and `baseRefName` ONLY. Never the PR
+#     body, review comments or issue comments, so no text a third party can
+#     write reaches the session that acts on the exit. `baseRefName` is a branch
+#     in the target repository rather than authored text, and it is refused
+#     unless it matches a conservative refname pattern.
+#
+# The base is read because a stacked PR rebased onto `main` absorbs its own base
+# (Q839). The wake names the base branch and never a command: `git rebase --onto`
+# needs the old base head, which `merge-base` cannot recover once the base has
+# been force-pushed (measured), so emitting one would hand over a line that is
+# wrong exactly when it matters.
 #   - It carries no CI output. Check failures stay with the worker that owns
 #     the PR, so a dispatcher watching a whole batch does not accumulate logs
 #     for work it is not fixing.
@@ -68,14 +76,14 @@ main() {
 	[[ -n "${PR_MERGEABILITY_REPO:-}" ]] && repo_args=(--repo "${PR_MERGEABILITY_REPO}")
 
 	local slept=0 failures=0
-	local raw state merge_state
+	local raw state merge_state base
 
 	while true; do
-		# Two fields, nothing else. A wider --json is how a comment stream
+		# Three fields, nothing else. A wider --json is how a comment stream
 		# becomes an injection channel into whatever acts on this output.
 		if ! raw=$(gh pr view "$PR" "${repo_args[@]}" \
-			--json state,mergeStateStatus \
-			--jq '"\(.state) \(.mergeStateStatus)"' 2>&1); then
+			--json state,mergeStateStatus,baseRefName \
+			--jq '[.state, .mergeStateStatus, .baseRefName] | @tsv' 2>&1); then
 			failures=$((failures + 1))
 			if ((failures >= MAX_CONSECUTIVE_FAILURES)); then
 				emit error "gh failed ${failures} times in a row; last output: ${raw}"
@@ -86,8 +94,11 @@ main() {
 		fi
 		failures=0
 
-		state="${raw%% *}"
-		merge_state="${raw##* }"
+		IFS=$'\t' read -r state merge_state base <<<"$raw"
+
+		# A refname git would accept, and nothing else. An unreadable base
+		# drops to the branchless wording rather than into the message.
+		[[ "$base" =~ ^[A-Za-z0-9._][A-Za-z0-9._/-]*$ ]] || base=""
 
 		if [[ "$state" != "OPEN" ]]; then
 			emit closed "The PR is ${state}. Nothing left to watch; drop it from the tracker."
@@ -95,7 +106,13 @@ main() {
 
 		case "$merge_state" in
 		DIRTY | BEHIND)
-			emit conflict "mergeStateStatus is ${merge_state}. Wake the owning worker to rebase onto origin/main, re-run make check, and force-push with lease. State the condition that invalidates the instruction, since delivery timing is not bounded."
+			if [[ -z "$base" ]]; then
+				emit conflict "mergeStateStatus is ${merge_state}. Wake the owning worker to rebase onto the branch this PR targets, which this watch could not read, re-run make check, and force-push with lease. State the condition that invalidates the instruction, since delivery timing is not bounded."
+			elif [[ "$base" == "main" ]]; then
+				emit conflict "mergeStateStatus is ${merge_state}. Wake the owning worker to rebase onto origin/main, re-run make check, and force-push with lease. State the condition that invalidates the instruction, since delivery timing is not bounded."
+			else
+				emit conflict "mergeStateStatus is ${merge_state}. The PR is stacked: it targets ${base}, not main, so rebasing onto main would absorb its base. Wake the owning worker to rebase onto origin/${base}, or onto origin/main if ${base} has already merged by the time the wake is read, then re-run make check and force-push with lease."
+			fi
 			;;
 		esac
 
