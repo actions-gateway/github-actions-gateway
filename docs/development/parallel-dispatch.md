@@ -481,6 +481,9 @@ It is the same command the checker would have run, and the rebase is the only de
 - **A ref pair is not a measurement**, because both refs move.
   The OIDs make the probe re-runnable: `git merge-tree --write-tree <base_oid> <head_oid>` re-derives the same conflict set from the objects at any later time, so a disagreement is settled by re-running it rather than argued from memory.
   That command is printed as well as recorded, which is what puts it in the session transcript the worker reports from.
+- **`HEAD` is not the PR's head, and a probe that reads it answers about the checkout instead.** Take the head from `gh pr view --json headRefOid`, and fetch `refs/pull/<n>/head` when the clone does not hold that commit: a dispatcher assessing a worker's PR never has the branch, and a worker's own local commits run ahead of what it pushed.
+  Measured 2026-08-12 on the shipped checker: `--assess 1438` then `--assess 1447` from one worktree returned byte-identical output at exit 0 `ELIGIBLE`, because neither run looked at either PR.
+  The failure is silent in the direction that matters, since a checkout that merges clean then reports `ELIGIBLE` for a PR whose own head conflicts in code, which is the one case the whole policy exists to hand back (Q834).
 - **Refusals are recorded too**, so an absent record means the assessment never ran rather than ran-and-refused.
   Records accumulate and the last one governs, which keeps a refusal that short-circuited before probing from erasing the measurement an earlier one took.
 - **It is not a registry.** `tmp/` is gitignored and session-local; nothing reconciles it and no gate reads it.

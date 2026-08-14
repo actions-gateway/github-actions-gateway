@@ -55,8 +55,13 @@ fi
 if [[ "${GH_SILENT:-}" == "$read_kind" ]]; then
 	exit 0
 fi
+# GH_HEAD_OID defaults through `-` rather than `:-`, so a case can answer with an
+# empty head — the shape a dropped field arrives in — as well as a wrong one. Its
+# default is the checkout's HEAD, which is what a PR's head is in the worker's
+# own worktree, so the cases that are not about the head are unaffected.
 case "$read_kind" in
-view) printf '%s\t%s\t%s\n' "${GH_STATE:-OPEN}" "${GH_DRAFT:-false}" "${GH_BASE:-main}" ;;
+view) printf '%s\t%s\t%s\t%s\n' "${GH_STATE:-OPEN}" "${GH_DRAFT:-false}" "${GH_BASE:-main}" \
+	"${GH_HEAD_OID-$(git rev-parse HEAD)}" ;;
 graphql) printf '%s %s\n' "${GH_NODE_ID:-PR_kwTEST}" "${GH_QUEUE_ENTRY:-none}" ;;
 timeline) printf '%s\n' "${GH_ENQUEUE_COUNT:-0}" ;;
 esac
@@ -358,6 +363,40 @@ replayed="$(cd "$HEAL_REPO" &&
 	git merge-tree --write-tree "$heal_base_oid" "$heal_head_oid" |
 	awk '/^CONFLICT/ && match($0, / in .+$/) { print substr($0, RSTART + 4) }')" || true
 assert_eq heal-replay-reconstructs "$replayed" docs/STATUS.md
+
+# The probe's head is the PR's, not the checkout's (Q834). Read as local `git
+# rev-parse HEAD` the verdict was about whatever the caller happened to have
+# checked out: measured 2026-08-12, `--assess 1438` then `--assess 1447` from one
+# worktree gave byte-identical output. The dangerous direction is asserted here —
+# a checkout that merges clean reporting ELIGIBLE for a PR whose own head
+# conflicts in code, which is an unattended enqueue of a change a human was
+# supposed to read.
+PR_HEAD_REPO="$(new_repo pr-head-vs-checkout code)"
+pr_head_oid="$(cd "$PR_HEAD_REPO" && git rev-parse feature)"
+(cd "$PR_HEAD_REPO" && git checkout -q main)
+GH_HEAD_OID="$pr_head_oid" expect pr-head-refuses-code 1 "$PR_HEAD_REPO" --assess 42
+assert_output pr-head-refuses-code 'scripts/thing.sh'
+assert_eq pr-head-recorded "$(field "$PR_HEAD_REPO" head_oid)" "$pr_head_oid"
+
+# Control: the checkout really does merge clean, so the refusal above measures
+# the PR's head rather than a checkout that would have conflicted anyway.
+checkout_conflicts="$(cd "$PR_HEAD_REPO" &&
+	git merge-tree --write-tree origin/main HEAD | grep -c '^CONFLICT' || true)"
+assert_eq pr-head-checkout-is-clean "$checkout_conflicts" 0
+
+# A head this clone does not hold is a probe that cannot run, not a reason to
+# fall back to the checkout. The fixture's origin is a local path with no
+# refs/pull, so the fetch finds nothing and the refusal names the head.
+GH_HEAD_OID=0123456789abcdef0123456789abcdef01234567 \
+	expect unmeasurable-absent-head 2 "$PR_HEAD_REPO" --assess 42
+assert_output unmeasurable-absent-head 'is not in this clone'
+
+# A dropped or malformed head is the read failing, and the refusal says so rather
+# than blaming the probe downstream of it.
+GH_HEAD_OID='' expect unmeasurable-empty-head 2 "$PR_HEAD_REPO" --assess 42
+assert_output unmeasurable-empty-head "PR 42's state"
+GH_HEAD_OID=null expect unmeasurable-garbage-head 2 "$PR_HEAD_REPO" --assess 42
+assert_output unmeasurable-garbage-head "PR 42's head commit"
 
 # A probe that cannot run must not read as "found no conflicts". Pointing the
 # base at a ref that does not resolve is the cheapest way to break it, and the
