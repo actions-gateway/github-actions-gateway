@@ -2684,6 +2684,45 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#the-rc1-validation-verdict-2026-08-14" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The rc.1 validation verdict, 2026-08-14
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="The rc.1 validation verdict, 2026-08-14">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#the-gate-could-not-start-and-the-defect-was-its-own" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The gate could not start, and the defect was its own
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#release-sentinelsh-reported-a-pass-that-was-not-this-runs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        release-sentinel.sh reported a PASS that was not this run's
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#candidates-not-yet-accepted" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2743,7 +2782,7 @@ Four gating Queue rows so far, labelled <code>1.5-gate</code>: Q712, Q713, and Q
 All four shipped 2026-08-11, and the marketing reconciliation closed 2026-08-12 (Q801, Q821).
 Two more were admitted afterwards, both on the <a href="#the-parity-axis-what-closed-and-what-backs-it">parity axis</a>: Q776 on 2026-08-13, to back the parity claim the other four earned, and Q844 on 2026-08-14, a classic-only capability the badge set never recorded and the marketing surface already claims for both tiers.
 Q844 shipped 2026-08-14 and Q776 has now shipped too, so every gating row is closed.
-The <a href="#pre-flight-the-api-surface-this-tag-publishes">API surface review</a> is recorded below, which clears the last item binding at the release candidate; the dogfood validation binds before the stable tag rather than before the RC.</p>
+The <a href="#pre-flight-the-api-surface-this-tag-publishes">API surface review</a> is recorded below, which cleared the last item binding at the release candidate. <code>v1.5.0-rc.1</code> was cut from <code>ff3b3ef1</code> on 2026-08-14 and <a href="#the-rc1-validation-verdict-2026-08-14">its dogfood validation PASSED</a>, so what remains before the stable tag is the stable-tag half of pre-flight: the marketing reconciliation, the operator-caveat pass, the roadmap and features reconciliation, and the announce-bar highlight.</p>
 </blockquote>
 <h2 id="why-these-gate-a-release-rather-than-riding-along">Why these gate a release rather than riding along<a class="headerlink" href="#why-these-gate-a-release-rather-than-riding-along" title="Permanent link">&para;</a></h2>
 <p>Q712 and Q713 came out of the 2026-08-06 competitive analysis, and both were defects in capabilities the project already claims, not new features.
@@ -2903,6 +2942,63 @@ The safety therefore sits where GAG does decide the outcome — an unresolvable 
 <p>One bound was not verified and does not need to be: <code>MaxLength=255</code> was not checked against GitHub's real limit for a runner group name.
 Loosening a length bound later is non-breaking and tightening one is, so a generous bound is the safe error.</p>
 <p>Nothing was deferred, so this review adds no gate row.</p>
+<h2 id="the-rc1-validation-verdict-2026-08-14">The rc.1 validation verdict, 2026-08-14<a class="headerlink" href="#the-rc1-validation-verdict-2026-08-14" title="Permanent link">&para;</a></h2>
+<p><code>validate-release.sh v1.5.0-rc.1</code> <strong>PASSED</strong>, exit 0, and the cluster was confirmed back at 0 nodes by asking <code>ops.sh at-rest</code> rather than by reading the gate's own teardown line.
+These are the receipts the notes' Validation section draws on.</p>
+<table>
+<thead>
+<tr>
+<th>Leg</th>
+<th>Result</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>deploy</td>
+<td>RC deployed and CI routed to GAG in ~3m</td>
+</tr>
+<tr>
+<td>e2e matrix</td>
+<td><strong>75 passed, 0 failed, 12 skipped</strong> in 7m28s (<a href="https://github.com/actions-gateway/github-actions-gateway/actions/runs/31805454168">run 31805454168</a>)</td>
+</tr>
+<tr>
+<td>sizing, <code>NodeShare</code></td>
+<td><code>sizingProfileState=Active</code>; worker CPU request derived to <strong>1500m</strong> where the templates ask 2 and 3</td>
+</tr>
+<tr>
+<td>sizing, <code>Throughput</code></td>
+<td><code>Active</code>, <code>sampleCounts=[188]</code></td>
+</tr>
+<tr>
+<td>CRD smoke</td>
+<td>blob signature <code>Verified OK</code>; all five v2 CRDs server-side applied and registered</td>
+</tr>
+</tbody>
+</table>
+<p>Artifact verification cleared separately and before the gate: 7/7 OCI signatures (five images, both charts), the <code>verify-blob</code> signature on the v2 CRD manifest, an SBOM attestation on the amd64 manifest, and a build-provenance attestation whose <code>buildSignerURI</code> ends <code>publish.yml@refs/tags/v1.5.0-rc.1</code> with a <code>sourceRepositoryDigest</code> equal to <code>ff3b3ef1</code>, the tagged commit.
+Following 1.4's practice, the two identity checks were re-run against deliberately wrong identities and both failed: a <code>refs/heads/</code> regexp took cosign to exit 12 naming the real subject, and <code>unit-test.yml</code> as <code>--signer-workflow</code> took <code>gh attestation verify</code> to exit 1.
+The provenance pass was read out of <code>--format json</code> rather than off the exit status, since that command prints nothing when its output is redirected.</p>
+<p><code>Throughput</code> actuating was not expected on this run.
+The <a href="../../operations/release/#validate-the-release-candidate-on-dogfood">runbook</a> treats it as reported-never-fatal because it needs ~20 samples per template container and the gate's matrix is about seven jobs.
+It reported <code>Active</code> on 188 samples, because the sampler tracks every worker pod whatever <code>spec.sizing</code> holds and the aggregate re-seeds from the persisted <code>status.sizingRecommendation</code>, so the CI tenant's ordinary traffic had already earned them.</p>
+<h3 id="the-gate-could-not-start-and-the-defect-was-its-own">The gate could not start, and the defect was its own<a class="headerlink" href="#the-gate-could-not-start-and-the-defect-was-its-own" title="Permanent link">&para;</a></h3>
+<p>The first launch failed in preflight, before anything was spent, reporting the <code>e2e</code> pool as having no autoscale ceiling.
+The cluster was configured correctly: GKE omits <code>minNodeCount</code> when it holds its 0 default, so the projected row led with an empty field and a default-IFS <code>read</code> slid the ceiling into the floor.
+No IFS could have recovered it, because tab is IFS whitespace and <code>read</code> drops a leading run of it unconditionally, so the projection now asks for a comma.
+Fixed in <a href="https://github.com/actions-gateway/github-actions-gateway/pull/1498">#1498</a> and confirmed against the live cluster before the gate was re-run.</p>
+<p>Two things about <em>when</em> it was found are worth keeping.
+The reservation preflight merged 2026-08-12 and the previous dogfood run was 2026-08-09, so this code had never executed against a real cluster; both test doubles modelled a literal <code>0</code> the API never sends, which is why nine assertions over the arithmetic downstream of that read stayed green.
+That is recorded as the null-vs-absent case in <a href="../../development/testing/#generate-a-fixture-with-the-producers-own-code-never-by-hand">testing.md</a>.
+The class of defect only surfaces when a release is actually being cut, which is the least convenient moment for it.</p>
+<h3 id="release-sentinelsh-reported-a-pass-that-was-not-this-runs"><code>release-sentinel.sh</code> reported a PASS that was not this run's<a class="headerlink" href="#release-sentinelsh-reported-a-pass-that-was-not-this-runs" title="Permanent link">&para;</a></h3>
+<p>Recorded because it nearly ended the session with a false verdict on the gate that decides whether an RC may be promoted.</p>
+<p>Launched while the gate was still in preflight, the sentinel read the <code>v1.4.0-rc.2</code> stream left in <code>tmp/</code> from 2026-08-09, found its terminal <code>passed</code> event, and reported <code>Gate: passed</code> with a next action of "report the result to the operator".
+The stale RC tag, a 101-hour elapsed time and the placeholder <code>owner/repo/actions/runs/42</code> were all in its own report, and none of them stopped it.
+A run that has not yet written its first event is indistinguishable, to the sentinel, from one that finished.
+Worked around here by archiving the three stale files under <code>v1.4.0-rc.2</code> names; the fix is a Queue row, and the choice is between matching the stream's <code>rc</code> against the tag being watched and scoping or truncating the stream at gate startup.</p>
+<p>The <code>stalled</code> event later in the run was <strong>not</strong> a defect.
+It fired once the dispatched run was no longer live while the stream was quiet, which is exactly Q630's reconciliation behaving as designed; the gate was mid-transition into <code>e2e-stop.sh</code> when it was checked.
+The quiet itself was the documented case where GitHub will not serve the job log: <code>heartbeat</code> stayed <code>null</code> for the whole 22-minute leg on a run that passed, and the run record was the signal that worked.</p>
 <h2 id="candidates-not-yet-accepted">Candidates not yet accepted<a class="headerlink" href="#candidates-not-yet-accepted" title="Permanent link">&para;</a></h2>
 <p>Held here so the reasoning is not lost, not committed to the release:</p>
 <ul>
