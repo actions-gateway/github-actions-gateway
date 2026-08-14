@@ -3032,6 +3032,14 @@
 <td>Q840 shipped the manual <code>comm</code> against <code>ORIG_HEAD</code>; no CI gate can run it, since <code>ORIG_HEAD</code> is gone by push time. Needs a local form. Measured: rule 8 covers <code>flake</code> only, so every other dropped row passes clean.</td>
 </tr>
 <tr>
+<td><a id="Q861"></a>Q861</td>
+<td><a href="../development/maintaining-backlog/#a-rows-asserted-defect-is-a-claim-not-a-finding">Refuting a measurement obliges a sweep of the artifacts it justified</a></td>
+<td><code>docs</code> <code>debt</code> <code>retro</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>#1417 shipped on "3 of 5 calico enforcement negatives failed"; #1441 refuted it next day, yet 3 of the 6 comments #1417 wrote still asserted it 2 days later (swept in #1510). Closing a row sweeps its own citations, not the change's.</td>
+</tr>
+<tr>
 <td><a id="Q814"></a>Q814</td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/agent/pr-requeue-eligible.sh">An ordinary <code>DIRTY</code> wake captures no conflict set, because <code>--assess</code> refuses before it probes</a></td>
 <td><code>ci</code> <code>debt</code> <code>retro</code></td>
