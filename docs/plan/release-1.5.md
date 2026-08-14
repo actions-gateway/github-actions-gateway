@@ -232,6 +232,50 @@ The `stalled` event later in the run was **not** a defect.
 It fired once the dispatched run was no longer live while the stream was quiet, which is exactly Q630's reconciliation behaving as designed; the gate was mid-transition into `e2e-stop.sh` when it was checked.
 The quiet itself was the documented case where GitHub will not serve the job log: `heartbeat` stayed `null` for the whole 22-minute leg on a run that passed, and the run record was the signal that worked.
 
+## The stable-tag pre-flight, 2026-08-14
+
+The four items that bind at the stable tag rather than at the candidate, plus the curated notes they feed.
+Recorded here because [release.md § Pre-flight](../operations/release.md#1-pre-flight) asks for a verdict, not a checkmark.
+
+**The marketing reconciliation found one under-claim and one stale claim, and the stale one was found by a question rather than by the pass.**
+
+Question 3 settles itself this cycle: the newest `gha-runner-scale-set` release is **0.14.2, from 2026-05-22**, which is exactly what all 17 competitor cells were stamped at on 2026-08-12.
+Upstream has not moved since the stamps, so no cell has aged out and none needed re-reading.
+That is the third state Q801 built the format for, doing its job on the first release to use it.
+
+Question 1 found **Q726 on no marketing surface at all**.
+Multi-label runner sets had no `features.md` line, and their only mention anywhere was a provenance footnote in `why-gag.md` explaining a stale ARC cell.
+The capability is the one that backs the zero-edit migration claim the front door makes, which is what makes the omission worth recording rather than just fixing: the inventory missed the feature that a published claim rests on.
+Everything else shipped this cycle already had a line, or was covered by a claim that Q844 made true rather than new.
+
+Question 2 was run too thinly, and the miss is worth more than the correction.
+Asked afterwards whether the two parity axes were actually closed, `why-gag.md` turned out to say a worker reaped while still `Pending` is re-run "on the classic tier", which Q766 had made both tiers in `v1.4.0`.
+The page **understated the product by a full release**, and it did so directly above a link to the canonical matrix that says both.
+
+The maintenance comment on that paragraph is why it survived: it asks for an update when a case is *added or removed* from the matrix, and this case was neither.
+Its acquisition tier changed, which is the same drift and is not what the instruction names.
+Both the claim and the instruction are corrected, and the under-claim half of this pass is the same shape one level up: a capability that moves tier changes what every surface may say about it, and nothing watches for that. `make metric-tiers-check` now covers the metric half; prose keeps needing the eye.
+
+**The operator-caveat pass found a missing migration note.** Q791 tightened scale-set name uniqueness from namespace-scoped to the whole GitHub scope, which rejects a configuration `v1.4.0` accepted, and it had reached `troubleshooting.md` and `tenant-onboarding.md` but not `upgrade.md`.
+The gap matters because of *when* the rejection lands: admission runs on create and update, so nothing is re-validated at upgrade time and a colliding pair keeps running until someone re-applies either set, possibly a tenant who changed nothing. `upgrade.md` now carries the note and the one-command check that finds a collision in advance.
+
+Reading the report itself needed care worth recording. `operator-caveats-since.sh` extracts new sections and new bullets by line, and the sentence-per-line adoption (#1357) landed inside this window, so its bullet half reported over a hundred items citing Q-numbers as old as Q114.
+The **new sections** were the signal: four of them, mapping exactly onto Q844, Q715, Q726 and Q712.
+
+**The roadmap needed nothing.** `make roadmap-check` is green and its near-term section holds only Q719, Q727, Q408 and Q564, all pointing at later releases; the 1.5 rows are correctly absent because they are closed and the gate fails a bullet naming a dead row.
+
+**The announce-bar highlight is updated and verified rendered**, not just edited: `GAG_DOCS_RELEASE=v1.5.0 make docs-build` renders `v1.5.0 is here` followed by the new highlight. `publish.yml`'s `announce-bar` job fails the release if the rendered banner does not name the tag, so this is a gate rather than a nicety.
+
+**The notes are authored in [`docs/releases/v1.5.0.md`](../releases/v1.5.0.md)**, in-repo so each fix is a diff.
+Every surface an operator can see was diffed mechanically rather than read off the changelog: two CRD fields, seven condition reasons, one metric, three Event reasons, and no chart values change, with nothing removed or renamed anywhere.
+
+Two extraction traps bit and were caught.
+A CRD property scan reported a field called `identity` that does not exist, having matched a wrapped godoc line.
+An Event-reason scan keyed on `recordEvent(` missed two of the three additions, because `provisioner/` records through `RecordEvent(` instead; keying on the argument after the event type finds all three and cannot mistake the adjacent action string for a reason.
+
+**Still outstanding at the tag:** the notes carry no `Container images` section, because the index digests do not exist until `publish.yml` has run.
+[Step 4](../operations/release.md#4-record-the-published-digests) is where they are read, and the section is appended before `gh release edit --notes-file` publishes the body.
+
 ## Candidates not yet accepted
 
 Held here so the reasoning is not lost, not committed to the release:

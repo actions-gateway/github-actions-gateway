@@ -17,6 +17,7 @@ The three independently versioned components — GMC, AGC, and worker image — 
   - [Non-breaking: an EgressProxy pool's pods drop the app: actions-gateway-proxy label (its pool is recreated once)](#non-breaking-an-egressproxy-pools-pods-drop-the-app-actions-gateway-proxy-label-its-pool-is-recreated-once)
   - [Non-breaking: GitHub Enterprise Server gateways now reach their own appliance (they never did)](#non-breaking-github-enterprise-server-gateways-now-reach-their-own-appliance-they-never-did)
   - [Non-breaking: a GHES appliance behind a private CA can now be trusted (`spec.githubCABundleRef`)](#non-breaking-a-ghes-appliance-behind-a-private-ca-can-now-be-trusted-specgithubcabundleref)
+  - [Scale-set name uniqueness is now enforced across the whole GitHub scope, not per namespace](#scale-set-name-uniqueness-is-now-enforced-across-the-whole-github-scope-not-per-namespace)
   - [Non-breaking: a worker lost while the AGC was down is now re-run automatically (cause="vanished")](#non-breaking-a-worker-lost-while-the-agc-was-down-is-now-re-run-automatically-causevanished)
   - [Non-breaking: drained and hand-deleted workers are now re-run automatically (cause="deletion")](#non-breaking-drained-and-hand-deleted-workers-are-now-re-run-automatically-causedeletion)
   - [Non-breaking: an evicted job's auto-re-run now lands (GitHub refused it before)](#non-breaking-an-evicted-jobs-auto-re-run-now-lands-github-refused-it-before)
@@ -220,6 +221,31 @@ Runbook: [troubleshooting.md § a GHES appliance's certificate is not trusted](t
 **Egress remains a separate obligation.** Trusting the CA does not put the appliance's address space in the NetworkPolicy; see the CIDR-mode note above.
 
 **Rolling back** restores the defect for these tenants. `v1alpha1` has no equivalent field and never will — it is frozen and removed at `v2.0.0`.
+
+### Scale-set name uniqueness is now enforced across the whole GitHub scope, not per namespace
+
+**Who is affected:** a platform running two or more `ScaleSet` runner sets, in *different* namespaces, whose gateways point at the same GitHub org, enterprise, or repo, and which share a **first** `runnerLabel`.
+Everyone else is unaffected, and no configuration changes.
+
+That configuration was accepted before this release and is rejected now.
+It was never safe: the first `runnerLabel` is the scale set's name at GitHub, so two sets sharing it drive one scale set from two controllers and each tenant's AGC can acquire the other tenant's jobs.
+The guard existed but was namespace-scoped, which is the one boundary that does not match how GitHub adopts a scale set by name.
+
+**Nothing is re-validated at upgrade time**, because admission runs on create and update.
+A colliding pair keeps running until someone re-applies either set, and the rejection lands then, which may be long after the upgrade and on a tenant who changed nothing.
+Finding it in advance costs one command:
+
+```bash
+kubectl get runnersets -A -o jsonpath='{range .items[?(@.spec.acquisitionProtocol=="ScaleSet")]}{.metadata.namespace}{"\t"}{.metadata.name}{"\t"}{.spec.runnerLabels[0]}{"\n"}{end}'
+```
+
+Any first label appearing twice under one GitHub scope is a collision: give one of the sets a distinct first label, which registers a new scale set.
+Labels *after* the first may be shared freely.
+
+The rejection names the GitHub scope but withholds the conflicting set, since it may belong to another tenant; a platform admin finds it in the GMC controller log or with the command above.
+Two `Classic` sets are unaffected, registering no scale set at all.
+
+**Rolling back** restores the namespace-scoped guard, so the colliding configuration is accepted again, along with the cross-tenant job acquisition it allows.
 
 ### Non-breaking: a worker lost while the AGC was down is now re-run automatically (`cause="vanished"`)
 

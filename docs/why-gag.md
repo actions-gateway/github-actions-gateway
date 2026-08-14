@@ -190,10 +190,15 @@ Under the per-cell stamp an aging claim degrades to unverified instead of to wro
 
 <!-- The canonical fires/doesn't-fire matrix is
      docs/operations/troubleshooting.md § Which Disruptions Auto-Re-Run a Job.
-     When a case is added or removed there, update this paragraph too. -->
+     When a case is added or removed there, update this paragraph too — and when
+     a case changes which acquisition tier it reaches, which is the same drift
+     and is what this paragraph missed for a whole release: the Pending-reap
+     re-run read "classic tier" from Q691 until Q766 had made it both, in
+     v1.4.0. Neither added nor removed a case, so the instruction above did not
+     fire. -->
 **Auto-re-run covers disruption, never failure.** Eviction, preemption, a drain and a stray `kubectl delete pod` all come back, on both acquisition tiers.
 A job that *failed* and a run you *cancelled* never do.
-Nor do workers the reaper took, with one exception: a worker reaped while still `Pending` is re-run on the classic tier once capacity returns.
+Nor do workers the reaper took, with one exception: a worker reaped while still `Pending` is re-run on both tiers once capacity returns.
 [The full boundary](operations/troubleshooting.md#which-disruptions-auto-re-run-a-job-and-which-never-do).
 
 **Right-sizing is structural, not a feature race.** An ephemeral pod runs one job and lives minutes, so stock Vertical Pod Autoscaler cannot size it.
