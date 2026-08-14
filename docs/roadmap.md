@@ -23,10 +23,6 @@ Every item here blocks a release tag, and nothing else appears in this section: 
 The pill beside each title names the release it blocks, read from the backlog rather than typed here, so it cannot outlive the commitment.
 
 
-- **[Capability parity across both acquisition tiers, gated](plan/v2-ga.md#capability-parity-is-a-precondition-of-the-removal)** <!-- q:Q776 --> Every capability reaches the ScaleSet tier as well as classic, which is what makes retiring classic at `v2.0.0` safe.
-  That check was a one-time walk, and three capabilities have arrived classic-only since.
-  Reconciling both sides mechanically is what stops the next one going unnoticed.
-
 - **[Persistent and shared worker storage](operations/README.md)** <!-- q:Q719 --> Workers are storage-less by design and nothing validates a `ReadWriteMany` volume mounted into one, so the stance is undocumented rather than decided. `ReadWriteMany` is how jobs share files and what ARC's `containerMode: kubernetes` depends on, so it also matters to anyone migrating off that mode.
   Validation and a reference architecture come before any API.
 

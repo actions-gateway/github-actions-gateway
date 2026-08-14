@@ -27,6 +27,7 @@ For SLO targets, see [Appendix A — Capacity Targets & SLOs](../design/appendix
 | `actions_gateway_eviction_retries_exhausted_total` | Counter | `namespace`, `runner_group`, `tier`, `cause` | Disruption retries exhausted; job requires manual re-run. Each occurrence also emits an `EvictionRetriesExhausted` Warning Event on the owning `RunnerGroup`/`RunnerSet` (Q170). `tier` and `cause` as above. |
 | `actions_gateway_eviction_rerun_failures_total` | Counter | `namespace`, `runner_group`, `tier`, `cause`, `reason` | Disruption recoveries whose re-run was **never accepted** by GitHub, so the budget slot is spent but the job was not re-run and needs a manual `gh run rerun` (Q503). `reason="run_never_concluded"`: GitHub was still answering `403 This workflow is already running` when the 15-minute re-run window closed — the original run outlived the job lock's ~10-minute TTL bound, which is itself worth investigating. `reason="api_error"`: a terminal API failure (a non-403 error, or a 403 that is a permissions problem rather than the still-running refusal). Each occurrence also emits an `EvictionRerunFailed` Warning Event naming the run. **Expected to be zero**; see the [runbook](troubleshooting.md#evicted-worker-pods-exhausting-retry-budget). |
 | `actions_gateway_eviction_recovery_identity_unknown_total` | Counter | `namespace`, `runner_group`, `cause` | Disrupted **scale-set** worker pods that carried no workflow-run identity, so no automatic re-run could be attempted and the job stays failed until a human re-runs it (Q417). Each occurrence also emits an `EvictionRecoveryIdentityUnknown` Warning Event on the owning `RunnerSet`. This is the one failure mode that makes scale-set eviction recovery silently inert, which is why it is counted separately from an exhausted budget: an exhausted budget means a tenant is evicting more than `maxEvictionRetries` allows, while this means GitHub did not send the assignment fields (`ownerName`, `repositoryName`, `workflowRunId`) the mechanism reads. **Expected to be zero** — the assignment fields were confirmed present on live GitHub on 2026-07-26, so a sustained rate is a protocol-level regression, not a capacity problem — see the [runbook](troubleshooting.md#evicted-scale-set-jobs-are-not-re-run-automatically). |
+| `actions_gateway_eviction_recovery_evidence_lost_total` | Counter | `namespace`, `runner_group`, `cause` | Disrupted **scale-set** worker pods deleted before the recovery could be claimed, so no automatic re-run was attempted and none can be attempted later: on that tier the pod is the disruption's only record, and it is gone (Q809). Each occurrence also emits an `EvictionRecoveryEvidenceLost` Warning Event on the owning `RunnerSet`. `cause="preemption"` and `cause="deletion"` are the exposed arms, since both act on a pod that is already terminating; the recovery scan reads pods from the informer cache and claims them through the live API, so a pod removed in between yields a claim that finds nothing. **Expected to be zero**, and distinct from `…_identity_unknown_total`, which means the pod was there and carried no run identity. See the [runbook](troubleshooting.md#a-preempted-workers-job-is-not-re-run). |
 | `actions_gateway_abandoned_run_force_cancels_total` | Counter | `namespace`, `runner_group`, `tier`, `outcome` | REST `force-cancel`s of the workflow run behind a worker pod removed before it ran: the fast honest ending for a job nothing will ever report (Q683). No `completejob` value ends such a job honestly (Q645/Q676), and told nothing GitHub cancels run and job at its ~15-minute unstarted-job timeout; the standalone force-cancel reaches the same **`cancelled`** conclusion in about a second (measured live 2026-08-05), and the cancelled run accepts `rerun-failed-jobs` where the false-green ending refused it. `outcome="cancelled"`: accepted. `outcome="identity_unknown"`: the acquire payload carried no `owner/repo/run_id`, so there was no endpoint to address. `outcome="error"`: GitHub refused the call or the API failed. On the latter two the unstarted-job timeout remains the honest backstop, so they cost latency, not correctness; a sustained non-zero rate on either is worth investigating. `tier="classic"` is the acquiring goroutine, woken by its own worker pod's deletion; `tier="scaleset"` is the owning reconciler, which reads the run identity off the pod as the reaper deletes it (Q766), so on that tier `outcome="identity_unknown"` is unreachable, and the same failure is counted as `eviction_recovery_identity_unknown_total{cause="abandoned"}` instead. Increments alongside `worker_pods_reaped_total{reason="pending_deadline"}`; see the [runbook](troubleshooting.md#worker-pod-reaped-while-pending-workerpodstuckpending). An `outcome="cancelled"` run is then queued for automatic re-run, tracked by the next row. |
 | `actions_gateway_abandoned_run_rerun_waits_total` | Counter | `namespace`, `runner_group`, `tier`, `outcome` | How the wait for capacity ended for a force-cancelled abandoned run queued for automatic re-run (Q691). The re-run is deliberately **deferred**: the job was abandoned because its worker could not be scheduled, so re-queueing it at once would put it back into the pool that was starved, and a shortage would compound into a re-run storm. It fires when a worker pod of the same owner **binds to a node** (`PodScheduled=True`) after the abandonment, the same evidence-of-capacity test the Q512 capacity-gate latch uses. `outcome="capacity_returned"`: a worker was placed and the re-run was handed to the shared per-run retry budget, where it continues as `eviction_retries_total{cause="abandoned"}` (and `eviction_retries_exhausted_total{cause="abandoned"}` once `maxEvictionRetries` re-runs are spent, which is the loop bound). `outcome="expired"`: nothing was placed within the 30-minute wait window, so the run stays cancelled and needs a manual re-run. A sustained `expired` rate means jobs are being lost silently to a pool that never recovers, and is worth alerting on. `tier` carries the acquisition tier the abandonment was detected on, matching the force-cancel it recovers (both tiers since Q766); the wait, the evidence, and the retry budget are identical on each. |
 | `actions_gateway_quota_retries_total` | Counter | `namespace`, `runner_group` | Pod creation attempts retried after the namespace `ResourceQuota` rejected the worker pod. A brief non-zero rate under burst is normal (the listener backs off and retries); a sustained rate means quota headroom is tight — raise the quota or lower `maxWorkers`. |
@@ -168,6 +169,82 @@ If you scrape the proxy with a hand-written scrape config instead of the generat
 Absent if you scrape without that relabeling.
 
 For abuse/compromise detection built on these metrics (slowloris, eviction-retry loops, credential-harvesting), see [security-operations.md](security-operations.md).
+
+---
+
+## Acquisition-tier reach
+
+Which acquisition tier emits each AGC series, so a flat zero can be read as *this tier does not emit it* rather than *nothing happened*.
+Every `actions_gateway_*` metric the AGC defines is listed; the [gate](../development/testing.md#the-make-check-pre-review-gate) fails when one is added without a row here, and when a row calls a series single-tier that the source emits from the tier it excludes.
+
+Four values, and no others:
+
+- **Both** is the parity claim: the series populates on a `Classic` and a `ScaleSet` set alike.
+- **Classic only** and **Scale-set only** mean the other tier reads a permanent zero, and the row says why, and what to read there instead.
+- **Tier-neutral** is a series with no acquisition tier at all.
+
+A **Classic only** series is not a gap by itself.
+Most are artifacts of the many-acquirers and JIT-agent models the scale-set protocol removes, so they disappear *with* classic at `v2.0.0` rather than being ported; [v2-ga.md](../plan/v2-ga.md#capability-parity-is-a-precondition-of-the-removal) is where that judgement is recorded and where the removal is gated on it.
+What the row must never be is silent: a capability that reaches only the tier every new tenant is *not* on is the failure this table exists to make visible.
+
+The GMC and proxy series above are not listed.
+Neither binary acquires jobs, so neither has a tier.
+
+| Metric | Tier | Why, and what to read on the other tier |
+| --- | --- | --- |
+| `actions_gateway_active_sessions` | Classic only | Counts open long-poll sessions in the many-acquirers pool. A scale set runs one session per set by construction; `actions_gateway_scaleset_jobs_assigned_total` is the documented substitute for reading demand. |
+| `actions_gateway_jobs_acquired_total` | Classic only | Counts `acquirejob` wins. The scale-set queue assigns each job to one acquirer instead, counted by `actions_gateway_scaleset_jobs_assigned_total` and `…_scaleset_jobs_provisioned_total`. |
+| `actions_gateway_job_acquisition_errors_total` | Classic only | There is no `acquirejob` call to fail. `actions_gateway_scaleset_provision_errors_total` carries the equivalent, and [alerting](observability-alerting.md) ships `actions_gateway:scaleset_provision_success_rate:rate5m` alongside the classic success-rate rule so the rules do not go silent at the cut. |
+| `actions_gateway_jobs_admission_rejected_total` | Classic only | The per-delivered-job form of the capacity ladder. The scale-set tier states the same ladder as an integer, so a refused job is never assigned and there is nothing to count: read `actions_gateway_scaleset_advertised_capacity` and `…_scaleset_capacity_withheld` (Q443). |
+| `actions_gateway_jobs_duplicate_delivery_total` | Classic only | Absent by design. The scale-set protocol delivers each job once, so there is no sibling fan-out to deduplicate. |
+| `actions_gateway_abandoned_delivery_completions_total` | Classic only | Absent by design. Releases an assignment a deduplicated sibling acquired, which only the many-acquirers model produces. |
+| `actions_gateway_fanout_loser_recycle_deferred_total` | Classic only | Absent by design. A fan-out loser only exists where several sessions acquire against one pool. |
+| `actions_gateway_renew_job_errors_total` | Classic only | Absent by design. On the scale-set tier the runner renews and completes its own job, so the AGC never calls `renewjob`. Worker loss on that tier surfaces through the reap and eviction-recovery series instead. |
+| `actions_gateway_renew_job_teardowns_total` | Classic only | Absent by design, for the same reason: with no renew loop there is no lock the AGC can observe being lost. `actions_gateway_worker_pods_reaped_total` carries the scale-set tier's worker reclaims. |
+| `actions_gateway_agent_recycles_total` | Classic only | Absent by design. Single-use JIT agents are a classic-pool artifact; a scale set mints JIT config per assigned job. |
+| `actions_gateway_agent_recycle_errors_total` | Classic only | Absent by design, as above. |
+| `actions_gateway_broker_token_propagation_retries_total` | Classic only | Absent by design. The retry rides the agent-recycle seam, which the scale-set tier does not have. |
+| `actions_gateway_broker_session_leaks_total` | Classic only | Absent by design. One long-lived session per set cannot accumulate the abandoned sessions a recycling pool does. |
+| `actions_gateway_worker_quota_pressure` | Classic only | A v1 `RunnerGroup` collector, and a `RunnerGroup` only acquires classically. `actions_gateway_runnerset_worker_quota_pressure` is the v2 twin and covers both tiers. |
+| `actions_gateway_worker_quota_exceeded` | Classic only | As above; the twin is `actions_gateway_runnerset_worker_quota_exceeded`. |
+| `actions_gateway_workers_unschedulable` | Classic only | As above; the twin is `actions_gateway_runnerset_workers_unschedulable`. |
+| `actions_gateway_eviction_recovery_identity_unknown_total` | Scale-set only | The classic tier reads the run identity from the payload its acquiring goroutine still holds, so it cannot lose it. That tier counts the same failure as `actions_gateway_abandoned_run_force_cancels_total{outcome="identity_unknown"}`. |
+| `actions_gateway_eviction_recovery_evidence_lost_total` | Scale-set only | On this tier the disrupted pod is the disruption's only record (Q809). The classic tier holds it in process, so there is no evidence to lose. |
+| `actions_gateway_scaleset_jobs_assigned_total` | Scale-set only | The scale-set queue's own delivery signal. `actions_gateway_jobs_acquired_total` is the classic counterpart. |
+| `actions_gateway_scaleset_jobs_provisioned_total` | Scale-set only | Worker pods provisioned per assigned job. A classic set provisions inline after `acquirejob`, so the two are one event there. |
+| `actions_gateway_scaleset_provision_errors_total` | Scale-set only | Provision failures on a fire-and-forget path. `actions_gateway_job_acquisition_errors_total` is the classic counterpart. |
+| `actions_gateway_scaleset_jobs_completed_total` | Scale-set only | The terminal `JobCompleted` message the classic many-acquirers protocol never delivered, so there is nothing to count on that tier. |
+| `actions_gateway_scaleset_jobs_deferred` | Scale-set only | Assignments held for a later re-offer, which requires a queue cursor the classic protocol does not have. |
+| `actions_gateway_scaleset_jobs_abandoned_total` | Scale-set only | Assignments the set stopped counting, likewise a property of the queue. |
+| `actions_gateway_scaleset_advertised_capacity` | Scale-set only | The capacity integer this tier advertises in place of a per-job admission decision; `actions_gateway_jobs_admission_rejected_total` is the classic form (Q443). |
+| `actions_gateway_scaleset_capacity_withheld` | Scale-set only | The per-rung breakdown behind that integer, same reason. |
+| `actions_gateway_token_refreshes_total` | Both | One installation-token manager serves both listeners. |
+| `actions_gateway_token_refresh_errors_total` | Both | As above. |
+| `actions_gateway_message_poll_errors_total` | Both | Ported by Q446 under the same `namespace`/`reason` vocabulary, so one query covers a mixed fleet and keeps working after classic is removed. |
+| `actions_gateway_pod_creation_latency_seconds` | Both | Observed off the shared pod informer since Q713, which sees a scale-set worker pod and a classic one identically. |
+| `actions_gateway_job_duration_seconds` | Both | As above (Q713). |
+| `actions_gateway_eviction_retries_total` | Both | Ported by Q417; split by the `tier` label. |
+| `actions_gateway_eviction_retries_exhausted_total` | Both | As above (Q417). |
+| `actions_gateway_eviction_rerun_failures_total` | Both | Recorded by the shared re-run path both tiers hand recoveries to (Q503). |
+| `actions_gateway_abandoned_run_force_cancels_total` | Both | Ported by Q766; split by the `tier` label. |
+| `actions_gateway_abandoned_run_rerun_waits_total` | Both | As above (Q766). |
+| `actions_gateway_quota_retries_total` | Both | Both provisioning paths create the worker pod through the same quota-retry helper. |
+| `actions_gateway_quota_retries_exhausted_total` | Both | As above. |
+| `actions_gateway_worker_scaleup_throttled_total` | Both | The opt-in `spec.scaleUp` limiter is applied on both provisioning paths. |
+| `actions_gateway_worker_pods_reaped_total` | Both | The reaper is protocol-agnostic; `runner_set` is additionally set on scale-set reaps (Q514). |
+| `actions_gateway_reap_blocking_sidecar_templates` | Both | Set from the resolved worker template before the reconciler routes by protocol. |
+| `actions_gateway_runnerset_worker_quota_pressure` | Both | A v2 `RunnerSet` condition gauge, and the condition is written on either protocol. |
+| `actions_gateway_runnerset_worker_quota_exceeded` | Both | As above. |
+| `actions_gateway_runnerset_workers_unschedulable` | Both | As above. |
+| `actions_gateway_runnerset_worker_capacity_declined` | Both | As above; emitted only for a set whose capacity gate is enabled. |
+| `actions_gateway_worker_usage_job_cpu_peak_cores` | Both | Sampled from every v2 `RunnerSet` worker pod, which both protocols label identically. |
+| `actions_gateway_worker_usage_job_memory_peak_bytes` | Both | As above. |
+| `actions_gateway_worker_usage_cpu_peak_cores` | Both | As above. |
+| `actions_gateway_worker_usage_memory_peak_bytes` | Both | As above. |
+| `actions_gateway_worker_usage_jobs_sampled_total` | Both | As above. |
+| `actions_gateway_worker_usage_jobs_unsampled_total` | Both | As above. |
+| `actions_gateway_worker_usage_poll_errors_total` | Both | Counts `metrics.k8s.io` list failures, which are per-namespace rather than per-tier. |
+| `actions_gateway_build_info` | Tier-neutral | Build metadata of the running binary. |
 
 ---
 

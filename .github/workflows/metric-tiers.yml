@@ -1,0 +1,60 @@
+# Reconcile the AGC's metric inventory against the acquisition-tier ledger an
+# operator reads (Q776). Its own workflow rather than a job in doc-links.yml
+# because its inputs straddle the two: the AGC's Go source on one side and an
+# operator doc on the other. Folding it into doc-links would mean adding
+# `cmd/agc/**` to that workflow's triggers, which would run the docs-site build
+# in release-links on every AGC code change; folding it into unit-test.yml would
+# mean it never runs on the docs-only half, which path-ignores Markdown.
+#
+# The `paths` below are the gate's actual inputs and nothing else: the AGC source
+# it takes the inventory from, the two docs it reconciles against, the checker
+# and its entry point, the Makefile target, and this file. `scripts/lib/**` is
+# there because the entry point sources common.sh.
+#
+# The two lists are the same list written twice — GitHub has no anchor syntax
+# across `pull_request` and `push` — so every edit belongs in both.
+name: metric-tiers
+
+on:
+  pull_request:
+    paths:
+      - 'cmd/agc/**'
+      - 'docs/operations/observability-metrics.md'
+      - 'docs/plan/v2-ga.md'
+      - 'devtools/docs/metrictiers/**'
+      - 'devtools/go.mod'
+      - 'devtools/go.sum'
+      - 'scripts/docs/check-metric-tiers.sh'
+      - 'scripts/docs/check-metric-tiers-test.sh'
+      - 'scripts/lib/**'
+      - 'Makefile'
+      - '.github/workflows/metric-tiers.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'cmd/agc/**'
+      - 'docs/operations/observability-metrics.md'
+      - 'docs/plan/v2-ga.md'
+      - 'devtools/docs/metrictiers/**'
+      - 'devtools/go.mod'
+      - 'devtools/go.sum'
+      - 'scripts/docs/check-metric-tiers.sh'
+      - 'scripts/docs/check-metric-tiers-test.sh'
+      - 'scripts/lib/**'
+      - 'Makefile'
+      - '.github/workflows/metric-tiers.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  metric-tiers:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.work
+      - name: metric tier ledger (make metric-tiers-check)
+        run: make metric-tiers-check

@@ -25,6 +25,7 @@ Applies across every row above. **Before writing that the gateway does X, check 
 Prose that reads as a property of the system is the failure mode; it is not repaired by being true of the tier the author had in mind.
 
 This has bitten three times (Q419 eviction recovery, Q439 the pre-claim quota gate, Q446 poll-error metrics), and once in a change whose whole purpose was to polish the same paragraphs.
+Q844 made it four: the troubleshooting matrix said outright that every disruption case works on both tiers, and the shipped scale-set tier did not.
 The claims are not wrong so much as unqualified, so review does not catch them — only checking the code does.
 
 How to check: the tier seams are the `ScaleSet` early return in `runnerset_controller.go` (everything after it is classic-only by construction), `provision()` versus `ProvisionScaleSetWorker`, and the `listener/` versus `scalesetlistener/` packages.
@@ -33,6 +34,8 @@ Two places it costs the most:
 
 - **Metrics tables.** A counter emitted from one tier reads a flat zero on the other, and zero looks like "nothing happened" rather than "nothing is watching".
   Say which tier emits it, and name the signal that substitutes.
+  This is the one place the convention is enforced rather than remembered: every `actions_gateway_*` series the AGC defines needs a row in the [acquisition-tier ledger](../operations/observability-metrics.md#acquisition-tier-reach), and `make metric-tiers-check` fails a new series that has none, plus a single-tier row the source refutes (Q776).
+  A `Both` claim is still yours to get right, since no static check can confirm one.
 - **Positioning copy** (`README.md`, `why-gag.md`, `features.md`, `roadmap.md`).
   A capability claimed for the system but implemented only on the deprecated tier is scheduled for deletion, not shipped — it belongs in the parity table in [v2-ga.md](../plan/v2-ga.md#capability-parity-is-a-precondition-of-the-removal), which gates the `v2.0.0` removal on closing exactly this gap.
 
