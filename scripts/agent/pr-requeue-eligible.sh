@@ -22,6 +22,12 @@
 #      repo's merge drivers own (docs/STATUS.md, docs/plan/README.md,
 #      docs/roadmap.md). A conflict in code, tests or workflows is a human's
 #      to read, because the rebase changes what the maintainer approved.
+#      Both sides of that merge are named by the PR, not by the checkout: the
+#      head comes from `headRefOid` (Q834). Read as local `git rev-parse HEAD`
+#      it answered about whatever the caller happened to have checked out, so
+#      --assess on two different PRs from one worktree returned the same
+#      verdict, and a checkout that merges clean reported ELIGIBLE for a PR
+#      whose own head conflicts in code.
 #      Backlog rows are the exception the maintainer signed off on:
 #      `status-isolation-check` keeps them in their own commit, so the reviewed
 #      code is untouched by that resolution, and lint-backlog/roadmap-check
@@ -257,12 +263,17 @@ human_enqueued() {
 	((n > 0))
 }
 
-# resolve_probe_commits BASE — pin both sides of the probe to an OID, so what
-# gets recorded is re-runnable: a ref pair is not a measurement anyone can
-# repeat, because `origin/<base>` and HEAD have both moved by the time the
-# question is asked. merge-tree exits 1 both when it finds conflicts and when a
-# ref does not resolve ("origin/x - not something we can merge"), so the base is
-# verified here rather than left to the probe's status.
+# resolve_probe_commits BASE HEAD_OID — pin both sides of the probe to an OID,
+# so what gets recorded is re-runnable: a ref pair is not a measurement anyone
+# can repeat, because `origin/<base>` and the PR's head have both moved by the
+# time the question is asked. merge-tree exits 1 both when it finds conflicts
+# and when a ref does not resolve ("origin/x - not something we can merge"), so
+# both sides are verified here rather than left to the probe's status.
+#
+# HEAD_OID is the PR's, so the answer does not depend on the checkout the caller
+# runs from (Q834). That commit need not be local — a dispatcher assessing a
+# worker's PR has never had the branch — so an absent one is fetched from the
+# pull ref before it is called missing.
 #
 # Separate from conflicting_paths because that runs in a command substitution,
 # where an assignment to either global would die with the subshell.
@@ -271,7 +282,14 @@ resolve_probe_commits() {
 		printf 'pr-requeue-eligible.sh: %s does not resolve to a commit\n' "$1" >&2
 		return 2
 	fi
-	PROBE_HEAD_OID="$(git rev-parse HEAD)"
+	if ! git rev-parse --verify --quiet "$2^{commit}" >/dev/null 2>&1; then
+		git fetch origin --quiet "refs/pull/$PR/head" 2>/dev/null || true
+	fi
+	if ! PROBE_HEAD_OID="$(git rev-parse --verify --quiet "$2^{commit}")"; then
+		printf 'pr-requeue-eligible.sh: PR %s head %s is not in this clone and refs/pull/%s/head did not fetch it\n' \
+			"$PR" "$2" "$PR" >&2
+		return 2
+	fi
 }
 
 # conflicting_paths — the driver-owned files this merge cannot resolve without
@@ -316,15 +334,20 @@ is_driver_owned() {
 }
 
 # A `read` takes the status of the read, not of the substitution feeding it, so
-# a failed `gh pr view` leaves all three fields empty and the first check below
+# a failed `gh pr view` leaves every field empty and the first check below
 # refuses with "the PR is , not OPEN", a verdict on a PR nobody looked at.
 # Measured 2026-08-11 under a transient TLS failure.
-pr_fields=$(gh_pr --json state,isDraft,baseRefName \
-	--jq '[.state, (.isDraft|tostring), .baseRefName] | @tsv') ||
+pr_fields=$(gh_pr --json state,isDraft,baseRefName,headRefOid \
+	--jq '[.state, (.isDraft|tostring), .baseRefName, .headRefOid] | @tsv') ||
 	unmeasurable "PR $PR's state"
-read -r state is_draft base <<<"$pr_fields"
-[[ -n "$state" && -n "$is_draft" && -n "$base" ]] ||
+read -r state is_draft base head_oid <<<"$pr_fields"
+[[ -n "$state" && -n "$is_draft" && -n "$base" && -n "$head_oid" ]] ||
 	unmeasurable "PR $PR's state: the read answered '$pr_fields'"
+# Shape-checked rather than left to rev-parse: an OID the read mangled would
+# otherwise surface as "the conflict set is unmeasurable", which names the probe
+# instead of the read that broke it.
+[[ "$head_oid" =~ ^[0-9a-f]{40}$ ]] ||
+	unmeasurable "PR $PR's head commit: the read answered '$head_oid'"
 
 [[ "$state" == "OPEN" ]] || wake "the PR is $state, not OPEN"
 [[ "$is_draft" == "false" ]] || wake "the PR is a draft"
@@ -373,7 +396,7 @@ human_enqueued || wake "no human has enqueued this PR, so a re-enqueue would be 
 # cannot be resolved is reported, rather than a raw `git fetch` fatal.
 git fetch origin "$base" --quiet 2>/dev/null || true
 probe_rc=0
-resolve_probe_commits "origin/$base" || probe_rc=$?
+resolve_probe_commits "origin/$base" "$head_oid" || probe_rc=$?
 if ((probe_rc == 0)); then
 	probed="$(conflicting_paths)" || probe_rc=$?
 fi
