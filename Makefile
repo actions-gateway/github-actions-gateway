@@ -161,6 +161,17 @@ promql-check: ## Fail on unparseable PromQL, or alert rules that have drifted fr
 metric-tiers-check: ## Fail on an AGC metric with no acquisition-tier row, or a tier claim the source refutes
 	scripts/docs/check-metric-tiers.sh
 
+# The same obligation for the other two signals an operator reads (Q850). Metrics
+# were one surface of three, so the completeness the gate above earned stopped at
+# the counters: a condition reason or an Event reason reaching one tier only was
+# still unrecorded. This one also fails an Event reason with no runbook entry,
+# which a metric does not need — an Event is met in `kubectl describe`, where a
+# tier without a remedy is no help.
+# status-scope: none — it selects the AGC source, the API vocabulary, and two named docs.
+.PHONY: reason-tiers-check
+reason-tiers-check: ## Fail on a condition/Event reason with no acquisition-tier row, or a tier claim the source refutes
+	scripts/docs/check-reason-tiers.sh
+
 # scripts/README.md coverage gate (Q688). That page is the only map from a
 # script to the gate that runs it, and listing the sixteen *-test.sh files that
 # had drifted off it fixes the day rather than the week — so the gate is the

@@ -52,7 +52,7 @@ CHECK_FAST_GATES := lint-backlog status-isolation-check roadmap-check \
                     doc-links release-pins-check em-dash-check page-density-check \
                     script-docs-check semver-floor-sources-check template-library-check \
                     md-reflow-check comparison-stamps-check promql-check \
-                    metric-tiers-check
+                    metric-tiers-check reason-tiers-check
 
 CHECK_HEAVY_GATES := build-tags-check lint cover-check
 
@@ -202,4 +202,4 @@ SCRIPTS_TESTS := agent/claude-go-throttle-hook-test agent/local-throttle-test \
                  release/download-cosign-test release/release-delta-test \
                  release/verify-release-test release/verify-published-docs-test \
                  updatecli/latest-cluster-autoscaler-patch-test \
-                 docs/check-metric-tiers-test
+                 docs/check-metric-tiers-test docs/check-reason-tiers-test
