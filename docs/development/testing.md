@@ -2592,6 +2592,10 @@ Each workflow ends with a small **`<workflow>-gate`** job (`unit-test-gate`, `se
 The ids are unique per workflow on purpose: a normal job's check-run name **is its job id**, GitHub matches required checks by that name, so nine jobs all named `gate` would collapse to one indistinguishable entry in the ruleset UI.
 See [required-status-checks.md](../plan/archive/required-status-checks.md).
 
+**"every real job" is load-bearing, and nothing enforces it (Q845).** A job left out of its gate's `needs` still runs and still reports its own check, but that check is not required, so the job fails red while the required gate reports green and the merge proceeds.
+The `uses-pinned` job shipped that way for the whole of its life: the SHA-pin gate it exists to be ran on every workflow change, and a mutable `uses:` ref could not have blocked anything.
+Adding a job to one of these workflows means adding it to the gate's `needs` in the same edit, and the way to check an existing one is to read the `needs:` list against the workflow's job ids rather than to read the PR's checks, where a red non-required job looks the same as a red required one.
+
 **Why not the simpler top-level `paths-ignore`:** a workflow skipped by a top-level path filter reports **no check at all**, which leaves a *required* check **Pending forever** and wedges the merge.
 Triggering on every PR and gating internally means the `gate` context always reports — green (all jobs skipped) on an unrelated PR, red when a real job fails — so it is safe to require.
 
