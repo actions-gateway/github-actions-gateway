@@ -735,6 +735,7 @@ Two gates (both in `make check`) enforce it so the omission can't ship silently:
 - **`make doc-links`** fails on any broken link the move introduces.
 
 The same change should also keep the plan's `docs/plan/README.md` **status text** current: when you delete a Queue row that completes a plan, update that plan's README row in the same edit.
+For a `release-X.Y.md` row the text is gated rather than remembered: once that release is published, `make plan-index-check` rejects an open marker (❌, 🔲, 🚧) on it, because the tag settles the question the cell was still arguing (Q812).
 
 **Keep archival a docs-only operation.** Archival must never touch code — a code edit re-triggers the heavy path-gated CI (e2e / integration / trivy) on what should be a `docs/**`-only move.
 The way to guarantee that: **code never references a plan by path.** A Go comment must not contain `docs/plan/<file>.md`; cite the durable layer instead — a `docs/design/` or `docs/operations/` doc, or a stable `Q-ID` / appendix `§`-ref (those survive archival untouched).

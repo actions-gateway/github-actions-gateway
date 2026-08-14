@@ -517,6 +517,10 @@ cp "$DRIVER" "$gate_repo/scripts/docs/git-merge-plan-index.sh"
 cp "$INDEX_CHECK" "$gate_repo/scripts/docs/check-plan-index.sh"
 cp "$REPO_ROOT/scripts/lib/merge-keyed-records.awk" "$gate_repo/scripts/lib/"
 cp "$REPO_ROOT/scripts/lib/merge-driver-common.sh" "$gate_repo/scripts/lib/"
+# The gate sources common.sh for resolve_release_tag (Q812), and resolves it from
+# its own location, so the copy has to come along or it dies before it checks
+# anything — which the baseline below reads as a red tree.
+cp "$REPO_ROOT/scripts/lib/common.sh" "$gate_repo/scripts/lib/"
 chmod +x "$gate_repo/scripts/docs/git-merge-plan-index.sh" "$gate_repo/scripts/docs/check-plan-index.sh"
 printf '%s merge=planindex\n' "$TARGET" >"$gate_repo/.gitattributes"
 git -C "$gate_repo" init -q -b trunk

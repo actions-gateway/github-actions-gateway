@@ -37,8 +37,28 @@
 #      about and stays true after the row closes; the Status cell is the claim
 #      that goes stale.
 #
+#   4. Release row ↔ published tag. An active `release-X.Y.md` row whose release
+#      the project has already published cannot carry an open marker (❌/🔲/🚧).
+#      Invariant 3 reads the *form of an ID*; the staleness lives in the prose
+#      around it, so the two never overlap. `release-1.3.md` read "❌ Open — one
+#      gate left ... Q484" with Q484 bare and its row gone: invariant 3 held and
+#      the gate passed on `main` every day for the nine days after `v1.3.0`
+#      shipped (Q802, Q812). The tag is a fact the cell cannot argue with.
+#
+#      Skipped when no stable tag resolves (a fresh fork), because there is then
+#      no release to contradict. ⚠️ stays legal on a shipped release: a residual
+#      Queue row is a real state. The reverse direction — ✅ before the tag —
+#      is deliberately not gated, since the docs are written before the tag is cut.
+#
 set -euo pipefail
 shopt -s inherit_errexit
+
+# The library is resolved from this script's own location, not from the git root
+# below: the root is whatever tree the gate is pointed at, which the test suite
+# scopes to a throwaway repo that has no scripts/lib/.
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=scripts/lib/common.sh
+source "$SCRIPT_DIR/../lib/common.sh"
 
 repo_root="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
 readme="$repo_root/docs/plan/README.md"
@@ -269,9 +289,68 @@ if (( ${#mismatch[@]} > 0 )); then
     } >&2
 fi
 
+# Invariant 4: a shipped release's row cannot still read as open.
+# One record per active `release-X.Y.md` row: line, plan file, and the cell's
+# leading status marker (the convention every row in this file follows).
+mapfile -t release_rows < <(awk '
+    /^## Archive/ { archived = 1 }
+    archived { next }
+    /^\| \[/ {
+        line = $0
+        gsub(/\\\|/, "\001", line)
+        if (split(line, col, "|") != 5) next
+        if (!match(col[2], "\\]\\(release-[0-9]+\\.[0-9]+\\.md\\)")) next
+        plan = substr(col[2], RSTART + 2, RLENGTH - 3)
+        cell = col[4]
+        sub(/^[ \t]+/, "", cell)
+        marker = cell
+        sub(/[ \t].*$/, "", marker)
+        print FNR "\t" plan "\t" marker
+    }
+' "$readme")
+
+# The current release, and where it was read from — resolve_release_tag in
+# scripts/lib/common.sh, shared with check-release-pins.sh and check-roadmap.sh
+# so every gate means the same thing by "the release an adopter is running".
+IFS=$'\t' read -r release_tag tag_source < <(resolve_release_tag "$repo_root") || true
+
+release_checked=0
+if (( ${#release_rows[@]} > 0 )) && [[ -z "${release_tag:-}" ]]; then
+    printf 'check-plan-index: release-row check SKIPPED — no stable vX.Y.Z tag locally or on\n'
+    printf '                  origin, so no published release can contradict a cell (fresh fork).\n'
+elif (( ${#release_rows[@]} > 0 )); then
+    release_minor="${release_tag#v}"
+    release_minor="${release_minor%.*}"
+    stale_release=()
+    for rec in "${release_rows[@]}"; do
+        IFS=$'\t' read -r lineno plan marker <<<"$rec"
+        minor="${plan#release-}"
+        minor="${minor%.md}"
+        # Shipped iff the project has released at or past this line.
+        [[ "$(printf '%s\n%s\n' "$minor" "$release_minor" | sort -V | head -1)" == "$minor" ]] || continue
+        release_checked=$(( release_checked + 1 ))
+        case "$marker" in
+        ❌ | 🔲 | 🚧) stale_release+=("$lineno"$'\t'"$plan"$'\t'"$marker") ;;
+        esac
+    done
+    if (( ${#stale_release[@]} > 0 )); then
+        errors=1
+        {
+            printf 'check-plan-index: %d release row(s) read as open for a release that has shipped.\n' "${#stale_release[@]}"
+            printf 'The tag is the fact and the cell is the claim, so the cell is what changes. Re-read it\n'
+            printf 'against the plan doc and mark the release ✅ — or ⚠️ if a Queue row genuinely remains.\n'
+            for c in "${stale_release[@]}"; do
+                IFS=$'\t' read -r l p m <<<"$c"
+                printf '  - docs/plan/README.md:%s %s is %s, but the project has released %s (from %s)\n' \
+                    "$l" "$p" "$m" "$release_tag" "$tag_source"
+            done
+        } >&2
+    fi
+fi
+
 if (( errors )); then
     exit 1
 fi
 
-printf 'check-plan-index: ok (%d active, %d archived; all STATUS-referenced or ⓘ, all indexed both ways, every Status-cell QNNN linked iff its row is live)\n' \
-    "${#indexed_active[@]}" "${#indexed_archive[@]}"
+printf 'check-plan-index: ok (%d active, %d archived; all STATUS-referenced or ⓘ, all indexed both ways, every Status-cell QNNN linked iff its row is live, %d shipped-release row(s) not reading as open)\n' \
+    "${#indexed_active[@]}" "${#indexed_archive[@]}" "$release_checked"

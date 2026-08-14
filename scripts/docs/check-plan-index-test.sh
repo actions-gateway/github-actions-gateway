@@ -16,6 +16,10 @@
 # Archive-row cases pin what must stay green, which is where a rule this shape
 # gets noisy first.
 #
+# The last block covers invariant 4, the shipped-release rule (Q812). Its red
+# cases replay the cell invariant 3 was green on for nine days, so they are also
+# the assertion that the two rules do not overlap.
+#
 # Runs under `make check` (via `make scripts-test`) and the CI shellcheck job.
 set -euo pipefail
 shopt -s inherit_errexit
@@ -26,6 +30,9 @@ GATE="$REPO_ROOT/scripts/docs/check-plan-index.sh"
 fails=0
 workdirs=()
 WORK=""
+# The release the gate resolves for the case about to run. Empty means "no tag",
+# which a fixture repo is anyway: it has no tags and no origin to read them from.
+TAG=""
 
 # shellcheck disable=SC2329 # invoked by `trap cleanup EXIT`; shellcheck 0.11
 # misses that whenever the script ends in an explicit `exit`.
@@ -37,22 +44,23 @@ cleanup() {
 }
 trap cleanup EXIT
 
-# new_repo QUEUE_IDS DEFERRED_IDS — start a throwaway repo holding the plan
+# new_repo QUEUE_IDS DEFERRED_IDS [PLAN] — start a throwaway repo holding the plan
 # files every fixture indexes, and a docs/STATUS.md whose Queue and Deferred
 # tables anchor the given space-separated IDs. The Progress row keeps invariant
-# 1 satisfied, so a case only ever fails on the rule it is testing.
+# 1 satisfied, so a case only ever fails on the rule it is testing. PLAN names
+# the single active plan file, which the release cases point at a release-X.Y.md.
 new_repo() {
-    local queue="$1" deferred="$2" id
+    local queue="$1" deferred="$2" plan="${3:-alpha.md}" id
     WORK="$(mktemp -d)"
     workdirs+=("$WORK")
     git -C "$WORK" init -q
     mkdir -p "$WORK/docs/plan/archive"
-    printf '# Alpha\n' >"$WORK/docs/plan/alpha.md"
+    printf '# Alpha\n' >"$WORK/docs/plan/$plan"
     printf '# Zeta\n' >"$WORK/docs/plan/archive/zeta.md"
     # shellcheck disable=SC2016 # the backticks are a Markdown label cell, not substitution
     {
         printf '# Project Status\n\n## Progress\n\n| Plan | Labels | St |\n|---|---|---|\n'
-        printf '| [Alpha](plan/alpha.md) | `docs` | 🔲 |\n'
+        printf '| [Alpha](plan/%s) | `docs` | 🔲 |\n' "$plan"
         printf '\n## Queue\n\n| ID | Item | Labels | St | Sz | Notes |\n|---|---|---|---|---|---|\n'
         for id in $queue; do
             printf '| <a id="%s"></a>%s | Thing | `docs` | 🔲 | S | note |\n' "$id" "$id"
@@ -81,10 +89,12 @@ index() {
 
 # expect NAME WANT [SUBSTRING] — run the gate inside WORK, compare its exit
 # status with WANT, and require SUBSTRING in its output when given. The gate
-# resolves its own root, so running it from the fixture scopes it there.
+# resolves its own root, so running it from the fixture scopes it there, and
+# $TAG hands it the release: an empty value falls through to the fixture's own
+# (absent) tags, which is how the pre-Q812 cases keep meaning what they did.
 expect() {
     local name="$1" want="$2" want_text="${3:-}" got=0
-    ( cd "$WORK" && "$GATE" ) >"$WORK/gate.out" 2>&1 || got=$?
+    ( cd "$WORK" && GAG_RELEASE_TAG="$TAG" "$GATE" ) >"$WORK/gate.out" 2>&1 || got=$?
     if [[ "$got" != "$want" ]]; then
         printf 'FAIL %s: want exit %s, got %s\n' "$name" "$want" "$got"
         awk '{ print "    " $0 }' "$WORK/gate.out"
@@ -152,6 +162,54 @@ expect 'a live row named bare in an Archive row is accepted' 0
 new_repo 'Q10' ''
 index '| [alpha.md](alpha.md) | Alpha scope | ⚠️ Q99 landed 2026-01-01; [Q10](../STATUS.md#Q10) remains |'
 expect 'a cell mixing a landed bare ID and a live linked one is accepted' 0
+
+# --- invariant 4: a shipped release must not read as open (Q812) ------------
+
+# The head of the real cell at ed8160c48^, which sat on `main` for the nine days
+# after v1.3.0 shipped. Q484 is bare and no row anchors it, so invariant 3 holds
+# and this fixture is green with invariant 4 removed — which is the point.
+TAG=v1.3.0
+new_repo 'Q10' '' 'release-1.3.md'
+index '| [release-1.3.md](release-1.3.md) | The 1.3 release gate | ❌ Open — one gate left from the pre-release API review, Q484 |'
+expect 'a shipped release still marked ❌ is rejected' 1 'but the project has released v1.3.0'
+
+new_repo 'Q10' '' 'release-1.3.md'
+index '| [release-1.3.md](release-1.3.md) | The 1.3 release gate | 🔲 Open. Every gate item landed |'
+expect 'a shipped release still marked 🔲 is rejected' 1 'read as open for a release that has shipped'
+
+# Released past the line, not merely at it.
+TAG=v1.5.0
+new_repo 'Q10' '' 'release-1.3.md'
+index '| [release-1.3.md](release-1.3.md) | The 1.3 release gate | 🚧 In progress |'
+expect 'a release the project has moved past, marked 🚧, is rejected' 1 'is 🚧'
+
+TAG=v1.4.0
+new_repo 'Q10' '' 'release-1.5.md'
+index '| [release-1.5.md](release-1.5.md) | The 1.5 release gate | 🔲 Open. All four gate items landed |'
+expect 'an unshipped release marked open is accepted' 0
+
+# ⚠️ stays legal after the tag: a residual Queue row is a real state, and the
+# rule would be unusable if shipping forced ✅.
+TAG=v1.3.0
+new_repo 'Q10' '' 'release-1.3.md'
+index '| [release-1.3.md](release-1.3.md) | The 1.3 release gate | ⚠️ Shipped 2026-08-03; one residual remains |'
+expect 'a shipped release marked ⚠️ is accepted' 0
+
+new_repo 'Q10' '' 'release-1.3.md'
+index '| [release-1.3.md](release-1.3.md) | The 1.3 release gate | ✅ Done — 1.3 SHIPPED 2026-08-03 |'
+expect 'a shipped release marked ✅ is accepted' 0
+
+# A plan that is not a release makes no claim a tag can refute.
+new_repo 'Q10' ''
+index '| [alpha.md](alpha.md) | Alpha scope | ❌ Open, nothing built |'
+expect 'a non-release plan marked ❌ is accepted' 0
+
+# No tag resolves in a fresh fork, so the check reports a skip rather than a
+# verdict — and says so, because a silent skip reads exactly like a pass.
+TAG=
+new_repo 'Q10' '' 'release-1.3.md'
+index '| [release-1.3.md](release-1.3.md) | The 1.3 release gate | ❌ Open |'
+expect 'a tagless tree skips the release-row check' 0 'release-row check SKIPPED'
 
 if (( fails > 0 )); then
     printf '\ncheck-plan-index-test: FAILED — %d case(s)\n' "$fails" >&2

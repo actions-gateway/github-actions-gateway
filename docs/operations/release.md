@@ -860,6 +860,16 @@ A page that yields *no* pin at all is a failure rather than a pass, so a pin tha
 Landing the bump is a normal PR; the gate is part of `make check` and of the `doc-links` CI workflow, so a stale pin reddens every subsequent PR until it is fixed.
 This step exists because `v1.3.0` shipped without it: `README.md`, `docs/index.md`, and `install.md` were fixed by hand while `upgrade.md` and `gitops.md` kept pointing at `1.2.0`, and `install.md`'s own patch-line hint still read `1.2.z` (Q638).
 
+The release plan's own row in [`docs/plan/README.md`](../plan/README.md) is the other hand-written claim the tag falsifies, and it is gated the same way:
+
+```bash
+make plan-index-check
+```
+
+Once `vX.Y.0` is published, that gate rejects an open marker (❌, 🔲, 🚧) on the `release-X.Y.md` row.
+Mark it ✅, or ⚠️ if a Queue row genuinely remains, and say what shipped.
+This half exists because `v1.3.0` shipped without it too: the 1.3 row read `❌ Open` on `main` for the nine days after the tag, and every rule the gate had at the time was green on it (Q802, Q812).
+
 #### The bump on `main` does not reach the published release
 
 Landing it on `main` fixes `make check` and the `dev` docs, and **nothing else**.
