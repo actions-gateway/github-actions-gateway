@@ -133,7 +133,7 @@
           <div class="md-banner__inner md-grid md-typeset">
             
             <strong>v1.4.0 is here.</strong>
-      Consent-gated cross-namespace egress proxy sharing, a curated runner template library you apply with one command, and v2 worker-capacity conditions exported as Prometheus gauges.
+      <a href="https://github.com/actions-gateway/github-actions-gateway/releases/tag/v1.4.0">Read the release notes.</a>
           </div>
           
         </aside>
@@ -2797,6 +2797,7 @@ A capability listed under <code>dev</code> but not under a numbered release has 
 <li><strong><a href="../design/04-operational-flows/#42-job-execution-flow-agc">Runner-scale-set acquisition</a></strong>: the same single-acquirer protocol ARC uses, with no many-acquirers fan-out.
   The default in v2.</li>
 <li><strong><a href="../design/04-operational-flows/#42-job-execution-flow-agc">Quota-aware intake</a></strong>: a job the namespace <code>ResourceQuota</code> has no room for is never taken on, so it stays queued at GitHub until there is capacity.</li>
+<li><strong><a href="../operations/troubleshooting/#jobs-targeting-one-of-a-runner-sets-labels-never-start-runnerlabelsincomplete">Multi-label runner sets</a></strong> <span class="gag-v2-badge">v2</span> <span class="gag-maturity-badge">beta</span>: every <code>runnerLabel</code> is registered at GitHub, so a job asking for any of them matches and a <code>runs-on</code> array migrates unedited.</li>
 <li><strong><a href="../operations/troubleshooting/#which-disruptions-auto-re-run-a-job-and-which-never-do">Auto re-run for disrupted jobs</a></strong>: a worker lost to eviction, preemption, a node drain, or a bare <code>kubectl delete pod</code> has its run re-run automatically, under a per-run budget.</li>
 <li><strong><a href="../operations/troubleshooting/#runnerset-reports-workercapacitydeclined-the-gateway-stopped-claiming-jobs">Capacity gate for unplaceable workers</a></strong>: opt-in.
   Stop claiming jobs while the cluster cannot place the worker shape, instead of claiming and cancelling them.

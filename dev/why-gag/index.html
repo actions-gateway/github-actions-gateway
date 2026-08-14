@@ -133,7 +133,7 @@
           <div class="md-banner__inner md-grid md-typeset">
             
             <strong>v1.4.0 is here.</strong>
-      Consent-gated cross-namespace egress proxy sharing, a curated runner template library you apply with one command, and v2 worker-capacity conditions exported as Prometheus gauges.
+      <a href="https://github.com/actions-gateway/github-actions-gateway/releases/tag/v1.4.0">Read the release notes.</a>
           </div>
           
         </aside>
@@ -3076,10 +3076,15 @@ rather than trusting it, and
 <h3 id="two-rows-with-fine-print">Two rows with fine print<a class="headerlink" href="#two-rows-with-fine-print" title="Permanent link">&para;</a></h3>
 <!-- The canonical fires/doesn't-fire matrix is
      docs/operations/troubleshooting.md § Which Disruptions Auto-Re-Run a Job.
-     When a case is added or removed there, update this paragraph too. -->
+     When a case is added or removed there, update this paragraph too — and when
+     a case changes which acquisition tier it reaches, which is the same drift
+     and is what this paragraph missed for a whole release: the Pending-reap
+     re-run read "classic tier" from Q691 until Q766 had made it both, in
+     v1.4.0. Neither added nor removed a case, so the instruction above did not
+     fire. -->
 <p><strong>Auto-re-run covers disruption, never failure.</strong> Eviction, preemption, a drain and a stray <code>kubectl delete pod</code> all come back, on both acquisition tiers.
 A job that <em>failed</em> and a run you <em>cancelled</em> never do.
-Nor do workers the reaper took, with one exception: a worker reaped while still <code>Pending</code> is re-run on the classic tier once capacity returns.
+Nor do workers the reaper took, with one exception: a worker reaped while still <code>Pending</code> is re-run on both tiers once capacity returns.
 <a href="../operations/troubleshooting/#which-disruptions-auto-re-run-a-job-and-which-never-do">The full boundary</a>.</p>
 <p><strong>Right-sizing is structural, not a feature race.</strong> An ephemeral pod runs one job and lives minutes, so stock Vertical Pod Autoscaler cannot size it.
 The loop only closes inside the controller that builds the pods.
