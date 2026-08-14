@@ -33,7 +33,10 @@ GIT_ID=(-c user.email=test@example.invalid -c user.name=test)
 # --- fixtures -----------------------------------------------------------------
 
 # qrow ID NOTES — one Queue row. Labels/St/Sz are opaque to the driver; NOTES is
-# the cell the "modified" cases vary.
+# the cell the "modified" cases vary. The label is unbackticked, so lint's
+# label-sensitive rules (8, 11) never match it: an assertion expecting one of
+# those to fire needs a row carrying a real `flake`-style label. The rule 10
+# cases below are label-agnostic, which is why they read straight from here.
 qrow() {
 	printf '| <a id="%s"></a>%s | [Item %s](plan/p.md) | infra | 🔲 | S | %s |' \
 		"$1" "$1" "$1" "$2"
