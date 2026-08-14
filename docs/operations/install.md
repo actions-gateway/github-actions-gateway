@@ -236,6 +236,7 @@ They are genuinely optional:
 
   **Upgrade.** Re-apply the newer release the same way you installed — either `kubectl apply --server-side -f …/releases/download/vX.Y.Z/actions-gateway-crds-v2.yaml` with the newer tag, or re-run the `helm template … | kubectl apply --server-side` render with the newer chart (`--version <x.y.z>` for a pinned OCI ref).
   Server-side apply merges the new schema in place — additive field/version changes need no other step.
+  Re-apply on **every** GMC upgrade, not only when you want a new field: the GMC checks the installed schema at startup and refuses to start when a CRD no longer declares a field that bounds tenant access, because a structural schema prunes such a field on write with no error ([troubleshooting.md](troubleshooting.md#gmc-exits-at-startup-an-installed-crd-schema-is-older-than-the-gmc)).
   On a running cluster the conversion `caBundle` is supplied by cert-manager's ca-injector, so it resolves post-apply; a `helm template` alone cannot look it up.
 
   **Rollback.** Re-apply the render of the *previous* chart version the same way.

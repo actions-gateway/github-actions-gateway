@@ -89,6 +89,7 @@ No tier badge means both tiers, and a gate removes the badge when the gap closes
 - **[Air-gapped install](operations/air-gapped-install.md)**: relocate images and the OCI chart to a private registry with digests preserved, including pull Secrets for the runtime pods.
 - **[GitOps install](operations/gitops.md)**: declarative Argo CD `Application` and Flux `HelmRelease` examples, with the CustomResourceDefinition (CRD) pruning gotcha handled.
 - **[Upgrade and rollback](operations/upgrade.md)**: versioned upgrade procedures and the rollback path for each release.
+- **[Stale-CRD startup check](operations/troubleshooting.md#gmc-exits-at-startup-an-installed-crd-schema-is-older-than-the-gmc)** <span class="gag-new-badge">new in 1.5</span>: the manager refuses to start when an installed CRD no longer declares a field that bounds tenant access, so a skipped CRD apply cannot leave `runnerGroup` accepted and silently pruned.
 - **[Runner-version drift warning](operations/troubleshooting.md#worker-image-runner-version)**: a worker image below GitHub's enforced minimum is reported before GitHub enforces it, and an image whose reference names no version says so rather than passing.
 - **[Backup and restore](operations/backup-restore.md)**: backup posture and a recovery runbook, with a [Velero-specific how-to](operations/velero-backup-restore.md).
 - **[Troubleshooting](operations/troubleshooting.md)**: symptom to diagnosis to remediation, organised by observable failure mode.

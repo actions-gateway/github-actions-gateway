@@ -12,6 +12,7 @@ Each section below covers a specific failure mode: symptoms, likely cause, diagn
 - [Helm Render Fails: gmc.image Must Be Pinned by Digest](#helm-render-fails-gmcimage-must-be-pinned-by-digest)
 - [GMC Pods Rejected: insufficient quota to match these scopes (PriorityClass)](#gmc-pods-rejected-insufficient-quota-to-match-these-scopes-priorityclass)
 - [Every RunnerGroup / RunnerSet Write Denied: no params found for policy binding](#every-runnergroup--runnerset-write-denied-no-params-found-for-policy-binding)
+- [GMC Exits at Startup: an Installed CRD Schema Is Older Than the GMC](#gmc-exits-at-startup-an-installed-crd-schema-is-older-than-the-gmc)
 - [GMC Not Provisioning Tenant Resources](#gmc-not-provisioning-tenant-resources)
 - [`kubectl rollout restart` of a Managed Deployment Reports Success but Nothing Restarts](#kubectl-rollout-restart-of-a-managed-deployment-reports-success-but-nothing-restarts)
 - [ActionsGateway Reports RunnerGroupsDegraded](#actionsgateway-reports-runnergroupsdegraded)
@@ -310,6 +311,44 @@ Full mechanism and the reproducer: [`q444-vap-param-resolution.md`](../plan/arch
   Straightforward on a self-managed control plane; on EKS/GKE/AKS you cannot restart it directly, and a control-plane version upgrade is usually the only lever that recycles the process.
 
   Restart the container itself (`crictl stop` on the apiserver container, then confirm its `createdAt` changed). `kubectl delete pod -n kube-system kube-apiserver-…` does **not** work — it recreates the static pod's mirror object while the container keeps running.
+
+---
+
+## GMC Exits at Startup: an Installed CRD Schema Is Older Than the GMC
+
+**Symptoms.** After an upgrade the GMC never becomes Ready, and its logs end at:
+
+```
+Failed to register controllers ... verify installed CRD schemas: the CustomResourceDefinitions
+installed in this cluster are older than this GMC and no longer declare a field that bounds
+tenant access:
+  - runnersets.actions-gateway.com at v2beta1 does not declare spec.runnerGroup
+```
+
+**Cause.** The v2 CRDs are applied out-of-band, because they exceed Helm's 1 MiB release-Secret limit, so `helm upgrade` of the main chart never touches them.
+Skipping the apply step therefore leaves the cluster serving the *previous* release's schema, and a structural schema **prunes an undeclared field on write, with no error and no warning**.
+The field stays settable in a manifest and does nothing in the cluster.
+
+For [`spec.runnerGroup`](../design/05-security.md#unbounded-job-intake-via-the-installations-default-runner-group) that is a security control failing open, not a feature going missing: with the field pruned to empty, the tenant's scale set registers into GitHub's installation-default runner group, which every repository in the organisation can route jobs into.
+The GMC refuses to start rather than keep provisioning tenants against a boundary that is not there.
+Gateways already running are unaffected, since each tenant's AGC is a separate Deployment, so the blast radius is provisioning rather than job flow.
+
+**Resolution.** Re-apply the v2 CRDs at the release this GMC ships in, then let the GMC restart:
+
+```bash
+kubectl apply --server-side -f \
+  https://github.com/actions-gateway/github-actions-gateway/releases/download/vX.Y.Z/actions-gateway-crds-v2.yaml
+```
+
+`helm template … | kubectl apply --server-side` is equivalent when the GMC runs outside `gmc-system`; both are covered in [install.md § the v2 API CRDs](install.md#optional-the-v2-api-crds).
+Confirm the schema landed before waiting on the rollout:
+
+```bash
+kubectl get crd runnersets.actions-gateway.com \
+  -o jsonpath='{.spec.versions[?(@.name=="v2beta1")].schema.openAPIV3Schema.properties.spec.properties.runnerGroup}'
+```
+
+Then **re-apply any `RunnerSet` that declared `runnerGroup` while the schema was stale**: the stored object had the field pruned out of it, and re-applying the CRD does not put it back.
 
 ---
 
