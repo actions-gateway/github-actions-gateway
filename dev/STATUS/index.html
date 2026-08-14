@@ -2848,14 +2848,6 @@
 <td>Measured 2026-08-14: <code>heartbeat</code> stayed null for the whole 22-minute e2e leg of a passing run, so the only in-flight signal was absent and the sentinel reported a stall it was right to report. The run record answers when the log will not.</td>
 </tr>
 <tr>
-<td><a id="Q849"></a>Q849</td>
-<td><a href="../design/05-security/#cross-tenant-job-acquisition-via-a-shared-scale-set-name">Report an existing scale-set name collision at reconcile, not only at admission</a></td>
-<td><code>1.5-gate</code> <code>security</code> <code>feature</code></td>
-<td>🔲</td>
-<td>M</td>
-<td>Admission runs on create and update, so Q791 never re-validates an existing pair: two controllers drive one scale set and each tenant can acquire the other's jobs until someone re-applies. <code>scaleset_scope.go</code> has the inventory and needs a caller.</td>
-</tr>
-<tr>
 <td><a id="Q852"></a>Q852</td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/cmd/wiring.go">Detect a CRD schema older than the binary at GMC startup</a></td>
 <td><code>1.5-gate</code> <code>security</code> <code>bug</code></td>

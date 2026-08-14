@@ -3239,6 +3239,12 @@ For SLO targets, see <a href="../../design/appendix-a-capacity-slos/">Appendix A
 <td><code>1</code> when a v2 <code>ActionsGateway</code>'s <code>AGCAutoscalingUnavailable=True</code> (Q360, §E.11): the gateway opted into managed AGC right-sizing (<code>agcAutoscaling</code>) but it cannot be satisfied — the <code>VerticalPodAutoscaler</code> CRDs are not installed (<code>VPACRDNotInstalled</code>) or a precedence conflict blocks the managed VPA. Advisory — the AGC still runs on its stamped <code>agcResources</code> sizing and <code>Ready</code> is unaffected; the opt-in is simply inert until the blocker clears. <code>0</code> when satisfied or not opted in. Without this gauge the unsatisfiable opt-in is visible only via <code>kubectl describe</code> (Q390). v2 only, emitted only on a v2 install (Q321).</td>
 </tr>
 <tr>
+<td><code>actions_gateway_scale_set_name_collision</code></td>
+<td>Gauge</td>
+<td><code>namespace</code>, <code>name</code></td>
+<td><code>1</code> when a v2 <code>ActionsGateway</code>'s <code>ScaleSetNameCollision=True</code> (Q849, §5.2): a <code>ScaleSet</code> <code>RunnerSet</code> bound to this gateway claims a scale-set name (its <strong>first</strong> <code>runnerLabel</code>) that another <code>RunnerSet</code> already claims in the same GitHub org/enterprise/repo, so both tenants' AGCs drive one scale set at GitHub and each acquires the other's jobs. Advisory: it does not gate <code>Ready</code>, and GAG does not pick a winner. <strong>Page on any <code>1</code></strong>: admission rejects every new such pair (Q791), so a <code>1</code> is a pair that predates the guard (an upgrade from before <code>v1.5.0</code>) or was applied with the validating webhook uninstalled, and it does not self-heal. See <a href="../troubleshooting/#actionsgateway-reports-scalesetnamecollision">ActionsGateway reports ScaleSetNameCollision</a>. v2 only, emitted only on a v2 install.</td>
+</tr>
+<tr>
 <td><code>actions_gateway_build_info</code></td>
 <td>Gauge</td>
 <td><code>component</code>, <code>version</code></td>
@@ -3278,7 +3284,7 @@ It is <code>True</code> when one or more of the <code>RunnerSet</code>s bound to
 The advisory conditions (<code>RateLimited</code>, the <code>WorkerQuota</code> ladder, <code>EgressUnattributed</code>, <code>PossibleReapBlockingSidecar</code>, <code>JobProvisionStalled</code>) are excluded so the rollup does not flap on normal load.
 The condition message names the impaired sets and their tripped signals, giving the operator a single pane without inspecting each child.
 Advisory — like the v1 rollup it does <strong>not</strong> gate <code>Ready</code>, since the gateway's own AGC control plane can be healthy while a tenant's set is impaired.
-It is exported as the <code>actions_gateway_runnersets_degraded</code> gauge (Q321), alongside <code>actions_gateway_agc_available</code>, <code>actions_gateway_egress_unattributed</code>, and <code>actions_gateway_agc_autoscaling_unavailable</code> for the gateway's <code>AGCAvailable</code>, <code>EgressUnattributed</code>, and <code>AGCAutoscalingUnavailable</code> conditions — the v2 twins of the v1 <code>ActionsGateway</code> condition gauges.
+It is exported as the <code>actions_gateway_runnersets_degraded</code> gauge (Q321), alongside <code>actions_gateway_agc_available</code>, <code>actions_gateway_egress_unattributed</code>, <code>actions_gateway_agc_autoscaling_unavailable</code>, and <code>actions_gateway_scale_set_name_collision</code> for the gateway's <code>AGCAvailable</code>, <code>EgressUnattributed</code>, <code>AGCAutoscalingUnavailable</code>, and <code>ScaleSetNameCollision</code> conditions — the v2 twins of the v1 <code>ActionsGateway</code> condition gauges.
 Every v2 gateway condition thus has a metric twin, so the advisory <code>agcAutoscaling</code> opt-in (Q360/Q390) is alertable rather than only visible via <code>kubectl describe</code>.
 All are emitted only on a v2 install and labelled per gateway (<code>namespace</code>, <code>name</code>).</p>
 </blockquote>

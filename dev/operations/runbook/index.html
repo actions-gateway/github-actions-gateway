@@ -2541,6 +2541,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#actionsgatewayscalesetnamecollision" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ActionsGatewayScaleSetNameCollision
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#actionsgatewayagentrecycleerrors" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3386,6 +3397,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#actionsgatewayscalesetnamecollision" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ActionsGatewayScaleSetNameCollision
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#actionsgatewayagentrecycleerrors" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3829,6 +3851,11 @@ See <a href="../troubleshooting/#actionsgateway-reports-egressrulesstale">Action
 <p><strong>Ticket.</strong> A referring gateway names a GitHub Enterprise Server host the <code>EgressProxy</code> pool's <code>CIDR</code>-mode allowlist cannot reach, so that tenant's GitHub traffic is denied and it acquires no jobs.
 The fix is yours to make — the appliance's ranges are knowable only to you, so this will not self-heal: supply them in <code>spec.destinationCIDRs</code> (a platform admin must allowlist them first) or switch the pool to an FQDN egress mode.
 See <a href="../troubleshooting/#a-ghes-tenants-traffic-never-reaches-the-appliance">A GHES Tenant's Traffic Never Reaches the Appliance</a>.</p>
+<h3 id="actionsgatewayscalesetnamecollision">ActionsGatewayScaleSetNameCollision<a class="headerlink" href="#actionsgatewayscalesetnamecollision" title="Permanent link">&para;</a></h3>
+<p><strong>Page.</strong> Two tenants are driving one scale set at GitHub right now, and each is acquiring the other's jobs: another organization's workflow content runs in the wrong namespace, against the wrong quota, egressing from the wrong attributed IPs.
+Admission rejects every new such pair, so this one predates the guard (an upgrade from before <code>v1.5.0</code>) or was applied while the validating webhook was uninstalled.
+It will not self-heal, and the condition names only the alerting gateway's own runner sets: the other holder is in the GMC log, because gateway status is tenant-readable.
+See <a href="../troubleshooting/#actionsgateway-reports-scalesetnamecollision"><code>ActionsGateway</code> Reports <code>ScaleSetNameCollision</code></a>.</p>
 <h3 id="actionsgatewayagentrecycleerrors">ActionsGatewayAgentRecycleErrors<a class="headerlink" href="#actionsgatewayagentrecycleerrors" title="Permanent link">&para;</a></h3>
 <p><strong>Ticket.</strong> Single-use JIT agent re-registration is failing; sustained growth shrinks listener capacity and decays tenant throughput job by job.
 See <a href="../troubleshooting/#concurrent-job-burst-serializes-to-1-worker-recycle-blocked-on-a-still-running-runner">Concurrent Job Burst Serializes to ~1 Worker (Recycle Blocked on a Still-Running Runner)</a>.</p>

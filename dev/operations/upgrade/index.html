@@ -4069,15 +4069,19 @@ Everyone else is unaffected, and no configuration changes.</p>
 It was never safe: the first <code>runnerLabel</code> is the scale set's name at GitHub, so two sets sharing it drive one scale set from two controllers and each tenant's AGC can acquire the other tenant's jobs.
 The guard existed but was namespace-scoped, which is the one boundary that does not match how GitHub adopts a scale set by name.</p>
 <p><strong>Nothing is re-validated at upgrade time</strong>, because admission runs on create and update.
-A colliding pair keeps running until someone re-applies either set, and the rejection lands then, which may be long after the upgrade and on a tenant who changed nothing.
-Finding it in advance costs one command:</p>
+A colliding pair keeps running until someone re-applies either set, and the rejection lands then, which may be long after the upgrade and on a tenant who changed nothing.</p>
+<p><strong>The GMC now tells you instead of leaving you to find out.</strong> Each affected gateway reconciles into an advisory <code>ScaleSetNameCollision=True</code> condition with a <code>Warning</code> Event, and <code>actions_gateway_scale_set_name_collision</code> reads <code>1</code> for it, so a pair carried in from an older release surfaces on the first reconcile after the upgrade rather than at the next unrelated <code>kubectl apply</code>.
+The condition does not gate <code>Ready</code> and does not stop the AGC: GAG cannot pick which tenant loses the name, and refusing to provision would take down the tenant that was there first as well.
+Resolution steps: <a href="../troubleshooting/#actionsgateway-reports-scalesetnamecollision"><code>ActionsGateway</code> reports <code>ScaleSetNameCollision</code></a>.</p>
+<p>You can also find it in advance, before upgrading, for one command:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>kubectl<span class="w"> </span>get<span class="w"> </span>runnersets<span class="w"> </span>-A<span class="w"> </span>-o<span class="w"> </span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">&#39;{range .items[?(@.spec.acquisitionProtocol==&quot;ScaleSet&quot;)]}{.metadata.namespace}{&quot;\t&quot;}{.metadata.name}{&quot;\t&quot;}{.spec.runnerLabels[0]}{&quot;\n&quot;}{end}&#39;</span>
 </code></pre></div>
 <p>Any first label appearing twice under one GitHub scope is a collision: give one of the sets a distinct first label, which registers a new scale set.
 Labels <em>after</em> the first may be shared freely.</p>
 <p>The rejection names the GitHub scope but withholds the conflicting set, since it may belong to another tenant; a platform admin finds it in the GMC controller log or with the command above.
 Two <code>Classic</code> sets are unaffected, registering no scale set at all.</p>
-<p><strong>Rolling back</strong> restores the namespace-scoped guard, so the colliding configuration is accepted again, along with the cross-tenant job acquisition it allows.</p>
+<p><strong>Rolling back</strong> restores the namespace-scoped guard, so the colliding configuration is accepted again, along with the cross-tenant job acquisition it allows, and the condition and gauge that would have reported it go away with it.
+A <code>ScaleSetNameCollision</code> condition left on a gateway is inert on the older version, which does not set or clear it; delete it by hand if a stale <code>True</code> would confuse a dashboard.</p>
 <h3 id="non-breaking-a-worker-lost-while-the-agc-was-down-is-now-re-run-automatically-causevanished">Non-breaking: a worker lost while the AGC was down is now re-run automatically (<code>cause="vanished"</code>)<a class="headerlink" href="#non-breaking-a-worker-lost-while-the-agc-was-down-is-now-re-run-automatically-causevanished" title="Permanent link">&para;</a></h3>
 <p><strong>Who is affected:</strong> every tenant on the <code>ScaleSet</code> acquisition tier.
 No configuration changes; the behaviour fires only on disruptions that previously needed a manual re-run.</p>
