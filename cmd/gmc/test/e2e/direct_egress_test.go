@@ -78,7 +78,7 @@ var _ = Describe("E2E_V2_DirectEgress", Ordered, func() {
 	})
 
 	// NonGitHubBlocked is the fifth egress negative, so this container needs the
-	// enforcer read on failure too (Q747/Q809).
+	// enforcer read on failure too (Q747, #1417).
 	AfterEach(func() {
 		if CurrentSpecReport().Failed() {
 			utils.DumpAGCSessionDiagnostics(tenantNS, agcDeploy, infraNamespace, fakegithubServiceName)

@@ -31,8 +31,7 @@ var _ = Describe("E2E_GMC_Provisioning", Ordered, func() {
 	// Dump before AfterAll deletes the namespace (Q666). The enforcer state goes
 	// with it because this container holds two of the egress negatives, and a
 	// connection that should have been dropped is as much a claim about the
-	// enforcer as about the policy (Q747; Q809 had three of these fail across
-	// main and two queue entries with no enforcer state captured anywhere).
+	// enforcer as about the policy (Q747, #1417).
 	AfterEach(func() {
 		if CurrentSpecReport().Failed() {
 			utils.DumpProvisioningDiagnostics(gmcNamespace, managerDeployment, tenantNS)
