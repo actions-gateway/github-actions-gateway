@@ -2976,14 +2976,6 @@
 <td>Seen once 2026-08-12 at load 101-111 on 18 cores (41 go procs, 8 siblings): passed one <code>make check</code>, failed the next on an identical tree (<code>Could not apply ... # topic appends</code>), passed standalone. Mechanism unverified, not clock-bound like Q642.</td>
 </tr>
 <tr>
-<td><a id="Q845"></a>Q845</td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/unit-test.yml"><code>unit-test-gate</code> omits <code>uses-pinned</code> from its needs, so the SHA-pin gate blocks nothing</a></td>
-<td><code>ci</code> <code>debt</code></td>
-<td>🔲</td>
-<td>S</td>
-<td>Found closing Q831 2026-08-13: every other unit-test job is in the aggregator's <code>needs</code>; <code>uses-pinned</code> is not, so a mutable <code>uses:</code> ref fails its job and the required check still passes. Confirm branch-ruleset contexts before deciding the fix.</td>
-</tr>
-<tr>
 <td><a id="Q812"></a>Q812</td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/docs/check-plan-index.sh">A plan index Status cell can claim an open release the gate reads as closed</a></td>
 <td><code>ci</code> <code>docs</code> <code>debt</code></td>
@@ -3510,6 +3502,14 @@
 <td>🔲</td>
 <td>M</td>
 <td>Three shapes, three bespoke checks: shared paths across two <code>filters:</code> (Q533), <code>on.push.paths</code> vs its filter (gated), <code>pull_request.paths</code> vs <code>push.paths</code> (ungated). One registry replaces all three, over Q584's <code>devtools/ci/pathfilters</code> parser.</td>
+</tr>
+<tr>
+<td><a id="Q856"></a>Q856</td>
+<td><a href="../development/testing/#path-gated-workflows-verify-the-heavy-gates-actually-ran">Nothing reconciles a <code>*-gate</code> job's <code>needs</code> with its workflow's job ids</a></td>
+<td><code>ci</code> <code>debt</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>An omitted job runs and reports red while the required gate reports green, so it blocks nothing. Q845 fixed the one instance (<code>uses-pinned</code>); a sweep of 9 aggregators found no other. Same workflow parser as <a href="#Q574">Q574</a>.</td>
 </tr>
 <tr>
 <td><a id="Q672"></a>Q672</td>
