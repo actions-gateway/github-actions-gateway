@@ -362,6 +362,32 @@
           "refId": "A"
         }
       ]
+    },
+    {
+      "type": "row",
+      "title": "Build Versions",
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 39 },
+      "id": 40,
+      "panels": []
+    },
+    {
+      "type": "bargauge",
+      "title": "Running versions by component",
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "gridPos": { "h": 7, "w": 12, "x": 0, "y": 40 },
+      "id": 41,
+      "description": "Instances per component and version, from actions_gateway_build_info. During a staggered upgrade this is where the fleet's spread is visible, and it is what says whether a tenant's job-duration series is the pre- or post-v1.5.0 span (Q713 changed it without a rename). The GMC comes from this dashboard's own scrape; agc and proxy need the per-tenant scrapes. The metric carries no namespace label, so $namespace does not filter it.",
+      "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] },
+      "options": { "displayMode": "gradient", "orientation": "horizontal" },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "expr": "count by (component, version) (actions_gateway_build_info)",
+          "legendFormat": "{{component}} {{version}}",
+          "refId": "A"
+        }
+      ]
     }
   ]
 }
