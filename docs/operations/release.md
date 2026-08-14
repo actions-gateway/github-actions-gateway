@@ -118,9 +118,25 @@ That cost is what makes "enough" a real bar rather than a formality — it is al
 **Which of these bind when the tag is a release candidate.** The first two bind at every tag: an RC cut from a red `main` validates nothing, and the version you pick fixes the stable tag's.
 The last four are stable-tag obligations, because a prerelease deploys no docs and its GitHub Release body is generated rather than curated, so there is no published surface for them to be wrong on yet.
 
+**Two are worth pulling forward to the first RC anyway**, on the same argument: the RC is the artifact that gets validated, so anything decided after it is published costs a new candidate and another hour-long dogfood run.
+
 The **API surface review is the exception worth pulling forward to the first RC**.
 Its deadline really is the stable tag, but the RC is the artifact that gets validated, and a rename decided after the candidate is published costs a new RC and another hour-long dogfood run.
 Reviewing it at the first RC and recording the verdict then is what keeps that cheap.
+
+**A draft of the notes belongs at the first RC too, for the same reason and a stronger one.** Writing the notes is what forces the release's claims to be *stated*, and a stated claim is the only kind anyone can check.
+Reviewing that draft is therefore a discovery step, not a formatting pass: it is reliably where the release's remaining defects surface, because nothing else in pre-flight asks the product to describe itself.
+
+Interrogate the draft with three questions.
+Each of them found something real in the 1.5 cycle, and each found it *after* the candidate was cut, which is what made it expensive:
+
+1. **Does every claim in it still hold?** The 1.5 draft said multi-label registration closed a gap, and checking the neighbouring claims found `why-gag.md` asserting a capability was classic-only that had reached both tiers a release earlier.
+2. **What does this release leave as a landmine for an operator who never reads these notes?** The best answers are the ones no caveat report can produce, because nothing changed in a file: 1.5's sharpest was that `helm upgrade` never applies CRDs and a structural schema prunes unknown fields silently, so a skipped step leaves a declared security boundary inert.
+   The two caveats that were *not* landmines each shipped a condition or Event that fires exactly when an operator would otherwise be confused, which is the shape to aim for.
+3. **Is every completeness or parity claim backed by something derived, or by a list someone maintains?** A curated inventory answers "nothing that someone recorded is missing" ([testing.md](../development/testing.md#generate-a-fixture-with-the-producers-own-code-never-by-hand)), and a release note is where that distinction becomes a published promise.
+
+Record the verdict in the release's plan doc as with the other pre-flight steps, and file what it turns up as gating rows.
+The point of doing it here rather than at the tag is that the answers are free before a candidate exists and cost a new RC afterwards: in 1.5 they arrived after `rc.1` had been cut, published and validated, and superseded it.
 
 - `main` is green: unit/integration/e2e and `security-scan.yml` all passing on the commit you are about to tag.
   Run `make check` locally as a final gate.
