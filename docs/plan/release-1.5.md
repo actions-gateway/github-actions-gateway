@@ -5,7 +5,7 @@
 > All four shipped 2026-08-11, and the marketing reconciliation closed 2026-08-12 (Q801, Q821).
 > Two more were admitted afterwards, both on the [parity axis](#the-parity-axis-what-closed-and-what-backs-it): Q776 on 2026-08-13, to back the parity claim the other four earned, and Q844 on 2026-08-14, a classic-only capability the badge set never recorded and the marketing surface already claims for both tiers.
 > Q844 shipped 2026-08-14 and Q776 has now shipped too, so every gating row is closed.
-> The [API surface review](#pre-flight-the-api-surface-this-tag-publishes) is recorded below, which cleared the last item binding at the release candidate. `v1.5.0-rc.1` was cut from `ff3b3ef1` on 2026-08-14 and [its dogfood validation PASSED](#the-rc1-validation-verdict-2026-08-14), so what remains before the stable tag is the stable-tag half of pre-flight: the marketing reconciliation, the operator-caveat pass, the roadmap and features reconciliation, and the announce-bar highlight.
+> The [API surface review](#pre-flight-the-api-surface-this-tag-publishes) is recorded below, which cleared the last item binding at the release candidate. `v1.5.0-rc.1` was cut from `ff3b3ef1` on 2026-08-14 and [its dogfood validation PASSED](#the-rc1-validation-verdict-2026-08-14), and the [stable-tag pre-flight](#the-stable-tag-pre-flight-2026-08-14) then ran and closed. **Scope reopened the same day**, on [eight further gating rows](#scope-reopened-2026-08-14-what-a-question-cost), two of which change shipped code, so `v1.5.0-rc.1` is superseded and the line will tag from an rc.2.
 
 ## Why these gate a release rather than riding along
 
@@ -275,6 +275,39 @@ An Event-reason scan keyed on `recordEvent(` missed two of the three additions, 
 
 **Still outstanding at the tag:** the notes carry no `Container images` section, because the index digests do not exist until `publish.yml` has run.
 [Step 4](../operations/release.md#4-record-the-published-digests) is where they are read, and the section is appended before `gh release edit --notes-file` publishes the body.
+
+## Scope reopened 2026-08-14: what a question cost
+
+The pre-flight above closed and the tag was the next step.
+Then a question — *did we finally reach v1→v2 and classic→ScaleSet parity, and should that go in the notes, docs, or marketing?* — reopened the release on eight rows.
+Recorded because the sequence, not the rows, is the lesson: each answer was measured, and each measurement found something the pass before it had not.
+
+**Both axes are closed, and only one of them is a 1.5 story.** The [capability parity table](v2-ga.md#capability-parity-is-a-precondition-of-the-removal) reads Both tiers on all six rows, `features.md` carries no `partly classic-only` badge, and the [tier ledger](../operations/observability-metrics.md#acquisition-tier-reach) reconciles all 53 series (26 Both, 16 classic-only, 10 scale-set-only, 1 tier-neutral) under a gate.
+The v1 to v2 axis closed mostly before the 1.4 tag; 1.5 contributed Q726 alone.
+
+**Asking the question found the stale claim the pass had missed**, recorded in the pre-flight section above, and then the same reasoning applied one level up.
+A completeness claim inherits the blind spots of its inventory, so "no capability is lost" cannot rest on a hand-kept list — that is the shape Q844 hid in, and [testing.md](../development/testing.md) states the rule outright.
+Q776 made metric *series* derived and gated.
+Q850 and Q851 extend that to condition reasons, Event reasons, and label values, which is the surface a completeness claim can honestly cover; the marketing claim waits for them.
+Measured while scoping Q851: `eviction_retries_total` reads Both while `cause="vanished"` is scale-set-only, and `abandoned_run_force_cancels_total` reads Both while `outcome="identity_unknown"` is unreachable there.
+The gate sees series, not values, so two live tier differences sit inside rows marked Both.
+
+**Then a second question — operators do not read release notes, so what are this release's landmines?** Q849 was already admitted for it: Q791's guard runs at admission, which never re-validates a pair that already exists.
+Two more came out of asking the same thing of every caveat.
+Q852 is the sharpest and was not on anyone's list: `helm upgrade` never applies CRDs, and a structural schema prunes unknown fields with no error, so a skipped step 1 leaves `spec.runnerGroup` declared and inert — a security control that silently does nothing.
+It generalises past this release, since every future field has the same exposure.
+Q853 covers the other silent one, Q713's classic-tier span change, which renamed nothing and shifts every dashboard and cost figure at upgrade.
+
+Worth keeping: the two caveats that are *not* landmines, Q844's budget spend and Q726's inert appended label, each ship a condition or Event that fires exactly when an operator would otherwise be confused.
+That is the pattern Q849, Q852 and Q853 copy.
+
+**Finally, the bar for rc.2: pass without anything needing interpretation.** Q854, Q855 and a promoted Q773 come from that.
+Q854 is the one that already cost a run — a single `HTTP 401` at 645s of the settle wait killed the first `v1.5.0-rc.1` attempt after 43 good polls, and the gate has no retry anywhere, while `download-verified.sh` has had jittered backoff since Q829.
+Q855 is the 22-minute blind spot on the leg that passed.
+Q773 was filed on 2026-08-09 and says the runbook calls a normal `Throughput: Active` result a surprise; it happened again on rc.1, and this document called it unexpected before the row was found.
+
+**One gate changed on the way.** Labelling release-process work `1.5-gate` made `roadmapcheck` demand a public roadmap bullet for a `gh` retry and a runbook line.
+Rule 7 now obliges a bullet only for a gated row carrying `feature` or `security`, so a release can wait on process work without advertising it to adopters ([maintaining-backlog.md](../development/maintaining-backlog.md#a-gate-label-and-its-roadmap-bullet-are-two-commits-and-the-first-one-is-red)).
 
 ## Candidates not yet accepted
 

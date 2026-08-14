@@ -94,8 +94,12 @@ Merge commits are skipped: their file list depends on which parent you diff agai
 
 ### A gate label and its roadmap bullet are two commits, and the first one is red
 
-`roadmapcheck` rule 7 requires every row labelled `X.Y-gate` to be named by a roadmap bullet, so adding the label and adding the bullet are one change in intent.
+`roadmapcheck` rule 7 requires a row labelled `X.Y-gate` **and** carrying `feature` or `security` to be named by a roadmap bullet, so adding the label and adding the bullet are one change in intent.
 Isolation splits them regardless: the label lives in `docs/STATUS.md` and the bullet in `docs/roadmap.md`, so they cannot share a commit.
+
+**A gate label answers two questions, and only one of them obliges a bullet.** Release scope is not all one kind: a capability or a security fix is what someone upgrades *for*, while the CI, test, docs and dogfood work that also blocks a tag is process.
+Requiring a bullet for both put our own release harness on the page people read to evaluate the product, so the obligation follows `feature`/`security` rather than the gate label alone.
+Gate a process row freely; it stays out of the roadmap and the release still waits for it.
 
 Read on its own, the `docs(status):` commit therefore fails rule 7, which looks alarming enough to go hunting for a way around it.
 There is none, and none is needed: `roadmapcheck` reads the **working tree**, not each commit in turn, so what `make check`, CI and the merge queue all judge is the pair together.

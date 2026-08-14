@@ -339,6 +339,23 @@ expect "gated row no bullet names" 1 \
     "$(roadmap "$NEAR" -- "$EXPL")" "$(status "Q1 Q3:feature,1.5-gate" "Q2")" \
     'no roadmap.md bullet names it'
 
+# A gate label answers two questions at once, and only one of them obliges a
+# bullet. Release process — CI, tests, docs, the dogfood harness — blocks a tag
+# without being anything an adopter would upgrade for, so requiring a bullet
+# put our own release tooling on the page people read to evaluate the product.
+# The obligation follows `feature`/`security`, not the gate label alone.
+expect "a gated process row needs no bullet" 0 \
+    "$(roadmap "$NEAR" -- "$EXPL")" "$(status "Q1 Q3:ci,docs,1.5-gate" "Q2")"
+
+expect "a gated dogfood row needs no bullet" 0 \
+    "$(roadmap "$NEAR" -- "$EXPL")" "$(status "Q1 Q3:dogfood,tests,1.5-gate" "Q2")"
+
+# The other direction, which is what stops the narrowing from silencing rule 7:
+# a security fix that blocks the tag is exactly what the page is for.
+expect "a gated security row still needs one" 1 \
+    "$(roadmap "$NEAR" -- "$EXPL")" "$(status "Q1 Q3:security,bug,1.5-gate" "Q2")" \
+    'no roadmap.md bullet names it'
+
 # ...and it is indifferent to how the bullet states the release. A bullet with
 # no prose claim at all still covers the label, because the binding is what
 # rule 7 reads. Without this, rule 7 would fail the page the moment Q770
