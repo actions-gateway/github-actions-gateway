@@ -6,15 +6,15 @@ cel.dev/expr
 ## explicit; go 1.21
 github.com/Masterminds/semver/v3
 # github.com/actions-gateway/github-actions-gateway/agc v0.0.0-00010101000000-000000000000 => ./cmd/agc
-## explicit; go 1.26.5
+## explicit; go 1.26.6
 # github.com/actions-gateway/github-actions-gateway/api v0.0.0-00010101000000-000000000000 => ./api
-## explicit; go 1.26.5
+## explicit; go 1.26.6
 # github.com/actions-gateway/github-actions-gateway/broker v0.0.0-00010101000000-000000000000 => ./broker
-## explicit; go 1.26.5
+## explicit; go 1.26.6
 # github.com/actions-gateway/github-actions-gateway/githubapp v0.0.0-00010101000000-000000000000 => ./githubapp
-## explicit; go 1.26.5
+## explicit; go 1.26.6
 # github.com/actions-gateway/github-actions-gateway/scaleset v0.0.0-00010101000000-000000000000 => ./scaleset
-## explicit; go 1.26.5
+## explicit; go 1.26.6
 # github.com/antlr4-go/antlr/v4 v4.13.1
 ## explicit; go 1.22
 github.com/antlr4-go/antlr/v4
