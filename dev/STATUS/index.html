@@ -3048,6 +3048,14 @@
 <td>No <code>api-surface-since.sh</code> counterpart for Event reasons. A v1.4.0 regex matching only <code>Event(obj, type, reason)</code> missed the <code>recordEvent(type, reason, action)</code> shape and returned a false no-change, caught by a positive control. Needs a self-test.</td>
 </tr>
 <tr>
+<td><a id="Q846"></a>Q846</td>
+<td><a href="../development/technical-debt/">A tooling issue is deduped at filing time, after the recommendation is already made</a></td>
+<td><code>docs</code> <code>debt</code> <code>retro</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>The <code>github-issue-filer</code> skill searches for duplicates when it files, so a "worth filing" said earlier has had no check at all. Q844 proposed a pr-sentinel report duplicating two already-closed upstream issues. Fix lives in <code>karlkfi/claude-skills</code>.</td>
+</tr>
+<tr>
 <td><a id="Q742"></a>Q742</td>
 <td><a href="../development/documentation-standards/#enforcing-the-em-dash-rule">A whole-file em-dash ceiling lets two green PRs merge to a red <code>main</code></a></td>
 <td><code>ci</code> <code>bug</code></td>
