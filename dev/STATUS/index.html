@@ -2880,6 +2880,14 @@
 <td>Q713 changed the classic <code>job_duration_seconds</code> span with no rename, so dashboards and cost attribution shift at upgrade with nothing marking it. <code>actions_gateway_build_info</code> is emitted by both binaries and read by no dashboard. Plus an upgrade note.</td>
 </tr>
 <tr>
+<td><a id="Q859"></a>Q859</td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/agent/claude-piped-gate-hook.sh">piped-gate's overlap probe judges the hook script's checkout, not the session's worktree</a></td>
+<td><code>ci</code> <code>debt</code> <code>bug</code> <code>retro</code></td>
+<td>🔲</td>
+<td>S</td>
+<td><code>main.go:188</code> probes the hook's installed worktree by design, assuming it is the session's. <code>EnterWorktree</code> breaks that: the session keeps the launch checkout's hook, and two PRs were refused for overlaps neither branch had. A cwd fix reverses it.</td>
+</tr>
+<tr>
 <td><a id="Q842"></a>Q842</td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/Makefile">A vendored tool bump never rebuilds its binary, so a stale tool serves a newer target</a></td>
 <td><code>ci</code> <code>debt</code> <code>bug</code></td>
