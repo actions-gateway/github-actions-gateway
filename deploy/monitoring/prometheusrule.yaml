@@ -203,6 +203,18 @@ spec:
             summary: "GHES egress ranges missing for {{ $labels.name }} in {{ $labels.namespace }}"
             description: "A referring gateway names a GitHub Enterprise Server host the pool's CIDR-mode allowlist cannot reach, so the tenant's GitHub traffic is denied and it acquires no jobs. Supply the appliance's ranges in spec.destinationCIDRs or switch to an FQDN egress mode — this will not self-heal."
 
+        # Page: two tenants are driving one scale set at GitHub right now (Q791, Q849)
+        - alert: ActionsGatewayScaleSetNameCollision
+          expr: |
+            actions_gateway_scale_set_name_collision == 1
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            runbook_url: "https://actions-gateway.com/operations/runbook/#actionsgatewayscalesetnamecollision"
+            summary: "Scale-set name shared across tenants for {{ $labels.name }} in {{ $labels.namespace }}"
+            description: "A ScaleSet RunnerSet bound to this gateway claims a scale-set name another RunnerSet already claims in the same GitHub scope, so both tenants' AGCs drive one scale set and each acquires the other's jobs. Admission rejects every new such pair, so this one predates the guard or was applied with the webhook uninstalled; it will not self-heal."
+
         # Ticket: agent re-registration failing — listener capacity decays job by job (Q267)
         - alert: ActionsGatewayAgentRecycleErrors
           expr: |
