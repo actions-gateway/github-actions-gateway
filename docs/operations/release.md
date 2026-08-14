@@ -358,6 +358,11 @@ Underneath it, each phase transition is appended as one JSON line to `tmp/releas
 Point `RELEASE_PROGRESS_FILE` elsewhere to move both files, since the status object defaults to `release-validation-status.json` beside the stream, or set `RELEASE_PROGRESS_FILE=` to disable both.
 The gate's own output is unaffected either way.
 
+**A `preflight` reading is the gate's own, never the last run's.** The gate empties the stream before its preflight and writes its first event after it, so the whole window renders `preflight` and a previous run's verdict is gone before anything can read it.
+It has to be cleared that early because preflight is not brief — a settle wait alone runs to `E2E_WAIT_TIMEOUT` — and a spent stream still holds its terminal event.
+Reading one is how the sentinel once reported `passed`, with the earlier RC's tag and a 101-hour elapsed time in its own output, for a run that had not started.
+The one stream it leaves alone belongs to a gate whose lease is still `held`, which is the concurrent-gate case the lease refuses moments later anyway.
+
 ##### Running it in your own terminal instead
 
 Equally supported, and equally legible — drop the `nohup`/`&`/`ASSUME_YES=1` and answer the confirmation:

@@ -742,6 +742,20 @@ teardown() {
 	echo "=== Teardown complete (exit ${rc}) ==="
 }
 
+# progress_reset_unless_held — empty the previous run's phase stream, so that
+# nothing can read it as this run's during the minutes a preflight takes. A
+# settle wait alone can run to E2E_WAIT_TIMEOUT, and a spent stream still holds
+# its terminal event: release-sentinel.sh read a `passed` left by an earlier RC
+# and published it as a verdict for a run that had not started.
+#
+# Held is the one state that must not be cleared: a live gate owns that stream,
+# and lease_acquire refuses this run moments later anyway. Every other state
+# (free, orphaned, foreign) means no live local owner, so the stream is spent.
+progress_reset_unless_held() {
+	[[ "$(lease_state "${PROJECT}" "${ZONE}" "${CLUSTER}")" != "held" ]] || return 0
+	progress_init
+}
+
 # reclaim_orphaned_gate [CONFIRM] — tear down what a killed gate left running,
 # before this run spends anything. CONFIRM=1 asks first (the --reclaim entry;
 # the gate proper has already confirmed the same target).
@@ -870,6 +884,10 @@ main() {
 
 	confirm_target
 
+	# Before preflight, not after it: until the stream is emptied, every reader
+	# meets the previous run's terminal event and reports it as this run's.
+	progress_reset_unless_held
+
 	# Reclaim before anything else spends: a gate killed mid-run left this
 	# cluster scaled up, and a run that deployed on top of it would inherit the
 	# leak instead of ending it. Also the point where a second concurrent gate
@@ -898,10 +916,10 @@ main() {
 	# Everything below mutates the cluster — arm the self-cleaning teardown first.
 	trap teardown EXIT
 
-	# Start the phase stream once the gate is committed to running, so a run
-	# that aborts during preflight leaves no half-stream for a renderer to
-	# mistake for an in-flight gate.
-	progress_init
+	# The stream was emptied before preflight; this is the first event in it, so
+	# a run that aborted earlier leaves an empty stream rather than a half one,
+	# and an empty stream renders `preflight` rather than an in-flight gate.
+	#
 	# The gate-start detail is the RC tag by contract — it is what the status
 	# renderer reports as .rc (lib/progress.sh).
 	progress_event gate start "${GAG_IMAGE_TAG}"
