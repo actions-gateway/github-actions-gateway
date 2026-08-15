@@ -564,6 +564,14 @@ So the default flow for this step is: **nothing — verify the auto-created Rele
 The step only creates a Release when the tag has **none yet**, so it never clobbers curated notes.
 If you want richer notes (highlights, upgrade caveats), **create the Release before pushing the tag** — e.g. `gh release create vX.Y.Z --draft --notes-file …` — and the pipeline will leave your body untouched while still attaching the signed v2 CRD manifest asset.
 
+**The Release is created as a draft and published by the pipeline's last step**, because this repo's releases are immutable: publishing seals the assets, and every upload after that point fails `HTTP 422: Cannot upload assets to an immutable release`.
+Draft, attach, then publish is [GitHub's own recommended order](https://docs.github.com/en/code-security/concepts/supply-chain-security/immutable-releases) for that reason, and it is what `chart-publish` now does.
+Two consequences for this step: a pre-created Release of your own should be a **draft** (as above), since the pipeline publishes whatever draft it finds once the assets are on; and a run that dies before the final step leaves a draft rather than a published Release missing its CRD manifest and checksums.
+
+**What immutability does and does not freeze.** The title and the notes stay editable after publication, so [step 4](#4-record-the-published-digests)'s `gh release edit --notes-file` still works and the curated body can be finished after the digests exist.
+The assets and the **tag** do not: a published Release locks its tag to one commit, which cannot be moved or deleted while the Release exists.
+So a tag pushed at the wrong commit is not recoverable by re-tagging — cut the next candidate number instead. `v1.5.0-rc.2` was pushed at a commit three merges stale and had to be superseded by an rc.3.
+
 #### Writing the curated notes
 
 A minor release accumulates more than a generated changelog can convey, and the two inputs that feed it, `operator-caveats-since.sh` and the commit log, both mislead in specific ways.

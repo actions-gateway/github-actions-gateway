@@ -588,7 +588,12 @@ jobs:
           if [[ "${PRERELEASE}" == "true" ]]; then
             extra+=(--prerelease)
           fi
-          gh release create "${TAG}" --repo "${REPO}" --title "${TAG}" \
+          # Created as a draft, published by the last step once every asset is
+          # attached. Publishing seals an immutable release, and this repo's
+          # releases became immutable between v1.5.0-rc.1 and v1.5.0-rc.2, so the
+          # create-then-upload order that worked before now fails every upload with
+          # HTTP 422. A draft takes assets; publishing is what freezes them.
+          gh release create "${TAG}" --repo "${REPO}" --title "${TAG}" --draft \
             --notes-file "${notes}" --generate-notes "${extra[@]}"
       - name: Render, sign, and attach the v2 CRD manifest to the release (keyless, Q276)
         env:
@@ -621,7 +626,7 @@ jobs:
           # with --clobber replaces a prior same-named asset, keeping re-publish
           # idempotent, and never touches curated notes.
           if ! gh release view "${TAG}" --repo "${REPO}" >/dev/null 2>&1; then
-            gh release create "${TAG}" --repo "${REPO}" --title "${TAG}" --generate-notes
+            gh release create "${TAG}" --repo "${REPO}" --title "${TAG}" --draft --generate-notes
           fi
           gh release upload "${TAG}" --repo "${REPO}" --clobber \
             "${out}" "${out}.cosign.bundle"
@@ -648,6 +653,25 @@ jobs:
           # checksum manifest, and its signature. --clobber keeps re-publish idempotent.
           gh release upload "${TAG}" --repo "${REPO}" --clobber \
             "${out}"/gag-migrate-* "${out}/SHA256SUMS" "${out}/SHA256SUMS.cosign.bundle"
+      - name: Publish the release now every asset is attached
+        env:
+          TAG: ${{ steps.tag.outputs.tag }}
+          REPO: ${{ github.repository }}
+          PRERELEASE: ${{ steps.tag.outputs.prerelease }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          # The last step to touch the release, because publishing an immutable one
+          # seals it: every asset the steps above attach has to be on the draft
+          # first. A run that dies before here leaves a draft rather than a
+          # published release missing its CRD manifest and checksums.
+          # --latest is explicit rather than inherited: `gh release create` picks it
+          # for a stable tag at creation, and a draft is not a candidate then.
+          extra=()
+          if [[ "${PRERELEASE}" != "true" ]]; then
+            extra+=(--latest)
+          fi
+          gh release edit "${TAG}" --repo "${REPO}" --draft=false "${extra[@]}"
       - name: Record published chart in the run summary
         env:
           REF: ${{ steps.chart.outputs.ref }}
