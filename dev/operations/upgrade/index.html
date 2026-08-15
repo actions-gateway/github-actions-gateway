@@ -1672,6 +1672,17 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
+  <a href="#non-breaking-job_duration_seconds-now-measures-worker-pod-lifetime-the-classic-tier-span-shrinks" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Non-breaking: job_duration_seconds now measures worker pod lifetime (the classic-tier span shrinks)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#non-breaking-an-abandoned-run-is-force-cancelled-and-re-run-automatically-on-both-acquisition-tiers" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3270,6 +3281,17 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
+  <a href="#non-breaking-job_duration_seconds-now-measures-worker-pod-lifetime-the-classic-tier-span-shrinks" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Non-breaking: job_duration_seconds now measures worker pod lifetime (the classic-tier span shrinks)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#non-breaking-an-abandoned-run-is-force-cancelled-and-re-run-automatically-on-both-acquisition-tiers" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3886,6 +3908,7 @@ For <strong>initial installation</strong> of the GMC, see <a href="../install/">
 <ul>
 <li><a href="#pre-upgrade-validation-checklist">Pre-Upgrade Validation Checklist</a></li>
 <li><a href="#migration-notes">Migration Notes</a></li>
+<li><a href="#non-breaking-job_duration_seconds-now-measures-worker-pod-lifetime-the-classic-tier-span-shrinks">Non-breaking: job_duration_seconds now measures worker pod lifetime (the classic-tier span shrinks)</a></li>
 <li><a href="#non-breaking-v1alpha1-is-deprecated-and-the-apiserver-now-warns">Non-breaking: v1alpha1 is deprecated and the apiserver now warns</a></li>
 <li><a href="#non-breaking-an-egressproxy-pools-pods-drop-the-app-actions-gateway-proxy-label-its-pool-is-recreated-once">Non-breaking: an EgressProxy pool's pods drop the app: actions-gateway-proxy label (its pool is recreated once)</a></li>
 <li><a href="#non-breaking-github-enterprise-server-gateways-now-reach-their-own-appliance-they-never-did">Non-breaking: GitHub Enterprise Server gateways now reach their own appliance (they never did)</a></li>
@@ -3954,6 +3977,38 @@ For <strong>initial installation</strong> of the GMC, see <a href="../install/">
 - Behavior changes that require configuration updates before the new binary takes effect.</p>
 <hr />
 <h2 id="migration-notes">Migration Notes<a class="headerlink" href="#migration-notes" title="Permanent link">&para;</a></h2>
+<h3 id="non-breaking-job_duration_seconds-now-measures-worker-pod-lifetime-the-classic-tier-span-shrinks">Non-breaking: <code>job_duration_seconds</code> now measures worker pod lifetime (the classic-tier span shrinks)<a class="headerlink" href="#non-breaking-job_duration_seconds-now-measures-worker-pod-lifetime-the-classic-tier-span-shrinks" title="Permanent link">&para;</a></h3>
+<p><strong>Who is affected:</strong> every tenant on the classic acquisition tier that has a dashboard, an alert, or a cost figure reading <code>actions_gateway_job_duration_seconds</code>.
+Scale-set tenants are affected in the other direction: the series was empty there before and now reports.</p>
+<p><strong>What changed.</strong> The observation moved off the classic provisioning goroutine and onto the shared pod informer, which sees a scale-set worker pod and a classic one identically (Q713).
+The span moved with it, and <strong>nothing was renamed</strong>, so both spans land in the same series:</p>
+<table>
+<thead>
+<tr>
+<th></th>
+<th>Span</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Before</td>
+<td>Job acquisition to the controller observing the pod terminal, which included the job Secret staging, the active-pod count, any quota retry, and any <code>spec.scaleUp</code> throttle wait, none of which a node bills for</td>
+</tr>
+<tr>
+<td>Now</td>
+<td>The worker pod's own lifetime: <code>creationTimestamp</code> to its last container finishing, or to the deletion request for a worker removed mid-run</td>
+</tr>
+</tbody>
+</table>
+<p>A pod that never started a container is no longer observed at all: it ran no job and occupied no node time.</p>
+<p><strong>What to expect at upgrade.</strong> Classic-tier <code>job_duration_seconds</code> percentiles <strong>step down</strong>, by the pre-creation window the old span carried.
+With <code>spec.scaleUp</code> unset (the default) and no quota pressure that window is seconds; with a configured <code>scaleUp</code> throttle or a namespace at its ResourceQuota it can be minutes.
+Anything costed off the series steps down with it.
+<a href="../../design/appendix-f-cost-model/">Appendix F</a> multiplies it by an hourly node rate, so classic-tier attribution was reading <strong>high</strong> before this release, and the new span is the one a node actually bills for.</p>
+<p><strong>Action required: re-baseline rather than compare across the step.</strong> A percentile or <code>rate()</code> window that spans the upgrade mixes two spans and means nothing.
+Re-baseline any threshold you set on classic job duration after the rollout settles, and treat pre-upgrade classic figures as a different measurement rather than a trend to extend.
+The shipped dashboards now mark this: the tenant dashboard's Job-duration panel carries the span in its description, with an <code>actions_gateway_build_info</code> version panel beneath it, and the platform dashboard has a Build Versions row so a staggered fleet shows which tenants have crossed over (<a href="../observability-dashboards/">dashboards</a>).</p>
+<p><strong>Rolling back</strong> returns the classic tier to the old, longer span and leaves the scale-set tier emitting nothing.</p>
 <h3 id="non-breaking-an-abandoned-run-is-force-cancelled-and-re-run-automatically-on-both-acquisition-tiers">Non-breaking: an abandoned run is force-cancelled and re-run automatically, on both acquisition tiers<a class="headerlink" href="#non-breaking-an-abandoned-run-is-force-cancelled-and-re-run-automatically-on-both-acquisition-tiers" title="Permanent link">&para;</a></h3>
 <p>This release adds two recoveries for a worker removed before its container ever ran, the <code>pendingPodDeadline</code> reap being the common cause: the run is force-cancelled in about a second instead of waiting out GitHub's ~15-minute unstarted-job timeout (Q683), and it is then re-run automatically once the runner set places a worker pod again (Q691).
 Both work on the classic <strong>and</strong> ScaleSet tiers (Q766), the latter being the default and <code>v2beta1</code>'s only option.</p>

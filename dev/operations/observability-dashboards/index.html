@@ -2711,7 +2711,7 @@
 <p>Part of the <a href="../observability/">Observability</a> guide.
 The panels below query the <a href="../observability-metrics/">Metrics reference</a> and the <a href="../observability-alerting/#slo-recording-rules">SLO recording rules</a>; the scrape wiring they depend on is in <a href="../observability-metrics-access/">Accessing metrics</a>.</p>
 <blockquote>
-<p><strong>Import as code.</strong> Two reference dashboards ship under <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/deploy/monitoring/README.md"><code>deploy/monitoring/</code></a> — import them into Grafana (<strong>Dashboards → New → Import</strong>) or provision them, rather than rebuilding the panels by hand.
+<p><strong>Import as code.</strong> Two reference dashboards ship under <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/deploy/monitoring/README.md"><code>deploy/monitoring/</code></a>: import them into Grafana (<strong>Dashboards → New → Import</strong>) or provision them, rather than rebuilding the panels by hand.
 They split along the scrape boundary each reads from; the layouts below document what each contains.</p>
 </blockquote>
 <table>
@@ -2821,6 +2821,11 @@ Uses the <a href="../observability-alerting/#slo-recording-rules">SLO recording 
 <td>Job duration p50/p95</td>
 <td><code>actions_gateway:job_duration_seconds:p50/p95</code></td>
 <td>Time series, both acquisition tiers. Worker pod lifetime, so it excludes the pre-creation staging a slow <code>acquirejob</code> or a <code>spec.scaleUp</code> throttle adds</td>
+</tr>
+<tr>
+<td>AGC / proxy version</td>
+<td><code>actions_gateway_build_info{component=~"agc\|proxy"}</code></td>
+<td>Stat showing the series name, not its value (the value is always <code>1</code>). Sits under the job-duration panel because it says which span that panel is measuring: the classic tier's was longer before v1.5.0 and nothing was renamed (<a href="../upgrade/#non-breaking-job_duration_seconds-now-measures-worker-pod-lifetime-the-classic-tier-span-shrinks">upgrade note</a>). The metric carries no <code>namespace</code> label, so <code>$namespace</code> does not filter it</td>
 </tr>
 <tr>
 <td>Disruption retries</td>
@@ -3064,7 +3069,7 @@ The <code>1</code> is orange rather than red on purpose: a latched gate is <a hr
 </tbody>
 </table>
 <h2 id="platform-dashboard">Platform dashboard<a class="headerlink" href="#platform-dashboard" title="Permanent link">&para;</a></h2>
-<p><img alt="The platform/fleet Grafana dashboard rendered against a live Prometheus: fleet-overview stats, GMC control-plane reconcile health, a per-gateway condition state-timeline, and cross-tenant throughput rows." src="../../assets/grafana-dashboard-platform.png" /></p>
+<p><img alt="The platform/fleet Grafana dashboard rendered against a live Prometheus: fleet-overview stats, GMC control-plane reconcile health, a per-gateway condition state-timeline, cross-tenant throughput, and a build-versions row." src="../../assets/grafana-dashboard-platform.png" /></p>
 <p>Fleet-wide; <code>$namespace</code> filters the cross-tenant rows.</p>
 <p><strong>Row 1 — Fleet Overview</strong></p>
 <table>
@@ -3167,13 +3172,27 @@ The <code>1</code> is orange rather than red on purpose: a latched gate is <a hr
 <td><code>sum by (namespace) (rate(actions_gateway_scaleset_jobs_assigned_total[5m])) * 60</code></td>
 <td>Time series</td>
 </tr>
+</tbody>
+</table>
+<p><strong>Row 5 — Build Versions</strong></p>
+<table>
+<thead>
 <tr>
-<td>Pod creation p99 by namespace</td>
-<td><code>actions_gateway:pod_creation_latency_seconds:p99</code></td>
-<td>Time series, both acquisition tiers</td>
+<th>Panel</th>
+<th>Query</th>
+<th>Visualization</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Running versions by component</td>
+<td><code>count by (component, version) (actions_gateway_build_info)</code></td>
+<td>Stat, one tile per component and version with the instance count</td>
 </tr>
 </tbody>
 </table>
+<p>The fleet's version spread during a staggered upgrade, and the answer to which tenants have crossed a semantics change: <code>job_duration_seconds</code> changed span at v1.5.0 without a rename (<a href="../upgrade/#non-breaking-job_duration_seconds-now-measures-worker-pod-lifetime-the-classic-tier-span-shrinks">upgrade note</a>).
+The GMC comes from this dashboard's own scrape; <code>agc</code> and <code>proxy</code> need the per-tenant scrapes, so a platform-only Prometheus shows one bar. <code>actions_gateway_build_info</code> carries no <code>namespace</code> label, so <code>$namespace</code> does not filter this row. | Pod creation p99 by namespace | <code>actions_gateway:pod_creation_latency_seconds:p99</code> | Time series, both acquisition tiers |</p>
 <h2 id="dashboard-variables">Dashboard Variables<a class="headerlink" href="#dashboard-variables" title="Permanent link">&para;</a></h2>
 <p>The dashboards ship with these template variables already wired:</p>
 <ul>

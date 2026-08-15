@@ -2864,14 +2864,6 @@
 <td>Measured 2026-08-14: <code>heartbeat</code> stayed null for the whole 22-minute e2e leg of a passing run, so the only in-flight signal was absent and the sentinel reported a stall it was right to report. The run record answers when the log will not.</td>
 </tr>
 <tr>
-<td><a id="Q853"></a>Q853</td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/tree/main/deploy/monitoring">Make a metric semantics change visible on the shipped dashboards</a></td>
-<td><code>1.5-gate</code> <code>docs</code> <code>debt</code></td>
-<td>🔲</td>
-<td>S</td>
-<td>Q713 changed the classic <code>job_duration_seconds</code> span with no rename, so dashboards and cost attribution shift at upgrade with nothing marking it. <code>actions_gateway_build_info</code> is emitted by both binaries and read by no dashboard. Plus an upgrade note.</td>
-</tr>
-<tr>
 <td><a id="Q859"></a>Q859</td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/agent/claude-piped-gate-hook.sh">piped-gate's overlap probe judges the hook script's checkout, not the session's worktree</a></td>
 <td><code>ci</code> <code>debt</code> <code>bug</code> <code>retro</code></td>
@@ -3022,6 +3014,30 @@
 <td>🔲</td>
 <td>S</td>
 <td>#1417 shipped on "3 of 5 calico enforcement negatives failed"; #1441 refuted it next day, yet 3 of the 6 comments #1417 wrote still asserted it 2 days later (swept in #1510). Closing a row sweeps its own citations, not the change's.</td>
+</tr>
+<tr>
+<td><a id="Q864"></a>Q864</td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/deploy/monitoring/grafana-dashboard-tenant.json">Ship the abandoned-runs panel the tenant dashboard doc already documents</a></td>
+<td><code>docs</code> <code>debt</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>Measured 2026-08-14: <a href="../operations/observability-dashboards/">Row 3</a> lists an <code>Abandoned runs awaiting capacity</code> panel on <code>abandoned_run_rerun_waits_total</code>; the shipped JSON has none, and the grid slot beside it is free. Q818's shape.</td>
+</tr>
+<tr>
+<td><a id="Q865"></a>Q865</td>
+<td><a href="../operations/upgrade/#table-of-contents">Gate the <code>upgrade.md</code> table of contents against its own headings</a></td>
+<td><code>docs</code> <code>ci</code> <code>debt</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>Measured 2026-08-14: the hand-kept TOC carries 24 of 25 migration notes in an order that no longer matches them, so a note is unreachable from the index readers use. <code>doc-links</code> only checks anchors that exist.</td>
+</tr>
+<tr>
+<td><a id="Q868"></a>Q868</td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/deploy/monitoring/preview/README.md">Gate a dashboard JSON change against its regenerated screenshot</a></td>
+<td><code>docs</code> <code>ci</code> <code>debt</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>Measured 2026-08-14: #1526 changed the platform dashboard with no <code>docs/assets/</code> render, so the screenshot lost a panel series. Nothing enforces the README's rule. Judge a PR's whole diff, not a commit, and exempt a description-only edit (#1531).</td>
 </tr>
 <tr>
 <td><a id="Q814"></a>Q814</td>
