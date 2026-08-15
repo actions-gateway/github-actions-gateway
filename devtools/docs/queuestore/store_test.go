@@ -52,7 +52,7 @@ func TestReadStoreRejectsAMismatchedFilename(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Marshal: %v", err)
 	}
-	if err := os.WriteFile(filepath.Join(dir, "Q2.md"), body, 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "Q2.md"), body, 0o600); err != nil {
 		t.Fatalf("WriteFile: %v", err)
 	}
 	if _, err := ReadStore(dir); err == nil {

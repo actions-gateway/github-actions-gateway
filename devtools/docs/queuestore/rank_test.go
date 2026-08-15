@@ -134,6 +134,7 @@ func TestRepeatedTailInsertionStaysOrderedAndShort(t *testing.T) {
 // ranks reproduces the intended order. Insertion points are chosen at random so
 // the walk covers interior splits, which head and tail insertion do not reach.
 func TestRandomInsertionsPreserveIntendedOrder(t *testing.T) {
+	//nolint:gosec // G404: a fixed seed is the point — the walk has to be reproducible.
 	rng := rand.New(rand.NewSource(1))
 
 	order := []int{}

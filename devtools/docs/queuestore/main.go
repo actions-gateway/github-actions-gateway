@@ -55,7 +55,7 @@ func run(args []string, out *os.File) error {
 		if err := WriteStore(args[2], items); err != nil {
 			return err
 		}
-		fmt.Fprintf(out, "queuestore: imported %d items into %s\n", len(items), args[2])
+		_, _ = fmt.Fprintf(out, "queuestore: imported %d items into %s\n", len(items), args[2])
 		return nil
 
 	case "render":
@@ -66,7 +66,7 @@ func run(args []string, out *os.File) error {
 		if err != nil {
 			return err
 		}
-		fmt.Fprintln(out, strings.Join(RenderRows(items, false), "\n"))
+		_, _ = fmt.Fprintln(out, strings.Join(RenderRows(items, false), "\n"))
 		return nil
 
 	case "check":
@@ -82,7 +82,7 @@ func run(args []string, out *os.File) error {
 				return err
 			}
 		}
-		fmt.Fprintf(out, "queuestore: ok (%d items in %s)\n", len(items), args[1])
+		_, _ = fmt.Fprintf(out, "queuestore: ok (%d items in %s)\n", len(items), args[1])
 		return nil
 	}
 	return usage()

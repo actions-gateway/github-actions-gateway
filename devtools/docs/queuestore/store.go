@@ -93,7 +93,7 @@ func UnmarshalItem(src []byte) (Item, error) {
 // different branches touch different paths, which no merge algorithm can turn
 // into a conflict.
 func WriteStore(dir string, items []Item) error {
-	if err := os.MkdirAll(dir, 0o755); err != nil {
+	if err := os.MkdirAll(dir, 0o750); err != nil {
 		return err
 	}
 	for _, it := range items {
@@ -104,7 +104,7 @@ func WriteStore(dir string, items []Item) error {
 		if err != nil {
 			return err
 		}
-		if err := os.WriteFile(filepath.Join(dir, it.ID+".md"), body, 0o644); err != nil {
+		if err := os.WriteFile(filepath.Join(dir, it.ID+".md"), body, 0o600); err != nil {
 			return err
 		}
 	}
