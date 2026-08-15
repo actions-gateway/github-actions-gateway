@@ -2,7 +2,7 @@
   "provenance": {
     "snapshot_date": "2026-08-15",
     "projects_glob": "/Users/karl/.claude/projects/*github-actions-gateway*",
-    "transcript_files_read": 426,
+    "transcript_files_read": 427,
     "snapshot_host": "mac-2",
     "hosts": [
       "mac-1",
@@ -48,13 +48,13 @@
   },
   "totals": {
     "measured": {
-      "input": 8407145,
-      "output": 91118300,
-      "cache_creation": 491257376,
-      "cache_read": 26996371822,
-      "assistant_msgs": 131334,
-      "user_msgs": 146397,
-      "headline_input_output_cachecreation": 590782821
+      "input": 8412830,
+      "output": 91646233,
+      "cache_creation": 494091946,
+      "cache_read": 27298873064,
+      "assistant_msgs": 132188,
+      "user_msgs": 147302,
+      "headline_input_output_cachecreation": 594151009
     },
     "estimated": {
       "input": 6559,
@@ -66,15 +66,15 @@
       "headline_input_output_cachecreation": 2494920
     },
     "combined": {
-      "input": 8413704,
-      "output": 91597236,
-      "cache_creation": 493266801,
-      "cache_read": 27063890665,
-      "assistant_msgs": 132076,
-      "user_msgs": 147258,
-      "headline_input_output_cachecreation": 593277741,
-      "grand_total_incl_cache_read": 27657168406,
-      "cache_reuse_ratio": 54.87
+      "input": 8419389,
+      "output": 92125169,
+      "cache_creation": 496101371,
+      "cache_read": 27366391907,
+      "assistant_msgs": 132930,
+      "user_msgs": 148163,
+      "headline_input_output_cachecreation": 596645929,
+      "grand_total_incl_cache_read": 27963037836,
+      "cache_reuse_ratio": 55.16
     }
   },
   "by_model": {
@@ -109,9 +109,9 @@
       "messages": 8356
     },
     "Opus 5": {
-      "headline": 287180256,
-      "output": 38923908,
-      "messages": 65407
+      "headline": 290548444,
+      "output": 39451841,
+      "messages": 66261
     }
   },
   "by_host": {
@@ -134,34 +134,34 @@
       "headline_input_output_cachecreation": 300762526
     },
     "mac-2": {
-      "input": 343123,
-      "output": 39156137,
-      "cache_creation": 250521035,
-      "cache_read": 15859980537,
-      "assistant_msgs": 64743,
-      "user_msgs": 72094,
-      "headline_input_output_cachecreation": 290020295
+      "input": 348808,
+      "output": 39684070,
+      "cache_creation": 253355605,
+      "cache_read": 16162481779,
+      "assistant_msgs": 65597,
+      "user_msgs": 72999,
+      "headline_input_output_cachecreation": 293388483
     }
   },
   "sessions": {
     "bucket_minutes": 10,
     "first_date": "2026-07-26",
     "last_date": "2026-08-15",
-    "session_days": 511,
+    "session_days": 514,
     "peak_concurrent": 16,
     "mean_concurrent": 3.04,
-    "hours_using_claude": 211.0,
-    "session_hours": 640.8,
+    "hours_using_claude": 213.0,
+    "session_hours": 647.2,
     "parallel_share_pct": 67,
     "note": "Concurrency needs session-level transcripts, which no earlier CSV preserved, so the series starts at the first day whose transcripts survive rather than at the first project day. It is never estimated."
   },
   "head_snapshot": {
     "go_code": 117768,
     "go_comments": 41575,
-    "markdown_nonblank": 52031,
-    "yaml_handwritten": 12480,
+    "markdown_nonblank": 52355,
+    "yaml_handwritten": 12504,
     "yaml_generated": 131488,
     "tests": 2218,
-    "commits": 1975
+    "commits": 1999
   }
 }

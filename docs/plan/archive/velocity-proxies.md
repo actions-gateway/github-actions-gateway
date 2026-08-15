@@ -166,7 +166,8 @@ Shipped as `md_words` and `words`.
 
 **What this leaves open.** The headline ratio is still tokens-per-line, with tokens-per-word beside it rather than replacing it.
 Swapping the denominator changes a published figure across three charts and every post in the announcement chain, which is a story decision rather than a correctness one.
-The `lines_vs_words` chart is what makes it decidable: cost per word rose ~5.6× over the project against ~6.4× per line, so the trend is real in both units and only the 2026-08-09 jump is an artifact.
+The `lines_vs_words` chart is what makes it decidable: cost per word rose ~4.9× over the project against ~6.4× per line, so the trend is real in both units and only the 2026-08-09 jump is an artifact.
+Both multiples were first written from a word count that still included generated CRD YAML; the per-word figure read ~5.6× until that was fixed.
 
 ## Status
 

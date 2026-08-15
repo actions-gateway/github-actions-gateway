@@ -84,28 +84,28 @@ The snapshots are announced as a quote-post chain (each post quotes the previous
 
 | Metric | Day 7 | Day 22 | Day 92 | Source |
 |---|--:|--:|--:|---|
-| Tokens (input + output + cache-creation) | ~10M | 56.2M | **593.3M** | transcripts + est. |
-| └ measured only | — | 53.7M | 590.8M | transcripts |
+| Tokens (input + output + cache-creation) | ~10M | 56.2M | **596.6M** | transcripts + est. |
+| └ measured only | — | 53.7M | 594.2M | transcripts |
 | └ estimated backfill (May 16–18) | — | +2.5M | +2.5M | per-commit estimate |
-| └ incl. cache reads | — | 2.02B | **27.7B** | transcripts + est. |
+| └ incl. cache reads | — | 2.02B | **28.0B** | transcripts + est. |
 | Cache reuse ratio (reads ÷ writes) | — | ~44× | **~55×** | transcripts |
-| Git commits | 232 | 617 | **1,975** | git |
+| Git commits | 232 | 617 | **1,999** | git |
 | Tests (`func Test*`) | 269 | 393 | **2,218** | git |
 | Lines of Go (code) | 15.5k | 20.9k | **117.8k** | git |
 | Lines of Go (comments) | 2.3k | 4.2k | **41.6k** | git |
-| Markdown (non-blank) | 14.3k | 14.0k | **52.0k** | git |
+| Markdown (non-blank) | 14.3k | 14.0k | **52.4k** | git |
 | YAML (hand-written) | 1.5k | 2.3k | **12.5k** | git |
 | Scripts & web (shell/Python/Make/Docker/CSS/JS) | — | — | **47.1k** | git |
-| **Words authored** (Go + docs + hand-written YAML + scripts) | — | — | **2.16M** | git |
-| **Tokens per word** | — | — | **274** | both |
-| Model mix | mostly Sonnet 4.6 | Sonnet 43% / Opus 57% | **Opus 5 48% / Opus 4.8 37% / Fable 7% / Sonnet 4% / Opus 4.7 3%** | transcripts |
+| **Words authored** (Go + docs + hand-written YAML + scripts) | — | — | **2.17M** | git |
+| **Tokens per word** | — | — | **275** | both |
+| Model mix | mostly Sonnet 4.6 | Sonnet 43% / Opus 57% | **Opus 5 49% / Opus 4.8 37% / Fable 7% / Sonnet 4% / Opus 4.7 3%** | transcripts |
 | Mean concurrent sessions | — | — | **3.0** (peak 16) | transcripts, since Jul 26 |
-| Hours using Claude (wall-clock) | — | — | **211.0h** → 640.8h session-time | transcripts, since Jul 26 |
+| Hours using Claude (wall-clock) | — | — | **213.0h** → 647.2h session-time | transcripts, since Jul 26 |
 
-The headline tokens figure **includes the ~2.5M estimated backfill** for the archived first three days; the measured-only floor is 590.8M.
+The headline tokens figure **includes the ~2.5M estimated backfill** for the archived first three days; the measured-only floor is 594.2M.
 Live totals (with the measured / estimated split) are always in [`data/summary.json`](data/summary.json).
 
-Markdown is the only count here still below where it stood two weeks ago (57.9k on 08-01), and nothing was deleted: the daily series runs 66.6k non-blank lines on 08-08, 49.0k the next day, 51.8k by 08-15.
+Markdown is the only count here still below where it stood two weeks ago (57.9k on 08-01), and nothing was deleted: the daily series runs 66.6k non-blank lines on 08-08, 49.0k the next day, 52.1k by 08-15.
 [#1357](https://github.com/actions-gateway/github-actions-gateway/pull/1357) reflowed every tracked doc to one sentence per line on 2026-08-09, which unwraps hard-wrapped paragraphs: 67.6k non-blank lines before that commit, 49.0k after, same words.
 Every line-count series here is a snapshot of the tree rather than a running total of lines ever written, so a reformat moves it.
 The date carries a grey dotted marker on the three lines-and-ratio charts, and `provenance.docs_reflow_date` in `summary.json`, so the step is never mistaken for lost docs.
@@ -148,14 +148,14 @@ They read "begins" rather than "joins" because the data can't tell a replacement
 A label that would overlap one already placed drops a row instead, measured on the rendered figure: the two July markers shared a height comfortably at day 80 and collided at day 89, because every added day squeezes the timeline under a fixed figure width.
 
 ### Tokens spent vs. words authored (the magnitude)
-![Cumulative tokens far above cumulative words authored, log scale](charts/tokens_vs_words.png) Log y so both ends are visible at once. ~593M cumulative tokens ride well above ~2.16M words authored; a linear axis crushes the smaller series to a sliver.
-The gold-shaded gap between the two curves is the ~274 tokens/word; on a log axis a ratio is a vertical gap.
+![Cumulative tokens far above cumulative words authored, log scale](charts/tokens_vs_words.png) Log y so both ends are visible at once. ~597M cumulative tokens ride well above ~2.17M words authored; a linear axis crushes the smaller series to a sliver.
+The gold-shaded gap between the two curves is the ~275 tokens/word; on a log axis a ratio is a vertical gap.
 "Words authored" is all hand-written output: Go (code + tests), Markdown, hand-written YAML, and scripts & web, comments included; generated CRD YAML, binaries, and lockfiles excluded.
 The undistorted breakdown of those lines is in the next chart.
 
 ### Tokens per word authored (the trend & the breakdown)
 ![Cost per word over time above a stacked breakdown of the words](charts/tokens_per_word.png) **Top:** cumulative tokens ÷ words authored, by day (measured days only).
-It climbs from ~56 tokens/word in week one to ~274 by month three, each word costing ~5× more once the easy scaffolding is done and the work shifts to logic, tests, review, and debugging.
+It climbs from ~56 tokens/word in week one to ~275 by month three, each word costing ~5× more once the easy scaffolding is done and the work shifts to logic, tests, review, and debugging.
 Unlike its per-line predecessor it then **plateaus** from mid-June, hovering in the 230–275 band rather than climbing all cycle.
 **Bottom:** the denominator itself, decomposed into Go, Markdown docs, hand-written YAML, and scripts & web.
 Its total height at any date *is* the divisor above, so "a word" is shown, not just named; docs alone very nearly match all of Go.
@@ -200,13 +200,13 @@ Only the per-line ratio steps on 2026-08-09, which is why the headline is now th
 Words are also the unit closest to a token, which makes the ratio a comparison between two counts of the same kind rather than a count against a layout choice.
 The gap in the top panel is where the mechanism shows: sentence-per-line put the same words on fewer lines, so words per line went from 12.2 to 16.9 overnight and the band visibly widens.
 
-The underlying climb is real in both units, which is the more interesting finding: cost per word still rose ~5.6× over the project, so the tokens-per-line trend is not an artifact; only the 2026-08-09 jump in it is.
+The underlying climb is real in both units, which is the more interesting finding: cost per word still rose ~4.9× over the project against ~6.4× per line, so the trend was never an artifact; only the 2026-08-09 jump in the per-line version was.
 
 ### Anatomy of token usage (log scale)
 ![Token usage anatomy on a log scale](charts/token_anatomy.png) Daily input / output / cache-creation / cache-read, log Y. Cache reads sit an order of magnitude above everything else, every day.
 
 ### Cumulative cache traffic
-![Cumulative cache traffic](charts/cumulative_cache.png) Cumulative cache reads (27.1B) vs writes (493M).
+![Cumulative cache traffic](charts/cumulative_cache.png) Cumulative cache reads (27.5B) vs writes (496M).
 Write once, replay ~55×.
 Both plan upgrades and the `mac-1`→`mac-2` handover are marked; the curve visibly steepens at the last of them.
 
@@ -215,7 +215,7 @@ Both plan upgrades and the `mac-1`→`mac-2` handover are marked; the curve visi
 **Top:** mean concurrency (line) against the day's peak (bars).
 The peak is the dramatic number, up to 16, but it lasts a single bucket; the **mean of 3.0** is what actually multiplies a day's output.
 **Bottom:** time on Claude each day, wall-clock against session-hours.
-The gap between the two bands *is* the mean concurrency: **211h elapsed produced 641h of session-time** over the window, a 3.0× multiplier.
+The gap between the two bands *is* the mean concurrency: **213h elapsed produced 647h of session-time** over the window, a 3.0× multiplier.
 67% of active time had two or more sessions running, on 4–54 sessions a day.
 
 Neither band is time anyone spent watching.
@@ -296,11 +296,11 @@ Totals split into `measured` / `estimated` / `combined` (summed from the persist
   A retired machine can never report again, so whatever it had not captured by its last run is gone rather than pending.
 - **Archived early days are estimated, not measured.** The project's first commits (2026-05-16 to -18) predate the earliest surviving transcript (2026-05-19), so their token usage is gone from the logs.
   Those days are **backfilled** from the Pro-era per-commit rate and flagged `estimated=1` (see "Backfilled (estimated) days" above).
-  The ~2.5M backfill is a modeled figure, not a measurement — the defensible measured-only floor is 590.8M.
+  The ~2.5M backfill is a modeled figure, not a measurement — the defensible measured-only floor is 594.2M.
   The git series is fully measured from 2026-05-16.
 - **"Concurrent" is a bucket width, not a fact.** A session counts as active in a 10-minute bucket if it produced a record there, so two sessions are "concurrent" when both worked within the same 10 minutes — not necessarily in the same second.
   The width is a judgement: wide enough that a session waiting on a build still counts as in flight, narrow enough that work hours apart never collides.
-  At 1-minute buckets the daily peaks come out 2–14 rather than 3–16, so the peak barely moves, while every figure with time in it does: the mean falls to 2.2, the parallel share to 53%, and wall-clock hours to 128 from 211, because the bucket *is* the unit of time.
+  At 1-minute buckets the daily peaks come out 2–14 rather than 3–16, so the peak barely moves, while every figure with time in it does: the mean falls to 2.2, the parallel share to 53%, and wall-clock hours to 130 from 213, because the bucket *is* the unit of time.
 - **Commits change units mid-project, so they are not a velocity series.** This repo moved from direct commits on `main` to PR squash-merges: the share of commits whose subject ends in `(#N)` runs 0% through 2026-05-31, 26% in the first half of June, and 100% from 2026-06-09 on.
   An early "commit" is one raw commit and a later one is a whole squashed PR, so charting commits across that boundary deflates the recent half.
   It is the same defect as the reflow, pointed the other way.
