@@ -338,6 +338,7 @@
       "datasource": { "type": "prometheus", "uid": "${datasource}" },
       "gridPos": { "h": 7, "w": 6, "x": 6, "y": 16 },
       "id": 22,
+      "description": "Worker pod lifetime on both acquisition tiers: creation to the last container finishing, or to the deletion request for a worker removed mid-run. The span changed in v1.5.0 (Q713) without a rename — the classic tier previously timed from job acquisition, so it also counted Secret staging, quota retries and any spec.scaleUp throttle wait, none of which a node bills for. Classic-tier p50/p95 step down at that upgrade, and so does anything costed off this series. The version panel below says which span you are reading.",
       "fieldConfig": { "defaults": { "unit": "s", "custom": { "fillOpacity": 10 } }, "overrides": [] },
       "targets": [
         {
@@ -400,6 +401,29 @@
           "datasource": { "type": "prometheus", "uid": "${datasource}" },
           "expr": "sum by (namespace, runner_group) (increase(actions_gateway_eviction_retries_exhausted_total{namespace=~\"$namespace\", runner_group=~\"$runner_group\"}[1h]))",
           "legendFormat": "{{namespace}}/{{runner_group}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "type": "stat",
+      "title": "AGC / proxy version",
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "gridPos": { "h": 7, "w": 6, "x": 6, "y": 23 },
+      "id": 27,
+      "description": "One series per running binary, from actions_gateway_build_info. Sits under the job-duration panel because it says which span that panel is measuring: v1.5.0 and later is worker pod lifetime on both tiers, earlier classic-tier data is the longer pre-Q713 span. The metric carries no namespace label, so $namespace does not filter it — every AGC and proxy this Prometheus scrapes is listed.",
+      "fieldConfig": { "defaults": { "unit": "none" }, "overrides": [] },
+      "options": {
+        "colorMode": "none",
+        "graphMode": "none",
+        "textMode": "name",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "expr": "actions_gateway_build_info{component=~\"agc|proxy\"}",
+          "legendFormat": "{{component}} {{version}}",
           "refId": "A"
         }
       ]

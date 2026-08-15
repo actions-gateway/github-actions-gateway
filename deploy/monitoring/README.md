@@ -6,7 +6,7 @@ Directly-appliable reference observability artifacts for github-actions-gateway,
 | --- | --- | --- |
 | [`prometheusrule.yaml`](prometheusrule.yaml) | `monitoring.coreos.com/v1` PrometheusRule | The recommended alerting rules and SLO recording rules. |
 | [`grafana-dashboard-tenant.json`](grafana-dashboard-tenant.json) | Grafana dashboard | **Per-tenant** view (from a tenant's AGC + egress-proxy mTLS scrape): gateway health, pod-creation-latency SLO, job throughput, scale-set acquisition tier (the default protocol), tenant health conditions, egress proxy, and kube-state-metrics proxy/quota panels. |
-| [`grafana-dashboard-platform.json`](grafana-dashboard-platform.json) | Grafana dashboard | **Platform/fleet** view (from the GMC manager scrape): managed gateways, GMC reconcile health, and the cross-tenant condition rollups (RunnerGroupsDegraded, EgressRulesStale, proxy quota). |
+| [`grafana-dashboard-platform.json`](grafana-dashboard-platform.json) | Grafana dashboard | **Platform/fleet** view (from the GMC manager scrape): managed gateways, GMC reconcile health, the cross-tenant condition rollups (RunnerGroupsDegraded, EgressRulesStale, proxy quota), and the fleet's running build versions. |
 
 All PromQL references metrics the controllers actually emit — see the [Full Metrics Reference](../../docs/operations/observability-metrics.md#full-metrics-reference).
 The recording rules in `prometheusrule.yaml` back several dashboard panels (`actions_gateway:pod_creation_latency_seconds:p95` / `:p99`, `actions_gateway:job_duration_seconds:p50` / `:p95`, `actions_gateway:scaleset_provision_success_rate:rate5m`), so apply both together.

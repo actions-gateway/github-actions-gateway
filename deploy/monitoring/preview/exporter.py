@@ -222,6 +222,14 @@ def render():
         L.append(f'actions_gateway_github_egress_incomplete{{namespace="{ns}",name="{name}"}} 0')
         L.append(f'actions_gateway_scale_set_name_collision{{namespace="{ns}",name="{name}"}} 0')
 
+    # Build metadata (Q318), read by the tenant version panel and the platform
+    # Running-versions bar gauge. Each real binary exposes exactly one series and
+    # Prometheus separates them by target; this single synthetic target stands in
+    # for a fleet mid-upgrade, so it emits one series per (component, version) pair
+    # and leaves one AGC a minor behind — the spread those panels exist to show.
+    for component, version in (("gmc", "v1.5.0"), ("agc", "v1.5.0"), ("agc", "v1.4.0"), ("proxy", "v1.5.0")):
+        L.append(f'actions_gateway_build_info{{component="{component}",version="{version}"}} 1')
+
     # controller-runtime built-ins: healthy reconcile throughput, no errors.
     for c in CONTROLLERS:
         L.append(f'controller_runtime_reconcile_errors_total{{controller="{c}"}} 0')

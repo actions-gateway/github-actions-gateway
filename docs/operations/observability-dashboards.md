@@ -5,7 +5,7 @@
 Part of the [Observability](observability.md) guide.
 The panels below query the [Metrics reference](observability-metrics.md) and the [SLO recording rules](observability-alerting.md#slo-recording-rules); the scrape wiring they depend on is in [Accessing metrics](observability-metrics-access.md).
 
-> **Import as code.** Two reference dashboards ship under [`deploy/monitoring/`](../../deploy/monitoring/README.md) — import them into Grafana (**Dashboards → New → Import**) or provision them, rather than rebuilding the panels by hand.
+> **Import as code.** Two reference dashboards ship under [`deploy/monitoring/`](../../deploy/monitoring/README.md): import them into Grafana (**Dashboards → New → Import**) or provision them, rather than rebuilding the panels by hand.
 > They split along the scrape boundary each reads from; the layouts below document what each contains.
 
 | Dashboard | Source scrape | Audience |
@@ -47,6 +47,7 @@ Uses the [SLO recording rules](observability-alerting.md#slo-recording-rules) as
 |-------|-------|---------------|
 | Jobs acquired total | `increase(actions_gateway_jobs_acquired_total[1h])` | Bar chart by runner_group |
 | Job duration p50/p95 | `actions_gateway:job_duration_seconds:p50/p95` | Time series, both acquisition tiers. Worker pod lifetime, so it excludes the pre-creation staging a slow `acquirejob` or a `spec.scaleUp` throttle adds |
+| AGC / proxy version | `actions_gateway_build_info{component=~"agc\|proxy"}` | Stat showing the series name, not its value (the value is always `1`). Sits under the job-duration panel because it says which span that panel is measuring: the classic tier's was longer before v1.5.0 and nothing was renamed ([upgrade note](upgrade.md#non-breaking-job_duration_seconds-now-measures-worker-pod-lifetime-the-classic-tier-span-shrinks)). The metric carries no `namespace` label, so `$namespace` does not filter it |
 | Disruption retries | `sum by (runner_group, tier, cause) (increase(actions_gateway_eviction_retries_total[1h]))` | Bar chart, split by acquisition tier (`classic`, `scaleset`) and cause (`eviction`, `preemption`, `deletion`, `abandoned`, `vanished`). Keep the causes visually distinct: `eviction` rising means node pressure, `preemption` rising means a `priorityTiers` floor is displacing opportunistic work, `abandoned` rising means workers are not being scheduled at all before `pendingPodDeadline` reaps them, `vanished` rising means the AGC itself keeps missing worker teardowns — different investigations entirely |
 | Abandoned runs awaiting capacity | `sum by (runner_group, tier, outcome) (increase(actions_gateway_abandoned_run_rerun_waits_total[1h]))` | Stat or bar chart, split by acquisition tier since Q766 ported the recovery to `scaleset`. `expired` is the one to watch: a job whose run was force-cancelled and whose capacity never came back inside the wait window is a job silently lost until someone re-runs it by hand |
 | Disruption budget exhausted | `increase(actions_gateway_eviction_retries_exhausted_total[1h])` | Stat (threshold: >0 = red) |
@@ -124,7 +125,7 @@ Labelled by `runner_set` (not `runner_group`), so the `$runner_group` variable d
 
 ## Platform dashboard
 
-![The platform/fleet Grafana dashboard rendered against a live Prometheus: fleet-overview stats, GMC control-plane reconcile health, a per-gateway condition state-timeline, and cross-tenant throughput rows.](../assets/grafana-dashboard-platform.png)
+![The platform/fleet Grafana dashboard rendered against a live Prometheus: fleet-overview stats, GMC control-plane reconcile health, a per-gateway condition state-timeline, cross-tenant throughput, and a build-versions row.](../assets/grafana-dashboard-platform.png)
 
 Fleet-wide; `$namespace` filters the cross-tenant rows.
 
@@ -158,7 +159,15 @@ Fleet-wide; `$namespace` filters the cross-tenant rows.
 | Active sessions by namespace | `sum by (namespace) (actions_gateway_active_sessions)` | Time series |
 | Jobs acquired/min by namespace (classic) | `sum by (namespace) (rate(actions_gateway_jobs_acquired_total[5m])) * 60` | Time series |
 | Jobs assigned/min by namespace (scale-set) | `sum by (namespace) (rate(actions_gateway_scaleset_jobs_assigned_total[5m])) * 60` | Time series |
-| Pod creation p99 by namespace | `actions_gateway:pod_creation_latency_seconds:p99` | Time series, both acquisition tiers |
+
+**Row 5 — Build Versions**
+
+| Panel | Query | Visualization |
+|-------|-------|---------------|
+| Running versions by component | `count by (component, version) (actions_gateway_build_info)` | Stat, one tile per component and version with the instance count |
+
+The fleet's version spread during a staggered upgrade, and the answer to which tenants have crossed a semantics change: `job_duration_seconds` changed span at v1.5.0 without a rename ([upgrade note](upgrade.md#non-breaking-job_duration_seconds-now-measures-worker-pod-lifetime-the-classic-tier-span-shrinks)).
+The GMC comes from this dashboard's own scrape; `agc` and `proxy` need the per-tenant scrapes, so a platform-only Prometheus shows one bar. `actions_gateway_build_info` carries no `namespace` label, so `$namespace` does not filter this row. | Pod creation p99 by namespace | `actions_gateway:pod_creation_latency_seconds:p99` | Time series, both acquisition tiers |
 
 ## Dashboard Variables
 

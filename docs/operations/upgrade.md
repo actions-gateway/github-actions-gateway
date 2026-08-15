@@ -13,6 +13,7 @@ The three independently versioned components — GMC, AGC, and worker image — 
 
 - [Pre-Upgrade Validation Checklist](#pre-upgrade-validation-checklist)
 - [Migration Notes](#migration-notes)
+  - [Non-breaking: job_duration_seconds now measures worker pod lifetime (the classic-tier span shrinks)](#non-breaking-job_duration_seconds-now-measures-worker-pod-lifetime-the-classic-tier-span-shrinks)
   - [Non-breaking: v1alpha1 is deprecated and the apiserver now warns](#non-breaking-v1alpha1-is-deprecated-and-the-apiserver-now-warns)
   - [Non-breaking: an EgressProxy pool's pods drop the app: actions-gateway-proxy label (its pool is recreated once)](#non-breaking-an-egressproxy-pools-pods-drop-the-app-actions-gateway-proxy-label-its-pool-is-recreated-once)
   - [Non-breaking: GitHub Enterprise Server gateways now reach their own appliance (they never did)](#non-breaking-github-enterprise-server-gateways-now-reach-their-own-appliance-they-never-did)
@@ -87,6 +88,32 @@ Also check the release notes for the new version before upgrading, particularly:
 ---
 
 ## Migration Notes
+
+### Non-breaking: `job_duration_seconds` now measures worker pod lifetime (the classic-tier span shrinks)
+
+**Who is affected:** every tenant on the classic acquisition tier that has a dashboard, an alert, or a cost figure reading `actions_gateway_job_duration_seconds`.
+Scale-set tenants are affected in the other direction: the series was empty there before and now reports.
+
+**What changed.** The observation moved off the classic provisioning goroutine and onto the shared pod informer, which sees a scale-set worker pod and a classic one identically (Q713).
+The span moved with it, and **nothing was renamed**, so both spans land in the same series:
+
+| | Span |
+| --- | --- |
+| Before | Job acquisition to the controller observing the pod terminal, which included the job Secret staging, the active-pod count, any quota retry, and any `spec.scaleUp` throttle wait, none of which a node bills for |
+| Now | The worker pod's own lifetime: `creationTimestamp` to its last container finishing, or to the deletion request for a worker removed mid-run |
+
+A pod that never started a container is no longer observed at all: it ran no job and occupied no node time.
+
+**What to expect at upgrade.** Classic-tier `job_duration_seconds` percentiles **step down**, by the pre-creation window the old span carried.
+With `spec.scaleUp` unset (the default) and no quota pressure that window is seconds; with a configured `scaleUp` throttle or a namespace at its ResourceQuota it can be minutes.
+Anything costed off the series steps down with it.
+[Appendix F](../design/appendix-f-cost-model.md) multiplies it by an hourly node rate, so classic-tier attribution was reading **high** before this release, and the new span is the one a node actually bills for.
+
+**Action required: re-baseline rather than compare across the step.** A percentile or `rate()` window that spans the upgrade mixes two spans and means nothing.
+Re-baseline any threshold you set on classic job duration after the rollout settles, and treat pre-upgrade classic figures as a different measurement rather than a trend to extend.
+The shipped dashboards now mark this: the tenant dashboard's Job-duration panel carries the span in its description, with an `actions_gateway_build_info` version panel beneath it, and the platform dashboard has a Build Versions row so a staggered fleet shows which tenants have crossed over ([dashboards](observability-dashboards.md)).
+
+**Rolling back** returns the classic tier to the old, longer span and leaves the scale-set tier emitting nothing.
 
 ### Non-breaking: an abandoned run is force-cancelled and re-run automatically, on both acquisition tiers
 
