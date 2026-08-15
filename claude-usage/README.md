@@ -124,7 +124,7 @@ One gap can no longer be closed: mac-1's last row came from a snapshot taken par
 Rendered to [`charts/`](charts/) at 1× and `@2x` (for upload).
 Each is regenerable from the CSVs.
 
-### Overview — all three tokens/lines views together
+### Overview: all three tokens/lines views together
 ![Tokens vs lines, cost per line, and the lines composition on one timeline](charts/tokens_overview.png) The three tokens-vs-lines views combined into one shared-timeline figure: **(1)** magnitude — tokens vs lines authored on a log axis (gap = cost/line); **(2)** breakdown — what those lines are (the composition); **(3)** cost — cumulative tokens ÷ line, with the value at each weekly guide.
 Event lines run through all three panels (labelled along the bottom of panel 1).
 Where one crosses a value label it passes *behind* the digits and breaks around them, rather than striking through: the labels are drawn above the lines and cut them with their own white halo, so a gap in an event line at a number is the number winning, not a change of line style.
@@ -133,27 +133,59 @@ The standalone versions follow below.
 ### Daily token usage by model
 ![Daily token usage by model](charts/tokens_by_model.png) The Pro→Max 5x upgrade (first dashed line, 2026-05-23) is visible as the hand-off from Sonnet 4.6 (orange) to Opus 4.7 (purple), then Opus 4.8 (blue), with Fable 5 (green) appearing from June 9 and Opus 5 (vermillion) from July 25; the second dashed line (2026-07-05) marks the Max 5x→20x upgrade.
 Opus 5 takes over almost completely from the green dash-dot line (2026-07-26), where `mac-2` took over, on days around three times the height of the Opus 4.8 era (median 14.9M across the `mac-2` days against 4.6M across the days Opus 4.8 led).
-That jump is the model and the plan, **not** more machines running at once — `mac-2` replaced `mac-1` rather than joining it.
+That jump is **not** more machines running at once: `mac-2` replaced `mac-1` rather than joining it.
+Nor is it the plan: the Max 5x → 20x upgrade three weeks earlier moved no work-shipped series at all.
+What it cannot be pinned on is either the model or the machine alone, since Opus 5 arrived the day before `mac-2` did.
+See the [velocity chart](#work-shipped-on-proxies-a-reformat-cant-move).
 Charts use the Okabe–Ito colourblind-safe palette, and each model also carries its own hatch pattern.
 
 Three kinds of event line, styled apart because they mean different things: a **black dashed** line is a plan upgrade (a higher ceiling on what one machine can spend), a **green dash-dot** line is a machine's rows beginning (a change in which machine is measuring), and a **grey dotted** line is the sentence-per-line reflow (a change in what a line *is*).
 The reflow line appears only on the three lines-and-ratio charts, because it moved the denominator and nothing about what was spent; marking it on a token chart would invite the reading that the reformat cost or saved something.
 Machine lines are derived from the first row each machine reports, so a third machine marks itself with no code change.
-They read "begins" rather than "joins" because the data can't tell a replacement from an addition — an old machine going quiet is not evidence it was retired.
+They read "begins" rather than "joins" because the data can't tell a replacement from an addition: an old machine going quiet is not evidence it was retired.
 A label that would overlap one already placed drops a row instead, measured on the rendered figure: the two July markers shared a height comfortably at day 80 and collided at day 89, because every added day squeezes the timeline under a fixed figure width.
 
 ### Tokens spent vs. lines authored (the magnitude)
 ![Cumulative tokens far above cumulative lines authored, log scale](charts/tokens_vs_lines.png) Log y so both ends are visible at once: ~593M cumulative tokens ride well above ~228k lines authored (a linear axis crushes the lines to an invisible sliver).
-The gold-shaded gap between the two curves is the ~2,601 tokens/line — on a log axis a ratio is a vertical gap.
-"Lines authored" is all hand-written output — Go (code + tests), Markdown, hand-written YAML, and scripts & web; generated CRD YAML, binaries, and lockfiles excluded.
+The gold-shaded gap between the two curves is the ~2,601 tokens/line; on a log axis a ratio is a vertical gap.
+"Lines authored" is all hand-written output: Go (code + tests), Markdown, hand-written YAML, and scripts & web; generated CRD YAML, binaries, and lockfiles excluded.
 The undistorted breakdown of those lines is in the next chart.
 
 ### Tokens per line authored (the trend & the breakdown)
 ![Cost per line over time above a stacked breakdown of the lines](charts/tokens_per_line.png) **Top:** cumulative tokens ÷ lines authored, by day (measured days only).
-It climbs from ~406 tokens/line in week one to ~2,601 by month three — each line costs ~6× more once the easy scaffolding is done and the work shifts to logic, tests, review, and debugging.
+It climbs from ~406 tokens/line in week one to ~2,601 by month three, each line costing ~6× more once the easy scaffolding is done and the work shifts to logic, tests, review, and debugging.
 **Bottom:** the denominator itself, decomposed — Go code, Go tests, Markdown docs, hand-written YAML, scripts & web.
 Its total height at any date *is* the divisor above, so "a line" is shown, not just named; tests and docs together dwarf non-test Go code.
 The grey dotted line on 2026-08-09 is the sentence-per-line reflow, which is why the Docs band notches down under it and the ratio above steps up: the same words on 18.6k fewer lines cost the same tokens, so roughly 200 of the ratio's climb past 2,400 is the reformat rather than the work.
+
+### Work shipped, on proxies a reformat can't move
+![PRs merged, tests added, backlog rows closed per week, and when work landed](charts/velocity.png) Tokens are an input and lines carry the reflow, so neither is a velocity series.
+These four are immune to both: **PRs merged**, **tests added**, **backlog rows closed**, and the spread of the day work landed across.
+
+Read the top three together and the plan upgrade disappears: Max 5x to 20x on 2026-07-05 raised the ceiling and moved nothing (tests/day 20.3 → 19.4, Go lines/day 1,058 → 963).
+What moves is the pair of lines three weeks later, and **that is exactly what this chart cannot resolve**.
+Opus 5 arrives 2026-07-25 and `mac-2` begins 2026-07-26, so the model and the machine are one day apart and no series here can say which did it.
+Drawing both markers is the point; the single Opus-5-on-`mac-1` day is one data point and settles nothing.
+
+The machine's side is measured elsewhere, though: a cold `make check` went from ~21 min on the retired Intel machine to **102 s** on its replacement, and [#1110](https://github.com/actions-gateway/github-actions-gateway/pull/1110) later sized the parallel-dispatch worker cap from RAM and cores rather than a constant.
+A 12× faster gate is not something a model does.
+
+Two shaded regions mark where a series cannot yet mean what its axis says: before the repo adopted PR squash-merges, and before `docs/STATUS.md` existed.
+**Commits are deliberately not drawn.** They look like the obvious velocity series and they are the contaminated one; see the Methodology note below.
+
+**Panel 4 is not hours worked.** Sessions run unattended and keep committing with nobody watching, and merges get cleared in bulk, so it shows when work *landed* rather than when anyone was present.
+
+### Lines vs. words, the same corpus in two units
+![Docs and cost ratios indexed, in lines and in words](charts/lines_vs_words.png) A rewrap moves every line count that spans a paragraph and leaves the words alone, which is what makes this pair readable.
+On the reflow day Markdown went **−17,574 lines and +15,098 words**.
+The line series reads as a catastrophe, the word series as an ordinary productive day.
+
+Both panels are indexed to 100 at the first measured day and share one axis, because on twin axes each series is scaled to its own range, which flattens exactly the divergence the chart exists to show.
+**Top:** the docs corpus in each unit.
+**Bottom:** cumulative tokens ÷ line against tokens ÷ word.
+Only the per-line ratio steps on 2026-08-09.
+
+The underlying climb is real in both units, which is the more interesting finding: cost per word still rose ~5.6× over the project, so the tokens-per-line trend is not an artifact; only the 2026-08-09 jump in it is ([Q824](../docs/STATUS.md#Q824)).
 
 ### Anatomy of token usage (log scale)
 ![Token usage anatomy on a log scale](charts/token_anatomy.png) Daily input / output / cache-creation / cache-read, log Y. Cache reads sit an order of magnitude above everything else, every day.
@@ -166,10 +198,14 @@ Both plan upgrades and the `mac-1`→`mac-2` handover are marked; the curve visi
 ### Parallel sessions
 ![Peak concurrent sessions per day, over the share of the day that was parallel](charts/parallel_sessions.png) How much of the work runs concurrently.
 **Top:** mean concurrency (line) against the day's peak (bars).
-The peak is the dramatic number — up to 16 — but it lasts a single bucket; the **mean of 3.0** is what actually multiplies a day's output.
+The peak is the dramatic number, up to 16, but it lasts a single bucket; the **mean of 3.0** is what actually multiplies a day's output.
 **Bottom:** time on Claude each day, wall-clock against session-hours.
-The gap between the two bands *is* the mean concurrency: **211h at the keyboard produced 641h of session-time** over the window, a 3.0× multiplier.
+The gap between the two bands *is* the mean concurrency: **211h elapsed produced 641h of session-time** over the window, a 3.0× multiplier.
 67% of active time had two or more sessions running, on 4–54 sessions a day.
+
+Neither band is time anyone spent watching.
+Sessions run unattended, so a bucket counts whenever a session did something, and the human may be elsewhere.
+These are hours the system was working, not hours at the keyboard.
 
 **This chart has its own timeline, and starts at 2026-07-26.** Concurrency needs session-level transcripts, and no CSV before this one preserved them, so the mac-1 era cannot be reconstructed — daily token totals can't say how many sessions overlapped.
 Drawing it against the project timeline would show 71 empty days and read as idleness rather than missing data.
@@ -199,6 +235,15 @@ Drives the token-usage-by-model chart, which sums each (day, model) across machi
 Per-day (last commit of each day) cumulative `commits`, `tests` (count of `func Test*`), `go_code` (non-blank minus line-comment Go lines, code + tests), `go_test` (the test-file subset of `go_code`), `md` (non-blank Markdown), `yaml` (non-blank hand-written YAML — generated CRD/controller-gen YAML excluded), and `scripts` (non-blank shell, Python, CSS/JS/HTML, Makefile, Dockerfile).
 All exclude `vendor/`.
 
+Also cumulative: `prs` (commits whose subject ends in `(#N)`, this repo's squash-merge signature) and `queue_closed` (Q anchors that have left `docs/STATUS.md`, counted on a row's *first* removal so a re-filed id can't book the same work twice; a work proxy rather than a completion ledger, since it catches a declined or pruned row too).
+
+`md_words` and `words` are tree snapshots like the line counts above, in the other unit: `md_words` counts the same text as `md`, and `words` the same corpus as lines-authored.
+Both include comment text, so `words` is not the line total converted: it is the corpus with nothing subtracted.
+They exist because a rewrap moves a line count and leaves a word count alone.
+
+`active_hours` is the one column that is neither a running total nor a snapshot: it is the count of distinct clock hours that day with a commit landing in them.
+It says when work landed, **not** hours worked: sessions run unattended, and merges get cleared in bulk.
+
 ### `session_metrics.csv` — merge-preserved
 Per-day, per-`host` session concurrency, in 10-minute buckets: `sessions` (distinct sessions that did work that day), `peak_concurrent` (most sessions active in any one bucket), `active_buckets` (buckets with any session), `parallel_buckets` (buckets with two or more), and `session_buckets` (concurrent sessions summed over every bucket).
 Every column is a count that can only rise as more transcripts become visible, so the upward-only merge is right for all of them.
@@ -211,8 +256,9 @@ Two headline figures are derived rather than stored, because a ratio isn't monot
 | **Session-hours** (summed over concurrent sessions) | `session_buckets` ÷ 6 |
 | **Mean concurrency** | `session_buckets` ÷ `active_buckets` |
 
-`active_buckets` is time actually spent using Claude: a bucket only counts when a session did something in it, so a session left open overnight adds nothing.
-It measures engaged time, not session lifetime.
+`active_buckets` is time Claude was actually working: a bucket only counts when a session did something in it, so a session left open overnight adds nothing.
+It measures engaged time, not session lifetime, and not human presence either.
+Sessions run unattended here, so a bucket fills whether or not anyone is watching it.
 
 There is no `estimated` column — this series is measured or absent.
 Summing across machines works for the bucket counts and `sessions`, but `peak_concurrent` is combined with a **max, not a sum**: two machines' peaks need not fall in the same bucket, so adding them would invent a burst that never happened.
@@ -239,6 +285,10 @@ Totals split into `measured` / `estimated` / `combined` (summed from the persist
 - **"Concurrent" is a bucket width, not a fact.** A session counts as active in a 10-minute bucket if it produced a record there, so two sessions are "concurrent" when both worked within the same 10 minutes — not necessarily in the same second.
   The width is a judgement: wide enough that a session waiting on a build still counts as in flight, narrow enough that work hours apart never collides.
   At 1-minute buckets the daily peaks come out 2–14 rather than 3–16, so the peak barely moves, while every figure with time in it does: the mean falls to 2.2, the parallel share to 53%, and wall-clock hours to 128 from 211, because the bucket *is* the unit of time.
+- **Commits change units mid-project, so they are not a velocity series.** This repo moved from direct commits on `main` to PR squash-merges: the share of commits whose subject ends in `(#N)` runs 0% through 2026-05-31, 26% in the first half of June, and 100% from 2026-06-09 on.
+  An early "commit" is one raw commit and a later one is a whole squashed PR, so charting commits across that boundary deflates the recent half.
+  It is the same defect as the reflow, pointed the other way.
+  `commits` stays in the CSV because the ratio in `active_hours` needs it; the velocity chart draws `prs` instead and shades the region where that series cannot mean what its axis says.
 - **Tokens-per-line is a proxy.** The denominator is all hand-authored output — Go (code + tests), Markdown, hand-written YAML, and scripts & web (shell, Python, Make/Docker, CSS/JS) — but tokens also go into review, debugging, and exploration that never lands as a line, so the ratio tracks overall effort-per-output, not the literal cost of one line.
   Generated YAML (CRDs/controller-gen, ~130k lines), binaries, lockfiles, and license boilerplate are excluded so non-authored content doesn't dilute it.
   Estimated (pre-transcript) days are excluded so it's measured-only.

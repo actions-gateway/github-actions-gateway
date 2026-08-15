@@ -42,6 +42,7 @@ import csv
 import glob
 import json
 import os
+import re
 import subprocess
 from collections import defaultdict
 from datetime import datetime
@@ -281,6 +282,18 @@ def grep_count(rev, pattern, paths):
     return total
 
 
+def grep_word_count(rev, pattern, paths):
+    """Whitespace-separated words across matching lines at a revision.
+
+    The reformat-proof half of the lines series: rewrapping a paragraph moves
+    every line count that spans it and leaves the word count identical, so a
+    ratio built on words survives a reflow that a per-line ratio cannot.
+    ``-h`` drops the ``rev:path:`` prefix so it isn't counted as content.
+    """
+    out = git("grep", "-h", "-E", pattern, rev, "--", *paths)
+    return sum(len(ln.split()) for ln in out.splitlines())
+
+
 def grep_lines_per_file(rev, pattern, paths):
     """``git grep -c`` line counts as a ``{path: count}`` map at a revision."""
     out = git("grep", "-c", "-E", pattern, rev, "--", *paths)
@@ -302,6 +315,50 @@ def grep_files_matching(rev, pattern, paths):
     return {ln.split(":", 1)[1] for ln in out.splitlines() if ":" in ln}
 
 
+PR_SUBJECT = re.compile(r"\(#\d+\)$")  # the squash-merge signature this repo lands with
+
+
+def queue_closures():
+    """``{date: count}`` of Queue rows that left ``docs/STATUS.md`` that day.
+
+    A row's anchor disappearing is work shipped in the common case, and a decline
+    or a prune in the rest — a work proxy, not a completion ledger. Only a Q-id's
+    *first* removal counts, so a row re-filed under a shipped id (the defect Q775
+    describes) can't book the same work twice.
+
+    One ``git log -p`` walk, not a ``git show`` per revision: that file has over a
+    thousand revisions and the per-revision form takes ~40 s.
+    """
+    out = git("log", "--reverse", "--format=%x00%ad", "--date=short",
+              "-p", "--", "docs/STATUS.md")
+    anchor = re.compile(r'id="(Q\d+)"')
+    closed, seen, date = defaultdict(int), set(), None
+    removed, added = set(), set()
+
+    def flush():
+        # An anchor on both sides moved within the file (Queue -> Deferred); only
+        # one that is gone from the revision entirely has closed.
+        for q in removed - added:
+            if q not in seen:
+                seen.add(q)
+                closed[date] += 1
+        removed.clear()
+        added.clear()
+
+    for ln in out.splitlines():
+        if ln.startswith("\x00"):
+            if date:
+                flush()
+            date = ln[1:]
+        elif ln.startswith("-") and not ln.startswith("---"):
+            removed.update(anchor.findall(ln))
+        elif ln.startswith("+") and not ln.startswith("+++"):
+            added.update(anchor.findall(ln))
+    if date:
+        flush()
+    return closed
+
+
 def git_series():
     """Per-day cumulative commits, test count, and authored LOC at each day's last commit.
 
@@ -309,21 +366,43 @@ def git_series():
     non-blank Markdown; ``yaml`` is non-blank *hand-written* YAML — generated YAML
     (CRDs and other controller-gen output) is excluded with the same heuristic the
     HEAD snapshot uses, so it isn't credited as authored output.
+
+    ``prs`` and ``queue_closed`` are cumulative like the rest. ``active_hours`` is
+    not: it is the count of distinct clock hours that day with a commit landing in
+    them, a per-day quantity that means nothing accumulated. It says when work was
+    landing across the whole project, including the era whose transcripts are gone.
+
+    It is not hours worked. Sessions run unattended and keep committing with nobody
+    watching, and merges get cleared in bulk, so the spread of the day this covers
+    is a property of the system rather than of anyone's presence.
     """
     rows = {}
-    log = git("log", "--reverse", "--format=%H|%ad", "--date=short").splitlines()
+    log = git("log", "--reverse", "--format=%H|%ad|%s",
+              "--date=format:%Y-%m-%d %H").splitlines()
     day_commits = defaultdict(int)
+    day_prs = defaultdict(int)
+    day_hours = defaultdict(set)
     last_hash = {}
     for ln in log:
         if "|" not in ln:
             continue
-        h, d = ln.split("|", 1)
+        h, stamp, subj = ln.split("|", 2)
+        d, _, hour = stamp.partition(" ")
         day_commits[d] += 1
+        day_hours[d].add(hour)
+        if PR_SUBJECT.search(subj.strip()):
+            day_prs[d] += 1
         last_hash[d] = h  # --reverse => last write wins => latest commit that day
+
+    closures = queue_closures()
+    cum_prs = 0
+    cum_closed = 0
 
     cum = 0
     for d in sorted(day_commits):
         cum += day_commits[d]
+        cum_prs += day_prs[d]
+        cum_closed += closures.get(d, 0)
         rev = last_hash[d]
         nonblank = grep_count(rev, "[^[:space:]]", GO_PATHS)
         line_comments = grep_count(rev, "^[[:space:]]*//", GO_PATHS)
@@ -343,6 +422,16 @@ def git_series():
             "md": md,
             "yaml": yaml_hand,
             "scripts": grep_count(rev, "[^[:space:]]", SCRIPT_PATHS),  # shell/python/web/build
+            "prs": cum_prs,
+            "queue_closed": cum_closed,
+            "active_hours": len(day_hours[d]),  # per-day, not cumulative
+            # The reformat-proof twins of `md` and of lines-authored. Both count
+            # every non-blank word including comments, so `words` is not `go_code
+            # + md + yaml + scripts` in another unit — it is the same corpus with
+            # nothing subtracted.
+            "md_words": grep_word_count(rev, "[^[:space:]]", MD_PATHS),
+            "words": sum(grep_word_count(rev, "[^[:space:]]", p)
+                         for p in (GO_PATHS, MD_PATHS, YAML_PATHS, SCRIPT_PATHS)),
         }
     return rows
 
@@ -537,7 +626,11 @@ def sessions_summary(rows):
     ``hours_using_claude`` is wall-clock: buckets where at least one session did
     something, so a session left open overnight adds nothing. ``session_hours``
     sums concurrent sessions over the same buckets, and their ratio is the mean
-    concurrency — the multiplier between time spent and work in flight.
+    concurrency — the multiplier between elapsed time and work in flight.
+
+    Neither figure is human presence. A session running unattended produces
+    records the whole time it works, so these count hours the *system* was
+    active, not hours anyone was watching it.
     """
     per_hour = 60 / SESSION_BUCKET_MIN
     active = sum(r["active_buckets"] for r in rows)
@@ -629,7 +722,8 @@ def main():
     sess_csv = os.path.join(DATA, "session_metrics.csv")
 
     git_rows = git_series()
-    write_csv(git_csv, ["date", "commits", "tests", "go_code", "go_test", "md", "yaml", "scripts"],
+    write_csv(git_csv, ["date", "commits", "tests", "go_code", "go_test", "md", "yaml", "scripts",
+                        "prs", "queue_closed", "active_hours", "md_words", "words"],
               [git_rows[d] for d in sorted(git_rows)])
     deltas = commit_deltas(git_rows)
 

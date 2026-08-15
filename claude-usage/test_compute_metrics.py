@@ -226,5 +226,94 @@ class SessionConcurrency(unittest.TestCase):
         self.assertEqual(cm.session_series("mac-x"), {})
 
 
+class PullRequestSubjects(unittest.TestCase):
+    """``prs`` counts squash merges, which are recognised only by a trailing ``(#N)``.
+
+    A subject that merely mentions an issue must not count, or the series silently
+    inflates on exactly the commits that talk about PRs rather than being one.
+    """
+
+    def test_a_trailing_reference_is_a_merge(self):
+        for subj in ("fix(agc): stand down a re-run (Q811) (#1515)",
+                     "docs: reflow (#1)"):
+            self.assertTrue(cm.PR_SUBJECT.search(subj), subj)
+
+    def test_a_reference_anywhere_else_is_not(self):
+        for subj in ("fix: revert the change from (#1515) that broke CI",
+                     "docs: explain why #1515 was reverted",
+                     "chore(metrics): refresh the snapshot (mac-2)",
+                     "feat: add a (#) placeholder"):
+            self.assertIsNone(cm.PR_SUBJECT.search(subj), subj)
+
+
+class QueueClosures(unittest.TestCase):
+    """``queue_closed`` counts a row leaving ``docs/STATUS.md``, once per id.
+
+    The walk reads one ``git log -p`` stream, so these drive it through the module's
+    own parser with a captured stream rather than asserting on a live repo, whose
+    history would make the expected counts move under the test.
+    """
+
+    def setUp(self):
+        self._git = cm.git
+
+    def tearDown(self):
+        cm.git = self._git
+
+    def feed(self, stream):
+        cm.git = lambda *a, **k: stream
+        return cm.queue_closures()
+
+    def test_a_removed_anchor_closes_on_its_date(self):
+        closed = self.feed(
+            '\x002026-06-01\n+| <a id="Q1"></a>Q1 | x |\n'
+            '\x002026-06-02\n-| <a id="Q1"></a>Q1 | x |\n')
+        self.assertEqual(dict(closed), {"2026-06-02": 1})
+
+    def test_a_row_moved_within_the_file_has_not_closed(self):
+        """Queue -> Deferred rewrites the row in place: gone from one table, present
+        in the other. The anchor is on both sides of the diff, so nothing closed."""
+        closed = self.feed(
+            '\x002026-06-02\n-| <a id="Q2"></a>Q2 | queue |\n+| <a id="Q2"></a>Q2 | deferred |\n')
+        self.assertEqual(dict(closed), {})
+
+    def test_a_refiled_id_cannot_close_twice(self):
+        """Q775's defect: a shipped id re-filed as a new row. Only the first removal
+        counts, so landing both can't book the same work again."""
+        closed = self.feed(
+            '\x002026-06-02\n-| <a id="Q3"></a>Q3 | x |\n'
+            '\x002026-06-05\n+| <a id="Q3"></a>Q3 | refiled |\n'
+            '\x002026-06-09\n-| <a id="Q3"></a>Q3 | refiled |\n')
+        self.assertEqual(dict(closed), {"2026-06-02": 1})
+
+    def test_diff_file_headers_are_not_rows(self):
+        closed = self.feed(
+            '\x002026-06-02\n--- a/docs/STATUS.md\n+++ b/docs/STATUS.md\n'
+            '-| <a id="Q4"></a>Q4 | x |\n')
+        self.assertEqual(dict(closed), {"2026-06-02": 1})
+
+
+class WordCounts(unittest.TestCase):
+    """``grep_word_count`` is the reformat-proof half: same text, unit that a rewrap
+    cannot move."""
+
+    def setUp(self):
+        self._git = cm.git
+
+    def tearDown(self):
+        cm.git = self._git
+
+    def test_a_rewrap_leaves_the_word_count_alone(self):
+        wrapped = "the quick brown\nfox jumps over\nthe lazy dog\n"
+        unwrapped = "the quick brown fox jumps over the lazy dog\n"
+        cm.git = lambda *a, **k: wrapped
+        before = cm.grep_word_count("rev", "x", ["*.md"])
+        cm.git = lambda *a, **k: unwrapped
+        after = cm.grep_word_count("rev", "x", ["*.md"])
+        self.assertEqual(before, after)
+        self.assertEqual(before, 9)
+        self.assertNotEqual(len(wrapped.splitlines()), len(unwrapped.splitlines()))
+
+
 if __name__ == "__main__":
     unittest.main()
