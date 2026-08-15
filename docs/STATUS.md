@@ -166,6 +166,7 @@ Specific actionable items in priority order. Pick from the top; skip 🚫 items 
 | <a id="Q880"></a>Q880 | [Validate release candidates in CI instead of a local dogfood gate](../scripts/dogfood/validate-release.sh) | `ci` `dogfood` `retro` | 🔲 | L | Auditable, keyed to the tag, and supersedes Q879. First milestone is Workload Identity Federation: CI has no GCP access, and a key contradicts the no-PEM feature. |
 | <a id="Q881"></a>Q881 | [`plan-hygiene` skips a PR that only adds a plan doc](../.github/workflows/plan-hygiene.yml) | `ci` `debt` `retro` | 🔲 | S | Its `plan` filter matches `docs/plan/README.md`, `docs/STATUS.md` and `**.go`, not `docs/plan/*.md`, so a PR adding only a plan doc skips the job that catches its missing row. |
 | <a id="Q882"></a>Q882 | [piped-gate tells a release branch to rebase onto main](../.claude/piped-gate-guard.json) | `debt` `retro` | 🔲 | S | It read `release-1.5` as a stale PR branch. Rebasing is the one thing that must never happen there: it publishes everything merged since the tag. Recurs on every backport. |
+| <a id="Q874"></a>Q874 | [Overview chart event lines strike the cost-per-line value labels](../claude-usage/make_charts.py) | `docs` `debt` | 🔲 | S | Measured 2026-08-15 on `tokens_overview`: the Max 5x→20x line cuts through `1,901` and the mac-2 line through `2,097`. Same class as the by-model event labels, which do step aside; the weekly guide labels get no collision pass. |
 
 ---
 
