@@ -2845,23 +2845,7 @@
 <td><code>flake</code> <code>ci</code></td>
 <td>🔲</td>
 <td>S</td>
-<td>Measured 2026-08-14 on #1515: <code>trivy (proxy)</code> 403'd HEAD-ing the pinned distroless digest while agc/gmc/fakegithub pulled that same digest green in the same run; green on rerun, no code change. <a href="#Q854">Q854</a> is the class.</td>
-</tr>
-<tr>
-<td><a id="Q854"></a>Q854</td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/dogfood/validate-release.sh">Retry a transient <code>gh</code> failure in the release gate instead of aborting the run</a></td>
-<td><code>1.5-gate</code> <code>dogfood</code> <code>bug</code></td>
-<td>🔲</td>
-<td>S</td>
-<td>Measured 2026-08-14: one <code>HTTP 401: Bad credentials</code> at 645s of the settle wait killed a <code>v1.5.0-rc.1</code> run after 43 good polls; 20+ calls succeeded right after. The gate has no retry. <code>download-verified.sh</code>'s jittered backoff is the pattern.</td>
-</tr>
-<tr>
-<td><a id="Q855"></a>Q855</td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/dogfood/e2e-run-watch.sh">Fall back to run job status when GitHub will not serve the e2e job log</a></td>
-<td><code>1.5-gate</code> <code>dogfood</code> <code>tests</code></td>
-<td>🔲</td>
-<td>S</td>
-<td>Measured 2026-08-14: <code>heartbeat</code> stayed null for the whole 22-minute e2e leg of a passing run, so the only in-flight signal was absent and the sentinel reported a stall it was right to report. The run record answers when the log will not.</td>
+<td>Measured 2026-08-14 on #1515: <code>trivy (proxy)</code> 403'd HEAD-ing the pinned distroless digest while agc/gmc/fakegithub pulled it green in the same run; green on rerun, no code change. Same class as <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/dogfood/validate-release.sh"><code>gh_retry</code></a>.</td>
 </tr>
 <tr>
 <td><a id="Q859"></a>Q859</td>
@@ -3190,14 +3174,6 @@
 <td>🔲</td>
 <td>M</td>
 <td><code>validate-release.sh</code> has zero references to <code>capacityGate</code>, <code>nodeAutoscaling</code> or quota; its legs are deploy, e2e, sizing, CRD smoke. It builds an autoscaling cluster with headroom, so the constrained path is never driven on real infra.</td>
-</tr>
-<tr>
-<td><a id="Q773"></a>Q773</td>
-<td><a href="../operations/release/#validate-the-release-candidate-on-dogfood">release.md's <code>Throughput</code> expectation is stale: the gate now reports it <code>Active</code></a></td>
-<td><code>1.5-gate</code> <code>docs</code> <code>dogfood</code></td>
-<td>🔲</td>
-<td>S</td>
-<td>Measured on v1.4.0-rc.1 2026-08-09 and again on v1.5.0-rc.1 2026-08-14 (<code>sampleCounts=[188]</code>), where the runbook calls <code>NOT VALIDATED THIS RUN</code> normal for a ~7-job matrix. Twice now a passing run has read as a surprise.</td>
 </tr>
 <tr>
 <td><a id="Q707"></a>Q707</td>
