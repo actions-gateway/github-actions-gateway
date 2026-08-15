@@ -600,6 +600,13 @@ It does not shorten the notes: `v1.3.0` shipped 2100 words and 25 links, because
 Prose is what gets cut; lists are what a reader actually searches.
 Fold the lists (below) and the length costs nothing.
 
+**A caveat that says a number moves is re-derived from the code, never paraphrased from the change that moved it.** `v1.5.0`'s job-duration caveat said the classic tier's old span *excluded* the pre-creation window, and that cost attribution had been reading *low*.
+Both are inverted.
+The span ran from job acquisition to the pod going terminal, so it charged the staging, quota-retry and `spec.scaleUp` throttle window, and attribution read high.
+What let it through is that the commit and [the plan doc](../plan/release-1.5.md) were both correct: the note was written from a sibling artifact instead of from `provisioner.go`, and a paraphrase can reverse a direction while keeping every noun in place.
+It then survived a full pre-flight and `rc.1`, because [`operator-caveats-since.sh`](https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/release/operator-caveats-since.sh) reports what changed and never judges a claim, by design.
+So for any caveat asserting that a value rises, falls, widens or narrows, open the diff that moved it and read both states before writing which way (#1529).
+
 ##### The section skeleton
 
 `v1.3.0` arrived at this order after several passes.
