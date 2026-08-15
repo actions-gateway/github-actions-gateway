@@ -2976,6 +2976,16 @@ A cell with no stamp asserts nothing; see <a href="#how-to-read-the-arc-column">
 <td><span class="twemoji gag-yes"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2m-2 15-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8z"/></svg></span> yes</td>
 </tr>
 <tr>
+<td>Bind a runner set to a named GitHub runner group</td>
+<td><span class="twemoji gag-yes"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2m-2 15-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8z"/></svg></span> yes, <code>runnerGroup</code> per scale set<br><span class="gag-cont">a name that resolves to no group fails the reconcile rather than falling back to the installation default</span><br><span class="gag-asof">0.14.2 · 2026-08-15</span></td>
+<td><span class="twemoji gag-yes"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2m-2 15-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8z"/></svg></span> <span class="gag-v2-badge">v2</span> <a href="../operations/tenant-onboarding/#bind-a-runner-set-to-a-github-runner-group"><code>runnerGroup</code>, or one <code>defaultRunnerGroup</code> per gateway</a><br><span class="gag-cont">the same failure, moved to admission, so the set is refused before it exists</span></td>
+</tr>
+<tr>
+<td>Multi-label runner sets (a <code>runs-on</code> array matches)</td>
+<td><span class="twemoji gag-yes"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2m-2 15-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8z"/></svg></span> yes, since 0.14.0<br><span class="gag-cont"><code>runnerScaleSetLabels</code>, deduplicated against the set name</span><br><span class="gag-asof">0.14.2 · 2026-08-15</span></td>
+<td><span class="twemoji gag-yes"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2m-2 15-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8z"/></svg></span> <span class="gag-v2-badge">v2</span> <a href="../operations/troubleshooting/#jobs-targeting-one-of-a-runner-sets-labels-never-start-runnerlabelsincomplete">every <code>runnerLabel</code> is registered</a></td>
+</tr>
+<tr>
 <td>Workers scale to zero between jobs</td>
 <td><span class="twemoji gag-yes"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2m-2 15-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8z"/></svg></span> yes, by default<br><span class="gag-asof">0.14.2 · 2026-08-12</span></td>
 <td><span class="twemoji gag-yes"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2m-2 15-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8z"/></svg></span> yes, by default</td>
@@ -2996,6 +3006,11 @@ A cell with no stamp asserts nothing; see <a href="#how-to-read-the-arc-column">
 <td><span class="twemoji gag-yes"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2m-2 15-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8z"/></svg></span> <strong>opt-in <a href="../operations/troubleshooting/#runnerset-reports-workercapacitydeclined-the-gateway-stopped-claiming-jobs"><code>capacityGate</code></a></strong><br><span class="gag-cont">off by default. Bounds the <em>rate</em> of wasted claims to roughly one per <code>pendingPodDeadline</code>; it does not eliminate the first</span></td>
 </tr>
 <tr>
+<td>Bound a stranded worker with no live controller</td>
+<td><span class="twemoji gag-no"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2c5.53 0 10 4.47 10 10s-4.47 10-10 10S2 17.53 2 12 6.47 2 12 2m3.59 5L12 10.59 8.41 7 7 8.41 10.59 12 7 15.59 8.41 17 12 13.41 15.59 17 17 15.59 13.41 12 17 8.41z"/></svg></span> <strong>pass-through only</strong><br><span class="gag-cont"><code>activeDeadlineSeconds</code> is copied from the pod template if an operator wrote one; nothing derives, reconciles or defaults a bound</span><br><span class="gag-asof">0.14.2 · 2026-08-15</span></td>
+<td><span class="twemoji gag-yes"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2m-2 15-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8z"/></svg></span> <strong><a href="../design/02-architecture/"><code>maxWorkerLifetime</code> stamped on every worker</a></strong><br><span class="gag-cont">as its <code>activeDeadlineSeconds</code>, so the <em>kubelet</em> enforces it and workers stay bounded with the controller down</span></td>
+</tr>
+<tr>
 <td>Guaranteed floor for critical runner types</td>
 <td><span class="twemoji gag-no"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2c5.53 0 10 4.47 10 10s-4.47 10-10 10S2 17.53 2 12 6.47 2 12 2m3.59 5L12 10.59 8.41 7 7 8.41 10.59 12 7 15.59 8.41 17 12 13.41 15.59 17 17 15.59 13.41 12 17 8.41z"/></svg></span> <strong>no reserved floor</strong><br><span class="gag-cont">ordering works, since <code>priorityClassName</code> reaches the runner pods; <code>minRunners</code> and <code>maxRunners</code> are per scale set, so neither holds a slice another set cannot spend (<a href="../design/appendix-d-alternatives-considered/#d3-actions-runner-controller-arc">the two gaps</a>)</span><br><span class="gag-asof">0.14.2 · 2026-08-12</span></td>
 <td><span class="twemoji gag-yes"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2m-2 15-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8z"/></svg></span> <a href="../design/02-architecture/">priority tiers per runner set</a></td>
@@ -3004,6 +3019,21 @@ A cell with no stamp asserts nothing; see <a href="#how-to-read-the-arc-column">
 <td>Throttle the <em>rate</em> new workers start (anti-stampede)</td>
 <td><span class="twemoji gag-no"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2c5.53 0 10 4.47 10 10s-4.47 10-10 10S2 17.53 2 12 6.47 2 12 2m3.59 5L12 10.59 8.41 7 7 8.41 10.59 12 7 15.59 8.41 17 12 13.41 15.59 17 17 15.59 13.41 12 17 8.41z"/></svg></span> <strong>no per-set start-rate control</strong><br><span class="gag-cont">its throttles are controller-wide and meter API calls, not worker onset</span><br><span class="gag-asof">0.14.2 · 2026-08-12</span></td>
 <td><span class="twemoji gag-yes"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2m-2 15-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8z"/></svg></span> <strong>opt-in <a href="../operations/tenant-onboarding/#step-2-create-the-actionsgateway-resource">per-set creation-rate limit</a></strong><br><span class="gag-cont">for shared-egress onset (NAT, firewall, VPN)</span></td>
+</tr>
+<tr>
+<td>Pod Security Admission on tenant namespaces</td>
+<td><span class="twemoji gag-no"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2c5.53 0 10 4.47 10 10s-4.47 10-10 10S2 17.53 2 12 6.47 2 12 2m3.59 5L12 10.59 8.41 7 7 8.41 10.59 12 7 15.59 8.41 17 12 13.41 15.59 17 17 15.59 13.41 12 17 8.41z"/></svg></span> <strong>neither scale-set chart sets one</strong><br><span class="gag-cont">no <code>pod-security.kubernetes.io/*</code> label is templated, so a namespace keeps whatever policy the cluster already applied and the chart asserts nothing about it</span><br><span class="gag-asof">0.14.2 · 2026-08-15</span></td>
+<td><span class="twemoji gag-yes"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2m-2 15-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8z"/></svg></span> <strong><a href="../design/05-security/"><code>baseline</code> per tenant namespace</a></strong><br><span class="gag-cont">reconciled rather than opt-in, in-tree PodSecurity, so no Kyverno or Gatekeeper is required</span></td>
+</tr>
+<tr>
+<td>Default-deny worker network isolation</td>
+<td><span class="twemoji gag-no"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2c5.53 0 10 4.47 10 10s-4.47 10-10 10S2 17.53 2 12 6.47 2 12 2m3.59 5L12 10.59 8.41 7 7 8.41 10.59 12 7 15.59 8.41 17 12 13.41 15.59 17 17 15.59 13.41 12 17 8.41z"/></svg></span> <strong>ships no <code>NetworkPolicy</code> at all</strong><br><span class="gag-cont">neither scale-set chart templates one, so worker pods reach whatever the cluster default allows, cloud metadata included; the isolation is a separate project you build and keep in sync</span><br><span class="gag-asof">0.14.2 · 2026-08-15</span></td>
+<td><span class="twemoji gag-yes"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2m-2 15-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8z"/></svg></span> <strong><a href="../design/05-security/">default-deny, reconciled per tenant</a></strong><br><span class="gag-cont">DNS and the tenant's own proxy only, re-derived as tenants come and go</span></td>
+</tr>
+<tr>
+<td>Two tenants claiming one scale-set name</td>
+<td><span class="twemoji gag-no"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2c5.53 0 10 4.47 10 10s-4.47 10-10 10S2 17.53 2 12 6.47 2 12 2m3.59 5L12 10.59 8.41 7 7 8.41 10.59 12 7 15.59 8.41 17 12 13.41 15.59 17 17 15.59 13.41 12 17 8.41z"/></svg></span> <strong>binds to the existing set instead of failing</strong><br><span class="gag-cont">a set whose name already exists in the runner group is reused, with no check on who owns it, so both namespaces' listeners acquire from one queue</span><br><span class="gag-asof">0.14.2 · 2026-08-15</span></td>
+<td><span class="twemoji gag-yes"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2m-2 15-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8z"/></svg></span> <strong><a href="../operations/troubleshooting/#actionsgateway-reports-scalesetnamecollision">admission refuses the pair</a></strong><br><span class="gag-cont">GitHub-wide; a collision carried in from an older release is reported on the gateway instead</span></td>
 </tr>
 <tr>
 <td>Per-tenant dedicated egress IPs</td>
@@ -3021,6 +3051,11 @@ A cell with no stamp asserts nothing; see <a href="#how-to-read-the-arc-column">
 <td><span class="twemoji gag-yes"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2m-2 15-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8z"/></svg></span> 1 shared pod, ~12 KiB per listener session</td>
 </tr>
 <tr>
+<td>Control-plane availability out of the box</td>
+<td><span class="twemoji gag-no"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2c5.53 0 10 4.47 10 10s-4.47 10-10 10S2 17.53 2 12 6.47 2 12 2m3.59 5L12 10.59 8.41 7 7 8.41 10.59 12 7 15.59 8.41 17 12 13.41 15.59 17 17 15.59 13.41 12 17 8.41z"/></svg></span> <strong>one replica, no <code>PodDisruptionBudget</code></strong><br><span class="gag-cont"><code>replicaCount: 1</code>, with leader election documented as enabled only above one; neither scale-set chart ships a PDB</span><br><span class="gag-asof">0.14.2 · 2026-08-15</span></td>
+<td><span class="twemoji gag-yes"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2m-2 15-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8z"/></svg></span> <strong><a href="../operations/install/#verify-a-healthy-install">two replicas, leader election, PDB, anti-co-location</a></strong><br><span class="gag-cont">by default, and the lease is released on shutdown, so failover takes seconds rather than a lease timeout</span></td>
+</tr>
+<tr>
 <td>Per-tenant utilization metrics</td>
 <td><span class="twemoji gag-no"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2c5.53 0 10 4.47 10 10s-4.47 10-10 10S2 17.53 2 12 6.47 2 12 2m3.59 5L12 10.59 8.41 7 7 8.41 10.59 12 7 15.59 8.41 17 12 13.41 15.59 17 17 15.59 13.41 12 17 8.41z"/></svg></span> <strong>opt-in, per scale set</strong><br><span class="gag-cont">ships commented out; carries a <code>namespace</code> label but nothing aggregates across sets, and no quota-headroom series</span><br><span class="gag-asof">0.14.2 · 2026-08-12</span></td>
 <td><span class="twemoji gag-yes"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2m-2 15-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8z"/></svg></span> <strong><a href="../operations/observability/">per tenant and per runner set</a></strong><br><span class="gag-cont">plus a <a href="../operations/observability-dashboards/#tenant-dashboard">dashboard and 20 alert rules as code</a></span></td>
@@ -3029,6 +3064,11 @@ A cell with no stamp asserts nothing; see <a href="#how-to-read-the-arc-column">
 <td>Right-size runner resources from measured usage</td>
 <td><span class="twemoji gag-no"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2c5.53 0 10 4.47 10 10s-4.47 10-10 10S2 17.53 2 12 6.47 2 12 2m3.59 5L12 10.59 8.41 7 7 8.41 10.59 12 7 15.59 8.41 17 12 13.41 15.59 17 17 15.59 13.41 12 17 8.41z"/></svg></span> no feedback loop, so runner <code>resources</code> stay a guess<br><span class="gag-cont"><code>AutoscalingRunnerSet</code> status carries runner counts and a phase, and nothing else</span><br><span class="gag-asof">0.14.2 · 2026-08-12</span></td>
 <td><span class="twemoji gag-yes"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2m-2 15-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8z"/></svg></span> <span class="gag-v2-badge">v2</span> <a href="../operations/worker-rightsizing/">measured recommendations in <code>RunnerSet</code> status</a><br><span class="gag-cont">+ opt-in profiles that auto-apply them at pod build (<code>Binpack</code>/<code>Throughput</code>/<code>NodeShare</code>), a <code>SizingDrift</code> condition, and per-job peak metrics</span></td>
+</tr>
+<tr>
+<td>Warn before the runner agent falls below GitHub's minimum</td>
+<td><span class="twemoji gag-no"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2c5.53 0 10 4.47 10 10s-4.47 10-10 10S2 17.53 2 12 6.47 2 12 2m3.59 5L12 10.59 8.41 7 7 8.41 10.59 12 7 15.59 8.41 17 12 13.41 15.59 17 17 15.59 13.41 12 17 8.41z"/></svg></span> <strong>no version check exists</strong><br><span class="gag-cont">scale sets are created with <code>DisableUpdate: true</code>, so a pinned image stays pinned; the <code>Outdated</code> phase tracks spec drift, not agent version</span><br><span class="gag-asof">0.14.2 · 2026-08-15</span></td>
+<td><span class="twemoji gag-yes"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2m-2 15-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8z"/></svg></span> <strong><a href="../operations/troubleshooting/#worker-image-runner-version">reported before GitHub enforces it</a></strong><br><span class="gag-cont">and an image reference naming no version says so rather than passing silently</span></td>
 </tr>
 <tr>
 <td>Cross-tenant fleet health view (platform admin)</td>
@@ -3048,7 +3088,8 @@ A cell with no stamp asserts nothing; see <a href="#how-to-read-the-arc-column">
 </tbody>
 </table>
 <p>Every GAG capability above is available today.
-Rows marked <span class="gag-v2-badge">v2</span> need the <code>actions-gateway.com/v2beta1</code> API, which is where new tenants start.</p>
+Rows marked <span class="gag-v2-badge">v2</span> need the <code>actions-gateway.com/v2beta1</code> API, which is where new tenants start.
+Which release a capability arrived in is on <a href="../features/">Features</a>; the version selector at the top of the page switches between what each release shipped.</p>
 <h3 id="how-to-read-the-arc-column">How to read the ARC column<a class="headerlink" href="#how-to-read-the-arc-column" title="Permanent link">&para;</a></h3>
 <p>Every ARC cell renders one of two things, and the difference is what it rests on:</p>
 <ul>
@@ -3063,10 +3104,13 @@ This page used to carry one blanket measurement note for the whole column, which
 Under the per-cell stamp an aging claim degrades to unverified instead of to wrong.</p>
 <div class="admonition note">
 <p class="admonition-title">What the current stamps were read against</p>
-<p>Every cell above was read on <strong>2026-08-12</strong> against ARC
-<code>gha-runner-scale-set</code> <strong>0.14.2</strong> (released 2026-05-22), at commit
+<p>Every cell above was read against ARC <code>gha-runner-scale-set</code> <strong>0.14.2</strong>
+(released 2026-05-22), at commit
 <a href="https://github.com/actions/actions-runner-controller/tree/9bb16ae49d0ce585d8e682aa7e2668a6e832d5d8"><code>9bb16ae</code></a>:
-controller source and chart values, not the documentation. The tag is what
+controller source and chart values, not the documentation. The stamps carry
+two dates because there were two passes: the original column on
+<strong>2026-08-12</strong>, and the eight rows added on <strong>2026-08-15</strong>, when 0.14.2 was
+still the newest published chart. The tag is what
 the stamp names; the commit is what makes it re-checkable, since a link to a
 branch drifts out from under the claim it was cited for. Per-cell evidence,
 file by file, is in the <a href="../plan/competitive-analysis-2026-08/#per-cell-evidence-for-the-arc-column-2026-08-12">competitive analysis</a>.</p>

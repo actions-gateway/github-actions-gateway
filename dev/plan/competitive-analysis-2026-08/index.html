@@ -2869,7 +2869,9 @@ The rule this produced is <a href="../../development/maintaining-backlog/#a-comp
 Every negative assertion here carries a positive control for that reason.</p>
 <h2 id="per-cell-evidence-for-the-arc-column-2026-08-12">Per-cell evidence for the ARC column, 2026-08-12<a class="headerlink" href="#per-cell-evidence-for-the-arc-column-2026-08-12" title="Permanent link">&para;</a></h2>
 <p>What each competitor-side cell of the <a href="../../why-gag/#gag-vs-arc-scale-set-mode">comparison table</a> was read against, so a re-check starts from a file rather than from the claim.
-Every row was read on <strong>2026-08-12</strong> at ARC <code>gha-runner-scale-set</code> <strong>0.14.2</strong>, commit <a href="https://github.com/actions/actions-runner-controller/tree/9bb16ae49d0ce585d8e682aa7e2668a6e832d5d8"><code>9bb16ae</code></a>.
+Rows were read at ARC <code>gha-runner-scale-set</code> <strong>0.14.2</strong>, commit <a href="https://github.com/actions/actions-runner-controller/tree/9bb16ae49d0ce585d8e682aa7e2668a6e832d5d8"><code>9bb16ae</code></a>, in two passes: the original column on <strong>2026-08-12</strong>, and the eight rows Q875 added on <strong>2026-08-15</strong>, marked in the table below.
+The second pass re-ran two of the first pass's findings as a positive control before measuring anything new — <code>rulesForListenerRole</code>'s two <code>patch</code>-only rules and the <code>30 * time.Second</code> / <code>10 * time.Minute</code> quota cycle both reproduced exactly, which is what makes the rest of that pass's negatives worth reading.
+0.14.2 was still the newest published chart on 2026-08-15, so both passes name the same version because nothing had shipped between them, not because the second pass reused the first's reading.
 Blob links are pinned to that commit rather than to <code>master</code>, so the quoted lines stay at the cited coordinates (the <a href="https://github.com/actions-gateway/github-actions-gateway/pull/1422">#1422</a> precedent).</p>
 <p>The 2026-08-06 research above is the reasoning; this is the file-and-line layer under it, which is what <a href="#why-the-marketing-drifted-and-the-fix">Q60's false closure</a> turned out not to have.</p>
 <table>
@@ -2932,11 +2934,45 @@ Blob links are pinned to that commit rather than to <code>master</code>, so the 
 <td>Cross-tenant fleet health</td>
 <td>One sample dashboard, <code>docs/gha-runner-scale-set-controller/samples/grafana-dashboard/</code>, and zero alert-rule files in the tree</td>
 </tr>
+<tr>
+<td>Runner group binding <em>(2026-08-15)</em></td>
+<td><code>runnerGroup</code> ships commented out in <a href="https://github.com/actions/actions-runner-controller/blob/9bb16ae49d0ce585d8e682aa7e2668a6e832d5d8/charts/gha-runner-scale-set/values.yaml"><code>charts/gha-runner-scale-set/values.yaml</code></a> and is templated into <code>AutoscalingRunnerSet.spec.runnerGroup</code>. In <a href="https://github.com/actions/actions-runner-controller/blob/9bb16ae49d0ce585d8e682aa7e2668a6e832d5d8/controllers/actions.github.com/autoscalingrunnerset_controller.go"><code>autoscalingrunnerset_controller.go</code></a>, <code>GetRunnerGroupByName</code> failing <strong>returns the error</strong> rather than falling through to the <code>runnerGroupID := 1</code> default. This is parity, and the first pass had not looked</td>
+</tr>
+<tr>
+<td>Multi-label sets <em>(2026-08-15)</em></td>
+<td>Same file: <code>RunnerScaleSetLabels</code> are added as <code>System</code> labels alongside the set name, deduplicated against it. Parity, and the row 0.14.0 made false before anyone noticed</td>
+</tr>
+<tr>
+<td>Worker lifetime bound <em>(2026-08-15)</em></td>
+<td><a href="https://github.com/actions/actions-runner-controller/blob/9bb16ae49d0ce585d8e682aa7e2668a6e832d5d8/controllers/actions.github.com/resourcebuilder.go"><code>resourcebuilder.go</code></a>: <code>pod.Spec.ActiveDeadlineSeconds = tmpl.Spec.ActiveDeadlineSeconds</code> is the only occurrence in <code>apis/</code>, <code>controllers/</code> or <code>charts/</code> — a pass-through of what an operator wrote, never a derived or defaulted bound</td>
+</tr>
+<tr>
+<td>Pod Security Admission <em>(2026-08-15)</em></td>
+<td>No <code>pod-security.kubernetes.io/*</code> label anywhere in <code>charts/gha-runner-scale-set</code> or <code>charts/gha-runner-scale-set-controller</code>. <code>securityContext</code> appears in those values only inside commented-out example blocks</td>
+</tr>
+<tr>
+<td>Worker NetworkPolicy <em>(2026-08-15)</em></td>
+<td>No <code>kind: NetworkPolicy</code> in either scale-set chart. The scale-set chart's ten templates are the <code>AutoscalingRunnerSet</code>, the GitHub secret, the kube-mode role/binding/SA, the manager role/binding, and a no-permission SA. <strong>This is an enumeration of the template set, not a keyword search</strong>, so it is a stronger negative than the auto-re-run one above</td>
+</tr>
+<tr>
+<td>Scale-set name collision <em>(2026-08-15)</em></td>
+<td><code>autoscalingrunnerset_controller.go</code> looks a set up with <code>GetRunnerScaleSet(ctx, runnerGroupID, name)</code> and, when one exists, <strong>reuses it</strong> — the log line reads <code>Created/Reused a runner scale set</code>. No ownership, namespace or creator check gates the reuse, so two <code>AutoscalingRunnerSet</code>s in different namespaces naming one set in one group both bind to it</td>
+</tr>
+<tr>
+<td>Control-plane availability <em>(2026-08-15)</em></td>
+<td><a href="https://github.com/actions/actions-runner-controller/blob/9bb16ae49d0ce585d8e682aa7e2668a6e832d5d8/charts/gha-runner-scale-set-controller/values.yaml"><code>charts/gha-runner-scale-set-controller/values.yaml</code></a>: <code>replicaCount: 1</code>, above a comment that leader election is enabled only when <code>replicaCount&gt;1</code>. The chart's fourteen templates include no <code>PodDisruptionBudget</code></td>
+</tr>
+<tr>
+<td>Runner agent version currency <em>(2026-08-15)</em></td>
+<td>Scale sets are created with <code>RunnerSetting{DisableUpdate: true}</code>, so a pinned image is never self-updated. The <code>Outdated</code> phase in the same file tracks <code>EphemeralRunnerSet</code> spec drift, not the agent version, and no semver comparison against a GitHub-published minimum exists in <code>controllers/</code>, <code>cmd/</code> or <code>github/</code></td>
+</tr>
 </tbody>
 </table>
-<p>Two things this pass did not settle, kept as claims rather than promoted to verdicts elsewhere on the page:</p>
+<p>Three things these passes did not settle, kept as claims rather than promoted to verdicts elsewhere on the page:</p>
 <ul>
 <li>the auto-re-run negative, above;</li>
+<li>the runner-agent-version negative from 2026-08-15, which is a keyword reading of <code>controllers/</code>, <code>cmd/</code> and <code>github/</code> in the same shape, so a check under another name would not have been found.
+  The chart-level half of that row (<code>DisableUpdate: true</code>) is a positive reading and is solid;</li>
 <li>the three "<a href="../../why-gag/#where-arc-is-ahead">where ARC is ahead</a>" bullets, which still carry the 2026-08-06 blanket date and no version.
   They concede rather than assert a gap, so they are not gated, but they age the same way.</li>
 </ul>
