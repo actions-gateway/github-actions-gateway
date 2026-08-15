@@ -637,6 +637,14 @@ docker buildx imagetools inspect ghcr.io/actions-gateway/gmc:vX.Y.Z \
   --format '{{json .Manifest.Digest}}'
 ```
 
+**Reconcile what you transcribed against what published.** The `Container images` section is the only part of a note that cannot be written before the tag, so it is copied in by hand after the release is already sealed, into the document operators take their `--set …image.digest=` pins from:
+
+```bash
+scripts/release/check-release-digests.sh vX.Y.Z
+```
+
+It asserts each digest matches the registry **and** is a multi-arch index, because a digest can be wrong in two ways: provenance binds to the index while SBOM attestations bind per-arch, so a per-arch digest pasted here pins operators to one architecture and still verifies cleanly against its own attestation.
+
 ### 5. Cut the GitHub Release
 
 **`publish.yml` creates the GitHub Release itself** (Q293) — no manual step.
@@ -664,8 +672,11 @@ What follows is the method, written after `v1.3.0`.
 Publish from it:
 
 ```bash
-gh release edit vX.Y.Z --notes-file docs/releases/vX.Y.Z.md
+gh release edit vX.Y.Z --notes-file <(scripts/release/render-release-body.sh docs/releases/vX.Y.Z.md)
 ```
+
+Publish through the renderer, never the file directly: the file is sentence-per-line by gate, and comment-flavour GFM turns each of those newlines into a `<br>`.
+`make release-notes-check` covers the rest of what a machine can settle here (a duplicate `# ` heading, an in-page anchor that renders dead, a `helm` command carrying an image-style chart version) and reports collapsed height for the fold decision.
 
 `v1.3.0`'s notes were drafted under `tmp/` and edited straight on the Release.
 By the time they were right they had been through a wrong count, a dead anchor, 46 forced line breaks, two mismatched PR numbers, and a caveat that never said "GHES" — every one caught by hand, none by review, and none of it reviewable because the text was not in a diff.
@@ -878,9 +889,19 @@ The site-side ids for one page, when you want to read them directly:
 grep -oE 'id="[^"]*"' site/operations/upgrade/index.html | sed 's/id="//;s/"//'
 ```
 
-**Do not hard-wrap.** GitHub renders a release body with comment-flavour GFM, where a single newline becomes `<br>`.
-Keep every paragraph, blockquote, and list continuation on one line.
-`v1.3.0`'s hard-wrapped draft rendered 46 of them.
+**Do not hard-wrap**, but do not unwrap the file either, because `md-reflow-check` keeps every tracked markdown file at sentence-per-line and `docs/releases/` is not exempt.
+GitHub renders a release body with comment-flavour GFM, where a single newline becomes `<br>`, so the two rules pull in opposite directions and the gate is the one that wins.
+`v1.5.0` published with 59 `<br>` for that reason, and the count had grown every release: 20, 22, then 33 in-paragraph breaks at `v1.3.0`, `v1.4.0`, `v1.5.0`.
+
+Render at publish time and both rules hold.
+The source keeps its per-sentence diffs; the body reads as paragraphs:
+
+```bash
+scripts/release/render-release-body.sh docs/releases/vX.Y.Z.md > tmp/body.md
+```
+
+It joins paragraphs, list-item continuations and blockquote bodies, and leaves structure alone: fences, tables, headings, HTML and the bullets themselves come through byte for byte, and a `> [!WARNING]` marker keeps its own line or the alert stops rendering as one.
+On `v1.5.0` it takes 59 `<br>` to 0 with the word sequence unchanged.
 
 Check this against the **renderer**, not the source.
 `gh release view --json body` returns the raw Markdown, which never contains `<br>` however badly it is wrapped, so grepping that is a check that cannot fail.
@@ -1055,6 +1076,29 @@ helm install gag oci://ghcr.io/actions-gateway/charts/actions-gateway --version 
   --set proxy.image.digest=sha256:<proxy> \
   --set wrapper.image.digest=sha256:<wrapper>
 ```
+
+## Checks that stay human, and why
+
+Most of this runbook is judgement, and a gate that guessed at judgement would fail good releases until someone switched it off.
+The rules below **look** mechanical, were measured against the shipped notes, and were rejected on the evidence.
+They are recorded here so the next reader reaches the measurement before rebuilding the check.
+
+- **`<summary>` counts against the list beneath them.** The convention is that an enumerating fold carries a count, so "does the number match the number of bullets" reads like arithmetic.
+  It is not.
+  `v1.5.0`'s `New condition types (2) and reasons (8)` sits above **four** bullets and is correct: two of them add reasons to conditions that already existed, and the eight reasons are spread across all four.
+  Any rule simple enough to state here flags that section, so the gate's first act would be to report correct notes as broken.
+  Check counts when curating a list, which is when the list changes and when you can see what it enumerates.
+
+- **`blob/` links.** The rule is real (link the versioned site so a reader lands on *that* release's instructions), but it has a legitimate exception, and `v1.5.0`'s single `blob/` link is it.
+  Postmortems are not published to the site, so there is no versioned URL to point at and the source tree is the only target.
+  A gate here needs an allowlist, and an allowlist of "documents that exist outside the site" is a second inventory to maintain for one link per release.
+
+- **Whether the notes are truncated on the Releases index.** GitHub publishes no threshold, so any number a gate enforced would be invented, and inventing one blocks a release over a guess.
+  `make release-notes-check` therefore **reports** collapsed height and ranks the unfolded sections by bytes, which is what the fold decision actually needs.
+  The watermark it warns at is the largest body known to render whole: `v1.3.0` at 12,019 bytes collapsed.
+
+What *is* gated is listed in [scripts/README.md](https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/README.md)'s `release/` table.
+The dividing line is whether a wrong answer is decidable from the file alone: a duplicate `# ` heading is, and whether a caveat is a landmine is not.
 
 ## Patch releases and backports
 

@@ -102,12 +102,22 @@ docker buildx imagetools inspect ghcr.io/<owner>/<image>:vX.Y.Z --format '{{.Man
 These are index digests, one ref serving both architectures.
 SBOM attestations bind to **per-arch** digests instead, so swapping them looks like a missing attestation.
 
-Land that in `docs/releases/vX.Y.Z.md`, then publish the body.
+Land that in `docs/releases/vX.Y.Z.md`, then reconcile it against what actually published rather than re-reading what you typed:
+
+```bash
+scripts/release/check-release-digests.sh vX.Y.Z
+```
+
+Then publish the body.
 This works because immutability freezes assets and the tag but leaves title and notes editable:
 
 ```bash
-gh release edit vX.Y.Z --notes-file docs/releases/vX.Y.Z.md
+gh release edit vX.Y.Z --notes-file <(scripts/release/render-release-body.sh docs/releases/vX.Y.Z.md)
 ```
+
+**Publish through the renderer, never the file.** `md-reflow-check` keeps the note at sentence-per-line, and comment-flavour GFM turns each of those newlines into a `<br>`: `v1.5.0` published with 59 of them.
+The renderer joins paragraphs, list continuations and quote bodies and leaves structure alone.
+`make release-notes-check` covers the rest of what a machine can settle here; [release.md § Checks that stay human](../../../docs/operations/release.md#checks-that-stay-human-and-why) records what was measured and deliberately left to you.
 
 **Then republish the version's docs.** Landing the pin bump on `main` fixes `make check` and the `dev` docs and nothing else, so this step is skipped only when step 3's bump made it into the tag's own tree:
 
