@@ -355,6 +355,36 @@ _stable_release_tag() {
 	awk '/^v[0-9]+\.[0-9]+\.[0-9]+$/ && !/^v0\./' | sort -V | tail -1
 }
 
+# resolve_prepared_release [repo_root] — print the release a candidate is being
+# cut for, as `vX.Y.Z`, or nothing when no candidate is outstanding.
+#
+# A release is "prepared" when a prerelease tag exists for a version that has no
+# stable tag yet: `v1.5.0-rc.3` present and `v1.5.0` absent means 1.5.0 is being
+# cut. It is derived from tags alone, so nothing declares or clears it, and it
+# stops answering the moment the stable tag lands.
+#
+# It exists so the docs can pin the release they are about to publish *before*
+# the tag. The site builds each version from its own tag, so pins bumped after
+# the tag never reach the release's published page: three of the four releases
+# cut since 1.0.0 shipped the previous version's install command as their landing
+# page, and v1.3.0 avoided it only because a hand-fix happened to land first.
+#
+# Deliberately NOT folded into resolve_release_tag, whose answer means "the
+# release an adopter is running" and is read by publish.yml, pages.yml and the
+# announce bar. A candidate is not something anybody runs.
+resolve_prepared_release() {
+	local tree="${1:-.}" tags newest_pre stable
+	tags="$(git -C "$tree" tag --list 'v*')"
+	# Highest prerelease of a non-0.x version, by version order.
+	newest_pre="$(printf '%s\n' "$tags" |
+		awk '/^v[0-9]+\.[0-9]+\.[0-9]+-/ && !/^v0\./' | sort -V | tail -1)"
+	[[ -n "$newest_pre" ]] || return 0
+	stable="${newest_pre%%-*}"
+	# Already released: the candidate is spent and the stable tag is the answer.
+	printf '%s\n' "$tags" | grep -qxF "$stable" && return 0
+	printf '%s\n' "$stable"
+}
+
 # release_pin_exempt_versions_regexp — print the pattern matching a release
 # version that appears in the pin-bearing pages on purpose and must not be
 # bumped. Currently only v2.0.0, the announced v1alpha1/v2alpha1 removal

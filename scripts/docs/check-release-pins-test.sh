@@ -177,6 +177,70 @@ else
     fails=$((fails + 1))
 fi
 
+# A release with a candidate tagged and no stable tag yet may be pinned early, so
+# the bump can land before the tag and reach that release's own published page.
+# These cases need real tags, and the gate reads them from the tree it is run in,
+# so each builds a throwaway repo and runs from inside it.
+#
+# Both directions matter here more than usual: accepting the prepared version is
+# the new behaviour, but a gate that accepted anything would pass a stale tree,
+# which is the bug this whole file exists for.
+prepared_repo() {
+    local dir="$WORKDIR/prep-$1"
+    shift
+    mkdir -p "$dir"
+    git -C "$dir" init -q .
+    git -C "$dir" config user.email t@example.com
+    git -C "$dir" config user.name t
+    : >"$dir/seed"
+    git -C "$dir" add seed
+    git -C "$dir" -c commit.gpgsign=false commit -qm seed
+    local t
+    for t in "$@"; do git -C "$dir" tag "$t"; done
+    printf '%s\n' "$dir"
+}
+
+# run_in DIR DOC — same as run, but from inside DIR so the gate reads its tags.
+run_in() {
+    status=0
+    output="$(cd "$1" && GAG_RELEASE_TAG=v1.4.0 "$GATE" "$2" 2>&1)" || status=$?
+}
+
+prep="$(prepared_repo a v1.4.0 v1.5.0-rc.3)"
+# shellcheck disable=SC2016 # literal backticks: the pin shape is markdown, and double quotes would run them
+printf '> Pin `--version 1.5.0` here.\n' >"$prep/doc.md"
+run_in "$prep" "$prep/doc.md"
+if (( status == 0 )); then
+    printf 'ok   %s\n' 'a candidate is tagged -> the prepared version may be pinned early'
+else
+    printf 'FAIL %s: expected exit 0, got %d:\n%s\n' 'prepared version accepted' "$status" "$output" >&2
+    fails=$((fails + 1))
+fi
+
+# The permissiveness is bounded: only the prepared version, not any version.
+# shellcheck disable=SC2016 # literal backticks: the pin shape is markdown, and double quotes would run them
+printf '> Pin `--version 1.3.0` here.\n' >"$prep/stale.md"
+run_in "$prep" "$prep/stale.md"
+if (( status == 1 )) && [[ "$output" == *"1.3.0"* ]]; then
+    printf 'ok   %s\n' 'a candidate is tagged -> a genuinely stale pin still fails'
+else
+    printf 'FAIL %s: expected exit 1 naming 1.3.0, got %d:\n%s\n' 'stale pin still fails' "$status" "$output" >&2
+    fails=$((fails + 1))
+fi
+
+# Once the stable tag lands the candidate is spent, so the early-pin allowance
+# stops: only the released version is acceptable from then on.
+released="$(prepared_repo b v1.4.0 v1.5.0-rc.3 v1.5.0)"
+# shellcheck disable=SC2016 # literal backticks: the pin shape is markdown, and double quotes would run them
+printf '> Pin `--version 1.6.0` here.\n' >"$released/doc.md"
+run_in "$released" "$released/doc.md"
+if (( status == 1 )); then
+    printf 'ok   %s\n' 'the stable tag landed -> no unreleased version is accepted'
+else
+    printf 'FAIL %s: expected exit 1, got %d:\n%s\n' 'allowance ends at the stable tag' "$status" "$output" >&2
+    fails=$((fails + 1))
+fi
+
 if (( fails > 0 )); then
     printf '\n%d check-release-pins assertion(s) failed\n' "$fails" >&2
     exit 1

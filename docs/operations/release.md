@@ -465,6 +465,18 @@ A red matrix, a failed CRD smoke, or a dead `NodeShare` profile is a **stop-ship
 
 ### 2. Tag and push
 
+**Land [step 7](#7-bump-the-pinned-release-in-the-docs)'s pin bump on `main` before you tag a stable release**, and confirm the gate names the version you are about to cut:
+
+```bash
+make release-pins-check
+```
+
+The site builds each version from its own tag, so a bump landing *after* the tag never reaches that release's published page.
+Three of the four releases cut since `1.0.0` shipped the previous version's install command as their landing page; `v1.3.0` escaped only because a hand-fix happened to land first.
+
+Bumping early is possible because a tagged candidate makes it so: `check-release-pins.sh` accepts a pin naming a release that has a candidate and no stable tag yet.
+It accepts the *current* release too, so a green gate is not on its own evidence the bump has landed: read the version it prints.
+
 ```bash
 git switch main && git pull --ff-only
 git tag -a vX.Y.Z -m "Release vX.Y.Z"
