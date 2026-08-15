@@ -38,9 +38,14 @@ If the item is genuinely ambiguous, or the right fix is out of proportion to the
 1. Finish the **code**, then start `make check` as a **background** task (`run_in_background: true`).
    Foreground-guard asks for exactly this.
 2. **While it runs**, do the work its verdict does not decide: doc updates per [`doc-update-matrix.md`](../../../docs/development/doc-update-matrix.md), the `docs/STATUS.md` row change, staging explicit paths, drafting the PR body.
-3. When it reports, run `make check` **again** over the final tree.
-   That green run is the one that counts.
-   If step 2 changed anything the gate compiles or lints (including a `Makefile` or a `scripts/*.sh`), step 1's verdict is void.
+   Run `make docs-gates` on the prose the moment you write it — seconds, and it is every gate a prose change can fail.
+   Waiting instead means `em-dash-check` and `md-reflow-check` fail the ten-minute gate, which is the whole reason that target exists.
+3. **Review the diff, then run `make check` again over the final tree.** In that order: the review is an edit source like any other, so a typo it finds after the gate voids the run that just went green.
+   That second green run is the one that counts.
+   If anything changed after step 1 started — step 2's docs, the review's fixes, a `Makefile` or a `scripts/*.sh` — step 1's verdict is void.
+
+**Once the final gate is running, touch nothing.** Not an edit, and not a Bash call either: a `Bash` tool call runs the piped-gate hook, which rebuilds the shared `.build/pipedgate` binary that `claude-piped-gate-hook-test` deletes mid-run, so the suite reads a real deny payload and fails ([Q825](../../../docs/STATUS.md)).
+Wait for the task notification instead of polling.
 
 **Read the gate's output, not just its exit code.** `doc-links`, `lint-backlog`, `plan-index-check`, `no-plan-refs-check` and `em-dash-check` all run inside `make check`, and the ones your change touches are the ones to read by name.
 Never pipe a gate into a filter: a pipeline reports the last stage's status, so `make check | tail` reports `tail`'s.
