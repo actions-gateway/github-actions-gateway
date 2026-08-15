@@ -909,6 +909,13 @@ def is_human_prompt(rec):
 # length: 42 genuinely authored prompts here run past 2,000 characters, so a size
 # cutoff would misclassify them, while no persona brief is under 2,000 and every
 # one is its session's first prompt.
+#
+# This is a convention, not a contract, and it has already drifted: the corpus
+# holds two wordings, "You are a worker session in a parallel-dispatch run" and
+# "You are a parallel-dispatch worker session (contract: ...)". Both survive only
+# because they share an opening. A third rewording breaks the split silently, and
+# a prompt that legitimately opens "You are right" would be misfiled. Q883 tracks
+# replacing it with an explicit marker the dispatcher emits on purpose.
 MACHINE_PERSONA = "You are "
 
 
