@@ -389,9 +389,10 @@ def git_series():
     them, a per-day quantity that means nothing accumulated. It says when work was
     landing across the whole project, including the era whose transcripts are gone.
 
-    It is not hours worked. Sessions run unattended and keep committing with nobody
-    watching, and merges get cleared in bulk, so the spread of the day this covers
-    is a property of the system rather than of anyone's presence.
+    It is not hours worked. Sessions sometimes run unattended and keep committing
+    with nobody watching, and merges get cleared in bulk, so the spread of the day
+    this covers is a property of the system rather than of anyone's presence, and
+    the attended share of it varies with what kind of work is in flight.
     """
     rows = {}
     log = git("log", "--reverse", "--format=%H|%ad|%s",
@@ -654,9 +655,10 @@ def sessions_summary(rows):
     sums concurrent sessions over the same buckets, and their ratio is the mean
     concurrency — the multiplier between elapsed time and work in flight.
 
-    Neither figure is human presence. A session running unattended produces
-    records the whole time it works, so these count hours the *system* was
-    active, not hours anyone was watching it.
+    Neither figure is human presence. A session left to run unattended produces
+    records the whole time it works, so these count hours the *system* was active
+    rather than hours anyone was watching it, and how much of it was attended
+    varies with the work and with whatever else the day held.
     """
     per_hour = 60 / SESSION_BUCKET_MIN
     active = sum(r["active_buckets"] for r in rows)

@@ -878,9 +878,9 @@ def chart_velocity():
     story on its own. These four do — with the two methodology steps drawn where
     they fall rather than smoothed over.
 
-    Panel 4 is when work *landed*, not hours worked: sessions run unattended and
-    merges get cleared in bulk, so the spread of the day it shows belongs to the
-    system, not to anyone's presence.
+    Panel 4 is when work *landed*, not hours worked: sessions sometimes run
+    unattended and merges get cleared in bulk, so the spread of the day it shows
+    belongs to the system, not to anyone's presence.
     """
     git = {r["date"]: r for r in load("git_metrics.csv")}
     if not git or "prs" not in next(iter(git.values())):
@@ -965,7 +965,7 @@ def chart_velocity():
              color=OI["skyblue"], lw=2.4, ls=(0, (6, 2)), zorder=4, path_effects=HALO)
     a4.set_ylabel("hours with a commit", fontsize=10.5)
     a4b.set_ylabel("commits / hour", fontsize=10.5, color=darken(OI["skyblue"]))
-    a4.set_title("When work landed — not hours worked (sessions run unattended)",
+    a4.set_title("When work landed — not hours worked (sessions sometimes run unattended)",
                  fontsize=12.5, fontweight="bold", loc="left")
     a4.grid(axis="y", alpha=0.22)
     for s in ("top",):

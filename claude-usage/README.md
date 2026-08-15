@@ -184,7 +184,7 @@ Two shaded regions mark where a series cannot yet mean what its axis says: befor
 No trend line is drawn inside them.
 **Commits are deliberately not drawn.** They look like the obvious velocity series and they are the contaminated one; see the Methodology note below.
 
-**Panel 4 is not hours worked.** Sessions run unattended and keep committing with nobody watching, and merges get cleared in bulk, so it shows when work *landed* rather than when anyone was present.
+**Panel 4 is not hours worked.** Sessions sometimes run unattended and keep committing with nobody watching, and merges get cleared in bulk, so it shows when work *landed* rather than when anyone was present.
 Its bars and their trend cover the whole project; the commits-per-hour line starts later, because its numerator is `commits` and that series changes units at the PR-workflow switch.
 
 ### Why the headline is words, not lines
@@ -218,9 +218,14 @@ The peak is the dramatic number, up to 16, but it lasts a single bucket; the **m
 The gap between the two bands *is* the mean concurrency: **213h elapsed produced 647h of session-time** over the window, a 3.0× multiplier.
 67% of active time had two or more sessions running, on 4–54 sessions a day.
 
-Neither band is time anyone spent watching.
-Sessions run unattended, so a bucket counts whenever a session did something, and the human may be elsewhere.
-These are hours the system was working, not hours at the keyboard.
+Neither band is time anyone spent watching, and the attended share of it is not constant.
+Sessions sometimes run unattended, so a bucket counts whenever a session did something and the human may be elsewhere; these are hours the system was working, not hours at the keyboard.
+
+How much attention a day needed varies with the work, which is why no fixed fraction can be read off these bands.
+Coding needs the least and parallelizes best, so it fills the widest bands with the fewest prompts.
+Work on skills, prose, process, and backlog grooming needs more attention per session and runs narrower.
+The mix also runs both ways at once: a parallel dispatcher can be draining the backlog while attention goes to a hand-prompted session beside it.
+And the ceiling on all of it is external, since days given to other projects or to paid work are simply days this machine sees less of.
 
 **This chart has its own timeline, and starts at 2026-07-26.** Concurrency needs session-level transcripts, and no CSV before this one preserved them, so the mac-1 era cannot be reconstructed — daily token totals can't say how many sessions overlapped.
 Drawing it against the project timeline would show 71 empty days and read as idleness rather than missing data.
@@ -258,7 +263,7 @@ Both include comment text, so `words` is not the line total converted: it is the
 They exist because a rewrap moves a line count and leaves a word count alone.
 
 `active_hours` is the one column that is neither a running total nor a snapshot: it is the count of distinct clock hours that day with a commit landing in them.
-It says when work landed, **not** hours worked: sessions run unattended, and merges get cleared in bulk.
+It says when work landed, **not** hours worked: sessions sometimes run unattended, and merges get cleared in bulk.
 
 ### `session_metrics.csv` — merge-preserved
 Per-day, per-`host` session concurrency, in 10-minute buckets: `sessions` (distinct sessions that did work that day), `peak_concurrent` (most sessions active in any one bucket), `active_buckets` (buckets with any session), `parallel_buckets` (buckets with two or more), and `session_buckets` (concurrent sessions summed over every bucket).
@@ -274,7 +279,7 @@ Two headline figures are derived rather than stored, because a ratio isn't monot
 
 `active_buckets` is time Claude was actually working: a bucket only counts when a session did something in it, so a session left open overnight adds nothing.
 It measures engaged time, not session lifetime, and not human presence either.
-Sessions run unattended here, so a bucket fills whether or not anyone is watching it.
+Sessions sometimes run unattended here, so a bucket fills whether or not anyone is watching it, and the attended fraction moves with the kind of work rather than staying fixed.
 
 There is no `estimated` column — this series is measured or absent.
 Summing across machines works for the bucket counts and `sessions`, but `peak_concurrent` is combined with a **max, not a sum**: two machines' peaks need not fall in the same bucket, so adding them would invent a burst that never happened.

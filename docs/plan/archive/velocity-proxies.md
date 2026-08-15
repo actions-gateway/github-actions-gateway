@@ -51,14 +51,14 @@ So the honest reading is that the upgrade relieved a constraint these proxies ar
 **The jump decomposes into spread and density.** Output roughly doubles at the 07-25/26 boundary, and it is not one effect: commits land across 1.4× more hours of the day, and 1.5× more of them land in each of those hours.
 
 **What that last row is not.** It is tempting to read "hours with a commit" as hours worked, and it is not.
-Sessions here run unattended, committing while nobody is watching, and merges are cleared in bulk when the human returns, so a burst of PR-merge commits can compress an afternoon's review into one hour.
+Sessions here sometimes run unattended, committing while nobody is watching, and merges are cleared in bulk when the human returns, so a burst of PR-merge commits can compress an afternoon's review into one hour.
 The series measures **when work was landing**, which is a property of the system, not of anyone's day.
 Spread widening is as consistent with more sessions running unsupervised for longer as it is with longer hours, and this data cannot tell those apart.
 
 That makes the panel worth drawing anyway: unattended spread is the mechanism the machine change is supposed to have moved, and it is the closest thing here to a signal for it.
 It just cannot be labelled as human time, in the chart or the caption.
 
-The same error is already published: the `parallel_sessions` chart titled its wall-clock band "at the keyboard", and `session_metrics.csv`'s hours are transcript activity, which unattended sessions generate on their own.
+The same error is already published: the `parallel_sessions` chart titled its wall-clock band "at the keyboard", and `session_metrics.csv`'s hours are transcript activity, which a session left unattended generates on its own.
 Fixing that wording is in scope.
 
 ## What cannot be attributed, and must be said on the chart
