@@ -23,5 +23,10 @@ exclude:
   # Table-shaped and high-contention, with its own git merge driver
   # (scripts/docs/git-merge-status.sh). Reflow buys nothing and risks the driver.
   - "docs/STATUS.md"
+  # Backlog item pages (Q869). Each body is one Queue Notes cell, and a cell is
+  # one line by construction — reflowing it to sentence-per-line would stop the
+  # item rendering back into the table at all. The contention this gate exists
+  # to reduce is already gone here: one item, one file.
+  - "docs/queue/*.md"
   # Symlink to CLAUDE.md; formatting it walks the same bytes twice.
   - "AGENTS.md"

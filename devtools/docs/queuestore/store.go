@@ -27,13 +27,16 @@ const fence = "---"
 // Marshal renders an item as its file: YAML frontmatter, an H1 carrying the
 // title, then the notes.
 func (it Item) Marshal() ([]byte, error) {
+	// Written in item-relative form: the file is a published page, so its
+	// links have to resolve from where it sits rather than from the table.
+	on := it.toItemForm()
 	head, err := yaml.Marshal(frontmatter{
-		ID:     it.ID,
-		Rank:   it.Rank,
-		Labels: it.Labels,
-		Status: it.Status,
-		Size:   it.Size,
-		Target: it.Target,
+		ID:     on.ID,
+		Rank:   on.Rank,
+		Labels: on.Labels,
+		Status: on.Status,
+		Size:   on.Size,
+		Target: on.Target,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("%s: %w", it.ID, err)
@@ -42,9 +45,9 @@ func (it Item) Marshal() ([]byte, error) {
 	b.WriteString(fence + "\n")
 	b.Write(head)
 	b.WriteString(fence + "\n\n")
-	b.WriteString("# " + it.Title + "\n")
-	if it.Notes != "" {
-		b.WriteString("\n" + it.Notes + "\n")
+	b.WriteString("# " + on.Title + "\n")
+	if on.Notes != "" {
+		b.WriteString("\n" + on.Notes + "\n")
 	}
 	return []byte(b.String()), nil
 }
@@ -74,6 +77,7 @@ func UnmarshalItem(src []byte) (Item, error) {
 		return Item{}, fmt.Errorf("%s: body does not open with an H1 title", fm.ID)
 	}
 
+	// Back to the table-relative form every other part of this program holds.
 	it := Item{
 		ID:     fm.ID,
 		Rank:   fm.Rank,
@@ -83,7 +87,7 @@ func UnmarshalItem(src []byte) (Item, error) {
 		Target: fm.Target,
 		Title:  strings.TrimPrefix(title, "# "),
 		Notes:  notes,
-	}
+	}.toTableForm()
 	return it, it.Validate()
 }
 

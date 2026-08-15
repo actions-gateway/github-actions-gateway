@@ -88,6 +88,30 @@ func compareRows(t *testing.T, table string, got, want []string) {
 	}
 }
 
+// storeDir is the committed per-item store, which lives alongside the table
+// until the cutover deletes the table.
+const storeDir = "../../../docs/queue"
+
+// Until the cutover, both representations are committed and either can be
+// edited, so this is the gate that stops them drifting: the store on disk has
+// to render exactly the table on disk. It fails on a row edited in one place
+// and not the other, on an item file deleted without its row, and on a row
+// filed without its file.
+func TestCommittedStoreMatchesTheTable(t *testing.T) {
+	wantQueue, wantDeferred, _ := liveRows(t)
+
+	items, err := ReadStore(storeDir)
+	if err != nil {
+		t.Fatalf("ReadStore(%s): %v", storeDir, err)
+	}
+	if got, want := len(items), len(wantQueue)+len(wantDeferred); got != want {
+		t.Fatalf("the store holds %d items and the tables hold %d rows; regenerate with `queuestore import docs/STATUS.md docs/queue`", got, want)
+	}
+
+	compareRows(t, "Queue", RenderRows(items, false), wantQueue)
+	compareRows(t, "Deferred", RenderRows(items, true), wantDeferred)
+}
+
 // Rank order has to reproduce the table's line order on import, or the cutover
 // would silently re-prioritize the backlog.
 func TestImportPreservesLineOrder(t *testing.T) {
