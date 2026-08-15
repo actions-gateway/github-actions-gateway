@@ -1569,6 +1569,29 @@ Two further traps sit under that: a variadic declaration's arity counts the trai
 None of the three was caught by the scan reporting a problem.
 Each was caught by comparing its output against values already documented elsewhere, which is [the positive control](#a-throwaway-probe-needs-a-positive-control-before-its-silence-means-anything) applied to an inventory: pick a handful the docs already name, and require the scan to find them before believing what it says is absent.
 
+### A scan that tracks enclosing scope must reset it, or the tail inherits the last match
+
+The section above is about a scan that reads the wrong *argument*.
+This one is about a scan that reads the wrong *context*: an `awk` or `grep` pipeline that remembers which function, section, or block it is inside, and never clears that memory when the block ends.
+
+[Q820](../STATUS.md#Q820)'s instrumentation turned on which `git commit -qam` calls sit inside a function, because `set -o errtrace` is load-bearing only for those.
+The scan was:
+
+```awk
+/^[a-z_]+\(\) \{/ { fn = $1 }
+/commit -qam/     { print NR, (fn ? fn : "TOP-LEVEL") }
+```
+
+Nothing resets `fn` at the closing brace, so every top-level call after the first function definition inherits that function's name.
+It reported all 14 calls across two suites as function-scoped.
+The truth is two per suite, with the remaining ten at top level.
+The answer was backwards, it read as authoritative, and it justified both which suites to change and a claim that merged into a plan doc and a code comment before a follow-up question surfaced it.
+
+The repair is one line (`/^}/ { fn = "" }`), but the habit is the point.
+This shares a failure mode with the argument-index trap above: the wrong answer arrives as a confident positive rather than as a silence, so nothing about the output looks wrong.
+[The positive control](#a-throwaway-probe-needs-a-positive-control-before-its-silence-means-anything) is what catches it.
+Count one block by hand, require the scan to agree with it, and only then believe the rest.
+
 ### A credential-gated spec that skips is not defending anything
 
 A spec that `Skip`s for want of credentials reports the same colour as one that ran and passed.
