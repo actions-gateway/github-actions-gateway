@@ -15,6 +15,7 @@
 //	POST /api/v3/{orgs/{org}|repos/{o}/{r}}/actions/runners/generate-jitconfig
 //	GET  /api/v3/.../actions/runners?name=<n>    — list runners (name filter)
 //	DELETE /api/v3/.../actions/runners/{id}      — deregister runner
+//	GET  /api/v3/repos/{o}/{r}/actions/runs/{id}  — run status/conclusion (Q811)
 //	POST /api/v3/repos/{o}/{r}/actions/runs/{id}/rerun-failed-jobs — eviction auto-retry
 //	POST /api/v3/repos/{o}/{r}/actions/runs/{id}/force-cancel — abandoned-run fast ending (Q683)
 //	POST /api/v3/.../actions/runners/registration-token — scale-set bootstrap, hop 1
@@ -291,6 +292,14 @@ type server struct {
 	// rerun-failed-jobs for one is refused like real GitHub refuses it (Q517).
 	// Marked per run via /control/runstate. Guarded by mu.
 	nonConcludedRuns map[string]bool
+	// cancelledRuns holds run_ids the run read reports as concluded `cancelled`,
+	// the state that stands a graceful-deletion recovery down instead of re-running
+	// it (Q811). Marked per run via /control/runstate. Real GitHub still ACCEPTS
+	// rerun-failed-jobs for such a run (measured 2026-08-05), so this deliberately
+	// does not refuse the POST: what must not happen is the AGC making the call at
+	// all, and a fake that refused it would hide a regression rather than fail on
+	// it. Guarded by mu.
+	cancelledRuns map[string]bool
 }
 
 // longPollTick is how often a held GET /message rechecks for a freshly enqueued
@@ -358,6 +367,7 @@ func newServer() *server {
 		acquiredReqs:      make(map[string]bool),
 		deliveryCount:     make(map[string]int),
 		nonConcludedRuns:  make(map[string]bool),
+		cancelledRuns:     make(map[string]bool),
 		sessionQueueGrace: defaultSessionQueueGrace,
 	}
 }
@@ -460,6 +470,14 @@ func (s *server) handleRunnerAPI(w http.ResponseWriter, r *http.Request) {
 	}
 	if strings.HasSuffix(path, "/force-cancel") && r.Method == http.MethodPost {
 		s.handleForceCancel(w, r)
+		return
+	}
+	// The run read (Q811) is served on both prefixes for the same reason the two
+	// calls above are: the AGC addresses GITHUB_API_BASE_URL, which the e2e venue
+	// points at /api/v3, while the unprefixed form stays reachable for a caller
+	// configured without it.
+	if id, ok := runIDFromRunPath(path); ok && r.Method == http.MethodGet {
+		s.handleRunStatus(w, id)
 		return
 	}
 	if path == "/api/v3/actions/runner-registration" ||
@@ -1327,8 +1345,8 @@ func (s *server) handleJobStats(w http.ResponseWriter, r *http.Request) {
 }
 
 // handleReposAPI routes the /repos/{owner}/{repo}/... REST endpoints the AGC
-// addresses directly off GITHUB_API_BASE_URL. Only rerun-failed-jobs and
-// force-cancel are served; anything else 404s, as an unimplemented endpoint should.
+// addresses directly off GITHUB_API_BASE_URL. Only the run read, rerun-failed-jobs
+// and force-cancel are served; anything else 404s, as an unimplemented endpoint should.
 func (s *server) handleReposAPI(w http.ResponseWriter, r *http.Request) {
 	if strings.HasSuffix(r.URL.Path, "/rerun-failed-jobs") && r.Method == http.MethodPost {
 		s.handleRerunFailedJobs(w, r)
@@ -1338,7 +1356,60 @@ func (s *server) handleReposAPI(w http.ResponseWriter, r *http.Request) {
 		s.handleForceCancel(w, r)
 		return
 	}
+	if id, ok := runIDFromRunPath(r.URL.Path); ok && r.Method == http.MethodGet {
+		s.handleRunStatus(w, id)
+		return
+	}
 	http.NotFound(w, r)
+}
+
+// runIDFromRunPath reports the run_id of a bare .../actions/runs/{run_id} path —
+// the run itself, not one of its sub-resources, which carry a further segment.
+func runIDFromRunPath(path string) (string, bool) {
+	const marker = "/actions/runs/"
+	i := strings.Index(path, marker)
+	if i < 0 {
+		return "", false
+	}
+	id := path[i+len(marker):]
+	if id == "" || strings.Contains(id, "/") {
+		return "", false
+	}
+	return id, true
+}
+
+// handleRunStatus serves the run read the deletion arm's cancel check makes before
+// it asks for a re-run (Q811):
+//
+//	GET /api/v3/repos/{owner}/{repo}/actions/runs/{run_id}
+//
+// It answers off the same /control/runstate the re-run refusal keys on, so the two
+// calls cannot disagree about one run: a run marked not-yet-concluded reads
+// in_progress with a null conclusion, exactly as it refuses the re-run with 403; any
+// other run reads completed/failure, the conclusion a disrupted run reaches at live
+// GitHub (measured, Q459), which is what lets the recovery proceed to its re-run.
+//
+// A cancelled conclusion — the state that stands the recovery down — is reachable by
+// marking the run cancelled through /control/runstate, so a spec asserting the
+// stand-down and one asserting the re-run drive the same endpoint.
+func (s *server) handleRunStatus(w http.ResponseWriter, runID string) {
+	s.mu.Lock()
+	status, conclusion := "completed", "failure"
+	switch {
+	case s.cancelledRuns[runID]:
+		conclusion = "cancelled"
+	case s.nonConcludedRuns[runID]:
+		status, conclusion = "in_progress", ""
+	}
+	s.mu.Unlock()
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	body := map[string]any{"id": runID, "status": status, "conclusion": conclusion}
+	if conclusion == "" {
+		body["conclusion"] = nil
+	}
+	_ = json.NewEncoder(w).Encode(body)
 }
 
 // handleRerunFailedJobs serves the eviction auto-retry call:
@@ -1399,13 +1470,18 @@ func rerunRunID(path string) string {
 
 // handleSetRunState is the control API:
 //
-//	POST /control/runstate?run=<run_id>&concluded=true|false
+//	POST /control/runstate?run=<run_id>&concluded=true|false[&conclusion=cancelled]
 //
 // concluded=false marks the run as not yet concluded, so rerun-failed-jobs for it
 // is refused the way real GitHub refuses it until it concludes the original run —
 // after an ungraceful kill that takes ~10 minutes (measured 9m36s, Q503).
 // concluded=true restores acceptance. Runs never marked are concluded, so only a
 // spec that opts its own run in sees refusals (Q517).
+//
+// conclusion=cancelled additionally makes the run read `cancelled` (Q811), the state
+// the graceful-deletion arm stands down on rather than re-queueing a job a human
+// stopped. It is only meaningful with concluded=true, since a run still in progress
+// has no conclusion; any other conclusion value restores the default `failure`.
 func (s *server) handleSetRunState(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
@@ -1426,6 +1502,11 @@ func (s *server) handleSetRunState(w http.ResponseWriter, r *http.Request) {
 		delete(s.nonConcludedRuns, runID)
 	} else {
 		s.nonConcludedRuns[runID] = true
+	}
+	if r.URL.Query().Get("conclusion") == "cancelled" {
+		s.cancelledRuns[runID] = true
+	} else {
+		delete(s.cancelledRuns, runID)
 	}
 	s.mu.Unlock()
 	w.WriteHeader(http.StatusOK)
