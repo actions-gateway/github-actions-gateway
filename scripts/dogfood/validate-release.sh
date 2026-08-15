@@ -86,6 +86,10 @@
 #                    Checked up front, like every other local tool — the CRD smoke
 #                    that consumes it runs last, after the billable legs.
 #   ASSUME_YES=1     Skip the wrapper's one interactive confirmation (automation).
+#   GH_RETRIES       Retries after the first attempt on every `gh` READ the gate
+#                    makes (default 5), on the jittered schedule GH_RETRY_DELAY
+#                    (5) doubles and GH_RETRY_MAX_DELAY (60) clamps. A single
+#                    transient denial mid-poll used to kill the whole run.
 #
 # One-time prerequisite (NOT run here): scripts/dogfood/e2e-setup.sh must have
 # provisioned the e2e node pool + GitHub App Secret once. See release.md.
@@ -174,6 +178,12 @@ WORKERS_MAX_RESTORE=""
 # Poll interval for the in-flight waits (run settle + rerun transition).
 E2E_POLL_INTERVAL=15
 
+# The retry schedule gh_retry uses. Defaults give 5, 10, 20, 40, 60s before
+# jitter, so a denial has roughly two and a half minutes to clear.
+GH_RETRIES="${GH_RETRIES:-5}"
+GH_RETRY_DELAY="${GH_RETRY_DELAY:-5}"
+GH_RETRY_MAX_DELAY="${GH_RETRY_MAX_DELAY:-60}"
+
 # The gate's phase event stream and its rendered status object default in
 # lib/progress.sh (empty either to opt out). Exported so the e2e relay, which
 # runs as a child process, folds its heartbeat into the same stream (Q616).
@@ -195,11 +205,49 @@ claims.
 USAGE
 }
 
+# gh_retry ARGS... — run `gh ARGS...` with bounded retries on an exponential,
+# jittered schedule (Q854). One `HTTP 401: Bad credentials` at 645s of the settle
+# wait killed a v1.5.0-rc.1 run after 43 good polls, and twenty-odd calls
+# succeeded immediately afterwards: a token that had to be refreshed, not an
+# outage. An hour-long billable gate must absorb that rather than die on it.
+#
+# Every call routed through here is a READ, so a retry can only ask the same
+# question twice. `gh workflow run` deliberately is not one of them: a dispatch
+# that failed after GitHub accepted it would queue a second e2e run into the
+# concurrency group, which is the collision settle_e2e_lane exists to avoid.
+#
+# Same schedule as download-verified.sh (Q829) — doubled, clamped, and jittered,
+# because a denial that is really a rate limit is not cleared by re-asking on a
+# fixed cadence.
+gh_retry() {
+	local attempts=$((GH_RETRIES + 1))
+	local backoff="${GH_RETRY_DELAY}"
+	local attempt rc sleep_for
+	for ((attempt = 1; attempt <= attempts; attempt++)); do
+		rc=0
+		gh "$@" || rc=$?
+		if ((rc == 0)); then
+			return 0
+		fi
+		if ((attempt < attempts)); then
+			sleep_for=$((backoff + RANDOM % (backoff / 2 + 1)))
+			echo "  gh exited ${rc} (attempt ${attempt}/${attempts}); retrying in ${sleep_for}s: gh $*" >&2
+			sleep "${sleep_for}"
+			backoff=$((backoff * 2))
+			if ((backoff > GH_RETRY_MAX_DELAY)); then
+				backoff="${GH_RETRY_MAX_DELAY}"
+			fi
+		fi
+	done
+	echo "error: gh $* failed after ${attempts} attempts." >&2
+	return "${rc}"
+}
+
 # resolve_installation_id — print the GitHub App installation ID for APP_ID on
 # the REPO's org (Part C1). The org is the slug's first path segment.
 resolve_installation_id() {
 	local org="${REPO%%/*}"
-	gh api "/orgs/${org}/installations" \
+	gh_retry api "/orgs/${org}/installations" \
 		--jq ".installations[] | select(.app_id == ${APP_ID}) | .id"
 }
 
@@ -366,7 +414,7 @@ deploy_leg() {
 
 # run_status <run-id> — print a run's status field (queued|in_progress|completed…).
 run_status() {
-	gh run view "$1" --repo "${REPO}" --json status --jq '.status'
+	gh_retry run view "$1" --repo "${REPO}" --json status --jq '.status'
 }
 
 # settle_e2e_lane — wait until the latest run of E2E_WORKFLOW is completed.
@@ -383,7 +431,7 @@ settle_e2e_lane() {
 
 	echo "Checking the ${workflow} lane is settled before dispatching into it..."
 	local run_id
-	run_id="$(gh run list --workflow="${workflow}" --repo "${REPO}" \
+	run_id="$(gh_retry run list --workflow="${workflow}" --repo "${REPO}" \
 		-L1 --json databaseId --jq '.[0].databaseId')"
 	if [[ -z "${run_id}" ]]; then
 		echo "  no prior ${workflow} run — the lane is free."
@@ -411,7 +459,7 @@ settle_e2e_lane() {
 # latest_dispatch_run_id WORKFLOW — print the newest workflow_dispatch run id of
 # WORKFLOW, or nothing when it has never been dispatched.
 latest_dispatch_run_id() {
-	gh run list --workflow="$1" --repo "${REPO}" \
+	gh_retry run list --workflow="$1" --repo "${REPO}" \
 		--event workflow_dispatch -L1 --json databaseId --jq '.[0].databaseId'
 }
 
@@ -426,6 +474,9 @@ dispatch_e2e_run() {
 	local before
 	before="$(latest_dispatch_run_id "${workflow}")"
 	echo "Dispatching ${workflow} @ ${ref} routed to ${GAG_E2E_RUNNER_INPUT} (this run only)..."
+	# Not gh_retry: the reads around it are repeatable, this is not. A dispatch
+	# that failed after GitHub accepted it would queue a second run into the
+	# concurrency group, where it parks in the single pending slot.
 	gh workflow run "${workflow}" --repo "${REPO}" --ref "${ref}" \
 		-f runner="${GAG_E2E_RUNNER_INPUT}"
 
@@ -492,7 +543,9 @@ e2e_leg() {
 #
 # Wholly best-effort: an artifact that is missing (a run that died before the
 # suite wrote one) must not turn into a second, misleading failure on top of the
-# real one.
+# real one. Not gh_retry for the same reason — a run with no artifact is the
+# expected miss here, and retrying it would spend the whole backoff schedule
+# before printing the line that says so.
 report_e2e_run() {
 	local run_id="$1" dir="${WORKDIR}/e2e-report"
 	mkdir -p "${dir}" 2>/dev/null || return 0
@@ -652,7 +705,7 @@ crd_smoke() {
 	gke_get_credentials_and_verify "${PROJECT}" "${ZONE}" "${CLUSTER}"
 
 	echo "Downloading the signed v2 CRD manifest for ${GAG_IMAGE_TAG}..."
-	gh release download "${GAG_IMAGE_TAG}" --repo "${REPO}" \
+	gh_retry release download "${GAG_IMAGE_TAG}" --repo "${REPO}" \
 		--pattern 'actions-gateway-crds-v2.yaml' \
 		--pattern 'actions-gateway-crds-v2.yaml.cosign.bundle' \
 		--dir "${WORKDIR}" --clobber

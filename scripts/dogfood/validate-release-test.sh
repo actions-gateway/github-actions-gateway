@@ -96,7 +96,7 @@ reset_gh() {
 	printf '%s\n' "$@" >"${GH_OUTPUTS_FILE}"
 	: >"${GH_LOG}"
 }
-gh() {
+scripted_gh() {
 	printf '%s\n' "$*" >>"${GH_LOG}"
 	local head
 	head="$(head -n 1 "${GH_OUTPUTS_FILE}")"
@@ -106,6 +106,7 @@ gh() {
 	fi
 	[[ "${head}" == "EMPTY" ]] || printf '%s\n' "${head}"
 }
+gh() { scripted_gh "$@"; }
 
 check() {
 	local name="$1" want="$2" got="$3"
@@ -181,6 +182,88 @@ E2E_WORKFLOW=e2e-calico.yml E2E_WAIT_TIMEOUT=60
 settle_e2e_lane >"${WORKDIR}/out"
 check_contains "E2E_WORKFLOW selects the lane" "e2e-calico.yml" "$(cat "${WORKDIR}/out")"
 unset E2E_WORKFLOW
+
+# --- Q854: a transient gh read is retried; the dispatch is not ---------------
+#
+# One `HTTP 401: Bad credentials` at 645s of the settle wait killed a
+# v1.5.0-rc.1 run after 43 good polls, with twenty-odd calls succeeding
+# immediately afterwards. The gate polls `gh` for the whole of an hour-long
+# billable window, so a single denial anywhere in it must not be terminal.
+#
+# The direction that would cost a run the other way is the last case here: the
+# dispatch is the one call that is not a read, and repeating it would queue a
+# second e2e run into the concurrency group.
+
+GH_ATTEMPTS="${WORKDIR}/gh-attempts"
+GH_FAILS="${WORKDIR}/gh-fails"
+GH_FAIL_MATCH=""
+GH_FLAKY_OUTPUT=""
+
+# flaky_gh — a `gh` that denies its first N calls whose argv contains
+# GH_FAIL_MATCH, then serves GH_FLAKY_OUTPUT. The counters live in files because
+# every call site here runs gh inside a command substitution.
+flaky_gh() {
+	local n
+	if [[ "$*" == *"${GH_FAIL_MATCH}"* ]]; then
+		n=$(($(cat "${GH_ATTEMPTS}") + 1))
+		echo "${n}" >"${GH_ATTEMPTS}"
+		if ((n <= $(cat "${GH_FAILS}"))); then
+			echo "gh: HTTP 401: Bad credentials (HTTP 401)" >&2
+			return 1
+		fi
+	fi
+	printf '%s\n' "${GH_FLAKY_OUTPUT}"
+}
+
+# arm_flaky MATCH FAILS OUTPUT — install flaky_gh with a denial budget.
+arm_flaky() {
+	GH_FAIL_MATCH="$1"
+	echo 0 >"${GH_ATTEMPTS}"
+	echo "$2" >"${GH_FAILS}"
+	GH_FLAKY_OUTPUT="$3"
+	gh() { flaky_gh "$@"; }
+}
+
+GH_RETRIES=5
+
+# The measured shape: two denials, then the answer.
+arm_flaky "run view" 2 "in_progress"
+check "a transient gh denial is retried to an answer" "in_progress" \
+	"$(gh_retry run view 999 --json status)"
+check "  ...and it took the two retries" 3 "$(cat "${GH_ATTEMPTS}")"
+
+# Bounded, so a real outage fails the gate rather than holding billable nodes
+# on a schedule that never ends.
+arm_flaky "run view" 99 ""
+retry_rc=0
+retry_err="$(gh_retry run view 999 2>&1)" || retry_rc=$?
+check "a persistent denial still fails" 1 "${retry_rc}"
+check "the retries are bounded at GH_RETRIES+1" 6 "$(cat "${GH_ATTEMPTS}")"
+check_contains "an exhausted retry says how many it tried" "after 6 attempts" "${retry_err}"
+
+# Through the real caller, which is what the 401 actually killed. The assertion
+# is on the answer, not on the exit status: a denied read leaves run_id empty,
+# and an empty run_id reads as a lane with no prior run — settling clean while
+# having learned nothing. So the resolved run id is what has to survive.
+arm_flaky "run list" 2 "555"
+reset_statuses completed
+E2E_WAIT_TIMEOUT=60
+settle_rc=0
+settle_out="$(settle_e2e_lane 2>&1)" || settle_rc=$?
+check "a denied lane read no longer kills the settle" 0 "${settle_rc}"
+check_contains "  ...and the lane read still resolves its run" \
+	"lane settled — latest e2e-test.yml run 555" "${settle_out}"
+
+# The dispatch is NOT a read. `latest_dispatch_run_id` answers normally; the
+# dispatch itself is denied once, and must be attempted exactly once.
+arm_flaky "workflow run" 99 "100"
+dispatch_rc=0
+dispatch_e2e_run >/dev/null 2>&1 || dispatch_rc=$?
+check "a denied dispatch fails" 1 "${dispatch_rc}"
+check "a dispatch is never retried" 1 "$(cat "${GH_ATTEMPTS}")"
+
+# Restore the argv-logging stub the sections below script.
+gh() { scripted_gh "$@"; }
 
 # --- dispatch_e2e_run: the run-scoped routing that replaced the repo-wide flip ---
 

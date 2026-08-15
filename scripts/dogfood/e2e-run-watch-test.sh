@@ -254,7 +254,89 @@ want_eq 'the three watches recorded their run here, not in the live stream' 3 \
 want_eq 'and it is this suite'\''s status file that names that run' 42 \
 	"$(jq -r '.runId' "${WORK}/status.json" 2>/dev/null || true)"
 
-unset -f now sleep run_state e2e_job_ids arm
+echo
+echo '== the run record is relayed when the log serves no heartbeat (Q855) =='
+# GitHub served no job log for the whole 22-minute e2e leg of the v1.5.0-rc.1
+# run that PASSED, so the relay stayed silent and `heartbeat` was null for its
+# entire duration — the operator's only in-flight signal, absent on a healthy
+# run. The jobs endpoint is the run record rather than the log, and answers when
+# the log will not.
+
+JOBS_FIXTURE='{"jobs":[
+  {"name":"e2e / e2e (kindnet)","status":"completed","conclusion":"success"},
+  {"name":"e2e / e2e (calico)","status":"in_progress","conclusion":null},
+  {"name":"e2e-gate","status":"queued","conclusion":null}]}'
+
+gh() { printf '%s' "$JOBS_FIXTURE"; }
+want_eq 'the run record renders a job-level summary' \
+	'[e2e run] 1/3 jobs done (1 ok) | running: e2e / e2e (calico)' \
+	"$(job_progress 42)"
+
+# A run whose jobs have not been created yet must render nothing rather than a
+# "0/0" line that reads as a finished run.
+gh() { printf '%s' '{"jobs":[]}'; }
+want_eq 'a run with no jobs yet renders nothing' '' "$(job_progress 42)"
+
+# Same contract as collect_heartbeats: this is a progress signal, so a fetch
+# that fails must cost a line, never the gate.
+gh() { return 1; }
+rc=0
+got="$(job_progress 42)" || rc=$?
+want_eq 'an unreachable jobs endpoint yields nothing' '' "$got"
+want_eq 'and does not fail the watcher' 0 "$rc"
+
+# Composition, in this suite's own stream (Q777) rather than the live one.
+RELEASE_PROGRESS_FILE="${WORK}/fallback.jsonl"
+RELEASE_STATUS_FILE="${WORK}/fallback-status.json"
+progress_init
+
+# Three jobs finishing one per poll, with the same payload served twice in the
+# middle so the on-change relay is exercised rather than assumed.
+JOBS_CURSOR="${WORK}/jobs-cursor"
+JOBS_SEQUENCE=(0 1 1 2 3)
+# shellcheck disable=SC2329  # reached through watch_run -> job_progress
+gh() {
+	local i
+	i="$(cat "$JOBS_CURSOR")"
+	echo $((i + 1)) > "$JOBS_CURSOR"
+	jq -cn --argjson d "${JOBS_SEQUENCE[i]:-3}" '{jobs: [range(3) | {
+		name: "e2e (\(.))",
+		status: (if . < $d then "completed" elif . == $d then "in_progress" else "queued" end),
+		conclusion: (if . < $d then "success" else null end)}]}'
+}
+
+count_beats() {
+	jq -c --arg p "$1" 'select(.kind == "heartbeat" and (.text | startswith($p)))' \
+		"${WORK}/fallback.jsonl" 2>/dev/null | grep -c . || true
+}
+
+echo 0 > "$JOBS_CURSOR"
+arm 4 'completed success'
+E2E_RUN_WATCH_TIMEOUT=3600
+watch_run 42 > "${WORK}/fallback.out" 2>&1
+
+want_eq 'five polls relay four summaries, the repeat suppressed' 4 "$(count_beats '[e2e run]')"
+want_contains 'the operator sees the job-level line' \
+	'[e2e run] 1/3 jobs done (1 ok)' "$(cat "${WORK}/fallback.out")"
+# The field that was null for 22 minutes.
+want_eq 'the status object carries a heartbeat again' '[e2e run] 3/3 jobs done (3 ok)' \
+	"$(jq -r '.heartbeat' "${WORK}/fallback-status.json" 2>/dev/null || true)"
+
+# The other direction: a log that does serve heartbeats keeps the fallback
+# quiet. The spec line carries detail the job summary cannot, and relaying both
+# would double every poll.
+progress_init
+echo 0 > "$JOBS_CURSOR"
+# shellcheck disable=SC2329  # both are reached through watch_run
+e2e_job_ids() { echo 1; }
+# shellcheck disable=SC2329
+collect_heartbeats() { printf '%s\n' "$FIXTURE_LOG" | heartbeat_lines; }
+arm 2 'completed success'
+watch_run 42 > /dev/null 2>&1
+want_eq 'a served log suppresses the job-level fallback' 0 "$(count_beats '[e2e run]')"
+want_eq 'and the spec heartbeat is what lands' 1 "$(count_beats '[e2e t+')"
+
+unset -f now sleep run_state e2e_job_ids arm collect_heartbeats count_beats gh
 
 echo
 if ((fails > 0)); then
