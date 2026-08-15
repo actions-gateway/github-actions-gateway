@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/1.4.0/operations/personas/">
+        <link rel="canonical" href="https://actions-gateway.com/1.5.0/operations/personas/">
       
       
         <link rel="prev" href="../">
@@ -63,15 +63,15 @@
   <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/IBMPlexSans-Bold.woff2">
   <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/MonaspaceNeon-Medium.woff2">
   
-  <meta property="og:image" content="https://actions-gateway.com/1.4.0assets/social-preview.png">
+  <meta property="og:image" content="https://actions-gateway.com/1.5.0assets/social-preview.png">
   <meta property="og:image:width" content="1280">
   <meta property="og:image:height" content="640">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:image" content="https://actions-gateway.com/1.4.0assets/social-preview.png">
+  <meta name="twitter:image" content="https://actions-gateway.com/1.5.0assets/social-preview.png">
   
-  <link rel="apple-touch-icon" href="https://actions-gateway.com/1.4.0assets/apple-touch-icon.png">
-  <link rel="alternate icon" href="https://actions-gateway.com/1.4.0assets/favicon.ico">
-  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/1.4.0assets/icon-512.png">
+  <link rel="apple-touch-icon" href="https://actions-gateway.com/1.5.0assets/apple-touch-icon.png">
+  <link rel="alternate icon" href="https://actions-gateway.com/1.5.0assets/favicon.ico">
+  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/1.5.0assets/icon-512.png">
   
   <script type="application/ld+json">
   {
@@ -79,14 +79,14 @@
     "@type": "SoftwareSourceCode",
     "name": "GitHub Actions Gateway",
     "description": "An Actions Runner Controller (ARC) alternative for self-hosted GitHub Actions runners on multi-tenant Kubernetes \u2014 oversubscribe a shared quota, recover evicted jobs automatically, and isolate every tenant\u0027s GitHub egress.",
-    "url": "https://actions-gateway.com/1.4.0",
+    "url": "https://actions-gateway.com/1.5.0",
     "codeRepository": "https://github.com/actions-gateway/github-actions-gateway",
     "programmingLanguage": "Go",
     "license": "https://www.apache.org/licenses/LICENSE-2.0",
     "author": {
       "@type": "Organization",
       "name": "GitHub Actions Gateway",
-      "url": "https://actions-gateway.com/1.4.0"
+      "url": "https://actions-gateway.com/1.5.0"
     }
   }
   </script>
@@ -95,8 +95,8 @@
     "@context": "https://schema.org",
     "@type": "Organization",
     "name": "GitHub Actions Gateway",
-    "url": "https://actions-gateway.com/1.4.0",
-    "logo": "https://actions-gateway.com/1.4.0assets/icon-512.png",
+    "url": "https://actions-gateway.com/1.5.0",
+    "logo": "https://actions-gateway.com/1.5.0assets/icon-512.png",
     "sameAs": ["https://github.com/actions-gateway/github-actions-gateway"]
   }
   </script>
@@ -132,8 +132,8 @@
         <aside class="md-banner">
           <div class="md-banner__inner md-grid md-typeset">
             
-            <strong>v1.4.0 is here.</strong>
-      Consent-gated cross-namespace egress proxy sharing, a curated runner template library you apply with one command, and v2 worker-capacity conditions exported as Prometheus gauges.
+            <strong>v1.5.0 is here.</strong>
+      A per-tenant GitHub runner group boundary, multi-label runner sets that migrate a <code>runs-on</code> array unedited, and job duration and latency metrics on the acquisition tier every new tenant runs.
           </div>
           
         </aside>
@@ -145,7 +145,7 @@
           <aside class="md-banner md-banner--warning">
             <div class="md-banner__inner md-grid md-typeset">
               You're not viewing the latest release.
-  <a href="https://actions-gateway.com/1.4.0"><strong>Go to the current docs.</strong></a>
+  <a href="https://actions-gateway.com/1.5.0"><strong>Go to the current docs.</strong></a>
 
             </div>
             <script>var el=document.querySelector("[data-md-component=outdated]"),base=new URL("../.."),outdated=__md_get("__outdated",sessionStorage,base);!0===outdated&&el&&(el.hidden=!1)</script>
@@ -2849,137 +2849,80 @@
 <blockquote>
 <p><strong>Audience:</strong> All</p>
 </blockquote>
-<p>Running GitHub Actions Gateway (GAG) for many teams means more than one role is
-involved, and the split between them is not a documentation convention. It is
-the product: the platform owns limits a tenant cannot raise, the tenant composes
-freely inside them, and neither has to file a ticket with the other for routine
-work. Single-tenant runner controllers do not need this distinction, which is
-why they generally do not have a primitive for it.</p>
-<p>This page defines each role by <strong>what it owns</strong> and, more usefully, <strong>what it
-cannot do</strong>. A boundary that a role can talk its way past is not a boundary.</p>
+<p>Running GitHub Actions Gateway (GAG) for many teams means more than one role is involved, and the split between them is not a documentation convention.
+It is the product: the platform owns limits a tenant cannot raise, the tenant composes freely inside them, and neither has to file a ticket with the other for routine work.
+Single-tenant runner controllers do not need this distinction, which is why they generally do not have a primitive for it.</p>
+<p>This page defines each role by <strong>what it owns</strong> and, more usefully, <strong>what it cannot do</strong>.
+A boundary that a role can talk its way past is not a boundary.</p>
 <h2 id="one-boundary-is-enforced-the-rest-are-just-labels">One boundary is enforced; the rest are just labels<a class="headerlink" href="#one-boundary-is-enforced-the-rest-are-just-labels" title="Permanent link">&para;</a></h2>
-<p>Only one line here is a <strong>privilege</strong> boundary the system enforces: <strong>platform
-side versus tenant side.</strong> A tenant operator cannot raise their own quota or
-self-grant privilege no matter who they report to, and that is checked by RBAC,
-admission, and a quota the control plane cannot write.</p>
+<p>Only one line here is a <strong>privilege</strong> boundary the system enforces: <strong>platform side versus tenant side.</strong> A tenant operator cannot raise their own quota or self-grant privilege no matter who they report to, and that is checked by RBAC, admission, and a quota the control plane cannot write.</p>
 <p>Everything else is a routing label for finding the right document.</p>
-<p><strong>On-call is a mode, not a role.</strong> Both sides get paged, for different things:
-the platform side when the control plane misbehaves, the tenant side when one
-namespace's CI does. Whoever is carrying the pager already appears below under
-the side they sit on, so there is no separate on-call persona on this page.</p>
-<p><strong>Job titles are not roles, which is why none of them appear here.</strong> "SRE" was
-a tag in this tree until 2026-08-07 and was retired for being ambiguous in the
-one way a routing tag cannot afford: both the platform and its tenants need
-SREs, so the tag never told a reader which side of the boundary a page was
-written for. Retiring it forced every page it covered to declare a side, and
-three turned out to be tenant-facing pages that had been filed as platform ones.
-"DevOps" was never a tag and should not become one; it is even less specific,
-and CI is not an application being operated in production.</p>
-<p>A role name here states a scope, a domain, and a responsibility. Read it as one
-question: which side of the tenancy boundary are you on?</p>
+<p><strong>On-call is a mode, not a role.</strong> Both sides get paged, for different things: the platform side when the control plane misbehaves, the tenant side when one namespace's CI does.
+Whoever is carrying the pager already appears below under the side they sit on, so there is no separate on-call persona on this page.</p>
+<p><strong>Job titles are not roles, which is why none of them appear here.</strong> "SRE" was a tag in this tree until 2026-08-07 and was retired for being ambiguous in the one way a routing tag cannot afford: both the platform and its tenants need SREs, so the tag never told a reader which side of the boundary a page was written for.
+Retiring it forced every page it covered to declare a side, and three turned out to be tenant-facing pages that had been filed as platform ones.
+"DevOps" was never a tag and should not become one; it is even less specific, and CI is not an application being operated in production.</p>
+<p>A role name here states a scope, a domain, and a responsibility.
+Read it as one question: which side of the tenancy boundary are you on?</p>
 <h2 id="the-roles">The roles<a class="headerlink" href="#the-roles" title="Permanent link">&para;</a></h2>
 <h3 id="platform-engineer">Platform engineer<a class="headerlink" href="#platform-engineer" title="Permanent link">&para;</a></h3>
-<p>Owns the cluster and everything shared in it, and carries the pager when the
-control plane itself misbehaves.</p>
-<p><strong>Owns:</strong> the GMC install and upgrades; the <code>actions-gateway.github.com/tenant</code>
-namespace marker; each tenant namespace's <code>ResourceQuota</code>; the
-<a href="../security-operations/#self-service-additions-via-the-priorityclassallowlist-cr-q188-q298"><code>PriorityClassAllowlist</code></a>;
-<code>ClusterRunnerTemplate</code> objects; the Pod Security Admission level and the
-<code>privileged-profile: allowed</code> grant; whether the cluster has a node autoscaler.
-At 03:00 the same person owns the <a href="../observability-alerting/">shipped alerts</a>,
-the <a href="../runbook/">runbook</a>, <a href="../backup-restore/">backup and restore</a>, and
-upgrades.</p>
-<p><strong>Cannot, by design:</strong> be required in the loop for a tenant's day-to-day runner
-changes. If adding a runner shape or adjusting concurrency needs a platform
-ticket, the model has failed.</p>
-<p><strong>Needs, specifically:</strong> failure modes that surface as a named condition, an
-Event, and a metric rather than as a log line to grep. The
-<a href="../troubleshooting/">troubleshooting guide</a> is organised by observable symptom
-for this reason.</p>
-<p><strong>Notably does not own:</strong> the <code>ResourceQuota</code> through GAG. The GMC holds no
-write verb on <code>resourcequotas</code>, so the quota is set on the namespace by the
-platform admin and the control plane operates within it. That is what makes the
-quota a real cap rather than a suggestion.</p>
+<p>Owns the cluster and everything shared in it, and carries the pager when the control plane itself misbehaves.</p>
+<p><strong>Owns:</strong> the GMC install and upgrades; the <code>actions-gateway.github.com/tenant</code> namespace marker; each tenant namespace's <code>ResourceQuota</code>; the <a href="../security-operations/#self-service-additions-via-the-priorityclassallowlist-cr-q188-q298"><code>PriorityClassAllowlist</code></a>; <code>ClusterRunnerTemplate</code> objects; the Pod Security Admission level and the <code>privileged-profile: allowed</code> grant; whether the cluster has a node autoscaler.
+At 03:00 the same person owns the <a href="../observability-alerting/">shipped alerts</a>, the <a href="../runbook/">runbook</a>, <a href="../backup-restore/">backup and restore</a>, and upgrades.</p>
+<p><strong>Cannot, by design:</strong> be required in the loop for a tenant's day-to-day runner changes.
+If adding a runner shape or adjusting concurrency needs a platform ticket, the model has failed.</p>
+<p><strong>Needs, specifically:</strong> failure modes that surface as a named condition, an Event, and a metric rather than as a log line to grep.
+The <a href="../troubleshooting/">troubleshooting guide</a> is organised by observable symptom for this reason.</p>
+<p><strong>Notably does not own:</strong> the <code>ResourceQuota</code> through GAG.
+The GMC holds no write verb on <code>resourcequotas</code>, so the quota is set on the namespace by the platform admin and the control plane operates within it.
+That is what makes the quota a real cap rather than a suggestion.</p>
 <h3 id="tenant-operator">Tenant operator<a class="headerlink" href="#tenant-operator" title="Permanent link">&para;</a></h3>
-<p>Owns one namespace's CI end to end: the runner configuration <strong>and</strong> the
-workflow files in the repositories being tested. Usually one person per tenant,
-sometimes one person across several similar tenants. When that team's CI breaks
-at 03:00, this is who looks at it, whatever their job title says.</p>
-<p><strong>That span is the point.</strong> <code>runs-on:</code> in a workflow and the <code>RunnerSet</code> that
-answers it are two halves of one job on one desk. It is why a migration that
-needs no workflow edit is worth something concrete to this person, and why a
-gap that forces one edit per target
-(<a href="../migration-from-arc/">migrating from ARC</a>) is a real cost rather than a
-detail. It is also why this role, not the platform engineer, is the one that
-has to be able to self-diagnose.</p>
-<p><strong>Owns:</strong> the <code>ActionsGateway</code>, its <code>RunnerSet</code>s and <code>RunnerTemplate</code>s, the
-GitHub App credential Secret for their own organization, worker pod shape,
-concurrency ceilings, their own <code>EgressProxy</code> if they use one, and the
-<code>runs-on</code> labels their workflows target.</p>
-<p><strong>Cannot, by design:</strong> raise their own <code>ResourceQuota</code>; name a <code>PriorityClass</code>
-outside the platform's allowlist; author a privileged worker template; or read
-another tenant's metrics, logs, or Secrets.</p>
+<p>Owns one namespace's CI end to end: the runner configuration <strong>and</strong> the workflow files in the repositories being tested.
+Usually one person per tenant, sometimes one person across several similar tenants.
+When that team's CI breaks at 03:00, this is who looks at it, whatever their job title says.</p>
+<p><strong>That span is the point.</strong> <code>runs-on:</code> in a workflow and the <code>RunnerSet</code> that answers it are two halves of one job on one desk.
+It is why a migration that needs no workflow edit is worth something concrete to this person, and why a gap that forces one edit per target (<a href="../migration-from-arc/">migrating from ARC</a>) is a real cost rather than a detail.
+It is also why this role, not the platform engineer, is the one that has to be able to self-diagnose.</p>
+<p><strong>Owns:</strong> the <code>ActionsGateway</code>, its <code>RunnerSet</code>s and <code>RunnerTemplate</code>s, the GitHub App credential Secret for their own organization, worker pod shape, concurrency ceilings, their own <code>EgressProxy</code> if they use one, and the <code>runs-on</code> labels their workflows target.</p>
+<p><strong>Cannot, by design:</strong> raise their own <code>ResourceQuota</code>; name a <code>PriorityClass</code> outside the platform's allowlist; author a privileged worker template; or read another tenant's metrics, logs, or Secrets.</p>
 <p><strong>Should be able to:</strong> answer "why is my job queued?" without opening a ticket.
-That is the test the <a href="../observability-dashboards/#tenant-dashboard">tenant dashboard</a>
-and the per-tenant metrics exist to pass, and the reason it matters is that the
-person asking is also the person who has to fix it.</p>
+That is the test the <a href="../observability-dashboards/#tenant-dashboard">tenant dashboard</a> and the per-tenant metrics exist to pass, and the reason it matters is that the person asking is also the person who has to fix it.</p>
 <h3 id="security--compliance">Security / compliance<a class="headerlink" href="#security--compliance" title="Permanent link">&para;</a></h3>
 <p>Reads rather than operates, and needs evidence rather than assurances.</p>
-<p><strong>Owns:</strong> the threat model's operational half, admission policy compatibility,
-abuse response, and whatever an auditor asks for.</p>
-<p><strong>Needs, specifically:</strong> artifacts produced unprompted. A control that exists
-but leaves no record is hard to evidence, which is why per-tenant egress
-attribution and admission decisions matter as much as the controls themselves.
-<a href="../security-operations/">Security operations</a> and
-<a href="../admission-policies/">admission policies</a> are the entry points.</p>
+<p><strong>Owns:</strong> the threat model's operational half, admission policy compatibility, abuse response, and whatever an auditor asks for.</p>
+<p><strong>Needs, specifically:</strong> artifacts produced unprompted.
+A control that exists but leaves no record is hard to evidence, which is why per-tenant egress attribution and admission decisions matter as much as the controls themselves.
+<a href="../security-operations/">Security operations</a> and <a href="../admission-policies/">admission policies</a> are the entry points.</p>
 <h3 id="budget-owner">Budget owner<a class="headerlink" href="#budget-owner" title="Permanent link">&para;</a></h3>
 <p>Owns the spend, and usually cannot read the cluster at all.</p>
-<p><strong>Needs, specifically:</strong> cost per tenant, in currency, from data they can
-defend in a planning conversation.
-<a href="../cost-attribution/">Cost attribution</a> maps tenant namespaces and
-<code>app.kubernetes.io/*</code> labels onto OpenCost and Kubecost allocation queries for
-exactly this. There is no dashboard for this persona yet; see the
-<a href="../../roadmap/">roadmap</a>.</p>
+<p><strong>Needs, specifically:</strong> cost per tenant, in currency, from data they can defend in a planning conversation.
+<a href="../cost-attribution/">Cost attribution</a> maps tenant namespaces and <code>app.kubernetes.io/*</code> labels onto OpenCost and Kubecost allocation queries for exactly this.
+There is no dashboard for this persona yet; see the <a href="../../roadmap/">roadmap</a>.</p>
 <h3 id="maintainer">Maintainer<a class="headerlink" href="#maintainer" title="Permanent link">&para;</a></h3>
-<p>Internal to GAG itself: cutting releases, the publish pipeline, supply-chain
-attestations. See <a href="../release/">release.md</a>. Listed because the docs index tags
-it, not because adopters need it.</p>
+<p>Internal to GAG itself: cutting releases, the publish pipeline, supply-chain attestations.
+See <a href="../release/">release.md</a>.
+Listed because the docs index tags it, not because adopters need it.</p>
 <h2 id="the-role-that-is-not-a-user">The role that is not a user<a class="headerlink" href="#the-role-that-is-not-a-user" title="Permanent link">&para;</a></h2>
-<p>An <strong>external contributor</strong> to a public repository can cause code to run on your
-cluster without being a user of your platform, and a fork pull request is an
-arbitrary-code-execution request the CI system is designed to honour. For every
-other role above, this one is part of the <strong>threat model</strong> rather than an
-audience.</p>
-<p>That asymmetry is why isolation is a separate concern from access control: the
-question is not what this person is permitted to do, but what their code can
-reach if it tries. GAG's stance today is
-<a href="../kata-dind-workloads/">Kata micro-VM workers</a> for trusted CI, with the
-untrusted-pull-request posture still in progress. The threat model, the layer
-map, and what is explicitly out of scope are in the
-<a href="../../plan/secure-multi-tenant-oss-ci/">secure multi-tenant OSS CI goal</a>.</p>
+<p>An <strong>external contributor</strong> to a public repository can cause code to run on your cluster without being a user of your platform, and a fork pull request is an arbitrary-code-execution request the CI system is designed to honour.
+For every other role above, this one is part of the <strong>threat model</strong> rather than an audience.</p>
+<p>That asymmetry is why isolation is a separate concern from access control: the question is not what this person is permitted to do, but what their code can reach if it tries.
+GAG's stance today is <a href="../kata-dind-workloads/">Kata micro-VM workers</a> for trusted CI, with the untrusted-pull-request posture still in progress.
+The threat model, the layer map, and what is explicitly out of scope are in the <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.5.0/docs/plan/secure-multi-tenant-oss-ci.md">secure multi-tenant OSS CI goal</a>.</p>
 <h2 id="how-personas-are-recorded">How personas are recorded<a class="headerlink" href="#how-personas-are-recorded" title="Permanent link">&para;</a></h2>
 <p>A doc's audience is recorded in two places, deliberately:</p>
 <ol>
-<li>the <strong>Personas column</strong> in the <a href="../">operations index</a>, which drives
-   the filter chips; and</li>
-<li>that doc's own <code>&gt; **Audience:** …</code> blockquote, which drives the per-doc pill
-   and deep-links back to the filtered index.</li>
+<li>the <strong>Personas column</strong> in the <a href="../">operations index</a>, which drives the filter chips; and</li>
+<li>that doc's own <code>&gt; **Audience:** …</code> blockquote, which drives the per-doc pill and deep-links back to the filtered index.</li>
 </ol>
-<p>They must agree. There is no CI check, so when you retag a doc, update both. Use
-the tag names already in use verbatim: an unlisted spelling silently creates a
-new chip that matches one document. "Tenant operator" is the correct name for
-the namespace-owning role; "Tenant owner" was a drifted variant and has been
-normalised.</p>
-<p><strong>Every tag is a role on this page, with one exception.</strong> <code>All</code> means every
-persona, and a page carrying it stays visible under any chip. This page and the
-<a href="../../design/08-glossary/">glossary</a> use it, which is why the audience line
-above names no roles: a page about who the roles are is not addressed to one of
-them.</p>
-<p>Otherwise, tag with a role name. <strong>Do not reintroduce a job title as a tag.</strong> A
-tag exists to route a reader to the right page, so it has to answer "is this
-for me?", and a title that both sides of the boundary use cannot. If a new tag
-seems necessary, the question to answer first is what scope, domain, and
-responsibility it names.</p>
+<p>They must agree.
+There is no CI check, so when you retag a doc, update both.
+Use the tag names already in use verbatim: an unlisted spelling silently creates a new chip that matches one document.
+"Tenant operator" is the correct name for the namespace-owning role; "Tenant owner" was a drifted variant and has been normalised.</p>
+<p><strong>Every tag is a role on this page, with one exception.</strong> <code>All</code> means every persona, and a page carrying it stays visible under any chip.
+This page and the <a href="../../design/08-glossary/">glossary</a> use it, which is why the audience line above names no roles: a page about who the roles are is not addressed to one of them.</p>
+<p>Otherwise, tag with a role name.
+<strong>Do not reintroduce a job title as a tag.</strong> A tag exists to route a reader to the right page, so it has to answer "is this for me?", and a title that both sides of the boundary use cannot.
+If a new tag seems necessary, the question to answer first is what scope, domain, and responsibility it names.</p>
 
 
 

@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/1.4.0/design/appendix-e-capacity-planning/">
+        <link rel="canonical" href="https://actions-gateway.com/1.5.0/design/appendix-e-capacity-planning/">
       
       
         <link rel="prev" href="../appendix-d-alternatives-considered/">
@@ -63,15 +63,15 @@
   <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/IBMPlexSans-Bold.woff2">
   <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/MonaspaceNeon-Medium.woff2">
   
-  <meta property="og:image" content="https://actions-gateway.com/1.4.0assets/social-preview.png">
+  <meta property="og:image" content="https://actions-gateway.com/1.5.0assets/social-preview.png">
   <meta property="og:image:width" content="1280">
   <meta property="og:image:height" content="640">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:image" content="https://actions-gateway.com/1.4.0assets/social-preview.png">
+  <meta name="twitter:image" content="https://actions-gateway.com/1.5.0assets/social-preview.png">
   
-  <link rel="apple-touch-icon" href="https://actions-gateway.com/1.4.0assets/apple-touch-icon.png">
-  <link rel="alternate icon" href="https://actions-gateway.com/1.4.0assets/favicon.ico">
-  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/1.4.0assets/icon-512.png">
+  <link rel="apple-touch-icon" href="https://actions-gateway.com/1.5.0assets/apple-touch-icon.png">
+  <link rel="alternate icon" href="https://actions-gateway.com/1.5.0assets/favicon.ico">
+  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/1.5.0assets/icon-512.png">
   
   <script type="application/ld+json">
   {
@@ -79,14 +79,14 @@
     "@type": "SoftwareSourceCode",
     "name": "GitHub Actions Gateway",
     "description": "An Actions Runner Controller (ARC) alternative for self-hosted GitHub Actions runners on multi-tenant Kubernetes \u2014 oversubscribe a shared quota, recover evicted jobs automatically, and isolate every tenant\u0027s GitHub egress.",
-    "url": "https://actions-gateway.com/1.4.0",
+    "url": "https://actions-gateway.com/1.5.0",
     "codeRepository": "https://github.com/actions-gateway/github-actions-gateway",
     "programmingLanguage": "Go",
     "license": "https://www.apache.org/licenses/LICENSE-2.0",
     "author": {
       "@type": "Organization",
       "name": "GitHub Actions Gateway",
-      "url": "https://actions-gateway.com/1.4.0"
+      "url": "https://actions-gateway.com/1.5.0"
     }
   }
   </script>
@@ -95,8 +95,8 @@
     "@context": "https://schema.org",
     "@type": "Organization",
     "name": "GitHub Actions Gateway",
-    "url": "https://actions-gateway.com/1.4.0",
-    "logo": "https://actions-gateway.com/1.4.0assets/icon-512.png",
+    "url": "https://actions-gateway.com/1.5.0",
+    "logo": "https://actions-gateway.com/1.5.0assets/icon-512.png",
     "sameAs": ["https://github.com/actions-gateway/github-actions-gateway"]
   }
   </script>
@@ -132,8 +132,8 @@
         <aside class="md-banner">
           <div class="md-banner__inner md-grid md-typeset">
             
-            <strong>v1.4.0 is here.</strong>
-      Consent-gated cross-namespace egress proxy sharing, a curated runner template library you apply with one command, and v2 worker-capacity conditions exported as Prometheus gauges.
+            <strong>v1.5.0 is here.</strong>
+      A per-tenant GitHub runner group boundary, multi-label runner sets that migrate a <code>runs-on</code> array unedited, and job duration and latency metrics on the acquisition tier every new tenant runs.
           </div>
           
         </aside>
@@ -145,7 +145,7 @@
           <aside class="md-banner md-banner--warning">
             <div class="md-banner__inner md-grid md-typeset">
               You're not viewing the latest release.
-  <a href="https://actions-gateway.com/1.4.0"><strong>Go to the current docs.</strong></a>
+  <a href="https://actions-gateway.com/1.5.0"><strong>Go to the current docs.</strong></a>
 
             </div>
             <script>var el=document.querySelector("[data-md-component=outdated]"),base=new URL("../.."),outdated=__md_get("__outdated",sessionStorage,base);!0===outdated&&el&&(el.hidden=!1)</script>
@@ -3011,16 +3011,23 @@
 <h1 id="appendix-e--capacity-planning--runnergroup-design">Appendix E — Capacity Planning &amp; RunnerGroup Design<a class="headerlink" href="#appendix-e--capacity-planning--runnergroup-design" title="Permanent link">&para;</a></h1>
 <p>← <a href="../appendix-d-alternatives-considered/">Appendix D</a> | <a href="../">Back to index</a></p>
 <hr />
-<p>This appendix is a practical guide for operators and tenant teams deciding how to structure their <code>RunnerGroup</code>s, size their <code>maxListeners</code> counts, and plan for growth. The raw constraint numbers live in <a href="../03-api-contracts/#35-github-api-rate-limit-budget">§3.5</a> and <a href="../appendix-a-capacity-slos/">Appendix A</a>; this appendix explains how to reason about them in practice.</p>
+<p>This appendix is a practical guide for operators and tenant teams deciding how to structure their <code>RunnerGroup</code>s, size their <code>maxListeners</code> counts, and plan for growth.
+The raw constraint numbers live in <a href="../03-api-contracts/#35-github-api-rate-limit-budget">§3.5</a> and <a href="../appendix-a-capacity-slos/">Appendix A</a>; this appendix explains how to reason about them in practice.</p>
 <blockquote>
-<p><strong>Milestone 1 protocol findings</strong> (see <a href="../../plan/milestone-1/#8-investigation-findings">docs/plan/milestone-1.md §8</a>):</p>
-<p><em>Session reuse confirmed</em> (Investigation C) — a session remains live after <code>acquirejob</code>; goroutines loop without a delete→create cycle. The steady-state cost remains <strong>one session per RunnerGroup</strong>.</p>
-<p><em>One session per registered runner agent enforced</em> (Investigation D) — <code>POST /sessions</code> returns 409 if the agentId already has a session. Each concurrent listener goroutine requires a distinct pre-registered agent. The AGC must provision up to <code>maxListeners</code> agents per RunnerGroup at setup time. This does not change the rate-limit math (one active session per agent, same session-count formula), but it adds an agent-registration step to RunnerGroup provisioning — see <a href="../02-architecture/#22-tier-2--actions-gateway-controller-agc">§2.2</a>.</p>
-<p><em>Opportunistic delivery supported</em> (inferred from Investigation C timing) — a newly dispatched job arrived in <code>GetMessage</code> within ~1 second of dispatch, consistent with delivery to any active polling session. No warm standby pool is needed.</p>
+<p><strong>Milestone 1 protocol findings</strong> (see <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.5.0/docs/plan/milestone-1.md#8-investigation-findings">docs/plan/milestone-1.md §8</a>):</p>
+<p><em>Session reuse confirmed</em> (Investigation C) — a session remains live after <code>acquirejob</code>; goroutines loop without a delete→create cycle.
+The steady-state cost remains <strong>one session per RunnerGroup</strong>.</p>
+<p><em>One session per registered runner agent enforced</em> (Investigation D) — <code>POST /sessions</code> returns 409 if the agentId already has a session.
+Each concurrent listener goroutine requires a distinct pre-registered agent.
+The AGC must provision up to <code>maxListeners</code> agents per RunnerGroup at setup time.
+This does not change the rate-limit math (one active session per agent, same session-count formula), but it adds an agent-registration step to RunnerGroup provisioning — see <a href="../02-architecture/#22-tier-2--actions-gateway-controller-agc">§2.2</a>.</p>
+<p><em>Opportunistic delivery supported</em> (inferred from Investigation C timing) — a newly dispatched job arrived in <code>GetMessage</code> within ~1 second of dispatch, consistent with delivery to any active polling session.
+No warm standby pool is needed.</p>
 </blockquote>
 <hr />
 <h2 id="e1-the-three-binding-constraints">E.1. The Three Binding Constraints<a class="headerlink" href="#e1-the-three-binding-constraints" title="Permanent link">&para;</a></h2>
-<p>Every capacity decision is governed by three independent ceilings. Hitting any one of them limits throughput regardless of the others.</p>
+<p>Every capacity decision is governed by three independent ceilings.
+Hitting any one of them limits throughput regardless of the others.</p>
 <table>
 <thead>
 <tr>
@@ -3051,16 +3058,21 @@
 </tr>
 </tbody>
 </table>
-<p>With the adaptive listener model, <strong>the GitHub App rate limit is no longer a steady-state concern for most tenants.</strong> One session per RunnerGroup means 10 RunnerGroups consume ~720 req/hour against a 15,000/hour budget — 5% utilization at rest. The rate limit becomes relevant only at sustained peak burst when many RunnerGroups are simultaneously at their <code>maxListeners</code> ceiling.</p>
+<p>With the adaptive listener model, <strong>the GitHub App rate limit is no longer a steady-state concern for most tenants.</strong> One session per RunnerGroup means 10 RunnerGroups consume ~720 req/hour against a 15,000/hour budget — 5% utilization at rest.
+The rate limit becomes relevant only at sustained peak burst when many RunnerGroups are simultaneously at their <code>maxListeners</code> ceiling.</p>
 <p>The key formulas:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>Steady-state sessions   = number of RunnerGroups in the ActionsGateway
 <a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>Peak sessions (worst case) = sum of maxListeners across all RunnerGroups
 </code></pre></div>
-<p>The platform-owned namespace <code>ResourceQuota</code> remains the binding constraint on how many jobs run concurrently — it is independent of listener count. It is set on the namespace by the platform admin (or your GitOps / tenant-operator stack), not on the <code>ActionsGateway</code> CR. For the arithmetic that turns runner shapes and <code>maxWorkers</code> into the actual quota numbers — including the native sidecars, Kata <code>RuntimeClass</code> overhead, and per-worker PVCs that the per-container asks alone do not account for — see <a href="../../operations/resourcequota-sizing/">sizing the platform-owned <code>ResourceQuota</code></a>.</p>
+<p>The platform-owned namespace <code>ResourceQuota</code> remains the binding constraint on how many jobs run concurrently — it is independent of listener count.
+It is set on the namespace by the platform admin (or your GitOps / tenant-operator stack), not on the <code>ActionsGateway</code> CR.
+For the arithmetic that turns runner shapes and <code>maxWorkers</code> into the actual quota numbers — including the native sidecars, Kata <code>RuntimeClass</code> overhead, and per-worker PVCs that the per-container asks alone do not account for — see <a href="../../operations/resourcequota-sizing/">sizing the platform-owned <code>ResourceQuota</code></a>.</p>
 <hr />
 <h2 id="e2-what-runnergroups-are-and-arent-for">E.2. What RunnerGroups Are (and Aren't) For<a class="headerlink" href="#e2-what-runnergroups-are-and-arent-for" title="Permanent link">&para;</a></h2>
-<p>A <code>RunnerGroup</code> represents a <strong>pool of listener goroutines sharing a common pod shape</strong>. It is not a per-repo, per-team, or per-workflow construct.</p>
-<p>GitHub routes jobs to a RunnerGroup by matching the job's <code>runs-on</code> labels against the RunnerGroup's <code>runnerLabels</code>. Any workflow in any repository with access to the GitHub App installation can target a RunnerGroup — repo boundaries are invisible to the routing layer.</p>
+<p>A <code>RunnerGroup</code> represents a <strong>pool of listener goroutines sharing a common pod shape</strong>.
+It is not a per-repo, per-team, or per-workflow construct.</p>
+<p>GitHub routes jobs to a RunnerGroup by matching the job's <code>runs-on</code> labels against the RunnerGroup's <code>runnerLabels</code>.
+Any workflow in any repository with access to the GitHub App installation can target a RunnerGroup — repo boundaries are invisible to the routing layer.</p>
 <p>This means:</p>
 <ul>
 <li><strong>Multiple repos → one RunnerGroup</strong> (if they share the same pod shape and labels).</li>
@@ -3069,7 +3081,8 @@
 </ul>
 <hr />
 <h2 id="e3-the-per-workflow-runnergroup-question">E.3. The Per-Workflow RunnerGroup Question<a class="headerlink" href="#e3-the-per-workflow-runnergroup-question" title="Permanent link">&para;</a></h2>
-<p>Because the steady-state rate-limit cost of a RunnerGroup is one session (~72 req/hour), adding a new RunnerGroup is genuinely cheap. This makes fine-grained RunnerGroup topologies much more practical than they would be under a fixed-session model.</p>
+<p>Because the steady-state rate-limit cost of a RunnerGroup is one session (~72 req/hour), adding a new RunnerGroup is genuinely cheap.
+This makes fine-grained RunnerGroup topologies much more practical than they would be under a fixed-session model.</p>
 <p>The argument for per-workflow RunnerGroups is now strong:</p>
 <ul>
 <li>Each workflow gets the minimum GPU count it actually needs, eliminating over-provisioning at the pod level.</li>
@@ -3078,24 +3091,34 @@
 <li>Adding a new RunnerGroup for a new test suite is a self-service config change with negligible operational cost.</li>
 </ul>
 <p>The remaining constraints are practical rather than rate-limit-driven:</p>
-<p><strong><code>maxListeners</code> must be sized per RunnerGroup.</strong> A RunnerGroup that receives large simultaneous job bursts needs a higher <code>maxListeners</code> ceiling to acquire them all within the 2-minute window. Misconfigured ceilings can cause missed acquisitions during bursts, not just queuing delays.</p>
-<p><strong>Peak rate-limit consumption scales with RunnerGroup count × <code>maxListeners</code>.</strong> At extreme scale — many RunnerGroups all bursting simultaneously — the peak session count can approach the installation budget. For most tenants this is not a practical concern; see <a href="#e6-when-to-shard-across-installations">E.6</a> for shard triggers.</p>
-<p><strong>Configuration overhead grows with RunnerGroup count.</strong> Each RunnerGroup requires a pod shape definition, label assignment, and <code>maxListeners</code> tuning. At very high RunnerGroup counts this becomes a maintenance surface.</p>
-<p><strong>The practical guidance:</strong> per-workflow RunnerGroups are a reasonable default for teams with meaningfully different resource requirements between workflows. Consolidate by pod shape only when workflows are resource-identical — there is no longer a strong rate-limit reason to force consolidation.</p>
+<p><strong><code>maxListeners</code> must be sized per RunnerGroup.</strong> A RunnerGroup that receives large simultaneous job bursts needs a higher <code>maxListeners</code> ceiling to acquire them all within the 2-minute window.
+Misconfigured ceilings can cause missed acquisitions during bursts, not just queuing delays.</p>
+<p><strong>Peak rate-limit consumption scales with RunnerGroup count × <code>maxListeners</code>.</strong> At extreme scale — many RunnerGroups all bursting simultaneously — the peak session count can approach the installation budget.
+For most tenants this is not a practical concern; see <a href="#e6-when-to-shard-across-installations">E.6</a> for shard triggers.</p>
+<p><strong>Configuration overhead grows with RunnerGroup count.</strong> Each RunnerGroup requires a pod shape definition, label assignment, and <code>maxListeners</code> tuning.
+At very high RunnerGroup counts this becomes a maintenance surface.</p>
+<p><strong>The practical guidance:</strong> per-workflow RunnerGroups are a reasonable default for teams with meaningfully different resource requirements between workflows.
+Consolidate by pod shape only when workflows are resource-identical — there is no longer a strong rate-limit reason to force consolidation.</p>
 <hr />
 <h2 id="e4-sizing-maxlisteners">E.4. Sizing <code>maxListeners</code><a class="headerlink" href="#e4-sizing-maxlisteners" title="Permanent link">&para;</a></h2>
-<p><code>RunnerGroup.maxListeners</code> caps the number of listener goroutines that can run concurrently during a burst. The AGC always maintains at least one listener; additional goroutines spawn as jobs arrive and shut down when the queue drains.</p>
-<p>This field is a <strong>burst ceiling, not a steady-state count.</strong> Setting it higher than needed costs nothing at rest — idle listener goroutines do not exist. The cost of setting it too low is missed job acquisitions: if 20 jobs arrive simultaneously and <code>maxListeners</code> is 5, only 5 can be acquired in the first wave; the remaining 15 must wait for sessions to free up, potentially timing out the 2-minute acquisition window if the burst is sustained.</p>
+<p><code>RunnerGroup.maxListeners</code> caps the number of listener goroutines that can run concurrently during a burst.
+The AGC always maintains at least one listener; additional goroutines spawn as jobs arrive and shut down when the queue drains.</p>
+<p>This field is a <strong>burst ceiling, not a steady-state count.</strong> Setting it higher than needed costs nothing at rest — idle listener goroutines do not exist.
+The cost of setting it too low is missed job acquisitions: if 20 jobs arrive simultaneously and <code>maxListeners</code> is 5, only 5 can be acquired in the first wave; the remaining 15 must wait for sessions to free up, potentially timing out the 2-minute acquisition window if the burst is sustained.</p>
 <p>A practical starting approach:</p>
 <ol>
-<li><strong>Estimate peak simultaneous job arrivals</strong> for this RunnerGroup. A team that pushes to many PRs at once at the start of the day may see 20–30 jobs arrive in a few seconds; a team with staggered pipelines may never exceed 5.</li>
+<li><strong>Estimate peak simultaneous job arrivals</strong> for this RunnerGroup.
+   A team that pushes to many PRs at once at the start of the day may see 20–30 jobs arrive in a few seconds; a team with staggered pipelines may never exceed 5.</li>
 <li><strong>Set <code>maxListeners</code> to cover that peak</strong> with a small margin (e.g. peak + 2–3).</li>
-<li><strong>Monitor <code>actions_gateway_active_sessions</code></strong> relative to <code>maxListeners</code>. If it consistently hits the ceiling during burst periods and jobs are being cancelled for acquisition timeout, increase it. If it never exceeds 3–4, the default of 10 is more than sufficient.</li>
+<li><strong>Monitor <code>actions_gateway_active_sessions</code></strong> relative to <code>maxListeners</code>.
+   If it consistently hits the ceiling during burst periods and jobs are being cancelled for acquisition timeout, increase it.
+   If it never exceeds 3–4, the default of 10 is more than sufficient.</li>
 </ol>
 <p>For most RunnerGroups the default of 10 is the right starting point and requires no tuning.</p>
 <hr />
 <h2 id="e5-multi-repo-usage">E.5. Multi-Repo Usage<a class="headerlink" href="#e5-multi-repo-usage" title="Permanent link">&para;</a></h2>
-<p>A GitHub App installation is scoped to an organization or a specific set of repositories. Within that scope, all repos can target any RunnerGroup by label — there is no per-repo RunnerGroup configuration required.</p>
+<p>A GitHub App installation is scoped to an organization or a specific set of repositories.
+Within that scope, all repos can target any RunnerGroup by label — there is no per-repo RunnerGroup configuration required.</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>Organization: my-org
 <a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>  ├── repo-a  (workflow: runs-on: [self-hosted, gpu-2x])   ──┐
 <a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>  ├── repo-b  (workflow: runs-on: [self-hosted, gpu-2x])   ──┤── same RunnerGroup
@@ -3104,24 +3127,42 @@
 <p>The only case that requires separate <code>ActionsGateway</code> CRs for repo-boundary reasons is when repos live in <strong>different GitHub organizations</strong> — because each org needs its own App installation, and each installation maps to exactly one <code>ActionsGateway</code> CR.</p>
 <hr />
 <h2 id="e6-when-to-shard-across-installations">E.6. When to Shard Across Installations<a class="headerlink" href="#e6-when-to-shard-across-installations" title="Permanent link">&para;</a></h2>
-<p>With the adaptive listener model, sharding is a much rarer need than under a fixed-session design. Shard to a new <code>ActionsGateway</code> CR (and therefore a new GitHub App installation) when:</p>
+<p>With the adaptive listener model, sharding is a much rarer need than under a fixed-session design.
+Shard to a new <code>ActionsGateway</code> CR (and therefore a new GitHub App installation) when:</p>
 <ul>
 <li>The <code>RateLimited</code> condition appears on any <code>RunnerGroup</code> during sustained peak load — the installation's 15,000 req/hour budget is being exhausted by simultaneous burst activity across many RunnerGroups.</li>
 <li>You need more than ~200 RunnerGroups in a single <code>ActionsGateway</code> (steady-state sessions approach the rate limit budget even at one session each).</li>
 <li>Repos in a different GitHub organization need access to the same Kubernetes tenant namespace.</li>
 <li>A team wants fully isolated credentials — a separate GitHub App installation with an independent rate-limit budget.</li>
 </ul>
-<p>As a rough check: <code>number of RunnerGroups × 72 req/hr</code> should stay well below 15,000/hr at rest. At 200 RunnerGroups that is 14,400 req/hr — already tight, with no headroom for burst. Keep steady-state RunnerGroup count comfortably below 150 per installation to preserve burst headroom.</p>
-<p>Each <code>ActionsGateway</code> CR requires its own namespace. If multiple shards are needed within a single team, the standard pattern is one namespace per installation:</p>
+<p>As a rough check: <code>number of RunnerGroups × 72 req/hr</code> should stay well below 15,000/hr at rest.
+At 200 RunnerGroups that is 14,400 req/hr — already tight, with no headroom for burst.
+Keep steady-state RunnerGroup count comfortably below 150 per installation to preserve burst headroom.</p>
+<p>Each <code>ActionsGateway</code> CR requires its own namespace.
+If multiple shards are needed within a single team, the standard pattern is one namespace per installation:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>team-a/                    ← namespace 1, ActionsGateway CR, GitHub App install 1
 <a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>team-a-overflow/           ← namespace 2, ActionsGateway CR, GitHub App install 2
 </code></pre></div>
-<p>Label the RunnerGroups consistently across installations (<code>gpu-2x</code>, <code>gpu-8x</code>, etc.) and split workflows between them based on priority or throughput class. There is no cross-installation load balancing built into this system; job routing is determined solely by which repos are covered by each installation's scope.</p>
+<p>Label the RunnerGroups consistently across installations (<code>gpu-2x</code>, <code>gpu-8x</code>, etc.) and split workflows between them based on priority or throughput class.</p>
+<blockquote>
+<p><strong>v2 <code>ScaleSet</code> sets shard differently.</strong> The advice above holds for <code>Classic</code> acquisition, where a label is only a match target.
+Under the <code>ScaleSet</code> protocol a set's <strong>first</strong> <code>runnerLabel</code> is its scale-set <em>name</em> at GitHub, and that name is unique per org, enterprise, or repo rather than per namespace.
+Two shards of one org therefore cannot reuse a first label, however far apart their namespaces are: they would drive one scale set from two controllers, each shard acquiring the other's jobs.
+Admission rejects it (Q791).
+Give each shard a distinct first label (<code>gpu-2x-a</code>, <code>gpu-2x-b</code>) and put the shared class in a later label, which may overlap freely.
+There is no cross-installation load balancing built into this system; job routing is determined solely by which repos are covered by each installation's scope.</p>
+</blockquote>
 <hr />
 <h2 id="e7-per-tenant-vs-per-team-partitioning">E.7. Per-Tenant vs. Per-Team Partitioning<a class="headerlink" href="#e7-per-tenant-vs-per-team-partitioning" title="Permanent link">&para;</a></h2>
-<p>The Gateway Manager Controller (GMC) multi-tenant model provisions one <code>ActionsGateway</code> per namespace. Within an organization, two common partitioning patterns emerge:</p>
-<p><strong>One gateway per team.</strong> Each team owns a namespace and an <code>ActionsGateway</code> CR. Runner shapes, <code>maxListeners</code> counts, and quota are fully self-managed per team. This is the recommended default — it aligns operational ownership with the team boundary, gives each team an independent rate-limit budget, and eliminates cross-team coordination on RunnerGroup configuration.</p>
-<p><strong>One gateway per environment (shared by multiple teams).</strong> A single tenant namespace serves multiple teams, with RunnerGroups differentiated by label convention (e.g. <code>team-a-gpu-2x</code>, <code>team-b-gpu-4x</code>). This reduces total AGC instances and GitHub App installations at the cost of reintroducing the coordination the self-service model is designed to avoid. Use this pattern only when the number of teams is small and the platform team is comfortable arbitrating RunnerGroup configuration and quota allocation.</p>
+<p>The Gateway Manager Controller (GMC) multi-tenant model provisions one <code>ActionsGateway</code> per namespace.
+Within an organization, two common partitioning patterns emerge:</p>
+<p><strong>One gateway per team.</strong> Each team owns a namespace and an <code>ActionsGateway</code> CR.
+Runner shapes, <code>maxListeners</code> counts, and quota are fully self-managed per team.
+This is the recommended default — it aligns operational ownership with the team boundary, gives each team an independent rate-limit budget, and eliminates cross-team coordination on RunnerGroup configuration.</p>
+<p><strong>One gateway per environment (shared by multiple teams).</strong> A single tenant namespace serves multiple teams, with RunnerGroups differentiated by label convention (e.g.
+<code>team-a-gpu-2x</code>, <code>team-b-gpu-4x</code>).
+This reduces total AGC instances and GitHub App installations at the cost of reintroducing the coordination the self-service model is designed to avoid.
+Use this pattern only when the number of teams is small and the platform team is comfortable arbitrating RunnerGroup configuration and quota allocation.</p>
 <hr />
 <h2 id="e8-decision-guide">E.8. Decision Guide<a class="headerlink" href="#e8-decision-guide" title="Permanent link">&para;</a></h2>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>New runner requirement arriving:
@@ -3152,18 +3193,32 @@
 </code></pre></div>
 <hr />
 <h2 id="e9-scaling-the-agc-itself">E.9. Scaling the AGC Itself<a class="headerlink" href="#e9-scaling-the-agc-itself" title="Permanent link">&para;</a></h2>
-<p>The AGC is a single-pod controller that holds all listener goroutine state in memory. It cannot be horizontally scaled to multiple replicas without distributing that state — a significant complexity increase that is not in scope for this design. The scaling levers available to operators are vertical scaling, optional VPA right-sizing, and sharding across multiple <code>ActionsGateway</code> CRs.</p>
-<p><strong>Vertical scaling (manual).</strong> The primary tuning surface is the AGC pod's resource footprint. The working memory consumed by listener goroutines at peak burst is:</p>
+<p>The AGC is a single-pod controller that holds all listener goroutine state in memory.
+It cannot be horizontally scaled to multiple replicas without distributing that state — a significant complexity increase that is not in scope for this design.
+The scaling levers available to operators are vertical scaling, optional VPA right-sizing, and sharding across multiple <code>ActionsGateway</code> CRs.</p>
+<p><strong>Vertical scaling (manual).</strong> The primary tuning surface is the AGC pod's resource footprint.
+The working memory consumed by listener goroutines at peak burst is:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>peak_goroutine_memory ≈ sum(maxListeners across all RunnerGroups) × 60 KiB
 </code></pre></div>
-<p>For example, 50 RunnerGroups each with <code>maxListeners: 10</code> → 500 concurrent goroutines at peak → ~30 MiB of goroutine working set. The recommended sizing (see <a href="../appendix-a-capacity-slos/">Appendix A</a>) is a <code>2Gi</code> memory <strong>request</strong> with a <code>4Gi</code> memory <strong>limit</strong> — the request is a generous scheduling reservation absorbing Go runtime overhead and heap churn during reconcile storms, and the limit sits well above the working set so transient bursts don't OOMKill the single-pod control plane while a true runaway is still bounded. On the v1 API the GMC stamps no resources on the AGC pod, so the platform applies this sizing on the AGC Deployment through its Helm/Kustomize overlay (or a namespace <code>LimitRange</code> that supplies default requests). If an operator adds many RunnerGroups with high <code>maxListeners</code> values and begins observing <code>container OOMKilled</code> events or high GC pressure (visible via <code>go_gc_duration_seconds</code> in Prometheus), raising the AGC Deployment's <code>resources.limits.memory</code> is the correct first response.</p>
-<p>CPU consumption is predominantly I/O-bound — goroutines spend nearly all of their time blocked on <code>GET /message</code> long-polls. CPU pressure appears only during reconcile churn (many RunnerGroups being created or deleted simultaneously) or during a token refresh storm. The recommended <code>2</code>-core CPU <strong>limit</strong> is sufficient for most deployments; raise the AGC Deployment's <code>resources.limits.cpu</code> only if <code>container_cpu_throttled_seconds_total</code> shows sustained throttling during peak reconcile activity.</p>
-<p><strong>Optional VPA right-sizing.</strong> A <a href="https://github.com/kubernetes/autoscaler/tree/master/vertical-pod-autoscaler">Vertical Pod Autoscaler</a> (VPA) observes the AGC's actual CPU and memory usage over time and adjusts its resource requests automatically. This is useful for operators who want the AGC to self-tune rather than set limits manually, especially in early-production environments where workload shape is still stabilizing. The AGC handles VPA-initiated restarts gracefully: when killed, in-flight listener goroutines deregister their sessions via <code>DELETE /sessions</code>, and the AGC re-registers them within GitHub's 2-minute redelivery window on restart (see <a href="../04-operational-flows/#42-job-execution-flow-agc">§4.2</a> and the <code>SessionReacquisition</code> SLO in <a href="../appendix-a-capacity-slos/">Appendix A</a>).</p>
+<p>For example, 50 RunnerGroups each with <code>maxListeners: 10</code> → 500 concurrent goroutines at peak → ~30 MiB of goroutine working set.
+The recommended sizing (see <a href="../appendix-a-capacity-slos/">Appendix A</a>) is a <code>2Gi</code> memory <strong>request</strong> with a <code>4Gi</code> memory <strong>limit</strong> — the request is a generous scheduling reservation absorbing Go runtime overhead and heap churn during reconcile storms, and the limit sits well above the working set so transient bursts don't OOMKill the single-pod control plane while a true runaway is still bounded.
+On the v1 API the GMC stamps no resources on the AGC pod, so the platform applies this sizing on the AGC Deployment through its Helm/Kustomize overlay (or a namespace <code>LimitRange</code> that supplies default requests).
+If an operator adds many RunnerGroups with high <code>maxListeners</code> values and begins observing <code>container OOMKilled</code> events or high GC pressure (visible via <code>go_gc_duration_seconds</code> in Prometheus), raising the AGC Deployment's <code>resources.limits.memory</code> is the correct first response.</p>
+<p>CPU consumption is predominantly I/O-bound — goroutines spend nearly all of their time blocked on <code>GET /message</code> long-polls.
+CPU pressure appears only during reconcile churn (many RunnerGroups being created or deleted simultaneously) or during a token refresh storm.
+The recommended <code>2</code>-core CPU <strong>limit</strong> is sufficient for most deployments; raise the AGC Deployment's <code>resources.limits.cpu</code> only if <code>container_cpu_throttled_seconds_total</code> shows sustained throttling during peak reconcile activity.</p>
+<p><strong>Optional VPA right-sizing.</strong> A <a href="https://github.com/kubernetes/autoscaler/tree/master/vertical-pod-autoscaler">Vertical Pod Autoscaler</a> (VPA) observes the AGC's actual CPU and memory usage over time and adjusts its resource requests automatically.
+This is useful for operators who want the AGC to self-tune rather than set limits manually, especially in early-production environments where workload shape is still stabilizing.
+The AGC handles VPA-initiated restarts gracefully: when killed, in-flight listener goroutines deregister their sessions via <code>DELETE /sessions</code>, and the AGC re-registers them within GitHub's 2-minute redelivery window on restart (see <a href="../04-operational-flows/#42-job-execution-flow-agc">§4.2</a> and the <code>SessionReacquisition</code> SLO in <a href="../appendix-a-capacity-slos/">Appendix A</a>).</p>
 <p>Under v2 this is a first-class opt-in rather than something the operator hand-rolls: see <a href="#e11-managed-vertical-right-sizing-of-the-control-planes">E.11</a> for the two managed opt-ins the system ships, the precedence rules against <code>agcResources</code>, and what happens on a cluster where the VPA CRDs are not installed.</p>
 <blockquote>
-<p><strong>v2 promotes AGC sizing to a CR field — <code>spec.agcResources</code> (Q171).</strong> This appendix describes the v1 API (<code>actions-gateway.github.com/v1alpha1</code>), where AGC sizing is platform-applied on the Deployment as above. The v2 <code>ActionsGateway</code> (<code>actions-gateway.com/v2alpha1</code>) instead exposes an optional <code>agcResources</code> field of the standard <code>corev1.ResourceRequirements</code> shape for tenant-controlled per-gateway sizing, and makes the <a href="../appendix-a-capacity-slos/">Appendix A</a> sizing (requests <code>cpu: 500m</code> / <code>memory: 2Gi</code>, limits <code>cpu: 2</code> / <code>memory: 4Gi</code>) the GMC-stamped default: the override is additive per key, so setting one knob keeps the default for the rest and omitting the field reproduces the default unchanged. See <a href="../appendix-h-v2-api-decomposition/">Appendix H</a> for the v2 decomposition and <a href="../../operations/tenant-onboarding/#tuning-agc-control-plane-resources">tenant-onboarding</a> for the operator-facing how-to and the recommended floor.</p>
+<p><strong>v2 promotes AGC sizing to a CR field — <code>spec.agcResources</code> (Q171).</strong> This appendix describes the v1 API (<code>actions-gateway.github.com/v1alpha1</code>), where AGC sizing is platform-applied on the Deployment as above.
+The v2 <code>ActionsGateway</code> (<code>actions-gateway.com/v2alpha1</code>) instead exposes an optional <code>agcResources</code> field of the standard <code>corev1.ResourceRequirements</code> shape for tenant-controlled per-gateway sizing, and makes the <a href="../appendix-a-capacity-slos/">Appendix A</a> sizing (requests <code>cpu: 500m</code> / <code>memory: 2Gi</code>, limits <code>cpu: 2</code> / <code>memory: 4Gi</code>) the GMC-stamped default: the override is additive per key, so setting one knob keeps the default for the rest and omitting the field reproduces the default unchanged.
+See <a href="../appendix-h-v2-api-decomposition/">Appendix H</a> for the v2 decomposition and <a href="../../operations/tenant-onboarding/#tuning-agc-control-plane-resources">tenant-onboarding</a> for the operator-facing how-to and the recommended floor.</p>
 </blockquote>
-<p><strong>Horizontal sharding.</strong> When the number of RunnerGroups or their aggregate <code>maxListeners</code> exceeds what a single vertically-scaled AGC pod can comfortably handle — or when rate-limit pressure appears (see <a href="#e6-when-to-shard-across-installations">E.6</a>) — the correct scale path is to shard into a second <code>ActionsGateway</code> CR in a new namespace with a separate GitHub App installation. Each shard has its own AGC pod, its own rate-limit budget, and its own independent listener goroutine pool. See <a href="#e6-when-to-shard-across-installations">E.6</a> for shard triggers and the standard namespace partitioning pattern.</p>
+<p><strong>Horizontal sharding.</strong> When the number of RunnerGroups or their aggregate <code>maxListeners</code> exceeds what a single vertically-scaled AGC pod can comfortably handle — or when rate-limit pressure appears (see <a href="#e6-when-to-shard-across-installations">E.6</a>) — the correct scale path is to shard into a second <code>ActionsGateway</code> CR in a new namespace with a separate GitHub App installation.
+Each shard has its own AGC pod, its own rate-limit budget, and its own independent listener goroutine pool.
+See <a href="#e6-when-to-shard-across-installations">E.6</a> for shard triggers and the standard namespace partitioning pattern.</p>
 <hr />
 <h2 id="e10-worked-examples">E.10. Worked Examples<a class="headerlink" href="#e10-worked-examples" title="Permanent link">&para;</a></h2>
 <p>The following concrete scenarios show how to apply the formulas and decision guide above to real configurations.</p>
@@ -3183,9 +3238,7 @@
 <a id="__codelineno-5-10" name="__codelineno-5-10" href="#__codelineno-5-10"></a><span class="w">    </span><span class="nt">pods</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;85&quot;</span><span class="w">           </span><span class="c1"># 10 + 20 + 50 + 5 headroom</span>
 </code></pre></div>
 <p>The tenant's <code>ActionsGateway</code> then declares the runner groups (no quota field).
-An embedded <code>runnerGroups[]</code> entry has no <code>name</code> field — the GMC derives each
-RunnerGroup's name from its first <code>runnerLabels</code> entry, so keep the distinguishing
-label first to give every group a distinct name:</p>
+An embedded <code>runnerGroups[]</code> entry has no <code>name</code> field — the GMC derives each RunnerGroup's name from its first <code>runnerLabels</code> entry, so keep the distinguishing label first to give every group a distinct name:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">actions-gateway.github.com/v1alpha1</span>
 <a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ActionsGateway</span>
 <a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="nt">metadata</span><span class="p">:</span>
@@ -3226,13 +3279,18 @@ label first to give every group a distinct name:</p>
 <a id="__codelineno-6-38" name="__codelineno-6-38" href="#__codelineno-6-38"></a><span class="w">      </span><span class="nt">maxListeners</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">10</span><span class="w">   </span><span class="c1"># rarely bursts, default is fine</span>
 <a id="__codelineno-6-39" name="__codelineno-6-39" href="#__codelineno-6-39"></a><span class="w">      </span><span class="nt">maxWorkers</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">50</span>
 </code></pre></div>
-<p><strong>Rate-limit check.</strong> Steady-state: 3 sessions × 72 req/hr = 216 req/hr — negligible against the 15,000/hr budget. Peak burst: (12 + 22 + 10) = 44 sessions × 72 req/hr = 3,168 req/hr — well within budget. No sharding needed.</p>
+<p><strong>Rate-limit check.</strong> Steady-state: 3 sessions × 72 req/hr = 216 req/hr — negligible against the 15,000/hr budget.
+Peak burst: (12 + 22 + 10) = 44 sessions × 72 req/hr = 3,168 req/hr — well within budget.
+No sharding needed.</p>
 <p><strong>Peak goroutine memory.</strong> 44 concurrent goroutines × 60 KiB ≈ 2.6 MiB — trivial.</p>
-<p><strong>Namespace quota.</strong> Sized to the maximum simultaneous pod count (10 + 20 + 50 = 80) plus 5 AGC/proxy headroom. The <code>requests.cpu</code> and <code>requests.memory</code> fields must sum to cover the worker pod requests for all concurrent jobs.</p>
+<p><strong>Namespace quota.</strong> Sized to the maximum simultaneous pod count (10 + 20 + 50 = 80) plus 5 AGC/proxy headroom.
+The <code>requests.cpu</code> and <code>requests.memory</code> fields must sum to cover the worker pod requests for all concurrent jobs.</p>
 <hr />
 <h3 id="scenario-2-cpu-only-team-100-jobsday-bursty-up-to-10-concurrent">Scenario 2: CPU-Only Team, 100 Jobs/Day, Bursty (Up to 10 Concurrent)<a class="headerlink" href="#scenario-2-cpu-only-team-100-jobsday-bursty-up-to-10-concurrent" title="Permanent link">&para;</a></h3>
-<p><strong>Context.</strong> A backend team runs integration tests. Jobs arrive in bursts at the start of PRs — up to 10 jobs may land simultaneously — but total daily volume is modest.</p>
-<p><strong>Configuration.</strong> Minimal; no GPU, no priority tiers. The platform admin owns the namespace quota:</p>
+<p><strong>Context.</strong> A backend team runs integration tests.
+Jobs arrive in bursts at the start of PRs — up to 10 jobs may land simultaneously — but total daily volume is modest.</p>
+<p><strong>Configuration.</strong> Minimal; no GPU, no priority tiers.
+The platform admin owns the namespace quota:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">v1</span>
 <a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ResourceQuota</span>
 <a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="nt">metadata</span><span class="p">:</span>
@@ -3266,13 +3324,20 @@ label first to give every group a distinct name:</p>
 <a id="__codelineno-8-20" name="__codelineno-8-20" href="#__codelineno-8-20"></a><span class="w">                  </span><span class="nt">cpu</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;2&quot;</span>
 <a id="__codelineno-8-21" name="__codelineno-8-21" href="#__codelineno-8-21"></a><span class="w">                  </span><span class="nt">memory</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;4Gi&quot;</span>
 </code></pre></div>
-<p><strong>Rate-limit check.</strong> 1 session × 72 req/hr = 72 req/hr at rest. Burst: 12 × 72 = 864 req/hr — well within budget.</p>
-<p><strong>Note on simplicity.</strong> Because there is no <code>priorityTiers</code>, no <code>PriorityClass</code> objects need to be pre-created. <code>maxWorkers</code> alone is sufficient for a flat concurrency ceiling. This is the recommended starting point for teams that do not have competing priority requirements.</p>
+<p><strong>Rate-limit check.</strong> 1 session × 72 req/hr = 72 req/hr at rest.
+Burst: 12 × 72 = 864 req/hr — well within budget.</p>
+<p><strong>Note on simplicity.</strong> Because there is no <code>priorityTiers</code>, no <code>PriorityClass</code> objects need to be pre-created.
+<code>maxWorkers</code> alone is sufficient for a flat concurrency ceiling.
+This is the recommended starting point for teams that do not have competing priority requirements.</p>
 <hr />
 <h3 id="scenario-3-large-tenant-hitting-the-250-session-ceiling--sharding-walkthrough">Scenario 3: Large Tenant Hitting the 250-Session Ceiling — Sharding Walkthrough<a class="headerlink" href="#scenario-3-large-tenant-hitting-the-250-session-ceiling--sharding-walkthrough" title="Permanent link">&para;</a></h3>
-<p><strong>Context.</strong> A platform team provides shared runners across 200 repositories in the same organization. They have 180 RunnerGroups (one per workflow shape), each with <code>maxListeners: 10</code>. At peak load, 60 RunnerGroups are simultaneously bursting.</p>
-<p><strong>Problem.</strong> The burst peak is 60 RunnerGroups × 10 sessions × 72 req/hr = 43,200 req/hr — nearly 3× the 15,000/hr installation budget. The <code>RateLimited</code> condition appears during business hours.</p>
-<p><strong>Steady-state check.</strong> 180 RunnerGroups × 72 req/hr = 12,960 req/hr. Even at rest, this is 86% of the budget — no headroom for any burst.</p>
+<p><strong>Context.</strong> A platform team provides shared runners across 200 repositories in the same organization.
+They have 180 RunnerGroups (one per workflow shape), each with <code>maxListeners: 10</code>.
+At peak load, 60 RunnerGroups are simultaneously bursting.</p>
+<p><strong>Problem.</strong> The burst peak is 60 RunnerGroups × 10 sessions × 72 req/hr = 43,200 req/hr — nearly 3× the 15,000/hr installation budget.
+The <code>RateLimited</code> condition appears during business hours.</p>
+<p><strong>Steady-state check.</strong> 180 RunnerGroups × 72 req/hr = 12,960 req/hr.
+Even at rest, this is 86% of the budget — no headroom for any burst.</p>
 <p><strong>Solution: shard to two ActionsGateway CRs.</strong></p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>namespace: platform-runners-1   → GitHub App installation 1
 <a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a>  RunnerGroups: 90 (the first half)
@@ -3280,7 +3345,9 @@ label first to give every group a distinct name:</p>
 <a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a>namespace: platform-runners-2   → GitHub App installation 2
 <a id="__codelineno-9-5" name="__codelineno-9-5" href="#__codelineno-9-5"></a>  RunnerGroups: 90 (the second half)
 </code></pre></div>
-<p>Split strategy: partition RunnerGroups by workflow class. If model-training workflows always burst together, put them in the same shard so their burst pressure is contained within one budget. If CPU and GPU workflows burst independently, split them across shards to spread peak load.</p>
+<p>Split strategy: partition RunnerGroups by workflow class.
+If model-training workflows always burst together, put them in the same shard so their burst pressure is contained within one budget.
+If CPU and GPU workflows burst independently, split them across shards to spread peak load.</p>
 <p>After sharding, each installation has 90 × 72 = 6,480 req/hr at rest — 43% of the 15,000/hr budget with headroom for burst.</p>
 <p><strong>Steps.</strong></p>
 <ol>
@@ -3292,7 +3359,9 @@ label first to give every group a distinct name:</p>
 </ol>
 <hr />
 <h2 id="e11-managed-vertical-right-sizing-of-the-control-planes">E.11. Managed Vertical Right-Sizing of the Control Planes<a class="headerlink" href="#e11-managed-vertical-right-sizing-of-the-control-planes" title="Permanent link">&para;</a></h2>
-<p>Both control planes — the cluster-wide Gateway Manager Controller (GMC) and each per-tenant AGC — are single-shape, long-lived workloads whose correct resource footprint is exactly the thing an operator cannot know in advance. Manual sizing is therefore either wasteful (a 2Gi request for a 60 MiB working set) or dangerous (a limit below the working set OOMKills a single-pod control plane). Q360 ships two opt-ins that hand that judgement to a Vertical Pod Autoscaler instead.</p>
+<p>Both control planes — the cluster-wide Gateway Manager Controller (GMC) and each per-tenant AGC — are single-shape, long-lived workloads whose correct resource footprint is exactly the thing an operator cannot know in advance.
+Manual sizing is therefore either wasteful (a 2Gi request for a 60 MiB working set) or dangerous (a limit below the working set OOMKills a single-pod control plane).
+Q360 ships two opt-ins that hand that judgement to a Vertical Pod Autoscaler instead.</p>
 <p>Both are <strong>opt-in and off by default</strong>, and both default to recommendation-only, so turning them on is observable before it is disruptive.</p>
 <table>
 <thead>
@@ -3315,7 +3384,8 @@ label first to give every group a distinct name:</p>
 </tr>
 </tbody>
 </table>
-<p>The per-gateway opt-in is the presence of the block; there is no <code>enabled</code> flag, so removing <code>agcAutoscaling</code> deletes the managed <code>VerticalPodAutoscaler</code> again. <code>spec.agcAutoscaling.mode</code> is the autoscaler's <code>updateMode</code>, restricted to three values:</p>
+<p>The per-gateway opt-in is the presence of the block; there is no <code>enabled</code> flag, so removing <code>agcAutoscaling</code> deletes the managed <code>VerticalPodAutoscaler</code> again.
+<code>spec.agcAutoscaling.mode</code> is the autoscaler's <code>updateMode</code>, restricted to three values:</p>
 <table>
 <thead>
 <tr>
@@ -3338,23 +3408,36 @@ label first to give every group a distinct name:</p>
 </tr>
 </tbody>
 </table>
-<p>Upstream's fourth value, <code>Auto</code>, is deliberately <strong>not</strong> exposed. It is an alias whose actuation mechanism is version-dependent (today it evicts like <code>Recreate</code>; in-place pod resize is still alpha), so a gateway pinned to <code>Auto</code> would silently change its restart behavior on a VPA upgrade. Naming <code>Recreate</code> makes the eviction explicit.</p>
+<p>Upstream's fourth value, <code>Auto</code>, is deliberately <strong>not</strong> exposed.
+It is an alias whose actuation mechanism is version-dependent (today it evicts like <code>Recreate</code>; in-place pod resize is still alpha), so a gateway pinned to <code>Auto</code> would silently change its restart behavior on a VPA upgrade.
+Naming <code>Recreate</code> makes the eviction explicit.</p>
 <h3 id="e111-precedence-against-agcresources">E.11.1. Precedence against <code>agcResources</code><a class="headerlink" href="#e111-precedence-against-agcresources" title="Permanent link">&para;</a></h3>
-<p>Both <code>agcResources</code> and the autoscaler influence the AGC container's resources, so the division is fixed and explicit rather than last-writer-wins. <strong>They compose; they do not compete.</strong></p>
+<p>Both <code>agcResources</code> and the autoscaler influence the AGC container's resources, so the division is fixed and explicit rather than last-writer-wins.
+<strong>They compose; they do not compete.</strong></p>
 <ul>
 <li><strong><code>agcResources</code> alone decides what the GMC stamps on the Deployment.</strong> That is unchanged by the opt-in, and it is the sizing actually in effect whenever the autoscaler is not actuating: <code>mode: Off</code>, the VPA components absent or down, or before the first recommendation exists.</li>
-<li><strong>The managed autoscaler is pinned to <code>controlledValues: RequestsOnly</code>.</strong> It moves <em>requests</em> only; the limits from <code>agcResources</code> (or the platform default) are never raised or lowered by it. On a single-pod control plane, an autoscaler that also drifted the memory <em>limit</em> would erode the OOM ceiling that bounds a runaway — the property the limit exists for.</li>
-<li><strong>A request the tenant explicitly set becomes the autoscaler's <code>minAllowed</code>.</strong> An explicit floor is honored as a floor rather than silently overwritten. Leave <code>agcResources.requests</code> unset to let the autoscaler size the AGC all the way down to its own global floor — that is the configuration where right-sizing has the most to win.</li>
-<li><strong>The effective limits become <code>maxAllowed</code>.</strong> This is a correctness requirement, not a preference: a container whose request exceeds its own limit is rejected by the apiserver, so the autoscaler must never recommend above the stamped limit. It is also the pairing upstream requires — <code>RequestsOnly</code> on a container that <em>has</em> limits is only safe with a <code>maxAllowed</code> at most equal to them — which is why the ceiling is always emitted rather than optional.</li>
+<li><strong>The managed autoscaler is pinned to <code>controlledValues: RequestsOnly</code>.</strong> It moves <em>requests</em> only; the limits from <code>agcResources</code> (or the platform default) are never raised or lowered by it.
+  On a single-pod control plane, an autoscaler that also drifted the memory <em>limit</em> would erode the OOM ceiling that bounds a runaway — the property the limit exists for.</li>
+<li><strong>A request the tenant explicitly set becomes the autoscaler's <code>minAllowed</code>.</strong> An explicit floor is honored as a floor rather than silently overwritten.
+  Leave <code>agcResources.requests</code> unset to let the autoscaler size the AGC all the way down to its own global floor — that is the configuration where right-sizing has the most to win.</li>
+<li><strong>The effective limits become <code>maxAllowed</code>.</strong> This is a correctness requirement, not a preference: a container whose request exceeds its own limit is rejected by the apiserver, so the autoscaler must never recommend above the stamped limit.
+  It is also the pairing upstream requires — <code>RequestsOnly</code> on a container that <em>has</em> limits is only safe with a <code>maxAllowed</code> at most equal to them — which is why the ceiling is always emitted rather than optional.</li>
 </ul>
-<p><strong>Resolved at reconcile, not at admission.</strong> Setting both fields is a coherent configuration (sizing plus bounds), not a contradiction, so rejecting the combination at admission would remove a useful and idiomatic way to configure a VPA. What admission-time rejection buys — "no silent surprises" — is bought instead by making the resolution visible: the derived bounds are on the stamped <code>VerticalPodAutoscaler</code> object, the GMC emits a Normal Event naming them when the autoscaler first appears, and the <code>AGCAutoscalingUnavailable</code> condition states which knob owns what. The chart-level opt-in follows the same rules against the chart's <code>resources</code> value.</p>
+<p><strong>Resolved at reconcile, not at admission.</strong> Setting both fields is a coherent configuration (sizing plus bounds), not a contradiction, so rejecting the combination at admission would remove a useful and idiomatic way to configure a VPA.
+What admission-time rejection buys — "no silent surprises" — is bought instead by making the resolution visible: the derived bounds are on the stamped <code>VerticalPodAutoscaler</code> object, the GMC emits a Normal Event naming them when the autoscaler first appears, and the <code>AGCAutoscalingUnavailable</code> condition states which knob owns what.
+The chart-level opt-in follows the same rules against the chart's <code>resources</code> value.</p>
 <h3 id="e112-when-the-vpa-crds-are-absent">E.11.2. When the VPA CRDs are absent<a class="headerlink" href="#e112-when-the-vpa-crds-are-absent" title="Permanent link">&para;</a></h3>
-<p>The <code>autoscaling.k8s.io</code> CRDs are not part of core Kubernetes, so an opt-in can be unsatisfiable through no fault of the CR. The GMC probes its RESTMapper for the <code>VerticalPodAutoscaler</code> kind and, when it is missing:</p>
+<p>The <code>autoscaling.k8s.io</code> CRDs are not part of core Kubernetes, so an opt-in can be unsatisfiable through no fault of the CR.
+The GMC probes its RESTMapper for the <code>VerticalPodAutoscaler</code> kind and, when it is missing:</p>
 <ul>
-<li><strong>provisions the gateway normally</strong> — the AGC is created with its <code>agcResources</code> sizing and reaches <code>Ready=True</code>. A missing optional right-sizing prerequisite is not a reason to withhold a tenant's runners;</li>
+<li><strong>provisions the gateway normally</strong> — the AGC is created with its <code>agcResources</code> sizing and reaches <code>Ready=True</code>.
+  A missing optional right-sizing prerequisite is not a reason to withhold a tenant's runners;</li>
 <li><strong>does not fail or retry the write</strong> — nothing is applied against a kind the apiserver does not serve, so there is no error to hot-loop on;</li>
-<li><strong>surfaces it</strong> — the advisory <code>AGCAutoscalingUnavailable=True</code> condition (reason <code>VPACRDNotInstalled</code>, naming the remediation) plus one Warning Event per transition. The condition is advisory: it never gates <code>Ready</code>, exactly like <code>EgressUnattributed</code>. Like every other v2 gateway condition it also exports a Prometheus gauge, <code>actions_gateway_agc_autoscaling_unavailable</code> (Q390), so the unsatisfiable opt-in is alertable rather than visible only via <code>kubectl describe</code>;</li>
-<li><strong>converges on its own</strong> — the gateway re-probes every 10 minutes, so installing the vertical-pod-autoscaler later takes effect without an operator edit. Ten minutes is a poll, not a hot loop: one cached-discovery lookup per gateway per interval.</li>
+<li><strong>surfaces it</strong> — the advisory <code>AGCAutoscalingUnavailable=True</code> condition (reason <code>VPACRDNotInstalled</code>, naming the remediation) plus one Warning Event per transition.
+  The condition is advisory: it never gates <code>Ready</code>, exactly like <code>EgressUnattributed</code>.
+  Like every other v2 gateway condition it also exports a Prometheus gauge, <code>actions_gateway_agc_autoscaling_unavailable</code> (Q390), so the unsatisfiable opt-in is alertable rather than visible only via <code>kubectl describe</code>;</li>
+<li><strong>converges on its own</strong> — the gateway re-probes every 10 minutes, so installing the vertical-pod-autoscaler later takes effect without an operator edit.
+  Ten minutes is a poll, not a hot loop: one cached-discovery lookup per gateway per interval.</li>
 </ul>
 <p>The chart-level opt-in has no equivalent runtime path — Helm renders the object at install time, so <code>vpa.enabled: true</code> without the CRDs fails <code>helm install</code> loudly, the same prerequisite contract as <code>metrics.serviceMonitor.enabled</code>.</p>
 <hr />

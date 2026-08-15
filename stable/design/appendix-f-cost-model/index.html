@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/1.4.0/design/appendix-f-cost-model/">
+        <link rel="canonical" href="https://actions-gateway.com/1.5.0/design/appendix-f-cost-model/">
       
       
         <link rel="prev" href="../appendix-e-capacity-planning/">
@@ -63,15 +63,15 @@
   <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/IBMPlexSans-Bold.woff2">
   <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/MonaspaceNeon-Medium.woff2">
   
-  <meta property="og:image" content="https://actions-gateway.com/1.4.0assets/social-preview.png">
+  <meta property="og:image" content="https://actions-gateway.com/1.5.0assets/social-preview.png">
   <meta property="og:image:width" content="1280">
   <meta property="og:image:height" content="640">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:image" content="https://actions-gateway.com/1.4.0assets/social-preview.png">
+  <meta name="twitter:image" content="https://actions-gateway.com/1.5.0assets/social-preview.png">
   
-  <link rel="apple-touch-icon" href="https://actions-gateway.com/1.4.0assets/apple-touch-icon.png">
-  <link rel="alternate icon" href="https://actions-gateway.com/1.4.0assets/favicon.ico">
-  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/1.4.0assets/icon-512.png">
+  <link rel="apple-touch-icon" href="https://actions-gateway.com/1.5.0assets/apple-touch-icon.png">
+  <link rel="alternate icon" href="https://actions-gateway.com/1.5.0assets/favicon.ico">
+  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/1.5.0assets/icon-512.png">
   
   <script type="application/ld+json">
   {
@@ -79,14 +79,14 @@
     "@type": "SoftwareSourceCode",
     "name": "GitHub Actions Gateway",
     "description": "An Actions Runner Controller (ARC) alternative for self-hosted GitHub Actions runners on multi-tenant Kubernetes \u2014 oversubscribe a shared quota, recover evicted jobs automatically, and isolate every tenant\u0027s GitHub egress.",
-    "url": "https://actions-gateway.com/1.4.0",
+    "url": "https://actions-gateway.com/1.5.0",
     "codeRepository": "https://github.com/actions-gateway/github-actions-gateway",
     "programmingLanguage": "Go",
     "license": "https://www.apache.org/licenses/LICENSE-2.0",
     "author": {
       "@type": "Organization",
       "name": "GitHub Actions Gateway",
-      "url": "https://actions-gateway.com/1.4.0"
+      "url": "https://actions-gateway.com/1.5.0"
     }
   }
   </script>
@@ -95,8 +95,8 @@
     "@context": "https://schema.org",
     "@type": "Organization",
     "name": "GitHub Actions Gateway",
-    "url": "https://actions-gateway.com/1.4.0",
-    "logo": "https://actions-gateway.com/1.4.0assets/icon-512.png",
+    "url": "https://actions-gateway.com/1.5.0",
+    "logo": "https://actions-gateway.com/1.5.0assets/icon-512.png",
     "sameAs": ["https://github.com/actions-gateway/github-actions-gateway"]
   }
   </script>
@@ -132,8 +132,8 @@
         <aside class="md-banner">
           <div class="md-banner__inner md-grid md-typeset">
             
-            <strong>v1.4.0 is here.</strong>
-      Consent-gated cross-namespace egress proxy sharing, a curated runner template library you apply with one command, and v2 worker-capacity conditions exported as Prometheus gauges.
+            <strong>v1.5.0 is here.</strong>
+      A per-tenant GitHub runner group boundary, multi-label runner sets that migrate a <code>runs-on</code> array unedited, and job duration and latency metrics on the acquisition tier every new tenant runs.
           </div>
           
         </aside>
@@ -145,7 +145,7 @@
           <aside class="md-banner md-banner--warning">
             <div class="md-banner__inner md-grid md-typeset">
               You're not viewing the latest release.
-  <a href="https://actions-gateway.com/1.4.0"><strong>Go to the current docs.</strong></a>
+  <a href="https://actions-gateway.com/1.5.0"><strong>Go to the current docs.</strong></a>
 
             </div>
             <script>var el=document.querySelector("[data-md-component=outdated]"),base=new URL("../.."),outdated=__md_get("__outdated",sessionStorage,base);!0===outdated&&el&&(el.hidden=!1)</script>
@@ -3057,11 +3057,16 @@
 <h1 id="appendix-f--cost-model">Appendix F — Cost Model<a class="headerlink" href="#appendix-f--cost-model" title="Permanent link">&para;</a></h1>
 <p>← <a href="../appendix-e-capacity-planning/">Appendix E</a> | <a href="../">Back to index</a></p>
 <hr />
-<p>Audience: budget owners, platform team leads. This appendix provides a framework for estimating and allocating compute costs under this system, and compares it to a representative Actions Runner Controller (ARC) deployment.</p>
-<p>Want a number for your own workload? Jump to the <strong><a href="#f5-savings-calculator-this-system-vs-arc">interactive savings calculator</a></strong> — it computes estimated monthly savings vs ARC from your jobs/day, average job duration, and the idle-runner floor ARC would hold.</p>
+<p>Audience: budget owners, platform team leads.
+This appendix provides a framework for estimating and allocating compute costs under this system, and compares it to a representative Actions Runner Controller (ARC) deployment.</p>
+<p>Want a number for your own workload?
+Jump to the <strong><a href="#f5-savings-calculator-this-system-vs-arc">interactive savings calculator</a></strong> — it computes estimated monthly savings vs ARC from your jobs/day, average job duration, and the idle-runner floor ARC would hold.</p>
 <hr />
 <h2 id="f0-rate-sources-and-assumptions">F.0. Rate sources and assumptions<a class="headerlink" href="#f0-rate-sources-and-assumptions" title="Permanent link">&para;</a></h2>
-<p>Every dollar figure below uses <strong>real public list prices</strong>, cited here so you can audit and re-derive them. NVIDIA rates are AWS EC2 Linux <strong>on-demand</strong> in <code>us-east-1</code>; AMD Instinct rates are on-demand from specialty GPU clouds and hyperscalers (AMD Instinct is not offered on AWS); GitHub figures are per-minute Actions billing. All captured <strong>2026-06</strong>. They change over time and vary by region, commitment (Savings Plans / Reserved / Spot), and provider — treat them as a worked baseline, not a quote, and substitute your own contracted rates.</p>
+<p>Every dollar figure below uses <strong>real public list prices</strong>, cited here so you can audit and re-derive them.
+NVIDIA rates are AWS EC2 Linux <strong>on-demand</strong> in <code>us-east-1</code>; AMD Instinct rates are on-demand from specialty GPU clouds and hyperscalers (AMD Instinct is not offered on AWS); GitHub figures are per-minute Actions billing.
+All captured <strong>2026-06</strong>.
+They change over time and vary by region, commitment (Savings Plans / Reserved / Spot), and provider — treat them as a worked baseline, not a quote, and substitute your own contracted rates.</p>
 <table>
 <thead>
 <tr>
@@ -3119,17 +3124,25 @@
 </tbody>
 </table>
 <blockquote>
-<p><strong>AMD Instinct pricing is more volatile than NVIDIA.</strong> It is sourced from specialty clouds (DigitalOcean, Hot Aisle, Runpod, TensorWave, Vultr) and hyperscalers (Oracle, Azure), not AWS, and the same chip can vary several-fold between providers and over short windows — MI355X on-demand swung from $2.59 to $8.60/GPU-hr in eight months. The per-GPU figures above are representative on-demand rates; re-check a current quote before relying on one. The cost <em>model</em> below is provider-agnostic — it cares only about the per-runner-hour rate you plug in, whichever accelerator and cloud you run.</p>
+<p><strong>AMD Instinct pricing is more volatile than NVIDIA.</strong> It is sourced from specialty clouds (DigitalOcean, Hot Aisle, Runpod, TensorWave, Vultr) and hyperscalers (Oracle, Azure), not AWS, and the same chip can vary several-fold between providers and over short windows — MI355X on-demand swung from $2.59 to $8.60/GPU-hr in eight months.
+The per-GPU figures above are representative on-demand rates; re-check a current quote before relying on one.
+The cost <em>model</em> below is provider-agnostic — it cares only about the per-runner-hour rate you plug in, whichever accelerator and cloud you run.</p>
 </blockquote>
 <p><strong>Assumptions baked into every figure below:</strong></p>
 <ul>
-<li><strong>Zero idle compute is the core lever.</strong> This system creates a worker pod only when a job is acquired and deletes it the instant the job completes (see <a href="../02-architecture/">§02 Architecture</a>). It holds <strong>no</strong> always-on runner replicas. ARC's scale-set mode, by contrast, commonly runs <code>minRunners: N &gt; 0</code> to mask cold-start latency — those N runners are billed 24/7 whether or not a job is running.</li>
-<li><strong>Active job cost is identical in both systems.</strong> A job that runs for <em>D</em> minutes on an instance costing <em>R</em> $/hr costs <code>D/60 × R</code> in <em>either</em> system — both run exactly one pod for the job's duration. The cost difference is therefore <strong>entirely the idle floor</strong> ARC holds and this system does not. We do <strong>not</strong> claim a per-job execution saving; claiming one would be dishonest.</li>
+<li><strong>Zero idle compute is the core lever.</strong> This system creates a worker pod only when a job is acquired and deletes it the instant the job completes (see <a href="../02-architecture/">§02 Architecture</a>).
+  It holds <strong>no</strong> always-on runner replicas.
+  ARC's scale-set mode, by contrast, commonly runs <code>minRunners: N &gt; 0</code> to mask cold-start latency — those N runners are billed 24/7 whether or not a job is running.</li>
+<li><strong>Active job cost is identical in both systems.</strong> A job that runs for <em>D</em> minutes on an instance costing <em>R</em> $/hr costs <code>D/60 × R</code> in <em>either</em> system — both run exactly one pod for the job's duration.
+  The cost difference is therefore <strong>entirely the idle floor</strong> ARC holds and this system does not.
+  We do <strong>not</strong> claim a per-job execution saving; claiming one would be dishonest.</li>
 <li><strong>A month is 730 hours</strong> (365 × 24 ÷ 12 ≈ 30.4 days).</li>
 <li>Figures ignore second-order differences (image-pull time, control-plane pods) that are small relative to GPU-node cost and roughly equal between the two systems.</li>
 </ul>
 <h3 id="comparing-accelerators-memory-per-dollar-not-dollars-per-gpu-hour">Comparing accelerators: memory per dollar, not dollars per GPU-hour<a class="headerlink" href="#comparing-accelerators-memory-per-dollar-not-dollars-per-gpu-hour" title="Permanent link">&para;</a></h3>
-<p>Sticker price per GPU-hour is a poor cross-vendor value signal — it blends chip generation, cloud tier, and on-board memory into one number. For the memory-bound jobs that dominate GPU CI/ML (large-model inference, long context, large batch sizes, big container builds), the metric that tracks real value is <strong>memory per dollar</strong>: dollars per GB-of-HBM per hour. That is a spec-sheet ratio, not a benchmark, so it does not hinge on framework or kernel tuning.</p>
+<p>Sticker price per GPU-hour is a poor cross-vendor value signal — it blends chip generation, cloud tier, and on-board memory into one number.
+For the memory-bound jobs that dominate GPU CI/ML (large-model inference, long context, large batch sizes, big container builds), the metric that tracks real value is <strong>memory per dollar</strong>: dollars per GB-of-HBM per hour.
+That is a spec-sheet ratio, not a benchmark, so it does not hinge on framework or kernel tuning.</p>
 <p>Comparing current-generation parts at the <strong>same cloud tier</strong> (specialty/neocloud on-demand, 2026-06):</p>
 <table>
 <thead>
@@ -3174,10 +3187,16 @@
 </tbody>
 </table>
 <p>On memory per dollar, AMD Instinct's larger HBM stacks land it roughly <strong>2–3× ahead</strong> of same-tier NVIDIA — and because one high-memory Instinct GPU can often do the work of several smaller cards, that advantage compounds under this system's per-job model as <strong>fewer worker pods and fewer GPU-hours per job</strong>, not just a lower hourly rate.</p>
-<p>Two caveats keep this a fair comparison rather than a thumb on the scale:</p>
+<p>Three caveats keep this a fair comparison rather than a thumb on the scale:</p>
 <ul>
-<li><strong>It is a memory claim, not a compute claim.</strong> Throughput per dollar ($ per token/sec, or per wall-clock job) is what ultimately decides cost, and it depends on your workload and on ROCm/kernel maturity for your framework. Measure it on your own jobs; we make no generic compute-per-dollar claim.</li>
-<li><strong>Use the rate you can actually get.</strong> MI355X here uses the low end of its volatile range ($3.00); at Oracle's $8.60/GPU-hr on-demand it is ≈ $0.030/GB-HBM-hr — level with H100. Same-tier, current-quote comparisons are the only honest ones. Sources: <a href="https://getdeploying.com/gpus/nvidia-h100">getdeploying H100</a>, <a href="https://getdeploying.com/gpus/nvidia-h200">H200</a>, and the AMD Instinct sources cited above.</li>
+<li><strong>It is a memory claim, not a compute claim.</strong> Throughput per dollar ($ per token/sec, or per wall-clock job) is what ultimately decides cost, and it depends on your workload and on ROCm/kernel maturity for your framework.
+  Measure it on your own jobs; we make no generic compute-per-dollar claim.</li>
+<li><strong>Use the rate you can actually get.</strong> MI355X here uses the low end of its volatile range ($3.00); at Oracle's $8.60/GPU-hr on-demand it is ≈ $0.030/GB-HBM-hr — level with H100.
+  Same-tier, current-quote comparisons are the only honest ones.
+  Sources: <a href="https://getdeploying.com/gpus/nvidia-h100">getdeploying H100</a>, <a href="https://getdeploying.com/gpus/nvidia-h200">H200</a>, and the AMD Instinct sources cited above.</li>
+<li><strong>The Instinct rates buy an unsandboxed worker.</strong> Both isolation runtimes this system supports are NVIDIA-only today: gVisor's GPU support is <code>nvproxy</code>, with no AMD or ROCm path, and Kata's kernel packaging accepts only <code>intel</code> and <code>nvidia</code> as its GPU vendor, so there is no packaged guest kernel that drives an Instinct card (measured 2026-08-12 against <a href="https://gvisor.dev/docs/user_guide/gpu/">gVisor GPU support</a> at release <code>release-20260803.0</code> and Kata <a href="https://github.com/kata-containers/kata-containers/blob/4d1e78da2f7d5ff6616d5674510a134556a1e97d/tools/packaging/kernel/build-kernel.sh"><code>build-kernel.sh</code></a> at <code>4d1e78d</code>, its current <code>main</code> state after the 4.0.0 release).
+  So the memory-per-dollar advantage applies to a trusted fleet running workers on the default <code>runc</code>, and untrusted multi-tenant AMD CI is not a supported configuration at any price.
+  <a href="../appendix-b-worker-isolation/">Appendix B</a> is the isolation menu those rates are spent under; the GPU plan works the constraint through in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.5.0/docs/plan/gpu-and-accelerated-ci.md#the-collision-with-the-security-goal">GPU and Accelerated CI</a>.</li>
 </ul>
 <hr />
 <h2 id="f1-per-job-cost-breakdown">F.1. Per-Job Cost Breakdown<a class="headerlink" href="#f1-per-job-cost-breakdown" title="Permanent link">&para;</a></h2>
@@ -3213,6 +3232,9 @@
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>worker_cost_per_job = (job_duration_seconds / 3600) × hourly_node_rate × resource_fraction
 </code></pre></div>
 <p>Where <code>resource_fraction</code> is the fraction of a node the pod's resource requests consume.</p>
+<p><code>job_duration_seconds</code> is the worker pod's own wall time on both acquisition tiers: creation to its last container finishing.
+That is why it can be multiplied by an hourly rate directly.
+Time spent before the pod exists (acquisition, Secret staging, a <code>spec.scaleUp</code> throttle wait) is outside the series because it is outside the bill.</p>
 <p><strong>Example — GPU job:</strong>
 - Job duration: 30 minutes (0.5 hr)
 - Node type: <code>p4d.24xlarge</code>, 8× A100, $32.77/hr
@@ -3224,15 +3246,20 @@
 - Pod requests: 2 CPU (⅛ of the node)
 - Worker cost: <code>0.167 × $0.768 × (1/8) = $0.016 per job</code></p>
 <h3 id="proxy-pod-fixed-overhead-amortized">Proxy Pod (Fixed Overhead, Amortized)<a class="headerlink" href="#proxy-pod-fixed-overhead-amortized" title="Permanent link">&para;</a></h3>
-<p>The proxy pool runs continuously at <code>minReplicas</code>. At low job volumes this is a meaningful cost; at high job volumes it amortizes to near-zero per job.</p>
+<p>The proxy pool runs continuously at <code>minReplicas</code>.
+At low job volumes this is a meaningful cost; at high job volumes it amortizes to near-zero per job.</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>proxy_overhead_per_job = (proxy_monthly_cost) / (jobs_per_month)
 </code></pre></div>
-<p><strong>Example:</strong> 2 proxy pods at 10m CPU / 32Mi memory on a shared <code>m6i.4xlarge</code> pool ≈ 1/800 of the node ≈ $0.001/hr ≈ <strong>$0.70/month</strong>. At 10,000 jobs/month: well under $0.0001 per job — negligible.</p>
+<p><strong>Example:</strong> 2 proxy pods at 10m CPU / 32Mi memory on a shared <code>m6i.4xlarge</code> pool ≈ 1/800 of the node ≈ $0.001/hr ≈ <strong>$0.70/month</strong>.
+At 10,000 jobs/month: well under $0.0001 per job — negligible.</p>
 <h3 id="agc-negligible">AGC (Negligible)<a class="headerlink" href="#agc-negligible" title="Permanent link">&para;</a></h3>
-<p>The AGC is a single pod running on a CPU-only node with modest resources (500m CPU / 2Gi memory request). On an <code>m6i.4xlarge</code> that is ~1/32 of the node ≈ $0.024/hr ≈ <strong>$17.5/month</strong>, amortized across all jobs for that tenant. At 1,000 jobs/month: $0.018 per job. At 10,000 jobs/month: $0.0018 per job.</p>
+<p>The AGC is a single pod running on a CPU-only node with modest resources (500m CPU / 2Gi memory request).
+On an <code>m6i.4xlarge</code> that is ~1/32 of the node ≈ $0.024/hr ≈ <strong>$17.5/month</strong>, amortized across all jobs for that tenant.
+At 1,000 jobs/month: $0.018 per job. At 10,000 jobs/month: $0.0018 per job.</p>
 <hr />
 <h2 id="f2-cost-comparison-this-system-vs-arc">F.2. Cost Comparison: This System vs. ARC<a class="headerlink" href="#f2-cost-comparison-this-system-vs-arc" title="Permanent link">&para;</a></h2>
-<p>ARC's idle GPU footprint depends heavily on configuration. Compare against the configuration your team actually runs:</p>
+<p>ARC's idle GPU footprint depends heavily on configuration.
+Compare against the configuration your team actually runs:</p>
 <table>
 <thead>
 <tr>
@@ -3275,16 +3302,21 @@
 - ARC idle cost: <code>10 nodes × $32.77/hr = $327.70/hr</code> — 10 GPU pods held to avoid cold-start latency, even when no jobs are running.
 - This system idle cost: AGC + proxy pool ≈ <code>$0.025/hr</code> — no GPU nodes held; the goroutine listener never goes cold, so no <code>minRunners &gt; 0</code> workaround is needed.
 - Over a 16-hour off-peak window: ARC idles away <code>16 × $327.70 ≈ $5,243</code> per day in GPU charges that this system does not incur.</p>
-<p><em>Against legacy ARC <code>RunnerDeployment</code></em>: idle costs are similar to or worse than the <code>minRunners: 1</code> scale-set case, depending on HRA configuration. Migrating from legacy ARC produces the largest absolute idle-GPU savings.</p>
-<p><strong>At 100% utilization</strong> (jobs running 24/7 at full concurrency), all configurations hold the same number of GPU pods and the cost difference approaches zero. This system's GPU-cost advantage is proportional to how often the GPU fleet is idle <em>and</em> how the comparison ARC deployment is configured.</p>
+<p><em>Against legacy ARC <code>RunnerDeployment</code></em>: idle costs are similar to or worse than the <code>minRunners: 1</code> scale-set case, depending on HRA configuration.
+Migrating from legacy ARC produces the largest absolute idle-GPU savings.</p>
+<p><strong>At 100% utilization</strong> (jobs running 24/7 at full concurrency), all configurations hold the same number of GPU pods and the cost difference approaches zero.
+This system's GPU-cost advantage is proportional to how often the GPU fleet is idle <em>and</em> how the comparison ARC deployment is configured.</p>
 <hr />
 <h2 id="f3-tenant-cost-allocation">F.3. Tenant Cost Allocation<a class="headerlink" href="#f3-tenant-cost-allocation" title="Permanent link">&para;</a></h2>
 <p>Because each tenant has a dedicated namespace with a scoped <code>ResourceQuota</code>, per-tenant costs can be attributed precisely.</p>
 <blockquote>
-<p><strong>Want live dollars, not a model?</strong> This appendix is a framework. To get <strong>real $/tenant</strong> from your running cluster with OpenCost or Kubecost — mapping GAG's per-tenant namespaces and <code>app.kubernetes.io/*</code> labels to allocation queries — follow the how-to in <a href="../../operations/cost-attribution/">Live per-tenant cost attribution</a>.</p>
+<p><strong>Want live dollars, not a model?</strong> This appendix is a framework.
+To get <strong>real $/tenant</strong> from your running cluster with OpenCost or Kubecost — mapping GAG's per-tenant namespaces and <code>app.kubernetes.io/*</code> labels to allocation queries — follow the how-to in <a href="../../operations/cost-attribution/">Live per-tenant cost attribution</a>.</p>
 </blockquote>
 <h3 id="worker-pod-attribution">Worker Pod Attribution<a class="headerlink" href="#worker-pod-attribution" title="Permanent link">&para;</a></h3>
-<p>Worker pods already carry the tenant namespace and the <code>app.kubernetes.io/*</code> recommended labels (the AGC stamps them at creation time), so Kubernetes cost-attribution tooling (e.g. OpenCost, Kubecost) can attribute them per tenant with no extra wiring — see the <a href="../../operations/cost-attribution/">live cost-attribution how-to</a> for the exact allocation queries. For an ad-hoc snapshot without that tooling, query your cloud provider's node usage metrics or scope <code>kubectl top</code> to the tenant namespace:</p>
+<p>Worker pods already carry the tenant namespace and the <code>app.kubernetes.io/*</code> recommended labels (the AGC stamps them at creation time), so Kubernetes cost-attribution tooling (e.g.
+OpenCost, Kubecost) can attribute them per tenant with no extra wiring — see the <a href="../../operations/cost-attribution/">live cost-attribution how-to</a> for the exact allocation queries.
+For an ad-hoc snapshot without that tooling, query your cloud provider's node usage metrics or scope <code>kubectl top</code> to the tenant namespace:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="c1"># Approximate: sum of worker pod CPU × memory × duration in namespace</span>
 <a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>kubectl<span class="w"> </span>top<span class="w"> </span>pods<span class="w"> </span>-n<span class="w"> </span>&lt;tenant-namespace&gt;<span class="w"> </span>--containers
 </code></pre></div>
@@ -3296,16 +3328,21 @@
 </code></pre></div>
 <p>Multiply by the GPU fraction from the RunnerGroup's pod template to convert to GPU-hours.</p>
 <h3 id="proxy-and-agc-attribution">Proxy and AGC Attribution<a class="headerlink" href="#proxy-and-agc-attribution" title="Permanent link">&para;</a></h3>
-<p>These are per-tenant fixed costs. Attribute them entirely to the tenant namespace since each tenant has a dedicated proxy pool and AGC. They are small relative to worker pod costs for active tenants.</p>
+<p>These are per-tenant fixed costs.
+Attribute them entirely to the tenant namespace since each tenant has a dedicated proxy pool and AGC.
+They are small relative to worker pod costs for active tenants.</p>
 <h3 id="showback-vs-chargeback">Showback vs. Chargeback<a class="headerlink" href="#showback-vs-chargeback" title="Permanent link">&para;</a></h3>
 <ul>
-<li><strong>Showback</strong> (recommended initially): publish per-tenant metrics (GPU-hours, job counts, pod-creation latency) to a shared Grafana dashboard so teams can see their own costs. No billing integration required.</li>
-<li><strong>Chargeback</strong>: multiply GPU-hours by the cloud rate per GPU-hour, then apply any discount or overhead factor, and invoice the business unit. This requires integrating <code>job_duration_seconds</code> with the RunnerGroup's resource request profile and cloud billing data.</li>
+<li><strong>Showback</strong> (recommended initially): publish per-tenant metrics (GPU-hours, job counts, pod-creation latency) to a shared Grafana dashboard so teams can see their own costs.
+  No billing integration required.</li>
+<li><strong>Chargeback</strong>: multiply GPU-hours by the cloud rate per GPU-hour, then apply any discount or overhead factor, and invoice the business unit.
+  This requires integrating <code>job_duration_seconds</code> with the RunnerGroup's resource request profile and cloud billing data.</li>
 </ul>
 <hr />
 <h2 id="f4-cost-optimization-levers">F.4. Cost Optimization Levers<a class="headerlink" href="#f4-cost-optimization-levers" title="Permanent link">&para;</a></h2>
 <h3 id="proxy-autoscaling-aggressiveness">Proxy Autoscaling Aggressiveness<a class="headerlink" href="#proxy-autoscaling-aggressiveness" title="Permanent link">&para;</a></h3>
-<p>The proxy pool's <code>minReplicas</code> is the primary fixed overhead. Set it as low as your availability requirements permit:</p>
+<p>The proxy pool's <code>minReplicas</code> is the primary fixed overhead.
+Set it as low as your availability requirements permit:</p>
 <ul>
 <li><code>minReplicas: 1</code> — single point of failure during updates, but minimizes idle cost.</li>
 <li><code>minReplicas: 2</code> — survives one proxy pod restart without dropped connections (recommended default).</li>
@@ -3313,24 +3350,35 @@
 </ul>
 <p>The <code>HorizontalPodAutoscaler</code> handles burst capacity automatically; <code>minReplicas</code> only affects the floor.</p>
 <h3 id="worker-resource-right-sizing">Worker Resource Right-Sizing<a class="headerlink" href="#worker-resource-right-sizing" title="Permanent link">&para;</a></h3>
-<p>Oversized resource requests are the most common source of wasted spend. If a job's workflow steps use 2 CPU but the pod requests 4 CPU, the other 2 CPU are reserved but idle.</p>
+<p>Oversized resource requests are the most common source of wasted spend.
+If a job's workflow steps use 2 CPU but the pod requests 4 CPU, the other 2 CPU are reserved but idle.</p>
 <p>Remediation:
 1. Monitor <code>container_cpu_usage_seconds_total</code> for worker pods to measure actual usage.
 2. Reduce <code>requests.cpu</code> in the RunnerGroup's <code>podTemplate</code> to match the observed p95 usage.
 3. Apply the same analysis to memory: compare <code>container_memory_working_set_bytes</code> to <code>requests.memory</code>.</p>
 <p>For GPU jobs, ensure the GPU count in <code>resources.limits.nvidia.com/gpu</code> matches the job's actual GPU parallelism — requesting 2 GPUs for a single-GPU workload doubles the job cost.</p>
 <h3 id="job-duration-reduction">Job Duration Reduction<a class="headerlink" href="#job-duration-reduction" title="Permanent link">&para;</a></h3>
-<p>Reducing job duration directly reduces worker pod cost. Common levers:
+<p>Reducing job duration directly reduces worker pod cost.
+Common levers:
 - Cache build artifacts and dependencies across jobs (GitHub Actions cache, persistent volumes).
 - Use smaller, targeted runner images with pre-installed tooling.
 - Parallelize test steps using a matrix strategy.</p>
 <p>The <code>actions_gateway_job_duration_seconds</code> histogram per RunnerGroup helps identify which runner shapes have the highest average duration and therefore the highest cost-reduction potential.</p>
 <h3 id="priority-tier-tuning">Priority Tier Tuning<a class="headerlink" href="#priority-tier-tuning" title="Permanent link">&para;</a></h3>
-<p>Priority tiers are a utilization lever, not only a fairness control. Without the floor guarantee, keeping GPU runners schedulable under a shared quota means reserving idle headroom so a GPU pod always has room — paid-for capacity that sits empty. The floor lets you instead pack the quota with cheap work and admit more runner demand than the floors reserve (safe oversubscription, arbitrated by the Kubernetes scheduler), raising utilization and throughput of the same cluster and lowering cost per job. The headroom you would otherwise hold idle is the saving.</p>
-<p>The trade-off is preemption cost. For tenants using <code>priorityTiers</code>, a floor tier mapped to a <em>preempting</em> <code>PriorityClass</code> guarantees GPU floor pods will schedule even under cluster contention — at the cost of potentially evicting lower-priority workloads. Evicted jobs are cheap to re-run; the GPU floor guarantee is typically worth it. Keep the floor tier's <code>threshold</code> small (the minimum number of GPU pods that must schedule immediately). Whether a tier preempts is decided by the platform, not the tenant: the <code>priorityClassName</code> must be on the GMC <code>--allowed-priority-classes</code> allowlist, and the platform sets each <code>PriorityClass</code>'s <code>preemptionPolicy</code> (defaulting to <code>Never</code> so a tenant cannot evict other tenants' pods — see <a href="../../operations/security-operations/#priority-classes-the-allowed-priority-classes-allowlist">security-operations.md § Priority classes</a>).</p>
+<p>Priority tiers are a utilization lever, not only a fairness control.
+Without the floor guarantee, keeping GPU runners schedulable under a shared quota means reserving idle headroom so a GPU pod always has room — paid-for capacity that sits empty.
+The floor lets you instead pack the quota with cheap work and admit more runner demand than the floors reserve (safe oversubscription, arbitrated by the Kubernetes scheduler), raising utilization and throughput of the same cluster and lowering cost per job.
+The headroom you would otherwise hold idle is the saving.</p>
+<p>The trade-off is preemption cost.
+For tenants using <code>priorityTiers</code>, a floor tier mapped to a <em>preempting</em> <code>PriorityClass</code> guarantees GPU floor pods will schedule even under cluster contention — at the cost of potentially evicting lower-priority workloads.
+Evicted jobs are cheap to re-run; the GPU floor guarantee is typically worth it.
+Keep the floor tier's <code>threshold</code> small (the minimum number of GPU pods that must schedule immediately).
+Whether a tier preempts is decided by the platform, not the tenant: the <code>priorityClassName</code> must be on the GMC <code>--allowed-priority-classes</code> allowlist, and the platform sets each <code>PriorityClass</code>'s <code>preemptionPolicy</code> (defaulting to <code>Never</code> so a tenant cannot evict other tenants' pods — see <a href="../../operations/security-operations/#priority-classes-the-allowed-priority-classes-allowlist">security-operations.md § Priority classes</a>).</p>
 <hr />
 <h2 id="f5-savings-calculator-this-system-vs-arc">F.5. Savings calculator (this system vs ARC)<a class="headerlink" href="#f5-savings-calculator-this-system-vs-arc" title="Permanent link">&para;</a></h2>
-<p>The saving over ARC is the <strong>idle-runner floor you stop paying for</strong>. Active job time costs the same in both systems — one pod per job, for the job's duration — so it cancels out; what ARC adds on top is <code>minRunners</code> held 24/7 (see <a href="#f2-cost-comparison-this-system-vs-arc">§F.2</a> and the <a href="#f0-rate-sources-and-assumptions">zero-idle-compute assumption</a>). Enter your own numbers to estimate the monthly saving.</p>
+<p>The saving over ARC is the <strong>idle-runner floor you stop paying for</strong>.
+Active job time costs the same in both systems — one pod per job, for the job's duration — so it cancels out; what ARC adds on top is <code>minRunners</code> held 24/7 (see <a href="#f2-cost-comparison-this-system-vs-arc">§F.2</a> and the <a href="#f0-rate-sources-and-assumptions">zero-idle-compute assumption</a>).
+Enter your own numbers to estimate the monthly saving.</p>
 <div class="gag-calc" data-jobs="200" data-duration="12" data-idle="10" data-rate="4.10" data-rate-label="A100 GPU (p4d.24xlarge ⅛)"></div>
 
 <p><strong>Worked example</strong> — the interactive calculator above defaults to these inputs; on GitHub or without JavaScript, this hand-worked case is the static fallback:</p>
@@ -3366,7 +3414,8 @@
 <li><strong>ARC idle floor</strong> = <code>10 × $4.10 × 730 ≈ $29,930/mo</code> — held 24/7 whether or not jobs run.</li>
 <li><strong>This system pays the active cost only.</strong> Monthly saving = the eliminated idle floor ≈ <strong>$29,930/mo (~$359k/yr)</strong> — about <strong>86%</strong> of ARC's ≈ <code>$34,920/mo</code> total.</li>
 </ul>
-<p>The saving shrinks toward zero as your fleet approaches 100% utilization (less idle to eliminate) and grows as idle dominates — the same dynamic spelled out in <a href="#f2-cost-comparison-this-system-vs-arc">§F.2</a>. The figure is an estimate from list prices in <a href="#f0-rate-sources-and-assumptions">§F.0</a>; your contracted rates and real utilization will differ.</p>
+<p>The saving shrinks toward zero as your fleet approaches 100% utilization (less idle to eliminate) and grows as idle dominates — the same dynamic spelled out in <a href="#f2-cost-comparison-this-system-vs-arc">§F.2</a>.
+The figure is an estimate from list prices in <a href="#f0-rate-sources-and-assumptions">§F.0</a>; your contracted rates and real utilization will differ.</p>
 <hr />
 <p>← <a href="../appendix-e-capacity-planning/">Appendix E</a> | <a href="../">Back to index</a></p>
 

@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/1.4.0/design/appendix-b-worker-isolation/">
+        <link rel="canonical" href="https://actions-gateway.com/1.5.0/design/appendix-b-worker-isolation/">
       
       
         <link rel="prev" href="../appendix-a-capacity-slos/">
@@ -63,15 +63,15 @@
   <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/IBMPlexSans-Bold.woff2">
   <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/MonaspaceNeon-Medium.woff2">
   
-  <meta property="og:image" content="https://actions-gateway.com/1.4.0assets/social-preview.png">
+  <meta property="og:image" content="https://actions-gateway.com/1.5.0assets/social-preview.png">
   <meta property="og:image:width" content="1280">
   <meta property="og:image:height" content="640">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:image" content="https://actions-gateway.com/1.4.0assets/social-preview.png">
+  <meta name="twitter:image" content="https://actions-gateway.com/1.5.0assets/social-preview.png">
   
-  <link rel="apple-touch-icon" href="https://actions-gateway.com/1.4.0assets/apple-touch-icon.png">
-  <link rel="alternate icon" href="https://actions-gateway.com/1.4.0assets/favicon.ico">
-  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/1.4.0assets/icon-512.png">
+  <link rel="apple-touch-icon" href="https://actions-gateway.com/1.5.0assets/apple-touch-icon.png">
+  <link rel="alternate icon" href="https://actions-gateway.com/1.5.0assets/favicon.ico">
+  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/1.5.0assets/icon-512.png">
   
   <script type="application/ld+json">
   {
@@ -79,14 +79,14 @@
     "@type": "SoftwareSourceCode",
     "name": "GitHub Actions Gateway",
     "description": "An Actions Runner Controller (ARC) alternative for self-hosted GitHub Actions runners on multi-tenant Kubernetes \u2014 oversubscribe a shared quota, recover evicted jobs automatically, and isolate every tenant\u0027s GitHub egress.",
-    "url": "https://actions-gateway.com/1.4.0",
+    "url": "https://actions-gateway.com/1.5.0",
     "codeRepository": "https://github.com/actions-gateway/github-actions-gateway",
     "programmingLanguage": "Go",
     "license": "https://www.apache.org/licenses/LICENSE-2.0",
     "author": {
       "@type": "Organization",
       "name": "GitHub Actions Gateway",
-      "url": "https://actions-gateway.com/1.4.0"
+      "url": "https://actions-gateway.com/1.5.0"
     }
   }
   </script>
@@ -95,8 +95,8 @@
     "@context": "https://schema.org",
     "@type": "Organization",
     "name": "GitHub Actions Gateway",
-    "url": "https://actions-gateway.com/1.4.0",
-    "logo": "https://actions-gateway.com/1.4.0assets/icon-512.png",
+    "url": "https://actions-gateway.com/1.5.0",
+    "logo": "https://actions-gateway.com/1.5.0assets/icon-512.png",
     "sameAs": ["https://github.com/actions-gateway/github-actions-gateway"]
   }
   </script>
@@ -132,8 +132,8 @@
         <aside class="md-banner">
           <div class="md-banner__inner md-grid md-typeset">
             
-            <strong>v1.4.0 is here.</strong>
-      Consent-gated cross-namespace egress proxy sharing, a curated runner template library you apply with one command, and v2 worker-capacity conditions exported as Prometheus gauges.
+            <strong>v1.5.0 is here.</strong>
+      A per-tenant GitHub runner group boundary, multi-label runner sets that migrate a <code>runs-on</code> array unedited, and job duration and latency metrics on the acquisition tier every new tenant runs.
           </div>
           
         </aside>
@@ -145,7 +145,7 @@
           <aside class="md-banner md-banner--warning">
             <div class="md-banner__inner md-grid md-typeset">
               You're not viewing the latest release.
-  <a href="https://actions-gateway.com/1.4.0"><strong>Go to the current docs.</strong></a>
+  <a href="https://actions-gateway.com/1.5.0"><strong>Go to the current docs.</strong></a>
 
             </div>
             <script>var el=document.querySelector("[data-md-component=outdated]"),base=new URL("../.."),outdated=__md_get("__outdated",sessionStorage,base);!0===outdated&&el&&(el.hidden=!1)</script>
@@ -2745,16 +2745,21 @@
 <h1 id="appendix-b--worker-isolation-runtime-optional">Appendix B — Worker Isolation Runtime (Optional)<a class="headerlink" href="#appendix-b--worker-isolation-runtime-optional" title="Permanent link">&para;</a></h1>
 <p>← <a href="../appendix-a-capacity-slos/">Appendix A</a> | <a href="../">Back to index</a> | Next: <a href="../appendix-c-ai-implementation/">Appendix C — AI-Assisted Implementation →</a></p>
 <hr />
-<p>Worker pods execute arbitrary workflow code, which is untrusted by definition. The system functions correctly on the default <code>runc</code> container runtime, but operators concerned about kernel-level container-escape attacks have the option of running worker pods under a sandboxed runtime by setting a <code>RuntimeClass</code> on the worker <code>PodTemplate</code>.</p>
-<p><strong>This is optional.</strong> Sandboxed runtimes add operational complexity (additional node configuration, larger pod startup latency, occasional kernel-feature incompatibilities) that may not be justified for every deployment. Use this appendix to decide whether to opt in.</p>
+<p>Worker pods execute arbitrary workflow code, which is untrusted by definition.
+The system functions correctly on the default <code>runc</code> container runtime, but operators concerned about kernel-level container-escape attacks have the option of running worker pods under a sandboxed runtime by setting a <code>RuntimeClass</code> on the worker <code>PodTemplate</code>.</p>
+<p><strong>This is optional.</strong> Sandboxed runtimes add operational complexity (additional node configuration, larger pod startup latency, occasional kernel-feature incompatibilities) that may not be justified for every deployment.
+Use this appendix to decide whether to opt in.</p>
 <blockquote>
 <p><strong>Validation status.</strong> The AGC honours a <code>runtimeClassName</code> set on the worker <code>PodTemplate</code> and applies no override that would strip it.</p>
-<p><strong>Kata Containers is live-validated (Q226/Q286).</strong> GAG's own end-to-end CI creates a <code>kind</code> cluster inside a worker pod under <code>runtimeClassName: kata</code> with zero <code>privileged: true</code>, on a nested-virtualization GKE node pool, and that is the dogfood default. The validated node prerequisites, the capability set an unprivileged <code>dockerd</code> needs, and the boundary's real limits are in <a href="../../operations/kata-dind-workloads/">Running DinD workloads under Kata</a>.</p>
+<p><strong>Kata Containers is live-validated (Q226/Q286).</strong> GAG's own end-to-end CI creates a <code>kind</code> cluster inside a worker pod under <code>runtimeClassName: kata</code> with zero <code>privileged: true</code>, on a nested-virtualization GKE node pool, and that is the dogfood default.
+The validated node prerequisites, the capability set an unprivileged <code>dockerd</code> needs, and the boundary's real limits are in <a href="../../operations/kata-dind-workloads/">Running DinD workloads under Kata</a>.</p>
 <p><strong>gVisor has not been exercised on a real cluster (Q15).</strong> Validating it needs a runsc-enabled node pool; operators selecting <code>runsc</code> should validate the full job path on their own cluster before relying on it for isolation.</p>
 </blockquote>
 <hr />
 <h2 id="b1-threat-coverage">B.1. Threat Coverage<a class="headerlink" href="#b1-threat-coverage" title="Permanent link">&para;</a></h2>
-<p>The escape vectors covered by sandboxed runtimes are kernel-level: shared-kernel exploits (e.g., <code>dirtyc0w</code>-class vulnerabilities), syscall-table abuse, and privilege escalation through container-runtime bugs. They do <strong>not</strong> cover the threats that ordinary Pod Security Standards already mitigate: dropped capabilities, non-root user, read-only root filesystem, seccomp profiles. Those should be enforced <em>regardless</em> of the runtime choice.</p>
+<p>The escape vectors covered by sandboxed runtimes are kernel-level: shared-kernel exploits (e.g., <code>dirtyc0w</code>-class vulnerabilities), syscall-table abuse, and privilege escalation through container-runtime bugs.
+They do <strong>not</strong> cover the threats that ordinary Pod Security Standards already mitigate: dropped capabilities, non-root user, read-only root filesystem, seccomp profiles.
+Those should be enforced <em>regardless</em> of the runtime choice.</p>
 <table>
 <thead>
 <tr>
@@ -2786,8 +2791,8 @@
 <tr>
 <td>Pod startup latency overhead</td>
 <td>Baseline</td>
-<td>+ 50–200ms</td>
-<td>+ 1–3s (VM boot)</td>
+<td>Sentry process start</td>
+<td>Guest kernel boot (see <a href="#b2-operational-cost">B.2</a>)</td>
 </tr>
 <tr>
 <td>Compatible workflows</td>
@@ -2822,17 +2827,17 @@
 <tr>
 <td>Cloud compatibility</td>
 <td>Most clouds support runsc on standard nodes</td>
-<td>Requires nested-virt or bare-metal nodes (e.g. AWS bare-metal, GCP nested-virt families)</td>
+<td>Requires nested-virt-capable nodes: selected virtual machine families on AWS and GCP, or bare metal (<a href="../../operations/kata-dind-workloads/#prerequisite--nested-virtualization-nodes">current families</a>)</td>
 </tr>
 <tr>
 <td>Per-pod memory overhead</td>
-<td>~10–30 MiB (Sentry process)</td>
-<td>~50–150 MiB (guest kernel + agent)</td>
+<td>Sentry process</td>
+<td>Guest kernel + agent; the shipped <code>kata</code> RuntimeClass reserves <code>160Mi</code></td>
 </tr>
 <tr>
 <td>Per-pod CPU overhead</td>
-<td>~3–10% syscall-heavy, near 0% compute-heavy</td>
-<td>~1–5% in steady state, larger startup cost</td>
+<td>Syscall interception, so syscall-heavy jobs pay most and compute-bound jobs pay little</td>
+<td>Near-native in steady state; the RuntimeClass reserves <code>250m</code>, and the real cost is at boot and on I/O crossing the virtio boundary</td>
 </tr>
 <tr>
 <td>Debugging</td>
@@ -2841,11 +2846,23 @@
 </tr>
 </tbody>
 </table>
+<p><strong>How to read these tables.</strong> Neither is a benchmark of this system.
+No rigorous, current head-to-head of <code>runc</code>, gVisor and Kata is cited here, and the figures that circulate are taken on some other kernel, hypervisor and storage path than the one an operator will run.
+Nothing in the gVisor column has been exercised on a cluster here at all (Q15, above).
+Read both tables as mechanism, and measure your own configuration before budgeting against <a href="../appendix-a-capacity-slos/">Appendix A</a>'s startup SLO.</p>
+<p>One figure is ours.
+On the dogfood configuration (GKE <code>1.35.5-gke.1241004</code>, Ubuntu 24.04, <code>c2-standard-4</code> nested-virt, Kata 3.32.0 with QEMU) the Q226 spike measured the micro-VM boot at roughly 2s over <code>runc</code>, with <code>kind create cluster</code> at 58s cold and 43s warm inside the guest (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.5.0/deploy/kata-ci/runner-pod.yaml"><code>deploy/kata-ci/runner-pod.yaml</code></a>).
+That is a QEMU number, not a property of Kata: the hypervisor is pluggable, and the lighter ones (Cloud Hypervisor, Firecracker) exist because QEMU's device model is the expensive part of the boot.
+The repo ships a stable <code>kata</code> alias onto the <code>kata-qemu</code> handler so the hypervisor can be retargeted without editing pod specs, and that object carries the pod overhead the scheduler reserves (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.5.0/deploy/kata-ci/runtimeclass.yaml"><code>deploy/kata-ci/runtimeclass.yaml</code></a>).</p>
+<p>For a CI workload the runtime is rarely the dominant cost anyway.
+How the sandbox surfaces the worker's writable storage swings image pull and build time more than the boot does, and the same decision governs whether the workload runs at all: Kata surfaces an <code>emptyDir</code> as virtiofs, on which Docker cannot use <code>overlay2</code> and silently falls back to <code>vfs</code>, while a raw block device passed into the guest restores native <code>overlay2</code> (<a href="../../operations/kata-dind-workloads/">Running DinD workloads under Kata</a>).
+Settle the storage path first; the runtime's boot cost is the smaller question.</p>
 <hr />
 <h2 id="b3-when-to-opt-in">B.3. When to Opt In<a class="headerlink" href="#b3-when-to-opt-in" title="Permanent link">&para;</a></h2>
 <p><strong>Strong reasons to enable a sandboxed runtime:</strong></p>
 <ul>
-<li>The cluster hosts both first-party and third-party workflow code (e.g. PRs from external contributors).</li>
+<li>The cluster hosts both first-party and third-party workflow code (e.g.
+  PRs from external contributors).</li>
 <li>The compliance posture requires hardware or hypervisor-level workload isolation.</li>
 <li>A previous incident or pen-test surfaced a kernel-level concern.</li>
 </ul>
@@ -2869,11 +2886,20 @@
 <a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a><span class="w">          </span><span class="nt">resources</span><span class="p">:</span>
 <a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a><span class="w">            </span><span class="nt">requests</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> cpu</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;1&quot;</span><span class="p p-Indicator">,</span><span class="nt"> memory</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;2Gi&quot;</span><span class="w"> </span><span class="p p-Indicator">}</span>
 </code></pre></div>
-<p>The cluster must have the corresponding <code>RuntimeClass</code> object installed and at least one node carrying the appropriate handler. The Gateway Manager Controller (GMC) does not install RuntimeClasses or runtime handlers — that is a cluster-admin operation.</p>
+<p>The cluster must have the corresponding <code>RuntimeClass</code> object installed and at least one node carrying the appropriate handler.
+The Gateway Manager Controller (GMC) does not install RuntimeClasses or runtime handlers — that is a cluster-admin operation.</p>
 <h2 id="b5-sidecar-containers-and-pod-reaping-q249">B.5. Sidecar containers and pod reaping (Q249)<a class="headerlink" href="#b5-sidecar-containers-and-pod-reaping-q249" title="Permanent link">&para;</a></h2>
-<p>A worker pod is one runner container plus, optionally, sidecars. A Kubernetes pod terminates only when <strong>every</strong> regular <code>spec.containers[]</code> entry has exited, so a sidecar that runs for the life of the job — a <code>docker:dind</code> daemon, a rootless BuildKit sidecar, a metrics agent — keeps the pod alive after the runner container finishes if it is declared as a <strong>regular container</strong>. The pod lingers, and because GAG counts a pod as an active session until it reaps, the runner slot stays charged against the <code>RunnerSet</code>'s <code>maxWorkers</code> — the same stranding class as <a href="../../STATUS/">Q247</a> (a pod left behind after its job is gone). Under a concurrent matrix the pool collapses to the pods that happened to reap.</p>
-<p>GAG does <strong>not</strong> solve this with a bespoke reaper — it relies on the upstream mechanism. A <strong>native sidecar</strong> (<a href="https://github.com/kubernetes/enhancements/tree/master/keps/sig-node/753-sidecar-containers">KEP-753</a>: a <code>restartPolicy: Always</code> init container, beta/on-by-default in Kubernetes 1.29, GA in 1.33) is torn down by the kubelet when the main container exits, so the pod completes on its own. Operators declare long-running build sidecars that way.</p>
-<p>Because nothing in a pod spec declares that a container "runs forever" (<code>dockerd</code> never exits; <code>busybox true</code> exits at once), the detection is necessarily a <strong>heuristic</strong> — "a regular, non-runner container may block reaping." That is why every outlet is a <strong>non-blocking warning</strong>, never a rejection: an admission <code>Warning:</code>, the advisory <code>PossibleReapBlockingSidecar</code> condition on the <code>RunnerSet</code>, and the <code>actions_gateway_reap_blocking_sidecar_templates</code> gauge. A per-template <code>actions-gateway.com/self-exiting-sidecars</code> name-list annotation acknowledges sidecars the operator asserts exit cleanly, silencing all three for the named containers only (a name-list, not a boolean, so a newly added footgun still warns). The operator-facing how-to lives in <a href="../../operations/in-runner-image-builds/#sidecar-containers-must-be-native-sidecars-q249">in-runner image builds § Sidecar containers must be native sidecars</a>.</p>
+<p>A worker pod is one runner container plus, optionally, sidecars.
+A Kubernetes pod terminates only when <strong>every</strong> regular <code>spec.containers[]</code> entry has exited, so a sidecar that runs for the life of the job — a <code>docker:dind</code> daemon, a rootless BuildKit sidecar, a metrics agent — keeps the pod alive after the runner container finishes if it is declared as a <strong>regular container</strong>.
+The pod lingers, and because GAG counts a pod as an active session until it reaps, the runner slot stays charged against the <code>RunnerSet</code>'s <code>maxWorkers</code> — the same stranding class as <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.5.0/docs/STATUS.md">Q247</a> (a pod left behind after its job is gone).
+Under a concurrent matrix the pool collapses to the pods that happened to reap.</p>
+<p>GAG does <strong>not</strong> solve this with a bespoke reaper — it relies on the upstream mechanism.
+A <strong>native sidecar</strong> (<a href="https://github.com/kubernetes/enhancements/tree/master/keps/sig-node/753-sidecar-containers">KEP-753</a>: a <code>restartPolicy: Always</code> init container, beta/on-by-default in Kubernetes 1.29, GA in 1.33) is torn down by the kubelet when the main container exits, so the pod completes on its own.
+Operators declare long-running build sidecars that way.</p>
+<p>Because nothing in a pod spec declares that a container "runs forever" (<code>dockerd</code> never exits; <code>busybox true</code> exits at once), the detection is necessarily a <strong>heuristic</strong> — "a regular, non-runner container may block reaping."
+That is why every outlet is a <strong>non-blocking warning</strong>, never a rejection: an admission <code>Warning:</code>, the advisory <code>PossibleReapBlockingSidecar</code> condition on the <code>RunnerSet</code>, and the <code>actions_gateway_reap_blocking_sidecar_templates</code> gauge.
+A per-template <code>actions-gateway.com/self-exiting-sidecars</code> name-list annotation acknowledges sidecars the operator asserts exit cleanly, silencing all three for the named containers only (a name-list, not a boolean, so a newly added footgun still warns).
+The operator-facing how-to lives in <a href="../../operations/in-runner-image-builds/#sidecar-containers-must-be-native-sidecars-q249">in-runner image builds § Sidecar containers must be native sidecars</a>.</p>
 <hr />
 <p>← <a href="../appendix-a-capacity-slos/">Appendix A</a> | <a href="../">Back to index</a> | Next: <a href="../appendix-c-ai-implementation/">Appendix C — AI-Assisted Implementation →</a></p>
 

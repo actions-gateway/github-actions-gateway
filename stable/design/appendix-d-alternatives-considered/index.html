@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/1.4.0/design/appendix-d-alternatives-considered/">
+        <link rel="canonical" href="https://actions-gateway.com/1.5.0/design/appendix-d-alternatives-considered/">
       
       
         <link rel="prev" href="../appendix-c-ai-implementation/">
@@ -63,15 +63,15 @@
   <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/IBMPlexSans-Bold.woff2">
   <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/MonaspaceNeon-Medium.woff2">
   
-  <meta property="og:image" content="https://actions-gateway.com/1.4.0assets/social-preview.png">
+  <meta property="og:image" content="https://actions-gateway.com/1.5.0assets/social-preview.png">
   <meta property="og:image:width" content="1280">
   <meta property="og:image:height" content="640">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:image" content="https://actions-gateway.com/1.4.0assets/social-preview.png">
+  <meta name="twitter:image" content="https://actions-gateway.com/1.5.0assets/social-preview.png">
   
-  <link rel="apple-touch-icon" href="https://actions-gateway.com/1.4.0assets/apple-touch-icon.png">
-  <link rel="alternate icon" href="https://actions-gateway.com/1.4.0assets/favicon.ico">
-  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/1.4.0assets/icon-512.png">
+  <link rel="apple-touch-icon" href="https://actions-gateway.com/1.5.0assets/apple-touch-icon.png">
+  <link rel="alternate icon" href="https://actions-gateway.com/1.5.0assets/favicon.ico">
+  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/1.5.0assets/icon-512.png">
   
   <script type="application/ld+json">
   {
@@ -79,14 +79,14 @@
     "@type": "SoftwareSourceCode",
     "name": "GitHub Actions Gateway",
     "description": "An Actions Runner Controller (ARC) alternative for self-hosted GitHub Actions runners on multi-tenant Kubernetes \u2014 oversubscribe a shared quota, recover evicted jobs automatically, and isolate every tenant\u0027s GitHub egress.",
-    "url": "https://actions-gateway.com/1.4.0",
+    "url": "https://actions-gateway.com/1.5.0",
     "codeRepository": "https://github.com/actions-gateway/github-actions-gateway",
     "programmingLanguage": "Go",
     "license": "https://www.apache.org/licenses/LICENSE-2.0",
     "author": {
       "@type": "Organization",
       "name": "GitHub Actions Gateway",
-      "url": "https://actions-gateway.com/1.4.0"
+      "url": "https://actions-gateway.com/1.5.0"
     }
   }
   </script>
@@ -95,8 +95,8 @@
     "@context": "https://schema.org",
     "@type": "Organization",
     "name": "GitHub Actions Gateway",
-    "url": "https://actions-gateway.com/1.4.0",
-    "logo": "https://actions-gateway.com/1.4.0assets/icon-512.png",
+    "url": "https://actions-gateway.com/1.5.0",
+    "logo": "https://actions-gateway.com/1.5.0assets/icon-512.png",
     "sameAs": ["https://github.com/actions-gateway/github-actions-gateway"]
   }
   </script>
@@ -132,8 +132,8 @@
         <aside class="md-banner">
           <div class="md-banner__inner md-grid md-typeset">
             
-            <strong>v1.4.0 is here.</strong>
-      Consent-gated cross-namespace egress proxy sharing, a curated runner template library you apply with one command, and v2 worker-capacity conditions exported as Prometheus gauges.
+            <strong>v1.5.0 is here.</strong>
+      A per-tenant GitHub runner group boundary, multi-label runner sets that migrate a <code>runs-on</code> array unedited, and job duration and latency metrics on the acquisition tier every new tenant runs.
           </div>
           
         </aside>
@@ -145,7 +145,7 @@
           <aside class="md-banner md-banner--warning">
             <div class="md-banner__inner md-grid md-typeset">
               You're not viewing the latest release.
-  <a href="https://actions-gateway.com/1.4.0"><strong>Go to the current docs.</strong></a>
+  <a href="https://actions-gateway.com/1.5.0"><strong>Go to the current docs.</strong></a>
 
             </div>
             <script>var el=document.querySelector("[data-md-component=outdated]"),base=new URL("../.."),outdated=__md_get("__outdated",sessionStorage,base);!0===outdated&&el&&(el.hidden=!1)</script>
@@ -1317,10 +1317,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#d9-forgemt-and-account-per-tenant-runner-platforms" class="md-nav__link">
+  <a href="#d9-forgemt-and-cloud-identity-tenant-boundaries" class="md-nav__link">
     <span class="md-ellipsis">
       
-        D.9. ForgeMT and Account-per-Tenant Runner Platforms
+        D.9. ForgeMT and Cloud-Identity Tenant Boundaries
       
     </span>
   </a>
@@ -2855,10 +2855,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#d9-forgemt-and-account-per-tenant-runner-platforms" class="md-nav__link">
+  <a href="#d9-forgemt-and-cloud-identity-tenant-boundaries" class="md-nav__link">
     <span class="md-ellipsis">
       
-        D.9. ForgeMT and Account-per-Tenant Runner Platforms
+        D.9. ForgeMT and Cloud-Identity Tenant Boundaries
       
     </span>
   </a>
@@ -2943,7 +2943,8 @@
 <h1 id="appendix-d--alternatives-considered">Appendix D — Alternatives Considered<a class="headerlink" href="#appendix-d--alternatives-considered" title="Permanent link">&para;</a></h1>
 <p>← <a href="../appendix-c-ai-implementation/">Appendix C</a> | <a href="../">Back to index</a> | Next: <a href="../appendix-e-capacity-planning/">Appendix E — Capacity Planning →</a></p>
 <hr />
-<p>This appendix documents the self-hosted runner approaches that were evaluated before settling on the four-tier gateway design. Each alternative is a legitimate solution for some deployment contexts; the goal here is to be explicit about the trade-offs that make them insufficient for the specific requirements of high-scale, multi-tenant, GPU-capable Kubernetes clusters.</p>
+<p>This appendix documents the self-hosted runner approaches that were evaluated before settling on the four-tier gateway design.
+Each alternative is a legitimate solution for some deployment contexts; the goal here is to be explicit about the trade-offs that make them insufficient for the specific requirements of high-scale, multi-tenant, GPU-capable Kubernetes clusters.</p>
 <p>The requirements driving this evaluation were: goroutine-level session multiplexing to eliminate idle pod overhead, per-tenant egress IP isolation, zero-idle compute between jobs (scale-to-zero), and self-service tenant onboarding without cluster-admin involvement per team.</p>
 <hr />
 <h2 id="d1-github-hosted-runners">D.1. GitHub-Hosted Runners<a class="headerlink" href="#d1-github-hosted-runners" title="Permanent link">&para;</a></h2>
@@ -2958,12 +2959,14 @@
 <p><strong>Disadvantages</strong></p>
 <ul>
 <li>No access to private network resources (internal APIs, private registries, on-premises databases) without additional tunneling infrastructure, which reintroduces operational complexity.</li>
-<li>No GPU support on standard plans. GitHub's larger runners offer some GPU options, but availability is limited, the hardware selection is fixed, and cost per minute is significantly higher than self-managed GPU nodes.</li>
+<li>No GPU support on standard plans.
+  GitHub's larger runners offer some GPU options, but availability is limited, the hardware selection is fixed, and cost per minute is significantly higher than self-managed GPU nodes.</li>
 <li>Cannot use custom base images or pre-warmed dependency caches without workarounds (artifact caching, container layer caching), which add latency and complexity.</li>
 <li>Per-minute billing at scale makes GitHub-hosted runners substantially more expensive than self-managed compute for teams with high job volume or long-running build pipelines.</li>
 <li>No control over egress IPs, making IP-based allowlisting on internal services or GitHub App integrations impractical.</li>
 </ul>
-<p><strong>Verdict:</strong> Appropriate for teams without private network requirements, GPU workloads, or strict egress control needs. Does not satisfy the multi-tenant, GPU-capable cluster requirements driving this design.</p>
+<p><strong>Verdict:</strong> Appropriate for teams without private network requirements, GPU workloads, or strict egress control needs.
+Does not satisfy the multi-tenant, GPU-capable cluster requirements driving this design.</p>
 <hr />
 <h2 id="d2-naive-self-hosted-runners-no-controller">D.2. Naive Self-Hosted Runners (No Controller)<a class="headerlink" href="#d2-naive-self-hosted-runners-no-controller" title="Permanent link">&para;</a></h2>
 <p>The baseline approach: register runner processes directly with GitHub, either as static pods in Kubernetes or on dedicated VMs, with no automation layer managing lifecycle.</p>
@@ -2975,170 +2978,167 @@
 </ul>
 <p><strong>Disadvantages</strong></p>
 <ul>
-<li>The 1:1 pod-to-connection model is the core problem this design solves. Every runner slot requires a running pod holding memory, a cluster IP, and a long-poll connection — regardless of whether any jobs are queued.</li>
-<li>No lifecycle automation: scaling up or down requires manual intervention or custom scripts. Idle capacity is permanent unless explicitly removed.</li>
-<li>No multi-tenancy. Runners registered at the organization or repository level are shared across all teams, with no resource isolation between tenants.</li>
-<li>No egress IP isolation. All runner traffic exits from shared node IPs.</li>
-<li>GPU nodes must be allocated to runner pods continuously, even between jobs. A team running ten GPU runner slots holds ten GPU allocations idle, paying for capacity that is delivering no value during quiet periods.</li>
+<li>The 1:1 pod-to-connection model is the core problem this design solves.
+  Every runner slot requires a running pod holding memory, a cluster IP, and a long-poll connection — regardless of whether any jobs are queued.</li>
+<li>No lifecycle automation: scaling up or down requires manual intervention or custom scripts.
+  Idle capacity is permanent unless explicitly removed.</li>
+<li>No multi-tenancy.
+  Runners registered at the organization or repository level are shared across all teams, with no resource isolation between tenants.</li>
+<li>No egress IP isolation.
+  All runner traffic exits from shared node IPs.</li>
+<li>GPU nodes must be allocated to runner pods continuously, even between jobs.
+  A team running ten GPU runner slots holds ten GPU allocations idle, paying for capacity that is delivering no value during quiet periods.</li>
 <li>Runner registration tokens expire; re-registration is a manual or scripted process with no automated recovery.</li>
 </ul>
-<p><strong>Verdict:</strong> Viable for small teams with a handful of runners. Fails at scale due to idle resource accumulation, and provides no multi-tenancy or egress isolation primitives.</p>
+<p><strong>Verdict:</strong> Viable for small teams with a handful of runners.
+Fails at scale due to idle resource accumulation, and provides no multi-tenancy or egress isolation primitives.</p>
 <hr />
 <h2 id="d3-actions-runner-controller-arc">D.3. Actions Runner Controller (ARC)<a class="headerlink" href="#d3-actions-runner-controller-arc" title="Permanent link">&para;</a></h2>
-<p><a href="https://github.com/actions/actions-runner-controller">ARC</a> is the official GitHub-maintained Kubernetes operator for self-hosted runners. It is the most mature and widely-deployed alternative and the most relevant comparison for this design.</p>
+<p><a href="https://github.com/actions/actions-runner-controller">ARC</a> is the official GitHub-maintained Kubernetes operator for self-hosted runners.
+It is the most mature and widely-deployed alternative and the most relevant comparison for this design.</p>
 <p><strong>Advantages</strong></p>
 <ul>
-<li>Official GitHub support: ARC is maintained by GitHub, has a large community, and is well-documented. API compatibility with the GitHub broker protocol is kept current by the maintainers.</li>
-<li>No broker protocol re-implementation required. ARC uses the official <code>actions/runner</code> binary and registration flow; this design re-implements a significant portion of the broker API (see <a href="../03-api-contracts/#33-re-implemented-broker-api-endpoints">§3.3</a>), which carries ongoing maintenance risk.</li>
+<li>Official GitHub support: ARC is maintained by GitHub, has a large community, and is well-documented.
+  API compatibility with the GitHub broker protocol is kept current by the maintainers.</li>
+<li>No broker protocol re-implementation required.
+  ARC uses the official <code>actions/runner</code> binary and registration flow; this design re-implements a significant portion of the broker API (see <a href="../03-api-contracts/#33-re-implemented-broker-api-endpoints">§3.3</a>), which carries ongoing maintenance risk.</li>
 <li><code>RunnerScaleSet</code> mode (introduced in ARC v0.5+) supports ephemeral runners that are provisioned on-demand and terminated after each job, eliminating the idle-pod problem for teams that adopt this mode.</li>
-<li>Integrates with Kubernetes-native autoscaling. The <code>RunnerScaleSet</code> controller publishes a custom metric that KEDA or the built-in autoscaler can act on.</li>
+<li>Integrates with Kubernetes-native autoscaling.
+  The <code>RunnerScaleSet</code> controller publishes a custom metric that KEDA or the built-in autoscaler can act on.</li>
 <li>Broad adoption means community-tested Helm charts, pre-built container images, and an established set of known operational issues.</li>
 </ul>
 <p><strong>Disadvantages</strong></p>
 <ul>
-<li><strong>Listener packaging.</strong> In <code>RunnerScaleSet</code> mode, ARC uses one listener per scale set (not one per slot) — a Go binary (<code>cmd/ghalistener</code>, built on the same official <code>github.com/actions/scaleset</code> client library this design tracks) — so its steady-state long-poll connection count is similar to this design's adaptive listener model. The difference is packaging: ARC deploys each listener as its own always-on pod with its own cluster IP, while the Actions Gateway Controller (AGC) runs every listener as a goroutine in one shared pod, at a measured ~12.2 KiB of AGC state per session (<a href="../appendix-a-capacity-slos/">Appendix A</a>). At a tenant operating 10 RunnerScaleSets, that is 10 always-on listener pods and 10 cluster IPs for ARC versus 1 AGC pod and 1 cluster IP here. (No per-listener memory ratio is published: the <code>gha-runner-scale-set</code> chart ships no default listener resource requests, so there is no measured ARC-side figure to compare against — see <a href="../appendix-a-capacity-slos/">Appendix A</a> for why the earlier ~4,000× claim was retired.)</li>
-<li><strong>Multi-tenant isolation.</strong> ARC does not provide a self-service multi-tenancy model. Each team typically requires a separate <code>RunnerDeployment</code> or <code>RunnerScaleSet</code> with its own RBAC, and cluster-admin involvement is required to set up network policies and resource quotas per tenant. There is no equivalent of the <code>ActionsGateway</code> CR that lets a team provision an isolated gateway instance within their existing namespace without cluster-admin.</li>
-<li><strong>Egress IP isolation.</strong> ARC provides no per-tenant egress IP control. All runner traffic exits from shared node IPs unless the operator independently layers a proxy or NAT gateway, which is not part of ARC's feature set. This design's per-tenant <code>EgressProxyPool</code> (Tier 3) provides this natively.</li>
-<li><strong>GPU idle cost.</strong> ARC's <code>RunnerScaleSet</code> can scale to zero runners between bursts, which eliminates idle GPU pod allocations during quiet periods. However, the scale-down latency is governed by the autoscaler's reaction time (typically 30–60 seconds after queue depth drops), whereas this design's ephemeral worker pods release their compute immediately on job completion. For GPU workloads where node hours are expensive, the difference in idle time per job cycle accumulates.</li>
-<li><strong>AGC node placement.</strong> ARC's controller runs on whatever nodes are available and does not distinguish between CPU-only and GPU node pools. The AGC in this design is explicitly designed to run on CPU-only nodes, keeping GPU capacity entirely free for worker pods. This distinction requires intentional <code>nodeSelector</code> or <code>taints/tolerations</code> configuration in ARC but is enforced structurally in this design.</li>
-<li><strong>No shared quota across runner sets, and no minimum guarantees within a shared pool.</strong> ARC's <code>maxRunners</code> is a per-<code>RunnerScaleSet</code> property with no mechanism to express a shared budget across multiple sets. A team with three RunnerScaleSets each capped at 50 can theoretically schedule 150 concurrent runners — exceeding the namespace's actual resource capacity — and there is no native way to say "all sets combined may use at most 100 concurrent jobs" without external tooling or manual coordination of per-set caps. Conversely, lowering per-set caps to constrain the aggregate introduces the opposite problem: a large CPU runner set can be capped low enough to protect namespace headroom, but there is no mechanism to guarantee that GPU runners (which need that headroom) can actually claim it when they need it. This design bounds all worker pods from all <code>RunnerGroup</code>s against the same Kubernetes <code>ResourceQuota</code> for the shared ceiling, and adds a <code>priorityTiers</code> field on each <code>RunnerGroup</code> to express minimum guarantees within that pool: the first N pods of a high-priority group are assigned a preempting <code>PriorityClass</code> that displaces lower-priority pods when the namespace is contended, while additional pods above the preemption threshold schedule opportunistically. Both the shared ceiling and the per-group priority floors are expressed declaratively in the <code>ActionsGateway</code> CR and enforced by the Kubernetes scheduler — no external tooling or manual cap coordination required.</li>
-<li><strong>Broker protocol opacity.</strong> Because ARC wraps the official runner binary, it inherits any breaking changes GitHub makes to the broker protocol without exposing them as first-class API contracts. This design's explicit broker API documentation (<a href="../03-api-contracts/#33-re-implemented-broker-api-endpoints">§3.3</a>) makes compatibility requirements visible and testable.</li>
+<li><strong>Listener packaging.</strong> In <code>RunnerScaleSet</code> mode, ARC uses one listener per scale set (not one per slot) — a Go binary (<code>cmd/ghalistener</code>, built on the same official <code>github.com/actions/scaleset</code> client library this design tracks) — so its steady-state long-poll connection count is similar to this design's adaptive listener model.
+  The difference is packaging: ARC deploys each listener as its own always-on pod with its own cluster IP, while the Actions Gateway Controller (AGC) runs every listener as a goroutine in one shared pod, at a measured ~12.2 KiB of AGC state per session (<a href="../appendix-a-capacity-slos/">Appendix A</a>).
+  At a tenant operating 10 RunnerScaleSets, that is 10 always-on listener pods and 10 cluster IPs for ARC versus 1 AGC pod and 1 cluster IP here.
+  (No per-listener memory ratio is published: the <code>gha-runner-scale-set</code> chart ships no default listener resource requests, so there is no measured ARC-side figure to compare against — see <a href="../appendix-a-capacity-slos/">Appendix A</a> for why the earlier ~4,000× claim was retired.)</li>
+<li><strong>Multi-tenant isolation.</strong> ARC does not provide a self-service multi-tenancy model.
+  Each team typically requires a separate <code>RunnerDeployment</code> or <code>RunnerScaleSet</code> with its own RBAC, and cluster-admin involvement is required to set up network policies and resource quotas per tenant.
+  There is no equivalent of the <code>ActionsGateway</code> CR that lets a team provision an isolated gateway instance within their existing namespace without cluster-admin.</li>
+<li><strong>Egress IP isolation.</strong> ARC provides no per-tenant egress IP control.
+  All runner traffic exits from shared node IPs unless the operator independently layers a proxy or NAT gateway, which is not part of ARC's feature set.
+  This design's per-tenant <code>EgressProxyPool</code> (Tier 3) provides this natively.</li>
+<li><strong>GPU idle cost.</strong> ARC's <code>RunnerScaleSet</code> can scale to zero runners between bursts, which eliminates idle GPU pod allocations during quiet periods.
+  However, the scale-down latency is governed by the autoscaler's reaction time (typically 30–60 seconds after queue depth drops), whereas this design's ephemeral worker pods release their compute immediately on job completion.
+  For GPU workloads where node hours are expensive, the difference in idle time per job cycle accumulates.</li>
+<li><strong>AGC node placement.</strong> ARC's controller runs on whatever nodes are available and does not distinguish between CPU-only and GPU node pools.
+  The AGC in this design is explicitly designed to run on CPU-only nodes, keeping GPU capacity entirely free for worker pods.
+  This distinction requires intentional <code>nodeSelector</code> or <code>taints/tolerations</code> configuration in ARC but is enforced structurally in this design.</li>
+<li><strong>No shared ceiling across runner sets, and no reserved floor within one.</strong> ARC does express scheduling <em>ordering</em> natively: <code>AutoscalingRunnerSetSpec.Template</code> is a full <code>corev1.PodTemplateSpec</code>, the <code>gha-runner-scale-set</code> chart copies every <code>template.spec</code> key it does not reserve for itself (<code>containers</code>, <code>initContainers</code>, <code>volumes</code>, <code>serviceAccountName</code>), and the <code>EphemeralRunner</code> controller assigns that <code>PodSpec</code> to the runner pod wholesale (<code>newPod.Spec = runner.Spec.Spec</code>), so a <code>priorityClassName</code> set on a scale set reaches its runner pods and preempts lower-priority ones (measured against ARC <code>master</code>, 2026-08-12).
+  What ARC cannot express is a <em>bounded</em> reservation, in either direction.
+  The floor: priority is a property of the scale set's one pod template, so every runner in the set carries the same class.
+  "The first 5 GPU runners preempt, the rest schedule opportunistically" requires the class to vary by pod index within a single set, and a set whose whole template preempts starves the sets beneath it rather than reserving a slice of the pool.
+  The ceiling: <code>maxRunners</code> is a per-<code>AutoscalingRunnerSet</code> property with no mechanism to express a shared budget across multiple sets.
+  A team with three sets each capped at 50 can theoretically schedule 150 concurrent runners, exceeding the namespace's actual resource capacity, and there is no native way to say "all sets combined may use at most 100 concurrent jobs" without external tooling or manual coordination of per-set caps.
+  This design bounds all worker pods from all <code>RunnerGroup</code>s against the same Kubernetes <code>ResourceQuota</code> for the shared ceiling, and adds a <code>priorityTiers</code> field on each <code>RunnerGroup</code> for the floor: the first N pods of a high-priority group are assigned a preempting <code>PriorityClass</code> that displaces lower-priority pods when the namespace is contended, while additional pods above the preemption threshold schedule opportunistically.
+  Both are expressed declaratively in the <code>ActionsGateway</code> CR and enforced by the Kubernetes scheduler, with no external tooling or manual cap coordination.</li>
+<li><strong>Broker protocol opacity.</strong> Because ARC wraps the official runner binary, it inherits any breaking changes GitHub makes to the broker protocol without exposing them as first-class API contracts.
+  This design's explicit broker API documentation (<a href="../03-api-contracts/#33-re-implemented-broker-api-endpoints">§3.3</a>) makes compatibility requirements visible and testable.</li>
 </ul>
-<p><strong>Verdict:</strong> ARC is the right choice for most teams that need Kubernetes-native self-hosted runners. It is mature, officially supported, and avoids the maintenance burden of re-implementing the broker protocol. This design is the right choice when the requirements include listener consolidation at scale (one shared AGC pod instead of an always-on listener pod and cluster IP per scale set), per-tenant egress IP isolation without additional infrastructure, or self-service multi-tenant onboarding with per-tenant namespace isolation, <code>priorityTiers</code> preemption control, and declarative <code>ActionsGateway</code> provisioning — none of which ARC provides natively.</p>
+<p><strong>Verdict:</strong> ARC is the right choice for most teams that need Kubernetes-native self-hosted runners.
+It is mature, officially supported, and avoids the maintenance burden of re-implementing the broker protocol.
+This design is the right choice when the requirements include listener consolidation at scale (one shared AGC pod instead of an always-on listener pod and cluster IP per scale set), per-tenant egress IP isolation without additional infrastructure, or self-service multi-tenant onboarding with per-tenant namespace isolation, a <code>priorityTiers</code> reservation floor under a shared quota ceiling, and declarative <code>ActionsGateway</code> provisioning — none of which ARC provides natively.</p>
 <hr />
 <h2 id="d4-arc-with-keda-autoscaling">D.4. ARC with KEDA Autoscaling<a class="headerlink" href="#d4-arc-with-keda-autoscaling" title="Permanent link">&para;</a></h2>
-<p>A common production pattern layers <a href="https://keda.sh/">KEDA</a> on top of ARC, using a <code>ScaledObject</code> targeting ARC's queue-depth metric to drive runner replica count. This addresses ARC's baseline idle-runner problem more aggressively than ARC's built-in autoscaler alone.</p>
+<p>A common production pattern layers <a href="https://keda.sh/">KEDA</a> on top of ARC, using a <code>ScaledObject</code> targeting ARC's queue-depth metric to drive runner replica count.
+This addresses ARC's baseline idle-runner problem more aggressively than ARC's built-in autoscaler alone.</p>
 <p><strong>Advantages</strong></p>
 <ul>
 <li>Eliminates idle runners during sustained quiet periods: KEDA can scale the <code>RunnerScaleSet</code> to zero replicas when the queue is empty and scale up in response to queued jobs.</li>
-<li>Uses standard, widely-adopted tooling. KEDA is a CNCF project with broad ecosystem support.</li>
+<li>Uses standard, widely-adopted tooling.
+  KEDA is a CNCF project with broad ecosystem support.</li>
 <li>Requires no changes to ARC's runner binary or broker integration.</li>
 </ul>
 <p><strong>Disadvantages</strong></p>
 <ul>
-<li><strong>Scale-up latency.</strong> KEDA reacts to metric changes on a configurable polling interval (default 30 seconds). During a burst, new runner pods must be scheduled, image-pulled, and registered with GitHub before they can accept work. This design's goroutine model maintains a standing pool of pre-registered virtual sessions at negligible cost, so job acquisition latency is bounded by pod scheduling and image pull time rather than runner registration time.</li>
-<li><strong>Adds operational dependency.</strong> KEDA introduces another component to install, upgrade, and monitor. Failure modes compound: a KEDA controller outage or metric source failure stalls autoscaling.</li>
+<li><strong>Scale-up latency.</strong> KEDA reacts to metric changes on a configurable polling interval (default 30 seconds).
+  During a burst, new runner pods must be scheduled, image-pulled, and registered with GitHub before they can accept work.
+  This design's goroutine model maintains a standing pool of pre-registered virtual sessions at negligible cost, so job acquisition latency is bounded by pod scheduling and image pull time rather than runner registration time.</li>
+<li><strong>Adds operational dependency.</strong> KEDA introduces another component to install, upgrade, and monitor.
+  Failure modes compound: a KEDA controller outage or metric source failure stalls autoscaling.</li>
 <li><strong>Does not solve multiplexing or egress isolation.</strong> KEDA addresses scale-to-zero but leaves the per-pod session overhead and shared-egress-IP problems untouched.</li>
-<li><strong>GPU idle gap.</strong> Even with KEDA scaling ARC to zero, the scale-down reaction time means GPU allocations are held for up to a full KEDA polling interval after the last job completes. This design's immediate compute release on pod completion eliminates that gap.</li>
+<li><strong>GPU idle gap.</strong> Even with KEDA scaling ARC to zero, the scale-down reaction time means GPU allocations are held for up to a full KEDA polling interval after the last job completes.
+  This design's immediate compute release on pod completion eliminates that gap.</li>
 </ul>
-<p><strong>Verdict:</strong> A meaningful improvement over plain ARC for teams where idle runner cost is the primary concern. Does not close the gap on session multiplexing, egress isolation, or multi-tenant self-service provisioning.</p>
+<p><strong>Verdict:</strong> A meaningful improvement over plain ARC for teams where idle runner cost is the primary concern.
+Does not close the gap on session multiplexing, egress isolation, or multi-tenant self-service provisioning.</p>
 <hr />
-<p>Sections D.1–D.4 cover ways of running the runners themselves. The two sections below cover <em>adjacent</em> Kubernetes tooling that is frequently raised alongside this design — a job-queue / quota manager and an infrastructure cost optimizer. Neither is a self-hosted runner controller, so neither is a drop-in substitute; both are included because each overlaps part of the problem space (priority/quota arbitration; GPU/compute cost) and the boundary between "what this design does" and "what these tools do" is a common point of confusion.</p>
+<p>Sections D.1–D.4 cover ways of running the runners themselves.
+The two sections below cover <em>adjacent</em> Kubernetes tooling that is frequently raised alongside this design — a job-queue / quota manager and an infrastructure cost optimizer.
+Neither is a self-hosted runner controller, so neither is a drop-in substitute; both are included because each overlaps part of the problem space (priority/quota arbitration; GPU/compute cost) and the boundary between "what this design does" and "what these tools do" is a common point of confusion.</p>
 <h2 id="d5-kueue-and-kubernetes-job-queue--quota-managers">D.5. Kueue and Kubernetes Job-Queue / Quota Managers<a class="headerlink" href="#d5-kueue-and-kubernetes-job-queue--quota-managers" title="Permanent link">&para;</a></h2>
-<p><a href="https://kueue.sigs.k8s.io/">Kueue</a> is the Kubernetes-native job queueing and quota manager maintained under the Kubernetes Special Interest Group (SIG) for scheduling. It is the natural off-the-shelf tool to reach for when someone asks "why not just put a priority queue in front of the runners?", so the boundary between it and this design is worth stating explicitly.</p>
-<p><strong>What it does.</strong> Kueue arbitrates workloads against declarative quota. Its core objects are <code>ClusterQueue</code> and <code>LocalQueue</code> (the quota and submission surfaces), <code>ResourceFlavor</code> (heterogeneous resource pools, e.g. GPU vs CPU), <code>Cohort</code> (quota borrowing between queues), and <code>WorkloadPriorityClass</code> (priority-ordered preemption). Per its own documentation, Kueue "decides when a job should wait, when a job should be admitted to start (as in pods can be created), and when a job should be preempted." It installs as Custom Resource Definitions (CRDs), a cluster-wide controller, and admission webhooks, and therefore requires cluster-admin to deploy.</p>
-<p><strong>Where it overlaps.</strong> Kueue's quota-and-priority model overlaps the same need this design addresses with a shared <code>ResourceQuota</code> ceiling plus per-<code>RunnerGroup</code> <code>priorityTiers</code>: keeping a high-priority runner type from being starved by a flood of lower-priority work, and expressing a shared budget across heterogeneous pools. A cluster that already runs Kueue has a credible answer to the priority/quota half of the problem at the pod layer.</p>
-<p><strong>The differentiator.</strong> Kueue gates the <em>pod</em> layer; this design's admission decision has to happen one layer above it, at the GitHub broker. A worker pod only exists <em>after</em> the Actions Gateway Controller (AGC) has already claimed the job from GitHub (<code>acquirejob</code>), at which point GitHub considers the job owned by that session and the job lock is ticking. Kueue has no visibility into the broker and cannot defer a job that is not yet a Kubernetes workload; if it defers the <em>pod</em> after the claim, the work is queued while the lock the design must renew counts down — the exact failure the broker-layer admission gate exists to prevent. So Kueue <strong>augments</strong> rather than <strong>replaces</strong> the design's gate: in a cluster that already runs Kueue, this design's worker pods can still participate in a <code>ClusterQueue</code> for cluster-wide quota and preemption at the pod layer, while the broker-layer decision of <em>whether to claim the job at all</em> stays upstream of anything Kueue can act on. Kueue also requires cluster-admin to install, which is in tension with this design's self-service-without-cluster-admin requirement, so making it a hard dependency would regress that goal.</p>
-<p>The full argument — why admission is gated before <code>acquirejob</code> rather than delegated to an in-cluster queue, and why a durable internal queue was also rejected — is developed in the pre-acquisition admission-control plan (Q59; see <a href="../../plan/archive/acquire-admission-control/#relationship-to-kueue-why-an-off-the-shelf-k8s-queue-isnt-the-admission-layer">Relationship to Kueue</a>) and is not duplicated here.</p>
-<p><strong>Verdict:</strong> Kueue is a strong fit for cluster-wide batch quota and priority arbitration at the pod layer, and composes with this design rather than competing with it. It is not a substitute for runner-control-plane admission, because the decision that matters for GitHub Actions jobs — whether to claim a job from the broker — happens before any Kubernetes workload exists for Kueue to manage.</p>
+<p><a href="https://kueue.sigs.k8s.io/">Kueue</a> is the Kubernetes-native job queueing and quota manager maintained under the Kubernetes Special Interest Group (SIG) for scheduling.
+It is the natural off-the-shelf tool to reach for when someone asks "why not just put a priority queue in front of the runners?", so the boundary between it and this design is worth stating explicitly.</p>
+<p><strong>What it does.</strong> Kueue arbitrates workloads against declarative quota.
+Its core objects are <code>ClusterQueue</code> and <code>LocalQueue</code> (the quota and submission surfaces), <code>ResourceFlavor</code> (heterogeneous resource pools, e.g. GPU vs CPU), <code>Cohort</code> (quota borrowing between queues), and <code>WorkloadPriorityClass</code> (priority-ordered preemption).
+Per its own documentation, Kueue "decides when a job should wait, when a job should be admitted to start (as in pods can be created), and when a job should be preempted."
+It installs as Custom Resource Definitions (CRDs), a cluster-wide controller, and admission webhooks, and therefore requires cluster-admin to deploy.</p>
+<p><strong>Where it overlaps.</strong> Kueue's quota-and-priority model overlaps the same need this design addresses with a shared <code>ResourceQuota</code> ceiling plus per-<code>RunnerGroup</code> <code>priorityTiers</code>: keeping a high-priority runner type from being starved by a flood of lower-priority work, and expressing a shared budget across heterogeneous pools.
+A cluster that already runs Kueue has a credible answer to the priority/quota half of the problem at the pod layer.</p>
+<p><strong>The differentiator.</strong> Kueue gates the <em>pod</em> layer; this design's admission decision has to happen one layer above it, at the GitHub broker.
+A worker pod only exists <em>after</em> the Actions Gateway Controller (AGC) has already claimed the job from GitHub (<code>acquirejob</code>), at which point GitHub considers the job owned by that session and the job lock is ticking.
+Kueue has no visibility into the broker and cannot defer a job that is not yet a Kubernetes workload; if it defers the <em>pod</em> after the claim, the work is queued while the lock the design must renew counts down — the exact failure the broker-layer admission gate exists to prevent.
+So Kueue <strong>augments</strong> rather than <strong>replaces</strong> the design's gate: in a cluster that already runs Kueue, this design's worker pods can still participate in a <code>ClusterQueue</code> for cluster-wide quota and preemption at the pod layer, while the broker-layer decision of <em>whether to claim the job at all</em> stays upstream of anything Kueue can act on.
+Kueue also requires cluster-admin to install, which is in tension with this design's self-service-without-cluster-admin requirement, so making it a hard dependency would regress that goal.</p>
+<p>The full argument — why admission is gated before <code>acquirejob</code> rather than delegated to an in-cluster queue, and why a durable internal queue was also rejected — is developed in the pre-acquisition admission-control plan (Q59; see <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.5.0/docs/plan/archive/acquire-admission-control.md#relationship-to-kueue-why-an-off-the-shelf-k8s-queue-isnt-the-admission-layer">Relationship to Kueue</a>) and is not duplicated here.</p>
+<p><strong>Verdict:</strong> Kueue is a strong fit for cluster-wide batch quota and priority arbitration at the pod layer, and composes with this design rather than competing with it.
+It is not a substitute for runner-control-plane admission, because the decision that matters for GitHub Actions jobs — whether to claim a job from the broker — happens before any Kubernetes workload exists for Kueue to manage.</p>
 <hr />
 <h2 id="d6-exostellar-and-infrastructure--gpu-cost-optimizers">D.6. Exostellar and Infrastructure / GPU Cost Optimizers<a class="headerlink" href="#d6-exostellar-and-infrastructure--gpu-cost-optimizers" title="Permanent link">&para;</a></h2>
-<p><a href="https://exostellar.io/">Exostellar</a> is representative of a class of infrastructure cost-optimization tooling that is sometimes mentioned in the same breath as runner autoscaling because it targets the cost of expensive (especially GPU) compute. It is included here to draw the layer boundary, not because it manages runners.</p>
-<p><strong>What it does.</strong> Per Exostellar's public materials, it offers two main capabilities. The Exostellar Infrastructure Optimizer runs workloads inside virtual machines (VMs) on cloud instances and predicts spot-instance reclamation, live-migrating a VM to another spot or on-demand instance to keep the workload alive while capturing spot pricing. Its Software Defined GPU offering provides vendor-agnostic, fractional GPU slicing through Kubernetes Dynamic Resource Allocation (DRA), partitioning GPUs beyond fixed Multi-Instance GPU (MIG) boundaries to raise utilization. Both are aimed at lowering the unit cost of the underlying compute.</p>
-<p><strong>Where it overlaps.</strong> Only at the framing level of "make expensive GPU compute cheaper." This design reduces GPU cost by holding <em>zero</em> idle GPU allocation between jobs — worker pods are provisioned when a job is acquired and release their compute on completion — so the comparison is real for anyone evaluating "how do I stop paying for idle GPUs."</p>
-<p><strong>The differentiator.</strong> Exostellar operates at the node / VM / GPU <em>infrastructure</em> layer: it optimizes the cost and packing of compute that has already been requested. This design operates at the runner <em>control-plane</em> layer: it decides whether a worker pod needs to exist at all (goroutine-multiplexed virtual sessions with no per-runner pod at rest), provides per-tenant egress IP isolation, and offers multi-tenant self-service provisioning — none of which an infrastructure optimizer addresses. The two are orthogonal and could compose: an infrastructure optimizer could pack the nodes that this design's ephemeral worker pods land on.</p>
+<p><a href="https://exostellar.io/">Exostellar</a> is representative of a class of infrastructure cost-optimization tooling that is sometimes mentioned in the same breath as runner autoscaling because it targets the cost of expensive (especially GPU) compute.
+It is included here to draw the layer boundary, not because it manages runners.</p>
+<p><strong>What it does.</strong> Per Exostellar's public materials, it offers two main capabilities.
+The Exostellar Infrastructure Optimizer runs workloads inside virtual machines (VMs) on cloud instances and predicts spot-instance reclamation, live-migrating a VM to another spot or on-demand instance to keep the workload alive while capturing spot pricing.
+Its Software Defined GPU offering provides vendor-agnostic, fractional GPU slicing through Kubernetes Dynamic Resource Allocation (DRA), partitioning GPUs beyond fixed Multi-Instance GPU (MIG) boundaries to raise utilization.
+Both are aimed at lowering the unit cost of the underlying compute.</p>
+<p><strong>Where it overlaps.</strong> Only at the framing level of "make expensive GPU compute cheaper."
+This design reduces GPU cost by holding <em>zero</em> idle GPU allocation between jobs — worker pods are provisioned when a job is acquired and release their compute on completion — so the comparison is real for anyone evaluating "how do I stop paying for idle GPUs."</p>
+<p><strong>The differentiator.</strong> Exostellar operates at the node / VM / GPU <em>infrastructure</em> layer: it optimizes the cost and packing of compute that has already been requested.
+This design operates at the runner <em>control-plane</em> layer: it decides whether a worker pod needs to exist at all (goroutine-multiplexed virtual sessions with no per-runner pod at rest), provides per-tenant egress IP isolation, and offers multi-tenant self-service provisioning — none of which an infrastructure optimizer addresses.
+The two are orthogonal and could compose: an infrastructure optimizer could pack the nodes that this design's ephemeral worker pods land on.</p>
 <blockquote>
-<p><strong>Unverified — treat as a hypothesis, not a claim.</strong> Working notes for this analysis speculated that vendors such as Exostellar layer a queue manager (e.g. Kueue) beneath ARC for GPU/quota management. Public materials reviewed for this appendix describe Exostellar as an infrastructure / GPU optimizer (spot-VM migration and GPU slicing) and do <strong>not</strong> describe a GitHub Actions runner, ARC integration, or a runner-queue product. The "layered under ARC" pattern is therefore not asserted here. What can be stated with confidence is the layer distinction above: infrastructure optimizers and this design address different layers and are not substitutes.</p>
+<p><strong>Unverified — treat as a hypothesis, not a claim.</strong> Working notes for this analysis speculated that vendors such as Exostellar layer a queue manager (e.g.
+Kueue) beneath ARC for GPU/quota management.
+Public materials reviewed for this appendix describe Exostellar as an infrastructure / GPU optimizer (spot-VM migration and GPU slicing) and do <strong>not</strong> describe a GitHub Actions runner, ARC integration, or a runner-queue product.
+The "layered under ARC" pattern is therefore not asserted here.
+What can be stated with confidence is the layer distinction above: infrastructure optimizers and this design address different layers and are not substitutes.</p>
 </blockquote>
-<p><strong>Verdict:</strong> Infrastructure and GPU cost optimizers are complementary to this design, not alternatives. They lower the cost of compute that is running; this design lowers cost primarily by ensuring compute is not running when no job needs it, and adds the runner-control-plane properties (multiplexing, egress isolation, multi-tenant self-service) that sit entirely outside an infrastructure optimizer's scope.</p>
+<p><strong>Verdict:</strong> Infrastructure and GPU cost optimizers are complementary to this design, not alternatives.
+They lower the cost of compute that is running; this design lowers cost primarily by ensuring compute is not running when no job needs it, and adds the runner-control-plane properties (multiplexing, egress isolation, multi-tenant self-service) that sit entirely outside an infrastructure optimizer's scope.</p>
 <hr />
 <h2 id="d7-worker-right-sizing-why-built-in-not-bolted-on">D.7. Worker Right-Sizing: Why Built In, Not Bolted On<a class="headerlink" href="#d7-worker-right-sizing-why-built-in-not-bolted-on" title="Permanent link">&para;</a></h2>
-<p>The worker right-sizing loop (Q359: per-job usage sampling → measured
-recommendations in <code>RunnerSet</code> status → opt-in sizing profiles applied at
-pod-build time; see <a href="../02-architecture/#22-tier-2--actions-gateway-controller-agc">§2.2</a>
-and <a href="../appendix-h-v2-api-decomposition/#h7-reference-integrity--runtime-conditions-not-admission">Appendix H §H.7</a>)
-is implemented inside the AGC rather than delegated to external sizing tooling.
-That was a deliberate choice among four alternatives, and the deciding argument
-is structural, not preference — it is worth recording because "why didn't you
-just use VPA?" is the obvious question, and because the same structural facts
-explain why this capability is hard for other runner controllers to retrofit.</p>
-<p><strong>The workload shape that breaks generic tooling.</strong> A worker pod runs exactly
-one CI job and lives minutes. Three consequences follow: pods can only be sized
-<em>at creation</em> (there is no steady state to converge on later); the sizing
-statistic that matters is the <strong>per-job peak envelope</strong> (p95/max of per-job
-peaks), not a time-weighted usage distribution; and there is no long-lived
-controller object with <code>/scale</code> semantics to group pods under (<code>replicas</code> is
-meaningless in a scale-to-zero design).</p>
-<p><strong>Alternative 1 — stock Vertical Pod Autoscaler (VPA).</strong> Fails on all three
-facts. Its <code>targetRef</code> requires a <code>/scale</code> subresource <code>RunnerSet</code> cannot
-meaningfully offer; its actuation is evict-and-resize, which on a one-job pod
-means killing the CI job to resize it; and its recommender models long-running
-services (usage distributions with half-life decay, OOM-event feedback), the
-wrong statistic for run-to-completion work. Recommendation dashboards layered on
-VPA (Goldilocks, Kubecost's request right-sizing) inherit the same foundation.
+<p>The worker right-sizing loop (Q359: per-job usage sampling → measured recommendations in <code>RunnerSet</code> status → opt-in sizing profiles applied at pod-build time; see <a href="../02-architecture/#22-tier-2--actions-gateway-controller-agc">§2.2</a> and <a href="../appendix-h-v2-api-decomposition/#h7-reference-integrity--runtime-conditions-not-admission">Appendix H §H.7</a>) is implemented inside the AGC rather than delegated to external sizing tooling.
+That was a deliberate choice among four alternatives, and the deciding argument is structural, not preference — it is worth recording because "why didn't you just use VPA?" is the obvious question, and because the same structural facts explain why this capability is hard for other runner controllers to retrofit.</p>
+<p><strong>The workload shape that breaks generic tooling.</strong> A worker pod runs exactly one CI job and lives minutes.
+Three consequences follow: pods can only be sized <em>at creation</em> (there is no steady state to converge on later); the sizing statistic that matters is the <strong>per-job peak envelope</strong> (p95/max of per-job peaks), not a time-weighted usage distribution; and there is no long-lived controller object with <code>/scale</code> semantics to group pods under (<code>replicas</code> is meaningless in a scale-to-zero design).</p>
+<p><strong>Alternative 1 — stock Vertical Pod Autoscaler (VPA).</strong> Fails on all three facts.
+Its <code>targetRef</code> requires a <code>/scale</code> subresource <code>RunnerSet</code> cannot meaningfully offer; its actuation is evict-and-resize, which on a one-job pod means killing the CI job to resize it; and its recommender models long-running services (usage distributions with half-life decay, OOM-event feedback), the wrong statistic for run-to-completion work.
+Recommendation dashboards layered on VPA (Goldilocks, Kubecost's request right-sizing) inherit the same foundation.
 <strong>Verdict:</strong> structurally unfit, not merely inconvenient.</p>
-<p><strong>Alternative 2 — VPA with a custom recommender.</strong> VPA's recommender is
-pluggable, so a batch-aware recommender could in principle replace the stock
-model. But the actuation and grouping problems remain (a webhook applying
-"Initial"-style values still needs a pod-grouping convention VPA does not have
-for <code>/scale</code>-less owners), so this path amounts to writing the hard parts from
-scratch <em>inside someone else's framing</em> — more total machinery than the native
-implementation, spread across more failure domains.</p>
-<p><strong>Alternative 3 — an external recommender closing the loop through GitOps.</strong> A
-cron or pipeline queries the Phase 1 Prometheus series, derives values, and
-opens pull requests against the tenant's <code>RunnerTemplate</code>. This is a legitimate
-design — auditable in git, zero new API surface — and nothing in GAG prevents an
-operator from running exactly this today on top of the exported metrics. It was
-rejected as <em>the</em> design because it requires a Prometheus (the Phase 1 decision
-deliberately avoided a hard external dependency), closes the loop on a
-days-scale cadence, cannot express per-container confidence gating at pod-build
-time, and pushes per-tenant automation onto every adopter — the opposite of the
-batteries-included posture that motivates the feature.</p>
-<p><strong>Alternative 4 — a from-scratch, general-purpose batch right-sizer.</strong> The
-serious contender. Designed fresh for run-to-completion pods it would be: a
-<code>PodSizingPolicy</code>-style CRD with a <strong>label selector</strong> (solving the grouping
-problem correctly), the same peak-per-pod-lifetime sampler and
-p95-of-peaks-plus-headroom recommender, and a <strong>mutating admission webhook</strong> as
-the only generic pod-creation actuation hook. This tool would genuinely
-generalize — Kubernetes Jobs, Tekton TaskRuns, Argo Workflows, and ARC's
-ephemeral runners all share the one-pod-one-unit-of-work shape — and no good
-open-source implementation of it exists. It was not chosen because the webhook
-is an entire failure domain the native design simply does not have:
-<code>failurePolicy: Fail</code> makes a sick <em>optimization</em> component block every matching
-pod (the CI fleet stops launching), <code>Ignore</code> makes sizing silently stop; either
-way the tool needs its own certs, chart, Tier-0 security review, and install
-step — and GAG's headline feature would begin "first install this other thing."
-The AGC's provisioner already <em>is</em> the pod creator, so native actuation is an
-in-process function call with direct access to confidence state: strictly less
-machinery, no availability coupling, and the recommendation surfaces on the
-tenant's own <code>RunnerSet</code> under their existing RBAC.</p>
-<p><strong>What the coupling costs, honestly.</strong> The sizing API (<code>spec.sizing</code>,
-<code>status.sizingRecommendation</code>) is permanent GAG surface carried into the v2beta1
-graduation, and a built-in feature cannot serve other batch systems the way
-Alternative 4 could. That deferred generality is deliberately kept cheap to
-revisit: the sampler/histogram/derivation core touches GAG at exactly two narrow
-seams (the worker-pod owner label and the v2 status types), and
-<a href="../appendix-g-future-enhancements/#g15-extract-the-batch-right-sizer-into-a-standalone--reusable-tool">Appendix G §G.15</a>
-records the extraction path and its triggers.</p>
-<p><strong>The competitive corollary.</strong> The same three structural facts apply to ARC:
-its ephemeral runner pods are <code>/scale</code>-less, one-job, minutes-lived — so stock
-VPA cannot size them either, and only ARC's own controller (or an
-Alternative-4-style webhook tool that does not exist) could actuate at pod
-creation. A measured sizing loop is therefore a capability that effectively
-must live <em>inside</em> a runner controller, which is why "measure → recommend →
-apply, built in" is a durable differentiator rather than a feature gap ARC
-closes by adding a sidecar tool.</p>
-<p><strong>Verdict:</strong> For this workload shape, the sizing loop belongs in the controller
-that builds the pods. Generic tooling fails structurally (D.7 alternatives 1–2),
-the GitOps loop remains available to operators who prefer it (alternative 3),
-and the general-purpose tool (alternative 4) is a valid <em>future extraction</em> of
-the shipped core, not a better first implementation.</p>
+<p><strong>Alternative 2 — VPA with a custom recommender.</strong> VPA's recommender is pluggable, so a batch-aware recommender could in principle replace the stock model.
+But the actuation and grouping problems remain (a webhook applying "Initial"-style values still needs a pod-grouping convention VPA does not have for <code>/scale</code>-less owners), so this path amounts to writing the hard parts from scratch <em>inside someone else's framing</em> — more total machinery than the native implementation, spread across more failure domains.</p>
+<p><strong>Alternative 3 — an external recommender closing the loop through GitOps.</strong> A cron or pipeline queries the Phase 1 Prometheus series, derives values, and opens pull requests against the tenant's <code>RunnerTemplate</code>.
+This is a legitimate design — auditable in git, zero new API surface — and nothing in GAG prevents an operator from running exactly this today on top of the exported metrics.
+It was rejected as <em>the</em> design because it requires a Prometheus (the Phase 1 decision deliberately avoided a hard external dependency), closes the loop on a days-scale cadence, cannot express per-container confidence gating at pod-build time, and pushes per-tenant automation onto every adopter — the opposite of the batteries-included posture that motivates the feature.</p>
+<p><strong>Alternative 4 — a from-scratch, general-purpose batch right-sizer.</strong> The serious contender.
+Designed fresh for run-to-completion pods it would be: a <code>PodSizingPolicy</code>-style CRD with a <strong>label selector</strong> (solving the grouping problem correctly), the same peak-per-pod-lifetime sampler and p95-of-peaks-plus-headroom recommender, and a <strong>mutating admission webhook</strong> as the only generic pod-creation actuation hook.
+This tool would genuinely generalize — Kubernetes Jobs, Tekton TaskRuns, Argo Workflows, and ARC's ephemeral runners all share the one-pod-one-unit-of-work shape — and no good open-source implementation of it exists.
+It was not chosen because the webhook is an entire failure domain the native design simply does not have: <code>failurePolicy: Fail</code> makes a sick <em>optimization</em> component block every matching pod (the CI fleet stops launching), <code>Ignore</code> makes sizing silently stop; either way the tool needs its own certs, chart, Tier-0 security review, and install step — and GAG's headline feature would begin "first install this other thing."
+The AGC's provisioner already <em>is</em> the pod creator, so native actuation is an in-process function call with direct access to confidence state: strictly less machinery, no availability coupling, and the recommendation surfaces on the tenant's own <code>RunnerSet</code> under their existing RBAC.</p>
+<p><strong>What the coupling costs, honestly.</strong> The sizing API (<code>spec.sizing</code>, <code>status.sizingRecommendation</code>) is permanent GAG surface carried into the v2beta1 graduation, and a built-in feature cannot serve other batch systems the way Alternative 4 could.
+That deferred generality is deliberately kept cheap to revisit: the sampler/histogram/derivation core touches GAG at exactly two narrow seams (the worker-pod owner label and the v2 status types), and <a href="../appendix-g-future-enhancements/#g15-extract-the-batch-right-sizer-into-a-standalone--reusable-tool">Appendix G §G.15</a> records the extraction path and its triggers.</p>
+<p><strong>The competitive corollary.</strong> The same three structural facts apply to ARC: its ephemeral runner pods are <code>/scale</code>-less, one-job, minutes-lived — so stock VPA cannot size them either, and only ARC's own controller (or an Alternative-4-style webhook tool that does not exist) could actuate at pod creation.
+A measured sizing loop is therefore a capability that effectively must live <em>inside</em> a runner controller, which is why "measure → recommend → apply, built in" is a durable differentiator rather than a feature gap ARC closes by adding a sidecar tool.</p>
+<p><strong>Verdict:</strong> For this workload shape, the sizing loop belongs in the controller that builds the pods.
+Generic tooling fails structurally (D.7 alternatives 1–2), the GitOps loop remains available to operators who prefer it (alternative 3), and the general-purpose tool (alternative 4) is a valid <em>future extraction</em> of the shipped core, not a better first implementation.</p>
 <hr />
 <h2 id="d8-gating-intake-on-capacity-which-signals-are-safe-to-gate-on">D.8. Gating Intake on Capacity: Which Signals Are Safe to Gate On<a class="headerlink" href="#d8-gating-intake-on-capacity-which-signals-are-safe-to-gate-on" title="Permanent link">&para;</a></h2>
-<p>The pre-acquisition admission gate refuses to claim a job from GitHub when the
-worker pod that job needs cannot be provisioned, because a claimed job holds a
-single-use JIT runner record and a ticking job lock. Two rungs are implemented:
-the owner's declared worker ceiling (Q59) and observed namespace-<code>ResourceQuota</code>
-headroom (#784). A third, obvious-looking rung is deliberately <strong>not</strong>
-implemented on the same terms: the scheduler's own <code>Unschedulable</code> verdict, which
-the <code>WorkersUnschedulable</code> condition already publishes as observability.</p>
-<p>That looks inconsistent, and the reason it is not is worth recording, because it
-does not appear to be written down anywhere in the ecosystem and it explains why
-every other runner controller settled for timeouts instead.</p>
-<p><strong>The principle.</strong> A capacity signal is safe to gate intake on if, and only if,
-<strong>no other actor is waiting on that signal to make capacity appear.</strong> Gating
-suppresses the signal; suppressing a signal that something else acts on destroys
-the rescue.</p>
+<p>The pre-acquisition admission gate refuses to claim a job from GitHub when the worker pod that job needs cannot be provisioned, because a claimed job holds a single-use JIT runner record and a ticking job lock.
+Two rungs are implemented: the owner's declared worker ceiling (Q59) and observed namespace-<code>ResourceQuota</code> headroom (#784).
+A third, obvious-looking rung is deliberately <strong>not</strong> implemented on the same terms: the scheduler's own <code>Unschedulable</code> verdict, which the <code>WorkersUnschedulable</code> condition already publishes as observability.</p>
+<p>That looks inconsistent, and the reason it is not is worth recording, because it does not appear to be written down anywhere in the ecosystem and it explains why every other runner controller settled for timeouts instead.</p>
+<p><strong>The principle.</strong> A capacity signal is safe to gate intake on if, and only if, <strong>no other actor is waiting on that signal to make capacity appear.</strong> Gating suppresses the signal; suppressing a signal that something else acts on destroys the rescue.</p>
 <p>Applied to the four signals:</p>
 <table>
 <thead>
@@ -3172,208 +3172,113 @@ the rescue.</p>
 </tbody>
 </table>
 <p>Three consequences follow.</p>
-<p><strong>Elasticity is a property of the cluster, not of the signal.</strong> The scheduler's
-verdict is the <em>same</em> fact on every cluster; only the presence of an autoscaler
-changes whether acting on it is safe. So the choice cannot be made once in code.
-It is an operator input, and on a fixed-size cluster (on-premises, a contracted
-node count) the cheapest rung is also the correct one, because no rescue was ever
-coming and every wasted claim is pure loss.</p>
-<p><strong>Even where gating is safe, it should rate-limit rather than hard-stop.</strong> A gate
-derived from the existence of a stuck pod is self-clearing: intake stops, the pod
-is reaped at <code>pendingPodDeadline</code>, the condition clears, one job is claimed, and
-the cycle repeats. A burst of <em>N</em> wasted claims becomes roughly one per deadline
-window while a Pending pod remains present for much of it, which keeps any
-autoscaler being asked and keeps the tenant discovering recovery. Rate-bounding,
-not elimination, is the achievable property.</p>
-<p><strong>Predicting placement in-process is not a fourth option.</strong> Reimplementing the
-scheduler's filter plugins (taints, affinity, topology spread, DRA, extended
-resources) is a large surface that will drift from the scheduler.
-<code>WorkersUnschedulable</code> deliberately reads the scheduler's verdict rather than
-guessing, and any capacity rung should delegate for the same reason.</p>
-<p><strong>Verdict:</strong> the quota rung is unconditionally safe and is implemented; the
-scheduler-verdict rung is safe exactly where nothing will act on the pod, so it
-belongs behind an explicit, off-by-default operator choice; the autoscaler's own
-declination and a solicited <code>ProvisioningRequest</code> answer are both safe and differ
-only in cost. The sequencing of those rungs is planned in
-<a href="../../plan/capacity-aware-intake/">capacity-aware-intake.md</a>.</p>
+<p><strong>Elasticity is a property of the cluster, not of the signal.</strong> The scheduler's verdict is the <em>same</em> fact on every cluster; only the presence of an autoscaler changes whether acting on it is safe.
+So the choice cannot be made once in code.
+It is an operator input, and on a fixed-size cluster (on-premises, a contracted node count) the cheapest rung is also the correct one, because no rescue was ever coming and every wasted claim is pure loss.</p>
+<p><strong>Even where gating is safe, it should rate-limit rather than hard-stop.</strong> A gate derived from the existence of a stuck pod is self-clearing: intake stops, the pod is reaped at <code>pendingPodDeadline</code>, the condition clears, one job is claimed, and the cycle repeats.
+A burst of <em>N</em> wasted claims becomes roughly one per deadline window while a Pending pod remains present for much of it, which keeps any autoscaler being asked and keeps the tenant discovering recovery.
+Rate-bounding, not elimination, is the achievable property.</p>
+<p><strong>Predicting placement in-process is not a fourth option.</strong> Reimplementing the scheduler's filter plugins (taints, affinity, topology spread, DRA, extended resources) is a large surface that will drift from the scheduler.
+<code>WorkersUnschedulable</code> deliberately reads the scheduler's verdict rather than guessing, and any capacity rung should delegate for the same reason.</p>
+<p><strong>Verdict:</strong> the quota rung is unconditionally safe and is implemented; the scheduler-verdict rung is safe exactly where nothing will act on the pod, so it belongs behind an explicit, off-by-default operator choice; the autoscaler's own declination and a solicited <code>ProvisioningRequest</code> answer are both safe and differ only in cost.
+The sequencing of those rungs is planned in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.5.0/docs/plan/capacity-aware-intake.md">capacity-aware-intake.md</a>.</p>
 <hr />
-<p>Sections D.1–D.8 cover the alternatives that were weighed while designing this
-system. The sections below cover <em>other runner control planes and CI systems</em> an
-adopter may already be running or actively evaluating. They were added after a
-competitive review on 2026-08-06; each records what the alternative does, where
-it overlaps, the differentiator, and a verdict, on the same terms as the sections
-above. <strong>Every claim about a third-party system is dated, because they move.</strong></p>
-<h2 id="d9-forgemt-and-account-per-tenant-runner-platforms">D.9. ForgeMT and Account-per-Tenant Runner Platforms<a class="headerlink" href="#d9-forgemt-and-account-per-tenant-runner-platforms" title="Permanent link">&para;</a></h2>
-<p><a href="https://github.com/cisco-open/forge">ForgeMT</a> (Cisco, Apache-2.0; measured
-2026-08-06: 211 stars, created 2025-05-12, actively pushed) is the closest
-<em>positional</em> competitor found: an explicitly multi-tenant, self-hosted GitHub
-Actions runner platform aimed at platform teams serving many internal tenants.</p>
-<p><strong>What it does.</strong> Terraform and Terragrunt deliver a runner control plane and an
-operating model across an AWS organization. It runs two execution backends in
-parallel: ephemeral EC2 runners, and ARC runner scale sets on EKS. Tenant
-onboarding is a reviewed infrastructure-as-code change. Per its README it
-enforces tenant boundaries for labels, IAM and OIDC role access, networks,
-images, runner specs, and GitHub App scope.</p>
-<p><strong>Where it overlaps.</strong> The problem statement is nearly identical to this
-design's: many tenants, one platform team, self-hosted runners, governance and
-onboarding automation as first-class concerns. It also ships cost-attribution
-and observability integrations, which this design addresses through
-<a href="../../operations/cost-attribution/">cost attribution</a>.</p>
-<p><strong>The differentiator, and it is a genuine architectural disagreement.</strong> ForgeMT
-isolates tenants with <strong>separate AWS accounts</strong>, on the explicit reasoning that
-Kubernetes namespaces are not a strong enough security boundary. That reasoning
-is sound as far as it goes, and an account boundary <em>is</em> stronger than a
-namespace. Two things follow, and both are trade-offs rather than refutations:</p>
+<p>Sections D.1–D.8 cover the alternatives that were weighed while designing this system.
+The sections below cover <em>other runner control planes and CI systems</em> an adopter may already be running or actively evaluating.
+They were added after a competitive review on 2026-08-06; each records what the alternative does, where it overlaps, the differentiator, and a verdict, on the same terms as the sections above.
+<strong>Every claim about a third-party system is dated, because they move.</strong></p>
+<h2 id="d9-forgemt-and-cloud-identity-tenant-boundaries">D.9. ForgeMT and Cloud-Identity Tenant Boundaries<a class="headerlink" href="#d9-forgemt-and-cloud-identity-tenant-boundaries" title="Permanent link">&para;</a></h2>
+<p><a href="https://github.com/cisco-open/forge">ForgeMT</a> (Cisco, Apache-2.0; measured 2026-08-12: 211 stars, created 2025-05-12, last pushed the same day) is the closest <em>positional</em> competitor found: an explicitly multi-tenant, self-hosted GitHub Actions runner platform aimed at platform teams serving many internal tenants.</p>
+<p><strong>What it does.</strong> Terraform and Terragrunt deliver a runner control plane and an operating model across an AWS organization.
+It runs two execution backends in parallel: ephemeral EC2 runners, and ARC runner scale sets on EKS.
+Tenant onboarding is a reviewed infrastructure-as-code change.
+Per its README it enforces tenant boundaries for labels, IAM and OIDC role access, networks, images, runner specs, and GitHub App scope.</p>
+<p><strong>Where it overlaps.</strong> The problem statement is nearly identical to this design's: many tenants, one platform team, self-hosted runners, governance and onboarding automation as first-class concerns.
+It also ships cost-attribution and observability integrations, which this design addresses through <a href="../../operations/cost-attribution/">cost attribution</a>.</p>
+<p><strong>The differentiator, and it is a genuine architectural disagreement.</strong> ForgeMT draws the tenant boundary in cloud identity and forge scope rather than in the cluster (its docs, read 2026-08-12).
+Its own vocabulary defines a tenant as the isolation and configuration boundary for a team: labels, runner settings, GitHub App scope, and AWS access, under a stated model of shared platform, isolated execution (<code>docs/architecture.md</code>).
+The AWS account layout is an operator input, not a product decision: onboarding intake asks for the account IDs the operator already runs, and tenants are Terragrunt directories under one shared environment, region, and VPC root (<code>docs/operations/tenant-onboarding.md</code>).
+Where a job needs a harder boundary than a pod, the answer is the EC2 lane, a full VM per job from a platform-owned AMI.
+On the ARC lane tenants share an EKS cluster selected by <code>arc_cluster_name</code>, and whether they also share nodes is one of the decisions the security guide hands to the operator, alongside namespaces, service accounts, pod identity, and network policy (<code>docs/security.md</code>).
+Two things follow, and both are trade-offs rather than refutations:</p>
 <ul>
-<li><strong>Partitioned capacity cannot be shifted.</strong> An account per tenant means each
-  tenant is provisioned for its own peak and every trough is stranded. That is
-  the cost of the stronger boundary, and it is the opposite trade from this
-  design, which shares one pool and arbitrates it with a platform-owned
-  <code>ResourceQuota</code> plus <code>priorityTiers</code>. Where nodes are large and expensive
-  (GPU, large-memory, reserved capacity), that difference dominates.</li>
-<li><strong>The boundary has no cheap on-premises analogue.</strong> In AWS an account is a
-  free API call inheriting a pre-built control plane. On bare metal the
-  equivalent is a hardware purchase, or building the hypervisor,
-  software-defined-networking, and self-service storage layer that would make
-  accounts possible. Compliance, data residency, and reserved GPU capacity are
-  precisely the constraints that put an adopter on-premises, so for that adopter
-  the model does not apply at all.</li>
+<li><strong>Every enforcement point is an AWS API, so the boundary does not port.</strong> IAM and OIDC role scope, VPC and subnet placement, AMIs, SSM for the GitHub App key, and ECR for images are what hold one ForgeMT tenant apart from the next.
+  Off AWS there is no substitute for any of them, and compliance, data residency, and reserved GPU capacity are precisely the constraints that put an adopter on-premises, so for that adopter the platform does not apply at all.
+  This design's enforcement points are Kubernetes API objects, so they land wherever a conformant cluster does, including air-gapped.</li>
+<li><strong>The boundary is applied rather than reconciled, and it stops at the cluster edge.</strong> A ForgeMT tenant is correct as of the last <code>terragrunt apply</code>, which buys a reviewable diff per onboarding that a single <code>ActionsGateway</code> CR does not match.
+  What it does not buy is a floor that re-asserts itself, and on the ARC lane the in-cluster half is a checklist rather than a default: namespaces, network policy, pod identity, privileged containers, and node sharing are all left to the operator to decide and review.
+  This design reconciles that floor instead (<a href="../05-security/">Pod Security Admission, default-deny NetworkPolicy, per-tenant egress</a>), keeps the cap in a platform-owned <code>ResourceQuota</code> the tenant controller has no verb to write, and makes kernel isolation a per-workload choice inside the shared pool (<a href="../../operations/kata-dind-workloads/">validated</a>) rather than a second lane provisioned per job.
+  See <a href="../appendix-b-worker-isolation/">appendix B</a> for the full worker-isolation analysis.</li>
 </ul>
-<p>This design's answer to the namespace objection is not that namespaces are
-sufficient alone. It is that the isolation floor is
-<a href="../05-security/">reconciled rather than assembled</a> (Pod Security Admission,
-default-deny NetworkPolicy, per-tenant egress), and that kernel isolation is
-available and <a href="../../operations/kata-dind-workloads/">validated</a> for the workloads
-that need it. See <a href="../appendix-b-worker-isolation/">appendix B</a> for the full
-worker-isolation analysis.</p>
-<p><strong>Verdict:</strong> ForgeMT is a strong fit for an AWS-native organization willing to
-trade shared-capacity utilization for account-level isolation. This design is
-the right choice when the compute is expensive enough that sharing it is the
-point, when the cluster is not on AWS, or when it is not in a cloud at all.</p>
+<p><strong>Verdict:</strong> ForgeMT is a strong fit for an AWS-native organization that wants its tenant boundary in cloud identity and its hard-isolation lane in VMs.
+This design is the right choice when the boundary has to hold inside a cluster, when the compute is expensive enough that sharing it beats provisioning a VM per job, or when the cluster is not in a cloud at all.</p>
 <h2 id="d10-prow-and-the-prior-art-for-automatic-re-run">D.10. Prow, and the Prior Art for Automatic Re-Run<a class="headerlink" href="#d10-prow-and-the-prior-art-for-automatic-re-run" title="Permanent link">&para;</a></h2>
-<p><a href="https://github.com/kubernetes-sigs/prow">Prow</a> is Kubernetes' own CI system and
-the most relevant prior art for this design's disruption-recovery behaviour.</p>
-<p><strong>What it does.</strong> Prow owns its own job queue and reconciles <code>ProwJob</code> objects
-into pods. Verified in source 2026-08-06: when a job pod is evicted, its node
-becomes unreachable, it is OOM-killed, or it stops unexpectedly, <code>plank</code>
-increments <code>PodRevivalCount</code>, deletes the pod, and recreates it on the next sync,
-up to <code>Plank.MaxRevivals</code> (<strong>default 3</strong>). The per-job opt-<em>out</em> is
-<code>error_on_eviction: true</code>. The field's own documentation is unambiguous: if it is
-unspecified or false, a new pod replaces the evicted one.</p>
-<p><strong>Where it overlaps.</strong> This is the same outcome this design provides for
-disrupted jobs, shipped by default, in a system running CI for thousands of
-repositories. Any claim that automatic re-run after disruption is <em>novel</em> is
-wrong, and should not be made.</p>
-<p><strong>The differentiator.</strong> Prow has no forge-side claim to protect. It reads its own
-queue, so "do not claim it" is not a problem it has, and its recovery is a
-pod-level restart of work it scheduled itself. A GitHub Actions runner control
-plane acquires a job <em>from GitHub</em>, which makes both halves harder: the job must
-be concluded at GitHub before it can be re-run, and the re-run itself is a call
-to a public REST endpoint outside the runner-scale-set protocol, requiring a
-credential scope a runner controller does not otherwise need.</p>
-<p>The honest scoping is therefore architectural rather than competitive: automatic
-disruption re-run is rare <strong>among control planes that claim work from an external
-forge</strong>, not rare in general. GitLab Runner, which faces exactly that problem,
-<a href="#d12-gitlab-runners-kubernetes-executor">detects the condition precisely and classifies it terminal</a>.</p>
-<p><strong>Verdict:</strong> Prow is not an alternative for GitHub Actions workloads, and is
-included because it is the strongest counter-example to an over-broad claim. The
-capability is real; the scoping matters.</p>
+<p><a href="https://github.com/kubernetes-sigs/prow">Prow</a> is Kubernetes' own CI system and the most relevant prior art for this design's disruption-recovery behaviour.</p>
+<p><strong>What it does.</strong> Prow owns its own job queue and reconciles <code>ProwJob</code> objects into pods.
+Verified in source 2026-08-06: when a job pod is evicted, its node becomes unreachable, it is OOM-killed, or it stops unexpectedly, <code>plank</code> increments <code>PodRevivalCount</code>, deletes the pod, and recreates it on the next sync, up to <code>Plank.MaxRevivals</code> (<strong>default 3</strong>).
+The per-job opt-<em>out</em> is <code>error_on_eviction: true</code>.
+The field's own documentation is unambiguous: if it is unspecified or false, a new pod replaces the evicted one.</p>
+<p><strong>Where it overlaps.</strong> This is the same outcome this design provides for disrupted jobs, shipped by default, in a system running CI for thousands of repositories.
+Any claim that automatic re-run after disruption is <em>novel</em> is wrong, and should not be made.</p>
+<p><strong>The differentiator.</strong> Prow has no forge-side claim to protect.
+It reads its own queue, so "do not claim it" is not a problem it has, and its recovery is a pod-level restart of work it scheduled itself.
+A GitHub Actions runner control plane acquires a job <em>from GitHub</em>, which makes both halves harder: the job must be concluded at GitHub before it can be re-run, and the re-run itself is a call to a public REST endpoint outside the runner-scale-set protocol, requiring a credential scope a runner controller does not otherwise need.</p>
+<p>The honest scoping is therefore architectural rather than competitive: automatic disruption re-run is rare <strong>among control planes that claim work from an external forge</strong>, not rare in general.
+GitLab Runner, which faces exactly that problem, <a href="#d12-gitlab-runners-kubernetes-executor">detects the condition precisely and classifies it terminal</a>.</p>
+<p><strong>Verdict:</strong> Prow is not an alternative for GitHub Actions workloads, and is included because it is the strongest counter-example to an over-broad claim.
+The capability is real; the scoping matters.</p>
 <h2 id="d11-self-hosted-github-actions-without-kubernetes">D.11. Self-Hosted GitHub Actions Without Kubernetes<a class="headerlink" href="#d11-self-hosted-github-actions-without-kubernetes" title="Permanent link">&para;</a></h2>
-<p>A large part of the self-hosted runner market runs on virtual machines rather
-than Kubernetes. The three most prominent (measured 2026-08-06):</p>
+<p>A large part of the self-hosted runner market runs on virtual machines rather than Kubernetes.
+The three most prominent (measured 2026-08-06):</p>
 <ul>
-<li><strong><a href="https://runs-on.com">RunsOn</a></strong> installs into the adopter's own AWS
-  account and runs ephemeral EC2 instances. Code and secrets stay in the
-  customer's account.</li>
-<li><strong><a href="https://github.com/github-aws-runners/terraform-aws-github-runner">github-aws-runners/terraform-aws-github-runner</a></strong>
-  (formerly philips-labs) is the established open-source Terraform and Lambda
-  pattern for ephemeral EC2 runners.</li>
-<li><strong><a href="https://actuated.com">Actuated</a></strong> is a hybrid: a vendor-hosted scheduler
-  drives Firecracker micro-VMs on hardware the customer owns, which is a genuine
-  answer for bare metal but places a vendor in the control path.</li>
+<li><strong><a href="https://runs-on.com">RunsOn</a></strong> installs into the adopter's own AWS account and runs ephemeral EC2 instances.
+  Code and secrets stay in the customer's account.</li>
+<li><strong><a href="https://github.com/github-aws-runners/terraform-aws-github-runner">github-aws-runners/terraform-aws-github-runner</a></strong> (formerly philips-labs) is the established open-source Terraform and Lambda pattern for ephemeral EC2 runners.</li>
+<li><strong><a href="https://actuated.com">Actuated</a></strong> is a hybrid: a vendor-hosted scheduler drives Firecracker micro-VMs on hardware the customer owns, which is a genuine answer for bare metal but places a vendor in the control path.</li>
 </ul>
-<p><strong>Where they overlap.</strong> All three satisfy "we must self-host", often with less
-operational surface than a Kubernetes control plane. For an adopter whose only
-requirement is that jobs not run on a vendor's shared infrastructure, they are
-strong and this design is heavier than necessary.</p>
-<p><strong>The differentiator.</strong> A VM per job gives isolation without a namespace
-argument, but the unit of allocation is an instance rather than a pod, so
-bin-packing several tenants onto one large machine is not the model. There is no
-<code>ResourceQuota</code> to arbitrate, no per-tenant capacity floor, and no shared-cluster
-utilization argument to make. The two AWS-based options are also cloud-locked,
-which rules them out for on-premises and reserved-hardware adopters.</p>
-<p><strong>Verdict:</strong> the right choice when the constraint is "not on a vendor's
-infrastructure" and the compute is elastic cloud capacity. This design targets
-the case where the compute is a fixed, expensive pool that several teams must
-share.</p>
+<p><strong>Where they overlap.</strong> All three satisfy "we must self-host", often with less operational surface than a Kubernetes control plane.
+For an adopter whose only requirement is that jobs not run on a vendor's shared infrastructure, they are strong and this design is heavier than necessary.</p>
+<p><strong>The differentiator.</strong> A VM per job gives isolation without a namespace argument, but the unit of allocation is an instance rather than a pod, so bin-packing several tenants onto one large machine is not the model.
+There is no <code>ResourceQuota</code> to arbitrate, no per-tenant capacity floor, and no shared-cluster utilization argument to make.
+The two AWS-based options are also cloud-locked, which rules them out for on-premises and reserved-hardware adopters.</p>
+<p><strong>Verdict:</strong> the right choice when the constraint is "not on a vendor's infrastructure" and the compute is elastic cloud capacity.
+This design targets the case where the compute is a fixed, expensive pool that several teams must share.</p>
 <h2 id="d12-gitlab-runners-kubernetes-executor">D.12. GitLab Runner's Kubernetes Executor<a class="headerlink" href="#d12-gitlab-runners-kubernetes-executor" title="Permanent link">&para;</a></h2>
-<p>The most mature multi-tenant CI-on-Kubernetes system in wide production use, and
-the closest architectural sibling to this design outside the GitHub ecosystem.
-Included because it faces the <em>same</em> structural problem: it claims a job from a
-hosted forge, then has to place a pod for it.</p>
-<p><strong>Where it overlaps.</strong> A job becomes a pod; <code>[runners.kubernetes]</code> configures the
-pod shape; namespaces separate projects. Verified 2026-08-06: it ships
-<code>pod_disruption_budget</code> for voluntary drains, <code>priority_class_name</code> for
-scheduling priority, and <code>retry_limits</code> for retrying request errors.</p>
-<p><strong>The differentiator.</strong> Two decisions differ, and both are the decisions this
-design exists to make differently:</p>
+<p>The most mature multi-tenant CI-on-Kubernetes system in wide production use, and the closest architectural sibling to this design outside the GitHub ecosystem.
+Included because it faces the <em>same</em> structural problem: it claims a job from a hosted forge, then has to place a pod for it.</p>
+<p><strong>Where it overlaps.</strong> A job becomes a pod; <code>[runners.kubernetes]</code> configures the pod shape; namespaces separate projects.
+Verified 2026-08-06: it ships <code>pod_disruption_budget</code> for voluntary drains, <code>priority_class_name</code> for scheduling priority, and <code>retry_limits</code> for retrying request errors.</p>
+<p><strong>The differentiator.</strong> Two decisions differ, and both are the decisions this design exists to make differently:</p>
 <ul>
-<li><strong>Capacity is discovered after the claim.</strong> Its intake gates (<code>concurrent</code>,
-  <code>limit</code>, <code>request_concurrency</code>) are counters, not cluster state. The
-  documentation's answer to over-subscription is <code>poll_timeout</code>, described in
-  GitLab's own reference as being for "queueing more builds than the cluster can
-  handle at a time". That is an already-claimed job waiting out a timeout, the
-  failure mode the <a href="#d8-gating-intake-on-capacity-which-signals-are-safe-to-gate-on">pre-acquisition gate</a>
-  exists to prevent.</li>
-<li><strong>Disruption is detected precisely, then treated as terminal.</strong> Its pod watcher
-  reads the <code>DisruptionTarget</code> condition, which is exactly the signal Kubernetes
-  sets on eviction, preemption, and graceful node shutdown. The function
-  consuming it is documented as handling errors the system cannot recover from,
-  and the build fails. Recovery is the workflow author's <code>retry:</code> keyword, which
-  defaults to none.</li>
+<li><strong>Capacity is discovered after the claim.</strong> Its intake gates (<code>concurrent</code>, <code>limit</code>, <code>request_concurrency</code>) are counters, not cluster state.
+  The documentation's answer to over-subscription is <code>poll_timeout</code>, described in GitLab's own reference as being for "queueing more builds than the cluster can handle at a time".
+  That is an already-claimed job waiting out a timeout, the failure mode the <a href="#d8-gating-intake-on-capacity-which-signals-are-safe-to-gate-on">pre-acquisition gate</a> exists to prevent.</li>
+<li><strong>Disruption is detected precisely, then treated as terminal.</strong> Its pod watcher reads the <code>DisruptionTarget</code> condition, which is exactly the signal Kubernetes sets on eviction, preemption, and graceful node shutdown.
+  The function consuming it is documented as handling errors the system cannot recover from, and the build fails.
+  Recovery is the workflow author's <code>retry:</code> keyword, which defaults to none.</li>
 </ul>
-<p><code>priority_class_name</code> is also a single class for a runner configuration, not a
-reserved floor per runner class, so it cannot express "GPU always keeps N slots".</p>
-<p><strong>Verdict:</strong> not an alternative for GitHub Actions workloads, but the most
-instructive comparison in this appendix. It demonstrates that detecting a
-disruption is the easy half, and that the placement of the admission decision
-relative to the claim is a deliberate architectural choice rather than an
-oversight.</p>
+<p><code>priority_class_name</code> is also a single class for a runner configuration, not a reserved floor per runner class, so it cannot express "GPU always keeps N slots".</p>
+<p><strong>Verdict:</strong> not an alternative for GitHub Actions workloads, but the most instructive comparison in this appendix.
+It demonstrates that detecting a disruption is the easy half, and that the placement of the admission decision relative to the claim is a deliberate architectural choice rather than an oversight.</p>
 <h2 id="d13-buildkite-agent-stack-for-kubernetes">D.13. Buildkite Agent Stack for Kubernetes<a class="headerlink" href="#d13-buildkite-agent-stack-for-kubernetes" title="Permanent link">&para;</a></h2>
-<p><a href="https://github.com/buildkite/agent-stack-k8s">agent-stack-k8s</a> runs Buildkite
-jobs as Kubernetes pods, with the control plane hosted by Buildkite and the
-agents self-hosted.</p>
-<p><strong>Where it overlaps.</strong> The split resembles this design's: a long-lived component
-watching a hosted queue, and one pod per unit of work. Its scheduler chain
-reserves work before a max-in-flight limiter and long before a pod exists, so
-like GitLab Runner it takes the claim before knowing the pod is placeable.
-Verified 2026-08-06: it sets <code>BackoffLimit: 0</code> and <code>RestartPolicy: Never</code>, so a
-disrupted pod is a failed job, and its limiter <em>orders</em> a pending queue by
-priority without reserving capacity for any class.</p>
-<p><strong>The differentiator.</strong> The control plane is a hosted service, so the
-compliance-driven adopter this design targets is out of scope by construction,
-and the comparison is only architectural. No per-tenant egress identity or
-<code>ResourceQuota</code>-aware intake appears in its configuration surface.</p>
-<p><strong>Verdict:</strong> a different ecosystem, and relevant mainly as evidence that the
-claim-then-place ordering is the industry norm rather than an ARC peculiarity.</p>
+<p><a href="https://github.com/buildkite/agent-stack-k8s">agent-stack-k8s</a> runs Buildkite jobs as Kubernetes pods, with the control plane hosted by Buildkite and the agents self-hosted.</p>
+<p><strong>Where it overlaps.</strong> The split resembles this design's: a long-lived component watching a hosted queue, and one pod per unit of work.
+Its scheduler chain reserves work before a max-in-flight limiter and long before a pod exists, so like GitLab Runner it takes the claim before knowing the pod is placeable.
+Verified 2026-08-06: it sets <code>BackoffLimit: 0</code> and <code>RestartPolicy: Never</code>, so a disrupted pod is a failed job, and its limiter <em>orders</em> a pending queue by priority without reserving capacity for any class.</p>
+<p><strong>The differentiator.</strong> The control plane is a hosted service, so the compliance-driven adopter this design targets is out of scope by construction, and the comparison is only architectural.
+No per-tenant egress identity or <code>ResourceQuota</code>-aware intake appears in its configuration surface.</p>
+<p><strong>Verdict:</strong> a different ecosystem, and relevant mainly as evidence that the claim-then-place ordering is the industry norm rather than an ARC peculiarity.</p>
 <h2 id="d14-managed-runner-services-an-explicit-non-competitor">D.14. Managed Runner Services: An Explicit Non-Competitor<a class="headerlink" href="#d14-managed-runner-services-an-explicit-non-competitor" title="Permanent link">&para;</a></h2>
-<p>Blacksmith, Namespace, Depot, WarpBuild, Cirrus Runners, Ubicloud and others sell
-faster GitHub Actions runners on infrastructure they operate. Several offer a
-bring-your-own-cloud mode in which compute runs in the customer's account while
-the control plane stays with the vendor.</p>
-<p><strong>Why they are not compared feature-by-feature.</strong> They compete on build speed and
-price per minute. This design competes on governance and isolation for compute
-the adopter already owns. An adopter who can run jobs on a vendor's
-infrastructure should evaluate that lane on its own terms, and will usually find
-it faster to adopt and quicker per build.</p>
-<p><strong>The routing question is a single one:</strong> must the compute be yours? If no, a
-managed service is very likely the better answer and this design is
-unnecessary overhead. If yes, because of compliance, data residency, an IP
-allow-list, an air-gapped network, or hardware already paid for, then the managed
-lane is unavailable regardless of its merits, and the real question becomes how
-many teams share that hardware and how safely.</p>
-<p><strong>Verdict:</strong> a different market. Comparisons that place them on one axis mislead
-in both directions.</p>
+<p>Blacksmith, Namespace, Depot, WarpBuild, Cirrus Runners, Ubicloud and others sell faster GitHub Actions runners on infrastructure they operate.
+Several offer a bring-your-own-cloud mode in which compute runs in the customer's account while the control plane stays with the vendor.</p>
+<p><strong>Why they are not compared feature-by-feature.</strong> They compete on build speed and price per minute.
+This design competes on governance and isolation for compute the adopter already owns.
+An adopter who can run jobs on a vendor's infrastructure should evaluate that lane on its own terms, and will usually find it faster to adopt and quicker per build.</p>
+<p><strong>The routing question is a single one:</strong> must the compute be yours?
+If no, a managed service is very likely the better answer and this design is unnecessary overhead.
+If yes, because of compliance, data residency, an IP allow-list, an air-gapped network, or hardware already paid for, then the managed lane is unavailable regardless of its merits, and the real question becomes how many teams share that hardware and how safely.</p>
+<p><strong>Verdict:</strong> a different market.
+Comparisons that place them on one axis mislead in both directions.</p>
 <hr />
 <p>← <a href="../appendix-c-ai-implementation/">Appendix C</a> | <a href="../">Back to index</a></p>
 

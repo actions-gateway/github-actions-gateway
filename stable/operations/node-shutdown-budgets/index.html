@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/1.4.0/operations/node-shutdown-budgets/">
+        <link rel="canonical" href="https://actions-gateway.com/1.5.0/operations/node-shutdown-budgets/">
       
       
         <link rel="prev" href="../worker-rightsizing/">
@@ -63,15 +63,15 @@
   <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/IBMPlexSans-Bold.woff2">
   <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/MonaspaceNeon-Medium.woff2">
   
-  <meta property="og:image" content="https://actions-gateway.com/1.4.0assets/social-preview.png">
+  <meta property="og:image" content="https://actions-gateway.com/1.5.0assets/social-preview.png">
   <meta property="og:image:width" content="1280">
   <meta property="og:image:height" content="640">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:image" content="https://actions-gateway.com/1.4.0assets/social-preview.png">
+  <meta name="twitter:image" content="https://actions-gateway.com/1.5.0assets/social-preview.png">
   
-  <link rel="apple-touch-icon" href="https://actions-gateway.com/1.4.0assets/apple-touch-icon.png">
-  <link rel="alternate icon" href="https://actions-gateway.com/1.4.0assets/favicon.ico">
-  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/1.4.0assets/icon-512.png">
+  <link rel="apple-touch-icon" href="https://actions-gateway.com/1.5.0assets/apple-touch-icon.png">
+  <link rel="alternate icon" href="https://actions-gateway.com/1.5.0assets/favicon.ico">
+  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/1.5.0assets/icon-512.png">
   
   <script type="application/ld+json">
   {
@@ -79,14 +79,14 @@
     "@type": "SoftwareSourceCode",
     "name": "GitHub Actions Gateway",
     "description": "An Actions Runner Controller (ARC) alternative for self-hosted GitHub Actions runners on multi-tenant Kubernetes \u2014 oversubscribe a shared quota, recover evicted jobs automatically, and isolate every tenant\u0027s GitHub egress.",
-    "url": "https://actions-gateway.com/1.4.0",
+    "url": "https://actions-gateway.com/1.5.0",
     "codeRepository": "https://github.com/actions-gateway/github-actions-gateway",
     "programmingLanguage": "Go",
     "license": "https://www.apache.org/licenses/LICENSE-2.0",
     "author": {
       "@type": "Organization",
       "name": "GitHub Actions Gateway",
-      "url": "https://actions-gateway.com/1.4.0"
+      "url": "https://actions-gateway.com/1.5.0"
     }
   }
   </script>
@@ -95,8 +95,8 @@
     "@context": "https://schema.org",
     "@type": "Organization",
     "name": "GitHub Actions Gateway",
-    "url": "https://actions-gateway.com/1.4.0",
-    "logo": "https://actions-gateway.com/1.4.0assets/icon-512.png",
+    "url": "https://actions-gateway.com/1.5.0",
+    "logo": "https://actions-gateway.com/1.5.0assets/icon-512.png",
     "sameAs": ["https://github.com/actions-gateway/github-actions-gateway"]
   }
   </script>
@@ -132,8 +132,8 @@
         <aside class="md-banner">
           <div class="md-banner__inner md-grid md-typeset">
             
-            <strong>v1.4.0 is here.</strong>
-      Consent-gated cross-namespace egress proxy sharing, a curated runner template library you apply with one command, and v2 worker-capacity conditions exported as Prometheus gauges.
+            <strong>v1.5.0 is here.</strong>
+      A per-tenant GitHub runner group boundary, multi-label runner sets that migrate a <code>runs-on</code> array unedited, and job duration and latency metrics on the acquisition tier every new tenant runs.
           </div>
           
         </aside>
@@ -145,7 +145,7 @@
           <aside class="md-banner md-banner--warning">
             <div class="md-banner__inner md-grid md-typeset">
               You're not viewing the latest release.
-  <a href="https://actions-gateway.com/1.4.0"><strong>Go to the current docs.</strong></a>
+  <a href="https://actions-gateway.com/1.5.0"><strong>Go to the current docs.</strong></a>
 
             </div>
             <script>var el=document.querySelector("[data-md-component=outdated]"),base=new URL("../.."),outdated=__md_get("__outdated",sessionStorage,base);!0===outdated&&el&&(el.hidden=!1)</script>
@@ -3002,25 +3002,19 @@
 
 
 <h1 id="node-shutdown-budgets-across-platforms">Node shutdown budgets across platforms<a class="headerlink" href="#node-shutdown-budgets-across-platforms" title="Permanent link">&para;</a></h1>
-<p><code>terminationGracePeriodSeconds</code> is a <strong>request, not a guarantee</strong>. The kubelet
-grants a terminating pod <code>min(terminationGracePeriodSeconds, whatever the node
-shutdown path allows)</code>, and that second number varies by platform, by node type,
-and by <em>why</em> the pod is going away. On some platforms it is 15 seconds.</p>
-<p>This page collects the defaults so you can size shutdown budgets against what
-your clusters actually grant, rather than against what the pod spec asks for.
-It is reference material — for what the gateway's own components do on SIGTERM,
-see <a href="../troubleshooting/#proxy-tunnel-cut-during-a-rollout">Proxy Tunnel Cut During a Rollout</a>.</p>
+<p><code>terminationGracePeriodSeconds</code> is a <strong>request, not a guarantee</strong>.
+The kubelet grants a terminating pod <code>min(terminationGracePeriodSeconds, whatever the node shutdown path allows)</code>, and that second number varies by platform, by node type, and by <em>why</em> the pod is going away.
+On some platforms it is 15 seconds.</p>
+<p>This page collects the defaults so you can size shutdown budgets against what your clusters actually grant, rather than against what the pod spec asks for.
+It is reference material — for what the gateway's own components do on SIGTERM, see <a href="../troubleshooting/#proxy-tunnel-cut-during-a-rollout">Proxy Tunnel Cut During a Rollout</a>.</p>
 <div class="admonition warning">
 <p class="admonition-title">The short version</p>
-<p>A pod's grace period is honoured in full during a <strong>voluntary</strong> drain
-(<code>kubectl drain</code>, autoscaler scale-down, node pool upgrade) and truncated
-hard during an <strong>involuntary</strong> one (spot reclamation, node shutdown). The
-gateway's proxy asks for 60s; on a GKE Spot node it will get 15.</p>
+<p>A pod's grace period is honoured in full during a <strong>voluntary</strong> drain (<code>kubectl drain</code>, autoscaler scale-down, node pool upgrade) and truncated hard during an <strong>involuntary</strong> one (spot reclamation, node shutdown).
+The gateway's proxy asks for 60s; on a GKE Spot node it will get 15.</p>
 </div>
 <hr />
 <h2 id="why-the-same-pod-gets-different-budgets">Why the same pod gets different budgets<a class="headerlink" href="#why-the-same-pod-gets-different-budgets" title="Permanent link">&para;</a></h2>
-<p>Three different code paths terminate pods, and they honour the grace period
-differently:</p>
+<p>Three different code paths terminate pods, and they honour the grace period differently:</p>
 <table>
 <thead>
 <tr>
@@ -3047,13 +3041,11 @@ differently:</p>
 </tr>
 </tbody>
 </table>
-<p>The middle row is the one that surprises people, and it is the row spot
-instances land in.</p>
+<p>The middle row is the one that surprises people, and it is the row spot instances land in.</p>
 <hr />
 <h2 id="graceful-node-shutdown-defaults">Graceful node shutdown defaults<a class="headerlink" href="#graceful-node-shutdown-defaults" title="Permanent link">&para;</a></h2>
-<p><code>shutdownGracePeriod</code> is the <strong>total</strong> node budget; <code>shutdownGracePeriodCriticalPods</code>
-is carved out of it for pods with <code>system-cluster-critical</code> /
-<code>system-node-critical</code> priority. Ordinary workloads get the difference.</p>
+<p><code>shutdownGracePeriod</code> is the <strong>total</strong> node budget; <code>shutdownGracePeriodCriticalPods</code> is carved out of it for pods with <code>system-cluster-critical</code> / <code>system-node-critical</code> priority.
+Ordinary workloads get the difference.</p>
 <table>
 <thead>
 <tr>
@@ -3116,29 +3108,20 @@ is carved out of it for pods with <code>system-cluster-critical</code> /
 </table>
 <p>Two consequences worth internalising:</p>
 <ul>
-<li><strong>On most self-managed distributions the feature is off</strong>, so an OS-level
-  shutdown kills pods outright with no SIGTERM at all. That is <em>worse</em> than a
-  short budget, and it is the default on RKE2, Kubespray, OpenShift and stock
-  EKS.</li>
-<li><strong>GKE is the outlier that enables it</strong>, and its 15s for ordinary pods is the
-  tightest real budget in the table.</li>
+<li><strong>On most self-managed distributions the feature is off</strong>, so an OS-level shutdown kills pods outright with no SIGTERM at all.
+  That is <em>worse</em> than a short budget, and it is the default on RKE2, Kubespray, OpenShift and stock EKS.</li>
+<li><strong>GKE is the outlier that enables it</strong>, and its 15s for ordinary pods is the tightest real budget in the table.</li>
 </ul>
 <div class="admonition danger">
 <p class="admonition-title">Bottlerocket cannot do graceful node shutdown</p>
-<p>The kubelet implements graceful node shutdown with <strong>systemd inhibitor
-locks</strong>, which live in <code>systemd-logind</code>. Bottlerocket does not ship
-<code>systemd-logind</code>, so the mechanism is unavailable: on node shutdown, pods are
-not gracefully terminated regardless of <code>shutdownGracePeriod</code> or
-<code>terminationGracePeriodSeconds</code>. If you run Bottlerocket, an interruption
-handler that cordons and drains <em>before</em> the shutdown begins is the only
-graceful path.</p>
+<p>The kubelet implements graceful node shutdown with <strong>systemd inhibitor locks</strong>, which live in <code>systemd-logind</code>.
+Bottlerocket does not ship <code>systemd-logind</code>, so the mechanism is unavailable: on node shutdown, pods are not gracefully terminated regardless of <code>shutdownGracePeriod</code> or <code>terminationGracePeriodSeconds</code>.
+If you run Bottlerocket, an interruption handler that cordons and drains <em>before</em> the shutdown begins is the only graceful path.</p>
 </div>
 <h3 id="raising-it-on-gke">Raising it on GKE<a class="headerlink" href="#raising-it-on-gke" title="Permanent link">&para;</a></h3>
-<p>GKE can extend the total to <strong>120s</strong> (<code>shutdownGracePeriodSeconds</code> /
-<code>shutdownGracePeriodCriticalPodsSeconds</code> in a node-pool kubelet config). 120s is
-a hard ceiling — <strong>no pod on the node can get more, whatever its
-<code>terminationGracePeriodSeconds</code> says</strong>. At the time of writing this is in
-Preview and needs GKE 1.35.0-gke.1171000+ on Standard clusters.</p>
+<p>GKE can extend the total to <strong>120s</strong> (<code>shutdownGracePeriodSeconds</code> / <code>shutdownGracePeriodCriticalPodsSeconds</code> in a node-pool kubelet config).
+120s is a hard ceiling — <strong>no pod on the node can get more, whatever its <code>terminationGracePeriodSeconds</code> says</strong>.
+At the time of writing this is in Preview and needs GKE 1.35.0-gke.1171000+ on Standard clusters.</p>
 <hr />
 <h2 id="preemption-notice-windows">Preemption notice windows<a class="headerlink" href="#preemption-notice-windows" title="Permanent link">&para;</a></h2>
 <p>The node shutdown budget can never exceed the notice the cloud gives:</p>
@@ -3164,12 +3147,11 @@ Preview and needs GKE 1.35.0-gke.1171000+ on Standard clusters.</p>
 </tr>
 </tbody>
 </table>
-<p>AWS's two minutes is roomy enough that a 60s pod budget fits. GCE's and Azure's
-30s are not — and on GKE the pod's own share of that 30s is 15s.</p>
+<p>AWS's two minutes is roomy enough that a 60s pod budget fits.
+GCE's and Azure's 30s are not — and on GKE the pod's own share of that 30s is 15s.</p>
 <hr />
 <h2 id="voluntary-drain-timeouts">Voluntary drain timeouts<a class="headerlink" href="#voluntary-drain-timeouts" title="Permanent link">&para;</a></h2>
-<p>These paths <em>do</em> honour <code>terminationGracePeriodSeconds</code>, bounded by the
-drainer's own patience:</p>
+<p>These paths <em>do</em> honour <code>terminationGracePeriodSeconds</code>, bounded by the drainer's own patience:</p>
 <table>
 <thead>
 <tr>
@@ -3206,13 +3188,11 @@ drainer's own patience:</p>
 </tr>
 </tbody>
 </table>
-<p>A 60s pod budget is comfortably inside every row here. The problem is never the
-voluntary path.</p>
+<p>A 60s pod budget is comfortably inside every row here.
+The problem is never the voluntary path.</p>
 <hr />
 <h2 id="what-this-means-for-the-gateway">What this means for the gateway<a class="headerlink" href="#what-this-means-for-the-gateway" title="Permanent link">&para;</a></h2>
-<p>The egress proxy asks for <code>terminationGracePeriodSeconds: 60</code> and runs its whole
-shutdown sequence — endpoint-removal linger, then in-flight CONNECT tunnel drain
-— inside a single 45s budget (<code>PROXY_SHUTDOWN_DRAIN_TIMEOUT</code>).</p>
+<p>The egress proxy asks for <code>terminationGracePeriodSeconds: 60</code> and runs its whole shutdown sequence — endpoint-removal linger, then in-flight CONNECT tunnel drain — inside a single 45s budget (<code>PROXY_SHUTDOWN_DRAIN_TIMEOUT</code>).</p>
 <table>
 <thead>
 <tr>
@@ -3244,52 +3224,37 @@ shutdown sequence — endpoint-removal linger, then in-flight CONNECT tunnel dra
 </tr>
 </tbody>
 </table>
-<p>Nothing breaks in the degraded rows — the sequence still runs in the right
-order, it is simply cut short, and tunnels still open get force-closed with a
-logged warning rather than silently severed. But the drain cannot do its job in
-15 seconds.</p>
+<p>Nothing breaks in the degraded rows — the sequence still runs in the right order, it is simply cut short, and tunnels still open get force-closed with a logged warning rather than silently severed.
+But the drain cannot do its job in 15 seconds.</p>
 <h3 id="recommendation-keep-proxy-pools-off-spot-capacity">Recommendation: keep proxy pools off spot capacity<a class="headerlink" href="#recommendation-keep-proxy-pools-off-spot-capacity" title="Permanent link">&para;</a></h3>
-<p>This is a recommendation, not an enforced constraint — it is your call, against
-your own tolerance for disruption.</p>
-<p>The egress proxy is <strong>shared infrastructure for every worker in the tenant</strong>, and
-its IP is the tenant's <a href="../../design/02-architecture/">egress identity</a>. Losing a
-proxy replica is categorically different from losing a worker:</p>
+<p>This is a recommendation, not an enforced constraint — it is your call, against your own tolerance for disruption.</p>
+<p>The egress proxy is <strong>shared infrastructure for every worker in the tenant</strong>, and its IP is the tenant's <a href="../../design/02-architecture/">egress identity</a>.
+Losing a proxy replica is categorically different from losing a worker:</p>
 <ul>
 <li>A reclaimed <strong>worker</strong> costs one CI job, which re-runs.</li>
-<li>A reclaimed <strong>proxy</strong> cuts live egress for every job currently routed through
-  it, and on a tight budget the drain cannot get out of the way cleanly.</li>
+<li>A reclaimed <strong>proxy</strong> cuts live egress for every job currently routed through it, and on a tight budget the drain cannot get out of the way cleanly.</li>
 </ul>
-<p>Pin the pool to on-demand capacity with <code>spec.scheduling</code> (nodeSelector,
-tolerations, affinity — see <a href="../tenant-onboarding/">tenant onboarding</a>). Workers
-are the right place to spend spot savings; the proxy is not. This is exactly the
-split the dogfood cluster uses: a spot <code>workers</code> pool tainted
-<code>dedicated=workers:NoSchedule</code> so control-plane and proxy pods cannot land on it.</p>
-<p>If you accept the risk and run proxies on spot anyway, <strong>disable</strong> the
-endpoint-removal linger so the whole truncated window goes to draining tunnels:</p>
+<p>Pin the pool to on-demand capacity with <code>spec.scheduling</code> (nodeSelector, tolerations, affinity — see <a href="../tenant-onboarding/">tenant onboarding</a>).
+Workers are the right place to spend spot savings; the proxy is not.
+This is exactly the split the dogfood cluster uses: a spot <code>workers</code> pool tainted <code>dedicated=workers:NoSchedule</code> so control-plane and proxy pods cannot land on it.</p>
+<p>If you accept the risk and run proxies on spot anyway, <strong>disable</strong> the endpoint-removal linger so the whole truncated window goes to draining tunnels:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="c1"># Spend the entire (short) window on the tunnel drain.</span>
 <a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="nv">PROXY_SHUTDOWN_LINGER</span><span class="o">=</span>-1s
 </code></pre></div>
-<p>Disable rather than shorten. On this path the linger provably cannot do its job
-(see <a href="#measured-on-graceful-node-shutdown-nothing-removes-the-endpoint-q388">the measurement below</a>):
-the endpoint stays in rotation until the pod is dead, so arrivals never stop and
-the linger runs to its ceiling no matter how the ceiling is set. Any time given
-to it is time taken from the drain.</p>
-<p>Set it on the <code>EgressProxy</code> / <code>ActionsGateway</code> spec rather than with
-<code>kubectl set env</code> — the GMC owns the Deployment and reconciles direct edits away.</p>
+<p>Disable rather than shorten.
+On this path the linger provably cannot do its job (see <a href="#measured-on-graceful-node-shutdown-nothing-removes-the-endpoint-q388">the measurement below</a>): the endpoint stays in rotation until the pod is dead, so arrivals never stop and the linger runs to its ceiling no matter how the ceiling is set.
+Any time given to it is time taken from the drain.</p>
+<p>Set it on the <code>EgressProxy</code> / <code>ActionsGateway</code> spec rather than with <code>kubectl set env</code> — the GMC owns the Deployment and reconciles direct edits away.</p>
 <hr />
 <h2 id="why-a-delay-is-needed-at-all-and-what-kubernetes-does-not-give-you">Why a delay is needed at all, and what Kubernetes does not give you<a class="headerlink" href="#why-a-delay-is-needed-at-all-and-what-kubernetes-does-not-give-you" title="Permanent link">&para;</a></h2>
-<p>Endpoint removal is <strong>concurrent with SIGTERM, not ordered before it</strong>. Marking
-the pod terminating, removing it from EndpointSlices, and each kube-proxy
-applying that removal are independent control loops. A pod can therefore receive
-SIGTERM while traffic is still being routed to it.</p>
-<p><strong>There is no signal for "endpoint removal has propagated."</strong> No API, no
-notification, no readback aggregated across the N kube-proxies applying it. This
-is the root reason the ecosystem standardised on a <code>preStop</code> sleep: it is not
-elegance, it is the absence of anything better.</p>
+<p>Endpoint removal is <strong>concurrent with SIGTERM, not ordered before it</strong>.
+Marking the pod terminating, removing it from EndpointSlices, and each kube-proxy applying that removal are independent control loops.
+A pod can therefore receive SIGTERM while traffic is still being routed to it.</p>
+<p><strong>There is no signal for "endpoint removal has propagated."</strong> No API, no notification, no readback aggregated across the N kube-proxies applying it.
+This is the root reason the ecosystem standardised on a <code>preStop</code> sleep: it is not elegance, it is the absence of anything better.</p>
 <h3 id="upstream-state-of-the-art">Upstream state of the art<a class="headerlink" href="#upstream-state-of-the-art" title="Permanent link">&para;</a></h3>
-<p>This is a known, accepted, unsolved gap — not an oversight, and not something to
-re-derive. Three upstream issues surround it; check them before assuming
-anything here has changed:</p>
+<p>This is a known, accepted, unsolved gap — not an oversight, and not something to re-derive.
+Three upstream issues surround it; check them before assuming anything here has changed:</p>
 <table>
 <thead>
 <tr>
@@ -3316,29 +3281,17 @@ anything here has changed:</p>
 </tr>
 </tbody>
 </table>
-<p>No KEP exists for the termination gate. The blocking design question, per SIG
-Network maintainers on 106476, is <em>"who do we wait for?"</em> — a pod may sit behind
-several ingresses, gateways and service LBs, some unreachable from inside the
-cluster, and deletion cannot be un-started once begun. Synchronising state back
-from every kube-proxy on every endpoint change is explicitly considered
-infeasible at scale.</p>
+<p>No KEP exists for the termination gate.
+The blocking design question, per SIG Network maintainers on 106476, is <em>"who do we wait for?"</em> — a pod may sit behind several ingresses, gateways and service LBs, some unreachable from inside the cluster, and deletion cannot be un-started once begun.
+Synchronising state back from every kube-proxy on every endpoint change is explicitly considered infeasible at scale.</p>
 <h3 id="measured-on-graceful-node-shutdown-nothing-removes-the-endpoint-q388">Measured: on graceful node shutdown, nothing removes the endpoint (Q388)<a class="headerlink" href="#measured-on-graceful-node-shutdown-nothing-removes-the-endpoint-q388" title="Permanent link">&para;</a></h3>
-<p>Both termination paths — ordinary delete, and the 116965 graceful-node-shutdown
-case — were measured on kind, Kubernetes <strong>1.35.0</strong>, with the kubelet configured
-GKE-style (<code>shutdownGracePeriod: 30s</code>, <code>shutdownGracePeriodCriticalPods: 15s</code>)
-and a two-replica Service whose pods fail readiness the instant they get
-SIGTERM.</p>
-<p><strong>Ordinary <code>kubectl delete</code>.</strong> The readiness probe (1s period, failure
-threshold 1) began failing at SIGTERM and kept failing. The pod's <code>Ready</code>
-condition stayed <code>True</code> for the entire 48-second termination and never flipped.
-The endpoint <em>was</em> withdrawn immediately, but by the <code>deletionTimestamp</code>, not by
-readiness. <strong>The probe runs and fails, but its result never reaches the <code>Ready</code>
-condition — endpoint removal is driven by <code>deletionTimestamp</code> regardless.</strong></p>
-<p>Note this is <em>adjacent to but distinct from</em> 124648, which is scoped to the
-eviction path and whose reporter states the probe works during termination on
-ordinary delete. On this evidence the delete-path behaviour (probe results never
-reflected into <code>Ready</code> during termination) appears to be unreported upstream —
-Q401 tracks filing it.</p>
+<p>Both termination paths — ordinary delete, and the 116965 graceful-node-shutdown case — were measured on kind, Kubernetes <strong>1.35.0</strong>, with the kubelet configured GKE-style (<code>shutdownGracePeriod: 30s</code>, <code>shutdownGracePeriodCriticalPods: 15s</code>) and a two-replica Service whose pods fail readiness the instant they get SIGTERM.</p>
+<p><strong>Ordinary <code>kubectl delete</code>.</strong> The readiness probe (1s period, failure threshold 1) began failing at SIGTERM and kept failing.
+The pod's <code>Ready</code> condition stayed <code>True</code> for the entire 48-second termination and never flipped.
+The endpoint <em>was</em> withdrawn immediately, but by the <code>deletionTimestamp</code>, not by readiness.
+<strong>The probe runs and fails, but its result never reaches the <code>Ready</code> condition — endpoint removal is driven by <code>deletionTimestamp</code> regardless.</strong></p>
+<p>Note this is <em>adjacent to but distinct from</em> 124648, which is scoped to the eviction path and whose reporter states the probe works during termination on ordinary delete.
+On this evidence the delete-path behaviour (probe results never reflected into <code>Ready</code> during termination) appears to be unreported upstream — Q401 tracks filing it.</p>
 <p><strong>116965, graceful node shutdown.</strong> With the node powering off:</p>
 <table>
 <thead>
@@ -3365,87 +3318,63 @@ Q401 tracks filing it.</p>
 </tbody>
 </table>
 <p>The pods never entered <code>Terminating</code> and never received a <code>deletionTimestamp</code>.
-The endpoints stayed <code>Ready</code> for the full ~15s ordinary-pod budget and were
-withdrawn only once the pods reached a terminal phase, which is to say <em>after
-they were already dead</em>.</p>
-<p><strong>Together these mean the endpoint stays in rotation for the whole
-graceful-node-shutdown window.</strong> New connections keep arriving, so the proxy's
-linger never observes quiescence and burns its entire ceiling. On a 15s GKE Spot
-budget that leaves roughly 5s for the tunnel drain.</p>
+The endpoints stayed <code>Ready</code> for the full ~15s ordinary-pod budget and were withdrawn only once the pods reached a terminal phase, which is to say <em>after they were already dead</em>.</p>
+<p><strong>Together these mean the endpoint stays in rotation for the whole graceful-node-shutdown window.</strong> New connections keep arriving, so the proxy's linger never observes quiescence and burns its entire ceiling.
+On a 15s GKE Spot budget that leaves roughly 5s for the tunnel drain.</p>
 <div class="admonition warning">
 <p class="admonition-title">On spot capacity, disable the linger</p>
-<p>Set <code>PROXY_SHUTDOWN_LINGER=-1s</code> so the whole truncated window goes to
-draining tunnels. The linger cannot do its job on that path, and this is a
-measured result rather than an inference.</p>
+<p>Set <code>PROXY_SHUTDOWN_LINGER=-1s</code> so the whole truncated window goes to draining tunnels.
+The linger cannot do its job on that path, and this is a measured result rather than an inference.</p>
 </div>
-<p>The upstream design intent is exactly what the proxy does. A SIG
-Node maintainer on 116965: <em>"the Kubernetes-portable behavior is to use the
-readiness endpoint to control being in rotation during graceful shutdown."</em>
-Failing <code>/readyz</code> is correct and stays. It simply does not work yet: as measured
-above (Q388), the probe's failures never reach the <code>Ready</code> condition on the
-delete path — and on eviction, 124648 halts the probe worker outright.</p>
+<p>The upstream design intent is exactly what the proxy does.
+A SIG Node maintainer on 116965: <em>"the Kubernetes-portable behavior is to use the readiness endpoint to control being in rotation during graceful shutdown."</em> Failing <code>/readyz</code> is correct and stays.
+It simply does not work yet: as measured above (Q388), the probe's failures never reach the <code>Ready</code> condition on the delete path — and on eviction, 124648 halts the probe worker outright.</p>
 <div class="admonition note">
 <p class="admonition-title">Reproducing this yourself: kind needs dbus first</p>
-<p>Stock kind <strong>cannot</strong> run graceful node shutdown. The kubelet logs
-<code>Failed to start node shutdown manager: dial unix
-/var/run/dbus/system_bus_socket: no such file or directory</code>, because the node
-image ships no dbus at all. <code>apt-get install dbus</code>, start <code>dbus</code> and
-<code>systemd-logind</code>, restart the kubelet, and confirm with <code>systemd-inhibit
---list</code> that the kubelet holds a <code>shutdown</code> lock before trusting any result.
-This is the same missing-<code>systemd-logind</code> mechanism that disables the feature
-on Bottlerocket.</p>
+<p>Stock kind <strong>cannot</strong> run graceful node shutdown.
+The kubelet logs <code>Failed to start node shutdown manager: dial unix /var/run/dbus/system_bus_socket: no such file or directory</code>, because the node image ships no dbus at all.
+<code>apt-get install dbus</code>, start <code>dbus</code> and <code>systemd-logind</code>, restart the kubelet, and confirm with <code>systemd-inhibit --list</code> that the kubelet holds a <code>shutdown</code> lock before trusting any result.
+This is the same missing-<code>systemd-logind</code> mechanism that disables the feature on Bottlerocket.</p>
 </div>
 <h3 id="what-the-newer-traffic-engineering-features-do-and-dont-fix">What the newer traffic-engineering features do and don't fix<a class="headerlink" href="#what-the-newer-traffic-engineering-features-do-and-dont-fix" title="Permanent link">&para;</a></h3>
-<p><code>ProxyTerminatingEndpoints</code> (KEP-1669, stable since <strong>1.28</strong>; EndpointSlice
-<code>terminating</code> conditions GA in <strong>1.26</strong>) is frequently cited as having solved
-this. It has not, for the multi-replica case. The rule is a <strong>fallback</strong>, not a
-preference — kube-proxy picks the first non-empty set of:</p>
+<p><code>ProxyTerminatingEndpoints</code> (KEP-1669, stable since <strong>1.28</strong>; EndpointSlice <code>terminating</code> conditions GA in <strong>1.26</strong>) is frequently cited as having solved this.
+It has not, for the multi-replica case.
+The rule is a <strong>fallback</strong>, not a preference — kube-proxy picks the first non-empty set of:</p>
 <ol>
 <li>ready endpoints that are <strong>not</strong> terminating,</li>
 <li>ready endpoints that <strong>are</strong> terminating.</li>
 </ol>
 <p>So a terminating pod receives traffic only when it is the <em>last</em> one standing.
-With a proxy pool of two or more healthy replicas, set (1) is never empty and
-the feature does nothing for the pod being rolled. It rescues the
-single-replica / <code>internalTrafficPolicy: Local</code> case, which is real and worth
-having — just not this one.</p>
+With a proxy pool of two or more healthy replicas, set (1) is never empty and the feature does nothing for the pod being rolled.
+It rescues the single-replica / <code>internalTrafficPolicy: Local</code> case, which is real and worth having — just not this one.</p>
 <h3 id="the-prestop-sleep-if-you-use-one">The <code>preStop</code> sleep, if you use one<a class="headerlink" href="#the-prestop-sleep-if-you-use-one" title="Permanent link">&para;</a></h3>
 <ul>
-<li>Use the <strong>native <code>sleep</code> handler</strong> (KEP-3960: beta and on by default in
-  <strong>1.30</strong>, GA'd after a reverted attempt in 1.32). <code>exec: ["sleep", …]</code> fails at
-  runtime on distroless images — no shell, no <code>sleep</code> binary — and the pod
-  proceeds straight to SIGTERM, silently reintroducing the race. Zero-valued
-  sleeps became usable in <strong>1.33</strong> (KEP-4818), which makes the field templatable.</li>
-<li>Community guidance clusters at <strong>5–15s</strong>. Upstream examples use 15s.</li>
-<li>Remember it is <strong>deducted from</strong> <code>terminationGracePeriodSeconds</code>, not added to
-  it — and on a truncated budget it is deducted from a number much smaller than
-  the manifest says.</li>
+<li>Use the <strong>native <code>sleep</code> handler</strong> (KEP-3960: beta and on by default in <strong>1.30</strong>, GA'd after a reverted attempt in 1.32).
+  <code>exec: ["sleep", …]</code> fails at runtime on distroless images — no shell, no <code>sleep</code> binary — and the pod proceeds straight to SIGTERM, silently reintroducing the race.
+  Zero-valued sleeps became usable in <strong>1.33</strong> (KEP-4818), which makes the field templatable.</li>
+<li>Community guidance clusters at <strong>5–15s</strong>.
+  Upstream examples use 15s.</li>
+<li>Remember it is <strong>deducted from</strong> <code>terminationGracePeriodSeconds</code>, not added to it — and on a truncated budget it is deducted from a number much smaller than the manifest says.</li>
 </ul>
 <h3 id="why-the-gateway-measures-instead">Why the gateway measures instead<a class="headerlink" href="#why-the-gateway-measures-instead" title="Permanent link">&para;</a></h3>
-<p>The proxy holds its CONNECT listener open after SIGTERM and watches its own
-<strong>new-connection arrivals</strong>, exiting once none has arrived for a short quiescence
-interval. Arrivals stopping is the property a <code>preStop</code> sleep is approximating,
-and the server can observe it directly — a local signal where no cluster-wide one
-exists. Because the wait is spent <em>inside</em> the drain budget rather than ahead of
-it, worst case is <code>max(linger, drain)</code> rather than their sum, which is what keeps
-a truncated window spending its seconds on draining rather than idling. See
-<a href="../../development/kubernetes-conventions/#graceful-shutdown-sigterm">kubernetes-conventions</a>
-for the pattern and the reasoning.</p>
+<p>The proxy holds its CONNECT listener open after SIGTERM and watches its own <strong>new-connection arrivals</strong>, exiting once none has arrived for a short quiescence interval.
+Arrivals stopping is the property a <code>preStop</code> sleep is approximating, and the server can observe it directly — a local signal where no cluster-wide one exists.
+Because the wait is spent <em>inside</em> the drain budget rather than ahead of it, worst case is <code>max(linger, drain)</code> rather than their sum, which is what keeps a truncated window spending its seconds on draining rather than idling.
+See <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.5.0/docs/development/kubernetes-conventions.md#graceful-shutdown-sigterm">kubernetes-conventions</a> for the pattern and the reasoning.</p>
 <hr />
 <h2 id="checklist-for-sizing-a-budget">Checklist for sizing a budget<a class="headerlink" href="#checklist-for-sizing-a-budget" title="Permanent link">&para;</a></h2>
 <ul>
 <li>[ ] Which of the three termination paths will actually hit this pod most often?</li>
-<li>[ ] Does this platform even have graceful node shutdown enabled? (On RKE2,
-      Kubespray, OpenShift and stock EKS: no, unless you configured it.)</li>
-<li>[ ] Is the workload on spot/preemptible capacity, and is that appropriate for
-      what it does?</li>
+<li>[ ] Does this platform even have graceful node shutdown enabled?
+  (On RKE2, Kubespray, OpenShift and stock EKS: no, unless you configured it.)</li>
+<li>[ ] Is the workload on spot/preemptible capacity, and is that appropriate for what it does?</li>
 <li>[ ] Does the drain still do something useful when truncated to 15s?</li>
 <li>[ ] Is there a <code>preStop</code> sleep eating into an already-truncated budget?</li>
 </ul>
 <hr />
 <h2 id="sources">Sources<a class="headerlink" href="#sources" title="Permanent link">&para;</a></h2>
-<p>Vendor and upstream documentation, retrieved 2026-07-22. Defaults change —
-re-check before relying on a number for capacity planning.</p>
+<p>Vendor and upstream documentation, retrieved 2026-07-22.
+Defaults change — re-check before relying on a number for capacity planning.</p>
 <ul>
 <li><a href="https://kubernetes.io/docs/concepts/cluster-administration/node-shutdown/">Node Shutdowns — Kubernetes</a></li>
 <li><a href="https://docs.cloud.google.com/kubernetes-engine/docs/concepts/spot-vms">Spot VMs — GKE</a></li>

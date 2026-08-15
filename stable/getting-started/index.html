@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/1.4.0/getting-started/">
+        <link rel="canonical" href="https://actions-gateway.com/1.5.0/getting-started/">
       
       
         <link rel="prev" href="../demo/">
@@ -63,15 +63,15 @@
   <link rel="preload" as="font" type="font/woff2" crossorigin href="../assets/fonts/IBMPlexSans-Bold.woff2">
   <link rel="preload" as="font" type="font/woff2" crossorigin href="../assets/fonts/MonaspaceNeon-Medium.woff2">
   
-  <meta property="og:image" content="https://actions-gateway.com/1.4.0assets/social-preview.png">
+  <meta property="og:image" content="https://actions-gateway.com/1.5.0assets/social-preview.png">
   <meta property="og:image:width" content="1280">
   <meta property="og:image:height" content="640">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:image" content="https://actions-gateway.com/1.4.0assets/social-preview.png">
+  <meta name="twitter:image" content="https://actions-gateway.com/1.5.0assets/social-preview.png">
   
-  <link rel="apple-touch-icon" href="https://actions-gateway.com/1.4.0assets/apple-touch-icon.png">
-  <link rel="alternate icon" href="https://actions-gateway.com/1.4.0assets/favicon.ico">
-  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/1.4.0assets/icon-512.png">
+  <link rel="apple-touch-icon" href="https://actions-gateway.com/1.5.0assets/apple-touch-icon.png">
+  <link rel="alternate icon" href="https://actions-gateway.com/1.5.0assets/favicon.ico">
+  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/1.5.0assets/icon-512.png">
   
   <script type="application/ld+json">
   {
@@ -79,14 +79,14 @@
     "@type": "SoftwareSourceCode",
     "name": "GitHub Actions Gateway",
     "description": "An Actions Runner Controller (ARC) alternative for self-hosted GitHub Actions runners on multi-tenant Kubernetes \u2014 oversubscribe a shared quota, recover evicted jobs automatically, and isolate every tenant\u0027s GitHub egress.",
-    "url": "https://actions-gateway.com/1.4.0",
+    "url": "https://actions-gateway.com/1.5.0",
     "codeRepository": "https://github.com/actions-gateway/github-actions-gateway",
     "programmingLanguage": "Go",
     "license": "https://www.apache.org/licenses/LICENSE-2.0",
     "author": {
       "@type": "Organization",
       "name": "GitHub Actions Gateway",
-      "url": "https://actions-gateway.com/1.4.0"
+      "url": "https://actions-gateway.com/1.5.0"
     }
   }
   </script>
@@ -95,8 +95,8 @@
     "@context": "https://schema.org",
     "@type": "Organization",
     "name": "GitHub Actions Gateway",
-    "url": "https://actions-gateway.com/1.4.0",
-    "logo": "https://actions-gateway.com/1.4.0assets/icon-512.png",
+    "url": "https://actions-gateway.com/1.5.0",
+    "logo": "https://actions-gateway.com/1.5.0assets/icon-512.png",
     "sameAs": ["https://github.com/actions-gateway/github-actions-gateway"]
   }
   </script>
@@ -132,8 +132,8 @@
         <aside class="md-banner">
           <div class="md-banner__inner md-grid md-typeset">
             
-            <strong>v1.4.0 is here.</strong>
-      Consent-gated cross-namespace egress proxy sharing, a curated runner template library you apply with one command, and v2 worker-capacity conditions exported as Prometheus gauges.
+            <strong>v1.5.0 is here.</strong>
+      A per-tenant GitHub runner group boundary, multi-label runner sets that migrate a <code>runs-on</code> array unedited, and job duration and latency metrics on the acquisition tier every new tenant runs.
           </div>
           
         </aside>
@@ -145,7 +145,7 @@
           <aside class="md-banner md-banner--warning">
             <div class="md-banner__inner md-grid md-typeset">
               You're not viewing the latest release.
-  <a href="https://actions-gateway.com/1.4.0"><strong>Go to the current docs.</strong></a>
+  <a href="https://actions-gateway.com/1.5.0"><strong>Go to the current docs.</strong></a>
 
             </div>
             <script>var el=document.querySelector("[data-md-component=outdated]"),base=new URL(".."),outdated=__md_get("__outdated",sessionStorage,base);!0===outdated&&el&&(el.hidden=!1)</script>
@@ -2783,43 +2783,31 @@
 
 <h1 id="getting-started">Getting Started<a class="headerlink" href="#getting-started" title="Permanent link">&para;</a></h1>
 <blockquote>
-<p><strong>Want to see it first?</strong> The <a href="../demo/">Demo</a> walks one real GitHub job through
-a local kind cluster (job → ephemeral worker pod → green on GitHub) with the
-exact commands to reproduce it.</p>
+<p><strong>Want to see it first?</strong> The <a href="../demo/">Demo</a> walks one real GitHub job through a local kind cluster (job → ephemeral worker pod → green on GitHub) with the exact commands to reproduce it.</p>
 </blockquote>
 <div class="admonition tip">
 <p class="admonition-title">New tenants: start on <code>v2beta1</code></p>
-<p>The recommended shape for a new tenant is the <strong>v2 API</strong> at
-<strong><code>actions-gateway.com/v2beta1</code></strong>: a decomposed <code>ActionsGateway</code> +
-<code>RunnerSet</code> + <code>RunnerTemplate</code> (+ optional <code>EgressProxy</code>), shown in
-<a href="#4-create-your-gateway-and-runner-set-v2-recommended">Step 4</a> below.
-<code>v2beta1</code> is the graduated, ScaleSet-only storage and hub version, v2's first
-stability contract, and where new capabilities land. <code>v2alpha1</code> stays served as
-the <a href="../operations/migration-v1-to-v2/"><code>gag-migrate</code></a> on-ramp, carrying the
-<code>acquisitionProtocol</code> selector a migrating v1 tenant needs and a new tenant does
-not, and the apiserver converts between the two. The older
-single-custom-resource (CR) <strong><code>v1alpha1</code></strong> API is still fully served but
-<strong><a href="../operations/v1alpha1-deprecation/">deprecated</a></strong>: reach for it only if you
-have a specific reason to, and see the
-<a href="#legacy-the-v1alpha1-api-deprecated">legacy v1 path</a>. <code>v1alpha1</code>, <code>v2alpha1</code>,
-and the classic acquisition protocol are all
-<a href="../operations/v1alpha1-deprecation/">removed at <code>v2.0.0</code></a>; <code>v2beta1</code> is not.
+<p>The recommended shape for a new tenant is the <strong>v2 API</strong> at <strong><code>actions-gateway.com/v2beta1</code></strong>: a decomposed <code>ActionsGateway</code> + <code>RunnerSet</code> + <code>RunnerTemplate</code> (+ optional <code>EgressProxy</code>), shown in <a href="#4-create-your-gateway-and-runner-set-v2-recommended">Step 4</a> below.
+<code>v2beta1</code> is the graduated, ScaleSet-only storage and hub version, v2's first stability contract, and where new capabilities land.
+<code>v2alpha1</code> stays served as the <a href="../operations/migration-v1-to-v2/"><code>gag-migrate</code></a> on-ramp, carrying the <code>acquisitionProtocol</code> selector a migrating v1 tenant needs and a new tenant does not, and the apiserver converts between the two.
+The older single-custom-resource (CR) <strong><code>v1alpha1</code></strong> API is still fully served but <strong><a href="../operations/v1alpha1-deprecation/">deprecated</a></strong>: reach for it only if you have a specific reason to, and see the <a href="#legacy-the-v1alpha1-api-deprecated">legacy v1 path</a>.
+<code>v1alpha1</code>, <code>v2alpha1</code>, and the classic acquisition protocol are all <a href="../operations/v1alpha1-deprecation/">removed at <code>v2.0.0</code></a>; <code>v2beta1</code> is not.
 Already on v1?
-<a href="../operations/migration-v1-to-v2/"><code>gag-migrate</code></a> moves you across without
-changing how your jobs are acquired.</p>
+<a href="../operations/migration-v1-to-v2/"><code>gag-migrate</code></a> moves you across without changing how your jobs are acquired.</p>
 </div>
 <h2 id="prerequisites">Prerequisites<a class="headerlink" href="#prerequisites" title="Permanent link">&para;</a></h2>
 <ul>
-<li>Kubernetes 1.30+ (GA <code>ValidatingAdmissionPolicy</code>); <strong>1.31+</strong> for the recommended
-  v2 path (per-gateway <code>RunnerSet</code> scoping uses a server-side field selector,
-  KEP-4358, that is alpha-off on 1.30)</li>
+<li>Kubernetes 1.30+ (GA <code>ValidatingAdmissionPolicy</code>); <strong>1.31+</strong> for the recommended v2 path (per-gateway <code>RunnerSet</code> scoping uses a server-side field selector, KEP-4358, that is alpha-off on 1.30)</li>
 <li>A CNI that enforces <code>NetworkPolicy</code> (Calico/Cilium) for the isolation controls to take effect</li>
 <li><a href="https://cert-manager.io">cert-manager</a> installed, <em>or</em> install with <code>--set certManager.enabled=false</code> to use the chart's self-signed webhook cert</li>
 <li>A GitHub App with a private key and installation ID</li>
 <li>Go 1.26+ only if you build the images yourself</li>
 </ul>
 <h2 id="1-deploy-the-gmc">1. Deploy the GMC<a class="headerlink" href="#1-deploy-the-gmc" title="Permanent link">&para;</a></h2>
-<p>The shipped install artifact is the <strong><code>actions-gateway</code> Helm chart</strong> (<a href="../charts/actions-gateway/README.md">reference</a>). It installs the Gateway Manager Controller (GMC), its CustomResourceDefinitions (CRDs), RBAC, validating webhook, and admission policy. The GMC then provisions per-tenant Actions Gateway Controller (AGC) instances and proxy pools at runtime. They are not installed by the chart.</p>
+<p>The shipped install artifact is the <strong><code>actions-gateway</code> Helm chart</strong> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.5.0/charts/actions-gateway/README.md">reference</a>).
+It installs the Gateway Manager Controller (GMC), its CustomResourceDefinitions (CRDs), RBAC, validating webhook, and admission policy.
+The GMC then provisions per-tenant Actions Gateway Controller (AGC) instances and proxy pools at runtime.
+They are not installed by the chart.</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>helm<span class="w"> </span>install<span class="w"> </span>gag<span class="w"> </span>charts/actions-gateway<span class="w"> </span><span class="se">\</span>
 <a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="w">  </span>--namespace<span class="w"> </span>gmc-system<span class="w"> </span>--create-namespace<span class="w"> </span><span class="se">\</span>
 <a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="w">  </span>--set<span class="w"> </span>gmc.image.digest<span class="o">=</span>sha256:&lt;gmc&gt;<span class="w"> </span><span class="se">\</span>
@@ -2827,11 +2815,18 @@ changing how your jobs are acquired.</p>
 <a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="w">  </span>--set<span class="w"> </span>proxy.image.digest<span class="o">=</span>sha256:&lt;proxy&gt;<span class="w"> </span><span class="se">\</span>
 <a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="w">  </span>--set<span class="w"> </span>wrapper.image.digest<span class="o">=</span>sha256:&lt;wrapper&gt;
 </code></pre></div>
-<p>All four images must be <strong>pinned by digest</strong>. The chart refuses to render while any of the four digests (<code>gmc</code>/<code>agc</code>/<code>proxy</code>/<code>wrapper</code>) is empty, naming the one to set (the worker-wrapper image is on by default, so it is required too). Pin them as above, or pass <code>--set allowFloatingImageTags=true</code> for dev/test only. See the <a href="../charts/actions-gateway/README.md">chart README</a> for the full values reference and the cert-manager toggle.</p>
+<p>All four images must be <strong>pinned by digest</strong>.
+The chart refuses to render while any of the four digests (<code>gmc</code>/<code>agc</code>/<code>proxy</code>/<code>wrapper</code>) is empty, naming the one to set (the worker-wrapper image is on by default, so it is required too).
+Pin them as above, or pass <code>--set allowFloatingImageTags=true</code> for dev/test only.
+See the <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.5.0/charts/actions-gateway/README.md">chart README</a> for the full values reference and the cert-manager toggle.</p>
 <blockquote>
-<p><strong>Dev/CI.</strong> The Helm chart is the single install path. There is no kustomize alternative. To install an unreleased chart from a source checkout, substitute the local <code>charts/actions-gateway</code> path for the <code>oci://…</code> ref above; <code>make deploy</code> (used by the e2e suite) wraps the same <code>helm install</code> with floating image tags for local iteration.</p>
+<p><strong>Dev/CI.</strong> The Helm chart is the single install path.
+There is no kustomize alternative.
+To install an unreleased chart from a source checkout, substitute the local <code>charts/actions-gateway</code> path for the <code>oci://…</code> ref above; <code>make deploy</code> (used by the e2e suite) wraps the same <code>helm install</code> with floating image tags for local iteration.</p>
 </blockquote>
-<p>For the recommended <strong>v2</strong> path, also install the opt-in v2 CRDs. They ship separately (and are applied server-side, never <code>helm install</code>ed) because the CRDs are large enough that a Helm release Secret would exceed its 1 MiB limit. For the default <code>gmc-system</code> namespace, apply the pre-rendered, cosign-signed manifest attached to the release, no helm needed:</p>
+<p>For the recommended <strong>v2</strong> path, also install the opt-in v2 CRDs.
+They ship separately (and are applied server-side, never <code>helm install</code>ed) because the CRDs are large enough that a Helm release Secret would exceed its 1 MiB limit.
+For the default <code>gmc-system</code> namespace, apply the pre-rendered, cosign-signed manifest attached to the release, no helm needed:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>kubectl<span class="w"> </span>apply<span class="w"> </span>--server-side<span class="w"> </span>-f<span class="w"> </span><span class="se">\</span>
 <a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="w">  </span>https://github.com/actions-gateway/github-actions-gateway/releases/download/vX.Y.Z/actions-gateway-crds-v2.yaml
 </code></pre></div>
@@ -2841,27 +2836,25 @@ changing how your jobs are acquired.</p>
 <a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="w">  </span>--namespace<span class="w"> </span>&lt;gmc-namespace&gt;<span class="w"> </span><span class="se">\</span>
 <a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="w">  </span><span class="p">|</span><span class="w"> </span>kubectl<span class="w"> </span>apply<span class="w"> </span>--server-side<span class="w"> </span>-f<span class="w"> </span>-
 </code></pre></div>
-<p>Either way the <code>clientConfig</code> must resolve to the GMC's <code>webhook-service</code>: each v2 CRD is served at <code>v2beta1</code> (the storage/hub version) and <code>v2alpha1</code>, and the apiserver converts between them via a conversion webhook hosted by the GMC (see <a href="../operations/install/#optional-the-v2-api-crds">install.md § the v2 API CRDs</a> for signature verification and the full options). The GMC <strong>detects the v2 CRDs at startup</strong>: with them present it starts the v2 controllers; without them it comes up clean on v1 only (logging <code>actions-gateway.com/v2alpha1 CRDs not installed; v2 controllers disabled</code>). It does not error-loop. Because detection is once-at-startup, installing the v2 CRDs into an already-running GMC needs a restart (<code>kubectl rollout restart deploy -n gmc-system gmc-controller-manager</code>). See the <a href="../charts/actions-gateway-crds-v2/README.md">chart README</a>.</p>
+<p>Either way the <code>clientConfig</code> must resolve to the GMC's <code>webhook-service</code>: each v2 CRD is served at <code>v2beta1</code> (the storage/hub version) and <code>v2alpha1</code>, and the apiserver converts between them via a conversion webhook hosted by the GMC (see <a href="../operations/install/#optional-the-v2-api-crds">install.md § the v2 API CRDs</a> for signature verification and the full options).
+The GMC <strong>detects the v2 CRDs at startup</strong>: with them present it starts the v2 controllers; without them it comes up clean on v1 only (logging <code>actions-gateway.com/v2alpha1 CRDs not installed; v2 controllers disabled</code>).
+It does not error-loop.
+Because detection is once-at-startup, installing the v2 CRDs into an already-running GMC needs a restart (<code>kubectl rollout restart deploy -n gmc-system gmc-controller-manager</code>).
+See the <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.5.0/charts/actions-gateway-crds-v2/README.md">chart README</a>.</p>
 <h2 id="2-create-and-mark-the-tenant-namespace-and-set-its-quota">2. Create and mark the tenant namespace, and set its quota<a class="headerlink" href="#2-create-and-mark-the-tenant-namespace-and-set-its-quota" title="Permanent link">&para;</a></h2>
-<p>Create the tenant namespace and mark it as managed by the GMC. The marker label
-authorizes the GMC to stamp Pod Security Admission labels on it; the
-<code>namespace-psa-guard</code> admission policy denies the GMC any namespace that lacks it.</p>
+<p>Create the tenant namespace and mark it as managed by the GMC.
+The marker label authorizes the GMC to stamp Pod Security Admission labels on it; the <code>namespace-psa-guard</code> admission policy denies the GMC any namespace that lacks it.</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>kubectl<span class="w"> </span>create<span class="w"> </span>namespace<span class="w"> </span>team-a
 <a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>kubectl<span class="w"> </span>label<span class="w"> </span>namespace<span class="w"> </span>team-a<span class="w"> </span>actions-gateway.github.com/tenant<span class="o">=</span><span class="nb">true</span>
 </code></pre></div>
 <blockquote>
-<p><strong>v2 namespace markers.</strong> In the recommended v2 flow the tenant marker aligns to
-<code>actions-gateway.com/tenant=managed</code>, and the Pod Security level moves off the CR
-onto the namespace as the <code>actions-gateway.com/security-profile</code> label (absent ⇒
-<code>baseline</code>). The GMC dual-reads both spellings during coexistence. For the exact
-v2 namespace labels and the profile-guard admission policy, see
-<a href="../operations/tenant-onboarding/#v2-api-multiple-gateways-per-namespace">Tenant Onboarding — v2 API</a>.</p>
+<p><strong>v2 namespace markers.</strong> In the recommended v2 flow the tenant marker aligns to <code>actions-gateway.com/tenant=managed</code>, and the Pod Security level moves off the CR onto the namespace as the <code>actions-gateway.com/security-profile</code> label (absent ⇒ <code>baseline</code>).
+The GMC dual-reads both spellings during coexistence.
+For the exact v2 namespace labels and the profile-guard admission policy, see <a href="../operations/tenant-onboarding/#v2-api-multiple-gateways-per-namespace">Tenant Onboarding — v2 API</a>.</p>
 </blockquote>
-<p>The namespace <code>ResourceQuota</code> (and any <code>LimitRange</code>) is <strong>platform-owned</strong>: the
-platform admin creates and manages it on the tenant namespace, and the gateway
-operates <em>within</em> it but never creates or mutates it. This is the real,
-tenant-uncontrollable cap on how much compute a tenant can consume. Apply it
-here, or via your GitOps / tenant-operator stack: Capsule, HNC, vCluster, kiosk.</p>
+<p>The namespace <code>ResourceQuota</code> (and any <code>LimitRange</code>) is <strong>platform-owned</strong>: the platform admin creates and manages it on the tenant namespace, and the gateway operates <em>within</em> it but never creates or mutates it.
+This is the real, tenant-uncontrollable cap on how much compute a tenant can consume.
+Apply it here, or via your GitOps / tenant-operator stack: Capsule, HNC, vCluster, kiosk.</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">v1</span>
 <a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ResourceQuota</span>
 <a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="nt">metadata</span><span class="p">:</span>
@@ -2888,18 +2881,12 @@ here, or via your GitOps / tenant-operator stack: Capsule, HNC, vCluster, kiosk.
 <a id="__codelineno-4-24" name="__codelineno-4-24" href="#__codelineno-4-24"></a><span class="w">        </span><span class="nt">cpu</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;1&quot;</span>
 <a id="__codelineno-4-25" name="__codelineno-4-25" href="#__codelineno-4-25"></a><span class="w">        </span><span class="nt">memory</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">512Mi</span>
 </code></pre></div>
-<p>The <code>LimitRange</code> is not optional here. A <code>ResourceQuota</code> that constrains
-<code>requests.cpu</code>/<code>requests.memory</code> makes those requests <strong>mandatory</strong> for every pod
-in the namespace: Kubernetes rejects any pod that omits a constrained resource.
-The AGC control-plane pod stamps no requests of its own, so without a <code>LimitRange</code>
-to supply defaults it is refused with <code>must specify requests.cpu</code> and never
-schedules. The <code>LimitRange</code> above fills that gap (and covers any worker pod whose
-runner group leaves requests unset). See
-<a href="../operations/resourcequota-sizing/#only-constrain-keys-every-pod-declares">only constrain keys every pod declares</a>.</p>
-<p>The gateway reads remaining quota and reacts to exhaustion (it won't claim a job
-the quota can't place, and lock-cancels then reruns any job that loses headroom
-after the claim, see <a href="../why-gag/">why-gag</a>), but the quota itself is yours to
-size and own.</p>
+<p>The <code>LimitRange</code> is not optional here.
+A <code>ResourceQuota</code> that constrains <code>requests.cpu</code>/<code>requests.memory</code> makes those requests <strong>mandatory</strong> for every pod in the namespace: Kubernetes rejects any pod that omits a constrained resource.
+The AGC control-plane pod stamps no requests of its own, so without a <code>LimitRange</code> to supply defaults it is refused with <code>must specify requests.cpu</code> and never schedules.
+The <code>LimitRange</code> above fills that gap (and covers any worker pod whose runner group leaves requests unset).
+See <a href="../operations/resourcequota-sizing/#only-constrain-keys-every-pod-declares">only constrain keys every pod declares</a>.</p>
+<p>The gateway reads remaining quota and reacts to exhaustion (it won't claim a job the quota can't place, and lock-cancels then reruns any job that loses headroom after the claim, see <a href="../why-gag/">why-gag</a>), but the quota itself is yours to size and own.</p>
 <h2 id="3-create-a-github-app-credential-secret">3. Create a GitHub App credential Secret<a class="headerlink" href="#3-create-a-github-app-credential-secret" title="Permanent link">&para;</a></h2>
 <p>Create this in the tenant's namespace:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">v1</span>
@@ -2917,18 +2904,11 @@ size and own.</p>
 <a id="__codelineno-5-13" name="__codelineno-5-13" href="#__codelineno-5-13"></a><span class="w">    </span><span class="no">-----END RSA PRIVATE KEY-----</span>
 </code></pre></div>
 <h2 id="4-create-your-gateway-and-runner-set-v2-recommended">4. Create your gateway and runner set (v2, recommended)<a class="headerlink" href="#4-create-your-gateway-and-runner-set-v2-recommended" title="Permanent link">&para;</a></h2>
-<p>The <strong>v2 API</strong> (<code>actions-gateway.com/v2beta1</code>) decomposes the single v1 CR into
-small, composable kinds: an <code>ActionsGateway</code> (identity + GitHub binding), a
-<code>RunnerTemplate</code> (a reusable pod shape), a <code>RunnerSet</code> per runner type, and an
-optional <code>EgressProxy</code>. The set below is feature-equivalent to the legacy v1
-example, a proxied gateway with a GPU runner set (priority tiers) and a Linux
-runner set.</p>
-<p><strong>You can skip authoring the template.</strong> GAG ships three validated worker pod
-shapes; <code>kubectl apply -k deploy/templates/plain</code> gives you the baseline one,
-and a <code>RunnerSet</code> then points at it with <code>templateRef: { name: plain, kind:
-ClusterRunnerTemplate }</code> in place of the inline <code>RunnerTemplate</code> below. If your
-jobs build container images, start from <code>kata-dind</code> instead. See the
-<a href="../operations/runner-template-library/">runner template library</a>.</p>
+<p>The <strong>v2 API</strong> (<code>actions-gateway.com/v2beta1</code>) decomposes the single v1 CR into small, composable kinds: an <code>ActionsGateway</code> (identity + GitHub binding), a <code>RunnerTemplate</code> (a reusable pod shape), a <code>RunnerSet</code> per runner type, and an optional <code>EgressProxy</code>.
+The set below is feature-equivalent to the legacy v1 example, a proxied gateway with a GPU runner set (priority tiers) and a Linux runner set.</p>
+<p><strong>You can skip authoring the template.</strong> GAG ships three validated worker pod shapes; <code>kubectl apply -k deploy/templates/plain</code> gives you the baseline one, and a <code>RunnerSet</code> then points at it with <code>templateRef: { name: plain, kind: ClusterRunnerTemplate }</code> in place of the inline <code>RunnerTemplate</code> below.
+If your jobs build container images, start from <code>kata-dind</code> instead.
+See the <a href="../operations/runner-template-library/">runner template library</a>.</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">actions-gateway.com/v2beta1</span>
 <a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">EgressProxy</span>
 <a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="nt">metadata</span><span class="p">:</span>
@@ -2975,55 +2955,46 @@ jobs build container images, start from <code>kata-dind</code> instead. See the
 <a id="__codelineno-6-44" name="__codelineno-6-44" href="#__codelineno-6-44"></a><span class="nt">spec</span><span class="p">:</span>
 <a id="__codelineno-6-45" name="__codelineno-6-45" href="#__codelineno-6-45"></a><span class="w">  </span><span class="nt">gatewayRef</span><span class="p">:</span><span class="w">  </span><span class="p p-Indicator">{</span><span class="nt"> name</span><span class="p">:</span><span class="w"> </span><span class="nv">team-a-gateway</span><span class="w"> </span><span class="p p-Indicator">}</span>
 <a id="__codelineno-6-46" name="__codelineno-6-46" href="#__codelineno-6-46"></a><span class="w">  </span><span class="nt">templateRef</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> name</span><span class="p">:</span><span class="w"> </span><span class="nv">default</span><span class="w"> </span><span class="p p-Indicator">}</span>
-<a id="__codelineno-6-47" name="__codelineno-6-47" href="#__codelineno-6-47"></a><span class="w">  </span><span class="c1"># Exactly one label: it is this set&#39;s scale-set name at GitHub and its single</span>
-<a id="__codelineno-6-48" name="__codelineno-6-48" href="#__codelineno-6-48"></a><span class="w">  </span><span class="c1"># runs-on match target (workflows say `runs-on: gpu`). Must be unique per gateway.</span>
-<a id="__codelineno-6-49" name="__codelineno-6-49" href="#__codelineno-6-49"></a><span class="w">  </span><span class="nt">runnerLabels</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="s">&quot;gpu&quot;</span><span class="p p-Indicator">]</span>
-<a id="__codelineno-6-50" name="__codelineno-6-50" href="#__codelineno-6-50"></a><span class="w">  </span><span class="c1"># priorityClassName values must be on the platform-owned allowlist: a watched</span>
-<a id="__codelineno-6-51" name="__codelineno-6-51" href="#__codelineno-6-51"></a><span class="w">  </span><span class="c1"># PriorityClassAllowlist CR, grown without a GMC restart (the</span>
-<a id="__codelineno-6-52" name="__codelineno-6-52" href="#__codelineno-6-52"></a><span class="w">  </span><span class="c1"># --allowed-priority-classes flag remains the fail-safe baseline).</span>
-<a id="__codelineno-6-53" name="__codelineno-6-53" href="#__codelineno-6-53"></a><span class="w">  </span><span class="c1"># Preemption is set on the PriorityClass object, not here.</span>
-<a id="__codelineno-6-54" name="__codelineno-6-54" href="#__codelineno-6-54"></a><span class="w">  </span><span class="nt">priorityTiers</span><span class="p">:</span>
-<a id="__codelineno-6-55" name="__codelineno-6-55" href="#__codelineno-6-55"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">priorityClassName</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">runner-critical</span>
-<a id="__codelineno-6-56" name="__codelineno-6-56" href="#__codelineno-6-56"></a><span class="w">      </span><span class="nt">threshold</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">5</span>
-<a id="__codelineno-6-57" name="__codelineno-6-57" href="#__codelineno-6-57"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">priorityClassName</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">runner-standard</span>
-<a id="__codelineno-6-58" name="__codelineno-6-58" href="#__codelineno-6-58"></a><span class="w">      </span><span class="nt">threshold</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">20</span>
-<a id="__codelineno-6-59" name="__codelineno-6-59" href="#__codelineno-6-59"></a><span class="nn">---</span>
-<a id="__codelineno-6-60" name="__codelineno-6-60" href="#__codelineno-6-60"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">actions-gateway.com/v2beta1</span>
-<a id="__codelineno-6-61" name="__codelineno-6-61" href="#__codelineno-6-61"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">RunnerSet</span>
-<a id="__codelineno-6-62" name="__codelineno-6-62" href="#__codelineno-6-62"></a><span class="nt">metadata</span><span class="p">:</span>
-<a id="__codelineno-6-63" name="__codelineno-6-63" href="#__codelineno-6-63"></a><span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">linux</span>
-<a id="__codelineno-6-64" name="__codelineno-6-64" href="#__codelineno-6-64"></a><span class="w">  </span><span class="nt">namespace</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">team-a</span>
-<a id="__codelineno-6-65" name="__codelineno-6-65" href="#__codelineno-6-65"></a><span class="nt">spec</span><span class="p">:</span>
-<a id="__codelineno-6-66" name="__codelineno-6-66" href="#__codelineno-6-66"></a><span class="w">  </span><span class="nt">gatewayRef</span><span class="p">:</span><span class="w">  </span><span class="p p-Indicator">{</span><span class="nt"> name</span><span class="p">:</span><span class="w"> </span><span class="nv">team-a-gateway</span><span class="w"> </span><span class="p p-Indicator">}</span>
-<a id="__codelineno-6-67" name="__codelineno-6-67" href="#__codelineno-6-67"></a><span class="w">  </span><span class="nt">templateRef</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> name</span><span class="p">:</span><span class="w"> </span><span class="nv">default</span><span class="w"> </span><span class="p p-Indicator">}</span>
-<a id="__codelineno-6-68" name="__codelineno-6-68" href="#__codelineno-6-68"></a><span class="w">  </span><span class="nt">runnerLabels</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="s">&quot;linux&quot;</span><span class="p p-Indicator">]</span>
-<a id="__codelineno-6-69" name="__codelineno-6-69" href="#__codelineno-6-69"></a><span class="w">  </span><span class="nt">maxWorkers</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">30</span>
+<a id="__codelineno-6-47" name="__codelineno-6-47" href="#__codelineno-6-47"></a><span class="w">  </span><span class="c1"># Every label is a runs-on match target, so a workflow can say `runs-on: gpu` or</span>
+<a id="__codelineno-6-48" name="__codelineno-6-48" href="#__codelineno-6-48"></a><span class="w">  </span><span class="c1"># `runs-on: [gpu, linux]`. The FIRST one is also this set&#39;s scale-set name at</span>
+<a id="__codelineno-6-49" name="__codelineno-6-49" href="#__codelineno-6-49"></a><span class="w">  </span><span class="c1"># GitHub, so it must be unique per gateway — and reordering renames the scale set.</span>
+<a id="__codelineno-6-50" name="__codelineno-6-50" href="#__codelineno-6-50"></a><span class="w">  </span><span class="nt">runnerLabels</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="s">&quot;gpu&quot;</span><span class="p p-Indicator">]</span>
+<a id="__codelineno-6-51" name="__codelineno-6-51" href="#__codelineno-6-51"></a><span class="w">  </span><span class="c1"># priorityClassName values must be on the platform-owned allowlist: a watched</span>
+<a id="__codelineno-6-52" name="__codelineno-6-52" href="#__codelineno-6-52"></a><span class="w">  </span><span class="c1"># PriorityClassAllowlist CR, grown without a GMC restart (the</span>
+<a id="__codelineno-6-53" name="__codelineno-6-53" href="#__codelineno-6-53"></a><span class="w">  </span><span class="c1"># --allowed-priority-classes flag remains the fail-safe baseline).</span>
+<a id="__codelineno-6-54" name="__codelineno-6-54" href="#__codelineno-6-54"></a><span class="w">  </span><span class="c1"># Preemption is set on the PriorityClass object, not here.</span>
+<a id="__codelineno-6-55" name="__codelineno-6-55" href="#__codelineno-6-55"></a><span class="w">  </span><span class="nt">priorityTiers</span><span class="p">:</span>
+<a id="__codelineno-6-56" name="__codelineno-6-56" href="#__codelineno-6-56"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">priorityClassName</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">runner-critical</span>
+<a id="__codelineno-6-57" name="__codelineno-6-57" href="#__codelineno-6-57"></a><span class="w">      </span><span class="nt">threshold</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">5</span>
+<a id="__codelineno-6-58" name="__codelineno-6-58" href="#__codelineno-6-58"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">priorityClassName</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">runner-standard</span>
+<a id="__codelineno-6-59" name="__codelineno-6-59" href="#__codelineno-6-59"></a><span class="w">      </span><span class="nt">threshold</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">20</span>
+<a id="__codelineno-6-60" name="__codelineno-6-60" href="#__codelineno-6-60"></a><span class="nn">---</span>
+<a id="__codelineno-6-61" name="__codelineno-6-61" href="#__codelineno-6-61"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">actions-gateway.com/v2beta1</span>
+<a id="__codelineno-6-62" name="__codelineno-6-62" href="#__codelineno-6-62"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">RunnerSet</span>
+<a id="__codelineno-6-63" name="__codelineno-6-63" href="#__codelineno-6-63"></a><span class="nt">metadata</span><span class="p">:</span>
+<a id="__codelineno-6-64" name="__codelineno-6-64" href="#__codelineno-6-64"></a><span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">linux</span>
+<a id="__codelineno-6-65" name="__codelineno-6-65" href="#__codelineno-6-65"></a><span class="w">  </span><span class="nt">namespace</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">team-a</span>
+<a id="__codelineno-6-66" name="__codelineno-6-66" href="#__codelineno-6-66"></a><span class="nt">spec</span><span class="p">:</span>
+<a id="__codelineno-6-67" name="__codelineno-6-67" href="#__codelineno-6-67"></a><span class="w">  </span><span class="nt">gatewayRef</span><span class="p">:</span><span class="w">  </span><span class="p p-Indicator">{</span><span class="nt"> name</span><span class="p">:</span><span class="w"> </span><span class="nv">team-a-gateway</span><span class="w"> </span><span class="p p-Indicator">}</span>
+<a id="__codelineno-6-68" name="__codelineno-6-68" href="#__codelineno-6-68"></a><span class="w">  </span><span class="nt">templateRef</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> name</span><span class="p">:</span><span class="w"> </span><span class="nv">default</span><span class="w"> </span><span class="p p-Indicator">}</span>
+<a id="__codelineno-6-69" name="__codelineno-6-69" href="#__codelineno-6-69"></a><span class="w">  </span><span class="nt">runnerLabels</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="s">&quot;linux&quot;</span><span class="p p-Indicator">]</span>
+<a id="__codelineno-6-70" name="__codelineno-6-70" href="#__codelineno-6-70"></a><span class="w">  </span><span class="nt">maxWorkers</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">30</span>
 </code></pre></div>
-<p>The GMC provisions the AGC, the proxy pool, RBAC, and network policies in
-<code>team-a</code> automatically. The <strong>namespace <code>ResourceQuota</code> is still platform-owned</strong>
-(Step 2). It is not a field on any of these CRs.</p>
-<p><strong>The proxy is optional in v2.</strong> Drop the <code>EgressProxy</code> and the <code>defaultProxyRef</code>
-and traffic egresses <strong>directly</strong> to GitHub, still <code>NetworkPolicy</code>-restricted to
-DNS + the GitHub CIDR allowlist, but without a stable per-tenant egress IP to
-allow-list. That collapses the minimal onboarding to three objects. For the
-proxy-less flow, reusable/cluster-default templates, multiple gateways per
-namespace, the 52-character name cap, and workload-identity credentials, see
-<a href="../operations/tenant-onboarding/#v2-api-multiple-gateways-per-namespace">Tenant Onboarding — v2 API</a>
-and <a href="../design/appendix-h-v2-api-decomposition/">Appendix H — v2 API decomposition</a>.</p>
-<p>Tenants requiring more than 250 concurrent sessions should shard across multiple <code>ActionsGateway</code> CRs, each backed by a separate GitHub App installation. See <a href="../design/appendix-a-capacity-slos/">Appendix A — Capacity Targets &amp; SLOs</a> for limits.</p>
+<p>The GMC provisions the AGC, the proxy pool, RBAC, and network policies in <code>team-a</code> automatically.
+The <strong>namespace <code>ResourceQuota</code> is still platform-owned</strong> (Step 2).
+It is not a field on any of these CRs.</p>
+<p><strong>The proxy is optional in v2.</strong> Drop the <code>EgressProxy</code> and the <code>defaultProxyRef</code> and traffic egresses <strong>directly</strong> to GitHub, still <code>NetworkPolicy</code>-restricted to DNS + the GitHub CIDR allowlist, but without a stable per-tenant egress IP to allow-list.
+That collapses the minimal onboarding to three objects.
+For the proxy-less flow, reusable/cluster-default templates, multiple gateways per namespace, the 52-character name cap, and workload-identity credentials, see <a href="../operations/tenant-onboarding/#v2-api-multiple-gateways-per-namespace">Tenant Onboarding — v2 API</a> and <a href="../design/appendix-h-v2-api-decomposition/">Appendix H — v2 API decomposition</a>.</p>
+<p>Tenants requiring more than 250 concurrent sessions should shard across multiple <code>ActionsGateway</code> CRs, each backed by a separate GitHub App installation.
+See <a href="../design/appendix-a-capacity-slos/">Appendix A — Capacity Targets &amp; SLOs</a> for limits.</p>
 <h2 id="legacy-the-v1alpha1-api-deprecated">Legacy: the <code>v1alpha1</code> API (deprecated)<a class="headerlink" href="#legacy-the-v1alpha1-api-deprecated" title="Permanent link">&para;</a></h2>
 <div class="admonition warning">
 <p class="admonition-title"><code>v1alpha1</code> is deprecated: new tenants should use v2 above</p>
-<p>The <code>actions-gateway.github.com/v1alpha1</code> single-CR API is still fully served
-and supported, but it is <strong><a href="../operations/v1alpha1-deprecation/">deprecated</a></strong>
-in favor of the decomposed v2 API, and it is <strong>removed at <code>v2.0.0</code></strong> (announced
-with <code>v1.3.0</code>, one release ahead, per the project's removal policy). Use it only
-if you have a specific reason not to adopt v2 yet; if you
-are already on v1, <a href="../operations/migration-v1-to-v2/"><code>gag-migrate</code></a> moves you
-to v2 without changing how your jobs are acquired.</p>
+<p>The <code>actions-gateway.github.com/v1alpha1</code> single-CR API is still fully served and supported, but it is <strong><a href="../operations/v1alpha1-deprecation/">deprecated</a></strong> in favor of the decomposed v2 API, and it is <strong>removed at <code>v2.0.0</code></strong> (announced with <code>v1.3.0</code>, one release ahead, per the project's removal policy).
+Use it only if you have a specific reason not to adopt v2 yet; if you are already on v1, <a href="../operations/migration-v1-to-v2/"><code>gag-migrate</code></a> moves you to v2 without changing how your jobs are acquired.</p>
 </div>
-<p>The v1 API expresses the whole gateway, proxy and all runner groups, in a single
-<code>ActionsGateway</code> CR:</p>
+<p>The v1 API expresses the whole gateway, proxy and all runner groups, in a single <code>ActionsGateway</code> CR:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">actions-gateway.github.com/v1alpha1</span>
 <a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ActionsGateway</span>
 <a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="nt">metadata</span><span class="p">:</span>
@@ -3082,10 +3053,12 @@ to v2 without changing how your jobs are acquired.</p>
 <p>When your GitHub App private key expires or is compromised, follow these steps to rotate credentials without downtime:</p>
 <ol>
 <li>
-<p><strong>Generate a new private key</strong> in the GitHub App settings (Settings → Developer settings → GitHub Apps → <code>&lt;app&gt;</code> → Private keys → Generate a private key). Download the <code>.pem</code> file.</p>
+<p><strong>Generate a new private key</strong> in the GitHub App settings (Settings → Developer settings → GitHub Apps → <code>&lt;app&gt;</code> → Private keys → Generate a private key).
+   Download the <code>.pem</code> file.</p>
 </li>
 <li>
-<p><strong>Create a new Secret</strong> with the new key. Use a distinct name from the old Secret:</p>
+<p><strong>Create a new Secret</strong> with the new key.
+   Use a distinct name from the old Secret:</p>
 </li>
 </ol>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">v1</span>
@@ -3108,7 +3081,8 @@ to v2 without changing how your jobs are acquired.</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>kubectl<span class="w"> </span>patch<span class="w"> </span>actionsgateway<span class="w"> </span>-n<span class="w"> </span>team-a<span class="w"> </span>team-a-gateway<span class="w"> </span><span class="se">\</span>
 <a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a><span class="w">  </span>--type<span class="o">=</span>merge<span class="w"> </span>-p<span class="w"> </span><span class="s1">&#39;{&quot;spec&quot;:{&quot;gitHubAppRef&quot;:{&quot;name&quot;:&quot;my-github-app-v2&quot;}}}&#39;</span>
 </code></pre></div>
-<p>The GMC detects the Secret reference change, updates the AGC pod template (including an <code>actions-gateway/github-app-secret</code> annotation that records the new Secret name), and triggers a rolling update. The new pod mounts the new Secret and immediately begins using the new credentials.</p>
+<p>The GMC detects the Secret reference change, updates the AGC pod template (including an <code>actions-gateway/github-app-secret</code> annotation that records the new Secret name), and triggers a rolling update.
+   The new pod mounts the new Secret and immediately begins using the new credentials.</p>
 <ol>
 <li><strong>Confirm the rollout completed:</strong></li>
 </ol>
@@ -3130,8 +3104,14 @@ to v2 without changing how your jobs are acquired.</p>
 <ol>
 <li><strong>Revoke the old key</strong> in the GitHub App settings.</li>
 </ol>
-<p><strong>Important:</strong> Do not update the Secret in-place. The GMC watches the <code>gitHubAppRef.name</code> reference, not the Secret's contents. Changing the Secret data without changing the reference name does not trigger an AGC rollout. The AGC continues using the cached token derived from the old key until it restarts or the token expires. Creating a new Secret and updating the reference is the correct rotation path.</p>
-<p><strong>If the referenced Secret is deleted before you complete the rotation</strong>, the GMC sets a <code>CredentialUnavailable=True</code> condition on the <code>ActionsGateway</code> CR and stops reconciling child resources. Recreating the Secret (with the same name, or updating <code>gitHubAppRef.name</code>) clears the condition and resumes normal operation. To inspect the condition:</p>
+<p><strong>Important:</strong> Do not update the Secret in-place.
+The GMC watches the <code>gitHubAppRef.name</code> reference, not the Secret's contents.
+Changing the Secret data without changing the reference name does not trigger an AGC rollout.
+The AGC continues using the cached token derived from the old key until it restarts or the token expires.
+Creating a new Secret and updating the reference is the correct rotation path.</p>
+<p><strong>If the referenced Secret is deleted before you complete the rotation</strong>, the GMC sets a <code>CredentialUnavailable=True</code> condition on the <code>ActionsGateway</code> CR and stops reconciling child resources.
+Recreating the Secret (with the same name, or updating <code>gitHubAppRef.name</code>) clears the condition and resumes normal operation.
+To inspect the condition:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a>kubectl<span class="w"> </span>get<span class="w"> </span>actionsgateway<span class="w"> </span>-n<span class="w"> </span>team-a<span class="w"> </span>team-a-gateway<span class="w"> </span>-o<span class="w"> </span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">&#39;{.status.conditions}&#39;</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>jq<span class="w"> </span>.
 </code></pre></div>
 

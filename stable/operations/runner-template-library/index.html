@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/1.4.0/operations/runner-template-library/">
+        <link rel="canonical" href="https://actions-gateway.com/1.5.0/operations/runner-template-library/">
       
       
         <link rel="prev" href="../resourcequota-sizing/">
@@ -63,15 +63,15 @@
   <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/IBMPlexSans-Bold.woff2">
   <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/MonaspaceNeon-Medium.woff2">
   
-  <meta property="og:image" content="https://actions-gateway.com/1.4.0assets/social-preview.png">
+  <meta property="og:image" content="https://actions-gateway.com/1.5.0assets/social-preview.png">
   <meta property="og:image:width" content="1280">
   <meta property="og:image:height" content="640">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:image" content="https://actions-gateway.com/1.4.0assets/social-preview.png">
+  <meta name="twitter:image" content="https://actions-gateway.com/1.5.0assets/social-preview.png">
   
-  <link rel="apple-touch-icon" href="https://actions-gateway.com/1.4.0assets/apple-touch-icon.png">
-  <link rel="alternate icon" href="https://actions-gateway.com/1.4.0assets/favicon.ico">
-  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/1.4.0assets/icon-512.png">
+  <link rel="apple-touch-icon" href="https://actions-gateway.com/1.5.0assets/apple-touch-icon.png">
+  <link rel="alternate icon" href="https://actions-gateway.com/1.5.0assets/favicon.ico">
+  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/1.5.0assets/icon-512.png">
   
   <script type="application/ld+json">
   {
@@ -79,14 +79,14 @@
     "@type": "SoftwareSourceCode",
     "name": "GitHub Actions Gateway",
     "description": "An Actions Runner Controller (ARC) alternative for self-hosted GitHub Actions runners on multi-tenant Kubernetes \u2014 oversubscribe a shared quota, recover evicted jobs automatically, and isolate every tenant\u0027s GitHub egress.",
-    "url": "https://actions-gateway.com/1.4.0",
+    "url": "https://actions-gateway.com/1.5.0",
     "codeRepository": "https://github.com/actions-gateway/github-actions-gateway",
     "programmingLanguage": "Go",
     "license": "https://www.apache.org/licenses/LICENSE-2.0",
     "author": {
       "@type": "Organization",
       "name": "GitHub Actions Gateway",
-      "url": "https://actions-gateway.com/1.4.0"
+      "url": "https://actions-gateway.com/1.5.0"
     }
   }
   </script>
@@ -95,8 +95,8 @@
     "@context": "https://schema.org",
     "@type": "Organization",
     "name": "GitHub Actions Gateway",
-    "url": "https://actions-gateway.com/1.4.0",
-    "logo": "https://actions-gateway.com/1.4.0assets/icon-512.png",
+    "url": "https://actions-gateway.com/1.5.0",
+    "logo": "https://actions-gateway.com/1.5.0assets/icon-512.png",
     "sameAs": ["https://github.com/actions-gateway/github-actions-gateway"]
   }
   </script>
@@ -132,8 +132,8 @@
         <aside class="md-banner">
           <div class="md-banner__inner md-grid md-typeset">
             
-            <strong>v1.4.0 is here.</strong>
-      Consent-gated cross-namespace egress proxy sharing, a curated runner template library you apply with one command, and v2 worker-capacity conditions exported as Prometheus gauges.
+            <strong>v1.5.0 is here.</strong>
+      A per-tenant GitHub runner group boundary, multi-label runner sets that migrate a <code>runs-on</code> array unedited, and job duration and latency metrics on the acquisition tier every new tenant runs.
           </div>
           
         </aside>
@@ -145,7 +145,7 @@
           <aside class="md-banner md-banner--warning">
             <div class="md-banner__inner md-grid md-typeset">
               You're not viewing the latest release.
-  <a href="https://actions-gateway.com/1.4.0"><strong>Go to the current docs.</strong></a>
+  <a href="https://actions-gateway.com/1.5.0"><strong>Go to the current docs.</strong></a>
 
             </div>
             <script>var el=document.querySelector("[data-md-component=outdated]"),base=new URL("../.."),outdated=__md_get("__outdated",sessionStorage,base);!0===outdated&&el&&(el.hidden=!1)</script>
@@ -2902,11 +2902,8 @@
 
 
 <h1 id="runner-template-library">Runner template library<a class="headerlink" href="#runner-template-library" title="Permanent link">&para;</a></h1>
-<p>GAG ships three ready-to-apply worker pod shapes under
-<a href="https://github.com/actions-gateway/github-actions-gateway/tree/main/deploy/templates"><code>deploy/templates/</code></a>,
-so you can start from a validated template instead of hand-authoring one. A
-<code>RunnerSet</code> picks one by name, and moving to your own template later is the same
-field pointing somewhere else.</p>
+<p>GAG ships three ready-to-apply worker pod shapes under <a href="https://github.com/actions-gateway/github-actions-gateway/tree/main/deploy/templates"><code>deploy/templates/</code></a>, so you can start from a validated template instead of hand-authoring one.
+A <code>RunnerSet</code> picks one by name, and moving to your own template later is the same field pointing somewhere else.</p>
 <p>Apply one, point a <code>RunnerSet</code> at it, done:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>kubectl<span class="w"> </span>apply<span class="w"> </span>-k<span class="w"> </span>deploy/templates/plain
 </code></pre></div>
@@ -2923,9 +2920,8 @@ field pointing somewhere else.</p>
 <a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a><span class="w">  </span><span class="nt">runnerLabels</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="s">&quot;linux&quot;</span><span class="p p-Indicator">]</span>
 </code></pre></div>
 <h2 id="choosing-an-entry">Choosing an entry<a class="headerlink" href="#choosing-an-entry" title="Permanent link">&para;</a></h2>
-<p>Pick by what your jobs do. Workload names are rows in this table, not template
-names: "kind end-to-end tests" is the Docker-in-Docker shape, delivered as
-<code>kata-dind</code> or <code>privileged-dind</code> depending on what your nodes can do.</p>
+<p>Pick by what your jobs do.
+Workload names are rows in this table, not template names: "kind end-to-end tests" is the Docker-in-Docker shape, delivered as <code>kata-dind</code> or <code>privileged-dind</code> depending on what your nodes can do.</p>
 <table>
 <thead>
 <tr>
@@ -2957,68 +2953,39 @@ names: "kind end-to-end tests" is the Docker-in-Docker shape, delivered as
 </tr>
 </tbody>
 </table>
-<p>Prefer <code>kata-dind</code> when you can have it, and a rootless builder before either. A
-privileged dockerd exposes the host kernel to every job that lands on that
-template, so a container escape from any one job reaches the node.</p>
-<p><strong>But "when you can have it" excludes more than it sounds like.</strong> Kata needs a
-KVM-capable host, which on a cloud provider means nested virtualisation or bare
-metal, and that is not universally available:</p>
+<p>Prefer <code>kata-dind</code> when you can have it, and a rootless builder before either.
+A privileged dockerd exposes the host kernel to every job that lands on that template, so a container escape from any one job reaches the node.</p>
+<p><strong>But "when you can have it" excludes more than it sounds like.</strong> Kata needs a KVM-capable host, which on a cloud provider means nested virtualisation or bare metal, and that is not universally available:</p>
 <ul>
-<li><strong>GPU builds are the clearest case.</strong> Getting a GPU into a Kata guest needs
-  VFIO/IOMMU passthrough, which a cloud instance does not expose to a nested
-  guest; NVIDIA's GPU Operator supports Kata in single-GPU-passthrough mode only,
-  and does not support configuring only some GPUs on a node for it. If your jobs
-  build on GPU instances, <code>privileged-dind</code> is the realistic path, not a
-  concession.</li>
-<li><strong>CPU architecture and machine family.</strong> Google Compute Engine excludes E2,
-  memory-optimized, H4D, and every AMD- and Arm-powered VM from nested
-  virtualisation. On AWS, nested virtualisation means a <code>.metal</code> instance.</li>
-<li>Where nested virtualisation does work, expect a measured performance cost:
-  GCE documents 10% or more for CPU-bound work, potentially more for I/O-bound.</li>
+<li><strong>GPU builds are the clearest case.</strong> Getting a GPU into a Kata guest needs VFIO/IOMMU passthrough, which a cloud instance does not expose to a nested guest; NVIDIA's GPU Operator supports Kata in single-GPU-passthrough mode only, and does not support configuring only some GPUs on a node for it.
+  If your jobs build on GPU instances, <code>privileged-dind</code> is the realistic path, not a concession.</li>
+<li><strong>CPU architecture and machine family.</strong> Google Compute Engine excludes E2, memory-optimized, H4D, and every AMD- and Arm-powered VM from nested virtualisation.
+  On AWS it is a per-instance opt-in confined to selected Intel families, so an AMD, Graviton, or GPU instance still means <code>.metal</code> or nothing (the <a href="../kata-dind-workloads/#prerequisite--nested-virtualization-nodes">current list</a>, fetched 2026-08-12).</li>
+<li>Where nested virtualisation does work, expect a measured performance cost: GCE documents 10% or more for CPU-bound work, potentially more for I/O-bound.</li>
 </ul>
-<p>So treat this as a real choice rather than a fallback with a bad reputation. If
-Kata is unavailable to you, the meaningful comparison is <code>privileged-dind</code>
-against a rootless builder, and the question is whether your jobs genuinely need
-a Docker daemon. Where you land on <code>privileged-dind</code>, confine it: a dedicated
-node pool, trusted jobs only, and never a fork's pull request.</p>
+<p>So treat this as a real choice rather than a fallback with a bad reputation.
+If Kata is unavailable to you, the meaningful comparison is <code>privileged-dind</code> against a rootless builder, and the question is whether your jobs genuinely need a Docker daemon.
+Where you land on <code>privileged-dind</code>, confine it: a dedicated node pool, trusted jobs only, and never a fork's pull request.</p>
 <h2 id="prerequisites-you-supply">Prerequisites you supply<a class="headerlink" href="#prerequisites-you-supply" title="Permanent link">&para;</a></h2>
-<p>GAG never installs runtime handlers, <code>RuntimeClass</code> objects, or node pools. That
-is deliberate and unchanged by the library
-(<a href="../kata-dind-workloads/">Running DinD workloads under Kata</a> covers the split in
-full). Each entry needs a different amount of groundwork.</p>
+<p>GAG never installs runtime handlers, <code>RuntimeClass</code> objects, or node pools.
+That is deliberate and unchanged by the library (<a href="../kata-dind-workloads/">Running DinD workloads under Kata</a> covers the split in full).
+Each entry needs a different amount of groundwork.</p>
 <h3 id="all-three">All three<a class="headerlink" href="#all-three" title="Permanent link">&para;</a></h3>
-<p>The v2 CRDs must be installed (the opt-in <code>actions-gateway-crds-v2</code> chart), and
-the namespace must be a marked tenant namespace per
-<a href="../tenant-onboarding/">Tenant onboarding</a>.</p>
+<p>The v2 CRDs must be installed (the opt-in <code>actions-gateway-crds-v2</code> chart), and the namespace must be a marked tenant namespace per <a href="../tenant-onboarding/">Tenant onboarding</a>.</p>
 <h3 id="kata-dind-and-privileged-dind"><code>kata-dind</code> and <code>privileged-dind</code><a class="headerlink" href="#kata-dind-and-privileged-dind" title="Permanent link">&para;</a></h3>
-<p><strong>A build-capable runner image.</strong> Both ship <code>spec.workerImage</code> set to
-<code>example.invalid/build-capable-runner:replace-me</code> and you must replace it. The
-runner container needs a Docker CLI on <code>PATH</code>; the sidecar supplies the daemon,
-not the client, and the stock <code>ghcr.io/actions/actions-runner</code> image ships
-neither. The reserved <code>.invalid</code> host is chosen so an unreplaced value fails at
-image pull rather than succeeding into a job that dies on <code>docker: not found</code>
-twenty minutes in. <code>scripts/dogfood/e2e-runner/Dockerfile</code> in this repo is a
-worked example.</p>
-<p><strong>Watch the worker pod, not the <code>RunnerSet</code>, when you suspect an unreplaced
-image.</strong> The pod reports the problem within seconds: it binds to a node and then
-sits Pending in <code>ImagePullBackOff</code>, with a <code>Failed</code> event naming the host it
-could not resolve.</p>
+<p><strong>A build-capable runner image.</strong> Both ship <code>spec.workerImage</code> set to <code>example.invalid/build-capable-runner:replace-me</code> and you must replace it.
+The runner container needs a Docker CLI on <code>PATH</code>; the sidecar supplies the daemon, not the client, and the stock <code>ghcr.io/actions/actions-runner</code> image ships neither.
+The reserved <code>.invalid</code> host is chosen so an unreplaced value fails at image pull rather than succeeding into a job that dies on <code>docker: not found</code> twenty minutes in.
+<code>scripts/dogfood/e2e-runner/Dockerfile</code> in this repo is a worked example.</p>
+<p><strong>Watch the worker pod, not the <code>RunnerSet</code>, when you suspect an unreplaced image.</strong> The pod reports the problem within seconds: it binds to a node and then sits Pending in <code>ImagePullBackOff</code>, with a <code>Failed</code> event naming the host it could not resolve.</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>kubectl<span class="w"> </span>get<span class="w"> </span>pods<span class="w"> </span>-n<span class="w"> </span>team-a<span class="w"> </span>-l<span class="w"> </span>actions-gateway.com/runner-set<span class="o">=</span>linux
 </code></pre></div>
-<p>The <code>RunnerSet</code> stays quiet for much longer, because a pod that cannot pull its
-image still scheduled perfectly well. <code>WorkersUnschedulable</code> reports only the
-scheduler's verdict, so it stays False and
-<code>actions_gateway_runnerset_workers_unschedulable</code> stays 0 for the whole window.
-The first
-<code>RunnerSet</code>-level signal is the <code>WorkerPodStuckPending</code> Warning event the reaper
-emits when it deletes the pod at <code>spec.pendingPodDeadline</code>, 10 minutes after the
-pod was created unless you lower that field. Until then the pod holds a
-concurrency slot, and each further job the set acquires starts the same cycle
-again.</p>
-<p><strong>A namespace at PSA <code>privileged</code>, plus GAG's three gates.</strong> Both entries need
-capabilities that Pod Security Standards <code>baseline</code> forbids, and PSA has no
-Kata-aware level in between. Tenants cannot self-elevate: the namespace needs
-all four settings in one object.</p>
+<p>The <code>RunnerSet</code> stays quiet for much longer, because a pod that cannot pull its image still scheduled perfectly well.
+<code>WorkersUnschedulable</code> reports only the scheduler's verdict, so it stays False and <code>actions_gateway_runnerset_workers_unschedulable</code> stays 0 for the whole window.
+The first <code>RunnerSet</code>-level signal is the <code>WorkerPodStuckPending</code> Warning event the reaper emits when it deletes the pod at <code>spec.pendingPodDeadline</code>, 10 minutes after the pod was created unless you lower that field.
+Until then the pod holds a concurrency slot, and each further job the set acquires starts the same cycle again.</p>
+<p><strong>A namespace at PSA <code>privileged</code>, plus GAG's three gates.</strong> Both entries need capabilities that Pod Security Standards <code>baseline</code> forbids, and PSA has no Kata-aware level in between.
+Tenants cannot self-elevate: the namespace needs all four settings in one object.</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">v1</span>
 <a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Namespace</span>
 <a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="nt">metadata</span><span class="p">:</span>
@@ -3031,53 +2998,37 @@ all four settings in one object.</p>
 <a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a><span class="w">  </span><span class="nt">annotations</span><span class="p">:</span>
 <a id="__codelineno-3-11" name="__codelineno-3-11" href="#__codelineno-3-11"></a><span class="w">    </span><span class="nt">actions-gateway.com/allow-profile-downgrade</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">allowed</span><span class="w"> </span><span class="c1"># platform-set consent</span>
 </code></pre></div>
-<p>Understand what this costs before you set it. Under the <code>privileged</code> profile
-GAG's <code>applySecurityDefaults</code> gap-fill becomes a no-op by design, so the template
-carries the entire security posture of its workers. That is the trade the library
-is meant to improve on: you get a vetted capability set instead of a hand-rolled
-one, not an exemption from thinking about it.</p>
+<p>Understand what this costs before you set it.
+Under the <code>privileged</code> profile GAG's <code>applySecurityDefaults</code> gap-fill becomes a no-op by design, so the template carries the entire security posture of its workers.
+That is the trade the library is meant to improve on: you get a vetted capability set instead of a hand-rolled one, not an exemption from thinking about it.</p>
 <h3 id="kata-dind-only"><code>kata-dind</code> only<a class="headerlink" href="#kata-dind-only" title="Permanent link">&para;</a></h3>
 <ul>
-<li>Nodes with nested virtualisation, and a Kata runtime installed on them
-  (kata-deploy or your distribution's equivalent).</li>
-<li>A <code>RuntimeClass</code> named <strong><code>kata</code></strong>. kata-deploy registers handler-named classes
-  (<code>kata-qemu</code>, <code>kata-clh</code>, and so on); either register <code>kata</code> as an alias or
-  patch <code>runtimeClassName</code> to the handler you have.</li>
-<li>A default <code>StorageClass</code> that supports <code>volumeMode: Block</code>. The template leaves
-  <code>storageClassName</code> unset so your cluster default applies; most CSI block
-  drivers qualify, most file and NFS drivers do not. Set it explicitly if yours
-  does not.</li>
-<li>A metadata control: Workload Identity, IMDSv2 with hop limit 1, or a
-  <code>NetworkPolicy</code> denying <code>169.254.169.254/32</code>. Kata bounds the kernel, not the
-  pod network. GAG measured GKE's service-account token endpoint answering
-  <code>HTTP 200</code> from inside a Kata guest, so the metadata server stays reachable
-  even though the container escape path does not.</li>
+<li>Nodes with nested virtualisation, and a Kata runtime installed on them (kata-deploy or your distribution's equivalent).</li>
+<li>A <code>RuntimeClass</code> named <strong><code>kata</code></strong>. kata-deploy registers handler-named classes (<code>kata-qemu</code>, <code>kata-clh</code>, and so on); either register <code>kata</code> as an alias or patch <code>runtimeClassName</code> to the handler you have.</li>
+<li>A default <code>StorageClass</code> that supports <code>volumeMode: Block</code>.
+  The template leaves <code>storageClassName</code> unset so your cluster default applies; most CSI block drivers qualify, most file and NFS drivers do not.
+  Set it explicitly if yours does not.</li>
+<li>A metadata control: Workload Identity, IMDSv2 with hop limit 1, or a <code>NetworkPolicy</code> denying <code>169.254.169.254/32</code>.
+  Kata bounds the kernel, not the pod network.
+  GAG measured GKE's service-account token endpoint answering <code>HTTP 200</code> from inside a Kata guest, so the metadata server stays reachable even though the container escape path does not.</li>
 </ul>
 <h2 id="nothing-ships-as-a-cluster-default">Nothing ships as a cluster default<a class="headerlink" href="#nothing-ships-as-a-cluster-default" title="Permanent link">&para;</a></h2>
-<p>Every entry is opt-in and applied on its own. There is no aggregate
-kustomization that applies all three, and no entry carries the
-<code>actions-gateway.com/is-default-template</code> annotation.</p>
-<p>That is a deliberate line rather than an oversight. A <code>ClusterRunnerTemplate</code>
-marked as the cluster default applies to every <code>RunnerSet</code> that names no
-template, so shipping one as a default would silently hand a privileged pod
-shape to sets that never asked for it. Marking a default is your decision; the
-resolution order is <code>templateRef</code>, then the gateway default, then the
-cluster-default annotation.</p>
+<p>Every entry is opt-in and applied on its own.
+There is no aggregate kustomization that applies all three, and no entry carries the <code>actions-gateway.com/is-default-template</code> annotation.</p>
+<p>That is a deliberate line rather than an oversight.
+A <code>ClusterRunnerTemplate</code> marked as the cluster default applies to every <code>RunnerSet</code> that names no template, so shipping one as a default would silently hand a privileged pod shape to sets that never asked for it.
+Marking a default is your decision; the resolution order is <code>templateRef</code>, then the gateway default, then the cluster-default annotation.</p>
 <h2 id="forking-an-entry">Forking an entry<a class="headerlink" href="#forking-an-entry" title="Permanent link">&para;</a></h2>
 <p>Two supported paths.</p>
-<p><strong>Copy it.</strong> Take <code>deploy/templates/&lt;entry&gt;/template.yaml</code>, rename the object,
-edit, and apply. Simple, and you own the result including any future fix that
-lands upstream.</p>
-<p><strong>Patch it with kustomize.</strong> Keeps you on the shipped base, so an upstream fix
-reaches you on the next pull.</p>
-<p>Read the next section before you write the patch. It is the single most
-expensive thing to get wrong here, and it fails silently.</p>
+<p><strong>Copy it.</strong> Take <code>deploy/templates/&lt;entry&gt;/template.yaml</code>, rename the object, edit, and apply.
+Simple, and you own the result including any future fix that lands upstream.</p>
+<p><strong>Patch it with kustomize.</strong> Keeps you on the shipped base, so an upstream fix reaches you on the next pull.</p>
+<p>Read the next section before you write the patch.
+It is the single most expensive thing to get wrong here, and it fails silently.</p>
 <h3 id="a-strategic-merge-patch-against-a-custom-resource-deletes-list-entries">A strategic-merge patch against a custom resource deletes list entries<a class="headerlink" href="#a-strategic-merge-patch-against-a-custom-resource-deletes-list-entries" title="Permanent link">&para;</a></h3>
-<p>kustomize decides how to merge a list from the OpenAPI schema of the type being
-patched. It ships schemas for built-in Kubernetes types only, so for a
-<code>ClusterRunnerTemplate</code> it has none, and a strategic-merge patch degrades to an
-RFC 7386 JSON merge patch. Under RFC 7386 a list is <strong>replaced wholesale</strong>
-rather than merged by key.</p>
+<p>kustomize decides how to merge a list from the OpenAPI schema of the type being patched.
+It ships schemas for built-in Kubernetes types only, so for a <code>ClusterRunnerTemplate</code> it has none, and a strategic-merge patch degrades to an RFC 7386 JSON merge patch.
+Under RFC 7386 a list is <strong>replaced wholesale</strong> rather than merged by key.</p>
 <p>Concretely: this patch, which reads like it adjusts one field,</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="nt">patches</span><span class="p">:</span>
 <a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">patch</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">|</span>
@@ -3094,17 +3045,16 @@ rather than merged by key.</p>
 <a id="__codelineno-4-13" name="__codelineno-4-13" href="#__codelineno-4-13"></a><span class="w">                  </span><span class="no">requests:</span>
 <a id="__codelineno-4-14" name="__codelineno-4-14" href="#__codelineno-4-14"></a><span class="w">                    </span><span class="no">cpu: &quot;3&quot;</span>
 </code></pre></div>
-<p>produces a <code>dind</code> container with <em>only</em> <code>name</code> and <code>resources</code>. Its <code>image</code>,
-<code>restartPolicy: Always</code>, the entire capability set, the startup probe and the
-<code>volumeDevices</code> binding the block volume are gone. <code>kubectl kustomize</code> prints
-this and exits <strong>0</strong>. The pod then fails at admission or, worse, starts without
-the daemon the runner is configured to reach. Measured on kustomize v5.8.1, as
-embedded in kubectl 1.36.</p>
-<p>Scalars and maps are safe either way. Lists are not, and <code>containers</code>,
-<code>initContainers</code>, <code>volumes</code> and <code>tolerations</code> are all lists.</p>
+<p>produces a <code>dind</code> container with <em>only</em> <code>name</code> and <code>resources</code>.
+Its <code>image</code>, <code>restartPolicy: Always</code>, the entire capability set, the startup probe and the <code>volumeDevices</code> binding the block volume are gone.
+<code>kubectl kustomize</code> prints this and exits <strong>0</strong>.
+The pod then fails at admission or, worse, starts without the daemon the runner is configured to reach.
+Measured on kustomize v5.8.1, as embedded in kubectl 1.36.</p>
+<p>Scalars and maps are safe either way.
+Lists are not, and <code>containers</code>, <code>initContainers</code>, <code>volumes</code> and <code>tolerations</code> are all lists.</p>
 <p>There are two ways out.</p>
-<p><strong>Option 1, JSON 6902. What this repo uses, and the one to reach for.</strong> A
-targeted op list needs no schema, so it cannot degrade:</p>
+<p><strong>Option 1, JSON 6902.
+What this repo uses, and the one to reach for.</strong> A targeted op list needs no schema, so it cannot degrade:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="c1"># my-overlay/kustomization.yaml</span>
 <a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">kustomize.config.k8s.io/v1beta1</span>
 <a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Kustomization</span>
@@ -3128,12 +3078,9 @@ targeted op list needs no schema, so it cannot degrade:</p>
 <a id="__codelineno-5-21" name="__codelineno-5-21" href="#__codelineno-5-21"></a><span class="w">        </span><span class="no">path: /spec/podTemplate/spec/initContainers/0/resources/requests/cpu</span>
 <a id="__codelineno-5-22" name="__codelineno-5-22" href="#__codelineno-5-22"></a><span class="w">        </span><span class="no">value: &quot;3&quot;</span>
 </code></pre></div>
-<p>The cost is that a JSON pointer carries a list index, so a patch survives on the
-base's ordering. Pin what you depend on with a comment, or prefer the whole-map
-<code>op: replace</code> over a deep path when the base might reorder.</p>
-<p><strong>Option 2, teach kustomize the schema.</strong> Supply an OpenAPI document that
-declares the merge key, and strategic merge starts behaving the way it does for
-a <code>Deployment</code>:</p>
+<p>The cost is that a JSON pointer carries a list index, so a patch survives on the base's ordering.
+Pin what you depend on with a comment, or prefer the whole-map <code>op: replace</code> over a deep path when the base might reorder.</p>
+<p><strong>Option 2, teach kustomize the schema.</strong> Supply an OpenAPI document that declares the merge key, and strategic merge starts behaving the way it does for a <code>Deployment</code>:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="p">{</span>
 <a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="w">  </span><span class="nt">&quot;definitions&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
 <a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="w">    </span><span class="nt">&quot;com.actions-gateway.v2beta1.ClusterRunnerTemplate&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
@@ -3162,62 +3109,37 @@ a <code>Deployment</code>:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="nt">openapi</span><span class="p">:</span>
 <a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="w">  </span><span class="nt">path</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">crt-schema.json</span>
 </code></pre></div>
-<p>Verified working under kubectl's embedded kustomize, with no standalone
-<code>kustomize</code> binary: the patch above then changes only <code>requests.cpu</code> and leaves
-the image, <code>restartPolicy</code>, capabilities, probe and <code>volumeDevices</code> intact, and
-strategic merges against built-in types in the same kustomization keep working.</p>
-<p><strong>The trap in option 2, which has the same signature as the bug.</strong> A custom
-schema <em>replaces</em> kustomize's built-in one rather than extending it, so a
-<code>$ref</code> into a built-in definition does not resolve. Writing the obvious thing,</p>
+<p>Verified working under kubectl's embedded kustomize, with no standalone <code>kustomize</code> binary: the patch above then changes only <code>requests.cpu</code> and leaves the image, <code>restartPolicy</code>, capabilities, probe and <code>volumeDevices</code> intact, and strategic merges against built-in types in the same kustomization keep working.</p>
+<p><strong>The trap in option 2, which has the same signature as the bug.</strong> A custom schema <em>replaces</em> kustomize's built-in one rather than extending it, so a <code>$ref</code> into a built-in definition does not resolve.
+Writing the obvious thing,</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="nt">&quot;podTemplate&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nt">&quot;$ref&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;#/definitions/io.k8s.api.core.v1.PodTemplateSpec&quot;</span><span class="w"> </span><span class="p">}</span>
 </code></pre></div>
-<p>leaves the ref dangling, kustomize finds no merge key, and it falls straight
-back to wholesale replacement, silently, at exit 0. That is indistinguishable
-from having written no schema at all. Declare the merge keys inline on the paths
-you patch, as above, and confirm by rendering and diffing rather than by the
-exit code.</p>
-<p>This repo stays on option 1 because option 2 means hand-maintaining a schema
-against a CRD that changes, and a schema that drifts fails open.</p>
-<p>GAG's own end-to-end suite is the worked example for option 1: the overlays
-under <code>deploy/dogfood-e2e/overlays/</code> consume these bases and patch in their
-cluster specifics and nothing else. <code>make template-library-check</code> rejects a
-strategic-merge patch against a <code>ClusterRunnerTemplate</code> in this repo, and
-compares each overlay's render against its base to catch a list that lost
-entries by any route.</p>
+<p>leaves the ref dangling, kustomize finds no merge key, and it falls straight back to wholesale replacement, silently, at exit 0.
+That is indistinguishable from having written no schema at all.
+Declare the merge keys inline on the paths you patch, as above, and confirm by rendering and diffing rather than by the exit code.</p>
+<p>This repo stays on option 1 because option 2 means hand-maintaining a schema against a CRD that changes, and a schema that drifts fails open.</p>
+<p>GAG's own end-to-end suite is the worked example for option 1: the overlays under <code>deploy/dogfood-e2e/overlays/</code> consume these bases and patch in their cluster specifics and nothing else.
+<code>make template-library-check</code> rejects a strategic-merge patch against a <code>ClusterRunnerTemplate</code> in this repo, and compares each overlay's render against its base to catch a list that lost entries by any route.</p>
 <h2 id="sizing">Sizing<a class="headerlink" href="#sizing" title="Permanent link">&para;</a></h2>
-<p>The resource requests and limits in <code>kata-dind</code> and <code>privileged-dind</code> are
-measured, not guessed, but they are measured on <strong>GAG's own end-to-end suite</strong>:
-a compile-heavy runner driving a nested Kubernetes cluster inside the sidecar.
-That is a plausible starting point for an image-building runner and a poor one
-for a job with a different shape.</p>
-<p>Two things about the Kata entry that do not transfer from ordinary pod sizing:
-CPU limits become the guest's vCPU count, and memory limits become the guest's
-entire RAM including page cache. There is none of the burst-to-node headroom the
-privileged variant's requests-only CPU gets. Add the <code>RuntimeClass</code> overhead
-(250m CPU, 160Mi) when you size nodes.</p>
+<p>The resource requests and limits in <code>kata-dind</code> and <code>privileged-dind</code> are measured, not guessed, but they are measured on <strong>GAG's own end-to-end suite</strong>: a compile-heavy runner driving a nested Kubernetes cluster inside the sidecar.
+That is a plausible starting point for an image-building runner and a poor one for a job with a different shape.</p>
+<p>Two things about the Kata entry that do not transfer from ordinary pod sizing: CPU limits become the guest's vCPU count, and memory limits become the guest's entire RAM including page cache.
+There is none of the burst-to-node headroom the privileged variant's requests-only CPU gets.
+Add the <code>RuntimeClass</code> overhead (250m CPU, 160Mi) when you size nodes.</p>
 <p>Re-measure for your workload: <a href="../worker-rightsizing/">Worker rightsizing</a>.</p>
 <h2 id="what-may-be-added-to-the-library">What may be added to the library<a class="headerlink" href="#what-may-be-added-to-the-library" title="Permanent link">&para;</a></h2>
-<p>Only what CI exercises. A shipped golden template is an implicit claim that it
-works, so membership is gated on evidence rather than on plausibility:</p>
+<p>Only what CI exercises.
+A shipped golden template is an implicit claim that it works, so membership is gated on evidence rather than on plausibility:</p>
 <ul>
-<li>every entry is applied to a real API server on each integration run, which
-  proves it satisfies the CRD schema and the v2 reserved-field validation rules;</li>
-<li><code>kata-dind</code> and <code>privileged-dind</code> are additionally the bases GAG's own dogfood
-  tenant runs real end-to-end jobs on.</li>
+<li>every entry is applied to a real API server on each integration run, which proves it satisfies the CRD schema and the v2 reserved-field validation rules;</li>
+<li><code>kata-dind</code> and <code>privileged-dind</code> are additionally the bases GAG's own dogfood tenant runs real end-to-end jobs on.</li>
 </ul>
-<p><code>make template-library-check</code> reconciles the shipped set against the exercised
-set on every run of the local gate and in CI, in both directions. gVisor, sysbox
-and rootless BuildKit are excluded for exactly this reason: they have no
-template-level coverage here, so shipping them would claim a validation that
-does not exist.</p>
+<p><code>make template-library-check</code> reconciles the shipped set against the exercised set on every run of the local gate and in CI, in both directions. gVisor, sysbox and rootless BuildKit are excluded for exactly this reason: they have no template-level coverage here, so shipping them would claim a validation that does not exist.</p>
 <h2 id="related">Related<a class="headerlink" href="#related" title="Permanent link">&para;</a></h2>
 <ul>
-<li><a href="../kata-dind-workloads/">Running DinD workloads under Kata</a>: the full Kata
-  reference, including what GAG does and does not manage</li>
-<li><a href="../in-runner-image-builds/">In-runner image builds</a>: the five build
-  approaches and their security profiles</li>
-<li><a href="../tenant-onboarding/">Tenant onboarding</a>: namespace marking, quotas, and the
-  v2 object set</li>
+<li><a href="../kata-dind-workloads/">Running DinD workloads under Kata</a>: the full Kata reference, including what GAG does and does not manage</li>
+<li><a href="../in-runner-image-builds/">In-runner image builds</a>: the five build approaches and their security profiles</li>
+<li><a href="../tenant-onboarding/">Tenant onboarding</a>: namespace marking, quotas, and the v2 object set</li>
 <li><a href="../worker-rightsizing/">Worker rightsizing</a>: measuring your own numbers</li>
 </ul>
 

@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/1.4.0/operations/resourcequota-sizing/">
+        <link rel="canonical" href="https://actions-gateway.com/1.5.0/operations/resourcequota-sizing/">
       
       
         <link rel="prev" href="../tenant-onboarding/">
@@ -63,15 +63,15 @@
   <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/IBMPlexSans-Bold.woff2">
   <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/MonaspaceNeon-Medium.woff2">
   
-  <meta property="og:image" content="https://actions-gateway.com/1.4.0assets/social-preview.png">
+  <meta property="og:image" content="https://actions-gateway.com/1.5.0assets/social-preview.png">
   <meta property="og:image:width" content="1280">
   <meta property="og:image:height" content="640">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:image" content="https://actions-gateway.com/1.4.0assets/social-preview.png">
+  <meta name="twitter:image" content="https://actions-gateway.com/1.5.0assets/social-preview.png">
   
-  <link rel="apple-touch-icon" href="https://actions-gateway.com/1.4.0assets/apple-touch-icon.png">
-  <link rel="alternate icon" href="https://actions-gateway.com/1.4.0assets/favicon.ico">
-  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/1.4.0assets/icon-512.png">
+  <link rel="apple-touch-icon" href="https://actions-gateway.com/1.5.0assets/apple-touch-icon.png">
+  <link rel="alternate icon" href="https://actions-gateway.com/1.5.0assets/favicon.ico">
+  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/1.5.0assets/icon-512.png">
   
   <script type="application/ld+json">
   {
@@ -79,14 +79,14 @@
     "@type": "SoftwareSourceCode",
     "name": "GitHub Actions Gateway",
     "description": "An Actions Runner Controller (ARC) alternative for self-hosted GitHub Actions runners on multi-tenant Kubernetes \u2014 oversubscribe a shared quota, recover evicted jobs automatically, and isolate every tenant\u0027s GitHub egress.",
-    "url": "https://actions-gateway.com/1.4.0",
+    "url": "https://actions-gateway.com/1.5.0",
     "codeRepository": "https://github.com/actions-gateway/github-actions-gateway",
     "programmingLanguage": "Go",
     "license": "https://www.apache.org/licenses/LICENSE-2.0",
     "author": {
       "@type": "Organization",
       "name": "GitHub Actions Gateway",
-      "url": "https://actions-gateway.com/1.4.0"
+      "url": "https://actions-gateway.com/1.5.0"
     }
   }
   </script>
@@ -95,8 +95,8 @@
     "@context": "https://schema.org",
     "@type": "Organization",
     "name": "GitHub Actions Gateway",
-    "url": "https://actions-gateway.com/1.4.0",
-    "logo": "https://actions-gateway.com/1.4.0assets/icon-512.png",
+    "url": "https://actions-gateway.com/1.5.0",
+    "logo": "https://actions-gateway.com/1.5.0assets/icon-512.png",
     "sameAs": ["https://github.com/actions-gateway/github-actions-gateway"]
   }
   </script>
@@ -132,8 +132,8 @@
         <aside class="md-banner">
           <div class="md-banner__inner md-grid md-typeset">
             
-            <strong>v1.4.0 is here.</strong>
-      Consent-gated cross-namespace egress proxy sharing, a curated runner template library you apply with one command, and v2 worker-capacity conditions exported as Prometheus gauges.
+            <strong>v1.5.0 is here.</strong>
+      A per-tenant GitHub runner group boundary, multi-label runner sets that migrate a <code>runs-on</code> array unedited, and job duration and latency metrics on the acquisition tier every new tenant runs.
           </div>
           
         </aside>
@@ -145,7 +145,7 @@
           <aside class="md-banner md-banner--warning">
             <div class="md-banner__inner md-grid md-typeset">
               You're not viewing the latest release.
-  <a href="https://actions-gateway.com/1.4.0"><strong>Go to the current docs.</strong></a>
+  <a href="https://actions-gateway.com/1.5.0"><strong>Go to the current docs.</strong></a>
 
             </div>
             <script>var el=document.querySelector("[data-md-component=outdated]"),base=new URL("../.."),outdated=__md_get("__outdated",sessionStorage,base);!0===outdated&&el&&(el.hidden=!1)</script>
@@ -2927,20 +2927,13 @@
 <blockquote>
 <p><strong>Audience:</strong> Platform engineer</p>
 </blockquote>
-<p>Turn a tenant's runner shapes and concurrency ceilings into the numbers you put
-in their namespace <code>ResourceQuota</code>, so the first install is a calculation rather
-than a guess. The quota is platform-owned — the gateway operates inside it but
-never creates or mutates it (see
-<a href="../tenant-onboarding/#step-1b-set-the-platform-owned-resourcequota">tenant onboarding Step 1b</a>).</p>
+<p>Turn a tenant's runner shapes and concurrency ceilings into the numbers you put in their namespace <code>ResourceQuota</code>, so the first install is a calculation rather than a guess.
+The quota is platform-owned — the gateway operates inside it but never creates or mutates it (see <a href="../tenant-onboarding/#step-1b-set-the-platform-owned-resourcequota">tenant onboarding Step 1b</a>).</p>
 <p>Getting it wrong fails in two directions, both quiet:</p>
 <ul>
-<li><strong>Too low</strong> — worker pods are rejected or sit <code>Pending</code>, and the Actions
-  Gateway Controller (AGC) leaves jobs queued at GitHub rather than claiming
-  them.</li>
-<li><strong>Constrained on the wrong key</strong> — a quota that constrains <code>limits.cpu</code>
-  rejects every pod that declares no CPU limit, which includes the recommended
-  Docker-in-Docker (DinD) worker shape. See
-  <a href="#only-constrain-keys-every-pod-declares">Only constrain keys every pod declares</a>.</li>
+<li><strong>Too low</strong> — worker pods are rejected or sit <code>Pending</code>, and the Actions Gateway Controller (AGC) leaves jobs queued at GitHub rather than claiming them.</li>
+<li><strong>Constrained on the wrong key</strong> — a quota that constrains <code>limits.cpu</code> rejects every pod that declares no CPU limit, which includes the recommended Docker-in-Docker (DinD) worker shape.
+  See <a href="#only-constrain-keys-every-pod-declares">Only constrain keys every pod declares</a>.</li>
 </ul>
 <h2 id="table-of-contents">Table of Contents<a class="headerlink" href="#table-of-contents" title="Permanent link">&para;</a></h2>
 <ul>
@@ -2955,9 +2948,8 @@ never creates or mutates it (see
 <li><a href="#related">Related</a></li>
 </ul>
 <h2 id="what-the-quota-actually-counts">What the quota actually counts<a class="headerlink" href="#what-the-quota-actually-counts" title="Permanent link">&para;</a></h2>
-<p>A worker pod's quota footprint is <strong>not</strong> the sum of its
-<code>podTemplate.spec.containers</code>. Kubernetes composes it from four parts, and two of
-them are easy to miss on exactly the worker shapes that cost the most.</p>
+<p>A worker pod's quota footprint is <strong>not</strong> the sum of its <code>podTemplate.spec.containers</code>.
+Kubernetes composes it from four parts, and two of them are easy to miss on exactly the worker shapes that cost the most.</p>
 <table>
 <thead>
 <tr>
@@ -2989,24 +2981,20 @@ them are easy to miss on exactly the worker shapes that cost the most.</p>
 </tr>
 </tbody>
 </table>
-<p>Verified on Kubernetes v1.36.1 by applying one pod at a time into a quota'd
-namespace and reading the <code>.status.used</code> delta. Reproduce it on any cluster:</p>
+<p>Verified on Kubernetes v1.36.1 by applying one pod at a time into a quota'd namespace and reading the <code>.status.used</code> delta.
+Reproduce it on any cluster:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>kubectl<span class="w"> </span>get<span class="w"> </span>resourcequota<span class="w"> </span>&lt;QUOTA_NAME&gt;<span class="w"> </span>-n<span class="w"> </span>&lt;NAMESPACE&gt;<span class="w"> </span>-o<span class="w"> </span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">&#39;{.status.used}&#39;</span>
 </code></pre></div>
-<p>The practical consequence: <strong>a DinD or Kata worker costs materially more quota
-than its runner container's <code>requests</code> suggest.</strong> For the reference shapes in
-<code>deploy/dogfood-e2e/overlays/</code>, the sidecar is 25% of the privileged-DinD pod's
-CPU request and 75% of its memory request.</p>
+<p>The practical consequence: <strong>a DinD or Kata worker costs materially more quota than its runner container's <code>requests</code> suggest.</strong> For the reference shapes in <code>deploy/dogfood-e2e/overlays/</code>, the sidecar is 25% of the privileged-DinD pod's CPU request and 75% of its memory request.</p>
 <h2 id="step-1--the-footprint-of-one-worker-pod">Step 1 — the footprint of one worker pod<a class="headerlink" href="#step-1--the-footprint-of-one-worker-pod" title="Permanent link">&para;</a></h2>
-<p>Sum, per pod, across <strong>regular containers plus native sidecars</strong>, then add any
-<code>RuntimeClass</code> overhead:</p>
+<p>Sum, per pod, across <strong>regular containers plus native sidecars</strong>, then add any <code>RuntimeClass</code> overhead:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>pod.requests.cpu    = Σ containers req.cpu    + Σ nativeSidecars req.cpu    + overhead.cpu
 <a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>pod.requests.memory = Σ containers req.memory + Σ nativeSidecars req.memory + overhead.memory
 <a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>pod.limits.cpu      = Σ containers lim.cpu    + Σ nativeSidecars lim.cpu    [+ overhead.cpu]
 <a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>pod.limits.memory   = Σ containers lim.memory + Σ nativeSidecars lim.memory [+ overhead.memory]
 </code></pre></div>
-<p>The bracketed overhead terms apply <strong>only if that limit is already non-zero</strong>. A
-shape declaring no CPU limit is not charged <code>overhead.cpu</code> against <code>limits.cpu</code>.</p>
+<p>The bracketed overhead terms apply <strong>only if that limit is already non-zero</strong>.
+A shape declaring no CPU limit is not charged <code>overhead.cpu</code> against <code>limits.cpu</code>.</p>
 <p>Where the inputs come from:</p>
 <table>
 <thead>
@@ -3034,21 +3022,20 @@ shape declaring no CPU limit is not charged <code>overhead.cpu</code> against <c
 </tr>
 </tbody>
 </table>
-<p>A term with no value drops out. A shape that declares requests but no limits
-contributes <code>0</code> to the <code>limits.*</code> rows — which is a constraint on <em>which quota
-keys you may set</em>, not free capacity. See
-<a href="#only-constrain-keys-every-pod-declares">Only constrain keys every pod declares</a>.</p>
+<p>A term with no value drops out.
+A shape that declares requests but no limits contributes <code>0</code> to the <code>limits.*</code> rows — which is a constraint on <em>which quota keys you may set</em>, not free capacity.
+See <a href="#only-constrain-keys-every-pod-declares">Only constrain keys every pod declares</a>.</p>
 <h2 id="step-2--multiply-by-concurrency-add-the-control-plane">Step 2 — multiply by concurrency, add the control plane<a class="headerlink" href="#step-2--multiply-by-concurrency-add-the-control-plane" title="Permanent link">&para;</a></h2>
-<p>Concurrency is <code>maxWorkers</code> per runner group or runner set. It has <strong>no default</strong>
-— an unset <code>maxWorkers</code> is an unbounded worker pool with no ceiling to size
-against, so set it before sizing the quota.</p>
+<p>Concurrency is <code>maxWorkers</code> per runner group or runner set.
+It has <strong>no default</strong> — an unset <code>maxWorkers</code> is an unbounded worker pool with no ceiling to size against, so set it before sizing the quota.</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>pods            = Σ_sets(maxWorkers) + proxy.maxReplicas + 1
 <a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>requests.cpu    = Σ_sets(maxWorkers × pod.requests.cpu)    + proxy.maxReplicas × proxyReq.cpu    + agcReq.cpu
 <a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>requests.memory = Σ_sets(maxWorkers × pod.requests.memory) + proxy.maxReplicas × proxyReq.memory + agcReq.memory
 <a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>limits.cpu      = Σ_sets(maxWorkers × pod.limits.cpu)      + proxy.maxReplicas × proxyLim.cpu    + agcLim.cpu
 <a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>limits.memory   = Σ_sets(maxWorkers × pod.limits.memory)   + proxy.maxReplicas × proxyLim.memory + agcLim.memory
 </code></pre></div>
-<p>The <code>+ 1</code> pod is the AGC control-plane pod. The control-plane terms:</p>
+<p>The <code>+ 1</code> pod is the AGC control-plane pod.
+The control-plane terms:</p>
 <table>
 <thead>
 <tr>
@@ -3087,18 +3074,12 @@ against, so set it before sizing the quota.</p>
 </table>
 <p>Two adjustments to make before you write the numbers down:</p>
 <ul>
-<li><strong>Sum over every runner set, not just the first.</strong> Each has its own
-  <code>maxWorkers</code> and pod shape; a GPU set with a large per-pod ask can dominate the
-  total at a low <code>maxWorkers</code>.</li>
-<li><strong>Round up.</strong> Leave headroom for the next scale-out and for any platform
-  daemon pods scheduled into the namespace.</li>
+<li><strong>Sum over every runner set, not just the first.</strong> Each has its own <code>maxWorkers</code> and pod shape; a GPU set with a large per-pod ask can dominate the total at a low <code>maxWorkers</code>.</li>
+<li><strong>Round up.</strong> Leave headroom for the next scale-out and for any platform daemon pods scheduled into the namespace.</li>
 </ul>
-<p>On the v2 API a proxy pool that opts out of the managed autoscaler
-(<code>EgressProxy.spec.managedAutoscaling: false</code>) makes <code>maxReplicas</code> inert — size
-the proxy term to your own autoscaler's ceiling instead.</p>
+<p>On the v2 API a proxy pool that opts out of the managed autoscaler (<code>EgressProxy.spec.managedAutoscaling: false</code>) makes <code>maxReplicas</code> inert — size the proxy term to your own autoscaler's ceiling instead.</p>
 <h2 id="step-3--the-storage-keys">Step 3 — the storage keys<a class="headerlink" href="#step-3--the-storage-keys" title="Permanent link">&para;</a></h2>
-<p>Two independent storage families apply, and a quota that constrains either
-without accounting for workers will block every worker pod.</p>
+<p>Two independent storage families apply, and a quota that constrains either without accounting for workers will block every worker pod.</p>
 <table>
 <thead>
 <tr>
@@ -3125,47 +3106,29 @@ without accounting for workers will block every worker pod.</p>
 </tr>
 </tbody>
 </table>
-<p>The class-scoped keys apply only when the claim template names a
-<code>storageClassName</code>. An unset one still resolves to the cluster default class and
-is charged under <em>that</em> class's keys — but the name is not knowable from the
-template, so the gateway's own footprint counts only the unscoped
-<code>persistentvolumeclaims</code> / <code>requests.storage</code> for such a volume. If you constrain
-a class-scoped key, name the class in the claim template too, or the conditions
-will not see that cap.</p>
-<p>A pod that mounts a <strong>pre-existing</strong> PVC (<code>volumes[].persistentVolumeClaim</code>)
-creates nothing and is charged nothing here — that claim was charged when it was
-created.</p>
-<p>This is what bites Kata tenants. The reference Kata worker shape mounts a
-per-pod 100Gi raw block device for <code>/var/lib/docker</code>, so a Kata set at
-<code>maxWorkers: 4</code> needs <code>persistentvolumeclaims: 4</code> and <code>requests.storage: 400Gi</code>
-on top of its CPU and memory. A namespace quota that sets
-<code>persistentvolumeclaims</code> for other reasons — and does not raise it for workers —
-silently caps concurrency at whatever that number is.</p>
+<p>The class-scoped keys apply only when the claim template names a <code>storageClassName</code>.
+An unset one still resolves to the cluster default class and is charged under <em>that</em> class's keys — but the name is not knowable from the template, so the gateway's own footprint counts only the unscoped <code>persistentvolumeclaims</code> / <code>requests.storage</code> for such a volume.
+If you constrain a class-scoped key, name the class in the claim template too, or the conditions will not see that cap.</p>
+<p>A pod that mounts a <strong>pre-existing</strong> PVC (<code>volumes[].persistentVolumeClaim</code>) creates nothing and is charged nothing here — that claim was charged when it was created.</p>
+<p>This is what bites Kata tenants.
+The reference Kata worker shape mounts a per-pod 100Gi raw block device for <code>/var/lib/docker</code>, so a Kata set at <code>maxWorkers: 4</code> needs <code>persistentvolumeclaims: 4</code> and <code>requests.storage: 400Gi</code> on top of its CPU and memory.
+A namespace quota that sets <code>persistentvolumeclaims</code> for other reasons — and does not raise it for workers — silently caps concurrency at whatever that number is.</p>
 <h3 id="a-storage-quota-fails-later-and-quieter-than-a-compute-quota">A storage quota fails later, and quieter, than a compute quota<a class="headerlink" href="#a-storage-quota-fails-later-and-quieter-than-a-compute-quota" title="Permanent link">&para;</a></h3>
-<p>The two families are enforced at different moments, and the difference decides
-what you will see when it goes wrong.</p>
-<p>A compute key is charged when the <strong>pod</strong> is admitted, so an exhausted
-<code>requests.cpu</code> rejects the pod outright and the AGC retries. A PVC key is charged
-against a <strong>separate object</strong>: the pod is admitted first, and Kubernetes' own
-ephemeral-volume controller then creates the PVC behind it. If that create is
-quota-rejected, nothing rejects the pod — it sits <code>Pending</code> with an unbound
-volume, holding a job that has already been claimed from GitHub, until the pod
-deadline reaps it.</p>
-<p>The gateway counts these keys in its worker footprint precisely so that case is
-caught before the job is claimed. Diagnose a suspected one on the PVC, not the
-pod:</p>
+<p>The two families are enforced at different moments, and the difference decides what you will see when it goes wrong.</p>
+<p>A compute key is charged when the <strong>pod</strong> is admitted, so an exhausted <code>requests.cpu</code> rejects the pod outright and the AGC retries.
+A PVC key is charged against a <strong>separate object</strong>: the pod is admitted first, and Kubernetes' own ephemeral-volume controller then creates the PVC behind it.
+If that create is quota-rejected, nothing rejects the pod — it sits <code>Pending</code> with an unbound volume, holding a job that has already been claimed from GitHub, until the pod deadline reaps it.</p>
+<p>The gateway counts these keys in its worker footprint precisely so that case is caught before the job is claimed.
+Diagnose a suspected one on the PVC, not the pod:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>kubectl<span class="w"> </span>get<span class="w"> </span>events<span class="w"> </span>-n<span class="w"> </span>&lt;NAMESPACE&gt;<span class="w"> </span>--field-selector<span class="w"> </span><span class="nv">reason</span><span class="o">=</span>FailedCreate
 </code></pre></div>
 <h2 id="only-constrain-keys-every-pod-declares">Only constrain keys every pod declares<a class="headerlink" href="#only-constrain-keys-every-pod-declares" title="Permanent link">&para;</a></h2>
-<p>A <code>ResourceQuota</code> that constrains a compute key makes that declaration
-<strong>mandatory</strong> for every pod in the namespace. Kubernetes rejects the pod
-outright:</p>
+<p>A <code>ResourceQuota</code> that constrains a compute key makes that declaration <strong>mandatory</strong> for every pod in the namespace.
+Kubernetes rejects the pod outright:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>pods &quot;runner-abc123&quot; is forbidden: failed quota: tenant-quota: must specify limits.cpu for: runner
 </code></pre></div>
-<p>This is the single most common self-inflicted failure, because the measured DinD
-worker shapes deliberately set <strong>no CPU limit</strong> — CPU is compressible, and
-throttling a DinD daemon slows every container inside it. Constraining
-<code>limits.cpu</code> on such a namespace rejects 100% of worker pods.</p>
+<p>This is the single most common self-inflicted failure, because the measured DinD worker shapes deliberately set <strong>no CPU limit</strong> — CPU is compressible, and throttling a DinD daemon slows every container inside it.
+Constraining <code>limits.cpu</code> on such a namespace rejects 100% of worker pods.</p>
 <p>Before applying a quota, check each key you intend to constrain:</p>
 <table>
 <thead>
@@ -3191,20 +3154,14 @@ throttling a DinD daemon slows every container inside it. Constraining
 </table>
 <p>Two ways to satisfy it:</p>
 <ul>
-<li><strong>Pair the quota with a <code>LimitRange</code></strong> that supplies namespace default requests
-  (and limits, if you constrain them). On <strong>v1</strong> this is required rather than
-  optional: the GMC stamps no resources on the AGC pod, so a <code>requests.cpu</code>-
-  constrained namespace rejects the AGC Deployment's pods with
-  <code>must specify requests.cpu</code>. The v2 AGC carries its own defaults and does not
-  need this.</li>
-<li><strong>Constrain only <code>pods</code></strong>, plus the storage keys if PVCs are in play. You lose
-  the compute cap and keep a hard concurrency ceiling.</li>
+<li><strong>Pair the quota with a <code>LimitRange</code></strong> that supplies namespace default requests (and limits, if you constrain them).
+  On <strong>v1</strong> this is required rather than optional: the GMC stamps no resources on the AGC pod, so a <code>requests.cpu</code>- constrained namespace rejects the AGC Deployment's pods with <code>must specify requests.cpu</code>.
+  The v2 AGC carries its own defaults and does not need this.</li>
+<li><strong>Constrain only <code>pods</code></strong>, plus the storage keys if PVCs are in play.
+  You lose the compute cap and keep a hard concurrency ceiling.</li>
 </ul>
 <h2 id="sizing-profiles-change-the-ask-at-pod-build">Sizing profiles change the ask at pod build<a class="headerlink" href="#sizing-profiles-change-the-ask-at-pod-build" title="Permanent link">&para;</a></h2>
-<p>An opt-in <a href="../worker-rightsizing/#sizing-profiles-opt-in-auto-apply">sizing profile</a>
-(<code>RunnerSet.spec.sizing.profile</code>, v2 only) rewrites the pod's CPU/memory values
-when the pod is built, so <strong>the template's static ask is not what the quota
-sees</strong>.</p>
+<p>An opt-in <a href="../worker-rightsizing/#sizing-profiles-opt-in-auto-apply">sizing profile</a> (<code>RunnerSet.spec.sizing.profile</code>, v2 only) rewrites the pod's CPU/memory values when the pod is built, so <strong>the template's static ask is not what the quota sees</strong>.</p>
 <table>
 <thead>
 <tr>
@@ -3233,25 +3190,16 @@ sees</strong>.</p>
 </table>
 <p>Sizing implications:</p>
 <ul>
-<li><strong><code>Throughput</code> deletes the CPU limit.</strong> Do not constrain <code>limits.cpu</code> on a
-  namespace running it.</li>
-<li><strong><code>Binpack</code> and <code>Throughput</code> only actuate after 20 samples per container.</strong>
-  Until then pods provision with the template's static values, so size the quota
-  for the <em>template</em>, which is the larger of the two in the case that matters
-  (an over-asking template is what these profiles exist to shrink).</li>
-<li><strong>Bound the derived values</strong> with <code>sizing.minRequests</code> / <code>sizing.maxRequests</code> if
-  you want a quota number that cannot be invalidated by a shift in measured usage.</li>
+<li><strong><code>Throughput</code> deletes the CPU limit.</strong> Do not constrain <code>limits.cpu</code> on a namespace running it.</li>
+<li><strong><code>Binpack</code> and <code>Throughput</code> only actuate after 20 samples per container.</strong> Until then pods provision with the template's static values, so size the quota for the <em>template</em>, which is the larger of the two in the case that matters (an over-asking template is what these profiles exist to shrink).</li>
+<li><strong>Bound the derived values</strong> with <code>sizing.minRequests</code> / <code>sizing.maxRequests</code> if you want a quota number that cannot be invalidated by a shift in measured usage.</li>
 </ul>
 <p>Check what a set is actually doing:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>kubectl<span class="w"> </span>get<span class="w"> </span>runnerset<span class="w"> </span>&lt;NAME&gt;<span class="w"> </span>-n<span class="w"> </span>&lt;NAMESPACE&gt;<span class="w"> </span>-o<span class="w"> </span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">&#39;{.status.sizingProfileState}&#39;</span>
 </code></pre></div>
-<p><code>Active</code> means derived values are in effect; <code>AwaitingSamples</code> means the template's
-static values are.</p>
+<p><code>Active</code> means derived values are in effect; <code>AwaitingSamples</code> means the template's static values are.</p>
 <h2 id="worked-example--a-dind-tenant-at-12-concurrent-jobs">Worked example — a DinD tenant at 12 concurrent jobs<a class="headerlink" href="#worked-example--a-dind-tenant-at-12-concurrent-jobs" title="Permanent link">&para;</a></h2>
-<p><strong>Inputs.</strong> A tenant running Docker-in-Docker CI on the measured reference shape
-(the shipped <code>privileged-dind</code> entry, <code>deploy/templates/privileged-dind/template.yaml</code>;
-see <a href="../runner-template-library/">runner template library</a>), with the default
-egress proxy pool, on the v2 API, <code>sizing.profile: Static</code>.</p>
+<p><strong>Inputs.</strong> A tenant running Docker-in-Docker CI on the measured reference shape (the shipped <code>privileged-dind</code> entry, <code>deploy/templates/privileged-dind/template.yaml</code>; see <a href="../runner-template-library/">runner template library</a>), with the default egress proxy pool, on the v2 API, <code>sizing.profile: Static</code>.</p>
 <table>
 <thead>
 <tr>
@@ -3370,13 +3318,9 @@ egress proxy pool, on the v2 API, <code>sizing.profile: Static</code>.</p>
 </tr>
 </tbody>
 </table>
-<p><strong>Step 3 — storage.</strong> This shape declares no <code>ephemeral-storage</code> asks and no
-ephemeral volumes, so no storage keys are needed — and the gateway charges it
-nothing on them, so a <code>persistentvolumeclaims</code> cap set for something else in this
-namespace will not hold the set back.</p>
-<p>The Kata variant is where this bites. Swapping in
-<code>deploy/dogfood-e2e/overlays/kata/</code>'s worker adds one 100Gi ephemeral volume per
-pod on the <code>standard-rwo</code> class, so the same 12 workers need four more keys:</p>
+<p><strong>Step 3 — storage.</strong> This shape declares no <code>ephemeral-storage</code> asks and no ephemeral volumes, so no storage keys are needed — and the gateway charges it nothing on them, so a <code>persistentvolumeclaims</code> cap set for something else in this namespace will not hold the set back.</p>
+<p>The Kata variant is where this bites.
+Swapping in <code>deploy/dogfood-e2e/overlays/kata/</code>'s worker adds one 100Gi ephemeral volume per pod on the <code>standard-rwo</code> class, so the same 12 workers need four more keys:</p>
 <table>
 <thead>
 <tr>
@@ -3403,10 +3347,9 @@ pod on the <code>standard-rwo</code> class, so the same 12 workers need four mor
 </tr>
 </tbody>
 </table>
-<p>Set only the keys you intend to constrain — but whichever you set, size it for
-all 12. <code>WorkerQuotaPressure</code> trips on the tightest of them.</p>
-<p><strong><code>limits.cpu</code> is deliberately absent</strong> from the quota below: neither worker
-container declares a CPU limit, so constraining it would reject every worker pod.</p>
+<p>Set only the keys you intend to constrain — but whichever you set, size it for all 12.
+<code>WorkerQuotaPressure</code> trips on the tightest of them.</p>
+<p><strong><code>limits.cpu</code> is deliberately absent</strong> from the quota below: neither worker container declares a CPU limit, so constraining it would reject every worker pod.</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">v1</span>
 <a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ResourceQuota</span>
 <a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="nt">metadata</span><span class="p">:</span>
@@ -3424,34 +3367,24 @@ container declares a CPU limit, so constraining it would reject every worker pod
 </code></pre></div>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>kubectl<span class="w"> </span>apply<span class="w"> </span>-f<span class="w"> </span>dind-team-quota.yaml
 </code></pre></div>
-<p>Apply it with an administrator identity — the quota is platform-owned, and the
-tenant's gateway has no write access to it.</p>
-<p><strong>Verify</strong> the tenant fits before jobs arrive. Both controllers publish advisory
-conditions when the remaining headroom cannot cover the configured ceilings:</p>
+<p>Apply it with an administrator identity — the quota is platform-owned, and the tenant's gateway has no write access to it.</p>
+<p><strong>Verify</strong> the tenant fits before jobs arrive.
+Both controllers publish advisory conditions when the remaining headroom cannot cover the configured ceilings:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>kubectl<span class="w"> </span>get<span class="w"> </span>actionsgateway<span class="w"> </span>&lt;NAME&gt;<span class="w"> </span>-n<span class="w"> </span>&lt;NAMESPACE&gt;<span class="w"> </span>-o<span class="w"> </span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">&#39;{range .status.conditions[?(@.type==&quot;ProxyQuotaPressure&quot;)]}{.status}{&quot; &quot;}{.message}{&quot;\n&quot;}{end}&#39;</span>
 </code></pre></div>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>kubectl<span class="w"> </span>get<span class="w"> </span>runnerset<span class="w"> </span>&lt;NAME&gt;<span class="w"> </span>-n<span class="w"> </span>&lt;NAMESPACE&gt;<span class="w"> </span>-o<span class="w"> </span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">&#39;{range .status.conditions[?(@.type==&quot;WorkerQuotaPressure&quot;)]}{.status}{&quot; &quot;}{.message}{&quot;\n&quot;}{end}&#39;</span>
 </code></pre></div>
 <p><code>False</code> on both means the quota admits scaling to <code>maxReplicas</code> and <code>maxWorkers</code>.</p>
 <h2 id="what-the-gateways-own-quota-conditions-count">What the gateway's own quota conditions count<a class="headerlink" href="#what-the-gateways-own-quota-conditions-count" title="Permanent link">&para;</a></h2>
-<p>The gateway computes a worker's footprint with the same arithmetic this page uses:
-the four-part compute sum (regular containers, native sidecars, the plain-init
-<code>max()</code> floor, and <code>RuntimeClass</code> overhead) <strong>plus</strong> the storage keys from
-<a href="#step-3--the-storage-keys">Step 3</a> — <code>ephemeral-storage</code> on both sides, and the
-PVC count and storage ask of every generic ephemeral volume, class-scoped keys
-included. One calculation feeds all three surfaces, so they cannot disagree:</p>
+<p>The gateway computes a worker's footprint with the same arithmetic this page uses: the four-part compute sum (regular containers, native sidecars, the plain-init <code>max()</code> floor, and <code>RuntimeClass</code> overhead) <strong>plus</strong> the storage keys from <a href="#step-3--the-storage-keys">Step 3</a> — <code>ephemeral-storage</code> on both sides, and the PVC count and storage ask of every generic ephemeral volume, class-scoped keys included.
+One calculation feeds all three surfaces, so they cannot disagree:</p>
 <ul>
 <li>the <code>WorkerQuotaPressure</code> / <code>WorkerQuotaExceeded</code> conditions;</li>
 <li>the pre-claim quota gate on the classic acquisition tier;</li>
-<li>the capacity integer a scale-set runner set advertises to GitHub, which folds
-  in live quota headroom on the default tier.</li>
+<li>the capacity integer a scale-set runner set advertises to GitHub, which folds in live quota headroom on the default tier.</li>
 </ul>
-<p>So a <code>False</code> <code>WorkerQuotaPressure</code> means the quota admits scaling to <code>maxWorkers</code>
-at the pod's <strong>full</strong> cost — sidecar, overhead, and per-worker PVCs included.</p>
-<p>A worker shape that declares no <code>ephemeral-storage</code> and no ephemeral volumes is
-charged nothing on the storage keys, so a namespace already at its
-<code>persistentvolumeclaims</code> ceiling for unrelated reasons does not hold such a set
-back.</p>
+<p>So a <code>False</code> <code>WorkerQuotaPressure</code> means the quota admits scaling to <code>maxWorkers</code> at the pod's <strong>full</strong> cost — sidecar, overhead, and per-worker PVCs included.</p>
+<p>A worker shape that declares no <code>ephemeral-storage</code> and no ephemeral volumes is charged nothing on the storage keys, so a namespace already at its <code>persistentvolumeclaims</code> ceiling for unrelated reasons does not hold such a set back.</p>
 <div class="admonition warning">
 <p class="admonition-title">This changed — conditions may now trip where they did not before</p>
 <p>Before this fix the footprint covered CPU and memory summed over
@@ -3492,20 +3425,14 @@ instead of leaving it to show up as burnt lock time. A quota already sized with
 the arithmetic on this page is unaffected; re-derive any that were not.</p>
 </div>
 <h3 id="pod-overhead-needs-a-cluster-scoped-read">Pod overhead needs a cluster-scoped read<a class="headerlink" href="#pod-overhead-needs-a-cluster-scoped-read" title="Permanent link">&para;</a></h3>
-<p>Overhead lives on the cluster-scoped <code>RuntimeClass</code>, not on the pod template, so
-the AGC reads it to size a Kata worker. The chart grants this through the
-per-gateway <code>agc-clusterrunnertemplate-reader</code> <code>ClusterRole</code>; a cluster whose AGC
-image is upgraded ahead of its chart has no such grant.</p>
-<p>The read is <strong>fail-open</strong>: without it the footprint simply omits overhead and the
-conditions behave as they did before, so nothing breaks — a Kata worker is just
-under-counted by its <code>overhead.podFixed</code> again. Confirm the grant landed:</p>
+<p>Overhead lives on the cluster-scoped <code>RuntimeClass</code>, not on the pod template, so the AGC reads it to size a Kata worker.
+The chart grants this through the per-gateway <code>agc-clusterrunnertemplate-reader</code> <code>ClusterRole</code>; a cluster whose AGC image is upgraded ahead of its chart has no such grant.</p>
+<p>The read is <strong>fail-open</strong>: without it the footprint simply omits overhead and the conditions behave as they did before, so nothing breaks — a Kata worker is just under-counted by its <code>overhead.podFixed</code> again.
+Confirm the grant landed:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a>kubectl<span class="w"> </span>auth<span class="w"> </span>can-i<span class="w"> </span>get<span class="w"> </span>runtimeclasses<span class="w"> </span>--as<span class="o">=</span>system:serviceaccount:&lt;NAMESPACE&gt;:&lt;AGC_SERVICEACCOUNT&gt;
 </code></pre></div>
-<p>Two cases need no grant at all, because no read happens: a pod template with no
-<code>runtimeClassName</code>, and one that declares <code>spec.overhead</code> itself. A declared
-<code>overhead</code> always wins over the read, and cannot drift — the <code>RuntimeClass</code>
-admission controller rejects any pod whose declared overhead differs from its
-<code>RuntimeClass</code>'s.</p>
+<p>Two cases need no grant at all, because no read happens: a pod template with no <code>runtimeClassName</code>, and one that declares <code>spec.overhead</code> itself.
+A declared <code>overhead</code> always wins over the read, and cannot drift — the <code>RuntimeClass</code> admission controller rejects any pod whose declared overhead differs from its <code>RuntimeClass</code>'s.</p>
 <h2 id="related">Related<a class="headerlink" href="#related" title="Permanent link">&para;</a></h2>
 <ul>
 <li><a href="../tenant-onboarding/#step-1b-set-the-platform-owned-resourcequota">Tenant onboarding Step 1b</a> — where the quota is applied in the onboarding flow.</li>

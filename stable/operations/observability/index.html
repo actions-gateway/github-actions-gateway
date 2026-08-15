@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/1.4.0/operations/observability/">
+        <link rel="canonical" href="https://actions-gateway.com/1.5.0/operations/observability/">
       
       
         <link rel="prev" href="../service-mesh-coexistence/">
@@ -63,15 +63,15 @@
   <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/IBMPlexSans-Bold.woff2">
   <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/MonaspaceNeon-Medium.woff2">
   
-  <meta property="og:image" content="https://actions-gateway.com/1.4.0assets/social-preview.png">
+  <meta property="og:image" content="https://actions-gateway.com/1.5.0assets/social-preview.png">
   <meta property="og:image:width" content="1280">
   <meta property="og:image:height" content="640">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:image" content="https://actions-gateway.com/1.4.0assets/social-preview.png">
+  <meta name="twitter:image" content="https://actions-gateway.com/1.5.0assets/social-preview.png">
   
-  <link rel="apple-touch-icon" href="https://actions-gateway.com/1.4.0assets/apple-touch-icon.png">
-  <link rel="alternate icon" href="https://actions-gateway.com/1.4.0assets/favicon.ico">
-  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/1.4.0assets/icon-512.png">
+  <link rel="apple-touch-icon" href="https://actions-gateway.com/1.5.0assets/apple-touch-icon.png">
+  <link rel="alternate icon" href="https://actions-gateway.com/1.5.0assets/favicon.ico">
+  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/1.5.0assets/icon-512.png">
   
   <script type="application/ld+json">
   {
@@ -79,14 +79,14 @@
     "@type": "SoftwareSourceCode",
     "name": "GitHub Actions Gateway",
     "description": "An Actions Runner Controller (ARC) alternative for self-hosted GitHub Actions runners on multi-tenant Kubernetes \u2014 oversubscribe a shared quota, recover evicted jobs automatically, and isolate every tenant\u0027s GitHub egress.",
-    "url": "https://actions-gateway.com/1.4.0",
+    "url": "https://actions-gateway.com/1.5.0",
     "codeRepository": "https://github.com/actions-gateway/github-actions-gateway",
     "programmingLanguage": "Go",
     "license": "https://www.apache.org/licenses/LICENSE-2.0",
     "author": {
       "@type": "Organization",
       "name": "GitHub Actions Gateway",
-      "url": "https://actions-gateway.com/1.4.0"
+      "url": "https://actions-gateway.com/1.5.0"
     }
   }
   </script>
@@ -95,8 +95,8 @@
     "@context": "https://schema.org",
     "@type": "Organization",
     "name": "GitHub Actions Gateway",
-    "url": "https://actions-gateway.com/1.4.0",
-    "logo": "https://actions-gateway.com/1.4.0assets/icon-512.png",
+    "url": "https://actions-gateway.com/1.5.0",
+    "logo": "https://actions-gateway.com/1.5.0assets/icon-512.png",
     "sameAs": ["https://github.com/actions-gateway/github-actions-gateway"]
   }
   </script>
@@ -132,8 +132,8 @@
         <aside class="md-banner">
           <div class="md-banner__inner md-grid md-typeset">
             
-            <strong>v1.4.0 is here.</strong>
-      Consent-gated cross-namespace egress proxy sharing, a curated runner template library you apply with one command, and v2 worker-capacity conditions exported as Prometheus gauges.
+            <strong>v1.5.0 is here.</strong>
+      A per-tenant GitHub runner group boundary, multi-label runner sets that migrate a <code>runs-on</code> array unedited, and job duration and latency metrics on the acquisition tier every new tenant runs.
           </div>
           
         </aside>
@@ -145,7 +145,7 @@
           <aside class="md-banner md-banner--warning">
             <div class="md-banner__inner md-grid md-typeset">
               You're not viewing the latest release.
-  <a href="https://actions-gateway.com/1.4.0"><strong>Go to the current docs.</strong></a>
+  <a href="https://actions-gateway.com/1.5.0"><strong>Go to the current docs.</strong></a>
 
             </div>
             <script>var el=document.querySelector("[data-md-component=outdated]"),base=new URL("../.."),outdated=__md_get("__outdated",sessionStorage,base);!0===outdated&&el&&(el.hidden=!1)</script>
@@ -2663,10 +2663,14 @@
 <blockquote>
 <p><strong>Audience:</strong> Platform engineer, Tenant operator</p>
 </blockquote>
-<p>Every component exposes Prometheus metrics from the standard <code>controller-runtime</code> metrics server, so built-in metrics (reconcile latency, work queue depth, etc.) are emitted automatically alongside the custom metrics documented in this guide. The serving posture differs by component:</p>
+<p>Every component exposes Prometheus metrics from the standard <code>controller-runtime</code> metrics server, so built-in metrics (reconcile latency, work queue depth, etc.) are emitted automatically alongside the custom metrics documented in this guide.
+The serving posture differs by component:</p>
 <ul>
-<li><strong>GMC manager</strong> — <code>:8443/metrics</code>, served over TLS. How a scrape verifies the cert is controlled by <code>metrics.tls.certManager.enabled</code> (see <a href="../observability-metrics-access/#verifying-the-metrics-scrape-tls-gmc-manager">Verifying the metrics scrape TLS (GMC manager)</a>).</li>
-<li><strong>Per-tenant AGC and proxy</strong> — <code>:8443/metrics</code>, served over <strong>mutual TLS</strong>: a scraper must present a client certificate signed by that tenant's metrics CA. The GMC publishes the scraper's client bundle per tenant. See <a href="../observability-metrics-access/#scraping-per-tenant-agc-and-proxy-metrics-mtls">Scraping per-tenant AGC and proxy metrics (mTLS)</a>.</li>
+<li><strong>GMC manager</strong> — <code>:8443/metrics</code>, served over TLS.
+  How a scrape verifies the cert is controlled by <code>metrics.tls.certManager.enabled</code> (see <a href="../observability-metrics-access/#verifying-the-metrics-scrape-tls-gmc-manager">Verifying the metrics scrape TLS (GMC manager)</a>).</li>
+<li><strong>Per-tenant AGC and proxy</strong> — <code>:8443/metrics</code>, served over <strong>mutual TLS</strong>: a scraper must present a client certificate signed by that tenant's metrics CA.
+  The GMC publishes the scraper's client bundle per tenant.
+  See <a href="../observability-metrics-access/#scraping-per-tenant-agc-and-proxy-metrics-mtls">Scraping per-tenant AGC and proxy metrics (mTLS)</a>.</li>
 </ul>
 <p>For SLO targets associated with these metrics, see <a href="../../design/appendix-a-capacity-slos/">Appendix A — Capacity Targets &amp; SLOs</a>.</p>
 <hr />
@@ -2702,7 +2706,7 @@
 </tr>
 </tbody>
 </table>
-<p>The alert rules and both dashboards also ship as code under <a href="../../deploy/monitoring/README.md"><code>deploy/monitoring/</code></a> — a <code>PrometheusRule</code> plus two Grafana dashboards — so prefer applying those over hand-copying the YAML.</p>
+<p>The alert rules and both dashboards also ship as code under <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.5.0/deploy/monitoring/README.md"><code>deploy/monitoring/</code></a> — a <code>PrometheusRule</code> plus two Grafana dashboards — so prefer applying those over hand-copying the YAML.</p>
 
 
 

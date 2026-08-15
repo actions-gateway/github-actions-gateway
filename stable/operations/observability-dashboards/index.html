@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/1.4.0/operations/observability-dashboards/">
+        <link rel="canonical" href="https://actions-gateway.com/1.5.0/operations/observability-dashboards/">
       
       
         <link rel="prev" href="../observability-alerting/">
@@ -63,15 +63,15 @@
   <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/IBMPlexSans-Bold.woff2">
   <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/MonaspaceNeon-Medium.woff2">
   
-  <meta property="og:image" content="https://actions-gateway.com/1.4.0assets/social-preview.png">
+  <meta property="og:image" content="https://actions-gateway.com/1.5.0assets/social-preview.png">
   <meta property="og:image:width" content="1280">
   <meta property="og:image:height" content="640">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:image" content="https://actions-gateway.com/1.4.0assets/social-preview.png">
+  <meta name="twitter:image" content="https://actions-gateway.com/1.5.0assets/social-preview.png">
   
-  <link rel="apple-touch-icon" href="https://actions-gateway.com/1.4.0assets/apple-touch-icon.png">
-  <link rel="alternate icon" href="https://actions-gateway.com/1.4.0assets/favicon.ico">
-  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/1.4.0assets/icon-512.png">
+  <link rel="apple-touch-icon" href="https://actions-gateway.com/1.5.0assets/apple-touch-icon.png">
+  <link rel="alternate icon" href="https://actions-gateway.com/1.5.0assets/favicon.ico">
+  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/1.5.0assets/icon-512.png">
   
   <script type="application/ld+json">
   {
@@ -79,14 +79,14 @@
     "@type": "SoftwareSourceCode",
     "name": "GitHub Actions Gateway",
     "description": "An Actions Runner Controller (ARC) alternative for self-hosted GitHub Actions runners on multi-tenant Kubernetes \u2014 oversubscribe a shared quota, recover evicted jobs automatically, and isolate every tenant\u0027s GitHub egress.",
-    "url": "https://actions-gateway.com/1.4.0",
+    "url": "https://actions-gateway.com/1.5.0",
     "codeRepository": "https://github.com/actions-gateway/github-actions-gateway",
     "programmingLanguage": "Go",
     "license": "https://www.apache.org/licenses/LICENSE-2.0",
     "author": {
       "@type": "Organization",
       "name": "GitHub Actions Gateway",
-      "url": "https://actions-gateway.com/1.4.0"
+      "url": "https://actions-gateway.com/1.5.0"
     }
   }
   </script>
@@ -95,8 +95,8 @@
     "@context": "https://schema.org",
     "@type": "Organization",
     "name": "GitHub Actions Gateway",
-    "url": "https://actions-gateway.com/1.4.0",
-    "logo": "https://actions-gateway.com/1.4.0assets/icon-512.png",
+    "url": "https://actions-gateway.com/1.5.0",
+    "logo": "https://actions-gateway.com/1.5.0assets/icon-512.png",
     "sameAs": ["https://github.com/actions-gateway/github-actions-gateway"]
   }
   </script>
@@ -132,8 +132,8 @@
         <aside class="md-banner">
           <div class="md-banner__inner md-grid md-typeset">
             
-            <strong>v1.4.0 is here.</strong>
-      Consent-gated cross-namespace egress proxy sharing, a curated runner template library you apply with one command, and v2 worker-capacity conditions exported as Prometheus gauges.
+            <strong>v1.5.0 is here.</strong>
+      A per-tenant GitHub runner group boundary, multi-label runner sets that migrate a <code>runs-on</code> array unedited, and job duration and latency metrics on the acquisition tier every new tenant runs.
           </div>
           
         </aside>
@@ -145,7 +145,7 @@
           <aside class="md-banner md-banner--warning">
             <div class="md-banner__inner md-grid md-typeset">
               You're not viewing the latest release.
-  <a href="https://actions-gateway.com/1.4.0"><strong>Go to the current docs.</strong></a>
+  <a href="https://actions-gateway.com/1.5.0"><strong>Go to the current docs.</strong></a>
 
             </div>
             <script>var el=document.querySelector("[data-md-component=outdated]"),base=new URL("../.."),outdated=__md_get("__outdated",sessionStorage,base);!0===outdated&&el&&(el.hidden=!1)</script>
@@ -2707,9 +2707,11 @@
 <blockquote>
 <p><strong>Audience:</strong> Platform engineer, Tenant operator</p>
 </blockquote>
-<p>Part of the <a href="../observability/">Observability</a> guide. The panels below query the <a href="../observability-metrics/">Metrics reference</a> and the <a href="../observability-alerting/#slo-recording-rules">SLO recording rules</a>; the scrape wiring they depend on is in <a href="../observability-metrics-access/">Accessing metrics</a>.</p>
+<p>Part of the <a href="../observability/">Observability</a> guide.
+The panels below query the <a href="../observability-metrics/">Metrics reference</a> and the <a href="../observability-alerting/#slo-recording-rules">SLO recording rules</a>; the scrape wiring they depend on is in <a href="../observability-metrics-access/">Accessing metrics</a>.</p>
 <blockquote>
-<p><strong>Import as code.</strong> Two reference dashboards ship under <a href="../../deploy/monitoring/README.md"><code>deploy/monitoring/</code></a> — import them into Grafana (<strong>Dashboards → New → Import</strong>) or provision them, rather than rebuilding the panels by hand. They split along the scrape boundary each reads from; the layouts below document what each contains.</p>
+<p><strong>Import as code.</strong> Two reference dashboards ship under <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.5.0/deploy/monitoring/README.md"><code>deploy/monitoring/</code></a>: import them into Grafana (<strong>Dashboards → New → Import</strong>) or provision them, rather than rebuilding the panels by hand.
+They split along the scrape boundary each reads from; the layouts below document what each contains.</p>
 </blockquote>
 <table>
 <thead>
@@ -2721,12 +2723,12 @@
 </thead>
 <tbody>
 <tr>
-<td><a href="../../deploy/monitoring/grafana-dashboard-tenant.json"><code>grafana-dashboard-tenant.json</code></a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.5.0/deploy/monitoring/grafana-dashboard-tenant.json"><code>grafana-dashboard-tenant.json</code></a></td>
 <td>a tenant's AGC + egress proxy (per-tenant mTLS)</td>
 <td>operator of one tenant's runners</td>
 </tr>
 <tr>
-<td><a href="../../deploy/monitoring/grafana-dashboard-platform.json"><code>grafana-dashboard-platform.json</code></a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.5.0/deploy/monitoring/grafana-dashboard-platform.json"><code>grafana-dashboard-platform.json</code></a></td>
 <td>the GMC manager (one cluster-wide TLS scrape)</td>
 <td>Platform engineer running the GMC / the fleet</td>
 </tr>
@@ -2734,11 +2736,12 @@
 </table>
 <p>The split mirrors how the metrics are exposed (see <a href="../observability-metrics-access/#how-to-access-metrics">Accessing metrics</a>): a platform operator scrapes the single GMC endpoint and cannot necessarily reach every tenant's mTLS metrics port, so the fleet rollups the GMC exports (<code>managed_gateways</code>, <code>runnergroups_degraded</code>, <code>egress_rules_stale</code>, the proxy-quota gauges) get their own dashboard.</p>
 <blockquote>
-<p>The screenshots below are rendered against a real Prometheus with synthetic data by the reproducible harness in <a href="../../deploy/monitoring/preview/README.md"><code>deploy/monitoring/preview/</code></a>; regenerate them there whenever a dashboard changes.</p>
+<p>The screenshots below are rendered against a real Prometheus with synthetic data by the reproducible harness in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.5.0/deploy/monitoring/preview/README.md"><code>deploy/monitoring/preview/</code></a>; regenerate them there whenever a dashboard changes.</p>
 </blockquote>
 <h2 id="tenant-dashboard">Tenant dashboard<a class="headerlink" href="#tenant-dashboard" title="Permanent link">&para;</a></h2>
 <p><img alt="The per-tenant Grafana dashboard rendered against a live Prometheus: gateway-health, pod-creation-latency SLO, job-throughput, scale-set-acquisition-tier, tenant-health-conditions, egress-proxy, and kube-state-metrics proxy/quota rows." src="../../assets/grafana-dashboard-tenant.png" /></p>
-<p>Filtered by the <code>$namespace</code>, <code>$runner_group</code>, and <code>$runner_set</code> template variables. Uses the <a href="../observability-alerting/#slo-recording-rules">SLO recording rules</a> as data sources where applicable.</p>
+<p>Filtered by the <code>$namespace</code>, <code>$runner_group</code>, and <code>$runner_set</code> template variables.
+Uses the <a href="../observability-alerting/#slo-recording-rules">SLO recording rules</a> as data sources where applicable.</p>
 <p><strong>Row 1 — Gateway Health (per namespace)</strong></p>
 <table>
 <thead>
@@ -2772,9 +2775,6 @@
 </tbody>
 </table>
 <p><strong>Row 2 — Pod Creation Latency SLO</strong></p>
-<blockquote>
-<p>Every panel in this row is <strong>classic acquisition only</strong> (Q713). <code>pod_creation_latency_seconds</code> is not observed on the scale-set path, so on a <code>ScaleSet</code> set, the default tier since P5, all three read blank rather than green. A blank SLO gauge here is a missing series, not a met target.</p>
-</blockquote>
 <table>
 <thead>
 <tr>
@@ -2819,12 +2819,17 @@
 <tr>
 <td>Job duration p50/p95</td>
 <td><code>actions_gateway:job_duration_seconds:p50/p95</code></td>
-<td>Time series. <strong>Classic acquisition only</strong> (Q713): <code>job_duration_seconds</code> is not observed on the scale-set path, so this panel is empty on a <code>ScaleSet</code> set</td>
+<td>Time series, both acquisition tiers. Worker pod lifetime, so it excludes the pre-creation staging a slow <code>acquirejob</code> or a <code>spec.scaleUp</code> throttle adds</td>
+</tr>
+<tr>
+<td>AGC / proxy version</td>
+<td><code>actions_gateway_build_info{component=~"agc\|proxy"}</code></td>
+<td>Stat showing the series name, not its value (the value is always <code>1</code>). Sits under the job-duration panel because it says which span that panel is measuring: the classic tier's was longer before v1.5.0 and nothing was renamed (<a href="../upgrade/#non-breaking-job_duration_seconds-now-measures-worker-pod-lifetime-the-classic-tier-span-shrinks">upgrade note</a>). The metric carries no <code>namespace</code> label, so <code>$namespace</code> does not filter it</td>
 </tr>
 <tr>
 <td>Disruption retries</td>
 <td><code>sum by (runner_group, tier, cause) (increase(actions_gateway_eviction_retries_total[1h]))</code></td>
-<td>Bar chart, split by acquisition tier (<code>classic</code>, <code>scaleset</code>) and cause (<code>eviction</code>, <code>preemption</code>, <code>deletion</code>, <code>abandoned</code>). Keep the causes visually distinct: <code>eviction</code> rising means node pressure, <code>preemption</code> rising means a <code>priorityTiers</code> floor is displacing opportunistic work, <code>abandoned</code> rising means workers are not being scheduled at all before <code>pendingPodDeadline</code> reaps them — different investigations entirely</td>
+<td>Bar chart, split by acquisition tier (<code>classic</code>, <code>scaleset</code>) and cause (<code>eviction</code>, <code>preemption</code>, <code>deletion</code>, <code>abandoned</code>, <code>vanished</code>). Keep the causes visually distinct: <code>eviction</code> rising means node pressure, <code>preemption</code> rising means a <code>priorityTiers</code> floor is displacing opportunistic work, <code>abandoned</code> rising means workers are not being scheduled at all before <code>pendingPodDeadline</code> reaps them, <code>vanished</code> rising means the AGC itself keeps missing worker teardowns — different investigations entirely</td>
 </tr>
 <tr>
 <td>Abandoned runs awaiting capacity</td>
@@ -2849,7 +2854,9 @@
 </tbody>
 </table>
 <p><strong>Row 4 — Scale-set Acquisition Tier (per runner_set)</strong></p>
-<p>The default acquisition protocol (Q264). These panels are the scale-set analog of the classic Gateway-Health and Job-Throughput rows above: a ScaleSet-protocol RunnerSet never emits <code>actions_gateway_active_sessions</code> or <code>jobs_acquired_total</code>, so its throughput and health are only visible here. Labelled by <code>runner_set</code> (not <code>runner_group</code>), so the <code>$runner_group</code> variable does not filter these — the <code>$runner_set</code> variable does.</p>
+<p>The default acquisition protocol (Q264).
+These panels are the scale-set analog of the classic Gateway-Health and Job-Throughput rows above: a ScaleSet-protocol RunnerSet never emits <code>actions_gateway_active_sessions</code> or <code>jobs_acquired_total</code>, so its throughput and health are only visible here.
+Labelled by <code>runner_set</code> (not <code>runner_group</code>), so the <code>$runner_group</code> variable does not filter these — the <code>$runner_set</code> variable does.</p>
 <table>
 <thead>
 <tr>
@@ -2882,7 +2889,7 @@
 <tr>
 <td>Worker pods reaped/s (by reason)</td>
 <td><code>sum by (namespace, runner_set, reason) (rate(actions_gateway_worker_pods_reaped_total{runner_set!=""}[5m]))</code></td>
-<td>Time series — the reaper counter's scale-set series (Q514), joinable with the capacity gauges above on <code>(namespace, runner_set)</code></td>
+<td>Time series — the reaper counter's per-<code>RunnerSet</code> series (Q514), joinable with the capacity gauges above on <code>(namespace, runner_set)</code>. The label keys on the owning kind, so a Classic-protocol <code>RunnerSet</code> appears here too</td>
 </tr>
 </tbody>
 </table>
@@ -2924,22 +2931,13 @@
 </tbody>
 </table>
 <blockquote>
-<p>The first three capacity panels union the v1 <code>RunnerGroup</code> family with its
-<code>actions_gateway_runnerset_*</code> v2 twin (Q319). The two families key on different
-labels — <code>runner_group</code> and <code>runner_set</code> — so <code>or</code> unions rather than overlaps them,
-and a panel that named only the v1 family would read a flat <code>0</code> on a v2-only deploy.
-To break either out per owner, replace <code>max(...)</code> with
-<code>max by (namespace, runner_set) (actions_gateway_runnerset_...)</code>.</p>
-<p><strong>Worker capacity declined has no v1 twin, and <code>No data</code> is a normal reading</strong>
-(Q643, Q658). The <a href="../observability-metrics/">gauge</a> is emitted only for a
-<code>RunnerSet</code> that set <code>spec.capacityGate.mode</code>, so an empty panel means no set
-opted in, not that the query is broken. It groups by <code>reason</code> rather than
-reducing to a bare <code>0</code>/<code>1</code> because the value alone cannot separate a live decline
-from the latched <code>AwaitingProbe</code> state, and those call for different actions;
-exactly one series exists per gated set, so <code>max by (reason)</code> cannot double-count.
-The <code>1</code> is orange rather than red on purpose: a latched gate is
-<a href="../troubleshooting/#runnerset-reports-workercapacitydeclined-the-gateway-stopped-claiming-jobs">throttling intake, not failing</a>,
-and it can sit <code>True</code> indefinitely on an idle set whose shape stays unplaceable.</p>
+<p>The first three capacity panels union the v1 <code>RunnerGroup</code> family with its <code>actions_gateway_runnerset_*</code> v2 twin (Q319).
+The two families key on different labels — <code>runner_group</code> and <code>runner_set</code> — so <code>or</code> unions rather than overlaps them, and a panel that named only the v1 family would read a flat <code>0</code> on a v2-only deploy.
+To break either out per owner, replace <code>max(...)</code> with <code>max by (namespace, runner_set) (actions_gateway_runnerset_...)</code>.</p>
+<p><strong>Worker capacity declined has no v1 twin, and <code>No data</code> is a normal reading</strong> (Q643, Q658).
+The <a href="../observability-metrics/">gauge</a> is emitted only for a <code>RunnerSet</code> that set <code>spec.capacityGate.mode</code>, so an empty panel means no set opted in, not that the query is broken.
+It groups by <code>reason</code> rather than reducing to a bare <code>0</code>/<code>1</code> because the value alone cannot separate a live decline from the latched <code>AwaitingProbe</code> state, and those call for different actions; exactly one series exists per gated set, so <code>max by (reason)</code> cannot double-count.
+The <code>1</code> is orange rather than red on purpose: a latched gate is <a href="../troubleshooting/#runnerset-reports-workercapacitydeclined-the-gateway-stopped-claiming-jobs">throttling intake, not failing</a>, and it can sit <code>True</code> indefinitely on an idle set whose shape stays unplaceable.</p>
 </blockquote>
 <p><strong>Row 6 — Egress Proxy (per tenant)</strong></p>
 <table>
@@ -3070,7 +3068,7 @@ and it can sit <code>True</code> indefinitely on an idle set whose shape stays u
 </tbody>
 </table>
 <h2 id="platform-dashboard">Platform dashboard<a class="headerlink" href="#platform-dashboard" title="Permanent link">&para;</a></h2>
-<p><img alt="The platform/fleet Grafana dashboard rendered against a live Prometheus: fleet-overview stats, GMC control-plane reconcile health, a per-gateway condition state-timeline, and cross-tenant throughput rows." src="../../assets/grafana-dashboard-platform.png" /></p>
+<p><img alt="The platform/fleet Grafana dashboard rendered against a live Prometheus: fleet-overview stats, GMC control-plane reconcile health, a per-gateway condition state-timeline, cross-tenant throughput, and a build-versions row." src="../../assets/grafana-dashboard-platform.png" /></p>
 <p>Fleet-wide; <code>$namespace</code> filters the cross-tenant rows.</p>
 <p><strong>Row 1 — Fleet Overview</strong></p>
 <table>
@@ -3143,7 +3141,7 @@ and it can sit <code>True</code> indefinitely on an idle set whose shape stays u
 <tbody>
 <tr>
 <td>Gateway condition rollups</td>
-<td><code>actions_gateway_runnergroups_degraded</code> / <code>_egress_rules_stale</code> / <code>_proxy_quota_pressure</code> / <code>_proxy_quota_exceeded</code> (v1); <code>_runnersets_degraded</code> / <code>_agc_available</code> / <code>_egress_unattributed</code> (v2); <code>_github_egress_incomplete</code> (v2 <code>EgressProxy</code> only)</td>
+<td><code>actions_gateway_runnergroups_degraded</code> / <code>_egress_rules_stale</code> / <code>_proxy_quota_pressure</code> / <code>_proxy_quota_exceeded</code> (v1); <code>_runnersets_degraded</code> / <code>_agc_available</code> / <code>_egress_unattributed</code> / <code>_scale_set_name_collision</code> (v2); <code>_github_egress_incomplete</code> (v2 <code>EgressProxy</code> only)</td>
 <td>State timeline (1 = firing)</td>
 </tr>
 </tbody>
@@ -3173,19 +3171,37 @@ and it can sit <code>True</code> indefinitely on an idle set whose shape stays u
 <td><code>sum by (namespace) (rate(actions_gateway_scaleset_jobs_assigned_total[5m])) * 60</code></td>
 <td>Time series</td>
 </tr>
+</tbody>
+</table>
+<p><strong>Row 5 — Build Versions</strong></p>
+<table>
+<thead>
 <tr>
-<td>Pod creation p99 by namespace</td>
-<td><code>actions_gateway:pod_creation_latency_seconds:p99</code></td>
-<td>Time series. <strong>Classic acquisition only</strong> (Q713), so namespaces running <code>ScaleSet</code> sets contribute no series</td>
+<th>Panel</th>
+<th>Query</th>
+<th>Visualization</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Running versions by component</td>
+<td><code>count by (component, version) (actions_gateway_build_info)</code></td>
+<td>Stat, one tile per component and version with the instance count</td>
 </tr>
 </tbody>
 </table>
+<p>The fleet's version spread during a staggered upgrade, and the answer to which tenants have crossed a semantics change: <code>job_duration_seconds</code> changed span at v1.5.0 without a rename (<a href="../upgrade/#non-breaking-job_duration_seconds-now-measures-worker-pod-lifetime-the-classic-tier-span-shrinks">upgrade note</a>).
+The GMC comes from this dashboard's own scrape; <code>agc</code> and <code>proxy</code> need the per-tenant scrapes, so a platform-only Prometheus shows one bar.
+<code>actions_gateway_build_info</code> carries no <code>namespace</code> label, so <code>$namespace</code> does not filter this row. | Pod creation p99 by namespace | <code>actions_gateway:pod_creation_latency_seconds:p99</code> | Time series, both acquisition tiers |</p>
 <h2 id="dashboard-variables">Dashboard Variables<a class="headerlink" href="#dashboard-variables" title="Permanent link">&para;</a></h2>
 <p>The dashboards ship with these template variables already wired:</p>
 <ul>
-<li><code>$namespace</code> — <code>label_values({__name__=~"actions_gateway_active_sessions|actions_gateway_scaleset_jobs_assigned_total"}, namespace)</code> — filters to a single tenant (both dashboards). The union of the classic and scale-set series is deliberate: a scale-set-only deploy emits no <code>active_sessions</code>, so keying the variable on that alone would leave the dashboard blank.</li>
-<li><code>$runner_group</code> — <code>label_values(actions_gateway_active_sessions{namespace="$namespace"}, runner_group)</code> — filters to a specific RunnerGroup on the classic-tier panels (tenant dashboard). The <code>runner_set</code>-labelled panels are not filtered by it; <code>$runner_set</code> is their variable.</li>
-<li><code>$runner_set</code> — <code>label_values(actions_gateway_runnerset_worker_quota_pressure{namespace="$namespace"}, runner_set)</code> — filters to a specific <code>RunnerSet</code> on the scale-set and v2 capacity panels (tenant dashboard). It reads its label values from the Q319 capacity gauges rather than the <code>scaleset_*</code> series on purpose: those gauges are emitted for <strong>every</strong> <code>RunnerSet</code>, while <code>scaleset_*</code> exists only for <code>ScaleSet</code>-protocol sets, so keying on the latter would hide a <code>Classic</code> set from the dropdown entirely.</li>
+<li><code>$namespace</code> — <code>label_values({__name__=~"actions_gateway_active_sessions|actions_gateway_scaleset_jobs_assigned_total"}, namespace)</code> — filters to a single tenant (both dashboards).
+  The union of the classic and scale-set series is deliberate: a scale-set-only deploy emits no <code>active_sessions</code>, so keying the variable on that alone would leave the dashboard blank.</li>
+<li><code>$runner_group</code> — <code>label_values(actions_gateway_active_sessions{namespace="$namespace"}, runner_group)</code> — filters to a specific RunnerGroup on the classic-tier panels (tenant dashboard).
+  The <code>runner_set</code>-labelled panels are not filtered by it; <code>$runner_set</code> is their variable.</li>
+<li><code>$runner_set</code> — <code>label_values(actions_gateway_runnerset_worker_quota_pressure{namespace="$namespace"}, runner_set)</code> — filters to a specific <code>RunnerSet</code> on the scale-set and v2 capacity panels (tenant dashboard).
+  It reads its label values from the Q319 capacity gauges rather than the <code>scaleset_*</code> series on purpose: those gauges are emitted for <strong>every</strong> <code>RunnerSet</code>, while <code>scaleset_*</code> exists only for <code>ScaleSet</code>-protocol sets, so keying on the latter would hide a <code>Classic</code> set from the dropdown entirely.</li>
 </ul>
 <hr />
 <p>← Back to <a href="../observability/">Observability</a></p>

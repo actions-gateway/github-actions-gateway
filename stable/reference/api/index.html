@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/1.4.0/reference/api/">
+        <link rel="canonical" href="https://actions-gateway.com/1.5.0/reference/api/">
       
       
         <link rel="prev" href="../">
@@ -61,15 +61,15 @@
   <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/IBMPlexSans-Bold.woff2">
   <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/MonaspaceNeon-Medium.woff2">
   
-  <meta property="og:image" content="https://actions-gateway.com/1.4.0assets/social-preview.png">
+  <meta property="og:image" content="https://actions-gateway.com/1.5.0assets/social-preview.png">
   <meta property="og:image:width" content="1280">
   <meta property="og:image:height" content="640">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:image" content="https://actions-gateway.com/1.4.0assets/social-preview.png">
+  <meta name="twitter:image" content="https://actions-gateway.com/1.5.0assets/social-preview.png">
   
-  <link rel="apple-touch-icon" href="https://actions-gateway.com/1.4.0assets/apple-touch-icon.png">
-  <link rel="alternate icon" href="https://actions-gateway.com/1.4.0assets/favicon.ico">
-  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/1.4.0assets/icon-512.png">
+  <link rel="apple-touch-icon" href="https://actions-gateway.com/1.5.0assets/apple-touch-icon.png">
+  <link rel="alternate icon" href="https://actions-gateway.com/1.5.0assets/favicon.ico">
+  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/1.5.0assets/icon-512.png">
   
   <script type="application/ld+json">
   {
@@ -77,14 +77,14 @@
     "@type": "SoftwareSourceCode",
     "name": "GitHub Actions Gateway",
     "description": "An Actions Runner Controller (ARC) alternative for self-hosted GitHub Actions runners on multi-tenant Kubernetes \u2014 oversubscribe a shared quota, recover evicted jobs automatically, and isolate every tenant\u0027s GitHub egress.",
-    "url": "https://actions-gateway.com/1.4.0",
+    "url": "https://actions-gateway.com/1.5.0",
     "codeRepository": "https://github.com/actions-gateway/github-actions-gateway",
     "programmingLanguage": "Go",
     "license": "https://www.apache.org/licenses/LICENSE-2.0",
     "author": {
       "@type": "Organization",
       "name": "GitHub Actions Gateway",
-      "url": "https://actions-gateway.com/1.4.0"
+      "url": "https://actions-gateway.com/1.5.0"
     }
   }
   </script>
@@ -93,8 +93,8 @@
     "@context": "https://schema.org",
     "@type": "Organization",
     "name": "GitHub Actions Gateway",
-    "url": "https://actions-gateway.com/1.4.0",
-    "logo": "https://actions-gateway.com/1.4.0assets/icon-512.png",
+    "url": "https://actions-gateway.com/1.5.0",
+    "logo": "https://actions-gateway.com/1.5.0assets/icon-512.png",
     "sameAs": ["https://github.com/actions-gateway/github-actions-gateway"]
   }
   </script>
@@ -130,8 +130,8 @@
         <aside class="md-banner">
           <div class="md-banner__inner md-grid md-typeset">
             
-            <strong>v1.4.0 is here.</strong>
-      Consent-gated cross-namespace egress proxy sharing, a curated runner template library you apply with one command, and v2 worker-capacity conditions exported as Prometheus gauges.
+            <strong>v1.5.0 is here.</strong>
+      A per-tenant GitHub runner group boundary, multi-label runner sets that migrate a <code>runs-on</code> array unedited, and job duration and latency metrics on the acquisition tier every new tenant runs.
           </div>
           
         </aside>
@@ -143,7 +143,7 @@
           <aside class="md-banner md-banner--warning">
             <div class="md-banner__inner md-grid md-typeset">
               You're not viewing the latest release.
-  <a href="https://actions-gateway.com/1.4.0"><strong>Go to the current docs.</strong></a>
+  <a href="https://actions-gateway.com/1.5.0"><strong>Go to the current docs.</strong></a>
 
             </div>
             <script>var el=document.querySelector("[data-md-component=outdated]"),base=new URL("../.."),outdated=__md_get("__outdated",sessionStorage,base);!0===outdated&&el&&(el.hidden=!1)</script>
@@ -3804,6 +3804,12 @@ docs/operations/security-operations.md.</p>
 <td>Optional: {}</td>
 </tr>
 <tr>
+<td><code>defaultRunnerGroup</code> <em>string</em></td>
+<td>DefaultRunnerGroup names the GitHub runner group inherited by RunnerSets under this gateway that set no spec.runnerGroup of their own. This is GitHub's own grouping, not the deprecated v1alpha1 RunnerGroup CR. Optional: unset on both objects leaves the scale set in GitHub's default group.<br />This is where a tenant's GitHub-side boundary is declared once. The runner group decides which repositories may target the tenant's runners, so a gateway whose sets all land in the default group is reachable by every repository that group admits, typically the whole organization. Resolved at runtime and fail-closed per set, exactly like an explicit spec.runnerGroup.<br />GAG does not create runner groups or manage their repository access: the platform admin pre-creates the group at GitHub and scopes it to the tenant's repositories. See docs/operations/tenant-onboarding.md.</td>
+<td></td>
+<td>MaxLength: 255<br />MinLength: 1<br />Optional: {}</td>
+</tr>
+<tr>
 <td><code>agcResources</code> <em><a href="https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.36/#resourcerequirements-v1-core">ResourceRequirements</a></em></td>
 <td>AGCResources tunes the CPU/memory requests and limits stamped on this gateway's AGC control-plane container (Q171). It is an additive, per-key override of the platform default — the documented Appendix A sizing of requests {cpu: 500m, memory: 2Gi}, limits {cpu: 2, memory: 4Gi}. The GMC starts from that default and overlays only the request/limit keys set here, so a value that sets just one knob keeps the sensible default for the others. Unset ⇒ the platform default unchanged. Changing it is a rolling restart of the AGC, not a hot reload.<br />Tune cautiously: the AGC is a single pod holding all listener-goroutine state in memory. A memory limit below the AGC's working set OOMKills the control plane, and a request larger than any node (or the namespace ResourceQuota) leaves the AGC pod unschedulable (Pending). See docs/operations/tenant-onboarding.md and docs/design/appendix-e-capacity-planning.md for sizing guidance and the recommended floor.</td>
 <td></td>
@@ -4957,9 +4963,15 @@ lifecycle fields are carried over from RunnerGroup unchanged in meaning.</p>
 </tr>
 <tr>
 <td><code>runnerLabels</code> <em>string array</em></td>
-<td>RunnerLabels is the label set matched against workflow runs-on values. v2beta1 is ScaleSet-only, so exactly one label is required (enforced by the CEL rule on this field): the scale set's single runnerLabel is its runs-on match target, and the label doubles as the scale-set name registered at GitHub. Each label must be non-empty and contain no whitespace or commas (comma is the runs-on list separator). A workload needing multi-label matching must stay on a v2alpha1 Classic RunnerSet during the deprecation window (Q264 §5a-U7).<br />The single-label rule lives on THIS FIELD rather than on the spec, so CRD validation ratcheting (KEP-4008; on by default since Kubernetes 1.30, and the v2 floor is 1.31) suppresses it on an update that leaves runnerLabels untouched. A Classic multi-label set authored through v2alpha1 is STORED as a hub object that violates this rule, so a spec-level rule made every unqualified <code>kubectl edit/patch</code> of such a set fail on a field unrelated to labels (Q398). Ratcheting only forgives an unchanged value: creating a multi-label set through v2beta1, or editing a stored set's labels through v2beta1, is still rejected.</td>
+<td>RunnerLabels is the label set matched against workflow runs-on values. Every label is registered on the scale set at GitHub, so a workflow may target the set with a single name (runs-on: linux) or with an array (runs-on: [linux, gpu]); the Actions Service matches a scale set's labels the way it matches a plain self-hosted runner's. Each label must be non-empty and contain no whitespace or commas (comma is the runs-on list separator).<br />The FIRST label is the scale set's name at GitHub, which makes it this set's identity: reordering the list renames the scale set, leaving the old one orphaned at GitHub, so treat runnerLabels[0] as stable and append rather than prepend. It is also the label the GMC's admission webhook holds unique across the runner sets under one gateway; later labels may overlap freely, and which set an ambiguous runs-on reaches is GitHub's decision.<br />A GitHub Enterprise Server appliance below 3.21 accepts only the name label unless a site admin enables DistributedTask.AllowRunnerScaleSetCustomLabels, and it discards the rest without an error. The AGC compares the registered label set against this one and reports any shortfall as the advisory RunnerLabelsIncomplete condition (Q726).</td>
 <td></td>
 <td>MinItems: 1<br />items:MaxLength: 256<br />items:Pattern: <code>^[^,\s]+$</code></td>
+</tr>
+<tr>
+<td><code>runnerGroup</code> <em>string</em></td>
+<td>RunnerGroup names the GitHub runner group this set's scale set is registered into. This is GitHub's own grouping, not the deprecated v1alpha1 RunnerGroup CR. Unset means inherit the gateway's defaultRunnerGroup; both unset means GitHub's default group.<br />The runner group is the GitHub-side authorization point for which repositories may target these runners. A scale set left in the default group is reachable by every repository that group admits, typically the whole organization, so a repository outside the tenant can name this set in runs-on and route work into its namespace, quota, and egress IP. Pod-level isolation is unaffected; what the group bounds is who can cause a job to run here.<br />Resolved at runtime against GitHub, not at admission (§H.7), and fail-closed: a name no runner group matches leaves the set Ready=False/ RunnerGroupNotFound rather than falling back to the default group, and a scale set already registered in a different group is moved into this one. The group's own repository access is configured at GitHub and is not managed by GAG. See docs/operations/tenant-onboarding.md.</td>
+<td></td>
+<td>MaxLength: 255<br />MinLength: 1<br />Optional: {}</td>
 </tr>
 <tr>
 <td><code>priorityTiers</code> <em><a href="#prioritytier">PriorityTier</a> array</em></td>

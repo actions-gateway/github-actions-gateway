@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/1.4.0/operations/velero-backup-restore/">
+        <link rel="canonical" href="https://actions-gateway.com/1.5.0/operations/velero-backup-restore/">
       
       
         <link rel="prev" href="../backup-restore/">
@@ -63,15 +63,15 @@
   <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/IBMPlexSans-Bold.woff2">
   <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/MonaspaceNeon-Medium.woff2">
   
-  <meta property="og:image" content="https://actions-gateway.com/1.4.0assets/social-preview.png">
+  <meta property="og:image" content="https://actions-gateway.com/1.5.0assets/social-preview.png">
   <meta property="og:image:width" content="1280">
   <meta property="og:image:height" content="640">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:image" content="https://actions-gateway.com/1.4.0assets/social-preview.png">
+  <meta name="twitter:image" content="https://actions-gateway.com/1.5.0assets/social-preview.png">
   
-  <link rel="apple-touch-icon" href="https://actions-gateway.com/1.4.0assets/apple-touch-icon.png">
-  <link rel="alternate icon" href="https://actions-gateway.com/1.4.0assets/favicon.ico">
-  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/1.4.0assets/icon-512.png">
+  <link rel="apple-touch-icon" href="https://actions-gateway.com/1.5.0assets/apple-touch-icon.png">
+  <link rel="alternate icon" href="https://actions-gateway.com/1.5.0assets/favicon.ico">
+  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/1.5.0assets/icon-512.png">
   
   <script type="application/ld+json">
   {
@@ -79,14 +79,14 @@
     "@type": "SoftwareSourceCode",
     "name": "GitHub Actions Gateway",
     "description": "An Actions Runner Controller (ARC) alternative for self-hosted GitHub Actions runners on multi-tenant Kubernetes \u2014 oversubscribe a shared quota, recover evicted jobs automatically, and isolate every tenant\u0027s GitHub egress.",
-    "url": "https://actions-gateway.com/1.4.0",
+    "url": "https://actions-gateway.com/1.5.0",
     "codeRepository": "https://github.com/actions-gateway/github-actions-gateway",
     "programmingLanguage": "Go",
     "license": "https://www.apache.org/licenses/LICENSE-2.0",
     "author": {
       "@type": "Organization",
       "name": "GitHub Actions Gateway",
-      "url": "https://actions-gateway.com/1.4.0"
+      "url": "https://actions-gateway.com/1.5.0"
     }
   }
   </script>
@@ -95,8 +95,8 @@
     "@context": "https://schema.org",
     "@type": "Organization",
     "name": "GitHub Actions Gateway",
-    "url": "https://actions-gateway.com/1.4.0",
-    "logo": "https://actions-gateway.com/1.4.0assets/icon-512.png",
+    "url": "https://actions-gateway.com/1.5.0",
+    "logo": "https://actions-gateway.com/1.5.0assets/icon-512.png",
     "sameAs": ["https://github.com/actions-gateway/github-actions-gateway"]
   }
   </script>
@@ -132,8 +132,8 @@
         <aside class="md-banner">
           <div class="md-banner__inner md-grid md-typeset">
             
-            <strong>v1.4.0 is here.</strong>
-      Consent-gated cross-namespace egress proxy sharing, a curated runner template library you apply with one command, and v2 worker-capacity conditions exported as Prometheus gauges.
+            <strong>v1.5.0 is here.</strong>
+      A per-tenant GitHub runner group boundary, multi-label runner sets that migrate a <code>runs-on</code> array unedited, and job duration and latency metrics on the acquisition tier every new tenant runs.
           </div>
           
         </aside>
@@ -145,7 +145,7 @@
           <aside class="md-banner md-banner--warning">
             <div class="md-banner__inner md-grid md-typeset">
               You're not viewing the latest release.
-  <a href="https://actions-gateway.com/1.4.0"><strong>Go to the current docs.</strong></a>
+  <a href="https://actions-gateway.com/1.5.0"><strong>Go to the current docs.</strong></a>
 
             </div>
             <script>var el=document.querySelector("[data-md-component=outdated]"),base=new URL("../.."),outdated=__md_get("__outdated",sessionStorage,base);!0===outdated&&el&&(el.hidden=!1)</script>
@@ -2905,9 +2905,13 @@
 <blockquote>
 <p><strong>Audience:</strong> Platform engineer</p>
 </blockquote>
-<p>This is a tool-specific how-to for backing up and restoring GitHub Actions Gateway (GAG) state with <a href="https://velero.io/">Velero</a>. It assumes you have already read the conceptual <a href="../backup-restore/">Backup, Restore, and Disaster Recovery (DR)</a> guide — that document explains the <strong>ownership model</strong> this how-to depends on (what the <code>ActionsGateway</code> custom resource (CR) owns, what it does not, and why re-applying the CR reconciles the owned children back). This page does not repeat that reasoning; it maps it onto concrete Velero commands.</p>
-<p>The single most important consequence for Velero: <strong>the Gateway Manager Controller (GMC) rebuilds every owned child from the CR.</strong> So the goal of a Velero restore is <em>not</em> to faithfully recreate every object — it is to restore the <strong>inputs</strong> (the CRs and the operator-supplied resources the controllers cannot regenerate) and let the controllers reconcile the rest. Restoring the owned children directly is at best redundant and at worst harmful (see <a href="#why-not-restore-the-owned-children-directly">Why not restore the owned children directly</a>).</p>
-<p>For the GitOps-first posture (the recommended primary backup), per-resource <code>kubectl</code> export, and the full scenario runbook, stay in <a href="../backup-restore/">backup-restore.md</a>. Use this page when Velero is your namespace-level backup tool.</p>
+<p>This is a tool-specific how-to for backing up and restoring GitHub Actions Gateway (GAG) state with <a href="https://velero.io/">Velero</a>.
+It assumes you have already read the conceptual <a href="../backup-restore/">Backup, Restore, and Disaster Recovery (DR)</a> guide — that document explains the <strong>ownership model</strong> this how-to depends on (what the <code>ActionsGateway</code> custom resource (CR) owns, what it does not, and why re-applying the CR reconciles the owned children back).
+This page does not repeat that reasoning; it maps it onto concrete Velero commands.</p>
+<p>The single most important consequence for Velero: <strong>the Gateway Manager Controller (GMC) rebuilds every owned child from the CR.</strong> So the goal of a Velero restore is <em>not</em> to faithfully recreate every object — it is to restore the <strong>inputs</strong> (the CRs and the operator-supplied resources the controllers cannot regenerate) and let the controllers reconcile the rest.
+Restoring the owned children directly is at best redundant and at worst harmful (see <a href="#why-not-restore-the-owned-children-directly">Why not restore the owned children directly</a>).</p>
+<p>For the GitOps-first posture (the recommended primary backup), per-resource <code>kubectl</code> export, and the full scenario runbook, stay in <a href="../backup-restore/">backup-restore.md</a>.
+Use this page when Velero is your namespace-level backup tool.</p>
 <hr />
 <h2 id="table-of-contents">Table of Contents<a class="headerlink" href="#table-of-contents" title="Permanent link">&para;</a></h2>
 <ul>
@@ -2923,7 +2927,9 @@
 </ul>
 <hr />
 <h2 id="what-velero-should-capture">What Velero Should Capture<a class="headerlink" href="#what-velero-should-capture" title="Permanent link">&para;</a></h2>
-<p>GAG's control-plane state lives entirely in Kubernetes API objects (etcd) — there are <strong>no persistent volumes</strong> holding gateway state. A Velero <em>resource</em> backup is therefore sufficient; you do not need File System Backup (restic/Kopia) or Container Storage Interface (CSI) volume snapshots for the GAG control plane itself. See <a href="#secret-handling-caveats">Secret Handling Caveats</a> for where those data-path features <em>would</em> matter.</p>
+<p>GAG's control-plane state lives entirely in Kubernetes API objects (etcd) — there are <strong>no persistent volumes</strong> holding gateway state.
+A Velero <em>resource</em> backup is therefore sufficient; you do not need File System Backup (restic/Kopia) or Container Storage Interface (CSI) volume snapshots for the GAG control plane itself.
+See <a href="#secret-handling-caveats">Secret Handling Caveats</a> for where those data-path features <em>would</em> matter.</p>
 <p>Two scopes matter:</p>
 <table>
 <thead>
@@ -2946,22 +2952,28 @@
 </tr>
 </tbody>
 </table>
-<p>Everything else in the tenant namespace — the Actions Gateway Controller (AGC) <code>Deployment</code>, ServiceAccounts, RoleBinding, metrics <code>Service</code>, NetworkPolicies, metrics TLS <code>Secret</code>s, and the <code>RunnerGroup</code> CR — is <strong>owned and reconciled by the GMC</strong> and does not need to be in the restore path. Those objects all carry the label <code>app.kubernetes.io/managed-by=actions-gateway-gmc</code>, which is exactly the selector the restore step uses to skip them.</p>
+<p>Everything else in the tenant namespace — the Actions Gateway Controller (AGC) <code>Deployment</code>, ServiceAccounts, RoleBinding, metrics <code>Service</code>, NetworkPolicies, metrics TLS <code>Secret</code>s, and the <code>RunnerGroup</code> CR — is <strong>owned and reconciled by the GMC</strong> and does not need to be in the restore path.
+Those objects all carry the label <code>app.kubernetes.io/managed-by=actions-gateway-gmc</code>, which is exactly the selector the restore step uses to skip them.</p>
 <hr />
 <h2 id="backing-up">Backing Up<a class="headerlink" href="#backing-up" title="Permanent link">&para;</a></h2>
 <p>The examples assume Velero is installed with a <code>BackupStorageLocation</code> whose object store has <strong>encryption-at-rest enabled</strong> (see <a href="#secret-handling-caveats">Secret Handling Caveats</a> — this is not optional for GAG, because the backup contains the GitHub App private-key Secret).</p>
 <h3 id="one-time-the-crds">One-time: the CRDs<a class="headerlink" href="#one-time-the-crds" title="Permanent link">&para;</a></h3>
-<p>CRDs are cluster-scoped and shared across all tenants. The cleanest source of truth for them is the Helm CRD chart in version control (GitOps), restored with <code>helm</code>/<code>kubectl apply</code> before anything else. If you want Velero to carry them too as a belt-and-suspenders, back them up on their own:</p>
+<p>CRDs are cluster-scoped and shared across all tenants.
+The cleanest source of truth for them is the Helm CRD chart in version control (GitOps), restored with <code>helm</code>/<code>kubectl apply</code> before anything else.
+If you want Velero to carry them too as a belt-and-suspenders, back them up on their own:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>velero<span class="w"> </span>backup<span class="w"> </span>create<span class="w"> </span>gag-crds<span class="w"> </span><span class="se">\</span>
 <a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="w">  </span>--include-resources<span class="w"> </span>customresourcedefinitions.apiextensions.k8s.io<span class="w"> </span><span class="se">\</span>
 <a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="w">  </span>--include-cluster-resources<span class="o">=</span><span class="nb">true</span><span class="w"> </span><span class="se">\</span>
 <a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="w">  </span>--selector<span class="w"> </span><span class="s1">&#39;app.kubernetes.io/part-of=actions-gateway&#39;</span>
 </code></pre></div>
 <blockquote>
-<p>The <code>--selector</code> narrows the backup to GAG's CRDs only. It works if your CRDs carry the <code>app.kubernetes.io/part-of=actions-gateway</code> label (the Helm chart stamps the recommended label set). If yours do not, drop the <code>--selector</code> and capture all CRDs — they are small and idempotent to restore.</p>
+<p>The <code>--selector</code> narrows the backup to GAG's CRDs only.
+It works if your CRDs carry the <code>app.kubernetes.io/part-of=actions-gateway</code> label (the Helm chart stamps the recommended label set).
+If yours do not, drop the <code>--selector</code> and capture all CRDs — they are small and idempotent to restore.</p>
 </blockquote>
 <h3 id="per-tenant-the-namespace">Per-tenant: the namespace<a class="headerlink" href="#per-tenant-the-namespace" title="Permanent link">&para;</a></h3>
-<p>Back up the whole tenant namespace. Capturing the owned children too is fine — they make the backup a useful point-in-time audit snapshot; the <a href="#restoring">restore step</a> simply skips them.</p>
+<p>Back up the whole tenant namespace.
+Capturing the owned children too is fine — they make the backup a useful point-in-time audit snapshot; the <a href="#restoring">restore step</a> simply skips them.</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>velero<span class="w"> </span>backup<span class="w"> </span>create<span class="w"> </span>gag-tenant-&lt;namespace&gt;<span class="w"> </span><span class="se">\</span>
 <a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="w">  </span>--include-namespaces<span class="w"> </span>&lt;namespace&gt;
 </code></pre></div>
@@ -2977,10 +2989,14 @@
 <h3 id="ordering-crds--inputs-and-crs--reconcile">Ordering: CRDs → inputs and CRs → reconcile<a class="headerlink" href="#ordering-crds--inputs-and-crs--reconcile" title="Permanent link">&para;</a></h3>
 <ol>
 <li>
-<p><strong>CRDs first.</strong> Restore the GAG CRDs (or <code>helm install</code> the CRD chart) before any CR — a namespaced CR cannot be created until its CRD is established. Velero already enforces this within a single restore: <code>customresourcedefinitions</code> sit near the top of Velero's default restore-resource-priority list, so CRDs are applied before the CRs that depend on them. If you keep CRDs in Git, apply them first and skip Velero for this step.</p>
+<p><strong>CRDs first.</strong> Restore the GAG CRDs (or <code>helm install</code> the CRD chart) before any CR — a namespaced CR cannot be created until its CRD is established.
+   Velero already enforces this within a single restore: <code>customresourcedefinitions</code> sit near the top of Velero's default restore-resource-priority list, so CRDs are applied before the CRs that depend on them.
+   If you keep CRDs in Git, apply them first and skip Velero for this step.</p>
 </li>
 <li>
-<p><strong>Inputs and top-level CRs, skipping owned children.</strong> Restore the tenant namespace, but <strong>exclude everything the GMC owns</strong> and let the controllers rebuild it. The owned children (and the GMC-provisioned <code>RunnerGroup</code>) all carry <code>app.kubernetes.io/managed-by=actions-gateway-gmc</code>; the operator inputs and the top-level CRs do not. A single label selector expresses exactly that:</p>
+<p><strong>Inputs and top-level CRs, skipping owned children.</strong> Restore the tenant namespace, but <strong>exclude everything the GMC owns</strong> and let the controllers rebuild it.
+   The owned children (and the GMC-provisioned <code>RunnerGroup</code>) all carry <code>app.kubernetes.io/managed-by=actions-gateway-gmc</code>; the operator inputs and the top-level CRs do not.
+   A single label selector expresses exactly that:</p>
 </li>
 </ol>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>velero<span class="w"> </span>restore<span class="w"> </span>create<span class="w"> </span>gag-restore-&lt;namespace&gt;<span class="w"> </span><span class="se">\</span>
@@ -2989,39 +3005,57 @@
 </code></pre></div>
 <p>This restores the <code>Namespace</code>, the <code>ResourceQuota</code>, the GitHub App credential <code>Secret</code>, the <code>ActionsGateway</code> CR, and any <code>EgressProxy</code> CR — and <strong>nothing else</strong>.</p>
 <ol>
-<li><strong>Let the controllers reconcile.</strong> Once the CRs land, the GMC re-provisions every owned child within ~30 seconds and <strong>regenerates the metrics TLS Secrets fresh</strong> (new key material — exactly as in a normal re-apply). The cluster-scoped <code>ClusterRoleBinding</code> the AGC needs is recreated by the GMC's reconcile, not by Velero. <code>RunnerSet</code>s that target the gateway re-bind automatically.</li>
+<li><strong>Let the controllers reconcile.</strong> Once the CRs land, the GMC re-provisions every owned child within ~30 seconds and <strong>regenerates the metrics TLS Secrets fresh</strong> (new key material — exactly as in a normal re-apply).
+   The cluster-scoped <code>ClusterRoleBinding</code> the AGC needs is recreated by the GMC's reconcile, not by Velero.
+   <code>RunnerSet</code>s that target the gateway re-bind automatically.</li>
 </ol>
 <blockquote>
-<p><strong>Ordering within step 2 is handled for you.</strong> Velero restores the <code>Namespace</code> and <code>Secret</code> before the CRs (namespaces and secrets also precede custom resources in the default priority list), so the gateway does not transiently report <code>CredentialUnavailable</code>. If you restore the <code>EgressProxy</code> from a <em>separate</em> backup, restore it before (or alongside) the <code>ActionsGateway</code>, or the gateway fails closed with <code>ProxyNotFound</code> until it appears — then reconciles on its own.</p>
+<p><strong>Ordering within step 2 is handled for you.</strong> Velero restores the <code>Namespace</code> and <code>Secret</code> before the CRs (namespaces and secrets also precede custom resources in the default priority list), so the gateway does not transiently report <code>CredentialUnavailable</code>.
+If you restore the <code>EgressProxy</code> from a <em>separate</em> backup, restore it before (or alongside) the <code>ActionsGateway</code>, or the gateway fails closed with <code>ProxyNotFound</code> until it appears — then reconciles on its own.</p>
 </blockquote>
 <h3 id="why-not-restore-the-owned-children-directly">Why not restore the owned children directly<a class="headerlink" href="#why-not-restore-the-owned-children-directly" title="Permanent link">&para;</a></h3>
 <p>Two reasons, both rooted in GAG's <a href="../backup-restore/#what-is-and-is-not-owned-by-the-cr">ownership model</a>:</p>
 <ul>
-<li><strong>Owner-reference UIDs go stale.</strong> Every owned child carries an <code>ownerReference</code> to the <code>ActionsGateway</code> CR's UID. On restore the apiserver assigns the CR a <strong>new</strong> UID, so a restored child's <code>ownerReference</code> points at a UID that no longer exists. Kubernetes garbage collection then deletes the "orphaned" child — so a directly-restored Deployment or Secret may simply vanish moments later. Letting the GMC recreate the children means they are stamped with the live CR's UID from the start.</li>
-<li><strong>Restored metrics TLS Secrets would be stale.</strong> The GMC regenerates the server/client metrics TLS Secrets on every reconcile. Restoring the old material just to have the GMC overwrite (or distrust) it buys nothing and risks a window where a <code>ServiceMonitor</code> trusts retired key material.</li>
+<li><strong>Owner-reference UIDs go stale.</strong> Every owned child carries an <code>ownerReference</code> to the <code>ActionsGateway</code> CR's UID.
+  On restore the apiserver assigns the CR a <strong>new</strong> UID, so a restored child's <code>ownerReference</code> points at a UID that no longer exists.
+  Kubernetes garbage collection then deletes the "orphaned" child — so a directly-restored Deployment or Secret may simply vanish moments later.
+  Letting the GMC recreate the children means they are stamped with the live CR's UID from the start.</li>
+<li><strong>Restored metrics TLS Secrets would be stale.</strong> The GMC regenerates the server/client metrics TLS Secrets on every reconcile.
+  Restoring the old material just to have the GMC overwrite (or distrust) it buys nothing and risks a window where a <code>ServiceMonitor</code> trusts retired key material.</li>
 </ul>
 <p>Skipping the owned children with the <code>managed-by</code> selector sidesteps both problems entirely and matches how a normal CR re-apply already recovers the gateway.</p>
 <hr />
 <h2 id="secret-handling-caveats">Secret Handling Caveats<a class="headerlink" href="#secret-handling-caveats" title="Permanent link">&para;</a></h2>
-<p>The GitHub App credential <code>Secret</code> is the <strong>only</strong> sensitive input in a tenant namespace that GAG cannot regenerate — the GMC rebuilds everything else (metrics TLS Secrets included) from the CR. By default a namespace backup captures that Secret exactly as in etcd: base64-encoded, <strong>not encrypted</strong>. So the whole "treat the backup like an etcd snapshot" burden below exists to protect that one object.</p>
-<p><strong>Recommended: take the Secret out of the backup entirely.</strong> If an external source of truth owns the App key, the in-cluster Secret becomes regenerable like every other owned object, and the Velero backup carries <strong>no secret material at all</strong> — which removes the encrypted-bucket requirement rather than merely mitigating it. Two common approaches:</p>
+<p>The GitHub App credential <code>Secret</code> is the <strong>only</strong> sensitive input in a tenant namespace that GAG cannot regenerate — the GMC rebuilds everything else (metrics TLS Secrets included) from the CR.
+By default a namespace backup captures that Secret exactly as in etcd: base64-encoded, <strong>not encrypted</strong>.
+So the whole "treat the backup like an etcd snapshot" burden below exists to protect that one object.</p>
+<p><strong>Recommended: take the Secret out of the backup entirely.</strong> If an external source of truth owns the App key, the in-cluster Secret becomes regenerable like every other owned object, and the Velero backup carries <strong>no secret material at all</strong> — which removes the encrypted-bucket requirement rather than merely mitigating it.
+Two common approaches:</p>
 <ul>
-<li><strong>External Secrets Operator (ESO)</strong> — back up the <code>ExternalSecret</code> CR (a <em>reference</em> to a vault key — AWS Secrets Manager, GCP Secret Manager, Vault, etc. — with no key material in it). After a restore, ESO re-syncs the <code>Secret</code> from the vault. This is the cleanest option: nothing sensitive ever lands in the backup. The <code>ExternalSecret</code> carries no <code>managed-by=actions-gateway-gmc</code> label, so the <a href="#ordering-crds--inputs-and-crs--reconcile">restore selector</a> keeps it automatically.</li>
-<li><strong>Sealed Secrets</strong> — the encrypted <code>SealedSecret</code> is safe to back up (and to keep in Git), and the controller decrypts it in-cluster. The trade-off: you must separately and securely back up the controller's sealing key, or no restore can decrypt anything.</li>
+<li><strong>External Secrets Operator (ESO)</strong> — back up the <code>ExternalSecret</code> CR (a <em>reference</em> to a vault key — AWS Secrets Manager, GCP Secret Manager, Vault, etc. — with no key material in it).
+  After a restore, ESO re-syncs the <code>Secret</code> from the vault.
+  This is the cleanest option: nothing sensitive ever lands in the backup.
+  The <code>ExternalSecret</code> carries no <code>managed-by=actions-gateway-gmc</code> label, so the <a href="#ordering-crds--inputs-and-crs--reconcile">restore selector</a> keeps it automatically.</li>
+<li><strong>Sealed Secrets</strong> — the encrypted <code>SealedSecret</code> is safe to back up (and to keep in Git), and the controller decrypts it in-cluster.
+  The trade-off: you must separately and securely back up the controller's sealing key, or no restore can decrypt anything.</li>
 </ul>
 <p>With either in place, exclude the live Secret from the backup so the only copy is the externally-managed one — in a GAG tenant namespace the App key is the sole operator-supplied Secret (the metrics TLS Secrets are GMC-regenerated), so excluding Secrets wholesale is safe:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>velero<span class="w"> </span>backup<span class="w"> </span>create<span class="w"> </span>gag-tenant-&lt;namespace&gt;<span class="w"> </span><span class="se">\</span>
 <a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="w">  </span>--include-namespaces<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span><span class="se">\</span>
 <a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="w">  </span>--exclude-resources<span class="w"> </span>secrets
 </code></pre></div>
-<p>GAG already recommends managing the App key with ESO / Sealed Secrets / SOPS regardless of backup tool — see <a href="../backup-restore/#primary-gitops">backup-restore.md § Primary: GitOps</a> and <a href="../security-operations/">security-operations.md</a>. Velero just inherits the payoff.</p>
+<p>GAG already recommends managing the App key with ESO / Sealed Secrets / SOPS regardless of backup tool — see <a href="../backup-restore/#primary-gitops">backup-restore.md § Primary: GitOps</a> and <a href="../security-operations/">security-operations.md</a>.
+Velero just inherits the payoff.</p>
 <p><strong>If you do keep the Secret in the backup</strong> (no external secret store), harden it:</p>
 <ul>
-<li><strong>Encrypt the backup storage at rest.</strong> Enable server-side encryption on the <code>BackupStorageLocation</code> bucket — SSE-S3 or SSE-KMS on Amazon S3, customer-managed encryption keys on Google Cloud Storage / Azure Blob, or your provider's equivalent. This is a hard requirement, not a nicety, because the private key is otherwise recoverable by anyone who can read the bucket.</li>
+<li><strong>Encrypt the backup storage at rest.</strong> Enable server-side encryption on the <code>BackupStorageLocation</code> bucket — SSE-S3 or SSE-KMS on Amazon S3, customer-managed encryption keys on Google Cloud Storage / Azure Blob, or your provider's equivalent.
+  This is a hard requirement, not a nicety, because the private key is otherwise recoverable by anyone who can read the bucket.</li>
 <li><strong>Restrict who can read backups and run restores.</strong> A restore re-materializes the Secret into the cluster; scope the Velero RBAC and the bucket IAM accordingly.</li>
-<li><strong>Or mint on restore from a vaulted <code>.pem</code>.</strong> If you keep the source <code>.pem</code> in a secrets vault but not under ESO, you can recreate the Secret from it at restore time (see <a href="../backup-restore/#scenario-b-whole-tenant-namespace-lost">backup-restore.md Scenario B</a>) instead of relying on the Velero copy. The trade-off is an extra manual step.</li>
+<li><strong>Or mint on restore from a vaulted <code>.pem</code>.</strong> If you keep the source <code>.pem</code> in a secrets vault but not under ESO, you can recreate the Secret from it at restore time (see <a href="../backup-restore/#scenario-b-whole-tenant-namespace-lost">backup-restore.md Scenario B</a>) instead of relying on the Velero copy.
+  The trade-off is an extra manual step.</li>
 </ul>
-<p><strong>Restic/Kopia and CSI snapshots do not apply to the GAG control plane.</strong> Those Velero features back up <em>PersistentVolume data</em>; GAG keeps no control-plane state on volumes, so there is nothing for them to capture here. They become relevant only if a <em>tenant's own runner workloads</em> mount PVs you also want backed up — a separate concern from GAG DR and out of scope for this page.</p>
+<p><strong>Restic/Kopia and CSI snapshots do not apply to the GAG control plane.</strong> Those Velero features back up <em>PersistentVolume data</em>; GAG keeps no control-plane state on volumes, so there is nothing for them to capture here.
+They become relevant only if a <em>tenant's own runner workloads</em> mount PVs you also want backed up — a separate concern from GAG DR and out of scope for this page.</p>
 <hr />
 <h2 id="verification">Verification<a class="headerlink" href="#verification" title="Permanent link">&para;</a></h2>
 <p>After the restore, verify the gateway exactly as for any other recovery — the checks in <a href="../backup-restore/#verification">backup-restore.md § Verification</a> apply unchanged: confirm the GMC re-provisioned the children, the AGC Deployment is available, the <code>ActionsGateway</code> reports <code>Ready=True</code>, and a test workflow provisions a worker pod.</p>

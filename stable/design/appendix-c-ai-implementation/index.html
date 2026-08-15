@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/1.4.0/design/appendix-c-ai-implementation/">
+        <link rel="canonical" href="https://actions-gateway.com/1.5.0/design/appendix-c-ai-implementation/">
       
       
         <link rel="prev" href="../appendix-b-worker-isolation/">
@@ -63,15 +63,15 @@
   <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/IBMPlexSans-Bold.woff2">
   <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/MonaspaceNeon-Medium.woff2">
   
-  <meta property="og:image" content="https://actions-gateway.com/1.4.0assets/social-preview.png">
+  <meta property="og:image" content="https://actions-gateway.com/1.5.0assets/social-preview.png">
   <meta property="og:image:width" content="1280">
   <meta property="og:image:height" content="640">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:image" content="https://actions-gateway.com/1.4.0assets/social-preview.png">
+  <meta name="twitter:image" content="https://actions-gateway.com/1.5.0assets/social-preview.png">
   
-  <link rel="apple-touch-icon" href="https://actions-gateway.com/1.4.0assets/apple-touch-icon.png">
-  <link rel="alternate icon" href="https://actions-gateway.com/1.4.0assets/favicon.ico">
-  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/1.4.0assets/icon-512.png">
+  <link rel="apple-touch-icon" href="https://actions-gateway.com/1.5.0assets/apple-touch-icon.png">
+  <link rel="alternate icon" href="https://actions-gateway.com/1.5.0assets/favicon.ico">
+  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/1.5.0assets/icon-512.png">
   
   <script type="application/ld+json">
   {
@@ -79,14 +79,14 @@
     "@type": "SoftwareSourceCode",
     "name": "GitHub Actions Gateway",
     "description": "An Actions Runner Controller (ARC) alternative for self-hosted GitHub Actions runners on multi-tenant Kubernetes \u2014 oversubscribe a shared quota, recover evicted jobs automatically, and isolate every tenant\u0027s GitHub egress.",
-    "url": "https://actions-gateway.com/1.4.0",
+    "url": "https://actions-gateway.com/1.5.0",
     "codeRepository": "https://github.com/actions-gateway/github-actions-gateway",
     "programmingLanguage": "Go",
     "license": "https://www.apache.org/licenses/LICENSE-2.0",
     "author": {
       "@type": "Organization",
       "name": "GitHub Actions Gateway",
-      "url": "https://actions-gateway.com/1.4.0"
+      "url": "https://actions-gateway.com/1.5.0"
     }
   }
   </script>
@@ -95,8 +95,8 @@
     "@context": "https://schema.org",
     "@type": "Organization",
     "name": "GitHub Actions Gateway",
-    "url": "https://actions-gateway.com/1.4.0",
-    "logo": "https://actions-gateway.com/1.4.0assets/icon-512.png",
+    "url": "https://actions-gateway.com/1.5.0",
+    "logo": "https://actions-gateway.com/1.5.0assets/icon-512.png",
     "sameAs": ["https://github.com/actions-gateway/github-actions-gateway"]
   }
   </script>
@@ -132,8 +132,8 @@
         <aside class="md-banner">
           <div class="md-banner__inner md-grid md-typeset">
             
-            <strong>v1.4.0 is here.</strong>
-      Consent-gated cross-namespace egress proxy sharing, a curated runner template library you apply with one command, and v2 worker-capacity conditions exported as Prometheus gauges.
+            <strong>v1.5.0 is here.</strong>
+      A per-tenant GitHub runner group boundary, multi-label runner sets that migrate a <code>runs-on</code> array unedited, and job duration and latency metrics on the acquisition tier every new tenant runs.
           </div>
           
         </aside>
@@ -145,7 +145,7 @@
           <aside class="md-banner md-banner--warning">
             <div class="md-banner__inner md-grid md-typeset">
               You're not viewing the latest release.
-  <a href="https://actions-gateway.com/1.4.0"><strong>Go to the current docs.</strong></a>
+  <a href="https://actions-gateway.com/1.5.0"><strong>Go to the current docs.</strong></a>
 
             </div>
             <script>var el=document.querySelector("[data-md-component=outdated]"),base=new URL("../.."),outdated=__md_get("__outdated",sessionStorage,base);!0===outdated&&el&&(el.hidden=!1)</script>
@@ -2723,40 +2723,67 @@
 <h1 id="appendix-c--ai-assisted-implementation-notes-optional">Appendix C — AI-Assisted Implementation Notes (Optional)<a class="headerlink" href="#appendix-c--ai-assisted-implementation-notes-optional" title="Permanent link">&para;</a></h1>
 <p>← <a href="../appendix-b-worker-isolation/">Appendix B</a> | <a href="../">Back to index</a> | Next: <a href="../appendix-d-alternatives-considered/">Appendix D — Alternatives Considered →</a></p>
 <hr />
-<p>The milestones in <a href="../06-implementation-phases/">§6</a> describe <em>what</em> to build and <em>how to verify</em> it; they do not prescribe a working style. This appendix collects guidance for teams who choose to use AI-assisted coding tools (e.g. Claude Code, GitHub Copilot, Cursor) during implementation. The guidance is optional and orthogonal to the design itself.</p>
+<p>The milestones in <a href="../06-implementation-phases/">§6</a> describe <em>what</em> to build and <em>how to verify</em> it; they do not prescribe a working style.
+This appendix collects guidance for teams who choose to use AI-assisted coding tools (e.g.
+Claude Code, GitHub Copilot, Cursor) during implementation.
+The guidance is optional and orthogonal to the design itself.</p>
 <hr />
 <h2 id="c1-comparative-advantages">C.1. Comparative Advantages<a class="headerlink" href="#c1-comparative-advantages" title="Permanent link">&para;</a></h2>
 <p>AI-assisted implementation is well-suited to this design for several reasons:</p>
 <ul>
-<li><strong>Boilerplate-heavy scaffolding.</strong> Both controllers are <code>controller-runtime</code>/<code>kubebuilder</code> operators with deeply conventional reconcile loops, RBAC markers, status update patterns, and CRD type definitions. AI tools generate this skeleton in minutes with high accuracy, freeing engineering time for the parts that actually require judgment.</li>
-<li><strong>Table-driven tests.</strong> Sections <a href="../07-test-plan/#71-unit-tests">7.1</a> and <a href="../07-test-plan/#72-integration-tests">7.2</a> specify dozens of test cases following uniform table-driven patterns. AI tools are particularly strong at generating these from a description of the inputs, expected outputs, and edge cases.</li>
+<li><strong>Boilerplate-heavy scaffolding.</strong> Both controllers are <code>controller-runtime</code>/<code>kubebuilder</code> operators with deeply conventional reconcile loops, RBAC markers, status update patterns, and CRD type definitions.
+  AI tools generate this skeleton in minutes with high accuracy, freeing engineering time for the parts that actually require judgment.</li>
+<li><strong>Table-driven tests.</strong> Sections <a href="../07-test-plan/#71-unit-tests">7.1</a> and <a href="../07-test-plan/#72-integration-tests">7.2</a> specify dozens of test cases following uniform table-driven patterns.
+  AI tools are particularly strong at generating these from a description of the inputs, expected outputs, and edge cases.</li>
 <li><strong>Repetitive resource generation.</strong> The GMC's reconciler emits ten kinds of Kubernetes objects per tenant; assembling each <code>corev1.Service</code>, <code>appsv1.Deployment</code>, <code>autoscalingv2.HorizontalPodAutoscaler</code>, etc. is exactly the kind of structured code generation AI tools handle well.</li>
-<li><strong>Fixture-based payload work.</strong> The decrypted job payload from Milestone 1 is large and opaque. AI tools can derive Go struct definitions, parse helpers, and field-validation tests from the fixture without needing a separate schema spec.</li>
-<li><strong>Shifting the engineer's role to review.</strong> The five-week timeline assumes the engineer spends more time reviewing, integrating, and validating than typing. AI tools enable this redistribution by absorbing the typing.</li>
+<li><strong>Fixture-based payload work.</strong> The decrypted job payload from Milestone 1 is large and opaque.
+  AI tools can derive Go struct definitions, parse helpers, and field-validation tests from the fixture without needing a separate schema spec.</li>
+<li><strong>Shifting the engineer's role to review.</strong> The five-week timeline assumes the engineer spends more time reviewing, integrating, and validating than typing.
+  AI tools enable this redistribution by absorbing the typing.</li>
 </ul>
 <hr />
 <h2 id="c2-risks-and-mitigations">C.2. Risks and Mitigations<a class="headerlink" href="#c2-risks-and-mitigations" title="Permanent link">&para;</a></h2>
 <p>AI-assisted implementation introduces specific failure modes that are worth naming explicitly.</p>
 <ul>
-<li><strong>Plausible but wrong code.</strong> AI tools confidently produce code that compiles and reads correctly but is wrong in subtle ways — calling the wrong endpoint, conflating <code>broker_url</code> and <code>run_service_url</code>, treating a Secret as mutable when it isn't, or skipping a critical <code>defer</code> on a mutex. <strong>Mitigation:</strong> every AI-generated PR is reviewed by an engineer who has read the relevant section of this design doc; the design doc, not the AI tool, is the source of truth.</li>
-<li><strong>Hidden security regressions.</strong> AI tools may generate ClusterRoles with overly broad verbs (<code>*</code> on <code>secrets</code>, wildcard resource selectors) because that is the path of least resistance. <strong>Mitigation:</strong> the <a href="../07-test-plan/#71-unit-tests">§7.1</a> "GMC RBAC boundary assertions" test exists specifically to catch this; run it on every PR and fail the build on violations.</li>
-<li><strong>Drift from the design doc.</strong> AI tools optimize for solving the immediate prompt and will happily diverge from the documented API contracts if not corrected. <strong>Mitigation:</strong> feed the specific design-doc section into the prompt for each task, not just the high-level goal; cross-reference generated CRD field names against <a href="../03-api-contracts/#31-kubernetes-crd-schemas">§3.1</a> before merging.</li>
-<li><strong>Test coverage that mirrors the code.</strong> AI tools generating tests after the implementation tend to test what the code <em>does</em>, not what it <em>should</em> do. <strong>Mitigation:</strong> write the test specification (the bullet under <a href="../07-test-plan/">§7</a>) before asking the AI to implement either the code or the test. Treat the design doc's test list as the contract.</li>
-<li><strong>Erosion of mental model.</strong> Engineers who rely heavily on AI for implementation may end up with a shallower understanding of the resulting system, slowing later debugging. <strong>Mitigation:</strong> the engineer is expected to be able to explain every merged PR without referring back to the AI conversation. If they cannot, the PR is not ready to merge.</li>
+<li><strong>Plausible but wrong code.</strong> AI tools confidently produce code that compiles and reads correctly but is wrong in subtle ways — calling the wrong endpoint, conflating <code>broker_url</code> and <code>run_service_url</code>, treating a Secret as mutable when it isn't, or skipping a critical <code>defer</code> on a mutex.
+  <strong>Mitigation:</strong> every AI-generated PR is reviewed by an engineer who has read the relevant section of this design doc; the design doc, not the AI tool, is the source of truth.</li>
+<li><strong>Hidden security regressions.</strong> AI tools may generate ClusterRoles with overly broad verbs (<code>*</code> on <code>secrets</code>, wildcard resource selectors) because that is the path of least resistance.
+  <strong>Mitigation:</strong> the <a href="../07-test-plan/#71-unit-tests">§7.1</a> "GMC RBAC boundary assertions" test exists specifically to catch this; run it on every PR and fail the build on violations.</li>
+<li><strong>Drift from the design doc.</strong> AI tools optimize for solving the immediate prompt and will happily diverge from the documented API contracts if not corrected.
+  <strong>Mitigation:</strong> feed the specific design-doc section into the prompt for each task, not just the high-level goal; cross-reference generated CRD field names against <a href="../03-api-contracts/#31-kubernetes-crd-schemas">§3.1</a> before merging.</li>
+<li><strong>Test coverage that mirrors the code.</strong> AI tools generating tests after the implementation tend to test what the code <em>does</em>, not what it <em>should</em> do.
+  <strong>Mitigation:</strong> write the test specification (the bullet under <a href="../07-test-plan/">§7</a>) before asking the AI to implement either the code or the test.
+  Treat the design doc's test list as the contract.</li>
+<li><strong>Erosion of mental model.</strong> Engineers who rely heavily on AI for implementation may end up with a shallower understanding of the resulting system, slowing later debugging.
+  <strong>Mitigation:</strong> the engineer is expected to be able to explain every merged PR without referring back to the AI conversation.
+  If they cannot, the PR is not ready to merge.</li>
 </ul>
 <hr />
 <h2 id="c3-recommended-prompting-structure-per-milestone">C.3. Recommended Prompting Structure Per Milestone<a class="headerlink" href="#c3-recommended-prompting-structure-per-milestone" title="Permanent link">&para;</a></h2>
-<p>These prompts are <em>suggestions</em>; adapt to taste. Each milestone references the design-doc section that should be pasted into the prompt as ground truth.</p>
+<p>These prompts are <em>suggestions</em>; adapt to taste.
+Each milestone references the design-doc section that should be pasted into the prompt as ground truth.</p>
 <ul>
-<li><strong><a href="../06-implementation-phases/#milestone-1-wire-protocol-probe-days-14">Milestone 1</a> (Wire Protocol Probe).</strong> Feed the broker endpoint table (<a href="../03-api-contracts/#33-re-implemented-broker-api-endpoints">§3.3</a>) and payload structs (<a href="../03-api-contracts/#34-broker-payload-blueprints-go-structs">§3.4</a>) as the source of truth. Ask for a standalone <code>cmd/probe/main.go</code> that authenticates via GitHub App credentials, calls <code>POST /sessions</code>, long-polls <code>GET /message</code>, calls <code>POST /acquirejob</code> on the <code>run_service_url</code> from the message body, and starts a <code>renewjob</code> loop. Be explicit about the two-URL pitfall called out in <a href="../03-api-contracts/#33-re-implemented-broker-api-endpoints">§3.3</a> — ask for the distinction to appear in named variables, not assumed.</li>
-<li><strong><a href="../06-implementation-phases/#milestone-2-agc-controller--reconciler-days-510">Milestone 2</a> (AGC).</strong> Ask for <code>kubebuilder</code>-style scaffolding from the <code>RunnerGroup</code> CRD spec in <a href="../03-api-contracts/#31-kubernetes-crd-schemas">§3.1</a>. Iterate on the goroutine session registry, Token Manager (mutex-protected token with T-5min proactive refresh), and per-job RenewJob loop. Use the Milestone 1 probe as the polling implementation. Pair every generated function with a table-driven unit test and a <code>goleak.VerifyNone(t)</code> assertion in test teardown.</li>
-<li><strong><a href="../06-implementation-phases/#milestone-3-worker-pod--pipe-handoff-days-1116">Milestone 3</a> (Worker pod).</strong> This is the riskiest phase for AI-assisted work because the Named Pipe handoff is underdocumented in the upstream <code>actions/runner</code> codebase. Validate the entrypoint wrapper against the static decrypted payload from Milestone 1 <em>before</em> wiring it into pod creation, so the pipe semantics can be debugged in isolation.</li>
-<li><strong><a href="../06-implementation-phases/#milestone-4-gateway-manager-controller--proxy-days-1722">Milestone 4</a> (GMC + Proxy).</strong> Ask for a second <code>cmd/</code> entry point in the same repo, sharing CRD types. Feed the <code>ActionsGateway</code> CRD spec from <a href="../03-api-contracts/#31-kubernetes-crd-schemas">§3.1</a> verbatim. Pay close attention to generated RBAC — write the <a href="../07-test-plan/#71-unit-tests">§7.1</a> "GMC RBAC boundary assertions" test <em>first</em>, before merging the GMC code. The CONNECT proxy itself is a small artifact (~150 lines) and an excellent target for AI generation.</li>
-<li><strong><a href="../06-implementation-phases/#milestone-5-hardening--load-testing-days-2326">Milestone 5</a> (Hardening &amp; Load).</strong> Ask for NetworkPolicy manifests scoped to the proxy label, PodSecurityContext hardening for both proxy and AGC, and per-namespace ResourceQuota definitions derived from <a href="../05-security/">§5</a> and <a href="../appendix-a-capacity-slos/">Appendix A</a>. Extend the load harness from Milestone 1 to multiple tenants. <strong>Review all generated security manifests by hand before applying to any real cluster</strong> — this is the highest-stakes review pass of the entire project.</li>
+<li><strong><a href="../06-implementation-phases/#milestone-1-wire-protocol-probe-days-14">Milestone 1</a> (Wire Protocol Probe).</strong> Feed the broker endpoint table (<a href="../03-api-contracts/#33-re-implemented-broker-api-endpoints">§3.3</a>) and payload structs (<a href="../03-api-contracts/#34-broker-payload-blueprints-go-structs">§3.4</a>) as the source of truth.
+  Ask for a standalone <code>cmd/probe/main.go</code> that authenticates via GitHub App credentials, calls <code>POST /sessions</code>, long-polls <code>GET /message</code>, calls <code>POST /acquirejob</code> on the <code>run_service_url</code> from the message body, and starts a <code>renewjob</code> loop.
+  Be explicit about the two-URL pitfall called out in <a href="../03-api-contracts/#33-re-implemented-broker-api-endpoints">§3.3</a> — ask for the distinction to appear in named variables, not assumed.</li>
+<li><strong><a href="../06-implementation-phases/#milestone-2-agc-controller--reconciler-days-510">Milestone 2</a> (AGC).</strong> Ask for <code>kubebuilder</code>-style scaffolding from the <code>RunnerGroup</code> CRD spec in <a href="../03-api-contracts/#31-kubernetes-crd-schemas">§3.1</a>.
+  Iterate on the goroutine session registry, Token Manager (mutex-protected token with T-5min proactive refresh), and per-job RenewJob loop.
+  Use the Milestone 1 probe as the polling implementation.
+  Pair every generated function with a table-driven unit test and a <code>goleak.VerifyNone(t)</code> assertion in test teardown.</li>
+<li><strong><a href="../06-implementation-phases/#milestone-3-worker-pod--pipe-handoff-days-1116">Milestone 3</a> (Worker pod).</strong> This is the riskiest phase for AI-assisted work because the Named Pipe handoff is underdocumented in the upstream <code>actions/runner</code> codebase.
+  Validate the entrypoint wrapper against the static decrypted payload from Milestone 1 <em>before</em> wiring it into pod creation, so the pipe semantics can be debugged in isolation.</li>
+<li><strong><a href="../06-implementation-phases/#milestone-4-gateway-manager-controller--proxy-days-1722">Milestone 4</a> (GMC + Proxy).</strong> Ask for a second <code>cmd/</code> entry point in the same repo, sharing CRD types.
+  Feed the <code>ActionsGateway</code> CRD spec from <a href="../03-api-contracts/#31-kubernetes-crd-schemas">§3.1</a> verbatim.
+  Pay close attention to generated RBAC — write the <a href="../07-test-plan/#71-unit-tests">§7.1</a> "GMC RBAC boundary assertions" test <em>first</em>, before merging the GMC code.
+  The CONNECT proxy itself is a small artifact (~150 lines) and an excellent target for AI generation.</li>
+<li><strong><a href="../06-implementation-phases/#milestone-5-hardening--load-testing-days-2326">Milestone 5</a> (Hardening &amp; Load).</strong> Ask for NetworkPolicy manifests scoped to the proxy label, PodSecurityContext hardening for both proxy and AGC, and per-namespace ResourceQuota definitions derived from <a href="../05-security/">§5</a> and <a href="../appendix-a-capacity-slos/">Appendix A</a>.
+  Extend the load harness from Milestone 1 to multiple tenants.
+  <strong>Review all generated security manifests by hand before applying to any real cluster</strong> — this is the highest-stakes review pass of the entire project.</li>
 </ul>
 <hr />
 <h2 id="c4-when-ai-assisted-implementation-is-the-wrong-choice">C.4. When AI-Assisted Implementation Is the Wrong Choice<a class="headerlink" href="#c4-when-ai-assisted-implementation-is-the-wrong-choice" title="Permanent link">&para;</a></h2>
-<p>If your team has not used these tools before, the five-week timeline may not include enough slack to learn the tools and the codebase simultaneously. Conventional implementation with a longer timeline is a safe alternative; the design doc is identical and the milestones still apply.</p>
+<p>If your team has not used these tools before, the five-week timeline may not include enough slack to learn the tools and the codebase simultaneously.
+Conventional implementation with a longer timeline is a safe alternative; the design doc is identical and the milestones still apply.</p>
 <hr />
 <p>← <a href="../appendix-b-worker-isolation/">Appendix B</a> | <a href="../">Back to index</a> | Next: <a href="../appendix-d-alternatives-considered/">Appendix D — Alternatives Considered →</a></p>
 

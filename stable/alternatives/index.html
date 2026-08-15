@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/1.4.0/alternatives/">
+        <link rel="canonical" href="https://actions-gateway.com/1.5.0/alternatives/">
       
       
         <link rel="prev" href="../why-gag/">
@@ -63,15 +63,15 @@
   <link rel="preload" as="font" type="font/woff2" crossorigin href="../assets/fonts/IBMPlexSans-Bold.woff2">
   <link rel="preload" as="font" type="font/woff2" crossorigin href="../assets/fonts/MonaspaceNeon-Medium.woff2">
   
-  <meta property="og:image" content="https://actions-gateway.com/1.4.0assets/social-preview.png">
+  <meta property="og:image" content="https://actions-gateway.com/1.5.0assets/social-preview.png">
   <meta property="og:image:width" content="1280">
   <meta property="og:image:height" content="640">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:image" content="https://actions-gateway.com/1.4.0assets/social-preview.png">
+  <meta name="twitter:image" content="https://actions-gateway.com/1.5.0assets/social-preview.png">
   
-  <link rel="apple-touch-icon" href="https://actions-gateway.com/1.4.0assets/apple-touch-icon.png">
-  <link rel="alternate icon" href="https://actions-gateway.com/1.4.0assets/favicon.ico">
-  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/1.4.0assets/icon-512.png">
+  <link rel="apple-touch-icon" href="https://actions-gateway.com/1.5.0assets/apple-touch-icon.png">
+  <link rel="alternate icon" href="https://actions-gateway.com/1.5.0assets/favicon.ico">
+  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/1.5.0assets/icon-512.png">
   
   <script type="application/ld+json">
   {
@@ -79,14 +79,14 @@
     "@type": "SoftwareSourceCode",
     "name": "GitHub Actions Gateway",
     "description": "An Actions Runner Controller (ARC) alternative for self-hosted GitHub Actions runners on multi-tenant Kubernetes \u2014 oversubscribe a shared quota, recover evicted jobs automatically, and isolate every tenant\u0027s GitHub egress.",
-    "url": "https://actions-gateway.com/1.4.0",
+    "url": "https://actions-gateway.com/1.5.0",
     "codeRepository": "https://github.com/actions-gateway/github-actions-gateway",
     "programmingLanguage": "Go",
     "license": "https://www.apache.org/licenses/LICENSE-2.0",
     "author": {
       "@type": "Organization",
       "name": "GitHub Actions Gateway",
-      "url": "https://actions-gateway.com/1.4.0"
+      "url": "https://actions-gateway.com/1.5.0"
     }
   }
   </script>
@@ -95,8 +95,8 @@
     "@context": "https://schema.org",
     "@type": "Organization",
     "name": "GitHub Actions Gateway",
-    "url": "https://actions-gateway.com/1.4.0",
-    "logo": "https://actions-gateway.com/1.4.0assets/icon-512.png",
+    "url": "https://actions-gateway.com/1.5.0",
+    "logo": "https://actions-gateway.com/1.5.0assets/icon-512.png",
     "sameAs": ["https://github.com/actions-gateway/github-actions-gateway"]
   }
   </script>
@@ -132,8 +132,8 @@
         <aside class="md-banner">
           <div class="md-banner__inner md-grid md-typeset">
             
-            <strong>v1.4.0 is here.</strong>
-      Consent-gated cross-namespace egress proxy sharing, a curated runner template library you apply with one command, and v2 worker-capacity conditions exported as Prometheus gauges.
+            <strong>v1.5.0 is here.</strong>
+      A per-tenant GitHub runner group boundary, multi-label runner sets that migrate a <code>runs-on</code> array unedited, and job duration and latency metrics on the acquisition tier every new tenant runs.
           </div>
           
         </aside>
@@ -145,7 +145,7 @@
           <aside class="md-banner md-banner--warning">
             <div class="md-banner__inner md-grid md-typeset">
               You're not viewing the latest release.
-  <a href="https://actions-gateway.com/1.4.0"><strong>Go to the current docs.</strong></a>
+  <a href="https://actions-gateway.com/1.5.0"><strong>Go to the current docs.</strong></a>
 
             </div>
             <script>var el=document.querySelector("[data-md-component=outdated]"),base=new URL(".."),outdated=__md_get("__outdated",sessionStorage,base);!0===outdated&&el&&(el.hidden=!1)</script>
@@ -2766,9 +2766,7 @@
 
 
 <h1 id="choosing-how-to-run-self-hosted-ci">Choosing how to run self-hosted CI<a class="headerlink" href="#choosing-how-to-run-self-hosted-ci" title="Permanent link">&para;</a></h1>
-<p>One question decides most of this: <strong>must the compute be yours, and do several
-teams have to share it?</strong> If either half is no, something simpler than GitHub
-Actions Gateway (GAG) is probably right.</p>
+<p>One question decides most of this: <strong>must the compute be yours, and do several teams have to share it?</strong> If either half is no, something simpler than GitHub Actions Gateway (GAG) is probably right.</p>
 <h2 id="when-not-to-choose-gag">When not to choose GAG<a class="headerlink" href="#when-not-to-choose-gag" title="Permanent link">&para;</a></h2>
 <table>
 <thead>
@@ -2803,12 +2801,10 @@ Actions Gateway (GAG) is probably right.</p>
 </table>
 <div class="admonition tip">
 <p class="admonition-title">GAG is for what is left</p>
-<p>The nodes are big and expensive, several teams have to share them, and that
-sharing has to be safe.</p>
+<p>The nodes are big and expensive, several teams have to share them, and that sharing has to be safe.</p>
 </div>
 <h2 id="location-location-location">Location, location, location<a class="headerlink" href="#location-location-location" title="Permanent link">&para;</a></h2>
-<p>Where each option can actually run is the fastest filter, and most comparisons
-omit it: "self-hosted" usually means "self-hosted on AWS".</p>
+<p>Where each option can actually run is the fastest filter, and most comparisons omit it: "self-hosted" usually means "self-hosted on AWS".</p>
 <table>
 <thead>
 <tr>
@@ -2837,20 +2833,16 @@ omit it: "self-hosted" usually means "self-hosted on AWS".</p>
 </table>
 <div class="admonition tip">
 <p class="admonition-title">On-premises, most of this list is already gone</p>
-<p>Only the last row is left, ruled out by the same constraint that made you
-self-host in the first place, before a single feature is compared.</p>
+<p>Only the last row is left, ruled out by the same constraint that made you self-host in the first place, before a single feature is compared.</p>
 </div>
-<p>That also breaks account-per-tenant isolation, which is ForgeMT's model and the
-serious argument against a shared cluster: an AWS account is a free API call,
-but its bare-metal equivalent is a hardware purchase, and partitioned capacity
-cannot be shifted between tenants.
-<a href="../design/appendix-d-alternatives-considered/#d9-forgemt-and-account-per-tenant-runner-platforms">Appendix D.9</a>
-takes it seriously and states both trade-offs.</p>
+<p>On-premises also removes the isolation boundaries those options are built from, which is the serious argument against a shared cluster.
+ForgeMT, the one other multi-tenant platform on the list, draws its tenant boundary in IAM and OIDC role scope, GitHub App scope, and runner labels, and offers a VM per job when a pod is not enough (its docs, read 2026-08-12).
+Every one of those is an AWS API, and on your own hardware the equivalent is a hardware purchase rather than a free call.
+<a href="../design/appendix-d-alternatives-considered/#d9-forgemt-and-cloud-identity-tenant-boundaries">Appendix D.9</a> states both trade-offs, including the one this design loses.</p>
 <h2 id="multi-tenant-platforms-are-an-order-of-magnitude-more-complex">Multi-tenant platforms are an order of magnitude more complex<a class="headerlink" href="#multi-tenant-platforms-are-an-order-of-magnitude-more-complex" title="Permanent link">&para;</a></h2>
-<p>Adding teams does not add a feature, it adds roles. Three end up in the room,
-each with different powers and a different blast radius, and holding them apart
-is most of the work. ARC models the first two as one person, which is coherent
-for a single-owner cluster and is why it has no primitive separating them.</p>
+<p>Adding teams does not add a feature, it adds roles.
+Three end up in the room, each with different powers and a different blast radius, and holding them apart is most of the work.
+ARC models the first two as one person, which is coherent for a single-owner cluster and is why it has no primitive separating them.</p>
 <table>
 <thead>
 <tr>
@@ -2889,8 +2881,7 @@ for a single-owner cluster and is why it has no primitive separating them.</p>
 <h2 id="a-paved-road-is-worth-more-than-a-trail-map">A paved road is worth more than a trail map<a class="headerlink" href="#a-paved-road-is-worth-more-than-a-trail-map" title="Permanent link">&para;</a></h2>
 <ul>
 <li><strong>Feature comparisons</strong> tell you what <em>can</em> be done.</li>
-<li><strong>Reference architectures</strong> prove it has been validated, and tell you how to
-  do it.</li>
+<li><strong>Reference architectures</strong> prove it has been validated, and tell you how to do it.</li>
 <li><strong>Runbooks, dashboards, and alerts</strong> tell you how to operate it.</li>
 </ul>
 <p>Measured 2026-08-06 against ARC 0.14.2 and <code>master</code>.</p>
@@ -2916,8 +2907,8 @@ for a single-owner cluster and is why it has no primitive separating them.</p>
 </tbody>
 </table>
 <h2 id="no-offering-is-perfect-yet">No offering is perfect, yet…<a class="headerlink" href="#no-offering-is-perfect-yet" title="Permanent link">&para;</a></h2>
-<p>Here is where GAG loses, and to whom. <strong>No single alternative holds all of
-these</strong>, which is why the middle column matters as much as the first.</p>
+<p>Here is where GAG loses, and to whom.
+<strong>No single alternative holds all of these</strong>, which is why the middle column matters as much as the first.</p>
 <table>
 <thead>
 <tr>
@@ -2929,18 +2920,13 @@ these</strong>, which is why the middle column matters as much as the first.</p>
 <tbody>
 <tr>
 <td>Install base</td>
-<td>ARC 6,417 stars, ForgeMT 211, GAG 3 (2026-08-06)</td>
+<td>ARC 6,430 stars, ForgeMT 211, GAG 3 (2026-08-12)</td>
 <td>see below</td>
 </tr>
 <tr>
 <td>Commercial support</td>
 <td>ARC, and every managed service</td>
 <td>none planned, by design</td>
-</tr>
-<tr>
-<td>Multi-label <code>runs-on</code></td>
-<td>ARC, since 0.14.0 (2026-03-19)</td>
-<td>Q726</td>
 </tr>
 <tr>
 <td><code>container:</code>/<code>services:</code> without privilege</td>
@@ -2957,35 +2943,15 @@ these</strong>, which is why the middle column matters as much as the first.</p>
 <td>ARC</td>
 <td><a href="../features/">flagged untested</a>; needs an operator with one</td>
 </tr>
-<tr>
-<td>Bound GitHub runner group</td>
-<td>ARC, via <code>runnerGroup</code></td>
-<td><a href="../roadmap/">Q712</a>, gating the next release</td>
-</tr>
-<tr>
-<td>Default-tier latency metrics</td>
-<td>nobody: a defect, not a rival's feature</td>
-<td><a href="../roadmap/">Q713</a>, gating the next release</td>
-</tr>
 </tbody>
 </table>
 <p>Two footnotes on that table.</p>
-<p><strong>Cache is usually misread.</strong> <code>actions/cache</code> works on GAG today; what is
-missing is a cache <em>inside</em> the cluster. ARC has none either, so this is not a
-reason to prefer ARC.</p>
-<p><strong>Install base has no engineering answer.</strong> If being the first production
-deployment is unacceptable, that settles it. The only counterweight is the
-evidence trail: dated measurements, failure modes documented with the incidents
-that found them, and a
-<a href="../design/appendix-a-capacity-slos/">published retraction</a> of the project's own
-best number once it proved unmeasurable.</p>
+<p><strong>Cache is usually misread.</strong> <code>actions/cache</code> works on GAG today; what is missing is a cache <em>inside</em> the cluster.
+ARC has none either, so this is not a reason to prefer ARC.</p>
+<p><strong>Install base has no engineering answer.</strong> If being the first production deployment is unacceptable, that settles it.
+The only counterweight is the evidence trail: dated measurements, failure modes documented with the incidents that found them, and a <a href="../design/appendix-a-capacity-slos/">published retraction</a> of the project's own best number once it proved unmeasurable.</p>
 <h2 id="reading-further">Reading further<a class="headerlink" href="#reading-further" title="Permanent link">&para;</a></h2>
-<p><a href="../design/appendix-d-alternatives-considered/">Appendix D</a> argues every
-alternative in full, including
-<a href="../design/appendix-d-alternatives-considered/#d10-prow-and-the-prior-art-for-automatic-re-run">Prow</a>,
-which is why GAG does not claim automatic re-run is novel, and
-<a href="../design/appendix-d-alternatives-considered/#d12-gitlab-runners-kubernetes-executor">GitLab Runner</a>,
-which faces the identical problem and resolves it the other way.
+<p><a href="../design/appendix-d-alternatives-considered/">Appendix D</a> argues every alternative in full, including <a href="../design/appendix-d-alternatives-considered/#d10-prow-and-the-prior-art-for-automatic-re-run">Prow</a>, which is why GAG does not claim automatic re-run is novel, and <a href="../design/appendix-d-alternatives-considered/#d12-gitlab-runners-kubernetes-executor">GitLab Runner</a>, which faces the identical problem and resolves it the other way.
 <a href="../why-gag/">Why GAG?</a> is the capability-by-capability comparison against ARC.</p>
 
 

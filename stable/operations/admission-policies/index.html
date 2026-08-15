@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/1.4.0/operations/admission-policies/">
+        <link rel="canonical" href="https://actions-gateway.com/1.5.0/operations/admission-policies/">
       
       
         <link rel="prev" href="../security-operations/">
@@ -63,15 +63,15 @@
   <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/IBMPlexSans-Bold.woff2">
   <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/MonaspaceNeon-Medium.woff2">
   
-  <meta property="og:image" content="https://actions-gateway.com/1.4.0assets/social-preview.png">
+  <meta property="og:image" content="https://actions-gateway.com/1.5.0assets/social-preview.png">
   <meta property="og:image:width" content="1280">
   <meta property="og:image:height" content="640">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:image" content="https://actions-gateway.com/1.4.0assets/social-preview.png">
+  <meta name="twitter:image" content="https://actions-gateway.com/1.5.0assets/social-preview.png">
   
-  <link rel="apple-touch-icon" href="https://actions-gateway.com/1.4.0assets/apple-touch-icon.png">
-  <link rel="alternate icon" href="https://actions-gateway.com/1.4.0assets/favicon.ico">
-  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/1.4.0assets/icon-512.png">
+  <link rel="apple-touch-icon" href="https://actions-gateway.com/1.5.0assets/apple-touch-icon.png">
+  <link rel="alternate icon" href="https://actions-gateway.com/1.5.0assets/favicon.ico">
+  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/1.5.0assets/icon-512.png">
   
   <script type="application/ld+json">
   {
@@ -79,14 +79,14 @@
     "@type": "SoftwareSourceCode",
     "name": "GitHub Actions Gateway",
     "description": "An Actions Runner Controller (ARC) alternative for self-hosted GitHub Actions runners on multi-tenant Kubernetes \u2014 oversubscribe a shared quota, recover evicted jobs automatically, and isolate every tenant\u0027s GitHub egress.",
-    "url": "https://actions-gateway.com/1.4.0",
+    "url": "https://actions-gateway.com/1.5.0",
     "codeRepository": "https://github.com/actions-gateway/github-actions-gateway",
     "programmingLanguage": "Go",
     "license": "https://www.apache.org/licenses/LICENSE-2.0",
     "author": {
       "@type": "Organization",
       "name": "GitHub Actions Gateway",
-      "url": "https://actions-gateway.com/1.4.0"
+      "url": "https://actions-gateway.com/1.5.0"
     }
   }
   </script>
@@ -95,8 +95,8 @@
     "@context": "https://schema.org",
     "@type": "Organization",
     "name": "GitHub Actions Gateway",
-    "url": "https://actions-gateway.com/1.4.0",
-    "logo": "https://actions-gateway.com/1.4.0assets/icon-512.png",
+    "url": "https://actions-gateway.com/1.5.0",
+    "logo": "https://actions-gateway.com/1.5.0assets/icon-512.png",
     "sameAs": ["https://github.com/actions-gateway/github-actions-gateway"]
   }
   </script>
@@ -132,8 +132,8 @@
         <aside class="md-banner">
           <div class="md-banner__inner md-grid md-typeset">
             
-            <strong>v1.4.0 is here.</strong>
-      Consent-gated cross-namespace egress proxy sharing, a curated runner template library you apply with one command, and v2 worker-capacity conditions exported as Prometheus gauges.
+            <strong>v1.5.0 is here.</strong>
+      A per-tenant GitHub runner group boundary, multi-label runner sets that migrate a <code>runs-on</code> array unedited, and job duration and latency metrics on the acquisition tier every new tenant runs.
           </div>
           
         </aside>
@@ -145,7 +145,7 @@
           <aside class="md-banner md-banner--warning">
             <div class="md-banner__inner md-grid md-typeset">
               You're not viewing the latest release.
-  <a href="https://actions-gateway.com/1.4.0"><strong>Go to the current docs.</strong></a>
+  <a href="https://actions-gateway.com/1.5.0"><strong>Go to the current docs.</strong></a>
 
             </div>
             <script>var el=document.querySelector("[data-md-component=outdated]"),base=new URL("../.."),outdated=__md_get("__outdated",sessionStorage,base);!0===outdated&&el&&(el.hidden=!1)</script>
@@ -2892,39 +2892,21 @@
 
 
 <h1 id="admission-policies-kyverno--gatekeeper-compatibility">Admission policies: Kyverno / Gatekeeper compatibility<a class="headerlink" href="#admission-policies-kyverno--gatekeeper-compatibility" title="Permanent link">&para;</a></h1>
-<p><strong>Audience:</strong> Platform engineer, Security
-<strong>Goal:</strong> know — <em>before</em> you install — whether your cluster's admission
-policies will let github-actions-gateway (GAG) pods schedule, and apply
-complementary sample policies that lock GAG's own hardened posture in place.</p>
-<p>Many clusters run a policy engine — <a href="https://kyverno.io">Kyverno</a> or
-<a href="https://open-policy-agent.github.io/gatekeeper/">OPA Gatekeeper</a> — that
-<strong>rejects pods at admission</strong> when they violate a cluster rule: require
-<code>runAsNonRoot</code>, drop all Linux capabilities, block the <code>:latest</code> image tag,
-allow only certain registries, require resource limits, require a seccomp
-profile. If one of those rules rejects a GAG worker, egress-proxy, Actions
-Gateway Controller (AGC), or Gateway Manager Controller (GMC) pod, the pod
-<strong>never schedules</strong> — a confusing, silent failure that surfaces only as "no
-runners ever come online" or a <code>Deployment</code> stuck at zero ready replicas.</p>
+<p><strong>Audience:</strong> Platform engineer, Security <strong>Goal:</strong> know — <em>before</em> you install — whether your cluster's admission policies will let github-actions-gateway (GAG) pods schedule, and apply complementary sample policies that lock GAG's own hardened posture in place.</p>
+<p>Many clusters run a policy engine — <a href="https://kyverno.io">Kyverno</a> or <a href="https://open-policy-agent.github.io/gatekeeper/">OPA Gatekeeper</a> — that <strong>rejects pods at admission</strong> when they violate a cluster rule: require <code>runAsNonRoot</code>, drop all Linux capabilities, block the <code>:latest</code> image tag, allow only certain registries, require resource limits, require a seccomp profile.
+If one of those rules rejects a GAG worker, egress-proxy, Actions Gateway Controller (AGC), or Gateway Manager Controller (GMC) pod, the pod <strong>never schedules</strong> — a confusing, silent failure that surfaces only as "no runners ever come online" or a <code>Deployment</code> stuck at zero ready replicas.</p>
 <p>This page does two things:</p>
 <ol>
-<li>A <a href="#compatibility-matrix"><strong>compatibility matrix</strong></a> — for each common policy
-   class, whether each GAG pod already complies (and why), or what you must
-   allow. Every row is grounded in the real pod specs GAG produces.</li>
-<li><a href="#sample-policies"><strong>Sample policies</strong></a> you can apply to <em>enforce</em> GAG's own
-   security posture, plus <em>exception</em> snippets for where a strict cluster policy
-   would otherwise block GAG.</li>
+<li>A <a href="#compatibility-matrix"><strong>compatibility matrix</strong></a> — for each common policy class, whether each GAG pod already complies (and why), or what you must allow.
+   Every row is grounded in the real pod specs GAG produces.</li>
+<li><a href="#sample-policies"><strong>Sample policies</strong></a> you can apply to <em>enforce</em> GAG's own security posture, plus <em>exception</em> snippets for where a strict cluster policy would otherwise block GAG.</li>
 </ol>
 <blockquote>
-<p>GAG uses in-tree <a href="https://kubernetes.io/docs/concepts/security/pod-security-admission/">Pod Security Admission</a>
-(PSA) as its <strong>floor</strong>, not as a replacement for your policy engine — the GMC
-stamps a <code>pod-security.kubernetes.io/enforce</code> level on every tenant namespace
-(<a href="../../design/05-security/#53-security-profiles-and-the-privileged-opt-in">§5.3 of the security design</a>).
-A Kyverno/Gatekeeper layer on top is fully supported and encouraged; this page
-is how to make the two layers agree.</p>
+<p>GAG uses in-tree <a href="https://kubernetes.io/docs/concepts/security/pod-security-admission/">Pod Security Admission</a> (PSA) as its <strong>floor</strong>, not as a replacement for your policy engine — the GMC stamps a <code>pod-security.kubernetes.io/enforce</code> level on every tenant namespace (<a href="../../design/05-security/#53-security-profiles-and-the-privileged-opt-in">§5.3 of the security design</a>).
+A Kyverno/Gatekeeper layer on top is fully supported and encouraged; this page is how to make the two layers agree.</p>
 </blockquote>
 <h2 id="gag-pod-classes">GAG pod classes<a class="headerlink" href="#gag-pod-classes" title="Permanent link">&para;</a></h2>
-<p>The matrix distinguishes seven pod classes because their security posture
-differs by design:</p>
+<p>The matrix distinguishes seven pod classes because their security posture differs by design:</p>
 <table>
 <thead>
 <tr>
@@ -2979,14 +2961,10 @@ differs by design:</p>
 </tr>
 </tbody>
 </table>
-<p>The worker profile is the tenant's <code>ActionsGateway.spec.securityProfile</code>
-(<code>baseline</code> default, <code>restricted</code>, or <code>privileged</code>); the GMC mirrors it onto the
-worker pods and the namespace PSA level. The proxy, AGC, and GMC pods are
-<strong>uniformly hardened</strong> and not tenant-tunable.</p>
+<p>The worker profile is the tenant's <code>ActionsGateway.spec.securityProfile</code> (<code>baseline</code> default, <code>restricted</code>, or <code>privileged</code>); the GMC mirrors it onto the worker pods and the namespace PSA level.
+The proxy, AGC, and GMC pods are <strong>uniformly hardened</strong> and not tenant-tunable.</p>
 <h2 id="compatibility-matrix">Compatibility matrix<a class="headerlink" href="#compatibility-matrix" title="Permanent link">&para;</a></h2>
-<p>Legend: ✅ already complies · ⚠️ complies by default but a tenant override or
-profile can change it · ❌ does <strong>not</strong> comply — you must allow it (exempt the
-pod, or pick a stricter worker profile).</p>
+<p>Legend: ✅ already complies · ⚠️ complies by default but a tenant override or profile can change it · ❌ does <strong>not</strong> comply — you must allow it (exempt the pod, or pick a stricter worker profile).</p>
 <table>
 <thead>
 <tr>
@@ -3104,77 +3082,46 @@ pod, or pick a stricter worker profile).</p>
 </tbody>
 </table>
 <h3 id="row-notes-the-why-grounded-in-the-pod-specs">Row notes (the <em>why</em>, grounded in the pod specs)<a class="headerlink" href="#row-notes-the-why-grounded-in-the-pod-specs" title="Permanent link">&para;</a></h3>
-<p><strong><code>runAsNonRoot: true</code></strong> — On <code>baseline</code>/<code>restricted</code> the AGC gap-fills
-pod-level <code>runAsNonRoot: true</code> <em>and</em> a numeric <code>runAsUser: 1001</code>
-(<a href="../../cmd/agc/internal/provisioner/provisioner.go"><code>provisioner.go</code></a>
-<code>applySecurityDefaults</code>). The numeric UID matters: kubelet cannot verify
-<code>runAsNonRoot</code> against the runner image's non-numeric <code>USER runner</code>, so without
-it the pod is rejected with <code>CreateContainerConfigError</code> (Q115). The
-<code>privileged</code> profile stamps <strong>no</strong> securityContext defaults — that is its whole
-purpose (DinD, root-requiring builds) — so a <code>runAsNonRoot</code> policy will reject
-it; that is correct, and those tenants need an explicit exception. Proxy, AGC,
-and GMC containers set <code>runAsNonRoot: true</code> directly.</p>
-<p><strong><code>seccompProfile: RuntimeDefault</code></strong> — Set on every <code>baseline</code>/<code>restricted</code>
-worker (pod-level) and on every proxy/AGC/GMC container. <code>privileged</code> workers
-get no default.</p>
-<p><strong>Drop ALL capabilities</strong> — Here is the most common surprise. The <code>baseline</code>
-worker profile <strong>deliberately does not</strong> drop capabilities or set
-<code>allowPrivilegeEscalation: false</code>, because baseline PSA permits in-job
-privilege escalation (<code>sudo</code>) and a large fraction of real CI jobs rely on it.
-A cluster policy that requires <code>drop: [ALL]</code> on <em>all</em> pods will therefore
-<strong>reject default workers</strong>. Your options, in order of preference:</p>
+<p><strong><code>runAsNonRoot: true</code></strong> — On <code>baseline</code>/<code>restricted</code> the AGC gap-fills pod-level <code>runAsNonRoot: true</code> <em>and</em> a numeric <code>runAsUser: 1001</code> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.5.0/cmd/agc/internal/provisioner/provisioner.go"><code>provisioner.go</code></a> <code>applySecurityDefaults</code>).
+The numeric UID matters: kubelet cannot verify <code>runAsNonRoot</code> against the runner image's non-numeric <code>USER runner</code>, so without it the pod is rejected with <code>CreateContainerConfigError</code> (Q115).
+The <code>privileged</code> profile stamps <strong>no</strong> securityContext defaults — that is its whole purpose (DinD, root-requiring builds) — so a <code>runAsNonRoot</code> policy will reject it; that is correct, and those tenants need an explicit exception.
+Proxy, AGC, and GMC containers set <code>runAsNonRoot: true</code> directly.</p>
+<p><strong><code>seccompProfile: RuntimeDefault</code></strong> — Set on every <code>baseline</code>/<code>restricted</code> worker (pod-level) and on every proxy/AGC/GMC container.
+<code>privileged</code> workers get no default.</p>
+<p><strong>Drop ALL capabilities</strong> — Here is the most common surprise.
+The <code>baseline</code> worker profile <strong>deliberately does not</strong> drop capabilities or set <code>allowPrivilegeEscalation: false</code>, because baseline PSA permits in-job privilege escalation (<code>sudo</code>) and a large fraction of real CI jobs rely on it.
+A cluster policy that requires <code>drop: [ALL]</code> on <em>all</em> pods will therefore <strong>reject default workers</strong>.
+Your options, in order of preference:</p>
 <ul>
-<li>Tell tenants to set <code>securityProfile: restricted</code> — that profile gap-fills
-  <code>allowPrivilegeEscalation: false</code> + <code>drop: [ALL]</code> on every worker container,
-  satisfying the policy with no exception needed.</li>
-<li>Or scope the cluster policy to exclude tenant namespaces (see the
-  <a href="#sample-policies">exception samples</a>) so <code>baseline</code> keeps working.</li>
+<li>Tell tenants to set <code>securityProfile: restricted</code> — that profile gap-fills <code>allowPrivilegeEscalation: false</code> + <code>drop: [ALL]</code> on every worker container, satisfying the policy with no exception needed.</li>
+<li>Or scope the cluster policy to exclude tenant namespaces (see the <a href="#sample-policies">exception samples</a>) so <code>baseline</code> keeps working.</li>
 </ul>
 <p><code>restricted</code>, proxy, AGC, and GMC pods already drop all capabilities.</p>
-<p><strong><code>allowPrivilegeEscalation: false</code></strong> — Same story as capabilities: only
-<code>restricted</code> (and the proxy/AGC/GMC pods) set it. <code>baseline</code> leaves it unset on
-purpose.</p>
-<p><strong><code>readOnlyRootFilesystem: true</code></strong> — <strong>No</strong> worker profile sets this, including
-<code>restricted</code>. The runner writes to its working tree (<code>_work</code>), tool cache, and
-temp dirs on the root filesystem; a read-only root would break virtually every
-job. If your cluster requires <code>readOnlyRootFilesystem</code>, you <strong>must</strong> exempt
-worker pods. The proxy, AGC, and GMC containers all run with
-<code>readOnlyRootFilesystem: true</code>.</p>
-<p><strong>No privileged containers / no host namespaces</strong> — The AGC unconditionally
-forces <code>hostPID/hostNetwork/hostIPC: false</code> and <code>automountServiceAccountToken:
-false</code> on every worker pod (all three profiles), overwriting any tenant
-<code>PodTemplate</code> value. <code>baseline</code>/<code>restricted</code> also forbid privileged containers
-via PSA. Only the <code>privileged</code> profile permits a privileged container — by
-design, and gated behind an admission webhook that requires an explicit
-per-tenant opt-in
-(<a href="../../design/05-security/#53-security-profiles-and-the-privileged-opt-in">§5.3</a>).</p>
-<p><strong>Block <code>:latest</code> / require digest pin</strong> — All GAG-managed images are pinned by
-<code>@sha256:</code> digest: the GMC, AGC, and proxy images are digest-pinned and the
-Helm chart <strong>refuses to render</strong> without a digest (<code>validateImageDigest</code>); the
-default worker image is also digest-pinned
-(<a href="../../cmd/agc/names/names.go"><code>names.go</code></a>). The ⚠️ is only because a tenant
-<em>may</em> override <code>spec.workerImage</code> (or a <code>PodTemplate</code> container image) with a
-floating tag — a tenant choice, not a GAG default. A "require digest" policy
-scoped to tenant namespaces is a good way to force tenants to pin too.</p>
-<p><strong>Registry allowlist</strong> — ⚠️ for every class because you must add GAG's
-registries to your allowlist:</p>
+<p><strong><code>allowPrivilegeEscalation: false</code></strong> — Same story as capabilities: only <code>restricted</code> (and the proxy/AGC/GMC pods) set it.
+<code>baseline</code> leaves it unset on purpose.</p>
+<p><strong><code>readOnlyRootFilesystem: true</code></strong> — <strong>No</strong> worker profile sets this, including <code>restricted</code>.
+The runner writes to its working tree (<code>_work</code>), tool cache, and temp dirs on the root filesystem; a read-only root would break virtually every job.
+If your cluster requires <code>readOnlyRootFilesystem</code>, you <strong>must</strong> exempt worker pods.
+The proxy, AGC, and GMC containers all run with <code>readOnlyRootFilesystem: true</code>.</p>
+<p><strong>No privileged containers / no host namespaces</strong> — The AGC unconditionally forces <code>hostPID/hostNetwork/hostIPC: false</code> and <code>automountServiceAccountToken: false</code> on every worker pod (all three profiles), overwriting any tenant <code>PodTemplate</code> value.
+<code>baseline</code>/<code>restricted</code> also forbid privileged containers via PSA.
+Only the <code>privileged</code> profile permits a privileged container — by design, and gated behind an admission webhook that requires an explicit per-tenant opt-in (<a href="../../design/05-security/#53-security-profiles-and-the-privileged-opt-in">§5.3</a>).</p>
+<p><strong>Block <code>:latest</code> / require digest pin</strong> — All GAG-managed images are pinned by <code>@sha256:</code> digest: the GMC, AGC, and proxy images are digest-pinned and the Helm chart <strong>refuses to render</strong> without a digest (<code>validateImageDigest</code>); the default worker image is also digest-pinned (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.5.0/cmd/agc/names/names.go"><code>names.go</code></a>).
+The ⚠️ is only because a tenant <em>may</em> override <code>spec.workerImage</code> (or a <code>PodTemplate</code> container image) with a floating tag — a tenant choice, not a GAG default.
+A "require digest" policy scoped to tenant namespaces is a good way to force tenants to pin too.</p>
+<p><strong>Registry allowlist</strong> — ⚠️ for every class because you must add GAG's registries to your allowlist:</p>
 <ul>
 <li>Control-plane images (<code>GMC</code>, <code>AGC</code>, egress proxy): <code>ghcr.io/actions-gateway/*</code>.</li>
 <li>Default worker image: <code>ghcr.io/actions/actions-runner</code>.</li>
 <li>Any registry your tenants set via <code>spec.workerImage</code> / <code>PodTemplate</code>.</li>
 </ul>
-<p><strong>Require CPU/memory requests + limits</strong> — Workers are gap-filled with
-<code>500m</code> CPU / <code>1Gi</code> memory as <em>both</em> requests and limits when a container sets
-neither. The proxy sets requests+limits. <strong>AGC v1alpha1 stamps no resources</strong> —
-a "require limits" policy will reject AGC v1 pods; either move the tenant to a
-v2alpha1 <code>ActionsGateway</code> (which gap-fills <code>500m</code>/<code>2Gi</code> requests, <code>2</code>/<code>4Gi</code>
-limits) or exempt AGC pods. The GMC's resources come from the chart's
-<code>resources</code> value, which ships with a sane default (<code>10m</code>/<code>64Mi</code> request,
-<code>500m</code>/<code>128Mi</code> limit).</p>
+<p><strong>Require CPU/memory requests + limits</strong> — Workers are gap-filled with <code>500m</code> CPU / <code>1Gi</code> memory as <em>both</em> requests and limits when a container sets neither.
+The proxy sets requests+limits.
+<strong>AGC v1alpha1 stamps no resources</strong> — a "require limits" policy will reject AGC v1 pods; either move the tenant to a v2alpha1 <code>ActionsGateway</code> (which gap-fills <code>500m</code>/<code>2Gi</code> requests, <code>2</code>/<code>4Gi</code> limits) or exempt AGC pods.
+The GMC's resources come from the chart's <code>resources</code> value, which ships with a sane default (<code>10m</code>/<code>64Mi</code> request, <code>500m</code>/<code>128Mi</code> limit).</p>
 <h2 id="sample-policies">Sample policies<a class="headerlink" href="#sample-policies" title="Permanent link">&para;</a></h2>
-<p>Ready-to-apply samples live in
-<a href="../examples/policies/"><code>examples/policies/</code></a>. Two complementary kinds, for both
-engines:</p>
+<p>Ready-to-apply samples live in <a href="../examples/policies/"><code>examples/policies/</code></a>.
+Two complementary kinds, for both engines:</p>
 <table>
 <thead>
 <tr>
@@ -3216,12 +3163,9 @@ engines:</p>
 </tr>
 </tbody>
 </table>
-<p>All samples key off two stable signals so they keep working as tenants come and
-go:</p>
+<p>All samples key off two stable signals so they keep working as tenants come and go:</p>
 <ul>
-<li>The <strong>tenant-namespace marker</strong> <code>actions-gateway.github.com/tenant: "true"</code>,
-  which the GMC requires on every namespace it provisions into (worker, proxy,
-  and AGC pods all live in marked namespaces).</li>
+<li>The <strong>tenant-namespace marker</strong> <code>actions-gateway.github.com/tenant: "true"</code>, which the GMC requires on every namespace it provisions into (worker, proxy, and AGC pods all live in marked namespaces).</li>
 <li>The <strong>GMC install namespace</strong>, where only the GMC manager pod runs.</li>
 </ul>
 <h3 id="apply-the-enforce-policies">Apply the enforce policies<a class="headerlink" href="#apply-the-enforce-policies" title="Permanent link">&para;</a></h3>
@@ -3231,23 +3175,16 @@ go:</p>
 <a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="c1"># Gatekeeper (ConstraintTemplate must exist before its Constraint)</span>
 <a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>kubectl<span class="w"> </span>apply<span class="w"> </span>-f<span class="w"> </span>docs/operations/examples/policies/gatekeeper/enforce-gag-worker-hardening.yaml
 </code></pre></div>
-<p>Start with <code>validationFailureAction: Audit</code> (Kyverno) or
-<code>enforcementAction: dryrun</code> (Gatekeeper) — both samples ship in that mode — and
-promote to enforce once you confirm no false positives against your real
-workloads.</p>
+<p>Start with <code>validationFailureAction: Audit</code> (Kyverno) or <code>enforcementAction: dryrun</code> (Gatekeeper) — both samples ship in that mode — and promote to enforce once you confirm no false positives against your real workloads.</p>
 <h3 id="apply-the-exceptions">Apply the exceptions<a class="headerlink" href="#apply-the-exceptions" title="Permanent link">&para;</a></h3>
-<p>If you already run a strict cluster baseline (e.g. the Kyverno
-<code>require-ro-rootfs</code> / <code>disallow-capabilities-strict</code> policies, or a Gatekeeper
-PodSecurityPolicy (PSP)-style constraint), apply the matching exception so GAG pods are not caught:</p>
+<p>If you already run a strict cluster baseline (e.g. the Kyverno <code>require-ro-rootfs</code> / <code>disallow-capabilities-strict</code> policies, or a Gatekeeper PodSecurityPolicy (PSP)-style constraint), apply the matching exception so GAG pods are not caught:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="c1"># Kyverno PolicyException — requires Kyverno&#39;s PolicyExceptions feature enabled.</span>
 <a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>kubectl<span class="w"> </span>apply<span class="w"> </span>-f<span class="w"> </span>docs/operations/examples/policies/kyverno/policyexception-gag.yaml
 <a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>
 <a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="c1"># Gatekeeper — exclude GAG namespaces from your strict Constraints.</span>
 <a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>kubectl<span class="w"> </span>apply<span class="w"> </span>-f<span class="w"> </span>docs/operations/examples/policies/gatekeeper/exclude-gag-namespaces.yaml
 </code></pre></div>
-<p>Read the comments in each file: the exceptions are deliberately <strong>narrow</strong> (only
-the properties GAG legitimately cannot satisfy, only in GAG namespaces) so they
-do not widen your cluster posture more than necessary.</p>
+<p>Read the comments in each file: the exceptions are deliberately <strong>narrow</strong> (only the properties GAG legitimately cannot satisfy, only in GAG namespaces) so they do not widen your cluster posture more than necessary.</p>
 <h2 id="governing-where-gag-pods-schedule">Governing where GAG pods schedule<a class="headerlink" href="#governing-where-gag-pods-schedule" title="Permanent link">&para;</a></h2>
 <p>GAG passes pod placement through to the CR author, in three places:</p>
 <table>
@@ -3276,26 +3213,15 @@ do not widen your cluster posture more than necessary.</p>
 </tr>
 </tbody>
 </table>
-<p>Each carries the standard <code>nodeSelector</code>, <code>tolerations</code>, and <code>affinity</code>. <strong>This is
-deliberate and not admin-gated.</strong> Distinct per-tenant egress IPs exist so tenants
-do not share a rate limit or a block radius; a tenant electing where its own
-traffic leaves the cluster is the intended use, and worker placement has always
-been able to do it.</p>
-<p>It follows that <strong>per-tenant egress-IP <em>attribution</em> is a property of your cluster
-configuration, not something GAG enforces on its own.</strong> If a downstream firewall
-allowlist or an audit trail attributes traffic by source IP, and CR authors in
-tenant namespaces are not fully trusted, constrain placement here — at the pod
-admission layer, where it also covers any pod a tenant can create directly.</p>
+<p>Each carries the standard <code>nodeSelector</code>, <code>tolerations</code>, and <code>affinity</code>.
+<strong>This is deliberate and not admin-gated.</strong> Distinct per-tenant egress IPs exist so tenants do not share a rate limit or a block radius; a tenant electing where its own traffic leaves the cluster is the intended use, and worker placement has always been able to do it.</p>
+<p>It follows that <strong>per-tenant egress-IP <em>attribution</em> is a property of your cluster configuration, not something GAG enforces on its own.</strong> If a downstream firewall allowlist or an audit trail attributes traffic by source IP, and CR authors in tenant namespaces are not fully trusted, constrain placement here — at the pod admission layer, where it also covers any pod a tenant can create directly.</p>
 <h3 id="pin-by-mutation-not-by-an-allowlist">Pin by mutation, not by an allowlist<a class="headerlink" href="#pin-by-mutation-not-by-an-allowlist" title="Permanent link">&para;</a></h3>
-<p>The instinct is to validate an allowlist of permitted <code>nodeSelector</code> values. <strong>That
-is not sound.</strong> <code>affinity.nodeAffinity</code> is a small query language supporting
-<code>NotIn</code> and <code>DoesNotExist</code>, so "any pool except my own" is expressible, and no
-key=value allowlist rejects it in general.</p>
-<p>Stamping the <code>nodeSelector</code> by <strong>mutation</strong> <em>is</em> sound, because Kubernetes ANDs
-<code>nodeSelector</code> with <code>nodeAffinity</code> — affinity can only narrow the candidate nodes,
-never widen them. Once admission pins the pod to a pool, no affinity expression
-moves it off. The worst a hostile author achieves is an unschedulable pod
-(<code>Pending</code>), never another tenant's egress IP.</p>
+<p>The instinct is to validate an allowlist of permitted <code>nodeSelector</code> values.
+<strong>That is not sound.</strong> <code>affinity.nodeAffinity</code> is a small query language supporting <code>NotIn</code> and <code>DoesNotExist</code>, so "any pool except my own" is expressible, and no key=value allowlist rejects it in general.</p>
+<p>Stamping the <code>nodeSelector</code> by <strong>mutation</strong> <em>is</em> sound, because Kubernetes ANDs <code>nodeSelector</code> with <code>nodeAffinity</code> — affinity can only narrow the candidate nodes, never widen them.
+Once admission pins the pod to a pool, no affinity expression moves it off.
+The worst a hostile author achieves is an unschedulable pod (<code>Pending</code>), never another tenant's egress IP.</p>
 <p>Label each tenant namespace with the pool it owns, then apply the policy:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>kubectl<span class="w"> </span>label<span class="w"> </span>namespace<span class="w"> </span>tenant-a<span class="w"> </span>actions-gateway.com/node-pool<span class="o">=</span>pool-tenant-a
 <a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>
@@ -3305,33 +3231,24 @@ moves it off. The worst a hostile author achieves is an unschedulable pod
 <a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="c1"># Gatekeeper — one Assign per tenant namespace, plus the toleration Constraint</span>
 <a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a>kubectl<span class="w"> </span>apply<span class="w"> </span>-f<span class="w"> </span>docs/operations/examples/policies/gatekeeper/restrict-gag-placement.yaml
 </code></pre></div>
-<p>Namespaces without the label are left untouched, so the Kyverno policy is safe to
-apply before you have labelled anything.</p>
+<p>Namespaces without the label are left untouched, so the Kyverno policy is safe to apply before you have labelled anything.</p>
 <h3 id="the-taint-bypass--and-why-validation-alone-is-not-enough">The taint bypass — and why validation alone is not enough<a class="headerlink" href="#the-taint-bypass--and-why-validation-alone-is-not-enough" title="Permanent link">&para;</a></h3>
-<p>A toleration with <code>operator: Exists</code> and <strong>no <code>key</code></strong> tolerates <em>every</em> taint in the
-cluster, including the taints that reserve a node pool for one tenant. No GAG-emitted
-pod needs one, so both samples deny it.</p>
-<p><strong>But do not mistake that rule for a control.</strong> It blocks only the <em>blanket</em> case. A
-pod that names the target pool's taint explicitly —</p>
+<p>A toleration with <code>operator: Exists</code> and <strong>no <code>key</code></strong> tolerates <em>every</em> taint in the cluster, including the taints that reserve a node pool for one tenant.
+No GAG-emitted pod needs one, so both samples deny it.</p>
+<p><strong>But do not mistake that rule for a control.</strong> It blocks only the <em>blanket</em> case.
+A pod that names the target pool's taint explicitly —</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="nt">tolerations</span><span class="p">:</span>
 <a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt">key</span><span class="p">:</span><span class="w"> </span><span class="nv">dedicated</span><span class="p p-Indicator">,</span><span class="nt"> operator</span><span class="p">:</span><span class="w"> </span><span class="nv">Equal</span><span class="p p-Indicator">,</span><span class="nt"> value</span><span class="p">:</span><span class="w"> </span><span class="nv">pool-tenant-b</span><span class="p p-Indicator">,</span><span class="nt"> effect</span><span class="p">:</span><span class="w"> </span><span class="nv">NoSchedule</span><span class="p p-Indicator">}</span>
 </code></pre></div>
-<p>— walks straight past it, and taint keys are conventional and readable
-(<code>kubectl get nodes -o jsonpath='{.items[*].spec.taints}'</code>). Denying keyless <code>Exists</code>
-raises the floor; it does not close the door.</p>
-<p><strong>The mutating pin is the only sound control of the two.</strong> It holds even against a pod
-that sets <code>nodeName</code> directly to bypass the scheduler, because kubelet's
-<code>PodMatchNodeSelector</code> admission re-checks <code>nodeSelector</code> and required <code>nodeAffinity</code>
-against the node it actually landed on. If you take one thing from this section, apply
-the mutation; treat the toleration rule as a cheap extra, not a substitute.</p>
+<p>— walks straight past it, and taint keys are conventional and readable (<code>kubectl get nodes -o jsonpath='{.items[*].spec.taints}'</code>).
+Denying keyless <code>Exists</code> raises the floor; it does not close the door.</p>
+<p><strong>The mutating pin is the only sound control of the two.</strong> It holds even against a pod that sets <code>nodeName</code> directly to bypass the scheduler, because kubelet's <code>PodMatchNodeSelector</code> admission re-checks <code>nodeSelector</code> and required <code>nodeAffinity</code> against the node it actually landed on.
+If you take one thing from this section, apply the mutation; treat the toleration rule as a cheap extra, not a substitute.</p>
 <blockquote>
-<p><strong>Not a substitute for tenant RBAC.</strong> These policies act on <strong>pods</strong>, so they
-cover worker, proxy, AGC, <em>and</em> any pod a tenant creates directly. That breadth is
-the point: GAG's NetworkPolicies select GAG-labelled pods, so an unlabelled pod a
-tenant creates in its own namespace is selected by no policy and egresses
-unrestricted. If tenants hold <code>pods: create</code> in their namespaces, placement is the
-least of what a policy engine needs to constrain. See
-<a href="../../design/05-security/#52-agc--proxy-level-threats-namespace-scoped">security design §5.2</a>.</p>
+<p><strong>Not a substitute for tenant RBAC.</strong> These policies act on <strong>pods</strong>, so they cover worker, proxy, AGC, <em>and</em> any pod a tenant creates directly.
+That breadth is the point: GAG's NetworkPolicies select GAG-labelled pods, so an unlabelled pod a tenant creates in its own namespace is selected by no policy and egresses unrestricted.
+If tenants hold <code>pods: create</code> in their namespaces, placement is the least of what a policy engine needs to constrain.
+See <a href="../../design/05-security/#52-agc--proxy-level-threats-namespace-scoped">security design §5.2</a>.</p>
 </blockquote>
 <h2 id="see-also">See also<a class="headerlink" href="#see-also" title="Permanent link">&para;</a></h2>
 <ul>

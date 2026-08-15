@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/1.4.0/design/06-implementation-phases/">
+        <link rel="canonical" href="https://actions-gateway.com/1.5.0/design/06-implementation-phases/">
       
       
         <link rel="prev" href="../05-security/">
@@ -63,15 +63,15 @@
   <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/IBMPlexSans-Bold.woff2">
   <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/MonaspaceNeon-Medium.woff2">
   
-  <meta property="og:image" content="https://actions-gateway.com/1.4.0assets/social-preview.png">
+  <meta property="og:image" content="https://actions-gateway.com/1.5.0assets/social-preview.png">
   <meta property="og:image:width" content="1280">
   <meta property="og:image:height" content="640">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:image" content="https://actions-gateway.com/1.4.0assets/social-preview.png">
+  <meta name="twitter:image" content="https://actions-gateway.com/1.5.0assets/social-preview.png">
   
-  <link rel="apple-touch-icon" href="https://actions-gateway.com/1.4.0assets/apple-touch-icon.png">
-  <link rel="alternate icon" href="https://actions-gateway.com/1.4.0assets/favicon.ico">
-  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/1.4.0assets/icon-512.png">
+  <link rel="apple-touch-icon" href="https://actions-gateway.com/1.5.0assets/apple-touch-icon.png">
+  <link rel="alternate icon" href="https://actions-gateway.com/1.5.0assets/favicon.ico">
+  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/1.5.0assets/icon-512.png">
   
   <script type="application/ld+json">
   {
@@ -79,14 +79,14 @@
     "@type": "SoftwareSourceCode",
     "name": "GitHub Actions Gateway",
     "description": "An Actions Runner Controller (ARC) alternative for self-hosted GitHub Actions runners on multi-tenant Kubernetes \u2014 oversubscribe a shared quota, recover evicted jobs automatically, and isolate every tenant\u0027s GitHub egress.",
-    "url": "https://actions-gateway.com/1.4.0",
+    "url": "https://actions-gateway.com/1.5.0",
     "codeRepository": "https://github.com/actions-gateway/github-actions-gateway",
     "programmingLanguage": "Go",
     "license": "https://www.apache.org/licenses/LICENSE-2.0",
     "author": {
       "@type": "Organization",
       "name": "GitHub Actions Gateway",
-      "url": "https://actions-gateway.com/1.4.0"
+      "url": "https://actions-gateway.com/1.5.0"
     }
   }
   </script>
@@ -95,8 +95,8 @@
     "@context": "https://schema.org",
     "@type": "Organization",
     "name": "GitHub Actions Gateway",
-    "url": "https://actions-gateway.com/1.4.0",
-    "logo": "https://actions-gateway.com/1.4.0assets/icon-512.png",
+    "url": "https://actions-gateway.com/1.5.0",
+    "logo": "https://actions-gateway.com/1.5.0assets/icon-512.png",
     "sameAs": ["https://github.com/actions-gateway/github-actions-gateway"]
   }
   </script>
@@ -132,8 +132,8 @@
         <aside class="md-banner">
           <div class="md-banner__inner md-grid md-typeset">
             
-            <strong>v1.4.0 is here.</strong>
-      Consent-gated cross-namespace egress proxy sharing, a curated runner template library you apply with one command, and v2 worker-capacity conditions exported as Prometheus gauges.
+            <strong>v1.5.0 is here.</strong>
+      A per-tenant GitHub runner group boundary, multi-label runner sets that migrate a <code>runs-on</code> array unedited, and job duration and latency metrics on the acquisition tier every new tenant runs.
           </div>
           
         </aside>
@@ -145,7 +145,7 @@
           <aside class="md-banner md-banner--warning">
             <div class="md-banner__inner md-grid md-typeset">
               You're not viewing the latest release.
-  <a href="https://actions-gateway.com/1.4.0"><strong>Go to the current docs.</strong></a>
+  <a href="https://actions-gateway.com/1.5.0"><strong>Go to the current docs.</strong></a>
 
             </div>
             <script>var el=document.querySelector("[data-md-component=outdated]"),base=new URL("../.."),outdated=__md_get("__outdated",sessionStorage,base);!0===outdated&&el&&(el.hidden=!1)</script>
@@ -2745,7 +2745,9 @@
 <h1 id="6-implementation-phasing--delivery-milestones">6. Implementation Phasing &amp; Delivery Milestones<a class="headerlink" href="#6-implementation-phasing--delivery-milestones" title="Permanent link">&para;</a></h1>
 <p>← <a href="../05-security/">Security</a> | <a href="../">Back to index</a> | Next: <a href="../07-test-plan/">Test Plan →</a></p>
 <hr />
-<p>The system is delivered across five milestones over roughly five weeks. Each milestone produces a deliverable and a verifiable success criterion; later milestones build on the artifacts of earlier ones (the probe binary becomes the AGC's polling implementation, the decrypted payload becomes the test fixture for the worker pod, and so on). Operators who prefer AI-assisted implementation can consult <a href="../appendix-c-ai-implementation/">Appendix C</a> for prompting guidance and a discussion of the trade-offs — that material is optional and orthogonal to the milestone structure itself.</p>
+<p>The system is delivered across five milestones over roughly five weeks.
+Each milestone produces a deliverable and a verifiable success criterion; later milestones build on the artifacts of earlier ones (the probe binary becomes the AGC's polling implementation, the decrypted payload becomes the test fixture for the worker pod, and so on).
+Operators who prefer AI-assisted implementation can consult <a href="../appendix-c-ai-implementation/">Appendix C</a> for prompting guidance and a discussion of the trade-offs — that material is optional and orthogonal to the milestone structure itself.</p>
 <table>
 <thead>
 <tr>
@@ -2784,48 +2786,79 @@
 </table>
 <hr />
 <h2 id="milestone-1-wire-protocol-probe-days-14">Milestone 1: Wire Protocol Probe (Days 1–4)<a class="headerlink" href="#milestone-1-wire-protocol-probe-days-14" title="Permanent link">&para;</a></h2>
-<p>See <a href="../../plan/milestone-1/">docs/plan/milestone-1.md</a> for the implementation plan and current status.</p>
+<p>See <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.5.0/docs/plan/milestone-1.md">docs/plan/milestone-1.md</a> for the implementation plan and current status.</p>
 <ul>
-<li><strong>Deliverable:</strong> A standalone Go binary under <code>cmd/probe/</code> that runs the full pre-execution sequence: authenticate via GitHub App credentials → <code>POST /sessions</code> → long-poll <code>GET /message</code> → <code>POST /acquirejob</code> on the <code>run_service_url</code> extracted from the message body → start a <code>renewjob</code> loop every 60 seconds. The probe prints the decrypted job payload to stdout and continues renewing until cancelled. Decrypted payload is committed as a fixture under <code>testdata/</code>.</li>
-<li><strong>Success Criteria:</strong> The probe acquires a real job and renews its lock at least three times without GitHub cancelling it. The committed payload becomes the ground-truth fixture for all subsequent integration tests.</li>
-<li><strong>Investigation — <code>AcknowledgeRunnerRequest</code>:</strong> The official runner source (<code>MessageListener.cs</code>) calls <code>AcknowledgeRunnerRequestAsync(runnerRequestId, sessionId)</code> after handing a job to the worker. This endpoint is not documented and its role is unclear — it may be the broker API's replacement for the old <code>DeleteMessage</code> call, or a no-op acknowledgment. The probe should attempt this call after a successful <code>acquirejob</code> and observe whether omitting it causes any downstream issue (e.g., the same job being redelivered, or session errors). If confirmed necessary, add it to the execution flow in <a href="../04-operational-flows/#42-job-execution-flow-agc">§4.2</a> and <a href="../03-api-contracts/#33-re-implemented-broker-api-endpoints">§3.3</a>.</li>
+<li><strong>Deliverable:</strong> A standalone Go binary under <code>cmd/probe/</code> that runs the full pre-execution sequence: authenticate via GitHub App credentials → <code>POST /sessions</code> → long-poll <code>GET /message</code> → <code>POST /acquirejob</code> on the <code>run_service_url</code> extracted from the message body → start a <code>renewjob</code> loop every 60 seconds.
+  The probe prints the decrypted job payload to stdout and continues renewing until cancelled.
+  Decrypted payload is committed as a fixture under <code>testdata/</code>.</li>
+<li><strong>Success Criteria:</strong> The probe acquires a real job and renews its lock at least three times without GitHub cancelling it.
+  The committed payload becomes the ground-truth fixture for all subsequent integration tests.</li>
+<li><strong>Investigation — <code>AcknowledgeRunnerRequest</code>:</strong> The official runner source (<code>MessageListener.cs</code>) calls <code>AcknowledgeRunnerRequestAsync(runnerRequestId, sessionId)</code> after handing a job to the worker.
+  This endpoint is not documented and its role is unclear — it may be the broker API's replacement for the old <code>DeleteMessage</code> call, or a no-op acknowledgment.
+  The probe should attempt this call after a successful <code>acquirejob</code> and observe whether omitting it causes any downstream issue (e.g., the same job being redelivered, or session errors).
+  If confirmed necessary, add it to the execution flow in <a href="../04-operational-flows/#42-job-execution-flow-agc">§4.2</a> and <a href="../03-api-contracts/#33-re-implemented-broker-api-endpoints">§3.3</a>.</li>
 <li>
-<p><strong>Risk investigation — egress IP variance:</strong> Before finishing this milestone, route the probe's broker API calls through a local two-pod proxy pool (two <code>httptest</code>-backed <code>CONNECT</code> proxies bound to different ports, simulating different egress IPs) and verify that <code>sessions</code>, <code>message</code>, <code>acquirejob</code>, and <code>renewjob</code> calls all succeed when each call lands on a different proxy. If any call fails or returns an unexpected status, pause and evaluate before proceeding to the proxy pool design in Milestone 4 — the fallback options are <code>sessionAffinity: ClientIP</code> on the proxy Service (low effort) or per-goroutine proxy assignment (higher fidelity).</p>
+<p><strong>Risk investigation — egress IP variance:</strong> Before finishing this milestone, route the probe's broker API calls through a local two-pod proxy pool (two <code>httptest</code>-backed <code>CONNECT</code> proxies bound to different ports, simulating different egress IPs) and verify that <code>sessions</code>, <code>message</code>, <code>acquirejob</code>, and <code>renewjob</code> calls all succeed when each call lands on a different proxy.
+  If any call fails or returns an unexpected status, pause and evaluate before proceeding to the proxy pool design in Milestone 4 — the fallback options are <code>sessionAffinity: ClientIP</code> on the proxy Service (low effort) or per-goroutine proxy assignment (higher fidelity).</p>
 </li>
 <li>
-<p><strong>Investigation — session reuse after <code>acquirejob</code>:</strong> The adaptive listener model in <a href="../02-architecture/#22-tier-2--actions-gateway-controller-agc">§2.2</a> requires that a goroutine can call <code>GET /message</code> again on the same <code>sessionId</code> immediately after a successful <code>POST /acquirejob</code>. Using the probe, acquire a job and then — without calling <code>DELETE /sessions</code> — immediately re-enter the <code>GET /message</code> long-poll on the same session. Confirm whether GitHub accepts the renewed poll and eventually delivers a second job, or returns a session error (e.g. 404, 410, or a protocol-level rejection). If session reuse is not permitted, the AGC must call <code>DELETE /sessions</code> and <code>POST /sessions</code> between each job, adding registration latency to every acquisition cycle. Document the observed behavior in <a href="../03-api-contracts/#33-re-implemented-broker-api-endpoints">§3.3</a> and adjust the Session Multiplexer implementation plan in Milestone 2 accordingly.</p>
+<p><strong>Investigation — session reuse after <code>acquirejob</code>:</strong> The adaptive listener model in <a href="../02-architecture/#22-tier-2--actions-gateway-controller-agc">§2.2</a> requires that a goroutine can call <code>GET /message</code> again on the same <code>sessionId</code> immediately after a successful <code>POST /acquirejob</code>.
+  Using the probe, acquire a job and then — without calling <code>DELETE /sessions</code> — immediately re-enter the <code>GET /message</code> long-poll on the same session.
+  Confirm whether GitHub accepts the renewed poll and eventually delivers a second job, or returns a session error (e.g.
+  404, 410, or a protocol-level rejection).
+  If session reuse is not permitted, the AGC must call <code>DELETE /sessions</code> and <code>POST /sessions</code> between each job, adding registration latency to every acquisition cycle.
+  Document the observed behavior in <a href="../03-api-contracts/#33-re-implemented-broker-api-endpoints">§3.3</a> and adjust the Session Multiplexer implementation plan in Milestone 2 accordingly.</p>
 </li>
 <li>
-<p><strong>Investigation — job delivery throttling by session count:</strong> Confirm whether GitHub's broker delivers jobs only to sessions that were registered <em>before</em> the job was queued, or whether it will deliver to any session that starts polling after the job arrives. To test: queue two jobs simultaneously with only one session registered, then register a second session mid-queue and observe whether both sessions receive a job. If GitHub throttles delivery to the registered session count at queue time, the adaptive spawn-on-acquire model may miss jobs during bursts (a job arrives while the replacement listener's <code>POST /sessions</code> call is in flight). If GitHub delivers opportunistically to any ready session, the model is safe. If throttling is confirmed, evaluate pre-spawning a small warm standby pool (2–3 sessions per RunnerGroup) as a mitigation, and update <a href="../appendix-e-capacity-planning/">Appendix E</a> accordingly.</p>
+<p><strong>Investigation — job delivery throttling by session count:</strong> Confirm whether GitHub's broker delivers jobs only to sessions that were registered <em>before</em> the job was queued, or whether it will deliver to any session that starts polling after the job arrives.
+  To test: queue two jobs simultaneously with only one session registered, then register a second session mid-queue and observe whether both sessions receive a job.
+  If GitHub throttles delivery to the registered session count at queue time, the adaptive spawn-on-acquire model may miss jobs during bursts (a job arrives while the replacement listener's <code>POST /sessions</code> call is in flight).
+  If GitHub delivers opportunistically to any ready session, the model is safe.
+  If throttling is confirmed, evaluate pre-spawning a small warm standby pool (2–3 sessions per RunnerGroup) as a mitigation, and update <a href="../appendix-e-capacity-planning/">Appendix E</a> accordingly.</p>
 </li>
 </ul>
 <hr />
 <h2 id="milestone-2-agc-controller--reconciler-days-510">Milestone 2: AGC Controller &amp; Reconciler (Days 5–10)<a class="headerlink" href="#milestone-2-agc-controller--reconciler-days-510" title="Permanent link">&para;</a></h2>
-<p>See <a href="../../plan/milestone-2/">docs/plan/milestone-2.md</a> for the implementation plan and current status.</p>
+<p>See <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.5.0/docs/plan/milestone-2.md">docs/plan/milestone-2.md</a> for the implementation plan and current status.</p>
 <ul>
-<li><strong>Deliverable:</strong> A deployable AGC scaffolded with <code>controller-runtime</code>/<code>kubebuilder</code> that reconciles <code>RunnerGroup</code> CRs into adaptive listener goroutine pools: one permanent goroutine at rest, spawning additional goroutines on demand up to <code>maxListeners</code> during bursts, with idle goroutines shutting down once the queue drains. Includes the Token Manager (mutex-protected installation token with T-5min proactive refresh), the per-job RenewJob loop, the <code>maxWorkers</code> simple pod-count ceiling (enforced without PriorityClass when <code>priorityTiers</code> is absent), and the polling implementation lifted from the Milestone 1 probe. Unit tests cover create/update/delete lifecycle transitions, goroutine spawn/kill/leak detection (via <code>goleak.VerifyNone</code>), idle-shutdown triggering after 50 consecutive empty 202 responses, and clock-based assertions that token refresh fires before expiry without interrupting in-flight goroutines.</li>
-<li><strong>Success Criteria:</strong> Creating, scaling <code>maxListeners</code>, and deleting a <code>RunnerGroup</code> in a local <code>kind</code> cluster produces no goroutine leaks (verified via <code>pprof</code> and <code>goleak</code>) and no orphaned Kubernetes resources. The goroutine count at rest is exactly one per RunnerGroup regardless of <code>maxListeners</code> setting. Token refresh completes without goroutines restarting.</li>
+<li><strong>Deliverable:</strong> A deployable AGC scaffolded with <code>controller-runtime</code>/<code>kubebuilder</code> that reconciles <code>RunnerGroup</code> CRs into adaptive listener goroutine pools: one permanent goroutine at rest, spawning additional goroutines on demand up to <code>maxListeners</code> during bursts, with idle goroutines shutting down once the queue drains.
+  Includes the Token Manager (mutex-protected installation token with T-5min proactive refresh), the per-job RenewJob loop, the <code>maxWorkers</code> simple pod-count ceiling (enforced without PriorityClass when <code>priorityTiers</code> is absent), and the polling implementation lifted from the Milestone 1 probe.
+  Unit tests cover create/update/delete lifecycle transitions, goroutine spawn/kill/leak detection (via <code>goleak.VerifyNone</code>), idle-shutdown triggering after 50 consecutive empty 202 responses, and clock-based assertions that token refresh fires before expiry without interrupting in-flight goroutines.</li>
+<li><strong>Success Criteria:</strong> Creating, scaling <code>maxListeners</code>, and deleting a <code>RunnerGroup</code> in a local <code>kind</code> cluster produces no goroutine leaks (verified via <code>pprof</code> and <code>goleak</code>) and no orphaned Kubernetes resources.
+  The goroutine count at rest is exactly one per RunnerGroup regardless of <code>maxListeners</code> setting.
+  Token refresh completes without goroutines restarting.</li>
 </ul>
 <hr />
 <h2 id="milestone-3-worker-pod--pipe-handoff-days-1116">Milestone 3: Worker Pod &amp; Pipe Handoff (Days 11–16)<a class="headerlink" href="#milestone-3-worker-pod--pipe-handoff-days-1116" title="Permanent link">&para;</a></h2>
-<p>See <a href="../../plan/milestone-3/">docs/plan/milestone-3.md</a> for the implementation plan and current status.</p>
+<p>See <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.5.0/docs/plan/milestone-3.md">docs/plan/milestone-3.md</a> for the implementation plan and current status.</p>
 <ul>
-<li><strong>Deliverable:</strong> A worker container image plus the pod-provisioning logic in the AGC: Dockerfile, entrypoint wrapper (Go binary that reads the mounted payload Secret and writes to Named Pipes), Secret mount logic, and the <code>AcquireJob</code> → pod-create handoff sequence. The Named Pipe handoff is the underdocumented part of this milestone — start by validating the wrapper with the static decrypted payload from Milestone 1 before wiring it into pod creation, so the pipe semantics can be debugged without a live GitHub trigger in the loop.</li>
-<li><strong>Success Criteria:</strong> A real workflow job dispatched from GitHub appears in the Actions UI with correct step output, timing, and a green checkmark. The worker container exits with code <code>0</code> on success, and both the pod and the job Secret are garbage-collected by the AGC.</li>
+<li><strong>Deliverable:</strong> A worker container image plus the pod-provisioning logic in the AGC: Dockerfile, entrypoint wrapper (Go binary that reads the mounted payload Secret and writes to Named Pipes), Secret mount logic, and the <code>AcquireJob</code> → pod-create handoff sequence.
+  The Named Pipe handoff is the underdocumented part of this milestone — start by validating the wrapper with the static decrypted payload from Milestone 1 before wiring it into pod creation, so the pipe semantics can be debugged without a live GitHub trigger in the loop.</li>
+<li><strong>Success Criteria:</strong> A real workflow job dispatched from GitHub appears in the Actions UI with correct step output, timing, and a green checkmark.
+  The worker container exits with code <code>0</code> on success, and both the pod and the job Secret are garbage-collected by the AGC.</li>
 </ul>
 <hr />
 <h2 id="milestone-4-gateway-manager-controller--proxy-days-1722">Milestone 4: Gateway Manager Controller + Proxy (Days 17–22)<a class="headerlink" href="#milestone-4-gateway-manager-controller--proxy-days-1722" title="Permanent link">&para;</a></h2>
-<p>See <a href="../../plan/milestone-4/">docs/plan/milestone-4.md</a> for the implementation plan and current status.</p>
+<p>See <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.5.0/docs/plan/milestone-4.md">docs/plan/milestone-4.md</a> for the implementation plan and current status.</p>
 <ul>
-<li><strong>Deliverable:</strong> A second operator (<code>cmd/gmc/</code>) sharing the repo with the AGC, reconciling <code>ActionsGateway</code> CRs into the full tenant resource set: ServiceAccount, Role, RoleBinding, NetworkPolicy, proxy Deployment, proxy Service, PodDisruptionBudget, HPA, AGC Deployment, and bootstrap RunnerGroups. (The namespace <code>ResourceQuota</code> is platform-owned — the GMC operates within it but never creates or mutates it; see Q130.) Includes a minimal stateless Go <code>CONNECT</code> proxy implementation (HTTPS tunneling only, no TLS termination), the admission webhook that rejects CRs in reserved namespaces, and <code>HTTP_PROXY</code>/<code>HTTPS_PROXY</code>/<code>NO_PROXY</code> injection into both the AGC Deployment and the worker pod template. RBAC test enumerates the GMC's generated ClusterRole rules and asserts no <code>*</code> verbs on <code>secrets</code>, <code>pods</code>, or <code>nodes</code> (regression guard against accidental escalation).</li>
-<li><strong>Success Criteria:</strong> Applying two <code>ActionsGateway</code> CRs in a <code>kind</code> cluster produces two independent tenant namespaces, each with a running AGC and a proxy pool with at least <code>minReplicas</code> Ready. Deleting one CR tears down only that tenant's resources. Updating <code>spec.proxy.maxReplicas</code> causes the HPA to reflect the new bound within one reconcile cycle.</li>
+<li><strong>Deliverable:</strong> A second operator (<code>cmd/gmc/</code>) sharing the repo with the AGC, reconciling <code>ActionsGateway</code> CRs into the full tenant resource set: ServiceAccount, Role, RoleBinding, NetworkPolicy, proxy Deployment, proxy Service, PodDisruptionBudget, HPA, AGC Deployment, and bootstrap RunnerGroups.
+  (The namespace <code>ResourceQuota</code> is platform-owned — the GMC operates within it but never creates or mutates it; see Q130.)
+  Includes a minimal stateless Go <code>CONNECT</code> proxy implementation (HTTPS tunneling only, no TLS termination), the admission webhook that rejects CRs in reserved namespaces, and <code>HTTP_PROXY</code>/<code>HTTPS_PROXY</code>/<code>NO_PROXY</code> injection into both the AGC Deployment and the worker pod template.
+  RBAC test enumerates the GMC's generated ClusterRole rules and asserts no <code>*</code> verbs on <code>secrets</code>, <code>pods</code>, or <code>nodes</code> (regression guard against accidental escalation).</li>
+<li><strong>Success Criteria:</strong> Applying two <code>ActionsGateway</code> CRs in a <code>kind</code> cluster produces two independent tenant namespaces, each with a running AGC and a proxy pool with at least <code>minReplicas</code> Ready.
+  Deleting one CR tears down only that tenant's resources.
+  Updating <code>spec.proxy.maxReplicas</code> causes the HPA to reflect the new bound within one reconcile cycle.</li>
 </ul>
 <hr />
 <h2 id="milestone-5-hardening--load-testing-days-2326">Milestone 5: Hardening &amp; Load Testing (Days 23–26)<a class="headerlink" href="#milestone-5-hardening--load-testing-days-2326" title="Permanent link">&para;</a></h2>
-<p>See <a href="../../plan/milestone-5/">docs/plan/milestone-5.md</a> for the implementation plan and current status.</p>
+<p>See <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.5.0/docs/plan/milestone-5.md">docs/plan/milestone-5.md</a> for the implementation plan and current status.</p>
 <ul>
-<li><strong>Deliverable:</strong> Production Helm chart or Kustomize overlays with locked-down Pod Security Standards, optional gVisor <code>RuntimeClass</code> configuration (see <a href="../appendix-b-worker-isolation/">Appendix B</a>), hardened proxy pod specs (read-only root filesystem, no capabilities), and a multi-tenant load harness under <code>test/load/</code> that simulates multiple tenants in parallel against a staging cluster with the full GMC+AGC stack running. (The per-tenant namespace <code>ResourceQuota</code> is provisioned out-of-band by the platform admin — the GAG chart does not ship it; the GMC operates within it but never creates or mutates it. See Q130.)</li>
-<li><strong>Success Criteria:</strong> 1,000 concurrent virtual runner sessions across 10 simulated tenants sustain a burst load with zero dropped messages, no cross-tenant resource visibility, and no deadlocked Go channels. The proxy HPA scales up under load and returns to <code>minReplicas</code> within 5 minutes of load subsiding. A <code>kube-bench</code> or <code>polaris</code> scan returns no critical findings.</li>
+<li><strong>Deliverable:</strong> Production Helm chart or Kustomize overlays with locked-down Pod Security Standards, optional gVisor <code>RuntimeClass</code> configuration (see <a href="../appendix-b-worker-isolation/">Appendix B</a>), hardened proxy pod specs (read-only root filesystem, no capabilities), and a multi-tenant load harness under <code>test/load/</code> that simulates multiple tenants in parallel against a staging cluster with the full GMC+AGC stack running.
+  (The per-tenant namespace <code>ResourceQuota</code> is provisioned out-of-band by the platform admin — the GAG chart does not ship it; the GMC operates within it but never creates or mutates it.
+  See Q130.)</li>
+<li><strong>Success Criteria:</strong> 1,000 concurrent virtual runner sessions across 10 simulated tenants sustain a burst load with zero dropped messages, no cross-tenant resource visibility, and no deadlocked Go channels.
+  The proxy HPA scales up under load and returns to <code>minReplicas</code> within 5 minutes of load subsiding.
+  A <code>kube-bench</code> or <code>polaris</code> scan returns no critical findings.</li>
 </ul>
 <hr />
 <p>← <a href="../05-security/">Security</a> | <a href="../">Back to index</a> | Next: <a href="../07-test-plan/">Test Plan →</a></p>

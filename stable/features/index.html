@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/1.4.0/features/">
+        <link rel="canonical" href="https://actions-gateway.com/1.5.0/features/">
       
       
         <link rel="prev" href="../alternatives/">
@@ -63,15 +63,15 @@
   <link rel="preload" as="font" type="font/woff2" crossorigin href="../assets/fonts/IBMPlexSans-Bold.woff2">
   <link rel="preload" as="font" type="font/woff2" crossorigin href="../assets/fonts/MonaspaceNeon-Medium.woff2">
   
-  <meta property="og:image" content="https://actions-gateway.com/1.4.0assets/social-preview.png">
+  <meta property="og:image" content="https://actions-gateway.com/1.5.0assets/social-preview.png">
   <meta property="og:image:width" content="1280">
   <meta property="og:image:height" content="640">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:image" content="https://actions-gateway.com/1.4.0assets/social-preview.png">
+  <meta name="twitter:image" content="https://actions-gateway.com/1.5.0assets/social-preview.png">
   
-  <link rel="apple-touch-icon" href="https://actions-gateway.com/1.4.0assets/apple-touch-icon.png">
-  <link rel="alternate icon" href="https://actions-gateway.com/1.4.0assets/favicon.ico">
-  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/1.4.0assets/icon-512.png">
+  <link rel="apple-touch-icon" href="https://actions-gateway.com/1.5.0assets/apple-touch-icon.png">
+  <link rel="alternate icon" href="https://actions-gateway.com/1.5.0assets/favicon.ico">
+  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/1.5.0assets/icon-512.png">
   
   <script type="application/ld+json">
   {
@@ -79,14 +79,14 @@
     "@type": "SoftwareSourceCode",
     "name": "GitHub Actions Gateway",
     "description": "An Actions Runner Controller (ARC) alternative for self-hosted GitHub Actions runners on multi-tenant Kubernetes \u2014 oversubscribe a shared quota, recover evicted jobs automatically, and isolate every tenant\u0027s GitHub egress.",
-    "url": "https://actions-gateway.com/1.4.0",
+    "url": "https://actions-gateway.com/1.5.0",
     "codeRepository": "https://github.com/actions-gateway/github-actions-gateway",
     "programmingLanguage": "Go",
     "license": "https://www.apache.org/licenses/LICENSE-2.0",
     "author": {
       "@type": "Organization",
       "name": "GitHub Actions Gateway",
-      "url": "https://actions-gateway.com/1.4.0"
+      "url": "https://actions-gateway.com/1.5.0"
     }
   }
   </script>
@@ -95,8 +95,8 @@
     "@context": "https://schema.org",
     "@type": "Organization",
     "name": "GitHub Actions Gateway",
-    "url": "https://actions-gateway.com/1.4.0",
-    "logo": "https://actions-gateway.com/1.4.0assets/icon-512.png",
+    "url": "https://actions-gateway.com/1.5.0",
+    "logo": "https://actions-gateway.com/1.5.0assets/icon-512.png",
     "sameAs": ["https://github.com/actions-gateway/github-actions-gateway"]
   }
   </script>
@@ -132,8 +132,8 @@
         <aside class="md-banner">
           <div class="md-banner__inner md-grid md-typeset">
             
-            <strong>v1.4.0 is here.</strong>
-      Consent-gated cross-namespace egress proxy sharing, a curated runner template library you apply with one command, and v2 worker-capacity conditions exported as Prometheus gauges.
+            <strong>v1.5.0 is here.</strong>
+      A per-tenant GitHub runner group boundary, multi-label runner sets that migrate a <code>runs-on</code> array unedited, and job duration and latency metrics on the acquisition tier every new tenant runs.
           </div>
           
         </aside>
@@ -145,7 +145,7 @@
           <aside class="md-banner md-banner--warning">
             <div class="md-banner__inner md-grid md-typeset">
               You're not viewing the latest release.
-  <a href="https://actions-gateway.com/1.4.0"><strong>Go to the current docs.</strong></a>
+  <a href="https://actions-gateway.com/1.5.0"><strong>Go to the current docs.</strong></a>
 
             </div>
             <script>var el=document.querySelector("[data-md-component=outdated]"),base=new URL(".."),outdated=__md_get("__outdated",sessionStorage,base);!0===outdated&&el&&(el.hidden=!1)</script>
@@ -2782,35 +2782,34 @@
 
 
 <h1 id="features">Features<a class="headerlink" href="#features" title="Permanent link">&para;</a></h1>
-<p>Everything GitHub Actions Gateway (GAG) does today, with a link to the doc that
-explains each one. For the argument against Actions Runner Controller (ARC), see
-<a href="../why-gag/">Why GAG?</a>; for what is not here yet, see the <a href="../roadmap/">roadmap</a>.</p>
-<p>Three badges appear below. <span class="gag-v2-badge">v2</span> marks a
-capability available only in the <code>actions-gateway.com/v2beta1</code> API;
-<span class="gag-maturity-badge">beta</span> marks one whose API shape is still
-under its first stability contract; and
-<span class="gag-tier-badge">partly classic-only</span> marks one that does not
-reach the ScaleSet acquisition tier every new tenant runs. No tier badge means
-both tiers, and a gate removes the badge when the gap closes.</p>
+<p>Everything GitHub Actions Gateway (GAG) does today, with a link to the doc that explains each one.
+For the argument against Actions Runner Controller (ARC), see <a href="../why-gag/">Why GAG?</a>; for what is not here yet, see the <a href="../roadmap/">roadmap</a>.</p>
+<p>Four badges appear below. <span class="gag-v2-badge">v2</span> marks a capability available only in the <code>actions-gateway.com/v2beta1</code> API; <span class="gag-maturity-badge">beta</span> marks one whose API shape is still under its first stability contract; <span class="gag-new-badge">new in 1.5</span> marks one this release adds; and <span class="gag-tier-badge">partly classic-only</span> marks one that does not reach the ScaleSet acquisition tier every new tenant runs.
+No tier badge means both tiers, and a gate removes the badge when the gap closes.</p>
 <div class="admonition tip">
 <p class="admonition-title">Check the version you're running</p>
-<p>Use the <strong>version selector</strong> at the top of the page to switch between the
-latest stable <a href="https://github.com/actions-gateway/github-actions-gateway/releases">release</a>
-(the default) and <strong><code>dev</code></strong>, the unreleased <code>main</code> branch. A capability listed
-under <code>dev</code> but not under a numbered release has not shipped in a tagged
-chart yet.</p>
+<p>Use the <strong>version selector</strong> at the top of the page to switch between the latest stable <a href="https://github.com/actions-gateway/github-actions-gateway/releases">release</a> (the default) and <strong><code>dev</code></strong>, the unreleased <code>main</code> branch.
+A capability listed under <code>dev</code> but not under a numbered release has not shipped in a tagged chart yet.</p>
 </div>
 <h2 id="job-intake-and-recovery">Job intake and recovery<a class="headerlink" href="#job-intake-and-recovery" title="Permanent link">&para;</a></h2>
 <ul>
-<li><strong><a href="../design/04-operational-flows/#42-job-execution-flow-agc">Runner-scale-set acquisition</a></strong>: the same single-acquirer protocol ARC uses, with no many-acquirers fan-out. The default in v2.</li>
+<li><strong><a href="../design/04-operational-flows/#42-job-execution-flow-agc">Runner-scale-set acquisition</a></strong>: the same single-acquirer protocol ARC uses, with no many-acquirers fan-out.
+  The default in v2.</li>
 <li><strong><a href="../design/04-operational-flows/#42-job-execution-flow-agc">Quota-aware intake</a></strong>: a job the namespace <code>ResourceQuota</code> has no room for is never taken on, so it stays queued at GitHub until there is capacity.</li>
+<li><strong><a href="../operations/troubleshooting/#jobs-targeting-one-of-a-runner-sets-labels-never-start-runnerlabelsincomplete">Multi-label runner sets</a></strong> <span class="gag-v2-badge">v2</span> <span class="gag-maturity-badge">beta</span> <span class="gag-new-badge">new in 1.5</span>: every <code>runnerLabel</code> is registered at GitHub, so a job asking for any of them matches and a <code>runs-on</code> array migrates unedited.</li>
 <li><strong><a href="../operations/troubleshooting/#which-disruptions-auto-re-run-a-job-and-which-never-do">Auto re-run for disrupted jobs</a></strong>: a worker lost to eviction, preemption, a node drain, or a bare <code>kubectl delete pod</code> has its run re-run automatically, under a per-run budget.</li>
-<li><strong><a href="../operations/troubleshooting/#runnerset-reports-workercapacitydeclined-the-gateway-stopped-claiming-jobs">Capacity gate for unplaceable workers</a></strong>: opt-in. Stop claiming jobs while the cluster cannot place the worker shape, instead of claiming and cancelling them. Off by default.</li>
+<li><strong><a href="../operations/troubleshooting/#runnerset-reports-workercapacitydeclined-the-gateway-stopped-claiming-jobs">Capacity gate for unplaceable workers</a></strong>: opt-in.
+  Stop claiming jobs while the cluster cannot place the worker shape, instead of claiming and cancelling them.
+  Off by default.</li>
 <li><strong><a href="../design/04-operational-flows/">Fast, honest ending for an abandoned run</a></strong>: a run whose worker is removed before it started is force-cancelled in about a second, measured live, then re-run automatically once capacity returns.</li>
 <li><strong><a href="../design/02-architecture/">Priority tiers per runner set</a></strong>: reserve a guaranteed floor of slots for expensive runner types so cheap CPU jobs cannot starve critical GPU work.</li>
 <li><strong><a href="../operations/tenant-onboarding/#step-2-create-the-actionsgateway-resource">Worker scale-up rate limiting</a></strong>: opt-in token bucket capping how <em>fast</em> workers start, distinct from the count ceiling, to smooth cold-start stampedes on shared egress.</li>
 <li><strong><a href="../design/02-architecture/">Scale-to-zero workers</a></strong>: worker pods exist only while a job runs; listeners are ~12 KiB goroutines in one shared pod, not a listener pod per runner group.</li>
 <li><strong><a href="../operations/tenant-onboarding/#step-2-create-the-actionsgateway-resource">Unmodified upstream runner images</a></strong>: the wrapper is injected into each worker pod at runtime (an OCI image volume on Kubernetes 1.33+, an initContainer below), so the stock <code>actions/runner</code> image, or any derivative, runs with no rebuild.</li>
+<li><strong><a href="../design/02-architecture/">A job conclusion survives losing the process</a></strong>: conclusions are persisted before any message delete is issued, so a hard kill leaves the message to be replayed rather than the conclusion lost.
+  Measured over 60 graceful stops at maximum pressure.</li>
+<li><strong><a href="../design/02-architecture/">Orphaned workers are bounded without a live controller</a></strong>: <code>maxWorkerLifetime</code> is stamped on each worker pod as its <code>activeDeadlineSeconds</code>, so the <strong>kubelet</strong> enforces it.
+  The motivating incident stranded 82 spot node-hours across 16 hours with the controller down.</li>
 </ul>
 <h2 id="capacity-cost-and-right-sizing">Capacity, cost, and right-sizing<a class="headerlink" href="#capacity-cost-and-right-sizing" title="Permanent link">&para;</a></h2>
 <ul>
@@ -2824,9 +2823,14 @@ chart yet.</p>
 </ul>
 <h2 id="tenant-isolation-and-egress">Tenant isolation and egress<a class="headerlink" href="#tenant-isolation-and-egress" title="Permanent link">&para;</a></h2>
 <ul>
+<li><strong><a href="../operations/tenant-onboarding/#bind-a-runner-set-to-a-github-runner-group">Bound GitHub runner group</a></strong> <span class="gag-v2-badge">v2</span> <span class="gag-maturity-badge">beta</span> <span class="gag-new-badge">new in 1.5</span>: <code>runnerGroup</code>, or <code>defaultRunnerGroup</code> once on the gateway, registers a tenant's scale sets into a named group, not the installation default, so only that group's repositories can route jobs.
+  An unknown group fails the set closed.</li>
+<li><strong><a href="../operations/troubleshooting/#actionsgateway-reports-scalesetnamecollision">Cross-tenant scale-set name guard</a></strong> <span class="gag-new-badge">new in 1.5</span>: a set's first <code>runnerLabel</code> names its scale set at GitHub, so two tenants claiming one name can acquire each other's jobs.
+  Admission refuses the pair GitHub-wide; one carried in from an older release is reported on the gateway.</li>
 <li><strong><a href="../design/network-architecture/">Per-tenant egress IPs</a></strong>: a dedicated proxy pool per tenant gives each team its own GitHub egress IPs to allow-list, with a contained blast radius.</li>
 <li><strong><a href="../operations/migration-v1-to-v2/">Standalone <code>EgressProxy</code></a></strong> <span class="gag-v2-badge">v2</span> <span class="gag-maturity-badge">beta</span>: the proxy becomes its own object, optionally shared, or omitted entirely for direct egress, which stays <code>NetworkPolicy</code>-restricted.</li>
-<li><strong><a href="../operations/security-operations/#sharing-an-egress-proxy-across-namespaces">Cross-namespace proxy sharing</a></strong> <span class="gag-v2-badge">v2</span> <span class="gag-maturity-badge">beta</span>: one pool can serve several namespaces, but only those its owner names in <code>sharing.allowedNamespaces</code>. Consent is provider-side, so naming a proxy from the consumer side grants nothing; unlisted stays denied, and only the proxy's public certificate crosses the namespace boundary.</li>
+<li><strong><a href="../operations/security-operations/#sharing-an-egress-proxy-across-namespaces">Cross-namespace proxy sharing</a></strong> <span class="gag-v2-badge">v2</span> <span class="gag-maturity-badge">beta</span>: one pool can serve several namespaces, but only those its owner names in <code>sharing.allowedNamespaces</code>.
+  Consent is provider-side, so naming a proxy from the consumer side grants nothing; unlisted stays denied, and only the proxy's public certificate crosses the namespace boundary.</li>
 <li><strong><a href="../operations/security-operations/#expressing-github-egress-by-fqdn-the-egresspolicymode-opt-in">FQDN egress policy</a></strong>: express GitHub egress by hostname instead of CIDR on Cilium, Calico, or GKE Dataplane V2.</li>
 <li><strong><a href="../operations/troubleshooting/#actionsgateway-reports-egressrulesstale">Auto-refreshed GitHub egress rules</a></strong>: the Gateway Manager Controller (GMC) re-reads GitHub's published IP ranges every 24 hours into each tenant's <code>NetworkPolicy</code>, and an <code>EgressRulesStale</code> condition, with a paging alert, fires when the refresh stalls past its window.</li>
 <li><strong><a href="../operations/migration-v1-to-v2/">Bring your own proxy autoscaler</a></strong> <span class="gag-v2-badge">v2</span> <span class="gag-maturity-badge">beta</span>: <code>managedAutoscaling: false</code> hands the proxy pool to KEDA, VPA, or a custom HorizontalPodAutoscaler.</li>
@@ -2836,12 +2840,15 @@ chart yet.</p>
 <h2 id="security-posture">Security posture<a class="headerlink" href="#security-posture" title="Permanent link">&para;</a></h2>
 <ul>
 <li><strong><a href="../design/05-security/">Secure-by-default hardening</a></strong>: Pod Security Admission per namespace, default-deny NetworkPolicies, and credentials kept out of environment variables, all reconciled rather than opt-in.</li>
-<li><strong><a href="../operations/runner-template-library/">Runner template library</a></strong>: three shipped worker pod shapes (<code>plain</code>, <code>kata-dind</code>, <code>privileged-dind</code>), each applied with one <code>kubectl apply -k</code>, so a tenant starts from a validated template instead of transcribing a capability set by hand. Only templates CI exercises may ship, and a gate enforces it.</li>
+<li><strong><a href="../operations/runner-template-library/">Runner template library</a></strong>: three shipped worker pod shapes (<code>plain</code>, <code>kata-dind</code>, <code>privileged-dind</code>), each applied with one <code>kubectl apply -k</code>, so a tenant starts from a validated template instead of transcribing a capability set by hand.
+  Only templates CI exercises may ship, and a gate enforces it.</li>
 <li><strong><a href="../operations/kata-dind-workloads/">Kata micro-VM workers</a></strong>: validated on nested virtualization, and the default for GAG's own end-to-end CI, which builds a <code>kind</code> cluster inside an unprivileged worker pod.</li>
 <li><strong><a href="../operations/in-runner-image-builds/">In-runner image builds</a></strong>: a decision table mapping BuildKit rootless, Kaniko, Sysbox, Kata, and privileged Docker-in-Docker to the right <code>securityProfile</code> and PSA level.</li>
 <li><strong><a href="../operations/release/">Signed images, SBOM, and SLSA provenance</a></strong>: every published image is keyless-signed and carries both a Software Bill of Materials (SBOM) attestation and a Supply-chain Levels for Software Artifacts (SLSA) build-provenance attestation.</li>
 <li><strong><a href="../operations/admission-policies/">Admission policy compatibility</a></strong>: a Kyverno/Gatekeeper matrix covering whether GAG pods comply with common cluster policies, plus sample enforce and exception policies.</li>
-<li><strong><a href="../operations/security-operations/">Optional CONNECT destination allow-listing</a></strong>: defense in depth, off by default. An opted-in proxy refuses a CONNECT outside the permitted set and counts each refusal as an alertable Server-Side Request Forgery (SSRF) signal. The mandatory default-deny NetworkPolicy stays the primary gate.</li>
+<li><strong><a href="../operations/security-operations/">Optional CONNECT destination allow-listing</a></strong>: defense in depth, off by default.
+  An opted-in proxy refuses a CONNECT outside the permitted set and counts each refusal as an alertable Server-Side Request Forgery (SSRF) signal.
+  The mandatory default-deny NetworkPolicy stays the primary gate.</li>
 <li><strong><a href="../design/05-security/#gmc-privilege-escalation-blast-radius-and-compensating-controls">Self-confining controller privileges</a></strong>: shipped <code>ValidatingAdmissionPolicy</code> guards deny the GMC's own cluster-wide writes outside admin-marked tenant namespaces, so a compromised manager cannot touch <code>kube-system</code> or any unmarked namespace.</li>
 <li><strong><a href="../operations/security-operations/#self-service-additions-via-the-priorityclassallowlist-cr-q188-q298">Restart-free platform allowlists</a></strong>: grow the worker and infra PriorityClass allowlists and the egress-destination allowlist by editing a watched <code>PriorityClassAllowlist</code> custom resource (CR) or ConfigMap, no GMC restart; a missing, invalid, or overlapping object fails safe back to the flag baseline.</li>
 <li><strong><a href="../operations/observability-logging/#what-never-appears-in-logs">Credential redaction in logs</a></strong>: every GitHub response body passes one sanitizer that strips tokens, JWTs, and JIT configs before it can reach a log line, at every log level.</li>
@@ -2853,8 +2860,8 @@ chart yet.</p>
 <li><strong><a href="../operations/observability-metrics/">Metrics reference</a></strong>: every Prometheus metric the GMC, AGC, and proxy export, scoped per tenant and runner group.</li>
 <li><strong><a href="../operations/observability-metrics/#full-metrics-reference">Fleet rollups for platform admins</a></strong>: cross-tenant degraded, egress-stale, and quota gauges in a single pane.</li>
 <li><strong><a href="../operations/observability-metrics-access/">Scraping setup</a></strong>: wiring the mutual-TLS metrics endpoints into your Prometheus.</li>
-<li><strong><a href="../operations/observability-alerting/">Alerting and SLOs</a></strong> <span class="gag-tier-badge">partly classic-only</span> <!-- tier:Q713 -->: ready-to-apply alert rules as code. Two SLOs and one alert read duration and latency series the ScaleSet tier does not emit yet, so they have no data there (<a href="../roadmap/">roadmap</a>).</li>
-<li><strong><a href="../operations/observability-dashboards/">Grafana dashboards</a></strong> <span class="gag-tier-badge">partly classic-only</span> <!-- tier:Q713 -->: a tenant dashboard and a platform dashboard, both as code. Their duration and latency panels stay empty on the ScaleSet tier for the same reason.</li>
+<li><strong><a href="../operations/observability-alerting/">Alerting and SLOs</a></strong>: ready-to-apply alert rules as code.</li>
+<li><strong><a href="../operations/observability-dashboards/">Grafana dashboards</a></strong>: a tenant dashboard and a platform dashboard, both as code.</li>
 <li><strong><a href="../operations/observability-logging/">Logging and tracing</a></strong>: structured logs and OpenTelemetry tracing across the four tiers.</li>
 </ul>
 <h2 id="install-and-day-2-operations">Install and day-2 operations<a class="headerlink" href="#install-and-day-2-operations" title="Permanent link">&para;</a></h2>
@@ -2864,6 +2871,8 @@ chart yet.</p>
 <li><strong><a href="../operations/air-gapped-install/">Air-gapped install</a></strong>: relocate images and the OCI chart to a private registry with digests preserved, including pull Secrets for the runtime pods.</li>
 <li><strong><a href="../operations/gitops/">GitOps install</a></strong>: declarative Argo CD <code>Application</code> and Flux <code>HelmRelease</code> examples, with the CustomResourceDefinition (CRD) pruning gotcha handled.</li>
 <li><strong><a href="../operations/upgrade/">Upgrade and rollback</a></strong>: versioned upgrade procedures and the rollback path for each release.</li>
+<li><strong><a href="../operations/troubleshooting/#gmc-exits-at-startup-an-installed-crd-schema-is-older-than-the-gmc">Stale-CRD startup check</a></strong> <span class="gag-new-badge">new in 1.5</span>: the manager refuses to start when an installed CRD no longer declares a field that bounds tenant access, so a skipped CRD apply cannot leave <code>runnerGroup</code> accepted and silently pruned.</li>
+<li><strong><a href="../operations/troubleshooting/#worker-image-runner-version">Runner-version drift warning</a></strong> <span class="gag-new-badge">new in 1.5</span>: a worker image below GitHub's enforced minimum is reported before GitHub enforces it, and an image whose reference names no version says so rather than passing.</li>
 <li><strong><a href="../operations/backup-restore/">Backup and restore</a></strong>: backup posture and a recovery runbook, with a <a href="../operations/velero-backup-restore/">Velero-specific how-to</a>.</li>
 <li><strong><a href="../operations/troubleshooting/">Troubleshooting</a></strong>: symptom to diagnosis to remediation, organised by observable failure mode.</li>
 <li><strong><a href="../operations/runbook/">Production runbook</a></strong>: the operational procedures the platform team needs on call.</li>
@@ -2874,12 +2883,17 @@ chart yet.</p>
 <li><strong><a href="../operations/migration-v1-to-v2/">The v2 API</a></strong> <span class="gag-v2-badge">v2</span> <span class="gag-maturity-badge">beta</span>: the recommended shape for new tenants: a decomposed <code>ActionsGateway</code> + <code>RunnerSet</code> + <code>RunnerTemplate</code>, with <code>v2beta1</code> as the graduated storage and hub version.</li>
 <li><strong><a href="../operations/migration-v1-to-v2/">Reusable runner templates</a></strong> <span class="gag-v2-badge">v2</span> <span class="gag-maturity-badge">beta</span>: one <code>RunnerTemplate</code> referenced by many runner sets, or a cluster-wide <code>ClusterRunnerTemplate</code> shared across namespaces.</li>
 <li><strong><a href="../operations/migration-v1-to-v2/">Multiple gateways per namespace</a></strong> <span class="gag-v2-badge">v2</span> <span class="gag-maturity-badge">beta</span>: scoped gateways coexist, each with its own GitHub binding and runner sets.</li>
-<li><strong><a href="../operations/troubleshooting/#a-ghes-tenants-traffic-never-reaches-the-appliance">GitHub Enterprise Server gateways</a></strong>: a gateway whose <code>gitHubURL</code> names a GHES appliance addresses that appliance on every GitHub surface, with a <code>GitHubEgressIncomplete</code> condition flagging an incomplete CIDR allow-list. <strong>Untested against a real GHES appliance.</strong></li>
-<li><strong><a href="../operations/troubleshooting/#a-ghes-appliances-certificate-is-not-trusted">GHES behind a private CA</a></strong> <span class="gag-v2-badge">v2</span>: <code>spec.githubCABundleRef</code> names a ConfigMap whose CA bundle is added to the trust of both the gateway's AGC and its worker pods, never replacing the system roots. <strong>Untested against a real GHES appliance.</strong></li>
+<li><strong><a href="../operations/troubleshooting/#a-ghes-tenants-traffic-never-reaches-the-appliance">GitHub Enterprise Server gateways</a></strong>: a gateway whose <code>gitHubURL</code> names a GHES appliance addresses that appliance on every GitHub surface, with a <code>GitHubEgressIncomplete</code> condition flagging an incomplete CIDR allow-list.
+  <strong>Untested against a real GHES appliance.</strong></li>
+<li><strong><a href="../operations/troubleshooting/#a-ghes-appliances-certificate-is-not-trusted">GHES behind a private CA</a></strong> <span class="gag-v2-badge">v2</span>: <code>spec.githubCABundleRef</code> names a ConfigMap whose CA bundle is added to the trust of both the gateway's AGC and its worker pods, never replacing the system roots.
+  <strong>Untested against a real GHES appliance.</strong></li>
 <li><strong><a href="../operations/migration-v1-to-v2/"><code>gag-migrate</code></a></strong>: a one-shot fan-out that moves a tenant off <code>v1alpha1</code> without changing how jobs are acquired: dry-run, review, apply.</li>
 <li><strong><a href="../operations/v1alpha1-deprecation/">Deprecations and the <code>v2.0.0</code> removal</a></strong>: what <code>v2.0.0</code> removes, what keeps working until then, and the pre-upgrade checklist.</li>
 <li><strong><a href="../operations/migration-from-arc/">Migrating from ARC</a></strong>: concept mapping, behavioral differences, and a worked zero-downtime migration of one runner group.</li>
-<li><strong><a href="../getting-started/">Getting started</a></strong>: first-time GitHub App setup, the v2 object set, and credential rotation. There is also a <a href="../demo/">recorded demo</a> of one real job on a local kind cluster.</li>
+<li><strong><a href="../design/github-protocol-dependencies/">The GitHub protocol dependency register</a></strong>: each GitHub runner-facing protocol this system speaks, its source of truth, a stability tier, and the drift-watch trigger for revisiting it.
+  One of the two is Public Preview with no wire specification.</li>
+<li><strong><a href="../getting-started/">Getting started</a></strong>: first-time GitHub App setup, the v2 object set, and credential rotation.
+  There is also a <a href="../demo/">recorded demo</a> of one real job on a local kind cluster.</li>
 </ul>
 
 
