@@ -2745,6 +2745,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#the-rc2-pre-flight-2026-08-15" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The rc.2 pre-flight, 2026-08-15
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#candidates-not-yet-accepted" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2803,7 +2814,7 @@
 Four gating Queue rows so far, labelled <code>1.5-gate</code>: Q712, Q713, and Q726, admitted 2026-08-09 from the candidate list below, plus Q715, admitted the same day off an external date.
 All four shipped 2026-08-11, and the marketing reconciliation closed 2026-08-12 (Q801, Q821).
 Two more were admitted afterwards, both on the <a href="#the-parity-axis-what-closed-and-what-backs-it">parity axis</a>: Q776 on 2026-08-13, to back the parity claim the other four earned, and Q844 on 2026-08-14, a classic-only capability the badge set never recorded and the marketing surface already claims for both tiers.
-Q844 shipped 2026-08-14 and Q776 has now shipped too, so every gating row is closed.
+Q844 shipped 2026-08-14 and Q776 has now shipped too, so every gating row is closed. <strong>All eight rows from the reopened scope shipped on 2026-08-15</strong>, so the Queue again carries no <code>1.5-gate</code> row and <a href="#the-rc2-pre-flight-2026-08-15">the rc.2 pre-flight</a> is recorded below.
 The <a href="#pre-flight-the-api-surface-this-tag-publishes">API surface review</a> is recorded below, which cleared the last item binding at the release candidate. <code>v1.5.0-rc.1</code> was cut from <code>ff3b3ef1</code> on 2026-08-14 and <a href="#the-rc1-validation-verdict-2026-08-14">its dogfood validation PASSED</a>, and the <a href="#the-stable-tag-pre-flight-2026-08-14">stable-tag pre-flight</a> then ran and closed. <strong>Scope reopened the same day</strong>, on <a href="#scope-reopened-2026-08-14-what-a-question-cost">eight further gating rows</a>, two of which change shipped code, so <code>v1.5.0-rc.1</code> is superseded and the line will tag from an rc.2.</p>
 </blockquote>
 <h2 id="why-these-gate-a-release-rather-than-riding-along">Why these gate a release rather than riding along<a class="headerlink" href="#why-these-gate-a-release-rather-than-riding-along" title="Permanent link">&para;</a></h2>
@@ -2815,8 +2826,8 @@ It is the one <a href="../arc-parity/">ARC parity</a> gap that breaks the zero-e
 <p><code>RunnerGroupName</code> exists on the scale-set listener config (<code>cmd/agc/internal/scalesetlistener/listener.go</code>) and is resolved when non-empty, but the sole production construction site in <code>cmd/agc/internal/controller/runnerset_scaleset.go</code> never set it.
 Every scale set therefore registered into the installation's default runner group.</p>
 <p>The GitHub runner group is the <strong>GitHub-side authorization point</strong> for which repositories may target which runners.
-With every tenant's scale set in one group, a repository outside a tenant can name that scale set in <code>runs-on</code> and route work into the tenant's namespace, quota, and egress IP.
-GAG's pod-level isolation is unaffected; what is unbounded is <em>who can cause a job to run there</em>.</p>
+With every tenant's scale set in one group, a repository outside a tenant could name that scale set in <code>runs-on</code> and route work into the tenant's namespace, quota, and egress IP.
+GAG's pod-level isolation was unaffected; what was unbounded was <em>who could cause a job to run there</em>.</p>
 <p>This is also the one place ARC was ahead on GAG's own core claim: its <code>gha-runner-scale-set</code> chart exposes <code>runnerGroup</code> as a first-class value.</p>
 <p><strong>Two defects the row did not name, found by measuring before coding.</strong> Wiring the field alone would have shipped a boundary that looks declared and is not:</p>
 <ul>
@@ -3085,6 +3096,59 @@ Q855 is the 22-minute blind spot on the leg that passed.
 Q773 was filed on 2026-08-09 and says the runbook calls a normal <code>Throughput: Active</code> result a surprise; it happened again on rc.1, and this document called it unexpected before the row was found.</p>
 <p><strong>One gate changed on the way.</strong> Labelling release-process work <code>1.5-gate</code> made <code>roadmapcheck</code> demand a public roadmap bullet for a <code>gh</code> retry and a runbook line.
 Rule 7 now obliges a bullet only for a gated row carrying <code>feature</code> or <code>security</code>, so a release can wait on process work without advertising it to adopters (<a href="../../development/maintaining-backlog/#a-gate-label-and-its-roadmap-bullet-are-two-commits-and-the-first-one-is-red">maintaining-backlog.md</a>).</p>
+<h2 id="the-rc2-pre-flight-2026-08-15">The rc.2 pre-flight, 2026-08-15<a class="headerlink" href="#the-rc2-pre-flight-2026-08-15" title="Permanent link">&para;</a></h2>
+<p>All eight rows admitted when scope reopened have shipped, so the Queue carries no <code>1.5-gate</code> row.
+Four of the commits behind them change the shipped binaries, which is what makes a second candidate necessary rather than optional: Q849 and Q852 (<code>gmc</code>), Q851's metric <code>Help</code> strings (<code>agc</code>), and Q811, a fix admitted outside the gate set.</p>
+<p><strong><code>main</code> was green on the tag target.</strong> Unit, integration and <code>security-scan</code> passed on <code>53283cd9f</code>, and e2e passed on that same SHA through the merge-queue run for #1541 rather than through the <code>push</code> lane, whose run for it sat behind the previous push's per-ref concurrency group. <code>make check</code> was green locally.
+Reading the <code>push</code> run's pending state as "e2e has not run" would have been wrong, and is the reason the SHA rather than the lane is what to check (Q675).</p>
+<p><strong>The API surface review was re-run, because the recorded <a href="#pre-flight-the-api-surface-this-tag-publishes">1.4→rc.1 verdict</a> no longer covers the tag.</strong> Q849 published surface <code>v1.5.0-rc.1</code> does not carry. <strong>Verdict: ship as-is.</strong></p>
+<table>
+<thead>
+<tr>
+<th>Addition</th>
+<th>Carried on</th>
+<th>Why the shape is right</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>ScaleSetNameCollision</code> (Q849)</td>
+<td><code>ActionsGateway</code> condition</td>
+<td>Abnormal-true and outside the <code>Ready</code> rollup, like <code>RunnerVersionTooOld</code> and <code>RunnerLabelsIncomplete</code>: a name shared with another tenant is a configuration mismatch the platform admin resolves, not an outage of this gateway. Advisory is the design, not a weaker enforcement — GAG cannot pick which tenant loses the name, and failing closed would take down the tenant that was there first.</td>
+</tr>
+<tr>
+<td><code>ScaleSetNameShared</code> / <code>ScaleSetNamesUnique</code> (Q849)</td>
+<td><code>ScaleSetNameCollision</code></td>
+<td>The True and False reasons of one condition, each named for the state it reports, following <code>LabelsRegistered</code>/<code>LabelsNotRegistered</code> from Q726.</td>
+</tr>
+<tr>
+<td><code>scale_set_name_collision</code> (Q849)</td>
+<td>GMC gauge</td>
+<td>A gauge rather than a counter because the condition describes a standing state, and one an operator must be able to alert on rather than only meet in <code>kubectl describe</code>.</td>
+</tr>
+<tr>
+<td><code>eviction_rerun_withheld_total</code> (Q811)</td>
+<td>AGC counter</td>
+<td>Keyed by <code>reason</code>, so a re-run the AGC declined is distinguishable from one it never reached — the withheld and failed paths stay separate series.</td>
+</tr>
+</tbody>
+</table>
+<p>No wire field, enum constraint, default, or label/annotation key changed, and nothing is wire-breaking: the additions are status vocabulary and telemetry.
+Nothing was deferred, so this review adds no gate row.</p>
+<p><strong>The marketing reconciliation was re-run too, and it had the same staleness the API review did.</strong> The <a href="#the-stable-tag-pre-flight-2026-08-14">stable-tag pass</a> ran 2026-08-14, before the reopened rows shipped, so Question 1 had never been asked of them.</p>
+<p>It found the cross-tenant scale-set name guard on <strong>no marketing surface at all</strong>: zero hits across <code>features.md</code>, <code>README.md</code>, <code>index.md</code> and <code>why-gag.md</code>, checked on five phrasings and both anchor targets.
+Q791 shipped 2026-08-13, so the 2026-08-14 pass missed it rather than predating it; Q849 shipped after. <code>features.md</code> now carries it under Tenant isolation, stating both halves — admission refuses the pair GitHub-scope-wide, and a pair carried in from an older release is reported as a condition, an Event, and an alertable gauge.</p>
+<p>Two adjacent findings came out of writing that entry.
+The <code>new in 1.5</code> badge convention arrived with Q852 and marked exactly one capability, while <code>v1.4.0</code>'s <code>features.md</code> carried no such badge at all, so a reader scanning the page concluded the release's one addition was a startup check.
+The runner group, multi-label registration and the runner-version warning now carry it too, and the page's own legend said <strong>three</strong> badges while four were in use, having never been updated when the fourth was introduced.</p>
+<p><strong>Two claims were checked against ARC and <em>not</em> written, which is the point of the pass.</strong> <code>gha_job_startup_duration_seconds</code> and <code>gha_job_execution_duration_seconds</code> both exist in <a href="https://github.com/actions/actions-runner-controller/blob/9bb16ae49d0ce585d8e682aa7e2668a6e832d5d8/cmd/ghalistener/metrics/metrics.go"><code>cmd/ghalistener/metrics/metrics.go</code></a> at 0.14.2 (<code>9bb16ae</code>), so a "job duration metrics are unique to GAG" claim would have been false on publication, the same failure the 2026-08-06 review found eleven times.
+What GAG has that ARC does not is the pod-creation latency series and a pod-lifetime span chosen for cost attribution, which is a different claim and a narrower one.
+The <code>RunnerVersionTooOld</code> claim stays off the comparison table for a different reason: the ARC-side fact is about the <code>actions/runner</code> binary and GitHub's brownout schedule rather than about ARC, so an ARC version stamp would attest to the wrong thing.
+The <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/docs/releases/v1.5.0.md">NOTE in the release notes</a> already carries the claim without naming a competitor, and cannot go false when ARC moves.</p>
+<p><strong>The notes were interrogated again, and the pass found a claim that had gone false.</strong> <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/docs/releases/v1.5.0.md"><code>docs/releases/v1.5.0.md</code></a> still told an operator that a colliding scale-set name is never re-validated at upgrade time and lands at some later unrelated apply.
+Q849 had made that untrue four commits earlier, on the same day the notes were last touched.
+The upgrade note in <code>docs/operations/upgrade.md</code> was correct throughout; only the release notes were stale, which is the direction that reaches an adopter first and is checked last.</p>
+<p>That is the same shape as the <a href="#the-stable-tag-pre-flight-2026-08-14">stable-tag pre-flight's</a> under-claim, one release surface over, and it is the argument for re-running the notes interrogation at <strong>every</strong> candidate rather than only the first: the notes go stale against the product between candidates, and nothing gates prose.</p>
 <h2 id="candidates-not-yet-accepted">Candidates not yet accepted<a class="headerlink" href="#candidates-not-yet-accepted" title="Permanent link">&para;</a></h2>
 <p>Held here so the reasoning is not lost, not committed to the release:</p>
 <ul>
