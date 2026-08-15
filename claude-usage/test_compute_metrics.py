@@ -262,7 +262,7 @@ class QueueClosures(unittest.TestCase):
 
     def feed(self, stream):
         cm.git = lambda *a, **k: stream
-        return cm.queue_closures()
+        return cm.queue_flow()[0]   # this class asserts on closures only
 
     def test_a_removed_anchor_closes_on_its_date(self):
         closed = self.feed(
@@ -313,6 +313,98 @@ class WordCounts(unittest.TestCase):
         self.assertEqual(before, after)
         self.assertEqual(before, 9)
         self.assertNotEqual(len(wrapped.splitlines()), len(unwrapped.splitlines()))
+
+
+class QueueFlow(unittest.TestCase):
+    """Both directions come from one walk, and a moved row is neither."""
+
+    def setUp(self):
+        self._git = cm.git
+
+    def tearDown(self):
+        cm.git = self._git
+
+    def feed(self, stream):
+        cm.git = lambda *a, **k: stream
+        return cm.queue_flow()
+
+    def test_added_is_filed_and_removed_is_closed(self):
+        closed, filed = self.feed(
+            '\x002026-06-01\n+| <a id="Q1"></a>Q1 | x |\n'
+            '\x002026-06-02\n-| <a id="Q1"></a>Q1 | x |\n')
+        self.assertEqual((dict(filed), dict(closed)),
+                         ({"2026-06-01": 1}, {"2026-06-02": 1}))
+
+    def test_a_moved_row_is_neither_filed_nor_closed(self):
+        closed, filed = self.feed(
+            '\x002026-06-02\n-| <a id="Q2"></a>Q2 | queue |\n+| <a id="Q2"></a>Q2 | deferred |\n')
+        self.assertEqual((dict(filed), dict(closed)), ({}, {}))
+
+
+class ConventionalSubjects(unittest.TestCase):
+    """The churn ratio counts commit types, so the type has to be the subject's."""
+
+    def test_types_are_read_from_the_prefix(self):
+        for subj, want in (("feat(agc): add a thing", "feat"),
+                           ("fix: repair it", "fix"),
+                           ("docs(metrics): explain", "docs")):
+            m = cm.CONVENTIONAL.match(subj)
+            self.assertIsNotNone(m, subj)
+            self.assertEqual(m.group(1), want)
+
+    def test_a_type_named_mid_subject_is_not_the_type(self):
+        m = cm.CONVENTIONAL.match("docs: why we fix: things")
+        self.assertEqual(m.group(1), "docs")
+
+
+class PullRequestFetch(unittest.TestCase):
+    """The fetch must fail soft, and must never re-ask for what it already holds."""
+
+    def setUp(self):
+        self._run = cm.subprocess.run
+
+    def tearDown(self):
+        cm.subprocess.run = self._run
+
+    def test_a_budget_under_the_floor_skips_the_fetch(self):
+        calls = []
+
+        class R:
+            stdout = str(cm.PR_RATE_FLOOR - 1)
+
+        def fake(cmd, *a, **k):
+            calls.append(cmd)
+            return R()
+
+        cm.subprocess.run = fake
+        self.assertEqual(cm.pr_series(0), {})
+        self.assertEqual(len(calls), 1, "must not call gh pr list after skipping")
+
+    def test_a_broken_gh_leaves_the_caller_empty_handed(self):
+        def fake(cmd, *a, **k):
+            raise OSError("no gh")
+        cm.subprocess.run = fake
+        self.assertEqual(cm.pr_series(0), {})
+
+    def test_rows_at_or_below_the_high_water_mark_are_not_refetched(self):
+        class R:
+            def __init__(self, out):
+                self.stdout = out
+
+        def fake(cmd, *a, **k):
+            if "rate_limit" in cmd:
+                return R("5000")
+            return R(json.dumps([
+                {"number": 7, "createdAt": "2026-08-01T00:00:00Z",
+                 "mergedAt": "2026-08-01T02:00:00Z"},
+                {"number": 5, "createdAt": "2026-07-01T00:00:00Z",
+                 "mergedAt": "2026-07-01T01:00:00Z"},
+            ]))
+
+        cm.subprocess.run = fake
+        got = cm.pr_series(5)
+        self.assertEqual(list(got), [7])
+        self.assertEqual(got[7]["cycle_hours"], "2.0000")
 
 
 if __name__ == "__main__":

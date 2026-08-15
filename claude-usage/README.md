@@ -182,10 +182,33 @@ Each line stops three days short at either end rather than averaging a partial w
 
 Two shaded regions mark where a series cannot yet mean what its axis says: before the repo adopted PR squash-merges, and before `docs/STATUS.md` existed.
 No trend line is drawn inside them.
-**Commits are deliberately not drawn.** They look like the obvious velocity series and they are the contaminated one; see the Methodology note below.
+**Commits are drawn despite being contaminated**, with a marker where the unit changes: before it a commit is one commit, after it a whole squashed PR.
+Its trend line is broken either side of that marker rather than run through it, because the mean of a window spanning the switch averages two different units.
+The panel is unshaded, unlike the two below it, since commits are real on both sides and only counted differently.
+
+**The backlog panel draws filed against closed.** Closures alone cannot tell progress from treading water: the busiest stretch closed 15 rows a day while filing 20, so the backlog grew by 106 rows over that window, faster than in any earlier era.
+That is not automatically bad, since filing more can mean finding more real work, but the direction is only visible with both lines.
 
 **Panel 4 is not hours worked.** Sessions sometimes run unattended and keep committing with nobody watching, and merges get cleared in bulk, so it shows when work *landed* rather than when anyone was present.
 Its bars and their trend cover the whole project; the commits-per-hour line starts later, because its numerator is `commits` and that series changes units at the PR-workflow switch.
+
+### How the work went, not just how much
+![Churn, PR cycle time, and code survival](charts/velocity_quality.png) The volume proxies above cannot tell 85 PRs of progress from 85 PRs of churn.
+These three can say something about it, each with a different blind spot, which is why they are drawn side by side rather than combined into a score.
+
+**Churn** is `fix` against `feat` commits over a rolling week, since a daily ratio has days with no denominator.
+It ran 1.51 in the Pro era, 1.00 under Max 20x, and **1.82** in the `mac-2` era: the busiest stretch spends the largest share of its commits fixing.
+Read it with both its blind spots in view, because they do not cancel: a `fix` may repair something written months earlier, and this repo added gates over the same window, so better detection raises the ratio without more defects existing.
+
+**Pull request cycle time** is open to merge, and **it is not evidence about the machine**, which is why it was originally proposed.
+The local gate runs before a PR is opened, so this measures GitHub Actions and the merge queue instead.
+Median cycle time rose from 0.35h to **0.53h** across the 07-25/26 boundary and that rise is unexplained: queue contention was the obvious candidate, and across 87 days the correlation between a day's merged-PR count and its median cycle time is **−0.19**, slightly negative, so busier days ran marginally faster.
+It is drawn as an observation with no cause attached.
+
+**Code survival** asks whether a week's output lasted: what share of the non-test Go written in a week was still present 14 days later.
+It runs 73–98% with no era trend, and the `mac-2` week sits at 91%, among the highest.
+So by this measure the doubled output is not less durable, which cuts against the churn reading and is why neither is presented alone.
+The horizon is fixed rather than measured to `HEAD` so every week is judged over the same window; the last two weeks are blank because theirs has not passed.
 
 ### Why the headline is words, not lines
 ![Docs and cost ratios in lines and in words, log scale](charts/lines_vs_words.png) This is the chart that retires the per-line ratio.
@@ -293,6 +316,24 @@ Summing across machines works for the bucket counts and `sessions`, but `peak_co
 
 A resumed session replays earlier records verbatim, which would credit the resuming session with work it only re-read, so each record is attributed to the earliest-starting session holding it.
 Replays are ~3% of records here and shift one day's peak by one.
+
+### `pr_metrics.csv` — merge-preserved, fetched incrementally
+One row per merged pull request: `number`, `merged_date`, `created_at`, `merged_at`, `cycle_hours`.
+The only series here whose source is a remote API rather than something recomputable offline, so it gets the same merge-preservation the token series does.
+
+Each run reads the highest number already stored and asks only for what is newer.
+Measured 2026-08-15: one 100-PR page costs 3 GraphQL points against a 5,000/hour budget, so the one-time 1,521-PR backfill was ~48 and every later run is 3.
+The fetch is skipped entirely when the remaining budget is under 500, since that budget is shared with every other tool on the account.
+No `gh`, no network, an API error, or a low budget all leave the existing rows untouched and let the run continue, so every other series still works offline and the charts still rebuild from committed data alone.
+
+### `survival_metrics.csv` — merge-preserved, final once the horizon passes
+Per 7-day bin: `week_start`, `added`, `survived`, `horizon_days`, `rate`.
+What share of the non-test Go written that week was still present 14 days later.
+
+Non-test Go only, because docs and YAML move for reasons that say nothing about whether the work held up: a reflow, a regenerated CRD.
+Both sides are bucketed by **author** date.
+`git log --since/--until` filter on commit date and `git blame` reports author time, and this repo rebases constantly, so mixing them credits a week with survivors it never wrote.
+`rate` is not clamped: a value above 1 would mean the two sides disagree, and capping it would hide exactly that.
 
 ### `summary.json`
 Totals split into `measured` / `estimated` / `combined` (summed from the persisted rows, so archival-safe), an `estimation` block documenting the per-commit method, a `sessions` block (bucket width, span, session-days, mean and peak concurrency, hours using Claude, session-hours, parallel share), per-model and per-machine (`by_host`) splits, an accurate HEAD working-tree snapshot, and full provenance — including which machine took the snapshot, which machines are on record, and the dates that break a series (the two plan upgrades and the docs reflow).

@@ -22,7 +22,8 @@ Outputs PNGs (1x + @2x) to claude-usage/charts/:
     token_anatomy        daily input/output/cache tokens on a log scale
     cumulative_cache     cumulative cache reads vs writes (stacked area)
     parallel_sessions    peak concurrency + the parallel share (own shorter timeline)
-    velocity             work shipped per week on reformat- and workflow-proof proxies
+    velocity             work shipped per day on reformat- and workflow-proof proxies
+    velocity_quality     churn, PR cycle time, and code survival
     lines_vs_words       the same corpus in lines and in words, and each cost ratio
 """
 
@@ -226,6 +227,23 @@ def rolling_mean(vals, window=7):
             out.append(None)
         else:
             out.append(sum(vals[i - half:i + half + 1]) / window)
+    return out
+
+
+def segments(xs, breaks, gap_days=3):
+    """``(lo, hi)`` spans of ``xs`` split at ``breaks``, with a gap either side.
+
+    A centered mean is only meaningful over a window whose values share a unit, so
+    a series whose unit changes is drawn as separate runs rather than one line
+    crossing the change. The gap is the mean's own half-window.
+    """
+    if not breaks:
+        return [(xs[0], xs[-1])]
+    out, lo = [], xs[0]
+    for b in sorted(breaks):
+        out.append((lo, b - timedelta(days=gap_days)))
+        lo = b + timedelta(days=gap_days)
+    out.append((lo, xs[-1]))
     return out
 
 
@@ -895,7 +913,8 @@ def chart_velocity():
             prev = cur
         return out
 
-    d_prs, d_tests, d_queue, d_commits = (delta(c) for c in ("prs", "tests", "queue_closed", "commits"))
+    d_prs, d_tests, d_queue, d_commits, d_filed = (
+        delta(c) for c in ("prs", "tests", "queue_closed", "commits", "queue_filed"))
 
     # Per day, matching every other chart here. Weekly bars smooth the series into
     # something easier to read and lose what the reader needs: a day is the unit
@@ -905,9 +924,9 @@ def chart_velocity():
     dxs = [dparse(d) for d in days]
     per_hour = [d_commits[d] / h if h else 0 for d, h in zip(days, hours)]
 
-    fig, axes = plt.subplots(4, 1, figsize=(11, 13.5), sharex=True,
-                             gridspec_kw=dict(height_ratios=[1, 1, 1, 1.15], hspace=0.22))
-    a1, a2, a3, a4 = axes
+    fig, axes = plt.subplots(5, 1, figsize=(11, 16.5), sharex=True,
+                             gridspec_kw=dict(height_ratios=[1, 1, 1, 1, 1.15], hspace=0.24))
+    a0, a1, a2, a3, a4 = axes
 
     # Where each series starts meaning what its axis says. The trend line is
     # suppressed before it: a mean spanning the boundary drags a real trend toward
@@ -915,9 +934,13 @@ def chart_velocity():
     pr_start = pr_workflow_start(git)
     backlog_start = next((dparse(d) for d in days
                           if int(git[d].get("queue_closed") or 0) > 0), None)
+    # a0 (commits) is drawn despite the unit change, so it gets the marker rather
+    # than the omission: the vertical line is where a commit stops meaning one
+    # commit and starts meaning a squashed PR.
     trend_from = {a1: pr_start, a3: backlog_start}
 
     panels = [
+        (a0, d_commits, OI["grey"], "commits", "Commits per day (unit changes at the marker)"),
         (a1, d_prs, OI["blue"], "PRs merged", "Pull requests merged per day"),
         (a2, d_tests, OI["purple"], "tests added", "Tests added per day"),
         (a3, d_queue, OI["vermillion"], "rows closed", "Backlog rows closed per day"),
@@ -932,14 +955,32 @@ def chart_velocity():
         since = trend_from.get(ax)
         if since:
             trend = [None if d < since else v for d, v in zip(dxs, trend)]
-        # No per-panel legend: all four panels use the one encoding and the footnote
+        # No per-panel legend: every panel uses the one encoding and the footnote
         # states it, while a legend box in the corner lands on an event label.
-        ax.plot([x for x, v in zip(dxs, trend) if v is not None],
-                [v for v in trend if v is not None],
-                color=darken(col), lw=2.6, zorder=5, path_effects=HALO)
+        #
+        # The commits panel is drawn in two segments around its marker. A window
+        # straddling the switch averages raw commits with squashed PRs, and the
+        # mean of two units is not a number.
+        breaks = [pr_start] if (ax is a0 and pr_start) else []
+        for lo, hi in segments(dxs, breaks):
+            seg = [(x, v) for x, v in zip(dxs, trend) if v is not None and lo <= x <= hi]
+            if seg:
+                ax.plot([x for x, _ in seg], [v for _, v in seg],
+                        color=darken(col), lw=2.6, zorder=5, path_effects=HALO)
         ax.set_ylabel(ylab, fontsize=10.5)
         ax.set_title(title, fontsize=12.5, fontweight="bold", loc="left")
         ax.grid(axis="y", alpha=0.22)
+
+    # Filed drawn over closed, because closures alone cannot tell progress from
+    # treading water: the busiest stretch closed 15 rows a day while filing 20.
+    filed_trend = rolling_mean([d_filed[d] for d in days])
+    if backlog_start:
+        filed_trend = [None if d < backlog_start else v for d, v in zip(dxs, filed_trend)]
+    a3.plot([x for x, v in zip(dxs, filed_trend) if v is not None],
+            [v for v in filed_trend if v is not None],
+            color=darken(OI["purple"]), lw=2.6, ls=(0, (5, 2)), zorder=6, path_effects=HALO)
+    a3.set_title("Backlog rows closed per day, against rows filed", fontsize=12.5,
+                 fontweight="bold", loc="left")
 
     # Panel 4: when the work landed, plus how densely it landed in those hours.
     a4.bar(dxs, hours, width=0.72, color=OI["green"], alpha=0.38, edgecolor="white",
@@ -975,11 +1016,16 @@ def chart_velocity():
     # Styled like the reflow marker for that reason, and shading the region where
     # the series cannot mean what its axis says.
     mcol, mls = REFLOW_STYLE
-    for ax, since, label in ((a1, pr_start, "PR workflow begins"),
-                             (a3, backlog_start, "backlog begins")):
+    for ax, since, label, shade in ((a0, pr_start, "unit changes", False),
+                                    (a1, pr_start, "PR workflow begins", True),
+                                    (a3, backlog_start, "backlog begins", True)):
         if since is None:
             continue
-        ax.axvspan(dxs[0], since, color="#000000", alpha=0.05, zorder=1)
+        # Commits are real either side of their marker, just counted differently, so
+        # that panel takes the line without the shading. Shading says the axis cannot
+        # be read at all there, which is true of PRs and the backlog and not of this.
+        if shade:
+            ax.axvspan(dxs[0], since, color="#000000", alpha=0.05, zorder=1)
         ax.axvline(since, color=mcol, ls=mls, lw=1.6, zorder=EVENT_Z)
         event_label(ax, since, 0.04, label, mcol, yc="axes fraction")
 
@@ -1015,6 +1061,107 @@ def chart_velocity():
              "says yet · Opus 5 and mac-2 land one day apart, so this data cannot separate model from machine",
              fontsize=7.5, color="#999")
     save(fig, "velocity")
+
+
+def chart_velocity_quality():
+    """How the work went, rather than how much of it there was.
+
+    Volume proxies cannot tell 85 PRs of progress from 85 PRs of churn. These
+    three can say something about it, each with a different blind spot, which is
+    why they are drawn together rather than combined into a score.
+    """
+    git = {r["date"]: r for r in load("git_metrics.csv")}
+    if not git or "fix" not in next(iter(git.values())):
+        return
+    days = sorted(git)
+    dxs = [dparse(d) for d in days]
+
+    fig, (b1, b2, b3) = plt.subplots(3, 1, figsize=(11, 10.5),
+                                     gridspec_kw=dict(height_ratios=[1, 1, 1], hspace=0.42))
+
+    # --- churn: fix against feat, over a week so the ratio has a denominator ---
+    feat = rolling_mean([int(git[d].get("feat") or 0) for d in days])
+    fix = rolling_mean([int(git[d].get("fix") or 0) for d in days])
+    rat = [(f / t) if (f is not None and t) else None for f, t in zip(fix, feat)]
+    pts = [(x, v) for x, v in zip(dxs, rat) if v is not None]
+    b1.plot([x for x, _ in pts], [v for _, v in pts], color=OI["vermillion"], lw=2.6,
+            zorder=4, path_effects=HALO)
+    b1.axhline(1.0, color="#999", ls=(0, (3, 3)), lw=1.2, zorder=2)
+    b1.annotate("one fix per feature", (dxs[3], 1.0), xytext=(4, 5),
+                textcoords="offset points", fontsize=9, color="#777", zorder=LABEL_Z)
+    b1.set_ylabel("fix ÷ feat commits", fontsize=10.5)
+    b1.set_title("Churn: how much of the work is fixing rather than building",
+                 fontsize=12.5, fontweight="bold", loc="left")
+
+    # --- the remote loop: open to merge ---
+    prs = load("pr_metrics.csv")
+    if prs:
+        byday = {}
+        for r in prs:
+            try:
+                byday.setdefault(r["merged_date"], []).append(float(r["cycle_hours"]))
+            except (ValueError, KeyError):
+                continue
+        pd = sorted(byday)
+        med = [sorted(byday[d])[len(byday[d]) // 2] for d in pd]
+        pxs = [dparse(d) for d in pd]
+        b2.bar(pxs, med, width=0.72, color=OI["skyblue"], alpha=0.5, edgecolor="white",
+               linewidth=0.4, zorder=3)
+        tr = rolling_mean(med)
+        seg = [(x, v) for x, v in zip(pxs, tr) if v is not None]
+        b2.plot([x for x, _ in seg], [v for _, v in seg], color=darken(OI["skyblue"]),
+                lw=2.6, zorder=5, path_effects=HALO)
+        b2.set_ylabel("hours, daily median", fontsize=10.5)
+        b2.set_title("Pull request cycle time — the remote loop, not the local gate",
+                     fontsize=12.5, fontweight="bold", loc="left")
+
+    # --- durability: does a week's code outlive its first fortnight ---
+    surv = load("survival_metrics.csv")
+    if surv:
+        sxs = [dparse(r["week_start"]) for r in surv]
+        rate = [100 * float(r["rate"]) for r in surv]
+        b3.bar(sxs, rate, width=5.2, color=OI["green"], alpha=0.6, edgecolor="white",
+               linewidth=0.6, zorder=3)
+        for x, v in zip(sxs, rate):
+            b3.annotate(f"{v:.0f}", (x, v), xytext=(0, 4), textcoords="offset points",
+                        ha="center", fontsize=8.5, fontweight="bold",
+                        color=darken(OI["green"]), zorder=LABEL_Z, path_effects=HALO)
+        b3.set_ylim(0, 108)
+        b3.set_ylabel("% still present", fontsize=10.5)
+        hz = surv[0].get("horizon_days", "14")
+        b3.set_title(f"Code survival: non-test Go still present {hz} days later",
+                     fontsize=12.5, fontweight="bold", loc="left")
+        # The tail is deliberately empty rather than missing: those weeks have not
+        # reached their horizon, so they have no final value yet. Said on the chart,
+        # because a blank right edge otherwise reads as the data having stopped.
+        if sxs[-1] < dxs[-1]:
+            b3.axvspan(sxs[-1] + timedelta(days=7), dxs[-1], color="#000000",
+                       alpha=0.04, zorder=1)
+            b3.annotate(f"horizon not yet reached\n(needs {hz} days)",
+                        ((sxs[-1] + timedelta(days=7) + (dxs[-1] - sxs[-1]) / 2), 50),
+                        ha="center", va="center", fontsize=9, color="#888", zorder=LABEL_Z)
+
+    for ax in (b1, b2, b3):
+        ax.set_xlim(dxs[0], dxs[-1])
+        ax.grid(axis="y", alpha=0.22)
+        for sp in ("top", "right"):
+            ax.spines[sp].set_visible(False)
+        for ev_date, _, col, ls in event_markers():
+            if dxs[0] <= ev_date <= dxs[-1]:
+                ax.axvline(ev_date, color=col, ls=ls, lw=1.4, zorder=EVENT_Z)
+        ax.xaxis.set_major_formatter(mdates.DateFormatter("%b %-d"))
+        ax.xaxis.set_major_locator(mdates.DayLocator(interval=7))
+        plt.setp(ax.get_xticklabels(), rotation=45, ha="right", fontsize=8.5)
+    labels = [event_label(b1, ev, 0.55, lbl, col, yc="axes fraction")
+              for ev, lbl, col, ls in event_markers() if dxs[0] <= ev <= dxs[-1]]
+    stagger_labels(fig, [t for t in labels if t is not None], 0.13)
+
+    fig.text(0.012, 0.004,
+             "cycle time is open-to-merge, so it measures GitHub Actions and the merge queue, "
+             "not the local gate · survival is a fixed 14-day horizon, so weeks are comparable "
+             "and a week's value is final once it passes",
+             fontsize=7.5, color="#999")
+    save(fig, "velocity_quality")
 
 
 def chart_lines_vs_words():
@@ -1095,6 +1242,7 @@ def main():
     chart_cumulative_cache()
     chart_parallel_sessions()
     chart_velocity()
+    chart_velocity_quality()
     chart_lines_vs_words()
     print(f"wrote charts to {CHARTS}")
 

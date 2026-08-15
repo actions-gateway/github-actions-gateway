@@ -45,7 +45,7 @@ import os
 import re
 import subprocess
 from collections import defaultdict
-from datetime import datetime
+from datetime import datetime, timedelta
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 DATA = os.path.join(HERE, "data")
@@ -333,10 +333,15 @@ def grep_files_matching(rev, pattern, paths):
 
 
 PR_SUBJECT = re.compile(r"\(#\d+\)$")  # the squash-merge signature this repo lands with
+CONVENTIONAL = re.compile(r"^(\w+)[(:]")   # the type in a Conventional Commits subject
 
 
-def queue_closures():
-    """``{date: count}`` of Queue rows that left ``docs/STATUS.md`` that day.
+def queue_flow():
+    """``(closed, filed)`` maps of ``{date: count}`` for rows leaving and entering.
+
+    Closures alone cannot tell progress from treading water: this project closed
+    15 rows a day in its busiest stretch while filing 20, so the backlog grew.
+    Both directions are counted from one walk.
 
     A row's anchor disappearing is work shipped in the common case, and a decline
     or a prune in the rest — a work proxy, not a completion ledger. Only a Q-id's
@@ -349,16 +354,22 @@ def queue_closures():
     out = git("log", "--reverse", "--format=%x00%ad", "--date=short",
               "-p", "--", "docs/STATUS.md")
     anchor = re.compile(r'id="(Q\d+)"')
-    closed, seen, date = defaultdict(int), set(), None
+    closed, filed = defaultdict(int), defaultdict(int)
+    seen_closed, seen_filed, date = set(), set(), None
     removed, added = set(), set()
 
     def flush():
         # An anchor on both sides moved within the file (Queue -> Deferred); only
-        # one that is gone from the revision entirely has closed.
+        # one gone from the revision entirely has closed, and only one that was not
+        # there before has been filed.
         for q in removed - added:
-            if q not in seen:
-                seen.add(q)
+            if q not in seen_closed:
+                seen_closed.add(q)
                 closed[date] += 1
+        for q in added - removed:
+            if q not in seen_filed:
+                seen_filed.add(q)
+                filed[date] += 1
         removed.clear()
         added.clear()
 
@@ -373,7 +384,165 @@ def queue_closures():
             added.update(anchor.findall(ln))
     if date:
         flush()
-    return closed
+    return closed, filed
+
+
+# Bounds on the pull-request fetch. Measured 2026-08-15: one 100-PR page costs 3
+# GraphQL points against a 5,000/hour budget, so a full 1,521-PR backfill is ~48
+# and an incremental run is 3. The floor still exists because this budget is
+# shared with every other tool on the account, and the page cap keeps a bug from
+# walking the whole repo history on every run.
+PR_RATE_FLOOR = 500
+PR_PAGE = 200
+PR_BACKFILL = 3000
+
+
+def pr_series(existing_max):
+    """Merged pull requests newer than ``existing_max``, as ``{number: row}``.
+
+    Returns ``{}`` and leaves the caller's data alone whenever the fetch cannot be
+    trusted: no ``gh``, no network, an API error, or a rate budget too low to
+    spend. Every other series is computed from git and transcripts, so a failure
+    here costs this one column and never the run.
+
+    A merged PR's timestamps never change, so rows are immutable once written and
+    the merge is an insert rather than the upward-only maximum the token series
+    needs.
+    """
+    try:
+        out = subprocess.run(
+            ["gh", "api", "rate_limit", "--jq", ".resources.graphql.remaining"],
+            capture_output=True, text=True, timeout=30)
+        remaining = int((out.stdout or "0").strip())
+    except (OSError, ValueError, subprocess.SubprocessError):
+        return {}
+    if remaining < PR_RATE_FLOOR:
+        print(f"pr_series: skipped, graphql budget {remaining} below floor {PR_RATE_FLOOR}")
+        return {}
+
+    limit = PR_BACKFILL if existing_max == 0 else PR_PAGE
+    try:
+        out = subprocess.run(
+            ["gh", "pr", "list", "--state", "merged", "--limit", str(limit),
+             "--json", "number,createdAt,mergedAt"],
+            capture_output=True, text=True, timeout=300, cwd=REPO)
+        rows = json.loads(out.stdout or "[]")
+    except (OSError, ValueError, subprocess.SubprocessError):
+        return {}
+
+    fresh = {}
+    for r in rows:
+        n = int(r["number"])
+        if n <= existing_max or not r.get("mergedAt"):
+            continue
+        try:
+            a = datetime.fromisoformat(r["createdAt"].replace("Z", "+00:00"))
+            b = datetime.fromisoformat(r["mergedAt"].replace("Z", "+00:00"))
+        except (ValueError, AttributeError):
+            continue
+        fresh[n] = {
+            "number": n,
+            "merged_date": r["mergedAt"][:10],
+            "created_at": r["createdAt"],
+            "merged_at": r["mergedAt"],
+            "cycle_hours": f"{(b - a).total_seconds() / 3600:.4f}",
+        }
+    # Every row on the page was new, so the gap is wider than one page. Say so
+    # rather than silently recording a hole the next run cannot detect.
+    if fresh and len(fresh) == len(rows) and existing_max:
+        print(f"pr_series: {len(fresh)} new PRs filled a full page; re-run to catch any older gap")
+    return fresh
+
+
+# How long after a week closes its survival is judged. Fixed horizon rather than
+# survival-to-HEAD so every week is measured over the same window and is therefore
+# comparable, and so a week's value is final once the horizon passes and can be
+# stored instead of recomputed.
+SURVIVAL_HORIZON_DAYS = 14
+
+
+def survival_series(existing_weeks):
+    """``{week_start: row}`` of code that outlived its first fortnight.
+
+    For each 7-day bin, what fraction of the Go lines written in it were still
+    present ``SURVIVAL_HORIZON_DAYS`` later. Volume says how much was produced;
+    this says how much of it was still standing two weeks on.
+
+    Restricted to non-test Go, the output whose churn the ratio is about: docs and
+    YAML move for reasons (a reflow, a regenerated CRD) that have nothing to do
+    with whether the work held up.
+
+    Weeks already in ``existing_weeks`` are skipped, and a week whose horizon is
+    still in the future is left alone until it is final.
+    """
+    log = git("log", "--reverse", "--format=%H|%ad", "--date=short").splitlines()
+    days = []
+    for ln in log:
+        if "|" in ln:
+            days.append(ln.split("|", 1))
+    if not days:
+        return {}
+    start = datetime.strptime(days[0][1], "%Y-%m-%d").date()
+    today = datetime.strptime(days[-1][1], "%Y-%m-%d").date()
+
+    added_by_week = {}
+    stat = git("log", "--reverse", "--format=%x00%ad", "--date=short", "--numstat",
+               "--", "*.go", ":!vendor/**", ":!**/vendor/**", ":!*_test.go")
+    cur = None
+    for ln in stat.splitlines():
+        if ln.startswith("\x00"):
+            d = datetime.strptime(ln[1:], "%Y-%m-%d").date()
+            cur = (start + timedelta(days=7 * ((d - start).days // 7))).isoformat()
+        elif cur and ln and ln[0].isdigit():
+            parts = ln.split("\t")
+            if len(parts) == 3 and parts[0].isdigit():
+                added_by_week[cur] = added_by_week.get(cur, 0) + int(parts[0])
+
+    rows = {}
+    week = 0
+    while True:
+        w0 = start + timedelta(days=7 * week)
+        w1 = w0 + timedelta(days=6)
+        horizon = w1 + timedelta(days=SURVIVAL_HORIZON_DAYS)
+        if w0 > today:
+            break
+        week += 1
+        key = w0.isoformat()
+        if key in existing_weeks or horizon > today:
+            continue
+        # Lines of non-test Go added during the week, bucketed by AUTHOR date.
+        # `--since/--until` filter on commit date, and this repo rebases constantly,
+        # so a commit authored in one week is frequently committed in the next. Blame
+        # reports author-time, so selecting on commit date would compare two clocks
+        # and report survivors the week never wrote.
+        added = added_by_week.get(key, 0)
+        if not added:
+            continue
+        # The tree as it stood at the horizon, blamed and bucketed by the date the
+        # line was introduced.
+        rev = git("rev-list", "-1", f"--before={horizon} 23:59:59", "HEAD").strip()
+        if not rev:
+            continue
+        files = git("ls-tree", "-r", "--name-only", rev, "--").splitlines()
+        survived = 0
+        for f in files:
+            if not f.endswith(".go") or f.endswith("_test.go") or "vendor/" in f:
+                continue
+            for bl in git("blame", "--line-porcelain", rev, "--", f).splitlines():
+                if bl.startswith("author-time "):
+                    d = datetime.utcfromtimestamp(int(bl.split()[1])).date()
+                    if w0 <= d <= w1:
+                        survived += 1
+        rows[key] = {
+            "week_start": key,
+            "added": added,
+            "survived": survived,
+            "horizon_days": SURVIVAL_HORIZON_DAYS,
+            # Not clamped: a rate above 1 would mean the two sides disagree, and
+            # capping it would hide exactly the defect worth seeing.
+            "rate": f"{survived / added:.4f}",
+        }
+    return rows
 
 
 def git_series():
@@ -400,6 +569,7 @@ def git_series():
     day_commits = defaultdict(int)
     day_prs = defaultdict(int)
     day_hours = defaultdict(set)
+    day_kind = defaultdict(lambda: defaultdict(int))
     last_hash = {}
     for ln in log:
         if "|" not in ln:
@@ -410,17 +580,22 @@ def git_series():
         day_hours[d].add(hour)
         if PR_SUBJECT.search(subj.strip()):
             day_prs[d] += 1
+        m = CONVENTIONAL.match(subj.strip())
+        if m and m.group(1) in ("feat", "fix"):
+            day_kind[d][m.group(1)] += 1
         last_hash[d] = h  # --reverse => last write wins => latest commit that day
 
-    closures = queue_closures()
+    closures, filings = queue_flow()
     cum_prs = 0
     cum_closed = 0
+    cum_filed = 0
 
     cum = 0
     for d in sorted(day_commits):
         cum += day_commits[d]
         cum_prs += day_prs[d]
         cum_closed += closures.get(d, 0)
+        cum_filed += filings.get(d, 0)
         rev = last_hash[d]
         nonblank = grep_count(rev, "[^[:space:]]", GO_PATHS)
         line_comments = grep_count(rev, "^[[:space:]]*//", GO_PATHS)
@@ -448,7 +623,13 @@ def git_series():
             "scripts": grep_count(rev, "[^[:space:]]", SCRIPT_PATHS),  # shell/python/web/build
             "prs": cum_prs,
             "queue_closed": cum_closed,
+            "queue_filed": cum_filed,
             "active_hours": len(day_hours[d]),  # per-day, not cumulative
+            # Also per-day: the churn signal. Coarse in two directions that do not
+            # cancel predictably, since a `fix` may repair something ancient and
+            # more gates catch more defects without more existing.
+            "feat": day_kind[d]["feat"],
+            "fix": day_kind[d]["fix"],
             # The reformat-proof twins of the line counts, per band so the cost
             # ratio's denominator can be decomposed the same way. Every one counts
             # non-blank words including comments, so `words` is not `go_code + md +
@@ -748,12 +929,47 @@ def main():
     model_csv = os.path.join(DATA, "model_daily.csv")
     git_csv = os.path.join(DATA, "git_metrics.csv")
     sess_csv = os.path.join(DATA, "session_metrics.csv")
+    pr_csv = os.path.join(DATA, "pr_metrics.csv")
+    surv_csv = os.path.join(DATA, "survival_metrics.csv")
 
     git_rows = git_series()
     write_csv(git_csv, ["date", "commits", "tests", "go_code", "go_test", "md", "yaml", "scripts",
-                        "prs", "queue_closed", "active_hours",
+                        "prs", "queue_closed", "queue_filed", "active_hours", "feat", "fix",
                         "go_words", "md_words", "yaml_words", "scripts_words", "words"],
               [git_rows[d] for d in sorted(git_rows)])
+    # Pull requests: merge-preserved and fetched incrementally, because the source
+    # is a remote API rather than something recomputable offline. Existing rows are
+    # never re-fetched; a failed fetch leaves them exactly as they are.
+    pr_rows = {}
+    try:
+        with open(pr_csv) as fh:
+            for r in csv.DictReader(fh):
+                pr_rows[int(r["number"])] = r
+    except (OSError, ValueError, KeyError):
+        pass
+    before = len(pr_rows)
+    pr_rows.update(pr_series(max(pr_rows) if pr_rows else 0))
+    if pr_rows:
+        write_csv(pr_csv, ["number", "merged_date", "created_at", "merged_at", "cycle_hours"],
+                  [pr_rows[n] for n in sorted(pr_rows)])
+    print(f"pull requests      : {len(pr_rows)} on record (+{len(pr_rows) - before} this run)")
+
+    # Code survival: immutable once a week's horizon passes, so stored weeks are
+    # never recomputed and only newly-final ones cost a blame pass.
+    surv_rows = {}
+    try:
+        with open(surv_csv) as fh:
+            for r in csv.DictReader(fh):
+                surv_rows[r["week_start"]] = r
+    except (OSError, KeyError):
+        pass
+    s_before = len(surv_rows)
+    surv_rows.update(survival_series(set(surv_rows)))
+    if surv_rows:
+        write_csv(surv_csv, ["week_start", "added", "survived", "horizon_days", "rate"],
+                  [surv_rows[w] for w in sorted(surv_rows)])
+    print(f"code survival      : {len(surv_rows)} week(s) final (+{len(surv_rows) - s_before} this run)")
+
     deltas = commit_deltas(git_rows)
 
     # --- tokens: preserve measured days, then backfill archived days as estimated ---
@@ -908,7 +1124,7 @@ def main():
     print(f"headline combined  : {headline(comb):,}")
     print(f"  + cache_read     : {headline(comb) + comb['cache_read']:,}")
     print(f"cache reuse        : {summary['totals']['combined']['cache_reuse_ratio']}x")
-    print(f"wrote {token_csv}, {model_csv}, {git_csv}, {sess_csv}, summary.json")
+    print(f"wrote {token_csv}, {model_csv}, {git_csv}, {sess_csv}, {pr_csv}, {surv_csv}, summary.json")
 
 
 if __name__ == "__main__":
