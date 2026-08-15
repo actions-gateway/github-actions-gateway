@@ -201,6 +201,6 @@ SCRIPTS_TESTS := agent/claude-go-throttle-hook-test agent/local-throttle-test \
                  go/go-vet-tags-test go/go-work-tidy-test \
                  release/download-cosign-test release/release-delta-test \
                  release/verify-release-test release/verify-published-docs-test \
-                 release/check-artifact-unchanged-test \
+                 release/check-artifact-unchanged-test release/check-gates-green-test \
                  updatecli/latest-cluster-autoscaler-patch-test \
                  docs/check-metric-tiers-test docs/check-reason-tiers-test
