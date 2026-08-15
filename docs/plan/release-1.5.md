@@ -339,6 +339,20 @@ Reading the `push` run's pending state as "e2e has not run" would have been wron
 No wire field, enum constraint, default, or label/annotation key changed, and nothing is wire-breaking: the additions are status vocabulary and telemetry.
 Nothing was deferred, so this review adds no gate row.
 
+**The marketing reconciliation was re-run too, and it had the same staleness the API review did.** The [stable-tag pass](#the-stable-tag-pre-flight-2026-08-14) ran 2026-08-14, before the reopened rows shipped, so Question 1 had never been asked of them.
+
+It found the cross-tenant scale-set name guard on **no marketing surface at all**: zero hits across `features.md`, `README.md`, `index.md` and `why-gag.md`, checked on five phrasings and both anchor targets.
+Q791 shipped 2026-08-13, so the 2026-08-14 pass missed it rather than predating it; Q849 shipped after. `features.md` now carries it under Tenant isolation, stating both halves — admission refuses the pair GitHub-scope-wide, and a pair carried in from an older release is reported as a condition, an Event, and an alertable gauge.
+
+Two adjacent findings came out of writing that entry.
+The `new in 1.5` badge convention arrived with Q852 and marked exactly one capability, while `v1.4.0`'s `features.md` carried no such badge at all, so a reader scanning the page concluded the release's one addition was a startup check.
+The runner group, multi-label registration and the runner-version warning now carry it too, and the page's own legend said **three** badges while four were in use, having never been updated when the fourth was introduced.
+
+**Two claims were checked against ARC and *not* written, which is the point of the pass.** `gha_job_startup_duration_seconds` and `gha_job_execution_duration_seconds` both exist in [`cmd/ghalistener/metrics/metrics.go`](https://github.com/actions/actions-runner-controller/blob/9bb16ae49d0ce585d8e682aa7e2668a6e832d5d8/cmd/ghalistener/metrics/metrics.go) at 0.14.2 (`9bb16ae`), so a "job duration metrics are unique to GAG" claim would have been false on publication, the same failure the 2026-08-06 review found eleven times.
+What GAG has that ARC does not is the pod-creation latency series and a pod-lifetime span chosen for cost attribution, which is a different claim and a narrower one.
+The `RunnerVersionTooOld` claim stays off the comparison table for a different reason: the ARC-side fact is about the `actions/runner` binary and GitHub's brownout schedule rather than about ARC, so an ARC version stamp would attest to the wrong thing.
+The [NOTE in the release notes](../releases/v1.5.0.md) already carries the claim without naming a competitor, and cannot go false when ARC moves.
+
 **The notes were interrogated again, and the pass found a claim that had gone false.** [`docs/releases/v1.5.0.md`](../releases/v1.5.0.md) still told an operator that a colliding scale-set name is never re-validated at upgrade time and lands at some later unrelated apply.
 Q849 had made that untrue four commits earlier, on the same day the notes were last touched.
 The upgrade note in `docs/operations/upgrade.md` was correct throughout; only the release notes were stale, which is the direction that reaches an adopter first and is checked last.
