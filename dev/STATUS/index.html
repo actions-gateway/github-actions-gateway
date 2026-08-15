@@ -3655,6 +3655,38 @@
 <td>S</td>
 <td><code>git_metrics</code> counts the current tree, so the 2026-08-09 reflow cut Markdown 67.6k to 49.0k and lifted tokens/line ~8% on no extra spend. Cumulative diff additions would be reformat-proof.</td>
 </tr>
+<tr>
+<td><a id="Q879"></a>Q879</td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/publish.yml">Assert at publish that a stable tag ships what a candidate validated</a></td>
+<td><code>ci</code> <code>dogfood</code> <code>retro</code></td>
+<td>🔲</td>
+<td>M</td>
+<td>The validated candidate is named only in prose, and newest-RC is unsafe: rc.2 was tagged, never validated. Needs a marker the dogfood gate writes and publish reads.</td>
+</tr>
+<tr>
+<td><a id="Q880"></a>Q880</td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/dogfood/validate-release.sh">Validate release candidates in CI instead of a local dogfood gate</a></td>
+<td><code>ci</code> <code>dogfood</code> <code>retro</code></td>
+<td>🔲</td>
+<td>L</td>
+<td>Auditable, keyed to the tag, and supersedes Q879. First milestone is Workload Identity Federation: CI has no GCP access, and a key contradicts the no-PEM feature.</td>
+</tr>
+<tr>
+<td><a id="Q881"></a>Q881</td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/plan-hygiene.yml"><code>plan-hygiene</code> skips a PR that only adds a plan doc</a></td>
+<td><code>ci</code> <code>debt</code> <code>retro</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>Its <code>plan</code> filter matches <code>docs/plan/README.md</code>, <code>docs/STATUS.md</code> and <code>**.go</code>, not <code>docs/plan/*.md</code>, so a PR adding only a plan doc skips the job that catches its missing row.</td>
+</tr>
+<tr>
+<td><a id="Q882"></a>Q882</td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.claude/piped-gate-guard.json">piped-gate tells a release branch to rebase onto main</a></td>
+<td><code>debt</code> <code>retro</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>It read <code>release-1.5</code> as a stale PR branch. Rebasing is the one thing that must never happen there: it publishes everything merged since the tag. Recurs on every backport.</td>
+</tr>
 </tbody>
 </table>
 <hr />
