@@ -106,7 +106,8 @@ The rewrite is mechanical and both link gates already cover it.
 Prove it by round-tripping the *live* table through the store and diffing the re-render against the original.
 Ship with a `-test.sh` companion. `docs/STATUS.md` stays authoritative throughout.
 
-**Phase 2: cutover.** Generate the 174 item files, replace both tables with the placeholder, add `queue_render.py`, rewrite the `#QNNN` links, and repoint the consumers: `backloglint`, `backlogmetrics`, `roadmapcheck`, `next-task.sh`, `queue-unblock.sh`, `find-duplicate-rows.sh`, `alloc-queue-id.sh`, `check-path-filters.sh`, and the three workflows.
+**Phase 2: cutover.** Gated on 1.5.0 shipping, for the reason under [Risks](#risks).
+Generate the 174 item files, replace both tables with the placeholder, add `queue_render.py`, rewrite the `#QNNN` links, and repoint the consumers: `backloglint`, `backlogmetrics`, `roadmapcheck`, `next-task.sh`, `queue-unblock.sh`, `find-duplicate-rows.sh`, `alloc-queue-id.sh`, `check-path-filters.sh`, and the three workflows.
 
 **Phase 3: retire the contention machinery.** Candidates, each verified against its remaining callers before deletion: `git-merge-status.sh` (156), `check-status-isolation.sh` and its test (126), the isolated `docs(status):` commit rule in `CLAUDE.md` and `CONTRIBUTING.md`, and lint rule 4 (the Notes cap).
 Rules 8, 9, 10 and 12 stay, re-expressed over files. `pipedgate`'s driver-owned-files list and [`pr-requeue-eligible.sh`](../../scripts/agent/pr-requeue-eligible.sh) both need their file sets updated in the same change.
@@ -127,8 +128,11 @@ A bulk rewrite proves itself by reconciliation, not by an empty leftover grep ([
 
 ## Risks
 
-- **Open PRs each delete a Queue row.** Four are open today (#1531, #1529, #1528, #1515).
-  Phase 2 either lands while that set is drained or migrates their rows by hand; it cannot land underneath them.
+- **Phase 2 lands after 1.5.0 ships**, which is itself after the currently open PRs land.
+  That is a sequencing decision, not a technical blocker: a cutover that rewrites every row and ~100 inbound links during a release window would put the backlog and the release ledger in the same blast radius, and the 1.5-gate rows are the ones being read most while the tag is cut.
+  It also disposes of the narrower risk, since every open PR deleting a Queue row will have drained by then and none of their rows need migrating by hand.
+- **Phase 1 is not gated on that.** It adds `devtools/docs/queuestore` and its round-trip test and changes no existing behaviour, so it can land whenever it is green.
+  Keeping it independent is the reason the phase split puts the generator before the cutover rather than shipping them together.
 - **`mkdocs build --strict` is a gate.** The link rewrite and the new hook both have to keep the two link gates and the strict build green.
 - **The ordered view leaves github.com.** Accepted, mitigated by the site render and `make queue`, revisitable via the post-merge-render follow-up.
 - **Phase 3 deletes safety machinery.** Rule 10 (a deleted row may not reappear) exists because a botched merge resolution silently reopens finished work.
