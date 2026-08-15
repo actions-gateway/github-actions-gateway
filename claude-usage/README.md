@@ -101,7 +101,8 @@ The snapshots are announced as a quote-post chain (each post quotes the previous
 | Model mix | mostly Sonnet 4.6 | Sonnet 43% / Opus 57% | **Opus 5 49% / Opus 4.8 37% / Fable 7% / Sonnet 4% / Opus 4.7 3%** | transcripts |
 | Mean concurrent sessions | — | — | **3.0** (peak 16) | transcripts, since Jul 26 |
 | Hours using Claude (wall-clock) | — | — | **216.8h** → 655.3h session-time | transcripts, since Jul 26 |
-| └ of that, at the keyboard | — | — | **101.5h** (47%) | transcripts, since Jul 26 |
+| Prompts actually typed by a person | — | — | **1,408** | transcripts, since Jul 26 |
+| └ time at the keyboard | — | — | **~102h** (47%), width-dependent | transcripts, since Jul 26 |
 
 The headline tokens figure **includes the ~2.5M estimated backfill** for the archived first three days; the measured-only floor is 597.8M.
 Live totals (with the measured / estimated split) are always in [`data/summary.json`](data/summary.json).
@@ -278,9 +279,15 @@ The peak is the dramatic number, up to 16, but it lasts a single bucket; the **m
 The gap between the two bands *is* the mean concurrency: **217h elapsed produced 655h of session-time** over the window, a 3.0× multiplier.
 67% of active time had two or more sessions running, on 4–54 sessions a day.
 
-The innermost band **is** time someone spent at the keyboard, and it is 47% of the rest: **101.5h against 216.8h**.
+The innermost band is time someone spent at the keyboard: **~102h against 216.8h**, or 47%.
 A 10-minute bucket counts as attended when a person actually typed in it, which is the only unambiguous presence signal the transcripts carry.
 Everything else here, every assistant record and every tool result, is produced whether or not anyone is watching.
+
+**Treat that 102 as a scale, not a measurement.** Prompts are sparse point events, 1,408 of them, and crediting each one a whole bucket makes the total scale with the bucket: 18.4h at 1-minute buckets, 102h at 10, 224h at 60.
+A session-of-presence model instead of buckets does not rescue it, giving 22.9h to 139.0h as its idle threshold moves from 5 to 60 minutes.
+Any single figure here needs an arbitrary parameter and moves six- to twelve-fold across defensible choices, which is worse than the wall-clock series it sits inside, where dense records make the width matter far less.
+
+Two things survive that and are worth more than the hours: the **count**, 1,408 typed prompts, which no parameter touches, and the **shape**, since every bucket in every chart uses the one width, so comparisons across days and hours hold even where the level does not.
 
 Identifying a typed prompt takes more than the record's own marker.
 `origin.kind == "human"` also arrives on four things nobody typed: a hook's denial text, a `<bash-input>` line and its output, a slash command's expansion, and an injected `<system-reminder>`.

@@ -1034,10 +1034,19 @@ def sessions_summary(rows):
         # carrying the marker that identifies a typed prompt partway through, so
         # this series starts later than the rest and cannot be compared with them
         # across that boundary.
+        #
+        # The hours are a scale rather than a measurement. Prompts are sparse point
+        # events and each one credits a whole bucket, so the total scales with the
+        # bucket width: 18.4h at 1 minute, 102h at 10, 224h at 60. The wall-clock
+        # series above is far less sensitive because its records are dense. What
+        # holds regardless is the prompt count and the shape across buckets, since
+        # every bucket everywhere uses the one width.
         "attended_hours": round(att / per_hour, 1),
         "attended_share_pct": round(100 * att / active) if active else 0,
         "attended_first_date": min((r["date"] for r in rows
                                     if int(r.get("attended_buckets") or 0) > 0), default=None),
+        "prompts_note": ("attended_hours scales with bucket_minutes; the parameter-free "
+                         "figures are the prompt count and the cross-bucket shape"),
         "note": ("Concurrency needs session-level transcripts, which no earlier CSV "
                  "preserved, so the series starts at the first day whose transcripts "
                  "survive rather than at the first project day. It is never estimated."),
