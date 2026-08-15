@@ -468,8 +468,22 @@ A red matrix, a failed CRD smoke, or a dead `NodeShare` profile is a **stop-ship
 ```bash
 git switch main && git pull --ff-only
 git tag -a vX.Y.Z -m "Release vX.Y.Z"
+```
+
+**Check what the tag actually points at before pushing it.** These two must print the same commit:
+
+```bash
+git rev-parse "vX.Y.Z^{commit}" && git rev-parse origin/main
+```
+
+```bash
 git push origin vX.Y.Z
 ```
+
+The check is here because creating a tag and pushing it are two moments, and anything can happen between them.
+A tag left over from an earlier attempt makes `git tag -a` fail, so a `&&` chain skips the push and does nothing — while a bare `git push` sends the **stale** tag instead.
+That is how `v1.5.0-rc.2` published from a commit three merges behind, and a published immutable Release locks its tag, so the only repair was to burn the candidate number ([postmortem](../postmortems/2026-08-15-rc2-tagged-a-stale-commit.md)).
+Cutting from a worktree makes the gap wider, since the tag is created against `origin/main` rather than a checked-out branch.
 
 Pushing the tag starts `publish.yml`.
 Watch it:
