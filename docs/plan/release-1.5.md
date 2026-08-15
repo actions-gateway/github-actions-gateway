@@ -359,6 +359,29 @@ The upgrade note in `docs/operations/upgrade.md` was correct throughout; only th
 
 That is the same shape as the [stable-tag pre-flight's](#the-stable-tag-pre-flight-2026-08-14) under-claim, one release surface over, and it is the argument for re-running the notes interrogation at **every** candidate rather than only the first: the notes go stale against the product between candidates, and nothing gates prose.
 
+## Re-deriving the highlight claims, 2026-08-15 (Q876)
+
+Every claim in the six `v1.5.0` highlights, checked against the code it describes rather than against a neighbouring doc.
+Q876 was admitted because one of the six had been inverted on both halves and survived a full pre-flight and `rc.1`; the other five had never been checked, and #1542 rewrote the section again afterwards.
+
+**One defect, and it was a number rather than a direction.** The acquisition-tier ledger claim read *53 series, 26 both tiers*.
+The gated ledger holds **54 and 27**: Q811 added `eviction_rerun_withheld_total`, tiered Both, after the figure was written.
+It appeared twice, in the highlight and in the API-surface section, and the arithmetic stayed self-consistent in both places (26+16+10+1 = 53), which is why nothing caught it — a stale total and a stale addend move together.
+
+The other five hold, and the mechanisms behind them are where the checking went:
+
+| Claim | Re-derived from |
+|---|---|
+| An unresolvable runner group fails closed rather than falling back | `scalesetlistener/listener.go:765` returns `ErrRunnerGroupNotFound` on `!ok`; the default-ID return above it is reached only by an *undeclared* group, which is the documented widening-is-explicit case |
+| An adopted scale set is moved into its declared group | `listener.go:798-810`, which reads the adopted set's group and moves it |
+| `job_duration_seconds` blast radius: two SLOs, one severity-critical alert, four recording rules, both dashboards | Four recording rules across the two series, and two alerts referencing them of which exactly one is `severity: critical` (`ActionsGatewayPodCreationLatencyP99`; the P95 is `warning`), so the singular is right. Two dashboard files. |
+| A run whose pod is gone at startup is re-run | `recoverOrphanedScaleSetWorkers` runs "once per process" over pods "already gone when this process started" |
+| `ScaleSet` is the only tier `v2beta1` exposes | `api/v2beta1/runnerset_types.go` carries no `AcquisitionProtocol` at all, against seven references in `v2alpha1` |
+
+**What this says about the counts, and the reason the row was worth its cost.** Every wrong number in this release has been a *derived* one going stale, not a mistyped one: the ledger figure here, the 120-commits and 9-shipped figures #1542 re-derived, and the `features.md` entry that outgrew its word cap.
+The gates hold the ledger to the source and the notes to nothing, so a figure copied out of a gated artifact is correct exactly until that artifact moves.
+Re-deriving at the tag is what closes that window, and it is cheap enough to repeat.
+
 ## Candidates not yet accepted
 
 Held here so the reasoning is not lost, not committed to the release:
