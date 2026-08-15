@@ -58,6 +58,14 @@ PLAN_STYLE = ("#222", "--")
 MACHINE_STYLE = ("#005E44", (0, (5, 2, 1, 2)))
 REFLOW_STYLE = ("#5B5B5B", (0, (1, 1.8)))
 
+# Event lines are drawn at zorder 5, after the series they cross. A value label
+# left at the default zorder is painted over and reads as struck through, so
+# every one of them sits above the lines and cuts them with its white halo —
+# the same trade `event_label` makes for the event's own text.
+EVENT_Z = 5
+LABEL_Z = 7
+HALO = [pe.Stroke(linewidth=3, foreground="white"), pe.Normal()]
+
 # Okabe–Ito colourblind-safe palette.
 OI = {
     "orange": "#E69F00", "skyblue": "#56B4E9", "green": "#009E73",
@@ -154,7 +162,7 @@ def reflow_marker(axes, label_ax, y=0.01):
     """
     col, ls = REFLOW_STYLE
     for a in axes:
-        a.axvline(DOCS_REFLOW, color=col, ls=ls, lw=1.6, zorder=5)
+        a.axvline(DOCS_REFLOW, color=col, ls=ls, lw=1.6, zorder=EVENT_Z)
     event_label(label_ax, DOCS_REFLOW, y, "docs reflow", col, yc="axes fraction")
 
 
@@ -358,9 +366,11 @@ def chart_tokens_per_line():
     ax.plot(xs, ys, color=gold, lw=3.2, solid_capstyle="round", zorder=3)
     ax.fill_between(xs, ys, 0, color=gold, alpha=0.10, zorder=2)
     ax.annotate(f"{ys[-1]:,.0f} tokens / line", (xs[-1], ys[-1]), xytext=(-8, 14),
-                textcoords="offset points", ha="right", fontsize=13, fontweight="bold", color="#8A6216")
+                textcoords="offset points", ha="right", fontsize=13, fontweight="bold",
+                color="#8A6216", path_effects=HALO, zorder=LABEL_Z)
     ax.annotate(f"{ys[0]:,.0f} / line", (xs[0], ys[0]), xytext=(6, -15),
-                textcoords="offset points", ha="left", fontsize=10.5, color="#8A6216")
+                textcoords="offset points", ha="left", fontsize=10.5, color="#8A6216",
+                path_effects=HALO, zorder=LABEL_Z)
     ax.set_title("Each line costs more tokens as the project matures",
                  fontsize=14, fontweight="bold", loc="left")
     ax.set_ylabel("cumulative tokens ÷ line", fontsize=11)
@@ -415,7 +425,8 @@ def chart_tokens_per_line():
         ax.plot([wd], [v], "o", color=gold, ms=5, zorder=6)
         ax.annotate(f"{v:,.0f}", (wd, v), xytext=(0, 9), textcoords="offset points",
                     ha="center", fontsize=8.5, fontweight="bold", color=gold,
-                    path_effects=[pe.Stroke(linewidth=2.5, foreground="white"), pe.Normal()])
+                    path_effects=[pe.Stroke(linewidth=2.5, foreground="white"), pe.Normal()],
+                    zorder=LABEL_Z)
 
     reflow_marker((ax, axb), axb)
     fig.text(0.012, 0.008, "generated CRD YAML, binaries & lockfiles excluded · tokens = input + output + cache writes",
@@ -433,7 +444,6 @@ def chart_tokens_vs_lines():
     breakdown of the lines lives in the tokens-per-line chart.
     """
     git, dates, xs, ys, cum_on, lines = _per_line_series()
-    halo = [pe.Stroke(linewidth=3, foreground="white"), pe.Normal()]
     tok = [cum_on[d] for d in dates]
     total = [lines(git[d]) for d in dates]
 
@@ -452,14 +462,14 @@ def chart_tokens_vs_lines():
 
     ax.annotate(f"{tok[-1] / 1e6:,.0f}M tokens", (xs[-1], tok[-1]), xytext=(-8, 10),
                 textcoords="offset points", ha="right", fontsize=12.5, fontweight="bold",
-                color=OI["blue"], path_effects=halo)
+                color=OI["blue"], path_effects=HALO, zorder=LABEL_Z)
     ax.annotate(f"{total[-1] / 1e3:,.0f}k lines", (xs[-1], total[-1]), xytext=(-8, -14),
                 textcoords="offset points", ha="right", fontsize=12.5, fontweight="bold",
-                color="#1B7A5A", path_effects=halo)
+                color="#1B7A5A", path_effects=HALO, zorder=LABEL_Z)
     gap_mid = (total[-1] * tok[-1]) ** 0.5  # geometric mid of the gap, on a log axis
     ax.annotate(f"≈ {ys[-1]:,.0f} tokens / line", (xs[-1], gap_mid), xytext=(-10, 0),
                 textcoords="offset points", ha="right", fontsize=13, fontweight="bold",
-                color=GOLD, path_effects=halo)
+                color=GOLD, path_effects=HALO, zorder=LABEL_Z)
 
     ax.set_title("Tokens spent vs. lines authored (log scale)",
                  fontsize=14, fontweight="bold", loc="left")
@@ -486,7 +496,6 @@ def chart_overview():
     """
     git, dates, xs, ys, cum_on, lines = _per_line_series()
     gold = GOLD
-    halo = [pe.Stroke(linewidth=3, foreground="white"), pe.Normal()]
     tok = [cum_on[d] for d in dates]
     total = [lines(git[d]) for d in dates]
 
@@ -515,16 +524,15 @@ def chart_overview():
             path_effects=[pe.Stroke(linewidth=5, foreground="white"), pe.Normal()])
     a1.plot(xs, total, color=OI["green"], lw=3.0, ls=(0, (6, 2)), zorder=4,
             path_effects=[pe.Stroke(linewidth=5, foreground="white"), pe.Normal()])
-    # zorder above the event lines drawn later, so neither strikes through the text.
     a1.annotate(f"{tok[-1] / 1e6:,.0f}M tokens", (xs[-1], tok[-1]), xytext=(-8, 9),
                 textcoords="offset points", ha="right", fontsize=12, fontweight="bold",
-                color=OI["blue"], path_effects=halo, zorder=7)
+                color=OI["blue"], path_effects=HALO, zorder=LABEL_Z)
     a1.annotate(f"{total[-1] / 1e3:,.0f}k lines", (xs[-1], total[-1]), xytext=(-8, -13),
                 textcoords="offset points", ha="right", fontsize=12, fontweight="bold",
-                color="#1B7A5A", path_effects=halo, zorder=7)
+                color="#1B7A5A", path_effects=HALO, zorder=LABEL_Z)
     a1.annotate(f"≈ {ys[-1]:,.0f} tokens / line", (xs[-1], (total[-1] * tok[-1]) ** 0.5),
                 xytext=(-10, 0), textcoords="offset points", ha="right", fontsize=12.5,
-                fontweight="bold", color=gold, path_effects=halo, zorder=7)
+                fontweight="bold", color=gold, path_effects=HALO, zorder=LABEL_Z)
     a1.set_ylabel("count (log scale)", fontsize=11)
     a1.set_title("Tokens spent vs. lines authored", fontsize=12.5, fontweight="bold", loc="left")
     a1.grid(axis="y", which="both", alpha=0.16)
@@ -558,9 +566,10 @@ def chart_overview():
     a3.yaxis.set_major_formatter(plt.FuncFormatter(lambda v, _: f"{v:,.0f}"))
     a3.annotate(f"{ys[-1]:,.0f} tokens / line", (xs[-1], ys[-1]), xytext=(-8, 12),
                 textcoords="offset points", ha="right", fontsize=12.5, fontweight="bold",
-                color=gold, path_effects=halo)
+                color=gold, path_effects=HALO, zorder=LABEL_Z)
     a3.annotate(f"{ys[0]:,.0f}", (xs[0], ys[0]), xytext=(4, -13), textcoords="offset points",
-                ha="left", fontsize=10, fontweight="bold", color=gold, path_effects=halo)
+                ha="left", fontsize=10, fontweight="bold", color=gold,
+                path_effects=HALO, zorder=LABEL_Z)
     for wd in week_dates:
         v = _val_on(wd)
         if v is None or wd == xs[-1]:
@@ -568,7 +577,8 @@ def chart_overview():
         a3.plot([wd], [v], "o", color=gold, ms=5, zorder=6)
         a3.annotate(f"{v:,.0f}", (wd, v), xytext=(0, 9), textcoords="offset points",
                     ha="center", fontsize=8.5, fontweight="bold", color=gold,
-                    path_effects=[pe.Stroke(linewidth=2.5, foreground="white"), pe.Normal()])
+                    path_effects=[pe.Stroke(linewidth=2.5, foreground="white"), pe.Normal()],
+                    zorder=LABEL_Z)
     a3.set_ylabel("cumulative tokens ÷ line", fontsize=11)
     a3.set_title("What those lines cost in tokens", fontsize=12.5, fontweight="bold", loc="left")
     a3.grid(axis="y", alpha=0.22)
@@ -591,7 +601,7 @@ def chart_overview():
         if not xs[0] <= ev_date <= xs[-1]:
             continue
         for a in (a1, a2, a3):
-            a.axvline(ev_date, color=col, ls=ls, lw=1.4, zorder=5)
+            a.axvline(ev_date, color=col, ls=ls, lw=1.4, zorder=EVENT_Z)
         event_label(a1, ev_date, 0.01, label, col, yc="axes fraction")
     reflow_marker((a1, a2, a3), a1)
     for a in (a1, a2):
