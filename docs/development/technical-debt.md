@@ -62,6 +62,23 @@ Worked example: Q492 flagged "`helm rollback` past a chart version that added a 
 Measuring it disproved the claim — `helm rollback` replays the target revision's stored manifest instead of re-rendering, so the failure cannot arise — while turning up a *different*, real hazard the analogy had hidden ([Q492's rollback caveat](../operations/upgrade.md#rolling-back-past-this-change-re-arms-the-outage-it-fixes)).
 The wrong flag had already merged into the record by then.
 
+### Instrumenting is not fixing, so an unestablished mechanism does not block it
+
+"Make the smallest change" and "measure before asserting a root cause" both push back on a fix coded to a guessed mechanism, and they are right to.
+[Q820](../STATUS.md#Q820)'s row asserted that the repo was gone mid-merge; measurement disproved it, so a fix written to the row would have repaired a working path.
+
+Neither rule governs **instrumentation**.
+A probe added to a failing suite asserts no mechanism and changes no behaviour, and it is verifiable on its own terms: it either names the failing call or it does not.
+Declining to add one until the mechanism is known is backwards, because the missing name is *why* the mechanism is unknown.
+
+The cost of waiting compounds, and it is not symmetric.
+Q820 was seen three times in four days, each occurrence green on rerun, each producing an identical signature that named no command.
+Three chances spent generating the same non-information.
+Worse, the two suites sharing its scaffolding were left uninstrumented in the first fix on the grounds of "not changing them on speculation", which applies the rule for guessed fixes to something that guesses nothing.
+
+So when a defect's mechanism is not established, ask what the *next* occurrence needs in order to be diagnosable, and add that much.
+Verify it in both directions, since instrumentation that has stopped firing fails as quietly as instrumentation that fires on everything: confirm it names the right thing under an injected failure, and that a healthy run stays silent.
+
 ### Capture knowledge durably, not in chat
 
 A debt item that exists only in a conversation is lost.
