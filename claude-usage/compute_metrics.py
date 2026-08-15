@@ -294,6 +294,23 @@ def grep_word_count(rev, pattern, paths):
     return sum(len(ln.split()) for ln in out.splitlines())
 
 
+def grep_words_per_file(rev, pattern, paths):
+    """Word counts as a ``{path: words}`` map, so a path filter can be applied.
+
+    The YAML band needs this: ``grep_word_count`` over every ``*.yaml`` sums the
+    generated CRDs too, which the line series drops. Counting them would dilute
+    the cost ratio with output nobody authored.
+    """
+    out = git("grep", "-E", pattern, rev, "--", *paths)
+    counts = {}
+    for ln in out.splitlines():
+        parts = ln.split(":", 2)  # rev:path:content
+        if len(parts) < 3:
+            continue
+        counts[parts[1]] = counts.get(parts[1], 0) + len(parts[2].split())
+    return counts
+
+
 def grep_lines_per_file(rev, pattern, paths):
     """``git grep -c`` line counts as a ``{path: count}`` map at a revision."""
     out = git("grep", "-c", "-E", pattern, rev, "--", *paths)
@@ -413,6 +430,12 @@ def git_series():
         generated = grep_files_matching(rev, "code generated|controller-gen", YAML_PATHS)
         yaml_hand = sum(c for p, c in yaml_counts.items()
                         if p not in generated and "/crd/" not in p)
+        go_w = grep_word_count(rev, "[^[:space:]]", GO_PATHS)
+        md_w = grep_word_count(rev, "[^[:space:]]", MD_PATHS)
+        yaml_words_per_file = grep_words_per_file(rev, "[^[:space:]]", YAML_PATHS)
+        yaml_w = sum(c for p, c in yaml_words_per_file.items()
+                     if p not in generated and "/crd/" not in p)
+        scripts_w = grep_word_count(rev, "[^[:space:]]", SCRIPT_PATHS)
         rows[d] = {
             "date": d,
             "commits": cum,
@@ -425,13 +448,16 @@ def git_series():
             "prs": cum_prs,
             "queue_closed": cum_closed,
             "active_hours": len(day_hours[d]),  # per-day, not cumulative
-            # The reformat-proof twins of `md` and of lines-authored. Both count
-            # every non-blank word including comments, so `words` is not `go_code
-            # + md + yaml + scripts` in another unit — it is the same corpus with
-            # nothing subtracted.
-            "md_words": grep_word_count(rev, "[^[:space:]]", MD_PATHS),
-            "words": sum(grep_word_count(rev, "[^[:space:]]", p)
-                         for p in (GO_PATHS, MD_PATHS, YAML_PATHS, SCRIPT_PATHS)),
+            # The reformat-proof twins of the line counts, per band so the cost
+            # ratio's denominator can be decomposed the same way. Every one counts
+            # non-blank words including comments, so `words` is not `go_code + md +
+            # yaml + scripts` in another unit — it is the same corpus with nothing
+            # subtracted.
+            "go_words": go_w,
+            "md_words": md_w,
+            "yaml_words": yaml_w,
+            "scripts_words": scripts_w,
+            "words": go_w + md_w + yaml_w + scripts_w,
         }
     return rows
 
@@ -723,7 +749,8 @@ def main():
 
     git_rows = git_series()
     write_csv(git_csv, ["date", "commits", "tests", "go_code", "go_test", "md", "yaml", "scripts",
-                        "prs", "queue_closed", "active_hours", "md_words", "words"],
+                        "prs", "queue_closed", "active_hours",
+                        "go_words", "md_words", "yaml_words", "scripts_words", "words"],
               [git_rows[d] for d in sorted(git_rows)])
     deltas = commit_deltas(git_rows)
 

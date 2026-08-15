@@ -16,9 +16,9 @@ Run:
 
 Outputs PNGs (1x + @2x) to claude-usage/charts/:
     tokens_by_model      daily token usage by model, with the plan-upgrade markers
-    tokens_per_line      cost-per-line ratio + the lines composition (stacked)
-    tokens_vs_lines      cumulative tokens vs lines authored (log scale)
-    tokens_overview      all three tokens/lines views stacked on one timeline
+    tokens_per_word      cost-per-word ratio + the words composition (stacked)
+    tokens_vs_words      cumulative tokens vs words authored (log scale)
+    tokens_overview      all three tokens/words views stacked on one timeline
     token_anatomy        daily input/output/cache tokens on a log scale
     cumulative_cache     cumulative cache reads vs writes (stacked area)
     parallel_sessions    peak concurrency + the parallel share (own shorter timeline)
@@ -95,6 +95,16 @@ LINE_BANDS = [
     ("Docs",          OI["green"],      "/",  lambda g: int(g.get("md") or 0)),
     ("YAML",          OI["yellow"],     "x",  lambda g: int(g.get("yaml") or 0)),
     ("Scripts & web", OI["vermillion"], "\\", lambda g: int(g.get("scripts") or 0)),
+]
+# The same five bands counted in words. Words are the headline denominator: they
+# are the unit closest to what a token is, and a reformat cannot move them. The
+# honest cost is that a per-word ratio rewards length, so prose trimmed to say the
+# same thing in fewer words scores as less output.
+WORD_BANDS = [
+    ("Go",            OI["blue"],       "",   lambda g: int(g.get("go_words") or 0)),
+    ("Docs",          OI["green"],      "/",  lambda g: int(g.get("md_words") or 0)),
+    ("YAML",          OI["yellow"],     "x",  lambda g: int(g.get("yaml_words") or 0)),
+    ("Scripts & web", OI["vermillion"], "\\", lambda g: int(g.get("scripts_words") or 0)),
 ]
 EST_NOTE = "shaded / hatched = pre-transcript days estimated from the Pro-era per-commit rate"
 
@@ -353,7 +363,7 @@ def _per_line_series():
 
     Returns ``(git, dates, xs, ys, cum_on, lines)`` where ``git`` is the git_metrics
     rows by date, ``dates`` the measured days that have authored lines, ``xs`` their
-    datetimes, ``ys`` cumulative tokens ÷ lines authored, ``cum_on`` cumulative
+    datetimes, ``ys`` cumulative tokens ÷ words authored, ``cum_on`` cumulative
     headline tokens carried forward onto every date, and ``lines(g)`` the
     all-hand-authored line count for a git row.
     """
@@ -377,23 +387,27 @@ def _per_line_series():
             last = cum[d]
         cum_on[d] = last
     # Measured days that have authored lines (avoids divide-by-zero on day 1).
-    dates = [d for d in sorted(git) if lines(git[d]) > 0 and d not in est_dates]
+    def words(g):
+        return int(g.get("words") or 0)
+
+    dates = [d for d in sorted(git) if words(git[d]) > 0 and d not in est_dates]
     xs = [dparse(d) for d in dates]
-    ys = [cum_on[d] / lines(git[d]) for d in dates]
-    return git, dates, xs, ys, cum_on, lines
+    ys = [cum_on[d] / words(git[d]) for d in dates]      # the headline ratio
+    ys_line = [cum_on[d] / lines(git[d]) for d in dates]  # kept for lines_vs_words
+    return git, dates, xs, ys, cum_on, lines, words, ys_line
 
 
-def chart_tokens_per_line():
-    """Two panels: cost-per-line ratio on top, the line denominator decomposed below.
+def chart_tokens_per_word():
+    """Two panels: cost-per-word ratio on top, the word denominator decomposed below.
 
-    Top: total headline tokens to date ÷ lines authored that day — a single ratio
+    Top: total headline tokens to date ÷ words authored that day — a single ratio
     that climbs as the project matures (each line costs more once the easy
     scaffolding is done and work shifts to logic, tests, review, debugging).
     Bottom: the denominator itself as a stacked area — Go code, Go tests, Markdown
     docs, hand-written YAML, scripts & web — so "a line" is shown, not described.
     Estimated (pre-transcript) days are excluded so the ratio is measured-only.
     """
-    git, dates, xs, ys, _, _ = _per_line_series()
+    git, dates, xs, ys, _, _, _, _ = _per_line_series()
     gold = GOLD
 
     # Weekly guide dates = project day 7, 14, ... (from the first commit), so the
@@ -418,15 +432,15 @@ def chart_tokens_per_line():
     # --- top: the cost-per-line ratio ---
     ax.plot(xs, ys, color=gold, lw=3.2, solid_capstyle="round", zorder=3)
     ax.fill_between(xs, ys, 0, color=gold, alpha=0.10, zorder=2)
-    ax.annotate(f"{ys[-1]:,.0f} tokens / line", (xs[-1], ys[-1]), xytext=(-8, 14),
+    ax.annotate(f"{ys[-1]:,.0f} tokens / word", (xs[-1], ys[-1]), xytext=(-8, 14),
                 textcoords="offset points", ha="right", fontsize=13, fontweight="bold",
                 color="#8A6216", path_effects=HALO, zorder=LABEL_Z)
-    ax.annotate(f"{ys[0]:,.0f} / line", (xs[0], ys[0]), xytext=(6, -15),
+    ax.annotate(f"{ys[0]:,.0f} / word", (xs[0], ys[0]), xytext=(6, -15),
                 textcoords="offset points", ha="left", fontsize=10.5, color="#8A6216",
                 path_effects=HALO, zorder=LABEL_Z)
-    ax.set_title("Each line costs more tokens as the project matures",
+    ax.set_title("Each word costs more tokens as the project matures",
                  fontsize=14, fontweight="bold", loc="left")
-    ax.set_ylabel("cumulative tokens ÷ line", fontsize=11)
+    ax.set_ylabel("cumulative tokens ÷ word", fontsize=11)
     ax.set_ylim(0, max(ys) * 1.12)
     ax.yaxis.set_major_formatter(plt.FuncFormatter(lambda v, _: f"{v:,.0f}"))
     ax.grid(axis="y", alpha=0.22)
@@ -437,16 +451,16 @@ def chart_tokens_per_line():
     # Muted fills + a bold boundary line per band, so the composition reads from
     # crisp colour-coded lines rather than busy texture. Faint hatch stays as a
     # secondary, colourblind-safe cue.
-    stacks = [[fn(git[d]) / 1e3 for d in dates] for _, _, _, fn in LINE_BANDS]
-    polys = axb.stackplot(xs, *stacks, colors=[c for _, c, _, _ in LINE_BANDS],
+    stacks = [[fn(git[d]) / 1e3 for d in dates] for _, _, _, fn in WORD_BANDS]
+    polys = axb.stackplot(xs, *stacks, colors=[c for _, c, _, _ in WORD_BANDS],
                           alpha=0.28, zorder=2)
-    for poly, (_, col, hatch, _) in zip(polys, LINE_BANDS):
+    for poly, (_, col, hatch, _) in zip(polys, WORD_BANDS):
         poly.set_hatch(hatch)
         poly.set_edgecolor(darken(col))  # hatch draws in the edge colour
         poly.set_linewidth(0.0)
     cumtop = np.cumsum(np.array(stacks), axis=0)
     running = 0.0
-    for i, (label, col, _, _) in enumerate(LINE_BANDS):
+    for i, (label, col, _, _) in enumerate(WORD_BANDS):
         axb.plot(xs, cumtop[i], color=darken(col), lw=2.4, solid_capstyle="round", zorder=4)
         s = stacks[i]
         mid = running + s[-1] / 2
@@ -454,7 +468,7 @@ def chart_tokens_per_line():
         axb.annotate(f"{label}  {s[-1]:.0f}k", (xs[-1], mid), xytext=(7, 0),
                      textcoords="offset points", va="center", fontsize=9.5,
                      fontweight="bold", color=darken(col))
-    axb.set_ylabel("lines authored (thousands)", fontsize=11)
+    axb.set_ylabel("words authored (thousands)", fontsize=11)
     axb.set_ylim(0, running * 1.05)
     axb.set_xlim(xs[0], xs[-1])
     axb.xaxis.set_major_formatter(mdates.DateFormatter("%b %-d"))
@@ -481,14 +495,13 @@ def chart_tokens_per_line():
                     path_effects=[pe.Stroke(linewidth=2.5, foreground="white"), pe.Normal()],
                     zorder=LABEL_Z)
 
-    reflow_marker((ax, axb), axb)
     fig.text(0.012, 0.008, "generated CRD YAML, binaries & lockfiles excluded · tokens = input + output + cache writes",
              fontsize=7.5, color="#999")
-    save(fig, "tokens_per_line")  # save() crops with bbox_inches="tight"
+    save(fig, "tokens_per_word")  # save() crops with bbox_inches="tight"
 
 
-def chart_tokens_vs_lines():
-    """Log-scale magnitude: total tokens far above total lines authored.
+def chart_tokens_vs_words():
+    """Log-scale magnitude: total tokens far above total words authored.
 
     Log y so both the ~115M tokens and the ~60k lines are visible at once (a linear
     axis would crush the lines to an invisible sliver). Two curves — tokens up top,
@@ -496,9 +509,9 @@ def chart_tokens_vs_lines():
     a log axis a ratio is a vertical gap. No composition here: the undistorted
     breakdown of the lines lives in the tokens-per-line chart.
     """
-    git, dates, xs, ys, cum_on, lines = _per_line_series()
+    git, dates, xs, ys, cum_on, lines, words, ys_line = _per_line_series()
     tok = [cum_on[d] for d in dates]
-    total = [lines(git[d]) for d in dates]
+    total = [words(git[d]) for d in dates]
 
     fig, ax = plt.subplots(figsize=(11, 6.2))
     ax.set_yscale("log")
@@ -511,46 +524,45 @@ def chart_tokens_vs_lines():
             label="Tokens spent (cumulative)")
     ax.plot(xs, total, color=OI["green"], lw=3.2, ls=(0, (6, 2)), zorder=4,
             path_effects=[pe.Stroke(linewidth=5.5, foreground="white"), pe.Normal()],
-            label="Lines authored (cumulative)")
+            label="Words authored (cumulative)")
 
     ax.annotate(f"{tok[-1] / 1e6:,.0f}M tokens", (xs[-1], tok[-1]), xytext=(-8, 10),
                 textcoords="offset points", ha="right", fontsize=12.5, fontweight="bold",
                 color=OI["blue"], path_effects=HALO, zorder=LABEL_Z)
-    ax.annotate(f"{total[-1] / 1e3:,.0f}k lines", (xs[-1], total[-1]), xytext=(-8, -14),
+    ax.annotate(f"{total[-1] / 1e3:,.0f}k words", (xs[-1], total[-1]), xytext=(-8, -14),
                 textcoords="offset points", ha="right", fontsize=12.5, fontweight="bold",
                 color="#1B7A5A", path_effects=HALO, zorder=LABEL_Z)
     gap_mid = (total[-1] * tok[-1]) ** 0.5  # geometric mid of the gap, on a log axis
-    ax.annotate(f"≈ {ys[-1]:,.0f} tokens / line", (xs[-1], gap_mid), xytext=(-10, 0),
+    ax.annotate(f"≈ {ys[-1]:,.0f} tokens / word", (xs[-1], gap_mid), xytext=(-10, 0),
                 textcoords="offset points", ha="right", fontsize=13, fontweight="bold",
                 color=GOLD, path_effects=HALO, zorder=LABEL_Z)
 
-    ax.set_title("Tokens spent vs. lines authored (log scale)",
+    ax.set_title("Tokens spent vs. words authored (log scale)",
                  fontsize=14, fontweight="bold", loc="left")
     ax.set_ylabel("cumulative count (log scale)", fontsize=11)
     ax.xaxis.set_major_formatter(mdates.DateFormatter("%b %-d"))
     ax.xaxis.set_major_locator(mdates.DayLocator(interval=2))
     plt.setp(ax.get_xticklabels(), rotation=45, ha="right", fontsize=8.5)
-    reflow_marker((ax,), ax)
     ax.legend(loc="upper center", bbox_to_anchor=(0.5, -0.12), ncol=2, frameon=False, fontsize=10)
     ax.spines["top"].set_visible(False)
     ax.spines["right"].set_visible(False)
-    fig.text(0.012, 0.008, "lines authored = Go + tests + Markdown + hand-written YAML + scripts & web · tokens = input + output + cache writes",
+    fig.text(0.012, 0.008, "words authored = Go + Markdown + hand-written YAML + scripts & web, comments included · tokens = input + output + cache writes",
              fontsize=7.5, color="#999")
-    save(fig, "tokens_vs_lines")
+    save(fig, "tokens_vs_words")
 
 
 def chart_overview():
     """All three tokens/lines views in one shared-x figure (top → bottom):
 
-    1. magnitude — tokens vs lines authored on a log axis, gap = cost/line;
+    1. magnitude — tokens vs words authored on a log axis, gap = cost/word;
     2. breakdown — the lines composition as a muted stacked area with bold edges;
-    3. cost — cumulative tokens ÷ line over time ("what those lines cost"), with
+    3. cost — cumulative tokens ÷ word over time ("what those words cost"), with
        the value at each weekly guide.
     """
-    git, dates, xs, ys, cum_on, lines = _per_line_series()
+    git, dates, xs, ys, cum_on, lines, words, ys_line = _per_line_series()
     gold = GOLD
     tok = [cum_on[d] for d in dates]
-    total = [lines(git[d]) for d in dates]
+    total = [words(git[d]) for d in dates]
 
     start = min(dparse(d) for d in git)
     val_at = dict(zip(xs, ys))
@@ -580,26 +592,26 @@ def chart_overview():
     a1.annotate(f"{tok[-1] / 1e6:,.0f}M tokens", (xs[-1], tok[-1]), xytext=(-8, 9),
                 textcoords="offset points", ha="right", fontsize=12, fontweight="bold",
                 color=OI["blue"], path_effects=HALO, zorder=LABEL_Z)
-    a1.annotate(f"{total[-1] / 1e3:,.0f}k lines", (xs[-1], total[-1]), xytext=(-8, -13),
+    a1.annotate(f"{total[-1] / 1e3:,.0f}k words", (xs[-1], total[-1]), xytext=(-8, -13),
                 textcoords="offset points", ha="right", fontsize=12, fontweight="bold",
                 color="#1B7A5A", path_effects=HALO, zorder=LABEL_Z)
-    a1.annotate(f"≈ {ys[-1]:,.0f} tokens / line", (xs[-1], (total[-1] * tok[-1]) ** 0.5),
+    a1.annotate(f"≈ {ys[-1]:,.0f} tokens / word", (xs[-1], (total[-1] * tok[-1]) ** 0.5),
                 xytext=(-10, 0), textcoords="offset points", ha="right", fontsize=12.5,
                 fontweight="bold", color=gold, path_effects=HALO, zorder=LABEL_Z)
     a1.set_ylabel("count (log scale)", fontsize=11)
-    a1.set_title("Tokens spent vs. lines authored", fontsize=12.5, fontweight="bold", loc="left")
+    a1.set_title("Tokens spent vs. words authored", fontsize=12.5, fontweight="bold", loc="left")
     a1.grid(axis="y", which="both", alpha=0.16)
 
     # --- panel 2: composition ---
-    stacks = [[fn(git[d]) / 1e3 for d in dates] for _, _, _, fn in LINE_BANDS]
-    polys = a2.stackplot(xs, *stacks, colors=[c for _, c, _, _ in LINE_BANDS], alpha=0.28, zorder=2)
-    for poly, (_, col, hatch, _) in zip(polys, LINE_BANDS):
+    stacks = [[fn(git[d]) / 1e3 for d in dates] for _, _, _, fn in WORD_BANDS]
+    polys = a2.stackplot(xs, *stacks, colors=[c for _, c, _, _ in WORD_BANDS], alpha=0.28, zorder=2)
+    for poly, (_, col, hatch, _) in zip(polys, WORD_BANDS):
         poly.set_hatch(hatch)
         poly.set_edgecolor(darken(col))
         poly.set_linewidth(0.0)
     cumtop = np.cumsum(np.array(stacks), axis=0)
     running = 0.0
-    for i, (label, col, _, _) in enumerate(LINE_BANDS):
+    for i, (label, col, _, _) in enumerate(WORD_BANDS):
         a2.plot(xs, cumtop[i], color=darken(col), lw=2.2, solid_capstyle="round", zorder=4)
         s = stacks[i]
         mid = running + s[-1] / 2
@@ -609,7 +621,7 @@ def chart_overview():
                     color=darken(col))
     a2.set_ylim(0, running * 1.05)
     a2.set_ylabel("lines authored (thousands)", fontsize=11)
-    a2.set_title("What those lines are", fontsize=12.5, fontweight="bold", loc="left")
+    a2.set_title("What those words are", fontsize=12.5, fontweight="bold", loc="left")
     a2.grid(axis="y", alpha=0.22)
 
     # --- panel 3: what those lines cost (tokens per line), with weekly values ---
@@ -617,7 +629,7 @@ def chart_overview():
     a3.fill_between(xs, ys, 0, color=gold, alpha=0.10, zorder=2)
     a3.set_ylim(0, max(ys) * 1.16)
     a3.yaxis.set_major_formatter(plt.FuncFormatter(lambda v, _: f"{v:,.0f}"))
-    a3.annotate(f"{ys[-1]:,.0f} tokens / line", (xs[-1], ys[-1]), xytext=(-8, 12),
+    a3.annotate(f"{ys[-1]:,.0f} tokens / word", (xs[-1], ys[-1]), xytext=(-8, 12),
                 textcoords="offset points", ha="right", fontsize=12.5, fontweight="bold",
                 color=gold, path_effects=HALO, zorder=LABEL_Z)
     a3.annotate(f"{ys[0]:,.0f}", (xs[0], ys[0]), xytext=(4, -13), textcoords="offset points",
@@ -632,8 +644,8 @@ def chart_overview():
                     ha="center", fontsize=8.5, fontweight="bold", color=gold,
                     path_effects=[pe.Stroke(linewidth=2.5, foreground="white"), pe.Normal()],
                     zorder=LABEL_Z)
-    a3.set_ylabel("cumulative tokens ÷ line", fontsize=11)
-    a3.set_title("What those lines cost in tokens", fontsize=12.5, fontweight="bold", loc="left")
+    a3.set_ylabel("cumulative tokens ÷ word", fontsize=11)
+    a3.set_title("What those words cost in tokens", fontsize=12.5, fontweight="bold", loc="left")
     a3.grid(axis="y", alpha=0.22)
     a3.xaxis.set_major_formatter(mdates.DateFormatter("%b %-d"))
     a3.xaxis.set_major_locator(mdates.DayLocator(interval=2))
@@ -656,7 +668,6 @@ def chart_overview():
         for a in (a1, a2, a3):
             a.axvline(ev_date, color=col, ls=ls, lw=1.4, zorder=EVENT_Z)
         event_label(a1, ev_date, 0.01, label, col, yc="axes fraction")
-    reflow_marker((a1, a2, a3), a1)
     for a in (a1, a2):
         plt.setp(a.get_xticklabels(), visible=False)
 
@@ -989,6 +1000,15 @@ def chart_velocity():
     a4.xaxis.set_major_formatter(mdates.DateFormatter("%b %-d"))
     a4.xaxis.set_major_locator(mdates.DayLocator(interval=4))
     plt.setp(a4.get_xticklabels(), rotation=45, ha="right", fontsize=8.5)
+    # One figure-level key rather than four inline ones: every panel shares the
+    # encoding, and a legend box inside any of them lands on an event label.
+    fig.legend(handles=[
+        mpatches.Patch(facecolor="#8A8A8A", alpha=0.5, label="daily value"),
+        Line2D([], [], color="#333333", lw=2.6, label="7-day centered mean"),
+        Line2D([], [], color=OI["skyblue"], lw=2.4, ls=(0, (6, 2)),
+               label="commits per such hour, 7-day mean (bottom panel, right axis)"),
+    ], loc="upper center", bbox_to_anchor=(0.5, 0.997), ncol=3, frameon=False, fontsize=9.5)
+    fig.subplots_adjust(top=0.958)
     fig.text(0.012, 0.006,
              "bars are daily · lines are a 7-day centered mean, stopping 3 days short at each end "
              "rather than averaging a partial window · shaded = the series cannot mean what its axis "
@@ -1012,14 +1032,14 @@ def chart_lines_vs_words():
     here: sentence-per-line put the same words on fewer lines, so the gap widens
     at the reflow rather than either curve behaving strangely.
     """
-    git, dates, xs, ys, cum_on, lines = _per_line_series()
+    git, dates, xs, ys, cum_on, lines, words, ys_line = _per_line_series()
     if not dates or "words" not in git[dates[0]]:
         return
 
     md_l = [int(git[d].get("md") or 0) for d in dates]
     md_w = [int(git[d].get("md_words") or 0) for d in dates]
-    words = [int(git[d].get("words") or 0) for d in dates]
-    per_word = [cum_on[d] / w if w else None for d, w in zip(dates, words)]
+    per_word = ys          # the headline ratio
+    per_line = ys_line     # what it replaced
 
     fig, (a1, a2) = plt.subplots(2, 1, figsize=(11, 8.4), sharex=True,
                                  gridspec_kw=dict(height_ratios=[1, 1], hspace=0.22))
@@ -1038,10 +1058,10 @@ def chart_lines_vs_words():
                 fontweight="bold", color=GOLD, path_effects=HALO, zorder=LABEL_Z)
 
     a2.set_yscale("log")
-    a2.plot(xs, ys, color=GOLD, lw=2.8, zorder=4, path_effects=HALO, label="Tokens ÷ line")
-    a2.plot([x for x, v in zip(xs, per_word) if v], [v for v in per_word if v],
-            color=OI["vermillion"], lw=2.8, ls=(0, (6, 2)), zorder=4, path_effects=HALO,
-            label="Tokens ÷ word")
+    a2.plot(xs, per_line, color=GOLD, lw=2.8, zorder=4, path_effects=HALO,
+            label="Tokens ÷ line (retired)")
+    a2.plot(xs, per_word, color=OI["vermillion"], lw=2.8, ls=(0, (6, 2)), zorder=4,
+            path_effects=HALO, label="Tokens ÷ word (headline)")
     a2.set_ylabel("tokens (log scale)", fontsize=10.5)
     a2.set_title("What each costs — only the per-line ratio steps at the reflow",
                  fontsize=12.5, fontweight="bold", loc="left")
@@ -1068,8 +1088,8 @@ def chart_lines_vs_words():
 
 def main():
     chart_tokens_by_model()
-    chart_tokens_per_line()
-    chart_tokens_vs_lines()
+    chart_tokens_per_word()
+    chart_tokens_vs_words()
     chart_overview()
     chart_token_anatomy()
     chart_cumulative_cache()

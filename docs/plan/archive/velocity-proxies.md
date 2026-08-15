@@ -72,13 +72,13 @@ Every series above jumps at that boundary and none can separate the model from t
 The single Opus-5-on-`mac-1` day is one data point.
 
 What *is* separable is that the machine had a large, measured, model-independent effect.
-[`local-gate-throughput.md`](archive/local-gate-throughput.md) re-baselined the local gate on the replacement machine the week it arrived: a cold `make check` end to end went from ~21 min on the Intel i7 (4 cores / 32 GB) to **102 s** on the M5 Max (18 cores / 128 GB).
+[`local-gate-throughput.md`](local-gate-throughput.md) re-baselined the local gate on the replacement machine the week it arrived: a cold `make check` end to end went from ~21 min on the Intel i7 (4 cores / 32 GB) to **102 s** on the M5 Max (18 cores / 128 GB).
 A ~12× faster gate is not something a model does.
 [#1110](https://github.com/actions-gateway/github-actions-gateway/pull/1110) then sized the parallel-dispatch worker cap from RAM and cores rather than a constant (ceiling 12; a 16 GB laptop gets 1), so parallel capacity rose in two steps rather than one.
 
 So the defensible claim is: **output doubled where the model and the machine changed within a day of each other, and the machine's contribution to it is documented elsewhere in the repo even though this data cannot size it.**
 
-The current `tokens_by_model` caption in [`claude-usage/README.md`](../../claude-usage/README.md) says the jump is "the model and the plan".
+The current `tokens_by_model` caption in [`claude-usage/README.md`](../../../claude-usage/README.md) says the jump is "the model and the plan".
 The plan half is refuted by the table above.
 That caption is in scope for this change.
 
@@ -145,7 +145,7 @@ The new columns are git-derived and recomputed, so what needs covering is the pa
 
 ## Q824: the row's remedy is refuted, and words are the fix
 
-[Q824](../STATUS.md#Q824) proposes cumulative diff additions as the reformat-proof denominator.
+Q824 proposed cumulative diff additions as the reformat-proof denominator.
 Measured 2026-08-15 over `*.md`, that inverts the problem rather than fixing it: the reflow day adds **+28,250** lines against a normal 100–4,000, because unwrapping a paragraph rewrites every line in it.
 The current-tree series steps *down* 18.6k; the proposed remedy steps *up* 28.2k and, being cumulative, never comes back.
 
@@ -170,7 +170,7 @@ The `lines_vs_words` chart is what makes it decidable: cost per word rose ~5.6×
 
 ## Status
 
-Shipped 2026-08-15, except the denominator swap above.
+Shipped 2026-08-15.
 
 | item | state |
 |---|---|
@@ -183,4 +183,4 @@ Shipped 2026-08-15, except the denominator swap above.
 | `tokens_by_model` caption's refuted "the model and the plan" claim | ✅ |
 | "at the keyboard" corrected wherever it claimed human presence | ✅ |
 | Parser tests, verified red by deleting each guard | ✅ |
-| Replace tokens-per-line with tokens-per-word as the headline | ❌ open decision |
+| Replace tokens-per-line with tokens-per-word as the headline | ✅ 2026-08-15, closing Q824 |

@@ -95,7 +95,9 @@ The snapshots are announced as a quote-post chain (each post quotes the previous
 | Lines of Go (comments) | 2.3k | 4.2k | **41.6k** | git |
 | Markdown (non-blank) | 14.3k | 14.0k | **52.0k** | git |
 | YAML (hand-written) | 1.5k | 2.3k | **12.5k** | git |
-| Scripts & web (shell/Python/Make/Docker/CSS/JS) | — | — | **46.7k** | git |
+| Scripts & web (shell/Python/Make/Docker/CSS/JS) | — | — | **47.1k** | git |
+| **Words authored** (Go + docs + hand-written YAML + scripts) | — | — | **2.16M** | git |
+| **Tokens per word** | — | — | **274** | both |
 | Model mix | mostly Sonnet 4.6 | Sonnet 43% / Opus 57% | **Opus 5 48% / Opus 4.8 37% / Fable 7% / Sonnet 4% / Opus 4.7 3%** | transcripts |
 | Mean concurrent sessions | — | — | **3.0** (peak 16) | transcripts, since Jul 26 |
 | Hours using Claude (wall-clock) | — | — | **211.0h** → 640.8h session-time | transcripts, since Jul 26 |
@@ -125,7 +127,7 @@ Rendered to [`charts/`](charts/) at 1× and `@2x` (for upload).
 Each is regenerable from the CSVs.
 
 ### Overview: all three tokens/lines views together
-![Tokens vs lines, cost per line, and the lines composition on one timeline](charts/tokens_overview.png) The three tokens-vs-lines views combined into one shared-timeline figure: **(1)** magnitude — tokens vs lines authored on a log axis (gap = cost/line); **(2)** breakdown — what those lines are (the composition); **(3)** cost — cumulative tokens ÷ line, with the value at each weekly guide.
+![Tokens vs lines, cost per line, and the lines composition on one timeline](charts/tokens_overview.png) The three tokens-vs-lines views combined into one shared-timeline figure: **(1)** magnitude, tokens vs words authored on a log axis (gap = cost/word); **(2)** breakdown, what those words are; **(3)** cost, cumulative tokens ÷ word with the value at each weekly guide.
 Event lines run through all three panels (labelled along the bottom of panel 1).
 Where one crosses a value label it passes *behind* the digits and breaks around them, rather than striking through: the labels are drawn above the lines and cut them with their own white halo, so a gap in an event line at a number is the number winning, not a change of line style.
 The standalone versions follow below.
@@ -145,18 +147,20 @@ Machine lines are derived from the first row each machine reports, so a third ma
 They read "begins" rather than "joins" because the data can't tell a replacement from an addition: an old machine going quiet is not evidence it was retired.
 A label that would overlap one already placed drops a row instead, measured on the rendered figure: the two July markers shared a height comfortably at day 80 and collided at day 89, because every added day squeezes the timeline under a fixed figure width.
 
-### Tokens spent vs. lines authored (the magnitude)
-![Cumulative tokens far above cumulative lines authored, log scale](charts/tokens_vs_lines.png) Log y so both ends are visible at once: ~593M cumulative tokens ride well above ~228k lines authored (a linear axis crushes the lines to an invisible sliver).
-The gold-shaded gap between the two curves is the ~2,601 tokens/line; on a log axis a ratio is a vertical gap.
-"Lines authored" is all hand-written output: Go (code + tests), Markdown, hand-written YAML, and scripts & web; generated CRD YAML, binaries, and lockfiles excluded.
+### Tokens spent vs. words authored (the magnitude)
+![Cumulative tokens far above cumulative words authored, log scale](charts/tokens_vs_words.png) Log y so both ends are visible at once. ~593M cumulative tokens ride well above ~2.16M words authored; a linear axis crushes the smaller series to a sliver.
+The gold-shaded gap between the two curves is the ~274 tokens/word; on a log axis a ratio is a vertical gap.
+"Words authored" is all hand-written output: Go (code + tests), Markdown, hand-written YAML, and scripts & web, comments included; generated CRD YAML, binaries, and lockfiles excluded.
 The undistorted breakdown of those lines is in the next chart.
 
-### Tokens per line authored (the trend & the breakdown)
-![Cost per line over time above a stacked breakdown of the lines](charts/tokens_per_line.png) **Top:** cumulative tokens ÷ lines authored, by day (measured days only).
-It climbs from ~406 tokens/line in week one to ~2,601 by month three, each line costing ~6× more once the easy scaffolding is done and the work shifts to logic, tests, review, and debugging.
-**Bottom:** the denominator itself, decomposed — Go code, Go tests, Markdown docs, hand-written YAML, scripts & web.
-Its total height at any date *is* the divisor above, so "a line" is shown, not just named; tests and docs together dwarf non-test Go code.
-The grey dotted line on 2026-08-09 is the sentence-per-line reflow, which is why the Docs band notches down under it and the ratio above steps up: the same words on 18.6k fewer lines cost the same tokens, so roughly 200 of the ratio's climb past 2,400 is the reformat rather than the work.
+### Tokens per word authored (the trend & the breakdown)
+![Cost per word over time above a stacked breakdown of the words](charts/tokens_per_word.png) **Top:** cumulative tokens ÷ words authored, by day (measured days only).
+It climbs from ~56 tokens/word in week one to ~274 by month three, each word costing ~5× more once the easy scaffolding is done and the work shifts to logic, tests, review, and debugging.
+Unlike its per-line predecessor it then **plateaus** from mid-June, hovering in the 230–275 band rather than climbing all cycle.
+**Bottom:** the denominator itself, decomposed into Go, Markdown docs, hand-written YAML, and scripts & web.
+Its total height at any date *is* the divisor above, so "a word" is shown, not just named; docs alone very nearly match all of Go.
+There is no reflow marker on this chart, and that is the point of the switch: the 2026-08-09 reformat moved lines and not words, so neither the band nor the ratio above it notices.
+The marker now appears only where a lines series is drawn, following the same rule the other event markers do.
 
 ### Work shipped, on proxies a reformat can't move
 ![PRs merged, tests added, backlog rows closed per day, and when work landed](charts/velocity.png) Tokens are an input and lines carry the reflow, so neither is a velocity series.
@@ -183,18 +187,20 @@ No trend line is drawn inside them.
 **Panel 4 is not hours worked.** Sessions run unattended and keep committing with nobody watching, and merges get cleared in bulk, so it shows when work *landed* rather than when anyone was present.
 Its bars and their trend cover the whole project; the commits-per-hour line starts later, because its numerator is `commits` and that series changes units at the PR-workflow switch.
 
-### Lines vs. words, the same corpus in two units
-![Docs and cost ratios in lines and in words, log scale](charts/lines_vs_words.png) A rewrap moves every line count that spans a paragraph and leaves the words alone, which is what makes this pair readable.
+### Why the headline is words, not lines
+![Docs and cost ratios in lines and in words, log scale](charts/lines_vs_words.png) This is the chart that retires the per-line ratio.
+A rewrap moves every line count that spans a paragraph and leaves the words alone, so a per-line cost figure carries any reformat the project ever does.
 On the reflow day Markdown went **−17,574 lines and +15,098 words**.
 The line series reads as a catastrophe, the word series as an ordinary productive day.
 
 Log y, absolute counts, the same choice the tokens-vs-lines chart makes: words outnumber lines about 17 to 1, so a linear axis leaves the smaller series a sliver.
 **Top:** the docs corpus in each unit, with the shaded gap between them being the words-per-line ratio, since on a log axis a ratio is a vertical gap.
 **Bottom:** cumulative tokens ÷ line against tokens ÷ word.
-Only the per-line ratio steps on 2026-08-09.
+Only the per-line ratio steps on 2026-08-09, which is why the headline is now the other one.
+Words are also the unit closest to a token, which makes the ratio a comparison between two counts of the same kind rather than a count against a layout choice.
 The gap in the top panel is where the mechanism shows: sentence-per-line put the same words on fewer lines, so words per line went from 12.2 to 16.9 overnight and the band visibly widens.
 
-The underlying climb is real in both units, which is the more interesting finding: cost per word still rose ~5.6× over the project, so the tokens-per-line trend is not an artifact; only the 2026-08-09 jump in it is ([Q824](../docs/STATUS.md#Q824)).
+The underlying climb is real in both units, which is the more interesting finding: cost per word still rose ~5.6× over the project, so the tokens-per-line trend is not an artifact; only the 2026-08-09 jump in it is.
 
 ### Anatomy of token usage (log scale)
 ![Token usage anatomy on a log scale](charts/token_anatomy.png) Daily input / output / cache-creation / cache-read, log Y. Cache reads sit an order of magnitude above everything else, every day.
@@ -246,7 +252,8 @@ All exclude `vendor/`.
 
 Also cumulative: `prs` (commits whose subject ends in `(#N)`, this repo's squash-merge signature) and `queue_closed` (Q anchors that have left `docs/STATUS.md`, counted on a row's *first* removal so a re-filed id can't book the same work twice; a work proxy rather than a completion ledger, since it catches a declined or pruned row too).
 
-`md_words` and `words` are tree snapshots like the line counts above, in the other unit: `md_words` counts the same text as `md`, and `words` the same corpus as lines-authored.
+`go_words`, `md_words`, `yaml_words`, `scripts_words` and their sum `words` are tree snapshots like the line counts above, in the other unit, one per band so the cost ratio's denominator decomposes the same way.
+`yaml_words` applies the same generated-file exclusion `yaml` does; counting the CRDs would have diluted the headline ratio by a third.
 Both include comment text, so `words` is not the line total converted: it is the corpus with nothing subtracted.
 They exist because a rewrap moves a line count and leaves a word count alone.
 
@@ -299,10 +306,12 @@ Totals split into `measured` / `estimated` / `combined` (summed from the persist
   It is the same defect as the reflow, pointed the other way.
   `commits` stays in the CSV because the per-hour ratio needs a numerator; the velocity chart draws `prs` instead and shades the region where that series cannot mean what its axis says.
   The ratio inherits the same defect and is cut at the same date: measured 2026-08-15, commits per hour-with-a-commit averages 3.39 before the switch and 2.32 after, a 32% apparent drop that is entirely the unit changing.
-- **Tokens-per-line is a proxy.** The denominator is all hand-authored output — Go (code + tests), Markdown, hand-written YAML, and scripts & web (shell, Python, Make/Docker, CSS/JS) — but tokens also go into review, debugging, and exploration that never lands as a line, so the ratio tracks overall effort-per-output, not the literal cost of one line.
+- **Tokens-per-word is a proxy, and it rewards length.** The denominator is all hand-authored output (Go code and tests, Markdown, hand-written YAML, and scripts & web, comments included), but tokens also go into review, debugging, and exploration that never lands as a word, so the ratio tracks overall effort-per-output, not the literal cost of one word.
+  Its honest weakness is the one in the old saw about writing a shorter letter given more time: prose or code cut to say the same thing in fewer words scores as *less* output, so a session spent tightening reads as expensive.
+  It replaced tokens-per-line on 2026-08-15 because a line is a layout choice and a word is not; the retired ratio is kept beside it in the lines-vs-words chart.
   Generated YAML (CRDs/controller-gen, ~130k lines), binaries, lockfiles, and license boilerplate are excluded so non-authored content doesn't dilute it.
   Estimated (pre-transcript) days are excluded so it's measured-only.
-  The denominator is also the current tree rather than everything ever written, so a pure reformat moves the ratio: the 2026-08-09 sentence-per-line reflow lifted it ~8% on no extra spend ([Q824](../docs/STATUS.md#Q824)).
+  The denominator is still the current tree rather than everything ever written, so deleted work stops counting; what it no longer does is move on a reformat.
 - **Neither plan ceiling is in this data, and the binding one was never the weekly.** Both upgrades (Pro→Max 5x, Max 5x→20x) were made because the **5-hour rolling limit** was being hit; the weekly allowance only started binding much later, first running to 99% in the window that reset on 2026-08-10.
   Nothing in the transcripts records either: every `rateLimits` field they carry is null, and both meters cover every project on the account while these CSVs cover one.
   So a flat reading across an upgrade date is not evidence the upgrade did nothing.
