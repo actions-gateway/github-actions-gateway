@@ -2832,6 +2832,14 @@
 <td>Three sightings in two days: #1505, #1527, #1531, each denying a create over disjoint hunks and costing a manual <code>git merge-tree</code> plus an override. <code>prOverlapWarning</code> intersects path sets only; line ranges need a per-PR diff fetch.</td>
 </tr>
 <tr>
+<td><a id="Q867"></a>Q867</td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/devtools/docs/metrictiers/values.go">Refute a single-tier series claim with the label-value origins the derivation already has</a></td>
+<td><code>ci</code> <code>docs</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>Measured 2026-08-14: marking <code>message_poll_errors_total</code> Classic only passes, because <code>checkContradiction</code> reads emission sites and the scale-set tier reaches it through an adapter. Q851's value origins name <code>scalesetlistener</code> and would refute it.</td>
+</tr>
+<tr>
 <td><a id="Q863"></a>Q863</td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/Dockerfile">A <code>docker buildx</code> base-image pull has no retry, so one registry 403 fails an image build</a></td>
 <td><code>flake</code> <code>ci</code></td>
@@ -2854,14 +2862,6 @@
 <td>🔲</td>
 <td>S</td>
 <td>Measured 2026-08-14: <code>heartbeat</code> stayed null for the whole 22-minute e2e leg of a passing run, so the only in-flight signal was absent and the sentinel reported a stall it was right to report. The run record answers when the log will not.</td>
-</tr>
-<tr>
-<td><a id="Q851"></a>Q851</td>
-<td><a href="../operations/observability-metrics/#acquisition-tier-reach">Take the acquisition-tier ledger to label-value granularity</a></td>
-<td><code>1.5-gate</code> <code>ci</code> <code>docs</code></td>
-<td>🔲</td>
-<td>M</td>
-<td>Measured 2026-08-14: <code>eviction_retries_total</code> reads Both while <code>cause="vanished"</code> is scale-set-only, and <code>abandoned_run_force_cancels_total</code> reads Both while <code>outcome="identity_unknown"</code> is unreachable there. The gate sees series, not values.</td>
 </tr>
 <tr>
 <td><a id="Q853"></a>Q853</td>

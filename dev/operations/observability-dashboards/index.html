@@ -2885,7 +2885,7 @@ Labelled by <code>runner_set</code> (not <code>runner_group</code>), so the <cod
 <tr>
 <td>Worker pods reaped/s (by reason)</td>
 <td><code>sum by (namespace, runner_set, reason) (rate(actions_gateway_worker_pods_reaped_total{runner_set!=""}[5m]))</code></td>
-<td>Time series — the reaper counter's scale-set series (Q514), joinable with the capacity gauges above on <code>(namespace, runner_set)</code></td>
+<td>Time series — the reaper counter's per-<code>RunnerSet</code> series (Q514), joinable with the capacity gauges above on <code>(namespace, runner_set)</code>. The label keys on the owning kind, so a Classic-protocol <code>RunnerSet</code> appears here too</td>
 </tr>
 </tbody>
 </table>

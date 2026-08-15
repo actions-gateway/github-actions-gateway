@@ -2103,6 +2103,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Acquisition-tier reach">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#label-value-reach" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Label-value reach
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -2860,6 +2877,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Acquisition-tier reach">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#label-value-reach" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Label-value reach
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -3062,7 +3096,7 @@ For SLO targets, see <a href="../../design/appendix-a-capacity-slos/">Appendix A
 <td><code>actions_gateway_job_acquisition_errors_total</code></td>
 <td>Counter</td>
 <td><code>namespace</code>, <code>reason</code></td>
-<td>Acquisition failures. Reason values: <code>already_claimed</code> (benign race), <code>delivery_window_expired</code> (job redelivered), <code>version_too_old</code>, <code>other</code>. An <code>acquirejob</code> failure also emits a <code>JobAcquisitionFailed</code> Warning Event on the owning <code>RunnerGroup</code>/<code>RunnerSet</code> (Q170).</td>
+<td>Acquisition failures. Reason values: <code>already_claimed</code> (benign race), <code>delivery_window_expired</code> (job redelivered), <code>version_too_old</code>, <code>acquirejob_failed</code> (the call itself was refused or errored), <code>other</code>. An <code>acquirejob</code> failure also emits a <code>JobAcquisitionFailed</code> Warning Event on the owning <code>RunnerGroup</code>/<code>RunnerSet</code> (Q170).</td>
 </tr>
 <tr>
 <td><code>actions_gateway_job_duration_seconds</code></td>
@@ -3158,7 +3192,7 @@ For SLO targets, see <a href="../../design/appendix-a-capacity-slos/">Appendix A
 <td><code>actions_gateway_worker_pods_reaped_total</code></td>
 <td>Counter</td>
 <td><code>namespace</code>, <code>runner_group</code>, <code>runner_set</code>, <code>reason</code></td>
-<td>Worker pods the AGC deleted — the lifecycle reaper's five reasons, plus the job-abandoned reclaim. <code>runner_group</code> carries the owning CR's name on <strong>both</strong> acquisition tiers (a <code>RunnerSet</code>'s reaps land there too, unchanged, so existing <code>runner_group</code>-keyed queries keep working); <code>runner_set</code> additionally carries the set name on scale-set reaps and is empty on classic ones (added in Q514), so the reap series join the <a href="#scale-set-acquisition-tier-q264"><code>runner_set</code>-labelled <code>scaleset_*</code> gauges</a> on <code>(namespace, runner_set)</code> — filter with <code>{runner_set!=""}</code> for the scale-set-only view. <code>reason="completed_ttl"</code> is routine cleanup after <code>completedPodTTL</code>; <code>reason="pending_deadline"</code> means a pod was stuck Pending past <code>pendingPodDeadline</code> and its job was cancelled — each such reap also emits a <code>WorkerPodStuckPending</code> Warning Event on the RunnerGroup. <code>reason="completed_pending"</code> means a pod was still Pending thirty seconds after GitHub reported its job terminal — the job ended before the pod could start, so the pod had nothing to run and (on the scale-set tier) no longer has the JIT-config Secret it mounts — and emits a <code>WorkerPodCompletedPending</code> Warning Event; it is deliberately distinct from <code>pending_deadline</code>, which would send you after a scheduling problem that does not exist; see the <a href="../troubleshooting/#worker-pod-reaped-while-pending-after-its-job-completed-workerpodcompletedpending">runbook</a>. <code>reason="orphaned_running"</code> means a pod was still Running five minutes after GitHub reported its job terminal — a ScaleSet worker that registered but never received its job, or a pod held open by a container that outlived the runner — and emits a <code>WorkerPodOrphanedRunning</code> Warning Event; see the <a href="../troubleshooting/#worker-pod-reaped-while-running-workerpodorphanedrunning">runbook</a>. <code>reason="lifetime_exceeded"</code> means the kubelet killed the pod for outliving <code>maxWorkerLifetime</code> (default 12h, the pod's <code>activeDeadlineSeconds</code>) and emits a <code>WorkerPodLifetimeExceeded</code> Warning Event — the unconditional backstop for a worker orphaned while the AGC was down, and the one reap reason that fires with no AGC running; see the <a href="../troubleshooting/#worker-killed-by-the-lifetime-cap-workerpodlifetimeexceeded">runbook</a>. <code>reason="gateway_deleted"</code> means the pod's <code>ActionsGateway</code> is being deleted: the AGC is the pods' only reaper and is torn down with the gateway, so it stops acquiring and deletes them itself rather than strand them — any job they were running is lost, and a single <code>WorkerPodsReapedOnGatewayTeardown</code> Warning Event names the count; see the <a href="../troubleshooting/#worker-pods-reaped-on-gateway-teardown-workerpodsreapedongatewayteardown">runbook</a>. <code>reason="job_abandoned"</code> is the one non-reaper source: the classic-tier provisioner reclaiming the worker of a job whose lock was definitively lost, immediately after the matching <code>renew_job_teardowns_total</code> increment — it should track that counter, and see the <a href="../troubleshooting/#renewjob-failures-rising">runbook</a>.</td>
+<td>Worker pods the AGC deleted — the lifecycle reaper's five reasons, plus the job-abandoned reclaim. <code>runner_group</code> carries the owning CR's name on <strong>both</strong> acquisition tiers (a <code>RunnerSet</code>'s reaps land there too, unchanged, so existing <code>runner_group</code>-keyed queries keep working); <code>runner_set</code> additionally carries the set name on every v2 <code>RunnerSet</code>'s reaps and is empty for a v1 <code>RunnerGroup</code> (added in Q514), so the reap series join the <a href="#scale-set-acquisition-tier-q264"><code>runner_set</code>-labelled <code>scaleset_*</code> gauges</a> on <code>(namespace, runner_set)</code> — filter with <code>{runner_set!=""}</code> for the v2 view. The label keys on the owning kind, not on the acquisition protocol, so a <code>RunnerSet</code> running <code>acquisitionProtocol: Classic</code> carries it too; <code>{runner_set!=""}</code> is therefore not a scale-set filter. <code>reason="completed_ttl"</code> is routine cleanup after <code>completedPodTTL</code>; <code>reason="pending_deadline"</code> means a pod was stuck Pending past <code>pendingPodDeadline</code> and its job was cancelled — each such reap also emits a <code>WorkerPodStuckPending</code> Warning Event on the RunnerGroup. <code>reason="completed_pending"</code> means a pod was still Pending thirty seconds after GitHub reported its job terminal — the job ended before the pod could start, so the pod had nothing to run and (on the scale-set tier) no longer has the JIT-config Secret it mounts — and emits a <code>WorkerPodCompletedPending</code> Warning Event; it is deliberately distinct from <code>pending_deadline</code>, which would send you after a scheduling problem that does not exist; see the <a href="../troubleshooting/#worker-pod-reaped-while-pending-after-its-job-completed-workerpodcompletedpending">runbook</a>. <code>reason="orphaned_running"</code> means a pod was still Running five minutes after GitHub reported its job terminal — a ScaleSet worker that registered but never received its job, or a pod held open by a container that outlived the runner — and emits a <code>WorkerPodOrphanedRunning</code> Warning Event; see the <a href="../troubleshooting/#worker-pod-reaped-while-running-workerpodorphanedrunning">runbook</a>. <code>reason="lifetime_exceeded"</code> means the kubelet killed the pod for outliving <code>maxWorkerLifetime</code> (default 12h, the pod's <code>activeDeadlineSeconds</code>) and emits a <code>WorkerPodLifetimeExceeded</code> Warning Event — the unconditional backstop for a worker orphaned while the AGC was down, and the one reap reason that fires with no AGC running; see the <a href="../troubleshooting/#worker-killed-by-the-lifetime-cap-workerpodlifetimeexceeded">runbook</a>. <code>reason="gateway_deleted"</code> means the pod's <code>ActionsGateway</code> is being deleted: the AGC is the pods' only reaper and is torn down with the gateway, so it stops acquiring and deletes them itself rather than strand them — any job they were running is lost, and a single <code>WorkerPodsReapedOnGatewayTeardown</code> Warning Event names the count; see the <a href="../troubleshooting/#worker-pods-reaped-on-gateway-teardown-workerpodsreapedongatewayteardown">runbook</a>. <code>reason="job_abandoned"</code> is the one non-reaper source: the classic-tier provisioner reclaiming the worker of a job whose lock was definitively lost, immediately after the matching <code>renew_job_teardowns_total</code> increment — it should track that counter, and see the <a href="../troubleshooting/#renewjob-failures-rising">runbook</a>.</td>
 </tr>
 <tr>
 <td><code>actions_gateway_worker_scaleup_throttled_total</code></td>
@@ -3839,6 +3873,74 @@ Neither binary acquires jobs, so neither has a tier.</p>
 <td><code>actions_gateway_build_info</code></td>
 <td>Tier-neutral</td>
 <td>Build metadata of the running binary.</td>
+</tr>
+</tbody>
+</table>
+<h3 id="label-value-reach">Label-value reach<a class="headerlink" href="#label-value-reach" title="Permanent link">&para;</a></h3>
+<p>A series can be <strong>Both</strong> while one of its label values is not. <code>actions_gateway_eviction_retries_total</code> populates on either tier, and <code>cause="vanished"</code> only ever comes from a scale-set set, so a query filtered to that value reads a permanent zero on classic, and the row above says the opposite.</p>
+<p>Each row here records one such exception.
+The <a href="../../development/testing/#the-make-check-pre-review-gate">gate</a> derives the values each series emits from the AGC source and fails when one it can prove single-tier has no row, when a row is refuted by where the source names its value, and when the <code>Help</code> text an operator scrapes off <code>/metrics</code> has fallen behind the vocabulary the code emits.</p>
+<p>Only the two single-tier answers appear here: a value that reaches both tiers needs no row, and the <code>tier</code> label is the axis itself rather than a value on it.
+Where the file layout cannot prove the claim, because the value is named in a file both tiers run and a guard is what keeps one of them away from it, the row cites the guard, and the gate holds that citation to a real source file.</p>
+<table>
+<thead>
+<tr>
+<th>Metric</th>
+<th>Label</th>
+<th>Value</th>
+<th>Tier</th>
+<th>Why, and what the other tier counts instead</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>actions_gateway_eviction_retries_total</code></td>
+<td><code>cause</code></td>
+<td><code>vanished</code></td>
+<td>Scale-set only</td>
+<td>Names a worker already gone when the AGC started, recovered off the run identity the listener persisted rather than off the pod (Q844). The classic tier's acquiring goroutine holds the payload in process, so it never loses the worker unobserved and has no such recovery to count.</td>
+</tr>
+<tr>
+<td><code>actions_gateway_eviction_retries_exhausted_total</code></td>
+<td><code>cause</code></td>
+<td><code>vanished</code></td>
+<td>Scale-set only</td>
+<td>As above: the exhausted arm of the same recovery.</td>
+</tr>
+<tr>
+<td><code>actions_gateway_eviction_rerun_failures_total</code></td>
+<td><code>cause</code></td>
+<td><code>vanished</code></td>
+<td>Scale-set only</td>
+<td>As above: the re-run-refused arm of the same recovery.</td>
+</tr>
+<tr>
+<td><code>actions_gateway_abandoned_run_force_cancels_total</code></td>
+<td><code>outcome</code></td>
+<td><code>identity_unknown</code></td>
+<td>Classic only</td>
+<td>The scale-set arm resolves the run identity off the worker pod <em>before</em> it force-cancels, and returns early when the pod carries none (<code>cmd/agc/internal/provisioner/abandoned_scaleset.go</code>), counting <code>actions_gateway_eviction_recovery_identity_unknown_total{cause="abandoned"}</code> instead. The two counters stay disjoint, so read that series for this failure on a scale-set set.</td>
+</tr>
+<tr>
+<td><code>actions_gateway_worker_pods_reaped_total</code></td>
+<td><code>reason</code></td>
+<td><code>completed_pending</code></td>
+<td>Scale-set only</td>
+<td>The arm reads the job-completion annotation the reaper tests in <code>cmd/agc/internal/controller/runner_shared.go</code>, and only the scale-set cleanup path stamps it; the classic tier's <code>provision()</code> goroutine owns its pod through to a terminal phase (Q420). An unstamped classic pod falls to <code>pending_deadline</code>.</td>
+</tr>
+<tr>
+<td><code>actions_gateway_worker_pods_reaped_total</code></td>
+<td><code>reason</code></td>
+<td><code>orphaned_running</code></td>
+<td>Scale-set only</td>
+<td>Same annotation, same guard in <code>cmd/agc/internal/controller/runner_shared.go</code>: a classic pod is never stamped, so it is never found still Running past its job's end. The classic tier reclaims that shape through the renew loop as <code>job_abandoned</code>.</td>
+</tr>
+<tr>
+<td><code>actions_gateway_worker_pods_reaped_total</code></td>
+<td><code>reason</code></td>
+<td><code>job_abandoned</code></td>
+<td>Classic only</td>
+<td>The reclaim fires only when the job context was cancelled with the classic renew loop's sentinel (<code>cmd/agc/internal/provisioner/completion.go</code>). The scale-set tier has no renew loop, since the runner renews its own job, so worker loss there surfaces through the reap and eviction-recovery series instead.</td>
 </tr>
 </tbody>
 </table>
