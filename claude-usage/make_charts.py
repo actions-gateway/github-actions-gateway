@@ -1103,16 +1103,29 @@ def chart_velocity_quality():
             except (ValueError, KeyError):
                 continue
         pd = sorted(byday)
-        med = [sorted(byday[d])[len(byday[d]) // 2] for d in pd]
         pxs = [dparse(d) for d in pd]
-        b2.bar(pxs, med, width=0.72, color=OI["skyblue"], alpha=0.5, edgecolor="white",
-               linewidth=0.4, zorder=3)
-        tr = rolling_mean(med)
-        seg = [(x, v) for x, v in zip(pxs, tr) if v is not None]
-        b2.plot([x for x, _ in seg], [v for _, v in seg], color=darken(OI["skyblue"]),
-                lw=2.6, zorder=5, path_effects=HALO)
-        b2.set_ylabel("hours, daily median", fontsize=10.5)
-        b2.set_title("Pull request cycle time — the remote loop, not the local gate",
+
+        def pct(vals, q):
+            v = sorted(vals)
+            return v[min(int(len(v) * q), len(v) - 1)]
+
+        # Two percentiles rather than a median, because they answer different
+        # questions and the median blends them. Merging needs a human to enqueue,
+        # so a PR opened while nobody is at the machine waits however long that
+        # lasts: the p99 reaches 34h and 90h in the earlier eras. The low
+        # percentile is the part availability cannot stretch, so it stands in for
+        # loop speed; the high one is mostly a record of being away.
+        for q, col, lab in ((0.25, OI["skyblue"], "p25, the loop when someone is there"),
+                            (0.90, OI["purple"], "p90, mostly time away from the machine")):
+            series = [pct(byday[d], q) for d in pd]
+            tr = rolling_mean(series)
+            seg = [(x, v) for x, v in zip(pxs, tr) if v is not None]
+            b2.plot([x for x, _ in seg], [v for _, v in seg], color=darken(col),
+                    lw=2.6, zorder=5, path_effects=HALO, label=lab)
+        b2.set_yscale("log")
+        b2.legend(loc="upper left", fontsize=9, frameon=False)
+        b2.set_ylabel("hours (log scale)", fontsize=10.5)
+        b2.set_title("Pull request open to merge — availability-bound, not a speed measure",
                      fontsize=12.5, fontweight="bold", loc="left")
 
     # --- durability: does a week's code outlive its first fortnight ---
@@ -1157,9 +1170,9 @@ def chart_velocity_quality():
     stagger_labels(fig, [t for t in labels if t is not None], 0.13)
 
     fig.text(0.012, 0.004,
-             "cycle time is open-to-merge, so it measures GitHub Actions and the merge queue, "
-             "not the local gate · survival is a fixed 14-day horizon, so weeks are comparable "
-             "and a week's value is final once it passes",
+             "open-to-merge includes waiting for a human to enqueue, so it tracks availability "
+             "at least as much as speed · survival is a fixed 14-day horizon, so weeks are "
+             "comparable and a week's value is final once it passes",
              fontsize=7.5, color="#999")
     save(fig, "velocity_quality")
 
