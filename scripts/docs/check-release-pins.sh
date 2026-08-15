@@ -91,8 +91,28 @@ fi
 release_version="${release_tag#v}"
 release_minor="${release_version%.*}"
 
-printf 'check-release-pins: current release %s (chart version %s), from %s\n' \
-    "$release_tag" "$release_version" "$tag_source"
+# A release with a candidate tagged and no stable tag yet may be pinned in
+# advance, so the bump can land BEFORE the tag. The site builds each version from
+# its own tag, so a bump landing after it never reaches that release's published
+# page — which is how three of the four releases since 1.0.0 published the
+# previous version's install command as their landing page.
+#
+# Both versions are accepted while a candidate is outstanding rather than only
+# the prepared one: requiring the bump the instant an RC is tagged would redden
+# main during the freeze, which is the same problem moved earlier. What forces
+# the bump is the pre-tag check in the release runbook, where being wrong is
+# still cheap; this gate's job is catching a genuinely stale pin.
+prepared_tag="$(resolve_prepared_release "$repo_root")"
+prepared_version="${prepared_tag#v}"
+prepared_minor="${prepared_version%.*}"
+
+if [[ -n "$prepared_tag" ]]; then
+    printf 'check-release-pins: current release %s (chart version %s), from %s; %s is prepared and may be pinned early\n' \
+        "$release_tag" "$release_version" "$tag_source" "$prepared_tag"
+else
+    printf 'check-release-pins: current release %s (chart version %s), from %s\n' \
+        "$release_tag" "$release_version" "$tag_source"
+fi
 
 fail=0
 total=0
@@ -109,12 +129,16 @@ for f in "${pin_files[@]}"; do
         if [[ "$kind" == "patchline" ]]; then
             want="${release_minor}.z"
             [[ "${tok#v}" == "$want" ]] && continue
-            printf "check-release-pins: %s:%s: patch-line hint \`%s\` names an old release; the current line is \`%s\`\n" \
-                "$rel" "$line_no" "$tok" "$want" >&2
+            [[ -n "$prepared_tag" && "${tok#v}" == "${prepared_minor}.z" ]] && continue
+            printf "check-release-pins: %s:%s: patch-line hint \`%s\` names an old release; the current line is \`%s\`%s\n" \
+                "$rel" "$line_no" "$tok" "$want" \
+                "${prepared_tag:+ (or \`${prepared_minor}.z\` for the prepared ${prepared_tag})}" >&2
         else
             [[ "${tok#v}" == "$release_version" ]] && continue
-            printf 'check-release-pins: %s:%s: pins %s, but the current release is %s\n' \
-                "$rel" "$line_no" "$tok" "$release_tag" >&2
+            [[ -n "$prepared_tag" && "${tok#v}" == "$prepared_version" ]] && continue
+            printf 'check-release-pins: %s:%s: pins %s, but the current release is %s%s\n' \
+                "$rel" "$line_no" "$tok" "$release_tag" \
+                "${prepared_tag:+ (or ${prepared_tag}, prepared)}" >&2
         fi
         fail=1
     done < <(release_version_literals "$f")
