@@ -2756,6 +2756,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#re-deriving-the-highlight-claims-2026-08-15-q876" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Re-deriving the highlight claims, 2026-08-15 (Q876)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#candidates-not-yet-accepted" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3149,6 +3160,46 @@ The <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main
 Q849 had made that untrue four commits earlier, on the same day the notes were last touched.
 The upgrade note in <code>docs/operations/upgrade.md</code> was correct throughout; only the release notes were stale, which is the direction that reaches an adopter first and is checked last.</p>
 <p>That is the same shape as the <a href="#the-stable-tag-pre-flight-2026-08-14">stable-tag pre-flight's</a> under-claim, one release surface over, and it is the argument for re-running the notes interrogation at <strong>every</strong> candidate rather than only the first: the notes go stale against the product between candidates, and nothing gates prose.</p>
+<h2 id="re-deriving-the-highlight-claims-2026-08-15-q876">Re-deriving the highlight claims, 2026-08-15 (Q876)<a class="headerlink" href="#re-deriving-the-highlight-claims-2026-08-15-q876" title="Permanent link">&para;</a></h2>
+<p>Every claim in the six <code>v1.5.0</code> highlights, checked against the code it describes rather than against a neighbouring doc.
+Q876 was admitted because one of the six had been inverted on both halves and survived a full pre-flight and <code>rc.1</code>; the other five had never been checked, and #1542 rewrote the section again afterwards.</p>
+<p><strong>One defect, and it was a number rather than a direction.</strong> The acquisition-tier ledger claim read <em>53 series, 26 both tiers</em>.
+The gated ledger holds <strong>54 and 27</strong>: Q811 added <code>eviction_rerun_withheld_total</code>, tiered Both, after the figure was written.
+It appeared twice, in the highlight and in the API-surface section, and the arithmetic stayed self-consistent in both places (26+16+10+1 = 53), which is why nothing caught it — a stale total and a stale addend move together.</p>
+<p>The other five hold, and the mechanisms behind them are where the checking went:</p>
+<table>
+<thead>
+<tr>
+<th>Claim</th>
+<th>Re-derived from</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>An unresolvable runner group fails closed rather than falling back</td>
+<td><code>scalesetlistener/listener.go:765</code> returns <code>ErrRunnerGroupNotFound</code> on <code>!ok</code>; the default-ID return above it is reached only by an <em>undeclared</em> group, which is the documented widening-is-explicit case</td>
+</tr>
+<tr>
+<td>An adopted scale set is moved into its declared group</td>
+<td><code>listener.go:798-810</code>, which reads the adopted set's group and moves it</td>
+</tr>
+<tr>
+<td><code>job_duration_seconds</code> blast radius: two SLOs, one severity-critical alert, four recording rules, both dashboards</td>
+<td>Four recording rules across the two series, and two alerts referencing them of which exactly one is <code>severity: critical</code> (<code>ActionsGatewayPodCreationLatencyP99</code>; the P95 is <code>warning</code>), so the singular is right. Two dashboard files.</td>
+</tr>
+<tr>
+<td>A run whose pod is gone at startup is re-run</td>
+<td><code>recoverOrphanedScaleSetWorkers</code> runs "once per process" over pods "already gone when this process started"</td>
+</tr>
+<tr>
+<td><code>ScaleSet</code> is the only tier <code>v2beta1</code> exposes</td>
+<td><code>api/v2beta1/runnerset_types.go</code> carries no <code>AcquisitionProtocol</code> at all, against seven references in <code>v2alpha1</code></td>
+</tr>
+</tbody>
+</table>
+<p><strong>What this says about the counts, and the reason the row was worth its cost.</strong> Every wrong number in this release has been a <em>derived</em> one going stale, not a mistyped one: the ledger figure here, the 120-commits and 9-shipped figures #1542 re-derived, and the <code>features.md</code> entry that outgrew its word cap.
+The gates hold the ledger to the source and the notes to nothing, so a figure copied out of a gated artifact is correct exactly until that artifact moves.
+Re-deriving at the tag is what closes that window, and it is cheap enough to repeat.</p>
 <h2 id="candidates-not-yet-accepted">Candidates not yet accepted<a class="headerlink" href="#candidates-not-yet-accepted" title="Permanent link">&para;</a></h2>
 <p>Held here so the reasoning is not lost, not committed to the release:</p>
 <ul>
