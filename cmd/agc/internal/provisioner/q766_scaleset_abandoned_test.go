@@ -40,6 +40,9 @@ type githubCalls struct {
 
 func (g *githubCalls) handler(status int) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		if answeredRunConclusion(w, r, runConcludedFailure) {
+			return
+		}
 		g.mu.Lock()
 		switch {
 		case strings.HasSuffix(r.URL.Path, "/force-cancel"):

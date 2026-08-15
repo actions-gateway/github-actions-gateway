@@ -97,6 +97,9 @@ func recoveryFixtureWith(t *testing.T, ic interceptor.Funcs, pods ...*corev1.Pod
 	rerunCount := &atomic.Int64{}
 	paths := make(chan string, 8)
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if answeredRunConclusion(w, r, runConcludedFailure) {
+			return
+		}
 		rerunCount.Add(1)
 		select {
 		case paths <- r.URL.Path:

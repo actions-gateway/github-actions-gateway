@@ -79,6 +79,19 @@ type Metrics struct {
 	// (GitHub still answered "This workflow is already running" when the re-run
 	// window closed) versus api_error (a terminal API failure).
 	EvictionRerunFailures *prometheus.CounterVec
+	// EvictionRerunWithheld counts disruption recoveries that deliberately did not ask
+	// GitHub to re-run, because doing so would undo a decision GitHub already recorded
+	// (Q811). Split by reason: run_cancelled (the run concluded `cancelled`, which
+	// rerun-failed-jobs accepts, so the graceful-deletion arm would re-queue a job a
+	// human stopped — the cancel runbook's own remedy for a worker that will not stop is
+	// to delete its pod, which supplies the deletion mark that arm keys on).
+	//
+	// Like EvictionRerunFailures it accompanies a spent budget slot: the reservation is
+	// taken at detection, minutes before GitHub concludes the run, so the conclusion
+	// cannot be read before the slot is claimed. Unlike it, this is the correct outcome
+	// and needs no operator action — it is counted so a re-run that did not happen is
+	// visible rather than indistinguishable from a recovery that never armed.
+	EvictionRerunWithheld *prometheus.CounterVec
 	// AbandonedRunForceCancels counts the provisioner's REST force-cancels of a run
 	// whose worker pod was removed before it ran (Q683). Nothing will ever report
 	// such a job — no completejob value ends it honestly (Q645/Q676) — and told
@@ -239,7 +252,12 @@ func NewMetrics() *Metrics {
 
 		EvictionRerunFailures: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: "actions_gateway_eviction_rerun_failures_total",
-			Help: "Disruption recoveries whose re-run was never accepted by GitHub, so the job requires a manual re-run despite the spent retry slot, by acquisition tier (classic, scaleset), cause (eviction, preemption, deletion, abandoned, vanished), and reason (run_never_concluded, api_error). cause=vanished is scale-set only, as above.",
+			Help: "Disruption recoveries whose re-run was never accepted by GitHub, so the job requires a manual re-run despite the spent retry slot, by acquisition tier (classic, scaleset), cause (eviction, preemption, deletion, abandoned, vanished), and reason (run_never_concluded, api_error, conclusion_unknown). cause=vanished is scale-set only, as above; reason=conclusion_unknown is the deletion arm only, whose cancel check never reached a verdict inside the window.",
+		}, []string{"namespace", "runner_group", "tier", "cause", "reason"}),
+
+		EvictionRerunWithheld: prometheus.NewCounterVec(prometheus.CounterOpts{
+			Name: "actions_gateway_eviction_rerun_withheld_total",
+			Help: "Disruption recoveries that deliberately did not ask GitHub to re-run, by acquisition tier (classic, scaleset), cause (deletion), and reason (run_cancelled: the run concluded cancelled, so a re-run would undo a human's cancel — Q811). The retry slot is spent, but no operator action is needed.",
 		}, []string{"namespace", "runner_group", "tier", "cause", "reason"}),
 
 		AbandonedRunForceCancels: prometheus.NewCounterVec(prometheus.CounterOpts{
@@ -326,6 +344,7 @@ func NewMetrics() *Metrics {
 		m.EvictionRetries,
 		m.EvictionRetriesExhausted,
 		m.EvictionRerunFailures,
+		m.EvictionRerunWithheld,
 		m.AbandonedRunForceCancels,
 		m.AbandonedRunRerunWaits,
 		m.EvictionRecoveryIdentityUnknown,

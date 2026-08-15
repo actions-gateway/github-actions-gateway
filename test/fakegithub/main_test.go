@@ -834,8 +834,10 @@ func TestRerunFailedJobsIsRecordedAndScoped(t *testing.T) {
 	}
 
 	// An unimplemented /repos endpoint must still 404 rather than be silently
-	// counted as a rerun.
-	resp, err := http.Get(main.URL + "/repos/o/r/actions/runs/4210")
+	// counted as a rerun. The run itself is served since Q811, so this probes a
+	// sub-resource that is not: the point is that an unserved path answers 404,
+	// not that this particular one is unserved.
+	resp, err := http.Get(main.URL + "/repos/o/r/actions/runs/4210/jobs")
 	if err != nil {
 		t.Fatalf("GET unimplemented repos endpoint: %v", err)
 	}
@@ -941,5 +943,79 @@ func TestRerunFailedJobsRefusedUntilRunConcludes(t *testing.T) {
 	}
 	if accepted, refused := reruns(); accepted != 1 || refused != 2 {
 		t.Fatalf("after conclusion: accepted=%d refused=%d, want 1/2", accepted, refused)
+	}
+}
+
+// TestRunStatusReadTracksRunState pins the run read the deletion arm's cancel check
+// makes before it asks for a re-run (Q811). The endpoint did not exist when that
+// check shipped, so the AGC's GET 404'd, the check read the run as unanswerable, and
+// the drained-worker recovery never made its re-run call: the e2e spec that asserts
+// the re-run failed for a reason no unit tier could see.
+//
+// It answers off the same /control/runstate the refusal keys on, so the read and the
+// POST cannot disagree about one run.
+func TestRunStatusReadTracksRunState(t *testing.T) {
+	s := newServer()
+	main := httptest.NewServer(s.mainMux())
+	defer main.Close()
+	control := httptest.NewServer(s.controlMux())
+	defer control.Close()
+
+	readRun := func(runID string) (int, string, any) {
+		t.Helper()
+		resp, err := http.Get(main.URL + "/repos/o/r/actions/runs/" + runID)
+		if err != nil {
+			t.Fatalf("read run %s: %v", runID, err)
+		}
+		defer func() { _ = resp.Body.Close() }()
+		var body struct {
+			Status     string `json:"status"`
+			Conclusion any    `json:"conclusion"`
+		}
+		_ = json.NewDecoder(resp.Body).Decode(&body)
+		return resp.StatusCode, body.Status, body.Conclusion
+	}
+	setState := func(runID, query string) {
+		t.Helper()
+		resp, err := http.Post(control.URL+"/control/runstate?run="+runID+"&"+query, "", nil)
+		if err != nil {
+			t.Fatalf("set run state: %v", err)
+		}
+		_ = resp.Body.Close()
+	}
+
+	// An unmarked run is the disrupted shape a recovery must be allowed to re-run:
+	// completed/failure, which live GitHub reaches for a drained worker (Q459).
+	if status, s, c := readRun("4242"); status != http.StatusOK || s != "completed" || c != "failure" {
+		t.Fatalf("unmarked run read %d %q/%v, want 200 completed/failure", status, s, c)
+	}
+
+	// Marked not-yet-concluded, the read agrees with the 403 the POST gives (Q517).
+	setState("4242", "concluded=false")
+	if status, s, c := readRun("4242"); status != http.StatusOK || s != "in_progress" || c != nil {
+		t.Fatalf("non-concluded run read %d %q/%v, want 200 in_progress/null", status, s, c)
+	}
+
+	// Cancelled is the state that stands the recovery down rather than re-running.
+	setState("4242", "concluded=true&conclusion=cancelled")
+	if status, s, c := readRun("4242"); status != http.StatusOK || s != "completed" || c != "cancelled" {
+		t.Fatalf("cancelled run read %d %q/%v, want 200 completed/cancelled", status, s, c)
+	}
+
+	// The POST is deliberately still accepted for it: real GitHub accepts a re-run of
+	// a cancelled run (measured 2026-08-05), so a spec asserting the AGC does not ask
+	// is asserting about the AGC, not about a fake that refuses on its behalf.
+	resp, err := http.Post(main.URL+"/repos/o/r/actions/runs/4242/rerun-failed-jobs", "", nil)
+	if err != nil {
+		t.Fatalf("rerun: %v", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("rerun of a cancelled run returned %d, want 201", resp.StatusCode)
+	}
+
+	// A sub-resource path is not the run read: it must keep routing to its own handler.
+	if status, _, _ := readRun("4242/rerun-failed-jobs"); status != http.StatusNotFound {
+		t.Fatalf("GET on a sub-resource returned %d, want 404", status)
 	}
 }
