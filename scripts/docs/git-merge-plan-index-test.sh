@@ -28,7 +28,29 @@ trap 'rm -rf "$WORKDIR"' EXIT
 # next occurrence is the only chance to see which call failed. errtrace carries
 # the ERR trap into run_merge, whose two commits it would otherwise miss.
 set -o errtrace
-trap 'printf "%s:%s: FAILED (rc=%s): %s\n" "${BASH_SOURCE[0]##*/}" "$LINENO" "$?" "$BASH_COMMAND" >&2' ERR
+
+q820_dirstate() {
+	if [[ -d "$1" ]]; then printf 'yes'; else printf 'no'; fi
+}
+
+# q820_report RC LINE COMMAND — the ERR trap. Names the failing call, then
+# records whether the throwaway trees are still on disk. git reaches the Q820
+# signature from its loose-object write path, which it enters long after
+# validating the repository, so the message itself cannot say whether anything
+# was removed; only a reading taken here can. RC/LINE/COMMAND are arguments
+# because $?, $LINENO and $BASH_COMMAND would all read this function's frame.
+q820_report() {
+	local repo
+	trap - ERR
+	printf '%s:%s: FAILED (rc=%s): %s\n' "${BASH_SOURCE[0]##*/}" "$2" "$1" "$3" >&2
+	printf 'Q820: WORKDIR=%s present=%s\n' "$WORKDIR" "$(q820_dirstate "$WORKDIR")" >&2
+	for repo in "$WORKDIR"/*/; do
+		[[ -d "$repo" ]] || continue
+		printf 'Q820:   %s .git=%s objects=%s\n' "${repo%/}" \
+			"$(q820_dirstate "$repo.git")" "$(q820_dirstate "$repo.git/objects")" >&2
+	done
+}
+trap 'q820_report "$?" "$LINENO" "$BASH_COMMAND"' ERR
 
 fails=0
 
