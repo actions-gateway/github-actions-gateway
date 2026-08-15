@@ -115,6 +115,15 @@ That cost is what makes "enough" a real bar rather than a formality — it is al
 
 ### 1. Pre-flight
 
+**A recorded verdict covers the commit it was measured at, so record that commit with it.** Each step below ends in a verdict written to the release's plan doc, and a verdict reads as done long after the scope it covered has moved.
+When scope reopens, every verdict taken before it is stale by default and re-runs unless someone can say why not.
+
+1.5 is the worked example, and it went both ways.
+The API surface review had been recorded over `v1.4.0..feabacdc4`; scope then reopened on eight rows, one of which published a new condition and two new series, and the review was re-run only because someone thought to ask what the recorded window covered.
+The marketing reconciliation, recorded the same day, was **not** re-run, and the cross-tenant scale-set name guard reached no marketing surface at all until a question about the website found it.
+Both reviews were correct when written.
+Neither knew its scope had moved.
+
 **Which of these bind when the tag is a release candidate.** The first two bind at every tag: an RC cut from a red `main` validates nothing, and the version you pick fixes the stable tag's.
 The last four are stable-tag obligations, because a prerelease deploys no docs and its GitHub Release body is generated rather than curated, so there is no published surface for them to be wrong on yet.
 
