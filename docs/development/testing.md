@@ -2887,6 +2887,12 @@ A PR with zero rows, or with only the lightweight docs workflows listed, has not
 `--commit <sha>` is the flag that answers the question asked.
 Do not hand-roll the equivalent as a `--jq` filter on `headSha`: a malformed expression matches everything and exits 0, which produces a confident, wrong "the heavy gates ran".
 
+**At a release tag, `scripts/release/check-gates-green.sh <ref>` asks this for you**, across every required context in the ruleset rather than a list someone kept by hand.
+It reads job conclusions rather than the run's, because the `<workflow>-gate` job above passes on `skipped` as readily as on `success`: a run whose real job never executed still concludes `success`, so a run-level reading calls the commit validated.
+Expect `SKIPPED` to be the *normal* answer at a release tip.
+Measured 2026-08-15, all nine required workflows had skipped their heavy job on the commit `v1.5.0` was tagged at, because docs-only merges sat on top of the last code change.
+That is not a blocker on its own; it means the verdict lives on an earlier commit, and `scripts/release/check-artifact-unchanged.sh` is what proves the released surface has not moved since.
+
 **Check at the sentinel's `ready` wake, not straight after opening the PR.** For the first minute or so every check is `pending` or `queued`, which looks identical to the gates being absent and invites a `sleep`-then-recheck loop, which [Never foreground-poll CI, logs, or files](#never-foreground-poll-ci-logs-or-files) forbids and foreground-guard blocks.
 The watcher's `ready` event already means checks concluded, so it is both the earliest and the cheapest moment for this verification.
 

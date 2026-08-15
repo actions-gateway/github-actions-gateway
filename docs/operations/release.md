@@ -147,8 +147,26 @@ Each of them found something real in the 1.5 cycle, and each found it *after* th
 Record the verdict in the release's plan doc as with the other pre-flight steps, and file what it turns up as gating rows.
 The point of doing it here rather than at the tag is that the answers are free before a candidate exists and cost a new RC afterwards: in 1.5 they arrived after `rc.1` had been cut, published and validated, and superseded it.
 
-- `main` is green: unit/integration/e2e and `security-scan.yml` all passing on the commit you are about to tag.
-  Run `make check` locally as a final gate.
+- `main` is green: every required gate passing on the commit you are about to tag.
+
+  ```bash
+  scripts/release/check-gates-green.sh origin/main
+  ```
+
+  It asks by commit across every lane, because `gh run list --branch main` hides merge-queue runs and so reports "not validated" about a commit that is.
+  It reads **job** conclusions rather than the run's, because each `<workflow>-gate` job passes on `skipped` as readily as on `success` ([testing.md](../development/testing.md#path-gated-workflows-verify-the-heavy-gates-actually-ran)).
+
+  **Expect `SKIPPED`, and do not read it as red.** It is the ordinary shape of a release tip: docs-only merges sit on top of the last code change, so the heavy jobs path-gate themselves away.
+  All nine required workflows had skipped their heavy job on the commit `v1.5.0` was tagged at, and the release was sound, because the code was the tree an earlier commit had validated in full.
+  Prove exactly that, and say which commit you are relying on:
+
+  ```bash
+  scripts/release/check-artifact-unchanged.sh <last-fully-validated-sha> origin/main
+  ```
+
+  A `NOT GREEN` line is the different answer: a lane failed, or none reported at all.
+  That one blocks the tag.
+  Run `make check` locally as a final gate, from a branch cut from `origin/main` so the tree matches the target.
 - Choose the version `vX.Y.Z` (semver).
   The tag **must** match `v*` or `publish.yml` will refuse to publish.
 - **Review the API surface this tag publishes for the first time.** A field, enum value, or default costs a rename to change before it ships and a conversion shim plus a deprecation window afterwards, so the tag is the moment the cheap window closes.
@@ -474,6 +492,21 @@ A red matrix, a failed CRD smoke, or a dead `NodeShare` profile is a **stop-ship
 
 ### 2. Tag and push
 
+**What may land between a validated candidate and the stable tag.** A candidate's dogfood validation covers the tree it was cut from, so anything merged after it that moves an artifact makes the verdict describe something other than what ships.
+That is how `v1.5.0-rc.1` was superseded: it validated, eight rows merged on top, and its verdict stopped describing `main`.
+
+The rule is **byte-identical artifacts, not "docs only"**.
+Documentation changes are expected in this window and cannot be avoided, because the validation verdict does not exist until the candidate is tagged, so the notes' Validation section is necessarily written afterwards.
+But the labels do not line up: `charts/actions-gateway/README.md` is a markdown file that **ships inside the chart tarball**, so a pure-docs pull request can change a published chart's bytes.
+Check rather than classify:
+
+```bash
+scripts/release/check-artifact-unchanged.sh <validated-candidate-sha> origin/main
+```
+
+Exit 1 means the stable tag would ship something no candidate validated.
+Revert it, or cut and validate a new candidate.
+
 **Land [step 7](#7-bump-the-pinned-release-in-the-docs)'s pin bump on `main` before you tag a stable release**, and confirm the gate names the version you are about to cut:
 
 ```bash
@@ -485,6 +518,8 @@ Three of the four releases cut since `1.0.0` shipped the previous version's inst
 
 Bumping early is possible because a tagged candidate makes it so: `check-release-pins.sh` accepts a pin naming a release that has a candidate and no stable tag yet.
 It accepts the *current* release too, so a green gate is not on its own evidence the bump has landed: read the version it prints.
+
+The pin bump is a documentation change, so it does not disturb the freeze check above.
 
 ```bash
 git switch main && git pull --ff-only
