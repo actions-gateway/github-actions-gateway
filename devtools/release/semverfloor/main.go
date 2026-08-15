@@ -94,6 +94,13 @@ func main() {
 // follows publish.yml's image matrix through each Dockerfile's COPY --from= edges
 // to the go build behind it, so adding an image or a chart needs nothing updated
 // here. A hand-kept list in a caller would silently stop covering a new artifact.
+//
+// Test files are excluded where the floor keeps them. Surface.Ships matches a Go
+// package directory whole, so a _test.go beside shipped code reads as shipping —
+// harmless for a version bump, wrong here: the toolchain never compiles _test.go
+// into a released binary, so a test-only change leaves every artifact byte for
+// byte the same. Counting it would answer "the artifact moved" for added coverage
+// or a flake fix and cost a release candidate that nothing required.
 func runShips() error {
 	root, err := repoRoot()
 	if err != nil {
@@ -115,11 +122,19 @@ func runShips() error {
 		if p == "" {
 			continue
 		}
-		if surface.Ships(p) {
+		if shipsBytes(surface, p) {
 			fmt.Println(p)
 		}
 	}
 	return sc.Err()
+}
+
+// shipsBytes reports whether editing a path can change a released artifact's
+// bytes. It is Surface.Ships minus Go test files: Ships matches a package
+// directory whole, so a _test.go beside shipped code reads as shipping, while the
+// toolchain never compiles one into a released binary.
+func shipsBytes(surface Surface, p string) bool {
+	return surface.Ships(p) && !strings.HasSuffix(p, "_test.go")
 }
 
 func run(from, to string, checkSources, notes bool) error {
