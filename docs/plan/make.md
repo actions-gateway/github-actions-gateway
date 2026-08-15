@@ -149,7 +149,8 @@ Each target then sets only its label filter, `--procs`, and `--junit-report` pat
 
 Root [Makefile:31,34](../../Makefile:31) uses Go's `-C cmd/agc` flag.
 [Makefile:71](../../Makefile:71) uses shell `cd cmd/gmc &&`.
-Pick one. `go build -C` is cleaner for Go invocations; for ginkgo (not a Go subcommand) `cd && ...` is fine — but the inconsistency is worth a comment if both stay.
+Pick one.
+`go build -C` is cleaner for Go invocations; for ginkgo (not a Go subcommand) `cd && ...` is fine — but the inconsistency is worth a comment if both stay.
 
 ### 2.6 Align `all` semantics across Makefiles
 

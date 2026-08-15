@@ -3,11 +3,14 @@
 **Status:** ⓘ informational — strategy/review, read-only analysis.
 No code changed.
 Feeds the Q264 P5 cutover and the v1alpha1 removal-timeline decisions.
-Complete as a review: both follow-ups it filed are parked in Deferred, waiting on [v2-ga.md](v2-ga.md) Phase 3 ([Q273](../STATUS.md#Q273), the v1 removal) and on upstream scale-set GA ([Q272](../STATUS.md#Q272)). **Date:** 2026-07-05. **Author view:** adversarial review of the hypothesis that v1 may be fundamentally limited by its protocol constraints — and that if so, we should sunset it faster and focus on v2/scale-set.
+Complete as a review: both follow-ups it filed are parked in Deferred, waiting on [v2-ga.md](v2-ga.md) Phase 3 ([Q273](../STATUS.md#Q273), the v1 removal) and on upstream scale-set GA ([Q272](../STATUS.md#Q272)).
+**Date:** 2026-07-05.
+**Author view:** adversarial review of the hypothesis that v1 may be fundamentally limited by its protocol constraints — and that if so, we should sunset it faster and focus on v2/scale-set.
 The review deliberately tests that hypothesis rather than assuming it.
 
 > **Update (2026-07-05) — P4 is in, and green on the acceptance gate.** [Q264](q264-scale-set-protocol.md) **P4** (live dogfood, [PR #541](https://github.com/actions-gateway/github-actions-gateway/pull/541)) confirmed the scale-set path **eliminates the [Q224](archive/gke-dogfood-turnup-findings.md) fan-out distinct-delivery starvation by construction**: the single-acquirer listener assigned, ran, and terminally concluded **all 7** distinct jobs (**7/7**, 0 dedup / collision) where classic managed **2/7** across eight re-routes.
-> This is the single most important piece of evidence for the "accelerate" case (§6.4). **Caveat — not a clean all-green sweep yet:** the residual non-green is *orthogonal to acquisition* (a self-referential `WORKER_MODE=scaleset` test leak — GAG dogfooding its own CI on its own scale-set worker — plus CPU-starved envtest), and gates the **P5 cutover**, not the acceptance verdict.
+> This is the single most important piece of evidence for the "accelerate" case (§6.4).
+> **Caveat — not a clean all-green sweep yet:** the residual non-green is *orthogonal to acquisition* (a self-referential `WORKER_MODE=scaleset` test leak — GAG dogfooding its own CI on its own scale-set worker — plus CPU-starved envtest), and gates the **P5 cutover**, not the acceptance verdict.
 > Q224/Q264 stay open until the clean-green re-run.
 
 ---
@@ -157,7 +160,8 @@ The classic tier also paid for itself — the protocol knowledge, the egress/iso
 
 > **Design question this review raised, now resolved (2026-07-05): keep v2beta1 ScaleSet-only.** The question was whether to *retain* `acquisitionProtocol` (and a `Classic` fallback) through v2beta1 and drop it only at v2 GA, rather than stripping it at graduation (Q264 §5a-U7/U8).
 > The retain-hedge existed to preserve a rollback fallback — but that fallback protects **v1/classic users who do not exist** (§6.3), so it buys almost nothing while muddying the "one protocol, strictly better than ARC" story that drives adoption.
-> Against that: **P4 proved the protocol works live** (7/7), **GAG owns its own client** (not hostage to upstream's Preview cadence — "Preview" is a label on GitHub's *library*, while the *wire protocol* is what ARC runs in production at scale), and a cleaner beta surface is easier to commit to and support. **Decision: v2beta1 stays ScaleSet-only.** The residual risk — GitHub drifts the protocol post-graduation with no classic escape — is real but bounded (own-client + ARC-in-prod + a code fix is always shippable), and is managed with a **technical** guardrail rather than the retain-hedge: **do not graduate v2beta1 until the clean-green dogfood re-run plus a short stability soak of the scale-set path** — bet the beta on evidence, not one run.
+> Against that: **P4 proved the protocol works live** (7/7), **GAG owns its own client** (not hostage to upstream's Preview cadence — "Preview" is a label on GitHub's *library*, while the *wire protocol* is what ARC runs in production at scale), and a cleaner beta surface is easier to commit to and support.
+> **Decision: v2beta1 stays ScaleSet-only.** The residual risk — GitHub drifts the protocol post-graduation with no classic escape — is real but bounded (own-client + ARC-in-prod + a code fix is always shippable), and is managed with a **technical** guardrail rather than the retain-hedge: **do not graduate v2beta1 until the clean-green dogfood re-run plus a short stability soak of the scale-set path** — bet the beta on evidence, not one run.
 > Consequence for the backlog: [Q272](../STATUS.md#Q272) (scale-set upstream maturity) is *not* a graduation blocker — it lifts the Preview caveat and triggers the U6 vendor-vs-own revisit, but the beta cut gates on GAG's own soak, not on GitHub's GA timeline.
 
 ### 6.2 The recommendation — v2 is the product; retire v1 on a stability schedule

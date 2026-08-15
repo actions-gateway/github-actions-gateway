@@ -37,7 +37,8 @@ The worker pod's own images (runner, `docker:28-dind` sidecar) are pulled by the
 
 ### 2.1 The measurement
 
-Source: GitHub Actions run [30786972228](https://github.com/actions-gateway/github-actions-gateway/actions/runs/30786972228), job `e2e / e2e` (job id 91602337821) — a green `workflow_dispatch` release-gate run of `e2e-test.yml` on 2026-08-03, routed to the dogfood scale set (`runs-on: gag-ci-e2e`, runner `gag-ci-e2e-246a8cb2-…`), kindnet lane, 62 of 73 specs passed. `E2E_VARIANT` defaults to `kata` (`scripts/dogfood/e2e-start.sh`) and nothing pins it otherwise, so this is the Kata overlay; the job's `docker info` corroborates it — an Alpine dind container on kernel 6.18.35 reporting 5 CPUs / 13.88 GiB, i.e. a micro-VM sized from the pod's limits, not the c2-standard-8 node it runs on.
+Source: GitHub Actions run [30786972228](https://github.com/actions-gateway/github-actions-gateway/actions/runs/30786972228), job `e2e / e2e` (job id 91602337821) — a green `workflow_dispatch` release-gate run of `e2e-test.yml` on 2026-08-03, routed to the dogfood scale set (`runs-on: gag-ci-e2e`, runner `gag-ci-e2e-246a8cb2-…`), kindnet lane, 62 of 73 specs passed.
+`E2E_VARIANT` defaults to `kata` (`scripts/dogfood/e2e-start.sh`) and nothing pins it otherwise, so this is the Kata overlay; the job's `docker info` corroborates it — an Alpine dind container on kernel 6.18.35 reporting 5 CPUs / 13.88 GiB, i.e. a micro-VM sized from the pod's limits, not the c2-standard-8 node it runs on.
 
 No new dogfood run was booked: the job log of a run that already happened *is* the measurement, and it records every fetch the job made.
 
@@ -144,7 +145,8 @@ Cosign signatures key on the manifest digest, not the pull location, so verifica
 Four upstreams need a mirror instance, per the [§2.2](#22-the-inventory) inventory: `docker.io`, `ghcr.io`, `quay.io`, `registry.k8s.io`.
 
 - **Inner dockerd** (Kata overlay dind sidecar `args`): add `--registry-mirror=http://mirror-docker-io.<ns>.svc.cluster.local:5000`.
-  This transparently covers every Docker-Hub pull, implicit or explicit. `dockerd` mirrors **only** Docker Hub, and the measured job makes non-Hub docker-client pulls — `ghcr.io/actions-gateway/gmc`, and on a cold cache the `quay.io` and `registry.k8s.io` prepulls.
+  This transparently covers every Docker-Hub pull, implicit or explicit.
+  `dockerd` mirrors **only** Docker Hub, and the measured job makes non-Hub docker-client pulls — `ghcr.io/actions-gateway/gmc`, and on a cold cache the `quay.io` and `registry.k8s.io` prepulls.
   Those refs are rewritten to the mirror address (`mirror-ghcr-io:5000/owner/img`) at their call sites, which pull-through mode serves natively.
 - **helm's OCI client** (`chart-released-upgrade-check.sh`): `helm pull oci://ghcr.io/<owner>/charts/…` takes neither of the above.
   The script already parameterises the ref (`RELEASED_CHART_OCI`), so the tight lane points it at `mirror-ghcr-io:5000/<owner>/charts` with `--plain-http`.

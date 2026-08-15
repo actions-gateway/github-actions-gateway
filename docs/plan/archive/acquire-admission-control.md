@@ -5,7 +5,8 @@ Tracked as [Q59](../../STATUS.md).
 
 > **What shipped.** The in-memory reservation-counter variant (the leading candidate below) is live: an `AdmitFunc` hook on `listener.Config` ([`goroutine.go`](../../../cmd/agc/internal/listener/goroutine.go)) is consulted before `AcquireJob`; the per-RunnerGroup gate lives in the provisioner ([`admission.go`](../../../cmd/agc/internal/provisioner/admission.go)) and reads the ceiling from the freshly cached RunnerGroup each call (honours spec edits, Q117).
 > Rejections increment `actions_gateway_jobs_admission_rejected_total`.
-> The post-acquire `ceilingCheck` and quota retry are unchanged — they remain the backstop. **Verified end-to-end (Q154):** the ceiling-held-→-cancelled-vs-redelivered assumption below has now been confirmed on a real cluster — see "End-to-end verification (Q154)".
+> The post-acquire `ceilingCheck` and quota retry are unchanged — they remain the backstop.
+> **Verified end-to-end (Q154):** the ceiling-held-→-cancelled-vs-redelivered assumption below has now been confirmed on a real cluster — see "End-to-end verification (Q154)".
 
 ## The problem in one sentence
 
@@ -75,7 +76,8 @@ Key design questions to resolve in implementation:
    Calling that synchronously on the hot path before *every* acquire adds an API round-trip per job and is racy under burst.
    Options:
    - **In-memory reservation counter** owned by the provisioner/multiplexer, incremented at admit and decremented on pod terminal state.
-     Fast, but is soft state lost on AGC restart (acceptable — fail-safe, like the eviction counter; budget resets generously, never starves). **Leading candidate.**
+     Fast, but is soft state lost on AGC restart (acceptable — fail-safe, like the eviction counter; budget resets generously, never starves).
+     **Leading candidate.**
    - **Informer-backed pod cache** (ties into [Q64](../../STATUS.md), which already wants the provisioner to *watch* pods instead of polling).
      The admit check reads the cache instead of the API server.
      Best long-term; pairs naturally with [Q63](../../STATUS.md)'s RunnerGroup `Owns(&Pod)`.
@@ -94,7 +96,8 @@ Key design questions to resolve in implementation:
    Consider lowering the default `maxQuotaRetries`/`quotaRetryDelay` once admission control absorbs most of the pressure — but that's a follow-up, not part of this change.
 
 5. **Where the gate lives.** `handleJob` already depends on `cfg` callbacks (`SpawnReplacement`, `JobHandler`).
-   Add an `AdmitFunc`-style hook (`func(ctx) (release func(), ok bool)`) so the listener stays decoupled from the provisioner and the reservation lifecycle is explicit per the CLAUDE.md async/ownership conventions. `release` is called on acquire failure or pod terminal state.
+   Add an `AdmitFunc`-style hook (`func(ctx) (release func(), ok bool)`) so the listener stays decoupled from the provisioner and the reservation lifecycle is explicit per the CLAUDE.md async/ownership conventions.
+   `release` is called on acquire failure or pod terminal state.
 
 ### What this buys
 

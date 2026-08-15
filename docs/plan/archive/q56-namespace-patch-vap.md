@@ -1,6 +1,7 @@
 # Q56 — Gate GMC cluster-wide `namespaces: patch` (k8s audit §B B2)
 
-**Status:** ✅ Done — shipped via the `namespace-psa-guard` VAP + marker-label contract; covered by `TestGMC_NamespacePSAGuard_EnforcesMarkerAndFieldScope`. **Queue:** [Q56](../../STATUS.md) · **Finding:** [k8s-best-practices.md §B B2](k8s-best-practices.md#b-rbac--cluster-wide-privilege-)
+**Status:** ✅ Done — shipped via the `namespace-psa-guard` VAP + marker-label contract; covered by `TestGMC_NamespacePSAGuard_EnforcesMarkerAndFieldScope`.
+**Queue:** [Q56](../../STATUS.md) · **Finding:** [k8s-best-practices.md §B B2](k8s-best-practices.md#b-rbac--cluster-wide-privilege-)
 
 ## Goal
 
@@ -18,7 +19,8 @@ This is exactly the fix the finding describes.
 ### Two constraints
 
 1. **Marker-label scope (primary).** Deny a namespace `UPDATE` by the GMC SA unless the *existing* object (`oldObject`) carries `actions-gateway.github.com/tenant: "true"`.
-   The marker is read from `oldObject`, which a compromised GMC cannot forge in the request, and is applied by a *trusted* actor (the admin, at namespace creation) — the GMC must never be able to set it, or a compromised GMC could mark `kube-system` then patch it. `kube-system` and every other non-tenant namespace lack the marker → the GMC SA cannot touch them.
+   The marker is read from `oldObject`, which a compromised GMC cannot forge in the request, and is applied by a *trusted* actor (the admin, at namespace creation) — the GMC must never be able to set it, or a compromised GMC could mark `kube-system` then patch it.
+   `kube-system` and every other non-tenant namespace lack the marker → the GMC SA cannot touch them.
    This alone fully closes B2.
 
 2. **PSA-only field guard (value guard, defense-in-depth).** Deny if the GMC's update changes any namespace label *other than* the six `pod-security.kubernetes.io/*` keys, or changes any annotation.
@@ -32,7 +34,8 @@ The marker scope already bounds the blast radius to GMC-managed tenant namespace
 
 ### Residual (documented, out of scope for Q56)
 
-A compromised GMC can still flip the PSA profile *within a tenant namespace it already manages* (e.g. `baseline` → `privileged` on that one tenant).
+A compromised GMC can still flip the PSA profile *within a tenant namespace it already manages* (e.g.
+`baseline` → `privileged` on that one tenant).
 That blast radius is inherent — the GMC's whole job is managing that tenant's PSA.
 The complementary control is CEL immutability / downgrade-audit on `securityProfile` itself, tracked as [Q33](../../STATUS.md) (k8s audit §D D5).
 Q56 is strictly about non-tenant namespaces.

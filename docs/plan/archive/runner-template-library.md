@@ -44,7 +44,8 @@ The library README carries the workload → template decision table, following t
 
 ### Invert the dogfood relationship
 
-The library (e.g. `deploy/templates/`) becomes the kustomize **base**; the dogfood e2e overlays patch e2e-specifics (worker image tag, sizing, GKE Workload Identity annotations) on top.
+The library (e.g.
+`deploy/templates/`) becomes the kustomize **base**; the dogfood e2e overlays patch e2e-specifics (worker image tag, sizing, GKE Workload Identity annotations) on top.
 The shipped artifact is then byte-for-byte the thing CI validates, minus declared patches, so the library cannot silently drift from its validation.
 The main genericizing decision is what the shipped `workerImage` reference is; the GKE-specific bits get marked as such (the reference architecture claims provider-agnostic).
 
@@ -86,7 +87,8 @@ The runner container needs a Docker CLI on `PATH`; the sidecar supplies only the
 Neither `ghcr.io/actions/actions-runner` nor GAG's own `worker` image ships one (`scripts/dogfood/e2e-runner/Dockerfile` exists precisely to add it).
 Omitting the image would let the AGC gap-fill the stock runner, producing a pod that starts, takes a job, and fails on `docker: not found` mid-run.
 
-Both DinD entries therefore ship `spec.workerImage: example.invalid/build-capable-runner:replace-me`. `.invalid` is RFC 2606 reserved, so an unreplaced value fails at image pull with the fix in the string.
+Both DinD entries therefore ship `spec.workerImage: example.invalid/build-capable-runner:replace-me`.
+`.invalid` is RFC 2606 reserved, so an unreplaced value fails at image pull with the fix in the string.
 It also makes the e2e overlays' `workerImage` patch mandatory rather than incidental, which is a second attachment between the shipped artifact and the exercised one.
 
 ## Later: demand-gated, not v1
@@ -104,7 +106,8 @@ It also makes the e2e overlays' `workerImage` patch mandatory rather than incide
 4. ✅ The 05-security.md enforcement claim is corrected.
 5. ✅ No template ships as a cluster default; each is individually opt-in, and `check-template-library.sh` fails on an entry that so much as mentions the annotation.
 
-Beyond the criteria: the admission rule is now mechanical rather than aspirational. `make template-library-check` reconciles the shipped set against the exercised set in both directions, and `TestTemplateLibrary_Admitted` applies every entry to a real apiserver on each integration run, which is what upgrades `plain` from "trivially inert, trust us" to a template CI actually admits.
+Beyond the criteria: the admission rule is now mechanical rather than aspirational.
+`make template-library-check` reconciles the shipped set against the exercised set in both directions, and `TestTemplateLibrary_Admitted` applies every entry to a real apiserver on each integration run, which is what upgrades `plain` from "trivially inert, trust us" to a template CI actually admits.
 
 ## Non-goals
 

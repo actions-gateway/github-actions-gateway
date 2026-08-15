@@ -14,7 +14,8 @@ The recording rules in `prometheusrule.yaml` back several dashboard panels (`act
 ## PrometheusRule
 
 Requires the Prometheus Operator (the `monitoring.coreos.com` CRDs).
-Apply into a namespace your Prometheus selects rules from, and add whatever label your Prometheus uses for rule discovery (e.g. `release: kube-prometheus-stack` — uncomment it in the manifest):
+Apply into a namespace your Prometheus selects rules from, and add whatever label your Prometheus uses for rule discovery (e.g.
+`release: kube-prometheus-stack` — uncomment it in the manifest):
 
 ```sh
 kubectl apply -n monitoring -f deploy/monitoring/prometheusrule.yaml

@@ -251,7 +251,8 @@ Neither binary acquires jobs, so neither has a tier.
 
 ### Label-value reach
 
-A series can be **Both** while one of its label values is not. `actions_gateway_eviction_retries_total` populates on either tier, and `cause="vanished"` only ever comes from a scale-set set, so a query filtered to that value reads a permanent zero on classic, and the row above says the opposite.
+A series can be **Both** while one of its label values is not.
+`actions_gateway_eviction_retries_total` populates on either tier, and `cause="vanished"` only ever comes from a scale-set set, so a query filtered to that value reads a permanent zero on classic, and the row above says the opposite.
 
 Each row here records one such exception.
 The [gate](../development/testing.md#the-make-check-pre-review-gate) derives the values each series emits from the AGC source and fails when one it can prove single-tier has no row, when a row is refuted by where the source names its value, and when the `Help` text an operator scrapes off `/metrics` has fallen behind the vocabulary the code emits.
@@ -274,7 +275,8 @@ Where the file layout cannot prove the claim, because the value is named in a fi
 ## Condition and Event tier reach
 
 The same question as [Acquisition-tier reach](#acquisition-tier-reach) above, asked of the other two signals an operator reads: the `reason` on a `.status.conditions[]` entry, and the `Reason` on a Kubernetes Event.
-A capability that reaches only one tier is as invisible in a condition as it is in a counter, so the same four values apply and the same gate holds these tables to the source. `make reason-tiers-check` fails a reason the AGC emits without a row here, a row the source refutes, and an Event reason that has no [runbook](troubleshooting.md#job-lifecycle-events-on-a-runnergroup--runnerset) entry.
+A capability that reaches only one tier is as invisible in a condition as it is in a counter, so the same four values apply and the same gate holds these tables to the source.
+`make reason-tiers-check` fails a reason the AGC emits without a row here, a row the source refutes, and an Event reason that has no [runbook](troubleshooting.md#job-lifecycle-events-on-a-runnergroup--runnerset) entry.
 
 Two things follow from how the AGC records these, and both are worth knowing before reading the tables:
 
@@ -428,7 +430,8 @@ Scale-set worker pods additionally carry:
 All four are controller-set: never set them by hand.
 Editing or removing `runner-name` in particular makes the pod's runner record uncollectable, which is what leaves stale registrations behind — see [Scale-Set Job Stranded by a Stale Runner Record](troubleshooting.md#scale-set-job-stranded-by-a-stale-runner-record-runner-name-409).
 
-Worker pods on **either** tier gain one more annotation at end of life: `actions-gateway.com/deletion-reason`, stamped with the reap reason (e.g. `completed_ttl`, `pending_deadline`) immediately before the AGC's reaper deletes the pod (Q502).
+Worker pods on **either** tier gain one more annotation at end of life: `actions-gateway.com/deletion-reason`, stamped with the reap reason (e.g.
+`completed_ttl`, `pending_deadline`) immediately before the AGC's reaper deletes the pod (Q502).
 It marks the deletion as the AGC's own, which is what excludes reaper cleanup from the graceful-deletion recovery that a drain or a manual delete triggers.
 Controller-set; never set it by hand — a hand-set stamp suppresses automatic recovery for that pod.
 

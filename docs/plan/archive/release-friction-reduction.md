@@ -30,9 +30,11 @@ First exercised on the next real `v*` tag (see Validation).
 
 The pipeline already has every piece of data; it just doesn't finish the job.
 
-1. **Derive `artifacthub.io/prerelease` from the tag at package time.** `publish.yml` already overrides the chart's `version`/`appVersion` from the tag; setting the annotation from whether the tag matches `-rc`/`0.` is the same mechanism (a `yq` edit before `helm package`). **Eliminates the flip PR entirely** — both directions.
+1. **Derive `artifacthub.io/prerelease` from the tag at package time.** `publish.yml` already overrides the chart's `version`/`appVersion` from the tag; setting the annotation from whether the tag matches `-rc`/`0.` is the same mechanism (a `yq` edit before `helm package`).
+   **Eliminates the flip PR entirely** — both directions.
    Update release.md § Chart version & metadata to match (it currently states the annotation is baked as-is and must be flipped by hand).
-2. **Generate complete, correct release notes and set `--prerelease` on the Release.** Emit the five multi-arch **index** digests (already recorded to the run summary), the `make verify-release VERSION=<tag>` line, and a `compare/<prev>...<tag>` changelog into the Release body, with `--prerelease` set from the tag. **Eliminates** the manual `gh release edit`, the wrong-base notes, and the digest copy.
+2. **Generate complete, correct release notes and set `--prerelease` on the Release.** Emit the five multi-arch **index** digests (already recorded to the run summary), the `make verify-release VERSION=<tag>` line, and a `compare/<prev>...<tag>` changelog into the Release body, with `--prerelease` set from the tag.
+   **Eliminates** the manual `gh release edit`, the wrong-base notes, and the digest copy.
    Keep the "create only if absent, never clobber curated notes" guard.
 
 After Bucket 1, Phase A collapses to: **push tag → verify.**

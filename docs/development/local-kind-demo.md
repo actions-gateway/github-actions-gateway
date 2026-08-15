@@ -91,7 +91,8 @@ kubectl create secret generic team-a-github-app -n team-a \
   --from-file=privateKey=app.pem
 ```
 
-Apply one `ActionsGateway` CR. `completedPodTTL: 0s` deletes each worker pod the moment its job finishes (the default retains terminal pods for 5 minutes so their logs stay inspectable):
+Apply one `ActionsGateway` CR.
+`completedPodTTL: 0s` deletes each worker pod the moment its job finishes (the default retains terminal pods for 5 minutes so their logs stay inspectable):
 
 ```yaml
 # actionsgateway.yaml

@@ -187,7 +187,8 @@ It was a no-op step that produced its own layer and added ~1 s.
 
 ### Approach
 
-Removed the line. `go build` resolves the workspace correctly without an explicit sync.
+Removed the line.
+`go build` resolves the workspace correctly without an explicit sync.
 
 ### Files
 
@@ -334,7 +335,8 @@ Every CI run re-paid the full ~166 MB transfer cost.
 Adopted the "kind-with-registry" pattern documented at <https://kind.sigs.k8s.io/docs/user/local-registry/>: a `registry:2` container runs alongside the kind cluster on the kind docker network; each node's containerd is configured to mirror `127.0.0.1:5000` → `kind-registry:5000`; buildx pushes directly to the registry; pods pull on demand.
 (The host ref is the literal IPv4 loopback, not `localhost`: the registry is published IPv4-only, so a pusher that resolves `localhost` to IPv6 `[::1]` first fails intermittently.)
 
-[scripts/e2e/kind-with-registry.sh](../../scripts/e2e/kind-with-registry.sh) handles the whole setup idempotently. `make e2e-cluster` invokes it; the legacy `kind load` flow was removed entirely (replaced rather than gated).
+[scripts/e2e/kind-with-registry.sh](../../scripts/e2e/kind-with-registry.sh) handles the whole setup idempotently.
+`make e2e-cluster` invokes it; the legacy `kind load` flow was removed entirely (replaced rather than gated).
 Image tags now include `127.0.0.1:5000/<name>:e2e-<sha>` so kubelet's `IfNotPresent` cache can't serve a stale image across cluster reuse.
 
 ### Files

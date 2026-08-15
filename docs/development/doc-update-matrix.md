@@ -3,7 +3,8 @@
 Which docs to update for each kind of change.
 Use this after making changes, before committing — update docs proactively rather than waiting to be asked.
 
-The `docs/` tree has two audiences: `docs/design/` explains how the system works (for contributors); `docs/operations/` explains what an operator does and sees (onboarding, runbooks, upgrades). **Updating the design docs is not sufficient** — if a change alters what an operator does, configures, or observes, the operator-facing docs must be updated too.
+The `docs/` tree has two audiences: `docs/design/` explains how the system works (for contributors); `docs/operations/` explains what an operator does and sees (onboarding, runbooks, upgrades).
+**Updating the design docs is not sufficient** — if a change alters what an operator does, configures, or observes, the operator-facing docs must be updated too.
 
 | Change | Docs to update |
 |---|---|
@@ -21,7 +22,8 @@ The `docs/` tree has two audiences: `docs/design/` explains how the system works
 
 ## Name the acquisition tier when a capability is not universal
 
-Applies across every row above. **Before writing that the gateway does X, check which acquisition tier actually does X** — and if it is not both, say so in the same sentence.
+Applies across every row above.
+**Before writing that the gateway does X, check which acquisition tier actually does X** — and if it is not both, say so in the same sentence.
 Prose that reads as a property of the system is the failure mode; it is not repaired by being true of the tier the author had in mind.
 
 This has bitten three times (Q419 eviction recovery, Q439 the pre-claim quota gate, Q446 poll-error metrics), and once in a change whose whole purpose was to polish the same paragraphs.

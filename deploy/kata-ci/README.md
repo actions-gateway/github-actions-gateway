@@ -4,7 +4,8 @@ Manifests and config for running GitHub Actions self-hosted runners that need Do
 Motivation, the options analysis, and the measured results live in [docs/plan/archive/kata-on-gke.md](../../docs/plan/archive/kata-on-gke.md).
 
 > **Status: live-validated.** `kind create cluster` was proven to run inside a non-privileged pod with `runtimeClassName: kata` on GKE (`1.35.5-gke.1241004`, Ubuntu 24.04 / containerd 2.1.5, `c2-standard-4` with nested virtualization, Kata 3.32.0 / QEMU).
-> Node kernel `6.8.0-1054-gke` vs guest kernel `6.18.35` confirms a real VM boundary. `kind create cluster` took 58 s from a cold image cache.
+> Node kernel `6.8.0-1054-gke` vs guest kernel `6.18.35` confirms a real VM boundary.
+> `kind create cluster` took 58 s from a cold image cache.
 >
 > **Kata does not close the cloud metadata-server path.** Workload Identity (`--workload-metadata=GKE_METADATA`) is a prerequisite of this architecture, not an optional extra.
 > See [the security rationale](../../docs/operations/kata-dind-workloads.md#the-security-rationale).
@@ -29,7 +30,8 @@ Using one label for both lets a Kata pod land on a node whose runtime does not e
 
 ## Static validation
 
-- `make manifest-validate` — yamllint over `deploy/kata-ci/` plus kubeconform schema-check of `runtimeclass.yaml` and `runner-pod.yaml`. `kata-values.yaml` is a Helm *values* file, not a manifest, so it is linted but not schema-checked.
+- `make manifest-validate` — yamllint over `deploy/kata-ci/` plus kubeconform schema-check of `runtimeclass.yaml` and `runner-pod.yaml`.
+  `kata-values.yaml` is a Helm *values* file, not a manifest, so it is linted but not schema-checked.
 - `make shellcheck` (part of `make check`) — lints `scripts/dev/kata-node-pool.sh`.
 
 ## Apply order (live — needs a nested-virt cluster)

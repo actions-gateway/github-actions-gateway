@@ -61,5 +61,6 @@ So the chart only needs to wire `imagePullSecrets` for its own workload (the GMC
 - Cross-link from `install.md` and `docs/operations/README.md`.
 
 ## Acceptance
-- Chart supports private-registry overrides + pull secrets for all images; digest pinning preserved. `helm lint`/`template` green; `make check` green.
+- Chart supports private-registry overrides + pull secrets for all images; digest pinning preserved.
+  `helm lint`/`template` green; `make check` green.
 - Air-gapped doc with the secure pull-secret pattern.

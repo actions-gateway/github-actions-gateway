@@ -90,7 +90,8 @@ See [Appendix A](../design/appendix-a-capacity-slos.md) and [Appendix E](../desi
 
 **Done (2026-05-23, commit `4932ce7`).**
 
-The split shipped. `cmd/gmc/internal/controller/builder.go` now emits three NetworkPolicies:
+The split shipped.
+`cmd/gmc/internal/controller/builder.go` now emits three NetworkPolicies:
 
 - `buildProxyNetworkPolicy` (lines 112-157) — `podSelector: { app: actions-gateway-proxy }`, egress = DNS + GitHub CIDRs:443, ingress restricted to pods carrying `labelComponent: componentWorkload` on `proxyPort`.
 - `buildWorkloadNetworkPolicy` (lines 159-188) — `podSelector` matching AGC and worker labels, egress = DNS + proxy ClusterIP:`proxyPort` only.

@@ -80,7 +80,8 @@ The GMC creates three `NetworkPolicy` objects per tenant in the tenant namespace
 The split (over a single combined policy) closes M-12 — worker pods inherit egress to the proxy and DNS only, not the Kubernetes API server.
 Only the AGC Deployment has API-server egress.
 
-The policies below are the v1 (`actions-gateway.github.com`) shape, whose names and selectors are fixed because v1 permits one gateway and one proxy pool per namespace. **v2 emits the same three policies with the same posture**, per-object rather than per-namespace: the workload and AGC policies are named for the gateway, the proxy policy for the `EgressProxy`, and every selector keys on the owning object's identity label (`actions-gateway.com/gateway` / `actions-gateway.com/egress-proxy`) instead of `app`.
+The policies below are the v1 (`actions-gateway.github.com`) shape, whose names and selectors are fixed because v1 permits one gateway and one proxy pool per namespace.
+**v2 emits the same three policies with the same posture**, per-object rather than per-namespace: the workload and AGC policies are named for the gateway, the proxy policy for the `EgressProxy`, and every selector keys on the owning object's identity label (`actions-gateway.com/gateway` / `actions-gateway.com/egress-proxy`) instead of `app`.
 Two consequences follow from that, both load-bearing during a [v1→v2 migration](../operations/migration-v1-to-v2.md)'s coexistence window, when a namespace holds both:
 
 - A v2 pool's pods do **not** carry `app: actions-gateway-proxy`, so v1's policy, `PodDisruptionBudget`, `HorizontalPodAutoscaler`, and hostname anti-affinity — all keyed on that one bare label — govern only v1's pool (Q582).
@@ -312,9 +313,11 @@ In any FQDN mode the standard NetworkPolicy keeps its DNS + ingress rules but **
 > **The `gke` backend is additive-allow, not default-deny — the base NetworkPolicy is load-bearing.** A GKE `FQDNNetworkPolicy` composes with any NetworkPolicy on the same pod as a **union** (egress is allowed if it matches *either*), so on its own it denies nothing — it only *adds* an allow for the listed FQDNs.
 > Cilium/Calico FQDN policies, by contrast, are self-default-denying.
 > GAG's fail-closed guarantee for `gke` therefore depends on the base standard NetworkPolicy always being present (it default-denies GitHub egress with the CIDR rule dropped, and carries the DNS-only allow including the Q229 node-local-dns peer): the `FQDNNetworkPolicy` only widens the union to permit GitHub, and if it is absent or unenforced GitHub egress stays denied by the base NP.
-> The `gke` reconcile branch is reached only when the base NP is managed, so a backend that opens egress without a default-deny base is never emitted. `gke`-backend **enforcement is not yet live-validated** on a real GKE cluster (deferred; see the [Q245 plan](../plan/q245-fqdn-intent-backend-split.md)).
+> The `gke` reconcile branch is reached only when the base NP is managed, so a backend that opens egress without a default-deny base is never emitted.
+> `gke`-backend **enforcement is not yet live-validated** on a real GKE cluster (deferred; see the [Q245 plan](../plan/q245-fqdn-intent-backend-split.md)).
 
-> **A managed "Cilium" platform usually does NOT accept the `cilium` backend.** The CRD test is literal: `kubectl get crd ciliumnetworkpolicies.cilium.io` must succeed. **GKE Dataplane V2's managed Cilium does NOT install that CRD** (dropped since GKE 1.21.5-gke.1300) — there, use `--fqdn-policy-backend=gke`, not `cilium`.
+> **A managed "Cilium" platform usually does NOT accept the `cilium` backend.** The CRD test is literal: `kubectl get crd ciliumnetworkpolicies.cilium.io` must succeed.
+> **GKE Dataplane V2's managed Cilium does NOT install that CRD** (dropped since GKE 1.21.5-gke.1300) — there, use `--fqdn-policy-backend=gke`, not `cilium`.
 > If a selected backend's CRD is absent the `EgressProxy` goes `Degraded` (`no matches for kind …`) and GitHub egress stays denied (fail-closed).
 > The cluster-scoped backends still deferred (AKS `CiliumClusterwideNetworkPolicy` via Advanced Container Networking Services, EKS DNS-based `ClusterNetworkPolicy` on Auto Mode) and OpenShift OVN `EgressFirewall` `dnsName` need a different ownership/GC model; tracked in the [Q245 plan](../plan/q245-fqdn-intent-backend-split.md).
 > Until a matching backend ships, use an **in-cluster caching mirror** (the recommended path for remote dependencies anyway) or `managedNetworkPolicy: false` and layer your own policy.

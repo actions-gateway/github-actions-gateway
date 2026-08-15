@@ -28,7 +28,8 @@ The fix routes that call through `githubapp.ResolveAPIBaseURL`, the same helper 
 
 Q506 was filed on the suspicion that the same shape recurs elsewhere.
 It does — but not where the Queue row guessed.
-The row named `githubEgressFQDNs` and "the noproxy guard list". `githubEgressFQDNs` is a real defect; the noproxy guard is not (its callers already resolve the GHES host).
+The row named `githubEgressFQDNs` and "the noproxy guard list".
+`githubEgressFQDNs` is a real defect; the noproxy guard is not (its callers already resolve the GHES host).
 Meanwhile the resolution Q504 leaned on — `GITHUB_API_BASE_URL` — has **no supported way to be set** on a GMC-provisioned Actions Gateway Controller (AGC).
 
 ## The inventory
@@ -99,7 +100,8 @@ Treat #3 as a documentation-and-validation problem regardless of which path is c
 
 ### 4. Two different detectors answer "is this public GitHub?"
 
-`isHostedServer` tests `strings.Contains(githubURL, "github.com")` over the **whole URL including its path** ([`github_registrar.go:390`](../../../cmd/agc/internal/agentpool/github_registrar.go)), so a GHES org path literally named `github.com` — `https://ghes.corp/github.com` — misclassifies as public SaaS. `scaleSetAPIBase` answers the same question by parsing the URL and switching on `u.Host` ([`runnerset_scaleset.go:260`](../../../cmd/agc/internal/controller/runnerset_scaleset.go)), which has no such hole.
+`isHostedServer` tests `strings.Contains(githubURL, "github.com")` over the **whole URL including its path** ([`github_registrar.go:390`](../../../cmd/agc/internal/agentpool/github_registrar.go)), so a GHES org path literally named `github.com` — `https://ghes.corp/github.com` — misclassifies as public SaaS.
+`scaleSetAPIBase` answers the same question by parsing the URL and switching on `u.Host` ([`runnerset_scaleset.go:260`](../../../cmd/agc/internal/controller/runnerset_scaleset.go)), which has no such hole.
 
 Low severity on its own — the triggering org name is contrived.
 It matters as a symptom: the repo has no single "resolve this gateway's GitHub API base" helper, so each caller invented one.

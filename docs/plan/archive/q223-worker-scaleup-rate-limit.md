@@ -59,7 +59,8 @@ Uses `golang.org/x/time/rate` (already vendored at the repo root; `x/time` is al
 
 1. **API** — `ScaleUpRateLimit` struct + `ScaleUp *ScaleUpRateLimit` field on `cmd/agc/api/v1alpha1` `RunnerGroupSpec` and `api/v2alpha1` `RunnerSetSpec`; regenerate deepcopy + CRD manifests + chart CRDs.
 2. **Neutral seam** — `ScaleUpConfig` (MaxPerSecond, Burst) on `provisioner.ResolvedSpec` (nil = off), populated by both the v1 `runnerGroupTarget` and the v2 `runnerSetTarget` adapters (burst defaulted to maxPerSecond there).
-3. **Limiter** — `scaleUpLimiter` (new `provisioner/scaleuplimiter.go`): per-owner token bucket, injectable clock + sleep for deterministic tests, zero-value ready (lazy map init) like `admissionGate`. `wait(ctx, key, cfg) (throttled, err)`.
+3. **Limiter** — `scaleUpLimiter` (new `provisioner/scaleuplimiter.go`): per-owner token bucket, injectable clock + sleep for deterministic tests, zero-value ready (lazy map init) like `admissionGate`.
+   `wait(ctx, key, cfg) (throttled, err)`.
 4. **Wiring** — call `p.scaleUp.wait(...)` before `createPodWithQuotaRetry` in both provision paths; on `throttled` increment the metric; on ctx-cancel return the error (job abandoned, same as a quota ctx-cancel).
 5. **Metric** — `actions_gateway_worker_scaleup_throttled_total{namespace, runner_group}` (G.11's `worker_scaleup_throttled_total`).
 6. **Docs** — operator field docs in `docs/operations/`; Appendix G.11 status → implemented stub; this plan; STATUS Q223 row removed (isolated commit).

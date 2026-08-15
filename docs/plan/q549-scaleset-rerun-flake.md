@@ -5,7 +5,8 @@ Two distinct failure modes now sit behind that one timeout.
 This file exists so the next occurrence is classified before anything is changed.
 
 **Status:** watching.
-Mode A is diagnosed and mitigated (PR #1120). **Mode B is diagnosed as of 2026-08-12 and fixed under [Q809](../STATUS.md#Q809)**; see [Mode B, attributed](#mode-b-attributed-2026-08-12-the-claim-was-made-and-lost) below.
+Mode A is diagnosed and mitigated (PR #1120).
+**Mode B is diagnosed as of 2026-08-12 and fixed under [Q809](../STATUS.md#Q809)**; see [Mode B, attributed](#mode-b-attributed-2026-08-12-the-claim-was-made-and-lost) below.
 It recurred three times that day, once on `main`, which fired this row's revive trigger; those three runs are the first with an AGC log line that names the failure, and it is not either cause the spec's own message guesses at.
 Reset the [soak clock](../development/maintaining-backlog.md#retiring-a-flake-watch-row) to **2026-08-12**: count green runs from the claim fix, not from PR #1120.
 
@@ -16,7 +17,8 @@ Reset the [soak clock](../development/maintaining-backlog.md#retiring-a-flake-wa
 | **A** — the AGC control plane was replaced inside the claim window | `agcPodIdentity() != pinnedAGC` at the wait's expiry: the spec records a `Q549 re-staging` report entry and retries the whole staging | Diagnosed on run [30658951388](https://github.com/actions-gateway/github-actions-gateway/actions/runs/30658951388), mitigated by the UID pin + re-stage (PR #1120). Worked case in [testing.md § Pin the process when the signal comes out of its memory](../development/testing.md#pin-the-process-when-the-signal-comes-out-of-its-memory) |
 | **B**: the window was undisturbed and the re-run still never fired | the pin is **unchanged**, so the spec takes its `Fail()` branch, with zero `Q549 re-staging` entries | **Diagnosed 2026-08-12**: the disruption was detected and the *claim* failed. Fixed under Q809; the spec now re-stages on the unwinnable half |
 
-The spec's own failure text names two candidate causes for the `Fail()` branch — a chart role missing a verb, or a regressed deletion-mark discriminator. **Both are wrong**, and the 2026-08-12 evidence rules them out directly: detection reached `cause: deletion` every time, so the discriminator was working, and the claim never returned a `Forbidden`, so the role was not short a verb.
+The spec's own failure text names two candidate causes for the `Fail()` branch — a chart role missing a verb, or a regressed deletion-mark discriminator.
+**Both are wrong**, and the 2026-08-12 evidence rules them out directly: detection reached `cause: deletion` every time, so the discriminator was working, and the claim never returned a `Forbidden`, so the role was not short a verb.
 
 ## Mode B: what run 30724186342 shows
 
@@ -41,7 +43,8 @@ Measured, in the order the log gives it:
   In the passing attempt 2 the same sampler recorded `… -> Failed/2026-08-02T00:17:58Z/2026-08-02T00:17:29Z` — claim present.
   That contrast is the sharpest signal the two logs carry.
   The sampler is diagnostics, not evidence: it bounds what was *observed* in ~2.2 s, never what happened.
-- **No `EvictionRerunFailed` event** in the namespace events dump. `rerunUntilAccepted` records that on every terminal failure, so no re-run reached a terminal refusal — the same discriminator that ruled out "attempted and refused" for mode A.
+- **No `EvictionRerunFailed` event** in the namespace events dump.
+  `rerunUntilAccepted` records that on every terminal failure, so no re-run reached a terminal refusal — the same discriminator that ruled out "attempted and refused" for mode A.
 - **The AGC logged nothing after 00:01:24Z**, through the dump taken at 00:02:57Z — at debug verbosity, and with no truncation (93 lines against `kubectl logs --tail=2000`).
   The re-run wait ran entirely inside that silence.
 
@@ -77,7 +80,8 @@ Measured:
   As on 2026-08-01, the entire re-run wait ran inside that silence.
 - **The RunnerSet reconcile was erroring across the disruption window**, not converged — [capture item 4](#what-to-capture-on-the-next-occurrence) below.
 
-**The listener error is by design, and is not a signal.** The open question below guessed it "may well be routine in this e2e"; it is. `scaleSetRecoveryManifest` sets `githubURL: https://ghes.invalid/ssrecorg` ([worker_scaleset_recovery_test.go](../../cmd/gmc/test/e2e/worker_scaleset_recovery_test.go)), deliberately choosing an unresolvable host so the bootstrap fails on NXDOMAIN — that failure is the precondition the spec needs.
+**The listener error is by design, and is not a signal.** The open question below guessed it "may well be routine in this e2e"; it is.
+`scaleSetRecoveryManifest` sets `githubURL: https://ghes.invalid/ssrecorg` ([worker_scaleset_recovery_test.go](../../cmd/gmc/test/e2e/worker_scaleset_recovery_test.go)), deliberately choosing an unresolvable host so the bootstrap fails on NXDOMAIN — that failure is the precondition the spec needs.
 So a reconcile erroring on the scale-set listener is the normal state of this tenant and cannot distinguish a failing run from a passing one.
 What remains open is whether the recovery scan is *reachable* while that is happening.
 

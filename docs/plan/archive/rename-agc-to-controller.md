@@ -47,7 +47,8 @@ const ControllerName = "actions-gateway-controller"
 ```
 
 The package needs to be importable by both `cmd/gmc/...` and `cmd/agc/...`.
-The root module (`github.com/actions-gateway/github-actions-gateway`) is already shared by both — putting it there (e.g. `names/names.go` at the repo root or `internal/names/` if the package should not be public API) keeps the import graph clean.
+The root module (`github.com/actions-gateway/github-actions-gateway`) is already shared by both — putting it there (e.g.
+`names/names.go` at the repo root or `internal/names/` if the package should not be public API) keeps the import graph clean.
 
 Note: the AGC `provisioner` and `agentpool` packages use this value for the `app.kubernetes.io/managed-by` label on resources the **AGC** creates (worker pods, agent secrets).
 Today this happens to match the GMC's Deployment name, but semantically they could diverge.

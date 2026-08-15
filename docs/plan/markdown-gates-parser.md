@@ -64,7 +64,8 @@ One escaped pipe in any cell shifts every field, measured:
 This fails *silently wrong*, not loudly, which is why it is worth closing before it happens rather than after.
 Filed as latent: "zero occurrences in `STATUS.md` today", which the build disproved: Q625 carried one, and the gate was reading 13 characters of a 243-character cell ([Phase 2 result](#phase-2-result-q613)).
 
-Second defect, latent: `awk`'s `length()` counts **bytes** on this host (BWK awk 20200816) and **runes** under `gawk` in a UTF-8 locale. `STATUS.md` carries 52 em dashes, 51 🔲, 26 ✅.
+Second defect, latent: `awk`'s `length()` counts **bytes** on this host (BWK awk 20200816) and **runes** under `gawk` in a UTF-8 locale.
+`STATUS.md` carries 52 em dashes, 51 🔲, 26 ✅.
 Measuring every cell exactly as the script extracts it, the longest is [Q555](../STATUS.md#Q555) at **249 bytes / 249 characters** — one byte of margin against the 250 cap, and Q640 (measured before it shipped, so no row to link) tied it on bytes at 249/245.
 Nothing diverges today, but rows are routinely authored to fill the budget, and one at 251/249 would pass in one environment and fail in the other.
 
@@ -129,7 +130,8 @@ Rewriting it onto goldmark would be actively wrong, not merely unnecessary.
 
 Also out: `check-codegen-drift.sh`, the `chart-*-check.sh` family, `validate-egress-ip.sh`, `dogfood/setup.sh`, and the `e2e/` scripts.
 They are long, but they orchestrate external CLIs (`kubectl`, `helm`, `docker`, `controller-gen`).
-Shell is the right language; Go would be `exec.Command` soup. **Length is not the signal; parsing is.**
+Shell is the right language; Go would be `exec.Command` soup.
+**Length is not the signal; parsing is.**
 
 ## Validation
 
@@ -223,7 +225,8 @@ No new module, no new `make` target, no new path filter: the `devtools/**` filte
 
 **The parse layer grew three general things**, not one-caller helpers: `Tables()` gains a `Text` reading of each cell beside Q613's source reading, `TopLevelListItems()` reports a bullet's text, its lead bold run, its HTML comments and whether it links, and `SectionRange()` gives the lines a heading's section spans.
 Plus `ParseRow()`, for the case Q612 did not have: **a table row with no table around it.** The metrics replay reads `git log -p` output, where every row is a lone `+`/`-` diff line.
-GFM only recognizes a table whose delimiter is at least as wide as its header, and pads a narrower header out, so acceptance is monotone in the width and the narrowest accepted width *is* the row's cell count. `ParseRow` binary-searches it, which leaves every escaping rule to goldmark instead of restating it.
+GFM only recognizes a table whose delimiter is at least as wide as its header, and pads a narrower header out, so acceptance is monotone in the width and the narrowest accepted width *is* the row's cell count.
+`ParseRow` binary-searches it, which leaves every escaping rule to goldmark instead of restating it.
 
 **`check-roadmap` reconciled** to the same verdict and the same counts (18 bullets, 57 features), with byte-identical output.
 Every bullet's annotation IDs and link flag match.

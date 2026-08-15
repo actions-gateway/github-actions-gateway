@@ -62,7 +62,8 @@ Proxy pods (GMC `buildProxyDeployment`) already ship a full hardened `SecurityCo
 
 ## D. CRD design polish 🟡
 
-Mostly cosmetic + future-proofing; no security implications except D5. **D1–D6 closed 2026-06-06 ([Q33](../../STATUS.md)); D7 deferred to v1beta1 graduation.**
+Mostly cosmetic + future-proofing; no security implications except D5.
+**D1–D6 closed 2026-06-06 ([Q33](../../STATUS.md)); D7 deferred to v1beta1 graduation.**
 
 | # | Sev | Finding | Location | Fix |
 |---|---|---|---|---|

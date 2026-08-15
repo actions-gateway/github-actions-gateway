@@ -11,7 +11,8 @@ Q603 is that seam.
 ## The defect
 
 `settle` ([listener.go](../../../cmd/agc/internal/scalesetlistener/listener.go)) marks a job concluded **in memory** — it drops the job from every held message's waiting set.
-The message is not deleted there. `flushDeletes` issues the DELETE, and it is called from the poll loop, so the delete lands some time after the conclusion that authorised it.
+The message is not deleted there.
+`flushDeletes` issues the DELETE, and it is called from the poll loop, so the delete lands some time after the conclusion that authorised it.
 
 Between those two moments the queue still holds a message whose only remaining guard is process-scoped state.
 A process that stops in that window leaves the message in the queue; the next process polls from cursor 0, receives it with `provisioned`, `completed`, and `abandoned` all empty, and provisions a worker for a job that is over.
@@ -34,7 +35,8 @@ reconcileDeferred → retryDeferred → flushDeletes → GetMessage → handleMe
 ```
 
 `abandonDeferredBefore` settles inside `reconcileDeferred`, so its delete is separated from its conclusion by `retryDeferred` — which re-offers every remaining deferred job, walking the runner-name ladder against the network, and which the loop's own comment notes "can hold the loop for a few pollBackoffs".
-The abandon path always has deferred jobs by construction, so this is the widest of the in-cycle gaps rather than an unlikely one. `completeJob` settles inside `handleMessage`, at the end of an iteration, so its delete waits on the next iteration's `reconcileDeferred` (a `RefreshSession` round trip) and `retryDeferred` before it is issued.
+The abandon path always has deferred jobs by construction, so this is the widest of the in-cycle gaps rather than an unlikely one.
+`completeJob` settles inside `handleMessage`, at the end of an iteration, so its delete waits on the next iteration's `reconcileDeferred` (a `RefreshSession` round trip) and `retryDeferred` before it is issued.
 
 ## The fix
 
@@ -82,7 +84,8 @@ Before the fix the count does not move.
 
 ### What shipped
 
-- `flushDeletesOnExit` runs as `run` unwinds, on a detached context bounded by the new `teardownBudget`, ordered before `deleteSession` by defer's LIFO. `deleteSession`'s own 10s literal became that constant: they are the same class of call, both spending the same pod grace period, and naming the budget once says so.
+- `flushDeletesOnExit` runs as `run` unwinds, on a detached context bounded by the new `teardownBudget`, ordered before `deleteSession` by defer's LIFO.
+  `deleteSession`'s own 10s literal became that constant: they are the same class of call, both spending the same pod grace period, and naming the budget once says so.
 - The per-cycle `flushDeletes` moved to sit directly after `reconcileDeferred`, and a second call now follows `handleMessage`.
   Those are the two places a job concludes, so a conclusion is no longer separated from its delete by `retryDeferred`'s re-offers or `reconcileDeferred`'s session refresh.
 

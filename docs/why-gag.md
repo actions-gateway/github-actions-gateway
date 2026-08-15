@@ -25,7 +25,8 @@ hide:
 
 ## The problem ARC leaves you with
 
-All four trace to one root, and it is not a missing feature. **ARC models a cluster with one owner**, so it has no primitive separating what the platform owns from what a tenant owns.
+All four trace to one root, and it is not a missing feature.
+**ARC models a cluster with one owner**, so it has no primitive separating what the platform owns from what a tenant owns.
 That is a reasonable product for a single-tenant cluster, and the same gap from four angles once teams share one.
 
 <div class="gag-pillars gag-pillars--problem gag-cols-2" markdown>

@@ -246,7 +246,8 @@ Refusing is the gate working: claiming a job the cluster cannot run spends a sin
 What the alert reports is that the refusal is not clearing.
 The gate throttles rather than seals, so intake continues at roughly one claim per `pendingPodDeadline` window; over 30 minutes that is at least three probes that failed to find capacity.
 
-1. Read the gate's evidence: `max by (namespace, runner_set, reason) (actions_gateway_runnerset_worker_capacity_declined == 1)`. `ScaleUpDeclined` is the cluster autoscaler's own refusal, `PodsUnschedulable` is the scheduler's verdict, and `AwaitingProbe` is the latched state that outlives the pod which produced it.
+1. Read the gate's evidence: `max by (namespace, runner_set, reason) (actions_gateway_runnerset_worker_capacity_declined == 1)`.
+   `ScaleUpDeclined` is the cluster autoscaler's own refusal, `PodsUnschedulable` is the scheduler's verdict, and `AwaitingProbe` is the latched state that outlives the pod which produced it.
    The gauge keys on `runner_set` while this alert's series keys on `runner_group`; both carry the same set's name, because the rejection counter is shared with v1 `RunnerGroup` owners.
 2. Work the reason with [RunnerSet Reports WorkerCapacityDeclined](troubleshooting.md#runnerset-reports-workercapacitydeclined-the-gateway-stopped-claiming-jobs), which maps each one to the node, taint, or quota fix that restores placement.
 3. The one-line rollback, if the gate is wrong about the cluster, is `spec.capacityGate.mode: Off`; the same section covers when that is the right call.

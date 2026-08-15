@@ -424,7 +424,8 @@ func (m *Multiplexer) Stop()
 
 - At least one listener goroutine is always running per RunnerGroup (the permanent baseline).
   If the baseline goroutine exits unexpectedly (recoverable error), the Multiplexer restarts it after a brief backoff (1s → 30s cap).
-- `activeCount ≤ maxListeners` at all times. `SpawnReplacement` is a no-op when the ceiling is reached.
+- `activeCount ≤ maxListeners` at all times.
+  `SpawnReplacement` is a no-op when the ceiling is reached.
 - On `Stop()`, every goroutine that holds an open session issues `DeleteSession` before the Multiplexer returns — this is the graceful shutdown requirement.
 
 **`multiplexer_test.go` — what to cover:**
@@ -772,7 +773,8 @@ Verify:
    Authorization: Bearer {installationAccessToken}
    ```
 
-**Implementation:** `GithubRegistrar` in `cmd/agc/internal/agentpool/github_registrar.go` implements this flow. `StubRegistrar` remains wired in `main.go` until validated against live GitHub credentials.
+**Implementation:** `GithubRegistrar` in `cmd/agc/internal/agentpool/github_registrar.go` implements this flow.
+`StubRegistrar` remains wired in `main.go` until validated against live GitHub credentials.
 
 **TODO(investigation-a):** Confirm exact request/response schema against a live `config.sh --debug` capture before replacing `StubRegistrar` in production `main.go`.
 The schema above is sourced from the open-source runner code and may differ for enterprise GitHub instances or future runner versions.

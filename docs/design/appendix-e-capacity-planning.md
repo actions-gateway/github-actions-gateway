@@ -172,7 +172,8 @@ Within an organization, two common partitioning patterns emerge:
 Runner shapes, `maxListeners` counts, and quota are fully self-managed per team.
 This is the recommended default — it aligns operational ownership with the team boundary, gives each team an independent rate-limit budget, and eliminates cross-team coordination on RunnerGroup configuration.
 
-**One gateway per environment (shared by multiple teams).** A single tenant namespace serves multiple teams, with RunnerGroups differentiated by label convention (e.g. `team-a-gpu-2x`, `team-b-gpu-4x`).
+**One gateway per environment (shared by multiple teams).** A single tenant namespace serves multiple teams, with RunnerGroups differentiated by label convention (e.g.
+`team-a-gpu-2x`, `team-b-gpu-4x`).
 This reduces total AGC instances and GitHub App installations at the cost of reintroducing the coordination the self-service model is designed to avoid.
 Use this pattern only when the number of teams is small and the platform team is comfortable arbitrating RunnerGroup configuration and quota allocation.
 
@@ -377,7 +378,8 @@ spec:
 **Rate-limit check.** 1 session × 72 req/hr = 72 req/hr at rest.
 Burst: 12 × 72 = 864 req/hr — well within budget.
 
-**Note on simplicity.** Because there is no `priorityTiers`, no `PriorityClass` objects need to be pre-created. `maxWorkers` alone is sufficient for a flat concurrency ceiling.
+**Note on simplicity.** Because there is no `priorityTiers`, no `PriorityClass` objects need to be pre-created.
+`maxWorkers` alone is sufficient for a flat concurrency ceiling.
 This is the recommended starting point for teams that do not have competing priority requirements.
 
 ---
@@ -433,7 +435,8 @@ Both are **opt-in and off by default**, and both default to recommendation-only,
 | GMC (cluster-wide) | Helm value `vpa.enabled: true` | the `*-controller-manager` Deployment |
 | AGC (per tenant) | `ActionsGateway.spec.agcAutoscaling` | that gateway's `<gw>-agc` Deployment |
 
-The per-gateway opt-in is the presence of the block; there is no `enabled` flag, so removing `agcAutoscaling` deletes the managed `VerticalPodAutoscaler` again. `spec.agcAutoscaling.mode` is the autoscaler's `updateMode`, restricted to three values:
+The per-gateway opt-in is the presence of the block; there is no `enabled` flag, so removing `agcAutoscaling` deletes the managed `VerticalPodAutoscaler` again.
+`spec.agcAutoscaling.mode` is the autoscaler's `updateMode`, restricted to three values:
 
 | `mode` | Behavior |
 | --- | --- |
@@ -447,7 +450,8 @@ Naming `Recreate` makes the eviction explicit.
 
 ### E.11.1. Precedence against `agcResources`
 
-Both `agcResources` and the autoscaler influence the AGC container's resources, so the division is fixed and explicit rather than last-writer-wins. **They compose; they do not compete.**
+Both `agcResources` and the autoscaler influence the AGC container's resources, so the division is fixed and explicit rather than last-writer-wins.
+**They compose; they do not compete.**
 
 - **`agcResources` alone decides what the GMC stamps on the Deployment.** That is unchanged by the opt-in, and it is the sizing actually in effect whenever the autoscaler is not actuating: `mode: Off`, the VPA components absent or down, or before the first recommendation exists.
 - **The managed autoscaler is pinned to `controlledValues: RequestsOnly`.** It moves *requests* only; the limits from `agcResources` (or the platform default) are never raised or lowered by it.

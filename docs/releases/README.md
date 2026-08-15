@@ -32,7 +32,8 @@ That is intended.
 The invariant is **this file matches the published body**, not "this file is frozen at the tag": the file is a living record of what the Release says, and the tag is a point in time.
 Amend the file, republish with `--notes-file`, and re-diff.
 
-It also cannot be automated away. `publish.yml` composes a body with the digests only when the tag has **no** Release yet; a curated draft — the whole point of authoring here — makes it skip that step and leave the notes untouched.
+It also cannot be automated away.
+`publish.yml` composes a body with the digests only when the tag has **no** Release yet; a curated draft — the whole point of authoring here — makes it skip that step and leave the notes untouched.
 Adding the digests by hand is the price of a curated body, so it is a required step of every release, not an oversight to fix later.
 
 ## Not published to the docs site
@@ -49,5 +50,6 @@ Two differences matter:
 The exclusion is spelled out in four places that must agree — `mkdocs.yml`, two `env:` blocks and one `export` in `.github/workflows/pages.yml`, and `scripts/docs/docs-preview.sh`.
 Because the directory is never a site page, a doc that links here must use the absolute `github.com` URL; a relative link fails `mkdocs build --strict`.
 
-Their own links point into the **versioned docs site** (`https://actions-gateway.com/X.Y.Z/…`, no leading `v`), so an operator reading the notes for a release gets that release's instructions. `make doc-links` skips external URLs by design; `make release-links-check` is the gate that resolves these ones anyway, against a local `mkdocs build` rather than the network (Q636).
+Their own links point into the **versioned docs site** (`https://actions-gateway.com/X.Y.Z/…`, no leading `v`), so an operator reading the notes for a release gets that release's instructions.
+`make doc-links` skips external URLs by design; `make release-links-check` is the gate that resolves these ones anyway, against a local `mkdocs build` rather than the network (Q636).
 Only the newest notes file's version is resolvable — `site/` is built from the current tree — so links naming an older release are reported as skipped, and a link to any other host is counted but never failed.

@@ -4,7 +4,8 @@
 
 This is the operator reference for installing the Gateway Manager Controller (GMC) with the shipped **`actions-gateway` Helm chart**.
 For day-2 operations after install, see [upgrade.md](upgrade.md).
-For the full end-to-end walkthrough that continues past the GMC install into the GitHub App Secret and the first `ActionsGateway` CR, see [Getting Started](../getting-started.md). **Replacing Actions Runner Controller (ARC)?** After the GMC is installed, the [Migrating from ARC guide](migration-from-arc.md) maps ARC scale sets onto tenant gateways and walks one runner group across.
+For the full end-to-end walkthrough that continues past the GMC install into the GitHub App Secret and the first `ActionsGateway` CR, see [Getting Started](../getting-started.md).
+**Replacing Actions Runner Controller (ARC)?** After the GMC is installed, the [Migrating from ARC guide](migration-from-arc.md) maps ARC scale sets onto tenant gateways and walks one runner group across.
 
 The Helm chart installs the GMC and its cluster prerequisites **only** — CRDs, RBAC, the validating webhook, the `namespace-psa-guard`, `gmc-tenant-resource-guard`, and `priorityclass-allowlist-guard` admission policies, and NetworkPolicies.
 Per-tenant Actions Gateway Controller (AGC) instances and egress proxy pools are **not** chart resources; the GMC provisions them at runtime from each tenant's `ActionsGateway` CR.
@@ -19,12 +20,15 @@ For the full chart reference (every value, the templates it renders, offline val
 - **Node architecture: `linux/amd64` or `linux/arm64`.** Published images are multi-arch — one pinned digest (the OCI index digest) serves both, so mixed amd64/arm64 (e.g.
   Graviton) node pools need no per-arch configuration.
   Other architectures are not published.
-- **A CNI that enforces `NetworkPolicy`** (Calico, Cilium) for the egress/ingress isolation controls to take effect. `kindnet` does not enforce egress, so the tenant-isolation guarantees do not hold under it. **GKE Dataplane V2** (Cilium) is supported and tested; if the cluster also runs **NodeLocal DNSCache**, use a GAG build that includes the Q229 fix (its DNS egress rule allows the `node-local-dns` redirect backend) — older builds drop DNS under Dataplane V2 and the tenant AGC crash-loops on its first GitHub token fetch (see [Troubleshooting → DNS Times Out Under the Egress NetworkPolicy](troubleshooting.md#dns-times-out-under-the-egress-networkpolicy-gke-dataplane-v2--nodelocal-dnscache)).
+- **A CNI that enforces `NetworkPolicy`** (Calico, Cilium) for the egress/ingress isolation controls to take effect.
+  `kindnet` does not enforce egress, so the tenant-isolation guarantees do not hold under it.
+  **GKE Dataplane V2** (Cilium) is supported and tested; if the cluster also runs **NodeLocal DNSCache**, use a GAG build that includes the Q229 fix (its DNS egress rule allows the `node-local-dns` redirect backend) — older builds drop DNS under Dataplane V2 and the tenant AGC crash-loops on its first GitHub token fetch (see [Troubleshooting → DNS Times Out Under the Egress NetworkPolicy](troubleshooting.md#dns-times-out-under-the-egress-networkpolicy-gke-dataplane-v2--nodelocal-dnscache)).
 - **Webhook serving cert** — choose one:
   - **cert-manager** (the default, `certManager.enabled=true`).
     Install [cert-manager](https://cert-manager.io) first; it issues and rotates the webhook serving cert.
   - **Self-signed** (`certManager.enabled=false`).
-    The chart generates a self-signed serving cert and wires the webhook `caBundle` itself — no cert-manager dependency. **Trade-off:** the cert rotates on a `helm upgrade` that cannot reuse the existing `webhook-server-cert` Secret; see the cert behavior notes in [upgrade.md](upgrade.md#gmc-install-and-upgrade-via-helm-recommended).
+    The chart generates a self-signed serving cert and wires the webhook `caBundle` itself — no cert-manager dependency.
+    **Trade-off:** the cert rotates on a `helm upgrade` that cannot reuse the existing `webhook-server-cert` Secret; see the cert behavior notes in [upgrade.md](upgrade.md#gmc-install-and-upgrade-via-helm-recommended).
 - **A GitHub App** with a private key and installation ID.
   The chart does *not* consume the App credential — it is referenced per tenant by the `ActionsGateway` CR you create after install (see [Getting Started](../getting-started.md)).
   You only need the App registered and installed before onboarding a tenant, not before installing the chart.
@@ -35,7 +39,8 @@ For the full chart reference (every value, the templates it renders, offline val
 ## Preflight the cluster (required first step)
 
 Before installing, **validate that the target cluster can actually uphold the tenant-isolation guarantees**.
-The most dangerous failure mode is silent: installing onto a CNI that does not enforce `NetworkPolicy` (e.g. `kindnet`) leaves every NetworkPolicy the chart ships **inert**, so tenants are *not* confined — and nothing fails or warns at install time.
+The most dangerous failure mode is silent: installing onto a CNI that does not enforce `NetworkPolicy` (e.g.
+`kindnet`) leaves every NetworkPolicy the chart ships **inert**, so tenants are *not* confined — and nothing fails or warns at install time.
 Run the preflight from a [source checkout](#install) first:
 
 ```sh

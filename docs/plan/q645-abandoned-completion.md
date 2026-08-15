@@ -41,7 +41,8 @@ One run, two JIT runners, both registered repo-level against this repo (the org 
 1. Register JIT runners **A** and **B** with the probe label (`gag-q645-abandoned`) via `generate-jitconfig`, and open a broker v2 session for each.
    This is the registration, OAuth-exchange, and session flow the AGC's agent pool and listener run (`agentpool.GithubRegistrar` / `listener.createSession`), reproduced in the probe over the shared `githubapp` and `broker` packages.
 2. Dispatch the fixture workflow ([`q645-abandoned-probe.yml`](../../.github/workflows/q645-abandoned-probe.yml)): one job, `runs-on: gag-q645-abandoned`, nothing ever runs it.
-3. Both sessions receive the fan-out `RunnerJobRequest`. **A acquires** its delivery (`acquirejob` on the delivered `run_service_url`); B only polls and logs.
+3. Both sessions receive the fan-out `RunnerJobRequest`.
+   **A acquires** its delivery (`acquirejob` on the delivered `run_service_url`); B only polls and logs.
    The probe resolves the run REST-side (newest queued run of the fixture workflow) before acquiring, so the REST watch has a subject.
 4. **A completes its assignment with `result=abandoned`**: the Q628 call, nothing else in between.
    No renew loop is needed, since the initial lock outlasts the seconds between acquire and complete.
@@ -137,7 +138,8 @@ Full logs in the session record; fixture runs named per row.
 | [30913691716](https://github.com/actions-gateway/github-actions-gateway/actions/runs/30913691716) | `canceled` | **2xx accepted** | Run concluded **`success`** 1 s later, the same false green as `abandoned`; job record again orphaned `in_progress`. `rerun-failed-jobs` on the concluded run: **403** `This workflow run cannot be retried`. |
 | [30914399921](https://github.com/actions-gateway/github-actions-gateway/actions/runs/30914399921) | *(none: acquire, then silence)* | n/a | No redelivery at the ~10-min acquire-lock lapse (the Q247 recycle applies to started jobs, not never-started ones). At **T0+15m14s** the run *and* the job both concluded **`cancelled`**: honest, visible, and no orphaned `in_progress` record, the only arm that leaves none. |
 
-Every accepted completejob value drives the run to `success`, `failed` is refused, and the green conclusion arms no re-run. **The completejob family cannot produce an honest outcome for an acquired-but-never-run job; saying nothing produces the only honest one**: `cancelled` at GitHub's ~15-minute unstarted-job horizon.
+Every accepted completejob value drives the run to `success`, `failed` is refused, and the green conclusion arms no re-run.
+**The completejob family cannot produce an honest outcome for an acquired-but-never-run job; saying nothing produces the only honest one**: `cancelled` at GitHub's ~15-minute unstarted-job horizon.
 
 ### The remedy
 
@@ -183,7 +185,8 @@ Fire it unconditionally and a capacity shortage becomes a re-run storm that deep
 ### What "capacity returned" means
 
 The codebase already answers this, for the Q512 capacity-gate latch: a worker pod that **bound to a node** (`PodScheduled=True`) after the decline is the evidence capacity came back, and the binding rather than the phase is the signal, because a bound pod still pulling images proves as much as a running one.
-Q691 reuses that definition verbatim, with the abandonment time as the "after". `podScheduledAt` moves from the controller package to the provisioner as `PodScheduledAt`, so both readers share one answer instead of two.
+Q691 reuses that definition verbatim, with the abandonment time as the "after".
+`podScheduledAt` moves from the controller package to the provisioner as `PodScheduledAt`, so both readers share one answer instead of two.
 
 An entry is registered only on the `cancelled` force-cancel outcome.
 That is the state the 2026-08-05 measurement showed accepts `rerun-failed-jobs`; `identity_unknown` has no endpoint to address, and after an `error` the run has not been concluded by us at all.

@@ -59,7 +59,8 @@ Goroutine-side immediate deletes (TTL `0s`) are not counted — the metric track
   No AGC-side deadline is added for Running pods.
 - **Reaping pods of deleted RunnerGroups**: covered by ownerRef GC.
   Pods created by pre-Q95 AGC versions whose RunnerGroup was deleted have neither an ownerRef nor a reconcile trigger; the upgrade note tells operators to clean these up once by label.
-- **RunnerGroup spec updates not reaching cached multiplexer job-handler closures** (e.g. `workerImage` changes need an AGC restart) — pre-existing behaviour, flagged separately if confirmed.
+- **RunnerGroup spec updates not reaching cached multiplexer job-handler closures** (e.g.
+  `workerImage` changes need an AGC restart) — pre-existing behaviour, flagged separately if confirmed.
 
 ## Test plan
 

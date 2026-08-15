@@ -43,11 +43,13 @@ This violates the explicit CLAUDE.md rule:
 
 ## 3. Extend `goleak` coverage ✅ DONE
 
-**Queue row:** #41 · **Size:** S · **Label:** `tests` · **Status:** shipped — `cmd/worker` now runs `goleak.VerifyTestMain(m)` (its `run()` spawns a payload-writer and an output-drain goroutine, both joined before return). `broker/` was already covered by the `TestMain` in `broker/client_test.go`, so no change was needed there; its only sub-package, `broker/brokertest/`, is a test helper with no test files.
+**Queue row:** #41 · **Size:** S · **Label:** `tests` · **Status:** shipped — `cmd/worker` now runs `goleak.VerifyTestMain(m)` (its `run()` spawns a payload-writer and an output-drain goroutine, both joined before return).
+`broker/` was already covered by the `TestMain` in `broker/client_test.go`, so no change was needed there; its only sub-package, `broker/brokertest/`, is a test helper with no test files.
 Both modules' tests are green under goleak and `make check` passes.
 
 `broker/` and `cmd/worker/` both spawn goroutines but their test suites don't apply `goleak.VerifyNone` in `TestMain`.
-The pattern is already established in `cmd/proxy/proxy_test.go` and the `cmd/agc/internal/{listener,token}/*_test.go` files. `goleak` is already a `broker/` dependency — it's just unused.
+The pattern is already established in `cmd/proxy/proxy_test.go` and the `cmd/agc/internal/{listener,token}/*_test.go` files.
+`goleak` is already a `broker/` dependency — it's just unused.
 
 **Fix:** Add a `TestMain` in each module's package root that calls `goleak.VerifyTestMain(m)`.
 Where intentional long-lived goroutines exist (e.g. test-server background loops), add the precise `goleak.IgnoreCurrent()` option rather than disabling the check.

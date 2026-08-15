@@ -16,7 +16,8 @@ The private key is stored in the macOS Keychain — **not** on disk or in the re
 
 ## Storing the private key (one-time setup)
 
-Download the `.pem` file from the GitHub App settings page and keep it on disk. `security add-generic-password` takes no file argument, so the key has to reach it some other way — and the two obvious routes are both wrong.
+Download the `.pem` file from the GitHub App settings page and keep it on disk.
+`security add-generic-password` takes no file argument, so the key has to reach it some other way — and the two obvious routes are both wrong.
 Feed the command below its input on **stdin**, which is neither:
 
 ```bash
@@ -29,7 +30,8 @@ KEY_FILE=~/Downloads/actions-gateway-test.2026-01-01.private-key.pem
 
 `xxd` reads the downloaded file in place; there is no temp copy to make or clean up, which is one fewer copy of the key on disk than any staging approach.
 
-`security -i` reads *commands* from stdin, so the key never becomes a process argument: `xxd` is invoked with only a filename and writes the hex to its stdout, and `security` is invoked with only `-i`. `xxd` is what makes this possible at all — `-X` wants one hex string, and hex is single-line.
+`security -i` reads *commands* from stdin, so the key never becomes a process argument: `xxd` is invoked with only a filename and writes the hex to its stdout, and `security` is invoked with only `-i`.
+`xxd` is what makes this possible at all — `-X` wants one hex string, and hex is single-line.
 
 Keep the two halves as a literal `printf` and a separate `xxd`.
 Collapsing them into `printf '… -X %s' "$(xxd …)"` happens to avoid a leak only because `printf` is a shell builtin and no process is spawned; with `/usr/bin/printf` the key is back in `ps`.
@@ -38,7 +40,8 @@ Collapsing them into `printf '… -X %s' "$(xxd …)"` happens to avoid a leak o
 > Quote `"$KEY_FILE"` so the shell cannot expand it either.
 
 > **Do not use the `-w` prompt for this key.** It is line-oriented — a multi-line PEM's second line is consumed as the "retype" and the command fails — and it silently truncates input at **128 characters**, which a 2048-bit key exceeds many times over.
-> It exits 0 and stores a fragment; the only symptom is authentication failing later. `-w "$(cat <file>)"` avoids the truncation but puts the key in `ps`.
+> It exits 0 and stores a fragment; the only symptom is authentication failing later.
+> `-w "$(cat <file>)"` avoids the truncation but puts the key in `ps`.
 
 Verify the entry round-trips:
 
@@ -104,5 +107,6 @@ spec:
 4. Delete the downloaded `.pem` file from `~/Downloads`.
 5. Recreate the Kubernetes Secret using the `mktemp` + `--from-file` flow from the previous section (the `trap` ensures the temp file is removed even if `kubectl` fails), then restart the consumers so they re-read it — for the dogfood tenant, `kubectl rollout restart deployment/actions-gateway-controller`.
    Worker pods are single-job and interrupting one costs a job, so check `kubectl get pods -l app.kubernetes.io/managed-by=actions-gateway-controller` first and roll during a quiet window.
-6. Delete the old key from the GitHub App settings page. **This is the step that actually ends the exposure** — everything before it only migrates you onto the new key.
+6. Delete the old key from the GitHub App settings page.
+   **This is the step that actually ends the exposure** — everything before it only migrates you onto the new key.
    Do it even if the rest is deferred.

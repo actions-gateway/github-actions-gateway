@@ -128,7 +128,8 @@ These are lower-priority; each is a one-test fix.
 
 #### 5c — `ParseRunnerRSAKey` with BOM-prefixed file ✓
 
-**Code path:** `ParseRunnerRSAKey` → `stripBOM` removes the `.NET` UTF-8 BOM before JSON parsing. **Coverage:** `stripBOM` is tested in `TestParseRunnerCredentials_DOTNETBOM` but not for the RSA params file.
+**Code path:** `ParseRunnerRSAKey` → `stripBOM` removes the `.NET` UTF-8 BOM before JSON parsing.
+**Coverage:** `stripBOM` is tested in `TestParseRunnerCredentials_DOTNETBOM` but not for the RSA params file.
 
 | Test | What it verifies |
 |---|---|
@@ -136,7 +137,8 @@ These are lower-priority; each is a one-test fix.
 
 #### 5d — `FetchRunnerOAuthToken` missing `access_token` field ✓
 
-**Code path:** server returns 200 with a JSON body that has an empty or missing `access_token` → error return. **Coverage:** untested → covered.
+**Code path:** server returns 200 with a JSON body that has an empty or missing `access_token` → error return.
+**Coverage:** untested → covered.
 
 | Test | What it verifies |
 |---|---|

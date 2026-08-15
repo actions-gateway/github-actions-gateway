@@ -31,7 +31,8 @@ Two coordinated pieces.
 
 - **Remove the top-level path filter** (`paths-ignore` / `on.<event>.paths`) so the workflow triggers on *every* PR.
   Fine-grained skipping stays *inside* the workflow via the `changes` job + each real job's `if:` guard (unchanged), so the actual expensive jobs still don't run on unrelated PRs — only the cheap `changes` job does.
-- Add a summary job whose id is **`<workflow>-gate`** (e.g. `unit-test-gate`) that `needs:` every real job and runs with `if: ${{ always() }}`.
+- Add a summary job whose id is **`<workflow>-gate`** (e.g.
+  `unit-test-gate`) that `needs:` every real job and runs with `if: ${{ always() }}`.
   It passes only when every needed job concluded `success` or `skipped`, and fails on anything else (`failure`, `cancelled`):
 
   ```yaml
@@ -60,7 +61,8 @@ Two coordinated pieces.
           done
   ```
 
-  A matrix job (e.g. `trivy`) aggregates naturally: `needs: [trivy]` waits for all legs and `needs.trivy.result` is `failure` if any leg failed.
+  A matrix job (e.g.
+  `trivy`) aggregates naturally: `needs: [trivy]` waits for all legs and `needs.trivy.result` is `failure` if any leg failed.
 
 ### 2. Mark the gate contexts required in the ruleset (admin)
 

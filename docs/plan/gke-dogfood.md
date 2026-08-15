@@ -234,13 +234,15 @@ EOF
 ### B3. Install the v2 CRDs and the GAG chart
 
 The v2 CRDs ship in a separate, opt-in chart (`actions-gateway-crds-v2`).
-The GMC runs its v2 controllers unconditionally, so the CRDs must be installed — and **at the same release as the GMC image**, because the v2 *alpha* schema drifts between releases (e.g. `ActionsGateway.spec.githubAppRef` in `v1.1.0-rc.2` became the `spec.credentials` discriminated union in `v1.1.0-rc.3`); a mismatch makes every reconcile fail validation.
+The GMC runs its v2 controllers unconditionally, so the CRDs must be installed — and **at the same release as the GMC image**, because the v2 *alpha* schema drifts between releases (e.g.
+`ActionsGateway.spec.githubAppRef` in `v1.1.0-rc.2` became the `spec.credentials` discriminated union in `v1.1.0-rc.3`); a mismatch makes every reconcile fail validation.
 A stale CRD that still exposes `githubAppRef` silently drops the credential — the GMC reads an empty App ref and provisions the AGC for workload-identity (Vault) instead, and the AGC crash-loops on `read appId: … no such file or directory`.
 Always apply this chart in lockstep with the GMC image.
 
 Since Q74 graduated each v2 CRD to two served versions (v2beta1 + v2alpha1), the rendered chart exceeds Helm's 1 MiB release-Secret limit, so `helm install`/`upgrade` can no longer store the release and fails outright.
 The supported install≡upgrade path is **apply-render**: `helm template` the chart, then `kubectl apply --server-side` (Q276).
-Dogfood uses the **from-source render** variant — it git-archives the local chart at `$GAG_IMAGE_TAG` to exercise pre-release code, so it cannot depend on the signed release asset (which exists only for `v*` tags). Because `$GAG_IMAGE_TAG` is a git ref, the archived chart is guaranteed to match the control-plane image built from that same ref. `scripts/dogfood/setup.sh` does this automatically; the manual equivalent for the pinned ref:
+Dogfood uses the **from-source render** variant — it git-archives the local chart at `$GAG_IMAGE_TAG` to exercise pre-release code, so it cannot depend on the signed release asset (which exists only for `v*` tags). Because `$GAG_IMAGE_TAG` is a git ref, the archived chart is guaranteed to match the control-plane image built from that same ref.
+`scripts/dogfood/setup.sh` does this automatically; the manual equivalent for the pinned ref:
 
 ```bash
 git archive "$GAG_IMAGE_TAG" charts/actions-gateway-crds-v2 | tar -x -C tmp/
@@ -285,10 +287,12 @@ done
 **Why patch instead of `--set conversion.caBundle=…` at CRD-render time?** The CA only exists after the GMC install creates its Secret, but the CRDs must be installed *before* the GMC so it detects the v2 kinds at startup and enables its v2 controllers + conversion webhook (Q228 — installing the CRDs later needs a GMC restart).
 Reversing that order to obtain the CA first would break the detection.
 So `scripts/dogfood/setup.sh` keeps the order **install CRDs (empty `caBundle`) → install GMC (mints the Secret) → `patch_crd_cabundle`**, and the patch runs before the first CR is applied.
-A JSON merge patch sets only the `caBundle` leaf, leaving the chart-rendered `clientConfig.service` block intact; a later server-side re-apply of the CRD chart never renders `caBundle`, so it cannot strip this leaf (a different field manager owns it). `setup.sh` does all of this automatically.
+A JSON merge patch sets only the `caBundle` leaf, leaving the chart-rendered `clientConfig.service` block intact; a later server-side re-apply of the CRD chart never renders `caBundle`, so it cannot strip this leaf (a different field manager owns it).
+`setup.sh` does all of this automatically.
 
 **Image-tag transition (pre- vs post-Q74).** `install_crds` pins the CRDs to `GAG_IMAGE_TAG`.
-The conversion webhook itself landed in Q74 (PR #557), so a **pre-Q74** GMC build (e.g. the old `v1.1.0-rc.6` default) ships **single-version** CRDs with conversion `strategy: None` and no webhook clientConfig — there is nothing to wire, and patching a webhook clientConfig onto them would be rejected (`should not be set when strategy is not Webhook`). `patch_crd_cabundle` therefore reads each CRD's `spec.conversion.strategy` and only patches the ones set to `Webhook`, cleanly skipping the rest.
+The conversion webhook itself landed in Q74 (PR #557), so a **pre-Q74** GMC build (e.g. the old `v1.1.0-rc.6` default) ships **single-version** CRDs with conversion `strategy: None` and no webhook clientConfig — there is nothing to wire, and patching a webhook clientConfig onto them would be rejected (`should not be set when strategy is not Webhook`).
+`patch_crd_cabundle` therefore reads each CRD's `spec.conversion.strategy` and only patches the ones set to `Webhook`, cleanly skipping the rest.
 So on a pre-Q74 build the caBundle wiring is a no-op; on a **post-Q74** build whose multi-version CRDs route CR conversion through `/convert`, the same step activates automatically with no further change.
 
 **Live-validated post-Q74 (Q281, 2026-07-07).** `GAG_IMAGE_TAG` is now pinned to a post-Q74 `main` SHA (`4567097…`) whose control-plane image was built + pushed by hand (see [Tracking post-Q74 pre-release builds](#tracking-post-q74-pre-release-builds)), so the full **apply → convert → read-back round-trip is live on dogfood**.
@@ -576,13 +580,15 @@ Two paths coexist:
 
 Both are folded into one `runs-on` expression, applied to these jobs (leave all `changes` jobs on `ubuntu-latest`):
 
-**`.github/workflows/unit-test.yml`** — jobs `lint`, `shellcheck`, `vendor-check`, `tidy-check`, `unit-test`, `coverage`. **`.github/workflows/integration-test.yml`** — job `integration-test`:
+**`.github/workflows/unit-test.yml`** — jobs `lint`, `shellcheck`, `vendor-check`, `tidy-check`, `unit-test`, `coverage`.
+**`.github/workflows/integration-test.yml`** — job `integration-test`:
 
 ```yaml
 runs-on: ${{ (github.event_name == 'workflow_dispatch' && inputs.target_gag) && fromJSON(vars.GAG_RUNNER || '"ubuntu-latest"') || 'ubuntu-latest' }}
 ```
 
-- On **push / pull_request** (or a dispatch with `target_gag` unset/false): `github.event_name == 'workflow_dispatch' && inputs.target_gag` is `false`, so the whole `&& … ||` expression short-circuits to the trailing `'ubuntu-latest'` — GitHub-hosted, exactly as before. `vars.GAG_RUNNER` is never consulted, so flipping it no longer affects these events.
+- On **push / pull_request** (or a dispatch with `target_gag` unset/false): `github.event_name == 'workflow_dispatch' && inputs.target_gag` is `false`, so the whole `&& … ||` expression short-circuits to the trailing `'ubuntu-latest'` — GitHub-hosted, exactly as before.
+  `vars.GAG_RUNNER` is never consulted, so flipping it no longer affects these events.
 - On a **dispatch with `target_gag=true`**: the expression evaluates `fromJSON(vars.GAG_RUNNER || '"ubuntu-latest"')`, giving the string `"gag-ci-scaleset"` (routes to GAG) when the variable is set, or `ubuntu-latest` when it is not.
   Since Q399 this is a single JSON *string*, not an array: the runner set declares one label, its own scale-set name.
   (Q726 lets a set carry more; this tenant still declares one.)
@@ -695,7 +701,8 @@ A drain that does not finish inside `DRAIN_TIMEOUT` **fails the stop and leaves 
 
 The error answers two questions, because they take opposite remedies.
 
-**Why is each pod still in flight?** Every in-flight pod is listed with its scheduling and container-waiting reasons, then with its latest warning event. `Pending` alone does not distinguish a pod waiting on a node coming up from one that will never start; the event does — `FailedScheduling` names the resource the pod cannot get, and `FailedMount` names the `job-payload` secret that does not exist.
+**Why is each pod still in flight?** Every in-flight pod is listed with its scheduling and container-waiting reasons, then with its latest warning event.
+`Pending` alone does not distinguish a pod waiting on a node coming up from one that will never start; the event does — `FailedScheduling` names the resource the pod cannot get, and `FailedMount` names the `job-payload` secret that does not exist.
 Without it a pod pinned on a missing secret reads as a bare `ContainerCreating`.
 
 **Was the drain moving at all?** The stop compares the pods in flight at the first and last polls.
@@ -763,7 +770,8 @@ Unlike `stop.sh` it does not wait for the drain — deleting the cluster takes t
 `ASSUME_YES=1` skips the prompt for automation.
 A missing cluster is a no-op, so the script is safe to re-run.
 
-**What survives, and therefore makes recreate possible:** the GCP project, billing link, enabled APIs, quota, the GitHub App and its installation, and the App private key in the local Keychain. **What does not:** the GAG control-plane install, every tenant namespace and CR, the cert-manager CA and all certs minted from it, the per-tenant metrics PKI, the in-cluster GitHub App secret, and every node pool.
+**What survives, and therefore makes recreate possible:** the GCP project, billing link, enabled APIs, quota, the GitHub App and its installation, and the App private key in the local Keychain.
+**What does not:** the GAG control-plane install, every tenant namespace and CR, the cert-manager CA and all certs minted from it, the per-tenant metrics PKI, the in-cluster GitHub App secret, and every node pool.
 Recreate rebuilds these; it does not restore them.
 
 ### Recreate is proven end-to-end (Q380)
@@ -830,22 +838,27 @@ The constraint is a **global, project-wide** CPU limit that defaults to **32**, 
 | `workers-od` | `e2-standard-4` | 0 at rest (manual) | 0 |
 | | | | **52 worst case** |
 
-With `workers` at 7 nodes the project sits at 4 + 28 = 32/32, and the e2e pool's scale-up is refused for want of 8. **The gate can therefore starve itself**: its deploy phase routes CI to GAG, scaling `workers` out of the same global budget the e2e leg then needs.
+With `workers` at 7 nodes the project sits at 4 + 28 = 32/32, and the e2e pool's scale-up is refused for want of 8.
+**The gate can therefore starve itself**: its deploy phase routes CI to GAG, scaling `workers` out of the same global budget the e2e leg then needs.
 Raised to **64** on 2026-08-03 (approved immediately), covering the 52 ceiling plus headroom for spot replacement and GKE surge.
 Re-measured 2026-08-12: still 64, and the pool shapes above are unchanged.
 
-**Two of those four ceilings move without anyone editing this table**, which is why the fit is not a fact to record once. `default-pool` is derived per run from the deployed always-on tenants ([lib/pool.sh](../../scripts/dogfood/lib/pool.sh)), so a third tenant adds 2 vCPU; `workers-od` is sized by hand for a benchmark campaign and only *usually* returned to 0, so four nodes left up is 16 vCPU that puts the ceiling at 68 against a 64 limit.
+**Two of those four ceilings move without anyone editing this table**, which is why the fit is not a fact to record once.
+`default-pool` is derived per run from the deployed always-on tenants ([lib/pool.sh](../../scripts/dogfood/lib/pool.sh)), so a third tenant adds 2 vCPU; `workers-od` is sized by hand for a benchmark campaign and only *usually* returned to 0, so four nodes left up is 16 vCPU that puts the ceiling at 68 against a 64 limit.
 
 **So the competition is capped rather than out-run** (Q631).
-Raising the limit again moves the collision instead of removing it: any new ceiling is one benchmark pool or one tenant away from being reached. `validate-release.sh` therefore takes the e2e and system pools' ceilings off the *live* budget before it routes CI, and holds `workers` to what is left.
+Raising the limit again moves the collision instead of removing it: any new ceiling is one benchmark pool or one tenant away from being reached.
+`validate-release.sh` therefore takes the e2e and system pools' ceilings off the *live* budget before it routes CI, and holds `workers` to what is left.
 The arithmetic is in [lib/quota.sh](../../scripts/dogfood/lib/quota.sh), the operator-facing behaviour in [release.md](../operations/release.md#the-gate-reserves-the-e2e-pools-cpu-budget).
 At today's 64 the reservation leaves room for 11 `workers` nodes against a configured 8, so it changes nothing; at the old 32 it would have held `workers` at 3 and the e2e pool would have got its 16 vCPU.
 
-**Read the API's error, not the autoscaler's event.** `FailedScaleUp` never names the quota. `gcloud container clusters resize` returns a 429 whose body does: `resource "CPUS_ALL_REGIONS": request requires '8.0' and is short '8.0'`.
+**Read the API's error, not the autoscaler's event.** `FailedScaleUp` never names the quota.
+`gcloud container clusters resize` returns a 429 whose body does: `resource "CPUS_ALL_REGIONS": request requires '8.0' and is short '8.0'`.
 Chasing the family quotas instead cost this release two runs and three wrong diagnoses.
 Regional `CPUS` and `N2_CPUS` are both 200 on this project (measured 2026-08-12), so neither can be the refusal.
 
-**Why N2 and not C2.** Separate from the above: the regional `C2_CPUS` default is 8, one node of this shape, and a request to raise it was **denied** on 2026-07-31 — while an identical 8→16 ask for `IN_USE_ADDRESSES` was approved 33 minutes earlier, so the size of the ask was not the discriminator. `N2_CPUS` defaults to 200 and n2 is this pool's original family, so it is already proven here.
+**Why N2 and not C2.** Separate from the above: the regional `C2_CPUS` default is 8, one node of this shape, and a request to raise it was **denied** on 2026-07-31 — while an identical 8→16 ask for `IN_USE_ADDRESSES` was approved 33 minutes earlier, so the size of the ask was not the discriminator.
+`N2_CPUS` defaults to 200 and n2 is this pool's original family, so it is already proven here.
 Note this alone would not have fixed anything; the global limit was the real blocker.
 
 ### F1. Run the one-time setup script
@@ -869,7 +882,8 @@ They are authored **directly at `actions-gateway.com/v2beta1`** (Q231) — the g
 In both variants the DinD native sidecar runs `dockerd` on `tcp://localhost:2375` (no TLS — pod-internal only) and the `runner` container sets `DOCKER_HOST=tcp://localhost:2375`.
 Because all containers in a pod share a network namespace, kind's API server is reachable at `localhost:<apiserver-port>` from the runner.
 
-> **The default variant is `kata`** (unprivileged kind-in-Kata) — live-validated green on GAG 2026-07-17 ([Q286](archive/kata-on-gke.md); the AC#5 run plus the seven live-found fixes are in [what the live session found](archive/kata-on-gke.md#what-the-live-session-found-2026-07-16)). `dind` (privileged DinD, clean-green since 2026-07-07) stays available as the explicit opt-in fallback for environments without nested virtualization.
+> **The default variant is `kata`** (unprivileged kind-in-Kata) — live-validated green on GAG 2026-07-17 ([Q286](archive/kata-on-gke.md); the AC#5 run plus the seven live-found fixes are in [what the live session found](archive/kata-on-gke.md#what-the-live-session-found-2026-07-16)).
+> `dind` (privileged DinD, clean-green since 2026-07-07) stays available as the explicit opt-in fallback for environments without nested virtualization.
 
 ### F2. Workflow change — already wired
 
@@ -892,7 +906,8 @@ CI is unaffected until you route.
 
 The e2e tenant's AGC is **on-demand** (Q231), not always-on: its standing ~500m-CPU AGC pod competes with the CI AGC + GMC + Athens on the `e2-standard-2` system pool (leaving the CI AGC `Pending`/`Insufficient cpu`), and the `SSD_TOTAL_GB=500` quota bounds the workers pool.
 So rather than keep it running, `e2e-start.sh` applies the tenant to spin the AGC up per e2e session and `e2e-stop.sh` deletes the `ActionsGateway` to tear it back down (the namespace, Secret, quota, template, and RunnerSet are inert without the gateway and kept).
-Before the delete, `e2e-stop.sh` **drains**: it waits for jobs still queued on the `gag-ci-e2e` scale set and for in-flight e2e worker pods, and on timeout fails *without* deleting — the AGC is the only thing that can serve a queued job or reap a worker pod, and deleting it under either strands them (2026-07-31: an orphaned worker pod's do-not-disrupt annotations pinned a billable node, and a stranded queued run wedged main's e2e concurrency group). `SKIP_E2E_DRAIN=1` overrides knowingly.
+Before the delete, `e2e-stop.sh` **drains**: it waits for jobs still queued on the `gag-ci-e2e` scale set and for in-flight e2e worker pods, and on timeout fails *without* deleting — the AGC is the only thing that can serve a queued job or reap a worker pod, and deleting it under either strands them (2026-07-31: an orphaned worker pod's do-not-disrupt annotations pinned a billable node, and a stranded queued run wedged main's e2e concurrency group).
+`SKIP_E2E_DRAIN=1` overrides knowingly.
 
 The worker half of that is now fixed in the product rather than only in the script (Q547): the AGC reaps its worker pods when it observes the gateway's `deletionTimestamp`, and the GMC holds teardown open until it has.
 So a delete under in-flight workers no longer strands a node — it *kills those jobs*, which is why the script still drains first.
@@ -904,13 +919,18 @@ A single `e2-standard-2` system node no longer leaves ~500m free for the on-dema
 The same ceiling applies to the **always-on** tenants, not just the on-demand e2e one: measured on a live node, `e2-standard-2` offers **1930m allocatable** against a **~1080m kube-system baseline**, leaving room for exactly *one* of the two 500m tenant AGCs (`dogfood-agc`, `dogfoodss-agc`).
 At 1 node the two race for the node and the loser stays `Pending` indefinitely — and because `dogfood/start.sh` waits on `instance=dogfood` specifically, a `dogfoodss` win times the wait out and fails the caller (this is what blocked `validate-release.sh` before it ever reached the e2e leg).
 Rather than pin a count that a third tenant would silently outgrow (Q357), `dogfood/start.sh` **derives** the size from the deployed always-on `ActionsGateway` CRs via `scripts/dogfood/lib/pool.sh`: one node per always-on tenant AGC, floored at the live-validated **2** (the on-demand e2e tenant's namespace is excluded — its AGC packs into the non-first nodes' larger headroom, validated with all three AGCs on 2 nodes).
-One-node-per-AGC is deliberately conservative; a spare node during the running window is cheaper than a `Pending` AGC. `SYSTEM_NODES` pins the size explicitly instead (a pin below the derived need warns). `scripts/dogfood/pool-test.sh` (in `make check` via `make scripts-test`) asserts the sizing against stubs.
+One-node-per-AGC is deliberately conservative; a spare node during the running window is cheaper than a `Pending` AGC.
+`SYSTEM_NODES` pins the size explicitly instead (a pin below the derived need warns).
+`scripts/dogfood/pool-test.sh` (in `make check` via `make scripts-test`) asserts the sizing against stubs.
 
 The e2e leg triggers the matrix with `gh workflow run` (a `workflow_dispatch` carrying the run-scoped `runner` input above).
-The dispatched run enters the workflow's per-ref concurrency group, which holds **one pending slot** — a run dispatched into a busy group parks there, and the next push to main cancels it, aborting the gate after the scale-up, deploy, and e2e AGC were already paid for (the rerun-era analog was observed 2026-07-20, after PR #709: `gh run rerun` refuses an in-flight run outright). `validate-release.sh` therefore *settles the lane* in `main()` before the trap arms and before anything billable: it waits out an in-flight run for up to `E2E_WAIT_TIMEOUT` (default 1800s) and otherwise fails there, where failure is free.
-The dispatch also resolves the **new** run's id (by watching the newest `workflow_dispatch` run change from a pre-dispatch baseline — `gh workflow run` prints no id) and fails rather than watching a stale run. `scripts/dogfood/validate-release-test.sh` (in `make check` via `make scripts-test`) asserts these paths against stubs.
+The dispatched run enters the workflow's per-ref concurrency group, which holds **one pending slot** — a run dispatched into a busy group parks there, and the next push to main cancels it, aborting the gate after the scale-up, deploy, and e2e AGC were already paid for (the rerun-era analog was observed 2026-07-20, after PR #709: `gh run rerun` refuses an in-flight run outright).
+`validate-release.sh` therefore *settles the lane* in `main()` before the trap arms and before anything billable: it waits out an in-flight run for up to `E2E_WAIT_TIMEOUT` (default 1800s) and otherwise fails there, where failure is free.
+The dispatch also resolves the **new** run's id (by watching the newest `workflow_dispatch` run change from a pre-dispatch baseline — `gh workflow run` prints no id) and fails rather than watching a stale run.
+`scripts/dogfood/validate-release-test.sh` (in `make check` via `make scripts-test`) asserts these paths against stubs.
 
-The same fail-early rule covers local tools (Q356): the CRD smoke is the gate's *last* leg, so its `cosign` dependency (`.build/cosign`, `make cosign`; `COSIGN=` to override) used to be checked ~25 minutes in — aborting after a full node scale-up + deploy + e2e cycle. `main()` now preflights it alongside the `require_cmd` checks, before the confirmation prompt and anything billable; `crd_smoke` only consumes the resolved `COSIGN_BIN`.
+The same fail-early rule covers local tools (Q356): the CRD smoke is the gate's *last* leg, so its `cosign` dependency (`.build/cosign`, `make cosign`; `COSIGN=` to override) used to be checked ~25 minutes in — aborting after a full node scale-up + deploy + e2e cycle.
+`main()` now preflights it alongside the `require_cmd` checks, before the confirmation prompt and anything billable; `crd_smoke` only consumes the resolved `COSIGN_BIN`.
 The test script asserts the preflight's paths too.
 
 `e2e-start.sh` scales the system pool up for the e2e window (`E2E_SYSTEM_NODES`, default `2`, never below the derived running size — a smaller resize would evict a tenant AGC), and `e2e-stop.sh` restores the running size afterwards (derived the same way as `dogfood/start.sh`, so the two agree by construction; `SYSTEM_POOL_AT_REST_NODES` pins it instead); `dogfood/stop.sh` later takes the pool to 0 for the zero-cost-at-rest state.
@@ -931,7 +951,8 @@ scripts/dogfood/e2e-stop.sh
 
 The e2e pool toggles independently from the CI pool — you can run only one or both at the same time.
 
-> **Migrating a pre-existing Classic e2e tenant (one-time).** If the tenant's RunnerSet was previously authored at `v2alpha1` with `acquisitionProtocol: Classic`, the conversion webhook stamped a `conversion.actions-gateway.com/acquisition-protocol: Classic` annotation on the stored v2beta1 object. `kubectl apply` of the new v2beta1 ScaleSet spec does **not** strip that webhook-added annotation, so the AGC keeps running Classic (it reads the RunnerSet through the v2beta1→v2alpha1 conversion, which restores `Classic` from the annotation).
+> **Migrating a pre-existing Classic e2e tenant (one-time).** If the tenant's RunnerSet was previously authored at `v2alpha1` with `acquisitionProtocol: Classic`, the conversion webhook stamped a `conversion.actions-gateway.com/acquisition-protocol: Classic` annotation on the stored v2beta1 object.
+> `kubectl apply` of the new v2beta1 ScaleSet spec does **not** strip that webhook-added annotation, so the AGC keeps running Classic (it reads the RunnerSet through the v2beta1→v2alpha1 conversion, which restores `Classic` from the annotation).
 > Recreate the RunnerSet once so it comes back v2beta1-native (annotation defaults to `ScaleSet`): `kubectl delete runnerset ci-e2e -n gag-dogfood-e2e` then `kubectl apply -k deploy/dogfood-e2e/overlays/dind`.
 > A tenant created fresh by `e2e-setup.sh` (authored at v2beta1 directly) never carries the annotation.
 > Verified live 2026-07-07 (Q231).
@@ -968,7 +989,8 @@ scripts/dogfood/ops.sh kvm-check [<node>]         # verify /dev/kvm on the e2e n
 scripts/dogfood/ops.sh at-rest                    # is anything still billing? 0 at rest, 1 not, 2 unreadable
 ```
 
-`kata-install` reuses exactly the install logic `e2e-setup.sh` runs (both source `scripts/dogfood/lib/kata.sh`), so it re-applies the DaemonSet + RuntimeClass without re-running the full billable one-time setup. `debug-pod`/`kvm-check` target the `e2e` pool, which autoscales from 0 — scale a node up first (`ops.sh pool-scale e2e 1`) or run them during an in-flight e2e session.
+`kata-install` reuses exactly the install logic `e2e-setup.sh` runs (both source `scripts/dogfood/lib/kata.sh`), so it re-applies the DaemonSet + RuntimeClass without re-running the full billable one-time setup.
+`debug-pod`/`kvm-check` target the `e2e` pool, which autoscales from 0 — scale a node up first (`ops.sh pool-scale e2e 1`) or run them during an in-flight e2e session.
 
 `at-rest` is the read-only one: it answers "did the teardown actually land" by counting the project's Compute Engine instances, and reports an unreadable project as `UNKNOWN` (exit 2) rather than as zero.
 Reading `currentNodeCount` off the cluster object cannot make that distinction, because gcloud prints the same empty string for a cluster at 0 nodes and for a projection that resolved to nothing ([release.md](../operations/release.md#confirming-the-cluster-is-actually-at-rest), Q779).

@@ -18,7 +18,8 @@ Two pieces keep the domain bound to the Actions-based Pages deploy:
 - **`site_url: https://actions-gateway.com/`** in `mkdocs.yml` — drives canonical URLs, `sitemap.xml`, and Open Graph / social meta, and roots the site at `/` (no more `/github-actions-gateway/` base path).
 
 DNS (managed at the registrar): four apex `A` records → GitHub Pages `185.199.108–111.153`, matching `AAAA` records, and a `www` `CNAME` → `actions-gateway.github.io`.
-The repo Pages custom domain is set server-side (`gh api -X PUT repos/{owner}/{repo}/pages -f cname=actions-gateway.com`), which provisions a Let's Encrypt cert; "Enforce HTTPS" is enabled once the cert reads `approved`. **DNSSEC and org-level domain verification remain optional future hardening — not yet done.**
+The repo Pages custom domain is set server-side (`gh api -X PUT repos/{owner}/{repo}/pages -f cname=actions-gateway.com`), which provisions a Let's Encrypt cert; "Enforce HTTPS" is enabled once the cert reads `approved`.
+**DNSSEC and org-level domain verification remain optional future hardening — not yet done.**
 
 (The original build plan and decision log is `docs/plan/website.md`; this doc is the durable how-to-maintain reference.)
 
@@ -41,7 +42,8 @@ The highlight renders only while `highlight_for` names the resolved release, so 
 Refreshing it is an optional pre-flight step in [release.md](../operations/release.md#1-pre-flight).
 
 Why this is derived at all: a stable tag deploys that tag's docs wholesale, so a banner that is wrong at tag time is published permanently under that version and no later fix to `main` reaches it.
-Every stable tag missed the manual bump: `v1.0.0` shipped saying *"Alpha, pre-1.0"*, and `v1.1.0` and `v1.2.0` both said *"v1.0.0 is here"* (Q393). `publish.yml`'s `announce-bar` gate now builds the site at the tag and asserts the **rendered** bar names it, so a broken hook or template fails the release before any image is pushed.
+Every stable tag missed the manual bump: `v1.0.0` shipped saying *"Alpha, pre-1.0"*, and `v1.1.0` and `v1.2.0` both said *"v1.0.0 is here"* (Q393).
+`publish.yml`'s `announce-bar` gate now builds the site at the tag and asserts the **rendered** bar names it, so a broken hook or template fails the release before any image is pushed.
 
 Both workflows check out with `fetch-depth: 0` for this reason: a default depth-1 checkout fetches no tags, and the bar would render the version-free fallback.
 Locally, `make docs-serve` and `make docs-build` resolve tags from your checkout, so run `git fetch --tags` if the bar looks stale.
@@ -132,7 +134,8 @@ Each version is a full built copy under its own path on the `gh-pages` branch, a
 - **`workflow_dispatch`** → deploys the `version`/`alias` inputs verbatim (or derives from the ref when blank) — used for **seeding** already-released versions and manual redeploys.
   The `docs_ref` input picks which ref the docs *content* is built from, independently of the ref the workflow logic runs from (see § Seeding below).
 
-**Backports don't demote the site.** A patch cut for an older supported line (e.g. `v1.2.5` released *after* `v1.3.0`) publishes/updates its own `1.2.5` version but leaves `stable` on `1.3.0` — the deploy claims `stable` only when the pushed tag is the highest released version.
+**Backports don't demote the site.** A patch cut for an older supported line (e.g.
+`v1.2.5` released *after* `v1.3.0`) publishes/updates its own `1.2.5` version but leaves `stable` on `1.3.0` — the deploy claims `stable` only when the pushed tag is the highest released version.
 That backport must be tagged off the release line, not off feature-ahead `main`; see [release.md § Patch releases and backports](../operations/release.md#patch-releases-and-backports).
 
 **A tag freezes what that version says, including its version pins.** This is the same trap the announce bar escaped by deriving its version ([§ The announce bar](#the-announce-bar)): anything wrong in the tag's tree publishes permanently under that version, and no later fix to `main` reaches it.
@@ -144,7 +147,8 @@ The procedure is [release.md step 7](../operations/release.md#the-bump-on-main-d
 That check reads each page's `<article>` and nothing around it, because the chrome is deliberately *not* the version being read: the announce bar names the newest release site-wide, so a correct `/1.1.0/` page announces a later one.
 A theme change that renames or drops `<article>` therefore fails it rather than quietly reducing it to scanning nothing.
 
-Pages source stays **"GitHub Actions"**: `mike` maintains the tree on `gh-pages`, and the `publish` job serves that whole tree as the Pages artifact. `--alias-type=copy` makes `stable/` a real directory — GitHub Pages artifact deploys don't follow symlinks, so a symlinked alias would 404 on deep links.
+Pages source stays **"GitHub Actions"**: `mike` maintains the tree on `gh-pages`, and the `publish` job serves that whole tree as the Pages artifact.
+`--alias-type=copy` makes `stable/` a real directory — GitHub Pages artifact deploys don't follow symlinks, so a symlinked alias would 404 on deep links.
 
 ### Seeding already-released versions
 
@@ -212,11 +216,13 @@ Three pieces of machine-readable/operational metadata are wired centrally so the
   Editing those config values updates the structured data automatically; don't hand-paste schema into individual pages.
   Validate built output at [validator.schema.org](https://validator.schema.org/).
 - **`robots.txt`** — `docs/robots.txt` lands inside each built version; the `pages.yml` `publish` job writes the **root** `robots.txt` that points crawlers at the default (stable) `sitemap.xml` and `Disallow`s `/dev/` so the unreleased version stays out of the index (avoiding duplicate content across versions).
-- **`sitemap.xml`** — generated automatically by MkDocs Material because `site_url` is set; no extra config. `robots.txt` points crawlers at it.
+- **`sitemap.xml`** — generated automatically by MkDocs Material because `site_url` is set; no extra config.
+  `robots.txt` points crawlers at it.
 
 ### Analytics (Plausible — opt-in)
 
-Privacy-respecting analytics (Plausible: no cookies, no Google Analytics) are wired via config in `mkdocs.yml` under `extra.analytics` and rendered by `overrides/main.html`. **Disabled by default** — the script is only emitted when `plausible_domain` is non-empty:
+Privacy-respecting analytics (Plausible: no cookies, no Google Analytics) are wired via config in `mkdocs.yml` under `extra.analytics` and rendered by `overrides/main.html`.
+**Disabled by default** — the script is only emitted when `plausible_domain` is non-empty:
 
 ```yaml
 extra:
@@ -267,19 +273,22 @@ Every custom class is namespaced `gag-`, in two families:
   The block name matches the wrapper `<div>` in the Markdown.
 - **Utilities** are bare and reusable — `gag-nowrap` (keeps a short code chip on one line inside a narrow table column), `gag-cont`, `gag-asof`.
 
-**Grep the name before adding a class.** A collision does not error — it resolves by specificity, silently. `.md-typeset .gag-nowrap` (0,2,0) beats a plain `.gag-nowrap` (0,1,0), so a new rule reusing that name has no effect and the symptom is "my CSS does nothing," with nothing in the build to explain it.
+**Grep the name before adding a class.** A collision does not error — it resolves by specificity, silently.
+`.md-typeset .gag-nowrap` (0,2,0) beats a plain `.gag-nowrap` (0,1,0), so a new rule reusing that name has no effect and the symptom is "my CSS does nothing," with nothing in the build to explain it.
 A utility that must never change behaviour and a component that must change it at a breakpoint are different classes, even when the declaration is identical.
 
 ### Page-scoped table rules
 
 Two pages pin their own table columns, each selected by an element only that page has: `.md-content__inner:has(.gag-vs-hero)` for the why-GAG comparison, and `.md-typeset:has(> h1#api-reference)` for the generated [API reference](../reference/api.md).
-Both are there for the same reason. `auto` table layout splits width by each column's max-content demand, so a column of paragraphs takes width from the columns that carry the row's identity, and the split moves as the container does.
+Both are there for the same reason.
+`auto` table layout splits width by each column's max-content demand, so a column of paragraphs takes width from the columns that carry the row's identity, and the split moves as the container does.
 Pin the columns with `table-layout: fixed` rather than tuning the prose.
 
 The comparison table's scope also owns the **last-column accent** (the tinted `td:last-child` and accent-coloured header), and it has to.
 "Last column" means GAG on that one table; everywhere else it is whatever the author put rightmost.
 The accent was global once, which put it on all ~660 tables in the tree, tinting Validation on the API reference and Fix on the troubleshooting page.
-Nothing in the build catches that, because the reveal JS classes every plain table (see [§ Progressive enhancement](#progressive-enhancement-docsjavascriptsextrajs)), so the rule reaches far past the "marketing tables" its comment claimed. **A new table rule that means something about a specific column belongs in a page scope, not in the global block.**
+Nothing in the build catches that, because the reveal JS classes every plain table (see [§ Progressive enhancement](#progressive-enhancement-docsjavascriptsextrajs)), so the rule reaches far past the "marketing tables" its comment claimed.
+**A new table rule that means something about a specific column belongs in a page scope, not in the global block.**
 
 **The ARC column carries three verdict states, not two.** `gag-yes` and `gag-no` are the verdicts; `gag-unverified` is the muted third, for a claim the project believes and has not checked.
 A verdict cell also ends in a `gag-asof` stamp naming the upstream version and the date it was read, which is a content rule rather than a style one and is enforced by `make comparison-stamps-check`.
@@ -294,7 +303,8 @@ Keep a stamp to one line if the format ever grows: a wrapping stamp would pay th
 ### Changing the hero headline
 
 The headline's type size and its two breakpoints are **derived from the longest unbreakable phrase**, not chosen for looks.
-The display face is monospace, so a phrase's width is arithmetic: `characters × 0.61em`. `Self-hosted GitHub Actions` is 26 characters — 15.86em, or 920px at the 2.9rem the headline used to cap at, against a headline column of only 718px.
+The display face is monospace, so a phrase's width is arithmetic: `characters × 0.61em`.
+`Self-hosted GitHub Actions` is 26 characters — 15.86em, or 920px at the 2.9rem the headline used to cap at, against a headline column of only 718px.
 That is why the cap is 2.2rem, why the logomark stacks above the headline below 56rem instead of eating 162px of the column, and why `gag-hero__phrase`'s `nowrap` releases below 44rem.
 
 Measure before changing any of the three.
@@ -311,7 +321,8 @@ Editing the headline **text** is subject to the same arithmetic: a phrase longer
 
 ### Measure the render; the source cannot answer these questions
 
-Every layout defect found in the 2026-08 marketing review was invisible in the Markdown and the CSS, and obvious in one measurement: tile heights, bullet wrapping, separator size, an alignment axis, a `display: flex` that turned prose into non-wrapping flex items, and 24px of horizontal scroll. **`make check` does not build the site**, so nothing gates any of it.
+Every layout defect found in the 2026-08 marketing review was invisible in the Markdown and the CSS, and obvious in one measurement: tile heights, bullet wrapping, separator size, an alignment axis, a `display: flex` that turned prose into non-wrapping flex items, and 24px of horizontal scroll.
+**`make check` does not build the site**, so nothing gates any of it.
 Run `make docs-serve` and measure.
 
 **Sweep the defect class, not the reported instance.** This is the expensive lesson.
@@ -433,7 +444,8 @@ Each rule below was measured against the render on 2026-08-08, and each has a pr
 **Check the dark palette separately, and expect it to be the worse one.** Material's muted-text token is near-symmetric in alpha and not in perceived contrast: `--md-default-fg-color--light` is `rgba(0, 0, 0, 0.54)` over white, which composites to `#757575` for `Lc 72`, and `rgba(226, 228, 233, 0.56)` over slate's `#1e2129`, which composites to `#8c8e95` for `Lc 39.4`.
 A component inheriting it loses 32.6 points when the reader flips the palette, with nothing in the source to show it.
 
-That is why secondary text and accent labels take `--gag-muted` and `--gag-accent-ink` rather than the Material tokens, on the same ink/fill split as `--gag-win-ink`. **Use them for any custom rule setting `color`**; a new rule reaching for `--md-default-fg-color--light` reintroduces the asymmetry silently.
+That is why secondary text and accent labels take `--gag-muted` and `--gag-accent-ink` rather than the Material tokens, on the same ink/fill split as `--gag-win-ink`.
+**Use them for any custom rule setting `color`**; a new rule reaching for `--md-default-fg-color--light` reintroduces the asymmetry silently.
 
 | | Light | Dark |
 | --- | --- | --- |
@@ -550,7 +562,8 @@ Run `make docs-build` too, and for the card grids or a wide table, serve the sit
 
 The first gate reads the MkDocs dialect even though it answers for GitHub: its parser handles `!!!` admonition bodies and `markdown="1"` HTML, so a link inside one is checked rather than silently skipped as an indented code block (Q612).
 
-Two engines, two gates. `docs/releases/` is the exception that needs a third: those files publish to neither, and their links are all absolute into the versioned site, so `make release-links-check` resolves them against a local `site/` build ([testing.md § The release-link gate](testing.md#the-release-link-gate)).
+Two engines, two gates.
+`docs/releases/` is the exception that needs a third: those files publish to neither, and their links are all absolute into the versioned site, so `make release-links-check` resolves them against a local `site/` build ([testing.md § The release-link gate](testing.md#the-release-link-gate)).
 
 A link can pass one and 404 on the other.
 Three divergences have actually shipped broken:
@@ -582,14 +595,17 @@ Scope is **per version**, not per site (Q558):
 | `dev` | The above **plus** the repo-internal docs: `docs/STATUS.md` (the [backlog](#the-backlog-page)), `docs/plan/`, `docs/development/` (this file included), `docs/assets/`'s READMEs |
 | *no version* | `docs/releases/` — see the trap below |
 
-A release is a frozen build, so a backlog published in one would be a snapshot stale from tag day. `dev` redeploys on every push to `main`, which is the only place a live backlog is honest.
+A release is a frozen build, so a backlog published in one would be a snapshot stale from tag day.
+`dev` redeploys on every push to `main`, which is the only place a live backlog is honest.
 
-One env var carries the difference. `mkdocs.yml`'s `exclude_docs` is an [`!ENV` tag](https://www.mkdocs.org/user-guide/configuration/#environment-variables) whose **default** is the full repo-internal exclusion list; the `dev` deploy step in `pages.yml` overrides `MKDOCS_EXCLUDE_DOCS` with a shorter one.
+One env var carries the difference.
+`mkdocs.yml`'s `exclude_docs` is an [`!ENV` tag](https://www.mkdocs.org/user-guide/configuration/#environment-variables) whose **default** is the full repo-internal exclusion list; the `dev` deploy step in `pages.yml` overrides `MKDOCS_EXCLUDE_DOCS` with a shorter one.
 Release deploys never set it, so no release version — existing or future — can gain a repo-internal page.
 
 Two traps worth keeping in mind when editing that wiring:
 
-- **Unset and empty mean opposite things.** The `!ENV` default applies only when the variable is *absent*. `pages.yml` therefore `export`s it inside a conditional rather than using a step-level `env:` with a `${{ … && … || '' }}` expression, which would set it to `''` on every release and publish the internal docs everywhere.
+- **Unset and empty mean opposite things.** The `!ENV` default applies only when the variable is *absent*.
+  `pages.yml` therefore `export`s it inside a conditional rather than using a step-level `env:` with a `${{ … && … || '' }}` expression, which would set it to `''` on every release and publish the internal docs everywhere.
 - **`docs/README.md` stays excluded on every version**, including `dev`.
   MkDocs drops it anyway as a conflict with the `index.md` landing page; leaving it in the list keeps that from surfacing as a build warning.
   Because it is never a site page, a doc that links to it must use the absolute `github.com` URL — a relative `../README.md` fails `mkdocs build --strict`.
@@ -598,10 +614,12 @@ Two traps worth keeping in mind when editing that wiring:
   The exclusion is spelled out in **four** places that must agree — `mkdocs.yml`'s default, the two `env:` blocks and the one `export` in `pages.yml`, and `scripts/docs/docs-preview.sh`.
   Miss the last and `make docs-build` disagrees with CI.
 
-PR builds validate **both** scopes (`pages.yml`'s `build` job runs `mkdocs build` twice), so a PR that breaks a plan or development page fails there rather than on `main`. `make docs-build` does the same locally — see [§ The two link gates](#the-two-link-gates).
+PR builds validate **both** scopes (`pages.yml`'s `build` job runs `mkdocs build` twice), so a PR that breaks a plan or development page fails there rather than on `main`.
+`make docs-build` does the same locally — see [§ The two link gates](#the-two-link-gates).
 
 A push to `main` re-runs that gate (`pages.yml`'s `validate` job), because a PR gate only ever sees its own base.
-Two PRs open at once can each pass and still merge into a red `main` — Q560 raised the link validation to warnings while Q558 added a link that trips it, and the breakage surfaced two hours later on an unrelated docs PR (Q562). `validate` runs beside the deploy rather than gating it: the point is a red status on `main`, not a stalled `dev` version.
+Two PRs open at once can each pass and still merge into a red `main` — Q560 raised the link validation to warnings while Q558 added a link that trips it, and the breakage surfaced two hours later on an unrelated docs PR (Q562).
+`validate` runs beside the deploy rather than gating it: the point is a red status on `main`, not a stalled `dev` version.
 
 ### What belongs in `nav`
 
@@ -625,7 +643,8 @@ The following pages exist in the docs directory, but are not included in the "na
 Aborted with 1 warnings in strict mode!
 ```
 
-Both scopes are checked, because nav coverage is decided per build: a `development/` page is a page only on `dev`, so the release-scope build cannot see it. `not_in_nav` is what suppresses the report for a deliberate omission, so it stays populated — the empty list is MkDocs' *reported* one, never this key.
+Both scopes are checked, because nav coverage is decided per build: a `development/` page is a page only on `dev`, so the release-scope build cannot see it.
+`not_in_nav` is what suppresses the report for a deliberate omission, so it stays populated — the empty list is MkDocs' *reported* one, never this key.
 The one inert entry is `/README.md`: MkDocs drops `docs/README.md` as an `index.md` conflict before nav is evaluated, so it reaches no scope's list and is kept only to mirror `exclude_docs`.
 
 ### The backlog page
@@ -684,7 +703,8 @@ Both link syntaxes are rewritten — inline `](target)` and the reference-style
 link, so covering only the first would leave the rarer form silently dead.
 
 This was already needed before the backlog page: `design/` and `operations/` shipped such links dead.
-Publishing the repo-internal docs made it load-bearing — 724 links across the tree, 34 on `STATUS.md` alone. `scripts/docs/source-links-hook-test.sh` asserts the rewrite in both directions under `make check`.
+Publishing the repo-internal docs made it load-bearing — 724 links across the tree, 34 on `STATUS.md` alone.
+`scripts/docs/source-links-hook-test.sh` asserts the rewrite in both directions under `make check`.
 
 ### Unpublished is per build, not per path (Q561)
 

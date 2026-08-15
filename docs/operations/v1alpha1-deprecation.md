@@ -51,7 +51,8 @@ Two consequences worth stating plainly:
 - **`v3.0.0` is not scheduled and carries no date**, exactly as `v2.0.0` carries none.
   It is gated on `v2beta1`'s retirement, which is gated in turn on the `v2` GA soak ([v2 GA plan](../plan/v2-ga.md)).
   The commitment here is a floor — *not before* `v3.0.0` — and the removal still gets its own one-release-ahead announcement.
-- **Whether the GA `v2` version defines the two values at all is a separate, open question**, settled by the graduation hop rather than by this notice. `v2` is a new version, so it is free to omit them; if it does, an operator on `v2` simply cannot set them, while an operator on `v2beta1` still can until `v3.0.0`.
+- **Whether the GA `v2` version defines the two values at all is a separate, open question**, settled by the graduation hop rather than by this notice.
+  `v2` is a new version, so it is free to omit them; if it does, an operator on `v2` simply cannot set them, while an operator on `v2beta1` still can until `v3.0.0`.
   Either way the removal release above is unchanged.
 
 **What to do now:** nothing is forced, but migrate when convenient — set `egressPolicyMode: FQDN` on the `EgressProxy` and have the platform operator set the matching GMC `--fqdn-policy-backend`.
@@ -90,7 +91,8 @@ They are called out because the schema alone does not say so: one is rejected at
 **An alert or dashboard reading `ActionsGateway.status.activeSessions` is reading a field no controller populates**, so it reports absent (or zero) no matter how busy the gateway is.
 Point it at the per-`RunnerGroup` field or the metric instead.
 
-Neither field is carried into v2. `v2beta1` replaces `SecretReference` with the name-only `LocalSecretReference`, which has no `namespace` at all, and `ActionsGatewayStatus` simply omits `activeSessions`.
+Neither field is carried into v2.
+`v2beta1` replaces `SecretReference` with the name-only `LocalSecretReference`, which has no `namespace` at all, and `ActionsGatewayStatus` simply omits `activeSessions`.
 So migrating with [`gag-migrate`](migration-v1-to-v2.md) needs no action for either: there is nothing to carry across.
 
 They stay in `v1alpha1` rather than being deleted now because [removing a field from a served version is a breaking change](../development/api-review.md#removal-needs-a-version-increment-not-a-promise).
@@ -129,9 +131,11 @@ The window **closes at `v2.0.0`**, when `v1alpha1` is removed and the legacy `"t
 **`v2.0.0` is the named removal release, announced with `v1.3.0`.** The project's policy is that a removal lands on a named release announced at least one release ahead ([roadmap](../roadmap.md)); `v1.3.0` carries that announcement for all three items above.
 
 `v2.0.0` is a **major** tag because removing a served API version is a breaking change, and it is gated on the **`v2` (GA) API being available and validated**, not on a date and not on an adopter census.
-Gating on v2 maturity is what lets the commitment be concrete: you are never asked to move onto an alpha to escape a removal, and there is no census to wait on. `v2beta1` is production-relyable today and converts to `v2` in place.
+Gating on v2 maturity is what lets the commitment be concrete: you are never asked to move onto an alpha to escape a removal, and there is no census to wait on.
+`v2beta1` is production-relyable today and converts to `v2` in place.
 
-There is deliberately **no date**. `v1.3.0` fixes *which* release removes these and *what* it removes; the GA soak that gates `v2.0.0` finishes when the evidence says the v2 shape is right.
+There is deliberately **no date**.
+`v1.3.0` fixes *which* release removes these and *what* it removes; the GA soak that gates `v2.0.0` finishes when the evidence says the v2 shape is right.
 
 ## Before you upgrade past `v2.0.0`
 

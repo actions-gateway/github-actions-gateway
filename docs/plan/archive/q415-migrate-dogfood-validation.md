@@ -5,8 +5,10 @@ The v2 GA Definition of Done row *"≥1 representative tenant migrated v1→v2 w
 All four defects found — Q463, Q465, Q466 and Q467 — have since been **fixed** by parallel sessions (#911, #912, #915, and the Q467 fix).
 Full evidence in [Findings](#findings).
 
-> That 2026-07-28 run confirmed none of those fixes — it ran against an `agc` image predating all of them, with `noProxyCIDRs` pinned and a deliberately short gateway name as workarounds. **All three are now confirmed live** on a control plane built from `2715e7f8`, with both workarounds removed: [Re-validation (Q472)](#re-validation-on-a-fixed-control-plane-2026-07-31-q472).
-> That run found one new defect of its own, [Q535](#defect-a-v2-agc-also-reconciles-the-v1-runnergroups-in-its-namespace-q535), since fixed. **Scope:** the last unverified item in the v2 GA Definition of Done — [v2-ga.md § Definition of Done audit](../v2-ga.md#definition-of-done-audit-as-of-this-change) row *"≥1 representative tenant migrated v1→v2 with the tool for real"*, today marked ⚠️ **Unverified**.
+> That 2026-07-28 run confirmed none of those fixes — it ran against an `agc` image predating all of them, with `noProxyCIDRs` pinned and a deliberately short gateway name as workarounds.
+> **All three are now confirmed live** on a control plane built from `2715e7f8`, with both workarounds removed: [Re-validation (Q472)](#re-validation-on-a-fixed-control-plane-2026-07-31-q472).
+> That run found one new defect of its own, [Q535](#defect-a-v2-agc-also-reconciles-the-v1-runnergroups-in-its-namespace-q535), since fixed.
+> **Scope:** the last unverified item in the v2 GA Definition of Done — [v2-ga.md § Definition of Done audit](../v2-ga.md#definition-of-done-audit-as-of-this-change) row *"≥1 representative tenant migrated v1→v2 with the tool for real"*, today marked ⚠️ **Unverified**.
 > Closing it needs a live migration, not another test.
 
 ## Goal (one sentence)
@@ -102,7 +104,8 @@ export REPO=actions-gateway/github-actions-gateway
 
 ## Acceptance criteria
 
-The run closes Q415 only if all of these hold, each recorded with its evidence in Findings below. **All met 2026-07-28.**
+The run closes Q415 only if all of these hold, each recorded with its evidence in Findings below.
+**All met 2026-07-28.**
 
 - [x] `gag-migrate --apply` completes without error against the live v1 tenant.
 - [x] The migrated `<gateway>-agc` and `<gateway>-egress-proxy` Deployments reach Ready.
@@ -183,7 +186,8 @@ The DoD row stays ⚠️ Unverified until a real DinD job completes on the migra
 
 ### Part 2 — the job half, run after the workflow reached `main` (2026-07-28)
 
-With the smoke workflow on the default branch the dispatch blocker cleared and the full ordered sequence ran. **All acceptance criteria pass.**
+With the smoke workflow on the default branch the dispatch blocker cleared and the full ordered sequence ran.
+**All acceptance criteria pass.**
 
 | Criterion | Result |
 |---|---|
@@ -246,7 +250,8 @@ It takes a proxied tenant on a managed cluster — precisely what this plan cons
 Filed as Q465.
 
 **Fixed (Q465).** The hardcoded range is gone.
-The GMC now exempts the API server by the address the cluster reports — its own `KUBERNETES_SERVICE_HOST`, which is the ClusterIP the AGC pod will dial — falling back to the literal `$(KUBERNETES_SERVICE_HOST)` for the kubelet to expand when the GMC itself runs out-of-cluster, and bracketing an IPv6 ClusterIP so Go's `NO_PROXY` parser matches it. `kubernetes.default.svc` joins the static half for clusters whose cluster domain is not `cluster.local`.
+The GMC now exempts the API server by the address the cluster reports — its own `KUBERNETES_SERVICE_HOST`, which is the ClusterIP the AGC pod will dial — falling back to the literal `$(KUBERNETES_SERVICE_HOST)` for the kubelet to expand when the GMC itself runs out-of-cluster, and bracketing an IPv6 ClusterIP so Go's `NO_PROXY` parser matches it.
+`kubernetes.default.svc` joins the static half for clusters whose cluster domain is not `cluster.local`.
 Worker pods lose the range outright and gain nothing: they hold no kubeconfig and never dial the API server.
 The net effect is a *narrower* default on every distribution — one API server address instead of a /12 of unrelated hosts.
 The workaround `noProxyCIDRs: [34.118.224.0/20]` was removed from [`deploy/dogfood-migrate/resources.yaml`](../../../deploy/dogfood-migrate/resources.yaml) so that a clean AGC startup would itself be the verification — [confirmed live 2026-07-31](#re-validation-on-a-fixed-control-plane-2026-07-31-q472).

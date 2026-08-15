@@ -1,6 +1,7 @@
 # Q69 — Authenticated secure-serving for proxy + AGC metrics
 
-**Status:** ✅ Done — uniform mTLS shipped for the AGC + proxy `/metrics` on `:8443`. **Size:** M **Labels:** `security` `infra` **Queue row:** Q69 (removed)
+**Status:** ✅ Done — uniform mTLS shipped for the AGC + proxy `/metrics` on `:8443`.
+**Size:** M **Labels:** `security` `infra` **Queue row:** Q69 (removed)
 
 ## What shipped
 
@@ -35,7 +36,8 @@ The AGC and proxy mount the server bundle (`ca.crt` + `tls.crt` + `tls.key`); th
 - `cmd/agc/main.go:179` — `Metrics: metricsserver.Options{BindAddress: metricsBindAddress}`.
   No `SecureServing`, no `FilterProvider`, no cert → **plain HTTP**.
 - AGC NetworkPolicy (`buildAGCNetworkPolicy`, `builder.go:275`) already allows egress to the kube API (443 + 6443) and ingress on the metrics port only from monitoring namespaces (`metrics=enabled`).
-- AGC RBAC: `agc-tenant-role` ClusterRole (`config/agc-tenant-role/agc_tenant_role.yaml`), bound per-tenant via a namespaced RoleBinding. **No** tokenreviews/subjectaccessreviews.
+- AGC RBAC: `agc-tenant-role` ClusterRole (`config/agc-tenant-role/agc_tenant_role.yaml`), bound per-tenant via a namespaced RoleBinding.
+  **No** tokenreviews/subjectaccessreviews.
 
 ### Proxy
 - `cmd/proxy/proxy.go:140` — `mux.Handle("/metrics", promhttp.Handler())` on the health listener (`:8081`), **plain HTTP**.
@@ -84,7 +86,8 @@ The AGC has no health probes today, so its metrics simply move `:8081 → :8443`
 ## Plan — AGC (`cmd/agc/main.go`)
 
 - Move the metrics bind address `:8081 → :8443`.
-- Enable `SecureServing: true`, `CertDir: /etc/actions-gateway/metrics-tls`, `CertName: tls.crt`, `KeyName: tls.key`, and a `TLSOpts` func setting `ClientAuth = RequireAndVerifyClientCert` + `ClientCAs` loaded from `metrics-tls/ca.crt`. **No** `FilterProvider` (no kube auth → no RBAC change).
+- Enable `SecureServing: true`, `CertDir: /etc/actions-gateway/metrics-tls`, `CertName: tls.crt`, `KeyName: tls.key`, and a `TLSOpts` func setting `ClientAuth = RequireAndVerifyClientCert` + `ClientCAs` loaded from `metrics-tls/ca.crt`.
+  **No** `FilterProvider` (no kube auth → no RBAC change).
 - Follow the established proxy-cert pattern: secure when the cert files are present (GMC always mounts them in production); plain fallback only when absent (dev/test), logged loudly.
   Update the `metricsBindAddress` comment.
 
@@ -98,7 +101,8 @@ The AGC has no health probes today, so its metrics simply move `:8081 → :8443`
 
 - AGC Deployment: metrics `containerPort 8081 → 8443`; mount the `actions-gateway-metrics-tls` Secret RO (mode `0o440` + `fsGroup 65532`, as the existing cert mounts).
 - Proxy Deployment: add `containerPort 8443`; mount the same Secret RO.
-- `metricsScrapeIngressRule()`: gate `metricsPort (8443)` instead of `8081` (one shared function → both AGC NP and proxy NP follow). `:8081` keeps no pod-ingress rule (kubelet probes already rely on node-exemption today — no change).
+- `metricsScrapeIngressRule()`: gate `metricsPort (8443)` instead of `8081` (one shared function → both AGC NP and proxy NP follow).
+  `:8081` keeps no pod-ingress rule (kubelet probes already rely on node-exemption today — no change).
   The `metrics=enabled` namespace selector stays as defense-in-depth.
 
 ## Tests

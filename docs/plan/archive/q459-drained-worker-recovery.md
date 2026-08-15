@@ -90,7 +90,8 @@ Whatever closes this must key off something else.
 The first half is measured above.
 The second half is question 2, and it is what `E2E_GitHub_CancelledRunLeavesNoDeletionMark` measures.
 
-Worth noting for the eventual implementation: the AGC already *has* this information and discards it. `InformerPodWaiter.onPodDelete` resolves waiters with `phase: PodSucceeded` and an empty reason ([`podwaiter.go`](../../../cmd/agc/internal/provisioner/podwaiter.go)), identical to a genuine success, matching the older poll loop's "deleted externally → treat as completion".
+Worth noting for the eventual implementation: the AGC already *has* this information and discards it.
+`InformerPodWaiter.onPodDelete` resolves waiters with `phase: PodSucceeded` and an empty reason ([`podwaiter.go`](../../../cmd/agc/internal/provisioner/podwaiter.go)), identical to a genuine success, matching the older poll loop's "deleted externally → treat as completion".
 Closing the gap needs no new watch, annotation or pod bookkeeping — it needs the waiter to stop flattening a distinction it can already see.
 
 ## Findings so far
@@ -135,7 +136,8 @@ Milestone 3's own plan doc had said so all along: "`contextData.github.run_id` (
 
 So both readers were looking somewhere the identity has never been, and the two symptoms are one cause: `repoInfo()` returned `("", "", 0)` and `jobMetaFrom()` returned an empty `jobMeta`.
 
-The fix reads the `github` context, keeps the variables and top-level `run_id` as tolerated fallbacks, and routes both readers through one `runIdentity()` so they cannot diverge again. `payload_groundtruth_test.go` asserts against the capture — against the unfixed parser it fails with exactly the observed symptom (owner `""`, repo `""`, run `0`), which is what makes it a guard rather than a restatement.
+The fix reads the `github` context, keeps the variables and top-level `run_id` as tolerated fallbacks, and routes both readers through one `runIdentity()` so they cannot diverge again.
+`payload_groundtruth_test.go` asserts against the capture — against the unfixed parser it fails with exactly the observed symptom (owner `""`, repo `""`, run `0`), which is what makes it a guard rather than a restatement.
 The synthetic payloads in the provisioner unit tests, the envtest eviction and drain specs, and Q421's fake-GitHub drain spec were all moved onto the real shape, since a fake carrying a field GitHub does not send is what kept this invisible.
 
 Two consequences for this plan.
@@ -206,7 +208,8 @@ Q495 was still a prerequisite for the **implementation**, for the separate reaso
 - **Read the spec summary, not the wall clock.** This run's four specs finished in 19m04s inside a `ginkgo` process that lived 94 minutes, because the host slept mid-run.
   Both false "it's wedged" diagnoses this session came from host-side clocks, and the rule that came out of it is now in [testing.md](../../development/testing.md#end-to-end-tests).
 - **Two concurrent live-GitHub sessions collide on the fixture repo.** Both dispatch the same `drain-probe.yml` in `actions-gateway/gateway-test` and both register a runner named `real-ag-e2e-6d8749c-0`.
-  Two such runs were in flight simultaneously on 2026-07-29. `dispatchAndResolveRun`'s snapshot keeps each spec on its own run, and this measurement's binding was confirmed directly (the pod's job began at 13:21:00Z, matching its run's 13:20:55Z job start, and the namespace did not exist when the other run started) — but the runner-name collision was not defended against.
+  Two such runs were in flight simultaneously on 2026-07-29.
+  `dispatchAndResolveRun`'s snapshot keeps each spec on its own run, and this measurement's binding was confirmed directly (the pod's job began at 13:21:00Z, matching its run's 13:20:55Z job start, and the namespace did not exist when the other run started) — but the runner-name collision was not defended against.
   [q511-live-github-run-isolation.md](../q511-live-github-run-isolation.md) settled it: the suite's `BeforeAll` now refuses to start while the fixture repo is not idle.
 
 Earlier attempts were blocked before even reaching it, by the PriorityClass VAP param-resolution failure that [q444-vap-param-resolution.md](q444-vap-param-resolution.md) investigates and Q492 has since fixed, by moving the guard's `paramKind` off a core type.
@@ -247,7 +250,8 @@ Recorded here because each was established while measuring, not while coding, an
    What blocks it is the contract: `PodWaiter.WaitForCompletion` returns only `(phase, reason, error)` ([`podwaiter.go`](../../../cmd/agc/internal/provisioner/podwaiter.go)), so the interface has to widen for the signal to reach `provision()`.
    No new watch, annotation, or pod bookkeeping is needed.
 2. **Exclude the AGC's own deletions, or the reaper becomes a re-run trigger.** [`reapWorkerPods`](../../../cmd/agc/internal/controller/runnergroup_reaper.go) deletes worker pods on three arms; `pending_deadline` applies to both tiers and `orphaned_running` to scale-set.
-   Each sets a `deletionTimestamp` on a pod the AGC itself gave up on, which under a naive deletion-keyed rule would re-run it. `lifetime_exceeded` is already safe by a different route — the kubelet publishes `DeadlineExceeded` *before* the reaper deletes, so that terminal phase carries no deletion mark and the existing reason check still separates it.
+   Each sets a `deletionTimestamp` on a pod the AGC itself gave up on, which under a naive deletion-keyed rule would re-run it.
+   `lifetime_exceeded` is already safe by a different route — the kubelet publishes `DeadlineExceeded` *before* the reaper deletes, so that terminal phase carries no deletion mark and the existing reason check still separates it.
 3. **The classic half needs Q495's fix to be real on a live worker.** Without a run ID, `handleEviction` returns early, so closing the gap on classic would buy an interface change and no recovery.
    Q495 has since been fixed — the identity is read from the payload's `github` context — but that fix has not yet been seen on a real worker pod at live-GitHub, so confirm the annotation before relying on the recovery it enables.
    The scale-set tier reads its identity from the pod annotations and is unaffected.
@@ -271,13 +275,15 @@ The scale-set arm shares preemption's non-restart-safety, with a shorter window:
 Design boundary: 04-operational-flows.md §4.2; operator behaviour: troubleshooting.md "Draining a Worker Auto-Re-Runs the Jobs It Interrupts".
 Pinned by `TestAGC_Drain_ClassicWorkerTerminalWithMark_Reruns` / `TestAGC_Drain_ScaleSetWorkerTerminalWithMark_Recovers` (recovered side) and the retained `DoesNotRerun`/`DoesNotRecover` pair (no-terminal-phase side), plus the podwaiter/scan/reaper unit tests.
 
-**Q519's first run caught the deletion arm inert on real clusters — a timestamp-shape bug, fixed with the gate.** The spec's field sampler recorded the disrupted worker as `Running/2026-07-31T07:02:00Z/` → `Failed/2026-07-31T07:02:00Z/` against a delete issued at 07:01:32: the apiserver stamps `deletionTimestamp` as request time **plus the grace period**, so on a real kubelet the mark sits ~28s in the *future* of the exit a SIGTERM-honouring runner records seconds after the request. `externallyDeletedBeforeTerminal` compared the raw mark and read every real drain as "deleted after terminal" — the cleanup shape — so no recovery fired; the shipped form could only ever recover a worker that ignored SIGTERM to its SIGKILL (exit at mark == grace expiry).
+**Q519's first run caught the deletion arm inert on real clusters — a timestamp-shape bug, fixed with the gate.** The spec's field sampler recorded the disrupted worker as `Running/2026-07-31T07:02:00Z/` → `Failed/2026-07-31T07:02:00Z/` against a delete issued at 07:01:32: the apiserver stamps `deletionTimestamp` as request time **plus the grace period**, so on a real kubelet the mark sits ~28s in the *future* of the exit a SIGTERM-honouring runner records seconds after the request.
+`externallyDeletedBeforeTerminal` compared the raw mark and read every real drain as "deleted after terminal" — the cleanup shape — so no recovery fired; the shipped form could only ever recover a worker that ignored SIGTERM to its SIGKILL (exit at mark == grace expiry).
 Both tiers shared the predicate, so classic drain recovery was equally inert.
 Every prior gate missed it for venue reasons: envtest pods are unscheduled, so their deletion collapses grace to zero and the mark *equals* the request time (the `TerminalWithMark` pair passes against that artifact shape), and the unit fixture restated the same wrong ordering (`finishedAt = deletionTimestamp + 5s`).
 The fix orders the deletion *request* — `deletionTimestamp` minus `deletionGracePeriodSeconds`, the two fields the apiserver stamps together — against the termination record, and makes the never-ran exclusion explicit (no termination record → nothing reportable to re-run) rather than an accident of the creation-time fallback.
 The unit fixtures now model the real stamp shape.
 
-**The RBAC gate this shipped without now exists (Q519).** The claim and completed-at patches ran 403-broken on real clusters because every local tier's client is admin — envtest does not enforce RBAC, and the fake-GitHub disruption specs were classic-tier. `E2E_AGC_ScaleSetRecovery` (`cmd/gmc/test/e2e/worker_scaleset_recovery_test.go`) closes that class at the fake-GitHub kind tier: a ScaleSet-protocol RunnerSet whose AGC runs under the chart's shipped `agc-tenant-role`, a running scale-set-shaped worker deleted gracefully, and the assertion that exactly one rerun lands — which, by the reconciler's ordering, is also the assertion that the claim patch landed (recovery calls GitHub only after the claim succeeds).
+**The RBAC gate this shipped without now exists (Q519).** The claim and completed-at patches ran 403-broken on real clusters because every local tier's client is admin — envtest does not enforce RBAC, and the fake-GitHub disruption specs were classic-tier.
+`E2E_AGC_ScaleSetRecovery` (`cmd/gmc/test/e2e/worker_scaleset_recovery_test.go`) closes that class at the fake-GitHub kind tier: a ScaleSet-protocol RunnerSet whose AGC runs under the chart's shipped `agc-tenant-role`, a running scale-set-shaped worker deleted gracefully, and the assertion that exactly one rerun lands — which, by the reconciler's ordering, is also the assertion that the claim patch landed (recovery calls GitHub only after the claim succeeds).
 Two scope limits, stated plainly: the spec stages the worker pod itself rather than provisioning it from an assignment, and the deliberately-failing listener bootstrap — the gateway's `githubURL` names fakegithub's plaintext port over https — is what keeps the reconcile loop fast enough to win the real teardown window.
 
 Both limits were originally forced by the venue: the e2e fakegithub spoke only the classic protocol, so no scale-set session could open there at all.
@@ -286,7 +292,8 @@ The limits above are now this spec's deliberate scope: a recovery scan running o
 
 The remaining work was carried by these Queue rows:
 
-1. ~~**Q495 first.**~~ Done — the run identity is read from the payload's `github` context, so the worker lookup can be made exact. **Still owed a live-GitHub confirmation**: the 2026-07-29 runs below predate that fix (their images were built from `719e67f1`), so what they observed — every worker matched by the snapshot fallback, none by the annotation — is the *unfixed* build's behaviour, and is evidence for the defect rather than for the fix.
+1. ~~**Q495 first.**~~ Done — the run identity is read from the payload's `github` context, so the worker lookup can be made exact.
+   **Still owed a live-GitHub confirmation**: the 2026-07-29 runs below predate that fix (their images were built from `719e67f1`), so what they observed — every worker matched by the snapshot fallback, none by the annotation — is the *unfixed* build's behaviour, and is evidence for the defect rather than for the fix.
    The next credentialed live-GitHub run should check that `actions-gateway.com/run-id` now appears on a real worker pod.
 2. ~~Un-pend `E2E_GitHub_CancelledRunLeavesNoDeletionMark` and run it.~~ Done — it no longer needed the annotation to become runnable (see above), and it passes.
 3. ~~Take the decision.~~ Done — the decision table's first row, recorded above.
@@ -295,6 +302,7 @@ The remaining work was carried by these Queue rows:
    Found by this measurement, independent of the gap.
    Split into a trigger and an actuator by [q501-cancel-relay.md](../q501-cancel-relay.md): the actuator shipped (a worker whose job the gateway abandons is now deleted, stamped `deletion-reason: job_abandoned` exactly as the constraint above requires), the trigger is still open.
 
-Operational note for whoever runs live-GitHub next, learned the expensive way: the suite teardown's `helm uninstall` deletes the `ValidatingAdmissionPolicyBinding`, which was exactly the trigger — so each run poisoned the next one's apiserver. **Q492 has since fixed this**: the guard's `paramKind` is now a CRD, for which the apiserver allocates a fresh dynamic informer per context, so emptying the binding set no longer breaks param resolution.
+Operational note for whoever runs live-GitHub next, learned the expensive way: the suite teardown's `helm uninstall` deletes the `ValidatingAdmissionPolicyBinding`, which was exactly the trigger — so each run poisoned the next one's apiserver.
+**Q492 has since fixed this**: the guard's `paramKind` is now a CRD, for which the apiserver allocates a fresh dynamic informer per context, so emptying the binding set no longer breaks param resolution.
 The workaround below is retained for anyone reproducing this investigation on a pre-Q492 build: restart the kube-apiserver (`crictl stop`, verified by `ATTEMPT` incrementing) *before* a run, not after a failure.
 Running with `E2E_SKIP_TEARDOWN=true` avoids the uninstall, but then a subsequent `helm upgrade` conflicts on server-side-apply field ownership (`kubectl-patch`/`kubectl-set` claim fields helm owns); deleting just the `gmc-controller-manager` Deployment beforehand clears that without touching the binding.

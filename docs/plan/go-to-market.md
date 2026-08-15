@@ -45,7 +45,8 @@ That DIY composition, not ARC alone, is what GAG usually replaces.
 **Explicitly NOT our audience.** Teams whose problem is "CI is slow / expensive" and who are happy running on a vendor's infrastructure.
 That is the managed-SaaS lane (§2).
 GAG does not compete there and should not pretend to.
-Chasing that audience dilutes the message and invites a comparison GAG will lose (it is not a hosted speed play). **Be honest about scope in all messaging** — it builds credibility with the people who *are* the ICP.
+Chasing that audience dilutes the message and invites a comparison GAG will lose (it is not a hosted speed play).
+**Be honest about scope in all messaging** — it builds credibility with the people who *are* the ICP.
 
 ## 2. Competitive landscape
 
@@ -223,11 +224,13 @@ LLMs answer from: GitHub issues/discussions, DEV Community, Medium, vendor compa
 ## 8. Launch sequence (phased)
 
 - **Phase 0 — readiness (prerequisite).** Public site live ([website.md](website.md)/Q129); a copy-pasteable install path that works for an outside operator; README problem-first; ARC→GAG migration guide drafted.
-  Do not seed channels before this — first impressions from cold traffic are one-shot. **GitHub Discussions stays off** in this phase: an empty forum on a pre-adoption, solo-maintained project with manually-driven (non-staffed) support reads as a ghost town, and slow replies look worse there than on Issues.
+  Do not seed channels before this — first impressions from cold traffic are one-shot.
+  **GitHub Discussions stays off** in this phase: an empty forum on a pre-adoption, solo-maintained project with manually-driven (non-staffed) support reads as a ghost town, and slow replies look worse there than on Issues.
   It also buys little over Issues until there's enough volume to want Q&A/idea threads separated from bug tracking.
   So the README, site footer, and roadmap community links point to **Issues** for now (already enabled, free, slow-response-tolerant for a small project).
 - **Phase 1 — seed.** Show HN + r/devops + r/kubernetes; begin honest, one-per-thread participation in the §3 ARC issues.
-  Goal: first handful of **external** deployers and their issues/questions (the real adoption signal). **Enable GitHub Discussions here** and seed 2–3 starter threads (intro, roadmap feedback), then repoint the community links from Issues back to Discussions — its value only exceeds the ghost-town cost once traffic is actively flowing and someone is watching it.
+  Goal: first handful of **external** deployers and their issues/questions (the real adoption signal).
+  **Enable GitHub Discussions here** and seed 2–3 starter threads (intro, roadmap feedback), then repoint the community links from Issues back to Discussions — its value only exceeds the ghost-town cost once traffic is actively flowing and someone is watching it.
 - **Phase 2 — amplify.** Publish the two blog posts; land in awesome-lists and at least one "ARC alternatives" roundup; tune the comparison page for the §5.2 search terms; pursue a CNCF/KubeCon lightning talk.
 - **Phase 3 — sustain.** Keep the comparison and receipts current as ARC evolves; keep answering in ARC issues.
   Re-measurement is a **release gate**, not a background task: the pre-flight step in [release.md](../operations/release.md#1-pre-flight) exists because the opportunistic version of this failed for two ARC releases running.

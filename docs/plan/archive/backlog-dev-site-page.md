@@ -29,8 +29,10 @@ Release versions are frozen builds — a backlog in them would be a snapshot fro
 The site's mike versioning already diverges content per version (each version builds from its ref; `dev` redeploys on every push to `main`), so dev-only is one conditional: MkDocs `!ENV` tags make the repo-internal `exclude_docs` entries conditional on an env var (`MKDOCS_EXCLUDE_DOCS`) that only the dev deploy path in [pages.yml](../../../.github/workflows/pages.yml) sets.
 Release deploys never set it, including future tags, so no release version ever carries the page.
 
-As implemented, the env var holds the exclusion *list* and the `!ENV` default is the full repo-internal set, so the two lists never duplicate. `!ENV` resolves an env value as a scalar node verbatim (measured against `yaml_env_tag`), not by re-parsing it as YAML, so a multi-line default keeps its newlines.
-The trap is that the default applies only when the variable is **absent**: a step-level `env:` with a falling-through `|| ''` would publish the internal docs on every release. `pages.yml` `export`s it inside a conditional instead.
+As implemented, the env var holds the exclusion *list* and the `!ENV` default is the full repo-internal set, so the two lists never duplicate.
+`!ENV` resolves an env value as a scalar node verbatim (measured against `yaml_env_tag`), not by re-parsing it as YAML, so a multi-line default keeps its newlines.
+The trap is that the default applies only when the variable is **absent**: a step-level `env:` with a falling-through `|| ''` would publish the internal docs on every release.
+`pages.yml` `export`s it inside a conditional instead.
 
 Bonus: `extra.version.default: stable` means Material already banners `dev` as "a different version" — visitors get the not-canonical framing for free.
 

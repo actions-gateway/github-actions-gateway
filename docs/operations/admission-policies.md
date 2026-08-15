@@ -55,7 +55,8 @@ The numeric UID matters: kubelet cannot verify `runAsNonRoot` against the runner
 The `privileged` profile stamps **no** securityContext defaults — that is its whole purpose (DinD, root-requiring builds) — so a `runAsNonRoot` policy will reject it; that is correct, and those tenants need an explicit exception.
 Proxy, AGC, and GMC containers set `runAsNonRoot: true` directly.
 
-**`seccompProfile: RuntimeDefault`** — Set on every `baseline`/`restricted` worker (pod-level) and on every proxy/AGC/GMC container. `privileged` workers get no default.
+**`seccompProfile: RuntimeDefault`** — Set on every `baseline`/`restricted` worker (pod-level) and on every proxy/AGC/GMC container.
+`privileged` workers get no default.
 
 **Drop ALL capabilities** — Here is the most common surprise.
 The `baseline` worker profile **deliberately does not** drop capabilities or set `allowPrivilegeEscalation: false`, because baseline PSA permits in-job privilege escalation (`sudo`) and a large fraction of real CI jobs rely on it.
@@ -67,14 +68,16 @@ Your options, in order of preference:
 
 `restricted`, proxy, AGC, and GMC pods already drop all capabilities.
 
-**`allowPrivilegeEscalation: false`** — Same story as capabilities: only `restricted` (and the proxy/AGC/GMC pods) set it. `baseline` leaves it unset on purpose.
+**`allowPrivilegeEscalation: false`** — Same story as capabilities: only `restricted` (and the proxy/AGC/GMC pods) set it.
+`baseline` leaves it unset on purpose.
 
 **`readOnlyRootFilesystem: true`** — **No** worker profile sets this, including `restricted`.
 The runner writes to its working tree (`_work`), tool cache, and temp dirs on the root filesystem; a read-only root would break virtually every job.
 If your cluster requires `readOnlyRootFilesystem`, you **must** exempt worker pods.
 The proxy, AGC, and GMC containers all run with `readOnlyRootFilesystem: true`.
 
-**No privileged containers / no host namespaces** — The AGC unconditionally forces `hostPID/hostNetwork/hostIPC: false` and `automountServiceAccountToken: false` on every worker pod (all three profiles), overwriting any tenant `PodTemplate` value. `baseline`/`restricted` also forbid privileged containers via PSA.
+**No privileged containers / no host namespaces** — The AGC unconditionally forces `hostPID/hostNetwork/hostIPC: false` and `automountServiceAccountToken: false` on every worker pod (all three profiles), overwriting any tenant `PodTemplate` value.
+`baseline`/`restricted` also forbid privileged containers via PSA.
 Only the `privileged` profile permits a privileged container — by design, and gated behind an admission webhook that requires an explicit per-tenant opt-in ([§5.3](../design/05-security.md#53-security-profiles-and-the-privileged-opt-in)).
 
 **Block `:latest` / require digest pin** — All GAG-managed images are pinned by `@sha256:` digest: the GMC, AGC, and proxy images are digest-pinned and the Helm chart **refuses to render** without a digest (`validateImageDigest`); the default worker image is also digest-pinned ([`names.go`](../../cmd/agc/names/names.go)).
@@ -88,7 +91,8 @@ A "require digest" policy scoped to tenant namespaces is a good way to force ten
 - Any registry your tenants set via `spec.workerImage` / `PodTemplate`.
 
 **Require CPU/memory requests + limits** — Workers are gap-filled with `500m` CPU / `1Gi` memory as *both* requests and limits when a container sets neither.
-The proxy sets requests+limits. **AGC v1alpha1 stamps no resources** — a "require limits" policy will reject AGC v1 pods; either move the tenant to a v2alpha1 `ActionsGateway` (which gap-fills `500m`/`2Gi` requests, `2`/`4Gi` limits) or exempt AGC pods.
+The proxy sets requests+limits.
+**AGC v1alpha1 stamps no resources** — a "require limits" policy will reject AGC v1 pods; either move the tenant to a v2alpha1 `ActionsGateway` (which gap-fills `500m`/`2Gi` requests, `2`/`4Gi` limits) or exempt AGC pods.
 The GMC's resources come from the chart's `resources` value, which ships with a sane default (`10m`/`64Mi` request, `500m`/`128Mi` limit).
 
 ## Sample policies
@@ -146,13 +150,15 @@ GAG passes pod placement through to the CR author, in three places:
 | `EgressProxy.spec.scheduling` | Egress-proxy pool pods | v2 |
 | `ActionsGateway.spec.scheduling` | AGC control-plane pod | v2 |
 
-Each carries the standard `nodeSelector`, `tolerations`, and `affinity`. **This is deliberate and not admin-gated.** Distinct per-tenant egress IPs exist so tenants do not share a rate limit or a block radius; a tenant electing where its own traffic leaves the cluster is the intended use, and worker placement has always been able to do it.
+Each carries the standard `nodeSelector`, `tolerations`, and `affinity`.
+**This is deliberate and not admin-gated.** Distinct per-tenant egress IPs exist so tenants do not share a rate limit or a block radius; a tenant electing where its own traffic leaves the cluster is the intended use, and worker placement has always been able to do it.
 
 It follows that **per-tenant egress-IP *attribution* is a property of your cluster configuration, not something GAG enforces on its own.** If a downstream firewall allowlist or an audit trail attributes traffic by source IP, and CR authors in tenant namespaces are not fully trusted, constrain placement here — at the pod admission layer, where it also covers any pod a tenant can create directly.
 
 ### Pin by mutation, not by an allowlist
 
-The instinct is to validate an allowlist of permitted `nodeSelector` values. **That is not sound.** `affinity.nodeAffinity` is a small query language supporting `NotIn` and `DoesNotExist`, so "any pool except my own" is expressible, and no key=value allowlist rejects it in general.
+The instinct is to validate an allowlist of permitted `nodeSelector` values.
+**That is not sound.** `affinity.nodeAffinity` is a small query language supporting `NotIn` and `DoesNotExist`, so "any pool except my own" is expressible, and no key=value allowlist rejects it in general.
 
 Stamping the `nodeSelector` by **mutation** *is* sound, because Kubernetes ANDs `nodeSelector` with `nodeAffinity` — affinity can only narrow the candidate nodes, never widen them.
 Once admission pins the pod to a pool, no affinity expression moves it off.

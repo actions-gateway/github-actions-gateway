@@ -42,9 +42,12 @@ proxy, worker   (standalone — no internal deps)
 
 `scaleset` (the GAG-owned runner-scale-set protocol client, Q264 Option E) is a `broker`-style leaf that depends only on `githubapp`; it has no importer yet — the AGC will import it in Q264 P3 when the scale-set acquisition tier lands.
 
-`githubapp` (GitHub App auth/JWT) and `broker` (the GitHub broker client) are the shared libraries; the `cmd/*` binaries depend *on* them, never the reverse. `api` (the shared v2 API kinds) is a third leaf both controllers depend on.
-The one cross-binary edge is `gmc → agc` (the Gateway Manager Controller imports the Actions Gateway Controller's API types to provision instances); the `api` leaf exists precisely so the AGC can read the GMC-group v2 kinds without an `agc → gmc` back-edge that would close a cycle. **Keep edges pointing toward the leaves:** a new import that makes `githubapp`, `broker`, or `api` depend on a `cmd/*` module, or makes `agc` depend on `gmc`, inverts the layering and should be restructured instead.
-Go's compiler rejects outright *cycles* for free; this graph captures the intended *direction* so a technically-legal-but-wrong edge is caught in review. `scripts/go/go-work-tidy.sh` derives this same order at runtime (via `go list -m all`) to tidy modules leaf-first.
+`githubapp` (GitHub App auth/JWT) and `broker` (the GitHub broker client) are the shared libraries; the `cmd/*` binaries depend *on* them, never the reverse.
+`api` (the shared v2 API kinds) is a third leaf both controllers depend on.
+The one cross-binary edge is `gmc → agc` (the Gateway Manager Controller imports the Actions Gateway Controller's API types to provision instances); the `api` leaf exists precisely so the AGC can read the GMC-group v2 kinds without an `agc → gmc` back-edge that would close a cycle.
+**Keep edges pointing toward the leaves:** a new import that makes `githubapp`, `broker`, or `api` depend on a `cmd/*` module, or makes `agc` depend on `gmc`, inverts the layering and should be restructured instead.
+Go's compiler rejects outright *cycles* for free; this graph captures the intended *direction* so a technically-legal-but-wrong edge is caught in review.
+`scripts/go/go-work-tidy.sh` derives this same order at runtime (via `go list -m all`) to tidy modules leaf-first.
 
 All runtime modules share a single `vendor/` at the repo root, produced by `go work vendor` and committed to git.
 Docker builds and CI rely on this — they invoke `go build` with `-mod=vendor` auto-selected (no proxy.golang.org during build).
@@ -83,8 +86,11 @@ Which of the two to use depends on how often the gate calls the program:
 
 - **Called once** — `go run` from the module directory, like `tools/`: `(cd devtools && go run ./ci/pathfilters …)`.
   Warm that costs ~42ms.
-- **Called in a loop** — build once into the gitignored `.build/` and exec the binary, which costs ~17ms a call against ~42ms for a `go run` that re-links every time. `check-path-filters.sh` does this in `ensure_pathfilters`; it invokes the extractor dozens of times per run.
-- **Its exit status is the gate's verdict** — build and exec even when called once. `go run` adds an `exit status 1` line of its own to stderr on top of the program's findings, and suppressing that would suppress the toolchain's compile errors with it. `check-doc-links.sh` builds for this reason.
+- **Called in a loop** — build once into the gitignored `.build/` and exec the binary, which costs ~17ms a call against ~42ms for a `go run` that re-links every time.
+  `check-path-filters.sh` does this in `ensure_pathfilters`; it invokes the extractor dozens of times per run.
+- **Its exit status is the gate's verdict** — build and exec even when called once.
+  `go run` adds an `exit status 1` line of its own to stderr on top of the program's findings, and suppressing that would suppress the toolchain's compile errors with it.
+  `check-doc-links.sh` builds for this reason.
   Put the binary beside the source it is built from, not under the tree being checked: a test suite points the gate at a throwaway repo.
 
 Every gate here already passes `-o` into the gitignored `.build/`.
@@ -109,7 +115,8 @@ A Go module brings a `vendor/` tree, and vendored dependencies ship shell script
 ### Wiring a new first-party module
 
 Outside `go.work` the Go gates do not see the module: `go-test.sh`, `go-lint.sh`, `coverage.sh` and `go-vulncheck.sh` all iterate `workspace_modules()` (`go work edit -json`).
-What they loop with `GOWORK=off` is `firstparty_nonworkspace_modules()` in [`scripts/lib/common.sh`](../../scripts/lib/common.sh), and **that needs no edit** — it is `nonworkspace_modules()` (every tracked `go.mod` outside `go.work`, vendored trees excluded) minus `tools/`. `go-work-tidy.sh` consumes the wider `nonworkspace_modules()`, because `go mod tidy` normalises a module's files whoever wrote its imports.
+What they loop with `GOWORK=off` is `firstparty_nonworkspace_modules()` in [`scripts/lib/common.sh`](../../scripts/lib/common.sh), and **that needs no edit** — it is `nonworkspace_modules()` (every tracked `go.mod` outside `go.work`, vendored trees excluded) minus `tools/`.
+`go-work-tidy.sh` consumes the wider `nonworkspace_modules()`, because `go mod tidy` normalises a module's files whoever wrote its imports.
 Both were hand-maintained lists until Q670/Q667, where the cost of a gate that covers a module only on remembering to widen it was measured directly: forgetting is silent, and every gate stays green.
 What still needs doing:
 
@@ -143,7 +150,8 @@ It is the same remedy the [Dependabot auto-sync workflow](#dependabot-go-bumps-a
 
 If the change **added, removed, or re-pointed an inter-module `replace` edge** (or added/deleted a workspace module), also update the module table's **Internal deps** column and the **Dependency direction** graph in [Workspace layout](#workspace-layout) above — those are maintained by hand and will otherwise drift.
 
-Do not run `go mod tidy` or `go mod vendor` inside an individual module — that produces state that conflicts with the workspace vendor. `scripts/go/go-work-tidy.sh` handles correct ordering across modules so you don't have to.
+Do not run `go mod tidy` or `go mod vendor` inside an individual module — that produces state that conflicts with the workspace vendor.
+`scripts/go/go-work-tidy.sh` handles correct ordering across modules so you don't have to.
 
 ### Module-file tidiness is gated in CI
 
@@ -153,7 +161,8 @@ The `tidy-check` CI job (`make tidy-check` → `scripts/go/go-tidy-check.sh`) re
 Run `make tidy-check` locally to reproduce the gate; like `vendor-check` it can need network on a cold cache, so it is intentionally **not** part of the fast `make check` gate.
 The remedy for a failure is steps 1–2 + commit, never an exemption.
 
-**The gate's reach is step 1's module list, not its diff.** It diffs `**/go.mod` across the whole repo, so `devtools/` and `tools/` were always inside the pathspec — but step 1 enumerated `go.work` alone, so nothing rewrote them and a tidy defect committed in both passed the gate clean (Q667). `go-work-tidy.sh` now tidies the non-workspace modules too, discovered rather than named; [`go-work-tidy-test.sh`](../../scripts/go/go-work-tidy-test.sh) asserts every tracked module gets a `go mod tidy`, so the next module is covered without widening a list.
+**The gate's reach is step 1's module list, not its diff.** It diffs `**/go.mod` across the whole repo, so `devtools/` and `tools/` were always inside the pathspec — but step 1 enumerated `go.work` alone, so nothing rewrote them and a tidy defect committed in both passed the gate clean (Q667).
+`go-work-tidy.sh` now tidies the non-workspace modules too, discovered rather than named; [`go-work-tidy-test.sh`](../../scripts/go/go-work-tidy-test.sh) asserts every tracked module gets a `go mod tidy`, so the next module is covered without widening a list.
 Reproducing this class of defect needs the injected untidiness **committed**: an uncommitted `go.mod` edit is itself drift the gate reports, which fails it for the wrong reason and reads as coverage.
 
 **Editing imports is a dependency change.** Adding the first import of a module `go.mod` records as `// indirect` promotes it to a direct `require`; dropping the last import demotes or removes it.
@@ -215,7 +224,8 @@ Run it locally against the live repo with `scripts/ci/dependabot-rebase-stale.sh
 The sync commit and the rebase force-push are both pushed with the workflow's default `GITHUB_TOKEN`.
 GitHub deliberately does **not** re-run workflows from a `GITHUB_TOKEN` push, which is what stops the bot commit from looping the sync workflow back on itself.
 The same rule means the required PR checks do **not** automatically re-evaluate on the new commit: they stay reported against the pre-sync or pre-rebase one.
-A maintainer clears it with one click either way. **Close and reopen the PR**, which re-fires the `pull_request` checks against the new head, and they pass.
+A maintainer clears it with one click either way.
+**Close and reopen the PR**, which re-fires the `pull_request` checks against the new head, and they pass.
 Using a stored Personal Access Token (PAT) instead of `GITHUB_TOKEN` would re-trigger the checks automatically, but the repo deliberately keeps no such credential, so the one-click re-trigger is the accepted trade-off.
 (Fork-authored Dependabot PRs are out of scope: `GITHUB_TOKEN` can't push to a fork, and this repo's Dependabot pushes branches to the repo itself, not a fork.)
 

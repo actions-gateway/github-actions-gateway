@@ -242,6 +242,7 @@ When a plan fully closes:
   Update any other in-repo links to the new path **and the moved doc's own relative links** (dropping into `archive/` adds one `../` level).
   The doc stays available; the working directory just gets less noisy.
   See the full protocol in [`docs/development/maintaining-backlog.md`](../development/maintaining-backlog.md#archiving-completed-plan-docs).
-- **Do this on close, not in a later audit** — in the same change that drops the plan's last STATUS reference. `make plan-index-check` (part of `make check`) fails when an active, non-`ⓘ` plan here is no longer referenced by STATUS.md, so a forgotten archival can't ship silently.
+- **Do this on close, not in a later audit** — in the same change that drops the plan's last STATUS reference.
+  `make plan-index-check` (part of `make check`) fails when an active, non-`ⓘ` plan here is no longer referenced by STATUS.md, so a forgotten archival can't ship silently.
 
 Add a row to this README when creating, completing, or archiving a plan.

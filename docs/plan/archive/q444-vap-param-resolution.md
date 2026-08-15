@@ -21,7 +21,8 @@ Prior sighting: [`q414-dind-tenant-fixture.md`](q414-dind-tenant-fixture.md) § 
 
 **The param informer for a `paramKind` dies permanently, in that kube-apiserver process, the moment the set of *bindings* whose policy names that `paramKind` becomes empty for at least one policy-refresh tick (default 1s).**
 
-For us that set has exactly one member, so `helm uninstall` — which deletes the binding — is the trigger. `helm upgrade` never empties the set and is safe.
+For us that set has exactly one member, so `helm uninstall` — which deletes the binding — is the trigger.
+`helm upgrade` never empties the set and is safe.
 
 Two consequences follow, and they explain everything previously observed:
 
@@ -47,7 +48,8 @@ From `kube-apiserver` v1.36.1, `staging/src/k8s.io/apiserver/pkg/admission/plugi
    }
    ```
 
-`ConfigMap` is a core type, so it takes the first path — and that path starts a **shared** informer with a **per-instance** context. `sharedInformerFactory` records `startedInformers[type] = true` and never clears it, so once `cancelFunc` fires:
+`ConfigMap` is a core type, so it takes the first path — and that path starts a **shared** informer with a **per-instance** context.
+`sharedInformerFactory` records `startedInformers[type] = true` and never clears it, so once `cancelFunc` fires:
 
 - the informer's `Run` returns and it is never restarted — `Start()` skips it forever;
 - its store is **frozen**, not cleared, at whatever it last held;
@@ -140,10 +142,12 @@ Ours is a core type that is always discoverable, and a restart *fixes* it.
 ## Reproducing
 
 - [`scripts/e2e/vap-param-informer-check.sh`](../../../scripts/e2e/vap-param-informer-check.sh) — the deterministic three-arm reproducer above.
-  Self-contained (its own CRDs, namespace and policies), no chart required. **Run it only against a disposable cluster**: arm 2 permanently breaks ConfigMap param resolution for that apiserver process.
+  Self-contained (its own CRDs, namespace and policies), no chart required.
+  **Run it only against a disposable cluster**: arm 2 permanently breaks ConfigMap param resolution for that apiserver process.
   Not wired into CI — it deliberately destroys the cluster it runs on, and it pins an *upstream* defect that our own code no longer depends on.
   It is the evidence for the fix, re-runnable by hand on a new Kubernetes minor to confirm arm 3 still holds.
-- [`scripts/e2e/chart-reinstall-check.sh`](../../../scripts/e2e/chart-reinstall-check.sh) (`make chart-reinstall-check`) — the product-level check, driving a real uninstall/reinstall against an installed release. **Wired into CI as of Q492**, now that the cycle it exercises is expected to pass.
+- [`scripts/e2e/chart-reinstall-check.sh`](../../../scripts/e2e/chart-reinstall-check.sh) (`make chart-reinstall-check`) — the product-level check, driving a real uninstall/reinstall against an installed release.
+  **Wired into CI as of Q492**, now that the cycle it exercises is expected to pass.
 
 ## Operator impact
 
@@ -170,11 +174,13 @@ Two candidates were on the table, both entirely in our control:
 
 1. **Move the `paramKind` off a core type** to a small CRD.
    Measurement 6 showed the CRD path is structurally immune, because it allocates a fresh informer per context; [arm 3](#arm-3--the-crd-paramkind-under-the-same-transition-q492) then confirmed it survives the actual failing transition.
-   Cost: a CRD, its RBAC, and a migration for the existing ConfigMap. **This is what shipped.**
+   Cost: a CRD, its RBAC, and a migration for the existing ConfigMap.
+   **This is what shipped.**
 2. **Keep the binding alive across `helm uninstall`** with `helm.sh/resource-policy: keep` on the VAPB and its param ConfigMap, so the binding set never empties.
    Much cheaper — but it collides with an existing invariant: [`scripts/manifest/manifest-validate.sh`](../../../scripts/manifest/manifest-validate.sh) asserts that **no VAPB carries `helm.sh/resource-policy: keep`**, because a retained binding leaves the guard enforcing after the release is gone and makes `admissionPolicy.enabled=false` a silent no-op.
    That reason still holds and is worse than the defect it would paper over.
-   It also only defends the Helm path; anything else that deletes the binding still breaks the cluster. **Rejected**; the invariant it would have overturned is still enforced.
+   It also only defends the Helm path; anything else that deletes the binding still breaks the cluster.
+   **Rejected**; the invariant it would have overturned is still enforced.
 
 Note the historical irony: retaining the *policy* was tried and reverted (`07061175` / `70b4b351`), and the binding — the one object that would have worked — is precisely the one we forbid retaining.
 

@@ -2,7 +2,8 @@
 
 An in-process load test that pins the design's headline capacity claim: **thousands of virtual runner sessions multiplexed as goroutines inside one AGC**, each costing **one runner re-registration per job** (the single-use JIT lifecycle, [Q114](../../../../docs/STATUS.md)).
 
-It drives the AGC's real listener-multiplexing core — the same `listener.Multiplexer` + `agentpool.Pool` + per-goroutine `broker.Client` wiring that `RunnerGroupReconciler` builds in production — against an in-process broker stub, a controller-runtime fake client for agent Secrets, and an in-memory registrar. **No cluster and no GitHub credentials are required.**
+It drives the AGC's real listener-multiplexing core — the same `listener.Multiplexer` + `agentpool.Pool` + per-goroutine `broker.Client` wiring that `RunnerGroupReconciler` builds in production — against an in-process broker stub, a controller-runtime fake client for agent Secrets, and an in-memory registrar.
+**No cluster and no GitHub credentials are required.**
 
 ## Run it
 
@@ -83,7 +84,8 @@ The peak-memory figure above is a deliberate **upper bound**: both the broker cl
 That is fine for a trend, but it cannot back a precise efficiency multiple versus pod-per-runner controllers.
 
 `TestAGCPerSessionMemory` (`mem_test.go`) isolates the AGC's *own* per-session footprint without any broker stub.
-It replaces the `httptest.Server` with `memTransport` — an in-process `http.RoundTripper` that answers the OAuth, CreateSession, and GetMessage calls with canned responses and **no server, socket, or per-session server-side state**. `GET …/message` parks the caller on its request context, so every started listener rests in exactly one goroutine blocked in its long-poll — the steady idle-session state.
+It replaces the `httptest.Server` with `memTransport` — an in-process `http.RoundTripper` that answers the OAuth, CreateSession, and GetMessage calls with canned responses and **no server, socket, or per-session server-side state**.
+`GET …/message` parks the caller on its request context, so every started listener rests in exactly one goroutine blocked in its long-poll — the steady idle-session state.
 
 ```bash
 make mem-profile   # 1,000 parked sessions; prints bytes/session, no broker stub
@@ -94,7 +96,8 @@ It reports a three-point heap+stack differential:
 - **mBase** — shared infra only (transport, `http.Client`, registrar).
 - **mAgents** — N pooled agents + N empty `Multiplexer`s, no goroutines.
   The `mAgents−mBase` bucket also holds the fake k8s client's retained agent Secrets — an apiserver-side cost in production, so it is **held out** of the headline figure.
-- **mFull** — all N listener goroutines started and parked. `mFull−mAgents` is the marginal AGC cost of one more concurrent session: the goroutine stack, its `broker.Client`, and its live session state — and nothing from the broker server side.
+- **mFull** — all N listener goroutines started and parked.
+  `mFull−mAgents` is the marginal AGC cost of one more concurrent session: the goroutine stack, its `broker.Client`, and its live session state — and nothing from the broker server side.
 
 A representative run holds 1,000 sessions at **~12 KiB/session** (≈ 8 KiB goroutine stack + ≈ 4 KiB heap), well under the ~60 KiB design estimate.
 Set `MEM_HEAP_PROFILE=mem.pprof` to also dump a pprof heap profile for `go tool pprof` inspection.

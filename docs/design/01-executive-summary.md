@@ -118,7 +118,8 @@ The residual cost is the displaced job's own elapsed time — it restarts from t
 
 When a worker loses its job to infrastructure, the AGC automatically re-queues it without user intervention: it stops renewing the job lock to prompt a fast GitHub cancellation, then calls GitHub's rerun API to reschedule.
 Two disruptions qualify.
-The **kubelet's node-pressure eviction** (memory or disk exhaustion) is detected from the `Evicted` pod status. **kube-scheduler preemption** — what a floor tier actually drives — deletes its victim instead, and is detected from the `DisruptionTarget` condition with reason `PreemptionByScheduler` that the scheduler stamps on the way out (Q497, measured 2026-07-29 as Q423).
+The **kubelet's node-pressure eviction** (memory or disk exhaustion) is detected from the `Evicted` pod status.
+**kube-scheduler preemption** — what a floor tier actually drives — deletes its victim instead, and is detected from the `DisruptionTarget` condition with reason `PreemptionByScheduler` that the scheduler stamps on the way out (Q497, measured 2026-07-29 as Q423).
 
 Both acquisition tiers cover both causes, by different routes: on the classic tier the Job Lock Renewer observes the pod it is already watching, while the scale-set tier — which provisions fire-and-forget — records the workflow run on the worker pod and lets the owning reconciler detect the disruption from the pod itself (Q417).
 A configurable retry budget, shared across both tiers *and* both causes per workflow run, prevents infinite loops on persistently failing workloads.

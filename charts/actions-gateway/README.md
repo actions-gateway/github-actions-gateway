@@ -39,7 +39,8 @@ Per-tenant Actions Gateway Controller (AGC) instances and egress proxy pools are
 ## Prerequisites
 
 - Kubernetes **>= 1.30** (GA `ValidatingAdmissionPolicy`).
-- A CNI that enforces `NetworkPolicy` (Calico/Cilium) for the egress/ingress controls to take effect. `kindnet` does not enforce egress.
+- A CNI that enforces `NetworkPolicy` (Calico/Cilium) for the egress/ingress controls to take effect.
+  `kindnet` does not enforce egress.
 - **cert-manager** *if* `certManager.enabled=true` (the default).
   Not required when you set `certManager.enabled=false`.
 - **Image digests** for the GMC, AGC, proxy, and worker-wrapper images (see below).
@@ -74,7 +75,8 @@ helm install gag charts/actions-gateway \
   --set wrapper.image.digest=sha256:<wrapper>
 ```
 
-The chart generates a self-signed webhook serving cert and wires the webhook `caBundle` itself. **Trade-off:** the cert rotates on a `helm upgrade` that cannot reuse the existing Secret — see [upgrade](../../docs/operations/upgrade.md).
+The chart generates a self-signed webhook serving cert and wires the webhook `caBundle` itself.
+**Trade-off:** the cert rotates on a `helm upgrade` that cannot reuse the existing Secret — see [upgrade](../../docs/operations/upgrade.md).
 
 ## Upgrade
 

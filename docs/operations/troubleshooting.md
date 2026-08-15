@@ -310,7 +310,8 @@ Full mechanism and the reproducer: [`q444-vap-param-resolution.md`](../plan/arch
 - **Restarting kube-apiserver** also clears it, and was the only recovery before Q492.
   Straightforward on a self-managed control plane; on EKS/GKE/AKS you cannot restart it directly, and a control-plane version upgrade is usually the only lever that recycles the process.
 
-  Restart the container itself (`crictl stop` on the apiserver container, then confirm its `createdAt` changed). `kubectl delete pod -n kube-system kube-apiserver-…` does **not** work — it recreates the static pod's mirror object while the container keeps running.
+  Restart the container itself (`crictl stop` on the apiserver container, then confirm its `createdAt` changed).
+  `kubectl delete pod -n kube-system kube-apiserver-…` does **not** work — it recreates the static pod's mirror object while the container keeps running.
 
 ---
 
@@ -406,7 +407,8 @@ But the pod is unchanged: same name, same `AGE`, no new ReplicaSet in `kubectl g
 The GMC's *own* Deployment (`gmc-controller-manager` in `gmc-system`) is not managed by a controller and restarts normally.
 
 **What happened.** `kubectl rollout restart` works by patching a `kubectl.kubernetes.io/restartedAt` annotation onto the Deployment's **pod template** — that changed template is what makes the Deployment controller roll a new ReplicaSet.
-On GMC versions without the Q552 fix, the reconciler rebuilt the whole pod template from the `ActionsGateway` / `EgressProxy` spec on every pass, so it reverted the annotation before the rollout began. `kubectl rollout status` then reported the *pre-existing* ReplicaSet — trivially complete — as a successful rollout.
+On GMC versions without the Q552 fix, the reconciler rebuilt the whole pod template from the `ActionsGateway` / `EgressProxy` spec on every pass, so it reverted the annotation before the rollout began.
+`kubectl rollout status` then reported the *pre-existing* ReplicaSet — trivially complete — as a successful rollout.
 
 **Resolution.**
 - **Upgrade the GMC** to a release carrying the Q552 fix.
@@ -440,7 +442,8 @@ kubectl get pods -n <namespace> -l app=actions-gateway-controller \
 The gateway infrastructure itself (proxy, AGC) may still be `Ready=True` — this condition rolls **child RunnerGroup** health up to the gateway so you don't have to inspect each group individually.
 
 **Cause.** One or more of the gateway's owned `RunnerGroup`s reports an *impairing* condition — `CredentialUnavailable` (the AGC can't obtain an installation token), `Degraded` (an unhealthy/unauthorized listener session), `RunnerVersionTooOld` (the worker image ships a runner below GitHub's enforced minimum, or GitHub rejected the configured version outright; see [Worker Image Runner Version](#worker-image-runner-version)), or `WorkersUnschedulable` (worker pods can't be scheduled).
-Advisory capacity/throughput conditions (`WorkerQuotaPressure`/`WorkerQuotaExceeded`, `RateLimited`) are deliberately **not** rolled up here — they have their own signals. `RunnerGroupsDegraded` does **not** gate `Ready`: the gateway can keep serving healthy groups while one is impaired.
+Advisory capacity/throughput conditions (`WorkerQuotaPressure`/`WorkerQuotaExceeded`, `RateLimited`) are deliberately **not** rolled up here — they have their own signals.
+`RunnerGroupsDegraded` does **not** gate `Ready`: the gateway can keep serving healthy groups while one is impaired.
 
 **Diagnostics.**
 
@@ -559,7 +562,8 @@ A set with no `capacityGate` (the default) never carries this condition at all �
 > Expect roughly one claim per deadline window, not zero — a `RunnerSet` that never claims anything again has a different problem.
 > On an idle gated set whose shape stays unplaceable, `AwaitingProbe` can persist `True` indefinitely; that is truthful, and harmless until jobs arrive.
 >
-> A latched set is invisible to the scheduler-side signals: the pod that produced the verdict is gone, so `WorkersUnschedulable` — and its gauge — is back to `0` while intake is still throttled. `worker_capacity_declined{reason="AwaitingProbe"}` is the series that stays `1`, which is why the gauge carries the reason.
+> A latched set is invisible to the scheduler-side signals: the pod that produced the verdict is gone, so `WorkersUnschedulable` — and its gauge — is back to `0` while intake is still throttled.
+> `worker_capacity_declined{reason="AwaitingProbe"}` is the series that stays `1`, which is why the gauge carries the reason.
 
 **What alerts on this.** Two ticket-severity rules cover the gate, one per acquisition tier: [`ActionsGatewayCapacityGateRejectingJobs`](runbook.md#actionsgatewaycapacitygaterejectingjobs) on the classic tier and [`ActionsGatewayScaleSetCapacityWithheld`](runbook.md#actionsgatewayscalesetcapacitywithheld) on the default `ScaleSet` one.
 Both watch the *cost* series above rather than `worker_capacity_declined` itself, and the scale-set rule additionally requires the set to have been assigned work in the last hour.
@@ -841,7 +845,8 @@ A GHES tenant behind a private CA must be on the v2 API.
 
 ## Tenant Namespace Missing the Managed-Tenant Marker Label
 
-**Symptoms.** An `ActionsGateway` never becomes `Ready`. `kubectl describe` shows a `Warning` event with reason `NamespaceMarkerMissing`, and the GMC log reports a `Forbidden` error stamping Pod Security Admission labels, citing the `namespace-psa-guard` admission policy.
+**Symptoms.** An `ActionsGateway` never becomes `Ready`.
+`kubectl describe` shows a `Warning` event with reason `NamespaceMarkerMissing`, and the GMC log reports a `Forbidden` error stamping Pod Security Admission labels, citing the `namespace-psa-guard` admission policy.
 This is common immediately after upgrading a cluster whose tenant namespaces predate the policy (see [Upgrade — Migration Notes](upgrade.md#migration-notes)).
 
 **Cause.** The GMC's cluster-wide `namespaces:patch` grant is gated by the `namespace-psa-guard` ValidatingAdmissionPolicy, which denies the GMC any namespace that is not labelled `actions-gateway.github.com/tenant: "true"`.
@@ -898,7 +903,8 @@ kubectl logs -n gmc-system deploy/gmc-controller-manager --tail=50 | grep -i "de
 ```
 
 **Resolution.** Fix the underlying delete failure — restore API-server health, or re-grant the GMC the delete verb / re-apply the `gmc-tenant-resource-guard` marker if the namespace lost its `actions-gateway.github.com/tenant=true` label (the policy gates DELETE too, so an unmarked namespace blocks teardown).
-The reconciler retries on its own backoff and removes the finalizer automatically once every delete is confirmed. **Do not** manually strip the finalizer to force the CR away — that re-introduces the orphaned-AGC failure mode the fail-closed behaviour exists to prevent; clear the real delete error instead.
+The reconciler retries on its own backoff and removes the finalizer automatically once every delete is confirmed.
+**Do not** manually strip the finalizer to force the CR away — that re-introduces the orphaned-AGC failure mode the fail-closed behaviour exists to prevent; clear the real delete error instead.
 
 **If the finalizer was already stripped.** Every namespaced child the GMC applies carries a controller `OwnerReference` to its `ActionsGateway`, in both API versions, so once the CR leaves etcd the Kubernetes garbage collector reclaims the AGC and proxy `Deployment`s, both `ServiceAccount`s, the AGC `RoleBinding`, the egress `NetworkPolicy`s, the `Service`s, the `PodDisruptionBudget`, the `HorizontalPodAutoscaler`, the TLS `Secret`s, and the `RunnerGroup`s — asynchronously and unordered, so worker pods are not drained first.
 Give it a few seconds, then confirm the namespace is clean and delete anything left by hand:
@@ -974,7 +980,8 @@ See [Narrowing the allowlist: drain stored references first](security-operations
    kubectl --context "$CTX" edit priorityclassallowlist gmc-priorityclass-allowlist
    ```
 
-2. **Let the AGC finish.** Its retry backoff clears the finalizer and the namespace completes terminating on its own. **Do not** strip the finalizer by hand while the controller can still do it — that skips the GitHub-side runner deregistration the finalizer exists for.
+2. **Let the AGC finish.** Its retry backoff clears the finalizer and the namespace completes terminating on its own.
+   **Do not** strip the finalizer by hand while the controller can still do it — that skips the GitHub-side runner deregistration the finalizer exists for.
 
 3. **If the AGC is already gone** — the namespace deletion killed it before the CRs cleared — re-adding the class unblocks admission but no controller remains to issue the write.
    That is the structural case of the entry above: follow the manual finalizer-drop recovery in [migration-v1-to-v2.md § Teardown order is load-bearing](migration-v1-to-v2.md#teardown-order-is-load-bearing-never-delete-the-namespace-first), including its caveats about what the manual drop skips.
@@ -1201,7 +1208,8 @@ Fixed versions make the multiplexer start idempotent, so the race cannot stack b
 
 ## RunnerGroup Stops Serving Jobs With Stale Ready=True
 
-**Symptoms.** A RunnerGroup stops servicing queued jobs even though the AGC pod is healthy, while `status.activeSessions` and the `Ready=True` condition still report the group as operational. `kubectl get runnergroup -n <namespace> -o jsonpath='{.status.activeSessions}'` shows a stale nonzero value that does not match the (zero) sessions GitHub sees for the group.
+**Symptoms.** A RunnerGroup stops servicing queued jobs even though the AGC pod is healthy, while `status.activeSessions` and the `Ready=True` condition still report the group as operational.
+`kubectl get runnergroup -n <namespace> -o jsonpath='{.status.activeSessions}'` shows a stale nonzero value that does not match the (zero) sessions GitHub sees for the group.
 
 **What happened.** The permanent baseline listener exited *non-retriably* — e.g. GitHub returned `401 Unauthorized` on session creation for a credential it considers dead.
 The multiplexer does not auto-restart a non-retriable exit (that restart is reserved for recoverable crashes), so the in-memory listener count drops to zero.
@@ -1219,7 +1227,8 @@ On AGC versions without the Q137 fix the RunnerGroup was only re-reconciled on a
 ## Listener Stalls for Minutes After a Black-Holed Broker Connection
 
 **Symptoms.** One of a RunnerGroup's sessions stops picking up jobs for minutes at a stretch even though the AGC pod is healthy, the broker is reachable, and other sessions in the same group keep working.
-The stall typically follows a network event that silently drops an established connection — a firewall/NAT idle-timeout that discards packets without sending a RST, an egress-proxy failover, or a broker-side hang — so the long-poll's TCP connection is *black-holed*: accepted but never answered. `actions_gateway_message_poll_errors_total{reason="timeout"}` increments when an affected listener recovers.
+The stall typically follows a network event that silently drops an established connection — a firewall/NAT idle-timeout that discards packets without sending a RST, an egress-proxy failover, or a broker-side hang — so the long-poll's TCP connection is *black-holed*: accepted but never answered.
+`actions_gateway_message_poll_errors_total{reason="timeout"}` increments when an affected listener recovers.
 
 **What happened.** The broker `GetMessage` long-poll holds the connection open for ~50s waiting for a job.
 On AGC versions without the Q108 fix the broker client had no response-header deadline, so a black-holed connection blocked the listener goroutine inside a single `GetMessage` call until the operating system's TCP timeout expired — minutes — during which that listener served no jobs.
@@ -1251,7 +1260,8 @@ The broker long-poll is the one deliberate exception — it is bounded by the re
 
 ## Orphaned RunnerGroup After Removing It From the Spec
 
-**Symptoms.** A runner group was removed from (or reordered within) `spec.runnerGroups` on an `ActionsGateway`, but a `RunnerGroup` for it still exists and keeps running listeners and worker pods. `kubectl get runnergroup -n <namespace>` lists more groups than the CR now declares:
+**Symptoms.** A runner group was removed from (or reordered within) `spec.runnerGroups` on an `ActionsGateway`, but a `RunnerGroup` for it still exists and keeps running listeners and worker pods.
+`kubectl get runnergroup -n <namespace>` lists more groups than the CR now declares:
 
 ```sh
 # Owner-labelled RunnerGroups for a gateway vs. what the spec now declares
@@ -1324,9 +1334,11 @@ Both are fixed; both are worth recognising if you are running an older release, 
   Deterministic per gateway-name length: for an affected length, *every* worker pod was rejected and *no* job ever ran.
 - **The `RunnerGroup` name used as a label value (Q473, `v1alpha1` only).** The GMC derives `<gateway>-<runner-label>`, and the AGC stamps that on every worker pod as `actions-gateway/runner-group`.
   Object names may be 253 characters but **label values stop at 63**, so past that the `RunnerGroup` reconciles perfectly while every worker pod create fails.
-  A 15-character gateway with a 40-character runner label was enough. `v2alpha1`/`v2beta1` are unaffected — v2 caps CR names at 52 characters precisely so derived children fit.
+  A 15-character gateway with a 40-character runner label was enough.
+  `v2alpha1`/`v2beta1` are unaffected — v2 caps CR names at 52 characters precisely so derived children fit.
 
-Both now derive through one bounded helper: the budget is split across the name's segments and each truncated tail carries a hash, so a derived name is always valid and still unique. **On upgrade, a gateway whose derived `RunnerGroup` name exceeded 63 characters gets a renamed `RunnerGroup`** (the old one is pruned) — that tenant could not place a worker pod before the rename, so nothing working is disturbed.
+Both now derive through one bounded helper: the budget is split across the name's segments and each truncated tail carries a hash, so a derived name is always valid and still unique.
+**On upgrade, a gateway whose derived `RunnerGroup` name exceeded 63 characters gets a renamed `RunnerGroup`** (the old one is pruned) — that tenant could not place a worker pod before the rename, so nothing working is disturbed.
 
 **Diagnostics.**
 
@@ -1347,7 +1359,8 @@ kubectl logs -n <namespace> deploy/actions-gateway-controller | grep -i "rejecte
 ```
 
 **Resolution.**
-- Read the API server's message in the event. `metadata.name: Invalid value` or `metadata.labels: Invalid value … must be no more than 63 bytes` means a derived name — upgrade to a release carrying the Q467/Q473 fixes, or shorten the gateway name (or its first runner label) in the meantime.
+- Read the API server's message in the event.
+  `metadata.name: Invalid value` or `metadata.labels: Invalid value … must be no more than 63 bytes` means a derived name — upgrade to a release carrying the Q467/Q473 fixes, or shorten the gateway name (or its first runner label) in the meantime.
   An `admission webhook … denied the request` means a cluster policy engine — see [Worker / Proxy / AGC Pods Rejected by a Cluster Policy Engine](#worker--proxy--agc-pods-rejected-by-a-cluster-policy-engine).
 - Confirm the pod really is absent rather than reaped: `kubectl get pods -n <namespace> -l actions-gateway/runner-group=<group>` (v1) or `-l actions-gateway.com/runner-set=<set>` (v2).
 - Re-run the workflow once the rejection is resolved; nothing is retried automatically, because the job's GitHub-side lock has already lapsed.
@@ -1356,7 +1369,8 @@ kubectl logs -n <namespace> deploy/actions-gateway-controller | grep -i "rejecte
 
 ## Worker Pods Stuck Pending
 
-**Symptoms.** Jobs are acquired (`actions_gateway_jobs_acquired_total` increments) but worker pods remain in `Pending` state for more than 60 seconds. `pod_creation_latency_seconds` p95 exceeds the 15s SLO target.
+**Symptoms.** Jobs are acquired (`actions_gateway_jobs_acquired_total` increments) but worker pods remain in `Pending` state for more than 60 seconds.
+`pod_creation_latency_seconds` p95 exceeds the 15s SLO target.
 
 **Likely causes.**
 - Namespace `ResourceQuota` is exhausted — no pod slot, CPU request, or memory request available.
@@ -1413,7 +1427,8 @@ On the classic path: no runner ever registered, so nothing inside the pod can re
 Measured live (the Q645/Q676 probe runs, 2026-08-04): completing the winner's own never-run delivery concludes the run as **`success`** one second later, a job that never executed reporting green, for `result=abandoned` and `canceled` alike, while `failed` is refused with a 401, and the green run cannot be retried with `rerun-failed-jobs` (403).
 Instead the AGC logs `worker pod was removed before it ran; reporting the job as abandoned and force-cancelling its run` and issues a REST `force-cancel` of the run: measured live (2026-08-05), the standalone call is accepted and concludes the run *and* job as **`cancelled`** about one second later, and the cancelled run *does* accept `rerun-failed-jobs`.
 When the call cannot act because the payload carried no run identity (`outcome="identity_unknown"` on `actions_gateway_abandoned_run_force_cancels_total`) or GitHub refused it (`outcome="error"`), GitHub's own ~15-minute unstarted-job timeout reaches the same `cancelled` ending.
-On the `ScaleSet` tier the identity comes off the worker pod instead, so a missing one reports as `actions_gateway_eviction_recovery_identity_unknown_total{cause="abandoned"}` with an `EvictionRecoveryIdentityUnknown` Warning Event, and means the assignment message carried no `workflowRunId`. `AGC_FANOUT_COMPLETION` does not affect this path (it gates only the Q260 sibling fan-out).
+On the `ScaleSet` tier the identity comes off the worker pod instead, so a missing one reports as `actions_gateway_eviction_recovery_identity_unknown_total{cause="abandoned"}` with an `EvictionRecoveryIdentityUnknown` Warning Event, and means the assignment message carried no `workflowRunId`.
+`AGC_FANOUT_COMPLETION` does not affect this path (it gates only the Q260 sibling fan-out).
 
 **Automatic re-run of the cancelled run (Q691).** The cancelled conclusion is recoverable, and the AGC recovers it for you: the run is queued for an automatic `rerun-failed-jobs`, fired once the owning group **places a worker pod again**.
 The wait is the point.
@@ -1504,7 +1519,9 @@ kubectl get pods -n <namespace> -l app.kubernetes.io/name=actions-gateway-contro
 Treat a *sustained* or *bursty* rate as the signal:
 
 - A burst right after an AGC restart, on a release before Q583, is the queue replay; it is self-limiting.
-  On a current release the queue is pruned as jobs conclude, so a restart burst instead means messages are **not** being deleted — check the AGC log for two lines. `delete acked message` names the message id and the error each *rejected* delete returned. `queue reported the acked message already gone` is the quieter one: the delete was accepted but removed nothing, which is what a backend that has stopped serving the delete endpoint answers.
+  On a current release the queue is pruned as jobs conclude, so a restart burst instead means messages are **not** being deleted — check the AGC log for two lines.
+  `delete acked message` names the message id and the error each *rejected* delete returned.
+  `queue reported the acked message already gone` is the quieter one: the delete was accepted but removed nothing, which is what a backend that has stopped serving the delete endpoint answers.
   Either way the queue grows and every subsequent restart is worse; an isolated already-gone line is harmless, a steady stream of them means nothing is being pruned at all.
 - **One or two after a restart, with neither of those lines in the log, is the hard-kill window (Q603) — on releases before Q606.** A job concludes in the AGC's memory a moment before its message is deleted at GitHub.
   A graceful stop flushes those deletes on the way out, but a pod killed outright (SIGKILL at the end of its grace period, an OOM kill, a lost node) cannot, so the message survived and the next process read it.
@@ -1601,7 +1618,8 @@ kubectl get pods -n <namespace> -l actions-gateway.com/runner-set=<set> \
   -o custom-columns='NAME:.metadata.name,NODE:.spec.nodeName,AGE:.metadata.creationTimestamp,JOB-DONE:.metadata.annotations.actions-gateway\.com/job-completed-at'
 ```
 
-Before deleting any of those, confirm the job really is over at GitHub — check the run in the Actions UI, or `kubectl logs <pod> -c runner` and look for a worker sitting at `Listening for Jobs` with nothing after it. **A pod whose job is genuinely still executing looks identical in cluster state**, and deleting it strands that job with no replacement.
+Before deleting any of those, confirm the job really is over at GitHub — check the run in the Actions UI, or `kubectl logs <pod> -c runner` and look for a worker sitting at `Listening for Jobs` with nothing after it.
+**A pod whose job is genuinely still executing looks identical in cluster state**, and deleting it strands that job with no replacement.
 
 ```sh
 # 3. Only once confirmed abandoned:
@@ -1828,7 +1846,8 @@ The wait is deliberate: a count is server state a fresh assignment may briefly l
 
 ## Worker Pods Stuck Running After the Job Finished (Mesh Sidecar)
 
-**Symptoms.** Worker pods sit `Running` with a not-ready container count (`READY 1/2`) long after their job completed; `completedPodTTL` never deletes them; over time the RunnerGroup wedges at `maxWorkers` and new jobs stop being picked up even though no job is actually executing. `kubectl get pod -o jsonpath='{.spec.containers[*].name}'` shows a second container such as `istio-proxy` or `linkerd-proxy`.
+**Symptoms.** Worker pods sit `Running` with a not-ready container count (`READY 1/2`) long after their job completed; `completedPodTTL` never deletes them; over time the RunnerGroup wedges at `maxWorkers` and new jobs stop being picked up even though no job is actually executing.
+`kubectl get pod -o jsonpath='{.spec.containers[*].name}'` shows a second container such as `istio-proxy` or `linkerd-proxy`.
 
 **What happened.** A service-mesh sidecar was injected into the worker pod.
 GAG worker pods run to completion: the slot is freed and the pod reaped only when the pod reaches a *terminal* phase (`Succeeded`/`Failed`), which requires every container to exit.
@@ -1883,9 +1902,11 @@ Jobs may still be running normally: the condition is a prediction about GitHub's
 Every reconcile, the AGC reads the runner version off the effective worker image reference (the set's `workerImage`, else the AGC's `WORKER_IMAGE`, else the digest-pinned built-in default) and compares it to that floor.
 It asks GitHub nothing, which is why the signal exists on a `ScaleSet` set: the scale-set protocol carries no runner version at session creation, so the listener there never sees the rejection that produces the `VersionTooOld` reason on the classic tier.
 
-Only the reference is read, so a tag that is not a runner version reports `Unknown` rather than a verdict. `Unknown` is deliberately not `False`: a custom image is exactly where a stale runner hides, and reporting "current" for an image nothing has checked would be worse than saying so.
+Only the reference is read, so a tag that is not a runner version reports `Unknown` rather than a verdict.
+`Unknown` is deliberately not `False`: a custom image is exactly where a stale runner hides, and reporting "current" for an image nothing has checked would be worse than saying so.
 
-**A `True` verdict makes the set impaired**, so it rolls up into the gateway's `RunnerGroupsDegraded`/`RunnerSetsDegraded` condition. `Unknown` and `False` do not.
+**A `True` verdict makes the set impaired**, so it rolls up into the gateway's `RunnerGroupsDegraded`/`RunnerSetsDegraded` condition.
+`Unknown` and `False` do not.
 
 **Resolution.**
 
@@ -1971,7 +1992,8 @@ A real percentage in `TARGETS` means metric computation is working; go to the `R
 
 **Likely cause.** `resources.requests.cpu` is unset or zero for proxy pods.
 The Kubernetes Horizontal Pod Autoscaler (HPA) computes CPU utilization as `(current_cpu_usage / requested_cpu)`.
-With no request there is no denominator, so the HPA emits `<unknown>` for the target metric and stops scaling entirely. `ScalingActive` goes `False` with reason `FailedGetResourceMetric`:
+With no request there is no denominator, so the HPA emits `<unknown>` for the target metric and stops scaling entirely.
+`ScalingActive` goes `False` with reason `FailedGetResourceMetric`:
 
 ```text
 the HPA was unable to compute the replica count: failed to get cpu utilization: unable to get metrics for resource cpu: no metrics returned from resource metrics API
@@ -2142,7 +2164,8 @@ WARN drain deadline expired; cutting in-flight CONNECT tunnels tunnels=3 drainTi
    A typical termination pays a couple of seconds, not the full ceiling.
 2. **Drain** — the listener closes and the proxy waits for in-flight tunnels.
 
-Both stages share `PROXY_SHUTDOWN_DRAIN_TIMEOUT` (default 45s) — the linger is spent *inside* that budget, not added to it — which fits inside the pod's `terminationGracePeriodSeconds: 60` with headroom. **Tunnels still open when the deadline expires are force-closed** — the alternative is holding the pod until the kubelet SIGKILLs it, which cuts them anyway and with no log line to show for it.
+Both stages share `PROXY_SHUTDOWN_DRAIN_TIMEOUT` (default 45s) — the linger is spent *inside* that budget, not added to it — which fits inside the pod's `terminationGracePeriodSeconds: 60` with headroom.
+**Tunnels still open when the deadline expires are force-closed** — the alternative is holding the pod until the kubelet SIGKILLs it, which cuts them anyway and with no log line to show for it.
 
 A tunnel carrying a long artifact upload or a GitHub long-poll can legitimately outlive 45s, so a small number of these warnings during a rollout is expected.
 A large `tunnels=` count on every terminating pod is the signal to act.
@@ -2202,7 +2225,8 @@ kubectl set env deploy/actions-gateway-proxy -n <namespace> \
 Setting it to a short positive value (`2s`) rather than disabling it keeps most of the benefit at a fraction of the cost.
 Note the GMC owns this Deployment and will reconcile the env away; set it on the `EgressProxy`/`ActionsGateway` spec for a durable change.
 
-> **Prefer keeping proxy pools off spot capacity.** The egress proxy is shared infrastructure for every worker in the tenant, and its IP is the tenant's egress identity: a reclaimed *worker* costs one CI job, which re-runs, while a reclaimed *proxy* cuts live egress for every job routed through it — and on a 15s budget the drain cannot get out of the way cleanly. `spec.scheduling` exists to pin the pool; use it to select on-demand nodes, and spend the spot savings on workers instead.
+> **Prefer keeping proxy pools off spot capacity.** The egress proxy is shared infrastructure for every worker in the tenant, and its IP is the tenant's egress identity: a reclaimed *worker* costs one CI job, which re-runs, while a reclaimed *proxy* cuts live egress for every job routed through it — and on a 15s budget the drain cannot get out of the way cleanly.
+> `spec.scheduling` exists to pin the pool; use it to select on-demand nodes, and spend the spot savings on workers instead.
 > This is a recommendation, not an enforced constraint — see [Node shutdown budgets](node-shutdown-budgets.md#recommendation-keep-proxy-pools-off-spot-capacity) for the full trade-off.
 
 ---
@@ -2300,7 +2324,8 @@ It is advisory, and deliberately not rolled into the gateway's `RunnerSetsDegrad
 
 ## RateLimited Condition on ActionsGateway
 
-**Symptoms.** `kubectl get actionsgateway` shows a `RateLimited=True` condition. `actions_gateway_active_sessions` is at or near the per-installation budget.
+**Symptoms.** `kubectl get actionsgateway` shows a `RateLimited=True` condition.
+`actions_gateway_active_sessions` is at or near the per-installation budget.
 
 **Likely cause.** The GitHub App installation's API budget (15,000 `GET /message` requests/hour) is exhausted.
 This occurs when the sum of `maxListeners` across all RunnerGroups simultaneously bursts to their ceiling for a sustained period.
@@ -2323,7 +2348,8 @@ kubectl get runnergroup -n <namespace> -o jsonpath='{.items[*].spec.maxListeners
 ```
 
 **Resolution.**
-- If a burst is temporary and below 10 minutes: no action required, the condition will clear as the burst subsides. `RateLimited=True` (reason `SustainedRateLimit`) is set only after `GET /message` has been answered `429` for over 10 minutes, and clears to `RateLimited=False` (reason `PollingHealthy`) on the first successful poll once the budget recovers — you do not need to restart the AGC to clear a stale condition.
+- If a burst is temporary and below 10 minutes: no action required, the condition will clear as the burst subsides.
+  `RateLimited=True` (reason `SustainedRateLimit`) is set only after `GET /message` has been answered `429` for over 10 minutes, and clears to `RateLimited=False` (reason `PollingHealthy`) on the first successful poll once the budget recovers — you do not need to restart the AGC to clear a stale condition.
 - If `maxListeners` values are set higher than needed, reduce them.
 - If the tenant's RunnerGroup count × `maxListeners` sustainably exceeds the installation budget, shard to a second `ActionsGateway` CR with a new GitHub App installation.
   See [Appendix E §E.6](../design/appendix-e-capacity-planning.md#e6-when-to-shard-across-installations).
@@ -2454,7 +2480,8 @@ It then **deletes the worker pod**, gracefully, so the runner gets its terminati
 Tearing the orphan down *before* the lock lapses closes the residual window in which GitHub could recycle the job and redeliver it to a sibling session (a duplicate worker pod for one job).
 A *single/transient* renewal failure still stays non-fatal and is retried.
 
-The reclaim is counted on `actions_gateway_worker_pods_reaped_total{reason="job_abandoned"}`, so `renew_job_teardowns_total` and that series should track each other. **Gateway versions before Q501 cancelled the job context but never deleted the pod**, so a torn-down worker kept running its (already reassigned) job until the kubelet enforced `maxWorkerLifetime` — 12 hours by default.
+The reclaim is counted on `actions_gateway_worker_pods_reaped_total{reason="job_abandoned"}`, so `renew_job_teardowns_total` and that series should track each other.
+**Gateway versions before Q501 cancelled the job context but never deleted the pod**, so a torn-down worker kept running its (already reassigned) job until the kubelet enforced `maxWorkerLifetime` — 12 hours by default.
 The tell on an affected version is `renew_job_teardowns_total` rising with no matching `job_abandoned` reaps and worker pods that stay `Running` long after their teardown line; the fix is the upgrade.
 An **AGC restart or rollout does not** delete live workers — only a per-job teardown does.
 
@@ -2793,7 +2820,8 @@ token fetch: Post "https://api.github.com/app/installations/<id>/access_tokens":
 startup failed: initial token fetch: context deadline exceeded
 ```
 
-From a pod in the tenant namespace (which the GMC egress `NetworkPolicy` governs) DNS times out, while the *same* lookup from a pod in a namespace with no GAG policy (e.g. `default`) succeeds — so cluster DNS is healthy and the egress policy is the cause.
+From a pod in the tenant namespace (which the GMC egress `NetworkPolicy` governs) DNS times out, while the *same* lookup from a pod in a namespace with no GAG policy (e.g.
+`default`) succeeds — so cluster DNS is healthy and the egress policy is the cause.
 Direct TCP to a GitHub IP on 443 from the tenant pod still works (the GitHub-CIDR egress rule is fine); **only DNS is broken**.
 This was first hit on the first live GAG install on GKE (Q224) running on a GKE Standard cluster with **Dataplane V2** (Cilium) and **NodeLocal DNSCache** enabled.
 
@@ -2811,7 +2839,8 @@ The GMC's DNS egress rule selected only `k8s-app: kube-dns` pods plus the link-l
 > An operator reading Google's page would conclude the peer is unnecessary; on Autopilot (always Dataplane V2, NodeLocal DNSCache not disableable) that conclusion breaks all tenant DNS.
 
 **Resolution.** Upgrade to a GAG build that includes the fix — the GMC-generated DNS egress rule now carries a third peer selecting `k8s-app: node-local-dns` in `kube-system`, alongside the `kube-dns` selector and the link-local block.
-This is a strict, minimal widening (still cluster DNS only, port 53 only — it preserves the DNS-exfiltration containment of [§ Security](../design/05-security.md)) and is harmless on clusters without NodeLocal DNSCache, where the selector simply matches no pod. **Re-validated live (2026-07-07)** on a fresh GKE Standard / Dataplane V2 cluster with NodeLocal DNSCache: from a pod governed by the GMC egress `NetworkPolicy`, `nslookup github.com` resolves through the `node-local-dns` peer while non-DNS non-allowlisted egress stays blocked.
+This is a strict, minimal widening (still cluster DNS only, port 53 only — it preserves the DNS-exfiltration containment of [§ Security](../design/05-security.md)) and is harmless on clusters without NodeLocal DNSCache, where the selector simply matches no pod.
+**Re-validated live (2026-07-07)** on a fresh GKE Standard / Dataplane V2 cluster with NodeLocal DNSCache: from a pod governed by the GMC egress `NetworkPolicy`, `nslookup github.com` resolves through the `node-local-dns` peer while non-DNS non-allowlisted egress stays blocked.
 Confirm the shipped policy:
 
 ```bash
@@ -2949,12 +2978,15 @@ A quota-blocked job is deliberately absent from this table: it is **never claime
 > The AGC retries that refusal every 30 seconds inside a 15-minute re-run window (Q503), so expect `disruption auto-retry triggered` in the AGC log **~10 minutes** after the eviction, not seconds, with `rerunCalls` in the tens — that attribute counts the calls the recovery made.
 > A single-digit count is not a fault: it means GitHub had already concluded the run before the recovery started calling — which is what happens when the disrupted runner got its own report out, as a drain or a preemption lets it (15–26s, Q459).
 > One eviction has been seen concluding that fast too (2026-08-03, 17s), but the run could not confirm which worker it disrupted, so do not read a low count after an eviction as proof the runner reported.
-> A recovery that gave up instead logs `disruption auto-retry failed`, increments `actions_gateway_eviction_rerun_failures_total`, and emits an `EvictionRerunFailed` Warning Event naming the run — that job needs a manual re-run. `reason="run_never_concluded"` means the original run outlived the 15-minute window (check whether GitHub still shows it in progress); `reason="api_error"` means the API failed outright — check the AGC log line's error for a permissions 403 or an endpoint problem. `reason="conclusion_unknown"` is the deletion arm only: its cancel check (Q811) spent the whole window unable to reach the run (the request never completing, or a 5xx), so no re-run was fired rather than one fired blind against a possible cancel.
+> A recovery that gave up instead logs `disruption auto-retry failed`, increments `actions_gateway_eviction_rerun_failures_total`, and emits an `EvictionRerunFailed` Warning Event naming the run — that job needs a manual re-run.
+> `reason="run_never_concluded"` means the original run outlived the 15-minute window (check whether GitHub still shows it in progress); `reason="api_error"` means the API failed outright — check the AGC log line's error for a permissions 403 or an endpoint problem.
+> `reason="conclusion_unknown"` is the deletion arm only: its cancel check (Q811) spent the whole window unable to reach the run (the request never completing, or a 5xx), so no re-run was fired rather than one fired blind against a possible cancel.
 > A 4xx or an undecodable 2xx on that same check lands in `api_error` instead, and fails immediately rather than at the window: neither answer changes inside fifteen minutes, and a 2xx that is not a run means the configured endpoint is not the API.
 > On an AGC older than the Q503 fix, the single un-retried re-run always lost this race and every evicted job needed a manual re-run.
 
 **Symptoms.** `actions_gateway_eviction_retries_exhausted_total` is incrementing.
-Jobs are being cancelled after eviction despite automatic retries. `kubectl describe` on the owning `RunnerGroup`/`RunnerSet` shows a `Warning` event with reason `EvictionRetriesExhausted` (Q170) naming the affected run — the event-based companion to the metric.
+Jobs are being cancelled after eviction despite automatic retries.
+`kubectl describe` on the owning `RunnerGroup`/`RunnerSet` shows a `Warning` event with reason `EvictionRetriesExhausted` (Q170) naming the affected run — the event-based companion to the metric.
 
 **Likely causes.**
 - Worker pod keeps being evicted on every attempt (persistent node pressure, OOM loop, or scheduling conflict that prevents the pod from completing).
@@ -3001,7 +3033,8 @@ kubectl describe runnergroup -n <namespace> <name> | grep -A1 EvictionRetriesExh
 
 ## Draining a Worker Auto-Re-Runs the Jobs It Interrupts
 
-> **Applies to both acquisition tiers.** Behaviour since Q502 — on earlier versions a drained worker's run needed a manual re-run. **Preemption has its own runbook** — [A Preempted Worker's Job Is Not Re-Run](#a-preempted-workers-job-is-not-re-run) below.
+> **Applies to both acquisition tiers.** Behaviour since Q502 — on earlier versions a drained worker's run needed a manual re-run.
+> **Preemption has its own runbook** — [A Preempted Worker's Job Is Not Re-Run](#a-preempted-workers-job-is-not-re-run) below.
 
 **Behaviour.** You cordon and drain a node that has worker pods on it, or delete a running worker pod by hand.
 The eviction (a drain is a PDB-checked graceful **delete** of each pod) starts the pod's termination: the Q385 SIGTERM relay gives the runner the pod's grace period to abort its job and report, GitHub concludes the job `failure` within seconds (15–26s measured, Q459), and the AGC re-runs the interrupted run — `actions_gateway_eviction_retries_total{cause="deletion"}` increments and a `rerun-failed-jobs` call is made, spending one slot of the run's shared `maxEvictionRetries` budget.
@@ -3027,7 +3060,8 @@ Consequences an operator should know:
 
 Two related things operators reasonably expect to change this, and which do not:
 
-- The worker pod's `cluster-autoscaler.kubernetes.io/safe-to-evict: false`, `karpenter.sh/do-not-disrupt: true`, and descheduler prefer-no-eviction annotations are advisory to **those controllers only**. `kubectl drain` and kube-scheduler preemption both ignore all three, by design — they exist to stop an autoscaler or descheduler from moving a mid-job worker, not to stop an administrator or the scheduler.
+- The worker pod's `cluster-autoscaler.kubernetes.io/safe-to-evict: false`, `karpenter.sh/do-not-disrupt: true`, and descheduler prefer-no-eviction annotations are advisory to **those controllers only**.
+  `kubectl drain` and kube-scheduler preemption both ignore all three, by design — they exist to stop an autoscaler or descheduler from moving a mid-job worker, not to stop an administrator or the scheduler.
 - Worker pods carry no PodDisruptionBudget, so nothing rejects the eviction either.
 
 **Diagnostics.**
@@ -3063,7 +3097,8 @@ kubectl logs -n <namespace> deploy/<agc-deployment> \
 If a drain of running workers produced no re-run, check whether the pods carried the `actions-gateway.com/deletion-reason` stamp (then the AGC deleted them, not your drain), whether the run's retry budget was already spent (`eviction_retries_exhausted_total`), and — scale-set tier only — whether the AGC was down across the teardown window, lost the pod before it could claim it (`eviction_recovery_evidence_lost_total`), or the pods carried no run identity (see [A Preempted Worker's Job Is Not Re-Run](#a-preempted-workers-job-is-not-re-run), whose scale-set failure modes apply to drains identically).
 
 **Resolution / how to drain safely.**
-- **Prefer a quiet window anyway.** The re-run restarts each interrupted job from the beginning, so a drain mid-job still costs the work done so far — and each interrupted run spends re-run budget. `kubectl get pods -n <namespace> -l app.kubernetes.io/managed-by=actions-gateway-controller` on the target node shows what a drain would interrupt; an empty result is the free moment.
+- **Prefer a quiet window anyway.** The re-run restarts each interrupted job from the beginning, so a drain mid-job still costs the work done so far — and each interrupted run spends re-run budget.
+  `kubectl get pods -n <namespace> -l app.kubernetes.io/managed-by=actions-gateway-controller` on the target node shows what a drain would interrupt; an empty result is the free moment.
 - **Give the runner room to report** before you drain, so the jobs at least conclude cleanly instead of hanging: raise `terminationGracePeriodSeconds` in the runner group's `podTemplate` and `WORKER_SHUTDOWN_GRACE` with it, per [Terminated Worker Pod Never Reports Its Job](#terminated-worker-pod-never-reports-its-job-job-hangs-on-github-until-the-lock-lapses).
   The same budget is what a preempted runner gets.
 - **Put cheap-to-repeat work in the preemptible tiers.** A displaced job is re-run automatically, but it restarts from the beginning — so a long, expensive job is still the wrong tenant for an opportunistic tier.
@@ -3089,8 +3124,10 @@ Expected behaviour is one automatic re-run per preempted run.
 
 1. **The victim was not actually preempted.** A `kubectl drain`, a manual delete, or a descheduler eviction looks similar but is recovered under `cause="deletion"` instead (see the previous runbook) — and only if the worker reached a terminal phase before the object went away.
    Check which cause, if any, actually moved.
-2. **The retry budget is spent.** `maxEvictionRetries` (default 2) is a hard lifetime cap per workflow run, shared across both tiers *and* both disruption causes: a run already re-run twice for node-pressure evictions has nothing left for a preemption. `actions_gateway_eviction_retries_exhausted_total{cause="preemption"}` confirms it, as does a `Warning` event with reason `EvictionRetriesExhausted`.
-3. **The worker carried no workflow-run identity** (scale-set tier only). `actions_gateway_eviction_recovery_identity_unknown_total{cause="preemption"}` increments and a `Warning` event with reason `EvictionRecoveryIdentityUnknown` is recorded on the `RunnerSet`.
+2. **The retry budget is spent.** `maxEvictionRetries` (default 2) is a hard lifetime cap per workflow run, shared across both tiers *and* both disruption causes: a run already re-run twice for node-pressure evictions has nothing left for a preemption.
+   `actions_gateway_eviction_retries_exhausted_total{cause="preemption"}` confirms it, as does a `Warning` event with reason `EvictionRetriesExhausted`.
+3. **The worker carried no workflow-run identity** (scale-set tier only).
+   `actions_gateway_eviction_recovery_identity_unknown_total{cause="preemption"}` increments and a `Warning` event with reason `EvictionRecoveryIdentityUnknown` is recorded on the `RunnerSet`.
    See [Evicted Scale-Set Jobs Are Not Re-Run Automatically](#evicted-scale-set-jobs-are-not-re-run-automatically) — the cause and the fix are the same for both disruptions.
 4. **The AGC was down for the victim's whole termination grace period** (scale-set tier only).
    The scheduler *deletes* its victim, so unlike an evicted pod — which sits in `Failed` until the reaper takes it — a preempted pod is readable only until its grace period expires (30s by default), and an AGC restarting across that window never sees the marker at all.
@@ -3098,7 +3135,8 @@ Expected behaviour is one automatic re-run per preempted run.
    So check `cause="vanished"` before concluding nothing fired — a preemption counter that stays flat while the vanished one moves is this case, not a defect.
    The classic tier is unaffected: its provisioning goroutine is already watching the pod, and if that goroutine is gone the session is gone with it.
 5. **The AGC saw the victim but lost it before claiming it** (scale-set tier only).
-   The same window as (4), missed by a margin rather than entirely: the recovery scan reads pods from the informer cache and claims them through the live API, so a pod removed in between yields a claim that finds nothing. `actions_gateway_eviction_recovery_evidence_lost_total{cause="preemption"}` increments and an `EvictionRecoveryEvidenceLost` Warning Event is recorded.
+   The same window as (4), missed by a margin rather than entirely: the recovery scan reads pods from the informer cache and claims them through the live API, so a pod removed in between yields a claim that finds nothing.
+   `actions_gateway_eviction_recovery_evidence_lost_total{cause="preemption"}` increments and an `EvictionRecoveryEvidenceLost` Warning Event is recorded.
    A manual re-run is required unless the AGC restarts, which is the one thing that re-reads the persisted record and picks the run up under `cause="vanished"`.
    A sustained rate points at AGC responsiveness — CPU starvation or a backlogged work queue — rather than at the role or the policy.
 
@@ -3418,7 +3456,8 @@ If you hit a case that genuinely needs the opt-out in production, open an issue 
 
 ## Jobs Not Being Acquired Despite Queued Work (Capacity Gate Saturated)
 
-**Symptoms.** Workflow jobs sit queued in GitHub while `actions_gateway_jobs_admission_rejected_total{namespace, runner_group, reason="ceiling"}` climbs and `actions_gateway_jobs_acquired_total` plateaus for the same group. `kubectl get pods` shows the group already running its full complement of worker pods.
+**Symptoms.** Workflow jobs sit queued in GitHub while `actions_gateway_jobs_admission_rejected_total{namespace, runner_group, reason="ceiling"}` climbs and `actions_gateway_jobs_acquired_total` plateaus for the same group.
+`kubectl get pods` shows the group already running its full complement of worker pods.
 The AGC is healthy — this is throttling, not a fault.
 
 > **Check the `reason` label first.** `reason="quota"` is a different problem with a different fix — the namespace `ResourceQuota` is out of headroom, not the group's ceiling.
@@ -3461,7 +3500,8 @@ kubectl get runnergroup <group> -n <namespace> \
 
 ## Worker Pod Fails to Start After Secure-by-Default SecurityContext
 
-**Symptoms.** A worker pod that previously ran now stays in `CreateContainerConfigError` or `Pending`, or is rejected at admission. `kubectl describe pod` shows one of:
+**Symptoms.** A worker pod that previously ran now stays in `CreateContainerConfigError` or `Pending`, or is rejected at admission.
+`kubectl describe pod` shows one of:
 - `Error: container has runAsNonRoot and image has non-numeric user (<name>), cannot verify user is non-root` — the AGC stamped `runAsNonRoot: true` (every profile except `privileged`) and the image declares its user **by name**, which kubelet cannot verify against a numeric UID.
   The **default** `ghcr.io/actions/actions-runner` image (`USER runner`) is handled automatically — the AGC gap-fills `runAsUser: 1001` so kubelet can verify it (Q115).
   You hit this only with a **custom/third-party** runner image whose named user is **not** UID 1001, so the auto-stamped 1001 doesn't match what its `USER` resolves to, or whose image has no numeric UID at all.
@@ -3577,7 +3617,8 @@ To run a second logical gateway, give it its own namespace (the guard is per-nam
 To rename or replace an existing CR, delete the old one and wait for teardown to complete before creating the replacement.
 
 > **`v2alpha1` lifts this restriction.** The singleton guard is a `v1alpha1`-only constraint rooted in fixed per-tenant resource names.
-> The `v2alpha1` (`actions-gateway.com`) API supports **multiple `ActionsGateway`s per namespace**: every derived resource is named per gateway (`<gateway>-agc`, `<gateway>-worker`, …) and each gateway's AGC reconciles only its own `RunnerSet`s, so they never contend. `securityProfile` also moved off the gateway onto the namespace, so co-located gateways share one Pod Security posture instead of flapping it.
+> The `v2alpha1` (`actions-gateway.com`) API supports **multiple `ActionsGateway`s per namespace**: every derived resource is named per gateway (`<gateway>-agc`, `<gateway>-worker`, …) and each gateway's AGC reconciles only its own `RunnerSet`s, so they never contend.
+> `securityProfile` also moved off the gateway onto the namespace, so co-located gateways share one Pod Security posture instead of flapping it.
 > See ["Multiple v2 gateways in one namespace"](#multiple-v2-gateways-in-one-namespace-naming-scoping-prerequisites) below.
 
 ---
@@ -3610,7 +3651,8 @@ per-tenant egress proxy, ...
 If it matches a GitHub host, that tenant's GitHub traffic skips the per-tenant egress proxy — defeating the egress-IP attribution that isolates tenants.
 On v2 the check runs on **both** the proxy write and the gateway/`RunnerSet` write, so the conflicting pair is rejected whichever side is applied last; a rejection on the referrer side names the conflicting `EgressProxy` and entry.
 
-**Resolution.** Remove the GitHub-matching entry — GitHub must always traverse the proxy. `noProxyCIDRs` is for *internal* destinations only and accepts CIDRs (`10.0.0.0/8`), bare IPs, and non-GitHub domain suffixes (`svc.cluster.local`, `internal.example.com`).
+**Resolution.** Remove the GitHub-matching entry — GitHub must always traverse the proxy.
+`noProxyCIDRs` is for *internal* destinations only and accepts CIDRs (`10.0.0.0/8`), bare IPs, and non-GitHub domain suffixes (`svc.cluster.local`, `internal.example.com`).
 Note the guard cannot detect a **CIDR/IP range** that happens to cover GitHub's (rotating) published ranges — never add those either; that residual is the operator's responsibility.
 
 ---
@@ -3677,7 +3719,8 @@ The scalar reserved pod-level fields (`serviceAccountName`, `host{PID,Network,IP
 
 ## `RunnerSet` Rejected: `acquisitionProtocol` (`v2alpha1`, early-adopter)
 
-> Applies to the `v2alpha1` (`actions-gateway.com`) API. `acquisitionProtocol` selects how the AGC acquires jobs for a runner set: `ScaleSet` (**the default** as of Q264 P5 — the runner-scale-set message-queue protocol, Q264 Option E) or `Classic` (**deprecated** — the per-runner broker protocol).
+> Applies to the `v2alpha1` (`actions-gateway.com`) API.
+> `acquisitionProtocol` selects how the AGC acquires jobs for a runner set: `ScaleSet` (**the default** as of Q264 P5 — the runner-scale-set message-queue protocol, Q264 Option E) or `Classic` (**deprecated** — the per-runner broker protocol).
 > Leaving the field unset selects `ScaleSet`.
 > Both protocols match on the whole `runnerLabels` set, so a multi-label set no longer has to pin `Classic`.
 
@@ -3768,7 +3811,8 @@ Admission (Q791) rejects every write that would create such a pair, in any apply
 Two ways that happens:
 
 - **Upgrade from a release before `v1.5.0`.** The uniqueness guard used to be namespace-scoped, so a cross-namespace pair was admitted then and is still stored now.
-  A webhook only fires on a write, and nothing re-applies these objects, so the guard never sees them. **This is the common case, and it is why the condition exists.**
+  A webhook only fires on a write, and nothing re-applies these objects, so the guard never sees them.
+  **This is the common case, and it is why the condition exists.**
 - **A window with the validating webhook uninstalled or unreachable.** `failurePolicy: Fail` makes an unreachable webhook block writes rather than admit them, so this needs the `ValidatingWebhookConfiguration` to have been absent: a partial install, or CRDs applied without the chart's webhook resources.
 
 **Resolution.** The two tenants are driving one scale set right now, so treat it as live cross-tenant exposure.
@@ -3858,7 +3902,8 @@ Until every reference resolves the set sits `Ready=False` with the specific `*No
 The AGC watches the referents and flips the set to `Ready` the moment the missing object syncs; **no re-apply of the `RunnerSet` is needed**.
 
 A `ProxyNotFound` here means a `proxyRef`/`defaultProxyRef` **names an `EgressProxy` that does not exist** — a named-but-missing reference fails closed (it does not silently fall back to direct egress).
-Apply the named `EgressProxy`, or remove the reference if you want direct egress. **Unset everywhere is not an error:** a `RunnerSet` with no `proxyRef` under a gateway with no `defaultProxyRef` resolves to **direct egress** (`Ready=True`, `status.proxyMode: Direct`, advisory `EgressUnattributed` condition), not `ProxyNotFound` — see ["RunnerSet reports `EgressUnattributed`"](#runnerset-or-gateway-reports-egressunattributed-direct-egress-v2alpha1).
+Apply the named `EgressProxy`, or remove the reference if you want direct egress.
+**Unset everywhere is not an error:** a `RunnerSet` with no `proxyRef` under a gateway with no `defaultProxyRef` resolves to **direct egress** (`Ready=True`, `status.proxyMode: Direct`, advisory `EgressUnattributed` condition), not `ProxyNotFound` — see ["RunnerSet reports `EgressUnattributed`"](#runnerset-or-gateway-reports-egressunattributed-direct-egress-v2alpha1).
 
 A `ClusterRunnerTemplate` ref (`templateRef.kind: ClusterRunnerTemplate`) resolves the same way: `TemplateNotFound` means the named cluster-scoped template does not exist yet.
 The AGC reads it through a per-gateway `ClusterRoleBinding` to the shipped `agc-clusterrunnertemplate-reader` ClusterRole that the GMC creates with the gateway — so if every namespaced reference resolves but a `ClusterRunnerTemplate` ref stays `TemplateNotFound`, confirm a platform administrator has created that `ClusterRunnerTemplate` (it is cluster-scoped and platform-authored; tenants cannot create it).
@@ -4017,7 +4062,8 @@ The gateway self-heals on the next watch event.
 
 > Applies to the `v2alpha1` (`actions-gateway.com`) API, currently early-adopter only.
 
-**Symptoms.** You set `ActionsGateway.spec.agcAutoscaling`, but `kubectl get vpa -n <ns>` finds nothing named `<gateway>-agc`. `kubectl describe actionsgateway <gateway> -n <ns>` shows:
+**Symptoms.** You set `ActionsGateway.spec.agcAutoscaling`, but `kubectl get vpa -n <ns>` finds nothing named `<gateway>-agc`.
+`kubectl describe actionsgateway <gateway> -n <ns>` shows:
 
 ```
 Conditions:
@@ -4033,7 +4079,8 @@ Events:
 **Cause.** The `autoscaling.k8s.io` CRDs are **not** part of core Kubernetes.
 They ship with the [Kubernetes vertical-pod-autoscaler](https://github.com/kubernetes/autoscaler/tree/master/vertical-pod-autoscaler) add-on, which your cluster does not have installed (or has only partly installed).
 
-**This is not an outage.** The gateway is fully provisioned and `Ready=True`; the AGC runs on its `spec.agcResources` sizing (or the platform default). `AGCAutoscalingUnavailable` is advisory and never gates `Ready` — it exists so an unsatisfiable opt-in is visible instead of silently doing nothing.
+**This is not an outage.** The gateway is fully provisioned and `Ready=True`; the AGC runs on its `spec.agcResources` sizing (or the platform default).
+`AGCAutoscalingUnavailable` is advisory and never gates `Ready` — it exists so an unsatisfiable opt-in is visible instead of silently doing nothing.
 The GMC does not retry the write against a kind the apiserver does not serve, so there is no reconcile churn either.
 
 **Resolution — pick one:**
@@ -4242,7 +4289,8 @@ pendingPodDeadline must be at least 1s
 
 **Resolution.**
 - Use a non-negative Go duration string for `completedPodTTL` (`"0s"`, `"5m"`, `"1h"`).
-- Use a duration of `1s` or more for `pendingPodDeadline`; to effectively park the deadline while debugging a scheduling issue, set it large (e.g. `"24h"`) rather than zero.
+- Use a duration of `1s` or more for `pendingPodDeadline`; to effectively park the deadline while debugging a scheduling issue, set it large (e.g.
+  `"24h"`) rather than zero.
 - Omit either field to get the defaults (`5m` retention, `10m` deadline).
 
 ---
@@ -4364,7 +4412,8 @@ kubectl run dbg-connect --rm -i --restart=Never --quiet \
 - If a custom override changed the readinessProbe path back to `/healthz`, remove it.
   GMC re-applies the canonical `Deployment` on its next reconcile, so the regression window closes within a few seconds.
 
-`/healthz` remains the liveness probe (always 200 if the process is up). `/readyz` is the readiness gate — kubelet keeps the pod out of the Service EndpointSlice until both `:8080` and `:8081` are bound.
+`/healthz` remains the liveness probe (always 200 if the process is up).
+`/readyz` is the readiness gate — kubelet keeps the pod out of the Service EndpointSlice until both `:8080` and `:8081` are bound.
 
 ---
 
@@ -4416,7 +4465,8 @@ The proxy Deployment never reaches full availability.
 
 **Cause.** The proxy pool uses **required** pod anti-affinity on `kubernetes.io/hostname` so replicas land on distinct nodes (a single node failure must never drop the whole tenant's egress pool, and co-located replicas defeat the PodDisruptionBudget).
 With the default `proxy.minReplicas: 2`, the scheduler needs **at least two schedulable nodes**.
-On a single-node dev/kind cluster (e.g. `test/kind-config-1worker.yaml`, where the control-plane is tainted and only one worker is schedulable) the second replica can never place.
+On a single-node dev/kind cluster (e.g.
+`test/kind-config-1worker.yaml`, where the control-plane is tainted and only one worker is schedulable) the second replica can never place.
 
 **Resolution.**
 - Production: ensure the cluster has at least `proxy.minReplicas` schedulable nodes for the proxy pods (the default kind config ships two workers).
@@ -4426,7 +4476,8 @@ On a single-node dev/kind cluster (e.g. `test/kind-config-1worker.yaml`, where t
 
 ## Proxy Pool Never Scales Out
 
-**Symptom.** Under load the proxy pool sits at `minReplicas` no matter what the HorizontalPodAutoscaler (HPA) wants. `kubectl get hpa -n <tenant-namespace>` shows a `TARGETS` percentage well above the target and `REPLICAS` climbing, while `kubectl get deploy` keeps reporting `minReplicas`.
+**Symptom.** Under load the proxy pool sits at `minReplicas` no matter what the HorizontalPodAutoscaler (HPA) wants.
+`kubectl get hpa -n <tenant-namespace>` shows a `TARGETS` percentage well above the target and `REPLICAS` climbing, while `kubectl get deploy` keeps reporting `minReplicas`.
 Scaling by hand (`kubectl scale deploy <proxy> --replicas=5`) reverts within a second.
 
 **Cause.** Fixed in the release that carries this page.

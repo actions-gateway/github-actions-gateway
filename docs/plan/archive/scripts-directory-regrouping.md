@@ -18,7 +18,8 @@ Both choices are bad, and the repo has one of each:
 | `security-scan.yml` | `go-vulncheck.sh`, `polaris-scan.sh`, `lib/**` | Enumerated, drifts silently |
 
 The two e2e lanes **run the same `e2e-reusable.yml`** yet disagree about which scripts matter by roughly 60×.
-They cannot both be right. `e2e-reusable.yml` directly references six scripts — `bake-with-retry.sh`, `download-verified.sh`, `free-runner-disk.sh`, `kind-with-registry.sh`, `prepull-manifest-images.sh`, `pull-image-with-retry.sh` — and reaches more through the `make` targets it invokes, so the calico list looks like a latent Q400-class false negative: a change to `free-runner-disk.sh` skips the lane that would exercise it.
+They cannot both be right.
+`e2e-reusable.yml` directly references six scripts — `bake-with-retry.sh`, `download-verified.sh`, `free-runner-disk.sh`, `kind-with-registry.sh`, `prepull-manifest-images.sh`, `pull-image-with-retry.sh` — and reaches more through the `make` targets it invokes, so the calico list looks like a latent Q400-class false negative: a change to `free-runner-disk.sh` skips the lane that would exercise it.
 
 `scripts/dogfood/` is the tell that this is structural rather than a filter bug.
 It exists precisely so the e2e filter can exclude it, and excluding it needs an extglob (`scripts/!(dogfood)/**`) with a nine-line comment explaining why a leading `!` does not subtract in `dorny/paths-filter`.
@@ -27,7 +28,8 @@ It exists precisely so the e2e filter can exclude it, and excluding it needs an 
 
 Measured during Q561 (2026-08-01):
 
-- PRs #1066 and #1071 changed a MkDocs hook, its unit test, and a doc page. `docs/**` and `hooks/**` are absent from the e2e filter, so the sole match was `scripts/*` catching what was then `scripts/source-links-hook-test.sh` (now [`scripts/docs/source-links-hook-test.sh`](../../../scripts/docs/source-links-hook-test.sh), where it cannot match).
+- PRs #1066 and #1071 changed a MkDocs hook, its unit test, and a doc page.
+  `docs/**` and `hooks/**` are absent from the e2e filter, so the sole match was `scripts/*` catching what was then `scripts/source-links-hook-test.sh` (now [`scripts/docs/source-links-hook-test.sh`](../../../scripts/docs/source-links-hook-test.sh), where it cannot match).
 - #1063 is the control: docs + `hooks/backlog_link.py` + `mkdocs.yml`, no script — e2e correctly skipped.
 - On #1071 the unnecessary run **failed** `E2E_Migration_MigratedTenantReconciles‑ IntoAWorkingControlPlane` (timeout; 61 of 62 specs passed) while `main` was green across the 8 preceding runs.
   A documentation change was blocked by a flake it had no business meeting ([Q570](../../STATUS.md#Q570)).
@@ -82,7 +84,8 @@ Runners need almost no change — `shellcheck-scripts.sh` and `make scripts-test
 
 - **Conflict blast radius.** A ~100-file rename conflicts with any concurrent branch touching `scripts/`.
   Land it in a quiet window, in one PR, rebased immediately before merge.
-- **A missed reference is a broken gate, not a compile error.** Shell resolves paths at run time. `make check` plus the CI matrix covers most of it; the residual risk is a path referenced only by a rarely-triggered workflow.
+- **A missed reference is a broken gate, not a compile error.** Shell resolves paths at run time.
+  `make check` plus the CI matrix covers most of it; the residual risk is a path referenced only by a rarely-triggered workflow.
 - **Filter narrowing is the Q400 hazard.** Rewriting `scripts/*` to `scripts/e2e/**` is a *narrowing* — the exact move `check-path-filters.sh` exists to police.
   Classify every script deliberately; when unsure, put it where the broader gate sees it.
 - **`git log --follow` / blame continuity** degrades for 100 files.
@@ -111,7 +114,8 @@ The shipped set is ten:
 | `manifest/` | `manifest-validate.sh` + the three `sync-chart-*.sh` generators | `manifest-validate.yml` is a gate the plan's table omits, and its four backends map to it exactly |
 | `dev/` | `setup.sh`, the two Milestone-1 probes, the two GKE spikes | The plan's `agent/` is "Claude hooks, local throttle"; these are developer-only but not agent tooling |
 
-`ci/` also came out narrower than the plan implied: it holds the meta-gates and `run-parallel.sh`, not the shared CI plumbing, which is the whole point of `fetch/` existing separately. `ci/**` is in no heavy tier's filter; `fetch/**` is in all of them.
+`ci/` also came out narrower than the plan implied: it holds the meta-gates and `run-parallel.sh`, not the shared CI plumbing, which is the whole point of `fetch/` existing separately.
+`ci/**` is in no heavy tier's filter; `fetch/**` is in all of them.
 
 ### `autoscaler-drift.yml` was not in the table either
 
@@ -122,7 +126,8 @@ That makes `scripts/e2e/**` over-trigger the kindnet e2e lane on a change to eit
 
 The plan's stated risk was narrowing.
 In practice the enumerated filters were the ones at risk, and collapsing them to a prefix glob widened them: `unit-test.yml:code` went from five named scripts to `scripts/go/**`, `security-scan.yml` from one to `scripts/security/**` + `scripts/fetch/**`, `manifest-validate.yml` from four to `scripts/manifest/**` + `scripts/fetch/**`.
-Only `e2e-test.yml` narrowed, and only there does criterion 3's new assertion apply. `autoscaler-drift.yml` gained `scripts/fetch/**` outright — it runs `download-verified.sh` and had never listed it.
+Only `e2e-test.yml` narrowed, and only there does criterion 3's new assertion apply.
+`autoscaler-drift.yml` gained `scripts/fetch/**` outright — it runs `download-verified.sh` and had never listed it.
 
 ### The move breaks two things a rename normally does not
 

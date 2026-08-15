@@ -25,7 +25,8 @@ Give the loop its own stop condition and the kill is never needed.
 
 **Do not reach for `timeout`.** It ships with GNU coreutils and is absent from a stock macOS, where neither `timeout` nor `gtimeout` is on `PATH`.
 A script that depends on it runs unbounded on a dev Mac while looking correct.
-That is the same silent-absence trap that broke Q690's load harness, which backgrounded its generators with `setsid`: also absent on macOS, so all three died instantly and 40 samples passed against an idle machine, reading as strong evidence of no flake. `timeout` is also still a kill, just one on a timer, so the signal can skip the cleanup `trap` that a self-terminating loop unwinds through.
+That is the same silent-absence trap that broke Q690's load harness, which backgrounded its generators with `setsid`: also absent on macOS, so all three died instantly and 40 samples passed against an idle machine, reading as strong evidence of no flake.
+`timeout` is also still a kill, just one on a timer, so the signal can skip the cleanup `trap` that a self-terminating loop unwinds through.
 
 This applies hardest to throwaway harnesses under the gitignored `tmp/`.
 Being a throwaway is exactly why such a script gets none of the review a tracked one does, and it is where every unbounded loop in this repo's history has actually come from.

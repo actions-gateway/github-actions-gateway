@@ -51,7 +51,8 @@ Fixed by seeding from the first input profile instead — every genuine multi-ga
 
 ### Finding 3 — the downgrade guard rejects every privileged relocation
 
-Fixing finding 2 exposed the next one. `namespace-security-profile-guard` compares the incoming `security-profile` label against the current one, and an **absent** label reads as `baseline`.
+Fixing finding 2 exposed the next one.
+`namespace-security-profile-guard` compares the incoming `security-profile` label against the current one, and an **absent** label reads as `baseline`.
 A tenant coming from v1 has never carried the v2 label, so relocating `privileged` always presents as `baseline` → `privileged` — a downgrade — and is denied:
 
 ```

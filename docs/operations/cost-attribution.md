@@ -61,7 +61,8 @@ Use the `app.kubernetes.io/*` set below, which is the stable contract for toolin
 The namespace name is operator-chosen — GAG does not derive or rename it — so use whatever namespace your team assigned the tenant.
 There is no separate proxy or worker namespace to reconcile.
 
-**Per-RunnerGroup / per-RunnerSet drill-down.** To split a tenant's worker cost by runner shape (e.g. `gpu-a100` vs `cpu-standard`), aggregate by `app.kubernetes.io/instance`, which carries the owning RunnerGroup/RunnerSet name.
+**Per-RunnerGroup / per-RunnerSet drill-down.** To split a tenant's worker cost by runner shape (e.g.
+`gpu-a100` vs `cpu-standard`), aggregate by `app.kubernetes.io/instance`, which carries the owning RunnerGroup/RunnerSet name.
 (GAG also sets project-specific `actions-gateway/runner-group` and `actions-gateway.com/runner-set` labels for `kubectl` selection — see [observability.md](observability-metrics.md#drilling-down-to-individual-runner-pods) — but for cost queries prefer the recommended `instance` label.)
 
 > **Cardinality caution.** Do not aggregate cost by a label whose value is per-job or per-run (there is none in the recommended set, but worker pods *also* carry per-job annotations like `actions-gateway.com/run-id`).

@@ -11,12 +11,14 @@ This guide covers running the `gag-migrate` tool: dry-run → review → `--appl
 ## Why upgrade to v2
 
 v2 is **opt-in**.
-It is served at two versions: **`v2beta1`** (the graduated, ScaleSet-only storage/hub version) and **`v2alpha1`** (deprecated, served as this tool's on-ramp). `gag-migrate` lands v1 RunnerGroups on **`v2alpha1`** so a migrated set keeps the Classic protocol it was registered under during the deprecation window; a tenant then moves to `v2beta1` (a lossless, apiserver-side conversion) once it no longer needs Classic.
+It is served at two versions: **`v2beta1`** (the graduated, ScaleSet-only storage/hub version) and **`v2alpha1`** (deprecated, served as this tool's on-ramp).
+`gag-migrate` lands v1 RunnerGroups on **`v2alpha1`** so a migrated set keeps the Classic protocol it was registered under during the deprecation window; a tenant then moves to `v2beta1` (a lossless, apiserver-side conversion) once it no longer needs Classic.
 Multi-label matching is not a reason to stay: `v2beta1` registers every `runnerLabel` on the scale set.
 Because `v2alpha1` is deprecated, the apiserver warns on every `v2alpha1` read or write, including the objects `gag-migrate` applies.
 The warning is advisory and blocks nothing; it clears when the tenant moves to `v2beta1`.
 [`v1alpha1` warns the same way](upgrade.md#non-breaking-v1alpha1-is-deprecated-and-the-apiserver-now-warns), so a tenant mid-migration sees a notice on both sides until v1 is decommissioned.
-Detail: [upgrade.md](upgrade.md#non-breaking-v2alpha1-is-deprecated-and-the-apiserver-now-warns). v2 is **not a drop-in replacement** (new API group `actions-gateway.com`, one CR decomposed into several kinds, a tool-assisted fan-out). `v1alpha1` stays fully supported until it is [removed at `v2.0.0`](v1alpha1-deprecation.md), which also removes `v2alpha1` and Classic, so treat the `v2alpha1` landing spot as a way station and `v2beta1` as the destination.
+Detail: [upgrade.md](upgrade.md#non-breaking-v2alpha1-is-deprecated-and-the-apiserver-now-warns). v2 is **not a drop-in replacement** (new API group `actions-gateway.com`, one CR decomposed into several kinds, a tool-assisted fan-out).
+`v1alpha1` stays fully supported until it is [removed at `v2.0.0`](v1alpha1-deprecation.md), which also removes `v2alpha1` and Classic, so treat the `v2alpha1` landing spot as a way station and `v2beta1` as the destination.
 Migrate a tenant when one of these is worth that trade-off.
 
 **New capabilities — no v1 equivalent:**
@@ -53,7 +55,8 @@ Migrate a tenant when one of these is worth that trade-off.
 | each `RunnerGroup` | a `RunnerSet` (`gatewayRef` + `templateRef`; `proxyRef` left unset so it inherits the gateway's `defaultProxyRef`) |
 | `ActionsGateway.spec.securityProfile` | the namespace label `actions-gateway.com/security-profile` |
 
-It also aligns the Q147 / domain-renamed namespace markers — adding the `actions-gateway.com/tenant=managed` marker, the `actions-gateway.com/security-profile` label, the domain-migrated `privileged-profile` grant, and the aligned `allow-profile-downgrade=allowed` annotation. **These are additive:** the legacy `actions-gateway.github.com/*` keys are kept so v1 keeps working during coexistence (every admission policy dual-reads both during the window), and are removed only when `v1alpha1` is finally removed.
+It also aligns the Q147 / domain-renamed namespace markers — adding the `actions-gateway.com/tenant=managed` marker, the `actions-gateway.com/security-profile` label, the domain-migrated `privileged-profile` grant, and the aligned `allow-profile-downgrade=allowed` annotation.
+**These are additive:** the legacy `actions-gateway.github.com/*` keys are kept so v1 keeps working during coexistence (every admission policy dual-reads both during the window), and are removed only when `v1alpha1` is finally removed.
 
 ### Behavior-preserving guarantees
 
@@ -72,7 +75,8 @@ v2 refuses a privileged container in a **namespaced** `RunnerTemplate` — a ten
 Privileged shapes live on the platform-owned, cluster-scoped `ClusterRunnerTemplate`, which exists precisely to hold golden Docker-in-Docker / sysbox templates ([§H.6](../design/appendix-h-v2-api-decomposition.md)).
 
 So when a v1 `RunnerGroup`'s `podTemplate` declares a privileged container or init container, `gag-migrate` emits a `ClusterRunnerTemplate` rather than a `RunnerTemplate`, and sets the set's `templateRef.kind: ClusterRunnerTemplate`.
-Non-privileged groups are unaffected. **This changes what a migration touches**, so it is called out in the dry-run with a warning, and there are three things to know:
+Non-privileged groups are unaffected.
+**This changes what a migration touches**, so it is called out in the dry-run with a warning, and there are three things to know:
 
 - **It needs cluster-scoped create permission.** `--apply` already requires permission to patch the tenant namespace; this adds `create` on `clusterrunnertemplates.actions-gateway.com`.
 - **Deleting the tenant namespace does not reclaim it.** Cluster-scoped objects have no owning namespace.
@@ -95,7 +99,8 @@ The `namespace-security-profile-guard` policy compares the incoming `actions-gat
 A tenant coming from v1 has never carried the v2 label, and `privileged` is the *least* restrictive level — so the relocation always presents as `baseline` → `privileged`, i.e. a downgrade, and is denied without the opt-in annotation.
 
 The downgrade is only apparent: the namespace's PSA enforcement is *already* `privileged` under v1, stamped there by the GMC from the gateway's spec.
-But the policy cannot see that, and it must not — it is the control that stops a stray re-apply from silently relaxing a tenant's isolation. `gag-migrate` therefore warns in the dry-run instead of writing the annotation itself, for the same reason it never invents the eligibility grant: opting into a downgrade is the operator's decision.
+But the policy cannot see that, and it must not — it is the control that stops a stray re-apply from silently relaxing a tenant's isolation.
+`gag-migrate` therefore warns in the dry-run instead of writing the annotation itself, for the same reason it never invents the eligibility grant: opting into a downgrade is the operator's decision.
 
 Add it before `--apply`, and remove it once the migration is verified:
 
@@ -125,7 +130,8 @@ Tenants migrating to `baseline` or `restricted` need none of this.
 
 ### Pin the target cluster
 
-`gag-migrate` talks to whatever your kubeconfig resolves to. **Pass `--context` to pin the cluster explicitly** rather than relying on the ambient current-context (a parallel session can silently repoint it):
+`gag-migrate` talks to whatever your kubeconfig resolves to.
+**Pass `--context` to pin the cluster explicitly** rather than relying on the ambient current-context (a parallel session can silently repoint it):
 
 ```bash
 gag-migrate --namespace team-a --context my-cluster
@@ -335,7 +341,8 @@ The legacy `actions-gateway.github.com/*` namespace markers and finalizers are r
   Migrating a **privileged** tenant always trips the downgrade rule; see [the downgrade opt-in](#a-privileged-tenant-needs-the-downgrade-opt-in-for-the-duration-of-the-migration).
   Note the ordering cost of discovering this at `--apply` time rather than in the dry-run: the namespace patch is the **last** step, so the v2 objects are already created when it fails.
   Re-running after adding the annotation is safe — apply is idempotent and skips what exists.
-- **`--apply` fails with `failed calling webhook … context deadline exceeded`.** The apiserver could not reach the GMC validating webhook. `--apply` already retries this for 90 seconds, so reaching this error means the webhook was down for longer than that — check the GMC deployment is `Running` with programmed endpoints (`kubectl -n gag-system get deploy,endpoints`) before re-running.
+- **`--apply` fails with `failed calling webhook … context deadline exceeded`.** The apiserver could not reach the GMC validating webhook.
+  `--apply` already retries this for 90 seconds, so reaching this error means the webhook was down for longer than that — check the GMC deployment is `Running` with programmed endpoints (`kubectl -n gag-system get deploy,endpoints`) before re-running.
   Re-running is safe: apply is idempotent and skips whatever the aborted run already created.
 - **The dry-run warns the namespace "holds no privileged-eligibility grant on either label domain".** The tenant migrates to `securityProfile: privileged` but carries the grant label on neither domain, or carries it with a value other than `allowed` (the match is exact — the legacy `"true"` is *not* a grant here).
   Apply the v2 label the warning names, as a platform administrator:

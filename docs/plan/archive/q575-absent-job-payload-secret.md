@@ -55,7 +55,8 @@ Three orderings reach the stall, in rising order of likelihood for the capture:
 1. **Same batch.** A run cancelled or fast-failing between two polls delivers `JobAssigned(X)` and `JobCompleted(X)` together.
    Guaranteed stall.
 2. **Adjacent batches.** The completion lands while the pod is still Pending on ordinary scheduling latency (image pull, node scale-up).
-3. **Restart replay.** A re-created session polls from cursor 0 with empty `provisioned`/`completed`/`abandoned` sets and replays the whole queue, provisioning workers for long-gone jobs and then completing them. **8 pods at once fits a replayed queue far better than 8 independent cancellations**, so this is the most likely trigger of the actual capture.
+3. **Restart replay.** A re-created session polls from cursor 0 with empty `provisioned`/`completed`/`abandoned` sets and replays the whole queue, provisioning workers for long-gone jobs and then completing them.
+   **8 pods at once fits a replayed queue far better than 8 independent cancellations**, so this is the most likely trigger of the actual capture.
    The replay itself is Q583 and is explicitly out of scope here — but the stall it produces is this defect, and fixing this defect bounds its damage.
 
 ## Fix

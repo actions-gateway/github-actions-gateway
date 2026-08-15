@@ -72,7 +72,8 @@ Measured 2026-08-06 against ARC 0.14.2 and `master`.
 
 ## No offering is perfect, yet…
 
-Here is where GAG loses, and to whom. **No single alternative holds all of these**, which is why the middle column matters as much as the first.
+Here is where GAG loses, and to whom.
+**No single alternative holds all of these**, which is why the middle column matters as much as the first.
 
 | What GAG lacks | Who has it | Tracked |
 |---|---|---|

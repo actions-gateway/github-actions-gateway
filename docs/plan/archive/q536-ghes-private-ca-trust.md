@@ -73,7 +73,8 @@ Applying the [api-review](../../development/api-review.md) rules:
 - **Fixed key `ca.crt`.** Matches `metricsCACertKey` and the upstream `kube-root-ca.crt` convention.
   A `key` override is reachable additively later if demand appears.
 - **Optional pointer, no default.** Unset and "empty bundle" are different states; unset must mean "system roots only", which is the safe direction.
-- **A new ref type, not `LocalObjectRef`.** `LocalObjectRef` carries the v2 52-character object-name budget (§H.6); a ConfigMap is a core object with the 253-character DNS-subdomain budget. `LocalConfigMapReference` mirrors the existing `LocalSecretReference` shape.
+- **A new ref type, not `LocalObjectRef`.** `LocalObjectRef` carries the v2 52-character object-name budget (§H.6); a ConfigMap is a core object with the 253-character DNS-subdomain budget.
+  `LocalConfigMapReference` mirrors the existing `LocalSecretReference` shape.
 
 ### Resolution is a runtime condition, not admission
 
@@ -85,7 +86,8 @@ The GMC resolves it in the reconcile and fails closed the same way `defaultProxy
 | ConfigMap absent | `CABundleNotFound` |
 | Present but no `ca.crt`, or it holds no parseable certificate | `CABundleInvalid` |
 
-No new condition type. `ProxyNotFound` already sets `Degraded` for the sibling case of an unresolvable reference, and a condition type carries no version and no conversion path — the cheaper surface is the right one.
+No new condition type.
+`ProxyNotFound` already sets `Degraded` for the sibling case of an unresolvable reference, and a condition type carries no version and no conversion path — the cheaper surface is the right one.
 
 Parsing in the GMC rather than letting the AGC fail at startup is deliberate: a `Degraded` condition naming the ConfigMap is a better operator signal than a `CrashLoopBackOff`.
 

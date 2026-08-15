@@ -80,7 +80,9 @@ The evidence removes it.
 - **Self-hosted:** the 360-minute default still applies but is *not* a ceiling — a workflow may raise `timeout-minutes` beyond it.
   GitHub instead enforces *"Each job in a workflow can run for up to 5 days of execution time"* ([Actions limits](https://docs.github.com/en/actions/reference/limits); introduced by the [2024-04-04 changelog](https://github.blog/changelog/2024-04-04-actions-jobs-executing-on-self-hosted-runners-will-now-timeout-in-5-days/)).
 
-Two numbers matter for choosing a default. **6 hours** is the timeout every job gets unless its author explicitly opted out of it — so a job running longer than 6 hours is always a deliberate act. **5 days** is the absolute ceiling above which no self-hosted job can run, so any cap we pick below it strictly tightens a bound GitHub already imposes.
+Two numbers matter for choosing a default.
+**6 hours** is the timeout every job gets unless its author explicitly opted out of it — so a job running longer than 6 hours is always a deliberate act.
+**5 days** is the absolute ceiling above which no self-hosted job can run, so any cap we pick below it strictly tightens a bound GitHub already imposes.
 
 ### 3. Message retention / redelivery: undocumented, and this is the honest answer
 
@@ -95,7 +97,8 @@ There is no published retention period for that case.
 Stating this plainly rather than inferring a number: **we do not know whether the replay path survives a multi-hour outage.** GAG's `scalesettest` fake keeps a session-independent queue log, which is the *permissive* assumption; real retention could be far shorter.
 If it is, the replay path is not a recovery path after a long outage and this item's deadline is the *only* one — which is an argument for the default being **on**, not opt-in.
 
-Filed as **Q468** for a live measurement; it needs cluster-only / live credentials and does not belong in this PR. **Measured 2026-07-29** ([q468-jobcompleted-retention.md](q468-jobcompleted-retention.md)): retention is *not* far shorter — a `JobCompleted` was still redelivered to a new session after 13 h 3 m with no session in between.
+Filed as **Q468** for a live measurement; it needs cluster-only / live credentials and does not belong in this PR.
+**Measured 2026-07-29** ([q468-jobcompleted-retention.md](q468-jobcompleted-retention.md)): retention is *not* far shorter — a `JobCompleted` was still redelivered to a new session after 13 h 3 m with no session in between.
 That is past this item's 12 h default, so the two mechanisms overlap: the cap fires while redelivery is still live, rather than either leaving a window uncovered.
 
 ### 4. Prior art
@@ -111,7 +114,8 @@ So ARC is a confirmation that the gap is real and not a design to copy.
 Three properties decide it:
 
 1. **The kubelet enforces it, not the AGC.** This is the decisive one.
-   In the dogfood incident the AGC was `Pending` for the entire 16 hours — so a *reaper-side* deadline would not have bounded that incident either, because there was no reaper running. `activeDeadlineSeconds` needs only the node.
+   In the dogfood incident the AGC was `Pending` for the entire 16 hours — so a *reaper-side* deadline would not have bounded that incident either, because there was no reaper running.
+   `activeDeadlineSeconds` needs only the node.
 2. **Measured from `StartTime`**, i.e. active-on-node time, so it does not double-count scheduling latency.
    Stuck-`Pending` is already covered separately by `pendingPodDeadline`.
 3. **It composes with the existing reaper.** The pod lands in `Failed` with `Status.Reason == "DeadlineExceeded"`, which the reaper's existing terminal arm already reclaims via `completedPodTTL`.

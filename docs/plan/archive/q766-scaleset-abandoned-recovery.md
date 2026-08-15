@@ -14,7 +14,9 @@ The two prior ports of the same shape are Q417 (eviction recovery) and Q443 (the
 
 Measured from source 2026-08-09.
 
-`provision()` holds a goroutine for the life of the job. `InformerPodWaiter` resolves that wait from the pod's **informer delete event**, whose payload is the last-known pod object, and stamps `PodOutcome.DeletedBeforeStart` from `!podEverStarted(pod)` ([podwaiter.go:342](../../../cmd/agc/internal/provisioner/podwaiter.go)). `provision()` then force-cancels the run and registers it for a capacity-gated re-run, using the `owner/repo/run_id` it parsed out of the AcquireJob payload it still holds ([provisioner.go:661](../../../cmd/agc/internal/provisioner/provisioner.go)).
+`provision()` holds a goroutine for the life of the job.
+`InformerPodWaiter` resolves that wait from the pod's **informer delete event**, whose payload is the last-known pod object, and stamps `PodOutcome.DeletedBeforeStart` from `!podEverStarted(pod)` ([podwaiter.go:342](../../../cmd/agc/internal/provisioner/podwaiter.go)).
+`provision()` then force-cancels the run and registers it for a capacity-gated re-run, using the `owner/repo/run_id` it parsed out of the AcquireJob payload it still holds ([provisioner.go:661](../../../cmd/agc/internal/provisioner/provisioner.go)).
 
 Two properties of that trigger matter for the port:
 

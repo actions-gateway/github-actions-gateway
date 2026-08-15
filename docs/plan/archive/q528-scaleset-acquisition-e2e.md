@@ -47,7 +47,8 @@ fakegithub serves the stub's handler at the paths the client uses:
 - `/api/v3/actions/runner-registration` and `/api/v3/{orgs,repos}/…/actions/runners/registration-token` — the two REST hops of the bootstrap, prefix-stripped onto the same handler.
 
 The classic `/api/v3/…/actions/runners` routes (generate-jitconfig, list, delete) stay on fakegithub's own runner registry.
-The scale-set happy path never touches them — it mints runners through `generatejitconfig` on the Actions Service — so the two registries do not have to agree. `DeregisterRunnerByName`, which does use the REST routes, is only reached on a runner-name 409, which this venue does not produce.
+The scale-set happy path never touches them — it mints runners through `generatejitconfig` on the Actions Service — so the two registries do not have to agree.
+`DeregisterRunnerByName`, which does use the REST routes, is only reached on a runner-name 409, which this venue does not produce.
 
 Control endpoints, alongside the existing classic ones:
 
@@ -104,7 +105,8 @@ Two worker pods, each carrying the run identity its assignment delivered.
 At that resolution a genuine pass and a vacuous one — assertions satisfied by state that predates the enqueue — are indistinguishable from spec timings, which is exactly what the first green run looked like before the log was captured.
 The log is diagnostics, not a gate; the assertions remain the gate.
 
-**Two things the run did not exercise**, recorded so neither is read into the result. `ResolveRunnerGroup` is absent from the log — the listener carried no group name, so the scale set was created against group 1 directly.
+**Two things the run did not exercise**, recorded so neither is read into the result.
+`ResolveRunnerGroup` is absent from the log — the listener carried no group name, so the scale set was created against group 1 directly.
 And no runner ever starts: fakegithub's JIT config is a syntactic placeholder, so the spec's terminal assertion is the staged JIT-config Secret the worker pod mounts, not a pod phase.
 A real runner executing a real job stays with the live-GitHub tier.
 

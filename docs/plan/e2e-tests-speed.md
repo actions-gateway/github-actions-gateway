@@ -533,7 +533,8 @@ This is the lowest-effort improvement to CI observability.
 
 ### Problem
 
-When a long-running spec (e.g. `WaitForDeploymentReady`) stalls in a parallel process, there is no signal in the log until the timeout fires — which can be 3–4 minutes later.
+When a long-running spec (e.g.
+`WaitForDeploymentReady`) stalls in a parallel process, there is no signal in the log until the timeout fires — which can be 3–4 minutes later.
 By that point other suites have already finished and the failure is hard to attribute to a specific `By(...)` step.
 
 ### Approach

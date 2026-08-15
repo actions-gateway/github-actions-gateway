@@ -35,7 +35,8 @@ Candidates, ordered by likelihood after the upstream source review below:
    But kind reuses pod IPs aggressively and the suite churns short-lived probe pods; if `getPodAssignedToIP` still maps the reused IP to a **deleted pod from an allowed namespace**, the verdict is a genuine spurious allow.
    Discriminator: no queue drops in the dump + full-window kindnet logs showing the stale pod attribution.
 3. **Memory pressure in kindnetd.** #612 removed the CPU limit but kept `memory: 50Mi`.
-   A GC-thrashing or reclaim-stalled enforcer delays verdicts, and with FailOpen a stalled queue overflows into accepts (folds into #1). `memory.events` (`high`/`max` counters) now captured.
+   A GC-thrashing or reclaim-stalled enforcer delays verdicts, and with FailOpen a stalled queue overflows into accepts (folds into #1).
+   `memory.events` (`high`/`max` counters) now captured.
 
 The 07-15 dump could not discriminate these because the kindnet log capture (`--tail=100`) started ~2 minutes **after** the failure window ended, and no nfqueue/memory counters were collected.
 The failure dump in [`e2e-reusable.yml`](../../.github/workflows/e2e-reusable.yml) now captures all three signals.
@@ -140,12 +141,14 @@ A local pass is expected either way (8 local vCPUs vs CI's 4 — CI adds the hos
 Side-finding from a back-to-back local re-run on the same cluster (an invalid comparison run, discarded): the suite's AfterSuite `make undeploy` removes the GMC/AGC while tenant namespaces from failed/late specs are still Terminating, stranding `actions-gateway.com/agentpool-cleanup` finalizers with no controller left to clear them — the namespaces never finish deleting and the next run's BeforeAll `create namespace` collides.
 CI is unaffected (fresh cluster per run); filed as its own Queue item for the local iteration loop.
 
-**Resolved (Q301):** the AfterSuite now drains tenant namespaces before `make undeploy`. `drainTenantNamespaces` (in [`cmd/gmc/test/e2e/e2e_suite_test.go`](../../cmd/gmc/test/e2e/e2e_suite_test.go)) deletes every namespace carrying the `actions-gateway.github.com/tenant` marker and waits (bounded, best-effort) for them to finish terminating while the GMC/AGC controllers are still up, so the finalizers clear before the controllers are torn down.
+**Resolved (Q301):** the AfterSuite now drains tenant namespaces before `make undeploy`.
+`drainTenantNamespaces` (in [`cmd/gmc/test/e2e/e2e_suite_test.go`](../../cmd/gmc/test/e2e/e2e_suite_test.go)) deletes every namespace carrying the `actions-gateway.github.com/tenant` marker and waits (bounded, best-effort) for them to finish terminating while the GMC/AGC controllers are still up, so the finalizers clear before the controllers are torn down.
 A back-to-back local re-run's BeforeAll no longer collides on a pre-existing Terminating namespace.
 
 ## 2026-08-03: a second `CrossTenant` occurrence, and what its *phase* implies
 
-[Run 30833071096](https://github.com/actions-gateway/github-actions-gateway/actions/runs/30833071096), on PR #1197's branch rather than `main`. `E2E_GMC_CrossTenantNetworkBlocked` failed at [`isolation_test.go:150`](../../cmd/gmc/test/e2e/isolation_test.go) — the gate probe pod was **still `Running`** when the 6-minute `Eventually` expired (`Timed out after 360.001s`, `probe pod still in phase "Running"`); 61 passed, 1 failed, 11 skipped.
+[Run 30833071096](https://github.com/actions-gateway/github-actions-gateway/actions/runs/30833071096), on PR #1197's branch rather than `main`.
+`E2E_GMC_CrossTenantNetworkBlocked` failed at [`isolation_test.go:150`](../../cmd/gmc/test/e2e/isolation_test.go) — the gate probe pod was **still `Running`** when the 6-minute `Eventually` expired (`Timed out after 360.001s`, `probe pod still in phase "Running"`); 61 passed, 1 failed, 11 skipped.
 It passed on a re-run of the same tree with no change to GMC, to any NetworkPolicy, or to the spec.
 
 **The phase narrows the cause more than the timeout does.** The probe loops 150 times over `curl --max-time 5 --connect-timeout 5` plus `sleep 2`, exiting 0 on 3 consecutive blocks and 1 when the loop is exhausted.
@@ -162,7 +165,8 @@ A never-enforced probe finishes and reports `Failed` with its own diagnostic; to
 That is enforcement **flapping**, which is the 2026-07-15 fail-open signal seen from the other side: there enforcement was confirmed and then leaked, here it never held long enough to be confirmed.
 Both are consistent with hypothesis 1 (nfqueue bypass accepting under load).
 
-**The assumption this rests on**, stated so it can be falsified: that a blocked attempt costs the full `--connect-timeout`, i.e. the packets are dropped rather than rejected. kindnetd's kube-network-policies issues nfqueue *drop* verdicts, so this holds — but a REJECT anywhere in the path would return fast and collapse the whole argument. **No failure dump was read for this run** (it is a PR-branch run, and the upgraded dump is wired for `main`), so the nfqueue counters that would confirm hypothesis 1 directly were not consulted.
+**The assumption this rests on**, stated so it can be falsified: that a blocked attempt costs the full `--connect-timeout`, i.e. the packets are dropped rather than rejected. kindnetd's kube-network-policies issues nfqueue *drop* verdicts, so this holds — but a REJECT anywhere in the path would return fast and collapse the whole argument.
+**No failure dump was read for this run** (it is a PR-branch run, and the upgraded dump is wired for `main`), so the nfqueue counters that would confirm hypothesis 1 directly were not consulted.
 This is recorded as an occurrence plus an inference from the observed phase, not as proven attribution.
 
 ### The probe's loop budget does not span the outer window

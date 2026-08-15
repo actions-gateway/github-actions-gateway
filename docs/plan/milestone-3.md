@@ -25,7 +25,8 @@
 Last refreshed 2026-05-30.
 The provisioner, decryption, ceiling enforcement, eviction retry, GC, and RBAC are all in code.
 Investigation A (Named Pipe protocol) is complete.
-Q5h (worker proxy-CA trust) shipped 2026-05-30. **Q6 (live-GitHub `E2E_GitHub_RealDispatch`) re-ran successfully on 2026-05-30** against real GitHub (`actions-gateway/gateway-test`, workflow `test-job.yml`, run [26685844172](https://github.com/actions-gateway/gateway-test/actions/runs/26685844172)): both specs (`E2E_GitHub_ActionsGatewayReachesReady` and `E2E_GitHub_WorkflowCompletesGreen`) pass, GitHub-side run concludes `success` — the first green checkmark from this system.
+Q5h (worker proxy-CA trust) shipped 2026-05-30.
+**Q6 (live-GitHub `E2E_GitHub_RealDispatch`) re-ran successfully on 2026-05-30** against real GitHub (`actions-gateway/gateway-test`, workflow `test-job.yml`, run [26685844172](https://github.com/actions-gateway/gateway-test/actions/runs/26685844172)): both specs (`E2E_GitHub_ActionsGatewayReachesReady` and `E2E_GitHub_WorkflowCompletesGreen`) pass, GitHub-side run concludes `success` — the first green checkmark from this system.
 The re-run also surfaced an unrelated GMC readiness-probe bug (`/readyz` returned OK before the webhook server bound, racing every rollout); fixed separately in `cmd/gmc/cmd/main.go` by gating readyz on `mgr.GetWebhookServer().StartedChecker()`.
 
 | Success criterion | Status | Notes |
@@ -86,7 +87,8 @@ Named Pipes are the underdocumented interface between the entrypoint wrapper and
 ```
 
 **What is needed:** `CreateSession` returns an `encryptionKey.value` field — a base64-encoded RSA-encrypted AES-256 session key.
-The message body returned by `GetMessage` is AES-256-CBC encrypted with that key. `broker.DecryptSessionKey` and `broker.DecryptMessageBody` already implement both steps (`broker/crypto.go`).
+The message body returned by `GetMessage` is AES-256-CBC encrypted with that key.
+`broker.DecryptSessionKey` and `broker.DecryptMessageBody` already implement both steps (`broker/crypto.go`).
 
 **Changes required:**
 
@@ -160,7 +162,8 @@ No new `go.mod` is needed; the root `go.mod` already hosts the `broker` and `git
 ### 2.2 Named Pipe protocol (Investigation Task A — see §5.A)
 
 `Runner.Worker` reads its job payload through Named Pipes (Linux FIFOs).
-The exact pipe paths and payload format are not confirmed from the existing codebase. **This is the underdocumented part of the milestone.** Investigation Task §5.A defines how to determine the pipe names and sequencing before writing this binary.
+The exact pipe paths and payload format are not confirmed from the existing codebase.
+**This is the underdocumented part of the milestone.** Investigation Task §5.A defines how to determine the pipe names and sequencing before writing this binary.
 
 **Provisional implementation** (to be updated after §5.A):
 
@@ -766,7 +769,8 @@ Worker pods need the symmetric treatment, but the AGC provisioner's `BuildPod` (
 
 **Fix sketch (tracked as Q5h):**
 
-1. **AGC provisioner pod builder:** Mount `actions-gateway-proxy-tls` (cert only, `Items: [{Key: tls.crt, Path: tls.crt}]`) into the runner container at a fixed path (e.g. `/etc/actions-gateway/proxy-tls/tls.crt`).
+1. **AGC provisioner pod builder:** Mount `actions-gateway-proxy-tls` (cert only, `Items: [{Key: tls.crt, Path: tls.crt}]`) into the runner container at a fixed path (e.g.
+   `/etc/actions-gateway/proxy-tls/tls.crt`).
    Symmetric to the AGC mount.
 2. **GMC `AGC_EXTRA_*` plumbing:** Thread the proxy-TLS Secret name into the AGC deployment as an env var (or hard-code the canonical name — the Secret name is deterministic per tenant).
    AGC reads it when building the worker pod spec.
@@ -791,7 +795,8 @@ Once Q5h ships, Q6 can be re-run against the same kind cluster and should reach 
 
 - AGC pod provisioner gained `Provisioner.ProxyTLSSecretName` ([cmd/agc/internal/provisioner/provisioner.go](../../cmd/agc/internal/provisioner/provisioner.go)).
   When non-empty, `buildPod` adds an `Items: [tls.crt]` Secret volume
-  + read-only mount at `/etc/actions-gateway/proxy-ca/tls.crt` and exports `PROXY_CA_CERT_PATH` on the runner container. `tls.key` is never projected, keeping the proxy private key off worker pods.
+  + read-only mount at `/etc/actions-gateway/proxy-ca/tls.crt` and exports `PROXY_CA_CERT_PATH` on the runner container.
+    `tls.key` is never projected, keeping the proxy private key off worker pods.
     Two new unit tests pin the mount shape and the empty-secret-name no-op path ([provisioner_test.go](../../cmd/agc/internal/provisioner/provisioner_test.go) — `TestBuildPod_MountsProxyCASecret`, `TestBuildPod_NoProxyCAWhenSecretNameEmpty`).
 - AGC `main.go` reads `PROXY_TLS_SECRET_NAME` and plumbs it into the provisioner.
 - GMC `buildAGCDeployment` sets `PROXY_TLS_SECRET_NAME= actions-gateway-proxy-tls` on the AGC Deployment so each tenant's AGC finds the right Secret automatically ([cmd/gmc/internal/controller/builder.go](../../cmd/gmc/internal/controller/builder.go)); `TestBuildAGCDeployment_PlumbsProxyTLSSecretName` guards the env.
@@ -833,5 +838,6 @@ The fix is a one-line addition and ships in the same branch as the Q6 re-run.
 The GMC's per-tenant proxy Deployment ([cmd/gmc/internal/controller/builder.go](../../cmd/gmc/internal/controller/builder.go)) used `/healthz` for both liveness and readiness, so worker pods could hit `connection refused` on `HTTPS_PROXY` traffic during a proxy rollout or HPA scale-up.
 
 Fixed by Q42: `ListenAndServe` now pre-binds both listeners synchronously before either serve goroutine starts, then closes a `ready` channel.
-A new `/readyz` endpoint returns 200 only after the channel closes, and the proxy `Deployment`'s `readinessProbe` was re-pointed to `/readyz`. `/healthz` remains the liveness probe.
+A new `/readyz` endpoint returns 200 only after the channel closes, and the proxy `Deployment`'s `readinessProbe` was re-pointed to `/readyz`.
+`/healthz` remains the liveness probe.
 Runbook: [troubleshooting.md — Worker `HTTPS_PROXY` Returns `connection refused` During Proxy Rollout](../operations/troubleshooting.md#worker-https_proxy-returns-connection-refused-during-proxy-rollout).

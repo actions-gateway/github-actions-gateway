@@ -244,7 +244,8 @@ A sample audit policy that captures exactly the verbs the table above alerts on 
 3. **AGC Secret reads** (`get`/`list`/`watch secrets`) by each AGC ServiceAccount — surfaces the full-body `list` and out-of-scope `get` the legitimate metadata-only code path never makes.
 
 **Why `Metadata`, not `RequestResponse`.** A Secret `get`/`list` *response* body contains `.data` — the GitHub App private keys this control protects.
-Logging at `RequestResponse` would copy that key material into the audit backend, creating a second exfiltration surface. `Metadata` records the requester, verb, resource, name, namespace, timestamp, and response code — enough to detect an anomalous read without duplicating the secret.
+Logging at `RequestResponse` would copy that key material into the audit backend, creating a second exfiltration surface.
+`Metadata` records the requester, verb, resource, name, namespace, timestamp, and response code — enough to detect an anomalous read without duplicating the secret.
 Keep the Secret rules at `Metadata`.
 
 **Before you install,** edit the placeholders (the file's header comment lists them): the GMC ServiceAccount user string if you overrode the install namespace or `namePrefix`, and one `users:` entry per tenant namespace for the AGC rule (the audit `users:` field is an exact match with no wildcard).
@@ -332,7 +333,8 @@ jq -c 'select(.user.username == "system:serviceaccount:gmc-system:gmc-controller
 ```
 
 A baseline is one `get` per `gitHubAppRef` Secret per reconcile, only in tenant namespaces.
-Alert on: any `list`/`watch`; a `get` rate well above the reconcile cadence; or any `get` outside a tenant namespace (e.g. `kube-system`).
+Alert on: any `list`/`watch`; a `get` rate well above the reconcile cadence; or any `get` outside a tenant namespace (e.g.
+`kube-system`).
 For the GMC write rule, a `responseStatus.code` of `403` is a VAP block — investigate the binary that attempted it.
 For AGC reads, filter by each AGC user string and alert on `verb == "list"` (the legit path is metadata-only) or a `get` on a Secret name the AGC does not own.
 
@@ -386,7 +388,8 @@ It runs on every PR that touches the chart or the `Makefile`, and on every push 
 - **What it gates.** The scan fails the PR on any `danger` finding — a privileged container, a host namespace, dangerous capabilities, a missing `securityContext`, a floating `:latest` image tag, and similar real regressions.
   A change that weakens the chart's hardened defaults cannot merge.
 - **What it reports but does not block.** `warning`-level findings are printed for visibility.
-  The handful that are false positives against a Helm-packaged operator chart (the controller's required ServiceAccount-token automount, the cross-document NetworkPolicy match polaris can't resolve statically, the `IfNotPresent` pull policy that is correct for a digest-pinned image, and Helm's `app.kubernetes.io/instance` labelling) are tuned to `ignore` in [`charts/actions-gateway/polaris.yaml`](../../charts/actions-gateway/polaris.yaml), each with a justifying comment. **Never relax a `danger` check to silence a finding — fix the chart instead** (secure-by-default).
+  The handful that are false positives against a Helm-packaged operator chart (the controller's required ServiceAccount-token automount, the cross-document NetworkPolicy match polaris can't resolve statically, the `IfNotPresent` pull policy that is correct for a digest-pinned image, and Helm's `app.kubernetes.io/instance` labelling) are tuned to `ignore` in [`charts/actions-gateway/polaris.yaml`](../../charts/actions-gateway/polaris.yaml), each with a justifying comment.
+  **Never relax a `danger` check to silence a finding — fix the chart instead** (secure-by-default).
 - **Run it yourself.** `make polaris-scan` (needs `helm` and `polaris` on `PATH`) runs the exact CI gate locally.
   It renders with a placeholder image digest so the audit reflects the production, digest-pinned posture — a digest is also required for the chart to render at all (an empty digest on any of the four images — `gmc`/`agc`/`proxy`/`wrapper` — fails the render; `make manifest-validate` asserts each rejection), so the placeholder cannot mask a fail-open default.
 
@@ -411,7 +414,8 @@ kubectl delete job kube-bench
 
 Triage the report against this operator's needs:
 
-- **`[FAIL]` on control-plane / kubelet hardening** (e.g. `--anonymous-auth=false`, `--authorization-mode` not `AlwaysAllow`, read-only etcd data dir, `--protect-kernel-defaults=true`) — fix at the cluster layer before onboarding.
+- **`[FAIL]` on control-plane / kubelet hardening** (e.g.
+  `--anonymous-auth=false`, `--authorization-mode` not `AlwaysAllow`, read-only etcd data dir, `--protect-kernel-defaults=true`) — fix at the cluster layer before onboarding.
   These are cluster-admin remediations, not chart settings; managed control planes (EKS/GKE/AKS) pass most of them by default and expose the rest as cluster config.
 - **NetworkPolicy / PodSecurity benchmark items** — this operator already satisfies the workload half: the chart ships GMC NetworkPolicies (`networkPolicy.enabled=true`) and the GMC stamps Pod Security Admission labels per tenant `securityProfile`.
   Confirm the cluster has a NetworkPolicy-enforcing Container Network Interface (CNI) (Calico/Cilium; kindnet does **not** enforce) and the `PodSecurity` admission plugin enabled, or those controls are inert.
@@ -461,7 +465,8 @@ See [network-architecture.md](../design/network-architecture.md#networkpolicy-ru
 > **Running a service mesh?** A mesh sidecar transparently intercepts the worker's outbound TCP and can re-route GitHub-bound traffic through a mesh egress gateway, silently bypassing the per-tenant proxy and dropping the egress-IP attribution this isolation property rests on.
 > See [Running GAG Alongside a Service Mesh](service-mesh-coexistence.md) for the injection opt-out and egress exclusions that keep GAG's proxy path authoritative.
 
-Some jobs legitimately need egress the proxy cannot carry — the CONNECT proxy tunnels HTTP/HTTPS to GitHub CIDRs only, so a non-HTTP protocol (a database, SSH, a raw TCP/UDP service), an internal artifact store or package mirror, or a specific custom DNS resolver is unreachable by default. **Grant that egress with an *additional*, additive NetworkPolicy in the tenant namespace — not by relaxing the managed defaults.** NetworkPolicies are additive (a union of allows), so an extra policy widens egress for the pods it selects without touching the floor.
+Some jobs legitimately need egress the proxy cannot carry — the CONNECT proxy tunnels HTTP/HTTPS to GitHub CIDRs only, so a non-HTTP protocol (a database, SSH, a raw TCP/UDP service), an internal artifact store or package mirror, or a specific custom DNS resolver is unreachable by default.
+**Grant that egress with an *additional*, additive NetworkPolicy in the tenant namespace — not by relaxing the managed defaults.** NetworkPolicies are additive (a union of allows), so an extra policy widens egress for the pods it selects without touching the floor.
 
 Worker pods carry two selectable labels, so you can target all workers or a single runner type:
 
@@ -591,15 +596,18 @@ Migrate by changing the tenant field to `FQDN` and setting the matching operator
 > Retiring a served version is a breaking change and lands on a major tag, which puts the earliest possible removal at `v3.0.0` — one major beyond the `v2.0.0` that removes `v1alpha1`, `v2alpha1`, and classic acquisition.
 > Full reasoning and the coupling to the other clocks: [the deprecation and removal notice](v1alpha1-deprecation.md#a-fourth-deprecation-on-a-different-clock-ciliumfqdn--calicofqdn).
 
-> **Managed "Cilium" platforms usually do NOT accept the `cilium` backend.** The CRD test is literal: `kubectl get crd ciliumnetworkpolicies.cilium.io` must succeed. **GKE Dataplane V2's managed Cilium does not install it** (dropped since GKE 1.21.5-gke.1300) — use `--fqdn-policy-backend=gke` there, not `cilium`.
+> **Managed "Cilium" platforms usually do NOT accept the `cilium` backend.** The CRD test is literal: `kubectl get crd ciliumnetworkpolicies.cilium.io` must succeed.
+> **GKE Dataplane V2's managed Cilium does not install it** (dropped since GKE 1.21.5-gke.1300) — use `--fqdn-policy-backend=gke` there, not `cilium`.
 > If a selected backend's CRD is absent, the GMC's apply fails loudly and the `EgressProxy` goes `Degraded`; GitHub egress stays **denied** (the base NetworkPolicy default-denies it), never silently opened.
 > The still-deferred cluster-scoped backends (AKS `CiliumClusterwideNetworkPolicy`, EKS `ClusterNetworkPolicy`) and OpenShift OVN `EgressFirewall` are tracked in the [Q245 plan](../plan/q245-fqdn-intent-backend-split.md).
 
 > **The `gke` backend is additive-allow, so the base NetworkPolicy is load-bearing.** Unlike Cilium/Calico policies (which are self-default-denying), a GKE `FQDNNetworkPolicy` only *adds* an allow — it is a union with any NetworkPolicy on the same pod, not a default-deny.
-> GAG's fail-closed guarantee therefore depends on the base standard NetworkPolicy (always emitted, GitHub-CIDR rule dropped in FQDN mode) staying present: the FQDN object widens the union to permit GitHub, and if it is absent or unenforced, GitHub egress stays denied by the base NP. **`gke`-backend enforcement is not yet live-validated on a real GKE cluster** (see the Q245 plan's live-validation follow-up); also note GKE's ~50-IP-per-FQDN resolution ceiling can intermittently drop egress for a wide wildcard like `*.blob.core.windows.net` under load — reserve FQDN egress for what an in-cluster caching mirror can't proxy.
+> GAG's fail-closed guarantee therefore depends on the base standard NetworkPolicy (always emitted, GitHub-CIDR rule dropped in FQDN mode) staying present: the FQDN object widens the union to permit GitHub, and if it is absent or unenforced, GitHub egress stays denied by the base NP.
+> **`gke`-backend enforcement is not yet live-validated on a real GKE cluster** (see the Q245 plan's live-validation follow-up); also note GKE's ~50-IP-per-FQDN resolution ceiling can intermittently drop egress for a wide wildcard like `*.blob.core.windows.net` under load — reserve FQDN egress for what an in-cluster caching mirror can't proxy.
 
 **Secure-by-default guarantee.** Selecting an FQDN mode can never weaken egress: the standard NetworkPolicy still default-denies GitHub egress, so if the CNI-native policy is absent or unenforced, GitHub egress is denied rather than wide-open.
-Confirm your CNI actually enforces DNS-based egress before relying on it (see the [network isolation validation](../design/network-architecture.md#how-to-validate-network-isolation) procedure). `egressPolicyMode` has no effect when `managedNetworkPolicy: false`.
+Confirm your CNI actually enforces DNS-based egress before relying on it (see the [network isolation validation](../design/network-architecture.md#how-to-validate-network-isolation) procedure).
+`egressPolicyMode` has no effect when `managedNetworkPolicy: false`.
 
 > FQDN mode is currently a v2 `EgressProxy` feature (the shared-egress surface).
 > The v1 `ActionsGateway` proxy and v2 direct-egress (proxy-less) gateways stay on the CIDR path; if you need FQDN egress there, use the `managedNetworkPolicy: false` hand-off above.
@@ -667,7 +675,9 @@ spec:
           matchLabels: { app: proxy }
 ```
 
-Unlike `affinity`, this field **composes** with the built-in cross-node anti-affinity — it never replaces it. `podAntiAffinity: {}` stays the single opt-out for the built-in cross-node spread; `topologySpreadConstraints` adds a second axis on top. **The `Pending` trap:** a *soft* zonal spread (`whenUnsatisfiable: ScheduleAnyway`) still inherits the *required* built-in cross-node anti-affinity, so replicas beyond the pinned pool's node count strand in `Pending` — the same escapes apply (`podAntiAffinity: {}`, or lower `minReplicas`).
+Unlike `affinity`, this field **composes** with the built-in cross-node anti-affinity — it never replaces it.
+`podAntiAffinity: {}` stays the single opt-out for the built-in cross-node spread; `topologySpreadConstraints` adds a second axis on top.
+**The `Pending` trap:** a *soft* zonal spread (`whenUnsatisfiable: ScheduleAnyway`) still inherits the *required* built-in cross-node anti-affinity, so replicas beyond the pinned pool's node count strand in `Pending` — the same escapes apply (`podAntiAffinity: {}`, or lower `minReplicas`).
 
 > **These placement fields are CR-author-settable, by design.** `nodeSelector`, `tolerations`, `affinity`, and `topologySpreadConstraints` are not gated by a platform allowlist.
 > Choosing an egress path is a feature — tenants should not have to share a rate limit or a block radius — and worker pods have always been able to do it.
@@ -678,7 +688,8 @@ Unlike `affinity`, this field **composes** with the built-in cross-node anti-aff
 > **`priorityClassName` is the exception — it *is* gated** (see below).
 > It is a cluster-wide, cross-tenant preemption lever, not a choice about the tenant's own traffic, so it sits behind its own allowlist.
 
-**Prioritizing infra pods: `priorityClassName` (gated).** An evicted proxy pod takes that tenant's *entire egress path* down; an evicted AGC pod takes that tenant's control plane down. `spec.scheduling.priorityClassName` raises these infra pods above best-effort workloads under node pressure.
+**Prioritizing infra pods: `priorityClassName` (gated).** An evicted proxy pod takes that tenant's *entire egress path* down; an evicted AGC pod takes that tenant's control plane down.
+`spec.scheduling.priorityClassName` raises these infra pods above best-effort workloads under node pressure.
 Because a `PriorityClass` is a cluster-wide preemption lever — and `system-*` classes are nameable from *any* namespace, not just `kube-system` — this field is gated against a **separate, infra-only** allowlist (`--allowed-infra-priority-classes`) that must stay **disjoint** from the worker allowlist.
 See [Priority classes: the two allowlists](#priority-classes-the-allowed-priority-classes-allowlist).
 
@@ -703,7 +714,8 @@ For **remote third-party dependencies** (Go modules, npm, PyPI, crates, containe
 - **Better behavior** — caching cuts repeat fetches, survives upstream outages, and gives a single audit point.
 
 Per-ecosystem mirrors: **Athens** (Go module proxy), **Verdaccio** (npm), a registry **pull-through cache** (container images).
-Reserve the destination allowlist for what a mirror genuinely cannot proxy: a *specific* live cloud-provider API (`kms.<region>.amazonaws.com`, a Private-Google-Access CIDR like `199.36.153.8/30`), internal services reachable only by IP, and one-off stable endpoints. **Never** a wildcard like `*.googleapis.com` (it covers `storage.googleapis.com/<any-bucket>` and reopens broad exfil), and **not** the metadata/IMDS endpoint.
+Reserve the destination allowlist for what a mirror genuinely cannot proxy: a *specific* live cloud-provider API (`kms.<region>.amazonaws.com`, a Private-Google-Access CIDR like `199.36.153.8/30`), internal services reachable only by IP, and one-off stable endpoints.
+**Never** a wildcard like `*.googleapis.com` (it covers `storage.googleapis.com/<any-bucket>` and reopens broad exfil), and **not** the metadata/IMDS endpoint.
 
 ### How the allowlist works
 
@@ -912,7 +924,8 @@ Rule of thumb: **a managed control plane is only safely scopable when you have p
 A public managed endpoint is a moving, provider-owned IP — scoping to a guessed range will eventually break, so keep the any-destination default there.
 
 **The cost of getting it wrong.** A CIDR that is too narrow (or that the platform rotates out from under you) **breaks the AGC's apiserver access** — the AGC can no longer acquire jobs or manage worker pods for that tenant.
-Symptom: AGC logs show apiserver dial timeouts after a rollout that introduced or changed `apiServerCIDRs`. **Remedy: widen the CIDR or clear `apiServerCIDRs` to restore the any-destination default.** Treat this as any egress tightening — validate on one cluster before fleet-wide rollout, and re-confirm after control-plane scaling, upgrades, or IP changes.
+Symptom: AGC logs show apiserver dial timeouts after a rollout that introduced or changed `apiServerCIDRs`.
+**Remedy: widen the CIDR or clear `apiServerCIDRs` to restore the any-destination default.** Treat this as any egress tightening — validate on one cluster before fleet-wide rollout, and re-confirm after control-plane scaling, upgrades, or IP changes.
 
 Leave `apiServerCIDRs` unset unless you have a confirmed, stable apiserver CIDR — the any-destination default is bounded by the §5.2 compensating controls (key mounted read-only, never an env var; workers carry no apiserver egress at all; digest-pinned non-root AGC; all GitHub-bound traffic still through the proxy).
 
@@ -1208,7 +1221,8 @@ The flip side: removing a class that stored objects still name freezes every lat
 Deletion-only updates (deletionTimestamp set, spec unchanged — the finalizer-removal write teardown depends on) are exempt via the policy's `exclude-deletion-only-updates` match condition (Q518), so narrowing can freeze a live object but can no longer wedge its deletion — see [Narrowing the allowlist](#narrowing-the-allowlist-drain-stored-references-first).
 
 The policy matches the v2 kinds too (Q323): `runnersets` (`priorityTiers[].priorityClassName`) and `runnertemplates` (`podTemplate.spec.priorityClassName`), across v2alpha1 and v2beta1.
-Those kinds are already gated by `failurePolicy: Fail` GMC webhooks, so for them the policy is defense-in-depth — coverage while the webhook is unavailable or bypassed, plus the stored-object re-validation a webhook cannot provide. `ClusterRunnerTemplate` is exempt (cluster-scoped, platform-authored — its writers can create `PriorityClass` objects anyway).
+Those kinds are already gated by `failurePolicy: Fail` GMC webhooks, so for them the policy is defense-in-depth — coverage while the webhook is unavailable or bypassed, plus the stored-object re-validation a webhook cannot provide.
+`ClusterRunnerTemplate` is exempt (cluster-scoped, platform-authored — its writers can create `PriorityClass` objects anyway).
 
 The policy reads its allowlist from the cluster-scoped **`PriorityClassAllowlist` CR** `<release>-priorityclass-allowlist` (the apiserver cannot read the GMC flag).
 The chart renders that object from `allowedPriorityClasses` — the same value that feeds `--allowed-priority-classes` — and the GMC watches the very same object, so the webhook and the policy cannot drift.
@@ -1234,7 +1248,8 @@ with `Deny` parameterNotFoundAction
 Because `parameterNotFoundAction: Deny` resolves parameters **before** any per-object matching, that denied *every* matched write — `runnergroups`, `runnersets`, `runnertemplates`, class-naming or not.
 It could also fail **open**, silently enforcing a stale allowlist from a frozen informer cache.
 
-The trigger is deleting the policy's **binding**: the apiserver keys one *shared* parameter informer per core-type `paramKind`, tears it down once no binding names that kind, and never restarts it. `helm uninstall` deletes the guard's only binding, so a later reinstall could not repair it — the only recovery was a kube-apiserver restart, unavailable on EKS/GKE/AKS.
+The trigger is deleting the policy's **binding**: the apiserver keys one *shared* parameter informer per core-type `paramKind`, tears it down once no binding names that kind, and never restarts it.
+`helm uninstall` deletes the guard's only binding, so a later reinstall could not repair it — the only recovery was a kube-apiserver restart, unavailable on EKS/GKE/AKS.
 Observed on Kubernetes 1.35.5 and 1.36.1.
 
 **What fixes it.** For a *CRD* `paramKind` the apiserver allocates a fresh dynamic informer per context, so the same transition is survivable.
@@ -1309,7 +1324,8 @@ cosign verify \
 
 - **A `cosign verify` failure is a stop-ship / incident signal.** It means the image was not signed by the publish workflow — a locally built, tampered, or third-party image.
   Do not deploy it; if it is already running, treat it as a suspected supply-chain compromise (isolate per the playbooks above).
-- Always verify by **digest** (`@sha256:…`) for the running workload — a tag is mutable; the digest is the bytes. `kubectl get pod <p> -o jsonpath='{.status.containerStatuses[*].imageID}'` gives the digest actually pulled.
+- Always verify by **digest** (`@sha256:…`) for the running workload — a tag is mutable; the digest is the bytes.
+  `kubectl get pod <p> -o jsonpath='{.status.containerStatuses[*].imageID}'` gives the digest actually pulled.
 - The same `--certificate-identity-regexp` / `--certificate-oidc-issuer` pair is what a cluster-admission policy engine (Kyverno `verifyImages`, Sigstore policy controller) should enforce so unsigned images can't run at all — that cluster-wide enforcement is the operator's to configure (the gateway does not ship it, mirroring the registry-allowlist split in [§5.2 Supply-Chain](../design/05-security.md#52-agc--proxy-level-threats-namespace-scoped)).
 
 ### Verify build provenance

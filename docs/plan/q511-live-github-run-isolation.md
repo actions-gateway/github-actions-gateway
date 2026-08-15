@@ -31,7 +31,8 @@ So this plan addresses a latent hazard, not a known-corrupted result.
 
 ## The decision: forbid concurrency
 
-The two filed rows proposed opposite designs — fail fast when a peer run is live, or scope the names so concurrent runs cannot collide. **Forbid wins**, decided 2026-07-31.
+The two filed rows proposed opposite designs — fail fast when a peer run is live, or scope the names so concurrent runs cannot collide.
+**Forbid wins**, decided 2026-07-31.
 
 What settled it is that isolating the *names* does not isolate the *routing*.
 GitHub routes a job by the runner's `runs-on` label, and the fixture workflows in `actions-gateway/gateway-test` pin that label literally.
@@ -67,7 +68,8 @@ The two filters have to agree — a cleanup narrower than the preflight would re
 
 ### What is verified, and what is not
 
-Verified live on 2026-07-31, against `actions-gateway/gateway-test`: the listing half of both filters. `gh api repos/…/actions/runners` returns what the preflight parses, over the operator's existing `repo` token scope — no App credential and no new host dependency — and `make e2e-github-cleanup ARGS='--dry-run'` reported the repo idle, which it was.
+Verified live on 2026-07-31, against `actions-gateway/gateway-test`: the listing half of both filters.
+`gh api repos/…/actions/runners` returns what the preflight parses, over the operator's existing `repo` token scope — no App credential and no new host dependency — and `make e2e-github-cleanup ARGS='--dry-run'` reported the repo idle, which it was.
 
 Not demonstrated: the destructive half.
 The fixture repo held zero runners and no in-flight run when this was written, so nothing exercised a real DELETE, a real cancel, or the 422 wait that follows one.

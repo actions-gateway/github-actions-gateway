@@ -119,7 +119,8 @@ These are not blocking but reduce clarity and correctness of what already exists
 
 ### 2.1 Fix the `maxEvictionRetries` inconsistency
 
-`docs/design/02-architecture.md §2.2` describes `maxEvictionRetries` per RunnerGroup. `docs/design/03-api-contracts.md §3.1` RunnerGroupSpec does not include this field.
+`docs/design/02-architecture.md §2.2` describes `maxEvictionRetries` per RunnerGroup.
+`docs/design/03-api-contracts.md §3.1` RunnerGroupSpec does not include this field.
 One of these is wrong.
 Resolve it:
 

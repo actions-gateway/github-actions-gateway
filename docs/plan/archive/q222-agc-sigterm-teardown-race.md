@@ -39,9 +39,11 @@ Total test wall time 120.29s — i.e. **both** per-session waits burned their fu
 ### 1. Nothing waited for listener goroutines at shutdown (structural)
 
 `cmd/agc/main.go` ends in `return mgr.Start(ctx)`.
-Listener goroutines are spawned from `Reconcile` onto the manager's context, so SIGTERM cancels them — but the manager does not track them. `Multiplexer.Stop`, which cancels *and* waits on each goroutine's `done` channel, was called only from `reconcileDelete`/`cleanupLocalState` (RunnerGroup deletion), never on manager shutdown.
+Listener goroutines are spawned from `Reconcile` onto the manager's context, so SIGTERM cancels them — but the manager does not track them.
+`Multiplexer.Stop`, which cancels *and* waits on each goroutine's `done` channel, was called only from `reconcileDelete`/`cleanupLocalState` (RunnerGroup deletion), never on manager shutdown.
 
-So `mgr.Start` returned as soon as the controllers stopped, `run()` returned, and the process exited out from under every goroutine still unwinding its poll loop and running its exit-defer `DELETE`. **In production this leaks a GitHub-side session per in-flight listener on every rollout.** In the integration test the process does not exit, which is why the test only ever saw it as a race against a timeout: `<-mgrDone` carried no information about the goroutines at all, so the assertion was polling a 60s ceiling with nothing guaranteeing the work had even started.
+So `mgr.Start` returned as soon as the controllers stopped, `run()` returned, and the process exited out from under every goroutine still unwinding its poll loop and running its exit-defer `DELETE`.
+**In production this leaks a GitHub-side session per in-flight listener on every rollout.** In the integration test the process does not exit, which is why the test only ever saw it as a race against a timeout: `<-mgrDone` carried no information about the goroutines at all, so the assertion was polling a 60s ceiling with nothing guaranteeing the work had even started.
 
 **Fix:** a `listenerShutdown` manager `Runnable` ([listener_shutdown.go](../../../cmd/agc/internal/controller/listener_shutdown.go)) registered by both reconcilers.
 It blocks on the manager context and then drains the reconciler's multiplexers, so `mgr.Start` returns only after every listener goroutine has exited.

@@ -117,7 +117,8 @@ The last two joined the list from the Q776 re-walk below.
 That list is prose and this section is archived at the cut, so the machine-readable form is the [acquisition-tier ledger](../operations/observability-metrics.md#acquisition-tier-reach), which carries every `actions_gateway_*` series rather than only the omissions, and which `make metric-tiers-check` holds to the source.
 The two are reconciled by that gate in both directions, so a name here that the ledger does not call classic-only fails.
 
-**Alerting already has its analog:** `job_acquisition_errors_total` is classic-only, but [observability-alerting.md](../operations/observability-alerting.md) ships `actions_gateway:scaleset_provision_success_rate:rate5m` alongside the classic `job_acquisition_success_rate`, so the shipped rules do not go silent at the cut. `active_sessions` is likewise classic-only with `scaleset_jobs_assigned_total` as the documented substitute.
+**Alerting already has its analog:** `job_acquisition_errors_total` is classic-only, but [observability-alerting.md](../operations/observability-alerting.md) ships `actions_gateway:scaleset_provision_success_rate:rate5m` alongside the classic `job_acquisition_success_rate`, so the shipped rules do not go silent at the cut.
+`active_sessions` is likewise classic-only with `scaleset_jobs_assigned_total` as the documented substitute.
 
 Both were genuine gates, not nice-to-haves: eviction recovery and the pre-claim quota gate are headline capabilities in [01-executive-summary.md](../design/01-executive-summary.md), [README.md](../../README.md), and [why-gag.md](../why-gag.md), all of which describe them as properties of the system rather than of one acquisition tier.
 Removing classic before Q417 and Q443 landed would have made those claims false at the same moment the only tier that satisfied them disappeared.

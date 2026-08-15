@@ -49,10 +49,12 @@ The timeline is confirmed verbatim in the attempt-1 log, including the AGC's sil
 Two listeners were up (`session-14` at agentIndex 0, `session-17` at agentIndex 1), and `session-17` polled throughout — it simply had no way to see a job sitting on `session-14`'s queue.
 
 That per-session queue is the artifact. fakegithub's `/control/enqueue?sessionId=` addresses a job to **one** session (`jobQueues[sessionID]`), and only two paths move it back to the deliverable pool: `DELETE /session` and the single-use consumption hook, both of which call `requeueLocked`.
-The real broker has no such state — a job stays in the pool until some session polls for it, and a delivery that is not acquired within ~2 min is redelivered pool-wide ([02-architecture §2.2](../../design/02-architecture.md), live-confirmed in the Q260 dogfood, where GitHub redelivered one job repeatedly over ~12 min). `DeleteSession` *accelerates* that redelivery; it is not what makes the work reachable.
+The real broker has no such state — a job stays in the pool until some session polls for it, and a delivery that is not acquired within ~2 min is redelivered pool-wide ([02-architecture §2.2](../../design/02-architecture.md), live-confirmed in the Q260 dogfood, where GitHub redelivered one job repeatedly over ~12 min).
+`DeleteSession` *accelerates* that redelivery; it is not what makes the work reachable.
 So in production a failed `DeleteSession` costs a session record and a delayed redelivery, not a stranded job.
 
-Corollary worth keeping: `/control/sessions` reports **registered**, not **polling**. `session-14` was already mid-job when the spec picked it at 16:24:36 — nine seconds before the recycle — so the enqueue was betting on the DELETE from the start.
+Corollary worth keeping: `/control/sessions` reports **registered**, not **polling**.
+`session-14` was already mid-job when the spec picked it at 16:24:36 — nine seconds before the recycle — so the enqueue was betting on the DELETE from the start.
 All seven `fakegithubEnqueueJob` call sites take that bet.
 
 ### 2. The leak deserved a metric, not more retries ✅

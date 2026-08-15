@@ -184,7 +184,8 @@ Ranked by value × likelihood users hit it.
 Bare-ID Queue items to file:
 
 1. **Service-mesh coexistence guide (Istio/Linkerd/Cilium ambient).** 🔴 The #1 silent breakage: injected sidecars prevent run-to-completion worker pods from terminating, and mesh egress interception fights the per-tenant proxy.
-   Deliver: per-namespace injection opt-out, native-sidecar/ambient guidance, egress-exclusion notes. *Highest priority — affects every mesh user.*
+   Deliver: per-namespace injection opt-out, native-sidecar/ambient guidance, egress-exclusion notes.
+   *Highest priority — affects every mesh user.*
 2. **Node-autoscaler disruption safety (Karpenter + Cluster Autoscaler).** ✅ **Done (Q218).** The provisioner gap-fills `karpenter.sh/do-not-disrupt: "true"` and `cluster-autoscaler.kubernetes.io/safe-to-evict: "false"` on every worker pod so consolidation/scale-down doesn't strand running jobs.
    Overridable per-key via `podTemplate.metadata.annotations`.
 3. **Descheduler exclusion.** ✅ **Done (Q218).** Worker pods are gap-filled with `descheduler.alpha.kubernetes.io/prefer-no-eviction: "true"` (current well-known key) so the descheduler doesn't evict mid-job.

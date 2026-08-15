@@ -39,7 +39,8 @@ This is exactly what the per-change doc-update rule misses over time and why a p
 ## Verification
 
 Findings were produced by source-inspecting agents, so per the repo's verify-before-trusting rule they are unverified until exec-confirmed.
-A sample of **~8 distinct high-severity goal-1 findings was verified directly against the code** — CRD served version, `ActionsGatewaySpec` fields, worker/AGC ServiceAccount name constants, the GMC finalizer domain, proxy metrics port, the proxy CPU-limit default, `ResourceQuota` non-reconciliation, and the shipped CRD set. **All confirmed; zero false positives in the sample.** Remaining findings should still be re-confirmed at fix time (a few — e.g. the worker-image override mechanism, which appears mis-stated in more than one doc — are subtle and worth a careful check before editing).
+A sample of **~8 distinct high-severity goal-1 findings was verified directly against the code** — CRD served version, `ActionsGatewaySpec` fields, worker/AGC ServiceAccount name constants, the GMC finalizer domain, proxy metrics port, the proxy CPU-limit default, `ResourceQuota` non-reconciliation, and the shipped CRD set.
+**All confirmed; zero false positives in the sample.** Remaining findings should still be re-confirmed at fix time (a few — e.g. the worker-image override mechanism, which appears mis-stated in more than one doc — are subtle and worth a careful check before editing).
 
 ## Cross-cutting themes
 
@@ -71,7 +72,8 @@ Each batch is independent per-file editing and could be dispatched in parallel (
 
 ## Full findings
 
-Ranked by goal (leverage order), then severity. `Sev`: **H**igh / **M**edium / **L**ow.
+Ranked by goal (leverage order), then severity.
+`Sev`: **H**igh / **M**edium / **L**ow.
 Evidence (line refs + the code symbol each goal-1 finding contradicts) is preserved in the audit run output; the `Issue`/`Fix` columns are abridged to fit.
 
 #### Goal 1 — Correct & current (36)

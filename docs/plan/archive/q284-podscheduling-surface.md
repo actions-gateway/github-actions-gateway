@@ -66,7 +66,8 @@ A validating check that the two lists do not intersect at GMC startup is cheap a
 
 ### 2.2 Why `priorityClassName` is gated at all, when the rest of `PodScheduling` is not
 
-The `PodScheduling` godoc records a deliberate, reviewed decision (Q282) that `nodeSelector` / `tolerations` / `affinity` are **tenant-settable and not allowlisted**. `priorityClassName` is the exception, and the distinction is not arbitrary:
+The `PodScheduling` godoc records a deliberate, reviewed decision (Q282) that `nodeSelector` / `tolerations` / `affinity` are **tenant-settable and not allowlisted**.
+`priorityClassName` is the exception, and the distinction is not arbitrary:
 
 - Placement is a **choice about the tenant's own traffic**.
   The property it weakens is *attribution* (two tenants may egress via one IP), not isolation.
@@ -98,7 +99,8 @@ The webhook coverage is uneven, and this is the part most likely to be mis-scope
 
 The v2 webhook package covers `egressproxy`, `runnerset`, and `runnertemplate` only.
 The v1alpha1 `ActionsGateway` webhook is a **different API group** and does not match v2 `actionsgateways`.
-So gating `ActionsGateway.spec.scheduling.priorityClassName` requires standing up a v2 `ActionsGateway` validating webhook from scratch — registration, chart wiring (`make chart-webhook-check` enforces drift), and envtest coverage. **This is the bulk of the work, and it is the reason Q284 is not the trivial `S` its diff size suggests.**
+So gating `ActionsGateway.spec.scheduling.priorityClassName` requires standing up a v2 `ActionsGateway` validating webhook from scratch — registration, chart wiring (`make chart-webhook-check` enforces drift), and envtest coverage.
+**This is the bulk of the work, and it is the reason Q284 is not the trivial `S` its diff size suggests.**
 
 The same residual G.7 recorded for the worker allowlist applies here: an operator who grants a tenant direct RBAC on the underlying resource bypasses the webhook, and stored objects are never re-validated.
 The Q289 `ValidatingAdmissionPolicy` backstop is now delivered for the worker PriorityClass allowlist ([G.7](../../design/appendix-g-future-enhancements.md#g7-validatingadmissionpolicy-for-direct-runnergroup-priorityclass-enforcement)); a Q284 infra allowlist should get the same VAP treatment on its own pass, following that policy's paramKind-ConfigMap pattern.
@@ -114,14 +116,17 @@ Do not add a second one.
 It is tempting to make this field symmetric with `affinity` — it *is* the spread mechanism, after all, so "set it and you own it" reads as the consistent choice.
 That reasoning is wrong here, and the asymmetry is principled:
 
-- **Two opt-out levers for one invariant is worse than one.** The built-in anti-affinity is a durability invariant (one node failure must not take the pool down). `affinity` has to be able to displace it because `podAntiAffinity` occupies the same field — there is nowhere else for an author's anti-affinity to go. `topologySpreadConstraints` is a *different* field with no such collision, so displacing the invariant would be a choice, not a necessity.
+- **Two opt-out levers for one invariant is worse than one.** The built-in anti-affinity is a durability invariant (one node failure must not take the pool down).
+  `affinity` has to be able to displace it because `podAntiAffinity` occupies the same field — there is nowhere else for an author's anti-affinity to go.
+  `topologySpreadConstraints` is a *different* field with no such collision, so displacing the invariant would be a choice, not a necessity.
   Making it a second, implicit opt-out means an author who wanted zonal spread silently loses cross-node spread.
 - **Composition is safe, and provably so.** `topologySpreadConstraints` can only *narrow* the candidate node set, never widen it — exactly like `nodeSelector` AND-ing with `nodeAffinity`.
   And its `labelSelector` counts only pods in the constraint's own namespace, so one tenant's spread constraint cannot be skewed by another tenant's pods.
   There is no soundness reason to drop the built-in term.
 
 The cost is the `Pending` trap: an author who asks for a soft zonal spread (`whenUnsatisfiable: ScheduleAnyway`) still inherits the *required* cross-node anti-affinity, so replicas beyond the node count strand in `Pending`.
-That is the existing behavior for any proxy pool with `minReplicas` above its node count, and the existing escapes apply — `podAntiAffinity: {}`, or lowering `minReplicas`. **Document it on the field**, in the godoc, next to the `affinity` precedence note.
+That is the existing behavior for any proxy pool with `minReplicas` above its node count, and the existing escapes apply — `podAntiAffinity: {}`, or lowering `minReplicas`.
+**Document it on the field**, in the godoc, next to the `affinity` precedence note.
 
 Unlike `priorityClassName`, `topologySpreadConstraints` needs **no allowlist**: it is namespace-scoped and narrowing, so it carries no cross-tenant lever.
 
@@ -129,7 +134,8 @@ Lock the composition with a unit test in `cmd/gmc/internal/controller/egressprox
 
 ## 4. CRD size budget
 
-`PodScheduling` is narrow specifically to keep the v2 CRDs under the apiserver's ~1.5 MiB per-object ceiling. `affinity` alone added roughly 72 KB of CRD schema *per served version*.
+`PodScheduling` is narrow specifically to keep the v2 CRDs under the apiserver's ~1.5 MiB per-object ceiling.
+`affinity` alone added roughly 72 KB of CRD schema *per served version*.
 
 `topologySpreadConstraints` carries a `labelSelector` plus `matchLabelKeys` / `nodeAffinityPolicy` / `nodeTaintsPolicy`; `priorityClassName` is a bare string.
 Both are far smaller than `affinity`, but the budget is real and shared across two served versions (`v2alpha1`, `v2beta1`).

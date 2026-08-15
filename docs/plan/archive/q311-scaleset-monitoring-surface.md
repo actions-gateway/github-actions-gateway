@@ -9,7 +9,8 @@ The dashboards' `$namespace` template variable is also derived from `active_sess
 ## Surfaces to add
 
 1. **Alerts** (`deploy/monitoring/prometheusrule.yaml`, mirrored in `observability.md` + `runbook.md`):
-   - `ActionsGatewayScaleSetProvisioningStalled` (critical) — the scale-set analog of `NoActiveSessions`: jobs are being *assigned* but none are being *provisioned* (a wedged tier). `assigned rate > 0 unless provisioned rate > 0`.
+   - `ActionsGatewayScaleSetProvisioningStalled` (critical) — the scale-set analog of `NoActiveSessions`: jobs are being *assigned* but none are being *provisioned* (a wedged tier).
+     `assigned rate > 0 unless provisioned rate > 0`.
    - `ActionsGatewayScaleSetProvisionErrors` (warning) — sustained provision-attempt failures (JIT-config mint / pod create).
 2. **SLO recording rule** (`prometheusrule.yaml` `actions-gateway-slos` group):
    - `actions_gateway:scaleset_provision_success_rate:rate5m` — provisioned / (provisioned + errors) per namespace, mirroring `job_acquisition_success_rate`.

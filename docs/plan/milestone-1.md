@@ -269,7 +269,8 @@ func (c *BrokerClient) RenewJob(ctx context.Context, runServiceURL string, req R
 func (c *BrokerClient) DeleteSession(ctx context.Context, sessionID string) error
 ```
 
-**Critical implementation detail — the two-URL model:** `CreateSession` and `GetMessage` use `BrokerClient.BrokerURL`. `AcquireJob` and `RenewJob` use the `run_service_url` from the message body, passed as a parameter.
+**Critical implementation detail — the two-URL model:** `CreateSession` and `GetMessage` use `BrokerClient.BrokerURL`.
+`AcquireJob` and `RenewJob` use the `run_service_url` from the message body, passed as a parameter.
 These must never be conflated.
 The comment in `types.go` and the function signatures enforce this at the call site.
 
@@ -315,7 +316,8 @@ It is not itself unit-tested (it wires up real credentials and makes live calls)
    - `GITHUB_APP_PRIVATE_KEY` (path to PEM file, or PEM literal)
    - `GITHUB_APP_INSTALLATION_ID`
    - `GITHUB_BROKER_URL` (the broker base URL for the runner registration)
-   - `GITHUB_RUNNER_VERSION` (e.g. `"2.327.1"`)
+   - `GITHUB_RUNNER_VERSION` (e.g.
+     `"2.327.1"`)
 2. Call `NewInstallationTokenProvider` and get a token.
 3. Construct a `BrokerClient` and call `CreateSession`.
    Print the session ID.

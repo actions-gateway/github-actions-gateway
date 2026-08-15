@@ -98,7 +98,8 @@ The classic protocol declines the claim per delivered job.
 
 An opt-in `capacityGate.mode` adds a third rung, *placeability*, for the case where quota has room but the cluster does not: a worker shape that no node can take and the node autoscaler will not grow for.
 Without it, a set with a drained node pool or vanished spot capacity keeps claiming, and each job spends a single-use runner registration and ends as a cancelled run.
-With it, those jobs stay queued at GitHub. `Off` by default ([runbook](docs/operations/troubleshooting.md#jobs-not-being-acquired-despite-queued-work-capacity-gate-saturated)).
+With it, those jobs stay queued at GitHub.
+`Off` by default ([runbook](docs/operations/troubleshooting.md#jobs-not-being-acquired-despite-queued-work-capacity-gate-saturated)).
 
 A Kubernetes job-queue manager such as Kueue operates one layer below this, on pod creation *after* the job is already claimed, and structurally cannot make that call ([Appendix D.5](docs/design/appendix-d-alternatives-considered.md#d5-kueue-and-kubernetes-job-queue--quota-managers)).
 

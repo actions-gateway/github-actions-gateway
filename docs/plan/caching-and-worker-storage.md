@@ -63,7 +63,8 @@ It is the contract.
 [q408 §3.5](q408-untrusted-pr-egress.md#35-the-mirror-role-is-a-contract) defines the mirror role as four properties, one of which is that **non-GET operations are refused, not forwarded**.
 That property is load-bearing: it is most of why an untrusted job can be allowed to talk to the mirror at all.
 
-A job cache is read-write by definition. `actions/cache` saves entries as well as restoring them, and a cache nothing writes to is empty.
+A job cache is read-write by definition.
+`actions/cache` saves entries as well as restoring them, and a cache nothing writes to is empty.
 So the artifact cache **cannot simply reuse the mirror role**, however well the same software serves both.
 It needs either a second role with its own contract, or a writable variant whose isolation argument is made separately, and that argument is the hard part: a write path reachable by an untrusted fork pull request is a way to plant content that a later trusted job restores and executes.
 

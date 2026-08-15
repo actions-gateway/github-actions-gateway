@@ -16,7 +16,9 @@ This chapter specifies the contracts the system is built against: the Kubernetes
 
 ## 3.1. Kubernetes CRD Schemas
 
-Two Custom Resource Definitions are introduced. `ActionsGateway` is namespace-scoped and owned by the GMC. `RunnerGroup` is namespace-scoped and owned by the AGC.
+Two Custom Resource Definitions are introduced.
+`ActionsGateway` is namespace-scoped and owned by the GMC.
+`RunnerGroup` is namespace-scoped and owned by the AGC.
 Both live in the tenant's namespace.
 The GMC creates `RunnerGroup` resources as part of AGC bootstrapping.
 
@@ -839,7 +841,9 @@ This pattern makes rotation observable (it is a normal Deployment rollout), test
 
 ## 3.3. Re-implemented Broker API Endpoints
 
-> **Common pitfall — the two-URL model.** GitHub's broker protocol uses two distinct base URLs and it is easy to conflate them in client code. **`broker_url`** is static for a given runner registration and is used by `POST /sessions` and `GET /message`. **`run_service_url`** is dynamic, extracted from each `GetMessage` response body, and is the base for that job's `POST /acquirejob` and `POST /renewjob` calls.
+> **Common pitfall — the two-URL model.** GitHub's broker protocol uses two distinct base URLs and it is easy to conflate them in client code.
+> **`broker_url`** is static for a given runner registration and is used by `POST /sessions` and `GET /message`.
+> **`run_service_url`** is dynamic, extracted from each `GetMessage` response body, and is the base for that job's `POST /acquirejob` and `POST /renewjob` calls.
 > The run service URL differs per job and must not be cached globally — caching it across jobs is the most common cause of mysterious 404s in custom broker clients.
 
 These endpoints are called by each AGC instance.
@@ -855,7 +859,9 @@ The GMC has no direct relationship with this API.
 | **POST** | `{broker_url}/acknowledge` | AGC Goroutine | Post-dispatch telemetry notification to the broker (`AcknowledgeRunnerRequestAsync` in the official runner source). Confirmed in Milestone 1 (Investigation A) as **not required for correct job delivery** — `acquirejob` alone is the atomic claim. The v2 broker host does not expose the v1 VSTS delete-message endpoint; the correct v2 path is `POST {brokerURL}acknowledge?sessionId={sessionId}` with body `{"runnerRequestId": "…"}`. Callers MAY skip this call; it has no effect on job delivery semantics. |
 
 **Retry policy for `GET /message`:** Based on `MessageListener.cs` in the official runner source, the AGC session goroutine should implement a two-tier random backoff on errors: up to 5 consecutive errors use [15s, 30s] jitter; beyond 5 errors the window widens to [30s, 60s].
-After 50 consecutive empty-body (202) responses within 30 minutes, apply the same [15s, 30s] backoff as a server-anomaly guard. **Non-retriable errors** (surface as a `RunnerGroup` status Condition, do not retry in a tight loop): session not found, pool not found, unauthorized, access denied. **Special case:** a session-expired error should trigger session recreation before resuming the poll loop.
+After 50 consecutive empty-body (202) responses within 30 minutes, apply the same [15s, 30s] backoff as a server-anomaly guard.
+**Non-retriable errors** (surface as a `RunnerGroup` status Condition, do not retry in a tight loop): session not found, pool not found, unauthorized, access denied.
+**Special case:** a session-expired error should trigger session recreation before resuming the poll loop.
 
 **Session reuse after `acquirejob`.** Confirmed in Milestone 1 (Investigation C): a goroutine may call `GET /message` again on the same `sessionId` immediately after a successful `acquirejob` — the session remains live and returns `202` without error.
 The AGC does not need a delete→create cycle between jobs.
@@ -968,7 +974,8 @@ The AGC's per-session and per-job request mix produces a predictable steady-stat
 **Per-active-job steady-state cost** (one goroutine with a running job):
 
 * `POST /renewjob` — every 60s for the duration of the job, so ~60 requests/hour while the job runs.
-* One-shot calls (`POST /sessions` once per session create, `POST /acquirejob` once per job) are negligible against the hourly budget. `POST /acknowledge` is confirmed optional (Investigation A) and is not counted.
+* One-shot calls (`POST /sessions` once per session create, `POST /acquirejob` once per job) are negligible against the hourly budget.
+  `POST /acknowledge` is confirmed optional (Investigation A) and is not counted.
 
 **Steady-state ceiling.** A reasonable safe target is **≤ 250 concurrent sessions per installation**, leaving headroom for bursts:
 

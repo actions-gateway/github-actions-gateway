@@ -30,7 +30,8 @@ A docs-only PR skips every Go tier.
 Measured on PR #1423, `unit-test`, `integration-test`, both e2e lanes, `coverage`, `trivy` and `govulncheck` all report `skipping` in 0s, so its wall clock is set entirely by the docs-content gates.
 
 There the profile was sharp rather than flat, and the pole was `doc-links` at **169s against a next-longest of 21s**.
-Effectively all of it was one shared shell helper. `select_present_files` deduped candidates by globbing an accumulating string, O(N^2) in the candidate count, and `check-doc-links.sh` feeds it a bare `git_candidates`: the whole tree, 13,830 paths, 90% of them `vendor/`.
+Effectively all of it was one shared shell helper.
+`select_present_files` deduped candidates by globbing an accumulating string, O(N^2) in the candidate count, and `check-doc-links.sh` feeds it a bare `git_candidates`: the whole tree, 13,830 paths, 90% of them `vendor/`.
 The Go checker it gates was never the cost: 0.17s to check 6,390 links across 271 files, against 38s to build the file list.
 
 Keying the seen-set took the oracle build to 0.54s and `make doc-links` end to end from 37.9s to 1.21s locally, output byte-identical.

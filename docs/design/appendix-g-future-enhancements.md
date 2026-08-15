@@ -152,7 +152,9 @@ A `paramKind` carries the allowlist because CRD CEL `XValidation` cannot read ex
 ## G.8. Optional (Disable-able) Egress Proxy
 
 **Current behavior.** The per-tenant egress proxy pool ([§2.3](02-architecture.md#23-tier-3--egress-proxy-pool)) is provisioned unconditionally for every `ActionsGateway`.
-The Gateway Manager Controller (GMC) always emits the proxy `Deployment`, `Service`, `HPA`, `PodDisruptionBudget`, and TLS cert `Secret`, and the workload `NetworkPolicy` ([`buildWorkloadNetworkPolicy`](../../cmd/gmc/internal/controller/builder.go)) grants Actions Gateway Controller (AGC) and worker pods egress to *only* cluster DNS and the proxy on port 8080 — so with no proxy, those pods have no network path to GitHub at all. `spec.proxy` is `+optional`, but only its *tuning* (replica counts, resources) is; the pool itself cannot be turned off. `spec.proxy.managedNetworkPolicy: false` is **not** a disable switch — it only drops the GitHub-CIDR rule from the proxy's own NetworkPolicy (for FQDN-based CNI policies); the proxy still runs and still carries all traffic.
+The Gateway Manager Controller (GMC) always emits the proxy `Deployment`, `Service`, `HPA`, `PodDisruptionBudget`, and TLS cert `Secret`, and the workload `NetworkPolicy` ([`buildWorkloadNetworkPolicy`](../../cmd/gmc/internal/controller/builder.go)) grants Actions Gateway Controller (AGC) and worker pods egress to *only* cluster DNS and the proxy on port 8080 — so with no proxy, those pods have no network path to GitHub at all.
+`spec.proxy` is `+optional`, but only its *tuning* (replica counts, resources) is; the pool itself cannot be turned off.
+`spec.proxy.managedNetworkPolicy: false` is **not** a disable switch — it only drops the GitHub-CIDR rule from the proxy's own NetworkPolicy (for FQDN-based CNI policies); the proxy still runs and still carries all traffic.
 
 **Why it was left out.** Routing *all* GitHub-bound traffic — AGC control-plane and worker data-plane alike — through the per-tenant proxy is what makes the gateway's differentiating claim coherent: stable per-tenant egress IPs at GitHub.
 Four downstream capabilities rest on it (see [docs/plan/worker-egress-proxy.md](../plan/worker-egress-proxy.md)): GitHub-side IP allowlisting, per-tenant audit attribution, GitHub-side incident containment (a rate-limit / abuse-flag / IP-ban hits one tenant, not whoever shares the node), and the one-operation per-tenant kill-switch (drain the pool).
@@ -216,7 +218,8 @@ The Vault `signer.vault.networkPolicy` is the canonical tenant-delegated case (A
 - The worker-through-proxy case extends the proxy allowlist ([G.1](#g1-proxy-enforced-destination-allowlist)), not the CRD egress shape.
 
 The **one** pre-v2 hygiene decision worth settling deliberately was: the Vault work shipped a per-feature peer descriptor (`VaultNetworkPolicy`: selector | CIDR, port derived from the address).
-If KMS, telemetry, and worker-egress had each grown their own near-duplicate descriptor, v2 would freeze three inconsistent shapes. **Resolved (Q204):** the descriptor is now the shared [`EgressPeer`](../../api/v2alpha1/actionsgateway_types.go) type (selector | CIDR
+If KMS, telemetry, and worker-egress had each grown their own near-duplicate descriptor, v2 would freeze three inconsistent shapes.
+**Resolved (Q204):** the descriptor is now the shared [`EgressPeer`](../../api/v2alpha1/actionsgateway_types.go) type (selector | CIDR
 + an optional explicit port), and `signer.vault.networkPolicy` references it.
   The extraction is serialization-compatible — the field keys (`podSelector`, `namespaceSelector`, `cidr`) are unchanged, so the v2alpha1 shape already shipped is preserved; only the additive optional `port` is new, with the Vault builder still deriving the port from the address when `port` is unset.
   Future consumers (KMS, telemetry) now reference the same type instead of forking it — the shape that is far cheaper to settle before the v2alpha1 → v2beta1 graduation ([Q74](../STATUS.md)) than after.
@@ -296,7 +299,8 @@ This is a real motivator for the ramp, but diagnose *which* limit binds, because
 Former → ramp; latter → ceiling.
 Multi-site setups are often **both**, so the ramp **complements** GAG's existing worker-quota ceiling rather than replacing it.
 
-**What "added" would look like.** An **opt-in, per-RunnerGroup** creation-rate limit on the provisioner — a token bucket bounding new worker pods per unit time (e.g. `scaleUp.maxPerSecond` + `scaleUp.burst`), default **off**.
+**What "added" would look like.** An **opt-in, per-RunnerGroup** creation-rate limit on the provisioner — a token bucket bounding new worker pods per unit time (e.g.
+`scaleUp.maxPerSecond` + `scaleUp.burst`), default **off**.
 When the bucket is empty, excess acquired jobs wait in the same admission path the quota backoff already uses, so it composes with `WorkerQuotaPressure` rather than adding a new state machine.
 Metrics: a `worker_scaleup_throttled_total` counter so operators can see when it bites.
 
@@ -370,7 +374,8 @@ Two children break that, and today the exceptions are hand-maintained:
 | Proxy `Deployment` | the pool's HPA (`.spec.replicas`) | `assignHPATargetDeploymentSpec` |
 
 The `Deployment` exception was found the hard way (Q283): the reconciler reverted every HPA scale-out within milliseconds, capping each tenant's egress capacity at `minReplicas`, and it did so *silently* for the project's whole lifetime.
-Under SSA the same mistake is loud — applying a field another manager owns returns a `409 Conflict` naming the field and the manager, so the reconciler errors on the first pass instead of ping-ponging. **That, not patch-traffic reduction, is the case for migrating.** (The steady-state churn SSA also removes is already a no-op: the apiserver dedups it, verified by the `apply_nochurn` envtest.)
+Under SSA the same mistake is loud — applying a field another manager owns returns a `409 Conflict` naming the field and the manager, so the reconciler errors on the first pass instead of ping-ponging.
+**That, not patch-traffic reduction, is the case for migrating.** (The steady-state churn SSA also removes is already a no-op: the apiserver dedups it, verified by the `apply_nochurn` envtest.)
 
 **What it would cost.** SSA cannot be handed a typed `*appsv1.Deployment`.
 A typed Go struct cannot distinguish "field unset" from "field == zero value", so applying one claims ownership of every zero-valued field (`strategy: {}`, `resources: {}`) and fights the apiserver's defaulters.
@@ -432,7 +437,8 @@ Start with increment 1; only build increment 2's webhook if a consumer exists th
 ## G.16. `ProvisioningRequest` Pre-Acquire Capacity Probe (`check-capacity`)
 
 **Current behavior.** The admission gate refuses to claim a job when the declared worker ceiling is reached (Q59) or the namespace `ResourceQuota` has no headroom (#784).
-It has no rung for *placeability*: a tenant whose worker shape cannot be scheduled keeps claiming jobs, each spending a JIT runner record and holding a GitHub lock until `pendingPodDeadline` reaps the pod. `WorkersUnschedulable` (Q157/Q303) reports the scheduler's verdict but never reaches the gate, and [§D.8](appendix-d-alternatives-considered.md#d8-gating-intake-on-capacity-which-signals-are-safe-to-gate-on) records why it cannot be gated on directly wherever a cluster autoscaler is running: the Pending pod *is* the scale-up request.
+It has no rung for *placeability*: a tenant whose worker shape cannot be scheduled keeps claiming jobs, each spending a JIT runner record and holding a GitHub lock until `pendingPodDeadline` reaps the pod.
+`WorkersUnschedulable` (Q157/Q303) reports the scheduler's verdict but never reaches the gate, and [§D.8](appendix-d-alternatives-considered.md#d8-gating-intake-on-capacity-which-signals-are-safe-to-gate-on) records why it cannot be gated on directly wherever a cluster autoscaler is running: the Pending pod *is* the scale-up request.
 
 **The gap this closes.** cluster-autoscaler's `ProvisioningRequest` (`autoscaling.x-k8s.io/v1`) resolves that conflict.
 Class `check-capacity.autoscaling.x-k8s.io` is a one-off feasibility question for a pod shape *without creating the pods*; `best-effort-atomic-scale-up.autoscaling.x-k8s.io` provisions the capacity atomically instead.
@@ -454,7 +460,8 @@ Off by default, per-RunnerSet (which is per-pod-shape, since a set resolves to e
    A TTL-cached "yes" reused for *N* jobs is therefore either stale feasibility or a single-use booking spent many times, and `Provision` mode additionally has to annotate worker pods to consume what it reserved.
    The condition to read also drifts by version (`CapacityAvailable` in the field docs, absent from the v1 condition constants, which carry `Provisioned`), so a reader must tolerate both.
 4. **No test estate answers a probe today, but a local one is plausible.** envtest can install the CRD and no autoscaler stamps conditions, so it needs a fake-CA condition stamper. kind runs no autoscaler *by default*, but upstream ships a [kwok cloud provider](https://github.com/kubernetes/autoscaler/tree/master/cluster-autoscaler/cloudprovider/kwok) whose stated purpose is running real CA against fake nodes, naming a local kind cluster as a use case — and `check-capacity` needs no cloud-provider integration at all, since [it is a scheduling simulation against existing capacity](https://github.com/kubernetes/autoscaler/blob/master/cluster-autoscaler/proposals/provisioning-request.md) that reserves nothing (provider APIs matter only for `best-effort-atomic-scale-up`).
-   The negative verdict this rung acts on — *cannot place, do not claim* — therefore needs no scale-up to reproduce. **The kwok harness now exists** — Q474 shipped it as the capacity gate's live drift gate ([plan §9c](../plan/capacity-aware-intake.md#9c-the-live-autoscaler-harness-and-what-it-measured-q474), `make autoscaler-cluster`), so a cluster with a real cluster-autoscaler in it is one `--enable-provisioning-requests` away.
+   The negative verdict this rung acts on — *cannot place, do not claim* — therefore needs no scale-up to reproduce.
+   **The kwok harness now exists** — Q474 shipped it as the capacity gate's live drift gate ([plan §9c](../plan/capacity-aware-intake.md#9c-the-live-autoscaler-harness-and-what-it-measured-q474), `make autoscaler-cluster`), so a cluster with a real cluster-autoscaler in it is one `--enable-provisioning-requests` away.
    Still unverified end-to-end: the kwok provider is `v1alpha1` and its docs are silent on ProvisioningRequests, so proving that pairing remains the first step of this item rather than a prerequisite it lacks a place to run.
    Provider support is a separate axis from implementation: `check-capacity` ships in the OSS cluster-autoscaler (1.30.1+, behind `--enable-provisioning-requests`), so any self-managed CA can serve it, and the gap is *managed* control planes.
    GKE serves the `ProvisioningRequest` API (`v1`, from `1.32.2-gke.1652000`) but [documents only its own `queued-provisioning.gke.io` class](https://docs.cloud.google.com/kubernetes-engine/docs/how-to/provisioningrequest) for flex-start: GPU/TPU-oriented, one `podSet` per request, no documented `check-capacity` support as of 2026-07.

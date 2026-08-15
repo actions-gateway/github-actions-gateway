@@ -2,7 +2,8 @@
 
 **Status:** the planID dedup is live-validated **effective** — the dedup fires on the shared `planID` and the burst-start Secret-collision collapse does **not** recur — and as of re-route #4 (2026-07-04) the **capacity (Q248) and collision residuals are both fixed** (3 non-preempted nodes; **0 Secret/Pod `already exists` in two bursts**).
 But the concurrent matrix is still **not fully green**: the remaining blocker has shifted to GitHub's broker **fan-out completion/assignment accounting**, which is distinct from and beyond this dedup, and which the #513 completejob-abandon flag does **not** resolve (it makes the end-state worse — keep it OFF).
-Full evidence in [`gke-dogfood.md`](gke-dogfood-turnup-findings.md) re-route #4 (and the re-route #4 update block below). **Q224/Q260/Q242 stay open.**
+Full evidence in [`gke-dogfood.md`](gke-dogfood-turnup-findings.md) re-route #4 (and the re-route #4 update block below).
+**Q224/Q260/Q242 stay open.**
 
 > **Update (redelivery residual code-complete).** Residual (2) — the late-redelivery Pod-collision — is **fixed in code** (this PR): the released `planID` claim now **lingers** for the pod's `completedPodTTL` window, so a late redelivery is deduped instead of colliding on the winner's lingering Completed pod.
 > See Follow-up item 1 below.
@@ -14,7 +15,9 @@ Full evidence in [`gke-dogfood.md`](gke-dogfood-turnup-findings.md) re-route #4 
 > Findings: **capacity (Q248) and collisions (#512) are both FIXED** — 3 non-preempted nodes, and **0 Secret/Pod `already exists` collisions in both bursts** (10 dedup events each).
 > But **neither flag state reaches green**: the blocker is now GitHub's broker **fan-out completion/assignment accounting**, distinct from and beyond this dedup.
 > With the flag **ON**, `completejob(result= skipped)` returns HTTP-OK (14/15; 1× `401 "Not authorized for this job"`) **but does not conclude the job** — a late redelivery re-assigns the already-run job to a replacement session and GitHub holds it **indefinitely `in_progress`**; by acking the delivery it even *suppresses* the 15-min unstarted-cancel that would otherwise resolve it.
-> With the flag **OFF** (control, only the completejob path differs) the same jobs reach **terminal `failure`/`cancelled`** (the Q259 recycle 422 blocks listener reuse → trivial jobs cancelled at the unstarted-timeout). **The flag makes the end-state worse, so it stays OFF by default.** Semantics answered: the run service **accepts** the `skipped` serialization but does not finalize the job on that call, and job-scoped completion auth is unreliable (the 401). **Item 2's completejob-abandon approach is therefore not the fix** — the real work is reconciling GitHub's per-delivery fan-out with the AGC's one-runner-per-session model (runner recycle + job completion), tracked under Q260/Q224.
+> With the flag **OFF** (control, only the completejob path differs) the same jobs reach **terminal `failure`/`cancelled`** (the Q259 recycle 422 blocks listener reuse → trivial jobs cancelled at the unstarted-timeout).
+> **The flag makes the end-state worse, so it stays OFF by default.** Semantics answered: the run service **accepts** the `skipped` serialization but does not finalize the job on that call, and job-scoped completion auth is unreliable (the 401).
+> **Item 2's completejob-abandon approach is therefore not the fix** — the real work is reconciling GitHub's per-delivery fan-out with the AGC's one-runner-per-session model (runner recycle + job completion), tracked under Q260/Q224.
 > Q224/Q260/Q242 stay open.
 
 ## Follow-up (post-#3): close the residual before re-validating green
@@ -23,7 +26,8 @@ Full evidence in [`gke-dogfood.md`](gke-dogfood-turnup-findings.md) re-route #4 
    A late redelivery arriving during that window is deduped at the post-acquire `planID` gate (counted on `actions_gateway_jobs_duplicate_delivery_total`) and never re-enters the provisioner — so there is **no `create Pod … already exists`** and no error surfaced as a job cancel.
    Once the linger elapses (pod reaped), the `planID` is reclaimable, so a genuine redelivery after GC still provisions.
    Expired lingering entries are swept lazily, keeping the map bounded.
-   - Wiring: `Multiplexer.ClaimLinger` set from `provisioner.EffectiveCompletedPodTTL(rg)` (v1) / `CompletedPodTTLOrDefault(rs.Spec.CompletedPodTTL)` (v2). `ClaimLinger == 0` (owner reaps terminal pods synchronously, so none linger) keeps the original delete-on-completion path.
+   - Wiring: `Multiplexer.ClaimLinger` set from `provisioner.EffectiveCompletedPodTTL(rg)` (v1) / `CompletedPodTTLOrDefault(rs.Spec.CompletedPodTTL)` (v2).
+     `ClaimLinger == 0` (owner reaps terminal pods synchronously, so none linger) keeps the original delete-on-completion path.
    - Regression: `TestAGC_Q260_LateRedeliveryAfterCompletionDedups` (envtest — winner completes, its pod lingers, a late redelivery of the same planID must be deduped, not a 2nd `create Pod`) + Multiplexer unit tests for the linger/sweep semantics.
      The envtest **fails against the pre-fix delete-on-completion behavior** with the exact residual signature (`create Pod runner-…-<planid>: pods "…" already exists`).
 2. **Reconcile GitHub's per-delivery job-assignment timeout with the dedup-to-one-delivery model.** ➜ **Designed + repro landed in [`q260-fanout-completion-reconciliation.md`](q260-fanout-completion-reconciliation.md).** The #513 immediate-loser-`skipped` path below is a **confirmed dead-end** (re-route #4); the recommended fix is instead a **winner-driven completion fan-out** to all sibling deliveries on completion, gated pending a live re-route #5 (one unknown: does GitHub honour a non-running delivery's completion?).
@@ -41,7 +45,8 @@ Full evidence in [`gke-dogfood.md`](gke-dogfood-turnup-findings.md) re-route #4 
      The turn-up that gathers this evidence should also flip the flag on and validate the fix — do both in one turn-up.
      Capture the run-service request/response in `gke-dogfood.md`.
 3. **Stable worker capacity for the re-validation** (Q248): the spot pool preempted to 1 node, confounding throughput.
-   Re-run on non-spot or ≥3 held nodes so a non-green result can be attributed cleanly. *(Cluster task; owned by the dispatcher's combined capacity + re-route #4 turn-up, not this code change.)*
+   Re-run on non-spot or ≥3 held nodes so a non-green result can be attributed cleanly.
+   *(Cluster task; owned by the dispatcher's combined capacity + re-route #4 turn-up, not this code change.)*
 
 ## Problem
 
@@ -52,7 +57,8 @@ One wins; the rest burn their runner slot (busy but pod-less) and the pool colla
 
 ## Root cause — wrong key
 
-- The colliding Secret is named from the job's **`planID`** — `resp.Plan.PlanID`, from the AcquireJob **response** ([`provisioner.go:541`](../../../cmd/agc/internal/provisioner/provisioner.go) `secretName := "job-" + safeName(planID)`; the pod name too). `planID` is the codebase's per-job unique identity.
+- The colliding Secret is named from the job's **`planID`** — `resp.Plan.PlanID`, from the AcquireJob **response** ([`provisioner.go:541`](../../../cmd/agc/internal/provisioner/provisioner.go) `secretName := "job-" + safeName(planID)`; the pod name too).
+  `planID` is the codebase's per-job unique identity.
 - The pre-acquire broker message ([`RunnerJobRequestBody`](../../../broker/types.go)) carries only `RunnerRequestID` + `RunServiceURL` + `BillingOwnerID` — **no** plan id.
   Siblings get distinct `RunnerRequestID`s, so the pre-acquire gate never collapses the fan-out.
 - `planID` is only known **post-acquire**, so the dedup must move to a post-acquire, pre-provision gate keyed on `planID`.

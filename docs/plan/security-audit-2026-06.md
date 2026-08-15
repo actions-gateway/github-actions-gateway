@@ -67,23 +67,32 @@ Guarded by `TestGMC_TenantResourceGuard_ConfinesWritesToMarkedNamespaces` (envte
 Original finding:
 
 
-`cmd/gmc/config/rbac/role.yaml:38-47` grants `secrets: create,get,list,update,watch` with no `resourceNames`, bound by a ClusterRoleBinding. `05-security.md:13-16` claims "no cluster-wide Secret read", metadata-only list, and "`get` on specific names only".
+`cmd/gmc/config/rbac/role.yaml:38-47` grants `secrets: create,get,list,update,watch` with no `resourceNames`, bound by a ClusterRoleBinding.
+`05-security.md:13-16` claims "no cluster-wide Secret read", metadata-only list, and "`get` on specific names only".
 The metadata-only watch (`WatchesMetadata`) and cache bypass (`DisableFor[*corev1.Secret]`) are client-side hygiene — RBAC lets a compromised GMC `get`/`list` full `.data` of every Secret in the cluster and `create`/`update` Secrets anywhere.
-The first audit's §GMC-1 residual ("metadata only") understated this (corrected 2026-06-12). **Fix:** ValidatingAdmissionPolicy confining GMC Secret reads/writes to tenant-marked namespaces (the `namespace-psa-guard` pattern), per-namespace Roles at onboarding, or correct the docs so operators don't rely on a non-existent property.
-Q29's audit-policy sample is the detective complement either way. *Interim (2026-06-12): the inaccurate claims in `05-security.md` are struck through with corrections in place; restoring clean prose there is part of resolving this item.*
+The first audit's §GMC-1 residual ("metadata only") understated this (corrected 2026-06-12).
+**Fix:** ValidatingAdmissionPolicy confining GMC Secret reads/writes to tenant-marked namespaces (the `namespace-psa-guard` pattern), per-namespace Roles at onboarding, or correct the docs so operators don't rely on a non-existent property.
+Q29's audit-policy sample is the detective complement either way.
+*Interim (2026-06-12): the inaccurate claims in `05-security.md` are struck through with corrections in place; restoring clean prose there is part of resolving this item.*
 
 ### Q122 — GMC workload writes are cluster-wide; docs claim confinement (High) — RESOLVED
 
 **Resolution.** All workload `create`/`update`/`delete` (deployments, services, serviceaccounts, networkpolicies, rolebindings, roles, HPAs, PDBs, runnergroups) are now confined to tenant-marked namespaces by the `gmc-tenant-resource-guard` ValidatingAdmissionPolicy (the same policy that handles the Q121 Secret-write path, keyed on the existing `actions-gateway.github.com/tenant=true` marker via `namespaceObject`).
-A compromised GMC can no longer create a Deployment or RoleBinding in `kube-system`. `05-security.md` and `02-architecture.md` updated so the confinement claims are true.
+A compromised GMC can no longer create a Deployment or RoleBinding in `kube-system`.
+`05-security.md` and `02-architecture.md` updated so the confinement claims are true.
 Guarded by `TestGMC_TenantResourceGuard_ConfinesWritesToMarkedNamespaces` (envtest, covers both Secret and Deployment kinds).
 (`resourcequotas` write was already dropped by Q130.)
 
 Original finding:
 
 
-`role.yaml:84-158`: deployments, rolebindings, networkpolicies, services, serviceaccounts, resourcequotas, HPAs, PDBs — all verbs, all namespaces. `05-security.md:13` and `02-architecture.md:66` claim writes are "limited to namespaces where an `ActionsGateway` CR exists"; nothing enforces that.
-A compromised GMC can create a Deployment or RoleBinding in `kube-system`. **Fix:** extend the `namespace-psa-guard` VAP approach — deny GMC-SA writes of these kinds in namespaces lacking the tenant marker label — and/or update the docs. *Interim (2026-06-12): the claims in `05-security.md` and `02-architecture.md` are struck through with corrections in place pending resolution.* **Resolved (Q122 + Q130).** The `gmc-tenant-resource-guard` ValidatingAdmissionPolicy now denies GMC-SA `CREATE`/`UPDATE`/`DELETE` of every workload kind — secrets, serviceaccounts, services, deployments, networkpolicies, horizontalpodautoscalers, poddisruptionbudgets, rolebindings, roles (plus the `RunnerGroup`/`RunnerSet` CRs) — in namespaces lacking the tenant marker label, so a compromised GMC can no longer write into `kube-system`. `resourcequotas` was dropped from the GMC entirely (Q130 — the `ResourceQuota` is platform-owned). `05-security.md` / `02-architecture.md` updated to match.
+`role.yaml:84-158`: deployments, rolebindings, networkpolicies, services, serviceaccounts, resourcequotas, HPAs, PDBs — all verbs, all namespaces.
+`05-security.md:13` and `02-architecture.md:66` claim writes are "limited to namespaces where an `ActionsGateway` CR exists"; nothing enforces that.
+A compromised GMC can create a Deployment or RoleBinding in `kube-system`.
+**Fix:** extend the `namespace-psa-guard` VAP approach — deny GMC-SA writes of these kinds in namespaces lacking the tenant marker label — and/or update the docs.
+*Interim (2026-06-12): the claims in `05-security.md` and `02-architecture.md` are struck through with corrections in place pending resolution.* **Resolved (Q122 + Q130).** The `gmc-tenant-resource-guard` ValidatingAdmissionPolicy now denies GMC-SA `CREATE`/`UPDATE`/`DELETE` of every workload kind — secrets, serviceaccounts, services, deployments, networkpolicies, horizontalpodautoscalers, poddisruptionbudgets, rolebindings, roles (plus the `RunnerGroup`/`RunnerSet` CRs) — in namespaces lacking the tenant marker label, so a compromised GMC can no longer write into `kube-system`.
+`resourcequotas` was dropped from the GMC entirely (Q130 — the `ResourceQuota` is platform-owned).
+`05-security.md` / `02-architecture.md` updated to match.
 Claim == reality.
 
 ### Q123 — SHA-pin GitHub Actions; publish.yml first (High) — RESOLVED
@@ -99,14 +108,17 @@ Policy
 
 ### Q124 — `make verify-release` accepts branch identities (Medium) — RESOLVED
 
-`scripts/release/verify-release.sh` (post-#209 home of the recipe; was `Makefile:511`) matched `publish\.yml@refs/(tags|heads)/.*$`; the documented identity (`security-operations.md`, `release.md`) is tags-only. `publish.yml` is `workflow_dispatch`-able from any ref with an arbitrary `tag` input and runs the workflow file *from that ref*: repo-write could dispatch from a scratch branch, overwrite a released GHCR version tag, and still pass verification.
+`scripts/release/verify-release.sh` (post-#209 home of the recipe; was `Makefile:511`) matched `publish\.yml@refs/(tags|heads)/.*$`; the documented identity (`security-operations.md`, `release.md`) is tags-only.
+`publish.yml` is `workflow_dispatch`-able from any ref with an arbitrary `tag` input and runs the workflow file *from that ref*: repo-write could dispatch from a scratch branch, overwrite a released GHCR version tag, and still pass verification.
 
 **Resolution:** the identity regexp is anchored tags-only — `@refs/tags/v.*$` — and factored into `release_identity_regexp` in `scripts/lib/common.sh` so it has a single source of truth.
-Defense in depth: both `publish.yml` jobs' "Resolve publish tag" step now refuse any `GITHUB_REF` that isn't `refs/tags/…`, so a branch `workflow_dispatch` can't even reach the sign step. `scripts/release/verify-release-test.sh` (run by `make check` and the CI shellcheck job) asserts the regexp accepts `refs/tags/vX.Y.Z` and rejects `refs/heads/…`.
+Defense in depth: both `publish.yml` jobs' "Resolve publish tag" step now refuse any `GITHUB_REF` that isn't `refs/tags/…`, so a branch `workflow_dispatch` can't even reach the sign step.
+`scripts/release/verify-release-test.sh` (run by `make check` and the CI shellcheck job) asserts the regexp accepts `refs/tags/vX.Y.Z` and rejects `refs/heads/…`.
 
 ### Q125 — GMC teardown fail-open (Medium) — RESOLVED
 
-**Resolution.** `deleteIfExists` now returns its error (a NotFound is success — the desired teardown end state). `reconcileDelete` collects the errors across every teardown delete; if any are non-nil it emits a `TeardownIncomplete` Warning event and returns the joined error to requeue **without removing the finalizer**, so a transient API (or admission/RBAC) failure can no longer orphan a live, credentialed AGC Deployment + RoleBinding.
+**Resolution.** `deleteIfExists` now returns its error (a NotFound is success — the desired teardown end state).
+`reconcileDelete` collects the errors across every teardown delete; if any are non-nil it emits a `TeardownIncomplete` Warning event and returns the joined error to requeue **without removing the finalizer**, so a transient API (or admission/RBAC) failure can no longer orphan a live, credentialed AGC Deployment + RoleBinding.
 The finalizer is removed only once every delete is confirmed gone.
 The path is idempotent: repeated passes re-list RunnerGroups (gone → skip) and re-issue deletes (NotFound → success), converging to clean.
 Operator-facing symptom documented in `troubleshooting.md`.
@@ -116,7 +128,8 @@ Original finding:
 
 
 `reconcileDelete` (`actionsgateway_controller.go:222-272`) error-checks RunnerGroup deletion, but the AGC Deployment, proxy resources, NetworkPolicies, RoleBinding, and ServiceAccounts go through `deleteIfExists` (`:274-280`), which logs and discards non-NotFound errors; the finalizer is then removed unconditionally.
-A transient API failure orphans a live credentialed AGC Deployment + RoleBinding after tenant offboarding, with no retry and only a log line. **Fix:** collect `deleteIfExists` errors and requeue without removing the finalizer until every delete succeeds or is NotFound.
+A transient API failure orphans a live credentialed AGC Deployment + RoleBinding after tenant offboarding, with no retry and only a log line.
+**Fix:** collect `deleteIfExists` errors and requeue without removing the finalizer until every delete succeeds or is NotFound.
 
 ### Q126 — CI gate: vendor contents vs go.sum (Medium) — RESOLVED
 
@@ -129,11 +142,13 @@ Original finding:
 
 With `-mod=vendor`, the Go toolchain checks only `vendor/modules.txt` consistency — never the hashes in `go.sum`.
 No CI step re-vendors and diffs, so a malicious edit inside a large vendor diff compiles into the signed release binaries unchecked (the license-notices job checks license drift only).
-Sibling of Q94 (go.sum tidiness) and Q111 (Dependabot vendor sync), which don't cover integrity. **Fix:** CI job running `go work vendor` (re-fetches with go.sum verification) + `git diff --exit-code vendor/ tools/vendor/`.
+Sibling of Q94 (go.sum tidiness) and Q111 (Dependabot vendor sync), which don't cover integrity.
+**Fix:** CI job running `go work vendor` (re-fetches with go.sum verification) + `git diff --exit-code vendor/ tools/vendor/`.
 
 ## Q127 hardening-batch items
 
-Small items, one Queue row; fix opportunistically or as one PR. **All eight RESOLVED in the Q127 PR** except the one optional sub-item carved out below.
+Small items, one Queue row; fix opportunistically or as one PR.
+**All eight RESOLVED in the Q127 PR** except the one optional sub-item carved out below.
 
 1. **`namespace-psa-guard` hardcodes the GMC SA username** — **RESOLVED.** The Helm chart is the sole install path (Q142) and both admission-policy templates already parameterize the username from `.Release.Namespace` + the `serviceAccountName` helper, so a GMC installed anywhere is covered.
    Added a render-level drift guard in `scripts/manifest/manifest-validate.sh` (renders under a non-default `--namespace` and asserts the policy matchConditions bind to the rendered GMC ServiceAccount, never a hardcoded `gmc-system` identity), and clarified that the raw `config/admission-policy/*.yaml` is the codegen/envtest fixture, not the deployed artifact.
@@ -152,9 +167,12 @@ Small items, one Queue row; fix opportunistically or as one PR. **All eight RESO
      The Helm chart is the sole install path (Q142); `manifest-validate.yml` renders with `helm` only.
 6. **Release images assemble from GHA BuildKit cache** — **RESOLVED.** `publish.yml` tag builds now set `no-cache: true` (was `cache-from: type=gha`), so every layer of a signed release builds from the tagged source, not a PR-populated cache.
    The `moby/buildkit:buildx-stable-1` builder image is digest-pinned.
-7. **AGC egress allows any destination on 443/6443** — **RESOLVED (documented residual).** Portable scoping is impossible: kube-proxy DNATs the `kubernetes` Service ClusterIP to provider-specific apiserver IPs before NetworkPolicy is evaluated, so a precise `ipBlock` is non-portable and a wrong one severs apiserver access (the PR #59 trap), so any-destination stays the secure default. `05-security.md` §5.2 documents the residual honestly with its compensating controls. **Follow-up delivered (Q145):** a first-class opt-in — the GMC `--apiserver-cidrs` flag / Helm `apiServerCIDRs` value — now lets an operator scope the AGC NetworkPolicy's 443/6443 rule to a stable apiserver CIDR set via `ipBlock`.
+7. **AGC egress allows any destination on 443/6443** — **RESOLVED (documented residual).** Portable scoping is impossible: kube-proxy DNATs the `kubernetes` Service ClusterIP to provider-specific apiserver IPs before NetworkPolicy is evaluated, so a precise `ipBlock` is non-portable and a wrong one severs apiserver access (the PR #59 trap), so any-destination stays the secure default.
+   `05-security.md` §5.2 documents the residual honestly with its compensating controls.
+   **Follow-up delivered (Q145):** a first-class opt-in — the GMC `--apiserver-cidrs` flag / Helm `apiServerCIDRs` value — now lets an operator scope the AGC NetworkPolicy's 443/6443 rule to a stable apiserver CIDR set via `ipBlock`.
    It is opt-in tightening only: empty preserves the any-destination default, so clusters with unpredictable post-DNAT apiserver IPs are unaffected.
-8. **Privileged-profile webhook incoherence** — **RESOLVED.** `validateRunnerGroups` is now profile-aware: a `privileged: true` worker container is admitted only under `securityProfile: privileged` (which stamps the namespace PSA to match), and is still rejected under the default `baseline`/`restricted` — secure by default. `05-security.md` §5.3 documents PSA as the enforcement backstop for the direct RunnerGroup path.
+8. **Privileged-profile webhook incoherence** — **RESOLVED.** `validateRunnerGroups` is now profile-aware: a `privileged: true` worker container is admitted only under `securityProfile: privileged` (which stamps the namespace PSA to match), and is still rejected under the default `baseline`/`restricted` — secure by default.
+   `05-security.md` §5.3 documents PSA as the enforcement backstop for the direct RunnerGroup path.
    Unit + envtest coverage.
    - **Follow-up CLOSED (Q133):** create-time `securityProfile: privileged` was a self-granted escalation — a tenant owns the CR and only *downgrades* were webhook-gated, so any tenant who could create an `ActionsGateway` could stamp their namespace PSA to `privileged`.
      The webhook now gates privileged eligibility (create AND update) behind a platform-applied namespace label `actions-gateway.github.com/privileged-profile=allowed`, fail-closed: absent the label privileged is rejected, and the tenant cannot self-grant it (they don't own namespace labels).

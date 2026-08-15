@@ -20,7 +20,8 @@ Revised 2026-08-12 by the Phase 3 re-measure below: e2e is now merge-group-only,
 Taken from the last 30 days of CI runs, merged PRs, and `git log` contention:
 
 - 26–34 PRs merge per day: `main` advances roughly every 25–30 min during active hours.
-- The e2e gate averages ~9 min on success (13.2 min on a representative executed run, 7.6 min of it `make e2e` proper; max observed 30 min). `e2e-gate` and `e2e-calico-gate` are both required checks.
+- The e2e gate averages ~9 min on success (13.2 min on a representative executed run, 7.6 min of it `make e2e` proper; max observed 30 min).
+  `e2e-gate` and `e2e-calico-gate` are both required checks.
 - 18 of 51 recent branches needed ≥2 e2e runs (worst: 5); 10 of the last 50 e2e runs were cancelled mid-flight by a superseding push.
   A third or more of e2e compute is redo, not first-run validation.
 - Contention is process files, not code: `docs/STATUS.md` appears in 542 of 702 commits (77%), `docs/plan/README.md` in 22%.
@@ -109,7 +110,8 @@ Revisit only if that fraction climbs.
 
 The candidate list as recorded on 2026-08-03:
 
-- Demote e2e from per-PR to merge-group-only (halves e2e volume again; trade-off: sessions learn of an e2e failure only at queue time). **Adopted 2026-08-12.**
+- Demote e2e from per-PR to merge-group-only (halves e2e volume again; trade-off: sessions learn of an e2e failure only at queue time).
+  **Adopted 2026-08-12.**
 - `docs/STATUS.md` contention (77% of commits) still forces manual conflict resolution before a PR can enqueue; a per-item-file backlog format would remove it structurally, but is a large format change touching the backlog skill and lint, and only worth it if post-queue measurement shows it binding.
 - GitHub Issues + a Projects board would also zero the conflicts, but trades them for a sync problem: today a Queue row is deleted in the same PR that ships the work (atomic with the code, reviewable in the diff, greppable in one file, and the bare-Q-ID anchor fabric across docs and code depends on it), while an issue close is a separate mutation that can drift from code state.
   Priority ordering is also weaker through `gh` (Projects v2 positions are drag-first, not CLI-first).

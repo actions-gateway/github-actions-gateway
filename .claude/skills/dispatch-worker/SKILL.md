@@ -119,7 +119,8 @@ On each wake:
 | `ready` | **Stop.** Report to the dispatcher (§8) and let the watcher stay exited. Never relaunch on `ready`: it re-evaluates at once, sees the same green state, and spins with no sleep between iterations. |
 | `closed` | The PR merged or was closed. Done. |
 
-Never foreground-poll CI. `gh pr checks --watch`, `gh run watch` and hand-rolled sleep loops pin the main thread, and pr-sentinel denies them.
+Never foreground-poll CI.
+`gh pr checks --watch`, `gh run watch` and hand-rolled sleep loops pin the main thread, and pr-sentinel denies them.
 
 Verify what landed by **content** (`git show origin/main:<path>`), never by SHA: a rebase rewrites your commits and a squash-merge discards them.
 

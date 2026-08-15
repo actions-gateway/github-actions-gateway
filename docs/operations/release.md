@@ -149,7 +149,8 @@ The point of doing it here rather than at the tag is that the answers are free b
   scripts/release/api-surface-since.sh
   ```
 
-  Apply the checklist in [api-review.md](../development/api-review.md#step-2--ask-these-of-each-addition) to each addition it lists, record the verdict in the release's plan doc, and file anything deferred as a Queue row carrying this release's gate label. **"Ship as-is, deliberately" is a valid and common outcome** — the point is that the shape is chosen rather than frozen by default.
+  Apply the checklist in [api-review.md](../development/api-review.md#step-2--ask-these-of-each-addition) to each addition it lists, record the verdict in the release's plan doc, and file anything deferred as a Queue row carrying this release's gate label.
+  **"Ship as-is, deliberately" is a valid and common outcome** — the point is that the shape is chosen rather than frozen by default.
 
   This step exists because it nearly did not happen: Q476 renamed `capacityGate.mode: On` days before 1.3.0 would have published it, and only because the question came up in an unrelated conversation.
 
@@ -198,7 +199,8 @@ The point of doing it here rather than at the tag is that the answers are free b
   This step exists because the alternative is remembering.
   The `v1.2.0`→next window accumulated a required pre-upgrade `kubectl apply`, a removed values key that fails the render, and a rollback that re-arms a cluster-wide outage — each recorded correctly in `docs/operations/upgrade.md` by the change that introduced it, and each invisible to anyone reading a generated changelog.
 
-- **Reconcile [`docs/roadmap.md`](../roadmap.md) and [`docs/features.md`](../features.md) against [`docs/STATUS.md`](https://github.com/actions-gateway/github-actions-gateway/blob/main/docs/STATUS.md) before you tag.** The same freeze that applies to the announce bar applies here: a stable tag deploys that tag's docs wholesale, so a stale roadmap is published permanently under that version. `make roadmap-check` catches the mechanical half — a roadmap bullet naming a deleted Queue row, or one sitting in the wrong section — and it runs in CI.
+- **Reconcile [`docs/roadmap.md`](../roadmap.md) and [`docs/features.md`](../features.md) against [`docs/STATUS.md`](https://github.com/actions-gateway/github-actions-gateway/blob/main/docs/STATUS.md) before you tag.** The same freeze that applies to the announce bar applies here: a stable tag deploys that tag's docs wholesale, so a stale roadmap is published permanently under that version.
+  `make roadmap-check` catches the mechanical half — a roadmap bullet naming a deleted Queue row, or one sitting in the wrong section — and it runs in CI.
   What it cannot catch is the move itself: **work that shipped this cycle needs a `docs/features.md` line**, and a Deferred row describing a capability an adopter would ask about belongs in *Exploring*.
   A 2026-07-25 audit found six of seven near-term items already shipped.
 - **Optional: refresh the docs-site announce bar's highlight.** The banner in [`overrides/main.html`](../../overrides/main.html) is the "vX.Y.Z is here" strip at the top of every page on the site.
@@ -223,12 +225,14 @@ The point of doing it here rather than at the tag is that the answers are free b
 
 #### Validate the release candidate on dogfood
 
-Before promoting a release-candidate line to a **stable** `vX.Y.Z` tag, validate the *latest RC* functionally on the dogfood cluster. `main`-green covers unit/integration/kind-e2e, but publishing an image the pipeline signed is not the same as proving it runs jobs — this gate exercises real GAG-provisions-runners-on-GKE behaviour the CI tiers can't observe.
+Before promoting a release-candidate line to a **stable** `vX.Y.Z` tag, validate the *latest RC* functionally on the dogfood cluster.
+`main`-green covers unit/integration/kind-e2e, but publishing an image the pipeline signed is not the same as proving it runs jobs — this gate exercises real GAG-provisions-runners-on-GKE behaviour the CI tiers can't observe.
 Run it before every GA (`vX.Y.Z`) cut; skip it only for an RC-to-RC or a patch tag that changes nothing an operator runs.
 
 The dogfood scripts pin GAG to any published ref via `GAG_IMAGE_TAG`, which resolves both as an image tag (`ghcr.io/actions-gateway/{gmc,agc,proxy,wrapper}:<ref>`) and as a git ref (for the matching CRDs) — an RC tag satisfies both by construction.
 
-**One command runs the whole gate**, and it runs for the better part of an hour — a green `v1.3.0-rc.4` run took 39 minutes end to end — with nothing to type at it after the first confirmation. `validate-release.sh` bakes in all the env and ordering below — deploy → route CI → on-demand e2e → dispatch the e2e matrix (run-scoped routing) → CRD smoke → teardown — is idempotent, and self-cleans back to 0 nodes on exit (success or failure — and on Ctrl-C, though [not on every ending](#a-killed-gate-is-reclaimed-by-the-next-one)).
+**One command runs the whole gate**, and it runs for the better part of an hour — a green `v1.3.0-rc.4` run took 39 minutes end to end — with nothing to type at it after the first confirmation.
+`validate-release.sh` bakes in all the env and ordering below — deploy → route CI → on-demand e2e → dispatch the e2e matrix (run-scoped routing) → CRD smoke → teardown — is idempotent, and self-cleans back to 0 nodes on exit (success or failure — and on Ctrl-C, though [not on every ending](#a-killed-gate-is-reclaimed-by-the-next-one)).
 On failure it first dumps a cluster snapshot (nodes, pods, unhealthy-pod detail, events) to the gate's output, because the teardown's scale-to-0 evicts every pod and destroys the evidence — read the `Failure diagnostics` section of a failed run's log (e.g. the `FailedScheduling` events) instead of re-running the gate to watch it fail again.
 The [legs it runs](#the-legs-the-gate-runs) are documented at the end of this section, and are the recovery path if one needs re-running by hand.
 
@@ -237,7 +241,8 @@ The gate settles the lane up front — before the node scale-up, the deploy, and
 It polls for up to `E2E_WAIT_TIMEOUT` seconds (default 1800), then fails with the run id; `E2E_WAIT_TIMEOUT=0` fails immediately instead of waiting.
 
 **The e2e leg's watch is bounded, so a run that never starts cannot hold the cluster.** The dispatched run is watched for up to `E2E_RUN_WATCH_TIMEOUT` seconds (default 5400 — 90 minutes: the 60-minute job ceiling plus the same 30 minutes of queue the settle wait allows).
-Past that the gate fails with exit 124, names the run, and tears the cluster back down to 0 nodes as it would for any other e2e failure. **The run itself keeps going on GitHub** — the deadline releases the nodes the *gate* is holding, not the ones the run is queued for, so cancel the run by hand if it is genuinely wedged.
+Past that the gate fails with exit 124, names the run, and tears the cluster back down to 0 nodes as it would for any other e2e failure.
+**The run itself keeps going on GitHub** — the deadline releases the nodes the *gate* is holding, not the ones the run is queued for, so cancel the run by hand if it is genuinely wedged.
 A healthy leg finishes in 25–33 minutes; raise the variable rather than removing the bound if yours is legitimately slower.
 
 The gate also checks every local tool it needs up front — including the pinned `cosign` the final CRD-smoke leg verifies with (`make cosign` downloads it to `.build/cosign`; `COSIGN=<path>` overrides) — so a missing binary fails the run before it spends anything, not 25 minutes in.
@@ -278,7 +283,8 @@ A ceiling left low throttles everyone's CI, so run it.
 
 ##### A killed gate is reclaimed by the next one
 
-**Self-cleaning covers most endings, not all of them.** Bash runs the teardown trap on Ctrl-C and on an ordinary `kill`, so those tear the cluster back down. `kill -9`, a killed parent process, and a teardown interrupted part-way through do not — each leaves billable nodes up with no process left to release them, and twice that was caught only by hunting for a live teardown process by hand (Q640).
+**Self-cleaning covers most endings, not all of them.** Bash runs the teardown trap on Ctrl-C and on an ordinary `kill`, so those tear the cluster back down.
+`kill -9`, a killed parent process, and a teardown interrupted part-way through do not — each leaves billable nodes up with no process left to release them, and twice that was caught only by hunting for a live teardown process by hand (Q640).
 
 So the gate takes an ownership lease for exactly the window in which it owns cluster state, and reclaims an *orphaned* one — a lease for the same target whose owning process is gone — before it spends anything.
 Running the gate again is therefore enough to end a leak the previous run started.
@@ -368,7 +374,9 @@ This is what the sentinel reads, and it answers the same question directly for a
 jq . tmp/release-validation-status.json
 ```
 
-`gate` is `preflight` (settling the e2e lane, nothing spent yet), `running`, `passed`, or `failed`; `phase`, `elapsed`, `phaseElapsed` and `idle` say where and for how long; `runRepo`/`runId` name the dispatched e2e run, which is what makes a quiet leg checkable against GitHub rather than only against the stream; `heartbeat` carries the newest relayed spec line — absent for a whole leg when GitHub will not serve the job log, which is a fetch problem and not a stalled run; `failure` names the phase that broke — the one that broke first, not the teardown that followed it. `scripts/dogfood/release-status.sh [stream-file]` renders the same object from any stream, including one whose gate process is gone. `RELEASE_STATUS_FILE=` disables the file.
+`gate` is `preflight` (settling the e2e lane, nothing spent yet), `running`, `passed`, or `failed`; `phase`, `elapsed`, `phaseElapsed` and `idle` say where and for how long; `runRepo`/`runId` name the dispatched e2e run, which is what makes a quiet leg checkable against GitHub rather than only against the stream; `heartbeat` carries the newest relayed spec line — absent for a whole leg when GitHub will not serve the job log, which is a fetch problem and not a stalled run; `failure` names the phase that broke — the one that broke first, not the teardown that followed it.
+`scripts/dogfood/release-status.sh [stream-file]` renders the same object from any stream, including one whose gate process is gone.
+`RELEASE_STATUS_FILE=` disables the file.
 
 Underneath it, each phase transition is appended as one JSON line to `tmp/release-validation-progress.jsonl` — the stream both renderers read, and inspectable directly (`tail -f`) without disturbing the run.
 Point `RELEASE_PROGRESS_FILE` elsewhere to move both files, since the status object defaults to `release-validation-status.json` beside the stream, or set `RELEASE_PROGRESS_FILE=` to disable both.
@@ -418,7 +426,8 @@ From a detached checkout of the RC tag (`git switch --detach vX.Y.Z-rc.N`):
    So: `GAG_IMAGE_TAG=vX.Y.Z-rc.N APP_ID=… INSTALLATION_ID=… ASSUME_YES=1 scripts/dogfood/setup.sh` (a timed-out rollout wait here is fine), then `scripts/dogfood/start.sh`.
    Run the one-time `scripts/dogfood/e2e-setup.sh` first if the e2e node pool / GitHub App Secret aren't set up yet.
    The cluster, context pinning, and prod-guard cautions are in [gke-dogfood.md](../plan/gke-dogfood.md).
-2. **Run the e2e job matrix on GAG runners.** This is two moves, not one. `scripts/dogfood/e2e-start.sh` spins up the on-demand e2e tenant's AGC — it does **not** start a run and does **not** touch routing.
+2. **Run the e2e job matrix on GAG runners.** This is two moves, not one.
+   `scripts/dogfood/e2e-start.sh` spins up the on-demand e2e tenant's AGC — it does **not** start a run and does **not** touch routing.
    Trigger the matrix by **dispatching a run with routing scoped to it**:
 
    ```bash
@@ -427,10 +436,13 @@ From a detached checkout of the RC tag (`git switch --detach vX.Y.Z-rc.N`):
 
    (same for `e2e-calico.yml`).
    Only that dispatched run lands on the RC's GAG-provisioned runners; every concurrent PR and merge keeps its normal hosted runners.
-   Do **not** reach for the repo-wide `GAG_E2E_RUNNER` variable here — flipping it routes every e2e job in the window, and a caught job wedged main CI when the teardown deleted the AGC under it (2026-07-31; the variable remains only as an `E2E_ROUTE_VAR=1` opt-in for a standing dogfood soak). **Node contention:** the on-demand e2e AGC (~500m CPU) does not fit on the single `e2-standard-2` system node beside the always-on CI AGCs (the CI AGC goes `Pending`/`Insufficient cpu`), so temporarily add a system node (e.g. scale `default-pool` to 2) for the duration of the e2e leg and scale it back after. **CPU budget:** running the legs by hand skips the reservation the gate applies, so if the e2e pool reports `FailedScaleUp` here, read [the reservation section above](#the-gate-reserves-the-e2e-pools-cpu-budget) rather than the family quotas.
+   Do **not** reach for the repo-wide `GAG_E2E_RUNNER` variable here — flipping it routes every e2e job in the window, and a caught job wedged main CI when the teardown deleted the AGC under it (2026-07-31; the variable remains only as an `E2E_ROUTE_VAR=1` opt-in for a standing dogfood soak).
+   **Node contention:** the on-demand e2e AGC (~500m CPU) does not fit on the single `e2-standard-2` system node beside the always-on CI AGCs (the CI AGC goes `Pending`/`Insufficient cpu`), so temporarily add a system node (e.g. scale `default-pool` to 2) for the duration of the e2e leg and scale it back after.
+   **CPU budget:** running the legs by hand skips the reservation the gate applies, so if the e2e pool reports `FailedScaleUp` here, read [the reservation section above](#the-gate-reserves-the-e2e-pools-cpu-budget) rather than the family quotas.
    Require the matrix **green** — this is GAG running its own CI end-to-end on the RC images.
 3. **Smoke the signed v2 CRD asset.** Download the RC release's `actions-gateway-crds-v2.yaml` + `.cosign.bundle`, `cosign verify-blob` against the publish identity (step 3 below), `kubectl apply --server-side` it, and assert the five v2 CRDs register — the helm-free install path operators actually use.
-4. **Assert the sizing profiles actuated.** A profile that silently falls back to `Static` still provisions a healthy pod and still runs the matrix green, so without this leg every other check reports success while the release's headline feature sits inert. `sizing_leg` treats the two profiles differently on purpose:
+4. **Assert the sizing profiles actuated.** A profile that silently falls back to `Static` still provisions a healthy pod and still runs the matrix green, so without this leg every other check reports success while the release's headline feature sits inert.
+   `sizing_leg` treats the two profiles differently on purpose:
 
    | Profile | Tenant | Behaviour |
    |---|---|---|
@@ -570,7 +582,8 @@ Two consequences for this step: a pre-created Release of your own should be a **
 
 **What immutability does and does not freeze.** The title and the notes stay editable after publication, so [step 4](#4-record-the-published-digests)'s `gh release edit --notes-file` still works and the curated body can be finished after the digests exist.
 The assets and the **tag** do not: a published Release locks its tag to one commit, which cannot be moved or deleted while the Release exists.
-So a tag pushed at the wrong commit is not recoverable by re-tagging — cut the next candidate number instead. `v1.5.0-rc.2` was pushed at a commit three merges stale and had to be superseded by an rc.3.
+So a tag pushed at the wrong commit is not recoverable by re-tagging — cut the next candidate number instead.
+`v1.5.0-rc.2` was pushed at a commit three merges stale and had to be superseded by an rc.3.
 
 #### Writing the curated notes
 
@@ -600,7 +613,8 @@ gh release view vX.Y.Z --json body --jq .body
 Use it to seed a new file when a tag predates this convention.
 
 **Notes answer "what is in it" and "what must I do".
-The docs answer "how" and "why".** Every explanation that can live in `upgrade.md` or an `operations/` page should, behind a link. `v1.3.0`'s first draft ran ~1000 words of prose; cutting it to links lost nothing.
+The docs answer "how" and "why".** Every explanation that can live in `upgrade.md` or an `operations/` page should, behind a link.
+`v1.3.0`'s first draft ran ~1000 words of prose; cutting it to links lost nothing.
 Link a Highlight from its bold lead, and link group headings rather than every line.
 
 That rule shortens the *prose*.
@@ -636,20 +650,26 @@ It is ordered by what a reader needs first, not by what took the most work:
 
 **Say something about security even when there is nothing to report.** Silence reads as an omission to the one reader scanning specifically for it.
 State plainly that no advisory accompanies the release, then list what it does carry — dependency security bumps, and any fix that hardens credential or trust handling without patching a reported vulnerability.
-Name the scanning gates and when they run. `v1.3.0` had no CVE and still warranted the section.
+Name the scanning gates and when they run.
+`v1.3.0` had no CVE and still warranted the section.
 
-**Lead with a danger banner, and make it an alert.** GFM alerts — `> [!WARNING]`, `> [!CAUTION]`, `> [!NOTE]` — render as real coloured callouts in a release body (verified; the render check below counts them). `v1.3.0` opens with a `[!WARNING]` naming the two required upgrade steps and the asymmetric rollback, because those are the only things that can hurt an operator who reads no further.
+**Lead with a danger banner, and make it an alert.** GFM alerts — `> [!WARNING]`, `> [!CAUTION]`, `> [!NOTE]` — render as real coloured callouts in a release body (verified; the render check below counts them).
+`v1.3.0` opens with a `[!WARNING]` naming the two required upgrade steps and the asymmetric rollback, because those are the only things that can hurt an operator who reads no further.
 Use `[!NOTE]` for a scope caveat and `[!CAUTION]` for the one thing that is genuinely destructive.
 Three alerts is a lot; more and none of them read as urgent.
 
 **Write a Deprecations section even when nothing is removed** — saying so is the point, since "deprecation" reads as "removal" to a skimmer.
-For each notice give the removal version, the migration path, and **whether the apiserver actually warns**. `v1.3.0` deprecated `v2alpha1` (warns on every apply) alongside `v1alpha1`, which is removal-slated and emits **no** warning at all — so nothing reminds an operator it is going away.
+For each notice give the removal version, the migration path, and **whether the apiserver actually warns**.
+`v1.3.0` deprecated `v2alpha1` (warns on every apply) alongside `v1alpha1`, which is removal-slated and emits **no** warning at all — so nothing reminds an operator it is going away.
 That asymmetry is exactly what a reader cannot discover for themselves.
 
-**Diff every surface an operator can see, not just the CRDs.** Each of these is enumerable, and each hides in a different file, so a review that reads only the Go diff misses most of them. `v1.3.0` shipped five: CRD fields, metric names, Kubernetes Event reasons, condition reasons, and configuration (chart values, env tunables, CLI flags).
+**Diff every surface an operator can see, not just the CRDs.** Each of these is enumerable, and each hides in a different file, so a review that reads only the Go diff misses most of them.
+`v1.3.0` shipped five: CRD fields, metric names, Kubernetes Event reasons, condition reasons, and configuration (chart values, env tunables, CLI flags).
 Diff each between the two tags mechanically rather than reading the changelog for them — the Event reasons and the metrics had no enumeration at all until they were diffed, and the notes had already been through several reviews.
 
-Two traps. **A rename reads as a removal** when the extraction is scoped to one directory: env vars first appeared to have 17 removals, all of which were code moving out of `cmd/`; re-running repo-wide showed zero. **Adjacent string arguments read as the same thing**: `recordEvent(obj, type, reason, action, …)` puts a reason and an action side by side, so `ProvisionWorker` and `ApplyAGCAutoscaler` both survived extraction as reasons until each call site was checked.
+Two traps.
+**A rename reads as a removal** when the extraction is scoped to one directory: env vars first appeared to have 17 removals, all of which were code moving out of `cmd/`; re-running repo-wide showed zero.
+**Adjacent string arguments read as the same thing**: `recordEvent(obj, type, reason, action, …)` puts a reason and an action side by side, so `ProvisionWorker` and `ApplyAGCAutoscaler` both survived extraction as reasons until each call site was checked.
 Always report "none removed" when it is true — operators are looking for exactly that.
 
 **Diff `docs/` as well, and link what is new from where it is actionable.** A new operator page is the strongest signal of a capability the notes forgot, and a heavily grown one shows where the release's real weight landed:
@@ -664,7 +684,8 @@ Link a new guide from the bullet it serves rather than from a documentation inve
 A guide with no feature to attach to goes in the contributor-facing section with one line on why it exists.
 
 **Give the API surface its own section, and lead it with any new CRD.** A new kind is not a field: the chart installs chart-root `crds/` on a *fresh install only*, so a new CRD is the reason "apply the CRDs" is step 1 of Upgrading, and the two must cross-reference.
-Then fold the rest — new spec fields, new status fields, new condition reasons — grouped by kind, counted like any other fold. `v1.3.0` listed 28 new condition reasons this way, and had to name `kubectl explain` and the signed CRD asset as the authority because no reference page existed.
+Then fold the rest — new spec fields, new status fields, new condition reasons — grouped by kind, counted like any other fold.
+`v1.3.0` listed 28 new condition reasons this way, and had to name `kubectl explain` and the signed CRD asset as the authority because no reference page existed.
 Link the [generated API reference](../reference/api.md) instead, at **this release's** version path (`/X.Y.Z/reference/api/`), so the fields the notes name are one click from their descriptions.
 It covers `v2beta1` only; a deprecated-version field still needs `kubectl explain`.
 
@@ -672,7 +693,8 @@ It covers `v2beta1` only; a deprecated-version field still needs `kubectl explai
 Link the run, quote the counts, and quote a value measured at the layer that matters: `v1.3.0` cites 73/73 specs with a run link, and a derived `1500m` observed on the pod where the templates asked for 2 and 3 CPU.
 Ship the receipt wherever a claim is made, not only in this section — a feature line that links its own PR is a receipt too.
 
-**Check the validation story against the plan doc, not memory.** This is the section a sceptical reader checks first, so a wrong detail here costs more than anywhere else. `v1.3.0`'s draft claimed no candidate had ever cleared the gate and that rc.5 was the first to return a verdict; the plan doc records rc.4 passing the day before.
+**Check the validation story against the plan doc, not memory.** This is the section a sceptical reader checks first, so a wrong detail here costs more than anywhere else.
+`v1.3.0`'s draft claimed no candidate had ever cleared the gate and that rc.5 was the first to return a verdict; the plan doc records rc.4 passing the day before.
 The true version was better anyway — five candidates, three aborted, rc.4 passed without catching a live worker pod, rc.5 caught one — and it is checkable, which the flattering version was not.
 
 **Keep a contributor-facing section, and put it last.** Release, CI, docs-site, and tooling work ships in no image and no chart, so it does not belong in the change lists.
@@ -721,23 +743,28 @@ So the residue is ordered rather than dumped: commits that also changed `docs/op
 At `v1.4.0` that ranks Q554 first of 43: ten rows carry the flag and thirty-three do not.
 Read the ten, and treat the rest as dev tooling only after the flag has had its say.
 
-**Cite the commit that did the work, not the one that filed it.** A Q-numbered backlog row and its implementation have near-identical subjects, so a `docs(plan)` commit reads exactly like the fix. `v1.3.0` cited #988 — `docs(plan): file and scope Q507` — under the label of #1008, the gate itself; a reader clicking through would have landed on a planning row.
+**Cite the commit that did the work, not the one that filed it.** A Q-numbered backlog row and its implementation have near-identical subjects, so a `docs(plan)` commit reads exactly like the fix.
+`v1.3.0` cited #988 — `docs(plan): file and scope Q507` — under the label of #1008, the gate itself; a reader clicking through would have landed on a planning row.
 Resolve each number to its title before shipping, and look for the same work cited twice under two numbers.
 
-**One fact per line, especially next to a procedure.** Distinct operator-facing changes run together into a paragraph read as background, and a paragraph sitting under a numbered list reads as a footnote to it. `v1.3.0`'s Upgrading section closed with three unrelated changes — quota accounting, a dropped proxy label, a new apiserver warning — in one sentence-run below its two numbered steps; as a bulleted list with a bold lead each, the same words are scannable.
+**One fact per line, especially next to a procedure.** Distinct operator-facing changes run together into a paragraph read as background, and a paragraph sitting under a numbered list reads as a footnote to it.
+`v1.3.0`'s Upgrading section closed with three unrelated changes — quota accounting, a dropped proxy label, a new apiserver warning — in one sentence-run below its two numbered steps; as a bulleted list with a bold lead each, the same words are scannable.
 Prose is for framing.
 Anything a reader might need to act on individually gets its own line.
 
 **Fold long lists.** `<details><summary>` renders on the Releases page and keeps the top scannable.
-It is also the only lever against truncation: the Releases *index* collapses a long body behind a **"read more"** link, and a fold counts as its one summary line while collapsed. `v1.3.0` hit that limit and was folded back under it — eight folds.
+It is also the only lever against truncation: the Releases *index* collapses a long body behind a **"read more"** link, and a fold counts as its one summary line while collapsed.
+`v1.3.0` hit that limit and was folded back under it — eight folds.
 If the index is truncating, the fix is another fold, not a cut.
 
-**Pick the next fold by measuring collapsed height, not by eye.** Sum each section's bytes with `<details>…</details>` bodies excluded; the biggest sections are rarely the ones that feel long. `v1.3.0` measured 9.5k collapsed, and the third-largest section was Validation — not an obvious candidate, since Upgrading and Highlights are larger but must both stay open.
+**Pick the next fold by measuring collapsed height, not by eye.** Sum each section's bytes with `<details>…</details>` bodies excluded; the biggest sections are rarely the ones that feel long.
+`v1.3.0` measured 9.5k collapsed, and the third-largest section was Validation — not an obvious candidate, since Upgrading and Highlights are larger but must both stay open.
 
 **When the content being folded is evidence, put the evidence in the `<summary>`.** A fold whose summary reads "Validation details" hides the receipt; one that reads `73/73 e2e specs on Kata microVM workers, on live GKE — the four legs, and what none of them assert` *is* the receipt, and a reader who never expands it has still seen the number.
 That is the exception to the count-in-the-summary convention: enumerations carry a count, evidence carries the finding.
 
-**Count what you list — and count the unit in the label.** State a count in a `<summary>` and it will be wrong the moment you curate the list. `v1.3.0`'s draft claimed 25 features and listed 23.
+**Count what you list — and count the unit in the label.** State a count in a `<summary>` and it will be wrong the moment you curate the list.
+`v1.3.0`'s draft claimed 25 features and listed 23.
 Subtler: its "New spec fields (10)" had ten *bullets* carrying thirteen *fields*, because three bullets grouped related ones (`.minRequests` / `.maxRequests` / `.limitHeadroomPercent`).
 Every other fold counted the noun in its own label; that one silently switched to bullets.
 Count what the label says, then re-count after every edit — mechanically, not by eye.
@@ -747,7 +774,8 @@ A feature list that reads as finished support overclaims.
 Check `docs/plan/archive/` for the feature's own "what this will not verify" section before describing it.
 Then ask whether an unexercised feature belongs in Highlights at all — `v1.3.0` kept GHES there and paid for it with a caveat in three places.
 
-**A caveat is a claim, so measure it before writing it.** Understating coverage is as wrong as overstating it, and easier to do accidentally because it feels safe. `v1.3.0`'s draft said the capacity gate had "unit and envtest coverage only"; the repo has a live-cluster-autoscaler test for its matcher (#929) and 305 lines of e2e proving a quota-blocked job redelivers (#1028).
+**A caveat is a claim, so measure it before writing it.** Understating coverage is as wrong as overstating it, and easier to do accidentally because it feels safe.
+`v1.3.0`'s draft said the capacity gate had "unit and envtest coverage only"; the repo has a live-cluster-autoscaler test for its matcher (#929) and 305 lines of e2e proving a quota-blocked job redelivers (#1028).
 Before writing "only tested at tier X", grep for the feature at every higher tier — and if the true statement is narrower than the tidy one, ship the narrow statement.
 What survived here was "the release gate does not *assert* it", which is checkable.
 
@@ -756,7 +784,8 @@ The `v1.3.0` draft said "Untested against a real appliance" under a GHES heading
 Name the subject inside the caveat, and repeat the caveat at each place the feature is claimed rather than relying on proximity.
 
 **Link the versioned docs site, not `main` and not `blob/`.** A reader of these notes should land on that release's instructions, and the site publishes a build per stable tag: `https://actions-gateway.com/X.Y.Z/operations/…`.
-Mind the form — the site drops the leading `v` exactly like the chart does. `v1.3.0` shipped 18 such links.
+Mind the form — the site drops the leading `v` exactly like the chart does.
+`v1.3.0` shipped 18 such links.
 They 404 until the docs deploy for the tag completes, which is expected while the Release is still a draft.
 
 **Verify every link and anchor.** A gate does it for you now (Q636):
@@ -780,9 +809,11 @@ grep -oE 'id="[^"]*"' site/operations/upgrade/index.html | sed 's/id="//;s/"//'
 ```
 
 **Do not hard-wrap.** GitHub renders a release body with comment-flavour GFM, where a single newline becomes `<br>`.
-Keep every paragraph, blockquote, and list continuation on one line. `v1.3.0`'s hard-wrapped draft rendered 46 of them.
+Keep every paragraph, blockquote, and list continuation on one line.
+`v1.3.0`'s hard-wrapped draft rendered 46 of them.
 
-Check this against the **renderer**, not the source. `gh release view --json body` returns the raw Markdown, which never contains `<br>` however badly it is wrapped, so grepping that is a check that cannot fail.
+Check this against the **renderer**, not the source.
+`gh release view --json body` returns the raw Markdown, which never contains `<br>` however badly it is wrapped, so grepping that is a check that cannot fail.
 Render it the way GitHub will:
 
 ```bash
@@ -844,7 +875,8 @@ None of these is a substitute for reading the notes — but each one caught a de
 | Rendering | `gh api -X POST /markdown -f mode=gfm` | hard-wrapped `<br>`s, alerts that did not render, literal `[!` |
 | Published body | re-fetch and `diff` against the file | an edit made on the Release and not in the repo |
 
-Two habits make the difference. **Plant a known failure in anything that reports "all clear"** — a checker with a broken query and a clean file produce identical output.
+Two habits make the difference.
+**Plant a known failure in anything that reports "all clear"** — a checker with a broken query and a clean file produce identical output.
 And **report the negative when it is true**: "16 metrics added, none removed" and "13 spec fields, nothing removed" are what an operator is actually scanning for, and neither is worth stating unless it was measured.
 
 ### 6. Chart version & metadata
@@ -897,11 +929,14 @@ This half exists because `v1.3.0` shipped without it too: the 1.3 row read `❌ 
 
 Landing it on `main` fixes `make check` and the `dev` docs, and **nothing else**.
 The site builds each version from its tag ([step 2](#2-tag-and-push)), so `/X.Y.Z/` is frozen at what the tag's tree said, which is the *previous* release's pins.
-So are `stable` and the root redirect a visitor lands on. `make release-pins-check` cannot catch this: it reads the working tree, not the published site. `make verify-published-docs` is the half that reads the site, and it is the last thing this step does.
+So are `stable` and the root redirect a visitor lands on.
+`make release-pins-check` cannot catch this: it reads the working tree, not the published site.
+`make verify-published-docs` is the half that reads the site, and it is the last thing this step does.
 
 The two facts are stated separately above and were never reconciled.
 Three of the four releases cut since `1.0.0` published the previous version's install command as their landing page.
-Measured on the live site 2026-08-10: `/1.1.0/` and `/1.2.0/` both advertise `--version 1.0.0`, and `/1.4.0/` advertised `1.3.0` together with the `v1.3.0` CRD manifest URL, as did `stable` and the root redirect, for the three hours until it was reported. `v1.3.0` is correct only because Q638's hand-fix happened to land before that tag.
+Measured on the live site 2026-08-10: `/1.1.0/` and `/1.2.0/` both advertise `--version 1.0.0`, and `/1.4.0/` advertised `1.3.0` together with the `v1.3.0` CRD manifest URL, as did `stable` and the root redirect, for the three hours until it was reported.
+`v1.3.0` is correct only because Q638's hand-fix happened to land before that tag.
 
 Nor can the bump simply move ahead of the tag: [`check-release-pins.sh`](../../scripts/docs/check-release-pins.sh) compares each pin for **equality** with the newest stable tag, so a pin naming the release about to be cut fails exactly as loudly as one naming the release before it, reddening `make check` and `doc-links` for every PR in the window.
 The `GAG_RELEASE_TAG` override is a gate-testing hook, set nowhere in CI.
@@ -936,7 +971,8 @@ It reads the four site pages that pin a version (the landing page, and `operatio
 Add `ARGS=--no-stable` for a backport to an older line, whose dispatch above drops the alias.
 This is the same comparison [`check-release-pins.sh`](../../scripts/docs/check-release-pins.sh) makes against the working tree, run against what the tree published; the two share one literal extractor so a pin shape the source gate catches cannot slip past this one.
 
-Do not spot-check it with `curl … | grep`: the theme wraps the leading digit of a highlighted version in its own `<span>`, so `--version 1.0.0` is not one string in the served HTML and a grep for it matches nothing, which is exactly what a correct page returns too. `/1.1.0/` and `/1.2.0/` still advertise `--version 1.0.0` today and both read as clean that way.
+Do not spot-check it with `curl … | grep`: the theme wraps the leading digit of a highlighted version in its own `<span>`, so `--version 1.0.0` is not one string in the served HTML and a grep for it matches nothing, which is exactly what a correct page returns too.
+`/1.1.0/` and `/1.2.0/` still advertise `--version 1.0.0` today and both read as clean that way.
 
 ### 8. Hand off to operators
 
@@ -967,7 +1003,8 @@ If `main` is clean and ready to ship, that's the next **minor** (`vX.(Y+1).0`), 
 > A `release-X.Y` branch cut from `vX.Y.0` therefore inherits whatever harness that commit had — so a fix to the gate only reaches a patch line if it was in the minor tag, or is cherry-picked like any other fix.
 >
 > The consequence is a rule for the **minor** cut, not the patch: tag `vX.Y.0` from a commit that carries the harness fixes you want the line to keep.
-> Cutting it from an older RC's commit to make the tag byte-match the validated artifact is the trap — it strands every gate fix found *during* that release's validation, which is exactly when gate fixes tend to be found. `v1.3.0` is the worked example: rc.5's validation produced two harness fixes ([Q627](../plan/release-1.3.md#Q627) and the e2e watch deadline), and a `release-1.3` branch cut from rc.5's commit would reproduce both on every future `v1.3.x`.
+> Cutting it from an older RC's commit to make the tag byte-match the validated artifact is the trap — it strands every gate fix found *during* that release's validation, which is exactly when gate fixes tend to be found.
+> `v1.3.0` is the worked example: rc.5's validation produced two harness fixes ([Q627](../plan/release-1.3.md#Q627) and the e2e watch deadline), and a `release-1.3` branch cut from rc.5's commit would reproduce both on every future `v1.3.x`.
 >
 > Validating an RC whose product code matches `main` is unaffected: the images and CRDs come from the tag, the harness from your checkout, so the two move independently by design.
 
@@ -1039,9 +1076,11 @@ gh api repos/<owner>/<action>/commits/<tag> --jq '.sha'
 `SYFT_VERSION`/`SYFT_SHA256` are **not** Dependabot-managed (a tool download, not an action ref).
 [`updatecli.d/syft.yaml`](../../updatecli.d/syft.yaml) bumps the pair weekly, in `publish.yml` and `security-scan.yml` together, so the released images and the PR-time scan are described by the same syft.
 
-The two workflow gates divide the work, and it is worth knowing which answers what. `actionlint` checks that a `uses:` ref is present and well formed, so a pin edited down to a bare `owner/repo` fails the PR.
+The two workflow gates divide the work, and it is worth knowing which answers what.
+`actionlint` checks that a `uses:` ref is present and well formed, so a pin edited down to a bare `owner/repo` fails the PR.
 But measured against v1.7.12, the version `tools/` pins, it accepts `@v7.0.1`, `@v4` and `@main` at exit 0, resolving the action's inputs off the tag while doing so.
-It reads the ref and never asserts it is a SHA. `uses-pinned-check` is the gate for that, and its scope is wider: actionlint lints only the root `.github/workflows/` directory, while the pin gate covers every workflow and composite action in the tree, including `cmd/gmc/.github/workflows/`: kubebuilder scaffolding GitHub never runs, whose refs no gate had read before.
+It reads the ref and never asserts it is a SHA.
+`uses-pinned-check` is the gate for that, and its scope is wider: actionlint lints only the root `.github/workflows/` directory, while the pin gate covers every workflow and composite action in the tree, including `cmd/gmc/.github/workflows/`: kubebuilder scaffolding GitHub never runs, whose refs no gate had read before.
 
 ### Signing identity is tags-only
 

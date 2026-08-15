@@ -13,7 +13,8 @@ make build-proxy  # build only the egress proxy
 
 `cmd/worker` is a workspace module but has no dedicated root-level build target — it is built into its container image only.
 
-Individual module Makefiles (e.g. `cmd/agc/Makefile`) also output to `.build/` via a relative path (`../../.build/`), so both `make` invocations land in the same place.
+Individual module Makefiles (e.g.
+`cmd/agc/Makefile`) also output to `.build/` via a relative path (`../../.build/`), so both `make` invocations land in the same place.
 
 ## Container images
 
@@ -111,7 +112,8 @@ Adding one to a workspace module does.
 **The source tree is its own distribution, and it is already satisfied.** `vendor/` is committed and this repo is public, so the third-party *source* is redistributed too — but each vendored module keeps its own `LICENSE` beside its code, which is exactly what the reproduce-the-notice clauses ask for.
 The roll-up file exists because a **binary** strips that: the image carries no `vendor/` tree, so the texts have to travel separately at `/licenses/`.
 
-**Notices scope is not SBOM scope.** The SBOM answers "what touched this build" for vulnerability tracking, and may legitimately inventory build-time tooling. `THIRD-PARTY-NOTICES` answers "what did we distribute" and is a legal artifact.
+**Notices scope is not SBOM scope.** The SBOM answers "what touched this build" for vulnerability tracking, and may legitimately inventory build-time tooling.
+`THIRD-PARTY-NOTICES` answers "what did we distribute" and is a legal artifact.
 Keep the two scoped separately — widening one does not widen the other.
 
 ### Image hardening

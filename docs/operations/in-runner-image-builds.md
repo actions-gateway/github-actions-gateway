@@ -1,6 +1,7 @@
 # In-runner image builds: choosing a build approach and security profile
 
-**Audience:** Platform engineer, Tenant operator. **Goal:** pick an image-build approach (`docker build` and friends) that builds container images *inside* a GitHub Actions Gateway (GAG) worker pod while staying inside the strictest Pod Security Admission (PSA) profile that still works.
+**Audience:** Platform engineer, Tenant operator.
+**Goal:** pick an image-build approach (`docker build` and friends) that builds container images *inside* a GitHub Actions Gateway (GAG) worker pod while staying inside the strictest Pod Security Admission (PSA) profile that still works.
 
 Building container images is the single most common heavyweight runner workload, and it collides head-on with pod-security hardening: the classic recipe — Docker-in-Docker (DinD) with a privileged container — requires the cluster's least-restrictive posture.
 It is almost never the approach you actually need.
@@ -34,7 +35,8 @@ Two GAG behaviours shape what a build pod may do:
 `buildkitd` in rootless mode (`docker buildx` against a rootless BuildKit instance, or the `moby/buildkit:*-rootless` image as a sidecar/standalone pod) builds images entirely in user space — no daemon socket, no privileged container.
 
 - **Recommended profile:** `baseline`.
-  Rootless BuildKit relies on unprivileged user namespaces and, on many kernels, needs a relaxed seccomp/AppArmor profile for the syscalls it uses to set up those namespaces. `baseline` permits `seccompProfile: Unconfined` and the `unconfined` AppArmor annotation; `restricted` forbids both.
+  Rootless BuildKit relies on unprivileged user namespaces and, on many kernels, needs a relaxed seccomp/AppArmor profile for the syscalls it uses to set up those namespaces.
+  `baseline` permits `seccompProfile: Unconfined` and the `unconfined` AppArmor annotation; `restricted` forbids both.
 - **`restricted`?** Best-effort only.
   On a recent-enough kernel where the default seccomp profile (`RuntimeDefault`) already permits the needed unshare syscalls and BuildKit runs fully as non-root, it *can* meet `restricted` — but this is kernel- and version-dependent, so treat `baseline` as the safe target and validate `restricted` on your own nodes before relying on it.
 - **What it can do:** full `Dockerfile` feature set, build cache, multi-stage builds, multi-arch via QEMU/emulation, registry push.
@@ -69,7 +71,8 @@ It is selected per-pod with a `RuntimeClass`.
   It needs **no** `privileged: true` container, so it stays out of the `privileged` profile entirely.
   This is Sysbox's whole value proposition: "real" DinD at `baseline` rather than `privileged`.
 - **RuntimeClass × profile interplay:**
-  - A platform admin must install the Sysbox runtime on nodes and create the `RuntimeClass` (e.g. `sysbox-runc`) cluster-wide.
+  - A platform admin must install the Sysbox runtime on nodes and create the `RuntimeClass` (e.g.
+    `sysbox-runc`) cluster-wide.
     The GMC never installs runtime handlers or `RuntimeClass` objects — that is a cluster-admin operation, the same model as the gVisor/Kata sandbox runtimes in [Appendix B](../design/appendix-b-worker-isolation.md).
   - The tenant references it in the worker `PodTemplate`: `spec.runtimeClassName: sysbox-runc`.
     The AGC honours a tenant-set `runtimeClassName` and applies no override that strips it.
@@ -114,7 +117,8 @@ How you declare that sidecar decides whether the worker pod can ever finish.
 
 A Kubernetes pod terminates only once **every** regular `spec.containers[]` entry has exited.
 A build sidecar such as `dockerd` runs forever, so if you declare it as a **regular container** the pod never reaches `Completed` after the runner container exits — it lingers, and the AGC keeps counting the runner slot against the `RunnerSet`'s `maxWorkers`.
-Under a concurrent matrix the pool strands (the same failure class as a pod stuck Pending). **Declare long-running build sidecars as native sidecars instead:**
+Under a concurrent matrix the pool strands (the same failure class as a pod stuck Pending).
+**Declare long-running build sidecars as native sidecars instead:**
 
 ```yaml
 spec:

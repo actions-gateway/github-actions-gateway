@@ -102,7 +102,8 @@ A job that is over replays its `JobCompleted` rather than its assignment, and is
 The re-run draws on the shared per-run `maxEvictionRetries` budget like every other cause, so it cannot loop.
 This is the same trade already accepted for an operator's bare `kubectl delete pod` of a running worker, which re-runs the job it interrupted by design.
 
-**A worker deleted before any container ran is re-run rather than force-cancelled first.** The `vanished` path cannot see whether the container started, because that is a fact about the pod, and the pod is gone. `rerun-failed-jobs` against a run with no failed job is refused by GitHub, which the existing error path logs and drops, so the outcome is the pre-Q844 one (a manual re-run) rather than a wrong one.
+**A worker deleted before any container ran is re-run rather than force-cancelled first.** The `vanished` path cannot see whether the container started, because that is a fact about the pod, and the pod is gone.
+`rerun-failed-jobs` against a run with no failed job is refused by GitHub, which the existing error path logs and drops, so the outcome is the pre-Q844 one (a manual re-run) rather than a wrong one.
 
 ## Scope
 

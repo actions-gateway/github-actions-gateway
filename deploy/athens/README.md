@@ -15,7 +15,8 @@ The one thing that varies is **where the cache lives**, which is a cost vs. firs
 
 The dogfood cluster idles its system node pool to zero, so with the **ephemeral** default the Athens pod is removed on every idle cycle and the first `vendor-check`/`tidy-check` after a wake re-downloads modules from `proxy.golang.org` (tens of seconds), warming again for the rest of the session.
 
-Choose **persistent** when you dogfood daily and the warm cache is worth the standing disk — persistence is also what enables the "pre-populated / air-gapped / survives-upstream-outages" properties the caching-mirror pattern advertises in [`docs/operations/security-operations.md`](../../docs/operations/security-operations.md). `scripts/dogfood/setup.sh` selects it via `ATHENS_PERSISTENT=1`.
+Choose **persistent** when you dogfood daily and the warm cache is worth the standing disk — persistence is also what enables the "pre-populated / air-gapped / survives-upstream-outages" properties the caching-mirror pattern advertises in [`docs/operations/security-operations.md`](../../docs/operations/security-operations.md).
+`scripts/dogfood/setup.sh` selects it via `ATHENS_PERSISTENT=1`.
 
 ## Reclaiming the disk during long idle stretches
 

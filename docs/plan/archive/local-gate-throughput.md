@@ -8,7 +8,8 @@ With half a dozen parallel worktree sessions the gate, not the work, sets the pa
 
 ## Baseline measurement (2026-07-26)
 
-Machine: MacBook Pro, Intel i7-1068NG7, **4 physical / 8 logical cores**, 32 GB. `scripts/agent/local-throttle.sh` sizes parallelism at `physical - 2 = 2`, so one run uses ~2 of 8 hardware threads at `utility` QoS while holding the exclusive lock.
+Machine: MacBook Pro, Intel i7-1068NG7, **4 physical / 8 logical cores**, 32 GB.
+`scripts/agent/local-throttle.sh` sizes parallelism at `physical - 2 = 2`, so one run uses ~2 of 8 hardware threads at `utility` QoS while holding the exclusive lock.
 
 Every `make check` prerequisite, timed individually, in a worktree checked out at `origin/main` with no local diff:
 
@@ -64,7 +65,8 @@ Measured, `cmd/agc` with `-coverprofile`:
 | worktree A, cold | 226 s | 0 | 2577 lines, 75.3 % |
 | worktree B, **first ever run** | **5 s** | 12 | 2577 lines, 75.3 % |
 
-The cached run emits a byte-identical coverage profile, so the ratchet is unaffected. `broker` reproduces the same result: without `-trimpath` worktree B re-runs the suite; with it, B prints `(cached)` on its first invocation.
+The cached run emits a byte-identical coverage profile, so the ratchet is unaffected.
+`broker` reproduces the same result: without `-trimpath` worktree B re-runs the suite; with it, B prints `(cached)` on its first invocation.
 
 **`-trimpath` must not be set globally** (`go env -w GOFLAGS`, or the e2e targets): [`cmd/gmc/test/e2e/e2e_suite_test.go`](../../../cmd/gmc/test/e2e/e2e_suite_test.go) resolves the v2 CRD chart directory from `runtime.Caller(0)`, which returns a trimmed, non-existent path under the flag.
 It is applied in the unit-tier scripts only (`scripts/go/go-test.sh`, `scripts/go/coverage.sh`), which the e2e and integration tiers do not use.
@@ -92,7 +94,8 @@ Trading a bounded oversubscription for halved queue depth is the right side of t
 ### 3. The cheap gates run in parallel ✓
 
 The 14 non-heavy `check` gates took no lock and ran strictly serially (~50 s).
-They now run through `scripts/ci/run-parallel.sh` (labeled, attributable output — GNU make 3.81 ships on macOS and has no `-O` output sync, so `make -j` would interleave failures unreadably). `scripts-test`'s 11 assertion scripts are parallelized the same way.
+They now run through `scripts/ci/run-parallel.sh` (labeled, attributable output — GNU make 3.81 ships on macOS and has no `-O` output sync, so `make -j` would interleave failures unreadably).
+`scripts-test`'s 11 assertion scripts are parallelized the same way.
 
 ## Finding: the QoS clamp, not the parallelism knobs, sets the local ceiling
 
@@ -182,10 +185,12 @@ Cold-cache `golangci-lint` on `cmd/agc` under the new prefix, 3 interleaved tria
 | 18 | 18 / 19 / 23 | 68–82 % | 5.71–5.89 ms | 12.2 ms | 0 | 0 | 0 |
 | 24 | 18 / 19 / 19 | 66–80 % | 5.97–7.29 ms | 9.8 ms | 0 | 0 | 0 |
 
-Every level lands in 18–23 s. **The spread *within* one level (16: 18→23 s) is wider than the spread between the extremes**, so there is no signal here to fit a curve to — `jobs` is simply not what bounds a per-module lint on this machine.
+Every level lands in 18–23 s.
+**The spread *within* one level (16: 18→23 s) is wider than the spread between the extremes**, so there is no signal here to fit a curve to — `jobs` is simply not what bounds a per-module lint on this machine.
 Two things follow, and they point in opposite directions from the ones the section above anticipated:
 
-- Raising it buys nothing. `go-lint.sh` lints modules **serially**, one `golangci-lint -j jobs` per module, and a single module's lint stops scaling below 8.
+- Raising it buys nothing.
+  `go-lint.sh` lints modules **serially**, one `golangci-lint -j jobs` per module, and a single module's lint stops scaling below 8.
   CPU% climbs with `jobs` (59 % → 80 %) while wall time does not — that is the oversubscription cost showing up with no throughput to pay for it.
 - Lowering it costs nothing *here*, but `jobs` is not lint's alone (see the unit tier below), so a cut would have to be justified against that consumer too.
 
@@ -198,7 +203,8 @@ It reproduced the harness's signature failure exactly: 46/40/40/40 s at `jobs=4/
 With the build cache warm, `-count=1` defeats only the *result* cache, so what remains is test execution — a handful of suites waiting on timers and envtest, which no amount of `-p` makes faster.
 
 That is now **four** undersized workloads across this investigation (`cmd/agc` alone, the warm `-race` tier, the warm unit tier, and — from the other direction — a `GOLANGCI_LINT_CACHE`-only bust).
-Every one of them returned identical numbers for every candidate and would have read as "the knob doesn't matter" without the saturation guard. **The generalization: on this repo, warm caches make every tier execution-bound and unable to discriminate; `GOCACHE` is what has to be cold for a parallelism knob to show a curve at all.** `run_test` therefore busts `GOCACHE` per run like `run_lint` does, which is also the regime that matters — a fresh worktree is exactly when the local gate is expensive.
+Every one of them returned identical numbers for every candidate and would have read as "the knob doesn't matter" without the saturation guard.
+**The generalization: on this repo, warm caches make every tier execution-bound and unable to discriminate; `GOCACHE` is what has to be cold for a parallelism knob to show a curve at all.** `run_test` therefore busts `GOCACHE` per run like `run_lint` does, which is also the regime that matters — a fresh worktree is exactly when the local gate is expensive.
 
 Cold, the unit tier does saturate (55–74 % CPU, `VALID`) and answers the other half of the `jobs` question — full workspace, `-count=1`, 2 interleaved trials:
 
@@ -224,7 +230,8 @@ Now the cores are really there, `jobs=24` genuinely oversubscribes them, and the
 
 ### `slots` stays at 2 — the knee is exactly there
 
-M concurrent cold-cache lints, 3 interleaved trials. `WALL_S` is the time until the **last** holder finishes, so aggregate throughput is M/wall — that, not wall time, is what a slot count buys:
+M concurrent cold-cache lints, 3 interleaved trials.
+`WALL_S` is the time until the **last** holder finishes, so aggregate throughput is M/wall — that, not wall time, is what a slot count buys:
 
 | holders | Wall (3 trials) | Mean | Throughput | vs 1 slot | CPU% | p99 jitter | max jitter | >50 ms |
 |---:|---|---:|---:|---:|---:|---:|---:|---:|
@@ -322,7 +329,9 @@ The other two differ on **three individual blocks**, and none of them is a split
 | `agc/internal/token/manager.go:147` | **0, 1** | 0, 0 | varies between two *serial* runs — unrelated to the shape |
 | `agc/internal/listener/renew.go:86` | 1, 1 | 0, 0 | `stopCtx.Err() != nil` — a renewal aborted by `stop()` landing mid-call |
 
-The `probe` one is self-documenting: `TestInvestigateJobDelivery_RealTimeoutNoJobArrives`'s own doc comment says it confirms a prompt exit "via **either** the top-of-loop deadline check **or** a deadline-exceeded GetMessage error". `manager.go:147` flips between two runs of the *same* shape, which is the cleanest evidence that this population is pre-existing. `renew.go:86` is the only one that tracked the shape across all four runs (n=2 each, so weak) — plausibly because the single invocation runs the machine at 439 % rather than 274 %, and a shutdown-mid-call race resolves differently under that load.
+The `probe` one is self-documenting: `TestInvestigateJobDelivery_RealTimeoutNoJobArrives`'s own doc comment says it confirms a prompt exit "via **either** the top-of-loop deadline check **or** a deadline-exceeded GetMessage error".
+`manager.go:147` flips between two runs of the *same* shape, which is the cleanest evidence that this population is pre-existing.
+`renew.go:86` is the only one that tracked the shape across all four runs (n=2 each, so weak) — plausibly because the single invocation runs the machine at 439 % rather than 274 %, and a shutdown-mid-call race resolves differently under that load.
 
 Effect on the ratchet: `cmd/agc` did not move at all (78.9 % both ways — two statements against thousands), and `cmd/probe` moved 81.8 % → 82.0 % in one run of four. ±0.2 pp is well inside the 0.5 pp tolerance, and is exactly the benign drift that tolerance was sized for, so nothing here needs fixing.
 It is worth knowing that a few floors carry ±0.2 pp of load-dependent noise rather than being exact.
