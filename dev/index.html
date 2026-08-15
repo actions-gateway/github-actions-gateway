@@ -130,8 +130,8 @@
         <aside class="md-banner">
           <div class="md-banner__inner md-grid md-typeset">
             
-            <strong>v1.4.0 is here.</strong>
-      <a href="https://github.com/actions-gateway/github-actions-gateway/releases/tag/v1.4.0">Read the release notes.</a>
+            <strong>v1.5.0 is here.</strong>
+      A per-tenant GitHub runner group boundary, multi-label runner sets that migrate a <code>runs-on</code> array unedited, and job duration and latency metrics on the acquisition tier every new tenant runs.
           </div>
           
         </aside>
@@ -2736,7 +2736,7 @@
 <div class="gag-install">
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>helm<span class="w"> </span>install<span class="w"> </span>gag<span class="w"> </span><span class="se">\</span>
 <a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="w">  </span>oci://ghcr.io/actions-gateway/charts/actions-gateway<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="w">  </span>--version<span class="w"> </span><span class="m">1</span>.4.0<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="w">  </span>--version<span class="w"> </span><span class="m">1</span>.5.0<span class="w"> </span><span class="se">\</span>
 <a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="w">  </span>--namespace<span class="w"> </span>gmc-system<span class="w"> </span>--create-namespace<span class="w"> </span><span class="se">\</span>
 <a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="w">  </span>--set<span class="w"> </span>gmc.image.digest<span class="o">=</span>sha256:&lt;gmc&gt;<span class="w"> </span><span class="se">\</span>
 <a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="w">  </span>--set<span class="w"> </span>agc.image.digest<span class="o">=</span>sha256:&lt;agc&gt;<span class="w"> </span><span class="se">\</span>
@@ -2745,7 +2745,7 @@
 <a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>
 <a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a><span class="c1"># v2 API (recommended): apply the signed, pre-rendered CRDs</span>
 <a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a>kubectl<span class="w"> </span>apply<span class="w"> </span>--server-side<span class="w"> </span>-f<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a><span class="w">  </span>https://github.com/actions-gateway/github-actions-gateway/releases/download/v1.4.0/actions-gateway-crds-v2.yaml
+<a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a><span class="w">  </span>https://github.com/actions-gateway/github-actions-gateway/releases/download/v1.5.0/actions-gateway-crds-v2.yaml
 </code></pre></div>
 </div>
 <div class="gag-section-intro">

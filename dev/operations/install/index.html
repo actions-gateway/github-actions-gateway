@@ -132,8 +132,8 @@
         <aside class="md-banner">
           <div class="md-banner__inner md-grid md-typeset">
             
-            <strong>v1.4.0 is here.</strong>
-      <a href="https://github.com/actions-gateway/github-actions-gateway/releases/tag/v1.4.0">Read the release notes.</a>
+            <strong>v1.5.0 is here.</strong>
+      A per-tenant GitHub runner group boundary, multi-label runner sets that migrate a <code>runs-on</code> array unedited, and job duration and latency metrics on the acquisition tier every new tenant runs.
           </div>
           
         </aside>
@@ -3092,20 +3092,20 @@ Set <code>VALIDATE_METRICS_TIMEOUT=0 VALIDATE_METRICS_GRACE=0</code> to restore 
 <hr />
 <h2 id="install">Install<a class="headerlink" href="#install" title="Permanent link">&para;</a></h2>
 <blockquote>
-<p><strong>Current release — <code>v1.4.0</code>.</strong> The chart is published, cosign-signed, and installable straight from the GHCR OCI registry.
-Pin <code>--version 1.4.0</code> (the chart version is the release tag without the leading <code>v</code>).
-Newer patch releases publish as <code>1.4.z</code>; pin the version you have verified.</p>
+<p><strong>Current release — <code>v1.5.0</code>.</strong> The chart is published, cosign-signed, and installable straight from the GHCR OCI registry.
+Pin <code>--version 1.5.0</code> (the chart version is the release tag without the leading <code>v</code>).
+Newer patch releases publish as <code>1.5.z</code>; pin the version you have verified.</p>
 </blockquote>
 <p>Install the published, signed chart straight from the registry — no source checkout needed:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>helm<span class="w"> </span>install<span class="w"> </span>gag<span class="w"> </span>oci://ghcr.io/actions-gateway/charts/actions-gateway<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="w">  </span>--version<span class="w"> </span><span class="m">1</span>.4.0<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="w">  </span>--version<span class="w"> </span><span class="m">1</span>.5.0<span class="w"> </span><span class="se">\</span>
 <a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="w">  </span>--namespace<span class="w"> </span>gmc-system<span class="w"> </span>--create-namespace<span class="w"> </span><span class="se">\</span>
 <a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="w">  </span>--set<span class="w"> </span>gmc.image.digest<span class="o">=</span>sha256:&lt;gmc&gt;<span class="w"> </span><span class="se">\</span>
 <a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="w">  </span>--set<span class="w"> </span>agc.image.digest<span class="o">=</span>sha256:&lt;agc&gt;<span class="w"> </span><span class="se">\</span>
 <a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="w">  </span>--set<span class="w"> </span>proxy.image.digest<span class="o">=</span>sha256:&lt;proxy&gt;<span class="w"> </span><span class="se">\</span>
 <a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="w">  </span>--set<span class="w"> </span>wrapper.image.digest<span class="o">=</span>sha256:&lt;wrapper&gt;
 </code></pre></div>
-<p>Copy the four image digests from the <a href="https://github.com/actions-gateway/github-actions-gateway/releases/tag/v1.4.0">release notes</a> (the chart ships <strong>no</strong> baked-in digests — empty digests are the fail-closed secure default, so an unconfigured render is rejected).
+<p>Copy the four image digests from the <a href="https://github.com/actions-gateway/github-actions-gateway/releases/tag/v1.5.0">release notes</a> (the chart ships <strong>no</strong> baked-in digests — empty digests are the fail-closed secure default, so an unconfigured render is rejected).
 Verify the chart and image signatures before installing — see <a href="../release/#3-verify-the-publish">release.md § Verify the publish</a> and <a href="../security-operations/#image-provenance-signature--sbom-verification">security-operations.md § Image provenance</a>.</p>
 <blockquote>
 <p><strong>Installing from a source checkout</strong> (dev/CI, or to install an unreleased chart) still works — substitute the local <code>charts/actions-gateway</code> path for the <code>oci://…</code> ref in any command on this page:</p>
@@ -3143,7 +3143,7 @@ This is the secure default: a digest is immutable, so neither the controller nor
 Digest pinning is preserved throughout (relocation is content-addressed).</p>
 <h3 id="without-cert-manager">Without cert-manager<a class="headerlink" href="#without-cert-manager" title="Permanent link">&para;</a></h3>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>helm<span class="w"> </span>install<span class="w"> </span>gag<span class="w"> </span>oci://ghcr.io/actions-gateway/charts/actions-gateway<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="w">  </span>--version<span class="w"> </span><span class="m">1</span>.4.0<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="w">  </span>--version<span class="w"> </span><span class="m">1</span>.5.0<span class="w"> </span><span class="se">\</span>
 <a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="w">  </span>--namespace<span class="w"> </span>gmc-system<span class="w"> </span>--create-namespace<span class="w"> </span><span class="se">\</span>
 <a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="w">  </span>--set<span class="w"> </span>certManager.enabled<span class="o">=</span><span class="nb">false</span><span class="w"> </span><span class="se">\</span>
 <a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a><span class="w">  </span>--set<span class="w"> </span>gmc.image.digest<span class="o">=</span>sha256:&lt;gmc&gt;<span class="w"> </span><span class="se">\</span>

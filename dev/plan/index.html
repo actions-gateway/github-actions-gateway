@@ -128,8 +128,8 @@
         <aside class="md-banner">
           <div class="md-banner__inner md-grid md-typeset">
             
-            <strong>v1.4.0 is here.</strong>
-      <a href="https://github.com/actions-gateway/github-actions-gateway/releases/tag/v1.4.0">Read the release notes.</a>
+            <strong>v1.5.0 is here.</strong>
+      A per-tenant GitHub runner group boundary, multi-label runner sets that migrate a <code>runs-on</code> array unedited, and job duration and latency metrics on the acquisition tier every new tenant runs.
           </div>
           
         </aside>
@@ -2724,7 +2724,7 @@ A plan with only deferred residuals is ✅, not ⚠️ — see <a href="../devel
 <tr>
 <td><a href="release-1.5/">release-1.5.md</a></td>
 <td>The 1.5 release gate: two defects in already-claimed capabilities (Q712 unwired runner-group binding, Q713 missing scale-set-tier latency series), plus the candidates held but not yet accepted</td>
-<td>🔲 Open. All four gate items landed 2026-08-11 (Q713 in #1390, Q712 in #1391, Q715 in #1392, Q726 in #1393), taking the floor to MINOR, and the <a href="release-1.5/#in-scope-reconcile-the-marketing-surfaces">marketing reconciliation</a> closed 2026-08-12 (Q801, Q821). Q776 closed the last one: the <a href="../operations/observability-metrics/#acquisition-tier-reach">acquisition-tier ledger</a> carries all 53 <code>actions_gateway_*</code> series with the tier that emits each, <code>make metric-tiers-check</code> holds it to the source in both directions, and the re-walk it required found two classic-only series on no list plus one that reached no operator doc. Only the release-candidate dogfood validation in <a href="../operations/release/">release.md</a> remains, which needs the actual RC image and so is deliberately not a Queue row</td>
+<td>✅ Shipped as <code>v1.5.0</code> on 2026-08-15, validated on <code>rc.3</code>. All four gate items landed 2026-08-11 (Q713 in #1390, Q712 in #1391, Q715 in #1392, Q726 in #1393), taking the floor to MINOR, and the <a href="release-1.5/#in-scope-reconcile-the-marketing-surfaces">marketing reconciliation</a> closed 2026-08-12 (Q801, Q821). Q776 closed the last one: the <a href="../operations/observability-metrics/#acquisition-tier-reach">acquisition-tier ledger</a> carries all 53 <code>actions_gateway_*</code> series with the tier that emits each, <code>make metric-tiers-check</code> holds it to the source in both directions, and the re-walk it required found two classic-only series on no list plus one that reached no operator doc. Only the release-candidate dogfood validation in <a href="../operations/release/">release.md</a> remains, which needs the actual RC image and so is deliberately not a Queue row</td>
 </tr>
 <tr>
 <td><a href="v2-ga/">v2-ga.md</a></td>
