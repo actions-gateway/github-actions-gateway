@@ -741,6 +741,41 @@ def is_estimated(row):
     return str(row.get("estimated", "0")) in ("1", "true", "True")
 
 
+# Text that arrives as a user record carrying ``origin.kind == "human"`` without a
+# human having typed anything: a hook's denial, a bash line and its output, a
+# slash command's expansion, an injected reminder. Q687's predicate, in code.
+NOT_A_PROMPT = ("<bash-input>", "<bash-stdout>", "<bash-stderr>", "<create-pr-command>",
+                "<system-reminder>", "<command-name>", "<local-command")
+
+
+def record_text(rec):
+    """The text of a user record, whether it arrived as a string or as blocks."""
+    c = (rec.get("message") or {}).get("content")
+    if isinstance(c, str):
+        return c
+    if isinstance(c, list):
+        return " ".join(b.get("text", "") for b in c if isinstance(b, dict))
+    return ""
+
+
+def is_human_prompt(rec):
+    """True when a person actually typed this.
+
+    The only unambiguous presence signal in the transcripts. Everything else the
+    session series counts, including every assistant record, is produced whether
+    or not anyone is watching, so a bucket holding one of these is the one kind
+    that says somebody was at the keyboard.
+
+    ``origin.kind`` alone is not enough: four classes carry it without a person
+    typing, which is why they are stripped rather than trusted.
+    """
+    if rec.get("type") != "user" or not rec.get("timestamp"):
+        return False
+    if (rec.get("origin") or {}).get("kind") != "human":
+        return False
+    return not record_text(rec).lstrip().startswith(NOT_A_PROMPT)
+
+
 def session_series(host):
     """Per-day session concurrency for this machine, keyed ``(date, host)``.
 
@@ -762,6 +797,7 @@ def session_series(host):
 
     recs = []    # (session, uuid, bucket)
     start = {}   # session -> its earliest bucket
+    attended = set()   # buckets a person typed in
     for f in files:
         sess = os.path.basename(f)[: -len(".jsonl")]
         try:
@@ -786,6 +822,8 @@ def session_series(host):
                     continue
                 b = dt.replace(minute=(dt.minute // SESSION_BUCKET_MIN) * SESSION_BUCKET_MIN,
                                second=0, microsecond=0)
+                if is_human_prompt(rec):
+                    attended.add(b)
                 recs.append((sess, uuid, b))
                 if sess not in start or b < start[sess]:
                     start[sess] = b
@@ -802,12 +840,14 @@ def session_series(host):
             active[b].add(sess)
 
     day = defaultdict(lambda: {"sessions": set(), "peak": 0, "active": 0, "parallel": 0,
-                               "session_buckets": 0})
+                               "session_buckets": 0, "attended": 0})
     for b, sessions in active.items():
         row = day[b.date().isoformat()]
         row["sessions"] |= sessions
         row["peak"] = max(row["peak"], len(sessions))
         row["active"] += 1
+        if b in attended:
+            row["attended"] += 1
         row["session_buckets"] += len(sessions)
         if len(sessions) > 1:
             row["parallel"] += 1
@@ -823,6 +863,10 @@ def session_series(host):
             # this / buckets-per-hour. Stored as the integer rather than as either
             # derived figure: a ratio is not monotone, so it cannot be max-merged.
             "session_buckets": v["session_buckets"],
+            # Buckets a person typed in. Zero for any day before the transcripts
+            # began carrying `origin.kind`, which is why it is reported with its
+            # own first date rather than compared against the token series.
+            "attended_buckets": v["attended"],
         }
         for dk, v in day.items()
     }
@@ -844,6 +888,7 @@ def sessions_summary(rows):
     per_hour = 60 / SESSION_BUCKET_MIN
     active = sum(r["active_buckets"] for r in rows)
     sess_b = sum(r["session_buckets"] for r in rows)
+    att = sum(int(r.get("attended_buckets") or 0) for r in rows)
     return {
         "bucket_minutes": SESSION_BUCKET_MIN,
         "first_date": min((r["date"] for r in rows), default=None),
@@ -857,6 +902,14 @@ def sessions_summary(rows):
         "session_hours": round(sess_b / per_hour, 1),
         "parallel_share_pct": (round(100 * sum(r["parallel_buckets"] for r in rows) / active)
                                if active else 0),
+        # Presence, not activity. Its own first date: the transcripts only began
+        # carrying the marker that identifies a typed prompt partway through, so
+        # this series starts later than the rest and cannot be compared with them
+        # across that boundary.
+        "attended_hours": round(att / per_hour, 1),
+        "attended_share_pct": round(100 * att / active) if active else 0,
+        "attended_first_date": min((r["date"] for r in rows
+                                    if int(r.get("attended_buckets") or 0) > 0), default=None),
         "note": ("Concurrency needs session-level transcripts, which no earlier CSV "
                  "preserved, so the series starts at the first day whose transcripts "
                  "survive rather than at the first project day. It is never estimated."),
@@ -1019,8 +1072,10 @@ def main():
     write_csv(model_csv, mkey + mnum + ["estimated"], m_out)
 
     # --- sessions: measured only, no backfill (see session_series) ---
+    # attended_buckets joins the upward-only merge like the rest: it is a count that
+    # can only rise as more transcripts become visible.
     snum = ["sessions", "peak_concurrent", "active_buckets", "parallel_buckets",
-            "session_buckets"]
+            "session_buckets", "attended_buckets"]
     skey = ["date", "host"]
     s_measured = load_measured(sess_csv, skey, snum)
     merge_max_into(s_measured, session_series(host), skey, snum)
@@ -1117,6 +1172,8 @@ def main():
           f"{ss['first_date']} -> {ss['last_date']}")
     print(f"  concurrency      : mean {ss['mean_concurrent']}, peak {ss['peak_concurrent']}, "
           f"{ss['parallel_share_pct']}% of active time parallel")
+    print(f"  at the keyboard  : {ss['attended_hours']}h attended "
+          f"({ss['attended_share_pct']}%), from {ss['attended_first_date']}")
     print(f"  time on claude   : {ss['hours_using_claude']}h wall-clock, "
           f"{ss['session_hours']}h session-time")
     print(f"headline measured  : {headline(meas):,}")

@@ -796,17 +796,19 @@ def chart_parallel_sessions():
     per_hour = 60 / sess_meta.get("bucket_minutes", 10)
     by_day = {}
     for r in rows:  # combine machines
-        d = by_day.setdefault(r["date"], {"peak": 0, "active": 0, "buckets": 0})
+        d = by_day.setdefault(r["date"], {"peak": 0, "active": 0, "buckets": 0, "attended": 0})
         # Peak is a max, not a sum: two machines' peaks need not coincide in time.
         d["peak"] = max(d["peak"], int(r["peak_concurrent"]))
         d["active"] += int(r["active_buckets"])
         d["buckets"] += int(r["session_buckets"])
+        d["attended"] = d.get("attended", 0) + int(r.get("attended_buckets") or 0)
     days = sorted(by_day)
     xs = list(range(len(days)))
     peak = [by_day[d]["peak"] for d in days]
     mean = [by_day[d]["buckets"] / by_day[d]["active"] if by_day[d]["active"] else 0 for d in days]
     wall = [by_day[d]["active"] / per_hour for d in days]
     shrs = [by_day[d]["buckets"] / per_hour for d in days]
+    att = [by_day[d].get("attended", 0) / per_hour for d in days]
 
     fig, (a1, a2) = plt.subplots(2, 1, figsize=(11, 7.8), sharex=True,
                                  gridspec_kw=dict(height_ratios=[1.2, 1], hspace=0.30))
@@ -833,18 +835,28 @@ def chart_parallel_sessions():
                     label="session-hours  (summed over concurrent sessions)")
     a2.plot(xs, shrs, color=OI["blue"], lw=2.4, marker="s", ms=4, zorder=3, path_effects=halo)
     a2.fill_between(xs, 0, wall, color=OI["orange"], alpha=0.55, zorder=2)
+    # Three nested bands: someone typing, the system working, and that summed over
+    # concurrent sessions. The innermost is the only one that means presence, and
+    # it exists only from the day the transcripts began marking a typed prompt.
+    if any(att):
+        a2.fill_between(xs, 0, att, color=OI["vermillion"], alpha=0.65, zorder=3)
+        a2.plot(xs, att, color=darken(OI["vermillion"]), lw=2.0, zorder=5,
+                path_effects=halo)
     a2.plot(xs, wall, color=darken(OI["orange"]), lw=2.2, marker="o", ms=4, zorder=4,
             path_effects=halo)
     a2.set_ylabel("hours", fontsize=11)
-    a2.set_title(f"Time on Claude each day — {sum(wall):.0f}h elapsed, "
-                 f"{sum(shrs):.0f}h of session-time ({sum(shrs) / sum(wall):.1f}×)",
+    a2.set_title(f"Time on Claude each day — {sum(att):.0f}h at the keyboard, "
+                 f"{sum(wall):.0f}h elapsed, {sum(shrs):.0f}h of session-time",
                  fontsize=12, fontweight="bold", loc="left")
     a2.set_ylim(0, max(shrs) * 1.22)
-    a2.legend(handles=[mpatches.Patch(facecolor=OI["skyblue"], alpha=0.40,
-                                      label="session-hours (summed over concurrent sessions)"),
-                       mpatches.Patch(facecolor=OI["orange"], alpha=0.55,
-                                      label="hours using Claude (wall-clock)")],
-              frameon=False, fontsize=9.5, loc="upper left", ncol=2)
+    handles = [mpatches.Patch(facecolor=OI["skyblue"], alpha=0.40,
+                              label="session-hours (summed over concurrent sessions)"),
+               mpatches.Patch(facecolor=OI["orange"], alpha=0.55,
+                              label="Claude working (wall-clock)")]
+    if any(att):
+        handles.append(mpatches.Patch(facecolor=OI["vermillion"], alpha=0.65,
+                                      label="a person at the keyboard (a typed prompt in the bucket)"))
+    a2.legend(handles=handles, frameon=False, fontsize=9.5, loc="upper left", ncol=2)
 
     for a in (a1, a2):
         a.set_xlim(-0.6, len(days) - 0.4)

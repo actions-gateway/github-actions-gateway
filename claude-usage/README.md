@@ -100,7 +100,8 @@ The snapshots are announced as a quote-post chain (each post quotes the previous
 | **Tokens per word** | — | — | **276** | both |
 | Model mix | mostly Sonnet 4.6 | Sonnet 43% / Opus 57% | **Opus 5 49% / Opus 4.8 37% / Fable 7% / Sonnet 4% / Opus 4.7 3%** | transcripts |
 | Mean concurrent sessions | — | — | **3.0** (peak 16) | transcripts, since Jul 26 |
-| Hours using Claude (wall-clock) | — | — | **213.8h** → 649.7h session-time | transcripts, since Jul 26 |
+| Hours using Claude (wall-clock) | — | — | **214.8h** → 652.5h session-time | transcripts, since Jul 26 |
+| └ of that, at the keyboard | — | — | **99.7h** (46%) | transcripts, since Jul 26 |
 
 The headline tokens figure **includes the ~2.5M estimated backfill** for the archived first three days; the measured-only floor is 594.7M.
 Live totals (with the measured / estimated split) are always in [`data/summary.json`](data/summary.json).
@@ -256,7 +257,17 @@ The peak is the dramatic number, up to 16, but it lasts a single bucket; the **m
 The gap between the two bands *is* the mean concurrency: **214h elapsed produced 650h of session-time** over the window, a 3.0× multiplier.
 67% of active time had two or more sessions running, on 4–54 sessions a day.
 
-Neither band is time anyone spent watching, and the attended share of it is not constant.
+The innermost band **is** time someone spent at the keyboard, and it is 46% of the rest: **99.7h against 214.8h**.
+A 10-minute bucket counts as attended when a person actually typed in it, which is the only unambiguous presence signal the transcripts carry.
+Everything else here, every assistant record and every tool result, is produced whether or not anyone is watching.
+
+Identifying a typed prompt takes more than the record's own marker.
+`origin.kind == "human"` also arrives on four things nobody typed: a hook's denial text, a `<bash-input>` line and its output, a slash command's expansion, and an injected `<system-reminder>`.
+The predicate strips those; without it the count roughly doubles.
+
+**This band cannot reach back before 2026-07-26**, because the transcripts only began carrying that marker then and `mac-1`'s went with the machine.
+It is the measure that would answer whether the new machine raised output per attended hour, and the window where it exists starts on the day the machine changed, so it cannot answer that and never will.
+What it can do is serve as a denominator from here on.
 Sessions sometimes run unattended, so a bucket counts whenever a session did something and the human may be elsewhere; these are hours the system was working, not hours at the keyboard.
 
 How much attention a day needed varies with the work, which is why no fixed fraction can be read off these bands.
@@ -306,6 +317,9 @@ It says when work landed, **not** hours worked: sessions sometimes run unattende
 ### `session_metrics.csv` — merge-preserved
 Per-day, per-`host` session concurrency, in 10-minute buckets: `sessions` (distinct sessions that did work that day), `peak_concurrent` (most sessions active in any one bucket), `active_buckets` (buckets with any session), `parallel_buckets` (buckets with two or more), and `session_buckets` (concurrent sessions summed over every bucket).
 Every column is a count that can only rise as more transcripts become visible, so the upward-only merge is right for all of them.
+
+`attended_buckets` is the same shape as the others and merges the same way, but counts only buckets a person typed in.
+It is zero before the transcripts began marking a typed prompt, so `summary.json` reports its own `attended_first_date` rather than letting it be read against the older series.
 
 Two headline figures are derived rather than stored, because a ratio isn't monotone and so can't be max-merged:
 
