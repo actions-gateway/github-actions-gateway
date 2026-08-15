@@ -3889,7 +3889,7 @@ See <a href="../../operations/tenant-onboarding/#bind-a-runner-set-to-a-github-r
 <p>The field is tenant-authored, and the <a href="../../development/api-review/#ask-whose-fact-it-is">whose-fact</a> question resolves benignly: a tenant naming a group that is not theirs volunteers <em>its own</em> runners to that group's repositories.
 It costs the tenant that lied and escalates nothing across tenants, which is why it is not gated by a platform allowlist the way <code>priorityClassName</code> is. <strong>Closed (Q712).</strong></p>
 <h3 id="cross-tenant-job-acquisition-via-a-shared-scale-set-name">Cross-tenant job acquisition via a shared scale-set name<a class="headerlink" href="#cross-tenant-job-acquisition-via-a-shared-scale-set-name" title="Permanent link">&para;</a></h3>
-<p>The second forge-side namespace, and the one where the whose-fact question does <em>not</em> resolve benignly.
+<p>The second GitHub-side namespace, and the one where the whose-fact question does <em>not</em> resolve benignly.
 A <code>ScaleSet</code> set's first <code>runnerLabel</code> is its scale-set name, and the AGC adopts a scale set <strong>by name</strong> against the Actions service its gateway's <code>githubURL</code> reaches, creating one only when the name is free.
 That name is unique per GitHub org, enterprise, or repo; the Kubernetes namespace is invisible to it.</p>
 <p>Two <code>RunnerSet</code>s in different namespaces whose gateways name one org and one first label are therefore two AGCs driving a <strong>single</strong> scale set.

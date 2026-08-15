@@ -2814,7 +2814,7 @@ It is the one <a href="../arc-parity/">ARC parity</a> gap that breaks the zero-e
 <h3 id="q712--the-runner-group-binding-is-declared-and-never-wired--shipped">Q712 — the runner-group binding is declared and never wired ✅ shipped<a class="headerlink" href="#q712--the-runner-group-binding-is-declared-and-never-wired--shipped" title="Permanent link">&para;</a></h3>
 <p><code>RunnerGroupName</code> exists on the scale-set listener config (<code>cmd/agc/internal/scalesetlistener/listener.go</code>) and is resolved when non-empty, but the sole production construction site in <code>cmd/agc/internal/controller/runnerset_scaleset.go</code> never set it.
 Every scale set therefore registered into the installation's default runner group.</p>
-<p>The GitHub runner group is the <strong>forge-side authorization point</strong> for which repositories may target which runners.
+<p>The GitHub runner group is the <strong>GitHub-side authorization point</strong> for which repositories may target which runners.
 With every tenant's scale set in one group, a repository outside a tenant can name that scale set in <code>runs-on</code> and route work into the tenant's namespace, quota, and egress IP.
 GAG's pod-level isolation is unaffected; what is unbounded is <em>who can cause a job to run there</em>.</p>
 <p>This is also the one place ARC was ahead on GAG's own core claim: its <code>gha-runner-scale-set</code> chart exposes <code>runnerGroup</code> as a first-class value.</p>
@@ -2901,7 +2901,7 @@ That residual is recorded in <a href="../v2-ga/#what-this-audit-checked-and-foun
 Preemption and drain recovery were listed here until 2026-08-14, on the grounds that only restart-safety differed; Q844 moved them out, because the difference was one the published claim does not make and the classic tier does not have, and then closed it:</p>
 <ul>
 <li>GitHub's session rejection for a too-old runner version stays classic-only, because the scale-set protocol carries no runner version at session creation.
-  Q715 gives the ScaleSet tier a reconcile-time warning instead, so both tiers carry a signal and only classic has the forge-side rejection.</li>
+  Q715 gives the ScaleSet tier a reconcile-time warning instead, so both tiers carry a signal and only classic has the GitHub-side rejection.</li>
 <li>The capacity ceiling uses a different pre-check and a different fallback on the scale-set tier (Q576), because a ScaleSet states its capacity as one integer per poll rather than as a decision per job.</li>
 <li>Several counters are absent from the scale-set tier by construction, being artifacts of the many-acquirers and JIT-agent models <code>ScaleSet</code> removes.
   <a href="../v2-ga/#capability-parity-is-a-precondition-of-the-removal">v2-ga.md</a> holds the list, and Q776 reconciles against it.</li>
@@ -2946,7 +2946,7 @@ The ledger is the evidence and the gate is what keeps it true; a capability with
 <tr>
 <td><code>RunnerGroupNotFound</code> (Q712)</td>
 <td><code>Ready</code></td>
-<td>Fail-closed is the design, not an error path: falling back to the default group would widen the forge-side boundary at the moment an operator narrows it.</td>
+<td>Fail-closed is the design, not an error path: falling back to the default group would widen the GitHub-side boundary at the moment an operator narrows it.</td>
 </tr>
 <tr>
 <td><code>WorkerImageBelowMinimum</code> / <code>WorkerImageCurrent</code> / <code>WorkerImageVersionUnknown</code> (Q715)</td>
