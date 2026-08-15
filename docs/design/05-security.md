@@ -414,7 +414,7 @@ It costs the tenant that lied and escalates nothing across tenants, which is why
 
 ### Cross-tenant job acquisition via a shared scale-set name
 
-The second forge-side namespace, and the one where the whose-fact question does *not* resolve benignly.
+The second GitHub-side namespace, and the one where the whose-fact question does *not* resolve benignly.
 A `ScaleSet` set's first `runnerLabel` is its scale-set name, and the AGC adopts a scale set **by name** against the Actions service its gateway's `githubURL` reaches, creating one only when the name is free.
 That name is unique per GitHub org, enterprise, or repo; the Kubernetes namespace is invisible to it.
 

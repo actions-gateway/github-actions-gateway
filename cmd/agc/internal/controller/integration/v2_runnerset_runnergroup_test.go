@@ -14,8 +14,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// The GitHub runner group is the forge-side authorization point for which repositories
-// may target a tenant's runners (Q712). These two specs are the end-to-end halves the
+// The runner group is the authorization point, at GitHub rather than in the cluster,
+// for which repositories may target a tenant's runners (Q712). These two specs are the end-to-end halves the
 // unit tests cannot see: that a group declared on a CR actually reaches the scale-set
 // registration through the reconciler, and that a group the installation does not have
 // stops the set with a reason an operator can act on rather than quietly registering it

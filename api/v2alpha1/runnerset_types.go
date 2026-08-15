@@ -126,7 +126,7 @@ type RunnerSetSpec struct {
 	// GitHub's default group. It governs the scale-set registration, so it has no
 	// effect on a Classic set, which registers no scale set.
 	//
-	// The runner group is the forge-side authorization point for which repositories
+	// The runner group is the GitHub-side authorization point for which repositories
 	// may target these runners. A scale set left in the default group is reachable
 	// by every repository that group admits, typically the whole organization, so a
 	// repository outside the tenant can name this set in runs-on and route work into
