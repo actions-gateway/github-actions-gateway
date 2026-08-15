@@ -134,7 +134,7 @@ The standalone versions follow below.
 ![Daily token usage by model](charts/tokens_by_model.png) The Pro→Max 5x upgrade (first dashed line, 2026-05-23) is visible as the hand-off from Sonnet 4.6 (orange) to Opus 4.7 (purple), then Opus 4.8 (blue), with Fable 5 (green) appearing from June 9 and Opus 5 (vermillion) from July 25; the second dashed line (2026-07-05) marks the Max 5x→20x upgrade.
 Opus 5 takes over almost completely from the green dash-dot line (2026-07-26), where `mac-2` took over, on days around three times the height of the Opus 4.8 era (median 14.9M across the `mac-2` days against 4.6M across the days Opus 4.8 led).
 That jump is **not** more machines running at once: `mac-2` replaced `mac-1` rather than joining it.
-Nor is it the plan: the Max 5x → 20x upgrade three weeks earlier moved no work-shipped series at all.
+The plan is a different question these series cannot answer: the Max 5x → 20x upgrade three weeks earlier moved none of them, but what both upgrades relieved was the 5-hour rolling limit, which nothing here measures.
 What it cannot be pinned on is either the model or the machine alone, since Opus 5 arrived the day before `mac-2` did.
 See the [velocity chart](#work-shipped-on-proxies-a-reformat-cant-move).
 Charts use the Okabe–Ito colourblind-safe palette, and each model also carries its own hatch pattern.
@@ -162,7 +162,9 @@ The grey dotted line on 2026-08-09 is the sentence-per-line reflow, which is why
 ![PRs merged, tests added, backlog rows closed per day, and when work landed](charts/velocity.png) Tokens are an input and lines carry the reflow, so neither is a velocity series.
 These four are immune to both: **PRs merged**, **tests added**, **backlog rows closed**, and the spread of the day work landed across.
 
-Read the top three together and the plan upgrade disappears: Max 5x to 20x on 2026-07-05 raised the ceiling and moved nothing (tests/day 20.3 → 19.4, Go lines/day 1,058 → 963).
+Read the top three together and the plan upgrade does not show up: tests/day went 20.3 to 19.4 across 2026-07-05, Go lines/day 1,058 to 963.
+That is a null result from a proxy that cannot observe the mechanism, not a finding that the upgrade did nothing.
+Both upgrades were made because the **5-hour rolling limit** was binding, and no series here can see a 5-hour window, an account-wide meter, or a session that stalled waiting for one.
 What moves is the pair of lines three weeks later, and **that is exactly what this chart cannot resolve**.
 Opus 5 arrives 2026-07-25 and `mac-2` begins 2026-07-26, so the model and the machine are one day apart and no series here can say which did it.
 Drawing both markers is the point; the single Opus-5-on-`mac-1` day is one data point and settles nothing.
@@ -294,9 +296,10 @@ Totals split into `measured` / `estimated` / `combined` (summed from the persist
   Generated YAML (CRDs/controller-gen, ~130k lines), binaries, lockfiles, and license boilerplate are excluded so non-authored content doesn't dilute it.
   Estimated (pre-transcript) days are excluded so it's measured-only.
   The denominator is also the current tree rather than everything ever written, so a pure reformat moves the ratio: the 2026-08-09 sentence-per-line reflow lifted it ~8% on no extra spend ([Q824](../docs/STATUS.md#Q824)).
-- **The plan's weekly ceiling is not in this data.** The Max 20x allowance first ran to 99% in the window that reset on 2026-08-10, so from here on a short day can be a limit rather than a choice.
-  Nothing in the transcripts records it: every `rateLimits` field they carry is null, and the allowance meters every project on the account while these CSVs cover one.
-  It is a dated note in Results above, not a series.
+- **Neither plan ceiling is in this data, and the binding one was never the weekly.** Both upgrades (Pro→Max 5x, Max 5x→20x) were made because the **5-hour rolling limit** was being hit; the weekly allowance only started binding much later, first running to 99% in the window that reset on 2026-08-10.
+  Nothing in the transcripts records either: every `rateLimits` field they carry is null, and both meters cover every project on the account while these CSVs cover one.
+  So a flat reading across an upgrade date is not evidence the upgrade did nothing.
+  These series measure output per day; the constraint the upgrades relieved was how much could be spent within any five hours, which no daily total can show.
 - **Date basis differs by source.** Token dates are UTC (from message timestamps); git dates are author-local (`--date=short`).
   Close enough at daily granularity, but they can disagree by a day at midnight boundaries.
 - **`go_code` is approximate in the daily series** (non-blank minus line comments, so block comments count as code).

@@ -42,8 +42,11 @@ The eras are bounded by the plan upgrade (2026-07-05) and by Opus 5 (2026-07-25)
 
 Two readings, both of which the chart has to support:
 
-**The plan upgrade bought no velocity.** Max 5x → 20x on 2026-07-05 raised the token ceiling and moved none of these series: tests per day went 20.3 to 19.4, Go lines 1,058 to 963.
-Whatever happened three weeks later is not the allowance.
+**The plan upgrade does not show up here, which is not the same as buying nothing.** Max 5x → 20x on 2026-07-05 moved none of these series: tests per day went 20.3 to 19.4, Go lines 1,058 to 963.
+That is a null result from proxies that cannot observe the mechanism.
+Both upgrades were made because the **5-hour rolling limit** was binding, and nothing in this dataset can see a five-hour window: these are daily totals, the meter is account-wide while the CSVs cover one project, and every `rateLimits` field in the transcripts is null.
+The weekly allowance only began binding much later, first hitting 99% in the window that reset 2026-08-10.
+So the honest reading is that the upgrade relieved a constraint these proxies are blind to, and what happened three weeks later still needs a different explanation.
 
 **The jump decomposes into spread and density.** Output roughly doubles at the 07-25/26 boundary, and it is not one effect: commits land across 1.4× more hours of the day, and 1.5× more of them land in each of those hours.
 
@@ -59,6 +62,10 @@ The same error is already published: the `parallel_sessions` chart titled its wa
 Fixing that wording is in scope.
 
 ## What cannot be attributed, and must be said on the chart
+
+**A flat series across an upgrade is not a null finding about the upgrade.** The proxies here are daily counts of shipped work.
+The constraint both plan upgrades relieved was the 5-hour rolling limit, which is invisible to a daily total, metered across every project on the account rather than this one, and absent from the transcripts (`rateLimits` is null throughout).
+Reading "no step at 2026-07-05" as "the plan bought nothing" is the same mistake as reading an empty grep as proof of absence before checking the query ran.
 
 **Opus 5 and `mac-2` are one day apart.** Opus 5 first appears 2026-07-25, `mac-2`'s first row is 2026-07-26.
 Every series above jumps at that boundary and none can separate the model from the machine.
