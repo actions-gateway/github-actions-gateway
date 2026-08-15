@@ -4,7 +4,7 @@
 > Four gating Queue rows so far, labelled `1.5-gate`: Q712, Q713, and Q726, admitted 2026-08-09 from the candidate list below, plus Q715, admitted the same day off an external date.
 > All four shipped 2026-08-11, and the marketing reconciliation closed 2026-08-12 (Q801, Q821).
 > Two more were admitted afterwards, both on the [parity axis](#the-parity-axis-what-closed-and-what-backs-it): Q776 on 2026-08-13, to back the parity claim the other four earned, and Q844 on 2026-08-14, a classic-only capability the badge set never recorded and the marketing surface already claims for both tiers.
-> Q844 shipped 2026-08-14 and Q776 has now shipped too, so every gating row is closed.
+> Q844 shipped 2026-08-14 and Q776 has now shipped too, so every gating row is closed. **All eight rows from the reopened scope shipped on 2026-08-15**, so the Queue again carries no `1.5-gate` row and [the rc.2 pre-flight](#the-rc2-pre-flight-2026-08-15) is recorded below.
 > The [API surface review](#pre-flight-the-api-surface-this-tag-publishes) is recorded below, which cleared the last item binding at the release candidate. `v1.5.0-rc.1` was cut from `ff3b3ef1` on 2026-08-14 and [its dogfood validation PASSED](#the-rc1-validation-verdict-2026-08-14), and the [stable-tag pre-flight](#the-stable-tag-pre-flight-2026-08-14) then ran and closed. **Scope reopened the same day**, on [eight further gating rows](#scope-reopened-2026-08-14-what-a-question-cost), two of which change shipped code, so `v1.5.0-rc.1` is superseded and the line will tag from an rc.2.
 
 ## Why these gate a release rather than riding along
@@ -21,8 +21,8 @@ It is the one [ARC parity](arc-parity.md) gap that breaks the zero-edit migratio
 Every scale set therefore registered into the installation's default runner group.
 
 The GitHub runner group is the **GitHub-side authorization point** for which repositories may target which runners.
-With every tenant's scale set in one group, a repository outside a tenant can name that scale set in `runs-on` and route work into the tenant's namespace, quota, and egress IP.
-GAG's pod-level isolation is unaffected; what is unbounded is *who can cause a job to run there*.
+With every tenant's scale set in one group, a repository outside a tenant could name that scale set in `runs-on` and route work into the tenant's namespace, quota, and egress IP.
+GAG's pod-level isolation was unaffected; what was unbounded was *who could cause a job to run there*.
 
 This is also the one place ARC was ahead on GAG's own core claim: its `gha-runner-scale-set` chart exposes `runnerGroup` as a first-class value.
 
@@ -318,6 +318,46 @@ Q773 was filed on 2026-08-09 and says the runbook calls a normal `Throughput: Ac
 
 **One gate changed on the way.** Labelling release-process work `1.5-gate` made `roadmapcheck` demand a public roadmap bullet for a `gh` retry and a runbook line.
 Rule 7 now obliges a bullet only for a gated row carrying `feature` or `security`, so a release can wait on process work without advertising it to adopters ([maintaining-backlog.md](../development/maintaining-backlog.md#a-gate-label-and-its-roadmap-bullet-are-two-commits-and-the-first-one-is-red)).
+
+## The rc.2 pre-flight, 2026-08-15
+
+All eight rows admitted when scope reopened have shipped, so the Queue carries no `1.5-gate` row.
+Four of the commits behind them change the shipped binaries, which is what makes a second candidate necessary rather than optional: Q849 and Q852 (`gmc`), Q851's metric `Help` strings (`agc`), and Q811, a fix admitted outside the gate set.
+
+**`main` was green on the tag target.** Unit, integration and `security-scan` passed on `53283cd9f`, and e2e passed on that same SHA through the merge-queue run for #1541 rather than through the `push` lane, whose run for it sat behind the previous push's per-ref concurrency group. `make check` was green locally.
+Reading the `push` run's pending state as "e2e has not run" would have been wrong, and is the reason the SHA rather than the lane is what to check (Q675).
+
+**The API surface review was re-run, because the recorded [1.4→rc.1 verdict](#pre-flight-the-api-surface-this-tag-publishes) no longer covers the tag.** Q849 published surface `v1.5.0-rc.1` does not carry. **Verdict: ship as-is.**
+
+| Addition | Carried on | Why the shape is right |
+|---|---|---|
+| `ScaleSetNameCollision` (Q849) | `ActionsGateway` condition | Abnormal-true and outside the `Ready` rollup, like `RunnerVersionTooOld` and `RunnerLabelsIncomplete`: a name shared with another tenant is a configuration mismatch the platform admin resolves, not an outage of this gateway. Advisory is the design, not a weaker enforcement — GAG cannot pick which tenant loses the name, and failing closed would take down the tenant that was there first. |
+| `ScaleSetNameShared` / `ScaleSetNamesUnique` (Q849) | `ScaleSetNameCollision` | The True and False reasons of one condition, each named for the state it reports, following `LabelsRegistered`/`LabelsNotRegistered` from Q726. |
+| `scale_set_name_collision` (Q849) | GMC gauge | A gauge rather than a counter because the condition describes a standing state, and one an operator must be able to alert on rather than only meet in `kubectl describe`. |
+| `eviction_rerun_withheld_total` (Q811) | AGC counter | Keyed by `reason`, so a re-run the AGC declined is distinguishable from one it never reached — the withheld and failed paths stay separate series. |
+
+No wire field, enum constraint, default, or label/annotation key changed, and nothing is wire-breaking: the additions are status vocabulary and telemetry.
+Nothing was deferred, so this review adds no gate row.
+
+**The marketing reconciliation was re-run too, and it had the same staleness the API review did.** The [stable-tag pass](#the-stable-tag-pre-flight-2026-08-14) ran 2026-08-14, before the reopened rows shipped, so Question 1 had never been asked of them.
+
+It found the cross-tenant scale-set name guard on **no marketing surface at all**: zero hits across `features.md`, `README.md`, `index.md` and `why-gag.md`, checked on five phrasings and both anchor targets.
+Q791 shipped 2026-08-13, so the 2026-08-14 pass missed it rather than predating it; Q849 shipped after. `features.md` now carries it under Tenant isolation, stating both halves — admission refuses the pair GitHub-scope-wide, and a pair carried in from an older release is reported as a condition, an Event, and an alertable gauge.
+
+Two adjacent findings came out of writing that entry.
+The `new in 1.5` badge convention arrived with Q852 and marked exactly one capability, while `v1.4.0`'s `features.md` carried no such badge at all, so a reader scanning the page concluded the release's one addition was a startup check.
+The runner group, multi-label registration and the runner-version warning now carry it too, and the page's own legend said **three** badges while four were in use, having never been updated when the fourth was introduced.
+
+**Two claims were checked against ARC and *not* written, which is the point of the pass.** `gha_job_startup_duration_seconds` and `gha_job_execution_duration_seconds` both exist in [`cmd/ghalistener/metrics/metrics.go`](https://github.com/actions/actions-runner-controller/blob/9bb16ae49d0ce585d8e682aa7e2668a6e832d5d8/cmd/ghalistener/metrics/metrics.go) at 0.14.2 (`9bb16ae`), so a "job duration metrics are unique to GAG" claim would have been false on publication, the same failure the 2026-08-06 review found eleven times.
+What GAG has that ARC does not is the pod-creation latency series and a pod-lifetime span chosen for cost attribution, which is a different claim and a narrower one.
+The `RunnerVersionTooOld` claim stays off the comparison table for a different reason: the ARC-side fact is about the `actions/runner` binary and GitHub's brownout schedule rather than about ARC, so an ARC version stamp would attest to the wrong thing.
+The [NOTE in the release notes](../releases/v1.5.0.md) already carries the claim without naming a competitor, and cannot go false when ARC moves.
+
+**The notes were interrogated again, and the pass found a claim that had gone false.** [`docs/releases/v1.5.0.md`](../releases/v1.5.0.md) still told an operator that a colliding scale-set name is never re-validated at upgrade time and lands at some later unrelated apply.
+Q849 had made that untrue four commits earlier, on the same day the notes were last touched.
+The upgrade note in `docs/operations/upgrade.md` was correct throughout; only the release notes were stale, which is the direction that reaches an adopter first and is checked last.
+
+That is the same shape as the [stable-tag pre-flight's](#the-stable-tag-pre-flight-2026-08-14) under-claim, one release surface over, and it is the argument for re-running the notes interrogation at **every** candidate rather than only the first: the notes go stale against the product between candidates, and nothing gates prose.
 
 ## Candidates not yet accepted
 

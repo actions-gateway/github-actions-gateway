@@ -3,7 +3,7 @@
 Everything GitHub Actions Gateway (GAG) does today, with a link to the doc that explains each one.
 For the argument against Actions Runner Controller (ARC), see [Why GAG?](why-gag.md); for what is not here yet, see the [roadmap](roadmap.md).
 
-Three badges appear below. <span class="gag-v2-badge">v2</span> marks a capability available only in the `actions-gateway.com/v2beta1` API; <span class="gag-maturity-badge">beta</span> marks one whose API shape is still under its first stability contract; and <span class="gag-tier-badge">partly classic-only</span> marks one that does not reach the ScaleSet acquisition tier every new tenant runs.
+Four badges appear below. <span class="gag-v2-badge">v2</span> marks a capability available only in the `actions-gateway.com/v2beta1` API; <span class="gag-maturity-badge">beta</span> marks one whose API shape is still under its first stability contract; <span class="gag-new-badge">new in 1.5</span> marks one this release adds; and <span class="gag-tier-badge">partly classic-only</span> marks one that does not reach the ScaleSet acquisition tier every new tenant runs.
 No tier badge means both tiers, and a gate removes the badge when the gap closes.
 
 !!! tip "Check the version you're running"
@@ -16,7 +16,7 @@ No tier badge means both tiers, and a gate removes the badge when the gap closes
 - **[Runner-scale-set acquisition](design/04-operational-flows.md#42-job-execution-flow-agc)**: the same single-acquirer protocol ARC uses, with no many-acquirers fan-out.
   The default in v2.
 - **[Quota-aware intake](design/04-operational-flows.md#42-job-execution-flow-agc)**: a job the namespace `ResourceQuota` has no room for is never taken on, so it stays queued at GitHub until there is capacity.
-- **[Multi-label runner sets](operations/troubleshooting.md#jobs-targeting-one-of-a-runner-sets-labels-never-start-runnerlabelsincomplete)** <span class="gag-v2-badge">v2</span> <span class="gag-maturity-badge">beta</span>: every `runnerLabel` is registered at GitHub, so a job asking for any of them matches and a `runs-on` array migrates unedited.
+- **[Multi-label runner sets](operations/troubleshooting.md#jobs-targeting-one-of-a-runner-sets-labels-never-start-runnerlabelsincomplete)** <span class="gag-v2-badge">v2</span> <span class="gag-maturity-badge">beta</span> <span class="gag-new-badge">new in 1.5</span>: every `runnerLabel` is registered at GitHub, so a job asking for any of them matches and a `runs-on` array migrates unedited.
 - **[Auto re-run for disrupted jobs](operations/troubleshooting.md#which-disruptions-auto-re-run-a-job-and-which-never-do)**: a worker lost to eviction, preemption, a node drain, or a bare `kubectl delete pod` has its run re-run automatically, under a per-run budget.
 - **[Capacity gate for unplaceable workers](operations/troubleshooting.md#runnerset-reports-workercapacitydeclined-the-gateway-stopped-claiming-jobs)**: opt-in.
   Stop claiming jobs while the cluster cannot place the worker shape, instead of claiming and cancelling them.
@@ -43,8 +43,10 @@ No tier badge means both tiers, and a gate removes the badge when the gap closes
 
 ## Tenant isolation and egress
 
-- **[Bound GitHub runner group](operations/tenant-onboarding.md#bind-a-runner-set-to-a-github-runner-group)** <span class="gag-v2-badge">v2</span> <span class="gag-maturity-badge">beta</span>: `runnerGroup`, or `defaultRunnerGroup` once on the gateway, registers a tenant's scale sets into a named group rather than the installation default, so only the repositories that group admits can route jobs in.
+- **[Bound GitHub runner group](operations/tenant-onboarding.md#bind-a-runner-set-to-a-github-runner-group)** <span class="gag-v2-badge">v2</span> <span class="gag-maturity-badge">beta</span> <span class="gag-new-badge">new in 1.5</span>: `runnerGroup`, or `defaultRunnerGroup` once on the gateway, registers a tenant's scale sets into a named group, not the installation default, so only that group's repositories can route jobs.
   An unknown group fails the set closed.
+- **[Cross-tenant scale-set name guard](operations/troubleshooting.md#actionsgateway-reports-scalesetnamecollision)** <span class="gag-new-badge">new in 1.5</span>: a set's first `runnerLabel` names its scale set at GitHub, so two tenants claiming one name can acquire each other's jobs.
+  Admission refuses the pair GitHub-wide; one carried in from an older release is reported on the gateway.
 - **[Per-tenant egress IPs](design/network-architecture.md)**: a dedicated proxy pool per tenant gives each team its own GitHub egress IPs to allow-list, with a contained blast radius.
 - **[Standalone `EgressProxy`](operations/migration-v1-to-v2.md)** <span class="gag-v2-badge">v2</span> <span class="gag-maturity-badge">beta</span>: the proxy becomes its own object, optionally shared, or omitted entirely for direct egress, which stays `NetworkPolicy`-restricted.
 - **[Cross-namespace proxy sharing](operations/security-operations.md#sharing-an-egress-proxy-across-namespaces)** <span class="gag-v2-badge">v2</span> <span class="gag-maturity-badge">beta</span>: one pool can serve several namespaces, but only those its owner names in `sharing.allowedNamespaces`.
@@ -90,7 +92,7 @@ No tier badge means both tiers, and a gate removes the badge when the gap closes
 - **[GitOps install](operations/gitops.md)**: declarative Argo CD `Application` and Flux `HelmRelease` examples, with the CustomResourceDefinition (CRD) pruning gotcha handled.
 - **[Upgrade and rollback](operations/upgrade.md)**: versioned upgrade procedures and the rollback path for each release.
 - **[Stale-CRD startup check](operations/troubleshooting.md#gmc-exits-at-startup-an-installed-crd-schema-is-older-than-the-gmc)** <span class="gag-new-badge">new in 1.5</span>: the manager refuses to start when an installed CRD no longer declares a field that bounds tenant access, so a skipped CRD apply cannot leave `runnerGroup` accepted and silently pruned.
-- **[Runner-version drift warning](operations/troubleshooting.md#worker-image-runner-version)**: a worker image below GitHub's enforced minimum is reported before GitHub enforces it, and an image whose reference names no version says so rather than passing.
+- **[Runner-version drift warning](operations/troubleshooting.md#worker-image-runner-version)** <span class="gag-new-badge">new in 1.5</span>: a worker image below GitHub's enforced minimum is reported before GitHub enforces it, and an image whose reference names no version says so rather than passing.
 - **[Backup and restore](operations/backup-restore.md)**: backup posture and a recovery runbook, with a [Velero-specific how-to](operations/velero-backup-restore.md).
 - **[Troubleshooting](operations/troubleshooting.md)**: symptom to diagnosis to remediation, organised by observable failure mode.
 - **[Production runbook](operations/runbook.md)**: the operational procedures the platform team needs on call.
