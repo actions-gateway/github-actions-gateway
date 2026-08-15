@@ -2933,7 +2933,7 @@
 <td><code>flake</code> <code>tests</code> <code>bug</code></td>
 <td>🔲</td>
 <td>S</td>
-<td>2026-08-12: <code>rc=$?</code> at :150 is the pipeline's status, not the hook's (no stdin read, so <code>jq</code> can SIGPIPE). 2026-08-14: the case <code>rm -f</code>s the shared <code>.build/pipedgate</code>, which a concurrent Bash-hook run rebuilds, so <code>out</code> is a real deny. 3 sightings.</td>
+<td><code>rc=$?</code> at :150 is the pipeline's status, not the hook's (<code>jq</code> SIGPIPEs). It also <code>rm -f</code>s <code>.build/pipedgate</code>, rebuilt under it by the session's own Bash calls (<a href="../development/testing/#the-make-check-pre-review-gate">why</a>). 5 sightings.</td>
 </tr>
 <tr>
 <td><a id="Q823"></a>Q823</td>
