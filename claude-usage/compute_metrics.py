@@ -904,6 +904,64 @@ def is_human_prompt(rec):
     return not record_text(rec).lstrip().startswith(NOT_A_PROMPT)
 
 
+def prompt_minutes():
+    """``{(date, minute): count}`` of UTC minutes a person submitted a prompt in.
+
+    The atomic fact behind every presence figure, stored at the finest resolution
+    the question needs, so nothing downstream has to be recomputed from
+    transcripts that may not survive.
+
+    Durations are *not* stored, because none of them is stable. A prompt is a
+    point event, so turning 1,408 of them into hours requires assuming how long
+    presence extends around each one, and the answer moves six- to twelvefold
+    across defensible assumptions: 18.4h at 1-minute buckets, 102h at 10, 224h at
+    60; 22.9h to 139.1h for a gap model as its idle threshold runs 5 to 60
+    minutes. The gap distribution offers no way out either, decaying smoothly with
+    no valley between "still here" and "left".
+
+    So this keeps what is parameter-free and lets any consumer pick its own
+    assumption: bucket widths, idle thresholds, counts and shapes are all
+    derivable from these rows, and none of them needs the transcripts again.
+
+    These are submissions, not keystrokes. A user record carries one timestamp and
+    nothing about composition, so a prompt typed over three minutes is a single
+    instant here and the time spent writing it is invisible. Length cannot stand in
+    for it either, since a paste and a paragraph look the same. The bias therefore
+    runs one way: this undercounts time engaged, and a minute holding a submission
+    is a minute someone was demonstrably present rather than a minute they typed.
+    """
+    files = []
+    for d in glob.glob(PROJECTS_GLOB):
+        files += glob.glob(os.path.join(d, "*.jsonl"))
+    seen = set()
+    out = defaultdict(int)
+    for f in files:
+        try:
+            fh = open(f, errors="replace")
+        except OSError:
+            continue
+        with fh:
+            for line in fh:
+                try:
+                    rec = json.loads(line)
+                except ValueError:
+                    continue
+                if not is_human_prompt(rec):
+                    continue
+                # A resumed session replays earlier records verbatim, so the uuid
+                # is what keeps one submission from counting twice.
+                uid = rec.get("uuid")
+                if uid in seen:
+                    continue
+                seen.add(uid)
+                try:
+                    dt = datetime.fromisoformat(rec["timestamp"].replace("Z", "+00:00"))
+                except ValueError:
+                    continue
+                out[(dt.date().isoformat(), dt.hour * 60 + dt.minute)] += 1
+    return {k: {"date": k[0], "minute": k[1], "prompts": v} for k, v in out.items()}
+
+
 def session_series(host):
     """Per-day session concurrency for this machine, keyed ``(date, host)``.
 
@@ -1045,8 +1103,9 @@ def sessions_summary(rows):
         "attended_share_pct": round(100 * att / active) if active else 0,
         "attended_first_date": min((r["date"] for r in rows
                                     if int(r.get("attended_buckets") or 0) > 0), default=None),
-        "prompts_note": ("attended_hours scales with bucket_minutes; the parameter-free "
-                         "figures are the prompt count and the cross-bucket shape"),
+        "prompts_note": ("attended_hours scales with bucket_minutes and is a scale rather "
+                         "than a measurement; prompt_minutes.csv holds the parameter-free "
+                         "record, from which any bucket width or idle threshold is derivable"),
         "note": ("Concurrency needs session-level transcripts, which no earlier CSV "
                  "preserved, so the series starts at the first day whose transcripts "
                  "survive rather than at the first project day. It is never estimated."),
@@ -1059,10 +1118,22 @@ def load_measured(path, key_cols, num_cols, defaults=None):
     for k, r in load_csv(path, key_cols, defaults).items():
         if is_estimated(r):
             continue
+        k = _norm_key(k)
         merged[k] = {c: int(float(r.get(c) or 0)) for c in num_cols}
         for kc, kv in zip(key_cols, k):
             merged[k][kc] = kv
     return merged
+
+
+def _norm_key(k):
+    """Key tuple with every part as a string.
+
+    A key that round-trips through CSV comes back as text, so a producer handing
+    back ``("hour", 9)`` and a loader handing back ``("hour", "9")`` are two
+    entries for one row. The merge then preserves both and every re-run doubles
+    the table. Normalising both sides is what keeps a re-run idempotent.
+    """
+    return tuple(str(part) for part in k)
 
 
 def merge_max_into(merged, new_rows, key_cols, num_cols):
@@ -1079,7 +1150,7 @@ def merge_max_into(merged, new_rows, key_cols, num_cols):
     only the busier one.
     """
     for k, r in new_rows.items():
-        kk = k if isinstance(k, tuple) else (k,)
+        kk = _norm_key(k if isinstance(k, tuple) else (k,))
         if kk in merged:
             for c in num_cols:
                 merged[kk][c] = max(merged[kk][c], int(r[c]))
@@ -1122,6 +1193,7 @@ def main():
     pr_csv = os.path.join(DATA, "pr_metrics.csv")
     surv_csv = os.path.join(DATA, "survival_metrics.csv")
     rhythm_csv = os.path.join(DATA, "rhythm_metrics.csv")
+    pm_csv = os.path.join(DATA, "prompt_minutes.csv")
 
     git_rows = git_series()
     write_csv(git_csv, ["date", "commits", "tests", "go_code", "go_test", "md", "yaml", "scripts",
@@ -1172,10 +1244,24 @@ def main():
     merge_max_into(r_measured, rhythm_series(offset), rkey, rnum)
     # One row records the offset everything else was bucketed in, so make_charts
     # can bucket PR timestamps identically without re-deriving or assuming it.
-    r_measured[("offset_hours", offset)] = {"dim": "offset_hours", "bucket": offset,
-                                            **{c: 0 for c in rnum}}
+    # str, not float: this row is written straight into the merged map rather than
+    # through merge_max_into, so it has to carry the same normalised key shape the
+    # loader produces or a re-run adds a second copy of it.
+    r_measured[("offset_hours", str(offset))] = {"dim": "offset_hours", "bucket": offset,
+                                                 **{c: 0 for c in rnum}}
     write_csv(rhythm_csv, rkey + rnum, [r_measured[k] for k in sorted(r_measured, key=str)])
     print(f"rhythm             : local UTC{offset:+g}, {len(r_measured)} weekday/hour buckets")
+
+    # Typed prompts at minute resolution, merge-preserved. Once a minute is on
+    # record it stays, so this survives the transcripts being archived and every
+    # presence figure downstream can be recomputed from it without them.
+    pm_key, pm_num = ["date", "minute"], ["prompts"]
+    pm = load_measured(pm_csv, pm_key, pm_num)
+    merge_max_into(pm, prompt_minutes(), pm_key, pm_num)
+    write_csv(pm_csv, pm_key + pm_num, [pm[k] for k in sorted(pm, key=lambda t: (t[0], int(t[1])))])
+    n_prompts = sum(int(r["prompts"]) for r in pm.values())
+    print(f"typed prompts      : {n_prompts} in {len(pm)} distinct minutes "
+          f"({len(pm) / 60:.1f}h of minutes holding a submission)")
 
     deltas = commit_deltas(git_rows)
 
@@ -1335,7 +1421,7 @@ def main():
     print(f"headline combined  : {headline(comb):,}")
     print(f"  + cache_read     : {headline(comb) + comb['cache_read']:,}")
     print(f"cache reuse        : {summary['totals']['combined']['cache_reuse_ratio']}x")
-    print(f"wrote {token_csv}, {model_csv}, {git_csv}, {sess_csv}, {pr_csv}, {surv_csv}, {rhythm_csv}, summary.json")
+    print(f"wrote {token_csv}, {model_csv}, {git_csv}, {sess_csv}, {pr_csv}, {surv_csv}, {rhythm_csv}, {pm_csv}, summary.json")
 
 
 if __name__ == "__main__":

@@ -101,7 +101,7 @@ The snapshots are announced as a quote-post chain (each post quotes the previous
 | Model mix | mostly Sonnet 4.6 | Sonnet 43% / Opus 57% | **Opus 5 49% / Opus 4.8 37% / Fable 7% / Sonnet 4% / Opus 4.7 3%** | transcripts |
 | Mean concurrent sessions | — | — | **3.0** (peak 16) | transcripts, since Jul 26 |
 | Hours using Claude (wall-clock) | — | — | **216.8h** → 655.3h session-time | transcripts, since Jul 26 |
-| Prompts actually typed by a person | — | — | **1,408** | transcripts, since Jul 26 |
+| Prompts submitted by a person | — | — | **1,316** | transcripts, since Jul 26 |
 | └ time at the keyboard | — | — | **~102h** (47%), width-dependent | transcripts, since Jul 26 |
 
 The headline tokens figure **includes the ~2.5M estimated backfill** for the archived first three days; the measured-only floor is 597.8M.
@@ -287,7 +287,11 @@ Everything else here, every assistant record and every tool result, is produced 
 A session-of-presence model instead of buckets does not rescue it, giving 22.9h to 139.0h as its idle threshold moves from 5 to 60 minutes.
 Any single figure here needs an arbitrary parameter and moves six- to twelve-fold across defensible choices, which is worse than the wall-clock series it sits inside, where dense records make the width matter far less.
 
-Two things survive that and are worth more than the hours: the **count**, 1,408 typed prompts, which no parameter touches, and the **shape**, since every bucket in every chart uses the one width, so comparisons across days and hours hold even where the level does not.
+Two things survive that and are worth more than the hours: the **count**, 1,316 prompts, which no parameter touches, and the **shape**, since every bucket in every chart uses the one width, so comparisons across days and hours hold even where the level does not.
+
+**These are submissions, not keystrokes.** A user record carries one timestamp and nothing about composition, so a prompt written over three minutes is a single instant here.
+The median prompt is 41 characters, but 15% run past 400 and the longest is 19,560, and a paste looks exactly like typing, so length cannot stand in for the missing time either.
+The bias runs one way: **1,108 distinct minutes, 18.5 hours, is a floor on presence** rather than a measure of effort, because every minute spent composing is invisible to it.
 
 Identifying a typed prompt takes more than the record's own marker.
 `origin.kind == "human"` also arrives on four things nobody typed: a hook's denial text, a `<bash-input>` line and its output, a slash command's expansion, and an injected `<system-reminder>`.
