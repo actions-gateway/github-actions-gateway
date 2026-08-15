@@ -101,8 +101,12 @@ Two qualifications matter for the next occurrence.
 The racing `rm` itself then errors `Directory not empty`, because git keeps creating object fanout directories under it.
 Only a removal that takes `.git` first lands on the signature.
 
-**The last line names a different command than the probe used.** The probe's `git add` ends `fatal: adding files failed`, while all three sightings end `fatal: updating files failed`, which is the worktree-update path (`git checkout`, `git merge`, `git rebase`) rather than `git add`.
-So the failing call in the suite is one of the checkout-or-merge steps, not one of the `git add` steps.
+**The last line names the failing command, and it is `git commit -a`.** A plain `git add -A` ends `fatal: adding files failed`, not the `fatal: updating files failed` all three sightings carry.
+Racing the same removal against each candidate separately settles it: `git commit -qam` reproduces the full four-line signature, last line included, on 1 of 40 attempts, while `git checkout -q -b` and `git merge` each reproduced nothing in 40.
+Treat those two zeros as weak on their own, since the positive case only landed once in 40; the last line is the stronger discriminator.
+
+That narrows the failing call in the suite to one of its six `commit -qam` invocations: the two in `run_merge`, the two staging the rebase case, and the two staging the subdirectory case.
+The `git add` and `commit -qm` pairs elsewhere in the suite, including the gate-agreement setup, would have failed with a different last line.
 
 ### But no candidate remover exists
 
@@ -126,7 +130,7 @@ That is a self-inflicted transient rather than this flake, and the exit status t
 
 1. **The step-level conclusions**, per the `gh api` call above.
    The check name will again say `shellcheck`.
-2. **Which git command failed.** `fatal: updating files failed` narrows it to a checkout, merge or rebase step, but not to a line.
+2. **Which of the six `commit -qam` calls failed.** The last line narrows it to that set but not to one call.
    Running the suite under `set -x` with a `PS4` carrying `$LINENO` would turn the next occurrence into a pointer at one line, and that single fact is what the exclusion list above is missing.
 3. **Whether the racing `rm` also errored.** A `rm: … Directory not empty` line anywhere in the suite's output is the remover announcing itself, since that is what a `rm -rf` racing a live git produces.
    None of the three sightings has one, which is the main reason the concurrent-removal family, though reproducible, still has no owner.
