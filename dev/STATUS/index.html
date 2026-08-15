@@ -2952,6 +2952,14 @@
 <td>Seen once 2026-08-12 at load 101-111 on 18 cores (41 go procs, 8 siblings): passed one <code>make check</code>, failed the next on an identical tree (<code>Could not apply ... # topic appends</code>), passed standalone. Mechanism unverified, not clock-bound like Q642.</td>
 </tr>
 <tr>
+<td><a id="Q878"></a>Q878</td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/docs/git-merge-status-test.sh">Give the sibling merge-driver suites Q820's tree reading</a></td>
+<td><code>tests</code> <code>ci</code> <code>retro</code></td>
+<td>🔲</td>
+<td>S</td>
+<td><code>git-merge-status-test</code> and <code>git-merge-roadmap-test</code> share Q820's shape and already carry its <code>ERR</code> trap, but not the <code>Q820:</code> tree state it added, so a sighting in either names a line and nothing else. Neither has flaked yet.</td>
+</tr>
+<tr>
 <td><a id="Q857"></a>Q857</td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/Makefile">A <code>COSIGN_VERSION</code> bump never re-downloads cosign, so <code>verify-release</code> runs the old verifier</a></td>
 <td><code>ci</code> <code>debt</code> <code>bug</code></td>
