@@ -1,7 +1,7 @@
 # Per-item queue store with a computed priority order
 
 **Status:** filed 2026-08-14.
-Plan only; no phase started.
+Phase 1 is being built in the same PR as this plan, so the counts and importer constraints below are corrected from its measurements rather than from the plan's first estimates.
 
 The Queue stores priority as line adjacency in one Markdown table, and the process aims every edit at the same end of that table.
 Picking from the top concentrates deletions there; priority-on-entry and flakes-first concentrate insertions there.
@@ -12,7 +12,7 @@ Two files that are added, edited, or deleted independently cannot conflict under
 
 ## The measurement
 
-Against the live 103-row Queue, using the repo's own measured adjacency rule (a conflict needs one untouched row of separation, [queue-id-allocation.md § What this fixes](../development/queue-id-allocation.md#what-this-fixes-and-what-it-does-not)):
+Against the live 102-row Queue, using the repo's own measured adjacency rule (a conflict needs one untouched row of separation, [queue-id-allocation.md § What this fixes](../development/queue-id-allocation.md#what-this-fixes-and-what-it-does-not)):
 
 | Concurrent workers | Today, taking the top *k* | If storage order were decorrelated from priority |
 |---|---|---|
@@ -49,7 +49,7 @@ labels: [ci, debt]
 status: ready          # ready | blocked
 size: L
 blocked_by: []
-target: plan/q869-per-item-queue-store.md
+target: plan/q869-per-item-queue-store.md   # optional
 ---
 ```
 
@@ -57,6 +57,13 @@ The file is both the storage record and a published page, which is what makes th
 That cap exists only because a row is a table cell; `CLAUDE.md` currently instructs writing a separate doc whenever the *why* does not fit, and the item page is that doc.
 
 Deferred items live in the same store with `status: deferred` and a `trigger:` field, rather than in a second table.
+
+Three shapes in the live tables that the importer has to respect, measured 2026-08-14 rather than assumed:
+
+- **`target` is optional.** All 102 Queue Item cells are exactly one Markdown link, but 2 of the 67 Deferred cells are bare text.
+  Requiring a target would either fabricate a link or drop those two, so the title stands alone when no link is written.
+- **Row anchors are not unique to the backlog tables.** The Progress table carries one too (Q248), so the importer is scoped to the `## Queue` and `## Deferred` sections rather than to every `<a id=` in the file.
+- **Cells are read from the GFM table AST, never split on `|`.** Queue rows split into 6, 7 or 8 pipe-delimited fields depending on what a cell contains, which is the Q613 finding that put `backloglint` on `devtools/docs/markdown`. `queuestore` parses the same way, and a first pass at these very numbers went wrong by splitting on the pipe.
 
 ### Priority as a rank key, not a position
 
@@ -68,8 +75,14 @@ Two sessions independently choosing the same rank is not a git conflict.
 It is a tie, broken deterministically by ID, so concurrent inserts commute and merge order stops mattering.
 That property, not the encoding, is the point.
 
-Base-36 strings rather than floats or gapped integers: inserting repeatedly at the head is the exact pathological case here (flakes-first sends every new flake to the top), and that is where float precision and integer gaps both run out.
-String midpointing does not.
+Base-36 strings rather than floats or gapped integers: inserting repeatedly at the head is the exact pathological case here, since flakes-first sends every new flake to the top, and that is where float precision and integer gaps both run out.
+
+**Plain midpointing does not run out, but it does degrade at the head, and phase 1 measured it rather than assuming otherwise.** An earlier draft of this section claimed string midpointing simply handles the case; it does not.
+Minimal-length midpointing below the smallest key prepends a digit roughly every five insertions, so a `rank_test.go` case driving 500 consecutive head insertions grew a key to 100 characters.
+Unbounded, but linear in exactly the operation the process performs most.
+
+Phase 1 therefore owes the standard order-prefixed key format, where a leading magnitude character lets the integer part grow downward and keeps head and tail insertion at constant key length, instead of the bare fraction the first implementation used.
+The failing test stays as the bound.
 
 Nobody types a rank.
 Intent is expressed as `make queue-rank ID=Q869 AFTER=Q863 BEFORE=Q854`, and a helper computes the key.
@@ -107,7 +120,7 @@ Prove it by round-tripping the *live* table through the store and diffing the re
 Ship with a `-test.sh` companion. `docs/STATUS.md` stays authoritative throughout.
 
 **Phase 2: cutover.** Gated on 1.5.0 shipping, for the reason under [Risks](#risks).
-Generate the 174 item files, replace both tables with the placeholder, add `queue_render.py`, rewrite the `#QNNN` links, and repoint the consumers: `backloglint`, `backlogmetrics`, `roadmapcheck`, `next-task.sh`, `queue-unblock.sh`, `find-duplicate-rows.sh`, `alloc-queue-id.sh`, `check-path-filters.sh`, and the three workflows.
+Generate the 169 item files, replace both tables with the placeholder, add `queue_render.py`, rewrite the `#QNNN` links, and repoint the consumers: `backloglint`, `backlogmetrics`, `roadmapcheck`, `next-task.sh`, `queue-unblock.sh`, `find-duplicate-rows.sh`, `alloc-queue-id.sh`, `check-path-filters.sh`, and the three workflows.
 
 **Phase 3: retire the contention machinery.** Candidates, each verified against its remaining callers before deletion: `git-merge-status.sh` (156), `check-status-isolation.sh` and its test (126), the isolated `docs(status):` commit rule in `CLAUDE.md` and `CONTRIBUTING.md`, and lint rule 4 (the Notes cap).
 Rules 8, 9, 10 and 12 stay, re-expressed over files. `pipedgate`'s driver-owned-files list and [`pr-requeue-eligible.sh`](../../scripts/agent/pr-requeue-eligible.sh) both need their file sets updated in the same change.
@@ -122,7 +135,8 @@ A bulk rewrite proves itself by reconciliation, not by an empty leftover grep ([
 
 - **Round-trip equality.** Re-render the table from the generated store and diff it against the pre-migration table.
   Byte equality modulo the anchor form is the strongest available check, and it is the phase 1 exit criterion.
-- **Count reconciliation.** 103 Queue plus 71 Deferred items in, exactly 174 files out, taken with a query that spans both tables.
+- **Count reconciliation.** 102 Queue plus 67 Deferred items in, exactly 169 files out, taken with a query that spans both tables.
+  Those two counts are line-anchored on each row's `<a id=` prefix, which is the one shape a pipe inside a cell cannot perturb.
 - **A known-affected site changed.** `Q408` carries inbound `(#Q408)` links from more than one doc; assert every one rewrote, rather than asserting no `#QNNN` remains.
 - **Red when it should be red.** Drop one item file and require the gate to fail, so a generator that silently skips files cannot pass.
 
