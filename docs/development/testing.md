@@ -121,6 +121,11 @@ As a backstop, `make check` prints a one-line reminder (via `scripts/ci/check-de
 Every edit made while the gate is running is unverified, and that includes the parallel work itself: `docs/STATUS.md`, `docs/**`, and the plan docs are gated by `lint-backlog`, `doc-links`, `roadmap-check`, and `plan-index-check`. **Re-run `make check` over the final tree before concluding.** The confirming run is cheap — the gates covering that work are the fast ones, which take no heavy-build slot, and the heavy phases are cache-warm.
 A **code** edit voids the verdict outright rather than merely narrowing it, and "code" means anything the gate compiles or lints: `scripts/*.sh` and the `Makefile` count, not only Go.
 
+**A `Bash` tool call during the run can turn the gate red on its own, without touching a file.** Every Bash call runs the piped-gate `PreToolUse` hook, which rebuilds the shared `.build/pipedgate` binary; `claude-piped-gate-hook-test`'s no-toolchain case `rm -f`s that same binary and then asserts the hook falls back, so a rebuild landing inside its window makes the case read a real deny payload and fail ([Q825](../STATUS.md)).
+Measured 2026-08-14: two failures in one session, the second reproducing on demand while tool calls continued and clearing immediately once the run was left alone.
+The failure names a suite the change never touched, so it reads as ambient flake rather than as something the session caused. **Once the confirming run starts, wait for its task notification and issue no Bash calls**: not a status peek, not a `git` read.
+That is also the cheapest way to keep the run from being voided by an edit, since the two habits are one habit.
+
 **The exit code you read has to belong to the gate.** A verdict is only as good as the command that reported it, and the usual way that breaks is wrapping the gate in something that has an exit status of its own.
 Three shapes, all seen in real sessions:
 
