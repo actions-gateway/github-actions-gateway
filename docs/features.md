@@ -43,10 +43,10 @@ No tier badge means both tiers, and a gate removes the badge when the gap closes
 
 ## Tenant isolation and egress
 
-- **[Bound GitHub runner group](operations/tenant-onboarding.md#bind-a-runner-set-to-a-github-runner-group)** <span class="gag-v2-badge">v2</span> <span class="gag-maturity-badge">beta</span> <span class="gag-new-badge">new in 1.5</span>: `runnerGroup`, or `defaultRunnerGroup` once on the gateway, registers a tenant's scale sets into a named group rather than the installation default, so only the repositories that group admits can route jobs in.
+- **[Bound GitHub runner group](operations/tenant-onboarding.md#bind-a-runner-set-to-a-github-runner-group)** <span class="gag-v2-badge">v2</span> <span class="gag-maturity-badge">beta</span> <span class="gag-new-badge">new in 1.5</span>: `runnerGroup`, or `defaultRunnerGroup` once on the gateway, registers a tenant's scale sets into a named group, not the installation default, so only that group's repositories can route jobs.
   An unknown group fails the set closed.
-- **[Cross-tenant scale-set name guard](operations/troubleshooting.md#actionsgateway-reports-scalesetnamecollision)** <span class="gag-new-badge">new in 1.5</span>: a `ScaleSet` set's first `runnerLabel` is its scale-set name at GitHub, so two tenants claiming one name drive a single scale set and each tenant's runners can acquire the other's jobs.
-  Admission refuses the pair across the whole GitHub scope rather than per namespace, and a pair carried in from an older release is reported on the gateway as a condition, an Event, and an alertable gauge.
+- **[Cross-tenant scale-set name guard](operations/troubleshooting.md#actionsgateway-reports-scalesetnamecollision)** <span class="gag-new-badge">new in 1.5</span>: a set's first `runnerLabel` names its scale set at GitHub, so two tenants claiming one name can acquire each other's jobs.
+  Admission refuses the pair GitHub-wide; one carried in from an older release is reported on the gateway.
 - **[Per-tenant egress IPs](design/network-architecture.md)**: a dedicated proxy pool per tenant gives each team its own GitHub egress IPs to allow-list, with a contained blast radius.
 - **[Standalone `EgressProxy`](operations/migration-v1-to-v2.md)** <span class="gag-v2-badge">v2</span> <span class="gag-maturity-badge">beta</span>: the proxy becomes its own object, optionally shared, or omitted entirely for direct egress, which stays `NetworkPolicy`-restricted.
 - **[Cross-namespace proxy sharing](operations/security-operations.md#sharing-an-egress-proxy-across-namespaces)** <span class="gag-v2-badge">v2</span> <span class="gag-maturity-badge">beta</span>: one pool can serve several namespaces, but only those its owner names in `sharing.allowedNamespaces`.

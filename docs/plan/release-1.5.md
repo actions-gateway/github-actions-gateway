@@ -21,8 +21,8 @@ It is the one [ARC parity](arc-parity.md) gap that breaks the zero-edit migratio
 Every scale set therefore registered into the installation's default runner group.
 
 The GitHub runner group is the **GitHub-side authorization point** for which repositories may target which runners.
-With every tenant's scale set in one group, a repository outside a tenant can name that scale set in `runs-on` and route work into the tenant's namespace, quota, and egress IP.
-GAG's pod-level isolation is unaffected; what is unbounded is *who can cause a job to run there*.
+With every tenant's scale set in one group, a repository outside a tenant could name that scale set in `runs-on` and route work into the tenant's namespace, quota, and egress IP.
+GAG's pod-level isolation was unaffected; what was unbounded was *who could cause a job to run there*.
 
 This is also the one place ARC was ahead on GAG's own core claim: its `gha-runner-scale-set` chart exposes `runnerGroup` as a first-class value.
 
