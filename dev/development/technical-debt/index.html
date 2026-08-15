@@ -2601,6 +2601,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#instrumenting-is-not-fixing-so-an-unestablished-mechanism-does-not-block-it" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Instrumenting is not fixing, so an unestablished mechanism does not block it
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#capture-knowledge-durably-not-in-chat" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2896,6 +2907,18 @@ If measuring it now is out of scope, flag <em>the question</em> rather than the 
 <p>Worked example: Q492 flagged "<code>helm rollback</code> past a chart version that added a values key fails the way <code>--reuse-values</code> does" in a PR description, reasoning from shape alone.
 Measuring it disproved the claim — <code>helm rollback</code> replays the target revision's stored manifest instead of re-rendering, so the failure cannot arise — while turning up a <em>different</em>, real hazard the analogy had hidden (<a href="../../operations/upgrade/#rolling-back-past-this-change-re-arms-the-outage-it-fixes">Q492's rollback caveat</a>).
 The wrong flag had already merged into the record by then.</p>
+<h3 id="instrumenting-is-not-fixing-so-an-unestablished-mechanism-does-not-block-it">Instrumenting is not fixing, so an unestablished mechanism does not block it<a class="headerlink" href="#instrumenting-is-not-fixing-so-an-unestablished-mechanism-does-not-block-it" title="Permanent link">&para;</a></h3>
+<p>"Make the smallest change" and "measure before asserting a root cause" both push back on a fix coded to a guessed mechanism, and they are right to.
+<a href="../../STATUS/#Q820">Q820</a>'s row asserted that the repo was gone mid-merge; measurement disproved it, so a fix written to the row would have repaired a working path.</p>
+<p>Neither rule governs <strong>instrumentation</strong>.
+A probe added to a failing suite asserts no mechanism and changes no behaviour, and it is verifiable on its own terms: it either names the failing call or it does not.
+Declining to add one until the mechanism is known is backwards, because the missing name is <em>why</em> the mechanism is unknown.</p>
+<p>The cost of waiting compounds, and it is not symmetric.
+Q820 was seen three times in four days, each occurrence green on rerun, each producing an identical signature that named no command.
+Three chances spent generating the same non-information.
+Worse, the two suites sharing its scaffolding were left uninstrumented in the first fix on the grounds of "not changing them on speculation", which applies the rule for guessed fixes to something that guesses nothing.</p>
+<p>So when a defect's mechanism is not established, ask what the <em>next</em> occurrence needs in order to be diagnosable, and add that much.
+Verify it in both directions, since instrumentation that has stopped firing fails as quietly as instrumentation that fires on everything: confirm it names the right thing under an injected failure, and that a healthy run stays silent.</p>
 <h3 id="capture-knowledge-durably-not-in-chat">Capture knowledge durably, not in chat<a class="headerlink" href="#capture-knowledge-durably-not-in-chat" title="Permanent link">&para;</a></h3>
 <p>A debt item that exists only in a conversation is lost.
 The moment you decide an item is worth doing later, it must land in the repo — a Queue row, a plan doc, or this policy.
