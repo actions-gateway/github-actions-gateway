@@ -52,7 +52,8 @@ The repo vendors the skill's tooling so the rules hold for every contributor, wi
   Write for a skimmer: cut detail and link a doc rather than compressing into fragments.
 - **A literal pipe in any cell is written `\|`, code spans included.** GFM reads a raw `|` as a column separator wherever it appears, so it splits the row into more cells than the header declares and everything past the header's last column is dropped from the rendered table, on github.com and on the site both.
   Nothing about the source line looks wrong, which is why it needs a gate: `lint-backlog` rule 13 compares each row's own width against its table header.
-  Measured 2026-08-14: Q866's Notes rendered as far as its opening backtick, losing the remaining two thirds, and the truncation also hid an over-cap cell from rule 4.
+  Measured 2026-08-14: Q866's Notes rendered as far as its opening backtick, losing the remaining two thirds, and the truncation also hid an over-cap cell from rule 4. **Budget for that second half: escaping the pipe is not a one-character fix.** Every rule downstream had been reading the stub before the pipe, so the cell they measure changes the moment it renders whole, and one of them can newly fail on a row nobody edited.
+  Q866's Notes went from a measured 100 characters to 269 against the 250 cap, and had to be trimmed in the same edit.
 - **A row never cites a count of the backlog.** "42 Queue rows", "60 parked" and friends go stale on the next filing — the file they measure is the one thing guaranteed to change under them, often the same day.
   State the *shape* instead ("the Queue is read top-down; the parked rows are only grepped on a trigger"), and put any dated figure in the linked plan doc, where a point-in-time measurement belongs.
   Q569's row was corrected twice in one session — 36 → 42 → 44 — before the count came out entirely.
