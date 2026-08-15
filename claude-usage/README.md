@@ -172,10 +172,16 @@ Drawing both markers is the point; the single Opus-5-on-`mac-1` day is one data 
 The machine's side is measured elsewhere, though: a cold `make check` went from ~21 min on the retired Intel machine to **102 s** on its replacement, and [#1110](https://github.com/actions-gateway/github-actions-gateway/pull/1110) later sized the parallel-dispatch worker cap from RAM and cores rather than a constant.
 A 12× faster gate is not something a model does.
 
+Bars are daily and every line is a **7-day centered mean**, which is what makes the inflection legible: all three top series sit flat through June and most of July, then climb from the 07-25/26 pair.
+Centered rather than trailing, because a trailing mean lags by half its window and would slide every inflection three days later than the day it happened, straight into the confound.
+Each line stops three days short at either end rather than averaging a partial window.
+
 Two shaded regions mark where a series cannot yet mean what its axis says: before the repo adopted PR squash-merges, and before `docs/STATUS.md` existed.
+No trend line is drawn inside them.
 **Commits are deliberately not drawn.** They look like the obvious velocity series and they are the contaminated one; see the Methodology note below.
 
 **Panel 4 is not hours worked.** Sessions run unattended and keep committing with nobody watching, and merges get cleared in bulk, so it shows when work *landed* rather than when anyone was present.
+Its bars and their trend cover the whole project; the commits-per-hour line starts later, because its numerator is `commits` and that series changes units at the PR-workflow switch.
 
 ### Lines vs. words, the same corpus in two units
 ![Docs and cost ratios in lines and in words, log scale](charts/lines_vs_words.png) A rewrap moves every line count that spans a paragraph and leaves the words alone, which is what makes this pair readable.
@@ -291,7 +297,8 @@ Totals split into `measured` / `estimated` / `combined` (summed from the persist
 - **Commits change units mid-project, so they are not a velocity series.** This repo moved from direct commits on `main` to PR squash-merges: the share of commits whose subject ends in `(#N)` runs 0% through 2026-05-31, 26% in the first half of June, and 100% from 2026-06-09 on.
   An early "commit" is one raw commit and a later one is a whole squashed PR, so charting commits across that boundary deflates the recent half.
   It is the same defect as the reflow, pointed the other way.
-  `commits` stays in the CSV because the ratio in `active_hours` needs it; the velocity chart draws `prs` instead and shades the region where that series cannot mean what its axis says.
+  `commits` stays in the CSV because the per-hour ratio needs a numerator; the velocity chart draws `prs` instead and shades the region where that series cannot mean what its axis says.
+  The ratio inherits the same defect and is cut at the same date: measured 2026-08-15, commits per hour-with-a-commit averages 3.39 before the switch and 2.32 after, a 32% apparent drop that is entirely the unit changing.
 - **Tokens-per-line is a proxy.** The denominator is all hand-authored output — Go (code + tests), Markdown, hand-written YAML, and scripts & web (shell, Python, Make/Docker, CSS/JS) — but tokens also go into review, debugging, and exploration that never lands as a line, so the ratio tracks overall effort-per-output, not the literal cost of one line.
   Generated YAML (CRDs/controller-gen, ~130k lines), binaries, lockfiles, and license boilerplate are excluded so non-authored content doesn't dilute it.
   Estimated (pre-transcript) days are excluded so it's measured-only.

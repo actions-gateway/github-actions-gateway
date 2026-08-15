@@ -111,7 +111,12 @@ Per day, not per week: every other chart here is daily, and a bin wide enough to
 2. **Tests added per day**, as bars, full project.
 3. **Queue rows closed per day**, as bars, shaded before 2026-05-31.
 4. **When work landed**: hours-with-a-commit per day as bars, with commits-per-such-hour as a line over them, the idiom `parallel_sessions` already uses for a mean over a peak.
+   That ratio's numerator is `commits`, so it inherits the unit change and is cut at the same date as panel 1: it averages 3.39 before the switch and 2.32 after, a 32% drop that is entirely the unit.
    Titled for what it measures, never as hours worked.
+
+Bars are daily; every line is a 7-day **centered** mean.
+Trailing would lag by half the window and slide each inflection three days later than it happened, which on this chart lands it inside the confound.
+Lines stop three days short at either end rather than averaging a partial window, and are suppressed inside the shaded regions.
 
 Event lines across all four, and this chart needs two kinds the existing charts do not have:
 

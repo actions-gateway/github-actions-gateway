@@ -200,6 +200,25 @@ def reflow_marker(axes, label_ax, y=0.01):
     event_label(label_ax, DOCS_REFLOW, y, "docs reflow", col, yc="axes fraction")
 
 
+def rolling_mean(vals, window=7):
+    """Centered rolling mean, ``None`` where the full window doesn't fit.
+
+    Centered, not trailing: a trailing mean lags by half its window, which would
+    slide every inflection later than the day it happened — fatal on a chart whose
+    point is that two events are one day apart. Edges stay ``None`` rather than
+    averaging a short window, so the line never ends on a partial figure that
+    swings and reads as a trend.
+    """
+    half = window // 2
+    out = []
+    for i in range(len(vals)):
+        if i < half or i + half >= len(vals):
+            out.append(None)
+        else:
+            out.append(sum(vals[i - half:i + half + 1]) / window)
+    return out
+
+
 def stagger_labels(fig, texts, step):
     """Step a label down until it clears the ones already placed.
 
@@ -879,26 +898,62 @@ def chart_velocity():
                              gridspec_kw=dict(height_ratios=[1, 1, 1, 1.15], hspace=0.22))
     a1, a2, a3, a4 = axes
 
+    # Where each series starts meaning what its axis says. The trend line is
+    # suppressed before it: a mean spanning the boundary drags a real trend toward
+    # a period the series could not measure.
+    pr_start = pr_workflow_start(git)
+    backlog_start = next((dparse(d) for d in days
+                          if int(git[d].get("queue_closed") or 0) > 0), None)
+    trend_from = {a1: pr_start, a3: backlog_start}
+
     panels = [
         (a1, d_prs, OI["blue"], "PRs merged", "Pull requests merged per day"),
         (a2, d_tests, OI["purple"], "tests added", "Tests added per day"),
         (a3, d_queue, OI["vermillion"], "rows closed", "Backlog rows closed per day"),
     ]
     for ax, series, col, ylab, title in panels:
-        ax.bar(dxs, [series[d] for d in days], width=0.72, color=col, alpha=0.8,
+        raw = [series[d] for d in days]
+        ax.bar(dxs, raw, width=0.72, color=col, alpha=0.5,
                edgecolor="white", linewidth=0.4, zorder=3)
+        # Daily bars carry the truth; the 7-day centered mean is what makes an
+        # inflection legible, which the bars alone are too noisy to show.
+        trend = rolling_mean(raw)
+        since = trend_from.get(ax)
+        if since:
+            trend = [None if d < since else v for d, v in zip(dxs, trend)]
+        # No per-panel legend: all four panels use the one encoding and the footnote
+        # states it, while a legend box in the corner lands on an event label.
+        ax.plot([x for x, v in zip(dxs, trend) if v is not None],
+                [v for v in trend if v is not None],
+                color=darken(col), lw=2.6, zorder=5, path_effects=HALO)
         ax.set_ylabel(ylab, fontsize=10.5)
         ax.set_title(title, fontsize=12.5, fontweight="bold", loc="left")
         ax.grid(axis="y", alpha=0.22)
 
     # Panel 4: when the work landed, plus how densely it landed in those hours.
-    a4.bar(dxs, hours, width=0.72, color=OI["green"], alpha=0.42, edgecolor="white",
-           linewidth=0.4, zorder=2, label="hours of the day with a commit landing")
+    a4.bar(dxs, hours, width=0.72, color=OI["green"], alpha=0.38, edgecolor="white",
+           linewidth=0.4, zorder=2)
+    h_trend = rolling_mean(hours)
+    a4.plot([x for x, v in zip(dxs, h_trend) if v is not None],
+            [v for v in h_trend if v is not None],
+            color=darken(OI["green"]), lw=2.6, zorder=5, path_effects=HALO)
     a4b = a4.twinx()
-    a4b.plot(dxs, per_hour, color=darken(OI["green"]), lw=2.0, zorder=4,
-             path_effects=HALO, label="commits per such hour")
+    # The ratio was the noisiest series on the figure and is derived anyway; the
+    # bars below it carry the daily truth, so only its trend is drawn.
+    #
+    # Suppressed before the PR-workflow switch for the same reason panel 1 is: its
+    # numerator is `commits`, whose unit changes there. Drawn across the boundary
+    # it runs high through May on raw commits and drops as they become squashed
+    # PRs, which reads as intensity falling when nothing about the work changed.
+    # The hours it divides by are unaffected, so only this line is cut.
+    r_trend = rolling_mean(per_hour)
+    if pr_start:
+        r_trend = [None if d < pr_start else v for d, v in zip(dxs, r_trend)]
+    a4b.plot([x for x, v in zip(dxs, r_trend) if v is not None],
+             [v for v in r_trend if v is not None],
+             color=OI["skyblue"], lw=2.4, ls=(0, (6, 2)), zorder=4, path_effects=HALO)
     a4.set_ylabel("hours with a commit", fontsize=10.5)
-    a4b.set_ylabel("commits / hour", fontsize=10.5, color=darken(OI["green"]))
+    a4b.set_ylabel("commits / hour", fontsize=10.5, color=darken(OI["skyblue"]))
     a4.set_title("When work landed — not hours worked (sessions run unattended)",
                  fontsize=12.5, fontweight="bold", loc="left")
     a4.grid(axis="y", alpha=0.22)
@@ -909,10 +964,8 @@ def chart_velocity():
     # Styled like the reflow marker for that reason, and shading the region where
     # the series cannot mean what its axis says.
     mcol, mls = REFLOW_STYLE
-    for ax, since, label in ((a1, pr_workflow_start(git), "PR workflow begins"),
-                             (a3, next((dparse(d) for d in days
-                                        if int(git[d].get("queue_closed") or 0) > 0), None),
-                              "backlog begins")):
+    for ax, since, label in ((a1, pr_start, "PR workflow begins"),
+                             (a3, backlog_start, "backlog begins")):
         if since is None:
             continue
         ax.axvspan(dxs[0], since, color="#000000", alpha=0.05, zorder=1)
@@ -937,8 +990,9 @@ def chart_velocity():
     a4.xaxis.set_major_locator(mdates.DayLocator(interval=4))
     plt.setp(a4.get_xticklabels(), rotation=45, ha="right", fontsize=8.5)
     fig.text(0.012, 0.006,
-             "shaded = the series cannot mean what its axis says yet · "
-             "Opus 5 and mac-2 land one day apart, so this data cannot separate model from machine",
+             "bars are daily · lines are a 7-day centered mean, stopping 3 days short at each end "
+             "rather than averaging a partial window · shaded = the series cannot mean what its axis "
+             "says yet · Opus 5 and mac-2 land one day apart, so this data cannot separate model from machine",
              fontsize=7.5, color="#999")
     save(fig, "velocity")
 
