@@ -161,7 +161,6 @@ Specific actionable items in priority order. Pick from the top; skip 🚫 items 
 | <a id="Q783"></a>Q783 | [Re-point `.git-blame-ignore-revs` at the squashed reflow commit](../CONTRIBUTING.md#skip-the-reflow-commit-in-git-blame) | `docs` | 🚫 | S | The squash mints a SHA that exists only once the reflow PR lands, so the file ships naming its pre-merge one. On git 2.55.0 that is a silent no-op, not an error. |
 | <a id="Q804"></a>Q804 | [`brokertest` answers `GET /message` 202 at once instead of long-polling](development/testing.md#test-doubles-must-long-poll) | `tests` `debt` | 🔲 | S | The one double that does not hold the poll, against this repo's own rule. Q788's client floor caps the spin at 10 req/s, so what remains is the timing-window distortion the rule is about; `scalesettest` is the shape to copy (wake on queue change). |
 | <a id="Q824"></a>Q824 | [A docs reformat moves the tokens-per-line metric](../claude-usage/README.md) | `debt` `docs` | 🔲 | S | `git_metrics` counts the current tree, so the 2026-08-09 reflow cut Markdown 67.6k to 49.0k and lifted tokens/line ~8% on no extra spend. Cumulative diff additions would be reformat-proof. |
-| <a id="Q875"></a>Q875 | [Extend the comparison table toward the feature inventory](why-gag.md) | `docs` | 🔲 | M | 17 stamped ARC cells against 68 capabilities on `features.md`, so an evaluator sees few differentiators. Each new row needs an ARC measurement at a pinned version. |
 
 ---
 
