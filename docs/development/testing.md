@@ -102,6 +102,10 @@ The gates with behaviour worth knowing have their own `### The … gate` section
 Two subset targets cut the wait when a change touches only one kind of file, and both are strict subsets of `make check` rather than a second opinion: `make status-gates` for a `docs/STATUS.md`-only edit, and `make docs-gates` for prose.
 The prose one exists because those gates run at the very *end* of `make check`, so a docs slip costs a full ten-minute cycle to discover; running them when the prose is written costs seconds.
 
+**A shell edit needs `make shellcheck` on its own.** Neither subset target includes it.
+The gate is 37 s over all 210 scripts, against a whole fast fan-out to learn the same thing from `make check` (measured 2026-08-15, Q870).
+What makes this worth its own call rather than trusting the eye: a `# shellcheck disable=` directive covers **only the next command**, so one placed above a block of four silences the first and leaves three live, and the source reads as if the whole block is covered.
+
 It covers the lint, unit-test *logic*, and coverage gates the `.github/workflows/unit-test.yml` + `coverage` CI jobs enforce — run it once when the work is done, not after every edit ([the inner loop](#the-inner-loop-cheap-checks-while-iterating-make-check-once-pre-pr) above is what you iterate with).
 The one CI step `make check` does **not** reproduce is the race detector: the CI `unit-test` job runs the same per-module unit tests under `-race` (see [the race gate](#the-race-detector-unit-gate) below), which roughly doubles their runtime.
 Reproduce that locally with `make test-race` — kept out of `make check` so the default dev gate doesn't become an unthrottled `-race` run.
