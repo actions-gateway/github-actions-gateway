@@ -158,7 +158,8 @@ Words are the unit that survives, and the check that settles it is per-file on t
 | `docs/operations/troubleshooting.md` | +1,300 / −1,457 | **+55 / −119** |
 
 Thousands of lines move, the words barely do.
-One file disagrees. `docs/development/testing.md` reads +3,221/−3,221 words, an alignment failure rather than a rewrite, so the unit is far more robust, not perfect.
+One file disagrees.
+`docs/development/testing.md` reads +3,221/−3,221 words, an alignment failure rather than a rewrite, so the unit is far more robust, not perfect.
 
 The implementation does **not** need a diff walk.
 The existing series counts lines *in the tree* at each day's last commit; the parallel is words in the tree, which a rewrap cannot move by construction and costs 0.24 s a day.
