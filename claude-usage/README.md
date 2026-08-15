@@ -200,10 +200,18 @@ These three can say something about it, each with a different blind spot, which 
 It ran 1.51 in the Pro era, 1.00 under Max 20x, and **1.82** in the `mac-2` era: the busiest stretch spends the largest share of its commits fixing.
 Read it with both its blind spots in view, because they do not cancel: a `fix` may repair something written months earlier, and this repo added gates over the same window, so better detection raises the ratio without more defects existing.
 
-**Pull request cycle time** is open to merge, and **it is not evidence about the machine**, which is why it was originally proposed.
-The local gate runs before a PR is opened, so this measures GitHub Actions and the merge queue instead.
-Median cycle time rose from 0.35h to **0.53h** across the 07-25/26 boundary and that rise is unexplained: queue contention was the obvious candidate, and across 87 days the correlation between a day's merged-PR count and its median cycle time is **−0.19**, slightly negative, so busier days ran marginally faster.
-It is drawn as an observation with no cause attached.
+**Pull request open to merge** is **availability-bound, and not a speed measure**, which is worth stating twice because it was proposed as one.
+Two things break that reading.
+The local gate runs before a PR is opened, so this never contained the 12× hardware speed-up.
+And merging here needs a human to enqueue, so a PR opened while nobody is at the machine waits exactly as long as that lasts.
+
+The distribution says how much that dominates.
+Across eras the p99 runs **33.7h, 90.0h, then 23.4h**: multi-day waits, which are days away rather than anything slow.
+So the panel draws two percentiles instead of a median.
+**p25** is the part availability cannot stretch and stands in for the loop itself; **p90** is mostly a record of being elsewhere.
+
+The median was the wrong statistic and it misled: it rose 0.35h to 0.53h across the handover while p10 held flat at 0.09h and both p90 and p99 **fell**.
+The distribution tightened rather than slowed, and the median moved because the share merged inside 30 minutes fell from 58% to 48%, not because the slow end got slower.
 
 **Code survival** asks whether a week's output lasted: what share of the non-test Go written in a week was still present 14 days later.
 It runs 73–98% with no era trend, and the `mac-2` week sits at 91%, among the highest.
@@ -354,6 +362,13 @@ Totals split into `measured` / `estimated` / `combined` (summed from the persist
 - **"Concurrent" is a bucket width, not a fact.** A session counts as active in a 10-minute bucket if it produced a record there, so two sessions are "concurrent" when both worked within the same 10 minutes — not necessarily in the same second.
   The width is a judgement: wide enough that a session waiting on a build still counts as in flight, narrow enough that work hours apart never collides.
   At 1-minute buckets the daily peaks come out 2–14 rather than 3–16, so the peak barely moves, while every figure with time in it does: the mean falls to 2.2, the parallel share to 53%, and wall-clock hours to 130 from 214, because the bucket *is* the unit of time.
+- **The largest input is not in this data.** Every series here measures what the system produced.
+  None measures how much time the maintainer chose to give it, which is the input they all sit downstream of.
+  That choice rose over this window for reasons no file here records: the replacement machine is more enjoyable to work on, so more hours went to it, and the project started looking useful enough professionally to be worth pushing further.
+  Competing work moves it the other way, since days spent elsewhere are days this project does not get.
+  So the 2026-07-26 step is where **three** things coincide, not two.
+  A new model, a new machine, and a rise in time invested all land within a day of each other, and this data separates none of them.
+  Read every "the tooling got faster" conclusion against that: the hours panel rising 1.4× is as consistent with wanting to spend more time as with being able to do more per hour, and the honest reading is that both moved at once.
 - **Commits change units mid-project, so they are not a velocity series.** This repo moved from direct commits on `main` to PR squash-merges: the share of commits whose subject ends in `(#N)` runs 0% through 2026-05-31, 26% in the first half of June, and 100% from 2026-06-09 on.
   An early "commit" is one raw commit and a later one is a whole squashed PR, so charting commits across that boundary deflates the recent half.
   It is the same defect as the reflow, pointed the other way.

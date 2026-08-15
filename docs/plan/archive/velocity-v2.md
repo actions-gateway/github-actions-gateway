@@ -27,11 +27,18 @@ Filed and closed are drawn together so the reader sees which is larger.
 **fix/feat ratio** is the durability dimension none of the volume proxies have.
 It is coarse in two directions that cancel unpredictably: a `fix` commit may repair something ancient rather than something just written, and this repo added gates over the same period, so more caught defects can raise the ratio without more defects existing.
 
-**PR cycle time** is open-to-merge, from the GitHub API.
-**It does not isolate the machine effect, which is why it was first proposed.** The local gate runs before a PR is ever opened, so this measures GitHub Actions plus the merge queue, neither of which the 2026-07-26 hardware change touched.
-The rise from 0.35h to 0.53h across that boundary is unexplained.
-Queue contention was the obvious candidate and the data does not support it: across 87 days the correlation between a day's merged-PR count and that day's median cycle time is **−0.19**, slightly negative, so busier days ran marginally faster rather than slower.
-It is charted as an observation with no attached cause.
+**PR cycle time** is open-to-merge, from the GitHub API, and it took three passes to state honestly.
+
+It does not isolate the machine effect, which is why it was first proposed: the local gate runs before a PR is ever opened, so it never contained the hardware change.
+The rise from 0.35h to 0.53h was then called unexplained, after queue contention was proposed and refuted (the correlation between a day's merged-PR count and its median cycle time is −0.19, the wrong sign).
+
+The maintainer supplied what the measure actually is.
+Merging needs a human to enqueue, and PRs sit when nobody is at the laptop, so open-to-merge tracks availability at least as much as speed.
+The distribution confirms it and refutes "unexplained" as well: the p99 runs 33.7h, 90.0h, 23.4h across the eras, which is days away rather than anything slow.
+The median moved because the sub-30-minute share fell from 58% to 48%, while p10 held flat and both p90 and p99 fell, so the distribution tightened rather than slowed.
+
+Charted as p25 against p90 on a log axis: the first is the part availability cannot stretch, the second is mostly a record of being elsewhere.
+The median is not drawn at all, because it blends the two.
 
 **Code survival** at a fixed horizon: what fraction of the lines added in a week were still present 14 days later.
 Fixed-horizon rather than survival-to-HEAD, for two reasons.
@@ -39,6 +46,17 @@ Every week is then measured over the same window, so the numbers are comparable;
 
 **Commits per day** is drawn despite being contaminated, at the maintainer's request, with the PR-workflow marker on it so the unit change is visible rather than omitted.
 An early commit is one commit and a later one is a whole squashed PR; the vertical line is where that changes.
+
+## The input none of these measure
+
+Every proxy here is downstream of one number nothing in the repo records: how many hours the maintainer chose to give the project.
+Over this window that rose for reasons outside the data.
+The replacement machine is more enjoyable to work on, which drew more hours to it, and the project began to look professionally useful, which made pushing it further worth more.
+
+That makes the 2026-07-26 step a three-way coincidence rather than the two-way one the charts already caveat: model, machine, and time invested all change within a day.
+It also reclaims the hours panel.
+Its 1.4× was described as system spread, a property of unattended sessions; the maintainer's account is that the hours themselves went up, which is a motivation effect and not a tooling one.
+No series here can weigh the two, so the README states both and claims neither.
 
 ## Scope
 
