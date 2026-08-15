@@ -111,7 +111,7 @@ Markdown is the only count here still below where it stood two weeks ago (57.9k 
 Every line-count series here is a snapshot of the tree rather than a running total of lines ever written, so a reformat moves it.
 The date carries a grey dotted marker on the three lines-and-ratio charts, and `provenance.docs_reflow_date` in `summary.json`, so the step is never mistaken for lost docs.
 
-The Max 20x weekly token allowance also hit **99% for the first time**, in the seven-day window that ended when it reset on the morning of Monday 2026-08-10.
+The Max 20x weekly token allowance also hit **100% for the first time**, in the seven-day window that ended when it reset on the morning of Monday 2026-08-10.
 That ceiling is not visible in anything here, and it is not this project's headline figure hitting a wall: the allowance meters Anthropic's own weighted accounting across every project on the account, and this project's 96.4M for that window was in fact *below* the preceding week's 98.6M.
 
 This snapshot spans a machine handover.
@@ -424,7 +424,7 @@ Totals split into `measured` / `estimated` / `combined` (summed from the persist
   Generated YAML (CRDs/controller-gen, ~130k lines), binaries, lockfiles, and license boilerplate are excluded so non-authored content doesn't dilute it.
   Estimated (pre-transcript) days are excluded so it's measured-only.
   The denominator is still the current tree rather than everything ever written, so deleted work stops counting; what it no longer does is move on a reformat.
-- **Neither plan ceiling is in this data, and the binding one was never the weekly.** Both upgrades (Pro→Max 5x, Max 5x→20x) were made because the **5-hour rolling limit** was being hit; the weekly allowance only started binding much later, first running to 99% in the window that reset on 2026-08-10.
+- **Neither plan ceiling is in this data, and the binding one was never the weekly.** Both upgrades (Pro→Max 5x, Max 5x→20x) were made because the **5-hour rolling limit** was being hit; the weekly allowance only started binding much later, first running to 100% in the window that reset on 2026-08-10.
   Nothing in the transcripts records either: every `rateLimits` field they carry is null, and both meters cover every project on the account while these CSVs cover one.
   So a flat reading across an upgrade date is not evidence the upgrade did nothing.
   These series measure output per day; the constraint the upgrades relieved was how much could be spent within any five hours, which no daily total can show.
