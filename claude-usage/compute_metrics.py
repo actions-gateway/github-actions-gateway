@@ -904,6 +904,32 @@ def is_human_prompt(rec):
     return not record_text(rec).lstrip().startswith(NOT_A_PROMPT)
 
 
+# A session opened by the dispatcher starts with a second-person persona brief
+# rather than anything a person wrote. Detected on that opening rather than on
+# length: 42 genuinely authored prompts here run past 2,000 characters, so a size
+# cutoff would misclassify them, while no persona brief is under 2,000 and every
+# one is its session's first prompt.
+MACHINE_PERSONA = "You are "
+
+
+def is_authored_prompt(rec):
+    """A human prompt that is not a dispatcher-composed session opening.
+
+    Distinct from ``is_human_prompt``, which asks whether a person was *there*.
+    Both are wanted, for different questions. Accepting a dispatch chip is a
+    keystroke and counts as presence, but the 5,000-character brief arriving with
+    it was written by the dispatcher, so counting its characters as authored would
+    be wrong: those openings are 7% of prompts here and 65% of all prompt
+    characters.
+
+    It does **not** mean typed. A pasted hook hint, a pasted log, a pasted error
+    are all indistinguishable from typing in a transcript, which carries only the
+    submitted text and one timestamp. So this separates machine-composed openings
+    from everything else, and everything else still mixes writing with pasting.
+    """
+    return is_human_prompt(rec) and not record_text(rec).lstrip().startswith(MACHINE_PERSONA)
+
+
 def prompt_minutes():
     """``{(date, minute): count}`` of UTC minutes a person submitted a prompt in.
 
@@ -935,6 +961,7 @@ def prompt_minutes():
         files += glob.glob(os.path.join(d, "*.jsonl"))
     seen = set()
     out = defaultdict(int)
+    authored = defaultdict(int)
     for f in files:
         try:
             fh = open(f, errors="replace")
@@ -958,8 +985,12 @@ def prompt_minutes():
                     dt = datetime.fromisoformat(rec["timestamp"].replace("Z", "+00:00"))
                 except ValueError:
                     continue
-                out[(dt.date().isoformat(), dt.hour * 60 + dt.minute)] += 1
-    return {k: {"date": k[0], "minute": k[1], "prompts": v} for k, v in out.items()}
+                key = (dt.date().isoformat(), dt.hour * 60 + dt.minute)
+                out[key] += 1
+                if is_authored_prompt(rec):
+                    authored[key] += 1
+    return {k: {"date": k[0], "minute": k[1], "prompts": v, "authored": authored.get(k, 0)}
+            for k, v in out.items()}
 
 
 def session_series(host):
@@ -1255,13 +1286,15 @@ def main():
     # Typed prompts at minute resolution, merge-preserved. Once a minute is on
     # record it stays, so this survives the transcripts being archived and every
     # presence figure downstream can be recomputed from it without them.
-    pm_key, pm_num = ["date", "minute"], ["prompts"]
+    pm_key, pm_num = ["date", "minute"], ["prompts", "authored"]
     pm = load_measured(pm_csv, pm_key, pm_num)
     merge_max_into(pm, prompt_minutes(), pm_key, pm_num)
     write_csv(pm_csv, pm_key + pm_num, [pm[k] for k in sorted(pm, key=lambda t: (t[0], int(t[1])))])
     n_prompts = sum(int(r["prompts"]) for r in pm.values())
-    print(f"typed prompts      : {n_prompts} in {len(pm)} distinct minutes "
-          f"({len(pm) / 60:.1f}h of minutes holding a submission)")
+    n_auth = sum(int(r["authored"]) for r in pm.values())
+    print(f"prompts submitted  : {n_prompts} ({n_auth} authored, {n_prompts - n_auth} "
+          f"machine-composed openings) in {len(pm)} distinct minutes "
+          f"({len(pm) / 60:.1f}h holding a submission)")
 
     deltas = commit_deltas(git_rows)
 
