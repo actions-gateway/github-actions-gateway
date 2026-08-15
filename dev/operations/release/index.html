@@ -3522,6 +3522,13 @@ That cost is what makes "enough" a real bar rather than a formality — it is al
 <p><strong>Once you decide to cut, the question changes.</strong> From that point the report stops being the view: write the release plan doc, open it with a <a href="../../development/maintaining-backlog/#cutting-a-release-the-scope-ledger">scope ledger</a>, and let the ledger's <code>-gate</code> rows answer "is it done?" until the tag.</p>
 <h2 id="release-sequence">Release sequence<a class="headerlink" href="#release-sequence" title="Permanent link">&para;</a></h2>
 <h3 id="1-pre-flight">1. Pre-flight<a class="headerlink" href="#1-pre-flight" title="Permanent link">&para;</a></h3>
+<p><strong>A recorded verdict covers the commit it was measured at, so record that commit with it.</strong> Each step below ends in a verdict written to the release's plan doc, and a verdict reads as done long after the scope it covered has moved.
+When scope reopens, every verdict taken before it is stale by default and re-runs unless someone can say why not.</p>
+<p>1.5 is the worked example, and it went both ways.
+The API surface review had been recorded over <code>v1.4.0..feabacdc4</code>; scope then reopened on eight rows, one of which published a new condition and two new series, and the review was re-run only because someone thought to ask what the recorded window covered.
+The marketing reconciliation, recorded the same day, was <strong>not</strong> re-run, and the cross-tenant scale-set name guard reached no marketing surface at all until a question about the website found it.
+Both reviews were correct when written.
+Neither knew its scope had moved.</p>
 <p><strong>Which of these bind when the tag is a release candidate.</strong> The first two bind at every tag: an RC cut from a red <code>main</code> validates nothing, and the version you pick fixes the stable tag's.
 The last four are stable-tag obligations, because a prerelease deploys no docs and its GitHub Release body is generated rather than curated, so there is no published surface for them to be wrong on yet.</p>
 <p><strong>Two are worth pulling forward to the first RC anyway</strong>, on the same argument: the RC is the artifact that gets validated, so anything decided after it is published costs a new candidate and another hour-long dogfood run.</p>
