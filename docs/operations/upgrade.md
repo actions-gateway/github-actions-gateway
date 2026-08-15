@@ -804,13 +804,13 @@ The shipped install artifact is the **`actions-gateway` Helm chart**, published 
 The chart is the **sole** install/upgrade vehicle — there is no kustomize path.
 For dev/CI iteration `make deploy` wraps `helm install` of the local chart with floating image tags.
 
-> **Current release — `v1.4.0`** (chart version = release tag without the leading `v`).
-> Pin `--version 1.4.0`; copy the image digests from the [release notes](https://github.com/actions-gateway/github-actions-gateway/releases/tag/v1.4.0) and verify the chart/image signatures before installing (see [release.md § Verify the publish](release.md#3-verify-the-publish)).
+> **Current release — `v1.5.0`** (chart version = release tag without the leading `v`).
+> Pin `--version 1.5.0`; copy the image digests from the [release notes](https://github.com/actions-gateway/github-actions-gateway/releases/tag/v1.5.0) and verify the chart/image signatures before installing (see [release.md § Verify the publish](release.md#3-verify-the-publish)).
 
 ```sh
 # First install (from the published, signed OCI chart)
 helm install gag oci://ghcr.io/actions-gateway/charts/actions-gateway \
-  --version 1.4.0 \
+  --version 1.5.0 \
   --namespace gmc-system --create-namespace \
   --set gmc.image.digest=sha256:<gmc> \
   --set agc.image.digest=sha256:<agc> \
