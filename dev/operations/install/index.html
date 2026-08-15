@@ -3008,7 +3008,8 @@
 </blockquote>
 <p>This is the operator reference for installing the Gateway Manager Controller (GMC) with the shipped <strong><code>actions-gateway</code> Helm chart</strong>.
 For day-2 operations after install, see <a href="../upgrade/">upgrade.md</a>.
-For the full end-to-end walkthrough that continues past the GMC install into the GitHub App Secret and the first <code>ActionsGateway</code> CR, see <a href="../../getting-started/">Getting Started</a>. <strong>Replacing Actions Runner Controller (ARC)?</strong> After the GMC is installed, the <a href="../migration-from-arc/">Migrating from ARC guide</a> maps ARC scale sets onto tenant gateways and walks one runner group across.</p>
+For the full end-to-end walkthrough that continues past the GMC install into the GitHub App Secret and the first <code>ActionsGateway</code> CR, see <a href="../../getting-started/">Getting Started</a>.
+<strong>Replacing Actions Runner Controller (ARC)?</strong> After the GMC is installed, the <a href="../migration-from-arc/">Migrating from ARC guide</a> maps ARC scale sets onto tenant gateways and walks one runner group across.</p>
 <p>The Helm chart installs the GMC and its cluster prerequisites <strong>only</strong> — CRDs, RBAC, the validating webhook, the <code>namespace-psa-guard</code>, <code>gmc-tenant-resource-guard</code>, and <code>priorityclass-allowlist-guard</code> admission policies, and NetworkPolicies.
 Per-tenant Actions Gateway Controller (AGC) instances and egress proxy pools are <strong>not</strong> chart resources; the GMC provisions them at runtime from each tenant's <code>ActionsGateway</code> CR.
 The chart is the <strong>sole</strong> install path — there is no kustomize overlay; the plain-YAML files under <code>cmd/gmc/config/</code> are the controller-gen codegen + test substrate, not an install vehicle.
@@ -3020,12 +3021,15 @@ For the full chart reference (every value, the templates it renders, offline val
 <li><strong>Node architecture: <code>linux/amd64</code> or <code>linux/arm64</code>.</strong> Published images are multi-arch — one pinned digest (the OCI index digest) serves both, so mixed amd64/arm64 (e.g.
   Graviton) node pools need no per-arch configuration.
   Other architectures are not published.</li>
-<li><strong>A CNI that enforces <code>NetworkPolicy</code></strong> (Calico, Cilium) for the egress/ingress isolation controls to take effect. <code>kindnet</code> does not enforce egress, so the tenant-isolation guarantees do not hold under it. <strong>GKE Dataplane V2</strong> (Cilium) is supported and tested; if the cluster also runs <strong>NodeLocal DNSCache</strong>, use a GAG build that includes the Q229 fix (its DNS egress rule allows the <code>node-local-dns</code> redirect backend) — older builds drop DNS under Dataplane V2 and the tenant AGC crash-loops on its first GitHub token fetch (see <a href="../troubleshooting/#dns-times-out-under-the-egress-networkpolicy-gke-dataplane-v2--nodelocal-dnscache">Troubleshooting → DNS Times Out Under the Egress NetworkPolicy</a>).</li>
+<li><strong>A CNI that enforces <code>NetworkPolicy</code></strong> (Calico, Cilium) for the egress/ingress isolation controls to take effect.
+  <code>kindnet</code> does not enforce egress, so the tenant-isolation guarantees do not hold under it.
+  <strong>GKE Dataplane V2</strong> (Cilium) is supported and tested; if the cluster also runs <strong>NodeLocal DNSCache</strong>, use a GAG build that includes the Q229 fix (its DNS egress rule allows the <code>node-local-dns</code> redirect backend) — older builds drop DNS under Dataplane V2 and the tenant AGC crash-loops on its first GitHub token fetch (see <a href="../troubleshooting/#dns-times-out-under-the-egress-networkpolicy-gke-dataplane-v2--nodelocal-dnscache">Troubleshooting → DNS Times Out Under the Egress NetworkPolicy</a>).</li>
 <li><strong>Webhook serving cert</strong> — choose one:</li>
 <li><strong>cert-manager</strong> (the default, <code>certManager.enabled=true</code>).
     Install <a href="https://cert-manager.io">cert-manager</a> first; it issues and rotates the webhook serving cert.</li>
 <li><strong>Self-signed</strong> (<code>certManager.enabled=false</code>).
-    The chart generates a self-signed serving cert and wires the webhook <code>caBundle</code> itself — no cert-manager dependency. <strong>Trade-off:</strong> the cert rotates on a <code>helm upgrade</code> that cannot reuse the existing <code>webhook-server-cert</code> Secret; see the cert behavior notes in <a href="../upgrade/#gmc-install-and-upgrade-via-helm-recommended">upgrade.md</a>.</li>
+    The chart generates a self-signed serving cert and wires the webhook <code>caBundle</code> itself — no cert-manager dependency.
+    <strong>Trade-off:</strong> the cert rotates on a <code>helm upgrade</code> that cannot reuse the existing <code>webhook-server-cert</code> Secret; see the cert behavior notes in <a href="../upgrade/#gmc-install-and-upgrade-via-helm-recommended">upgrade.md</a>.</li>
 <li><strong>A GitHub App</strong> with a private key and installation ID.
   The chart does <em>not</em> consume the App credential — it is referenced per tenant by the <code>ActionsGateway</code> CR you create after install (see <a href="../../getting-started/">Getting Started</a>).
   You only need the App registered and installed before onboarding a tenant, not before installing the chart.</li>
@@ -3034,7 +3038,8 @@ For the full chart reference (every value, the templates it renders, offline val
 <hr />
 <h2 id="preflight-the-cluster-required-first-step">Preflight the cluster (required first step)<a class="headerlink" href="#preflight-the-cluster-required-first-step" title="Permanent link">&para;</a></h2>
 <p>Before installing, <strong>validate that the target cluster can actually uphold the tenant-isolation guarantees</strong>.
-The most dangerous failure mode is silent: installing onto a CNI that does not enforce <code>NetworkPolicy</code> (e.g. <code>kindnet</code>) leaves every NetworkPolicy the chart ships <strong>inert</strong>, so tenants are <em>not</em> confined — and nothing fails or warns at install time.
+The most dangerous failure mode is silent: installing onto a CNI that does not enforce <code>NetworkPolicy</code> (e.g.
+<code>kindnet</code>) leaves every NetworkPolicy the chart ships <strong>inert</strong>, so tenants are <em>not</em> confined — and nothing fails or warns at install time.
 Run the preflight from a <a href="#install">source checkout</a> first:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>make<span class="w"> </span>validate-cluster
 </code></pre></div>

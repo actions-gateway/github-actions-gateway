@@ -2712,7 +2712,8 @@ The two halves are not atomic, and nothing carries the second one across a proce
 Q603 is that seam.</p>
 <h2 id="the-defect">The defect<a class="headerlink" href="#the-defect" title="Permanent link">&para;</a></h2>
 <p><code>settle</code> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/scalesetlistener/listener.go">listener.go</a>) marks a job concluded <strong>in memory</strong> — it drops the job from every held message's waiting set.
-The message is not deleted there. <code>flushDeletes</code> issues the DELETE, and it is called from the poll loop, so the delete lands some time after the conclusion that authorised it.</p>
+The message is not deleted there.
+<code>flushDeletes</code> issues the DELETE, and it is called from the poll loop, so the delete lands some time after the conclusion that authorised it.</p>
 <p>Between those two moments the queue still holds a message whose only remaining guard is process-scoped state.
 A process that stops in that window leaves the message in the queue; the next process polls from cursor 0, receives it with <code>provisioned</code>, <code>completed</code>, and <code>abandoned</code> all empty, and provisions a worker for a job that is over.
 That is the Q583 defect returning through the fix's own seam — which is what the row means by "Q583 narrows it, not closes it".</p>
@@ -2727,7 +2728,8 @@ So whatever settled since the last <code>flushDeletes</code> is stranded on <em>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>reconcileDeferred → retryDeferred → flushDeletes → GetMessage → handleMessage
 </code></pre></div>
 <p><code>abandonDeferredBefore</code> settles inside <code>reconcileDeferred</code>, so its delete is separated from its conclusion by <code>retryDeferred</code> — which re-offers every remaining deferred job, walking the runner-name ladder against the network, and which the loop's own comment notes "can hold the loop for a few pollBackoffs".
-The abandon path always has deferred jobs by construction, so this is the widest of the in-cycle gaps rather than an unlikely one. <code>completeJob</code> settles inside <code>handleMessage</code>, at the end of an iteration, so its delete waits on the next iteration's <code>reconcileDeferred</code> (a <code>RefreshSession</code> round trip) and <code>retryDeferred</code> before it is issued.</p>
+The abandon path always has deferred jobs by construction, so this is the widest of the in-cycle gaps rather than an unlikely one.
+<code>completeJob</code> settles inside <code>handleMessage</code>, at the end of an iteration, so its delete waits on the next iteration's <code>reconcileDeferred</code> (a <code>RefreshSession</code> round trip) and <code>retryDeferred</code> before it is issued.</p>
 <h2 id="the-fix">The fix<a class="headerlink" href="#the-fix" title="Permanent link">&para;</a></h2>
 <p>Both halves are ordering, and neither needs persistence or an unverified backend property.</p>
 <ol>
@@ -2765,7 +2767,8 @@ That is what the first regression test pins, and it needs no timing at all to ob
 Before the fix the count does not move.</p>
 <h3 id="what-shipped">What shipped<a class="headerlink" href="#what-shipped" title="Permanent link">&para;</a></h3>
 <ul>
-<li><code>flushDeletesOnExit</code> runs as <code>run</code> unwinds, on a detached context bounded by the new <code>teardownBudget</code>, ordered before <code>deleteSession</code> by defer's LIFO. <code>deleteSession</code>'s own 10s literal became that constant: they are the same class of call, both spending the same pod grace period, and naming the budget once says so.</li>
+<li><code>flushDeletesOnExit</code> runs as <code>run</code> unwinds, on a detached context bounded by the new <code>teardownBudget</code>, ordered before <code>deleteSession</code> by defer's LIFO.
+  <code>deleteSession</code>'s own 10s literal became that constant: they are the same class of call, both spending the same pod grace period, and naming the budget once says so.</li>
 <li>The per-cycle <code>flushDeletes</code> moved to sit directly after <code>reconcileDeferred</code>, and a second call now follows <code>handleMessage</code>.
   Those are the two places a job concludes, so a conclusion is no longer separated from its delete by <code>retryDeferred</code>'s re-offers or <code>reconcileDeferred</code>'s session refresh.</li>
 </ul>

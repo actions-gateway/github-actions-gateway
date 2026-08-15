@@ -2674,7 +2674,8 @@ Use the root <code>Makefile</code>:</p>
 <a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>make<span class="w"> </span>build-proxy<span class="w">  </span><span class="c1"># build only the egress proxy</span>
 </code></pre></div>
 <p><code>cmd/worker</code> is a workspace module but has no dedicated root-level build target — it is built into its container image only.</p>
-<p>Individual module Makefiles (e.g. <code>cmd/agc/Makefile</code>) also output to <code>.build/</code> via a relative path (<code>../../.build/</code>), so both <code>make</code> invocations land in the same place.</p>
+<p>Individual module Makefiles (e.g.
+<code>cmd/agc/Makefile</code>) also output to <code>.build/</code> via a relative path (<code>../../.build/</code>), so both <code>make</code> invocations land in the same place.</p>
 <h2 id="container-images">Container images<a class="headerlink" href="#container-images" title="Permanent link">&para;</a></h2>
 <p>The four production images (<code>cmd/{agc,gmc,proxy,worker}/Dockerfile</code>) are built together via <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/docker-bake.hcl"><code>docker-bake.hcl</code></a> (<code>docker buildx bake</code>).
 Every image is a named stage of the single root <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/Dockerfile"><code>Dockerfile</code></a>, selected with <code>--target</code>; they share one <code>deps</code> stage that compiles the vendored dependency tree once.
@@ -2769,7 +2770,8 @@ The other two vendored trees are deliberately excluded:</p>
 Adding one to a workspace module does.</p>
 <p><strong>The source tree is its own distribution, and it is already satisfied.</strong> <code>vendor/</code> is committed and this repo is public, so the third-party <em>source</em> is redistributed too — but each vendored module keeps its own <code>LICENSE</code> beside its code, which is exactly what the reproduce-the-notice clauses ask for.
 The roll-up file exists because a <strong>binary</strong> strips that: the image carries no <code>vendor/</code> tree, so the texts have to travel separately at <code>/licenses/</code>.</p>
-<p><strong>Notices scope is not SBOM scope.</strong> The SBOM answers "what touched this build" for vulnerability tracking, and may legitimately inventory build-time tooling. <code>THIRD-PARTY-NOTICES</code> answers "what did we distribute" and is a legal artifact.
+<p><strong>Notices scope is not SBOM scope.</strong> The SBOM answers "what touched this build" for vulnerability tracking, and may legitimately inventory build-time tooling.
+<code>THIRD-PARTY-NOTICES</code> answers "what did we distribute" and is a legal artifact.
 Keep the two scoped separately — widening one does not widen the other.</p>
 <h3 id="image-hardening">Image hardening<a class="headerlink" href="#image-hardening" title="Permanent link">&para;</a></h3>
 <p>A few build-time hardening conventions are shared by every Dockerfile and gated by the <a href="../testing/#the-dockerfile-lint-gate"><code>dockerfile-lint</code> CI workflow</a> (<code>hadolint</code> at the strictest <code>style</code> threshold):</p>

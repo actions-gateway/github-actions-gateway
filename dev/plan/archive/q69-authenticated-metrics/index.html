@@ -2758,7 +2758,8 @@
 
 
 <h1 id="q69--authenticated-secure-serving-for-proxy--agc-metrics">Q69 — Authenticated secure-serving for proxy + AGC metrics<a class="headerlink" href="#q69--authenticated-secure-serving-for-proxy--agc-metrics" title="Permanent link">&para;</a></h1>
-<p><strong>Status:</strong> ✅ Done — uniform mTLS shipped for the AGC + proxy <code>/metrics</code> on <code>:8443</code>. <strong>Size:</strong> M <strong>Labels:</strong> <code>security</code> <code>infra</code> <strong>Queue row:</strong> Q69 (removed)</p>
+<p><strong>Status:</strong> ✅ Done — uniform mTLS shipped for the AGC + proxy <code>/metrics</code> on <code>:8443</code>.
+<strong>Size:</strong> M <strong>Labels:</strong> <code>security</code> <code>infra</code> <strong>Queue row:</strong> Q69 (removed)</p>
 <h2 id="what-shipped">What shipped<a class="headerlink" href="#what-shipped" title="Permanent link">&para;</a></h2>
 <ul>
 <li>GMC issues a per-tenant metrics CA + server cert + scraper client cert (<code>cmd/gmc/internal/controller/metrics_cert.go</code>), stored in two Secrets (<code>actions-gateway-metrics-tls</code> server bundle, <code>actions-gateway-metrics-client</code> scraper bundle) reconciled by <code>ensureMetricsCerts</code> and GC'd via owner refs.</li>
@@ -2788,7 +2789,8 @@ The AGC and proxy mount the server bundle (<code>ca.crt</code> + <code>tls.crt</
 <li><code>cmd/agc/main.go:179</code> — <code>Metrics: metricsserver.Options{BindAddress: metricsBindAddress}</code>.
   No <code>SecureServing</code>, no <code>FilterProvider</code>, no cert → <strong>plain HTTP</strong>.</li>
 <li>AGC NetworkPolicy (<code>buildAGCNetworkPolicy</code>, <code>builder.go:275</code>) already allows egress to the kube API (443 + 6443) and ingress on the metrics port only from monitoring namespaces (<code>metrics=enabled</code>).</li>
-<li>AGC RBAC: <code>agc-tenant-role</code> ClusterRole (<code>config/agc-tenant-role/agc_tenant_role.yaml</code>), bound per-tenant via a namespaced RoleBinding. <strong>No</strong> tokenreviews/subjectaccessreviews.</li>
+<li>AGC RBAC: <code>agc-tenant-role</code> ClusterRole (<code>config/agc-tenant-role/agc_tenant_role.yaml</code>), bound per-tenant via a namespaced RoleBinding.
+  <strong>No</strong> tokenreviews/subjectaccessreviews.</li>
 </ul>
 <h3 id="proxy">Proxy<a class="headerlink" href="#proxy" title="Permanent link">&para;</a></h3>
 <ul>
@@ -2858,7 +2860,8 @@ The AGC has no health probes today, so its metrics simply move <code>:8081 → :
 <h2 id="plan--agc-cmdagcmaingo">Plan — AGC (<code>cmd/agc/main.go</code>)<a class="headerlink" href="#plan--agc-cmdagcmaingo" title="Permanent link">&para;</a></h2>
 <ul>
 <li>Move the metrics bind address <code>:8081 → :8443</code>.</li>
-<li>Enable <code>SecureServing: true</code>, <code>CertDir: /etc/actions-gateway/metrics-tls</code>, <code>CertName: tls.crt</code>, <code>KeyName: tls.key</code>, and a <code>TLSOpts</code> func setting <code>ClientAuth = RequireAndVerifyClientCert</code> + <code>ClientCAs</code> loaded from <code>metrics-tls/ca.crt</code>. <strong>No</strong> <code>FilterProvider</code> (no kube auth → no RBAC change).</li>
+<li>Enable <code>SecureServing: true</code>, <code>CertDir: /etc/actions-gateway/metrics-tls</code>, <code>CertName: tls.crt</code>, <code>KeyName: tls.key</code>, and a <code>TLSOpts</code> func setting <code>ClientAuth = RequireAndVerifyClientCert</code> + <code>ClientCAs</code> loaded from <code>metrics-tls/ca.crt</code>.
+  <strong>No</strong> <code>FilterProvider</code> (no kube auth → no RBAC change).</li>
 <li>Follow the established proxy-cert pattern: secure when the cert files are present (GMC always mounts them in production); plain fallback only when absent (dev/test), logged loudly.
   Update the <code>metricsBindAddress</code> comment.</li>
 </ul>
@@ -2872,7 +2875,8 @@ The AGC has no health probes today, so its metrics simply move <code>:8081 → :
 <ul>
 <li>AGC Deployment: metrics <code>containerPort 8081 → 8443</code>; mount the <code>actions-gateway-metrics-tls</code> Secret RO (mode <code>0o440</code> + <code>fsGroup 65532</code>, as the existing cert mounts).</li>
 <li>Proxy Deployment: add <code>containerPort 8443</code>; mount the same Secret RO.</li>
-<li><code>metricsScrapeIngressRule()</code>: gate <code>metricsPort (8443)</code> instead of <code>8081</code> (one shared function → both AGC NP and proxy NP follow). <code>:8081</code> keeps no pod-ingress rule (kubelet probes already rely on node-exemption today — no change).
+<li><code>metricsScrapeIngressRule()</code>: gate <code>metricsPort (8443)</code> instead of <code>8081</code> (one shared function → both AGC NP and proxy NP follow).
+  <code>:8081</code> keeps no pod-ingress rule (kubelet probes already rely on node-exemption today — no change).
   The <code>metrics=enabled</code> namespace selector stays as defense-in-depth.</li>
 </ul>
 <h2 id="tests">Tests<a class="headerlink" href="#tests" title="Permanent link">&para;</a></h2>

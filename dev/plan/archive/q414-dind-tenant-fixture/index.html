@@ -2730,7 +2730,8 @@ The CLI's namespace-wide override in <code>migrateNamespace</code> then clobbere
 <p>Direction-safe, outcome-wrong: the migrated tenant's namespace enforced <code>baseline</code>, so Pod Security Admission would refuse the very DinD worker pods the tenant migrated in order to keep running.
 Fixed by seeding from the first input profile instead — every genuine multi-gateway comparison is unchanged (strictest still wins), and a single gateway now migrates to exactly its own profile.</p>
 <h3 id="finding-3--the-downgrade-guard-rejects-every-privileged-relocation">Finding 3 — the downgrade guard rejects every privileged relocation<a class="headerlink" href="#finding-3--the-downgrade-guard-rejects-every-privileged-relocation" title="Permanent link">&para;</a></h3>
-<p>Fixing finding 2 exposed the next one. <code>namespace-security-profile-guard</code> compares the incoming <code>security-profile</code> label against the current one, and an <strong>absent</strong> label reads as <code>baseline</code>.
+<p>Fixing finding 2 exposed the next one.
+<code>namespace-security-profile-guard</code> compares the incoming <code>security-profile</code> label against the current one, and an <strong>absent</strong> label reads as <code>baseline</code>.
 A tenant coming from v1 has never carried the v2 label, so relocating <code>privileged</code> always presents as <code>baseline</code> → <code>privileged</code> — a downgrade — and is denied:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>namespaces &quot;tenant-migrate-dind&quot; is forbidden: ValidatingAdmissionPolicy
 <a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>&#39;gmc-namespace-security-profile-guard&#39; denied request: security profile downgrade from

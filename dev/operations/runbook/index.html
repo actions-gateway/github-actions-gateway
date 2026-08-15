@@ -3894,7 +3894,8 @@ This is the <strong>classic</strong> acquisition tier, where every increment is 
 What the alert reports is that the refusal is not clearing.
 The gate throttles rather than seals, so intake continues at roughly one claim per <code>pendingPodDeadline</code> window; over 30 minutes that is at least three probes that failed to find capacity.</p>
 <ol>
-<li>Read the gate's evidence: <code>max by (namespace, runner_set, reason) (actions_gateway_runnerset_worker_capacity_declined == 1)</code>. <code>ScaleUpDeclined</code> is the cluster autoscaler's own refusal, <code>PodsUnschedulable</code> is the scheduler's verdict, and <code>AwaitingProbe</code> is the latched state that outlives the pod which produced it.
+<li>Read the gate's evidence: <code>max by (namespace, runner_set, reason) (actions_gateway_runnerset_worker_capacity_declined == 1)</code>.
+   <code>ScaleUpDeclined</code> is the cluster autoscaler's own refusal, <code>PodsUnschedulable</code> is the scheduler's verdict, and <code>AwaitingProbe</code> is the latched state that outlives the pod which produced it.
    The gauge keys on <code>runner_set</code> while this alert's series keys on <code>runner_group</code>; both carry the same set's name, because the rejection counter is shared with v1 <code>RunnerGroup</code> owners.</li>
 <li>Work the reason with <a href="../troubleshooting/#runnerset-reports-workercapacitydeclined-the-gateway-stopped-claiming-jobs">RunnerSet Reports WorkerCapacityDeclined</a>, which maps each one to the node, taint, or quota fix that restores placement.</li>
 <li>The one-line rollback, if the gate is wrong about the cluster, is <code>spec.capacityGate.mode: Off</code>; the same section covers when that is the right call.</li>

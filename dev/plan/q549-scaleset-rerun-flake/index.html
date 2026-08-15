@@ -2663,7 +2663,8 @@
 Two distinct failure modes now sit behind that one timeout.
 This file exists so the next occurrence is classified before anything is changed.</p>
 <p><strong>Status:</strong> watching.
-Mode A is diagnosed and mitigated (PR #1120). <strong>Mode B is diagnosed as of 2026-08-12 and fixed under <a href="../../STATUS/#Q809">Q809</a></strong>; see <a href="#mode-b-attributed-2026-08-12-the-claim-was-made-and-lost">Mode B, attributed</a> below.
+Mode A is diagnosed and mitigated (PR #1120).
+<strong>Mode B is diagnosed as of 2026-08-12 and fixed under <a href="../../STATUS/#Q809">Q809</a></strong>; see <a href="#mode-b-attributed-2026-08-12-the-claim-was-made-and-lost">Mode B, attributed</a> below.
 It recurred three times that day, once on <code>main</code>, which fired this row's revive trigger; those three runs are the first with an AGC log line that names the failure, and it is not either cause the spec's own message guesses at.
 Reset the <a href="../../development/maintaining-backlog/#retiring-a-flake-watch-row">soak clock</a> to <strong>2026-08-12</strong>: count green runs from the claim fix, not from PR #1120.</p>
 <h2 id="the-two-modes">The two modes<a class="headerlink" href="#the-two-modes" title="Permanent link">&para;</a></h2>
@@ -2688,7 +2689,8 @@ Reset the <a href="../../development/maintaining-backlog/#retiring-a-flake-watch
 </tr>
 </tbody>
 </table>
-<p>The spec's own failure text names two candidate causes for the <code>Fail()</code> branch — a chart role missing a verb, or a regressed deletion-mark discriminator. <strong>Both are wrong</strong>, and the 2026-08-12 evidence rules them out directly: detection reached <code>cause: deletion</code> every time, so the discriminator was working, and the claim never returned a <code>Forbidden</code>, so the role was not short a verb.</p>
+<p>The spec's own failure text names two candidate causes for the <code>Fail()</code> branch — a chart role missing a verb, or a regressed deletion-mark discriminator.
+<strong>Both are wrong</strong>, and the 2026-08-12 evidence rules them out directly: detection reached <code>cause: deletion</code> every time, so the discriminator was working, and the claim never returned a <code>Forbidden</code>, so the role was not short a verb.</p>
 <h2 id="mode-b-what-run-30724186342-shows">Mode B: what run 30724186342 shows<a class="headerlink" href="#mode-b-what-run-30724186342-shows" title="Permanent link">&para;</a></h2>
 <p>Run <a href="https://github.com/actions-gateway/github-actions-gateway/actions/runs/30724186342">30724186342</a> attempt 1, job <code>e2e / e2e</code>, branch <code>claude/q547-537615</code> (PR #1140, an unrelated change — v2 gateway-teardown worker reap), 2026-08-02 00:01–00:03 UTC.
 Attempt 2 passed with no code change.</p>
@@ -2734,7 +2736,8 @@ Attempt 2 passed with no code change.</p>
   In the passing attempt 2 the same sampler recorded <code>… -&gt; Failed/2026-08-02T00:17:58Z/2026-08-02T00:17:29Z</code> — claim present.
   That contrast is the sharpest signal the two logs carry.
   The sampler is diagnostics, not evidence: it bounds what was <em>observed</em> in ~2.2 s, never what happened.</li>
-<li><strong>No <code>EvictionRerunFailed</code> event</strong> in the namespace events dump. <code>rerunUntilAccepted</code> records that on every terminal failure, so no re-run reached a terminal refusal — the same discriminator that ruled out "attempted and refused" for mode A.</li>
+<li><strong>No <code>EvictionRerunFailed</code> event</strong> in the namespace events dump.
+  <code>rerunUntilAccepted</code> records that on every terminal failure, so no re-run reached a terminal refusal — the same discriminator that ruled out "attempted and refused" for mode A.</li>
 <li><strong>The AGC logged nothing after 00:01:24Z</strong>, through the dump taken at 00:02:57Z — at debug verbosity, and with no truncation (93 lines against <code>kubectl logs --tail=2000</code>).
   The re-run wait ran entirely inside that silence.</li>
 </ul>
@@ -2793,7 +2796,8 @@ The mode does not belong to one CNI.</p>
   As on 2026-08-01, the entire re-run wait ran inside that silence.</li>
 <li><strong>The RunnerSet reconcile was erroring across the disruption window</strong>, not converged — <a href="#what-to-capture-on-the-next-occurrence">capture item 4</a> below.</li>
 </ul>
-<p><strong>The listener error is by design, and is not a signal.</strong> The open question below guessed it "may well be routine in this e2e"; it is. <code>scaleSetRecoveryManifest</code> sets <code>githubURL: https://ghes.invalid/ssrecorg</code> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/test/e2e/worker_scaleset_recovery_test.go">worker_scaleset_recovery_test.go</a>), deliberately choosing an unresolvable host so the bootstrap fails on NXDOMAIN — that failure is the precondition the spec needs.
+<p><strong>The listener error is by design, and is not a signal.</strong> The open question below guessed it "may well be routine in this e2e"; it is.
+<code>scaleSetRecoveryManifest</code> sets <code>githubURL: https://ghes.invalid/ssrecorg</code> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/test/e2e/worker_scaleset_recovery_test.go">worker_scaleset_recovery_test.go</a>), deliberately choosing an unresolvable host so the bootstrap fails on NXDOMAIN — that failure is the precondition the spec needs.
 So a reconcile erroring on the scale-set listener is the normal state of this tenant and cannot distinguish a failing run from a passing one.
 What remains open is whether the recovery scan is <em>reachable</em> while that is happening.</p>
 <h2 id="mode-b-attributed-2026-08-12-the-claim-was-made-and-lost">Mode B, attributed (2026-08-12): the claim was made, and lost<a class="headerlink" href="#mode-b-attributed-2026-08-12-the-claim-was-made-and-lost" title="Permanent link">&para;</a></h2>

@@ -2894,7 +2894,9 @@ A ready-to-paste template:</p>
 <p><strong><code>/goal</code></strong> Act as the <strong>dispatcher</strong> for a parallel-dispatch run, following <code>docs/development/parallel-dispatch.md</code>.
 Clear <strong>[BATCH — e.g. "the remaining <code>1.0-gate</code> Queue items in <code>docs/STATUS.md</code>"]</strong>: one worker session (task chip) and one PR per task, <strong>max [N] concurrent</strong> (from <code>scripts/agent/local-throttle.sh workers</code>).
 Each worker must be a <strong>full, independent Claude Code session (a task chip), never a sub-agent</strong>.
-Give every worker the self-healing contract from task one (launch the <strong>pr-sentinel</strong> background watcher on PR open — one watcher that wakes on CI failures <strong>and</strong> merge conflicts; push the real fix or <code>git rebase origin/main</code>, relaunch the watcher after every wake that it can act on, keep the main thread free, never self-merge, escalate after 5 tries). <strong>Re-check mergeability at the merge step</strong> — a <code>ready</code> PR can go stale in your review queue. <strong>You own assignment, merge ordering, and scope</strong> — hand each worker exactly one item so none collide; each worker removes its own <code>docs/STATUS.md</code> Queue row in its PR (isolated commit).
+Give every worker the self-healing contract from task one (launch the <strong>pr-sentinel</strong> background watcher on PR open — one watcher that wakes on CI failures <strong>and</strong> merge conflicts; push the real fix or <code>git rebase origin/main</code>, relaunch the watcher after every wake that it can act on, keep the main thread free, never self-merge, escalate after 5 tries).
+<strong>Re-check mergeability at the merge step</strong> — a <code>ready</code> PR can go stale in your review queue.
+<strong>You own assignment, merge ordering, and scope</strong> — hand each worker exactly one item so none collide; each worker removes its own <code>docs/STATUS.md</code> Queue row in its PR (isolated commit).
 Tell every worker to run <code>make check</code> as a <strong>background</strong> task while it does its docs / STATUS-row / PR-body work and re-run it over the final tree — under a batch the gate is mostly heavy-build-slot queue time and must not sit on the critical path.
 Stream tasks by shared files and land foundational changes first.
 Verify each PR's <strong>scope</strong> and that its heavy gates ran, then <strong>report it ready.
@@ -2970,7 +2972,8 @@ After a <code>gh pr create</code> or a PR-branch <code>git push</code>, its <cod
 <li>The variable is not set in the shell the Bash tool runs (measured 2026-08-01 — the other <code>CLAUDE_*</code> variables are present, this one is not), so the form expands to <code>/scripts/pr-sentinel-watch.sh</code> and exits 127.
   Loud, and one retry against the nudge's path recovers it.</li>
 <li>pr-sentinel's own <code>PreToolUse</code> guard auto-approves the launch only when <code>argv[1]</code> <strong>realpath-equals</strong> its watcher script, and it tokenizes with <code>shlex.split</code>, which expands nothing.
-  A variable or <code>$(…)</code> is compared as literal text, so it can never match, and the launch falls through to a prompt. <strong>Setting <code>CLAUDE_PLUGIN_ROOT</code> somewhere would therefore trade the loud 127 for a silent stall</strong> — an unattended worker waits at that prompt and its PR spends the rest of its life unwatched.</li>
+  A variable or <code>$(…)</code> is compared as literal text, so it can never match, and the launch falls through to a prompt.
+  <strong>Setting <code>CLAUDE_PLUGIN_ROOT</code> somewhere would therefore trade the loud 127 for a silent stall</strong> — an unattended worker waits at that prompt and its PR spends the rest of its life unwatched.</li>
 </ul>
 <p>Copying the resolved path is not a workaround, then, but the only shape that auto-approves; the guard refuses to resolve indirection precisely so it cannot be tricked into auto-approving some other script.
 The nudge re-resolves the path on every push, so it stays correct across plugin version bumps.</p>
@@ -2995,7 +2998,8 @@ It covers <strong>both</strong> post-PR failure modes in one mechanism, exiting 
   Branches here are single-owner (one worktree, one task), so a rebase keeps history linear and costs nothing a squash-merge wouldn't discard anyway. branch-guard's default <code>strict</code> push policy <strong>auto-approves a force-push of the worktree's own current branch</strong>, so this needs no prompt.</li>
 <li><strong><code>ready</code></strong> — all checks green, no conflict.
   Hand back for merge review; <strong>the worker never merges</strong> (see <a href="#the-merge-model">the merge model</a>).
-  This ends the watch. <strong>Do not relaunch pr-sentinel on <code>ready</code></strong> — it re-evaluates immediately, sees the same green/<code>CLEAN</code> state, and exits with <code>ready</code> again, so a relaunch loop spins with no sleep in between.
+  This ends the watch.
+  <strong>Do not relaunch pr-sentinel on <code>ready</code></strong> — it re-evaluates immediately, sees the same green/<code>CLEAN</code> state, and exits with <code>ready</code> again, so a relaunch loop spins with no sleep in between.
   See <a href="#the-post-ready-gap">the post-<code>ready</code> gap</a> for what actually covers the window between handoff and merge.</li>
 </ul>
 <p>Because the watcher wakes on <strong>mergeable state</strong> too, a sibling PR merging — which silently leaves this PR conflicting with no CI signal — is just another wake, not a separate mechanism to run.
@@ -3003,7 +3007,8 @@ The earlier contract ran a <strong>distinct</strong> background conflict-watcher
 <p>pr-sentinel also <strong>denies</strong> foreground CI polling — <code>gh pr checks --watch</code>, <code>gh run watch</code>, and hand-rolled <code>while/until … sleep</code> loops — via a <code>PreToolUse</code> hook, so a worker cannot accidentally pin its main thread.
 Override for one legitimate poll with <code>PR_SENTINEL_OVERRIDE=&lt;reason&gt;</code>.</p>
 <h3 id="fallback-1-a-self-managed-background-watcher">Fallback 1: a self-managed background watcher<a class="headerlink" href="#fallback-1-a-self-managed-background-watcher" title="Permanent link">&para;</a></h3>
-<p>If pr-sentinel is not active in the worker's session, the worker runs its <strong>own</strong> background task (<code>run_in_background</code>) that loops: sleep → non-blocking <code>gh pr checks &lt;n&gt;</code> for check state <strong>and</strong> <code>gh pr view &lt;n&gt; --json mergeable</code> for conflict state → wake to push the real fix or <code>git rebase origin/main</code>, re-run <code>make check</code>, <code>git push --force-with-lease</code>, relaunch. <strong>Never foreground-poll</strong> — no <code>gh pr checks --watch</code> / <code>gh run watch</code> / <code>sleep</code>-loop on the main thread (it pins the session, and pr-sentinel's hook denies it outright where installed).</p>
+<p>If pr-sentinel is not active in the worker's session, the worker runs its <strong>own</strong> background task (<code>run_in_background</code>) that loops: sleep → non-blocking <code>gh pr checks &lt;n&gt;</code> for check state <strong>and</strong> <code>gh pr view &lt;n&gt; --json mergeable</code> for conflict state → wake to push the real fix or <code>git rebase origin/main</code>, re-run <code>make check</code>, <code>git push --force-with-lease</code>, relaunch.
+<strong>Never foreground-poll</strong> — no <code>gh pr checks --watch</code> / <code>gh run watch</code> / <code>sleep</code>-loop on the main thread (it pins the session, and pr-sentinel's hook denies it outright where installed).</p>
 <h3 id="fallback-2-autofix-pr-cloud-session-last-resort">Fallback 2: <code>/autofix-pr</code> cloud session (last resort)<a class="headerlink" href="#fallback-2-autofix-pr-cloud-session-last-resort" title="Permanent link">&para;</a></h3>
 <p><code>/autofix-pr</code> spawns a Claude Code cloud session with auto-fix enabled.
 Prefer the options above: it has been <strong>unreliable</strong> (auto mode / Claude Desktop), it <strong>cannot</strong> react to merge conflicts (GitHub emits no webhook when the base branch advances), and it wakes on the PR <strong>comment stream</strong> — an indirect prompt-injection channel on a public repo, since anyone who can comment can plant text the agent then treats as instructions.
@@ -3017,7 +3022,8 @@ Avoid it on public repos; reserve it for cases where neither the plugin nor a ba
   See <a href="../testing/#path-gated-workflows-verify-the-heavy-gates-actually-ran">testing.md § Path-gated workflows</a>.</li>
 <li><strong>Never merge or enqueue.</strong> A green + mergeable PR is handed to the dispatcher, which hands it to the maintainer (see <a href="#the-merge-model">the merge model</a>).</li>
 <li><strong>Relaunch the watcher after every actionable wake</strong> — <code>check_failure</code>, <code>conflict</code>/<code>behind</code>, <code>timeout</code>, <code>error</code>.
-  An unwatched open PR heals nothing. <code>ready</code> and <code>closed</code> end the watch; the safety valve below does too.</li>
+  An unwatched open PR heals nothing.
+  <code>ready</code> and <code>closed</code> end the watch; the safety valve below does too.</li>
 <li><strong>Verify what landed by content, never by SHA.</strong> A rebase rewrites the branch's commit SHAs (and the eventual squash-merge discards them regardless), so check <code>git show origin/main:&lt;path&gt;</code> rather than looking for a commit you remember.</li>
 <li><strong>Safety valve.</strong> If the PR can't be made green after ~5 attempts, post a PR comment summarizing the blocker and stop, so the dispatcher can intervene.</li>
 <li><strong>No secrets.</strong> Never read, print, log, or pass any secret while healing (see <a href="#the-no-secrets-rule">the no-secrets rule</a>).</li>
@@ -3053,15 +3059,18 @@ It costs the session list: a running background task reads as a busy session, so
 Splitting the watch at <code>ready</code> puts each half where its output belongs, with CI failures staying in the session that owns the PR.</p>
 <h3 id="the-worker-prompt-carries-the-delta-not-the-contract">The worker prompt carries the delta, not the contract<a class="headerlink" href="#the-worker-prompt-carries-the-delta-not-the-contract" title="Permanent link">&para;</a></h3>
 <p>The contract is a repo-local skill, <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.claude/skills/dispatch-worker/SKILL.md"><code>dispatch-worker</code></a>: gate placement, boundaries, STATUS.md commit isolation, heavy-gate verification, the pr-sentinel loop, and the never-merge rule.
-Invoke it and stop there. <strong>Do not restate any of it in the prompt.</strong></p>
-<p>Restating was the earlier practice and it was waste twice over. <code>CLAUDE.md</code> auto-loads into every fresh session, so a "Rules" block duplicates what the worker already has; the rest duplicated this file, which the worker can read.
+Invoke it and stop there.
+<strong>Do not restate any of it in the prompt.</strong></p>
+<p>Restating was the earlier practice and it was waste twice over.
+<code>CLAUDE.md</code> auto-loads into every fresh session, so a "Rules" block duplicates what the worker already has; the rest duplicated this file, which the worker can read.
 It also made the chips themselves unreviewable, which matters because the chip list is where a maintainer scans what is about to run.</p>
 <p>So the prompt carries only what the skill and the Queue row cannot:</p>
 <ul>
 <li><strong>The item</strong> and the model to run on (<a href="#model-selection">Model selection</a>); a fresh worker cannot run <code>model-advisor</code> interactively.</li>
 <li><strong>The dispatcher's worktree name</strong>, which is how the worker addresses it to report its PR (<code>dispatch-worker</code> skill §8).
   A session cannot look up its own name, so the dispatcher has to state it and the worker resolves it through <code>ListAgents</code>.</li>
-<li><strong>What the dispatcher measured, and when.</strong> The row's asserted mechanism is a claim; saying it was re-verified saves the worker repeating the check, and saying <em>where the row is stale</em> saves it implementing a fixed defect. <strong>Say what you did not measure with the same care.</strong> A prompt's claims read as settled where a row's read as claims, because the prompt says a session checked, and the worker then builds on them rather than testing them.
+<li><strong>What the dispatcher measured, and when.</strong> The row's asserted mechanism is a claim; saying it was re-verified saves the worker repeating the check, and saying <em>where the row is stale</em> saves it implementing a fixed defect.
+  <strong>Say what you did not measure with the same care.</strong> A prompt's claims read as settled where a row's read as claims, because the prompt says a session checked, and the worker then builds on them rather than testing them.
   Q805's chip forwarded the row's "all three fail closed" as fact and drew an instruction from it, not to change what the checker decides; the worker's first measurement found one probe failing <em>open</em>, on the call immediately before <code>gh pr merge --squash</code>.
   Mark an unverified claim as unverified, or leave it out.</li>
 <li><strong>The trap worth naming</strong> — the tempting wrong fix, the control the test needs, the decision the row leaves open.
@@ -3129,7 +3138,8 @@ It is cheap and makes the run auditable and resumable.</p>
   A worker may rebase and re-enqueue <strong>only</strong> when <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/agent/pr-requeue-eligible.sh"><code>scripts/agent/pr-requeue-eligible.sh</code></a> says so, which requires a prior human enqueue, an open non-draft PR, no current queue entry, and a rebase whose conflicts fall solely in the merge-driver-owned files.
   A conflict anywhere else changes what was reviewed, so it wakes the maintainer instead.
   A read the checker could not take is a third answer, not a refusal: it exits 2 naming what it could not measure, because a <code>gh</code> failure otherwise reads as a measured "not OPEN", "not queued", or "nobody enqueued it", and that reason is what a later reader has instead of the eviction.
-  A <strong>first</strong> enqueue is still never an agent's to make. <code>ELIGIBLE</code> also does not make the re-enqueue runnable: <code>gh pr merge</code> routes it through <code>enablePullRequestAutoMerge</code>, which this repository forbids (<code>allow_auto_merge: false</code>), so it fails <code>Auto merge is not allowed for this repository</code> (measured 2026-08-14 on #1525, gh 2.96.0).
+  A <strong>first</strong> enqueue is still never an agent's to make.
+  <code>ELIGIBLE</code> also does not make the re-enqueue runnable: <code>gh pr merge</code> routes it through <code>enablePullRequestAutoMerge</code>, which this repository forbids (<code>allow_auto_merge: false</code>), so it fails <code>Auto merge is not allowed for this repository</code> (measured 2026-08-14 on #1525, gh 2.96.0).
   Report the verdict and its <code>measured:</code> line, and hand the re-enqueue to the maintainer.</li>
 <li><strong>What the dispatcher owes at handoff</strong>, so the review is cheap rather than a re-derivation: which heavy gates ran and on which head SHA, what the scope review found, and the mergeability state as of <em>now</em>.</li>
 </ul>
@@ -3258,14 +3268,16 @@ Until the ordering changes, run the driverless-clone <code>merge-tree</code> bel
 It is the same command the checker would have run, and the rebase is the only deadline: afterwards the branch merges clean and there is nothing left to measure.</p>
 <ul>
 <li>
-<p><strong><code>-c merge.&lt;name&gt;.driver=false</code> does not emulate a driverless merge, it fabricates conflicts.</strong> The value is a <em>command line</em>, so <code>false</code> runs <code>/usr/bin/false</code>, which exits non-zero, and git records a conflict for every driver-owned path both sides touched without ever attempting the built-in three-way merge. <code>true</code> and other no-ops fail the opposite way: they exit 0 having written nothing, so the merge silently keeps <em>ours</em> and every probe reads clean.
+<p><strong><code>-c merge.&lt;name&gt;.driver=false</code> does not emulate a driverless merge, it fabricates conflicts.</strong> The value is a <em>command line</em>, so <code>false</code> runs <code>/usr/bin/false</code>, which exits non-zero, and git records a conflict for every driver-owned path both sides touched without ever attempting the built-in three-way merge.
+  <code>true</code> and other no-ops fail the opposite way: they exit 0 having written nothing, so the merge silently keeps <em>ours</em> and every probe reads clean.
   Measured 2026-08-12 against GitHub as the control, on two PRs it reported <code>CLEAN</code>: <code>driver=false</code> gave <code>rc=1</code>, <code>driver=true</code> gave <code>rc=0</code>, and a bare clone with no driver configured gave <code>rc=0</code>, matching GitHub.
   There is no <code>-c</code> form that unsets a driver, so a clone that has run <code>make merge-driver</code> cannot answer this question at all.</p>
 </li>
 <li>
 <p><strong><code>mergeStateStatus</code> lags a force-push, so pair it with the head OID.</strong> The branch ref updates immediately and the PR object does not: measured 2026-08-12, <code>git ls-remote</code> showed the new head while <code>gh pr view</code> still returned the <em>superseded</em> OID with <code>DIRTY</code> for minutes, and pr-sentinel read it in that window and fired <code>conflict</code> on a branch that was already healed.
   Ask for <code>headRefOid</code> alongside the status and compare it to <code>git ls-remote origin refs/heads/&lt;branch&gt;</code>; differing OIDs mean the verdict is about something you no longer have, so re-read rather than act.
-  Same discipline as requiring a tree OID to prove a probe ran. <strong><code>UNKNOWN</code> with <em>matching</em> OIDs is a third case</strong>: the read is fresh and GitHub is still computing.
+  Same discipline as requiring a tree OID to prove a probe ran.
+  <strong><code>UNKNOWN</code> with <em>matching</em> OIDs is a third case</strong>: the read is fresh and GitHub is still computing.
   Rebase anyway rather than waiting, because a no-op rebase costs nothing and acting on an uncomputed field costs a cycle — the asymmetry decides it, not the field.</p>
 </li>
 <li>
@@ -3280,8 +3292,10 @@ It is the same command the checker would have run, and the rebase is the only de
 <p><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/agent/pr-requeue-eligible.sh"><code>pr-requeue-eligible.sh</code></a> uses the <code>driver=false</code> form, and its comment claims to measure "what the merge queue will see".
   It does not; it measures which driver-owned files both sides touched, a superset.
   That is conservative for its own <code>ELIGIBLE</code> rule, which discounts those paths anyway, so it cannot manufacture a false <code>ELIGIBLE</code> — but read as "does this branch need a heal" it is a false positive every time a branch and <code>main</code> both touch <code>docs/STATUS.md</code>.</p>
-<p>Two further traps made the <code>-c</code> form look like it was working, both measured 2026-08-12 and both silent. <strong>A misspelled driver name fails open</strong>: git ignores the unknown config key, runs the real driver anyway, and exits 0, so a probe written against a guessed name (<code>merge.status</code> for <code>docs/STATUS.md</code>, whose driver is <code>backlog</code>) produces byte-identical output to no probe at all.
-  Together with the fabricated conflicts above, that is a probe whose two spellings are wrong in opposite directions and neither of which is ever an error. <strong>The driver writes to stderr</strong>, and its advisory line names the file it resolved, so a reader scanning the combined output for a path finds one and reports a conflict list assembled from chatter that says the opposite.
+<p>Two further traps made the <code>-c</code> form look like it was working, both measured 2026-08-12 and both silent.
+  <strong>A misspelled driver name fails open</strong>: git ignores the unknown config key, runs the real driver anyway, and exits 0, so a probe written against a guessed name (<code>merge.status</code> for <code>docs/STATUS.md</code>, whose driver is <code>backlog</code>) produces byte-identical output to no probe at all.
+  Together with the fabricated conflicts above, that is a probe whose two spellings are wrong in opposite directions and neither of which is ever an error.
+  <strong>The driver writes to stderr</strong>, and its advisory line names the file it resolved, so a reader scanning the combined output for a path finds one and reports a conflict list assembled from chatter that says the opposite.
   Read the stage lines only (<code>^[0-9]{6} &lt;sha&gt; [123]</code>) whichever way you probe; a run with no conflict prints the merged tree OID and nothing else.</p>
 <ul>
 <li>

@@ -2714,7 +2714,8 @@ Tracked as <a href="../../../STATUS/">Q59</a>.</p>
 <blockquote>
 <p><strong>What shipped.</strong> The in-memory reservation-counter variant (the leading candidate below) is live: an <code>AdmitFunc</code> hook on <code>listener.Config</code> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/listener/goroutine.go"><code>goroutine.go</code></a>) is consulted before <code>AcquireJob</code>; the per-RunnerGroup gate lives in the provisioner (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/provisioner/admission.go"><code>admission.go</code></a>) and reads the ceiling from the freshly cached RunnerGroup each call (honours spec edits, Q117).
 Rejections increment <code>actions_gateway_jobs_admission_rejected_total</code>.
-The post-acquire <code>ceilingCheck</code> and quota retry are unchanged — they remain the backstop. <strong>Verified end-to-end (Q154):</strong> the ceiling-held-→-cancelled-vs-redelivered assumption below has now been confirmed on a real cluster — see "End-to-end verification (Q154)".</p>
+The post-acquire <code>ceilingCheck</code> and quota retry are unchanged — they remain the backstop.
+<strong>Verified end-to-end (Q154):</strong> the ceiling-held-→-cancelled-vs-redelivered assumption below has now been confirmed on a real cluster — see "End-to-end verification (Q154)".</p>
 </blockquote>
 <h2 id="the-problem-in-one-sentence">The problem in one sentence<a class="headerlink" href="#the-problem-in-one-sentence" title="Permanent link">&para;</a></h2>
 <p>The AGC claims a job from GitHub (<code>acquirejob</code>) <strong>before</strong> it knows whether it has capacity to place a worker pod for it, so under capacity pressure it acquires jobs it cannot run — wasting the claim and, in the worst case, getting the run cancelled rather than redelivered.</p>
@@ -2776,7 +2777,8 @@ It does <strong>not</strong> remove the post-acquire <code>ceilingCheck</code> o
    Calling that synchronously on the hot path before <em>every</em> acquire adds an API round-trip per job and is racy under burst.
    Options:</li>
 <li><strong>In-memory reservation counter</strong> owned by the provisioner/multiplexer, incremented at admit and decremented on pod terminal state.
-     Fast, but is soft state lost on AGC restart (acceptable — fail-safe, like the eviction counter; budget resets generously, never starves). <strong>Leading candidate.</strong></li>
+     Fast, but is soft state lost on AGC restart (acceptable — fail-safe, like the eviction counter; budget resets generously, never starves).
+     <strong>Leading candidate.</strong></li>
 <li><strong>Informer-backed pod cache</strong> (ties into <a href="../../../STATUS/">Q64</a>, which already wants the provisioner to <em>watch</em> pods instead of polling).
      The admit check reads the cache instead of the API server.
      Best long-term; pairs naturally with <a href="../../../STATUS/">Q63</a>'s RunnerGroup <code>Owns(&amp;Pod)</code>.</li>
@@ -2800,7 +2802,8 @@ It does <strong>not</strong> remove the post-acquire <code>ceilingCheck</code> o
 </li>
 <li>
 <p><strong>Where the gate lives.</strong> <code>handleJob</code> already depends on <code>cfg</code> callbacks (<code>SpawnReplacement</code>, <code>JobHandler</code>).
-   Add an <code>AdmitFunc</code>-style hook (<code>func(ctx) (release func(), ok bool)</code>) so the listener stays decoupled from the provisioner and the reservation lifecycle is explicit per the CLAUDE.md async/ownership conventions. <code>release</code> is called on acquire failure or pod terminal state.</p>
+   Add an <code>AdmitFunc</code>-style hook (<code>func(ctx) (release func(), ok bool)</code>) so the listener stays decoupled from the provisioner and the reservation lifecycle is explicit per the CLAUDE.md async/ownership conventions.
+   <code>release</code> is called on acquire failure or pod terminal state.</p>
 </li>
 </ol>
 <h3 id="what-this-buys">What this buys<a class="headerlink" href="#what-this-buys" title="Permanent link">&para;</a></h3>

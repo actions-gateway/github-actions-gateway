@@ -2824,8 +2824,10 @@ The v2 GA Definition of Done row <em>"≥1 representative tenant migrated v1→v
 All four defects found — Q463, Q465, Q466 and Q467 — have since been <strong>fixed</strong> by parallel sessions (#911, #912, #915, and the Q467 fix).
 Full evidence in <a href="#findings">Findings</a>.</p>
 <blockquote>
-<p>That 2026-07-28 run confirmed none of those fixes — it ran against an <code>agc</code> image predating all of them, with <code>noProxyCIDRs</code> pinned and a deliberately short gateway name as workarounds. <strong>All three are now confirmed live</strong> on a control plane built from <code>2715e7f8</code>, with both workarounds removed: <a href="#re-validation-on-a-fixed-control-plane-2026-07-31-q472">Re-validation (Q472)</a>.
-That run found one new defect of its own, <a href="#defect-a-v2-agc-also-reconciles-the-v1-runnergroups-in-its-namespace-q535">Q535</a>, since fixed. <strong>Scope:</strong> the last unverified item in the v2 GA Definition of Done — <a href="../../v2-ga/#definition-of-done-audit-as-of-this-change">v2-ga.md § Definition of Done audit</a> row <em>"≥1 representative tenant migrated v1→v2 with the tool for real"</em>, today marked ⚠️ <strong>Unverified</strong>.
+<p>That 2026-07-28 run confirmed none of those fixes — it ran against an <code>agc</code> image predating all of them, with <code>noProxyCIDRs</code> pinned and a deliberately short gateway name as workarounds.
+<strong>All three are now confirmed live</strong> on a control plane built from <code>2715e7f8</code>, with both workarounds removed: <a href="#re-validation-on-a-fixed-control-plane-2026-07-31-q472">Re-validation (Q472)</a>.
+That run found one new defect of its own, <a href="#defect-a-v2-agc-also-reconciles-the-v1-runnergroups-in-its-namespace-q535">Q535</a>, since fixed.
+<strong>Scope:</strong> the last unverified item in the v2 GA Definition of Done — <a href="../../v2-ga/#definition-of-done-audit-as-of-this-change">v2-ga.md § Definition of Done audit</a> row <em>"≥1 representative tenant migrated v1→v2 with the tool for real"</em>, today marked ⚠️ <strong>Unverified</strong>.
 Closing it needs a live migration, not another test.</p>
 </blockquote>
 <h2 id="goal-one-sentence">Goal (one sentence)<a class="headerlink" href="#goal-one-sentence" title="Permanent link">&para;</a></h2>
@@ -2931,7 +2933,8 @@ See <a href="#the-teardown-order-is-load-bearing-and-undocumented">the teardown 
 </li>
 </ol>
 <h2 id="acceptance-criteria">Acceptance criteria<a class="headerlink" href="#acceptance-criteria" title="Permanent link">&para;</a></h2>
-<p>The run closes Q415 only if all of these hold, each recorded with its evidence in Findings below. <strong>All met 2026-07-28.</strong></p>
+<p>The run closes Q415 only if all of these hold, each recorded with its evidence in Findings below.
+<strong>All met 2026-07-28.</strong></p>
 <ul>
 <li>[x] <code>gag-migrate --apply</code> completes without error against the live v1 tenant.</li>
 <li>[x] The migrated <code>&lt;gateway&gt;-agc</code> and <code>&lt;gateway&gt;-egress-proxy</code> Deployments reach Ready.</li>
@@ -3020,7 +3023,8 @@ The DoD row stays ⚠️ Unverified until a real DinD job completes on the migra
 <p><strong>The namespace patch worked exactly as designed</strong>, and this is the part the v1-domain grant label was chosen to exercise: the platform grant was carried <em>forward</em> onto the v2 domain (<code>actions-gateway.com/privileged-profile=allowed</code> added beside the original v1 label), <code>security-profile=privileged</code> was relocated from the gateway to the namespace, the v2 tenant marker was added, and every v1 marker survived.</p>
 <p><code>noProxyCIDRs</code> also carried across onto the emitted <code>EgressProxy</code>, which is what let the migrated AGC start — see the defect immediately below.</p>
 <h3 id="part-2--the-job-half-run-after-the-workflow-reached-main-2026-07-28">Part 2 — the job half, run after the workflow reached <code>main</code> (2026-07-28)<a class="headerlink" href="#part-2--the-job-half-run-after-the-workflow-reached-main-2026-07-28" title="Permanent link">&para;</a></h3>
-<p>With the smoke workflow on the default branch the dispatch blocker cleared and the full ordered sequence ran. <strong>All acceptance criteria pass.</strong></p>
+<p>With the smoke workflow on the default branch the dispatch blocker cleared and the full ordered sequence ran.
+<strong>All acceptance criteria pass.</strong></p>
 <table>
 <thead>
 <tr>
@@ -3094,7 +3098,8 @@ Every managed Kubernetes offering breaks; only kind/kubeadm works.</p>
 It takes a proxied tenant on a managed cluster — precisely what this plan constructs — to reach the bug.
 Filed as Q465.</p>
 <p><strong>Fixed (Q465).</strong> The hardcoded range is gone.
-The GMC now exempts the API server by the address the cluster reports — its own <code>KUBERNETES_SERVICE_HOST</code>, which is the ClusterIP the AGC pod will dial — falling back to the literal <code>$(KUBERNETES_SERVICE_HOST)</code> for the kubelet to expand when the GMC itself runs out-of-cluster, and bracketing an IPv6 ClusterIP so Go's <code>NO_PROXY</code> parser matches it. <code>kubernetes.default.svc</code> joins the static half for clusters whose cluster domain is not <code>cluster.local</code>.
+The GMC now exempts the API server by the address the cluster reports — its own <code>KUBERNETES_SERVICE_HOST</code>, which is the ClusterIP the AGC pod will dial — falling back to the literal <code>$(KUBERNETES_SERVICE_HOST)</code> for the kubelet to expand when the GMC itself runs out-of-cluster, and bracketing an IPv6 ClusterIP so Go's <code>NO_PROXY</code> parser matches it.
+<code>kubernetes.default.svc</code> joins the static half for clusters whose cluster domain is not <code>cluster.local</code>.
 Worker pods lose the range outright and gain nothing: they hold no kubeconfig and never dial the API server.
 The net effect is a <em>narrower</em> default on every distribution — one API server address instead of a /12 of unrelated hosts.
 The workaround <code>noProxyCIDRs: [34.118.224.0/20]</code> was removed from <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/deploy/dogfood-migrate/resources.yaml"><code>deploy/dogfood-migrate/resources.yaml</code></a> so that a clean AGC startup would itself be the verification — <a href="#re-validation-on-a-fixed-control-plane-2026-07-31-q472">confirmed live 2026-07-31</a>.</p>

@@ -2777,7 +2777,8 @@ Read the severities as "what the code says will happen", and see <a href="#what-
 The fix routes that call through <code>githubapp.ResolveAPIBaseURL</code>, the same helper the token exchange uses.</p>
 <p>Q506 was filed on the suspicion that the same shape recurs elsewhere.
 It does — but not where the Queue row guessed.
-The row named <code>githubEgressFQDNs</code> and "the noproxy guard list". <code>githubEgressFQDNs</code> is a real defect; the noproxy guard is not (its callers already resolve the GHES host).
+The row named <code>githubEgressFQDNs</code> and "the noproxy guard list".
+<code>githubEgressFQDNs</code> is a real defect; the noproxy guard is not (its callers already resolve the GHES host).
 Meanwhile the resolution Q504 leaned on — <code>GITHUB_API_BASE_URL</code> — has <strong>no supported way to be set</strong> on a GMC-provisioned Actions Gateway Controller (AGC).</p>
 <h2 id="the-inventory">The inventory<a class="headerlink" href="#the-inventory" title="Permanent link">&para;</a></h2>
 <p>Every <code>github.com</code> / <code>api.github.com</code> / <code>codeload.github.com</code> occurrence outside <code>vendor/</code>, classified.
@@ -2870,7 +2871,8 @@ A GHES appliance's address is knowable only to the operator.
 Pointing the fetcher at a GHES <code>/meta</code> is not a mechanical swap: GHES serves that endpoint, but it describes that appliance's own configuration, and whether those ranges are the right allowlist is a design question, not a substitution.
 Treat #3 as a documentation-and-validation problem regardless of which path is chosen for #1 and #2.</p>
 <h3 id="4-two-different-detectors-answer-is-this-public-github">4. Two different detectors answer "is this public GitHub?"<a class="headerlink" href="#4-two-different-detectors-answer-is-this-public-github" title="Permanent link">&para;</a></h3>
-<p><code>isHostedServer</code> tests <code>strings.Contains(githubURL, "github.com")</code> over the <strong>whole URL including its path</strong> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/agentpool/github_registrar.go"><code>github_registrar.go:390</code></a>), so a GHES org path literally named <code>github.com</code> — <code>https://ghes.corp/github.com</code> — misclassifies as public SaaS. <code>scaleSetAPIBase</code> answers the same question by parsing the URL and switching on <code>u.Host</code> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/controller/runnerset_scaleset.go"><code>runnerset_scaleset.go:260</code></a>), which has no such hole.</p>
+<p><code>isHostedServer</code> tests <code>strings.Contains(githubURL, "github.com")</code> over the <strong>whole URL including its path</strong> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/agentpool/github_registrar.go"><code>github_registrar.go:390</code></a>), so a GHES org path literally named <code>github.com</code> — <code>https://ghes.corp/github.com</code> — misclassifies as public SaaS.
+<code>scaleSetAPIBase</code> answers the same question by parsing the URL and switching on <code>u.Host</code> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/controller/runnerset_scaleset.go"><code>runnerset_scaleset.go:260</code></a>), which has no such hole.</p>
 <p>Low severity on its own — the triggering org name is contrived.
 It matters as a symptom: the repo has no single "resolve this gateway's GitHub API base" helper, so each caller invented one.
 Any fix for #1 should collapse all three.</p>

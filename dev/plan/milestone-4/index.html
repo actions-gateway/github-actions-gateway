@@ -3228,7 +3228,8 @@
 <li><a href="#12-live-multi-tenant-validation-evidence-2026-06-1112">12. Live multi-tenant validation evidence (2026-06-11/12)</a></li>
 </ul>
 <h2 id="status-at-a-glance">Status at a glance<a class="headerlink" href="#status-at-a-glance" title="Permanent link">&para;</a></h2>
-<p>Last refreshed 2026-06-12. <strong>All success criteria are now live-validated.</strong> The multi-tenant, delete-isolation, and end-to-end-proxy-job rows were proven on a real kind cluster with real GitHub App credentials on 2026-06-11/12 — see <a href="#12-live-multi-tenant-validation-evidence-2026-06-1112">§12 Live multi-tenant validation evidence</a> for the full session record, including the four product bugs it surfaced (tracked as Q114–Q117 in <a href="../../STATUS/">STATUS.md</a>).</p>
+<p>Last refreshed 2026-06-12.
+<strong>All success criteria are now live-validated.</strong> The multi-tenant, delete-isolation, and end-to-end-proxy-job rows were proven on a real kind cluster with real GitHub App credentials on 2026-06-11/12 — see <a href="#12-live-multi-tenant-validation-evidence-2026-06-1112">§12 Live multi-tenant validation evidence</a> for the full session record, including the four product bugs it surfaced (tracked as Q114–Q117 in <a href="../../STATUS/">STATUS.md</a>).</p>
 <table>
 <thead>
 <tr>
@@ -4191,11 +4192,16 @@ The reconciler behaviours below are covered by the existing unit tests in <code>
 <hr />
 <h2 id="9-success-criteria-checklist">9. Success Criteria Checklist<a class="headerlink" href="#9-success-criteria-checklist" title="Permanent link">&para;</a></h2>
 <ul>
-<li>[x] Two <code>ActionsGateway</code> CRs in a <code>kind</code> cluster produce two independent, functional tenant setups. <em>(2026-06-12 live — §12)</em></li>
-<li>[x] Deleting one CR removes only that tenant's resources. <em>(2026-06-12 live — §12)</em></li>
-<li>[ ] <code>spec.proxy.maxReplicas</code> change reflected in HPA within one reconcile cycle. <em>(covered by <code>hpa_update_test.go</code>; not exercised in the §12 live session)</em></li>
-<li>[ ] Admission webhook rejects CRs in <code>kube-system</code>, <code>kube-public</code>, and <code>gmc-system</code> (plus the GMC's install namespace via the <code>POD_NAMESPACE</code> downward-API env var when non-default). <em>(unit-tested; not exercised in the §12 live session)</em></li>
-<li>[x] End-to-end job completes with green checkmark via proxy (confirmed by <code>HTTPS_PROXY</code> in worker pod env). <em>(2026-06-12 live — §12)</em></li>
+<li>[x] Two <code>ActionsGateway</code> CRs in a <code>kind</code> cluster produce two independent, functional tenant setups.
+  <em>(2026-06-12 live — §12)</em></li>
+<li>[x] Deleting one CR removes only that tenant's resources.
+  <em>(2026-06-12 live — §12)</em></li>
+<li>[ ] <code>spec.proxy.maxReplicas</code> change reflected in HPA within one reconcile cycle.
+  <em>(covered by <code>hpa_update_test.go</code>; not exercised in the §12 live session)</em></li>
+<li>[ ] Admission webhook rejects CRs in <code>kube-system</code>, <code>kube-public</code>, and <code>gmc-system</code> (plus the GMC's install namespace via the <code>POD_NAMESPACE</code> downward-API env var when non-default).
+  <em>(unit-tested; not exercised in the §12 live session)</em></li>
+<li>[x] End-to-end job completes with green checkmark via proxy (confirmed by <code>HTTPS_PROXY</code> in worker pod env).
+  <em>(2026-06-12 live — §12)</em></li>
 <li>[ ] RBAC regression tests pass: no <code>*</code> verbs on <code>secrets</code>, <code>pods</code>, or <code>nodes</code> in the GMC ClusterRole.</li>
 <li>[ ] <code>go test -race ./...</code> passes across all four modules (root, agc, gmc, proxy).</li>
 <li>[ ] Worker ServiceAccount <code>actions-gateway-worker</code> created by GMC and used by provisioner.</li>
@@ -4285,7 +4291,8 @@ This session also served as the <a href="../archive/q12-helm-chart/#live-validat
 <a id="__codelineno-24-5" name="__codelineno-24-5" href="#__codelineno-24-5"></a># deployment 2/2 Available in ~10 s; AGC_IMAGE/PROXY_IMAGE env digest-pinned
 </code></pre></div>
 <ul>
-<li><strong>Deviation from pure production posture (at the time of this run):</strong> the AGC's org URL had no CR field, so the GMC was patched with the testing-gated <code>--allow-agc-extra-env=true</code> + <code>AGC_EXTRA_GITHUB_ORG_URL=https://github.com/actions-gateway/gateway-test</code> (same mechanism the live-GitHub suite uses). <strong>Resolved by Q116:</strong> the org URL is now a first-class required <code>spec.gitHubURL</code> field threaded to the AGC as <code>GITHUB_ORG_URL</code>, so this workaround is no longer needed — set <code>spec.gitHubURL</code> (or chart value <code>sampleGateway.gitHubURL</code>) on the CR instead.</li>
+<li><strong>Deviation from pure production posture (at the time of this run):</strong> the AGC's org URL had no CR field, so the GMC was patched with the testing-gated <code>--allow-agc-extra-env=true</code> + <code>AGC_EXTRA_GITHUB_ORG_URL=https://github.com/actions-gateway/gateway-test</code> (same mechanism the live-GitHub suite uses).
+  <strong>Resolved by Q116:</strong> the org URL is now a first-class required <code>spec.gitHubURL</code> field threaded to the AGC as <code>GITHUB_ORG_URL</code>, so this workaround is no longer needed — set <code>spec.gitHubURL</code> (or chart value <code>sampleGateway.gitHubURL</code>) on the CR instead.</li>
 </ul>
 <h3 id="multi-tenant-dod-row-1">Multi-tenant (DoD row 1)<a class="headerlink" href="#multi-tenant-dod-row-1" title="Permanent link">&para;</a></h3>
 <p>Two namespaces (<code>tenant-a</code>, <code>tenant-b</code>, both labelled <code>actions-gateway.github.com/tenant=true</code>), each with a real-credential <code>github-app-creds</code> Secret and an <code>ActionsGateway</code> CR (proxy <code>minReplicas: 2</code>; runner labels <code>e2e</code> / <code>e2e-b</code> respectively).
@@ -4303,22 +4310,28 @@ Worker pod env (observed live):</p>
 <p>Worker logs showed step/job log uploads to the results service at 3/3 success rate (all via the proxy tunnel; the Q5h proxy-CA trust chain held).</p>
 <p><strong>Q71 (runner-version contract):</strong> session creation against real GitHub succeeded — but the live truth is subtler than the Queue row assumed: the GMC-provisioned AGC never sets <code>GITHUB_RUNNER_VERSION</code>, so <code>CreateSession</code> sends an <strong>empty</strong> <code>agent.version</code> (and <code>GetMessage</code> omits <code>runnerVersion</code>), which GitHub accepts.
 The 2.334.0/2.335.x pin exists only in the worker image.
-Recorded as Q118 (set the env in the GMC + fix the Dockerfile-vs-<code>DefaultWorkerImage</code> drift Dependabot introduced in #197). <strong>Resolved (Q118):</strong> the runner version now lives in one place — <code>RunnerVersion</code> in <code>cmd/agc/names</code> — which drives <code>DefaultWorkerImage</code> (digest-pinned to 2.335.1) and the <code>GITHUB_RUNNER_VERSION</code> the GMC injects, so <code>agent.version</code> is non-empty and matches the worker binary; a lockstep unit test guards against future Dockerfile/constant drift.</p>
+Recorded as Q118 (set the env in the GMC + fix the Dockerfile-vs-<code>DefaultWorkerImage</code> drift Dependabot introduced in #197).
+<strong>Resolved (Q118):</strong> the runner version now lives in one place — <code>RunnerVersion</code> in <code>cmd/agc/names</code> — which drives <code>DefaultWorkerImage</code> (digest-pinned to 2.335.1) and the <code>GITHUB_RUNNER_VERSION</code> the GMC injects, so <code>agent.version</code> is non-empty and matches the worker binary; a lockstep unit test guards against future Dockerfile/constant drift.</p>
 <h3 id="delete-isolation-dod-row-2">Delete isolation (DoD row 2)<a class="headerlink" href="#delete-isolation-dod-row-2" title="Permanent link">&para;</a></h3>
-<p><code>kubectl delete actionsgateway gateway-b -n tenant-b</code> returned after the finalizer drained; afterwards <code>tenant-b</code> contained only the namespace itself, the <code>default</code> ServiceAccount, and the operator-created <code>github-app-creds</code> Secret (the namespace is never deleted by design). <code>tenant-a</code> was untouched (<code>Ready=True</code>, AGC + 2/2 proxy pods running, RunnerGroup intact) and subsequently ran run 27395702908 to green.
+<p><code>kubectl delete actionsgateway gateway-b -n tenant-b</code> returned after the finalizer drained; afterwards <code>tenant-b</code> contained only the namespace itself, the <code>default</code> ServiceAccount, and the operator-created <code>github-app-creds</code> Secret (the namespace is never deleted by design).
+<code>tenant-a</code> was untouched (<code>Ready=True</code>, AGC + 2/2 proxy pods running, RunnerGroup intact) and subsequently ran run 27395702908 to green.
 Deleting <code>gateway-a</code> at the end, with a healthy session, also <strong>deregistered its runners from GitHub</strong> — the repo runner list went empty.</p>
 <h3 id="product-bugs-surfaced-all-filed-in-statusmd">Product bugs surfaced (all filed in <a href="../../STATUS/">STATUS.md</a>)<a class="headerlink" href="#product-bugs-surfaced-all-filed-in-statusmd" title="Permanent link">&para;</a></h3>
 <p>The live run worked <strong>only after</strong> working around these; none are caught by unit/cluster-only/fake-GitHub tiers:</p>
 <ol>
 <li><strong>Q115 — default worker SecurityContext breaks the runner image.</strong> Q31's <code>applySecurityDefaults</code> stamps pod-level <code>runAsNonRoot: true</code>; the <code>actions-runner</code> image uses non-numeric <code>USER runner</code>, so kubelet fails every default-path worker pod with <code>CreateContainerConfigError: container has runAsNonRoot and image has non-numeric user</code>.
-   Worked around per-tenant with <code>podTemplate.spec.securityContext.runAsUser: 1001</code>. fake-GitHub masked this by using the <strong>agc image</strong> as its worker placeholder. <strong>Fixed (Q115):</strong> <code>applySecurityDefaults</code> now gap-fills <code>runAsUser: 1001</code> (the runner image's UID) alongside <code>runAsNonRoot: true</code> whenever non-root is enforced, so the default path is kubelet-admissible; the gap-fill is skipped when a tenant sets <code>runAsNonRoot: false</code> and an explicit <code>runAsUser</code> still wins.
+   Worked around per-tenant with <code>podTemplate.spec.securityContext.runAsUser: 1001</code>. fake-GitHub masked this by using the <strong>agc image</strong> as its worker placeholder.
+   <strong>Fixed (Q115):</strong> <code>applySecurityDefaults</code> now gap-fills <code>runAsUser: 1001</code> (the runner image's UID) alongside <code>runAsNonRoot: true</code> whenever non-root is enforced, so the default path is kubelet-admissible; the gap-fill is skipped when a tenant sets <code>runAsNonRoot: false</code> and an explicit <code>runAsUser</code> still wins.
    A new fake-GitHub spec (<code>E2E_AGC_WorkerSecurityContext</code>) provisions a worker pod from the <strong>real</strong> worker image and asserts kubelet admits it, so a regression of the default is caught in CI rather than only live.</li>
 <li><strong>Q114 — JIT agents are single-use and the AGC cannot self-heal.</strong> GitHub removed each JIT runner after it completed (or had acquired a then-cancelled) job; the never-used agent survived.
    The AGC kept polling with the stale agent/session — <code>GetMessage</code> looped on <code>200</code>-with-empty-body (<code>decode response: EOF</code>) and later <code>401 unauthorized</code> for hours with no re-registration; recovery required deleting the agentpool Secrets + restarting the AGC, and re-registration of a <em>surviving</em> name then failed <code>409 Already exists</code> (no deregister-then-retry).
-   This breaks the multiplex-many-jobs-per-agent assumption at its root. <strong>Fixed (Q114):</strong> the listener now re-registers its agent after every job (and heals 401/EOF-stale sessions found after a restart, resolving the surviving-name 409 by ID lookup); fakegithub can simulate the single-use behaviour for fake-GitHub regression coverage — see <a href="../archive/q114-jit-agent-selfheal/">q114-jit-agent-selfheal.md</a>.</li>
-<li><strong>Q117 — RunnerGroup <code>podTemplate</code> changes don't reach running listeners.</strong> After patching the CR (observedGeneration advanced), newly provisioned worker pods still used the old template until the AGC pod was restarted. <strong>Fixed (Q117):</strong> the provisioner re-reads the RunnerGroup from the shared (cache-backed) client at pod-build time instead of using the listener-start snapshot, so a <code>podTemplate</code> (and any other spec) edit takes effect on the next acquired job with no AGC restart.
+   This breaks the multiplex-many-jobs-per-agent assumption at its root.
+   <strong>Fixed (Q114):</strong> the listener now re-registers its agent after every job (and heals 401/EOF-stale sessions found after a restart, resolving the surviving-name 409 by ID lookup); fakegithub can simulate the single-use behaviour for fake-GitHub regression coverage — see <a href="../archive/q114-jit-agent-selfheal/">q114-jit-agent-selfheal.md</a>.</li>
+<li><strong>Q117 — RunnerGroup <code>podTemplate</code> changes don't reach running listeners.</strong> After patching the CR (observedGeneration advanced), newly provisioned worker pods still used the old template until the AGC pod was restarted.
+   <strong>Fixed (Q117):</strong> the provisioner re-reads the RunnerGroup from the shared (cache-backed) client at pod-build time instead of using the listener-start snapshot, so a <code>podTemplate</code> (and any other spec) edit takes effect on the next acquired job with no AGC restart.
    The start-time snapshot is kept only as a fallback when the cached read fails (e.g. the group was deleted mid-shutdown).</li>
-<li><strong>Q116 — no production path for the GitHub org URL</strong> (see Setup deviation above). <strong>Fixed (Q116):</strong> added the required first-class <code>ActionsGateway.spec.gitHubURL</code> field, threaded to the AGC Deployment as <code>GITHUB_ORG_URL</code> and validated (https scheme + org/owner path) by the GMC webhook; the testing-only <code>--allow-agc-extra-env</code> flag is retained for genuinely-extra env but is no longer required for the org URL.</li>
+<li><strong>Q116 — no production path for the GitHub org URL</strong> (see Setup deviation above).
+   <strong>Fixed (Q116):</strong> added the required first-class <code>ActionsGateway.spec.gitHubURL</code> field, threaded to the AGC Deployment as <code>GITHUB_ORG_URL</code> and validated (https scheme + org/owner path) by the GMC webhook; the testing-only <code>--allow-agc-extra-env</code> flag is retained for genuinely-extra env but is no longer required for the org URL.</li>
 </ol>
 <p>Operator-facing runbook entry for (1): <a href="../../operations/troubleshooting/#worker-pod-fails-to-start-after-secure-by-default-securitycontext">troubleshooting.md</a>.</p>
 

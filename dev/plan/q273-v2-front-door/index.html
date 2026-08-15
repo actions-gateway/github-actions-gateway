@@ -2631,7 +2631,8 @@
 
 
 <h1 id="q273--make-v2-the-front-door--exemplary-v1v2-migration-plan">Q273 — Make v2 the front door + exemplary v1→v2 migration (plan)<a class="headerlink" href="#q273--make-v2-the-front-door--exemplary-v1v2-migration-plan" title="Permanent link">&para;</a></h1>
-<p><strong>Status:</strong> ▶ Started 2026-07-06. <strong>Scope:</strong> the <em>do-now</em> front-door / positioning / onboarding / migration slice of <a href="../../STATUS/#Q273">Q273</a>.
+<p><strong>Status:</strong> ▶ Started 2026-07-06.
+<strong>Scope:</strong> the <em>do-now</em> front-door / positioning / onboarding / migration slice of <a href="../../STATUS/#Q273">Q273</a>.
 Full "v2-only" (v1 removal) stays gated on v2beta1 (Q74) — <strong>this plan removes nothing</strong>.
 Strategy source: <a href="../v1-classic-sunset-review/">v1-classic-sunset-review.md §6.2</a>.</p>
 <h2 id="goal-one-sentence">Goal (one sentence)<a class="headerlink" href="#goal-one-sentence" title="Permanent link">&para;</a></h2>
@@ -2641,7 +2642,8 @@ Strategy source: <a href="../v1-classic-sunset-review/">v1-classic-sunset-review
 Route new users to v2 (the better shape), be honest it is alpha-but-recommended, mark v1 the stable-but-deprecated legacy path.
 Positioning stays true whether or not the sibling P5 ScaleSet-default flip has merged yet.</p>
 <h2 id="doc-ownership-partition-avoid-collision-with-the-q264-p5-chip">Doc-ownership partition (avoid collision with the Q264-P5 chip)<a class="headerlink" href="#doc-ownership-partition-avoid-collision-with-the-q264-p5-chip" title="Permanent link">&para;</a></h2>
-<p><strong>P5 owns:</strong> the code default flip + the <code>acquisitionProtocol</code> CRD field docs + the classic-protocol operator reference (in <code>docs/operations/</code> protocol section and the <code>tenant-onboarding</code> field reference). <strong>This chip owns:</strong> everything front-door / positioning / onboarding-flow / migration.
+<p><strong>P5 owns:</strong> the code default flip + the <code>acquisitionProtocol</code> CRD field docs + the classic-protocol operator reference (in <code>docs/operations/</code> protocol section and the <code>tenant-onboarding</code> field reference).
+<strong>This chip owns:</strong> everything front-door / positioning / onboarding-flow / migration.
 - <strong>Do NOT edit</strong> the <code>acquisitionProtocol</code> field reference or classic-protocol operator docs.
   On conflict, rebase and defer to P5 on protocol-field specifics.
 - Positioning frames the single-acquirer ScaleSet model as v2's acquisition story <strong>without hard-asserting the shipped default is already ScaleSet</strong> (true whether or not P5 has merged).
@@ -2666,7 +2668,8 @@ Positioning stays true whether or not the sibling P5 ScaleSet-default flip has m
 <li>Fresh <code>claude/</code> worktree; rebased on origin/main.
   No cluster / no dogfood.</li>
 <li><code>docs/STATUS.md</code> edit is an ISOLATED commit (keep Q273 row; note do-now routing done, full v2-only still gated on Q74).</li>
-<li>Human docs never link to <code>CLAUDE.md</code>. <code>make check</code> (+ docs build if touched) green before PR.
+<li>Human docs never link to <code>CLAUDE.md</code>.
+  <code>make check</code> (+ docs build if touched) green before PR.
   No Claude attribution. </content> </invoke></li>
 </ul>
 

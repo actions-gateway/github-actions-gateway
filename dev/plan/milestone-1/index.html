@@ -3197,7 +3197,8 @@ The design separates concerns clearly:</p>
 <a id="__codelineno-7-31" name="__codelineno-7-31" href="#__codelineno-7-31"></a><span class="c1">// unacquired work. Called during graceful shutdown.</span>
 <a id="__codelineno-7-32" name="__codelineno-7-32" href="#__codelineno-7-32"></a><span class="kd">func</span><span class="w"> </span><span class="p">(</span><span class="nx">c</span><span class="w"> </span><span class="o">*</span><span class="nx">BrokerClient</span><span class="p">)</span><span class="w"> </span><span class="nx">DeleteSession</span><span class="p">(</span><span class="nx">ctx</span><span class="w"> </span><span class="nx">context</span><span class="p">.</span><span class="nx">Context</span><span class="p">,</span><span class="w"> </span><span class="nx">sessionID</span><span class="w"> </span><span class="kt">string</span><span class="p">)</span><span class="w"> </span><span class="kt">error</span>
 </code></pre></div>
-<p><strong>Critical implementation detail — the two-URL model:</strong> <code>CreateSession</code> and <code>GetMessage</code> use <code>BrokerClient.BrokerURL</code>. <code>AcquireJob</code> and <code>RenewJob</code> use the <code>run_service_url</code> from the message body, passed as a parameter.
+<p><strong>Critical implementation detail — the two-URL model:</strong> <code>CreateSession</code> and <code>GetMessage</code> use <code>BrokerClient.BrokerURL</code>.
+<code>AcquireJob</code> and <code>RenewJob</code> use the <code>run_service_url</code> from the message body, passed as a parameter.
 These must never be conflated.
 The comment in <code>types.go</code> and the function signatures enforce this at the call site.</p>
 <p><strong><code>planId</code> extraction:</strong> <code>AcquireJob</code> must check the <code>x-plan-id</code> response header first.
@@ -3233,7 +3234,8 @@ It is not itself unit-tested (it wires up real credentials and makes live calls)
 <li><code>GITHUB_APP_PRIVATE_KEY</code> (path to PEM file, or PEM literal)</li>
 <li><code>GITHUB_APP_INSTALLATION_ID</code></li>
 <li><code>GITHUB_BROKER_URL</code> (the broker base URL for the runner registration)</li>
-<li><code>GITHUB_RUNNER_VERSION</code> (e.g. <code>"2.327.1"</code>)</li>
+<li><code>GITHUB_RUNNER_VERSION</code> (e.g.
+     <code>"2.327.1"</code>)</li>
 <li>Call <code>NewInstallationTokenProvider</code> and get a token.</li>
 <li>Construct a <code>BrokerClient</code> and call <code>CreateSession</code>.
    Print the session ID.</li>

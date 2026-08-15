@@ -2694,7 +2694,8 @@ The repo vendors the skill's tooling so the rules hold for every contributor, wi
   Write for a skimmer: cut detail and link a doc rather than compressing into fragments.</li>
 <li><strong>A literal pipe in any cell is written <code>\|</code>, code spans included.</strong> GFM reads a raw <code>|</code> as a column separator wherever it appears, so it splits the row into more cells than the header declares and everything past the header's last column is dropped from the rendered table, on github.com and on the site both.
   Nothing about the source line looks wrong, which is why it needs a gate: <code>lint-backlog</code> rule 13 compares each row's own width against its table header.
-  Measured 2026-08-14: Q866's Notes rendered as far as its opening backtick, losing the remaining two thirds, and the truncation also hid an over-cap cell from rule 4. <strong>Budget for that second half: escaping the pipe is not a one-character fix.</strong> Every rule downstream had been reading the stub before the pipe, so the cell they measure changes the moment it renders whole, and one of them can newly fail on a row nobody edited.
+  Measured 2026-08-14: Q866's Notes rendered as far as its opening backtick, losing the remaining two thirds, and the truncation also hid an over-cap cell from rule 4.
+  <strong>Budget for that second half: escaping the pipe is not a one-character fix.</strong> Every rule downstream had been reading the stub before the pipe, so the cell they measure changes the moment it renders whole, and one of them can newly fail on a row nobody edited.
   Q866's Notes went from a measured 100 characters to 269 against the 250 cap, and had to be trimmed in the same edit.</li>
 <li><strong>A row never cites a count of the backlog.</strong> "42 Queue rows", "60 parked" and friends go stale on the next filing — the file they measure is the one thing guaranteed to change under them, often the same day.
   State the <em>shape</em> instead ("the Queue is read top-down; the parked rows are only grepped on a trigger"), and put any dated figure in the linked plan doc, where a point-in-time measurement belongs.
@@ -2715,7 +2716,8 @@ That literal shape is also the shape practice already has: across the last 80 me
 Several isolated backlog commits in one PR is ordinary and stays green — <a href="https://github.com/actions-gateway/github-actions-gateway/pull/1239">#1239</a> landed three.</p>
 <p><strong><code>git commit --amend</code> after the row change amends the row change.</strong> Order is free to the gates, but the backlog commit is usually the last one written, so it sits at <code>HEAD</code>; a later fix to the other half lands on it and builds exactly the mixed commit this rule forbids.
 Nothing warns you, because the amend is a perfectly ordinary command that did what you asked.
-Read <code>git show --stat HEAD</code> before amending anything, and write the row change once the rest is settled rather than mid-iteration. <code>check-status-isolation.sh</code> does catch the mix, but on the pushed branch, a CI cycle after the cheap moment to notice.</p>
+Read <code>git show --stat HEAD</code> before amending anything, and write the row change once the rest is settled rather than mid-iteration.
+<code>check-status-isolation.sh</code> does catch the mix, but on the pushed branch, a CI cycle after the cheap moment to notice.</p>
 <p>Two mechanisms enforce it, and neither subsumes the other:</p>
 <table>
 <thead>
@@ -2773,7 +2775,8 @@ Every one of these is caught by a gate, and every one is cheaper to do up front 
    In an active plan's Status cell the de-link is gated rather than tidy: <code>make plan-index-check</code> requires a live row to be linked and a closed one to be bare, so the anchor dying is what puts the cell in front of someone (Q800).
    Re-read the whole cell while you are there, since it is a rollup no individual row owns.</li>
 <li><strong>Delete the roadmap bullet, continuation lines included.</strong> A forward-looking bullet exists because the row does (<a href="#a-gate-label-and-its-roadmap-bullet-are-two-commits-and-the-first-one-is-red">rule 7</a>), so it goes when the row does.
-   Its indented follow-on lines are part of the same list item: leave one behind and Markdown attaches it to the <strong>previous</strong> bullet, whose word count then breaks the cap. <code>make roadmap-check</code> names the stray line and the bullet it landed on (rule 12), and reports the cap over the line span it actually counted, so a violation on a bullet you never touched no longer reads as a pre-existing failure.</li>
+   Its indented follow-on lines are part of the same list item: leave one behind and Markdown attaches it to the <strong>previous</strong> bullet, whose word count then breaks the cap.
+   <code>make roadmap-check</code> names the stray line and the bullet it landed on (rule 12), and reports the cap over the line span it actually counted, so a violation on a bullet you never touched no longer reads as a pre-existing failure.</li>
 <li><strong>Archive the plan doc if this was its last <code>STATUS.md</code> reference</strong>, per <a href="#archiving-completed-plan-docs">the protocol below</a>, whose step 4 is the one most often missed: dropping a level into <code>archive/</code> re-bases <strong>the moved doc's own outbound links</strong>, not just the links pointing at it.</li>
 <li><strong>Update the plan's <code>docs/plan/README.md</code> row</strong> in the same change, moving it to the Archive section.</li>
 </ol>
@@ -2874,7 +2877,8 @@ The shared-word floor is what a ratio alone cannot supply, because containment d
 <p>Deferred and Flake watch are searched too, because a row duplicating a parked item is the same mistake and those are the tables nobody greps.
 Notes cells are deliberately not matched: folding a 250-character Notes cell into a row's token set can only raise every score, inflating the ranking without adding a cut.</p>
 <h3 id="whether-it-is-noisy-enough-to-ignore">Whether it is noisy enough to ignore<a class="headerlink" href="#whether-it-is-noisy-enough-to-ignore" title="Permanent link">&para;</a></h3>
-<p>An advisory that fires constantly is worse than none, so the thresholds are measured rather than asserted. <code>scripts/docs/find-duplicate-rows.sh --audit</code> runs every shipped row back through the same scoring path the search uses, and prints what flags:</p>
+<p>An advisory that fires constantly is worse than none, so the thresholds are measured rather than asserted.
+<code>scripts/docs/find-duplicate-rows.sh --audit</code> runs every shipped row back through the same scoring path the search uses, and prints what flags:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>scripts/docs/find-duplicate-rows.sh<span class="w"> </span>--audit
 </code></pre></div>
 <p><strong>Roughly one row in five surfaces a candidate when filed, and every pair it flags is topically adjacent rather than a nonsense match.</strong> The snapshot behind that, on 2026-08-04 (72 Queue + 31 Deferred + 15 Flake-watch rows): 11 flagged pairs out of 6,903.
@@ -2891,7 +2895,8 @@ It runs on local merges, rebases, cherry-picks and stash applications — everyw
 <p><strong>One-time setup, per clone:</strong></p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>make<span class="w"> </span>merge-driver
 </code></pre></div>
-<p><code>.gitattributes</code> already routes the file to <code>merge=backlog</code>, but git deliberately refuses to let a tracked file define a driver's <em>command</em> — that would be remote code execution on clone — so the config half is per-clone and opt-in. <strong>Nothing requires you to install it:</strong> until you do, the attribute names an undefined driver and git silently uses its built-in three-way merge, which is exactly the pre-driver behaviour.
+<p><code>.gitattributes</code> already routes the file to <code>merge=backlog</code>, but git deliberately refuses to let a tracked file define a driver's <em>command</em> — that would be remote code execution on clone — so the config half is per-clone and opt-in.
+<strong>Nothing requires you to install it:</strong> until you do, the attribute names an undefined driver and git silently uses its built-in three-way merge, which is exactly the pre-driver behaviour.
 <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/dev/setup.sh"><code>scripts/dev/setup.sh</code></a> installs it for you, as it does the git hooks.</p>
 <p><strong>What it refuses to resolve.</strong> Every uncertainty ends the same way — the plain three-way merge re-runs and its conflict markers stand, with a one-line reason on stderr:</p>
 <table>
@@ -2934,7 +2939,8 @@ Two consequences worth internalising: the driver <strong>cannot resurrect a row 
 Picking a side of that hunk is what loses rows neither side disagreed about.</p>
 <p><strong>It does not help GitHub</strong>, which cannot see a clone's config: the server-side squash-merge, the mergeability read behind <code>mergeStateStatus</code>, and the merge queue's candidate build all take the plain three-way merge.
 That is why a batch's row deletions are <a href="../parallel-dispatch/#the-dispatcher-owns-assignment-not-coordination-files">spaced at assignment</a> rather than left to the driver.
-And a driver-resolved merge is still a merge you own: read the resulting row set, then run the three gates below. <code>make lint-backlog</code> remains the independent backstop — rules 8, 9 and 10 all still apply to whatever the driver produced.</p>
+And a driver-resolved merge is still a merge you own: read the resulting row set, then run the three gates below.
+<code>make lint-backlog</code> remains the independent backstop — rules 8, 9 and 10 all still apply to whatever the driver produced.</p>
 <h3 id="the-same-treatment-for-docsplanreadmemd">The same treatment for <code>docs/plan/README.md</code><a class="headerlink" href="#the-same-treatment-for-docsplanreadmemd" title="Permanent link">&para;</a></h3>
 <p>The plan index has <code>STATUS.md</code>'s contention and the same cause.
 Every plan doc that lands adds one long row, every archival moves one to the top of the Archive table, and the topical sections concentrate both on the same few neighbours.
@@ -2989,7 +2995,8 @@ Shrinking the verify step from ~6 minutes to a few seconds is what breaks the lo
 <li>Commit and push <strong>immediately</strong>.
    Do not wait on <code>make check</code>.</li>
 </ol>
-<p><code>make check</code> adds nothing here: no gate it runs beyond these reads <code>docs/STATUS.md</code>, and CI runs the full gate on the pushed branch regardless. <code>status-gates</code> is the complete set a <code>STATUS.md</code>-only diff can fail, and every member is also in <code>make check</code>, so this is a strict subset and never a second opinion.</p>
+<p><code>make check</code> adds nothing here: no gate it runs beyond these reads <code>docs/STATUS.md</code>, and CI runs the full gate on the pushed branch regardless.
+<code>status-gates</code> is the complete set a <code>STATUS.md</code>-only diff can fail, and every member is also in <code>make check</code>, so this is a strict subset and never a second opinion.</p>
 <p><strong>Run the target, don't transcribe its contents.</strong> This list used to be spelled out here as three <code>make</code> targets, and it was wrong: <code>roadmap-check</code> and <code>plan-index-check</code> both read Queue membership and both can fail on a <code>STATUS.md</code>-only diff.
 A grooming pass that parked a row followed the three-target list, went green locally, and opened a PR red on <code>roadmap-check</code>.
 The set now lives in the <code>STATUS_GATES</code> variable in the <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/Makefile"><code>Makefile</code></a>, whose comment names each member and what it catches, so there is one copy to keep true.
@@ -3002,7 +3009,8 @@ Authoring a groom, filing a row, or completing an item is not that race, and a Q
 Author the change first: if it really did touch only <code>docs/STATUS.md</code>, the gate set above still covers it; otherwise run <code>make check</code>.</p>
 <h3 id="a-moved-row-defeats-conflict-detection">A moved row defeats conflict detection<a class="headerlink" href="#a-moved-row-defeats-conflict-detection" title="Permanent link">&para;</a></h3>
 <p>Git raises a delete/modify conflict only when both sides touch the <em>same</em> lines.
-Reordering a row moves it, so a branch that <strong>relocates</strong> a row while <code>main</code> <strong>deletes</strong> it produces no conflict at all: git applies the delete at the old position and the re-add at the new one, and a completed row silently comes back. <strong>A clean rebase is not evidence of a correct one.</strong></p>
+Reordering a row moves it, so a branch that <strong>relocates</strong> a row while <code>main</code> <strong>deletes</strong> it produces no conflict at all: git applies the delete at the old position and the re-add at the new one, and a completed row silently comes back.
+<strong>A clean rebase is not evidence of a correct one.</strong></p>
 <p>This is the second and more dangerous of the two ways a done row comes back — the squash-merge case at least leaves a conflict to notice.
 Both occurred on 2026-07-25: the squash case in <a href="https://github.com/actions-gateway/github-actions-gateway/pull/766">#766</a>/<a href="https://github.com/actions-gateway/github-actions-gateway/pull/768">#768</a>, and the reorder case while rebasing a release-planning branch across <a href="https://github.com/actions-gateway/github-actions-gateway/pull/805">#805</a>, which had shipped the very row that branch was relabelling.
 A third near-miss on 2026-07-26 — a row inserted directly above one <code>main</code> had just deleted — is what finally bought the automated check below.</p>
@@ -3014,7 +3022,8 @@ Against the tip, a row <code>main</code> deleted while your branch was behind re
 Under <code>--staged</code> the baseline is the pre-commit tree instead, because that mode asks what the <em>commit</em> changes.</p>
 <p>The <a href="#the-merge-driver-resolve-queue-rows-by-id-not-by-line-position">merge driver</a> closes the reorder-over-delete path at the source — it decides by ID, so a relocated row cannot outvote a deletion — but only for people who installed it, and only for local merges.
 The lint rule stays the load-bearing check.</p>
-<p>Deliberately re-opening a closed item? <code>BACKLOG_ALLOW_RESURRECT="Q1 Q2" make lint-backlog</code>.</p>
+<p>Deliberately re-opening a closed item?
+<code>BACKLOG_ALLOW_RESURRECT="Q1 Q2" make lint-backlog</code>.</p>
 <p><strong>To inspect by hand</strong>, list the IDs your branch has that the branch point did not.
 Read the branch point, not <code>origin/main</code> — against the tip this prints every row <code>main</code> has deleted since you branched:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="nv">base</span><span class="o">=</span><span class="s2">&quot;</span><span class="k">$(</span>git<span class="w"> </span>merge-base<span class="w"> </span>HEAD<span class="w"> </span>origin/main<span class="k">)</span><span class="s2">&quot;</span>
@@ -3025,7 +3034,9 @@ Anything else is a row <code>main</code> deleted and your rebase brought back �
 <h3 id="a-hand-resolved-conflict-drops-rows-the-markers-never-named">A hand-resolved conflict drops rows the markers never named<a class="headerlink" href="#a-hand-resolved-conflict-drops-rows-the-markers-never-named" title="Permanent link">&para;</a></h3>
 <p>Rule 10 catches a row that comes <em>back</em>.
 The mirror case is a row that quietly goes <em>away</em>, and no rule catches that one, because deleting a row is how a row closes: a lint pass cannot tell a completed item from a casualty.</p>
-<p>Measured on <a href="https://github.com/actions-gateway/github-actions-gateway/pull/1471">#1471</a>: the driver refused a <code>Q738</code> row both sides had edited, which is correct behaviour for a keyed merge, and the hand resolution that followed <strong>deleted <code>Q823</code> and <code>Q822</code></strong>, rows belonging to <code>main</code> that the PR never touched, while <strong>dropping <code>Q836</code> and <code>Q837</code></strong>, the two rows the PR existed to add. <code>git rebase</code> reported success, no marker remained, and <code>make status-gates</code> passed on the result. <strong>An absent marker proves a resolution is well-formed, never that it is correct.</strong></p>
+<p>Measured on <a href="https://github.com/actions-gateway/github-actions-gateway/pull/1471">#1471</a>: the driver refused a <code>Q738</code> row both sides had edited, which is correct behaviour for a keyed merge, and the hand resolution that followed <strong>deleted <code>Q823</code> and <code>Q822</code></strong>, rows belonging to <code>main</code> that the PR never touched, while <strong>dropping <code>Q836</code> and <code>Q837</code></strong>, the two rows the PR existed to add.
+<code>git rebase</code> reported success, no marker remained, and <code>make status-gates</code> passed on the result.
+<strong>An absent marker proves a resolution is well-formed, never that it is correct.</strong></p>
 <p>Reproduced in a throwaway repo with the driver installed (git 2.55.0), one refused row sitting between two rows added on each side:</p>
 <table>
 <thead>
@@ -3184,7 +3195,8 @@ The lifecycle:</p>
 </ul>
 <p>A sighting on a <strong>PR branch</strong> does not meet the trigger, so the row stays in Flake watch — but it is still evidence the mitigation is incomplete: record it (on the row, or in the doc the row links) and count the soak from that date rather than from the fix.
 Record <em>which mode</em> failed, too, where the row's fix addressed a specific one: <a href="../../STATUS/#Q549">Q549</a>'s second sighting was a mode its fix never covered, and a row naming only the fixed mode would have sent the next session to re-diagnose the wrong thing.</p>
-<p>This is the one place the general "done rows are deleted" rule does <strong>not</strong> apply, which makes it easy to miss when a flake fix otherwise looks like a routine change. <code>scripts/docs/lint-backlog.sh</code> enforces it (rule 8): a <code>flake</code>-labelled Queue row that disappears entirely — measured against the <a href="#a-moved-row-defeats-conflict-detection">merge base</a> with <code>origin/main</code>, or the pre-commit state under <code>--staged</code> — fails the lint, naming the row and pointing here.
+<p>This is the one place the general "done rows are deleted" rule does <strong>not</strong> apply, which makes it easy to miss when a flake fix otherwise looks like a routine change.
+<code>scripts/docs/lint-backlog.sh</code> enforces it (rule 8): a <code>flake</code>-labelled Queue row that disappears entirely — measured against the <a href="#a-moved-row-defeats-conflict-detection">merge base</a> with <code>origin/main</code>, or the pre-commit state under <code>--staged</code> — fails the lint, naming the row and pointing here.
 Retiring a row per the ledger rules below is the deliberate exception: <code>BACKLOG_ALLOW_FLAKE_DELETE="Q123"</code> lets specific IDs through.</p>
 <h3 id="retiring-a-flake-watch-row">Retiring a flake-watch row<a class="headerlink" href="#retiring-a-flake-watch-row" title="Permanent link">&para;</a></h3>
 <p>Flake watch must not grow without bound — a row whose recurrence-memory has decayed to ~zero still costs a live-table scan every grooming pass and a slice of context budget, for no signal.
@@ -3235,7 +3247,8 @@ Deleting outright throws that memory away and makes the next occurrence look nov
 <p><code>docs/STATUS.md</code> keeps a plan-level <strong>Progress</strong> table above the Queue — one row per plan doc.
 Update it only when a plan's overall status changes (⚠️ → ✅, a new plan lands, a plan retires); most STATUS.md commits touch only the Queue.
 If completing a Queue row closes the last open item under a Progress row, update both in the same commit.</p>
-<p>When you remove a Queue row for a <strong>shipped user-facing capability</strong>, also check whether it graduates a bullet on the website <a href="../../roadmap/">roadmap.md</a> — an "In progress / near-term" item moving to "Available now (1.0)" — and state its true maturity (GA vs. alpha) so the roadmap doesn't overclaim. <code>make roadmap-check</code> (in <code>make check</code>) catches the drift for you: each forward-looking roadmap bullet carries an invisible <code>&lt;!-- q:QN --&gt;</code> annotation, so deleting the row here fails the gate until the bullet moves.
+<p>When you remove a Queue row for a <strong>shipped user-facing capability</strong>, also check whether it graduates a bullet on the website <a href="../../roadmap/">roadmap.md</a> — an "In progress / near-term" item moving to "Available now (1.0)" — and state its true maturity (GA vs. alpha) so the roadmap doesn't overclaim.
+<code>make roadmap-check</code> (in <code>make check</code>) catches the drift for you: each forward-looking roadmap bullet carries an invisible <code>&lt;!-- q:QN --&gt;</code> annotation, so deleting the row here fails the gate until the bullet moves.
 Deleting the row and the annotation without moving the bullet defeats it, which is the one case still on you.</p>
 <h3 id="-means-an-open-queue-row-remains--deferred-residuals-dont-count"><code>⚠️</code> means an open <em>Queue</em> row remains — deferred residuals don't count<a class="headerlink" href="#-means-an-open-queue-row-remains--deferred-residuals-dont-count" title="Permanent link">&para;</a></h3>
 <p>A plan is <code>⚠️</code> only while it has at least one open row <strong>in the Queue</strong>.
@@ -3248,7 +3261,8 @@ For the rare case where the vanished row was such a citation and real work genui
 "Status: Complete — residuals deferred as <a href="../../STATUS/#Q11">Q11</a>").
 The plan doc is <strong>not</strong> archived in this case — its <code>✅</code> Progress row still references it.</p>
 <h3 id="what-parking-a-row-obliges-elsewhere">What parking a row obliges elsewhere<a class="headerlink" href="#what-parking-a-row-obliges-elsewhere" title="Permanent link">&para;</a></h3>
-<p>Deleting a row has a documented cascade — the Progress flip, plan archival, the roadmap graduation. <strong>Moving a row to Deferred has the same one</strong>, because parking changes Queue membership exactly as deleting does, and everything downstream reads Queue membership rather than row existence:</p>
+<p>Deleting a row has a documented cascade — the Progress flip, plan archival, the roadmap graduation.
+<strong>Moving a row to Deferred has the same one</strong>, because parking changes Queue membership exactly as deleting does, and everything downstream reads Queue membership rather than row existence:</p>
 <table>
 <thead>
 <tr>
@@ -3282,7 +3296,8 @@ The plan doc is <strong>not</strong> archived in this case — its <code>✅</co
 <p>Only the first two were written down before.
 A 2026-07-30 groom that deferred <a href="../../STATUS/#Q273">Q273</a> found the other three the expensive way — two by opening a red PR, the third by re-reading the page.</p>
 <h2 id="a-label-earns-its-place-by-discriminating">A label earns its place by discriminating<a class="headerlink" href="#a-label-earns-its-place-by-discriminating" title="Permanent link">&para;</a></h2>
-<p>A label that lands on most rows costs a column and answers nothing. <code>infra</code> reached 69 of 160 table rows before it was retired — it had become "engineering work that isn't docs, tests, or security", covering controller bugs, API graduation, GPU support, and CI gates alike.
+<p>A label that lands on most rows costs a column and answers nothing.
+<code>infra</code> reached 69 of 160 table rows before it was retired — it had become "engineering work that isn't docs, tests, or security", covering controller bugs, API graduation, GPU support, and CI gates alike.
 The rows it marked already carried <code>bug</code>/<code>feature</code>/<code>security</code>; the label added no cut.</p>
 <p>Three narrower labels replaced it, each answering a question someone actually asks:</p>
 <table>
@@ -3311,7 +3326,8 @@ The rows it marked already carried <code>bug</code>/<code>feature</code>/<code>s
 </tr>
 </tbody>
 </table>
-<p>Deliberately <strong>not</strong> added: an <code>e2e</code> label. <code>tests</code> already covers those rows and the item title names the suite, so <code>e2e</code> would double-label rather than split.
+<p>Deliberately <strong>not</strong> added: an <code>e2e</code> label.
+<code>tests</code> already covers those rows and the item title names the suite, so <code>e2e</code> would double-label rather than split.
 A product change to the AGC or GMC takes no area label at all — <code>bug</code>/<code>feature</code>/<code>security</code> carries it, and the linked path says where it lives.</p>
 <p>Apply the same bar to any new label: if you can't name the question it answers, or it would land on more than a third of rows, it belongs in the item title instead.</p>
 <p><code>lint-backlog.sh</code> rule 11 holds the vocabulary closed: every label on a Progress, Queue, or Deferred row must appear on the <code>**Labels:**</code> line, so adding one is a deliberate edit to that line rather than a typo that sticks.
@@ -3376,7 +3392,8 @@ A ledger row makes "no RC has ever passed this" answerable at a glance.</p>
   Leaving the label on <em>is</em> the decision to delay — there is no separate marker for it.</li>
 </ul>
 <p>Both are reversible and both are cheap, which is the point: the expensive failure is a release whose scope quietly drifts because nothing recorded what it was.</p>
-<p><strong>A <code>-gate</code> label is also a public promise.</strong> <a href="../../roadmap/"><code>docs/roadmap.md</code></a> is where an adopter reads it, so adding or removing one is an edit to both files and a punt that skips the second leaves the promise standing. <code>make roadmap-check</code> reconciles them in both directions: every <code>X.Y-gate</code> row must be named by a roadmap bullet's <code>&lt;!-- q:QN --&gt;</code> annotation, and a bullet that writes a version into its prose must name a row carrying that gate.
+<p><strong>A <code>-gate</code> label is also a public promise.</strong> <a href="../../roadmap/"><code>docs/roadmap.md</code></a> is where an adopter reads it, so adding or removing one is an edit to both files and a punt that skips the second leaves the promise standing.
+<code>make roadmap-check</code> reconciles them in both directions: every <code>X.Y-gate</code> row must be named by a roadmap bullet's <code>&lt;!-- q:QN --&gt;</code> annotation, and a bullet that writes a version into its prose must name a row carrying that gate.
 Only the second reads the prose, and only it goes quiet once the version is a derived chip rather than a sentence; the coverage half reads the annotation and the label alone, so it holds whatever the bullet looks like.
 Naming a version without claiming to gate it stays free, which is how Q273's bullet names <code>v2.0.0</code> while carrying no label.</p>
 <p><strong>A near-term roadmap bullet means "committed to a named release".</strong> An item with no <code>X.Y-gate</code> label behind it belongs in Deferred with a revive trigger, which puts its bullet under <em>Exploring / longer-term</em>.

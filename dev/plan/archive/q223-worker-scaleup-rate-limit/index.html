@@ -2712,7 +2712,8 @@ The per-key <code>rate.Limiter</code> is updated in place (<code>SetLimit</code>
 <ol>
 <li><strong>API</strong> — <code>ScaleUpRateLimit</code> struct + <code>ScaleUp *ScaleUpRateLimit</code> field on <code>cmd/agc/api/v1alpha1</code> <code>RunnerGroupSpec</code> and <code>api/v2alpha1</code> <code>RunnerSetSpec</code>; regenerate deepcopy + CRD manifests + chart CRDs.</li>
 <li><strong>Neutral seam</strong> — <code>ScaleUpConfig</code> (MaxPerSecond, Burst) on <code>provisioner.ResolvedSpec</code> (nil = off), populated by both the v1 <code>runnerGroupTarget</code> and the v2 <code>runnerSetTarget</code> adapters (burst defaulted to maxPerSecond there).</li>
-<li><strong>Limiter</strong> — <code>scaleUpLimiter</code> (new <code>provisioner/scaleuplimiter.go</code>): per-owner token bucket, injectable clock + sleep for deterministic tests, zero-value ready (lazy map init) like <code>admissionGate</code>. <code>wait(ctx, key, cfg) (throttled, err)</code>.</li>
+<li><strong>Limiter</strong> — <code>scaleUpLimiter</code> (new <code>provisioner/scaleuplimiter.go</code>): per-owner token bucket, injectable clock + sleep for deterministic tests, zero-value ready (lazy map init) like <code>admissionGate</code>.
+   <code>wait(ctx, key, cfg) (throttled, err)</code>.</li>
 <li><strong>Wiring</strong> — call <code>p.scaleUp.wait(...)</code> before <code>createPodWithQuotaRetry</code> in both provision paths; on <code>throttled</code> increment the metric; on ctx-cancel return the error (job abandoned, same as a quota ctx-cancel).</li>
 <li><strong>Metric</strong> — <code>actions_gateway_worker_scaleup_throttled_total{namespace, runner_group}</code> (G.11's <code>worker_scaleup_throttled_total</code>).</li>
 <li><strong>Docs</strong> — operator field docs in <code>docs/operations/</code>; Appendix G.11 status → implemented stub; this plan; STATUS Q223 row removed (isolated commit).</li>

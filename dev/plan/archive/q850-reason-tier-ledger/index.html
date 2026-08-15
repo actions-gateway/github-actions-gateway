@@ -2721,7 +2721,8 @@ The rest sit in files both protocols execute, so the tier came from where the ca
 <li>Everything <strong>after</strong> it is the classic arm alone: the installation-token fetch, the agent pool, and the multiplexer.
   That is why <code>TokenUnavailable</code>, <code>AgentProvisioningFailed</code> and <code>ListenerStartFailed</code> are classic-only.
   The scale-set arm hands the token manager to its listener rather than fetching at reconcile, and reports a start failure as <code>NoActiveSessions</code> with <code>ScaleSetListenerStartFailed</code> carrying the cause.</li>
-<li>A <code>RunnerGroup</code> only ever acquires classically, so a reason no v2 path writes is classic-only by construction. <code>CredentialAvailable</code> is the only row that rests on this alone.</li>
+<li>A <code>RunnerGroup</code> only ever acquires classically, so a reason no v2 path writes is classic-only by construction.
+  <code>CredentialAvailable</code> is the only row that rests on this alone.</li>
 </ul>
 <h2 id="6-what-the-walk-found">6. What the walk found<a class="headerlink" href="#6-what-the-walk-found" title="Permanent link">&para;</a></h2>
 <p><strong>Two Events an operator can meet in <code>kubectl describe</code> had no runbook entry.</strong> <code>AgentDeregistrationFailed</code> fires when a set being deleted cannot deregister its agent Secrets, holding the finalizer; <code>OrphanedWorkerRecovered</code> fires when a scale-set worker was already gone at AGC startup, so the disruption's cause was lost with the pod (Q844).

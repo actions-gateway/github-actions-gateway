@@ -2667,9 +2667,11 @@ So every cut repeats:
 First exercised on the next real <code>v*</code> tag (see Validation).</p>
 <p>The pipeline already has every piece of data; it just doesn't finish the job.</p>
 <ol>
-<li><strong>Derive <code>artifacthub.io/prerelease</code> from the tag at package time.</strong> <code>publish.yml</code> already overrides the chart's <code>version</code>/<code>appVersion</code> from the tag; setting the annotation from whether the tag matches <code>-rc</code>/<code>0.</code> is the same mechanism (a <code>yq</code> edit before <code>helm package</code>). <strong>Eliminates the flip PR entirely</strong> — both directions.
+<li><strong>Derive <code>artifacthub.io/prerelease</code> from the tag at package time.</strong> <code>publish.yml</code> already overrides the chart's <code>version</code>/<code>appVersion</code> from the tag; setting the annotation from whether the tag matches <code>-rc</code>/<code>0.</code> is the same mechanism (a <code>yq</code> edit before <code>helm package</code>).
+   <strong>Eliminates the flip PR entirely</strong> — both directions.
    Update release.md § Chart version &amp; metadata to match (it currently states the annotation is baked as-is and must be flipped by hand).</li>
-<li><strong>Generate complete, correct release notes and set <code>--prerelease</code> on the Release.</strong> Emit the five multi-arch <strong>index</strong> digests (already recorded to the run summary), the <code>make verify-release VERSION=&lt;tag&gt;</code> line, and a <code>compare/&lt;prev&gt;...&lt;tag&gt;</code> changelog into the Release body, with <code>--prerelease</code> set from the tag. <strong>Eliminates</strong> the manual <code>gh release edit</code>, the wrong-base notes, and the digest copy.
+<li><strong>Generate complete, correct release notes and set <code>--prerelease</code> on the Release.</strong> Emit the five multi-arch <strong>index</strong> digests (already recorded to the run summary), the <code>make verify-release VERSION=&lt;tag&gt;</code> line, and a <code>compare/&lt;prev&gt;...&lt;tag&gt;</code> changelog into the Release body, with <code>--prerelease</code> set from the tag.
+   <strong>Eliminates</strong> the manual <code>gh release edit</code>, the wrong-base notes, and the digest copy.
    Keep the "create only if absent, never clobber curated notes" guard.</li>
 </ol>
 <p>After Bucket 1, Phase A collapses to: <strong>push tag → verify.</strong></p>

@@ -2701,7 +2701,8 @@ Both argue for resolving the tag dynamically rather than hardcoding.</p>
 <li>The values migration path is covered too, or explicitly noted as out of scope: a released release whose values set a key HEAD removed must fail <em>at render</em> with the migration message, not midway through applying.</li>
 </ul>
 <h2 id="why-this-is-worth-a-gate-rather-than-a-checklist-item">Why this is worth a gate rather than a checklist item<a class="headerlink" href="#why-this-is-worth-a-gate-rather-than-a-checklist-item" title="Permanent link">&para;</a></h2>
-<p>The failure is invisible to every local signal. <code>helm template</code>, <code>helm lint</code>, <code>kubeconform</code>, <code>make check</code> and the full e2e suite all pass on a chart that no existing release can upgrade to, because none of them has an older release to upgrade <em>from</em>.
+<p>The failure is invisible to every local signal.
+<code>helm template</code>, <code>helm lint</code>, <code>kubeconform</code>, <code>make check</code> and the full e2e suite all pass on a chart that no existing release can upgrade to, because none of them has an older release to upgrade <em>from</em>.
 A reviewer would have to know Helm's <code>crds/</code> rule and think to ask.
 That is exactly the shape that belongs in CI rather than in a human's memory.</p>
 <p>Prior art for the harness: <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/e2e/chart-upgrade-check.sh"><code>chart-upgrade-check.sh</code></a> already captures a live release's values, mutates the chart, upgrades, and restores — most of the scaffolding this needs exists there.</p>

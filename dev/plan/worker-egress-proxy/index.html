@@ -2788,7 +2788,8 @@ Heavy GPU tenants should raise <code>maxReplicas</code> in their <code>ActionsGa
 <hr />
 <h2 id="implementation-status">Implementation status<a class="headerlink" href="#implementation-status" title="Permanent link">&para;</a></h2>
 <p><strong>Done (2026-05-23, commit <code>4932ce7</code>).</strong></p>
-<p>The split shipped. <code>cmd/gmc/internal/controller/builder.go</code> now emits three NetworkPolicies:</p>
+<p>The split shipped.
+<code>cmd/gmc/internal/controller/builder.go</code> now emits three NetworkPolicies:</p>
 <ul>
 <li><code>buildProxyNetworkPolicy</code> (lines 112-157) — <code>podSelector: { app: actions-gateway-proxy }</code>, egress = DNS + GitHub CIDRs:443, ingress restricted to pods carrying <code>labelComponent: componentWorkload</code> on <code>proxyPort</code>.</li>
 <li><code>buildWorkloadNetworkPolicy</code> (lines 159-188) — <code>podSelector</code> matching AGC and worker labels, egress = DNS + proxy ClusterIP:<code>proxyPort</code> only.</li>

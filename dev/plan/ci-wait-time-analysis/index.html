@@ -2743,7 +2743,8 @@ That is not the common case: of the 300 commits before 2026-08-12, <strong>143 w
 A docs-only PR skips every Go tier.
 Measured on PR #1423, <code>unit-test</code>, <code>integration-test</code>, both e2e lanes, <code>coverage</code>, <code>trivy</code> and <code>govulncheck</code> all report <code>skipping</code> in 0s, so its wall clock is set entirely by the docs-content gates.</p>
 <p>There the profile was sharp rather than flat, and the pole was <code>doc-links</code> at <strong>169s against a next-longest of 21s</strong>.
-Effectively all of it was one shared shell helper. <code>select_present_files</code> deduped candidates by globbing an accumulating string, O(N^2) in the candidate count, and <code>check-doc-links.sh</code> feeds it a bare <code>git_candidates</code>: the whole tree, 13,830 paths, 90% of them <code>vendor/</code>.
+Effectively all of it was one shared shell helper.
+<code>select_present_files</code> deduped candidates by globbing an accumulating string, O(N^2) in the candidate count, and <code>check-doc-links.sh</code> feeds it a bare <code>git_candidates</code>: the whole tree, 13,830 paths, 90% of them <code>vendor/</code>.
 The Go checker it gates was never the cost: 0.17s to check 6,390 links across 271 files, against 38s to build the file list.</p>
 <p>Keying the seen-set took the oracle build to 0.54s and <code>make doc-links</code> end to end from 37.9s to 1.21s locally, output byte-identical.
 The gate is also one of <code>make check</code>'s 30 concurrent fast gates, so the same fix lands in the local loop.</p>

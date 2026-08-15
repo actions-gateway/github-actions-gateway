@@ -2694,7 +2694,8 @@ Mixed case (Direct gateway + a RunnerSet with its own proxyRef): the workload NP
 <li>GMC envtest (<code>integration/</code>): proxy-less gateway → Ready, AGC NP + workload NP have GitHub-CIDR egress, <code>proxyMode: Direct</code> + EgressUnattributed; proxied regression; IP-refresh patches direct NPs.</li>
 <li>AGC envtest (<code>integration/</code>): proxy-less RunnerSet → Ready, <code>proxyMode: Direct</code> + EgressUnattributed; proxied regression.
   Unit tests for builders + resolve.</li>
-<li>e2e (proxy-less job→pod→direct→GitHub, non-GitHub blocked): <strong>shipped (Q178)</strong>. <code>E2E_V2_DirectEgress</code> (<code>cmd/gmc/test/e2e/direct_egress_test.go</code>) provisions a proxy-less gateway + RunnerSet on kind and proves both halves of the §H.10 contract live on a CNI:</li>
+<li>e2e (proxy-less job→pod→direct→GitHub, non-GitHub blocked): <strong>shipped (Q178)</strong>.
+  <code>E2E_V2_DirectEgress</code> (<code>cmd/gmc/test/e2e/direct_egress_test.go</code>) provisions a proxy-less gateway + RunnerSet on kind and proves both halves of the §H.10 contract live on a CNI:</li>
 <li><strong>Positive (both CNI legs):</strong> a workload-labelled pod reaches <code>api.github.com</code> directly — no proxy in the path — confirming the workload NP's GitHub-CIDR allowance lets proxy-less workers egress to GitHub.</li>
 <li><strong>Negative (Calico leg only):</strong> from the same workload network context a connection to a non-GitHub destination (fakegithub in <code>e2e-infra</code>) is dropped by the default-deny egress NetworkPolicy.
     Self-skips on kindnet via <code>egressEnforcingCNI()</code> — kindnet accepts NetworkPolicy but does not enforce egress drops (Q7b/Q119), so the block can only be proven on the Calico lane (<code>e2e-calico.yml</code>, triggered per-PR on <code>cmd/gmc/**</code>).</li>

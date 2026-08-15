@@ -2651,7 +2651,8 @@ The GMC tests and a handful of AGC provisioner tests have not been brought in li
 <hr />
 <h2 id="1-gmc-integration-tests-500ms-polling--25ms">1. GMC integration tests: 500ms polling → 25ms<a class="headerlink" href="#1-gmc-integration-tests-500ms-polling--25ms" title="Permanent link">&para;</a></h2>
 <p><strong>Files:</strong> <code>cmd/gmc/internal/controller/integration/</code> (all test files)</p>
-<p>Every <code>Eventually</code> call in the GMC suite uses a 500ms polling interval. <code>TestGMC_TenantProvisioning_AllResourcesCreated</code> alone has 11 serial <code>Eventually</code> calls — each condition resolves in &lt;10ms against envtest, but the test then waits up to 490ms for the next poll.
+<p>Every <code>Eventually</code> call in the GMC suite uses a 500ms polling interval.
+<code>TestGMC_TenantProvisioning_AllResourcesCreated</code> alone has 11 serial <code>Eventually</code> calls — each condition resolves in &lt;10ms against envtest, but the test then waits up to 490ms for the next poll.
 At 11 calls that is up to 5.5 seconds of dead time in one test.</p>
 <p>Changing all GMC <code>Eventually</code> polling from <code>500*time.Millisecond</code> to <code>25*time.Millisecond</code> is safe: envtest never needs 500ms to process a write, and 25ms gives plenty of headroom on a loaded CI machine.
 This matches the AGC side's existing convention.</p>

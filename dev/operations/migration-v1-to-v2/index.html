@@ -3058,12 +3058,14 @@ Because one v1 object fans out into several v2 objects, the move is a tool-assis
 <p>This guide covers running the <code>gag-migrate</code> tool: dry-run → review → <code>--apply</code>, the coexistence/rollback story, and the post-migration teardown.</p>
 <h2 id="why-upgrade-to-v2">Why upgrade to v2<a class="headerlink" href="#why-upgrade-to-v2" title="Permanent link">&para;</a></h2>
 <p>v2 is <strong>opt-in</strong>.
-It is served at two versions: <strong><code>v2beta1</code></strong> (the graduated, ScaleSet-only storage/hub version) and <strong><code>v2alpha1</code></strong> (deprecated, served as this tool's on-ramp). <code>gag-migrate</code> lands v1 RunnerGroups on <strong><code>v2alpha1</code></strong> so a migrated set keeps the Classic protocol it was registered under during the deprecation window; a tenant then moves to <code>v2beta1</code> (a lossless, apiserver-side conversion) once it no longer needs Classic.
+It is served at two versions: <strong><code>v2beta1</code></strong> (the graduated, ScaleSet-only storage/hub version) and <strong><code>v2alpha1</code></strong> (deprecated, served as this tool's on-ramp).
+<code>gag-migrate</code> lands v1 RunnerGroups on <strong><code>v2alpha1</code></strong> so a migrated set keeps the Classic protocol it was registered under during the deprecation window; a tenant then moves to <code>v2beta1</code> (a lossless, apiserver-side conversion) once it no longer needs Classic.
 Multi-label matching is not a reason to stay: <code>v2beta1</code> registers every <code>runnerLabel</code> on the scale set.
 Because <code>v2alpha1</code> is deprecated, the apiserver warns on every <code>v2alpha1</code> read or write, including the objects <code>gag-migrate</code> applies.
 The warning is advisory and blocks nothing; it clears when the tenant moves to <code>v2beta1</code>.
 <a href="../upgrade/#non-breaking-v1alpha1-is-deprecated-and-the-apiserver-now-warns"><code>v1alpha1</code> warns the same way</a>, so a tenant mid-migration sees a notice on both sides until v1 is decommissioned.
-Detail: <a href="../upgrade/#non-breaking-v2alpha1-is-deprecated-and-the-apiserver-now-warns">upgrade.md</a>. v2 is <strong>not a drop-in replacement</strong> (new API group <code>actions-gateway.com</code>, one CR decomposed into several kinds, a tool-assisted fan-out). <code>v1alpha1</code> stays fully supported until it is <a href="../v1alpha1-deprecation/">removed at <code>v2.0.0</code></a>, which also removes <code>v2alpha1</code> and Classic, so treat the <code>v2alpha1</code> landing spot as a way station and <code>v2beta1</code> as the destination.
+Detail: <a href="../upgrade/#non-breaking-v2alpha1-is-deprecated-and-the-apiserver-now-warns">upgrade.md</a>. v2 is <strong>not a drop-in replacement</strong> (new API group <code>actions-gateway.com</code>, one CR decomposed into several kinds, a tool-assisted fan-out).
+<code>v1alpha1</code> stays fully supported until it is <a href="../v1alpha1-deprecation/">removed at <code>v2.0.0</code></a>, which also removes <code>v2alpha1</code> and Classic, so treat the <code>v2alpha1</code> landing spot as a way station and <code>v2beta1</code> as the destination.
 Migrate a tenant when one of these is worth that trade-off.</p>
 <p><strong>New capabilities — no v1 equivalent:</strong></p>
 <ul>
@@ -3122,7 +3124,8 @@ Migrate a tenant when one of these is worth that trade-off.</p>
 </tr>
 </tbody>
 </table>
-<p>It also aligns the Q147 / domain-renamed namespace markers — adding the <code>actions-gateway.com/tenant=managed</code> marker, the <code>actions-gateway.com/security-profile</code> label, the domain-migrated <code>privileged-profile</code> grant, and the aligned <code>allow-profile-downgrade=allowed</code> annotation. <strong>These are additive:</strong> the legacy <code>actions-gateway.github.com/*</code> keys are kept so v1 keeps working during coexistence (every admission policy dual-reads both during the window), and are removed only when <code>v1alpha1</code> is finally removed.</p>
+<p>It also aligns the Q147 / domain-renamed namespace markers — adding the <code>actions-gateway.com/tenant=managed</code> marker, the <code>actions-gateway.com/security-profile</code> label, the domain-migrated <code>privileged-profile</code> grant, and the aligned <code>allow-profile-downgrade=allowed</code> annotation.
+<strong>These are additive:</strong> the legacy <code>actions-gateway.github.com/*</code> keys are kept so v1 keeps working during coexistence (every admission policy dual-reads both during the window), and are removed only when <code>v1alpha1</code> is finally removed.</p>
 <h3 id="behavior-preserving-guarantees">Behavior-preserving guarantees<a class="headerlink" href="#behavior-preserving-guarantees" title="Permanent link">&para;</a></h3>
 <p>The fan-out preserves v1 behavior and weakens no security property:</p>
 <ul>
@@ -3137,7 +3140,8 @@ Migrate a tenant when one of these is worth that trade-off.</p>
 <p>v2 refuses a privileged container in a <strong>namespaced</strong> <code>RunnerTemplate</code> — a tenant must not be able to self-author a privileged worker shape.
 Privileged shapes live on the platform-owned, cluster-scoped <code>ClusterRunnerTemplate</code>, which exists precisely to hold golden Docker-in-Docker / sysbox templates (<a href="../../design/appendix-h-v2-api-decomposition/">§H.6</a>).</p>
 <p>So when a v1 <code>RunnerGroup</code>'s <code>podTemplate</code> declares a privileged container or init container, <code>gag-migrate</code> emits a <code>ClusterRunnerTemplate</code> rather than a <code>RunnerTemplate</code>, and sets the set's <code>templateRef.kind: ClusterRunnerTemplate</code>.
-Non-privileged groups are unaffected. <strong>This changes what a migration touches</strong>, so it is called out in the dry-run with a warning, and there are three things to know:</p>
+Non-privileged groups are unaffected.
+<strong>This changes what a migration touches</strong>, so it is called out in the dry-run with a warning, and there are three things to know:</p>
 <ul>
 <li><strong>It needs cluster-scoped create permission.</strong> <code>--apply</code> already requires permission to patch the tenant namespace; this adds <code>create</code> on <code>clusterrunnertemplates.actions-gateway.com</code>.</li>
 <li><strong>Deleting the tenant namespace does not reclaim it.</strong> Cluster-scoped objects have no owning namespace.
@@ -3156,7 +3160,8 @@ A privileged tenant therefore migrates under exactly the grant it already had.</
 The <code>namespace-security-profile-guard</code> policy compares the incoming <code>actions-gateway.com/security-profile</code> label against the current one, and an <strong>absent</strong> label reads as the <code>baseline</code> default.
 A tenant coming from v1 has never carried the v2 label, and <code>privileged</code> is the <em>least</em> restrictive level — so the relocation always presents as <code>baseline</code> → <code>privileged</code>, i.e. a downgrade, and is denied without the opt-in annotation.</p>
 <p>The downgrade is only apparent: the namespace's PSA enforcement is <em>already</em> <code>privileged</code> under v1, stamped there by the GMC from the gateway's spec.
-But the policy cannot see that, and it must not — it is the control that stops a stray re-apply from silently relaxing a tenant's isolation. <code>gag-migrate</code> therefore warns in the dry-run instead of writing the annotation itself, for the same reason it never invents the eligibility grant: opting into a downgrade is the operator's decision.</p>
+But the policy cannot see that, and it must not — it is the control that stops a stray re-apply from silently relaxing a tenant's isolation.
+<code>gag-migrate</code> therefore warns in the dry-run instead of writing the annotation itself, for the same reason it never invents the eligibility grant: opting into a downgrade is the operator's decision.</p>
 <p>Add it before <code>--apply</code>, and remove it once the migration is verified:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>kubectl<span class="w"> </span>annotate<span class="w"> </span>namespace<span class="w"> </span>team-a<span class="w"> </span>actions-gateway.com/allow-profile-downgrade<span class="o">=</span>allowed
 <a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>gag-migrate<span class="w"> </span>--namespace<span class="w"> </span>team-a<span class="w"> </span>--context<span class="w"> </span>my-cluster<span class="w"> </span>--apply
@@ -3178,7 +3183,8 @@ But the policy cannot see that, and it must not — it is the control that stops
 <a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>sha256sum<span class="w"> </span>-c<span class="w"> </span>SHA256SUMS<span class="w">   </span><span class="c1"># then confirm your binary&#39;s checksum matches</span>
 </code></pre></div>
 <h3 id="pin-the-target-cluster">Pin the target cluster<a class="headerlink" href="#pin-the-target-cluster" title="Permanent link">&para;</a></h3>
-<p><code>gag-migrate</code> talks to whatever your kubeconfig resolves to. <strong>Pass <code>--context</code> to pin the cluster explicitly</strong> rather than relying on the ambient current-context (a parallel session can silently repoint it):</p>
+<p><code>gag-migrate</code> talks to whatever your kubeconfig resolves to.
+<strong>Pass <code>--context</code> to pin the cluster explicitly</strong> rather than relying on the ambient current-context (a parallel session can silently repoint it):</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>gag-migrate<span class="w"> </span>--namespace<span class="w"> </span>team-a<span class="w"> </span>--context<span class="w"> </span>my-cluster
 </code></pre></div>
 <p>Before any write, <code>--apply</code> echoes the resolved target context and scope and requires an explicit <code>yes</code>.
@@ -3383,7 +3389,8 @@ Prefer the ordered teardown above; this is a recovery path, not an alternative.<
   Migrating a <strong>privileged</strong> tenant always trips the downgrade rule; see <a href="#a-privileged-tenant-needs-the-downgrade-opt-in-for-the-duration-of-the-migration">the downgrade opt-in</a>.
   Note the ordering cost of discovering this at <code>--apply</code> time rather than in the dry-run: the namespace patch is the <strong>last</strong> step, so the v2 objects are already created when it fails.
   Re-running after adding the annotation is safe — apply is idempotent and skips what exists.</li>
-<li><strong><code>--apply</code> fails with <code>failed calling webhook … context deadline exceeded</code>.</strong> The apiserver could not reach the GMC validating webhook. <code>--apply</code> already retries this for 90 seconds, so reaching this error means the webhook was down for longer than that — check the GMC deployment is <code>Running</code> with programmed endpoints (<code>kubectl -n gag-system get deploy,endpoints</code>) before re-running.
+<li><strong><code>--apply</code> fails with <code>failed calling webhook … context deadline exceeded</code>.</strong> The apiserver could not reach the GMC validating webhook.
+  <code>--apply</code> already retries this for 90 seconds, so reaching this error means the webhook was down for longer than that — check the GMC deployment is <code>Running</code> with programmed endpoints (<code>kubectl -n gag-system get deploy,endpoints</code>) before re-running.
   Re-running is safe: apply is idempotent and skips whatever the aborted run already created.</li>
 <li><strong>The dry-run warns the namespace "holds no privileged-eligibility grant on either label domain".</strong> The tenant migrates to <code>securityProfile: privileged</code> but carries the grant label on neither domain, or carries it with a value other than <code>allowed</code> (the match is exact — the legacy <code>"true"</code> is <em>not</em> a grant here).
   Apply the v2 label the warning names, as a platform administrator:</li>

@@ -2627,8 +2627,10 @@ There the path is: enable the provider's control-plane audit logging and transla
   EKS's fixed policy logs Secret access at <code>Metadata</code>.
   Query with CloudWatch Logs Insights.</li>
 <li><strong>GKE</strong> — Secret <strong>reads</strong> are Cloud Audit Logs <strong>Data Access</strong> logs (<code>DATA_READ</code>/<code>ADMIN_READ</code>), <strong>off by default</strong> — enable them for the Kubernetes Engine API.
-  Writes are Admin Activity logs (always on). <code>methodName</code> is <code>io.k8s.core.v1.secrets.get</code> etc.; query in Logs Explorer.</li>
-<li><strong>AKS</strong> — forward the <strong><code>kube-audit</code></strong> diagnostic category to Log Analytics / storage / Event Hub. <strong><code>kube-audit-admin</code> excludes <code>get</code>/<code>list</code></strong> — so it cannot see Secret reads; the compromised-Secret detection requires the full <code>kube-audit</code> category.
+  Writes are Admin Activity logs (always on).
+  <code>methodName</code> is <code>io.k8s.core.v1.secrets.get</code> etc.; query in Logs Explorer.</li>
+<li><strong>AKS</strong> — forward the <strong><code>kube-audit</code></strong> diagnostic category to Log Analytics / storage / Event Hub.
+  <strong><code>kube-audit-admin</code> excludes <code>get</code>/<code>list</code></strong> — so it cannot see Secret reads; the compromised-Secret detection requires the full <code>kube-audit</code> category.
   Query with KQL.</li>
 </ul>
 <h2 id="acceptance">Acceptance<a class="headerlink" href="#acceptance" title="Permanent link">&para;</a></h2>

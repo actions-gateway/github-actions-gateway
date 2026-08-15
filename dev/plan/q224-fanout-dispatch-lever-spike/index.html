@@ -2749,11 +2749,13 @@ Outcome — <strong>2/7 green, 5/7 wedged <code>in_progress</code> indefinitely<
 <h2 id="2-why-only-3-of-48-listeners-were-online-idle-at-burst-agc-side-from-code">2. Why only 3 of 48 listeners were online-idle at burst (AGC-side, from code)<a class="headerlink" href="#2-why-only-3-of-48-listeners-were-online-idle-at-burst-agc-side-from-code" title="Permanent link">&para;</a></h2>
 <p>Pinned to the multiplexer/listener code, not assumed:</p>
 <ol>
-<li><strong>Baseline is exactly one permanent poller.</strong> <code>Multiplexer.Start</code> spawns a single permanent baseline goroutine (<code>m.spawn(ctx, true)</code>, <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/listener/multiplexer.go"><code>multiplexer.go:152</code></a>); there is <strong>no</strong> <code>minIdleListeners</code> / eager-warm knob. <code>maxListeners</code> is only a <em>ceiling</em> (<code>SpawnReplacement</code> no-ops at the cap, <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/listener/multiplexer.go"><code>multiplexer.go:174</code></a>).</li>
+<li><strong>Baseline is exactly one permanent poller.</strong> <code>Multiplexer.Start</code> spawns a single permanent baseline goroutine (<code>m.spawn(ctx, true)</code>, <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/listener/multiplexer.go"><code>multiplexer.go:152</code></a>); there is <strong>no</strong> <code>minIdleListeners</code> / eager-warm knob.
+   <code>maxListeners</code> is only a <em>ceiling</em> (<code>SpawnReplacement</code> no-ops at the cap, <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/listener/multiplexer.go"><code>multiplexer.go:174</code></a>).</li>
 <li><strong>Growth is reactive and 1:1, triggered only by a distinct-planID acquisition.</strong> <code>SpawnReplacement</code> is called by a listener <strong>after it wins a job</strong> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/listener/goroutine.go"><code>goroutine.go:924</code></a>) — <em>after</em> the <code>ClaimJob</code> dedup gate.
    A <strong>deduped loser skips SpawnReplacement entirely</strong> (<code>goroutine.go:866</code>: "SpawnReplacement/renew/provision are all skipped for the loser"; the loser returns at <code>goroutine.go:909</code>).
    So <strong>F duplicate deliveries of one job grow the pool by exactly 1</strong> (the single winner), not by F.</li>
-<li><strong>Therefore, from an idle start, the pool can only grow as fast as <em>distinct</em> planIDs are won.</strong> When GitHub feeds the small idle pool duplicates of one job (§1), each duplicate is a loser → no growth → the pool never climbs toward 48. <code>maxListeners</code> width is <strong>not</strong> the lever (#8 confirmed a 3-session stall at 48); the reactive, winner-only, demand-driven growth is.</li>
+<li><strong>Therefore, from an idle start, the pool can only grow as fast as <em>distinct</em> planIDs are won.</strong> When GitHub feeds the small idle pool duplicates of one job (§1), each duplicate is a loser → no growth → the pool never climbs toward 48.
+   <code>maxListeners</code> width is <strong>not</strong> the lever (#8 confirmed a 3-session stall at 48); the reactive, winner-only, demand-driven growth is.</li>
 </ol>
 <p>This is genuinely AGC-side and changeable — an eager warm baseline of idle listeners <em>would</em> present more distinct idle runners at t=0 (that is H1).
 Whether that helps is decided entirely by §4.</p>
@@ -2780,7 +2782,8 @@ That conflates two different things and the distinction is load-bearing:</p>
   A pre-scheduled idle <strong>pod</strong> cuts pod-schedule latency after a job is <em>acquired</em>.
   It is <strong>not</strong> a long-poll session and presents <strong>no</strong> extra idle runner to GitHub → <strong>zero</strong> effect on dispatch starvation.
   Reviving Q261 as specified does <strong>not</strong> address Q224's blocker.</li>
-<li><strong>Warm idle <em>listeners</em></strong> = a <em>new</em> <code>minIdleListeners</code> / <code>baselineListeners</code> knob that eagerly maintains N idle long-poll sessions (each a distinct registered idle runner) instead of the single reactive baseline (§2). <em>This</em> is what H1 needs, and it does not exist today.</li>
+<li><strong>Warm idle <em>listeners</em></strong> = a <em>new</em> <code>minIdleListeners</code> / <code>baselineListeners</code> knob that eagerly maintains N idle long-poll sessions (each a distinct registered idle runner) instead of the single reactive baseline (§2).
+  <em>This</em> is what H1 needs, and it does not exist today.</li>
 </ul>
 <p>So even to <em>try</em> H1 faithfully you build the warm-listener baseline, not Q261.</p>
 <h3 id="42-efficacy-hinges-on-one-github-side-unknown">4.2 Efficacy hinges on one GitHub-side unknown<a class="headerlink" href="#42-efficacy-hinges-on-one-github-side-unknown" title="Permanent link">&para;</a></h3>
@@ -2794,7 +2797,8 @@ But the existing evidence <strong>leans toward (b)</strong>:</p>
 <ul>
 <li><strong>#8 is the strongest tell.</strong> Faced with 7 queued jobs and a small idle pool, GitHub fed the ~3 idle slots <strong>~6 duplicates of ONE planID</strong> while <strong>5 distinct planIDs went undelivered</strong>.
   If GitHub load-balanced distinct jobs across idle runners (a), those 5 planIDs would have gone to the idle slots; instead the same job was re-offered/fanned.
-  That is the signature of (b). <em>(Consistent-with, not proof: the 5 could in principle have been withheld by an unrelated per-group serialization — which is exactly what the §5 probe would settle.)</em></li>
+  That is the signature of (b).
+  <em>(Consistent-with, not proof: the 5 could in principle have been withheld by an unrelated per-group serialization — which is exactly what the §5 probe would settle.)</em></li>
 <li><strong>The scale-set 1:1 result does <em>not</em> transfer.</strong> Investigation E2 (<a href="../archive/q264-scale-set-protocol-phases/#2b-investigation-e2--capacity-gating-recovery-and-a-real-runner-2026-07-04">q264 §2b</a>) showed GitHub delivering distinct jobs 1:1 — but on the <strong>auto-assign scale-set backend</strong> (server pushes assignments up to a capacity header), a <em>different dispatch algorithm</em> from classic offer-to-many long-poll.
   It proves GitHub <em>can</em> spread when it owns the assignment; it says nothing about classic pollers.</li>
 </ul>
@@ -2817,7 +2821,8 @@ New: a <code>classic_dispatch.go</code> scenario that</p>
 <li><strong>Registers M distinct classic runners</strong> into a runner group carrying a dedicated label, varying the naming axis: <strong>stable/recycled</strong> (<code>probe-N</code>) vs <strong>unique/ephemeral</strong> (<code>probe-&lt;nonce&gt;</code>) — the H2 variable.</li>
 <li><strong>Opens all M long-poll sessions and confirms all M are idle-polling (warm)</strong> <em>before</em> queuing — the H1 variable (contrast: reactively grow from 1).</li>
 <li><strong>Queues N distinct jobs</strong> near-simultaneously via a fixture workflow (<code>classic-dispatch-probe.yml</code>, an N-job <code>matrix</code> on <code>runs-on: [self-hosted, &lt;label&gt;]</code>), analogous to <code>scaleset-probe.yml</code>.</li>
-<li><strong>Records, per delivery</strong>: which session/runner received it, the <code>planID</code> (post-<code>AcquireJob</code>) and <code>RunnerRequestID</code>, and time. <strong>Metric:</strong> distinct planIDs delivered vs duplicate deliveries, and their distribution across the M sessions.</li>
+<li><strong>Records, per delivery</strong>: which session/runner received it, the <code>planID</code> (post-<code>AcquireJob</code>) and <code>RunnerRequestID</code>, and time.
+   <strong>Metric:</strong> distinct planIDs delivered vs duplicate deliveries, and their distribution across the M sessions.</li>
 <li><strong>Cleans up</strong> all M runner records (a fresh dedicated group/label to avoid the shared-repo <code>ci-N</code> clutter hazard).</li>
 </ol>
 <p>Run the 2×2: {stable, unique} × {warm, reactive}, N ≈ M ≈ 6–8.

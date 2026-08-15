@@ -2887,7 +2887,8 @@ Neither is tested.</p>
 </tbody>
 </table>
 <h4 id="5c--parserunnerrsakey-with-bom-prefixed-file-">5c — <code>ParseRunnerRSAKey</code> with BOM-prefixed file ✓<a class="headerlink" href="#5c--parserunnerrsakey-with-bom-prefixed-file-" title="Permanent link">&para;</a></h4>
-<p><strong>Code path:</strong> <code>ParseRunnerRSAKey</code> → <code>stripBOM</code> removes the <code>.NET</code> UTF-8 BOM before JSON parsing. <strong>Coverage:</strong> <code>stripBOM</code> is tested in <code>TestParseRunnerCredentials_DOTNETBOM</code> but not for the RSA params file.</p>
+<p><strong>Code path:</strong> <code>ParseRunnerRSAKey</code> → <code>stripBOM</code> removes the <code>.NET</code> UTF-8 BOM before JSON parsing.
+<strong>Coverage:</strong> <code>stripBOM</code> is tested in <code>TestParseRunnerCredentials_DOTNETBOM</code> but not for the RSA params file.</p>
 <table>
 <thead>
 <tr>
@@ -2903,7 +2904,8 @@ Neither is tested.</p>
 </tbody>
 </table>
 <h4 id="5d--fetchrunneroauthtoken-missing-access_token-field-">5d — <code>FetchRunnerOAuthToken</code> missing <code>access_token</code> field ✓<a class="headerlink" href="#5d--fetchrunneroauthtoken-missing-access_token-field-" title="Permanent link">&para;</a></h4>
-<p><strong>Code path:</strong> server returns 200 with a JSON body that has an empty or missing <code>access_token</code> → error return. <strong>Coverage:</strong> untested → covered.</p>
+<p><strong>Code path:</strong> server returns 200 with a JSON body that has an empty or missing <code>access_token</code> → error return.
+<strong>Coverage:</strong> untested → covered.</p>
 <table>
 <thead>
 <tr>

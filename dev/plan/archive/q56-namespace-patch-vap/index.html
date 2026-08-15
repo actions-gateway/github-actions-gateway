@@ -2709,7 +2709,8 @@
 
 
 <h1 id="q56--gate-gmc-cluster-wide-namespaces-patch-k8s-audit-b-b2">Q56 — Gate GMC cluster-wide <code>namespaces: patch</code> (k8s audit §B B2)<a class="headerlink" href="#q56--gate-gmc-cluster-wide-namespaces-patch-k8s-audit-b-b2" title="Permanent link">&para;</a></h1>
-<p><strong>Status:</strong> ✅ Done — shipped via the <code>namespace-psa-guard</code> VAP + marker-label contract; covered by <code>TestGMC_NamespacePSAGuard_EnforcesMarkerAndFieldScope</code>. <strong>Queue:</strong> <a href="../../../STATUS/">Q56</a> · <strong>Finding:</strong> <a href="../k8s-best-practices/#b-rbac--cluster-wide-privilege-">k8s-best-practices.md §B B2</a></p>
+<p><strong>Status:</strong> ✅ Done — shipped via the <code>namespace-psa-guard</code> VAP + marker-label contract; covered by <code>TestGMC_NamespacePSAGuard_EnforcesMarkerAndFieldScope</code>.
+<strong>Queue:</strong> <a href="../../../STATUS/">Q56</a> · <strong>Finding:</strong> <a href="../k8s-best-practices/#b-rbac--cluster-wide-privilege-">k8s-best-practices.md §B B2</a></p>
 <h2 id="goal">Goal<a class="headerlink" href="#goal" title="Permanent link">&para;</a></h2>
 <p>A compromised GMC pod must not be able to relabel a non-tenant namespace (notably <code>kube-system</code>) Pod Security Admission (PSA) profile.
 Today the GMC holds cluster-wide <code>namespaces: patch/update</code> so it can stamp PSA labels on tenant namespaces — but that same grant lets a compromised pod relabel <code>kube-system</code> to <code>privileged</code>.</p>
@@ -2722,7 +2723,8 @@ This is exactly the fix the finding describes.</p>
 <ol>
 <li>
 <p><strong>Marker-label scope (primary).</strong> Deny a namespace <code>UPDATE</code> by the GMC SA unless the <em>existing</em> object (<code>oldObject</code>) carries <code>actions-gateway.github.com/tenant: "true"</code>.
-   The marker is read from <code>oldObject</code>, which a compromised GMC cannot forge in the request, and is applied by a <em>trusted</em> actor (the admin, at namespace creation) — the GMC must never be able to set it, or a compromised GMC could mark <code>kube-system</code> then patch it. <code>kube-system</code> and every other non-tenant namespace lack the marker → the GMC SA cannot touch them.
+   The marker is read from <code>oldObject</code>, which a compromised GMC cannot forge in the request, and is applied by a <em>trusted</em> actor (the admin, at namespace creation) — the GMC must never be able to set it, or a compromised GMC could mark <code>kube-system</code> then patch it.
+   <code>kube-system</code> and every other non-tenant namespace lack the marker → the GMC SA cannot touch them.
    This alone fully closes B2.</p>
 </li>
 <li>
@@ -2735,7 +2737,8 @@ This is exactly the fix the finding describes.</p>
 The GMC legitimately stamps PSA <code>privileged</code> on such a tenant's namespace, so a value ban on <code>privileged</code> would break supported tenants.
 The marker scope already bounds the blast radius to GMC-managed tenant namespaces.</p>
 <h3 id="residual-documented-out-of-scope-for-q56">Residual (documented, out of scope for Q56)<a class="headerlink" href="#residual-documented-out-of-scope-for-q56" title="Permanent link">&para;</a></h3>
-<p>A compromised GMC can still flip the PSA profile <em>within a tenant namespace it already manages</em> (e.g. <code>baseline</code> → <code>privileged</code> on that one tenant).
+<p>A compromised GMC can still flip the PSA profile <em>within a tenant namespace it already manages</em> (e.g.
+<code>baseline</code> → <code>privileged</code> on that one tenant).
 That blast radius is inherent — the GMC's whole job is managing that tenant's PSA.
 The complementary control is CEL immutability / downgrade-audit on <code>securityProfile</code> itself, tracked as <a href="../../../STATUS/">Q33</a> (k8s audit §D D5).
 Q56 is strictly about non-tenant namespaces.</p>

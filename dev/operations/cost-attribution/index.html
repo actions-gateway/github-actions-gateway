@@ -2905,7 +2905,8 @@ Use the <code>app.kubernetes.io/*</code> set below, which is the stable contract
 <p><strong>Namespace = tenant.</strong> GAG places a tenant's worker pods, proxy pool, and AGC all in that tenant's namespace (the <code>ActionsGateway</code> CR's namespace).
 The namespace name is operator-chosen — GAG does not derive or rename it — so use whatever namespace your team assigned the tenant.
 There is no separate proxy or worker namespace to reconcile.</p>
-<p><strong>Per-RunnerGroup / per-RunnerSet drill-down.</strong> To split a tenant's worker cost by runner shape (e.g. <code>gpu-a100</code> vs <code>cpu-standard</code>), aggregate by <code>app.kubernetes.io/instance</code>, which carries the owning RunnerGroup/RunnerSet name.
+<p><strong>Per-RunnerGroup / per-RunnerSet drill-down.</strong> To split a tenant's worker cost by runner shape (e.g.
+<code>gpu-a100</code> vs <code>cpu-standard</code>), aggregate by <code>app.kubernetes.io/instance</code>, which carries the owning RunnerGroup/RunnerSet name.
 (GAG also sets project-specific <code>actions-gateway/runner-group</code> and <code>actions-gateway.com/runner-set</code> labels for <code>kubectl</code> selection — see <a href="../observability-metrics/#drilling-down-to-individual-runner-pods">observability.md</a> — but for cost queries prefer the recommended <code>instance</code> label.)</p>
 <blockquote>
 <p><strong>Cardinality caution.</strong> Do not aggregate cost by a label whose value is per-job or per-run (there is none in the recommended set, but worker pods <em>also</em> carry per-job annotations like <code>actions-gateway.com/run-id</code>).

@@ -2772,7 +2772,8 @@ Rejected for the cost above.</p>
   Drive the validator with a known allowlist via the constructor (as reserved-namespace tests do).</li>
 <li>Unit tests for the membership logic.</li>
 <li>Provisioner/CRD tests that previously set <code>PreemptionPolicy</code> (none found in code; only the type defined it) — confirm <code>make check</code> stays green after field removal.</li>
-<li>Run gmc under <code>-race</code> per testing.md. <strong>No kind e2e</strong> — admission rejection is envtest-provable; scheduler preemption is a k8s property we don't re-prove.</li>
+<li>Run gmc under <code>-race</code> per testing.md.
+  <strong>No kind e2e</strong> — admission rejection is envtest-provable; scheduler preemption is a k8s property we don't re-prove.</li>
 </ul>
 <h3 id="docs">Docs<a class="headerlink" href="#docs" title="Permanent link">&para;</a></h3>
 <ul>

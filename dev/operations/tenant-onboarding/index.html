@@ -3262,7 +3262,8 @@
 </blockquote>
 <p>This checklist walks from pre-conditions through first successful job.
 For the full setup reference, see <a href="../../getting-started/">Getting Started</a>.
-For day-2 operations after onboarding, see the <a href="../runbook/">Runbook</a>. <strong>Coming from Actions Runner Controller (ARC)?</strong> Start with the <a href="../migration-from-arc/">Migrating from ARC guide</a> — it maps ARC scale-set concepts onto the steps below and walks one runner group across.</p>
+For day-2 operations after onboarding, see the <a href="../runbook/">Runbook</a>.
+<strong>Coming from Actions Runner Controller (ARC)?</strong> Start with the <a href="../migration-from-arc/">Migrating from ARC guide</a> — it maps ARC scale-set concepts onto the steps below and walks one runner group across.</p>
 <div class="admonition tip">
 <p class="admonition-title">New tenants: onboard on the v2 API</p>
 <p>Steps 0–3 (GitHub App, Secret, <code>ResourceQuota</code>) are the same for every tenant.
@@ -3320,7 +3321,8 @@ The single-CR <code>v1alpha1</code> flow in <a href="#step-2-create-the-actionsg
 <li>[ ] <strong>PriorityClass objects exist and are allowlisted</strong> (priority-tiered tenants only).
   Any <code>priorityClassName</code> a tenant references in <code>priorityTiers</code> must (1) be pre-created at the cluster level by the platform (<code>kubectl get priorityclass</code>) <strong>and</strong> (2) appear on the GMC <code>--allowed-priority-classes</code> flag.
   The GMC validating webhook rejects any <code>priorityClassName</code> not on the allowlist (an empty allowlist rejects <em>all</em> of them) — this stops a tenant naming a high-priority, preempting class and evicting other tenants' worker pods.
-  Create allowlisted classes with <code>preemptionPolicy: Never</code> unless cross-tenant preemption is genuinely intended for that tier; see <a href="../security-operations/#priority-classes-the-allowed-priority-classes-allowlist">security-operations.md § Priority classes</a>. <strong>If you do enable a preempting tier, tell the tenant what preemption costs them:</strong> a preempted worker's job concludes on GitHub <em>and</em> is re-run automatically (Q497), but the re-run starts from the beginning rather than resuming — so a long, expensive job in a displaceable tier pays its whole runtime again.
+  Create allowlisted classes with <code>preemptionPolicy: Never</code> unless cross-tenant preemption is genuinely intended for that tier; see <a href="../security-operations/#priority-classes-the-allowed-priority-classes-allowlist">security-operations.md § Priority classes</a>.
+  <strong>If you do enable a preempting tier, tell the tenant what preemption costs them:</strong> a preempted worker's job concludes on GitHub <em>and</em> is re-run automatically (Q497), but the re-run starts from the beginning rather than resuming — so a long, expensive job in a displaceable tier pays its whole runtime again.
   Put cheap-to-repeat work in the tiers that can be displaced.
   See <a href="../troubleshooting/#a-preempted-workers-job-is-not-re-run">troubleshooting: a preempted worker's job is not re-run</a>.</li>
 <li>[ ] <strong><code>noProxyCIDRs</code> is left unset unless the tenant has its own internal destination.</strong> The cluster-internal exemptions — <code>svc.cluster.local</code>, <code>kubernetes.default.svc</code>, <code>localhost</code>, <code>127.0.0.1</code>, and the cluster's API server ClusterIP — are appended automatically on every distribution, so neither the service CIDR nor the API server needs to be named here (this was not true before Q465; see <a href="../troubleshooting/#agc-crash-loops-dialling-the-api-server-through-the-egress-proxy">troubleshooting: AGC crash-loops dialling the API server through the egress proxy</a>).
@@ -3441,7 +3443,8 @@ Avoid all of these by never opening or retyping the key:</p>
 <hr />
 <h2 id="step-1-create-the-github-app-secret">Step 1: Create the GitHub App Secret<a class="headerlink" href="#step-1-create-the-github-app-secret" title="Permanent link">&para;</a></h2>
 <p>Create this in the tenant's namespace.
-Use a stable, versioned name (e.g. <code>github-app-v1</code>) to enable clean credential rotation later.
+Use a stable, versioned name (e.g.
+<code>github-app-v1</code>) to enable clean credential rotation later.
 The Secret holds three keys — <code>appId</code>, <code>installationId</code>, and <code>privateKey</code> — which the GMC projects into the AGC pod as files the controller reads at startup (<code>cmd/agc/main.go</code>).</p>
 <p><strong>Recommended — create from the downloaded file (secure).</strong> Pass the <code>.pem</code> straight into <code>kubectl</code> with <code>--from-file</code>; this preserves the key byte-for-byte (sidestepping every PEM pitfall above) and never exposes it in a shell argument, an environment variable, or your shell history.
 Delete the file as soon as the Secret exists:</p>
@@ -3596,7 +3599,9 @@ See <a href="../troubleshooting/#second-actionsgateway-in-a-namespace-rejected-s
 </code></pre></div>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a>kubectl<span class="w"> </span>apply<span class="w"> </span>-f<span class="w"> </span>actionsgateway.yaml
 </code></pre></div>
-<p><strong>Optional — worker-pod lifecycle.</strong> Each <code>runnerGroups[]</code> entry accepts two cleanup knobs. <code>completedPodTTL</code> (default <code>5m</code>) is how long a finished worker pod (Succeeded/Failed) is kept before the AGC deletes it — the retention window is your chance to <code>kubectl logs</code>/<code>describe</code> a failed pod; <code>"0s"</code> deletes pods immediately on completion. <code>pendingPodDeadline</code> (default <code>10m</code>, minimum <code>1s</code>) is how long a worker pod may sit Pending (unpullable image, unschedulable constraints) before the AGC deletes it and frees the concurrency slot it was holding — raise it above your worst-case node-autoscaling time for GPU pools, e.g.:</p>
+<p><strong>Optional — worker-pod lifecycle.</strong> Each <code>runnerGroups[]</code> entry accepts two cleanup knobs.
+<code>completedPodTTL</code> (default <code>5m</code>) is how long a finished worker pod (Succeeded/Failed) is kept before the AGC deletes it — the retention window is your chance to <code>kubectl logs</code>/<code>describe</code> a failed pod; <code>"0s"</code> deletes pods immediately on completion.
+<code>pendingPodDeadline</code> (default <code>10m</code>, minimum <code>1s</code>) is how long a worker pod may sit Pending (unpullable image, unschedulable constraints) before the AGC deletes it and frees the concurrency slot it was holding — raise it above your worst-case node-autoscaling time for GPU pools, e.g.:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="w">  </span><span class="nt">runnerGroups</span><span class="p">:</span>
 <a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">runnerLabels</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="s">&quot;self-hosted&quot;</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="s">&quot;gpu&quot;</span><span class="p p-Indicator">]</span>
 <a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a><span class="w">      </span><span class="nt">completedPodTTL</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;30m&quot;</span><span class="w">      </span><span class="c1"># longer debugging window for failed jobs</span>
@@ -3719,10 +3724,13 @@ So the gate takes one input from each party, and a runner set cannot choose a si
 <a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a><span class="w">  </span><span class="nt">clusterCapacity</span><span class="p">:</span>
 <a id="__codelineno-14-4" name="__codelineno-14-4" href="#__codelineno-14-4"></a><span class="w">    </span><span class="nt">nodeAutoscaling</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Absent</span><span class="w">   </span><span class="c1"># Present (default) | Absent</span>
 </code></pre></div>
-<p><strong>The default is the safe direction, not the common one.</strong> Under <code>Present</code> the gate refuses intake only on an explicit autoscaler declination, so leaving it unset — or getting it wrong — can only ever <em>under</em>-gate, which is the behaviour you already have. <code>Absent</code> gates on the scheduler's verdict alone, so setting it on a cluster that <em>can</em> grow refuses jobs on pods the autoscaler was about to rescue. <strong>Only set <code>Absent</code> if you own the node contract and it is fixed.</strong> The AGC never infers this: an autoscaler is legitimately silent during backoff, during a cooldown after a failed scale-up, or for a pod it filters out, so "no autoscaler events appeared" is absence of evidence, and reading it as evidence of absence would starve a tenant.</p>
+<p><strong>The default is the safe direction, not the common one.</strong> Under <code>Present</code> the gate refuses intake only on an explicit autoscaler declination, so leaving it unset — or getting it wrong — can only ever <em>under</em>-gate, which is the behaviour you already have.
+<code>Absent</code> gates on the scheduler's verdict alone, so setting it on a cluster that <em>can</em> grow refuses jobs on pods the autoscaler was about to rescue.
+<strong>Only set <code>Absent</code> if you own the node contract and it is fixed.</strong> The AGC never infers this: an autoscaler is legitimately silent during backoff, during a cooldown after a failed scale-up, or for a pod it filters out, so "no autoscaler events appeared" is absence of evidence, and reading it as evidence of absence would starve a tenant.</p>
 <p>Three things to know about the <code>Present</code> (elastic) signal specifically:</p>
 <ul>
-<li><strong>Recognition is narrow on purpose.</strong> It reads cluster autoscaler's <code>NotTriggerScaleUp</code> and Karpenter's <code>FailedScheduling</code>, and nothing else. <code>FailedScheduling</code> counts only when it came from a reporter that is <strong>not</strong> your scheduler — that reason is kube-scheduler's own for every ordinary transient placement failure, and reading those as declinations would refuse jobs your cluster was about to run.
+<li><strong>Recognition is narrow on purpose.</strong> It reads cluster autoscaler's <code>NotTriggerScaleUp</code> and Karpenter's <code>FailedScheduling</code>, and nothing else.
+  <code>FailedScheduling</code> counts only when it came from a reporter that is <strong>not</strong> your scheduler — that reason is kube-scheduler's own for every ordinary transient placement failure, and reading those as declinations would refuse jobs your cluster was about to run.
   A commercial optimizer (CAST AI, Spot Ocean, Zesty) emits its own vocabulary, so the gate simply never closes for it, which is today's behavior.</li>
 <li><strong>It reads Events, and Events expire.</strong> The AGC reads a stuck pod's Events directly (no Event watch, and only for pods already past the scheduling grace).
   Events are garbage-collected on the apiserver's <code>--event-ttl</code>, commonly one hour; that is well outside the <code>pendingPodDeadline</code> window the gate consults, and an expired Event means the gate opens rather than errors.</li>
@@ -3757,7 +3765,8 @@ Because the AGC injects the wrapper on top of <strong>any</strong> base, your im
 <a id="__codelineno-15-5" name="__codelineno-15-5" href="#__codelineno-15-5"></a><span class="w">    </span><span class="o">&amp;&amp;</span><span class="w"> </span>rm<span class="w"> </span>-rf<span class="w"> </span>/var/lib/apt/lists/*
 <a id="__codelineno-15-6" name="__codelineno-15-6" href="#__codelineno-15-6"></a><span class="k">USER</span><span class="w"> </span><span class="s">runner   # keep the non-root UID 1001 the AGC expects</span>
 </code></pre></div>
-<p>A working reference you can copy and extend lives at <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/dogfood/runner/Dockerfile"><code>scripts/dogfood/runner/Dockerfile</code></a> (built by <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/dogfood/runner-build.sh"><code>scripts/dogfood/runner-build.sh</code></a>); it adds just enough to run a <code>make</code>-based Go CI. <strong>It is a reference example, not an officially supported image</strong> — GAG signs and CVE-scans only its five first-party images, so a runner image you ship (or copy from the example) is yours to pin by digest and scan.
+<p>A working reference you can copy and extend lives at <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/dogfood/runner/Dockerfile"><code>scripts/dogfood/runner/Dockerfile</code></a> (built by <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/dogfood/runner-build.sh"><code>scripts/dogfood/runner-build.sh</code></a>); it adds just enough to run a <code>make</code>-based Go CI.
+<strong>It is a reference example, not an officially supported image</strong> — GAG signs and CVE-scans only its five first-party images, so a runner image you ship (or copy from the example) is yours to pin by digest and scan.
 Keep the runner version in step with the default the AGC would otherwise inject.
 GitHub refuses to register a runner below its enforced minimum, currently <code>2.329.0</code>, and separately requires each new runner release be installed within 30 days of publication to keep executing jobs.</p>
 <p><strong>Tag your image with the runner version it ships.</strong> The AGC reads the runner version off the <code>workerImage</code> reference and reports the verdict as the <code>RunnerVersionTooOld</code> condition on the <code>RunnerGroup</code>/<code>RunnerSet</code>:</p>
@@ -3794,7 +3803,8 @@ The pinned-digest advice above still stands, and <code>myrepo/runner:2.335.1@sha
 </code></pre></div>
 <p><code>runner version detected version=2.335.1</code> is the real answer for a custom image; <code>runner version not detected</code> means the image is not <code>actions/runner</code>-derived in the expected layout.</p>
 <p><strong>Optional — distributed tracing.</strong> To send the AGC's OpenTelemetry traces to a collector, add a <code>spec.tracing</code> block.
-Setting <code>endpoint</code> is what turns tracing on; leave the block out to keep it off (the default). <code>sampler</code> is a fixed enum — an unrecognized value is rejected by admission (see <a href="../troubleshooting/#tracing-sampler-rejected-by-admission">troubleshooting: tracing sampler rejected</a>).</p>
+Setting <code>endpoint</code> is what turns tracing on; leave the block out to keep it off (the default).
+<code>sampler</code> is a fixed enum — an unrecognized value is rejected by admission (see <a href="../troubleshooting/#tracing-sampler-rejected-by-admission">troubleshooting: tracing sampler rejected</a>).</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a><span class="nt">spec</span><span class="p">:</span>
 <a id="__codelineno-17-2" name="__codelineno-17-2" href="#__codelineno-17-2"></a><span class="w">  </span><span class="nt">tracing</span><span class="p">:</span>
 <a id="__codelineno-17-3" name="__codelineno-17-3" href="#__codelineno-17-3"></a><span class="w">    </span><span class="nt">endpoint</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">https://otel-collector.observability:4317</span>
@@ -3994,7 +4004,9 @@ See <a href="../troubleshooting/#proxy-pool-not-scaling">Troubleshooting — Pro
 <h2 id="v2-api-multiple-gateways-per-namespace">v2 API: multiple gateways per namespace<a class="headerlink" href="#v2-api-multiple-gateways-per-namespace" title="Permanent link">&para;</a></h2>
 <blockquote>
 <p><strong>Audience:</strong> Platform engineer onboarding a tenant on the <strong><code>actions-gateway.com</code></strong> API, at <strong><code>v2beta1</code></strong> — the graduated, ScaleSet-only storage and hub version, and the version every <strong>new</strong> tenant should use.
-It is served <em>beside</em> <code>v1alpha1</code>, so everything above (the deprecated <code>actions-gateway.github.com/v1alpha1</code> flow) keeps working while you adopt it. <code>v2alpha1</code> is also still served, but only as the <a href="../migration-v1-to-v2/"><code>gag-migrate</code></a> on-ramp for tenants moving off v1: it carries the deprecated <a href="#acquisition-protocol-v2alpha1-only"><code>acquisitionProtocol</code></a> selector, which a new tenant does not need. <code>v2alpha1</code> is itself deprecated and <a href="../v1alpha1-deprecation/">removed at <code>v2.0.0</code></a>; <code>v2beta1</code> is not.
+It is served <em>beside</em> <code>v1alpha1</code>, so everything above (the deprecated <code>actions-gateway.github.com/v1alpha1</code> flow) keeps working while you adopt it.
+<code>v2alpha1</code> is also still served, but only as the <a href="../migration-v1-to-v2/"><code>gag-migrate</code></a> on-ramp for tenants moving off v1: it carries the deprecated <a href="#acquisition-protocol-v2alpha1-only"><code>acquisitionProtocol</code></a> selector, which a new tenant does not need.
+<code>v2alpha1</code> is itself deprecated and <a href="../v1alpha1-deprecation/">removed at <code>v2.0.0</code></a>; <code>v2beta1</code> is not.
 Install the opt-in <code>actions-gateway-crds-v2</code> chart first; see <a href="../../getting-started/#1-deploy-the-gmc">Getting Started — Deploy the GMC</a>.</p>
 </blockquote>
 <p>The biggest onboarding change in v2 is that a single namespace may hold <strong>multiple <code>ActionsGateway</code>s</strong>, lifting the v1 one-gateway-per-namespace rule (<a href="#step-2-create-the-actionsgateway-resource">Step 2</a>).
@@ -4009,7 +4021,8 @@ What that changes when onboarding a v2 tenant:</p>
   On a 1.30 cluster a v2 AGC's <code>RunnerSet</code> informer fails to sync (<code>field label not supported</code>) and the pod never becomes ready.
   Confirm the cluster is ≥ 1.31 before onboarding any v2 gateway.</li>
 <li><strong>Co-located gateways share one namespace security profile.</strong> In v2 the Pod Security level is a property of the <strong>namespace</strong>, not the gateway (see the v2 callout in <a href="#pre-conditions">Pre-Conditions</a>) — so all gateways in a namespace run under the same <code>actions-gateway.com/security-profile</code> label.
-  Tenants needing different postures (e.g. <code>baseline</code> vs <code>privileged</code>) still use separate namespaces, exactly as in v1.</li>
+  Tenants needing different postures (e.g.
+  <code>baseline</code> vs <code>privileged</code>) still use separate namespaces, exactly as in v1.</li>
 </ul>
 <p>For the full reference — the naming table, per-gateway garbage-collection behavior, the CRD chart prerequisite, and the failure modes — see <a href="../troubleshooting/#multiple-v2-gateways-in-one-namespace-naming-scoping-prerequisites">Troubleshooting — Multiple v2 gateways in one namespace</a> and <a href="../../design/appendix-h-v2-api-decomposition/">Appendix H — v2 API decomposition</a>.</p>
 <h3 id="proxy-less-onboarding-direct-egress">Proxy-less onboarding (direct egress)<a class="headerlink" href="#proxy-less-onboarding-direct-egress" title="Permanent link">&para;</a></h3>
@@ -4096,7 +4109,8 @@ It exists to let a tenant migrating off <code>v1alpha1</code> keep the classic p
 <a id="__codelineno-27-10" name="__codelineno-27-10" href="#__codelineno-27-10"></a><span class="w">  </span><span class="nt">maxWorkers</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">50</span>
 </code></pre></div>
 <ul>
-<li><strong>A new tenant should never need this.</strong> Author on <code>v2beta1</code>, with as many labels per set as your workflows target. <code>Classic</code> is deprecated and, together with <code>v2alpha1</code> and <code>v1alpha1</code>, <a href="../v1alpha1-deprecation/">removed at <code>v2.0.0</code></a>; <code>spec.maxListeners</code> goes with it.</li>
+<li><strong>A new tenant should never need this.</strong> Author on <code>v2beta1</code>, with as many labels per set as your workflows target.
+  <code>Classic</code> is deprecated and, together with <code>v2alpha1</code> and <code>v1alpha1</code>, <a href="../v1alpha1-deprecation/">removed at <code>v2.0.0</code></a>; <code>spec.maxListeners</code> goes with it.</li>
 <li><strong><code>gag-migrate</code> writes <code>acquisitionProtocol: Classic</code></strong> onto every set it emits, so a migrated tenant's groups keep the protocol they were registered under.
   Opting one into the scale-set protocol later means creating a fresh set, not editing the old one — the field is <strong>immutable</strong>, because switching a live set's protocol is a re-registration storm.</li>
 <li><strong>Editing a Classic set works unqualified, labels included.</strong> An unqualified <code>kubectl edit/patch/apply</code> addresses the <code>v2beta1</code> storage version, which admits the same multi-label shape.</li>
@@ -4139,7 +4153,8 @@ GAG only registers the tenant's scale sets into the group you named; if the grou
   An undeclared group leaves an existing scale set where it is, so widening the boundary is always an explicit act at GitHub.</li>
 </ul>
 <h3 id="starting-from-a-shipped-template">Starting from a shipped template<a class="headerlink" href="#starting-from-a-shipped-template" title="Permanent link">&para;</a></h3>
-<p>Before hand-authoring a <code>RunnerTemplate</code>, check whether one of the three shipped entries already fits. <code>kubectl apply -k deploy/templates/plain</code> gives a baseline worker; <code>kata-dind</code> and <code>privileged-dind</code> cover jobs that build container images.
+<p>Before hand-authoring a <code>RunnerTemplate</code>, check whether one of the three shipped entries already fits.
+<code>kubectl apply -k deploy/templates/plain</code> gives a baseline worker; <code>kata-dind</code> and <code>privileged-dind</code> cover jobs that build container images.
 A <code>RunnerSet</code> then names one with <code>templateRef: { name: plain, kind: ClusterRunnerTemplate }</code>.
 They are cluster-scoped and platform-applied, none is marked as the cluster default, and each carries prerequisites the template cannot express: see the <a href="../runner-template-library/">runner template library</a>.</p>
 <h3 id="optional-templateref-a-default-worker-pod-shape">Optional <code>templateRef</code> (a default worker pod shape)<a class="headerlink" href="#optional-templateref-a-default-worker-pod-shape" title="Permanent link">&para;</a></h3>
@@ -4270,7 +4285,8 @@ Check the resolution any time with <code>kubectl get vpa &lt;gateway&gt;-agc -o 
 <p>The GMC's own control plane has the same opt-in at the chart level — the <code>vpa.enabled</code> value in <a href="../install/#key-values-an-operator-sets">install.md</a>.</p>
 <h3 id="workload-identity-credentials-external-signer">Workload-identity credentials (external signer)<a class="headerlink" href="#workload-identity-credentials-external-signer" title="Permanent link">&para;</a></h3>
 <p><code>spec.credentials</code> is a discriminated union (keyed by <code>credentials.type</code>) with two members.
-The default, <code>GitHubApp</code> (every example above), is the <strong>possession model</strong>: the App's RSA private key lives in a namespace <code>Secret</code> (<a href="#step-1-create-the-github-app-secret">Step 1</a>) and the AGC signs the App JWT in-process. <code>WorkloadIdentity</code> is the opt-in <strong>delegation model</strong>: <strong>no App private key is ever stored in the cluster</strong> — an external signer signs the App JWT, and the AGC proves its own pod identity to that signer.
+The default, <code>GitHubApp</code> (every example above), is the <strong>possession model</strong>: the App's RSA private key lives in a namespace <code>Secret</code> (<a href="#step-1-create-the-github-app-secret">Step 1</a>) and the AGC signs the App JWT in-process.
+<code>WorkloadIdentity</code> is the opt-in <strong>delegation model</strong>: <strong>no App private key is ever stored in the cluster</strong> — an external signer signs the App JWT, and the AGC proves its own pod identity to that signer.
 Use it when policy forbids a long-lived signing key at rest in the cluster and you run a signer (HashiCorp Vault in the MVP) the AGC can reach.
 See <a href="../../design/05-security/#57-workload-identity-the-no-pem-delegation-model">security §5.7</a> for the trust model.</p>
 <p>There is <strong>no <code>githubApp</code> Secret</strong> for this method — you do not run <a href="#step-1-create-the-github-app-secret">Step 1</a>.

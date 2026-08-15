@@ -2691,7 +2691,8 @@ Revised 2026-08-12 by the Phase 3 re-measure below: e2e is now merge-group-only,
 <p>Taken from the last 30 days of CI runs, merged PRs, and <code>git log</code> contention:</p>
 <ul>
 <li>26–34 PRs merge per day: <code>main</code> advances roughly every 25–30 min during active hours.</li>
-<li>The e2e gate averages ~9 min on success (13.2 min on a representative executed run, 7.6 min of it <code>make e2e</code> proper; max observed 30 min). <code>e2e-gate</code> and <code>e2e-calico-gate</code> are both required checks.</li>
+<li>The e2e gate averages ~9 min on success (13.2 min on a representative executed run, 7.6 min of it <code>make e2e</code> proper; max observed 30 min).
+  <code>e2e-gate</code> and <code>e2e-calico-gate</code> are both required checks.</li>
 <li>18 of 51 recent branches needed ≥2 e2e runs (worst: 5); 10 of the last 50 e2e runs were cancelled mid-flight by a superseding push.
   A third or more of e2e compute is redo, not first-run validation.</li>
 <li>Contention is process files, not code: <code>docs/STATUS.md</code> appears in 542 of 702 commits (77%), <code>docs/plan/README.md</code> in 22%.
@@ -2785,7 +2786,8 @@ The trade-off the candidate named is accepted on the 1% failure rate: an e2e bre
 Revisit only if that fraction climbs.</p>
 <p>The candidate list as recorded on 2026-08-03:</p>
 <ul>
-<li>Demote e2e from per-PR to merge-group-only (halves e2e volume again; trade-off: sessions learn of an e2e failure only at queue time). <strong>Adopted 2026-08-12.</strong></li>
+<li>Demote e2e from per-PR to merge-group-only (halves e2e volume again; trade-off: sessions learn of an e2e failure only at queue time).
+  <strong>Adopted 2026-08-12.</strong></li>
 <li><code>docs/STATUS.md</code> contention (77% of commits) still forces manual conflict resolution before a PR can enqueue; a per-item-file backlog format would remove it structurally, but is a large format change touching the backlog skill and lint, and only worth it if post-queue measurement shows it binding.</li>
 <li>GitHub Issues + a Projects board would also zero the conflicts, but trades them for a sync problem: today a Queue row is deleted in the same PR that ships the work (atomic with the code, reviewable in the diff, greppable in one file, and the bare-Q-ID anchor fabric across docs and code depends on it), while an issue close is a separate mutation that can drift from code state.
   Priority ordering is also weaker through <code>gh</code> (Projects v2 positions are drag-first, not CLI-first).

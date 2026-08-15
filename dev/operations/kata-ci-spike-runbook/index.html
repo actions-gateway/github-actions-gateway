@@ -2938,7 +2938,8 @@ Spike timings: 58 s cold / 43 s warm for <code>kind create cluster</code>; 2 s f
 <hr />
 <h2 id="step-5--confirm-the-metadata-server-is-closed">Step 5 — Confirm the metadata server is closed<a class="headerlink" href="#step-5--confirm-the-metadata-server-is-closed" title="Permanent link">&para;</a></h2>
 <p>Kata isolates the kernel, not the pod network.
-Verify Workload Identity is doing its job. <strong>Never print the token body.</strong></p>
+Verify Workload Identity is doing its job.
+<strong>Never print the token body.</strong></p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>kubectl<span class="w"> </span>--context<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$CTX</span><span class="s2">&quot;</span><span class="w"> </span>run<span class="w"> </span>meta-id<span class="w"> </span>--image<span class="o">=</span>busybox:1.36<span class="w"> </span>--restart<span class="o">=</span>Never<span class="w"> </span><span class="se">\</span>
 <a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a><span class="w">  </span>--overrides<span class="o">=</span><span class="s1">&#39;{&quot;spec&quot;:{&quot;runtimeClassName&quot;:&quot;kata&quot;}}&#39;</span><span class="w"> </span>--command<span class="w"> </span>--<span class="w"> </span>sh<span class="w"> </span>-c<span class="w"> </span><span class="se">\</span>
 <a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a><span class="w">  </span><span class="s1">&#39;wget -qO- --header=&quot;Metadata-Flavor: Google&quot; \</span>

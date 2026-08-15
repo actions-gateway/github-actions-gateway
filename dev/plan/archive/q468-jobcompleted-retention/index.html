@@ -2824,7 +2824,8 @@ Read that ladder with the caveat below.</p>
 <p>The stub grew one route for this — <code>POST /repos/{owner}/{repo}/actions/runs/{id}/cancel</code>, which completes the run's assigned jobs and queues their <code>JobCompleted</code>.
 That models the causal chain the arming phase depends on, so the test covers the probe's cancel wiring rather than stubbing around it.</p>
 <p>What these tests cannot cover is the measurement itself: the stub's queue never expires, so <code>RETAINED</code> is the only outcome it can produce from a real arm.
-The <code>LOST</code> case is driven from a state file pointing at an empty queue. <strong>A green suite here means the harness works, not that the replay path does.</strong></p>
+The <code>LOST</code> case is driven from a state file pointing at an empty queue.
+<strong>A green suite here means the harness works, not that the replay path does.</strong></p>
 <h2 id="findings">Findings<a class="headerlink" href="#findings" title="Permanent link">&para;</a></h2>
 <h3 id="the-first-rung-retained-at-29-s-2026-07-28">The first rung: RETAINED at 29 s (2026-07-28)<a class="headerlink" href="#the-first-rung-retained-at-29-s-2026-07-28" title="Permanent link">&para;</a></h3>
 <p>Armed against <code>actions-gateway/github-actions-gateway</code>, scale set <code>gag-q468-retention</code> (id 11), job <code>2446648c-…</code>, run <code>30409332447</code>.</p>

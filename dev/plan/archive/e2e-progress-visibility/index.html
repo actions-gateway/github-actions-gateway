@@ -2745,8 +2745,11 @@ One mechanism serves both, which is expected: <code>runs-on</code> resolves from
 </ul>
 <h2 id="two-constraints-that-shape-the-design">Two constraints that shape the design<a class="headerlink" href="#two-constraints-that-shape-the-design" title="Permanent link">&para;</a></h2>
 <ol>
-<li><strong>Live progress cannot be printed from inside the suite.</strong> Ginkgo installs a <code>dup2</code>-based output interceptor around spec execution, so anything a spec or a <code>ReportAfterEach</code> writes to stdout is captured and replayed when the spec ends — precisely the buffering we are trying to escape. <code>--output-interceptor-mode=none</code> would stream it at the cost of per-spec failure capture, which is a bad trade. <strong>File writes are not intercepted</strong>, so the suite can emit to a file and a process <em>outside</em> Ginkgo can do the printing.</li>
-<li><strong>The Actions log is append-only.</strong> No cursor addressing, so no redrawing progress bar; heartbeat lines must each stand alone. <code>GITHUB_STEP_SUMMARY</code> renders after the job, not during it, so it serves the post-run view and cannot serve the live one.</li>
+<li><strong>Live progress cannot be printed from inside the suite.</strong> Ginkgo installs a <code>dup2</code>-based output interceptor around spec execution, so anything a spec or a <code>ReportAfterEach</code> writes to stdout is captured and replayed when the spec ends — precisely the buffering we are trying to escape.
+   <code>--output-interceptor-mode=none</code> would stream it at the cost of per-spec failure capture, which is a bad trade.
+   <strong>File writes are not intercepted</strong>, so the suite can emit to a file and a process <em>outside</em> Ginkgo can do the printing.</li>
+<li><strong>The Actions log is append-only.</strong> No cursor addressing, so no redrawing progress bar; heartbeat lines must each stand alone.
+   <code>GITHUB_STEP_SUMMARY</code> renders after the job, not during it, so it serves the post-run view and cannot serve the live one.</li>
 </ol>
 <p>Together these force the shape: <strong>the suite writes a structured event stream to a file; a separate watcher process renders it to the step log.</strong></p>
 <h2 id="scope">Scope<a class="headerlink" href="#scope" title="Permanent link">&para;</a></h2>
@@ -2757,7 +2760,8 @@ Both are follow-ons once the heartbeat shows what it does and does not answer.</
 <p><code>ReportBeforeSuite</code> / <code>ReportBeforeEach</code> / <code>ReportAfterEach</code> in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/test/e2e/e2e_suite_test.go">e2e_suite_test.go</a> append one JSON object per line to <code>$E2E_PROGRESS_FILE</code> (default <code>tmp/e2e-progress.jsonl</code>, gitignored).
 Unset disables the whole mechanism, so a plain <code>go test</code> run is unaffected.</p>
 <p>Events: <code>total</code> (from <code>PreRunStats.SpecsThatWillRun</code>, once), <code>start</code>, <code>end</code> (with state and duration).</p>
-<p><strong>The atomicity constraint is load-bearing.</strong> Six parallel processes append to one file. <code>O_APPEND</code> writes to a regular file are atomic only below <code>PIPE_BUF</code> (4 KiB), so event lines carry spec text and state — never captured output — and the writer truncates each line defensively.
+<p><strong>The atomicity constraint is load-bearing.</strong> Six parallel processes append to one file.
+<code>O_APPEND</code> writes to a regular file are atomic only below <code>PIPE_BUF</code> (4 KiB), so event lines carry spec text and state — never captured output — and the writer truncates each line defensively.
 A spec name long enough to breach the limit would interleave two processes' bytes and corrupt both records.</p>
 <p>Rendering must consume <em>this</em> stream, not Ginkgo's human-readable log.
 Reporter output is not a stable contract; a regex scraper over it would drift silently, the same failure mode the autoscaler event-reason matcher exists to catch.</p>

@@ -2667,7 +2667,8 @@
 <blockquote>
 <p><strong>Status: ✅ Done — shipped 2026-07-03 (Q249).</strong> Discovered during the GKE-dogfood privileged-DinD e2e validation (2026-06-30): a <code>docker:dind</code> sidecar declared as a <strong>regular</strong> container kept the worker pod at <code>1/2</code> after the runner exited, so the AGC counted it as an active session and <code>maxWorkers</code> saturated — the <a href="../gke-dogfood-turnup-findings/">Q247</a> stranding symptom, reproduced deterministically.
 This surfaces that misconfiguration at admission
-+ status + metrics and steers operators to native sidecars. <strong>No custom reaper.</strong></p>
++ status + metrics and steers operators to native sidecars.
+  <strong>No custom reaper.</strong></p>
 <p><strong>What shipped.</strong> Shared detection helper <code>ReapBlockingSidecars</code> + <code>SelfExitingSidecarsAnnotation</code> / <code>RunnerContainerName</code> constants in the neutral <code>api/v2alpha1</code> module (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/api/v2alpha1/sidecar.go">sidecar.go</a>).
 Three non-blocking outlets, all gated by the name-list opt-out: (a) a GMC validating- webhook admission <strong>Warning</strong> on RunnerTemplate/ClusterRunnerTemplate create+update (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/webhook/v2alpha1/runnertemplate_webhook.go">runnertemplate_webhook.go</a>); (b) the advisory <code>PossibleReapBlockingSidecar</code> RunnerSet condition, set/cleared from the resolved template by the AGC reconciler (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/controller/runnerset_controller.go">runnerset_controller.go</a>); (c) the <code>actions_gateway_reap_blocking_sidecar_templates</code> gauge.
 Tested at the tier that observes each: unit (helper, condition+metric), GMC webhook unit (warning emitted/suppressed, never blocks), and AGC envtest integration (condition True/False end-to-end + set still reaches Ready).
@@ -2680,7 +2681,8 @@ No fix needed; kept as the load-bearing assumption.</p>
 The intent is to <em>train operators toward native sidecars</em>, not to enforce or to build a reaper.</p>
 <h2 id="background--why-this-not-a-reaper">Background — why this, not a reaper<a class="headerlink" href="#background--why-this-not-a-reaper" title="Permanent link">&para;</a></h2>
 <p>A GAG worker pod is one "main" runner container plus, optionally, sidecars.
-If a sidecar is a <strong>regular</strong> <code>spec.containers[]</code> entry that runs forever (e.g. <code>dockerd</code> for DinD), the pod never reaches <code>Completed</code> — a pod terminates only when <strong>all</strong> its regular containers exit.
+If a sidecar is a <strong>regular</strong> <code>spec.containers[]</code> entry that runs forever (e.g.
+<code>dockerd</code> for DinD), the pod never reaches <code>Completed</code> — a pod terminates only when <strong>all</strong> its regular containers exit.
 The pod lingers <code>1/2</code>, the AGC keeps counting it active, and the runner pool strands.</p>
 <p><strong>The upstream fix already exists — we rely on it, not on a reaper.</strong> Native sidecars (<a href="https://github.com/kubernetes/enhancements/tree/master/keps/sig-node/753-sidecar-containers">KEP-753</a>): a <code>restartPolicy: Always</code> <strong>init container</strong> that Kubernetes tears down when the main container exits, so the pod completes on its own.
 Beta / on-by-default in <strong>1.29</strong>, GA in <strong>1.33</strong>.

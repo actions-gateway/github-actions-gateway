@@ -2616,7 +2616,8 @@ The dashboards' <code>$namespace</code> template variable is also derived from <
 <h2 id="surfaces-to-add">Surfaces to add<a class="headerlink" href="#surfaces-to-add" title="Permanent link">&para;</a></h2>
 <ol>
 <li><strong>Alerts</strong> (<code>deploy/monitoring/prometheusrule.yaml</code>, mirrored in <code>observability.md</code> + <code>runbook.md</code>):</li>
-<li><code>ActionsGatewayScaleSetProvisioningStalled</code> (critical) — the scale-set analog of <code>NoActiveSessions</code>: jobs are being <em>assigned</em> but none are being <em>provisioned</em> (a wedged tier). <code>assigned rate &gt; 0 unless provisioned rate &gt; 0</code>.</li>
+<li><code>ActionsGatewayScaleSetProvisioningStalled</code> (critical) — the scale-set analog of <code>NoActiveSessions</code>: jobs are being <em>assigned</em> but none are being <em>provisioned</em> (a wedged tier).
+     <code>assigned rate &gt; 0 unless provisioned rate &gt; 0</code>.</li>
 <li><code>ActionsGatewayScaleSetProvisionErrors</code> (warning) — sustained provision-attempt failures (JIT-config mint / pod create).</li>
 <li><strong>SLO recording rule</strong> (<code>prometheusrule.yaml</code> <code>actions-gateway-slos</code> group):</li>
 <li><code>actions_gateway:scaleset_provision_success_rate:rate5m</code> — provisioned / (provisioned + errors) per namespace, mirroring <code>job_acquisition_success_rate</code>.</li>

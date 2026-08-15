@@ -3567,7 +3567,8 @@ The doc remains available — the rationale is often more valuable than the diff
   Update any other in-repo links to the new path <strong>and the moved doc's own relative links</strong> (dropping into <code>archive/</code> adds one <code>../</code> level).
   The doc stays available; the working directory just gets less noisy.
   See the full protocol in <a href="../development/maintaining-backlog/#archiving-completed-plan-docs"><code>docs/development/maintaining-backlog.md</code></a>.</li>
-<li><strong>Do this on close, not in a later audit</strong> — in the same change that drops the plan's last STATUS reference. <code>make plan-index-check</code> (part of <code>make check</code>) fails when an active, non-<code>ⓘ</code> plan here is no longer referenced by STATUS.md, so a forgotten archival can't ship silently.</li>
+<li><strong>Do this on close, not in a later audit</strong> — in the same change that drops the plan's last STATUS reference.
+  <code>make plan-index-check</code> (part of <code>make check</code>) fails when an active, non-<code>ⓘ</code> plan here is no longer referenced by STATUS.md, so a forgotten archival can't ship silently.</li>
 </ul>
 <p>Add a row to this README when creating, completing, or archiving a plan.</p>
 

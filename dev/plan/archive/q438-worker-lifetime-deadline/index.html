@@ -2782,7 +2782,9 @@ The evidence removes it.</p>
 <li><strong>Self-hosted:</strong> the 360-minute default still applies but is <em>not</em> a ceiling — a workflow may raise <code>timeout-minutes</code> beyond it.
   GitHub instead enforces <em>"Each job in a workflow can run for up to 5 days of execution time"</em> (<a href="https://docs.github.com/en/actions/reference/limits">Actions limits</a>; introduced by the <a href="https://github.blog/changelog/2024-04-04-actions-jobs-executing-on-self-hosted-runners-will-now-timeout-in-5-days/">2024-04-04 changelog</a>).</li>
 </ul>
-<p>Two numbers matter for choosing a default. <strong>6 hours</strong> is the timeout every job gets unless its author explicitly opted out of it — so a job running longer than 6 hours is always a deliberate act. <strong>5 days</strong> is the absolute ceiling above which no self-hosted job can run, so any cap we pick below it strictly tightens a bound GitHub already imposes.</p>
+<p>Two numbers matter for choosing a default.
+<strong>6 hours</strong> is the timeout every job gets unless its author explicitly opted out of it — so a job running longer than 6 hours is always a deliberate act.
+<strong>5 days</strong> is the absolute ceiling above which no self-hosted job can run, so any cap we pick below it strictly tightens a bound GitHub already imposes.</p>
 <h3 id="3-message-retention--redelivery-undocumented-and-this-is-the-honest-answer">3. Message retention / redelivery: undocumented, and this is the honest answer<a class="headerlink" href="#3-message-retention--redelivery-undocumented-and-this-is-the-honest-answer" title="Permanent link">&para;</a></h3>
 <p>Q435 flagged this as unmeasured.
 It remains <strong>unmeasured and undocumented</strong>, and no amount of reading settles it.</p>
@@ -2792,7 +2794,8 @@ It says nothing about how long GitHub holds a terminal <code>JobCompleted</code>
 There is no published retention period for that case.</p>
 <p>Stating this plainly rather than inferring a number: <strong>we do not know whether the replay path survives a multi-hour outage.</strong> GAG's <code>scalesettest</code> fake keeps a session-independent queue log, which is the <em>permissive</em> assumption; real retention could be far shorter.
 If it is, the replay path is not a recovery path after a long outage and this item's deadline is the <em>only</em> one — which is an argument for the default being <strong>on</strong>, not opt-in.</p>
-<p>Filed as <strong>Q468</strong> for a live measurement; it needs cluster-only / live credentials and does not belong in this PR. <strong>Measured 2026-07-29</strong> (<a href="../q468-jobcompleted-retention/">q468-jobcompleted-retention.md</a>): retention is <em>not</em> far shorter — a <code>JobCompleted</code> was still redelivered to a new session after 13 h 3 m with no session in between.
+<p>Filed as <strong>Q468</strong> for a live measurement; it needs cluster-only / live credentials and does not belong in this PR.
+<strong>Measured 2026-07-29</strong> (<a href="../q468-jobcompleted-retention/">q468-jobcompleted-retention.md</a>): retention is <em>not</em> far shorter — a <code>JobCompleted</code> was still redelivered to a new session after 13 h 3 m with no session in between.
 That is past this item's 12 h default, so the two mechanisms overlap: the cap fires while redelivery is still live, rather than either leaving a window uncovered.</p>
 <h3 id="4-prior-art">4. Prior art<a class="headerlink" href="#4-prior-art" title="Permanent link">&para;</a></h3>
 <p><strong>ARC does not solve this.</strong> Actions Runner Controller exposes no maximum-runner- lifetime or deadline knob, and orphaned/stuck runner pods are a long-standing open class of issues against it — <a href="https://github.com/actions/actions-runner-controller/issues/1833">#1833</a> (runner not cleaned up after completion), <a href="https://github.com/actions/actions-runner-controller/issues/3821">#3821</a> (AutoscalingRunnerSet stuck believing runners exist), <a href="https://github.com/actions/actions-runner-controller/issues/4136">#4136</a>, <a href="https://github.com/actions/actions-runner-controller/issues/4203">#4203</a>.
@@ -2805,7 +2808,8 @@ So ARC is a confirmation that the gap is real and not a design to copy.</p>
 <p>Three properties decide it:</p>
 <ol>
 <li><strong>The kubelet enforces it, not the AGC.</strong> This is the decisive one.
-   In the dogfood incident the AGC was <code>Pending</code> for the entire 16 hours — so a <em>reaper-side</em> deadline would not have bounded that incident either, because there was no reaper running. <code>activeDeadlineSeconds</code> needs only the node.</li>
+   In the dogfood incident the AGC was <code>Pending</code> for the entire 16 hours — so a <em>reaper-side</em> deadline would not have bounded that incident either, because there was no reaper running.
+   <code>activeDeadlineSeconds</code> needs only the node.</li>
 <li><strong>Measured from <code>StartTime</code></strong>, i.e. active-on-node time, so it does not double-count scheduling latency.
    Stuck-<code>Pending</code> is already covered separately by <code>pendingPodDeadline</code>.</li>
 <li><strong>It composes with the existing reaper.</strong> The pod lands in <code>Failed</code> with <code>Status.Reason == "DeadlineExceeded"</code>, which the reaper's existing terminal arm already reclaims via <code>completedPodTTL</code>.</li>

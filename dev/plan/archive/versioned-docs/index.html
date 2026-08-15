@@ -2665,11 +2665,14 @@ The deeper issue (Q238): a single <code>main</code>-rendered page can't be corre
 <li><strong>Pages source stays "GitHub Actions" (not branch-serving).</strong> mike maintains the version tree on the <code>gh-pages</code> branch; the <code>publish</code> job serves that tree as the Pages <strong>artifact</strong>.
   This keeps full control of the artifact root, which matters for the custom domain: mike does <strong>not</strong> keep a root <code>CNAME</code>, so the workflow re-asserts <code>docs/CNAME</code> at the artifact root every deploy.
   Branch-serving would have required a server-side Pages-source change and risked mike clobbering the root CNAME.</li>
-<li><strong><code>--alias-type=copy</code> for aliases.</strong> GitHub Pages artifact deploys don't follow symlinks, so mike's default symlinked <code>stable/</code> would 404 on deep links. <code>copy</code> makes <code>stable/</code> a real directory; <code>stable/operations/…</code> resolves.</li>
+<li><strong><code>--alias-type=copy</code> for aliases.</strong> GitHub Pages artifact deploys don't follow symlinks, so mike's default symlinked <code>stable/</code> would 404 on deep links.
+  <code>copy</code> makes <code>stable/</code> a real directory; <code>stable/operations/…</code> resolves.</li>
 <li><strong>Trigger model mirrors <code>publish.yml</code>.</strong> A stable <code>v*</code> tag deploys the release; a prerelease tag (<code>0.x</code>, <code>-rc</code>/<code>-alpha</code>/<code>-beta</code>) does not deploy — the same prerelease test <code>publish.yml</code> uses (Q293), so the site republishes on exactly the tags that ship a stable chart.
-  A <code>main</code> push refreshes <code>dev</code>. <code>workflow_dispatch</code> deploys an explicit <code>version</code>/<code>alias</code> (for seeding and manual redeploys).</li>
+  A <code>main</code> push refreshes <code>dev</code>.
+  <code>workflow_dispatch</code> deploys an explicit <code>version</code>/<code>alias</code> (for seeding and manual redeploys).</li>
 <li><strong><code>stable</code>/default is semver-aware, not latest-tag-wins.</strong> A stable tag claims the <code>stable</code> alias + the default root redirect <strong>only when it is the highest released version</strong> (<code>mike list</code> → <code>sort -V</code>).
-  This handles patch releases: a backport to an older supported line (e.g. <code>v1.2.5</code> cut after <code>v1.3.0</code>) publishes its own version without demoting the site from <code>1.3.0</code>.
+  This handles patch releases: a backport to an older supported line (e.g.
+  <code>v1.2.5</code> cut after <code>v1.3.0</code>) publishes its own version without demoting the site from <code>1.3.0</code>.
   Because <code>mike</code> builds each version from its tag, a patch tagged off the release line (not off feature-ahead <code>main</code>) carries only that line's content — so correct release engineering makes the docs correct for free; no docs-specific branch is needed.
   See <a href="../../../operations/release/#patch-releases-and-backports">release.md § Patch releases and backports</a>.</li>
 </ul>

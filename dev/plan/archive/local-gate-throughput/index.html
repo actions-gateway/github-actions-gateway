@@ -2864,7 +2864,8 @@ On a small dev machine it costs ~21 minutes on a fresh worktree, and because the
 With half a dozen parallel worktree sessions the gate, not the work, sets the pace — observed waits up to 5 h (Q376).</p>
 <p><strong>Goal.</strong> Cut both the cost of one run and the queue depth across concurrent runs, without weakening any gate and without regressing the desktop-safety properties the throttle exists to protect.</p>
 <h2 id="baseline-measurement-2026-07-26">Baseline measurement (2026-07-26)<a class="headerlink" href="#baseline-measurement-2026-07-26" title="Permanent link">&para;</a></h2>
-<p>Machine: MacBook Pro, Intel i7-1068NG7, <strong>4 physical / 8 logical cores</strong>, 32 GB. <code>scripts/agent/local-throttle.sh</code> sizes parallelism at <code>physical - 2 = 2</code>, so one run uses ~2 of 8 hardware threads at <code>utility</code> QoS while holding the exclusive lock.</p>
+<p>Machine: MacBook Pro, Intel i7-1068NG7, <strong>4 physical / 8 logical cores</strong>, 32 GB.
+<code>scripts/agent/local-throttle.sh</code> sizes parallelism at <code>physical - 2 = 2</code>, so one run uses ~2 of 8 hardware threads at <code>utility</code> QoS while holding the exclusive lock.</p>
 <p>Every <code>make check</code> prerequisite, timed individually, in a worktree checked out at <code>origin/main</code> with no local diff:</p>
 <table>
 <thead>
@@ -2996,7 +2997,8 @@ That conclusion was measured at the default flags and is wrong once <code>-trimp
 </tr>
 </tbody>
 </table>
-<p>The cached run emits a byte-identical coverage profile, so the ratchet is unaffected. <code>broker</code> reproduces the same result: without <code>-trimpath</code> worktree B re-runs the suite; with it, B prints <code>(cached)</code> on its first invocation.</p>
+<p>The cached run emits a byte-identical coverage profile, so the ratchet is unaffected.
+<code>broker</code> reproduces the same result: without <code>-trimpath</code> worktree B re-runs the suite; with it, B prints <code>(cached)</code> on its first invocation.</p>
 <p><strong><code>-trimpath</code> must not be set globally</strong> (<code>go env -w GOFLAGS</code>, or the e2e targets): <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/test/e2e/e2e_suite_test.go"><code>cmd/gmc/test/e2e/e2e_suite_test.go</code></a> resolves the v2 CRD chart directory from <code>runtime.Caller(0)</code>, which returns a trimmed, non-existent path under the flag.
 It is applied in the unit-tier scripts only (<code>scripts/go/go-test.sh</code>, <code>scripts/go/coverage.sh</code>), which the e2e and integration tiers do not use.
 The release images already build with <code>-trimpath</code> (<code>cmd/*/Dockerfile</code>), so the flag is not new to the repo.</p>
@@ -3014,7 +3016,8 @@ The desktop-safety property the throttle defends is the QoS demotion (CPU <stron
 Trading a bounded oversubscription for halved queue depth is the right side of that trade on a machine running several sessions, and the env override exists for anyone who wants the old strict serialization (<code>GAG_HEAVY_BUILD_SLOTS=1</code>).</p>
 <h3 id="3-the-cheap-gates-run-in-parallel-">3. The cheap gates run in parallel ✓<a class="headerlink" href="#3-the-cheap-gates-run-in-parallel-" title="Permanent link">&para;</a></h3>
 <p>The 14 non-heavy <code>check</code> gates took no lock and ran strictly serially (~50 s).
-They now run through <code>scripts/ci/run-parallel.sh</code> (labeled, attributable output — GNU make 3.81 ships on macOS and has no <code>-O</code> output sync, so <code>make -j</code> would interleave failures unreadably). <code>scripts-test</code>'s 11 assertion scripts are parallelized the same way.</p>
+They now run through <code>scripts/ci/run-parallel.sh</code> (labeled, attributable output — GNU make 3.81 ships on macOS and has no <code>-O</code> output sync, so <code>make -j</code> would interleave failures unreadably).
+<code>scripts-test</code>'s 11 assertion scripts are parallelized the same way.</p>
 <h2 id="finding-the-qos-clamp-not-the-parallelism-knobs-sets-the-local-ceiling">Finding: the QoS clamp, not the parallelism knobs, sets the local ceiling<a class="headerlink" href="#finding-the-qos-clamp-not-the-parallelism-knobs-sets-the-local-ceiling" title="Permanent link">&para;</a></h2>
 <p>Measured 2026-07-26 on the replacement dev machine: Apple M5 Max, <strong>18 physical / 18 logical cores</strong> (performance levels "Super" ×6 and "Performance" ×12), 128 GB.
 There <code>local-throttle.sh</code> sizes <code>jobs</code> at <code>physical - 2 = 16</code>, and <code>slots</code> stays at its hardcoded default of 2.</p>
@@ -3215,10 +3218,12 @@ A <code>test</code> workload was added alongside <code>lint</code>, because <cod
 </tr>
 </tbody>
 </table>
-<p>Every level lands in 18–23 s. <strong>The spread <em>within</em> one level (16: 18→23 s) is wider than the spread between the extremes</strong>, so there is no signal here to fit a curve to — <code>jobs</code> is simply not what bounds a per-module lint on this machine.
+<p>Every level lands in 18–23 s.
+<strong>The spread <em>within</em> one level (16: 18→23 s) is wider than the spread between the extremes</strong>, so there is no signal here to fit a curve to — <code>jobs</code> is simply not what bounds a per-module lint on this machine.
 Two things follow, and they point in opposite directions from the ones the section above anticipated:</p>
 <ul>
-<li>Raising it buys nothing. <code>go-lint.sh</code> lints modules <strong>serially</strong>, one <code>golangci-lint -j jobs</code> per module, and a single module's lint stops scaling below 8.
+<li>Raising it buys nothing.
+  <code>go-lint.sh</code> lints modules <strong>serially</strong>, one <code>golangci-lint -j jobs</code> per module, and a single module's lint stops scaling below 8.
   CPU% climbs with <code>jobs</code> (59 % → 80 %) while wall time does not — that is the oversubscription cost showing up with no throughput to pay for it.</li>
 <li>Lowering it costs nothing <em>here</em>, but <code>jobs</code> is not lint's alone (see the unit tier below), so a cut would have to be justified against that consumer too.</li>
 </ul>
@@ -3228,7 +3233,8 @@ Two things follow, and they point in opposite directions from the ones the secti
 It reproduced the harness's signature failure exactly: 46/40/40/40 s at <code>jobs=4/8/16/24</code> and 18–36 % mean CPU, correctly marked <code>INVALID</code>.
 With the build cache warm, <code>-count=1</code> defeats only the <em>result</em> cache, so what remains is test execution — a handful of suites waiting on timers and envtest, which no amount of <code>-p</code> makes faster.</p>
 <p>That is now <strong>four</strong> undersized workloads across this investigation (<code>cmd/agc</code> alone, the warm <code>-race</code> tier, the warm unit tier, and — from the other direction — a <code>GOLANGCI_LINT_CACHE</code>-only bust).
-Every one of them returned identical numbers for every candidate and would have read as "the knob doesn't matter" without the saturation guard. <strong>The generalization: on this repo, warm caches make every tier execution-bound and unable to discriminate; <code>GOCACHE</code> is what has to be cold for a parallelism knob to show a curve at all.</strong> <code>run_test</code> therefore busts <code>GOCACHE</code> per run like <code>run_lint</code> does, which is also the regime that matters — a fresh worktree is exactly when the local gate is expensive.</p>
+Every one of them returned identical numbers for every candidate and would have read as "the knob doesn't matter" without the saturation guard.
+<strong>The generalization: on this repo, warm caches make every tier execution-bound and unable to discriminate; <code>GOCACHE</code> is what has to be cold for a parallelism knob to show a curve at all.</strong> <code>run_test</code> therefore busts <code>GOCACHE</code> per run like <code>run_lint</code> does, which is also the regime that matters — a fresh worktree is exactly when the local gate is expensive.</p>
 <p>Cold, the unit tier does saturate (55–74 % CPU, <code>VALID</code>) and answers the other half of the <code>jobs</code> question — full workspace, <code>-count=1</code>, 2 interleaved trials:</p>
 <table>
 <thead>
@@ -3287,7 +3293,8 @@ Replacing it with a tuned constant would trade a rationale that scales for a num
 Before, <code>jobs = 16</code> was <a href="#what-this-means-for-the-two-knobs">fictional</a> — 2.7× oversubscription of a 6-core confinement.
 Now the cores are really there, <code>jobs=24</code> genuinely oversubscribes them, and the desktop still never registered a stutter event.</p>
 <h3 id="slots-stays-at-2--the-knee-is-exactly-there"><code>slots</code> stays at 2 — the knee is exactly there<a class="headerlink" href="#slots-stays-at-2--the-knee-is-exactly-there" title="Permanent link">&para;</a></h3>
-<p>M concurrent cold-cache lints, 3 interleaved trials. <code>WALL_S</code> is the time until the <strong>last</strong> holder finishes, so aggregate throughput is M/wall — that, not wall time, is what a slot count buys:</p>
+<p>M concurrent cold-cache lints, 3 interleaved trials.
+<code>WALL_S</code> is the time until the <strong>last</strong> holder finishes, so aggregate throughput is M/wall — that, not wall time, is what a slot count buys:</p>
 <table>
 <thead>
 <tr>
@@ -3480,7 +3487,9 @@ The other two differ on <strong>three individual blocks</strong>, and none of th
 </tr>
 </tbody>
 </table>
-<p>The <code>probe</code> one is self-documenting: <code>TestInvestigateJobDelivery_RealTimeoutNoJobArrives</code>'s own doc comment says it confirms a prompt exit "via <strong>either</strong> the top-of-loop deadline check <strong>or</strong> a deadline-exceeded GetMessage error". <code>manager.go:147</code> flips between two runs of the <em>same</em> shape, which is the cleanest evidence that this population is pre-existing. <code>renew.go:86</code> is the only one that tracked the shape across all four runs (n=2 each, so weak) — plausibly because the single invocation runs the machine at 439 % rather than 274 %, and a shutdown-mid-call race resolves differently under that load.</p>
+<p>The <code>probe</code> one is self-documenting: <code>TestInvestigateJobDelivery_RealTimeoutNoJobArrives</code>'s own doc comment says it confirms a prompt exit "via <strong>either</strong> the top-of-loop deadline check <strong>or</strong> a deadline-exceeded GetMessage error".
+<code>manager.go:147</code> flips between two runs of the <em>same</em> shape, which is the cleanest evidence that this population is pre-existing.
+<code>renew.go:86</code> is the only one that tracked the shape across all four runs (n=2 each, so weak) — plausibly because the single invocation runs the machine at 439 % rather than 274 %, and a shutdown-mid-call race resolves differently under that load.</p>
 <p>Effect on the ratchet: <code>cmd/agc</code> did not move at all (78.9 % both ways — two statements against thousands), and <code>cmd/probe</code> moved 81.8 % → 82.0 % in one run of four. ±0.2 pp is well inside the 0.5 pp tolerance, and is exactly the benign drift that tolerance was sized for, so nothing here needs fixing.
 It is worth knowing that a few floors carry ±0.2 pp of load-dependent noise rather than being exact.</p>
 <p>The split rule (longest module import path, <code>/</code>-bounded, then the same <code>EXCLUDE_RE</code> filter) is asserted by <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/go/coverage-test.sh"><code>scripts/go/coverage-test.sh</code></a> under <code>make scripts-test</code>: the per-module invocation could not get attribution wrong by construction, and the split can, so the boundary and exclusion cases are pinned rather than left to a full coverage run to notice.</p>

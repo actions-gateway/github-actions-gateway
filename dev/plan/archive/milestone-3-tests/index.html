@@ -2854,7 +2854,8 @@ Q9 is therefore complete.</p>
 <hr />
 <h2 id="high-priority">High Priority<a class="headerlink" href="#high-priority" title="Permanent link">&para;</a></h2>
 <h3 id="h1--no-metric-assertions-for-any-m3-prometheus-metrics--done">H1 — No metric assertions for any M3 Prometheus metrics ✅ Done<a class="headerlink" href="#h1--no-metric-assertions-for-any-m3-prometheus-metrics--done" title="Permanent link">&para;</a></h3>
-<p><strong>What's missing:</strong> The provisioner tests pass <code>nil</code> for <code>*listener.Metrics</code>, so <code>JobDuration</code>, <code>EvictionRetries</code>, and <code>EvictionRetriesExhausted</code> are never asserted. <code>PodCreationLatency</code> is declared in <code>Metrics</code> but never emitted anywhere in <code>provisioner.go</code> — dead code that a metric assertion would immediately surface.</p>
+<p><strong>What's missing:</strong> The provisioner tests pass <code>nil</code> for <code>*listener.Metrics</code>, so <code>JobDuration</code>, <code>EvictionRetries</code>, and <code>EvictionRetriesExhausted</code> are never asserted.
+<code>PodCreationLatency</code> is declared in <code>Metrics</code> but never emitted anywhere in <code>provisioner.go</code> — dead code that a metric assertion would immediately surface.</p>
 <p><strong>Proposed fix:</strong></p>
 <ul>
 <li>Add a <code>newTestMetrics()</code> helper in <code>provisioner_test.go</code> (analogous to the one in <code>goroutine_test.go</code>).</li>
@@ -2914,7 +2915,8 @@ A bug that sets <code>aesKey</code> to an empty slice instead of <code>nil</code
 </ul>
 <hr />
 <h3 id="m2--writepayloadtopipe-with-an-empty-payload-is-untested--done">M2 — <code>writePayloadToPipe</code> with an empty payload is untested ✅ Done<a class="headerlink" href="#m2--writepayloadtopipe-with-an-empty-payload-is-untested--done" title="Permanent link">&para;</a></h3>
-<p><strong>What's missing:</strong> A misconfigured empty Kubernetes Secret produces a <code>[0,0,0,0]</code> wire message with no body bytes. <code>Runner.Worker</code> would then read zero bytes after the prefix, potentially hanging or erroring.
+<p><strong>What's missing:</strong> A misconfigured empty Kubernetes Secret produces a <code>[0,0,0,0]</code> wire message with no body bytes.
+<code>Runner.Worker</code> would then read zero bytes after the prefix, potentially hanging or erroring.
 No test covers this case or verifies the length prefix round-trips correctly for large payloads.</p>
 <p><strong>Proposed fix:</strong></p>
 <ul>

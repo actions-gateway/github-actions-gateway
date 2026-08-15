@@ -2632,7 +2632,8 @@
 
 <h1 id="q501--relaying-a-run-cancellation-to-the-worker-pod">Q501 — relaying a run cancellation to the worker pod<a class="headerlink" href="#q501--relaying-a-run-cancellation-to-the-worker-pod" title="Permanent link">&para;</a></h1>
 <p><strong>Status:</strong> ⚠️ Partial.
-The <em>actuator</em> shipped (Phase 1). <strong>Phase 0 is answered:</strong> the ScaleSet tier is not exposed to the unbounded form of this defect, from a live measurement already committed to the repo — so Q501 is a <strong>classic-tier</strong> item and candidate B's cost is not worth paying.
+The <em>actuator</em> shipped (Phase 1).
+<strong>Phase 0 is answered:</strong> the ScaleSet tier is not exposed to the unbounded form of this defect, from a live measurement already committed to the repo — so Q501 is a <strong>classic-tier</strong> item and candidate B's cost is not worth paying.
 The remaining question is Phase 2, one live-GitHub reading that the cancel spec is now instrumented to take.</p>
 <p>Q501 was found by <a href="../archive/q459-drained-worker-recovery/#the-measurement-also-found-that-a-cancel-never-reaches-the-worker-q501">Q459's cancellation measurement</a>: a <code>sleep 600</code> job ran its full 600s after its run was cancelled from GitHub, which concluded the job at its own ~5-minute grace.
 Cancelling a runaway job does not reclaim its capacity.</p>
@@ -2660,7 +2661,8 @@ They compose: closing either alone changes nothing observable.</p>
 </tr>
 </tbody>
 </table>
-<p>The actuator gap is the larger surprise, because it is not specific to cancellation. <code>handleJob</code> derives a per-job context and the renew loop cancels it when the job's lock is definitively lost (Q254) — the stated intent being that "the worker tears down".
+<p>The actuator gap is the larger surprise, because it is not specific to cancellation.
+<code>handleJob</code> derives a per-job context and the renew loop cancels it when the job's lock is definitively lost (Q254) — the stated intent being that "the worker tears down".
 It does not: <code>waitForCompletion</code> returns <code>ctx.Err()</code>, <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/provisioner/provisioner.go"><code>provision</code></a> deletes the job Secret and returns, and the pod is left running.
 Nothing else reclaims it either — the reaper's <code>orphaned_running</code> arm reads an annotation only the scale-set tier stamps — so it burns a worker slot and a node until the kubelet kills it at <code>spec.maxWorkerLifetime</code> (default <strong>12 hours</strong>).</p>
 <p>So every Q254 lost-lock teardown has been leaving an orphan, not just the cancel path.
@@ -2704,16 +2706,20 @@ The default since Q264 P5 is <code>acquisitionProtocol: ScaleSet</code>, and tha
 <p><strong>A cancelled run puts a terminal message on that queue, measured live.</strong> Q468's retention probe cancelled a real run and recorded the result: <code>POST …/runs/{id}/cancel</code> accepted, and the job's <code>JobCompleted</code> with <code>result: canceled</code> on the scale set's queue <strong>~0.2 s later</strong> (<a href="../archive/q468-jobcompleted-retention/">q468-jobcompleted-retention.md</a>, 2026-07-28).
 The observation is load-bearing enough that the spelling — <code>canceled</code>, one L — is what <code>scalesetstub</code> was corrected to.
 So the trigger this plan set out to find on classic already exists on ScaleSet and needed no new run to establish.</p>
-<p>The actuator downstream of it is also already built, and it is not the Phase 1 one. <code>completeJob</code> → <code>CleanupScaleSetJob</code> → <code>markJobCompleted</code> stamps <code>actions-gateway.com/job-completed-at</code> on the job's worker pod, and the reaper deletes a pod still <code>Running</code> <code>completedJobRunningGrace</code> (5 min) later — the Q420 arm, proven end to end against a real apiserver by <code>TestV2_RunnerSet_OrphanedRunningPodReaped</code>.</p>
+<p>The actuator downstream of it is also already built, and it is not the Phase 1 one.
+<code>completeJob</code> → <code>CleanupScaleSetJob</code> → <code>markJobCompleted</code> stamps <code>actions-gateway.com/job-completed-at</code> on the job's worker pod, and the reaper deletes a pod still <code>Running</code> <code>completedJobRunningGrace</code> (5 min) later — the Q420 arm, proven end to end against a real apiserver by <code>TestV2_RunnerSet_OrphanedRunningPodReaped</code>.</p>
 <p>So the ScaleSet worst case is two graces, not the job's remaining runtime: GitHub's own ~5-minute cancellation grace before it concludes a job whose runner is still going, then the 5-minute reap grace, plus reconcile lag.
-Classic's worst case is the job running to completion, bounded only by <code>spec.maxWorkerLifetime</code> — 12 hours by default. <strong>Q501 in its unbounded form is a classic-tier defect</strong>, on a tier scheduled for removal at <code>v2.0.0</code>.</p>
+Classic's worst case is the job running to completion, bounded only by <code>spec.maxWorkerLifetime</code> — 12 hours by default.
+<strong>Q501 in its unbounded form is a classic-tier defect</strong>, on a tier scheduled for removal at <code>v2.0.0</code>.</p>
 <p><strong>What stays unmeasured, and why it does not gate anything.</strong> Q468's cancel had <em>no runner attached</em> — it says so explicitly, since producing a <code>JobCompleted</code> without one is the whole trick the arming phase turns.
 So the ~0.2 s is the latency for a job GitHub can conclude immediately, not for one with a live worker; the composed cancel→queue→stamp→reap figure has each component measured or proven but has never been observed as one number.
 It also remains likely that a ScaleSet worker aborts natively long before any of that, since it runs the full runner (<code>run.sh --jitconfig</code>) over its own broker session — untested, and now not worth a run of its own.
 Neither residual can move the bound above the two graces, which is the only thing Phase 0 was asked to decide.</p>
 <h2 id="phase-1--the-actuator-shipped">Phase 1 — the actuator (shipped)<a class="headerlink" href="#phase-1--the-actuator-shipped" title="Permanent link">&para;</a></h2>
 <p>When the listener abandons a job, the worker pod is reclaimed.</p>
-<p>The subtlety is that a process-wide shutdown cancels every job context at once, and must <strong>not</strong> delete live workers — an AGC rollout would kill every running job. <code>context.Cause</code> separates the two: <code>handleJob</code> derives the job context with <code>context.WithCancelCause</code>, the renew loop cancels it with <code>ErrJobAbandoned</code> wrapping the teardown reason, and a plain parent cancellation leaves the cause as <code>context.Canceled</code>. <code>provision</code> reclaims only on the former.</p>
+<p>The subtlety is that a process-wide shutdown cancels every job context at once, and must <strong>not</strong> delete live workers — an AGC rollout would kill every running job.
+<code>context.Cause</code> separates the two: <code>handleJob</code> derives the job context with <code>context.WithCancelCause</code>, the renew loop cancels it with <code>ErrJobAbandoned</code> wrapping the teardown reason, and a plain parent cancellation leaves the cause as <code>context.Canceled</code>.
+<code>provision</code> reclaims only on the former.</p>
 <p>The delete is stamped <code>actions-gateway.com/deletion-reason: job_abandoned</code> before it is issued, which is what keeps it from re-entering Q502's graceful-deletion recovery as a disruption — the exclusion <code>deletion.go</code> requires of "any future AGC deletion path — e.g. a Q501 cancel-relay that deletes the worker".
 A reclaimed worker is counted on <code>actions_gateway_worker_pods_reaped_total{reason="job_abandoned"}</code>.</p>
 <p>The pod delete is graceful, so the Q385 SIGTERM relay reaches <code>Runner.Worker</code> and the runner reports its own outcome rather than being SIGKILLed — the same path a drain takes, measured at 16s to a GitHub conclusion.</p>

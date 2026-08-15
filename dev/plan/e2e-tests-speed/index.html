@@ -3934,7 +3934,8 @@ This is the lowest-effort improvement to CI observability.</p>
 <h2 id="12-progress-reporting-for-slow-specs---poll-progress-after">12. Progress reporting for slow specs (<code>--poll-progress-after</code>)<a class="headerlink" href="#12-progress-reporting-for-slow-specs---poll-progress-after" title="Permanent link">&para;</a></h2>
 <p><strong>Estimated savings: faster diagnosis, not raw speed</strong></p>
 <h3 id="problem_11">Problem<a class="headerlink" href="#problem_11" title="Permanent link">&para;</a></h3>
-<p>When a long-running spec (e.g. <code>WaitForDeploymentReady</code>) stalls in a parallel process, there is no signal in the log until the timeout fires — which can be 3–4 minutes later.
+<p>When a long-running spec (e.g.
+<code>WaitForDeploymentReady</code>) stalls in a parallel process, there is no signal in the log until the timeout fires — which can be 3–4 minutes later.
 By that point other suites have already finished and the failure is hard to attribute to a specific <code>By(...)</code> step.</p>
 <h3 id="approach_5">Approach<a class="headerlink" href="#approach_5" title="Permanent link">&para;</a></h3>
 <p>Ginkgo v2's <code>--poll-progress-after=Xs</code> flag prints a progress report for any spec that has not completed within X seconds.

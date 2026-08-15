@@ -2771,7 +2771,8 @@ It matters here because three of the six layers assume framework machinery this 
 After fixes: 0 broken file links and 0 broken in-page anchors across the doc set.</p>
 <p>Tasks:</p>
 <ol>
-<li><strong>Fix the one broken link</strong> — ✅ done. <code>docs/plan/archive/milestone-2-tests.md</code> linked to <code>milestone-2.md</code> (moved up a directory) → <code>../milestone-2.md</code>.
+<li><strong>Fix the one broken link</strong> — ✅ done.
+   <code>docs/plan/archive/milestone-2-tests.md</code> linked to <code>milestone-2.md</code> (moved up a directory) → <code>../milestone-2.md</code>.
    Full relative-<code>.md</code>-link scan: 0 broken project links.</li>
 <li><strong>Anchor spot-check</strong> — ✅ done (full check, not just spot).
    Validated all 127 in-page <code>#anchor</code> links against the GitHub heading-slug algorithm; found and fixed 5 pre-existing broken anchors: 3 in <code>design/README.md</code> (TOC pointed at richer text than the actual <code>01-executive-summary.md</code> subheadings), 1 in <code>02-architecture.md</code> (<code>§11.A</code> said <code>investigation</code>, heading is <code>protocol</code>), and 1 in <code>security.md</code> (the <code>worker-egress-proxy.md</code> "Implementation status" heading carried a volatile date+commit — stabilized the heading so the anchor is durable).
@@ -2787,7 +2788,8 @@ The repo's analogue is the implemented-vs-planned distinction, which CLAUDE.md e
 <p>Task:</p>
 <ol>
 <li><strong>Implemented-vs-planned prose audit</strong> — ✅ audited; one significant finding.
-   The highest-signal check was cross-referencing every documented Prometheus metric name against the metric literals actually registered in non-test Go (<code>cmd/proxy/proxy.go</code>, <code>cmd/agc/internal/listener/metrics.go</code>). <strong>15 metrics are implemented; the docs reference 6 that have no code definition at all</strong> — operator docs document telemetry an operator cannot scrape.</li>
+   The highest-signal check was cross-referencing every documented Prometheus metric name against the metric literals actually registered in non-test Go (<code>cmd/proxy/proxy.go</code>, <code>cmd/agc/internal/listener/metrics.go</code>).
+   <strong>15 metrics are implemented; the docs reference 6 that have no code definition at all</strong> — operator docs document telemetry an operator cannot scrape.</li>
 </ol>
 <table>
 <thead>
@@ -2848,7 +2850,8 @@ The real metadata layer is the per-directory <code>README.md</code> index — on
 <p>Source of truth: per-directory <code>README.md</code> indexes, design-doc breadcrumbs, and the role-based reading paths in <code>design/README.md</code>.</p>
 <p>Tasks:</p>
 <ol>
-<li><strong>Add <code>docs/README.md</code> landing page</strong> — the highest-value single fix. <code>docs/</code> root holds <code>getting-started.md</code>, <code>STATUS.md</code>, and four subdirs with nothing tying them together.
+<li><strong>Add <code>docs/README.md</code> landing page</strong> — the highest-value single fix.
+   <code>docs/</code> root holds <code>getting-started.md</code>, <code>STATUS.md</code>, and four subdirs with nothing tying them together.
    Add a top-level index: one line per subdir + the two root docs, plus the role-based entry points (mirror, don't duplicate, the <code>design/README.md</code> paths).</li>
 <li><strong>Orphan check.</strong> Confirm every doc is reachable from some index — appendices, <code>network-architecture.md</code> (un-numbered, sits outside the breadcrumb sequence), <code>k8s-best-practices.md</code>.</li>
 <li><strong>Heading hierarchy + case sweep.</strong> Confirm each design doc uses <code>#</code> title / <code>##</code> sections consistently and heading case (sentence vs title) is uniform within the set.</li>
@@ -2857,7 +2860,8 @@ The real metadata layer is the per-directory <code>README.md</code> index — on
 <h2 id="layer-6--reusable-content-blocks---done">Layer 6 — Reusable content blocks · ✅ done<a class="headerlink" href="#layer-6--reusable-content-blocks---done" title="Permanent link">&para;</a></h2>
 <p>No include mechanism and none will be added (see Decisions).
 Framework-free reuse = pick one canonical location and cross-link to it; do not paste-and-drift.</p>
-<p><strong>Direction constraint (important):</strong> human-facing docs must never link to <code>CLAUDE.md</code>. <code>CLAUDE.md</code> (symlinked <code>AGENTS.md</code>) is the entrypoint <em>for Claude only</em>; humans start at <code>README.md</code>.
+<p><strong>Direction constraint (important):</strong> human-facing docs must never link to <code>CLAUDE.md</code>.
+<code>CLAUDE.md</code> (symlinked <code>AGENTS.md</code>) is the entrypoint <em>for Claude only</em>; humans start at <code>README.md</code>.
 So a shared block lives canonically in the <code>docs/</code> tree, and <code>CLAUDE.md</code> may hold its own self-contained copy or link <em>to</em> the human doc — never the reverse.</p>
 <p>Outcome:</p>
 <ol>

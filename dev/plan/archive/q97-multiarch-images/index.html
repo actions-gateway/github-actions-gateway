@@ -2675,7 +2675,8 @@
 <h2 id="why-multi-arch-not-document-the-limitation">Why multi-arch (not document-the-limitation)<a class="headerlink" href="#why-multi-arch-not-document-the-limitation" title="Permanent link">&para;</a></h2>
 <p>All three pinned base images already cover arm64 — verified against the exact digests in the Dockerfiles with <code>docker buildx imagetools inspect</code>:</p>
 <ul>
-<li><code>golang:1.26@sha256:68cb6d…</code> — index incl. <code>linux/amd64</code>, <code>linux/arm64/v8</code></li>
+<li><code>golang:1.26@sha256:68cb6d…</code> — index incl.
+  <code>linux/amd64</code>, <code>linux/arm64/v8</code></li>
 <li><code>gcr.io/distroless/static:nonroot@sha256:963fa6…</code> — index incl. both</li>
 <li><code>ghcr.io/actions/actions-runner:2.335.1@sha256:08c30b…</code> — index incl. both</li>
 </ul>
@@ -2692,7 +2693,8 @@ This also fixes the worker image for local arm64 (Apple Silicon kind) builds, wh
 <li><code>platforms: linux/amd64,linux/arm64</code> on the build-push step.
   With multiple platforms, <code>steps.build.outputs.digest</code> becomes the <strong>image index</strong> digest — exactly what chart values / GMC digest pinning should reference (the kubelet resolves the per-arch manifest from the index at pull time).
   The run-summary digest step is unchanged and now records the index digest.</li>
-<li><strong>Signing:</strong> <code>cosign sign --recursive</code> — signs the index <em>and</em> each per-arch child manifest. <code>cosign verify</code> on the index (what <code>make verify-release</code> and the operator runbook do) is unchanged; verifying a per-arch digest (e.g. the <code>imageID</code> a kubelet actually pulled) now also succeeds.</li>
+<li><strong>Signing:</strong> <code>cosign sign --recursive</code> — signs the index <em>and</em> each per-arch child manifest.
+  <code>cosign verify</code> on the index (what <code>make verify-release</code> and the operator runbook do) is unchanged; verifying a per-arch digest (e.g. the <code>imageID</code> a kubelet actually pulled) now also succeeds.</li>
 <li><strong>SBOM:</strong> one SBOM <strong>per architecture</strong>, attested onto that architecture's manifest digest.
   A single syft scan of an index silently picks one platform — an arm64 operator auditing the attestation would get an amd64 package list.
   The per-arch digests are resolved from the index with <code>docker buildx imagetools inspect --format</code>; syft scans each per-arch ref; <code>cosign attest</code> binds each SBOM to its arch digest.

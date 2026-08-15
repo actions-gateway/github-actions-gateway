@@ -3550,7 +3550,8 @@ The point of doing it here rather than at the tag is that the answers are free b
 </ul>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>scripts/release/api-surface-since.sh
 </code></pre></div>
-<p>Apply the checklist in <a href="../../development/api-review/#step-2--ask-these-of-each-addition">api-review.md</a> to each addition it lists, record the verdict in the release's plan doc, and file anything deferred as a Queue row carrying this release's gate label. <strong>"Ship as-is, deliberately" is a valid and common outcome</strong> — the point is that the shape is chosen rather than frozen by default.</p>
+<p>Apply the checklist in <a href="../../development/api-review/#step-2--ask-these-of-each-addition">api-review.md</a> to each addition it lists, record the verdict in the release's plan doc, and file anything deferred as a Queue row carrying this release's gate label.
+  <strong>"Ship as-is, deliberately" is a valid and common outcome</strong> — the point is that the shape is chosen rather than frozen by default.</p>
 <p>This step exists because it nearly did not happen: Q476 renamed <code>capacityGate.mode: On</code> days before 1.3.0 would have published it, and only because the question came up in an unrelated conversation.</p>
 <ul>
 <li><strong>Reconcile the marketing surfaces against what this tag actually ships.</strong> <code>docs/index.md</code>, <code>docs/why-gag.md</code>, <code>README.md</code>, and <code>docs/features.md</code> make claims about GAG <em>and</em> about alternatives, and both halves rot: GAG gains capabilities the pages never learn about, and a competitor closes a gap the pages still assert.
@@ -3590,7 +3591,8 @@ The point of doing it here rather than at the tag is that the answers are free b
 <p>This step exists because the alternative is remembering.
   The <code>v1.2.0</code>→next window accumulated a required pre-upgrade <code>kubectl apply</code>, a removed values key that fails the render, and a rollback that re-arms a cluster-wide outage — each recorded correctly in <code>docs/operations/upgrade.md</code> by the change that introduced it, and each invisible to anyone reading a generated changelog.</p>
 <ul>
-<li><strong>Reconcile <a href="../../roadmap/"><code>docs/roadmap.md</code></a> and <a href="../../features/"><code>docs/features.md</code></a> against <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/docs/STATUS.md"><code>docs/STATUS.md</code></a> before you tag.</strong> The same freeze that applies to the announce bar applies here: a stable tag deploys that tag's docs wholesale, so a stale roadmap is published permanently under that version. <code>make roadmap-check</code> catches the mechanical half — a roadmap bullet naming a deleted Queue row, or one sitting in the wrong section — and it runs in CI.
+<li><strong>Reconcile <a href="../../roadmap/"><code>docs/roadmap.md</code></a> and <a href="../../features/"><code>docs/features.md</code></a> against <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/docs/STATUS.md"><code>docs/STATUS.md</code></a> before you tag.</strong> The same freeze that applies to the announce bar applies here: a stable tag deploys that tag's docs wholesale, so a stale roadmap is published permanently under that version.
+  <code>make roadmap-check</code> catches the mechanical half — a roadmap bullet naming a deleted Queue row, or one sitting in the wrong section — and it runs in CI.
   What it cannot catch is the move itself: <strong>work that shipped this cycle needs a <code>docs/features.md</code> line</strong>, and a Deferred row describing a capability an adopter would ask about belongs in <em>Exploring</em>.
   A 2026-07-25 audit found six of seven near-term items already shipped.</li>
 <li><strong>Optional: refresh the docs-site announce bar's highlight.</strong> The banner in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/overrides/main.html"><code>overrides/main.html</code></a> is the "vX.Y.Z is here" strip at the top of every page on the site.
@@ -3609,17 +3611,20 @@ The point of doing it here rather than at the tag is that the answers are free b
 <p>(A <code>docs_ref</code> seed of an already-cut release pins <code>overrides/</code> to the current checkout, so re-seeding refreshes the highlight on past tags too.
   See <a href="../../development/website/#seeding-already-released-versions">website.md § Seeding</a>.)</p>
 <h4 id="validate-the-release-candidate-on-dogfood">Validate the release candidate on dogfood<a class="headerlink" href="#validate-the-release-candidate-on-dogfood" title="Permanent link">&para;</a></h4>
-<p>Before promoting a release-candidate line to a <strong>stable</strong> <code>vX.Y.Z</code> tag, validate the <em>latest RC</em> functionally on the dogfood cluster. <code>main</code>-green covers unit/integration/kind-e2e, but publishing an image the pipeline signed is not the same as proving it runs jobs — this gate exercises real GAG-provisions-runners-on-GKE behaviour the CI tiers can't observe.
+<p>Before promoting a release-candidate line to a <strong>stable</strong> <code>vX.Y.Z</code> tag, validate the <em>latest RC</em> functionally on the dogfood cluster.
+<code>main</code>-green covers unit/integration/kind-e2e, but publishing an image the pipeline signed is not the same as proving it runs jobs — this gate exercises real GAG-provisions-runners-on-GKE behaviour the CI tiers can't observe.
 Run it before every GA (<code>vX.Y.Z</code>) cut; skip it only for an RC-to-RC or a patch tag that changes nothing an operator runs.</p>
 <p>The dogfood scripts pin GAG to any published ref via <code>GAG_IMAGE_TAG</code>, which resolves both as an image tag (<code>ghcr.io/actions-gateway/{gmc,agc,proxy,wrapper}:&lt;ref&gt;</code>) and as a git ref (for the matching CRDs) — an RC tag satisfies both by construction.</p>
-<p><strong>One command runs the whole gate</strong>, and it runs for the better part of an hour — a green <code>v1.3.0-rc.4</code> run took 39 minutes end to end — with nothing to type at it after the first confirmation. <code>validate-release.sh</code> bakes in all the env and ordering below — deploy → route CI → on-demand e2e → dispatch the e2e matrix (run-scoped routing) → CRD smoke → teardown — is idempotent, and self-cleans back to 0 nodes on exit (success or failure — and on Ctrl-C, though <a href="#a-killed-gate-is-reclaimed-by-the-next-one">not on every ending</a>).
+<p><strong>One command runs the whole gate</strong>, and it runs for the better part of an hour — a green <code>v1.3.0-rc.4</code> run took 39 minutes end to end — with nothing to type at it after the first confirmation.
+<code>validate-release.sh</code> bakes in all the env and ordering below — deploy → route CI → on-demand e2e → dispatch the e2e matrix (run-scoped routing) → CRD smoke → teardown — is idempotent, and self-cleans back to 0 nodes on exit (success or failure — and on Ctrl-C, though <a href="#a-killed-gate-is-reclaimed-by-the-next-one">not on every ending</a>).
 On failure it first dumps a cluster snapshot (nodes, pods, unhealthy-pod detail, events) to the gate's output, because the teardown's scale-to-0 evicts every pod and destroys the evidence — read the <code>Failure diagnostics</code> section of a failed run's log (e.g. the <code>FailedScheduling</code> events) instead of re-running the gate to watch it fail again.
 The <a href="#the-legs-the-gate-runs">legs it runs</a> are documented at the end of this section, and are the recovery path if one needs re-running by hand.</p>
 <p><strong>If you just merged something, the gate waits before it spends anything.</strong> The gate's dispatched run enters the e2e workflow's per-ref concurrency group, whose single pending slot the next push to main would cancel it out of — and the latest <code>e2e-test.yml</code> run is usually the still-running push-run of the merge you just made.
 The gate settles the lane up front — before the node scale-up, the deploy, and the e2e AGC — so a collision costs a wait, not a cluster cycle.
 It polls for up to <code>E2E_WAIT_TIMEOUT</code> seconds (default 1800), then fails with the run id; <code>E2E_WAIT_TIMEOUT=0</code> fails immediately instead of waiting.</p>
 <p><strong>The e2e leg's watch is bounded, so a run that never starts cannot hold the cluster.</strong> The dispatched run is watched for up to <code>E2E_RUN_WATCH_TIMEOUT</code> seconds (default 5400 — 90 minutes: the 60-minute job ceiling plus the same 30 minutes of queue the settle wait allows).
-Past that the gate fails with exit 124, names the run, and tears the cluster back down to 0 nodes as it would for any other e2e failure. <strong>The run itself keeps going on GitHub</strong> — the deadline releases the nodes the <em>gate</em> is holding, not the ones the run is queued for, so cancel the run by hand if it is genuinely wedged.
+Past that the gate fails with exit 124, names the run, and tears the cluster back down to 0 nodes as it would for any other e2e failure.
+<strong>The run itself keeps going on GitHub</strong> — the deadline releases the nodes the <em>gate</em> is holding, not the ones the run is queued for, so cancel the run by hand if it is genuinely wedged.
 A healthy leg finishes in 25–33 minutes; raise the variable rather than removing the bound if yours is legitimately slower.</p>
 <p>The gate also checks every local tool it needs up front — including the pinned <code>cosign</code> the final CRD-smoke leg verifies with (<code>make cosign</code> downloads it to <code>.build/cosign</code>; <code>COSIGN=&lt;path&gt;</code> overrides) — so a missing binary fails the run before it spends anything, not 25 minutes in.</p>
 <h5 id="the-gate-reserves-the-e2e-pools-cpu-budget">The gate reserves the e2e pool's CPU budget<a class="headerlink" href="#the-gate-reserves-the-e2e-pools-cpu-budget" title="Permanent link">&para;</a></h5>
@@ -3645,7 +3650,8 @@ The usual cause is that something is still up from earlier work, most often the 
 <p>If teardown could not restore the ceiling it says so and prints the <code>gcloud container clusters update</code> that puts it back.
 A ceiling left low throttles everyone's CI, so run it.</p>
 <h5 id="a-killed-gate-is-reclaimed-by-the-next-one">A killed gate is reclaimed by the next one<a class="headerlink" href="#a-killed-gate-is-reclaimed-by-the-next-one" title="Permanent link">&para;</a></h5>
-<p><strong>Self-cleaning covers most endings, not all of them.</strong> Bash runs the teardown trap on Ctrl-C and on an ordinary <code>kill</code>, so those tear the cluster back down. <code>kill -9</code>, a killed parent process, and a teardown interrupted part-way through do not — each leaves billable nodes up with no process left to release them, and twice that was caught only by hunting for a live teardown process by hand (Q640).</p>
+<p><strong>Self-cleaning covers most endings, not all of them.</strong> Bash runs the teardown trap on Ctrl-C and on an ordinary <code>kill</code>, so those tear the cluster back down.
+<code>kill -9</code>, a killed parent process, and a teardown interrupted part-way through do not — each leaves billable nodes up with no process left to release them, and twice that was caught only by hunting for a live teardown process by hand (Q640).</p>
 <p>So the gate takes an ownership lease for exactly the window in which it owns cluster state, and reclaims an <em>orphaned</em> one — a lease for the same target whose owning process is gone — before it spends anything.
 Running the gate again is therefore enough to end a leak the previous run started.
 To do only that, without starting a validation run:</p>
@@ -3705,7 +3711,9 @@ Nothing needs cleaning up between runs — the marker is keyed to the moment it 
 This is what the sentinel reads, and it answers the same question directly for a human:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a>jq<span class="w"> </span>.<span class="w"> </span>tmp/release-validation-status.json
 </code></pre></div>
-<p><code>gate</code> is <code>preflight</code> (settling the e2e lane, nothing spent yet), <code>running</code>, <code>passed</code>, or <code>failed</code>; <code>phase</code>, <code>elapsed</code>, <code>phaseElapsed</code> and <code>idle</code> say where and for how long; <code>runRepo</code>/<code>runId</code> name the dispatched e2e run, which is what makes a quiet leg checkable against GitHub rather than only against the stream; <code>heartbeat</code> carries the newest relayed spec line — absent for a whole leg when GitHub will not serve the job log, which is a fetch problem and not a stalled run; <code>failure</code> names the phase that broke — the one that broke first, not the teardown that followed it. <code>scripts/dogfood/release-status.sh [stream-file]</code> renders the same object from any stream, including one whose gate process is gone. <code>RELEASE_STATUS_FILE=</code> disables the file.</p>
+<p><code>gate</code> is <code>preflight</code> (settling the e2e lane, nothing spent yet), <code>running</code>, <code>passed</code>, or <code>failed</code>; <code>phase</code>, <code>elapsed</code>, <code>phaseElapsed</code> and <code>idle</code> say where and for how long; <code>runRepo</code>/<code>runId</code> name the dispatched e2e run, which is what makes a quiet leg checkable against GitHub rather than only against the stream; <code>heartbeat</code> carries the newest relayed spec line — absent for a whole leg when GitHub will not serve the job log, which is a fetch problem and not a stalled run; <code>failure</code> names the phase that broke — the one that broke first, not the teardown that followed it.
+<code>scripts/dogfood/release-status.sh [stream-file]</code> renders the same object from any stream, including one whose gate process is gone.
+<code>RELEASE_STATUS_FILE=</code> disables the file.</p>
 <p>Underneath it, each phase transition is appended as one JSON line to <code>tmp/release-validation-progress.jsonl</code> — the stream both renderers read, and inspectable directly (<code>tail -f</code>) without disturbing the run.
 Point <code>RELEASE_PROGRESS_FILE</code> elsewhere to move both files, since the status object defaults to <code>release-validation-status.json</code> beside the stream, or set <code>RELEASE_PROGRESS_FILE=</code> to disable both.
 The gate's own output is unaffected either way.</p>
@@ -3739,17 +3747,21 @@ From a detached checkout of the RC tag (<code>git switch --detach vX.Y.Z-rc.N</c
    So: <code>GAG_IMAGE_TAG=vX.Y.Z-rc.N APP_ID=… INSTALLATION_ID=… ASSUME_YES=1 scripts/dogfood/setup.sh</code> (a timed-out rollout wait here is fine), then <code>scripts/dogfood/start.sh</code>.
    Run the one-time <code>scripts/dogfood/e2e-setup.sh</code> first if the e2e node pool / GitHub App Secret aren't set up yet.
    The cluster, context pinning, and prod-guard cautions are in <a href="../../plan/gke-dogfood/">gke-dogfood.md</a>.</li>
-<li><strong>Run the e2e job matrix on GAG runners.</strong> This is two moves, not one. <code>scripts/dogfood/e2e-start.sh</code> spins up the on-demand e2e tenant's AGC — it does <strong>not</strong> start a run and does <strong>not</strong> touch routing.
+<li><strong>Run the e2e job matrix on GAG runners.</strong> This is two moves, not one.
+   <code>scripts/dogfood/e2e-start.sh</code> spins up the on-demand e2e tenant's AGC — it does <strong>not</strong> start a run and does <strong>not</strong> touch routing.
    Trigger the matrix by <strong>dispatching a run with routing scoped to it</strong>:</li>
 </ol>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a>gh<span class="w"> </span>workflow<span class="w"> </span>run<span class="w"> </span>e2e-test.yml<span class="w"> </span>--ref<span class="w"> </span>main<span class="w"> </span>-f<span class="w"> </span><span class="nv">runner</span><span class="o">=</span><span class="s1">&#39;&quot;gag-ci-e2e&quot;&#39;</span>
 </code></pre></div>
 <p>(same for <code>e2e-calico.yml</code>).
    Only that dispatched run lands on the RC's GAG-provisioned runners; every concurrent PR and merge keeps its normal hosted runners.
-   Do <strong>not</strong> reach for the repo-wide <code>GAG_E2E_RUNNER</code> variable here — flipping it routes every e2e job in the window, and a caught job wedged main CI when the teardown deleted the AGC under it (2026-07-31; the variable remains only as an <code>E2E_ROUTE_VAR=1</code> opt-in for a standing dogfood soak). <strong>Node contention:</strong> the on-demand e2e AGC (~500m CPU) does not fit on the single <code>e2-standard-2</code> system node beside the always-on CI AGCs (the CI AGC goes <code>Pending</code>/<code>Insufficient cpu</code>), so temporarily add a system node (e.g. scale <code>default-pool</code> to 2) for the duration of the e2e leg and scale it back after. <strong>CPU budget:</strong> running the legs by hand skips the reservation the gate applies, so if the e2e pool reports <code>FailedScaleUp</code> here, read <a href="#the-gate-reserves-the-e2e-pools-cpu-budget">the reservation section above</a> rather than the family quotas.
+   Do <strong>not</strong> reach for the repo-wide <code>GAG_E2E_RUNNER</code> variable here — flipping it routes every e2e job in the window, and a caught job wedged main CI when the teardown deleted the AGC under it (2026-07-31; the variable remains only as an <code>E2E_ROUTE_VAR=1</code> opt-in for a standing dogfood soak).
+   <strong>Node contention:</strong> the on-demand e2e AGC (~500m CPU) does not fit on the single <code>e2-standard-2</code> system node beside the always-on CI AGCs (the CI AGC goes <code>Pending</code>/<code>Insufficient cpu</code>), so temporarily add a system node (e.g. scale <code>default-pool</code> to 2) for the duration of the e2e leg and scale it back after.
+   <strong>CPU budget:</strong> running the legs by hand skips the reservation the gate applies, so if the e2e pool reports <code>FailedScaleUp</code> here, read <a href="#the-gate-reserves-the-e2e-pools-cpu-budget">the reservation section above</a> rather than the family quotas.
    Require the matrix <strong>green</strong> — this is GAG running its own CI end-to-end on the RC images.
 3. <strong>Smoke the signed v2 CRD asset.</strong> Download the RC release's <code>actions-gateway-crds-v2.yaml</code> + <code>.cosign.bundle</code>, <code>cosign verify-blob</code> against the publish identity (step 3 below), <code>kubectl apply --server-side</code> it, and assert the five v2 CRDs register — the helm-free install path operators actually use.
-4. <strong>Assert the sizing profiles actuated.</strong> A profile that silently falls back to <code>Static</code> still provisions a healthy pod and still runs the matrix green, so without this leg every other check reports success while the release's headline feature sits inert. <code>sizing_leg</code> treats the two profiles differently on purpose:</p>
+4. <strong>Assert the sizing profiles actuated.</strong> A profile that silently falls back to <code>Static</code> still provisions a healthy pod and still runs the matrix green, so without this leg every other check reports success while the release's headline feature sits inert.
+   <code>sizing_leg</code> treats the two profiles differently on purpose:</p>
 <table>
 <thead>
 <tr>
@@ -3891,7 +3903,8 @@ Draft, attach, then publish is <a href="https://docs.github.com/en/code-security
 Two consequences for this step: a pre-created Release of your own should be a <strong>draft</strong> (as above), since the pipeline publishes whatever draft it finds once the assets are on; and a run that dies before the final step leaves a draft rather than a published Release missing its CRD manifest and checksums.</p>
 <p><strong>What immutability does and does not freeze.</strong> The title and the notes stay editable after publication, so <a href="#4-record-the-published-digests">step 4</a>'s <code>gh release edit --notes-file</code> still works and the curated body can be finished after the digests exist.
 The assets and the <strong>tag</strong> do not: a published Release locks its tag to one commit, which cannot be moved or deleted while the Release exists.
-So a tag pushed at the wrong commit is not recoverable by re-tagging — cut the next candidate number instead. <code>v1.5.0-rc.2</code> was pushed at a commit three merges stale and had to be superseded by an rc.3.</p>
+So a tag pushed at the wrong commit is not recoverable by re-tagging — cut the next candidate number instead.
+<code>v1.5.0-rc.2</code> was pushed at a commit three merges stale and had to be superseded by an rc.3.</p>
 <h4 id="writing-the-curated-notes">Writing the curated notes<a class="headerlink" href="#writing-the-curated-notes" title="Permanent link">&para;</a></h4>
 <p>A minor release accumulates more than a generated changelog can convey, and the two inputs that feed it, <code>operator-caveats-since.sh</code> and the commit log, both mislead in specific ways.
 What follows is the method, written after <code>v1.3.0</code>.</p>
@@ -3909,7 +3922,8 @@ The exclusion is spelled out in four places that must agree — <code>mkdocs.yml
 </code></pre></div>
 <p>Use it to seed a new file when a tag predates this convention.</p>
 <p><strong>Notes answer "what is in it" and "what must I do".
-The docs answer "how" and "why".</strong> Every explanation that can live in <code>upgrade.md</code> or an <code>operations/</code> page should, behind a link. <code>v1.3.0</code>'s first draft ran ~1000 words of prose; cutting it to links lost nothing.
+The docs answer "how" and "why".</strong> Every explanation that can live in <code>upgrade.md</code> or an <code>operations/</code> page should, behind a link.
+<code>v1.3.0</code>'s first draft ran ~1000 words of prose; cutting it to links lost nothing.
 Link a Highlight from its bold lead, and link group headings rather than every line.</p>
 <p>That rule shortens the <em>prose</em>.
 It does not shorten the notes: <code>v1.3.0</code> shipped 2100 words and 25 links, because enumerations kept being added — a feature list, a fix list, the API surface, the condition reasons.
@@ -3992,16 +4006,22 @@ It is ordered by what a reader needs first, not by what took the most work:</p>
 </table>
 <p><strong>Say something about security even when there is nothing to report.</strong> Silence reads as an omission to the one reader scanning specifically for it.
 State plainly that no advisory accompanies the release, then list what it does carry — dependency security bumps, and any fix that hardens credential or trust handling without patching a reported vulnerability.
-Name the scanning gates and when they run. <code>v1.3.0</code> had no CVE and still warranted the section.</p>
-<p><strong>Lead with a danger banner, and make it an alert.</strong> GFM alerts — <code>&gt; [!WARNING]</code>, <code>&gt; [!CAUTION]</code>, <code>&gt; [!NOTE]</code> — render as real coloured callouts in a release body (verified; the render check below counts them). <code>v1.3.0</code> opens with a <code>[!WARNING]</code> naming the two required upgrade steps and the asymmetric rollback, because those are the only things that can hurt an operator who reads no further.
+Name the scanning gates and when they run.
+<code>v1.3.0</code> had no CVE and still warranted the section.</p>
+<p><strong>Lead with a danger banner, and make it an alert.</strong> GFM alerts — <code>&gt; [!WARNING]</code>, <code>&gt; [!CAUTION]</code>, <code>&gt; [!NOTE]</code> — render as real coloured callouts in a release body (verified; the render check below counts them).
+<code>v1.3.0</code> opens with a <code>[!WARNING]</code> naming the two required upgrade steps and the asymmetric rollback, because those are the only things that can hurt an operator who reads no further.
 Use <code>[!NOTE]</code> for a scope caveat and <code>[!CAUTION]</code> for the one thing that is genuinely destructive.
 Three alerts is a lot; more and none of them read as urgent.</p>
 <p><strong>Write a Deprecations section even when nothing is removed</strong> — saying so is the point, since "deprecation" reads as "removal" to a skimmer.
-For each notice give the removal version, the migration path, and <strong>whether the apiserver actually warns</strong>. <code>v1.3.0</code> deprecated <code>v2alpha1</code> (warns on every apply) alongside <code>v1alpha1</code>, which is removal-slated and emits <strong>no</strong> warning at all — so nothing reminds an operator it is going away.
+For each notice give the removal version, the migration path, and <strong>whether the apiserver actually warns</strong>.
+<code>v1.3.0</code> deprecated <code>v2alpha1</code> (warns on every apply) alongside <code>v1alpha1</code>, which is removal-slated and emits <strong>no</strong> warning at all — so nothing reminds an operator it is going away.
 That asymmetry is exactly what a reader cannot discover for themselves.</p>
-<p><strong>Diff every surface an operator can see, not just the CRDs.</strong> Each of these is enumerable, and each hides in a different file, so a review that reads only the Go diff misses most of them. <code>v1.3.0</code> shipped five: CRD fields, metric names, Kubernetes Event reasons, condition reasons, and configuration (chart values, env tunables, CLI flags).
+<p><strong>Diff every surface an operator can see, not just the CRDs.</strong> Each of these is enumerable, and each hides in a different file, so a review that reads only the Go diff misses most of them.
+<code>v1.3.0</code> shipped five: CRD fields, metric names, Kubernetes Event reasons, condition reasons, and configuration (chart values, env tunables, CLI flags).
 Diff each between the two tags mechanically rather than reading the changelog for them — the Event reasons and the metrics had no enumeration at all until they were diffed, and the notes had already been through several reviews.</p>
-<p>Two traps. <strong>A rename reads as a removal</strong> when the extraction is scoped to one directory: env vars first appeared to have 17 removals, all of which were code moving out of <code>cmd/</code>; re-running repo-wide showed zero. <strong>Adjacent string arguments read as the same thing</strong>: <code>recordEvent(obj, type, reason, action, …)</code> puts a reason and an action side by side, so <code>ProvisionWorker</code> and <code>ApplyAGCAutoscaler</code> both survived extraction as reasons until each call site was checked.
+<p>Two traps.
+<strong>A rename reads as a removal</strong> when the extraction is scoped to one directory: env vars first appeared to have 17 removals, all of which were code moving out of <code>cmd/</code>; re-running repo-wide showed zero.
+<strong>Adjacent string arguments read as the same thing</strong>: <code>recordEvent(obj, type, reason, action, …)</code> puts a reason and an action side by side, so <code>ProvisionWorker</code> and <code>ApplyAGCAutoscaler</code> both survived extraction as reasons until each call site was checked.
 Always report "none removed" when it is true — operators are looking for exactly that.</p>
 <p><strong>Diff <code>docs/</code> as well, and link what is new from where it is actionable.</strong> A new operator page is the strongest signal of a capability the notes forgot, and a heavily grown one shows where the release's real weight landed:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-29-1" name="__codelineno-29-1" href="#__codelineno-29-1"></a>git<span class="w"> </span>diff<span class="w"> </span>--name-status<span class="w"> </span>v&lt;prev&gt;..origin/main<span class="w"> </span>--<span class="w"> </span>docs/operations/<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span><span class="s1">&#39;^A&#39;</span>
@@ -4011,13 +4031,15 @@ Always report "none removed" when it is true — operators are looking for exact
 Link a new guide from the bullet it serves rather than from a documentation inventory — <code>resourcequota-sizing.md</code> belongs on the quota-accounting upgrade note, where an operator hits the problem it solves.
 A guide with no feature to attach to goes in the contributor-facing section with one line on why it exists.</p>
 <p><strong>Give the API surface its own section, and lead it with any new CRD.</strong> A new kind is not a field: the chart installs chart-root <code>crds/</code> on a <em>fresh install only</em>, so a new CRD is the reason "apply the CRDs" is step 1 of Upgrading, and the two must cross-reference.
-Then fold the rest — new spec fields, new status fields, new condition reasons — grouped by kind, counted like any other fold. <code>v1.3.0</code> listed 28 new condition reasons this way, and had to name <code>kubectl explain</code> and the signed CRD asset as the authority because no reference page existed.
+Then fold the rest — new spec fields, new status fields, new condition reasons — grouped by kind, counted like any other fold.
+<code>v1.3.0</code> listed 28 new condition reasons this way, and had to name <code>kubectl explain</code> and the signed CRD asset as the authority because no reference page existed.
 Link the <a href="../../reference/api/">generated API reference</a> instead, at <strong>this release's</strong> version path (<code>/X.Y.Z/reference/api/</code>), so the fields the notes name are one click from their descriptions.
 It covers <code>v2beta1</code> only; a deprecated-version field still needs <code>kubectl explain</code>.</p>
 <p><strong>Validation is receipts, not adjectives.</strong> "Thoroughly tested" is worth nothing.
 Link the run, quote the counts, and quote a value measured at the layer that matters: <code>v1.3.0</code> cites 73/73 specs with a run link, and a derived <code>1500m</code> observed on the pod where the templates asked for 2 and 3 CPU.
 Ship the receipt wherever a claim is made, not only in this section — a feature line that links its own PR is a receipt too.</p>
-<p><strong>Check the validation story against the plan doc, not memory.</strong> This is the section a sceptical reader checks first, so a wrong detail here costs more than anywhere else. <code>v1.3.0</code>'s draft claimed no candidate had ever cleared the gate and that rc.5 was the first to return a verdict; the plan doc records rc.4 passing the day before.
+<p><strong>Check the validation story against the plan doc, not memory.</strong> This is the section a sceptical reader checks first, so a wrong detail here costs more than anywhere else.
+<code>v1.3.0</code>'s draft claimed no candidate had ever cleared the gate and that rc.5 was the first to return a verdict; the plan doc records rc.4 passing the day before.
 The true version was better anyway — five candidates, three aborted, rc.4 passed without catching a live worker pod, rc.5 caught one — and it is checkable, which the flattering version was not.</p>
 <p><strong>Keep a contributor-facing section, and put it last.</strong> Release, CI, docs-site, and tooling work ships in no image and no chart, so it does not belong in the change lists.
 It still belongs in the notes: it is what a reader evaluating the project's health is looking for.
@@ -4052,18 +4074,23 @@ The runner template library (Q554) was one of <code>v1.4.0</code>'s three headli
 So the residue is ordered rather than dumped: commits that also changed <code>docs/operations/</code> come first, an added page ahead of an edited one, because <a href="../../development/doc-update-matrix/">doc-update-matrix.md</a> requires an operator-visible change to land there.
 At <code>v1.4.0</code> that ranks Q554 first of 43: ten rows carry the flag and thirty-three do not.
 Read the ten, and treat the rest as dev tooling only after the flag has had its say.</p>
-<p><strong>Cite the commit that did the work, not the one that filed it.</strong> A Q-numbered backlog row and its implementation have near-identical subjects, so a <code>docs(plan)</code> commit reads exactly like the fix. <code>v1.3.0</code> cited #988 — <code>docs(plan): file and scope Q507</code> — under the label of #1008, the gate itself; a reader clicking through would have landed on a planning row.
+<p><strong>Cite the commit that did the work, not the one that filed it.</strong> A Q-numbered backlog row and its implementation have near-identical subjects, so a <code>docs(plan)</code> commit reads exactly like the fix.
+<code>v1.3.0</code> cited #988 — <code>docs(plan): file and scope Q507</code> — under the label of #1008, the gate itself; a reader clicking through would have landed on a planning row.
 Resolve each number to its title before shipping, and look for the same work cited twice under two numbers.</p>
-<p><strong>One fact per line, especially next to a procedure.</strong> Distinct operator-facing changes run together into a paragraph read as background, and a paragraph sitting under a numbered list reads as a footnote to it. <code>v1.3.0</code>'s Upgrading section closed with three unrelated changes — quota accounting, a dropped proxy label, a new apiserver warning — in one sentence-run below its two numbered steps; as a bulleted list with a bold lead each, the same words are scannable.
+<p><strong>One fact per line, especially next to a procedure.</strong> Distinct operator-facing changes run together into a paragraph read as background, and a paragraph sitting under a numbered list reads as a footnote to it.
+<code>v1.3.0</code>'s Upgrading section closed with three unrelated changes — quota accounting, a dropped proxy label, a new apiserver warning — in one sentence-run below its two numbered steps; as a bulleted list with a bold lead each, the same words are scannable.
 Prose is for framing.
 Anything a reader might need to act on individually gets its own line.</p>
 <p><strong>Fold long lists.</strong> <code>&lt;details&gt;&lt;summary&gt;</code> renders on the Releases page and keeps the top scannable.
-It is also the only lever against truncation: the Releases <em>index</em> collapses a long body behind a <strong>"read more"</strong> link, and a fold counts as its one summary line while collapsed. <code>v1.3.0</code> hit that limit and was folded back under it — eight folds.
+It is also the only lever against truncation: the Releases <em>index</em> collapses a long body behind a <strong>"read more"</strong> link, and a fold counts as its one summary line while collapsed.
+<code>v1.3.0</code> hit that limit and was folded back under it — eight folds.
 If the index is truncating, the fix is another fold, not a cut.</p>
-<p><strong>Pick the next fold by measuring collapsed height, not by eye.</strong> Sum each section's bytes with <code>&lt;details&gt;…&lt;/details&gt;</code> bodies excluded; the biggest sections are rarely the ones that feel long. <code>v1.3.0</code> measured 9.5k collapsed, and the third-largest section was Validation — not an obvious candidate, since Upgrading and Highlights are larger but must both stay open.</p>
+<p><strong>Pick the next fold by measuring collapsed height, not by eye.</strong> Sum each section's bytes with <code>&lt;details&gt;…&lt;/details&gt;</code> bodies excluded; the biggest sections are rarely the ones that feel long.
+<code>v1.3.0</code> measured 9.5k collapsed, and the third-largest section was Validation — not an obvious candidate, since Upgrading and Highlights are larger but must both stay open.</p>
 <p><strong>When the content being folded is evidence, put the evidence in the <code>&lt;summary&gt;</code>.</strong> A fold whose summary reads "Validation details" hides the receipt; one that reads <code>73/73 e2e specs on Kata microVM workers, on live GKE — the four legs, and what none of them assert</code> <em>is</em> the receipt, and a reader who never expands it has still seen the number.
 That is the exception to the count-in-the-summary convention: enumerations carry a count, evidence carries the finding.</p>
-<p><strong>Count what you list — and count the unit in the label.</strong> State a count in a <code>&lt;summary&gt;</code> and it will be wrong the moment you curate the list. <code>v1.3.0</code>'s draft claimed 25 features and listed 23.
+<p><strong>Count what you list — and count the unit in the label.</strong> State a count in a <code>&lt;summary&gt;</code> and it will be wrong the moment you curate the list.
+<code>v1.3.0</code>'s draft claimed 25 features and listed 23.
 Subtler: its "New spec fields (10)" had ten <em>bullets</em> carrying thirteen <em>fields</em>, because three bullets grouped related ones (<code>.minRequests</code> / <code>.maxRequests</code> / <code>.limitHeadroomPercent</code>).
 Every other fold counted the noun in its own label; that one silently switched to bullets.
 Count what the label says, then re-count after every edit — mechanically, not by eye.</p>
@@ -4071,14 +4098,16 @@ Count what the label says, then re-count after every edit — mechanically, not 
 A feature list that reads as finished support overclaims.
 Check <code>docs/plan/archive/</code> for the feature's own "what this will not verify" section before describing it.
 Then ask whether an unexercised feature belongs in Highlights at all — <code>v1.3.0</code> kept GHES there and paid for it with a caveat in three places.</p>
-<p><strong>A caveat is a claim, so measure it before writing it.</strong> Understating coverage is as wrong as overstating it, and easier to do accidentally because it feels safe. <code>v1.3.0</code>'s draft said the capacity gate had "unit and envtest coverage only"; the repo has a live-cluster-autoscaler test for its matcher (#929) and 305 lines of e2e proving a quota-blocked job redelivers (#1028).
+<p><strong>A caveat is a claim, so measure it before writing it.</strong> Understating coverage is as wrong as overstating it, and easier to do accidentally because it feels safe.
+<code>v1.3.0</code>'s draft said the capacity gate had "unit and envtest coverage only"; the repo has a live-cluster-autoscaler test for its matcher (#929) and 305 lines of e2e proving a quota-blocked job redelivers (#1028).
 Before writing "only tested at tier X", grep for the feature at every higher tier — and if the true statement is narrower than the tidy one, ship the narrow statement.
 What survived here was "the release gate does not <em>assert</em> it", which is checkable.</p>
 <p><strong>A caveat must survive being read alone.</strong> Every line in a folded list is read out of its heading's context — by search, by a linked anchor, by a skimmer.
 The <code>v1.3.0</code> draft said "Untested against a real appliance" under a GHES heading, which says nothing at all once the heading scrolls away; it shipped as "Untested against a real <strong>GHES</strong> appliance".
 Name the subject inside the caveat, and repeat the caveat at each place the feature is claimed rather than relying on proximity.</p>
 <p><strong>Link the versioned docs site, not <code>main</code> and not <code>blob/</code>.</strong> A reader of these notes should land on that release's instructions, and the site publishes a build per stable tag: <code>https://actions-gateway.com/X.Y.Z/operations/…</code>.
-Mind the form — the site drops the leading <code>v</code> exactly like the chart does. <code>v1.3.0</code> shipped 18 such links.
+Mind the form — the site drops the leading <code>v</code> exactly like the chart does.
+<code>v1.3.0</code> shipped 18 such links.
 They 404 until the docs deploy for the tag completes, which is expected while the Release is still a draft.</p>
 <p><strong>Verify every link and anchor.</strong> A gate does it for you now (Q636):</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-32-1" name="__codelineno-32-1" href="#__codelineno-32-1"></a>make<span class="w"> </span>release-links-check
@@ -4093,8 +4122,10 @@ That is also the shape to watch when the docs move on after a tag: the gate then
 <div class="highlight"><pre><span></span><code><a id="__codelineno-33-1" name="__codelineno-33-1" href="#__codelineno-33-1"></a>grep<span class="w"> </span>-oE<span class="w"> </span><span class="s1">&#39;id=&quot;[^&quot;]*&quot;&#39;</span><span class="w"> </span>site/operations/upgrade/index.html<span class="w"> </span><span class="p">|</span><span class="w"> </span>sed<span class="w"> </span><span class="s1">&#39;s/id=&quot;//;s/&quot;//&#39;</span>
 </code></pre></div>
 <p><strong>Do not hard-wrap.</strong> GitHub renders a release body with comment-flavour GFM, where a single newline becomes <code>&lt;br&gt;</code>.
-Keep every paragraph, blockquote, and list continuation on one line. <code>v1.3.0</code>'s hard-wrapped draft rendered 46 of them.</p>
-<p>Check this against the <strong>renderer</strong>, not the source. <code>gh release view --json body</code> returns the raw Markdown, which never contains <code>&lt;br&gt;</code> however badly it is wrapped, so grepping that is a check that cannot fail.
+Keep every paragraph, blockquote, and list continuation on one line.
+<code>v1.3.0</code>'s hard-wrapped draft rendered 46 of them.</p>
+<p>Check this against the <strong>renderer</strong>, not the source.
+<code>gh release view --json body</code> returns the raw Markdown, which never contains <code>&lt;br&gt;</code> however badly it is wrapped, so grepping that is a check that cannot fail.
 Render it the way GitHub will:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-34-1" name="__codelineno-34-1" href="#__codelineno-34-1"></a>gh<span class="w"> </span>api<span class="w"> </span>-X<span class="w"> </span>POST<span class="w"> </span>/markdown<span class="w"> </span>-f<span class="w"> </span><span class="nv">mode</span><span class="o">=</span>gfm<span class="w"> </span>-f<span class="w"> </span><span class="s2">&quot;text=</span><span class="k">$(</span>cat<span class="w"> </span>docs/releases/vX.Y.Z.md<span class="k">)</span><span class="s2">&quot;</span><span class="w"> </span><span class="se">\</span>
 <a id="__codelineno-34-2" name="__codelineno-34-2" href="#__codelineno-34-2"></a><span class="w">  </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>-c<span class="w"> </span><span class="s1">&#39;&lt;br&gt;&#39;</span>
@@ -4175,7 +4206,8 @@ None of these is a substitute for reading the notes — but each one caught a de
 </tr>
 </tbody>
 </table>
-<p>Two habits make the difference. <strong>Plant a known failure in anything that reports "all clear"</strong> — a checker with a broken query and a clean file produce identical output.
+<p>Two habits make the difference.
+<strong>Plant a known failure in anything that reports "all clear"</strong> — a checker with a broken query and a clean file produce identical output.
 And <strong>report the negative when it is true</strong>: "16 metrics added, none removed" and "13 spec fields, nothing removed" are what an operator is actually scanning for, and neither is worth stating unless it was measured.</p>
 <h3 id="6-chart-version--metadata">6. Chart version &amp; metadata<a class="headerlink" href="#6-chart-version--metadata" title="Permanent link">&para;</a></h3>
 <p>The <code>chart-publish</code> job sets the published chart's <code>version</code> and <code>appVersion</code> to the release tag (with the leading <code>v</code> stripped, since chart SemVer forbids it), so there is <strong>no manual Chart.yaml version bump</strong> to remember — the in-repo <code>version</code>/<code>appVersion</code> are dev placeholders the pipeline overrides at package time.
@@ -4214,10 +4246,13 @@ This half exists because <code>v1.3.0</code> shipped without it too: the 1.3 row
 <h4 id="the-bump-on-main-does-not-reach-the-published-release">The bump on <code>main</code> does not reach the published release<a class="headerlink" href="#the-bump-on-main-does-not-reach-the-published-release" title="Permanent link">&para;</a></h4>
 <p>Landing it on <code>main</code> fixes <code>make check</code> and the <code>dev</code> docs, and <strong>nothing else</strong>.
 The site builds each version from its tag (<a href="#2-tag-and-push">step 2</a>), so <code>/X.Y.Z/</code> is frozen at what the tag's tree said, which is the <em>previous</em> release's pins.
-So are <code>stable</code> and the root redirect a visitor lands on. <code>make release-pins-check</code> cannot catch this: it reads the working tree, not the published site. <code>make verify-published-docs</code> is the half that reads the site, and it is the last thing this step does.</p>
+So are <code>stable</code> and the root redirect a visitor lands on.
+<code>make release-pins-check</code> cannot catch this: it reads the working tree, not the published site.
+<code>make verify-published-docs</code> is the half that reads the site, and it is the last thing this step does.</p>
 <p>The two facts are stated separately above and were never reconciled.
 Three of the four releases cut since <code>1.0.0</code> published the previous version's install command as their landing page.
-Measured on the live site 2026-08-10: <code>/1.1.0/</code> and <code>/1.2.0/</code> both advertise <code>--version 1.0.0</code>, and <code>/1.4.0/</code> advertised <code>1.3.0</code> together with the <code>v1.3.0</code> CRD manifest URL, as did <code>stable</code> and the root redirect, for the three hours until it was reported. <code>v1.3.0</code> is correct only because Q638's hand-fix happened to land before that tag.</p>
+Measured on the live site 2026-08-10: <code>/1.1.0/</code> and <code>/1.2.0/</code> both advertise <code>--version 1.0.0</code>, and <code>/1.4.0/</code> advertised <code>1.3.0</code> together with the <code>v1.3.0</code> CRD manifest URL, as did <code>stable</code> and the root redirect, for the three hours until it was reported.
+<code>v1.3.0</code> is correct only because Q638's hand-fix happened to land before that tag.</p>
 <p>Nor can the bump simply move ahead of the tag: <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/docs/check-release-pins.sh"><code>check-release-pins.sh</code></a> compares each pin for <strong>equality</strong> with the newest stable tag, so a pin naming the release about to be cut fails exactly as loudly as one naming the release before it, reddening <code>make check</code> and <code>doc-links</code> for every PR in the window.
 The <code>GAG_RELEASE_TAG</code> override is a gate-testing hook, set nowhere in CI.</p>
 <p>So the bump lands twice, and the release's own docs are republished from the second copy:</p>
@@ -4239,7 +4274,8 @@ Those belong to the highest release, and a dispatch applies them verbatim rather
 <p>It reads the four site pages that pin a version (the landing page, and <code>operations/</code>'s <code>install</code>, <code>upgrade</code> and <code>gitops</code>), plus the <code>stable</code> alias and the root redirect, and fails with the page and the version each one actually advertises.
 Add <code>ARGS=--no-stable</code> for a backport to an older line, whose dispatch above drops the alias.
 This is the same comparison <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/docs/check-release-pins.sh"><code>check-release-pins.sh</code></a> makes against the working tree, run against what the tree published; the two share one literal extractor so a pin shape the source gate catches cannot slip past this one.</p>
-<p>Do not spot-check it with <code>curl … | grep</code>: the theme wraps the leading digit of a highlighted version in its own <code>&lt;span&gt;</code>, so <code>--version 1.0.0</code> is not one string in the served HTML and a grep for it matches nothing, which is exactly what a correct page returns too. <code>/1.1.0/</code> and <code>/1.2.0/</code> still advertise <code>--version 1.0.0</code> today and both read as clean that way.</p>
+<p>Do not spot-check it with <code>curl … | grep</code>: the theme wraps the leading digit of a highlighted version in its own <code>&lt;span&gt;</code>, so <code>--version 1.0.0</code> is not one string in the served HTML and a grep for it matches nothing, which is exactly what a correct page returns too.
+<code>/1.1.0/</code> and <code>/1.2.0/</code> still advertise <code>--version 1.0.0</code> today and both read as clean that way.</p>
 <h3 id="8-hand-off-to-operators">8. Hand off to operators<a class="headerlink" href="#8-hand-off-to-operators" title="Permanent link">&para;</a></h3>
 <p>Operators install/upgrade straight from the <strong>published OCI chart</strong> with the digests pinned via <code>--set</code>, exactly as <a href="../install/#pin-images-by-digest">install.md § Pin images by digest</a> and <a href="../upgrade/">upgrade.md</a> document (<code>X.Y.Z</code> is the release tag without the <code>v</code>):</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-42-1" name="__codelineno-42-1" href="#__codelineno-42-1"></a>helm<span class="w"> </span>install<span class="w"> </span>gag<span class="w"> </span>oci://ghcr.io/actions-gateway/charts/actions-gateway<span class="w"> </span>--version<span class="w"> </span>X.Y.Z<span class="w"> </span><span class="se">\</span>
@@ -4263,7 +4299,8 @@ If <code>main</code> is clean and ready to ship, that's the next <strong>minor</
 <p><strong>A release line carries its own validation harness.</strong> <code>validate-release.sh</code> and the dogfood scripts under it live in this repo, and the gate runs <em>the scripts in your checkout</em> against <em>the artifacts of the tag</em>.
 A <code>release-X.Y</code> branch cut from <code>vX.Y.0</code> therefore inherits whatever harness that commit had — so a fix to the gate only reaches a patch line if it was in the minor tag, or is cherry-picked like any other fix.</p>
 <p>The consequence is a rule for the <strong>minor</strong> cut, not the patch: tag <code>vX.Y.0</code> from a commit that carries the harness fixes you want the line to keep.
-Cutting it from an older RC's commit to make the tag byte-match the validated artifact is the trap — it strands every gate fix found <em>during</em> that release's validation, which is exactly when gate fixes tend to be found. <code>v1.3.0</code> is the worked example: rc.5's validation produced two harness fixes (<a href="../../plan/release-1.3/#Q627">Q627</a> and the e2e watch deadline), and a <code>release-1.3</code> branch cut from rc.5's commit would reproduce both on every future <code>v1.3.x</code>.</p>
+Cutting it from an older RC's commit to make the tag byte-match the validated artifact is the trap — it strands every gate fix found <em>during</em> that release's validation, which is exactly when gate fixes tend to be found.
+<code>v1.3.0</code> is the worked example: rc.5's validation produced two harness fixes (<a href="../../plan/release-1.3/#Q627">Q627</a> and the e2e watch deadline), and a <code>release-1.3</code> branch cut from rc.5's commit would reproduce both on every future <code>v1.3.x</code>.</p>
 <p>Validating an RC whose product code matches <code>main</code> is unaffected: the images and CRDs come from the tag, the harness from your checkout, so the two move independently by design.</p>
 </blockquote>
 <p>The <strong>docs site follows automatically</strong>: <code>mike</code> builds each version from its own tag, so a patch tagged off the release line publishes docs with only that line's content — no unreleased features.
@@ -4341,9 +4378,11 @@ To pin or bump by hand, resolve the tag to its commit SHA and keep the comment i
 </code></pre></div>
 <p><code>SYFT_VERSION</code>/<code>SYFT_SHA256</code> are <strong>not</strong> Dependabot-managed (a tool download, not an action ref).
 <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/updatecli.d/syft.yaml"><code>updatecli.d/syft.yaml</code></a> bumps the pair weekly, in <code>publish.yml</code> and <code>security-scan.yml</code> together, so the released images and the PR-time scan are described by the same syft.</p>
-<p>The two workflow gates divide the work, and it is worth knowing which answers what. <code>actionlint</code> checks that a <code>uses:</code> ref is present and well formed, so a pin edited down to a bare <code>owner/repo</code> fails the PR.
+<p>The two workflow gates divide the work, and it is worth knowing which answers what.
+<code>actionlint</code> checks that a <code>uses:</code> ref is present and well formed, so a pin edited down to a bare <code>owner/repo</code> fails the PR.
 But measured against v1.7.12, the version <code>tools/</code> pins, it accepts <code>@v7.0.1</code>, <code>@v4</code> and <code>@main</code> at exit 0, resolving the action's inputs off the tag while doing so.
-It reads the ref and never asserts it is a SHA. <code>uses-pinned-check</code> is the gate for that, and its scope is wider: actionlint lints only the root <code>.github/workflows/</code> directory, while the pin gate covers every workflow and composite action in the tree, including <code>cmd/gmc/.github/workflows/</code>: kubebuilder scaffolding GitHub never runs, whose refs no gate had read before.</p>
+It reads the ref and never asserts it is a SHA.
+<code>uses-pinned-check</code> is the gate for that, and its scope is wider: actionlint lints only the root <code>.github/workflows/</code> directory, while the pin gate covers every workflow and composite action in the tree, including <code>cmd/gmc/.github/workflows/</code>: kubebuilder scaffolding GitHub never runs, whose refs no gate had read before.</p>
 <h3 id="signing-identity-is-tags-only">Signing identity is tags-only<a class="headerlink" href="#signing-identity-is-tags-only" title="Permanent link">&para;</a></h3>
 <p>Releases are cut by pushing a <code>v*</code> tag, so a legitimate keyless signature's Fulcio certificate records <code>publish.yml</code> running from <code>refs/tags/vX.Y.Z</code>.
 Two layers enforce that a signature can only ever be a tag signature:</p>

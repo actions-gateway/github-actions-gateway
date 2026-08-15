@@ -2879,7 +2879,9 @@ Optimizing against an unattributed number risks building a mechanism that remove
 Extending it to scale-set, with no <code>timeout-minutes</code> confound, is the cheapest gate on the whole effort.</p>
 <h2 id="why-classic-only-is-not-worth-shipping">Why classic-only is not worth shipping<a class="headerlink" href="#why-classic-only-is-not-worth-shipping" title="Permanent link">&para;</a></h2>
 <p>The fast-release mechanism <code>#811</code> proposes does exist on classic: <code>broker.Client.CompleteJob</code> posts a terminal <code>TaskResult</code> with the job-scoped token the AGC already holds for renewal, and its 404/410 handling is already a documented benign no-op.</p>
-<p>Wiring it is real work rather than a one-liner. <code>handleEviction</code> receives only <code>owner</code>, <code>repo</code>, <code>runID</code>; the <code>planID</code>, <code>runServiceURL</code>, and job token live in the listener (<code>cmd/agc/internal/listener/job.go</code>). <code>SiblingDelivery</code> already carries the right shape, so the plumbing is tractable, but it crosses a layer boundary and moves a job-scoped credential into the provisioner.</p>
+<p>Wiring it is real work rather than a one-liner.
+<code>handleEviction</code> receives only <code>owner</code>, <code>repo</code>, <code>runID</code>; the <code>planID</code>, <code>runServiceURL</code>, and job token live in the listener (<code>cmd/agc/internal/listener/job.go</code>).
+<code>SiblingDelivery</code> already carries the right shape, so the plumbing is tractable, but it crosses a layer boundary and moves a job-scoped credential into the provisioner.</p>
 <p>Against a tier scheduled for removal at <code>v2.0.0</code>, that cost buys a capability that ships and then is deleted.
 Do not implement classic-only.</p>
 <h2 id="plan">Plan<a class="headerlink" href="#plan" title="Permanent link">&para;</a></h2>
@@ -2905,13 +2907,16 @@ If GitHub's own detection dominates, the fast-release idea is dead and only Phas
 <p>Shipped 2026-07-26 (Q417).
 Each planned step and what it became:</p>
 <ol>
-<li><strong>Establish run identity</strong> — resolved above. <code>scaleset.JobMessage</code> now models <code>ownerName</code>, <code>repositoryName</code>, <code>workflowRunId</code>, and <code>jobDisplayName</code>, with <code>RunIdentity()</code> returning the <code>(owner, repo, run_id, ok)</code> triple.
+<li><strong>Establish run identity</strong> — resolved above.
+   <code>scaleset.JobMessage</code> now models <code>ownerName</code>, <code>repositoryName</code>, <code>workflowRunId</code>, and <code>jobDisplayName</code>, with <code>RunIdentity()</code> returning the <code>(owner, repo, run_id, ok)</code> triple.
    The listener passes it through <code>scalesetlistener.Job</code>; <code>ProvisionScaleSetWorker</code> stamps it as the existing <code>actions-gateway.com/run-id</code> / <code>/repository</code> annotations, so both tiers share one worker-pod annotation vocabulary.
    The <code>scalesettest</code> fake now delivers the fields too, because the real backend does — a fake that answered with them empty would have hidden the gap until a live run.</li>
 <li><strong>Detect the eviction</strong> — pod watch, not the terminal <code>JobCompleted</code>, and via the <strong>owning reconciler</strong> rather than a per-job goroutine.
    The reconciler already watches worker pods for phase changes and already lists them every reconcile to reap them, so detection costs one cached List.
-   Choosing the reconciler over a goroutine is the same call Q420 made and for the same reason: a fire-and-forget tier has no process-scoped place to keep the state, so the pod has to carry it, and recovery then survives an AGC restart between the eviction and the rerun. <code>RecoverEvictedScaleSetWorkers</code> runs <strong>before</strong> the reaper, since the reaper would otherwise delete the evidence.</li>
-<li><strong>Reuse the retry budget</strong> — unchanged. <code>handleEviction</code>, <code>reserveEvictionRetry</code>, the sharded per-<code>run_id</code> lock, and the sweeper are all shared; the only addition is a <code>tier</code> argument that labels the metrics.
+   Choosing the reconciler over a goroutine is the same call Q420 made and for the same reason: a fire-and-forget tier has no process-scoped place to keep the state, so the pod has to carry it, and recovery then survives an AGC restart between the eviction and the rerun.
+   <code>RecoverEvictedScaleSetWorkers</code> runs <strong>before</strong> the reaper, since the reaper would otherwise delete the evidence.</li>
+<li><strong>Reuse the retry budget</strong> — unchanged.
+   <code>handleEviction</code>, <code>reserveEvictionRetry</code>, the sharded per-<code>run_id</code> lock, and the sweeper are all shared; the only addition is a <code>tier</code> argument that labels the metrics.
    The Q106 invariant now holds <em>across</em> tiers, which the concurrency regression test exercises by driving half its evictions down each path.</li>
 </ol>
 <p>Against the design constraints listed below:</p>
@@ -2962,7 +2967,8 @@ Each planned step and what it became:</p>
   Q385's SIGTERM relay already covers every case where something in the pod gets to run.
   The 404/410 no-op covers the race, but make the intent explicit rather than relying on it.</li>
 <li><strong>Cover deletion, not only terminal phase.</strong> Classic's branch fires on <code>PodFailed</code>/<code>Evicted</code>, which is the kubelet's node-pressure signal.
-  API-initiated eviction (<code>kubectl drain</code>) deletes the pod instead, and <code>waitForPodCompletion</code> reads a vanished pod as <code>PodSucceeded</code>, so the drain path appears to reach no recovery at all. <strong>Measured 2026-07-27 (Q421) and confirmed on both tiers</strong> — a drained worker pod publishes no terminal phase before it disappears, so no rerun fires (<a href="../eviction-oversubscription-validation/#result-measured-2026-07-27">result</a>).
+  API-initiated eviction (<code>kubectl drain</code>) deletes the pod instead, and <code>waitForPodCompletion</code> reads a vanished pod as <code>PodSucceeded</code>, so the drain path appears to reach no recovery at all.
+  <strong>Measured 2026-07-27 (Q421) and confirmed on both tiers</strong> — a drained worker pod publishes no terminal phase before it disappears, so no rerun fires (<a href="../eviction-oversubscription-validation/#result-measured-2026-07-27">result</a>).
   The pod watch this phase adds should not inherit the gap; whether to close it at all is <a href="../archive/q459-drained-worker-recovery/">Q459</a>.</li>
 <li><strong>Ordering and budget.</strong> Report the terminal result, then rerun, consuming exactly one slot from the per-run budget.</li>
 <li><strong>Observability.</strong> A distinct metric or Event so a fast release is distinguishable from a lapse in the field.

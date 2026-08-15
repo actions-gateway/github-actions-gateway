@@ -3087,7 +3087,8 @@ The proxy, AGC, and GMC pods are <strong>uniformly hardened</strong> and not ten
 The numeric UID matters: kubelet cannot verify <code>runAsNonRoot</code> against the runner image's non-numeric <code>USER runner</code>, so without it the pod is rejected with <code>CreateContainerConfigError</code> (Q115).
 The <code>privileged</code> profile stamps <strong>no</strong> securityContext defaults — that is its whole purpose (DinD, root-requiring builds) — so a <code>runAsNonRoot</code> policy will reject it; that is correct, and those tenants need an explicit exception.
 Proxy, AGC, and GMC containers set <code>runAsNonRoot: true</code> directly.</p>
-<p><strong><code>seccompProfile: RuntimeDefault</code></strong> — Set on every <code>baseline</code>/<code>restricted</code> worker (pod-level) and on every proxy/AGC/GMC container. <code>privileged</code> workers get no default.</p>
+<p><strong><code>seccompProfile: RuntimeDefault</code></strong> — Set on every <code>baseline</code>/<code>restricted</code> worker (pod-level) and on every proxy/AGC/GMC container.
+<code>privileged</code> workers get no default.</p>
 <p><strong>Drop ALL capabilities</strong> — Here is the most common surprise.
 The <code>baseline</code> worker profile <strong>deliberately does not</strong> drop capabilities or set <code>allowPrivilegeEscalation: false</code>, because baseline PSA permits in-job privilege escalation (<code>sudo</code>) and a large fraction of real CI jobs rely on it.
 A cluster policy that requires <code>drop: [ALL]</code> on <em>all</em> pods will therefore <strong>reject default workers</strong>.
@@ -3097,12 +3098,14 @@ Your options, in order of preference:</p>
 <li>Or scope the cluster policy to exclude tenant namespaces (see the <a href="#sample-policies">exception samples</a>) so <code>baseline</code> keeps working.</li>
 </ul>
 <p><code>restricted</code>, proxy, AGC, and GMC pods already drop all capabilities.</p>
-<p><strong><code>allowPrivilegeEscalation: false</code></strong> — Same story as capabilities: only <code>restricted</code> (and the proxy/AGC/GMC pods) set it. <code>baseline</code> leaves it unset on purpose.</p>
+<p><strong><code>allowPrivilegeEscalation: false</code></strong> — Same story as capabilities: only <code>restricted</code> (and the proxy/AGC/GMC pods) set it.
+<code>baseline</code> leaves it unset on purpose.</p>
 <p><strong><code>readOnlyRootFilesystem: true</code></strong> — <strong>No</strong> worker profile sets this, including <code>restricted</code>.
 The runner writes to its working tree (<code>_work</code>), tool cache, and temp dirs on the root filesystem; a read-only root would break virtually every job.
 If your cluster requires <code>readOnlyRootFilesystem</code>, you <strong>must</strong> exempt worker pods.
 The proxy, AGC, and GMC containers all run with <code>readOnlyRootFilesystem: true</code>.</p>
-<p><strong>No privileged containers / no host namespaces</strong> — The AGC unconditionally forces <code>hostPID/hostNetwork/hostIPC: false</code> and <code>automountServiceAccountToken: false</code> on every worker pod (all three profiles), overwriting any tenant <code>PodTemplate</code> value. <code>baseline</code>/<code>restricted</code> also forbid privileged containers via PSA.
+<p><strong>No privileged containers / no host namespaces</strong> — The AGC unconditionally forces <code>hostPID/hostNetwork/hostIPC: false</code> and <code>automountServiceAccountToken: false</code> on every worker pod (all three profiles), overwriting any tenant <code>PodTemplate</code> value.
+<code>baseline</code>/<code>restricted</code> also forbid privileged containers via PSA.
 Only the <code>privileged</code> profile permits a privileged container — by design, and gated behind an admission webhook that requires an explicit per-tenant opt-in (<a href="../../design/05-security/#53-security-profiles-and-the-privileged-opt-in">§5.3</a>).</p>
 <p><strong>Block <code>:latest</code> / require digest pin</strong> — All GAG-managed images are pinned by <code>@sha256:</code> digest: the GMC, AGC, and proxy images are digest-pinned and the Helm chart <strong>refuses to render</strong> without a digest (<code>validateImageDigest</code>); the default worker image is also digest-pinned (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/names/names.go"><code>names.go</code></a>).
 The ⚠️ is only because a tenant <em>may</em> override <code>spec.workerImage</code> (or a <code>PodTemplate</code> container image) with a floating tag — a tenant choice, not a GAG default.
@@ -3114,7 +3117,8 @@ A "require digest" policy scoped to tenant namespaces is a good way to force ten
 <li>Any registry your tenants set via <code>spec.workerImage</code> / <code>PodTemplate</code>.</li>
 </ul>
 <p><strong>Require CPU/memory requests + limits</strong> — Workers are gap-filled with <code>500m</code> CPU / <code>1Gi</code> memory as <em>both</em> requests and limits when a container sets neither.
-The proxy sets requests+limits. <strong>AGC v1alpha1 stamps no resources</strong> — a "require limits" policy will reject AGC v1 pods; either move the tenant to a v2alpha1 <code>ActionsGateway</code> (which gap-fills <code>500m</code>/<code>2Gi</code> requests, <code>2</code>/<code>4Gi</code> limits) or exempt AGC pods.
+The proxy sets requests+limits.
+<strong>AGC v1alpha1 stamps no resources</strong> — a "require limits" policy will reject AGC v1 pods; either move the tenant to a v2alpha1 <code>ActionsGateway</code> (which gap-fills <code>500m</code>/<code>2Gi</code> requests, <code>2</code>/<code>4Gi</code> limits) or exempt AGC pods.
 The GMC's resources come from the chart's <code>resources</code> value, which ships with a sane default (<code>10m</code>/<code>64Mi</code> request, <code>500m</code>/<code>128Mi</code> limit).</p>
 <h2 id="sample-policies">Sample policies<a class="headerlink" href="#sample-policies" title="Permanent link">&para;</a></h2>
 <p>Ready-to-apply samples live in <a href="../examples/policies/"><code>examples/policies/</code></a>.
@@ -3210,10 +3214,12 @@ Two complementary kinds, for both engines:</p>
 </tr>
 </tbody>
 </table>
-<p>Each carries the standard <code>nodeSelector</code>, <code>tolerations</code>, and <code>affinity</code>. <strong>This is deliberate and not admin-gated.</strong> Distinct per-tenant egress IPs exist so tenants do not share a rate limit or a block radius; a tenant electing where its own traffic leaves the cluster is the intended use, and worker placement has always been able to do it.</p>
+<p>Each carries the standard <code>nodeSelector</code>, <code>tolerations</code>, and <code>affinity</code>.
+<strong>This is deliberate and not admin-gated.</strong> Distinct per-tenant egress IPs exist so tenants do not share a rate limit or a block radius; a tenant electing where its own traffic leaves the cluster is the intended use, and worker placement has always been able to do it.</p>
 <p>It follows that <strong>per-tenant egress-IP <em>attribution</em> is a property of your cluster configuration, not something GAG enforces on its own.</strong> If a downstream firewall allowlist or an audit trail attributes traffic by source IP, and CR authors in tenant namespaces are not fully trusted, constrain placement here — at the pod admission layer, where it also covers any pod a tenant can create directly.</p>
 <h3 id="pin-by-mutation-not-by-an-allowlist">Pin by mutation, not by an allowlist<a class="headerlink" href="#pin-by-mutation-not-by-an-allowlist" title="Permanent link">&para;</a></h3>
-<p>The instinct is to validate an allowlist of permitted <code>nodeSelector</code> values. <strong>That is not sound.</strong> <code>affinity.nodeAffinity</code> is a small query language supporting <code>NotIn</code> and <code>DoesNotExist</code>, so "any pool except my own" is expressible, and no key=value allowlist rejects it in general.</p>
+<p>The instinct is to validate an allowlist of permitted <code>nodeSelector</code> values.
+<strong>That is not sound.</strong> <code>affinity.nodeAffinity</code> is a small query language supporting <code>NotIn</code> and <code>DoesNotExist</code>, so "any pool except my own" is expressible, and no key=value allowlist rejects it in general.</p>
 <p>Stamping the <code>nodeSelector</code> by <strong>mutation</strong> <em>is</em> sound, because Kubernetes ANDs <code>nodeSelector</code> with <code>nodeAffinity</code> — affinity can only narrow the candidate nodes, never widen them.
 Once admission pins the pod to a pool, no affinity expression moves it off.
 The worst a hostile author achieves is an unschedulable pod (<code>Pending</code>), never another tenant's egress IP.</p>

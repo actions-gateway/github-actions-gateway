@@ -2711,7 +2711,8 @@ It has to be implemented, and implemented before 1.4.0 hardens it further.</p>
 <h2 id="what-h9-did-not-account-for">What §H.9 did not account for<a class="headerlink" href="#what-h9-did-not-account-for" title="Permanent link">&para;</a></h2>
 <p>Two findings from reading the code, both of which change the shape of the work.</p>
 <h3 id="cross-namespace-references-are-not-expressible">Cross-namespace references are not expressible<a class="headerlink" href="#cross-namespace-references-are-not-expressible" title="Permanent link">&para;</a></h3>
-<p>No reference type carries a namespace. <code>ObjectRef</code> and <code>LocalObjectRef</code> are name-only, and both resolution sites resolve in the referrer's own namespace: <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/controller/actionsgateway_v2_controller.go"><code>actionsgateway_v2_controller.go:221</code></a> for <code>defaultProxyRef</code>, <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/controller/runnerset_target.go"><code>runnerset_target.go:476</code></a> for <code>proxyRef</code>.</p>
+<p>No reference type carries a namespace.
+<code>ObjectRef</code> and <code>LocalObjectRef</code> are name-only, and both resolution sites resolve in the referrer's own namespace: <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/controller/actionsgateway_v2_controller.go"><code>actionsgateway_v2_controller.go:221</code></a> for <code>defaultProxyRef</code>, <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/controller/runnerset_target.go"><code>runnerset_target.go:476</code></a> for <code>proxyRef</code>.</p>
 <p>So <code>allowedNamespaces</code> cannot gate anything today: there is no reference for it to refuse.
 M4 builds the path and the consent check together.
 A consent check alone would gate a reference nobody can write.</p>
@@ -2720,7 +2721,8 @@ Every change below has to preserve that for an absent or empty <code>allowedName
 <h3 id="the-agc-cannot-read-a-remote-egressproxy">The AGC cannot read a remote <code>EgressProxy</code><a class="headerlink" href="#the-agc-cannot-read-a-remote-egressproxy" title="Permanent link">&para;</a></h3>
 <p>This is the finding that decides the architecture.
 The AGC's cache is pinned to its own tenant namespace so that it needs only the per-tenant <code>Role</code> the GMC creates, rather than a <code>ClusterRole</code>.
-See <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/main.go"><code>cmd/agc/main.go:284-292</code></a>, deliberate and documented in place. <code>RunnerSet.spec.proxyRef</code> is resolved by the AGC.
+See <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/main.go"><code>cmd/agc/main.go:284-292</code></a>, deliberate and documented in place.
+<code>RunnerSet.spec.proxyRef</code> is resolved by the AGC.
 So the worker path cannot be built by teaching the AGC to read across namespaces without either widening its RBAC or adding a projection mechanism.</p>
 <p>Three ways out, and why one wins:</p>
 <table>
@@ -2795,7 +2797,9 @@ The causation claim, that the consent check is what denies, is settled by deleti
 Nothing here is written ahead of the evidence.</p>
 <ul>
 <li>2026-08-08: scope decided (full M4, both paths); architecture decided (GMC-mediated projection); API shape decided (<code>ProxyObjectRef</code>).</li>
-<li>2026-08-08: API landed. <code>ProxyObjectRef</code> in both version packages, <code>ProxyShareNotGranted</code> in <code>apiconditions</code> and both re-exports, <code>LocalObjectRef</code> retired as unused. <code>make v2-api-sync-check</code> green; CRDs, chart CRDs, deepcopy and <code>docs/reference/api.md</code> regenerated.</li>
+<li>2026-08-08: API landed.
+  <code>ProxyObjectRef</code> in both version packages, <code>ProxyShareNotGranted</code> in <code>apiconditions</code> and both re-exports, <code>LocalObjectRef</code> retired as unused.
+  <code>make v2-api-sync-check</code> green; CRDs, chart CRDs, deepcopy and <code>docs/reference/api.md</code> regenerated.</li>
 <li>2026-08-08: enforcement landed.
   Consent check on both resolution sites, CA projection with prune-on-revoke, dual-side NetworkPolicy, cross-namespace watch mappers.
   The proxy's GitHub-host allowlist now also spans granted remote referrers, which same-namespace assembly had missed.</li>

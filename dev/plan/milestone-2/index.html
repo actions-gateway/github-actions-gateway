@@ -3522,7 +3522,8 @@ It owns the set of running listener goroutines and enforces the <code>maxListene
 <ul>
 <li>At least one listener goroutine is always running per RunnerGroup (the permanent baseline).
   If the baseline goroutine exits unexpectedly (recoverable error), the Multiplexer restarts it after a brief backoff (1s → 30s cap).</li>
-<li><code>activeCount ≤ maxListeners</code> at all times. <code>SpawnReplacement</code> is a no-op when the ceiling is reached.</li>
+<li><code>activeCount ≤ maxListeners</code> at all times.
+  <code>SpawnReplacement</code> is a no-op when the ceiling is reached.</li>
 <li>On <code>Stop()</code>, every goroutine that holds an open session issues <code>DeleteSession</code> before the Multiplexer returns — this is the graceful shutdown requirement.</li>
 </ul>
 <p><strong><code>multiplexer_test.go</code> — what to cover:</strong></p>
@@ -4057,7 +4058,8 @@ Verify:</p>
 </code></pre></div></p>
 </li>
 </ol>
-<p><strong>Implementation:</strong> <code>GithubRegistrar</code> in <code>cmd/agc/internal/agentpool/github_registrar.go</code> implements this flow. <code>StubRegistrar</code> remains wired in <code>main.go</code> until validated against live GitHub credentials.</p>
+<p><strong>Implementation:</strong> <code>GithubRegistrar</code> in <code>cmd/agc/internal/agentpool/github_registrar.go</code> implements this flow.
+<code>StubRegistrar</code> remains wired in <code>main.go</code> until validated against live GitHub credentials.</p>
 <p><strong>TODO(investigation-a):</strong> Confirm exact request/response schema against a live <code>config.sh --debug</code> capture before replacing <code>StubRegistrar</code> in production <code>main.go</code>.
 The schema above is sourced from the open-source runner code and may differ for enterprise GitHub instances or future runner versions.</p>
 <hr />

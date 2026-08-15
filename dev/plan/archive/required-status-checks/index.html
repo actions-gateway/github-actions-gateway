@@ -2692,7 +2692,8 @@ So you cannot simply mark <code>govulncheck</code> / <code>unit-test</code> / et
 <ul>
 <li><strong>Remove the top-level path filter</strong> (<code>paths-ignore</code> / <code>on.&lt;event&gt;.paths</code>) so the workflow triggers on <em>every</em> PR.
   Fine-grained skipping stays <em>inside</em> the workflow via the <code>changes</code> job + each real job's <code>if:</code> guard (unchanged), so the actual expensive jobs still don't run on unrelated PRs — only the cheap <code>changes</code> job does.</li>
-<li>Add a summary job whose id is <strong><code>&lt;workflow&gt;-gate</code></strong> (e.g. <code>unit-test-gate</code>) that <code>needs:</code> every real job and runs with <code>if: ${{ always() }}</code>.
+<li>Add a summary job whose id is <strong><code>&lt;workflow&gt;-gate</code></strong> (e.g.
+  <code>unit-test-gate</code>) that <code>needs:</code> every real job and runs with <code>if: ${{ always() }}</code>.
   It passes only when every needed job concluded <code>success</code> or <code>skipped</code>, and fails on anything else (<code>failure</code>, <code>cancelled</code>):</li>
 </ul>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nt">unit-test-gate</span><span class="p">:</span>
@@ -2719,7 +2720,8 @@ So you cannot simply mark <code>govulncheck</code> / <code>unit-test</code> / et
 <a id="__codelineno-0-22" name="__codelineno-0-22" href="#__codelineno-0-22"></a><span class="w">          </span><span class="no">esac</span>
 <a id="__codelineno-0-23" name="__codelineno-0-23" href="#__codelineno-0-23"></a><span class="w">        </span><span class="no">done</span>
 </code></pre></div>
-<p>A matrix job (e.g. <code>trivy</code>) aggregates naturally: <code>needs: [trivy]</code> waits for all legs and <code>needs.trivy.result</code> is <code>failure</code> if any leg failed.</p>
+<p>A matrix job (e.g.
+  <code>trivy</code>) aggregates naturally: <code>needs: [trivy]</code> waits for all legs and <code>needs.trivy.result</code> is <code>failure</code> if any leg failed.</p>
 <h3 id="2-mark-the-gate-contexts-required-in-the-ruleset-admin">2. Mark the gate contexts required in the ruleset (admin)<a class="headerlink" href="#2-mark-the-gate-contexts-required-in-the-ruleset-admin" title="Permanent link">&para;</a></h3>
 <p>After this PR merges, a repo admin adds each workflow's gate context to the <code>default-protect</code> ruleset's <code>required_status_checks</code>.
 This is the only step that actually turns the gates merge-blocking, and it needs admin rights the CI branch does not have.</p>

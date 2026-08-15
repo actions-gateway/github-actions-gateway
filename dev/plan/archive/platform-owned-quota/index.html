@@ -2684,7 +2684,8 @@
 <p><strong>Decision (2026-06-13):</strong> the platform admin owns the <code>Namespace</code>, <code>ResourceQuota</code>, and <code>LimitRange</code>; GAG operates <em>within</em> them and never creates or mutates them.
 Remove <code>spec.namespaceQuota</code> from the <code>ActionsGateway</code> CRD and drop the GMC's <code>resourcequotas</code>/<code>limitranges</code> write RBAC.
 A breaking CRD change, done <strong>pre-1.0 while it is free</strong> (post-1.0 it would need a conversion webhook — see deferred <a href="../../../STATUS/">Q74</a>).</p>
-<p>Tracked as STATUS Queue Q130. <strong>Implemented (2026-06-14):</strong> the CRD/RBAC/controller/docs edits landed; see the Status section below.</p>
+<p>Tracked as STATUS Queue Q130.
+<strong>Implemented (2026-06-14):</strong> the CRD/RBAC/controller/docs edits landed; see the Status section below.</p>
 <h2 id="why">Why<a class="headerlink" href="#why" title="Permanent link">&para;</a></h2>
 <p>The website rework surfaced that the implementation contradicts the core value prop.
 The site (correctly) says "the platform team caps each tenant," but today:</p>
@@ -2738,7 +2739,8 @@ Captured here; may split into its own item after the quota change lands.</p>
 <ul>
 <li><strong>API/CRD:</strong> removed <code>NamespaceQuota</code> from <code>ActionsGatewaySpec</code> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/api/v1alpha1/actionsgateway_types.go">actionsgateway_types.go</a>); regenerated deepcopy, the CRD bases, the GMC-bundled chart CRD copy, and RBAC.
   Structural-schema pruning silently drops the now-unknown field from existing CRs (no apply rejection) pre-1.0.</li>
-<li><strong>Controller/builder:</strong> removed <code>buildResourceQuota</code>, the reconcile apply path, the teardown delete, and the <code>applyResourceQuota</code> helper. <code>maxQuotaRetries</code> / <code>quotaRetryDelay</code> (AGC reacting to a <em>full</em> quota) are kept — those are operating <em>within</em> a quota, not owning it.</li>
+<li><strong>Controller/builder:</strong> removed <code>buildResourceQuota</code>, the reconcile apply path, the teardown delete, and the <code>applyResourceQuota</code> helper.
+  <code>maxQuotaRetries</code> / <code>quotaRetryDelay</code> (AGC reacting to a <em>full</em> quota) are kept — those are operating <em>within</em> a quota, not owning it.</li>
 <li><strong>RBAC:</strong> dropped the <code>resourcequotas</code> verbs from <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/config/rbac/role.yaml">role.yaml</a> and the chart <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/charts/actions-gateway/templates/rbac.yaml">rbac.yaml</a>.
   No <code>limitranges</code> grant existed.
   Partially subsumes <a href="../../security-audit-2026-06/#q122--gmc-workload-writes-are-cluster-wide-docs-claim-confinement-high--resolved">Q122</a>.</li>

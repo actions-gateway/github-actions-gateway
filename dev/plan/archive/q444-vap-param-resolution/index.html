@@ -2739,7 +2739,8 @@ Because <code>parameterNotFoundAction: Deny</code> resolves params <em>before</e
 Prior sighting: <a href="../q414-dind-tenant-fixture/"><code>q414-dind-tenant-fixture.md</code></a> § Local-loop notes.</p>
 <h2 id="the-trigger">The trigger<a class="headerlink" href="#the-trigger" title="Permanent link">&para;</a></h2>
 <p><strong>The param informer for a <code>paramKind</code> dies permanently, in that kube-apiserver process, the moment the set of <em>bindings</em> whose policy names that <code>paramKind</code> becomes empty for at least one policy-refresh tick (default 1s).</strong></p>
-<p>For us that set has exactly one member, so <code>helm uninstall</code> — which deletes the binding — is the trigger. <code>helm upgrade</code> never empties the set and is safe.</p>
+<p>For us that set has exactly one member, so <code>helm uninstall</code> — which deletes the binding — is the trigger.
+<code>helm upgrade</code> never empties the set and is safe.</p>
 <p>Two consequences follow, and they explain everything previously observed:</p>
 <ul>
 <li>The informer is keyed by <code>paramKind</code> <strong>GVK</strong>, shared by every policy naming it, so one policy losing its binding is enough to kill the informer for all of them.</li>
@@ -2761,7 +2762,8 @@ Prior sighting: <a href="../q414-dind-tenant-fixture/"><code>q414-dind-tenant-fi
 <a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="w">    </span><span class="k">go</span><span class="w"> </span><span class="nx">informer</span><span class="p">.</span><span class="nx">Informer</span><span class="p">().</span><span class="nx">Run</span><span class="p">(</span><span class="nx">instanceContext</span><span class="p">.</span><span class="nx">Done</span><span class="p">())</span><span class="w"> </span><span class="c1">// CRDs: a FRESH informer</span>
 <a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="p">}</span>
 </code></pre></div>
-<p><code>ConfigMap</code> is a core type, so it takes the first path — and that path starts a <strong>shared</strong> informer with a <strong>per-instance</strong> context. <code>sharedInformerFactory</code> records <code>startedInformers[type] = true</code> and never clears it, so once <code>cancelFunc</code> fires:</p>
+<p><code>ConfigMap</code> is a core type, so it takes the first path — and that path starts a <strong>shared</strong> informer with a <strong>per-instance</strong> context.
+<code>sharedInformerFactory</code> records <code>startedInformers[type] = true</code> and never clears it, so once <code>cancelFunc</code> fires:</p>
 <ul>
 <li>the informer's <code>Run</code> returns and it is never restarted — <code>Start()</code> skips it forever;</li>
 <li>its store is <strong>frozen</strong>, not cleared, at whatever it last held;</li>
@@ -2907,10 +2909,12 @@ Ours is a core type that is always discoverable, and a restart <em>fixes</em> it
 <h2 id="reproducing">Reproducing<a class="headerlink" href="#reproducing" title="Permanent link">&para;</a></h2>
 <ul>
 <li><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/e2e/vap-param-informer-check.sh"><code>scripts/e2e/vap-param-informer-check.sh</code></a> — the deterministic three-arm reproducer above.
-  Self-contained (its own CRDs, namespace and policies), no chart required. <strong>Run it only against a disposable cluster</strong>: arm 2 permanently breaks ConfigMap param resolution for that apiserver process.
+  Self-contained (its own CRDs, namespace and policies), no chart required.
+  <strong>Run it only against a disposable cluster</strong>: arm 2 permanently breaks ConfigMap param resolution for that apiserver process.
   Not wired into CI — it deliberately destroys the cluster it runs on, and it pins an <em>upstream</em> defect that our own code no longer depends on.
   It is the evidence for the fix, re-runnable by hand on a new Kubernetes minor to confirm arm 3 still holds.</li>
-<li><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/e2e/chart-reinstall-check.sh"><code>scripts/e2e/chart-reinstall-check.sh</code></a> (<code>make chart-reinstall-check</code>) — the product-level check, driving a real uninstall/reinstall against an installed release. <strong>Wired into CI as of Q492</strong>, now that the cycle it exercises is expected to pass.</li>
+<li><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/e2e/chart-reinstall-check.sh"><code>scripts/e2e/chart-reinstall-check.sh</code></a> (<code>make chart-reinstall-check</code>) — the product-level check, driving a real uninstall/reinstall against an installed release.
+  <strong>Wired into CI as of Q492</strong>, now that the cycle it exercises is expected to pass.</li>
 </ul>
 <h2 id="operator-impact">Operator impact<a class="headerlink" href="#operator-impact" title="Permanent link">&para;</a></h2>
 <p><strong>On releases from Q492 onward: none.</strong> The guard's <code>paramKind</code> is a CRD, so the binding-set transition is survivable and no apiserver restart is ever needed.
@@ -2932,11 +2936,13 @@ Blast radius, symptoms and recovery for that case remain documented in <a href="
 <ol>
 <li><strong>Move the <code>paramKind</code> off a core type</strong> to a small CRD.
    Measurement 6 showed the CRD path is structurally immune, because it allocates a fresh informer per context; <a href="#arm-3--the-crd-paramkind-under-the-same-transition-q492">arm 3</a> then confirmed it survives the actual failing transition.
-   Cost: a CRD, its RBAC, and a migration for the existing ConfigMap. <strong>This is what shipped.</strong></li>
+   Cost: a CRD, its RBAC, and a migration for the existing ConfigMap.
+   <strong>This is what shipped.</strong></li>
 <li><strong>Keep the binding alive across <code>helm uninstall</code></strong> with <code>helm.sh/resource-policy: keep</code> on the VAPB and its param ConfigMap, so the binding set never empties.
    Much cheaper — but it collides with an existing invariant: <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/manifest/manifest-validate.sh"><code>scripts/manifest/manifest-validate.sh</code></a> asserts that <strong>no VAPB carries <code>helm.sh/resource-policy: keep</code></strong>, because a retained binding leaves the guard enforcing after the release is gone and makes <code>admissionPolicy.enabled=false</code> a silent no-op.
    That reason still holds and is worse than the defect it would paper over.
-   It also only defends the Helm path; anything else that deletes the binding still breaks the cluster. <strong>Rejected</strong>; the invariant it would have overturned is still enforced.</li>
+   It also only defends the Helm path; anything else that deletes the binding still breaks the cluster.
+   <strong>Rejected</strong>; the invariant it would have overturned is still enforced.</li>
 </ol>
 <p>Note the historical irony: retaining the <em>policy</em> was tried and reverted (<code>07061175</code> / <code>70b4b351</code>), and the binding — the one object that would have worked — is precisely the one we forbid retaining.</p>
 <h3 id="what-shipped-in-q492">What shipped in Q492<a class="headerlink" href="#what-shipped-in-q492" title="Permanent link">&para;</a></h3>

@@ -2748,7 +2748,8 @@ The ordering inverts.</p>
 <p>The platform admin pre-creates both sets of classes and is responsible for keeping them disjoint.
 A validating check that the two lists do not intersect at GMC startup is cheap and worth having — it converts a silent priority inversion into a boot-time error.</p>
 <h3 id="22-why-priorityclassname-is-gated-at-all-when-the-rest-of-podscheduling-is-not">2.2 Why <code>priorityClassName</code> is gated at all, when the rest of <code>PodScheduling</code> is not<a class="headerlink" href="#22-why-priorityclassname-is-gated-at-all-when-the-rest-of-podscheduling-is-not" title="Permanent link">&para;</a></h3>
-<p>The <code>PodScheduling</code> godoc records a deliberate, reviewed decision (Q282) that <code>nodeSelector</code> / <code>tolerations</code> / <code>affinity</code> are <strong>tenant-settable and not allowlisted</strong>. <code>priorityClassName</code> is the exception, and the distinction is not arbitrary:</p>
+<p>The <code>PodScheduling</code> godoc records a deliberate, reviewed decision (Q282) that <code>nodeSelector</code> / <code>tolerations</code> / <code>affinity</code> are <strong>tenant-settable and not allowlisted</strong>.
+<code>priorityClassName</code> is the exception, and the distinction is not arbitrary:</p>
 <ul>
 <li>Placement is a <strong>choice about the tenant's own traffic</strong>.
   The property it weakens is <em>attribution</em> (two tenants may egress via one IP), not isolation.
@@ -2797,7 +2798,8 @@ The webhook coverage is uneven, and this is the part most likely to be mis-scope
 </table>
 <p>The v2 webhook package covers <code>egressproxy</code>, <code>runnerset</code>, and <code>runnertemplate</code> only.
 The v1alpha1 <code>ActionsGateway</code> webhook is a <strong>different API group</strong> and does not match v2 <code>actionsgateways</code>.
-So gating <code>ActionsGateway.spec.scheduling.priorityClassName</code> requires standing up a v2 <code>ActionsGateway</code> validating webhook from scratch — registration, chart wiring (<code>make chart-webhook-check</code> enforces drift), and envtest coverage. <strong>This is the bulk of the work, and it is the reason Q284 is not the trivial <code>S</code> its diff size suggests.</strong></p>
+So gating <code>ActionsGateway.spec.scheduling.priorityClassName</code> requires standing up a v2 <code>ActionsGateway</code> validating webhook from scratch — registration, chart wiring (<code>make chart-webhook-check</code> enforces drift), and envtest coverage.
+<strong>This is the bulk of the work, and it is the reason Q284 is not the trivial <code>S</code> its diff size suggests.</strong></p>
 <p>The same residual G.7 recorded for the worker allowlist applies here: an operator who grants a tenant direct RBAC on the underlying resource bypasses the webhook, and stored objects are never re-validated.
 The Q289 <code>ValidatingAdmissionPolicy</code> backstop is now delivered for the worker PriorityClass allowlist (<a href="../../../design/appendix-g-future-enhancements/#g7-validatingadmissionpolicy-for-direct-runnergroup-priorityclass-enforcement">G.7</a>); a Q284 infra allowlist should get the same VAP treatment on its own pass, following that policy's paramKind-ConfigMap pattern.</p>
 <h2 id="3-topologyspreadconstraints--composes-with-the-built-in-anti-affinity">3. <code>topologySpreadConstraints</code> — composes with the built-in anti-affinity<a class="headerlink" href="#3-topologyspreadconstraints--composes-with-the-built-in-anti-affinity" title="Permanent link">&para;</a></h2>
@@ -2808,18 +2810,22 @@ Do not add a second one.</p>
 <p>It is tempting to make this field symmetric with <code>affinity</code> — it <em>is</em> the spread mechanism, after all, so "set it and you own it" reads as the consistent choice.
 That reasoning is wrong here, and the asymmetry is principled:</p>
 <ul>
-<li><strong>Two opt-out levers for one invariant is worse than one.</strong> The built-in anti-affinity is a durability invariant (one node failure must not take the pool down). <code>affinity</code> has to be able to displace it because <code>podAntiAffinity</code> occupies the same field — there is nowhere else for an author's anti-affinity to go. <code>topologySpreadConstraints</code> is a <em>different</em> field with no such collision, so displacing the invariant would be a choice, not a necessity.
+<li><strong>Two opt-out levers for one invariant is worse than one.</strong> The built-in anti-affinity is a durability invariant (one node failure must not take the pool down).
+  <code>affinity</code> has to be able to displace it because <code>podAntiAffinity</code> occupies the same field — there is nowhere else for an author's anti-affinity to go.
+  <code>topologySpreadConstraints</code> is a <em>different</em> field with no such collision, so displacing the invariant would be a choice, not a necessity.
   Making it a second, implicit opt-out means an author who wanted zonal spread silently loses cross-node spread.</li>
 <li><strong>Composition is safe, and provably so.</strong> <code>topologySpreadConstraints</code> can only <em>narrow</em> the candidate node set, never widen it — exactly like <code>nodeSelector</code> AND-ing with <code>nodeAffinity</code>.
   And its <code>labelSelector</code> counts only pods in the constraint's own namespace, so one tenant's spread constraint cannot be skewed by another tenant's pods.
   There is no soundness reason to drop the built-in term.</li>
 </ul>
 <p>The cost is the <code>Pending</code> trap: an author who asks for a soft zonal spread (<code>whenUnsatisfiable: ScheduleAnyway</code>) still inherits the <em>required</em> cross-node anti-affinity, so replicas beyond the node count strand in <code>Pending</code>.
-That is the existing behavior for any proxy pool with <code>minReplicas</code> above its node count, and the existing escapes apply — <code>podAntiAffinity: {}</code>, or lowering <code>minReplicas</code>. <strong>Document it on the field</strong>, in the godoc, next to the <code>affinity</code> precedence note.</p>
+That is the existing behavior for any proxy pool with <code>minReplicas</code> above its node count, and the existing escapes apply — <code>podAntiAffinity: {}</code>, or lowering <code>minReplicas</code>.
+<strong>Document it on the field</strong>, in the godoc, next to the <code>affinity</code> precedence note.</p>
 <p>Unlike <code>priorityClassName</code>, <code>topologySpreadConstraints</code> needs <strong>no allowlist</strong>: it is namespace-scoped and narrowing, so it carries no cross-tenant lever.</p>
 <p>Lock the composition with a unit test in <code>cmd/gmc/internal/controller/egressproxy_scheduling_test.go</code>, alongside the existing <code>TestEgressProxyScheduling_NoneSetPreservesBuiltInAntiAffinity</code>.</p>
 <h2 id="4-crd-size-budget">4. CRD size budget<a class="headerlink" href="#4-crd-size-budget" title="Permanent link">&para;</a></h2>
-<p><code>PodScheduling</code> is narrow specifically to keep the v2 CRDs under the apiserver's ~1.5 MiB per-object ceiling. <code>affinity</code> alone added roughly 72 KB of CRD schema <em>per served version</em>.</p>
+<p><code>PodScheduling</code> is narrow specifically to keep the v2 CRDs under the apiserver's ~1.5 MiB per-object ceiling.
+<code>affinity</code> alone added roughly 72 KB of CRD schema <em>per served version</em>.</p>
 <p><code>topologySpreadConstraints</code> carries a <code>labelSelector</code> plus <code>matchLabelKeys</code> / <code>nodeAffinityPolicy</code> / <code>nodeTaintsPolicy</code>; <code>priorityClassName</code> is a bare string.
 Both are far smaller than <code>affinity</code>, but the budget is real and shared across two served versions (<code>v2alpha1</code>, <code>v2beta1</code>).</p>
 <p><strong>Measure before and after.</strong> <code>make chart-crds</code> then check the rendered CRD sizes; the v2 CRDs already ship via <code>helm template | kubectl apply --server-side</code> rather than <code>helm install</code> precisely because they exceed the 1 MiB Helm release-Secret limit.</p>

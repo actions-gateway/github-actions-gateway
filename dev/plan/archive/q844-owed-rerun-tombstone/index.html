@@ -2793,7 +2793,8 @@ A job that is over replays its <code>JobCompleted</code> rather than its assignm
 <p><strong>A previous process that reaped a terminal pod and then died before reading that job's completion re-runs a genuinely failed job, once.</strong> Reaching it needs the completion to have gone unread for at least <code>completedPodTTL</code> while the listener was polling, and then a kill inside that state.
 The re-run draws on the shared per-run <code>maxEvictionRetries</code> budget like every other cause, so it cannot loop.
 This is the same trade already accepted for an operator's bare <code>kubectl delete pod</code> of a running worker, which re-runs the job it interrupted by design.</p>
-<p><strong>A worker deleted before any container ran is re-run rather than force-cancelled first.</strong> The <code>vanished</code> path cannot see whether the container started, because that is a fact about the pod, and the pod is gone. <code>rerun-failed-jobs</code> against a run with no failed job is refused by GitHub, which the existing error path logs and drops, so the outcome is the pre-Q844 one (a manual re-run) rather than a wrong one.</p>
+<p><strong>A worker deleted before any container ran is re-run rather than force-cancelled first.</strong> The <code>vanished</code> path cannot see whether the container started, because that is a fact about the pod, and the pod is gone.
+<code>rerun-failed-jobs</code> against a run with no failed job is refused by GitHub, which the existing error path logs and drops, so the outcome is the pre-Q844 one (a manual re-run) rather than a wrong one.</p>
 <h2 id="scope">Scope<a class="headerlink" href="#scope" title="Permanent link">&para;</a></h2>
 <table>
 <thead>

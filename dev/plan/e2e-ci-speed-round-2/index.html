@@ -2927,7 +2927,8 @@ From the run log, that overlap is fully effective and no longer where the time g
 <p>~570 s of compile contending for a 4-vCPU runner, every run, because:</p>
 <ul>
 <li><strong>Each image compiled the shared dependency closure separately.</strong> Six Dockerfiles meant six <code>builder</code> stages; BuildKit can only share a build step between targets when it is the same stage in the same Dockerfile, so the <code>--mount=type=cache</code> on <code>/root/.cache/go-build</code> that round 1 added (§2) never paid off across targets — all six started cold simultaneously and raced.</li>
-<li><strong><code>GOCACHE</code> was cold on every run.</strong> Round 1 noted this and left it: "the cache mount … does not persist across runs unless BuildKit state itself is cached." <code>docker/setup-buildx-action</code> boots a fresh builder each run, so it never is.
+<li><strong><code>GOCACHE</code> was cold on every run.</strong> Round 1 noted this and left it: "the cache mount … does not persist across runs unless BuildKit state itself is cached."
+  <code>docker/setup-buildx-action</code> boots a fresh builder each run, so it never is.
   Meanwhile <code>cache-to type=gha</code> could not help either, because <code>COPY . .</code> invalidates the build layer on every PR.</li>
 <li><strong>The wrapper binary was compiled twice.</strong> <code>cmd/worker/Dockerfile</code> and <code>cmd/worker/Dockerfile.wrapper</code> ran an identical <code>go build ./cmd/worker</code> in identical builder stages (log steps <code>#41</code> and <code>#47</code>, 41 s each).
   Two files, so BuildKit could not deduplicate them.</li>
@@ -3111,7 +3112,8 @@ This suite keeps its own base port (19300).</p>
 <h3 id="tried-and-reverted-metrics-server---metric-resolution-15-s--10-s">Tried and reverted: metrics-server <code>--metric-resolution</code> 15 s → 10 s<a class="headerlink" href="#tried-and-reverted-metrics-server---metric-resolution-15-s--10-s" title="Permanent link">&para;</a></h3>
 <p>The HPA cannot report <code>ScalingActive=True</code> until metrics-server has scraped, so the default resolution sits directly in front of this spec.
 Lowering it to 10 s — metrics-server's minimum <em>accepted</em> value — looked like free latency.</p>
-<p>It is not. <code>--metric-resolution</code> must also <strong>exceed kubelet's housekeeping interval</strong> (10 s by default).
+<p>It is not.
+<code>--metric-resolution</code> must also <strong>exceed kubelet's housekeeping interval</strong> (10 s by default).
 At exactly 10 s metrics-server keeps re-reading unchanged cAdvisor samples, discards them as duplicate timestamps, and never serves usage at all — so the outcome is not a slower HPA but a dead one.</p>
 <p>On PR #874 both specs that gate on <code>ScalingActive=True</code> timed out:</p>
 <table>

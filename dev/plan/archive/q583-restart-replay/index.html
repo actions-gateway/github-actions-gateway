@@ -2744,7 +2744,8 @@ The residual — unpruned process-scoped guard sets — was filed as Q597 and cl
 <p>Q583 was filed with an instruction to measure at the rc.4 gate before building, because the row's mechanism was asserted rather than observed.
 That instruction is discharged here: the measurement was already in the repo, twice, and the residual unknown is about the <strong>fix</strong>, not the defect.</p>
 <h2 id="the-defect">The defect<a class="headerlink" href="#the-defect" title="Permanent link">&para;</a></h2>
-<p>The scale-set listener acks by advancing a cursor and nothing else. <code>advanceCursor</code> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/scalesetlistener/listener.go">listener.go</a>) moves an in-memory <code>lastMessageID</code>; no code path in <code>scalesetlistener</code> calls <code>Client.DeleteMessage</code>.
+<p>The scale-set listener acks by advancing a cursor and nothing else.
+<code>advanceCursor</code> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/scalesetlistener/listener.go">listener.go</a>) moves an in-memory <code>lastMessageID</code>; no code path in <code>scalesetlistener</code> calls <code>Client.DeleteMessage</code>.
 The queue log is scale-set-scoped, so it outlives both the session and the process, and a new session polls from cursor 0.</p>
 <p>What makes the replay harmful rather than merely redundant is that the guards against it are process-scoped maps — <code>provisioned</code>, <code>completed</code>, and <code>abandoned</code> (the last one Q553's give-up guard).
 A restarted AGC has all three empty, so a replayed <code>JobAssigned</code> for a job that concluded days ago passes every check and provisions a worker.</p>
@@ -2815,7 +2816,8 @@ Questions 2 and 3 are the P4-era <code>DeleteMessage</code> unknown that Q264 le
 </ol>
 <p>A different owner name per generation is deliberate: it is what makes the backend see a new listener arriving rather than the same one resuming, which is what a restarted AGC is.</p>
 <h3 id="a-404-reads-as-success-so-the-verdict-comes-off-the-wire">A 404 reads as success, so the verdict comes off the wire<a class="headerlink" href="#a-404-reads-as-success-so-the-verdict-comes-off-the-wire" title="Permanent link">&para;</a></h3>
-<p>Building the probe surfaced something that would have invalidated its own headline result. <code>Client.DeleteMessage</code> reports a 404 or 410 as success — for a listener that is right, since a message already gone is a benign ack — but a backend that does not serve the endpoint <strong>also</strong> answers 404.
+<p>Building the probe surfaced something that would have invalidated its own headline result.
+<code>Client.DeleteMessage</code> reports a 404 or 410 as success — for a listener that is right, since a message already gone is a benign ack — but a backend that does not serve the endpoint <strong>also</strong> answers 404.
 The typed return says "acked" for the case the fix depends on and for the case that kills it.</p>
 <p>So measurement 2 is read from the response status via a <code>ResponseObserver</code>, not from the error.
 This is the rule Investigation E already states for its own reporting: the finding is what the wire did, not what the client made of it.</p>
@@ -2890,7 +2892,8 @@ And nothing here bounds retention — Q468's ≥13 h remains the only number, st
 A handled message is registered against the jobs it names that have not concluded; a job concludes by completing with its Secret reclaimed, or by being abandoned (Q553); and a message whose set empties is deleted on the next poll cycle.
 A failed delete keeps its entry and is retried on the following cycle, because the cursor has already moved past the message and nothing else would bring it back.</p>
 <p>The wait is the whole safety argument, and each of its three cases has a test that fails without it: a job provisioned but still running, a Q551 deferred job the previous process never provisioned, and a completion whose Secret reclaim failed all hold their message in the queue, so a restart still re-reads them.</p>
-<p>One trap worth recording, because it cost a wrong-green test before it was caught. <code>Client.DeleteMessage</code> reports a 404 as success, so a stub answering 404 made the listener believe it had deleted a message it had not, and the retry test passed while testing nothing.
+<p>One trap worth recording, because it cost a wrong-green test before it was caught.
+<code>Client.DeleteMessage</code> reports a 404 as success, so a stub answering 404 made the listener believe it had deleted a message it had not, and the retry test passed while testing nothing.
 Treating a 404 as an ack is nonetheless right <em>here</em> — Investigation G proved the endpoint is served, so a 404 means the message is genuinely gone — but it means a failure that must be retried has to be a 5xx.
 The stub's lever now takes the status rather than a bool, which forces each test to say which backend it is modelling.</p>
 <p>Left open deliberately: <code>provisioned</code>, <code>completed</code>, and <code>abandoned</code> are still never pruned, so they grow with the jobs a listener handles over its lifetime.

@@ -2756,7 +2756,8 @@ In brief: the architecture review found the breaking surface fully covered; ever
 We do <strong>not</strong> gate on external adoption — <code>v1alpha1</code> never carried a stability contract either, and a <code>v3</code> re-cut remains the escape hatch if the shape proves wrong.
 Beta's "production-relyable" signal is itself an adoption driver (nobody relies on an alpha that may vanish without notice).</p>
 <h2 id="the-blocker-sequence">The blocker sequence<a class="headerlink" href="#the-blocker-sequence" title="Permanent link">&para;</a></h2>
-<p>Ordered in the <a href="../../STATUS/">Queue</a>. <strong>Q191/Q196/Q197/Q15/Q218 are independent and run in parallel; Q74 waits for all five.</strong></p>
+<p>Ordered in the <a href="../../STATUS/">Queue</a>.
+<strong>Q191/Q196/Q197/Q15/Q218 are independent and run in parallel; Q74 waits for all five.</strong></p>
 <h3 id="1-q191--broker-compatibility-sweep-run-first">1. Q191 — Broker-compatibility sweep <em>(run first)</em><a class="headerlink" href="#1-q191--broker-compatibility-sweep-run-first" title="Permanent link">&para;</a></h3>
 <p>GAG re-implements the GitHub broker protocol, so a protocol gap could force a CRD change.
 Run this <em>before</em> freezing the beta shape: expand <code>cmd/probe</code> into a compatibility suite that exercises the full broker surface and publish a compat report.
@@ -2822,11 +2823,13 @@ This reverses the <a href="../../design/appendix-h-v2-api-decomposition/#h15-oth
 <h3 id="workload-identity-a-different-config-vault-first">Workload identity: a different config, Vault-first<a class="headerlink" href="#workload-identity-a-different-config-vault-first" title="Permanent link">&para;</a></h3>
 <p>Workload identity is not "a different Secret" — it is a different trust model, so it needs a different field set:</p>
 <ul>
-<li><strong>GitHub App = possession model.</strong> Hold the App's RSA private key. <code>{appId, installationId, privateKeyRef → Secret}</code>.
+<li><strong>GitHub App = possession model.</strong> Hold the App's RSA private key.
+  <code>{appId, installationId, privateKeyRef → Secret}</code>.
   Signing material sits at rest in the namespace.</li>
 <li><strong>Workload identity = delegation model.</strong> Hold no key.
   The signing material lives in an external trust anchor (Vault, cloud KMS/HSM) or is federated via OIDC.
-  The pod proves its identity (Vault Kubernetes auth / IRSA / GKE WI / Azure WI) and the anchor signs the JWT or releases a short-lived token. <strong>No <code>privateKey</code> field at all.</strong></li>
+  The pod proves its identity (Vault Kubernetes auth / IRSA / GKE WI / Azure WI) and the anchor signs the JWT or releases a short-lived token.
+  <strong>No <code>privateKey</code> field at all.</strong></li>
 </ul>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="nt">spec</span><span class="p">:</span>
 <a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="w">  </span><span class="nt">credentials</span><span class="p">:</span>

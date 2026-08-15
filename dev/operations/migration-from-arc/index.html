@@ -3242,9 +3242,11 @@ The pool is HPA-managed between <code>spec.minReplicas</code> and <code>maxRepli
   These rules are inert unless your Container Network Interface (CNI) plugin enforces egress NetworkPolicy — Calico or Cilium do; kind's default kindnet does <strong>not</strong>.
   If you ran ARC on a cluster whose CNI does not enforce egress, <strong>isolation is silently void</strong> until you switch CNI.
   Validate with the probes in <a href="../../design/network-architecture/#how-to-validate-network-isolation">network-architecture § How to Validate Network Isolation</a>.</li>
-<li><strong>The GitHub IP allow-list is maintained for you.</strong> The GMC refreshes the GitHub CIDR set the proxy permits, so the egress allow-list tracks GitHub's published ranges without operator action. <code>egressPolicyMode: FQDN</code> allow-lists GitHub by hostname instead, where your CNI supports it.</li>
+<li><strong>The GitHub IP allow-list is maintained for you.</strong> The GMC refreshes the GitHub CIDR set the proxy permits, so the egress allow-list tracks GitHub's published ranges without operator action.
+  <code>egressPolicyMode: FQDN</code> allow-lists GitHub by hostname instead, where your CNI supports it.</li>
 <li><strong>Internal destinations need <code>noProxyCIDRs</code>.</strong> Anything your jobs reach <em>inside</em> the cluster or your network (artifact stores, internal registries) must be excluded from the proxy via <code>EgressProxy.spec.noProxyCIDRs</code> (CIDRs, bare IPs, or <code>NO_PROXY</code> domain suffixes).
-  Cluster-internal defaults are appended automatically on every distribution — <code>svc.cluster.local</code>, <code>kubernetes.default.svc</code>, <code>localhost</code>, <code>127.0.0.1</code>, and the cluster's API server ClusterIP — so neither the API server nor the service CIDR belongs in this field. <strong>Admission rejects any entry that would route GitHub traffic around the proxy</strong> (a host matching <code>githubURL</code> or <code>github.com</code> / <code>githubusercontent.com</code> / <code>ghcr.io</code>) — that would break egress-IP attribution.</li>
+  Cluster-internal defaults are appended automatically on every distribution — <code>svc.cluster.local</code>, <code>kubernetes.default.svc</code>, <code>localhost</code>, <code>127.0.0.1</code>, and the cluster's API server ClusterIP — so neither the API server nor the service CIDR belongs in this field.
+  <strong>Admission rejects any entry that would route GitHub traffic around the proxy</strong> (a host matching <code>githubURL</code> or <code>github.com</code> / <code>githubusercontent.com</code> / <code>ghcr.io</code>) — that would break egress-IP attribution.</li>
 <li><strong>The AGC↔proxy hop is HTTPS with a pinned cert.</strong> The GMC issues a per-tenant self-signed cert and pins it into the AGC trust store, so the proxy hop is not eavesdroppable by other tenants on the cluster.</li>
 </ul>
 <hr />
@@ -3354,7 +3356,8 @@ When a set should never be starved by cheaper runners, use <code>priorityTiers</
 <h3 id="security-profiles">Security profiles<a class="headerlink" href="#security-profiles" title="Permanent link">&para;</a></h3>
 <p>ARC's <code>containerMode: dind</code> becomes two platform-owned grants in GAG v2, neither tenant-settable:</p>
 <ol>
-<li><strong>A privileged namespace.</strong> The Pod Security level is a <strong>namespace label</strong> in v2 (<code>actions-gateway.com/security-profile</code>), shared by every gateway in the namespace. <code>privileged</code> additionally requires the namespace to carry <code>actions-gateway.com/privileged-profile: allowed</code>, applied by an administrator, or admission rejects it.</li>
+<li><strong>A privileged namespace.</strong> The Pod Security level is a <strong>namespace label</strong> in v2 (<code>actions-gateway.com/security-profile</code>), shared by every gateway in the namespace.
+   <code>privileged</code> additionally requires the namespace to carry <code>actions-gateway.com/privileged-profile: allowed</code>, applied by an administrator, or admission rejects it.</li>
 <li><strong>A privileged template.</strong> A namespaced <code>RunnerTemplate</code> may <strong>not</strong> declare privileged containers — a tenant must not self-author a privileged worker shape.
    Privileged DinD/sysbox/Kata shapes are published by a platform admin as a cluster-scoped <code>ClusterRunnerTemplate</code>, which a <code>RunnerSet</code> references with <code>templateRef: { kind: ClusterRunnerTemplate, name: … }</code>.</li>
 </ol>
@@ -3367,7 +3370,8 @@ Full rules: <a href="../tenant-onboarding/#pre-conditions">tenant-onboarding Pre
 <p>Worked example: an ARC scale set named <strong><code>gpu-large</code></strong> in namespace <strong><code>team-a</code></strong>, authenticated with a GitHub App, running GPU workflows.</p>
 <h3 id="0-confirm-prerequisites">0. Confirm prerequisites<a class="headerlink" href="#0-confirm-prerequisites" title="Permanent link">&para;</a></h3>
 <p>The GMC is installed <strong>with the v2 CRD chart</strong> (<a href="../install/#optional-the-v2-api-crds">Install</a>), the cluster is <strong>Kubernetes ≥ 1.31</strong>, and its CNI enforces egress NetworkPolicy (<a href="#egress-isolation-the-big-difference">Egress isolation</a>).
-Confirm the namespace is marked a managed tenant, carries its security-profile label, and has a platform-owned <code>ResourceQuota</code> — see the <a href="../tenant-onboarding/#pre-conditions">tenant-onboarding Pre-Conditions</a>. <strong>Leave the ARC scale set running</strong> throughout.</p>
+Confirm the namespace is marked a managed tenant, carries its security-profile label, and has a platform-owned <code>ResourceQuota</code> — see the <a href="../tenant-onboarding/#pre-conditions">tenant-onboarding Pre-Conditions</a>.
+<strong>Leave the ARC scale set running</strong> throughout.</p>
 <h3 id="1-create-the-github-app-secret">1. Create the GitHub App Secret<a class="headerlink" href="#1-create-the-github-app-secret" title="Permanent link">&para;</a></h3>
 <p>If your ARC scale set used a <strong>GitHub App</strong> already, you can reuse the same App — create a GAG-shaped Secret (<code>appId</code>, <code>installationId</code>, <code>privateKey</code>) in the tenant namespace per <a href="../tenant-onboarding/#step-1-create-the-github-app-secret">tenant-onboarding Step 1</a>.
 If your scale set used a <strong>PAT</strong>, register a GitHub App now (<code>Actions: Read</code> + <code>Administration: Read</code>, installed on the same org/repos) — GAG has no PAT path.

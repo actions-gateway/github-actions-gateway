@@ -2845,7 +2845,8 @@ There is nothing to pin per-command, and <code>kubectl config use-context</code>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>kind<span class="w"> </span>get<span class="w"> </span>kubeconfig<span class="w"> </span>--name<span class="w"> </span>actions-gateway-e2e<span class="w"> </span>&gt;<span class="w"> </span>tmp/kubeconfig
 </code></pre></div>
 <p>then set <code>KUBECONFIG=$PWD/tmp/kubeconfig</code> on the <code>ginkgo</code>/<code>make e2e</code> invocation.
-The suite and everything it shells out to inherit it, no shared file is touched, and a parallel session's <code>use-context</code> cannot steal the run mid-flight. <code>tmp/</code> at the repo root is gitignored and inside the workspace, which is where scratch files belong.</p>
+The suite and everything it shells out to inherit it, no shared file is touched, and a parallel session's <code>use-context</code> cannot steal the run mid-flight.
+<code>tmp/</code> at the repo root is gitignored and inside the workspace, which is where scratch files belong.</p>
 <p>Without it the first <code>kubectl</code> fails against the empty default — <code>dial tcp [::1]:8080: connect: connection refused</code>, usually surfacing as a cert-manager install failure in <code>SynchronizedBeforeSuite</code> rather than as anything about contexts.</p>
 <h3 id="verify-the-resolved-target-before-any-mutating-command">Verify the resolved target before any mutating command<a class="headerlink" href="#verify-the-resolved-target-before-any-mutating-command" title="Permanent link">&para;</a></h3>
 <p>An explicit <code>--context</code> still points <em>somewhere</em>.
@@ -2872,7 +2873,8 @@ The design survived because its reasoning was independent, not because the premi
 </ul>
 <p>This is the shared-resource case of the general rule that a claim cites a measurement — here the measurement is real and the <em>causal step</em> is what goes unverified.</p>
 <h3 id="image-tag-caching">Image tag caching<a class="headerlink" href="#image-tag-caching" title="Permanent link">&para;</a></h3>
-<p>Kind nodes use <code>imagePullPolicy: IfNotPresent</code> and will keep serving the cached layer when you re-push the same tag. <strong>Pushing to <code>127.0.0.1:5000/foo:e2e-abc123</code> a second time does not refresh what kubelet runs.</strong></p>
+<p>Kind nodes use <code>imagePullPolicy: IfNotPresent</code> and will keep serving the cached layer when you re-push the same tag.
+<strong>Pushing to <code>127.0.0.1:5000/foo:e2e-abc123</code> a second time does not refresh what kubelet runs.</strong></p>
 <p>Two options:
 - Push to a unique tag per iteration (<code>-v2</code>, <code>-v3</code>, or a content hash) and update the deployment image:
   <div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>docker<span class="w"> </span>buildx<span class="w"> </span>bake<span class="w"> </span>--file<span class="w"> </span>docker-bake.hcl<span class="w"> </span>--set<span class="w"> </span><span class="s2">&quot;agc.tags=127.0.0.1:5000/agc:e2e-d667096-v2&quot;</span><span class="w"> </span>agc
@@ -2962,7 +2964,8 @@ The AGC therefore selects its registrar <strong>stub-first</strong>: when both <
 To iterate on a single component:</p>
 <ol>
 <li>Stand up the cluster + cert-manager + GMC once with <code>E2E_SKIP_TEARDOWN=true make e2e RUN='&lt;spec&gt;'</code>.
-   The suite leaves the GMC, fakegithub, and cert-manager in place after it exits. <code>RUN</code> is a regex over the spec's full text, passed to ginkgo as <code>--focus</code>; it composes with <code>SUITE</code>, which picks a labelled subset.
+   The suite leaves the GMC, fakegithub, and cert-manager in place after it exits.
+   <code>RUN</code> is a regex over the spec's full text, passed to ginkgo as <code>--focus</code>; it composes with <code>SUITE</code>, which picks a labelled subset.
    A <code>RUN</code> matching no spec <strong>fails</strong> the run rather than reporting a green e2e: the target passes <code>--fail-on-empty</code>.</li>
 <li>Rebuild the changed component only: <code>docker buildx bake --file docker-bake.hcl --set "&lt;target&gt;.tags=127.0.0.1:5000/&lt;name&gt;:&lt;unique-tag&gt;" &lt;target&gt;</code>.</li>
 <li>Update the deployment image: <code>kubectl set image</code> (or <code>kubectl set env</code> for <code>AGC_IMAGE</code>/<code>PROXY_IMAGE</code>/<code>WRAPPER_IMAGE</code> on the GMC).</li>
@@ -2978,7 +2981,8 @@ Helm 4 applies server-side, so the next run's <code>helm upgrade</code> fails in
 </code></pre></div>
 <p><code>setupGMC</code> deletes the leftover Deployment before <code>make deploy</code> for exactly this reason (Q590), and Helm recreates it chart-owned.
 Nothing else the skipped teardown left is touched, so the fakegithub, cert-manager, and tenant-namespace state of a failed run stays inspectable right up until you start the next run.</p>
-<p>An ad-hoc <code>helm upgrade</code> against a standing release hits the same conflict. <code>--force-conflicts</code> reclaims ownership (Helm 4 only: Helm 3 has no server-side apply, so there is nothing to reclaim), which is what <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/e2e/chart-upgrade-check.sh"><code>scripts/e2e/chart-upgrade-check.sh</code></a> does in its normalize step, deliberately <em>not</em> on the upgrade its assertions rest on.</p>
+<p>An ad-hoc <code>helm upgrade</code> against a standing release hits the same conflict.
+<code>--force-conflicts</code> reclaims ownership (Helm 4 only: Helm 3 has no server-side apply, so there is nothing to reclaim), which is what <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/e2e/chart-upgrade-check.sh"><code>scripts/e2e/chart-upgrade-check.sh</code></a> does in its normalize step, deliberately <em>not</em> on the upgrade its assertions rest on.</p>
 <h2 id="watching-whats-actually-happening">Watching what's actually happening<a class="headerlink" href="#watching-whats-actually-happening" title="Permanent link">&para;</a></h2>
 <p>Distroless pods log to stdout.
 Useful one-shots:</p>

@@ -2927,7 +2927,8 @@ They are <strong>not</strong> part of the <code>v2.0.0</code> bundle above.</p>
 <li><strong><code>v3.0.0</code> is not scheduled and carries no date</strong>, exactly as <code>v2.0.0</code> carries none.
   It is gated on <code>v2beta1</code>'s retirement, which is gated in turn on the <code>v2</code> GA soak (<a href="../../plan/v2-ga/">v2 GA plan</a>).
   The commitment here is a floor — <em>not before</em> <code>v3.0.0</code> — and the removal still gets its own one-release-ahead announcement.</li>
-<li><strong>Whether the GA <code>v2</code> version defines the two values at all is a separate, open question</strong>, settled by the graduation hop rather than by this notice. <code>v2</code> is a new version, so it is free to omit them; if it does, an operator on <code>v2</code> simply cannot set them, while an operator on <code>v2beta1</code> still can until <code>v3.0.0</code>.
+<li><strong>Whether the GA <code>v2</code> version defines the two values at all is a separate, open question</strong>, settled by the graduation hop rather than by this notice.
+  <code>v2</code> is a new version, so it is free to omit them; if it does, an operator on <code>v2</code> simply cannot set them, while an operator on <code>v2beta1</code> still can until <code>v3.0.0</code>.
   Either way the removal release above is unchanged.</li>
 </ul>
 <p><strong>What to do now:</strong> nothing is forced, but migrate when convenient — set <code>egressPolicyMode: FQDN</code> on the <code>EgressProxy</code> and have the platform operator set the matching GMC <code>--fqdn-policy-backend</code>.
@@ -2977,7 +2978,8 @@ They are called out because the schema alone does not say so: one is rejected at
 </table>
 <p><strong>An alert or dashboard reading <code>ActionsGateway.status.activeSessions</code> is reading a field no controller populates</strong>, so it reports absent (or zero) no matter how busy the gateway is.
 Point it at the per-<code>RunnerGroup</code> field or the metric instead.</p>
-<p>Neither field is carried into v2. <code>v2beta1</code> replaces <code>SecretReference</code> with the name-only <code>LocalSecretReference</code>, which has no <code>namespace</code> at all, and <code>ActionsGatewayStatus</code> simply omits <code>activeSessions</code>.
+<p>Neither field is carried into v2.
+<code>v2beta1</code> replaces <code>SecretReference</code> with the name-only <code>LocalSecretReference</code>, which has no <code>namespace</code> at all, and <code>ActionsGatewayStatus</code> simply omits <code>activeSessions</code>.
 So migrating with <a href="../migration-v1-to-v2/"><code>gag-migrate</code></a> needs no action for either: there is nothing to carry across.</p>
 <p>They stay in <code>v1alpha1</code> rather than being deleted now because <a href="../../development/api-review/#removal-needs-a-version-increment-not-a-promise">removing a field from a served version is a breaking change</a>.
 The removal is the version's own, at <code>v2.0.0</code>.</p>
@@ -3036,8 +3038,10 @@ The window <strong>closes at <code>v2.0.0</code></strong>, when <code>v1alpha1</
 <h2 id="the-removal-release-and-what-it-is-gated-on">The removal release, and what it is gated on<a class="headerlink" href="#the-removal-release-and-what-it-is-gated-on" title="Permanent link">&para;</a></h2>
 <p><strong><code>v2.0.0</code> is the named removal release, announced with <code>v1.3.0</code>.</strong> The project's policy is that a removal lands on a named release announced at least one release ahead (<a href="../../roadmap/">roadmap</a>); <code>v1.3.0</code> carries that announcement for all three items above.</p>
 <p><code>v2.0.0</code> is a <strong>major</strong> tag because removing a served API version is a breaking change, and it is gated on the <strong><code>v2</code> (GA) API being available and validated</strong>, not on a date and not on an adopter census.
-Gating on v2 maturity is what lets the commitment be concrete: you are never asked to move onto an alpha to escape a removal, and there is no census to wait on. <code>v2beta1</code> is production-relyable today and converts to <code>v2</code> in place.</p>
-<p>There is deliberately <strong>no date</strong>. <code>v1.3.0</code> fixes <em>which</em> release removes these and <em>what</em> it removes; the GA soak that gates <code>v2.0.0</code> finishes when the evidence says the v2 shape is right.</p>
+Gating on v2 maturity is what lets the commitment be concrete: you are never asked to move onto an alpha to escape a removal, and there is no census to wait on.
+<code>v2beta1</code> is production-relyable today and converts to <code>v2</code> in place.</p>
+<p>There is deliberately <strong>no date</strong>.
+<code>v1.3.0</code> fixes <em>which</em> release removes these and <em>what</em> it removes; the GA soak that gates <code>v2.0.0</code> finishes when the evidence says the v2 shape is right.</p>
 <h2 id="before-you-upgrade-past-v200">Before you upgrade past <code>v2.0.0</code><a class="headerlink" href="#before-you-upgrade-past-v200" title="Permanent link">&para;</a></h2>
 <ol>
 <li><strong>Migrate off <code>v1alpha1</code>.</strong> Run <a href="../migration-v1-to-v2/"><code>gag-migrate</code></a>, which also relabels the namespace markers and annotations onto the <code>actions-gateway.com/</code> spellings.

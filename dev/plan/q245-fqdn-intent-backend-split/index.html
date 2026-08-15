@@ -2833,7 +2833,8 @@ It closes the fragmentation the Q242 turn-on surfaced: today <code>egressPolicyM
 <p><strong>Scope of this document: design + phased implementation plan.</strong> The <code>gke</code> backend interacts with GKE Dataplane V2's in-kernel FQDN enforcement, which can only be confirmed on a real GKE cluster; that live validation was originally deferred and has since been <strong>completed</strong> (see the Live-validation section below).
 Guarantees previously marked <strong>(to be validated)</strong> are now validated, except the wildcard-blob 50-IP ceiling, which remains unstressed.</p>
 <p>Tracks Q245 (shipped + validated).
-A v2beta1 (Q74) input alongside <a href="../archive/q242-g1-proxy-destination-allowlist/">Q242</a> / <a href="../q243-egress-ip-reference-arch/">Q243</a>. <strong>Note (2026-07-06): <code>egressPolicyMode</code> has already graduated into <code>v2beta1</code> (served + storage) via Q74 (#557), so the reshape is no longer a free alpha-only change — it now needs a compatible-superset + conversion path (see <a href="#migration--compatibility">Migration</a>).</strong> Promoted from the <a href="../archive/q242-g1-proxy-destination-allowlist/#provider-fqdn-egress-fragmentation-post-implementation-finding">Q242 plan § Provider FQDN-egress fragmentation</a>.</p>
+A v2beta1 (Q74) input alongside <a href="../archive/q242-g1-proxy-destination-allowlist/">Q242</a> / <a href="../q243-egress-ip-reference-arch/">Q243</a>.
+<strong>Note (2026-07-06): <code>egressPolicyMode</code> has already graduated into <code>v2beta1</code> (served + storage) via Q74 (#557), so the reshape is no longer a free alpha-only change — it now needs a compatible-superset + conversion path (see <a href="#migration--compatibility">Migration</a>).</strong> Promoted from the <a href="../archive/q242-g1-proxy-destination-allowlist/#provider-fqdn-egress-fragmentation-post-implementation-finding">Q242 plan § Provider FQDN-egress fragmentation</a>.</p>
 <hr />
 <h2 id="the-problem-the-enum-conflates-intent-with-mechanism">The problem: the enum conflates intent with mechanism<a class="headerlink" href="#the-problem-the-enum-conflates-intent-with-mechanism" title="Permanent link">&para;</a></h2>
 <p><code>EgressProxy.spec.egressPolicyMode</code> today is a three-value enum (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/api/v2alpha1/egressproxy_types.go"><code>api/v2alpha1/egressproxy_types.go</code></a>):</p>
@@ -2923,7 +2924,8 @@ A v2beta1 (Q74) input alongside <a href="../archive/q242-g1-proxy-destination-al
 <p>Two structural axes fall out of this table, and they are what the design separates:</p>
 <ul>
 <li><strong>Namespaced vs cluster-scoped.</strong> Cilium, Calico, and GKE-managed are all <strong>namespaced</strong> — they slot into the GMC's existing per-<code>EgressProxy</code> ownership + cascade-GC model unchanged.
-  AKS (<code>CiliumClusterwideNetworkPolicy</code>) and EKS (<code>ClusterNetworkPolicy</code>) are <strong>cluster-scoped</strong>, which the namespaced per-<code>EgressProxy</code> ownership cannot express — those need the GMC to own/merge a cluster-scoped object (a different ownership/GC model). <strong>This is why <code>gke</code> is the right first backend to add and AKS/EKS are deferred</strong> (see <a href="#backend-support-matrix">Backend matrix</a>).</li>
+  AKS (<code>CiliumClusterwideNetworkPolicy</code>) and EKS (<code>ClusterNetworkPolicy</code>) are <strong>cluster-scoped</strong>, which the namespaced per-<code>EgressProxy</code> ownership cannot express — those need the GMC to own/merge a cluster-scoped object (a different ownership/GC model).
+  <strong>This is why <code>gke</code> is the right first backend to add and AKS/EKS are deferred</strong> (see <a href="#backend-support-matrix">Backend matrix</a>).</li>
 <li><strong>Default-deny vs additive-allow composition.</strong> This is the security crux and gets its own section (<a href="#secure-by-default-the-composition-crux">Secure by default</a>).</li>
 </ul>
 <h2 id="the-design-two-independent-axes">The design: two independent axes<a class="headerlink" href="#the-design-two-independent-axes" title="Permanent link">&para;</a></h2>
@@ -2944,7 +2946,8 @@ A v2beta1 (Q74) input alongside <a href="../archive/q242-g1-proxy-destination-al
 <li><code>FQDN</code> — "express my GitHub (+ Q242 <code>destinationFQDNs</code>) egress allowlist by hostname."
   The tenant says <em>what</em>; the operator's backend decides <em>how</em>.</li>
 </ul>
-<p>The tenant no longer names Cilium/Calico/GKE. <code>destinationFQDNs</code> (Q242) now requires intent <code>FQDN</code> (not the specific <code>CiliumFQDN</code>/<code>CalicoFQDN</code> values), so the Q242 host-suffix allowlist composes with <strong>whatever</strong> backend the cluster runs.</p>
+<p>The tenant no longer names Cilium/Calico/GKE.
+<code>destinationFQDNs</code> (Q242) now requires intent <code>FQDN</code> (not the specific <code>CiliumFQDN</code>/<code>CalicoFQDN</code> values), so the Q242 host-suffix allowlist composes with <strong>whatever</strong> backend the cluster runs.</p>
 <h3 id="axis-2--operator-backend-gmc---fqdn-policy-backend">Axis 2 — Operator backend (<code>GMC --fqdn-policy-backend</code>)<a class="headerlink" href="#axis-2--operator-backend-gmc---fqdn-policy-backend" title="Permanent link">&para;</a></h3>
 <p>A GMC install-level flag, chosen once per cluster by the platform operator, alongside the existing platform-governance egress flags (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/cmd/main.go"><code>cmd/gmc/cmd/main.go:143</code></a> — <code>--allowed-egress-fqdns</code> / <code>--allowed-egress-cidrs</code> / <code>--egress-destination-allowlist-configmap</code>):</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>--fqdn-policy-backend=none|cilium|calico|gke   (default: none)
@@ -3030,7 +3033,8 @@ This matches the existing secure-by-default contract for Cilium/Calico (<a href=
 <p><strong>Secure-default checklist (CLAUDE.md § Security principles):</strong></p>
 <ul>
 <li>The default <code>--fqdn-policy-backend=none</code> <strong>denies</strong> FQDN intent rather than guessing a mechanism — no auto-detect, no silent fallback.</li>
-<li>No backend value makes egress <strong>less</strong> isolated than today's <code>CIDR</code> default. <code>CIDR</code> remains the CRD default; nothing about this change alters the default posture of an <code>EgressProxy</code> that never sets <code>egressPolicyMode</code>.</li>
+<li>No backend value makes egress <strong>less</strong> isolated than today's <code>CIDR</code> default.
+  <code>CIDR</code> remains the CRD default; nothing about this change alters the default posture of an <code>EgressProxy</code> that never sets <code>egressPolicyMode</code>.</li>
 <li><code>FQDN</code> + <code>none</code> is an <strong>admission rejection</strong>, not a runtime <code>Degraded</code> — the operator learns at apply time, not from a stranded proxy pool.</li>
 <li>The <code>gke</code> union semantics are called out as a <strong>required invariant</strong> (base NP present), not an incidental one, so a future refactor can't quietly drop the base NP and open egress.</li>
 </ul>
@@ -3067,7 +3071,8 @@ An operator running the add-on instead would want a distinct backend value, e.g.
 Reconcile/GC reuse <code>applyCNIPolicy</code> / <code>deleteCNIPolicy</code> unchanged.</p>
 <h3 id="dns-handling--simpler-than-cilium-q229-interaction">DNS handling — simpler than Cilium (Q229 interaction)<a class="headerlink" href="#dns-handling--simpler-than-cilium-q229-interaction" title="Permanent link">&para;</a></h3>
 <p>Cilium's backend needs a <strong>DNS-visibility</strong> rule so its DNS proxy learns the resolved IPs, plus (Q229 — see <a href="../../design/network-architecture/">network-architecture.md</a>) a <code>node-local-dns</code> DNS peer on GKE Dataplane V2, where NodeLocal DNSCache redirects the kube-dns ClusterIP to the per-node <code>node-local-dns</code> pod.</p>
-<p>The <code>gke</code> <code>FQDNNetworkPolicy</code> needs <strong>neither</strong> inside the FQDN object: the GKE docs state an active <code>FQDNNetworkPolicy</code> "does not affect the ability of workloads to make DNS requests" — DNS bypasses FQDN enforcement, and GKE resolves the names itself. <strong>But</strong> DNS still has to be allowed by the <strong>base <code>NetworkPolicy</code></strong>, and that base NP already carries the Q229 <code>node-local-dns</code> peer (<code>dnsEgressRule</code>, shared with the Cilium/Calico builders).
+<p>The <code>gke</code> <code>FQDNNetworkPolicy</code> needs <strong>neither</strong> inside the FQDN object: the GKE docs state an active <code>FQDNNetworkPolicy</code> "does not affect the ability of workloads to make DNS requests" — DNS bypasses FQDN enforcement, and GKE resolves the names itself.
+<strong>But</strong> DNS still has to be allowed by the <strong>base <code>NetworkPolicy</code></strong>, and that base NP already carries the Q229 <code>node-local-dns</code> peer (<code>dnsEgressRule</code>, shared with the Cilium/Calico builders).
 So the Q229 DPv2-DNS fix is inherited for free by the <code>gke</code> backend — no new DNS rule, and no risk of the Q229 regression, precisely because DNS lives in the base NP that <code>gke</code> composes with (see <a href="#secure-by-default-the-composition-crux">Secure by default</a>).</p>
 <h3 id="composition-with-the-q242-allowlist">Composition with the Q242 allowlist<a class="headerlink" href="#composition-with-the-q242-allowlist" title="Permanent link">&para;</a></h3>
 <p>Q242's <code>destinationFQDNs</code> (host suffixes) and <code>destinationCIDRs</code> (IP ranges) compose unchanged:</p>
@@ -3081,7 +3086,8 @@ So the Q229 DPv2-DNS fix is inherited for free by the <code>gke</code> backend �
 <h3 id="gke-caveats-to-document-in-operator-docs"><code>gke</code> caveats (to document in operator docs)<a class="headerlink" href="#gke-caveats-to-document-in-operator-docs" title="Permanent link">&para;</a></h3>
 <ul>
 <li><strong>50-IP resolution ceiling per FQDN, 100-IP quota per hostname.</strong> A wildcard like <code>*.blob.core.windows.net</code> (Azure-blob-backed Actions cache/artifacts) can resolve to many IPs; if enforcement caps at 50 resolved IPs, some blob egress may be dropped intermittently.
-  This is the same "DNS-based allowlisting is inherently leaky" fragility Q242 documented — reinforce the <strong>in-cluster caching mirror</strong> as the robust path and reserve FQDN egress for what a mirror can't proxy. <strong>(to be validated on a real GKE cluster.)</strong></li>
+  This is the same "DNS-based allowlisting is inherently leaky" fragility Q242 documented — reinforce the <strong>in-cluster caching mirror</strong> as the robust path and reserve FQDN egress for what a mirror can't proxy.
+  <strong>(to be validated on a real GKE cluster.)</strong></li>
 <li><strong><code>v1alpha1</code>, managed, GKE-version-gated</strong> (1.26.4-gke.500+ / 1.27.1-gke.400+, Dataplane V2, <code>--enable-fqdn-network-policy</code>, kube-dns or Cloud DNS).
   Absence → <code>NoMatch</code>, which the reconcile tolerates on delete and surfaces as <code>Degraded</code> on apply (fail-closed by the base NP).</li>
 </ul>
@@ -3144,7 +3150,8 @@ So the Q229 DPv2-DNS fix is inherited for free by the <code>gke</code> backend �
 <p>The split is what makes <code>aks</code>/<code>eks</code> <em>addable at all</em> without another tenant-facing enum explosion — but their <strong>cluster-scoped</strong> objects need a new ownership/GC design (the GMC owning/merging one cluster-scoped policy across many namespaced <code>EgressProxy</code> pools, with reference-counted GC).
 That is a self-contained follow-up, out of scope here; the security model is unaffected (the allowlist is platform-governed regardless of where the object lives).</p>
 <h2 id="migration--compatibility">Migration / compatibility<a class="headerlink" href="#migration--compatibility" title="Permanent link">&para;</a></h2>
-<p><strong>Update (2026-07-06): the original "free in alpha" premise below is stale.</strong> It was written before Q74 (#557) graduated the v2 kinds. <code>egressPolicyMode</code> now lives in <strong>both <code>v2alpha1</code> and <code>v2beta1</code> (served + storage)</strong> — confirm against the rendered CRD (<code>charts/actions-gateway-crds-v2/templates/crds/egressproxy-crd.yaml</code>), not the old "it's only <code>api/v2alpha1</code>" assumption.
+<p><strong>Update (2026-07-06): the original "free in alpha" premise below is stale.</strong> It was written before Q74 (#557) graduated the v2 kinds.
+<code>egressPolicyMode</code> now lives in <strong>both <code>v2alpha1</code> and <code>v2beta1</code> (served + storage)</strong> — confirm against the rendered CRD (<code>charts/actions-gateway-crds-v2/templates/crds/egressproxy-crd.yaml</code>), not the old "it's only <code>api/v2alpha1</code>" assumption.
 So <strong>dropping <code>CiliumFQDN</code>/<code>CalicoFQDN</code> outright is now a breaking change to a served + storage beta field</strong>, not a free alpha reshape.</p>
 <p><strong>Default path (secure-by-default / no-regression): a compatible superset.</strong> Keep <code>CiliumFQDN</code>/<code>CalicoFQDN</code> accepted-but-deprecated in both versions, add <code>CIDR</code>/<code>FQDN</code>, normalize the old CNI-specific values to <code>FQDN</code> + the matching operator backend (with a deprecation warning), and map old→new in the Q74 conversion webhook (fuzz-test the v2beta1→v2alpha1→v2beta1 round-trip so the Cilium-vs-Calico distinction isn't silently dropped).
 Remove the old values only at a later, deliberate breaking hop.</p>
@@ -3162,7 +3169,8 @@ Confirm before choosing it.</p>
 The operator <code>--fqdn-policy-backend</code> flag is <strong>not</strong> a CRD field and never enters conversion at all; it is install configuration, versionless by construction.
 This is strictly simpler for Q74 than leaving the fragmented enum to be reshaped <em>during</em> the cut.</p>
 <p>If, contrary to the above, a real consumer of <code>CiliumFQDN</code>/<code>CalicoFQDN</code> is found before this lands, the fallback is a one-release additive alias: keep <code>CiliumFQDN</code>/<code>CalicoFQDN</code> in the enum as deprecated, treat <code>CiliumFQDN</code> ≡ <code>FQDN</code>
-+ forced <code>cilium</code> backend (ignoring the flag) and likewise for Calico, then drop them at the beta cut via the conversion webhook. <strong>Recommended: skip the alias</strong> — there are no consumers, and the alias is pure carrying-cost.</p>
++ forced <code>cilium</code> backend (ignoring the flag) and likewise for Calico, then drop them at the beta cut via the conversion webhook.
+  <strong>Recommended: skip the alias</strong> — there are no consumers, and the alias is pure carrying-cost.</p>
 <h2 id="implementation-plan-phased">Implementation plan (phased)<a class="headerlink" href="#implementation-plan-phased" title="Permanent link">&para;</a></h2>
 <p>Sized L overall; phased so each phase is independently shippable, reviewable, and (except the live GKE pass) offline-testable.</p>
 <h3 id="phase-1--api-split--operator-flag--backend-resolver-offline">Phase 1 — API split + operator flag + backend resolver <em>(offline)</em><a class="headerlink" href="#phase-1--api-split--operator-flag--backend-resolver-offline" title="Permanent link">&para;</a></h3>

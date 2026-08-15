@@ -3160,7 +3160,8 @@ Within an organization, two common partitioning patterns emerge:</p>
 <p><strong>One gateway per team.</strong> Each team owns a namespace and an <code>ActionsGateway</code> CR.
 Runner shapes, <code>maxListeners</code> counts, and quota are fully self-managed per team.
 This is the recommended default — it aligns operational ownership with the team boundary, gives each team an independent rate-limit budget, and eliminates cross-team coordination on RunnerGroup configuration.</p>
-<p><strong>One gateway per environment (shared by multiple teams).</strong> A single tenant namespace serves multiple teams, with RunnerGroups differentiated by label convention (e.g. <code>team-a-gpu-2x</code>, <code>team-b-gpu-4x</code>).
+<p><strong>One gateway per environment (shared by multiple teams).</strong> A single tenant namespace serves multiple teams, with RunnerGroups differentiated by label convention (e.g.
+<code>team-a-gpu-2x</code>, <code>team-b-gpu-4x</code>).
 This reduces total AGC instances and GitHub App installations at the cost of reintroducing the coordination the self-service model is designed to avoid.
 Use this pattern only when the number of teams is small and the platform team is comfortable arbitrating RunnerGroup configuration and quota allocation.</p>
 <hr />
@@ -3326,7 +3327,8 @@ The platform admin owns the namespace quota:</p>
 </code></pre></div>
 <p><strong>Rate-limit check.</strong> 1 session × 72 req/hr = 72 req/hr at rest.
 Burst: 12 × 72 = 864 req/hr — well within budget.</p>
-<p><strong>Note on simplicity.</strong> Because there is no <code>priorityTiers</code>, no <code>PriorityClass</code> objects need to be pre-created. <code>maxWorkers</code> alone is sufficient for a flat concurrency ceiling.
+<p><strong>Note on simplicity.</strong> Because there is no <code>priorityTiers</code>, no <code>PriorityClass</code> objects need to be pre-created.
+<code>maxWorkers</code> alone is sufficient for a flat concurrency ceiling.
 This is the recommended starting point for teams that do not have competing priority requirements.</p>
 <hr />
 <h3 id="scenario-3-large-tenant-hitting-the-250-session-ceiling--sharding-walkthrough">Scenario 3: Large Tenant Hitting the 250-Session Ceiling — Sharding Walkthrough<a class="headerlink" href="#scenario-3-large-tenant-hitting-the-250-session-ceiling--sharding-walkthrough" title="Permanent link">&para;</a></h3>
@@ -3383,7 +3385,8 @@ Q360 ships two opt-ins that hand that judgement to a Vertical Pod Autoscaler ins
 </tr>
 </tbody>
 </table>
-<p>The per-gateway opt-in is the presence of the block; there is no <code>enabled</code> flag, so removing <code>agcAutoscaling</code> deletes the managed <code>VerticalPodAutoscaler</code> again. <code>spec.agcAutoscaling.mode</code> is the autoscaler's <code>updateMode</code>, restricted to three values:</p>
+<p>The per-gateway opt-in is the presence of the block; there is no <code>enabled</code> flag, so removing <code>agcAutoscaling</code> deletes the managed <code>VerticalPodAutoscaler</code> again.
+<code>spec.agcAutoscaling.mode</code> is the autoscaler's <code>updateMode</code>, restricted to three values:</p>
 <table>
 <thead>
 <tr>
@@ -3410,7 +3413,8 @@ Q360 ships two opt-ins that hand that judgement to a Vertical Pod Autoscaler ins
 It is an alias whose actuation mechanism is version-dependent (today it evicts like <code>Recreate</code>; in-place pod resize is still alpha), so a gateway pinned to <code>Auto</code> would silently change its restart behavior on a VPA upgrade.
 Naming <code>Recreate</code> makes the eviction explicit.</p>
 <h3 id="e111-precedence-against-agcresources">E.11.1. Precedence against <code>agcResources</code><a class="headerlink" href="#e111-precedence-against-agcresources" title="Permanent link">&para;</a></h3>
-<p>Both <code>agcResources</code> and the autoscaler influence the AGC container's resources, so the division is fixed and explicit rather than last-writer-wins. <strong>They compose; they do not compete.</strong></p>
+<p>Both <code>agcResources</code> and the autoscaler influence the AGC container's resources, so the division is fixed and explicit rather than last-writer-wins.
+<strong>They compose; they do not compete.</strong></p>
 <ul>
 <li><strong><code>agcResources</code> alone decides what the GMC stamps on the Deployment.</strong> That is unchanged by the opt-in, and it is the sizing actually in effect whenever the autoscaler is not actuating: <code>mode: Off</code>, the VPA components absent or down, or before the first recommendation exists.</li>
 <li><strong>The managed autoscaler is pinned to <code>controlledValues: RequestsOnly</code>.</strong> It moves <em>requests</em> only; the limits from <code>agcResources</code> (or the platform default) are never raised or lowered by it.

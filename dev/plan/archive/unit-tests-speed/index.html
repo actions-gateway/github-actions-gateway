@@ -2950,7 +2950,8 @@ Within it, the slowest individual tests are:</p>
 <hr />
 <h2 id="1-renewloop-fake-clock-advancement--34s-saved">1. RenewLoop fake-clock advancement — ~3.4s saved<a class="headerlink" href="#1-renewloop-fake-clock-advancement--34s-saved" title="Permanent link">&para;</a></h2>
 <h3 id="problem">Problem<a class="headerlink" href="#problem" title="Permanent link">&para;</a></h3>
-<p><code>TestRenewLoop_TicksAt60s</code> and <code>TestRenewLoop_NonOKContinues</code> each take ~1.8s despite using a <code>fakeClock</code>. <code>StartRenewLoop</code> waits for <code>clk.After(60 * time.Second)</code>.
+<p><code>TestRenewLoop_TicksAt60s</code> and <code>TestRenewLoop_NonOKContinues</code> each take ~1.8s despite using a <code>fakeClock</code>.
+<code>StartRenewLoop</code> waits for <code>clk.After(60 * time.Second)</code>.
 The tests verify each of 3 RenewJob calls in a loop:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="k">for</span><span class="w"> </span><span class="nx">i</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span><span class="w"> </span><span class="nx">i</span><span class="w"> </span><span class="p">&lt;</span><span class="w"> </span><span class="mi">3</span><span class="p">;</span><span class="w"> </span><span class="nx">i</span><span class="o">++</span><span class="w"> </span><span class="p">{</span>
 <a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="w">    </span><span class="nx">assert</span><span class="p">.</span><span class="nx">Eventually</span><span class="p">(</span><span class="nx">t</span><span class="p">,</span><span class="w"> </span><span class="kd">func</span><span class="p">()</span><span class="w"> </span><span class="kt">bool</span><span class="w"> </span><span class="p">{</span>
@@ -3021,7 +3022,8 @@ Production code defaults to <code>time.Second</code> when zero; tests set it to 
 <hr />
 <h2 id="3-rsa-2048-bit-key-generation--1s-saved">3. RSA 2048-bit key generation — ~1s saved<a class="headerlink" href="#3-rsa-2048-bit-key-generation--1s-saved" title="Permanent link">&para;</a></h2>
 <h3 id="problem_2">Problem<a class="headerlink" href="#problem_2" title="Permanent link">&para;</a></h3>
-<p>Every call to <code>makeAgent()</code> in <code>goroutine_test.go</code> generates a fresh 2048-bit RSA key (~100ms each). <code>makeAgent</code> is called once per test that uses <code>makeCfg</code> or <code>newMuxWithServers</code>, plus multiple direct calls in <code>broker/crypto_test.go</code> and <code>githubapp/auth_test.go</code> and <code>githubapp/runner_auth_test.go</code>.</p>
+<p>Every call to <code>makeAgent()</code> in <code>goroutine_test.go</code> generates a fresh 2048-bit RSA key (~100ms each).
+<code>makeAgent</code> is called once per test that uses <code>makeCfg</code> or <code>newMuxWithServers</code>, plus multiple direct calls in <code>broker/crypto_test.go</code> and <code>githubapp/auth_test.go</code> and <code>githubapp/runner_auth_test.go</code>.</p>
 <p>Approximate count:
 - <code>goroutine_test.go</code> — <code>makeAgent</code> called in ~9 tests
 - <code>multiplexer_test.go</code> — <code>makeAgent</code> called in ~2 helpers

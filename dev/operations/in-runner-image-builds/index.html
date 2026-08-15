@@ -2879,7 +2879,8 @@
 
 
 <h1 id="in-runner-image-builds-choosing-a-build-approach-and-security-profile">In-runner image builds: choosing a build approach and security profile<a class="headerlink" href="#in-runner-image-builds-choosing-a-build-approach-and-security-profile" title="Permanent link">&para;</a></h1>
-<p><strong>Audience:</strong> Platform engineer, Tenant operator. <strong>Goal:</strong> pick an image-build approach (<code>docker build</code> and friends) that builds container images <em>inside</em> a GitHub Actions Gateway (GAG) worker pod while staying inside the strictest Pod Security Admission (PSA) profile that still works.</p>
+<p><strong>Audience:</strong> Platform engineer, Tenant operator.
+<strong>Goal:</strong> pick an image-build approach (<code>docker build</code> and friends) that builds container images <em>inside</em> a GitHub Actions Gateway (GAG) worker pod while staying inside the strictest Pod Security Admission (PSA) profile that still works.</p>
 <p>Building container images is the single most common heavyweight runner workload, and it collides head-on with pod-security hardening: the classic recipe — Docker-in-Docker (DinD) with a privileged container — requires the cluster's least-restrictive posture.
 It is almost never the approach you actually need.
 Rootless build tooling builds the same images under <code>baseline</code> (and sometimes <code>restricted</code>) PSA, with no privileged container and no host-kernel exposure.</p>
@@ -2927,7 +2928,8 @@ Three values exist, ranked least-to-most restrictive as <code>privileged → bas
 <p><code>buildkitd</code> in rootless mode (<code>docker buildx</code> against a rootless BuildKit instance, or the <code>moby/buildkit:*-rootless</code> image as a sidecar/standalone pod) builds images entirely in user space — no daemon socket, no privileged container.</p>
 <ul>
 <li><strong>Recommended profile:</strong> <code>baseline</code>.
-  Rootless BuildKit relies on unprivileged user namespaces and, on many kernels, needs a relaxed seccomp/AppArmor profile for the syscalls it uses to set up those namespaces. <code>baseline</code> permits <code>seccompProfile: Unconfined</code> and the <code>unconfined</code> AppArmor annotation; <code>restricted</code> forbids both.</li>
+  Rootless BuildKit relies on unprivileged user namespaces and, on many kernels, needs a relaxed seccomp/AppArmor profile for the syscalls it uses to set up those namespaces.
+  <code>baseline</code> permits <code>seccompProfile: Unconfined</code> and the <code>unconfined</code> AppArmor annotation; <code>restricted</code> forbids both.</li>
 <li><strong><code>restricted</code>?</strong> Best-effort only.
   On a recent-enough kernel where the default seccomp profile (<code>RuntimeDefault</code>) already permits the needed unshare syscalls and BuildKit runs fully as non-root, it <em>can</em> meet <code>restricted</code> — but this is kernel- and version-dependent, so treat <code>baseline</code> as the safe target and validate <code>restricted</code> on your own nodes before relying on it.</li>
 <li><strong>What it can do:</strong> full <code>Dockerfile</code> feature set, build cache, multi-stage builds, multi-arch via QEMU/emulation, registry push.</li>
@@ -2960,7 +2962,8 @@ It is selected per-pod with a <code>RuntimeClass</code>.</p>
   It needs <strong>no</strong> <code>privileged: true</code> container, so it stays out of the <code>privileged</code> profile entirely.
   This is Sysbox's whole value proposition: "real" DinD at <code>baseline</code> rather than <code>privileged</code>.</li>
 <li><strong>RuntimeClass × profile interplay:</strong></li>
-<li>A platform admin must install the Sysbox runtime on nodes and create the <code>RuntimeClass</code> (e.g. <code>sysbox-runc</code>) cluster-wide.
+<li>A platform admin must install the Sysbox runtime on nodes and create the <code>RuntimeClass</code> (e.g.
+    <code>sysbox-runc</code>) cluster-wide.
     The GMC never installs runtime handlers or <code>RuntimeClass</code> objects — that is a cluster-admin operation, the same model as the gVisor/Kata sandbox runtimes in <a href="../../design/appendix-b-worker-isolation/">Appendix B</a>.</li>
 <li>The tenant references it in the worker <code>PodTemplate</code>: <code>spec.runtimeClassName: sysbox-runc</code>.
     The AGC honours a tenant-set <code>runtimeClassName</code> and applies no override that strips it.</li>
@@ -3001,7 +3004,8 @@ Like Sysbox it needs <strong>no</strong> <code>privileged: true</code> container
 How you declare that sidecar decides whether the worker pod can ever finish.</p>
 <p>A Kubernetes pod terminates only once <strong>every</strong> regular <code>spec.containers[]</code> entry has exited.
 A build sidecar such as <code>dockerd</code> runs forever, so if you declare it as a <strong>regular container</strong> the pod never reaches <code>Completed</code> after the runner container exits — it lingers, and the AGC keeps counting the runner slot against the <code>RunnerSet</code>'s <code>maxWorkers</code>.
-Under a concurrent matrix the pool strands (the same failure class as a pod stuck Pending). <strong>Declare long-running build sidecars as native sidecars instead:</strong></p>
+Under a concurrent matrix the pool strands (the same failure class as a pod stuck Pending).
+<strong>Declare long-running build sidecars as native sidecars instead:</strong></p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nt">spec</span><span class="p">:</span>
 <a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="w">  </span><span class="nt">template</span><span class="p">:</span>
 <a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="w">    </span><span class="nt">spec</span><span class="p">:</span>

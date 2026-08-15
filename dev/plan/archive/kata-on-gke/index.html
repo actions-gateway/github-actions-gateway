@@ -3143,21 +3143,26 @@ Using one label for both lets a Kata pod land on a node whose runtime does not e
 See <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/deploy/kata-ci/runner-pod.yaml"><code>deploy/kata-ci/runner-pod.yaml</code></a>.</p>
 <ol>
 <li><strong><code>/var/lib/docker</code> must be a raw block volume, not an <code>emptyDir</code>.</strong> Kata surfaces an <code>emptyDir</code> as <strong>virtiofs</strong>, on which Docker cannot use <code>overlay2</code>; it silently falls back to <code>vfs</code>. kind then switches its node snapshotter to <code>fuse-overlayfs</code>, which needs <code>/dev/fuse</code> — absent from the guest — and the inner kubelet dies with <code>failed to create kubelet: open /dev/kmsg</code> / snapshotter errors.
-   Use <code>volumeMode: Block</code> + <code>volumeDevices</code>, then <code>mkfs.ext4</code> inside the guest. <em>Gotcha:</em> <code>docker:dind</code> declares <code>VOLUME /var/lib/docker</code> and Kata pre-mounts virtiofs there, so a naive "is it mounted?" check passes and skips your ext4 mount.
+   Use <code>volumeMode: Block</code> + <code>volumeDevices</code>, then <code>mkfs.ext4</code> inside the guest.
+   <em>Gotcha:</em> <code>docker:dind</code> declares <code>VOLUME /var/lib/docker</code> and Kata pre-mounts virtiofs there, so a naive "is it mounted?" check passes and skips your ext4 mount.
    Test for the <strong>device</strong>, not the mountpoint.</li>
-<li><strong><code>/dev/kmsg</code> does not exist in the Kata guest</strong>, and the inner kubelet hard-requires it (<code>open /dev/kmsg: no such file or directory</code>). <code>mknod /dev/kmsg c 1 11</code> (needs <code>CAP_MKNOD</code>), then bind it into kind's node container via <code>extraMounts</code>.</li>
-<li><strong><code>/sys/fs/cgroup</code> is mounted read-only</strong> for a non-privileged container, so <code>runc</code> cannot create the kind node's cgroup. <code>mount -o remount,rw /sys/fs/cgroup</code> succeeds with <code>CAP_SYS_ADMIN</code>.
+<li><strong><code>/dev/kmsg</code> does not exist in the Kata guest</strong>, and the inner kubelet hard-requires it (<code>open /dev/kmsg: no such file or directory</code>).
+   <code>mknod /dev/kmsg c 1 11</code> (needs <code>CAP_MKNOD</code>), then bind it into kind's node container via <code>extraMounts</code>.</li>
+<li><strong><code>/sys/fs/cgroup</code> is mounted read-only</strong> for a non-privileged container, so <code>runc</code> cannot create the kind node's cgroup.
+   <code>mount -o remount,rw /sys/fs/cgroup</code> succeeds with <code>CAP_SYS_ADMIN</code>.
    Under Kata this hierarchy belongs to the <strong>guest</strong> kernel, so the remount grants nothing on the host — under plain runc the same tree is the host's, which is precisely why classic DinD demands <code>privileged: true</code>.</li>
 <li><strong><code>/proc/sys</code> is read-only</strong> likewise; Docker writes per-veth <code>net.ipv6.conf.&lt;iface&gt;.disable_ipv6</code>.
    Same remount, same guest-only reasoning.
    (<code>net.ipv4.ip_forward</code> is already <code>1</code> in the guest, so Docker never writes it.)</li>
 <li><strong>cgroup v2 nesting.</strong> The cgroup-namespace root holds our shell + <code>dockerd</code>, and cgroup v2 forbids a cgroup from holding processes <em>and</em> delegating controllers to children — so systemd inside kind's node cannot create <code>/init.scope</code> (<code>Failed to create /init.scope control group: Structure needs cleaning</code>).
-   Evacuate the root into a leaf cgroup, then populate <code>cgroup.subtree_control</code>. <code>docker:dind</code>'s own entrypoint does this; overriding <code>command:</code> skips it.</li>
+   Evacuate the root into a leaf cgroup, then populate <code>cgroup.subtree_control</code>.
+   <code>docker:dind</code>'s own entrypoint does this; overriding <code>command:</code> skips it.</li>
 <li><strong>IPv6 is disabled in the guest</strong>, but kind unconditionally creates its Docker network with <code>--ipv6</code>.
    Pre-create an IPv4-only bridge network named <code>kind</code>; kind reuses it.</li>
 </ol>
 <h3 id="4-capabilities">4. Capabilities<a class="headerlink" href="#4-capabilities" title="Permanent link">&para;</a></h3>
-<p><code>drop: [ALL]</code>, then add Docker's default set plus four extras. <code>privileged: true</code> is never needed and must never be added.</p>
+<p><code>drop: [ALL]</code>, then add Docker's default set plus four extras.
+<code>privileged: true</code> is never needed and must never be added.</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>CHOWN DAC_OVERRIDE FSETID FOWNER MKNOD NET_RAW SETGID SETUID
 <a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>SETFCAP SETPCAP NET_BIND_SERVICE SYS_CHROOT KILL AUDIT_WRITE   # Docker defaults
 <a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>SYS_ADMIN NET_ADMIN SYS_RESOURCE SYS_PTRACE                    # rootful dockerd + runc
@@ -3167,7 +3172,8 @@ See <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main
 <h2 id="constraints-and-gotchas-found">Constraints and gotchas found<a class="headerlink" href="#constraints-and-gotchas-found" title="Permanent link">&para;</a></h2>
 <ul>
 <li><strong>Capacity, not quota.</strong> <code>n2-standard-4</code> and <code>n2d-standard-4</code> were both <code>ZONE_RESOURCE_POOL_EXHAUSTED</code> in <code>us-central1-a</code> while <code>N2_CPUS</code> quota sat at 0/200.
-  A plain non-nested-virt <code>n2</code> also failed, so nested virt does <strong>not</strong> narrow the capacity pool, and <code>n2d</code> is not rejected for lacking AMD SVM — the <code>n2/n2d/c2/c2d</code> allowlist in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/dev/kata-node-pool.sh"><code>scripts/dev/kata-node-pool.sh</code></a> is correct. <code>c2-standard-4</code> and <code>c2d-standard-4</code> both worked.
+  A plain non-nested-virt <code>n2</code> also failed, so nested virt does <strong>not</strong> narrow the capacity pool, and <code>n2d</code> is not rejected for lacking AMD SVM — the <code>n2/n2d/c2/c2d</code> allowlist in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/dev/kata-node-pool.sh"><code>scripts/dev/kata-node-pool.sh</code></a> is correct.
+  <code>c2-standard-4</code> and <code>c2d-standard-4</code> both worked.
   Watch the per-family regional quota: <code>C2_CPUS</code> defaulted to <strong>8</strong> on a fresh project.</li>
 <li><strong>A stockout wedges the cluster.</strong> A failing <code>CREATE_NODE_POOL</code> op holds a cluster-level lock (<code>Cluster is running incompatible operation</code>) and blocks even deleting the pool, for tens of minutes.
   Prefer creating the nested-virt pool as the cluster's <em>initial</em> pool (<code>clusters create --enable-nested-virtualization</code>) so a stockout fails fast.</li>
@@ -3215,7 +3221,8 @@ The Q286 wiring has since landed in-repo; what follows records what shipped, the
 </ol>
 <h3 id="the-design-correction-the-namespace-cannot-stay-psa-baseline">The design correction: the namespace cannot stay PSA-baseline<a class="headerlink" href="#the-design-correction-the-namespace-cannot-stay-psa-baseline" title="Permanent link">&para;</a></h3>
 <p>Earlier revisions of this plan (and the overlay stub) claimed the Kata variant keeps the namespace at <code>baseline</code> with no privileged profile.
-That is wrong: the unprivileged <code>dockerd</code>'s validated capability set (<code>SYS_ADMIN</code>, <code>NET_ADMIN</code>, <code>SYS_RESOURCE</code>, <code>SYS_PTRACE</code>, <code>NET_RAW</code>) exceeds PSS baseline's fixed <code>capabilities.add</code> allowlist, and PSA is not Kata-aware — it cannot credit the VM boundary. <strong>Verified against a real apiserver</strong> (envtest, 2026-07-16): a namespace with <code>enforce=baseline</code> rejects the Kata worker pod as Forbidden; <code>enforce=privileged</code> admits it.
+That is wrong: the unprivileged <code>dockerd</code>'s validated capability set (<code>SYS_ADMIN</code>, <code>NET_ADMIN</code>, <code>SYS_RESOURCE</code>, <code>SYS_PTRACE</code>, <code>NET_RAW</code>) exceeds PSS baseline's fixed <code>capabilities.add</code> allowlist, and PSA is not Kata-aware — it cannot credit the VM boundary.
+<strong>Verified against a real apiserver</strong> (envtest, 2026-07-16): a namespace with <code>enforce=baseline</code> rejects the Kata worker pod as Forbidden; <code>enforce=privileged</code> admits it.
 So the kata overlay carries the same four privileged-namespace gates as dind, and the "no privileged container" property is enforced by the worker shape being a <strong>platform-owned <code>ClusterRunnerTemplate</code></strong> (v2 refuses tenant-authored privileged shapes; tenants cannot edit cluster-scoped templates), not by the PSA level.
 A second Kata-specific delta: <strong>CPU limits are load-bearing</strong> in the kata overlay — Kata sizes the guest VM's vCPUs from them — so the dind overlay's "requests-only CPU" idiom does not port.</p>
 <h3 id="live-validation-checklist-the-remaining-q286-gate">Live-validation checklist (the remaining Q286 gate)<a class="headerlink" href="#live-validation-checklist-the-remaining-q286-gate" title="Permanent link">&para;</a></h3>
@@ -3238,9 +3245,12 @@ The defects found on the way are in <a href="#what-the-live-session-found-2026-0
 <ol>
 <li><strong>The cluster had no Workload Identity pool</strong> — <code>--workload-metadata=GKE_METADATA</code> is rejected with a 400 without cluster-level <code>--workload-pool</code> (the Q226 spike ran on a spike cluster that had it).
    Enabled live; the Part A create command in <a href="../../gke-dogfood/">gke-dogfood.md</a> now carries <code>--workload-pool</code> plus a retrofit note.</li>
-<li><strong><code>helm --set</code> typed the pool label as a boolean</strong> — <code>nodeSelector</code> values must be strings, so kata-deploy's server-side apply failed. <code>e2e-setup.sh</code> now uses <code>--set-string</code>.</li>
-<li><strong>kata-deploy ships no tolerations</strong> — it could never schedule onto the <code>dedicated=e2e:NoSchedule</code> pool. <code>e2e-setup.sh</code> now passes a matching <code>tolerations[0]</code> value.</li>
-<li><strong>Autoscale-from-zero never fired</strong>: the <code>kata</code> RuntimeClass schedules on <code>katacontainers.io/kata-runtime=true</code>, which kata-deploy applies post-install — but the cluster autoscaler simulates against the pool's <em>configured</em> labels only, so no Kata pod could ever trigger the 0→N scale-up. <code>e2e-setup.sh</code> now bakes the runtime label into the pool's <code>--node-labels</code> (the same pattern GKE uses for gVisor sandbox pools); the bind-before-install window resolves via kubelet sandbox-create retries.</li>
+<li><strong><code>helm --set</code> typed the pool label as a boolean</strong> — <code>nodeSelector</code> values must be strings, so kata-deploy's server-side apply failed.
+   <code>e2e-setup.sh</code> now uses <code>--set-string</code>.</li>
+<li><strong>kata-deploy ships no tolerations</strong> — it could never schedule onto the <code>dedicated=e2e:NoSchedule</code> pool.
+   <code>e2e-setup.sh</code> now passes a matching <code>tolerations[0]</code> value.</li>
+<li><strong>Autoscale-from-zero never fired</strong>: the <code>kata</code> RuntimeClass schedules on <code>katacontainers.io/kata-runtime=true</code>, which kata-deploy applies post-install — but the cluster autoscaler simulates against the pool's <em>configured</em> labels only, so no Kata pod could ever trigger the 0→N scale-up.
+   <code>e2e-setup.sh</code> now bakes the runtime label into the pool's <code>--node-labels</code> (the same pattern GKE uses for gVisor sandbox pools); the bind-before-install window resolves via kubelet sandbox-create retries.</li>
 <li><strong><code>blkid || mkfs</code> never formatted the fresh PVC</strong> — <code>docker:dind</code>'s <code>blkid</code> is busybox blkid, which exits 0 on a blank device, so the mkfs was skipped and the ext4 mount failed <code>EINVAL</code> on every fresh ephemeral volume.
    The Q226 spike masked this: its <em>static</em> PVC had been formatted once by hand, so the gate always found a filesystem.
    Isolated by cloning the AGC-rendered pod and bisecting against a working debug pod.

@@ -2645,13 +2645,15 @@
 <p>Three <code>1.0-gate</code> findings from <a href="../../security-audit-2026-06/">security-audit-2026-06</a>, sharing the GMC RBAC + reconcile/teardown surface.
 Implemented together.</p>
 <h2 id="q121--gmc-secret-rbac-cluster-wide-vs-name-scoped-claim">Q121 — GMC Secret RBAC: cluster-wide vs. name-scoped claim<a class="headerlink" href="#q121--gmc-secret-rbac-cluster-wide-vs-name-scoped-claim" title="Permanent link">&para;</a></h2>
-<p><code>role.yaml</code> grants <code>secrets: get/list/create/update/watch</code> cluster-wide. <code>05-security.md</code> claimed "no cluster-wide Secret read", metadata-only list, "<code>get</code> on specific names only" — all false.</p>
+<p><code>role.yaml</code> grants <code>secrets: get/list/create/update/watch</code> cluster-wide.
+<code>05-security.md</code> claimed "no cluster-wide Secret read", metadata-only list, "<code>get</code> on specific names only" — all false.</p>
 <p><strong>What is tightenable, what is not:</strong></p>
 <ul>
 <li><strong>Writes</strong> (<code>create</code>/<code>update</code>) go through admission, so a <code>ValidatingAdmissionPolicy</code> <em>can</em> confine them to tenant-marked namespaces. → enforced by the new <code>gmc-tenant-resource-guard</code> VAP.</li>
 <li><strong>Reads</strong> (<code>get</code>/<code>list</code>/<code>watch</code>) do <strong>not</strong> go through admission — VAP never sees read verbs.
   RBAC <code>resourceNames</code> cannot scope <code>list</code>/<code>watch</code>, and tenant Secret names are dynamic so it cannot scope <code>get</code> either.
-  The metadata informer additionally needs cluster-wide <code>list</code>/<code>watch</code> because the GMC discovers tenant namespaces at runtime. <strong>Full read-confinement is therefore not achievable via VAP/RBAC alone.</strong></li>
+  The metadata informer additionally needs cluster-wide <code>list</code>/<code>watch</code> because the GMC discovers tenant namespaces at runtime.
+  <strong>Full read-confinement is therefore not achievable via VAP/RBAC alone.</strong></li>
 </ul>
 <p><strong>Resolution (claim == reality):</strong> tighten writes via the VAP; correct <code>05-security.md</code> to state the honest read scope (cluster-wide get + metadata list/watch) and the compensating controls: metadata-only informer (no <code>.data</code> cached), uncached direct <code>get</code> of only the named credential Secret in the CR namespace, the write-confinement VAP, and the Q29 detective audit policy.
 No more "no cluster-wide read" / "specific names only" claims.</p>
@@ -2669,7 +2671,8 @@ In envtest the reconciler runs as the admin user, not the GMC SA, so the policy 
 <p>Shipped by the Helm chart (<code>templates/tenant-resource-guard.yaml</code>, gated by the existing <code>admissionPolicy.enabled</code>) and applied by <code>make deploy</code>.</p>
 <h2 id="q125--teardown-fail-open">Q125 — teardown fail-open<a class="headerlink" href="#q125--teardown-fail-open" title="Permanent link">&para;</a></h2>
 <p><code>deleteIfExists</code> swallowed non-NotFound delete errors and <code>reconcileDelete</code> removed the finalizer unconditionally → a transient API failure orphaned a live credentialed AGC Deployment + RoleBinding with no retry.</p>
-<p><strong>Fix:</strong> <code>deleteIfExists</code> returns its error (NotFound → nil = success). <code>reconcileDelete</code> collects errors across all deletes; if any are non-nil it emits a <code>TeardownIncomplete</code> Warning event and returns the joined error to requeue <strong>without removing the finalizer</strong>.
+<p><strong>Fix:</strong> <code>deleteIfExists</code> returns its error (NotFound → nil = success).
+<code>reconcileDelete</code> collects errors across all deletes; if any are non-nil it emits a <code>TeardownIncomplete</code> Warning event and returns the joined error to requeue <strong>without removing the finalizer</strong>.
 The finalizer is removed only once every delete is confirmed gone.
 Idempotent: repeated passes re-list RunnerGroups (gone → skip) and re-issue deletes (NotFound → success), so it converges.</p>
 <h2 id="tests">Tests<a class="headerlink" href="#tests" title="Permanent link">&para;</a></h2>

@@ -2919,7 +2919,8 @@ Optimise for that.</p>
 <p>Length is the most common defect in this tree and the hardest to see from inside a draft.
 Run these four passes before touching wording.
 Every example below is from one review of the marketing pages, where 24 rounds of feedback collapsed into these four causes.</p>
-<p><strong>Ask whether the block belongs on this page at all.</strong> Three questions: does <em>this</em> page's reader need it, does it belong on another page, and what audience wants it and where would they look for it. <code>why-gag.md</code> carried a 424-word section on the v2 API decomposition, 22% of the page's height, whose four comparison points were already rows in the table directly above it, and whose subject was a GAG v1-to-v2 contrast rather than the ARC comparison the page exists for.
+<p><strong>Ask whether the block belongs on this page at all.</strong> Three questions: does <em>this</em> page's reader need it, does it belong on another page, and what audience wants it and where would they look for it.
+<code>why-gag.md</code> carried a 424-word section on the v2 API decomposition, 22% of the page's height, whose four comparison points were already rows in the table directly above it, and whose subject was a GAG v1-to-v2 contrast rather than the ARC comparison the page exists for.
 Deleting it lost nothing: <code>features.md</code> and <a href="../../design/appendix-h-v2-api-decomposition/">appendix H</a> already served the reader who wanted it.</p>
 <p><strong>Never restate in prose what a diagram or table already carries.</strong> Prose beside a visual is the visual admitting it did not work.
 That same page opened a section with two paragraphs, 139 words, naming three capabilities, their combined effect and four outcomes, directly above a flow diagram whose nodes said exactly that.
@@ -2968,7 +2969,8 @@ Earn trust by being specific and honest.</p>
   Several per paragraph is a signature, and it is the surface tell readers spot fastest.
   Reach for a comma, a period, a colon, or parentheses first, and keep the dash only where the aside really does interrupt the sentence and no other mark carries it.
   Two dashes in one sentence almost always means the sentence wants to be two sentences.
-  Above roughly 3 per 1,000 words, rewrite. <code>make em-dash-check</code> enforces it: see <a href="#enforcing-the-em-dash-rule">Enforcing the em-dash rule</a>.</li>
+  Above roughly 3 per 1,000 words, rewrite.
+  <code>make em-dash-check</code> enforces it: see <a href="#enforcing-the-em-dash-rule">Enforcing the em-dash rule</a>.</li>
 <li><strong>Formatting in moderation.</strong> Bold the keyword, not the sentence; sentence-case headings, not Title Case; no emoji as bullets or status markers.
   Mechanical, every-line formatting is itself a tell.
   (The one sanctioned Title-Case heading is the <code>## Table of Contents</code> index — a fixed, doc-wide convention, not prose.)</li>
@@ -3018,7 +3020,8 @@ Table cells, blockquotes and list items are prose and are counted.</p>
 A gate set at 3 would land red on everything and be switched off, so <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/docs/em-dash-baseline.txt"><code>scripts/docs/em-dash-baseline.txt</code></a> freezes each of those files at its current count as a ceiling.
 A listed file may not gain em-dashes; a file with no entry, including every new doc, is held to the rule itself.</p>
 <p><a href="../../STATUS/#Q650">Q650</a> is the cleanup.
-As it lands, <code>make em-dash-baseline</code> re-records the ceilings and the diff is the measure of what it cleared; an entry disappears once its file reaches the rule, and an empty baseline means the ratchet is done. <code>make em-dash-report</code> prints every file's density, worst first, which is the worklist.</p>
+As it lands, <code>make em-dash-baseline</code> re-records the ceilings and the diff is the measure of what it cleared; an entry disappears once its file reaches the rule, and an empty baseline means the ratchet is done.
+<code>make em-dash-report</code> prints every file's density, worst first, which is the worklist.</p>
 <h2 id="an-upstream-behavior-claim-cites-a-measurement">An upstream-behavior claim cites a measurement<a class="headerlink" href="#an-upstream-behavior-claim-cites-a-measurement" title="Permanent link">&para;</a></h2>
 <p>A sentence about how something outside this repo behaves is a claim nobody here can check, and it goes stale with no commit, no red gate, and no other signal.
 Write the version it was measured against and when, or name the gate that keeps re-measuring it.
@@ -3100,7 +3103,8 @@ The second names the input as well as the version, because the answer depended o
 <p>From <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/controller/autoscaler_verdict.go"><code>autoscaler_verdict.go</code></a>.
 When the measurement needs more than a clause, it goes in <code>docs/</code> and the comment links there.
 Growing a provenance paragraph in the source is not the compliant form.</p>
-<p><strong>A live gate beats a date.</strong> Where a gate re-measures the claim on every run, name the gate instead: it is fresher than any date, and it turns red when upstream moves. <code>make test-autoscaler</code> and <code>make test-karpenter</code> drive real autoscalers and assert the matcher's verdict on the events that come back, which is why the reason constants they pin carry no per-claim date.</p>
+<p><strong>A live gate beats a date.</strong> Where a gate re-measures the claim on every run, name the gate instead: it is fresher than any date, and it turns red when upstream moves.
+<code>make test-autoscaler</code> and <code>make test-karpenter</code> drive real autoscalers and assert the matcher's verdict on the events that come back, which is why the reason constants they pin carry no per-claim date.</p>
 <h3 id="a-competitor-side-verdict-carries-its-own-stamp">A competitor-side verdict carries its own stamp<a class="headerlink" href="#a-competitor-side-verdict-carries-its-own-stamp" title="Permanent link">&para;</a></h3>
 <p>The marketing case, and the one where the prose form of the rule is not enough.
 <a href="../../why-gag/">why-gag.md</a> renders competitor claims as green checks and red X's, and a verdict table needs a definite cell in every row.
@@ -3111,7 +3115,8 @@ The rule is therefore per cell, and mechanical enough to gate:</p>
 <ul>
 <li>a <strong>verdict</strong> carries exactly one <code>&lt;span class="gag-asof"&gt;VERSION · DATE&lt;/span&gt;</code>, naming the upstream version it was read at and the day it was read;</li>
 <li><strong><code>.gag-unverified</code></strong> is the state for a claim we believe and have not checked, and it carries no stamp, because a stamp is what a verdict rests on;</li>
-<li>there is no third case. <code>make comparison-stamps-check</code> fails the page, in <code>make check</code>.</li>
+<li>there is no third case.
+  <code>make comparison-stamps-check</code> fails the page, in <code>make check</code>.</li>
 </ul>
 <p>Only the competitor column is stamped.
 A wrong claim about this repo's own behaviour goes red in a test, which is the "our own behaviour is not upstream" exemption above; requiring a citation there would add nothing to that gate and would make every GAG cell unfixable without one nobody can produce.</p>
@@ -3214,7 +3219,8 @@ That payoff is large here: 263 non-vendored Markdown files carry roughly 82,000 
 <div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>make<span class="w"> </span>md-reflow
 </code></pre></div>
 <p><code>make md-reflow-check</code> reports what is unformatted without writing, <code>make md-reflow-diff</code> prints the change, and <code>make md-reflow-explain</code> names every paragraph the formatter declines, where it is, and why.
-The check is in <code>make check</code> and costs about a second for the whole tree. <code>.mdreflow.yaml</code> at the repo root holds the configuration: <code>sentence</code> mode at <code>max-width: 0</code>, excluding the two generated docs, <code>docs/STATUS.md</code>, and the <code>AGENTS.md</code> symlink. mdreflow always excludes <code>vendor/</code>, so the 471 tracked vendored Markdown files are never walked.</p>
+The check is in <code>make check</code> and costs about a second for the whole tree.
+<code>.mdreflow.yaml</code> at the repo root holds the configuration: <code>sentence</code> mode at <code>max-width: 0</code>, excluding the two generated docs, <code>docs/STATUS.md</code>, and the <code>AGENTS.md</code> symlink. mdreflow always excludes <code>vendor/</code>, so the 471 tracked vendored Markdown files are never walked.</p>
 <h3 id="what-stays-hard-wrapped-and-why-it-stays-that-way">What stays hard-wrapped, and why it stays that way<a class="headerlink" href="#what-stays-hard-wrapped-and-why-it-stays-that-way" title="Permanent link">&para;</a></h3>
 <p>Measured 2026-08-13 on mdreflow v0.1.7: 99.70% of interior line breaks in the docset's prose sit at a sentence boundary, 13,746 of 13,787, leaving 41.
 The formatter declines 38 paragraphs across 8 files, spanning 90 source lines.
@@ -3240,7 +3246,8 @@ A paragraph the formatter leaves alone is correctly formatted, and hand-joining 
 <p>The coverage figure counts line breaks.
 It cannot see whether a page still renders what it should, and that difference is not academic: a MkDocs callout flattened into a paragraph still scores as sentence-per-line, because it is.</p>
 <p>Adopting this convention destroyed 7 of 17 callouts on this tree and every gate stayed green, because the output was still valid Markdown that built.
-What caught it was rendering the site before and after and diffing every page. <strong>A change that moves line breaks across the docs is verified by a <code>mkdocs build</code> diff, not by <code>make check</code> and not by a coverage number.</strong></p>
+What caught it was rendering the site before and after and diffing every page.
+<strong>A change that moves line breaks across the docs is verified by a <code>mkdocs build</code> diff, not by <code>make check</code> and not by a coverage number.</strong></p>
 <p>Two pages differ structurally under that diff today, and both are the reflow fixing latent bugs rather than causing them: a sentence wrapped so <code>10.</code> began a line had been rendering as a stray list item, and a heading missing from a page's nav now appears.
 Wrapping mid-sentence is what puts a number, a <code>---</code>, or another block-starting token at line start where Markdown reinterprets it.
 One sentence per line cannot.</p>

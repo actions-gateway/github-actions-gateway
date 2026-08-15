@@ -2670,7 +2670,8 @@ Helm was decided over Kustomize (<a href="../../milestone-5/#11-install-vehicle-
 <p><strong>Scope of this PR (slice 1 — the whole GMC core install).</strong> A lint-clean, offline-validated chart that renders the complete GMC control plane.
 Not a second distribution path — the <code>cmd/*/config/</code> kustomize bases stay the dev/CI source of truth (they back <code>make manifests</code> and the envtest/e2e tiers).</p>
 <h2 id="what-the-chart-installs">What the chart installs<a class="headerlink" href="#what-the-chart-installs" title="Permanent link">&para;</a></h2>
-<p>The GMC is the only thing installed. <strong>AGC instances and proxy pools are provisioned by the GMC at runtime</strong> from each <code>ActionsGateway</code> CR — they are <em>not</em> chart resources.
+<p>The GMC is the only thing installed.
+<strong>AGC instances and proxy pools are provisioned by the GMC at runtime</strong> from each <code>ActionsGateway</code> CR — they are <em>not</em> chart resources.
 Verified against <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/controller/builder.go">builder.go</a> (<code>buildAGCDeployment</code>/<code>buildProxyDeployment</code>) and <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/cmd/main.go">main.go</a> (<code>AGCImage</code>/<code>ProxyImage</code> injected into the reconciler), and the <code>docs/operations/tenant-onboarding.md</code> flow.</p>
 <p>Resources, sourced 1:1 from the kustomize bases:</p>
 <table>
@@ -2759,7 +2760,9 @@ Verified against <a href="https://github.com/actions-gateway/github-actions-gate
 <li><code>namespace-psa-guard</code> VAP binding ships <code>validationActions: [Deny]</code>.</li>
 <li>Leader election on, 2 replicas, HA defaults.</li>
 <li><strong>Image digest pinning is the secure default.</strong> The GMC rejects floating <code>AGC_IMAGE</code>/<code>PROXY_IMAGE</code> tags unless <code>--allow-floating-image-tags</code> is set (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/cmd/main.go">main.go</a> <code>validateImageDigest</code>).
-  The chart does <strong>not</strong> pass that flag by default and leaves digests empty, so an unconfigured install fails closed at GMC startup until the operator pins <code>agc.image.digest</code>/<code>proxy.image.digest</code>. <code>values.yaml</code> documents this prominently. <code>allowFloatingImageTags=true</code> is the documented dev-only opt-out.</li>
+  The chart does <strong>not</strong> pass that flag by default and leaves digests empty, so an unconfigured install fails closed at GMC startup until the operator pins <code>agc.image.digest</code>/<code>proxy.image.digest</code>.
+  <code>values.yaml</code> documents this prominently.
+  <code>allowFloatingImageTags=true</code> is the documented dev-only opt-out.</li>
 </ul>
 <h2 id="operator-facing-values-valuesyaml--readme-table">Operator-facing values (<code>values.yaml</code> + README table)<a class="headerlink" href="#operator-facing-values-valuesyaml--readme-table" title="Permanent link">&para;</a></h2>
 <p><code>gmc.image.*</code>, <code>agc.image.*</code>, <code>proxy.image.*</code> (repository/tag/digest), <code>leaderElection.enabled</code>, <code>metrics.enabled</code>, <code>metrics.serviceMonitor.enabled</code>, <code>securityProfile</code> (sample default), <code>certManager.enabled</code>, <code>allowFloatingImageTags</code>, <code>sampleGateway.create</code>, <code>networkPolicy.enabled</code>, <code>podDisruptionBudget.enabled</code>, <code>replicaCount</code>, <code>resources</code>.

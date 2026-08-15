@@ -3007,7 +3007,8 @@ Capturing the owned children too is fine — they make the backup a useful point
 <p>This restores the <code>Namespace</code>, the <code>ResourceQuota</code>, the GitHub App credential <code>Secret</code>, the <code>ActionsGateway</code> CR, and any <code>EgressProxy</code> CR — and <strong>nothing else</strong>.</p>
 <ol>
 <li><strong>Let the controllers reconcile.</strong> Once the CRs land, the GMC re-provisions every owned child within ~30 seconds and <strong>regenerates the metrics TLS Secrets fresh</strong> (new key material — exactly as in a normal re-apply).
-   The cluster-scoped <code>ClusterRoleBinding</code> the AGC needs is recreated by the GMC's reconcile, not by Velero. <code>RunnerSet</code>s that target the gateway re-bind automatically.</li>
+   The cluster-scoped <code>ClusterRoleBinding</code> the AGC needs is recreated by the GMC's reconcile, not by Velero.
+   <code>RunnerSet</code>s that target the gateway re-bind automatically.</li>
 </ol>
 <blockquote>
 <p><strong>Ordering within step 2 is handled for you.</strong> Velero restores the <code>Namespace</code> and <code>Secret</code> before the CRs (namespaces and secrets also precede custom resources in the default priority list), so the gateway does not transiently report <code>CredentialUnavailable</code>.

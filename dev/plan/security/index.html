@@ -3663,7 +3663,8 @@ Status legend: ✅ done, ⚠️ partial (residual accepted), ❌ open, ⓘ infor
 <h2 id="critical">Critical<a class="headerlink" href="#critical" title="Permanent link">&para;</a></h2>
 <h3 id="c-1-runnergroup-podtemplate-is-not-validated-tenant-can-ship-privileged-worker-pods">C-1. RunnerGroup <code>PodTemplate</code> is not validated; tenant can ship privileged worker pods<a class="headerlink" href="#c-1-runnergroup-podtemplate-is-not-validated-tenant-can-ship-privileged-worker-pods" title="Permanent link">&para;</a></h3>
 <ul>
-<li><strong>Status (2026-05-23): Done.</strong> Closed by W2. <code>SecurityProfile</code> enum on <code>ActionsGatewaySpec</code> (default <code>baseline</code>); <code>applyNamespacePSA</code> in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/controller/actionsgateway_controller.go">actionsgateway_controller.go:509</a> stamps <code>pod-security.kubernetes.io/{enforce,warn,audit}</code> labels on the tenant namespace at every reconcile.
+<li><strong>Status (2026-05-23): Done.</strong> Closed by W2.
+  <code>SecurityProfile</code> enum on <code>ActionsGatewaySpec</code> (default <code>baseline</code>); <code>applyNamespacePSA</code> in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/controller/actionsgateway_controller.go">actionsgateway_controller.go:509</a> stamps <code>pod-security.kubernetes.io/{enforce,warn,audit}</code> labels on the tenant namespace at every reconcile.
   The in-tree PodSecurity admission plugin rejects any worker pod that violates the profile, including pods built by the AGC from a tenant's PodTemplate.
   A CEL <code>XValidation</code> on <code>RunnerGroupSpec.PodTemplate</code> also rejects <code>privileged: true</code> at <code>kubectl apply</code> time for the kinder failure path (per D-7).</li>
 <li><strong>Location:</strong> <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/api/v1alpha1/runnergroup_types.go">cmd/agc/api/v1alpha1/runnergroup_types.go:30-60</a>, <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/provisioner/provisioner.go">cmd/agc/internal/provisioner/provisioner.go:349-439</a>, <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/controller/actionsgateway_controller.go">cmd/gmc/internal/controller/actionsgateway_controller.go</a></li>
@@ -3673,7 +3674,8 @@ Status legend: ✅ done, ⚠️ partial (residual accepted), ❌ open, ⓘ infor
   Today the code has no admission-time guard; the AGC's per-PodSpec overrides cover only <code>hostPID</code>/<code>hostNetwork</code>/<code>hostIPC</code>/<code>automountServiceAccountToken</code> and leave everything else (privileged, capabilities, hostPath, etc.) to whichever cluster-wide policy engine the operator happens to install.
   That dependency is invisible to the GMC and silent to the tenant.</li>
 <li><strong>Description:</strong> The CRD field <code>RunnerGroupSpec.PodTemplate</code> is a verbatim <code>corev1.PodTemplateSpec</code>.
-  No CEL <code>XValidation</code> rules constrain it. <code>Provisioner.buildPod</code> overrides <code>HostPID</code>/<code>HostNetwork</code>/<code>HostIPC</code> and forces <code>AutomountServiceAccountToken: false</code>, but it does <em>not</em> touch:</li>
+  No CEL <code>XValidation</code> rules constrain it.
+  <code>Provisioner.buildPod</code> overrides <code>HostPID</code>/<code>HostNetwork</code>/<code>HostIPC</code> and forces <code>AutomountServiceAccountToken: false</code>, but it does <em>not</em> touch:</li>
 <li><code>securityContext.privileged</code>, <code>runAsUser=0</code>, <code>allowPrivilegeEscalation</code>, <code>capabilities.add</code></li>
 <li><code>hostPath</code> volumes</li>
 <li><code>PodSecurityContext.Sysctls</code></li>
@@ -3696,7 +3698,8 @@ Status legend: ✅ done, ⚠️ partial (residual accepted), ❌ open, ⓘ infor
 <li><strong>AGC PodSpec invariants remain unconditional.</strong> Regardless of the selected profile, <code>provisioner.buildPod</code> continues to force <code>HostPID=false</code>, <code>HostNetwork=false</code>, <code>HostIPC=false</code>, <code>AutomountServiceAccountToken=false</code>, and the worker <code>ServiceAccountName</code>.
      PSA is the safety net at the namespace boundary; the AGC's overrides are the floor at pod construction.
      This ensures a <code>privileged</code>-profile tenant still cannot project Kubernetes API credentials into a worker pod or share host namespaces.</li>
-<li><strong>Tenants who need both privileged and non-privileged workloads</strong> deploy two <code>ActionsGateway</code> CRs in two namespaces (e.g. <code>myteam-builds</code> with <code>privileged</code> for DinD, <code>myteam-tests</code> with <code>baseline</code> for everything else).
+<li><strong>Tenants who need both privileged and non-privileged workloads</strong> deploy two <code>ActionsGateway</code> CRs in two namespaces (e.g.
+     <code>myteam-builds</code> with <code>privileged</code> for DinD, <code>myteam-tests</code> with <code>baseline</code> for everything else).
      Per-<code>ActionsGateway</code> is the granularity at which the profile is chosen; per-<code>RunnerGroup</code> within one namespace is not supported in v1 (PSA is namespace-scoped).
      <a href="../../design/appendix-g-future-enhancements/">Appendix G</a> records finer granularity as a candidate future enhancement.</li>
 <li><strong><code>privileged</code> tenants are strongly encouraged to pair the profile with a sandbox runtime</strong> (<code>runtimeClassName: kata-containers</code> or <code>gvisor</code> in the <code>PodTemplate</code>).
@@ -3715,7 +3718,9 @@ Status legend: ✅ done, ⚠️ partial (residual accepted), ❌ open, ⓘ infor
 <h2 id="high">High<a class="headerlink" href="#high" title="Permanent link">&para;</a></h2>
 <h3 id="h-1-github-app-private-key-injected-into-agc-pod-as-an-environment-variable">H-1. GitHub App private key injected into AGC pod as an environment variable<a class="headerlink" href="#h-1-github-app-private-key-injected-into-agc-pod-as-an-environment-variable" title="Permanent link">&para;</a></h3>
 <ul>
-<li><strong>Status (2026-05-23): Done.</strong> Closed by W3. <code>buildAGCDeployment</code> mounts the <code>gitHubAppRef</code> Secret as a volume at <code>/etc/actions-gateway/github-app/</code> with mode <code>0o400</code> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/controller/builder.go">builder.go:33,450,481</a>). <code>cmd/agc/main.go:91-111</code> reads <code>appId</code>, <code>installationId</code>, and <code>privateKey</code> from files.
+<li><strong>Status (2026-05-23): Done.</strong> Closed by W3.
+  <code>buildAGCDeployment</code> mounts the <code>gitHubAppRef</code> Secret as a volume at <code>/etc/actions-gateway/github-app/</code> with mode <code>0o400</code> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/controller/builder.go">builder.go:33,450,481</a>).
+  <code>cmd/agc/main.go:91-111</code> reads <code>appId</code>, <code>installationId</code>, and <code>privateKey</code> from files.
   The three <code>GITHUB_APP_*</code> env-var entries are gone; <code>kubectl describe pod</code> no longer shows the key bytes.</li>
 <li><strong>Location:</strong> <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/controller/builder.go">cmd/gmc/internal/controller/builder.go:291-321</a>, <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/main.go">cmd/agc/main.go:42-55</a></li>
 <li><strong>Category:</strong> OWASP A02:2025 — Cryptographic Failures / A05:2025 — Misconfiguration</li>
@@ -3734,7 +3739,8 @@ Status legend: ✅ done, ⚠️ partial (residual accepted), ❌ open, ⓘ infor
 <p>The <code>gitHubAppRef</code> Secret schema is already correct (keys <code>appId</code>, <code>installationId</code>, <code>privateKey</code>) and test fixtures already create real Secrets via <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/test/utils/resources.go"><code>CreateGitHubAppSecret</code></a>.
   Only the AGC's <em>consumption</em> of the Secret needs to change.
 - <strong>Mitigation:</strong> Project the <code>gitHubAppRef</code> Secret as a file volume on the AGC pod at <code>/etc/actions-gateway/github-app/</code> with <code>defaultMode: 0o400</code>.
-  Update <code>cmd/agc/main.go</code> to read <code>appId</code>, <code>installationId</code>, and <code>privateKey</code> from files. <code>loadPEM</code> already supports the file-path form.
+  Update <code>cmd/agc/main.go</code> to read <code>appId</code>, <code>installationId</code>, and <code>privateKey</code> from files.
+  <code>loadPEM</code> already supports the file-path form.
   Delete the three <code>GITHUB_APP_*</code> env-var entries from <code>buildAGCDeployment</code>.</p>
 <p>Scope is limited to credential material.
   Non-secret configuration (proxy address, runner version, broker URL overrides for tests) stays in env vars — those are not secrets and don't belong in a Secret volume just for symmetry.
@@ -3757,7 +3763,8 @@ Status legend: ✅ done, ⚠️ partial (residual accepted), ❌ open, ⓘ infor
 - <strong>Mitigation (implemented, partially):</strong> Four controls landed:</p>
 <ol>
 <li>
-<p><strong><code>list</code>/<code>watch</code> were initially removed</strong> (commit where W4 first shipped), but this broke the agent pool's Secret enumeration — the pool must enumerate its own per-runner Secrets to reconcile state (<code>EnsureAgents</code>). <code>list</code> was restored (dc80293).</p>
+<p><strong><code>list</code>/<code>watch</code> were initially removed</strong> (commit where W4 first shipped), but this broke the agent pool's Secret enumeration — the pool must enumerate its own per-runner Secrets to reconcile state (<code>EnsureAgents</code>).
+     <code>list</code> was restored (dc80293).</p>
 </li>
 <li>
 <p><strong>Secret cache disabled on the AGC manager</strong> (<code>Client.Cache.DisableFor [*corev1.Secret]</code>, commit 8ea6f5f) — all Secret reads (<code>Get</code> and <code>List</code>) bypass the controller-runtime in-process cache and go direct to the API server.
@@ -3776,7 +3783,8 @@ Status legend: ✅ done, ⚠️ partial (residual accepted), ❌ open, ⓘ infor
      Asserted by <code>TestPool_EnumeratesSecretsAsMetadataOnly</code>.</p>
 </li>
 <li>
-<p><strong>Residual risk (accepted):</strong> The AGC Role still grants the <code>list</code> <em>verb</em> on all Secrets in the tenant namespace, so a compromised AGC binary could issue a full-body <code>list</code> out-of-band to enumerate user-managed Secrets (e.g. <code>ghcr-pull-token</code>, <code>slack-webhook</code>) — RBAC cannot scope <code>list</code> by name or label (see below).
+<p><strong>Residual risk (accepted):</strong> The AGC Role still grants the <code>list</code> <em>verb</em> on all Secrets in the tenant namespace, so a compromised AGC binary could issue a full-body <code>list</code> out-of-band to enumerate user-managed Secrets (e.g.
+  <code>ghcr-pull-token</code>, <code>slack-webhook</code>) — RBAC cannot scope <code>list</code> by name or label (see below).
   The legitimate code path no longer does this (control 4), and any such read still hits the API server in the audit log.
   The <code>watch</code> verb was removed from the AGC Role (Q26), so only <code>list</code> remains as residual.
   Two paths to closing <code>list</code> were evaluated and rejected for v1:</p>
@@ -3786,7 +3794,8 @@ Status legend: ✅ done, ⚠️ partial (residual accepted), ❌ open, ⓘ infor
     Static enumeration would require the GMC to update the Role on every agent-pool resize.</p>
 </li>
 <li>
-<p><strong>Label-selector-restricted RBAC (KEP-4601)</strong> — KEP-4601 ("Authorize with Field and Label Selectors") reached GA in Kubernetes 1.34 and is enabled by default in 1.35 (the cluster version used here), but it extends the <em>authorizer</em> layer, not the <code>rbacv1.PolicyRule</code> API. <code>PolicyRule</code> has no <code>LabelSelector</code> field even in k8s.io/api v0.35.
+<p><strong>Label-selector-restricted RBAC (KEP-4601)</strong> — KEP-4601 ("Authorize with Field and Label Selectors") reached GA in Kubernetes 1.34 and is enabled by default in 1.35 (the cluster version used here), but it extends the <em>authorizer</em> layer, not the <code>rbacv1.PolicyRule</code> API.
+    <code>PolicyRule</code> has no <code>LabelSelector</code> field even in k8s.io/api v0.35.
     The feature benefits webhook authorizers (OPA, Kyverno) but does not let standard RBAC roles scope <code>list</code> to label-filtered resources.</p>
 </li>
 <li>
@@ -3853,7 +3862,8 @@ Status legend: ✅ done, ⚠️ partial (residual accepted), ❌ open, ⓘ infor
 </ul>
 <h3 id="m-3-aes-cbc-unpadding-has-padding-oracle-shaped-error-returns">M-3. AES-CBC unpadding has padding-oracle-shaped error returns<a class="headerlink" href="#m-3-aes-cbc-unpadding-has-padding-oracle-shaped-error-returns" title="Permanent link">&para;</a></h3>
 <ul>
-<li><strong>Status (2026-05-23): Done.</strong> Closed by W6. <code>pkcs7Unpad</code> in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/broker/crypto.go">broker/crypto.go:84</a> now returns a single <code>errInvalidPadding</code> sentinel for every malformed input (empty, bad length, wrong byte).
+<li><strong>Status (2026-05-23): Done.</strong> Closed by W6.
+  <code>pkcs7Unpad</code> in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/broker/crypto.go">broker/crypto.go:84</a> now returns a single <code>errInvalidPadding</code> sentinel for every malformed input (empty, bad length, wrong byte).
   The byte comparison runs in constant time via <code>crypto/subtle</code>.
   The oracle shape is eliminated regardless of how the error is surfaced.</li>
 <li><strong>Location:</strong> <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/broker/crypto.go">broker/crypto.go:75-89</a></li>
@@ -3865,13 +3875,15 @@ Status legend: ✅ done, ⚠️ partial (residual accepted), ❌ open, ⓘ infor
   AES-CBC + PKCS#7 + no MAC = padding oracle if an attacker can submit chosen ciphertexts and observe oracle output.</li>
 <li><strong>Mitigation:</strong></li>
 <li>Replace the error returns with a single sentinel error <code>errInvalidPadding</code> returned for <em>all</em> unpadding failures (empty, bad length, wrong byte).</li>
-<li>Make the comparison constant-time: collect a single <code>ok</code> bit across all bytes (e.g. <code>mask |= data[i] ^ byte(padLen)</code>) and return after the loop.</li>
+<li>Make the comparison constant-time: collect a single <code>ok</code> bit across all bytes (e.g.
+     <code>mask |= data[i] ^ byte(padLen)</code>) and return after the loop.</li>
 <li>Add a Note that this decrypt routine MUST NOT be exposed as a network-callable handler.</li>
 <li>Long-term: ask GitHub's broker to switch to AES-GCM or otherwise AEAD-protect the message body; the AES-CBC choice is dictated by compatibility with the .NET runner, not by us.</li>
 </ul>
 <h3 id="m-4-rerun-failed-jobs-url-built-from-job-payload-values-without-validation">M-4. <code>rerun-failed-jobs</code> URL built from job payload values without validation<a class="headerlink" href="#m-4-rerun-failed-jobs-url-built-from-job-payload-values-without-validation" title="Permanent link">&para;</a></h3>
 <ul>
-<li><strong>Status (2026-05-23): Done.</strong> Closed by W6. <code>rerunFailedJobs</code> at <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/provisioner/provisioner.go">provisioner.go:250-276</a> rejects any <code>owner</code>/<code>repo</code> not matching <code>repoSegmentRE</code> (line 526: <code>^[A-Za-z0-9][A-Za-z0-9._-]*$</code>) before building the URL, and wraps each segment in <code>neturl.PathEscape</code>.
+<li><strong>Status (2026-05-23): Done.</strong> Closed by W6.
+  <code>rerunFailedJobs</code> at <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/provisioner/provisioner.go">provisioner.go:250-276</a> rejects any <code>owner</code>/<code>repo</code> not matching <code>repoSegmentRE</code> (line 526: <code>^[A-Za-z0-9][A-Za-z0-9._-]*$</code>) before building the URL, and wraps each segment in <code>neturl.PathEscape</code>.
   A unit test feeds adversarial <code>system.github.repository</code> values and asserts the call is rejected pre-HTTP.</li>
 <li><strong>Location:</strong> <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/provisioner/provisioner.go">cmd/agc/internal/provisioner/provisioner.go:248-293</a></li>
 <li><strong>Category:</strong> OWASP A03:2025 — Injection (URL/path injection)</li>
@@ -3879,7 +3891,9 @@ Status legend: ✅ done, ⚠️ partial (residual accepted), ❌ open, ⓘ infor
   An attacker would need to MitM that channel or compromise the broker.
   The class is injection, but the input is server-derived.
   Worth fixing because the cost is low and the contract from GitHub is not formally guaranteed.</li>
-<li><strong>Description:</strong> <code>rerunFailedJobs</code> builds <code>%s/repos/%s/%s/actions/runs/%s/rerun-failed-jobs</code> from <code>owner</code>, <code>repo</code>, and <code>runID</code>. <code>owner</code> and <code>repo</code> are extracted from <code>acquirePayload.Variables["system.github.repository"]</code> via <code>strings.SplitN("/", 2)</code>. <code>runID</code> is parsed as <code>%d</code> (safe).
+<li><strong>Description:</strong> <code>rerunFailedJobs</code> builds <code>%s/repos/%s/%s/actions/runs/%s/rerun-failed-jobs</code> from <code>owner</code>, <code>repo</code>, and <code>runID</code>.
+  <code>owner</code> and <code>repo</code> are extracted from <code>acquirePayload.Variables["system.github.repository"]</code> via <code>strings.SplitN("/", 2)</code>.
+  <code>runID</code> is parsed as <code>%d</code> (safe).
   There is no validation that <code>owner</code>/<code>repo</code> contain only <code>[A-Za-z0-9_.-]</code>.</li>
 <li><strong>Mitigation:</strong></li>
 <li>Reject any <code>owner</code>/<code>repo</code> that contains a character outside <code>[A-Za-z0-9._-]</code> before building the URL.</li>
@@ -3924,7 +3938,8 @@ Status legend: ✅ done, ⚠️ partial (residual accepted), ❌ open, ⓘ infor
 </ul>
 <h3 id="m-7-agc-deployment-lacks-securitycontext">M-7. AGC Deployment lacks SecurityContext<a class="headerlink" href="#m-7-agc-deployment-lacks-securitycontext" title="Permanent link">&para;</a></h3>
 <ul>
-<li><strong>Status (2026-05-23): Done.</strong> Closed by W8. <code>buildAGCDeployment</code> now sets <code>RunAsNonRoot: true</code>, <code>ReadOnlyRootFilesystem: true</code>, <code>AllowPrivilegeEscalation: false</code>, <code>Capabilities.Drop: ALL</code>, and <code>SeccompProfile: RuntimeDefault</code> on the AGC container (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/controller/builder.go">builder.go:492-497</a>).
+<li><strong>Status (2026-05-23): Done.</strong> Closed by W8.
+  <code>buildAGCDeployment</code> now sets <code>RunAsNonRoot: true</code>, <code>ReadOnlyRootFilesystem: true</code>, <code>AllowPrivilegeEscalation: false</code>, <code>Capabilities.Drop: ALL</code>, and <code>SeccompProfile: RuntimeDefault</code> on the AGC container (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/controller/builder.go">builder.go:492-497</a>).
   The same hardening was applied to the proxy container (line 323-327) alongside <code>Capabilities</code>/<code>SeccompProfile</code> that were missing there.</li>
 <li><strong>Location:</strong> <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/controller/builder.go">cmd/gmc/internal/controller/builder.go:291-321</a></li>
 <li><strong>Category:</strong> OWASP A05:2025 — Security Misconfiguration</li>
@@ -3956,7 +3971,8 @@ Status legend: ✅ done, ⚠️ partial (residual accepted), ❌ open, ⓘ infor
 </ul>
 <h3 id="m-9-iprangereconciler-drops-workerproxy-egress-rule-on-every-refresh">M-9. <code>IPRangeReconciler</code> drops worker→proxy egress rule on every refresh<a class="headerlink" href="#m-9-iprangereconciler-drops-workerproxy-egress-rule-on-every-refresh" title="Permanent link">&para;</a></h3>
 <ul>
-<li><strong>Status (2026-05-23): Done.</strong> Closed by W1. <code>patchNetworkPolicy</code> now only refreshes the proxy NetworkPolicy (<code>npProxyName</code>); the workload policy carrying the worker→proxy egress rule is left untouched (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/controller/ipranges.go">ipranges.go:193-204</a>).
+<li><strong>Status (2026-05-23): Done.</strong> Closed by W1.
+  <code>patchNetworkPolicy</code> now only refreshes the proxy NetworkPolicy (<code>npProxyName</code>); the workload policy carrying the worker→proxy egress rule is left untouched (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/controller/ipranges.go">ipranges.go:193-204</a>).
   The separation of policies makes the previous code-path conflation impossible by construction.</li>
 <li><strong>Location:</strong> <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/controller/ipranges.go">cmd/gmc/internal/controller/ipranges.go:162-173</a></li>
 <li><strong>Category:</strong> OWASP A04:2025 — Insecure Design</li>
@@ -4009,7 +4025,8 @@ Status legend: ✅ done, ⚠️ partial (residual accepted), ❌ open, ⓘ infor
 <li><strong>Category:</strong> OWASP A09:2025 — Logging Failures (verbose error)</li>
 <li><strong>Description:</strong> Errors include the full response body.
   GitHub may return request IDs and partial token echoes in error bodies — these end up in AGC logs that are aggregated cluster-wide and often retained.</li>
-<li><strong>Mitigation:</strong> Cap body output (e.g. <code>body[:200]</code>) and add a <code>log.Debug</code> path with the full body gated by an env-var debug switch.</li>
+<li><strong>Mitigation:</strong> Cap body output (e.g.
+  <code>body[:200]</code>) and add a <code>log.Debug</code> path with the full body gated by an env-var debug switch.</li>
 </ul>
 <h3 id="m-14-gmc-forwards-agc_extra_-env-vars-to-every-tenant-agc">M-14. GMC forwards <code>AGC_EXTRA_*</code> env vars to every tenant AGC<a class="headerlink" href="#m-14-gmc-forwards-agc_extra_-env-vars-to-every-tenant-agc" title="Permanent link">&para;</a></h3>
 <ul>
@@ -4033,7 +4050,8 @@ Status legend: ✅ done, ⚠️ partial (residual accepted), ❌ open, ⓘ infor
 <p><strong>Option B — replace with a per-tenant typed field.</strong> Add an optional <code>proxy.endpointOverrides</code> (or similarly named) block to <code>ActionsGatewaySpec</code> with strongly-typed fields: <code>apiBaseURL</code>, <code>brokerURL</code>, <code>stubAuthURL</code>, <code>stubBrokerURL</code>.
   The GMC reads these from each CR and stamps them onto that tenant's AGC Deployment as ordinary env vars.
   CRD CEL validation rejects values that aren't <code>https://</code> URLs (or <code>http://</code> against <code>*.svc.cluster.local</code> for the test case).
-  The GMC pod's environment has no special privileged role anymore — every override is visible in the CR. <code>AGC_EXTRA_*</code> is deleted.</p>
+  The GMC pod's environment has no special privileged role anymore — every override is visible in the CR.
+  <code>AGC_EXTRA_*</code> is deleted.</p>
 <p>Option B is the cleaner outcome (typed, per-tenant, no cluster-wide side channel) but adds a CRD field whose only legitimate production use case is "I want to point one tenant at a private GitHub Enterprise endpoint" — which is plausible but not a current requirement.
   Option A is one flag + one <code>if</code> and removes the silent-default-on misconfiguration risk.</p>
 <p>These values are non-credentials and stay in env vars in either option; this finding is about the <em>forwarding mechanism</em>, not about whether env vars are an acceptable transport for non-secret config.
@@ -4054,7 +4072,8 @@ Status legend: ✅ done, ⚠️ partial (residual accepted), ❌ open, ⓘ infor
 <li><strong>Location:</strong> <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/provisioner/provisioner.go">cmd/agc/internal/provisioner/provisioner.go:508-526</a>, <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/controller/builder.go">cmd/gmc/internal/controller/builder.go:454-466</a></li>
 <li><strong>Category:</strong> OWASP A04:2025 — Insecure Design</li>
 <li><strong>Description:</strong> Both <code>safeName</code> variants replace any non-DNS character with <code>-</code>.
-  Two distinct inputs (e.g. <code>gpu/a100</code> and <code>gpu_a100</code>) yield the same Kubernetes object name, causing a silent overwrite.
+  Two distinct inputs (e.g.
+  <code>gpu/a100</code> and <code>gpu_a100</code>) yield the same Kubernetes object name, causing a silent overwrite.
   For job payload Secrets keyed on planID, this is theoretically a cross-job leak: if planIDs from two different acquisitions normalize to the same name, the Secret content is overwritten.
   GitHub planIDs are GUIDs in practice, but the contract is not declared.</li>
 <li><strong>Mitigation:</strong> When collapsing, append a hash suffix of the original input (<code>-&lt;8 hex bytes&gt;</code>) so distinct inputs produce distinct names.</li>
@@ -4080,14 +4099,16 @@ Status legend: ✅ done, ⚠️ partial (residual accepted), ❌ open, ⓘ infor
 <ul>
 <li><strong>Location:</strong> <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/proxy/proxy.go">cmd/proxy/proxy.go:148-158</a></li>
 <li><strong>Category:</strong> OWASP A04:2025 — Insecure Design (resource exhaustion)</li>
-<li><strong>Why Medium:</strong> Resource starvation rather than privilege escalation. <code>ResourceQuota</code> caps pod count and HPA caps replica count, but a flood of hung tunnels within a single pod degrades throughput before either control reacts.
+<li><strong>Why Medium:</strong> Resource starvation rather than privilege escalation.
+  <code>ResourceQuota</code> caps pod count and HPA caps replica count, but a flood of hung tunnels within a single pod degrades throughput before either control reacts.
   Compounds with M-17 to widen the slowloris surface.</li>
 <li><strong>Description:</strong> <code>handleConnect</code> calls <code>io.Copy</code> in two goroutines and waits on a single done signal.
   There is no read deadline on the hijacked client conn or the upstream conn, and no upper bound on tunnel lifetime.
   A long-poll that stalls keeps the relay goroutines alive until the OS TCP timeout (minutes-to-hours on Linux).</li>
 <li><strong>Mitigation:</strong></li>
 <li>Wrap the tunnel in <code>ctx, cancel := context.WithTimeout(r.Context(), maxTunnelLifetime)</code> (default e.g. 6h, configurable on <code>Server</code>) and cancel on the first <code>done</code> receive.</li>
-<li>In each relay goroutine, after a successful copy chunk, refresh a per-conn idle deadline (e.g. <code>dst.SetDeadline(time.Now().Add(idleTimeout))</code>, default 5min) so a stalled stream is torn down.</li>
+<li>In each relay goroutine, after a successful copy chunk, refresh a per-conn idle deadline (e.g.
+     <code>dst.SetDeadline(time.Now().Add(idleTimeout))</code>, default 5min) so a stalled stream is torn down.</li>
 <li>Add an <code>actions_gateway_proxy_tunnel_duration_seconds</code> histogram so the chosen ceilings are observable.</li>
 </ul>
 <h3 id="m-19-worker-dockerfile-base-image-is-not-digest-pinned--resolved-2026-06-01">M-19. Worker Dockerfile base image is not digest-pinned — <strong>Resolved 2026-06-01</strong><a class="headerlink" href="#m-19-worker-dockerfile-base-image-is-not-digest-pinned--resolved-2026-06-01" title="Permanent link">&para;</a></h3>
@@ -4134,7 +4155,8 @@ Status legend: ✅ done, ⚠️ partial (residual accepted), ❌ open, ⓘ infor
 <li><strong>Category:</strong> OWASP A04:2025 — Insecure Design</li>
 <li><strong>Description:</strong> Both functions look for <code>"401"</code>, <code>"403"</code>, <code>"404"</code>, <code>"410"</code> as substrings of the error message.
   Fragile — a response body containing those digits in an unrelated context can match.</li>
-<li><strong>Mitigation:</strong> Return typed errors from <code>broker.Client</code> (e.g. <code>*UnauthorizedError</code>, <code>*SessionExpiredError</code>) and use <code>errors.As</code>.</li>
+<li><strong>Mitigation:</strong> Return typed errors from <code>broker.Client</code> (e.g.
+  <code>*UnauthorizedError</code>, <code>*SessionExpiredError</code>) and use <code>errors.As</code>.</li>
 </ul>
 <h3 id="l-5-pem-key-parsing-accepts-only-pkcs1-in-agentpoolcryptogo-asymmetric-with-githubappauthgo">L-5. PEM key parsing accepts only PKCS#1 in <code>agentpool/crypto.go</code> (asymmetric with <code>githubapp/auth.go</code>)<a class="headerlink" href="#l-5-pem-key-parsing-accepts-only-pkcs1-in-agentpoolcryptogo-asymmetric-with-githubappauthgo" title="Permanent link">&para;</a></h3>
 <ul>
@@ -4347,7 +4369,8 @@ W4 is the only Phase 1 workstream still carrying residual risk; see the inline s
 <h4 id="w2--security-profiles-via-psa-closes-c-1--done-2026-05-23-commit-1155d6f">W2 — Security profiles via PSA (closes C-1) — <strong>Done (2026-05-23, commit <code>1155d6f</code>)</strong><a class="headerlink" href="#w2--security-profiles-via-psa-closes-c-1--done-2026-05-23-commit-1155d6f" title="Permanent link">&para;</a></h4>
 <ul>
 <li><strong>What shipped:</strong></li>
-<li><code>cmd/gmc/api/v1alpha1/actionsgateway_types.go</code> — <code>SecurityProfile</code> enum field (<code>baseline | restricted | privileged</code>, default <code>baseline</code>) with CEL <code>enum</code> validation. <code>zz_generated.deepcopy.go</code> regenerated.</li>
+<li><code>cmd/gmc/api/v1alpha1/actionsgateway_types.go</code> — <code>SecurityProfile</code> enum field (<code>baseline | restricted | privileged</code>, default <code>baseline</code>) with CEL <code>enum</code> validation.
+    <code>zz_generated.deepcopy.go</code> regenerated.</li>
 <li><code>cmd/gmc/internal/controller/actionsgateway_controller.go</code> — <code>applyNamespacePSA</code> (line 509) stamps <code>pod-security.kubernetes.io/{enforce,warn,audit}</code> and matching <code>*-version</code> labels on the tenant namespace at every reconcile.
     Idempotent label merge; called from <code>reconcileResources</code>.</li>
 <li><code>cmd/agc/api/v1alpha1/runnergroup_types.go</code> — CEL <code>XValidation</code> rejects <code>privileged: true</code> in <code>RunnerGroupSpec.PodTemplate</code> at <code>kubectl apply</code> time (per D-7).</li>
@@ -4381,7 +4404,8 @@ W4 is the only Phase 1 workstream still carrying residual risk; see the inline s
     Its header comment explains why <code>list</code>/<code>watch</code> on <code>secrets</code> are required and points to the cache-disable as the substitute control.</p>
 </li>
 </ul>
-<p><code>list</code>/<code>watch</code> on all Secrets in the tenant namespace remain in the ClusterRole. <code>resourceNames</code> restriction is not viable (dynamic names, no glob support).
+<p><code>list</code>/<code>watch</code> on all Secrets in the tenant namespace remain in the ClusterRole.
+  <code>resourceNames</code> restriction is not viable (dynamic names, no glob support).
   KEP-4601 (GA in k8s 1.34) does not extend <code>rbacv1.PolicyRule</code> — it helps webhook authorizers, not standard RBAC.
   Split-SA was evaluated and declined (D-3 reasoning: AGC compromise already implies access to credentials it minted).
   The residual enumeration risk is accepted for v1 and documented in the H-2 finding above.</p>
@@ -4403,7 +4427,8 @@ Originally framed as the next milestone after Phase 1; shipped in the same push.
 <li><strong>What shipped:</strong></li>
 <li><code>broker/crypto.go:19,84</code> — <code>errInvalidPadding</code> is the single sentinel returned by <code>pkcs7Unpad</code> for every malformed input.
     Byte comparison runs through <code>crypto/subtle</code> in constant time.</li>
-<li><code>cmd/agc/internal/provisioner/provisioner.go</code> — <code>repoSegmentRE</code> (line 526) restricts <code>owner</code>/<code>repo</code> to <code>^[A-Za-z0-9][A-Za-z0-9._-]*$</code>. <code>rerunFailedJobs</code> (lines 250-276) rejects non-matching values pre-HTTP and wraps each path segment in <code>neturl.PathEscape</code>.</li>
+<li><code>cmd/agc/internal/provisioner/provisioner.go</code> — <code>repoSegmentRE</code> (line 526) restricts <code>owner</code>/<code>repo</code> to <code>^[A-Za-z0-9][A-Za-z0-9._-]*$</code>.
+    <code>rerunFailedJobs</code> (lines 250-276) rejects non-matching values pre-HTTP and wraps each path segment in <code>neturl.PathEscape</code>.</li>
 <li><code>broker/client.go</code> — <code>GetMessage</code> (line 293) and <code>DeleteSession</code> (line 313) build URLs through <code>url.Parse</code> + <code>url.Values</code> with <code>RawQuery = q.Encode()</code>.
     No raw string concatenation in the URL path.</li>
 <li><strong>Tests:</strong> unit tests with adversarial <code>system.github.repository</code> inputs cover the M-4 reject path; crypto round-trip tests exercise the M-3 sentinel; broker tests assert correct URL composition.</li>
@@ -4416,8 +4441,10 @@ See D-4 for the rationale.</p>
 <ul>
 <li><strong>Files:</strong></li>
 <li><code>cmd/gmc/internal/controller/builder.go</code> — new helper <code>buildProxyCertSecret(ag)</code> generates a 2048-bit RSA keypair and a self-signed cert via <code>crypto/x509.CreateCertificate</code> with the proxy ClusterIP/DNS name as SAN, ~1-year lifetime.
-    Store the cert+key in a Secret (e.g. <code>actions-gateway-proxy-tls</code>).
-    The proxy Deployment mounts the Secret at <code>/etc/actions-gateway/proxy-tls/</code> mode <code>0400</code>; the AGC Deployment mounts only the cert (public part) at <code>/etc/actions-gateway/proxy-ca/</code>. <code>buildProxyServiceAddr</code> returns <code>https://</code>.</li>
+    Store the cert+key in a Secret (e.g.
+    <code>actions-gateway-proxy-tls</code>).
+    The proxy Deployment mounts the Secret at <code>/etc/actions-gateway/proxy-tls/</code> mode <code>0400</code>; the AGC Deployment mounts only the cert (public part) at <code>/etc/actions-gateway/proxy-ca/</code>.
+    <code>buildProxyServiceAddr</code> returns <code>https://</code>.</li>
 <li><code>cmd/gmc/internal/controller/actionsgateway_controller.go</code> — <code>reconcileResources</code> ensures the Secret exists and re-issues when expiry is within (say) 30 days.
     Reconciler-driven rotation; no external controller needed.</li>
 <li><code>cmd/proxy/proxy.go</code> and <code>cmd/proxy/main.go</code> — accept <code>PROXY_TLS_CERT_PATH</code> and <code>PROXY_TLS_KEY_PATH</code>.
@@ -4711,7 +4738,8 @@ No cluster required.</p>
 </tr>
 </tbody>
 </table>
-<p><strong>W4 residual risk (H-2 accepted):</strong> The AGC Role grants <code>get</code>, <code>list</code>, <code>watch</code>, <code>create</code>, and <code>delete</code> on all Secrets in the tenant namespace. <code>list</code> is required by the agent pool's Secret enumeration (<code>agentpool.Pool.listSecretMeta</code>); narrowing it by label is not possible through standard <code>rbacv1.PolicyRule</code> (no <code>LabelSelector</code> field even in k8s.io/api v0.35 / KEP-4601 GA).
+<p><strong>W4 residual risk (H-2 accepted):</strong> The AGC Role grants <code>get</code>, <code>list</code>, <code>watch</code>, <code>create</code>, and <code>delete</code> on all Secrets in the tenant namespace.
+<code>list</code> is required by the agent pool's Secret enumeration (<code>agentpool.Pool.listSecretMeta</code>); narrowing it by label is not possible through standard <code>rbacv1.PolicyRule</code> (no <code>LabelSelector</code> field even in k8s.io/api v0.35 / KEP-4601 GA).
 The substitute controls are <code>Client.Cache.DisableFor[*corev1.Secret]</code> in the AGC manager (Secret bodies are never held in-process) and the metadata-only bulk list (Q57) so the legitimate <code>list</code> path returns no bodies; bodies are read per-name via <code>get</code>.
 Do not write a test asserting that <code>list</code> or <code>get</code> on an unrelated Secret is denied; both are currently allowed and the design knowingly accepts this.
 See H-2 for full rationale.</p>
@@ -4914,7 +4942,8 @@ Image: <code>ghcr.io/actions/actions-runner:latest</code> (v2.334.0, UID 1001).<
 <a id="__codelineno-5-36" name="__codelineno-5-36" href="#__codelineno-5-36"></a><span class="w">  </span>--<span class="w"> </span>/home/runner/bin/Runner.Listener<span class="w"> </span>--version
 <a id="__codelineno-5-37" name="__codelineno-5-37" href="#__codelineno-5-37"></a><span class="c1"># → 2.334.0, exit 0</span>
 </code></pre></div>
-<p><strong>Result:</strong> pod admitted and runner binary executed successfully. <code>restricted</code> is a viable production profile.
+<p><strong>Result:</strong> pod admitted and runner binary executed successfully.
+<code>restricted</code> is a viable production profile.
 Tenants must set <code>runAsUser: 1001</code> and <code>runAsGroup: 1001</code> in their <code>RunnerGroup.spec.podTemplate</code>; without a numeric UID Kubernetes rejects the pod with "cannot verify user is non-root".</p>
 <h4 id="ci-gating">CI gating<a class="headerlink" href="#ci-gating" title="Permanent link">&para;</a></h4>
 <ul>

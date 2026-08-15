@@ -2746,7 +2746,8 @@ The suite carries instrumentation only: an <code>ERR</code> trap naming the fail
 </table>
 <p>Two different ephemeral runners on two different pull requests, plus one local run, is what rules out the host temp pressure sighting 1 suspected: an ephemeral runner starts clean.
 Sighting 3's job ran on GitHub-hosted <code>ubuntu-latest</code> (<code>runner_group_name: GitHub Actions</code>), not on a self-hosted dogfood runner.</p>
-<p><strong>Reading sighting 3 costs a step-level look.</strong> The failing check is named <code>shellcheck</code> and shellcheck itself passed: the job runs several steps, and the one that failed is <code>scripts behavioural tests (make scripts-test)</code>. <code>unit-test-gate</code> also reported failure because it aggregates the gating jobs' results.
+<p><strong>Reading sighting 3 costs a step-level look.</strong> The failing check is named <code>shellcheck</code> and shellcheck itself passed: the job runs several steps, and the one that failed is <code>scripts behavioural tests (make scripts-test)</code>.
+<code>unit-test-gate</code> also reported failure because it aggregates the gating jobs' results.
 One root cause, two red checks, and neither check name points at the suite.
 Read the step conclusions:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>gh<span class="w"> </span>api<span class="w"> </span>repos/actions-gateway/github-actions-gateway/actions/jobs/95012397955<span class="w"> </span>--jq<span class="w"> </span><span class="s1">&#39;.steps[] | &quot;\(.number) \(.conclusion) \(.name)&quot;&#39;</span>

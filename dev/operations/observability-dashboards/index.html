@@ -3192,7 +3192,8 @@ The <code>1</code> is orange rather than red on purpose: a latched gate is <a hr
 </tbody>
 </table>
 <p>The fleet's version spread during a staggered upgrade, and the answer to which tenants have crossed a semantics change: <code>job_duration_seconds</code> changed span at v1.5.0 without a rename (<a href="../upgrade/#non-breaking-job_duration_seconds-now-measures-worker-pod-lifetime-the-classic-tier-span-shrinks">upgrade note</a>).
-The GMC comes from this dashboard's own scrape; <code>agc</code> and <code>proxy</code> need the per-tenant scrapes, so a platform-only Prometheus shows one bar. <code>actions_gateway_build_info</code> carries no <code>namespace</code> label, so <code>$namespace</code> does not filter this row. | Pod creation p99 by namespace | <code>actions_gateway:pod_creation_latency_seconds:p99</code> | Time series, both acquisition tiers |</p>
+The GMC comes from this dashboard's own scrape; <code>agc</code> and <code>proxy</code> need the per-tenant scrapes, so a platform-only Prometheus shows one bar.
+<code>actions_gateway_build_info</code> carries no <code>namespace</code> label, so <code>$namespace</code> does not filter this row. | Pod creation p99 by namespace | <code>actions_gateway:pod_creation_latency_seconds:p99</code> | Time series, both acquisition tiers |</p>
 <h2 id="dashboard-variables">Dashboard Variables<a class="headerlink" href="#dashboard-variables" title="Permanent link">&para;</a></h2>
 <p>The dashboards ship with these template variables already wired:</p>
 <ul>

@@ -2665,7 +2665,9 @@ See <a href="../../../design/appendix-h-v2-api-decomposition/#h15-other-breaking
 <ol>
 <li><strong>API</strong> (<code>api/v2alpha1</code>): <code>CredentialTypeWorkloadIdentity</code> enum value; <code>WorkloadIdentity</code> member on <code>GitHubCredentials</code>; <code>ExternalSigner</code> (provider discriminator) + <code>VaultSigner</code> + <code>VaultKubernetesAuth</code> types; a per-member CEL <code>iff</code> rule that <em>extends</em> the union (never an N-way "exactly one of"); a per-provider CEL <code>iff</code> on <code>ExternalSigner</code>.
    Regenerate deepcopy + CRDs + sync Helm chart CRDs.</li>
-<li><strong><code>githubapp.Signer</code> interface</strong>: pluggable JWT signing. <code>pemSigner</code> wraps the existing in-cluster crypto path (RS256/EdDSA) with <strong>zero behavior change</strong>. <code>NewInstallationTokenProviderWithSigner</code> builds a provider around any <code>Signer</code>.</li>
+<li><strong><code>githubapp.Signer</code> interface</strong>: pluggable JWT signing.
+   <code>pemSigner</code> wraps the existing in-cluster crypto path (RS256/EdDSA) with <strong>zero behavior change</strong>.
+   <code>NewInstallationTokenProviderWithSigner</code> builds a provider around any <code>Signer</code>.</li>
 <li><strong><code>githubapp/vaultsigner</code></strong>: the MVP external signer.
    Vault Kubernetes auth login (projected SA token → Vault client token, cached to its lease) + Vault transit <code>sign</code> (RSA pkcs1v15 + sha2-256 = RS256).
    HTTPS-by-default with an explicit dev/test opt-in.

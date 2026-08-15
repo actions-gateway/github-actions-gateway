@@ -2653,7 +2653,8 @@ The interesting part is what a wrong verdict did once it was believed: it entere
   It was not.</li>
 <li>A dispatched worker session was given "unbreak <code>main</code>" as its first instruction.
   Roughly half its run went to a defect that did not exist.</li>
-<li>No shipped artifact was affected. <code>main</code> was green throughout, the release was never blocked, and no code changed on the strength of the claim.</li>
+<li>No shipped artifact was affected.
+  <code>main</code> was green throughout, the release was never blocked, and no code changed on the strength of the claim.</li>
 </ul>
 <h2 id="what-the-defect-was">What the defect was<a class="headerlink" href="#what-the-defect-was" title="Permanent link">&para;</a></h2>
 <p><code>make md-reflow-check</code> builds <code>.build/mdreflow</code> from the vendored <code>tools/</code> module and runs it over the tree.
@@ -2667,8 +2668,10 @@ It checks out fresh, has no <code>.build/</code>, and therefore builds from the 
 The two environments diverge silently and only on the developer's side.</p>
 <h2 id="timeline">Timeline<a class="headerlink" href="#timeline" title="Permanent link">&para;</a></h2>
 <p><strong>2026-08-09.</strong> <code>.build/mdreflow</code> is built from the then-current pin.</p>
-<p><strong>2026-08-13.</strong> <a href="https://github.com/actions-gateway/github-actions-gateway/pull/1462">#1462</a> adopts mdreflow v0.1.7. <code>tools/go.mod</code> changes; the binary does not.</p>
-<p><strong>2026-08-13.</strong> A release-readiness session runs <code>make check</code>. <code>md-reflow-check</code> reports four files as needing reflow.
+<p><strong>2026-08-13.</strong> <a href="https://github.com/actions-gateway/github-actions-gateway/pull/1462">#1462</a> adopts mdreflow v0.1.7.
+<code>tools/go.mod</code> changes; the binary does not.</p>
+<p><strong>2026-08-13.</strong> A release-readiness session runs <code>make check</code>.
+<code>md-reflow-check</code> reports four files as needing reflow.
 The tree is clean; the binary is four days stale.</p>
 <p>The reading taken is that <code>main</code> is broken.
 It is a reasonable inference: the four files are byte-identical to <code>origin/main</code>, which does rule out the working branch as the cause, and that check is performed and passes.
@@ -2681,7 +2684,9 @@ The Q831 half is real and lands, wiring five previously unwired gates.
 The first half has nothing to fix.</p>
 <p><strong>2026-08-14.</strong> Q831's fix wires <code>md-reflow-check</code> into <code>doc-links.yml</code>.
 A run on main's tip now reports the <code>md-reflow</code> job as <strong>passed</strong>, while the local run still fails.</p>
-<p><strong>2026-08-14.</strong> The contradiction forces the comparison. <code>.build/mdreflow</code> is dated 2026-08-09, the pin is v0.1.7, the binary is deleted, make rebuilds it, and <code>make md-reflow-check</code> passes. <code>make check</code> passes whole for the first time in the session.</p>
+<p><strong>2026-08-14.</strong> The contradiction forces the comparison.
+<code>.build/mdreflow</code> is dated 2026-08-09, the pin is v0.1.7, the binary is deleted, make rebuilds it, and <code>make md-reflow-check</code> passes.
+<code>make check</code> passes whole for the first time in the session.</p>
 <h2 id="contributing-factors">Contributing factors<a class="headerlink" href="#contributing-factors" title="Permanent link">&para;</a></h2>
 <p><strong>A tool binary outlives its pin, by construction.</strong> The Makefile rule has no prerequisites, so nothing connects a change in <code>tools/go.mod</code> to a rebuild.
 Recorded as Q842 before this session, from the <em>loud</em> failure mode: a stale binary meeting a flag it does not know.

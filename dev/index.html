@@ -3047,7 +3047,8 @@ Every resource is namespaced, none is cluster-scoped, and no <code>ResourceQuota
     All gateways in a namespace share one level.</li>
 <li><code>credentials.githubApp.name</code> references a <code>Secret</code> in this namespace holding the GitHub App <code>appId</code>, <code>installationId</code>, and <code>privateKey</code>.
     The GMC watches the reference name, not the Secret contents.
-    See <a href="getting-started/#rotating-github-app-credentials">credential rotation</a>. <code>WorkloadIdentity</code> is the opt-in no-PEM credential member.</li>
+    See <a href="getting-started/#rotating-github-app-credentials">credential rotation</a>.
+    <code>WorkloadIdentity</code> is the opt-in no-PEM credential member.</li>
 <li>Both runner sets reference the <strong>same</strong> <code>RunnerTemplate</code>.
     There is no <code>ResourceQuota</code> field on any of these CRs.
     The single quota every runner set shares is <strong>platform-owned</strong>, set on the namespace by the platform admin, so it is a real cap the tenant cannot raise.

@@ -2746,12 +2746,17 @@ The guidance is optional and orthogonal to the design itself.</p>
 <h2 id="c2-risks-and-mitigations">C.2. Risks and Mitigations<a class="headerlink" href="#c2-risks-and-mitigations" title="Permanent link">&para;</a></h2>
 <p>AI-assisted implementation introduces specific failure modes that are worth naming explicitly.</p>
 <ul>
-<li><strong>Plausible but wrong code.</strong> AI tools confidently produce code that compiles and reads correctly but is wrong in subtle ways — calling the wrong endpoint, conflating <code>broker_url</code> and <code>run_service_url</code>, treating a Secret as mutable when it isn't, or skipping a critical <code>defer</code> on a mutex. <strong>Mitigation:</strong> every AI-generated PR is reviewed by an engineer who has read the relevant section of this design doc; the design doc, not the AI tool, is the source of truth.</li>
-<li><strong>Hidden security regressions.</strong> AI tools may generate ClusterRoles with overly broad verbs (<code>*</code> on <code>secrets</code>, wildcard resource selectors) because that is the path of least resistance. <strong>Mitigation:</strong> the <a href="../07-test-plan/#71-unit-tests">§7.1</a> "GMC RBAC boundary assertions" test exists specifically to catch this; run it on every PR and fail the build on violations.</li>
-<li><strong>Drift from the design doc.</strong> AI tools optimize for solving the immediate prompt and will happily diverge from the documented API contracts if not corrected. <strong>Mitigation:</strong> feed the specific design-doc section into the prompt for each task, not just the high-level goal; cross-reference generated CRD field names against <a href="../03-api-contracts/#31-kubernetes-crd-schemas">§3.1</a> before merging.</li>
-<li><strong>Test coverage that mirrors the code.</strong> AI tools generating tests after the implementation tend to test what the code <em>does</em>, not what it <em>should</em> do. <strong>Mitigation:</strong> write the test specification (the bullet under <a href="../07-test-plan/">§7</a>) before asking the AI to implement either the code or the test.
+<li><strong>Plausible but wrong code.</strong> AI tools confidently produce code that compiles and reads correctly but is wrong in subtle ways — calling the wrong endpoint, conflating <code>broker_url</code> and <code>run_service_url</code>, treating a Secret as mutable when it isn't, or skipping a critical <code>defer</code> on a mutex.
+  <strong>Mitigation:</strong> every AI-generated PR is reviewed by an engineer who has read the relevant section of this design doc; the design doc, not the AI tool, is the source of truth.</li>
+<li><strong>Hidden security regressions.</strong> AI tools may generate ClusterRoles with overly broad verbs (<code>*</code> on <code>secrets</code>, wildcard resource selectors) because that is the path of least resistance.
+  <strong>Mitigation:</strong> the <a href="../07-test-plan/#71-unit-tests">§7.1</a> "GMC RBAC boundary assertions" test exists specifically to catch this; run it on every PR and fail the build on violations.</li>
+<li><strong>Drift from the design doc.</strong> AI tools optimize for solving the immediate prompt and will happily diverge from the documented API contracts if not corrected.
+  <strong>Mitigation:</strong> feed the specific design-doc section into the prompt for each task, not just the high-level goal; cross-reference generated CRD field names against <a href="../03-api-contracts/#31-kubernetes-crd-schemas">§3.1</a> before merging.</li>
+<li><strong>Test coverage that mirrors the code.</strong> AI tools generating tests after the implementation tend to test what the code <em>does</em>, not what it <em>should</em> do.
+  <strong>Mitigation:</strong> write the test specification (the bullet under <a href="../07-test-plan/">§7</a>) before asking the AI to implement either the code or the test.
   Treat the design doc's test list as the contract.</li>
-<li><strong>Erosion of mental model.</strong> Engineers who rely heavily on AI for implementation may end up with a shallower understanding of the resulting system, slowing later debugging. <strong>Mitigation:</strong> the engineer is expected to be able to explain every merged PR without referring back to the AI conversation.
+<li><strong>Erosion of mental model.</strong> Engineers who rely heavily on AI for implementation may end up with a shallower understanding of the resulting system, slowing later debugging.
+  <strong>Mitigation:</strong> the engineer is expected to be able to explain every merged PR without referring back to the AI conversation.
   If they cannot, the PR is not ready to merge.</li>
 </ul>
 <hr />
@@ -2773,7 +2778,8 @@ Each milestone references the design-doc section that should be pasted into the 
   Pay close attention to generated RBAC — write the <a href="../07-test-plan/#71-unit-tests">§7.1</a> "GMC RBAC boundary assertions" test <em>first</em>, before merging the GMC code.
   The CONNECT proxy itself is a small artifact (~150 lines) and an excellent target for AI generation.</li>
 <li><strong><a href="../06-implementation-phases/#milestone-5-hardening--load-testing-days-2326">Milestone 5</a> (Hardening &amp; Load).</strong> Ask for NetworkPolicy manifests scoped to the proxy label, PodSecurityContext hardening for both proxy and AGC, and per-namespace ResourceQuota definitions derived from <a href="../05-security/">§5</a> and <a href="../appendix-a-capacity-slos/">Appendix A</a>.
-  Extend the load harness from Milestone 1 to multiple tenants. <strong>Review all generated security manifests by hand before applying to any real cluster</strong> — this is the highest-stakes review pass of the entire project.</li>
+  Extend the load harness from Milestone 1 to multiple tenants.
+  <strong>Review all generated security manifests by hand before applying to any real cluster</strong> — this is the highest-stakes review pass of the entire project.</li>
 </ul>
 <hr />
 <h2 id="c4-when-ai-assisted-implementation-is-the-wrong-choice">C.4. When AI-Assisted Implementation Is the Wrong Choice<a class="headerlink" href="#c4-when-ai-assisted-implementation-is-the-wrong-choice" title="Permanent link">&para;</a></h2>

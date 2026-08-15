@@ -2993,7 +2993,8 @@ Two pieces keep the domain bound to the Actions-based Pages deploy:</p>
 <li><strong><code>site_url: https://actions-gateway.com/</code></strong> in <code>mkdocs.yml</code> — drives canonical URLs, <code>sitemap.xml</code>, and Open Graph / social meta, and roots the site at <code>/</code> (no more <code>/github-actions-gateway/</code> base path).</li>
 </ul>
 <p>DNS (managed at the registrar): four apex <code>A</code> records → GitHub Pages <code>185.199.108–111.153</code>, matching <code>AAAA</code> records, and a <code>www</code> <code>CNAME</code> → <code>actions-gateway.github.io</code>.
-The repo Pages custom domain is set server-side (<code>gh api -X PUT repos/{owner}/{repo}/pages -f cname=actions-gateway.com</code>), which provisions a Let's Encrypt cert; "Enforce HTTPS" is enabled once the cert reads <code>approved</code>. <strong>DNSSEC and org-level domain verification remain optional future hardening — not yet done.</strong></p>
+The repo Pages custom domain is set server-side (<code>gh api -X PUT repos/{owner}/{repo}/pages -f cname=actions-gateway.com</code>), which provisions a Let's Encrypt cert; "Enforce HTTPS" is enabled once the cert reads <code>approved</code>.
+<strong>DNSSEC and org-level domain verification remain optional future hardening — not yet done.</strong></p>
 <p>(The original build plan and decision log is <code>docs/plan/website.md</code>; this doc is the durable how-to-maintain reference.)</p>
 <h2 id="the-announce-bar">The announce bar<a class="headerlink" href="#the-announce-bar" title="Permanent link">&para;</a></h2>
 <p>The strip at the top of every page ("vX.Y.Z is here…") is the <code>announce</code> block in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/overrides/main.html"><code>overrides/main.html</code></a>.
@@ -3026,7 +3027,8 @@ That is also why <code>pages.yml</code> pins <code>overrides/</code> to the curr
 The highlight renders only while <code>highlight_for</code> names the resolved release, so forgetting to refresh it degrades the bar to a release-notes link instead of pairing a new version with the previous release's headline.
 Refreshing it is an optional pre-flight step in <a href="../../operations/release/#1-pre-flight">release.md</a>.</p>
 <p>Why this is derived at all: a stable tag deploys that tag's docs wholesale, so a banner that is wrong at tag time is published permanently under that version and no later fix to <code>main</code> reaches it.
-Every stable tag missed the manual bump: <code>v1.0.0</code> shipped saying <em>"Alpha, pre-1.0"</em>, and <code>v1.1.0</code> and <code>v1.2.0</code> both said <em>"v1.0.0 is here"</em> (Q393). <code>publish.yml</code>'s <code>announce-bar</code> gate now builds the site at the tag and asserts the <strong>rendered</strong> bar names it, so a broken hook or template fails the release before any image is pushed.</p>
+Every stable tag missed the manual bump: <code>v1.0.0</code> shipped saying <em>"Alpha, pre-1.0"</em>, and <code>v1.1.0</code> and <code>v1.2.0</code> both said <em>"v1.0.0 is here"</em> (Q393).
+<code>publish.yml</code>'s <code>announce-bar</code> gate now builds the site at the tag and asserts the <strong>rendered</strong> bar names it, so a broken hook or template fails the release before any image is pushed.</p>
 <p>Both workflows check out with <code>fetch-depth: 0</code> for this reason: a default depth-1 checkout fetches no tags, and the bar would render the version-free fallback.
 Locally, <code>make docs-serve</code> and <code>make docs-build</code> resolve tags from your checkout, so run <code>git fetch --tags</code> if the bar looks stale.
 To see what the bar will name without building the site:</p>
@@ -3142,7 +3144,8 @@ Each version is a full built copy under its own path on the <code>gh-pages</code
 <li><strong><code>workflow_dispatch</code></strong> → deploys the <code>version</code>/<code>alias</code> inputs verbatim (or derives from the ref when blank) — used for <strong>seeding</strong> already-released versions and manual redeploys.
   The <code>docs_ref</code> input picks which ref the docs <em>content</em> is built from, independently of the ref the workflow logic runs from (see § Seeding below).</li>
 </ul>
-<p><strong>Backports don't demote the site.</strong> A patch cut for an older supported line (e.g. <code>v1.2.5</code> released <em>after</em> <code>v1.3.0</code>) publishes/updates its own <code>1.2.5</code> version but leaves <code>stable</code> on <code>1.3.0</code> — the deploy claims <code>stable</code> only when the pushed tag is the highest released version.
+<p><strong>Backports don't demote the site.</strong> A patch cut for an older supported line (e.g.
+<code>v1.2.5</code> released <em>after</em> <code>v1.3.0</code>) publishes/updates its own <code>1.2.5</code> version but leaves <code>stable</code> on <code>1.3.0</code> — the deploy claims <code>stable</code> only when the pushed tag is the highest released version.
 That backport must be tagged off the release line, not off feature-ahead <code>main</code>; see <a href="../../operations/release/#patch-releases-and-backports">release.md § Patch releases and backports</a>.</p>
 <p><strong>A tag freezes what that version says, including its version pins.</strong> This is the same trap the announce bar escaped by deriving its version (<a href="#the-announce-bar">§ The announce bar</a>): anything wrong in the tag's tree publishes permanently under that version, and no later fix to <code>main</code> reaches it.
 The install pins are the case still paying for it.
@@ -3151,7 +3154,8 @@ The bump therefore lands twice: on <code>main</code>, and on a <code>release-X.Y
 The procedure is <a href="../../operations/release/#the-bump-on-main-does-not-reach-the-published-release">release.md step 7</a>, and <code>make verify-published-docs VERSION=vX.Y.Z</code> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/release/verify-published-docs.sh">verify-published-docs.sh</a>) is what says the republish worked.</p>
 <p>That check reads each page's <code>&lt;article&gt;</code> and nothing around it, because the chrome is deliberately <em>not</em> the version being read: the announce bar names the newest release site-wide, so a correct <code>/1.1.0/</code> page announces a later one.
 A theme change that renames or drops <code>&lt;article&gt;</code> therefore fails it rather than quietly reducing it to scanning nothing.</p>
-<p>Pages source stays <strong>"GitHub Actions"</strong>: <code>mike</code> maintains the tree on <code>gh-pages</code>, and the <code>publish</code> job serves that whole tree as the Pages artifact. <code>--alias-type=copy</code> makes <code>stable/</code> a real directory — GitHub Pages artifact deploys don't follow symlinks, so a symlinked alias would 404 on deep links.</p>
+<p>Pages source stays <strong>"GitHub Actions"</strong>: <code>mike</code> maintains the tree on <code>gh-pages</code>, and the <code>publish</code> job serves that whole tree as the Pages artifact.
+<code>--alias-type=copy</code> makes <code>stable/</code> a real directory — GitHub Pages artifact deploys don't follow symlinks, so a symlinked alias would 404 on deep links.</p>
 <h3 id="seeding-already-released-versions">Seeding already-released versions<a class="headerlink" href="#seeding-already-released-versions" title="Permanent link">&para;</a></h3>
 <p><code>mike</code> only knows the versions it has deployed, so releases cut <strong>before</strong> this workflow landed aren't in the tree yet, and <strong>the site root has nothing to redirect to until some version claims the default</strong>: the apex domain 404s while every push still reports success.
 That was the state from the Q238 cutover until the first seed, because <code>mike set-default</code> runs only for a stable tag push or an explicit dispatch, and the last release predated the cutover by four days.
@@ -3249,10 +3253,12 @@ To preview the full versioned tree with the selector, run <code>mike</code> from
   Editing those config values updates the structured data automatically; don't hand-paste schema into individual pages.
   Validate built output at <a href="https://validator.schema.org/">validator.schema.org</a>.</li>
 <li><strong><code>robots.txt</code></strong> — <code>docs/robots.txt</code> lands inside each built version; the <code>pages.yml</code> <code>publish</code> job writes the <strong>root</strong> <code>robots.txt</code> that points crawlers at the default (stable) <code>sitemap.xml</code> and <code>Disallow</code>s <code>/dev/</code> so the unreleased version stays out of the index (avoiding duplicate content across versions).</li>
-<li><strong><code>sitemap.xml</code></strong> — generated automatically by MkDocs Material because <code>site_url</code> is set; no extra config. <code>robots.txt</code> points crawlers at it.</li>
+<li><strong><code>sitemap.xml</code></strong> — generated automatically by MkDocs Material because <code>site_url</code> is set; no extra config.
+  <code>robots.txt</code> points crawlers at it.</li>
 </ul>
 <h3 id="analytics-plausible--opt-in">Analytics (Plausible — opt-in)<a class="headerlink" href="#analytics-plausible--opt-in" title="Permanent link">&para;</a></h3>
-<p>Privacy-respecting analytics (Plausible: no cookies, no Google Analytics) are wired via config in <code>mkdocs.yml</code> under <code>extra.analytics</code> and rendered by <code>overrides/main.html</code>. <strong>Disabled by default</strong> — the script is only emitted when <code>plausible_domain</code> is non-empty:</p>
+<p>Privacy-respecting analytics (Plausible: no cookies, no Google Analytics) are wired via config in <code>mkdocs.yml</code> under <code>extra.analytics</code> and rendered by <code>overrides/main.html</code>.
+<strong>Disabled by default</strong> — the script is only emitted when <code>plausible_domain</code> is non-empty:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="nt">extra</span><span class="p">:</span>
 <a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="w">  </span><span class="nt">analytics</span><span class="p">:</span>
 <a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="w">    </span><span class="nt">plausible_domain</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;&quot;</span><span class="w">                              </span><span class="c1"># set to enable, e.g. actions-gateway.com</span>
@@ -3294,16 +3300,19 @@ If you add a weight that appears above the fold, preload it too, or it may brief
   The block name matches the wrapper <code>&lt;div&gt;</code> in the Markdown.</li>
 <li><strong>Utilities</strong> are bare and reusable — <code>gag-nowrap</code> (keeps a short code chip on one line inside a narrow table column), <code>gag-cont</code>, <code>gag-asof</code>.</li>
 </ul>
-<p><strong>Grep the name before adding a class.</strong> A collision does not error — it resolves by specificity, silently. <code>.md-typeset .gag-nowrap</code> (0,2,0) beats a plain <code>.gag-nowrap</code> (0,1,0), so a new rule reusing that name has no effect and the symptom is "my CSS does nothing," with nothing in the build to explain it.
+<p><strong>Grep the name before adding a class.</strong> A collision does not error — it resolves by specificity, silently.
+<code>.md-typeset .gag-nowrap</code> (0,2,0) beats a plain <code>.gag-nowrap</code> (0,1,0), so a new rule reusing that name has no effect and the symptom is "my CSS does nothing," with nothing in the build to explain it.
 A utility that must never change behaviour and a component that must change it at a breakpoint are different classes, even when the declaration is identical.</p>
 <h3 id="page-scoped-table-rules">Page-scoped table rules<a class="headerlink" href="#page-scoped-table-rules" title="Permanent link">&para;</a></h3>
 <p>Two pages pin their own table columns, each selected by an element only that page has: <code>.md-content__inner:has(.gag-vs-hero)</code> for the why-GAG comparison, and <code>.md-typeset:has(&gt; h1#api-reference)</code> for the generated <a href="../../reference/api/">API reference</a>.
-Both are there for the same reason. <code>auto</code> table layout splits width by each column's max-content demand, so a column of paragraphs takes width from the columns that carry the row's identity, and the split moves as the container does.
+Both are there for the same reason.
+<code>auto</code> table layout splits width by each column's max-content demand, so a column of paragraphs takes width from the columns that carry the row's identity, and the split moves as the container does.
 Pin the columns with <code>table-layout: fixed</code> rather than tuning the prose.</p>
 <p>The comparison table's scope also owns the <strong>last-column accent</strong> (the tinted <code>td:last-child</code> and accent-coloured header), and it has to.
 "Last column" means GAG on that one table; everywhere else it is whatever the author put rightmost.
 The accent was global once, which put it on all ~660 tables in the tree, tinting Validation on the API reference and Fix on the troubleshooting page.
-Nothing in the build catches that, because the reveal JS classes every plain table (see <a href="#progressive-enhancement-docsjavascriptsextrajs">§ Progressive enhancement</a>), so the rule reaches far past the "marketing tables" its comment claimed. <strong>A new table rule that means something about a specific column belongs in a page scope, not in the global block.</strong></p>
+Nothing in the build catches that, because the reveal JS classes every plain table (see <a href="#progressive-enhancement-docsjavascriptsextrajs">§ Progressive enhancement</a>), so the rule reaches far past the "marketing tables" its comment claimed.
+<strong>A new table rule that means something about a specific column belongs in a page scope, not in the global block.</strong></p>
 <p><strong>The ARC column carries three verdict states, not two.</strong> <code>gag-yes</code> and <code>gag-no</code> are the verdicts; <code>gag-unverified</code> is the muted third, for a claim the project believes and has not checked.
 A verdict cell also ends in a <code>gag-asof</code> stamp naming the upstream version and the date it was read, which is a content rule rather than a style one and is enforced by <code>make comparison-stamps-check</code>.
 The reasoning is in <a href="../documentation-standards/#a-competitor-side-verdict-carries-its-own-stamp">documentation-standards.md</a>.
@@ -3314,7 +3323,8 @@ The worst ratio is a one-word <code>yes</code> row, 53px to 79px, which is also 
 Keep a stamp to one line if the format ever grows: a wrapping stamp would pay that cost twice on every row.</p>
 <h3 id="changing-the-hero-headline">Changing the hero headline<a class="headerlink" href="#changing-the-hero-headline" title="Permanent link">&para;</a></h3>
 <p>The headline's type size and its two breakpoints are <strong>derived from the longest unbreakable phrase</strong>, not chosen for looks.
-The display face is monospace, so a phrase's width is arithmetic: <code>characters × 0.61em</code>. <code>Self-hosted GitHub Actions</code> is 26 characters — 15.86em, or 920px at the 2.9rem the headline used to cap at, against a headline column of only 718px.
+The display face is monospace, so a phrase's width is arithmetic: <code>characters × 0.61em</code>.
+<code>Self-hosted GitHub Actions</code> is 26 characters — 15.86em, or 920px at the 2.9rem the headline used to cap at, against a headline column of only 718px.
 That is why the cap is 2.2rem, why the logomark stacks above the headline below 56rem instead of eating 162px of the column, and why <code>gag-hero__phrase</code>'s <code>nowrap</code> releases below 44rem.</p>
 <p>Measure before changing any of the three.
 Serve the site, then in the browser console read the column against the phrase:</p>
@@ -3325,7 +3335,8 @@ Serve the site, then in the browser console read the column against the phrase:<
 <p>Sweep the viewport widths, not just your own — the binding case is ~1200px, where the logomark hits its 132px size cap while the hero is already at its 44rem max.
 Editing the headline <strong>text</strong> is subject to the same arithmetic: a phrase longer than 26 characters needs the cap lowered again, or it will overrun the column.</p>
 <h3 id="measure-the-render-the-source-cannot-answer-these-questions">Measure the render; the source cannot answer these questions<a class="headerlink" href="#measure-the-render-the-source-cannot-answer-these-questions" title="Permanent link">&para;</a></h3>
-<p>Every layout defect found in the 2026-08 marketing review was invisible in the Markdown and the CSS, and obvious in one measurement: tile heights, bullet wrapping, separator size, an alignment axis, a <code>display: flex</code> that turned prose into non-wrapping flex items, and 24px of horizontal scroll. <strong><code>make check</code> does not build the site</strong>, so nothing gates any of it.
+<p>Every layout defect found in the 2026-08 marketing review was invisible in the Markdown and the CSS, and obvious in one measurement: tile heights, bullet wrapping, separator size, an alignment axis, a <code>display: flex</code> that turned prose into non-wrapping flex items, and 24px of horizontal scroll.
+<strong><code>make check</code> does not build the site</strong>, so nothing gates any of it.
 Run <code>make docs-serve</code> and measure.</p>
 <p><strong>Sweep the defect class, not the reported instance.</strong> This is the expensive lesson.
 One tile was reported as too tall; measuring only that tile missed a duplicated component on a second page, a wall of six admonitions, and two overflow bugs, which then arrived as separate rounds of feedback.
@@ -3484,7 +3495,8 @@ Each rule below was measured against the render on 2026-08-08, and each has a pr
 </table>
 <p><strong>Check the dark palette separately, and expect it to be the worse one.</strong> Material's muted-text token is near-symmetric in alpha and not in perceived contrast: <code>--md-default-fg-color--light</code> is <code>rgba(0, 0, 0, 0.54)</code> over white, which composites to <code>#757575</code> for <code>Lc 72</code>, and <code>rgba(226, 228, 233, 0.56)</code> over slate's <code>#1e2129</code>, which composites to <code>#8c8e95</code> for <code>Lc 39.4</code>.
 A component inheriting it loses 32.6 points when the reader flips the palette, with nothing in the source to show it.</p>
-<p>That is why secondary text and accent labels take <code>--gag-muted</code> and <code>--gag-accent-ink</code> rather than the Material tokens, on the same ink/fill split as <code>--gag-win-ink</code>. <strong>Use them for any custom rule setting <code>color</code></strong>; a new rule reaching for <code>--md-default-fg-color--light</code> reintroduces the asymmetry silently.</p>
+<p>That is why secondary text and accent labels take <code>--gag-muted</code> and <code>--gag-accent-ink</code> rather than the Material tokens, on the same ink/fill split as <code>--gag-win-ink</code>.
+<strong>Use them for any custom rule setting <code>color</code></strong>; a new rule reaching for <code>--md-default-fg-color--light</code> reintroduces the asymmetry silently.</p>
 <table>
 <thead>
 <tr>
@@ -3626,7 +3638,8 @@ Run <code>make docs-build</code> too, and for the card grids or a wide table, se
 </tbody>
 </table>
 <p>The first gate reads the MkDocs dialect even though it answers for GitHub: its parser handles <code>!!!</code> admonition bodies and <code>markdown="1"</code> HTML, so a link inside one is checked rather than silently skipped as an indented code block (Q612).</p>
-<p>Two engines, two gates. <code>docs/releases/</code> is the exception that needs a third: those files publish to neither, and their links are all absolute into the versioned site, so <code>make release-links-check</code> resolves them against a local <code>site/</code> build (<a href="../testing/#the-release-link-gate">testing.md § The release-link gate</a>).</p>
+<p>Two engines, two gates.
+<code>docs/releases/</code> is the exception that needs a third: those files publish to neither, and their links are all absolute into the versioned site, so <code>make release-links-check</code> resolves them against a local <code>site/</code> build (<a href="../testing/#the-release-link-gate">testing.md § The release-link gate</a>).</p>
 <p>A link can pass one and 404 on the other.
 Three divergences have actually shipped broken:</p>
 <ul>
@@ -3668,12 +3681,15 @@ That is <a href="https://github.com/actions-gateway/github-actions-gateway/blob/
 </tr>
 </tbody>
 </table>
-<p>A release is a frozen build, so a backlog published in one would be a snapshot stale from tag day. <code>dev</code> redeploys on every push to <code>main</code>, which is the only place a live backlog is honest.</p>
-<p>One env var carries the difference. <code>mkdocs.yml</code>'s <code>exclude_docs</code> is an <a href="https://www.mkdocs.org/user-guide/configuration/#environment-variables"><code>!ENV</code> tag</a> whose <strong>default</strong> is the full repo-internal exclusion list; the <code>dev</code> deploy step in <code>pages.yml</code> overrides <code>MKDOCS_EXCLUDE_DOCS</code> with a shorter one.
+<p>A release is a frozen build, so a backlog published in one would be a snapshot stale from tag day.
+<code>dev</code> redeploys on every push to <code>main</code>, which is the only place a live backlog is honest.</p>
+<p>One env var carries the difference.
+<code>mkdocs.yml</code>'s <code>exclude_docs</code> is an <a href="https://www.mkdocs.org/user-guide/configuration/#environment-variables"><code>!ENV</code> tag</a> whose <strong>default</strong> is the full repo-internal exclusion list; the <code>dev</code> deploy step in <code>pages.yml</code> overrides <code>MKDOCS_EXCLUDE_DOCS</code> with a shorter one.
 Release deploys never set it, so no release version — existing or future — can gain a repo-internal page.</p>
 <p>Two traps worth keeping in mind when editing that wiring:</p>
 <ul>
-<li><strong>Unset and empty mean opposite things.</strong> The <code>!ENV</code> default applies only when the variable is <em>absent</em>. <code>pages.yml</code> therefore <code>export</code>s it inside a conditional rather than using a step-level <code>env:</code> with a <code>${{ … &amp;&amp; … || '' }}</code> expression, which would set it to <code>''</code> on every release and publish the internal docs everywhere.</li>
+<li><strong>Unset and empty mean opposite things.</strong> The <code>!ENV</code> default applies only when the variable is <em>absent</em>.
+  <code>pages.yml</code> therefore <code>export</code>s it inside a conditional rather than using a step-level <code>env:</code> with a <code>${{ … &amp;&amp; … || '' }}</code> expression, which would set it to <code>''</code> on every release and publish the internal docs everywhere.</li>
 <li><strong><code>docs/README.md</code> stays excluded on every version</strong>, including <code>dev</code>.
   MkDocs drops it anyway as a conflict with the <code>index.md</code> landing page; leaving it in the list keeps that from surfacing as a build warning.
   Because it is never a site page, a doc that links to it must use the absolute <code>github.com</code> URL — a relative <code>../README.md</code> fails <code>mkdocs build --strict</code>.</li>
@@ -3682,9 +3698,11 @@ Release deploys never set it, so no release version — existing or future — c
   The exclusion is spelled out in <strong>four</strong> places that must agree — <code>mkdocs.yml</code>'s default, the two <code>env:</code> blocks and the one <code>export</code> in <code>pages.yml</code>, and <code>scripts/docs/docs-preview.sh</code>.
   Miss the last and <code>make docs-build</code> disagrees with CI.</li>
 </ul>
-<p>PR builds validate <strong>both</strong> scopes (<code>pages.yml</code>'s <code>build</code> job runs <code>mkdocs build</code> twice), so a PR that breaks a plan or development page fails there rather than on <code>main</code>. <code>make docs-build</code> does the same locally — see <a href="#the-two-link-gates">§ The two link gates</a>.</p>
+<p>PR builds validate <strong>both</strong> scopes (<code>pages.yml</code>'s <code>build</code> job runs <code>mkdocs build</code> twice), so a PR that breaks a plan or development page fails there rather than on <code>main</code>.
+<code>make docs-build</code> does the same locally — see <a href="#the-two-link-gates">§ The two link gates</a>.</p>
 <p>A push to <code>main</code> re-runs that gate (<code>pages.yml</code>'s <code>validate</code> job), because a PR gate only ever sees its own base.
-Two PRs open at once can each pass and still merge into a red <code>main</code> — Q560 raised the link validation to warnings while Q558 added a link that trips it, and the breakage surfaced two hours later on an unrelated docs PR (Q562). <code>validate</code> runs beside the deploy rather than gating it: the point is a red status on <code>main</code>, not a stalled <code>dev</code> version.</p>
+Two PRs open at once can each pass and still merge into a red <code>main</code> — Q560 raised the link validation to warnings while Q558 added a link that trips it, and the breakage surfaced two hours later on an unrelated docs PR (Q562).
+<code>validate</code> runs beside the deploy rather than gating it: the point is a red status on <code>main</code>, not a stalled <code>dev</code> version.</p>
 <h3 id="what-belongs-in-nav">What belongs in <code>nav</code><a class="headerlink" href="#what-belongs-in-nav" title="Permanent link">&para;</a></h3>
 <p>The <code>nav</code> is the operator-facing table of contents, so a published page is either in it or declared in <code>not_in_nav</code>.
 Two kinds are declared:</p>
@@ -3702,7 +3720,8 @@ Add a page and <code>make docs-build</code> fails until it is either in <code>na
 <a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a>  - operations/your-new-page.md
 <a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a>Aborted with 1 warnings in strict mode!
 </code></pre></div>
-<p>Both scopes are checked, because nav coverage is decided per build: a <code>development/</code> page is a page only on <code>dev</code>, so the release-scope build cannot see it. <code>not_in_nav</code> is what suppresses the report for a deliberate omission, so it stays populated — the empty list is MkDocs' <em>reported</em> one, never this key.
+<p>Both scopes are checked, because nav coverage is decided per build: a <code>development/</code> page is a page only on <code>dev</code>, so the release-scope build cannot see it.
+<code>not_in_nav</code> is what suppresses the report for a deliberate omission, so it stays populated — the empty list is MkDocs' <em>reported</em> one, never this key.
 The one inert entry is <code>/README.md</code>: MkDocs drops <code>docs/README.md</code> as an <code>index.md</code> conflict before nav is evaluated, so it reaches no scope's list and is kept only to mirror <code>exclude_docs</code>.</p>
 <h3 id="the-backlog-page">The backlog page<a class="headerlink" href="#the-backlog-page" title="Permanent link">&para;</a></h3>
 <p><code>docs/STATUS.md</code> renders at <a href="https://actions-gateway.com/dev/STATUS/"><code>/dev/STATUS/</code></a> with filter chips over its tables — see <a href="#progressive-enhancement-docsjavascriptsextrajs">§ Progressive enhancement</a>.
@@ -3780,7 +3799,8 @@ So is a <strong>directory under <code>docs/</code></strong>, which resolves to t
 <code>[label]: target</code> definition. Python-Markdown resolves the two into the same
 link, so covering only the first would leave the rarer form silently dead.</p>
 <p>This was already needed before the backlog page: <code>design/</code> and <code>operations/</code> shipped such links dead.
-Publishing the repo-internal docs made it load-bearing — 724 links across the tree, 34 on <code>STATUS.md</code> alone. <code>scripts/docs/source-links-hook-test.sh</code> asserts the rewrite in both directions under <code>make check</code>.</p>
+Publishing the repo-internal docs made it load-bearing — 724 links across the tree, 34 on <code>STATUS.md</code> alone.
+<code>scripts/docs/source-links-hook-test.sh</code> asserts the rewrite in both directions under <code>make check</code>.</p>
 <h3 id="unpublished-is-per-build-not-per-path-q561">Unpublished is per build, not per path (Q561)<a class="headerlink" href="#unpublished-is-per-build-not-per-path-q561" title="Permanent link">&para;</a></h3>
 <p>"Does not publish" is decided <strong>per build, from its own file set</strong> — <code>on_files</code> records the src_uris whose <code>inclusion.is_included()</code>, the same derivation <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/hooks/backlog_link.py"><code>hooks/backlog_link.py</code></a> uses for the banner link.
 Escaping <code>docs/</code> is only one way to qualify.

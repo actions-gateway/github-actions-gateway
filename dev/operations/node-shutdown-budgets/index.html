@@ -3289,7 +3289,8 @@ Synchronising state back from every kube-proxy on every endpoint change is expli
 <p>Both termination paths — ordinary delete, and the 116965 graceful-node-shutdown case — were measured on kind, Kubernetes <strong>1.35.0</strong>, with the kubelet configured GKE-style (<code>shutdownGracePeriod: 30s</code>, <code>shutdownGracePeriodCriticalPods: 15s</code>) and a two-replica Service whose pods fail readiness the instant they get SIGTERM.</p>
 <p><strong>Ordinary <code>kubectl delete</code>.</strong> The readiness probe (1s period, failure threshold 1) began failing at SIGTERM and kept failing.
 The pod's <code>Ready</code> condition stayed <code>True</code> for the entire 48-second termination and never flipped.
-The endpoint <em>was</em> withdrawn immediately, but by the <code>deletionTimestamp</code>, not by readiness. <strong>The probe runs and fails, but its result never reaches the <code>Ready</code> condition — endpoint removal is driven by <code>deletionTimestamp</code> regardless.</strong></p>
+The endpoint <em>was</em> withdrawn immediately, but by the <code>deletionTimestamp</code>, not by readiness.
+<strong>The probe runs and fails, but its result never reaches the <code>Ready</code> condition — endpoint removal is driven by <code>deletionTimestamp</code> regardless.</strong></p>
 <p>Note this is <em>adjacent to but distinct from</em> 124648, which is scoped to the eviction path and whose reporter states the probe works during termination on ordinary delete.
 On this evidence the delete-path behaviour (probe results never reflected into <code>Ready</code> during termination) appears to be unreported upstream — Q401 tracks filing it.</p>
 <p><strong>116965, graceful node shutdown.</strong> With the node powering off:</p>
@@ -3332,7 +3333,8 @@ It simply does not work yet: as measured above (Q388), the probe's failures neve
 <div class="admonition note">
 <p class="admonition-title">Reproducing this yourself: kind needs dbus first</p>
 <p>Stock kind <strong>cannot</strong> run graceful node shutdown.
-The kubelet logs <code>Failed to start node shutdown manager: dial unix /var/run/dbus/system_bus_socket: no such file or directory</code>, because the node image ships no dbus at all. <code>apt-get install dbus</code>, start <code>dbus</code> and <code>systemd-logind</code>, restart the kubelet, and confirm with <code>systemd-inhibit --list</code> that the kubelet holds a <code>shutdown</code> lock before trusting any result.
+The kubelet logs <code>Failed to start node shutdown manager: dial unix /var/run/dbus/system_bus_socket: no such file or directory</code>, because the node image ships no dbus at all.
+<code>apt-get install dbus</code>, start <code>dbus</code> and <code>systemd-logind</code>, restart the kubelet, and confirm with <code>systemd-inhibit --list</code> that the kubelet holds a <code>shutdown</code> lock before trusting any result.
 This is the same missing-<code>systemd-logind</code> mechanism that disables the feature on Bottlerocket.</p>
 </div>
 <h3 id="what-the-newer-traffic-engineering-features-do-and-dont-fix">What the newer traffic-engineering features do and don't fix<a class="headerlink" href="#what-the-newer-traffic-engineering-features-do-and-dont-fix" title="Permanent link">&para;</a></h3>
@@ -3348,7 +3350,8 @@ With a proxy pool of two or more healthy replicas, set (1) is never empty and th
 It rescues the single-replica / <code>internalTrafficPolicy: Local</code> case, which is real and worth having — just not this one.</p>
 <h3 id="the-prestop-sleep-if-you-use-one">The <code>preStop</code> sleep, if you use one<a class="headerlink" href="#the-prestop-sleep-if-you-use-one" title="Permanent link">&para;</a></h3>
 <ul>
-<li>Use the <strong>native <code>sleep</code> handler</strong> (KEP-3960: beta and on by default in <strong>1.30</strong>, GA'd after a reverted attempt in 1.32). <code>exec: ["sleep", …]</code> fails at runtime on distroless images — no shell, no <code>sleep</code> binary — and the pod proceeds straight to SIGTERM, silently reintroducing the race.
+<li>Use the <strong>native <code>sleep</code> handler</strong> (KEP-3960: beta and on by default in <strong>1.30</strong>, GA'd after a reverted attempt in 1.32).
+  <code>exec: ["sleep", …]</code> fails at runtime on distroless images — no shell, no <code>sleep</code> binary — and the pod proceeds straight to SIGTERM, silently reintroducing the race.
   Zero-valued sleeps became usable in <strong>1.33</strong> (KEP-4818), which makes the field templatable.</li>
 <li>Community guidance clusters at <strong>5–15s</strong>.
   Upstream examples use 15s.</li>

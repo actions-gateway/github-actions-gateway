@@ -2816,7 +2816,8 @@ Bypass the hook for a single commit with <code>git commit --no-verify</code>.</p
 </table>
 <p>Real-CNI / kube-proxy / kubelet / TLS-over-tunnel behaviours are only observable at the e2e tier — see <a href="../testing/">testing.md</a> and <a href="../../design/07-test-plan/">07-test-plan.md</a> §7.3 for why unit and envtest tiers cannot prove them.</p>
 <h2 id="compress-success-expand-failure">Compress success, expand failure<a class="headerlink" href="#compress-success-expand-failure" title="Permanent link">&para;</a></h2>
-<p>Test output is non-verbose by default. <code>go test</code> without <code>-v</code> prints one <code>ok &lt;pkg&gt;</code> line per passing package and the <strong>full</strong> output of any package that fails — so passing runs stay quiet and failures keep all their detail.
+<p>Test output is non-verbose by default.
+<code>go test</code> without <code>-v</code> prints one <code>ok &lt;pkg&gt;</code> line per passing package and the <strong>full</strong> output of any package that fails — so passing runs stay quiet and failures keep all their detail.
 Add <code>V=1</code> (<code>make check V=1</code> or <code>make test V=1</code>) to stream output live when debugging a slow or hanging test: without <code>-v</code>, <code>go test</code> buffers each package's output until the package completes, so a hung test shows nothing — not even its <code>t.Log</code> lines — until it finishes or hits <code>-timeout</code>; with <code>-v</code> the output streams as it is produced.
 See <a href="../testing/#the-make-check-pre-review-gate">testing.md</a>.</p>
 <h2 id="assessment">Assessment<a class="headerlink" href="#assessment" title="Permanent link">&para;</a></h2>
@@ -2842,7 +2843,8 @@ CLAUDE.md tells contributors which tier proves which bug class.</p>
 Held just short of A because expectations are spread across prose plus the one command rather than a single consolidated checklist.</p>
 <h3 id="self-reinforcing-correct-twice--automate--a">Self-reinforcing (correct twice → automate) — A<a class="headerlink" href="#self-reinforcing-correct-twice--automate--a" title="Permanent link">&para;</a></h3>
 <p>The article's core principle is visibly practiced.
-<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.golangci.yml"><code>.golangci.yml</code></a> states its scope is to "catch regressions of the bugs and idiom violations tracked in Queue items 38–41." <code>scripts/docs/lint-backlog.sh</code> exists solely because the <code>docs/STATUS.md</code> format (e.g. the 250-char Notes cap) kept getting violated.
+<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.golangci.yml"><code>.golangci.yml</code></a> states its scope is to "catch regressions of the bugs and idiom violations tracked in Queue items 38–41."
+<code>scripts/docs/lint-backlog.sh</code> exists solely because the <code>docs/STATUS.md</code> format (e.g. the 250-char Notes cap) kept getting violated.
 The workspace-guard PreToolUse hook is real-time backpressure on file operations, and branch-guard is the same on git operations — prompting before commits, pushes, or destructive commands on a protected branch.
 (These two guards are harness/<code>CLAUDE.md</code>-level, not repo-tracked hook scripts; the repo does track two PreToolUse hooks of its own, <code>scripts/agent/claude-go-throttle-hook.sh</code> and <code>scripts/agent/claude-no-subagent-workers-hook.sh</code>.)
 Each is a repeated correction turned into an automated gate.</p>

@@ -2850,7 +2850,8 @@ After excluding generated code, the only uncovered hand-written funcs are:</p>
 Clears the module on its own.</p>
 <p>Optionally fold a one-case buffer test into whichever module sits on the tolerance edge (<code>cmd/agc</code>) here or in Workstream B.</p>
 <h3 id="b--cmdworker--77-test-only-one-pr">B — <code>cmd/worker</code> → ~77% (test-only, one PR)<a class="headerlink" href="#b--cmdworker--77-test-only-one-pr" title="Permanent link">&para;</a></h3>
-<p>Extend <code>cmd/worker/worker_test.go</code> with cases for the uncovered branches of <code>run()</code> (65%) and <code>installSelf()</code> (71.4%) — the extracted, testable paths (bad dir, missing binary, env fallbacks). <code>main()</code> stays 0% by design (thin dispatch).</p>
+<p>Extend <code>cmd/worker/worker_test.go</code> with cases for the uncovered branches of <code>run()</code> (65%) and <code>installSelf()</code> (71.4%) — the extracted, testable paths (bad dir, missing binary, env fallbacks).
+<code>main()</code> stays 0% by design (thin dispatch).</p>
 <h3 id="c--cmdgmc-pure-helpers-test-only-part-of-the-gmc-pr">C — <code>cmd/gmc</code> pure helpers (test-only, part of the gmc PR)<a class="headerlink" href="#c--cmdgmc-pure-helpers-test-only-part-of-the-gmc-pr" title="Permanent link">&para;</a></h3>
 <p>Three already-extracted parsers in <code>cmd/gmc/cmd/main.go</code> are untested at 0%:</p>
 <ul>
@@ -2876,7 +2877,8 @@ All pure logic, unit-testable without a cluster:</p>
 Extract from <code>run()</code>:
 - <code>parseProbeConfig(getenv func(string) string) (probeConfig, error)</code> — the ~60-line env/config block (app ID/installation ID parsing, PEM load, broker URL/v2 selection, pool ID) with all its error branches.
 - keep the <code>investigate*</code>/<code>probeAcknowledge</code> broker calls at package scope (they already are).</p>
-<p><code>run()</code> shrinks to thin orchestration (mint token → open session → dispatch investigations). <strong>Existing tests stay green and unchanged</strong> — that is the safety proof.
+<p><code>run()</code> shrinks to thin orchestration (mint token → open session → dispatch investigations).
+<strong>Existing tests stay green and unchanged</strong> — that is the safety proof.
 No new tests in this commit.</p>
 <p><strong>E2 — tests only.</strong> Unit-test:
 - <code>parseProbeConfig</code> branches (missing var, unparseable int, bad PEM, v2-URL override, pool-ID default/override).

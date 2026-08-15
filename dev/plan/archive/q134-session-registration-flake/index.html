@@ -2660,7 +2660,8 @@ One spec per run times out (180–240s) on <code>fakegithubActiveSessionsForOwne
 <li><strong>Not a regression from <code>5e490d9</code> (Q134's own "fix", PR #226).</strong> The identical failure (<code>worker_securitycontext_test.go:96</code>, "no session registered", 180s) occurred on <code>main</code> at <code>5bab2d50e</code> (run 27505615811), <em>before</em> the "last green" <code>ac54a78</code>.
   The apparent <code>ac54a78</code>-green / <code>5e490d9</code>-red bisect boundary is an artifact of an intermittent flake landing on a green run by luck.
   It predates the commit.</li>
-<li><strong>Not the gate added by <code>5e490d9</code>.</strong> <code>WaitForRunnerGroupReconciled</code> waits for <code>RunnerGroup.status.observedGeneration</code>, which the reconciler sets (<code>runnergroup_controller.go:327</code>) <em>synchronously, right after <code>mux.Start()</code> returns</em>. <code>mux.Start()</code> only <em>spawns</em> the listener goroutine — it does not wait for <code>createSession</code> to succeed.
+<li><strong>Not the gate added by <code>5e490d9</code>.</strong> <code>WaitForRunnerGroupReconciled</code> waits for <code>RunnerGroup.status.observedGeneration</code>, which the reconciler sets (<code>runnergroup_controller.go:327</code>) <em>synchronously, right after <code>mux.Start()</code> returns</em>.
+  <code>mux.Start()</code> only <em>spawns</em> the listener goroutine — it does not wait for <code>createSession</code> to succeed.
   So <code>observedGeneration</code> is set ~9s after the tenant is applied (CI timeline) while the session is still not registered; the gate passes in &lt;1s and the 180s session wait then fails.
   The gate's premise ("observedGeneration ⇒ a broker session is imminent") is incomplete.
   It is harmless but did not address the flake.</li>
@@ -2668,7 +2669,8 @@ One spec per run times out (180–240s) on <code>fakegithubActiveSessionsForOwne
   So AGC→fakegithub connectivity is fine when the session subsequently fails to register.</li>
 </ul>
 <h2 id="root-cause">Root cause<a class="headerlink" href="#root-cause" title="Permanent link">&para;</a></h2>
-<p>The listener's session-establishment broker calls have <strong>no per-call deadline</strong>. <code>createSession</code> (<code>goroutine.go</code>) and the OAuth token exchange (<code>refreshBrokerToken</code> → <code>githubapp.FetchRunnerOAuthToken</code>) run on the goroutine's context, which derives from the <strong>long-lived manager context</strong> (cancelled only at AGC shutdown).
+<p>The listener's session-establishment broker calls have <strong>no per-call deadline</strong>.
+<code>createSession</code> (<code>goroutine.go</code>) and the OAuth token exchange (<code>refreshBrokerToken</code> → <code>githubapp.FetchRunnerOAuthToken</code>) run on the goroutine's context, which derives from the <strong>long-lived manager context</strong> (cancelled only at AGC shutdown).
 The per-agent <code>broker.Client</code> is built with <code>HTTPClient: nil</code> (<code>BrokerConfig.HTTPClient</code> is never set in <code>cmd/agc/main.go</code>), so it falls back to <code>http.DefaultClient</code> — which has no overall/read timeout.</p>
 <p>Consequently, if fakegithub <em>accepts the TCP connection but is slow to respond</em> — plausible for a single-replica service under 6-proc parallel CI load — the goroutine blocks <strong>inside a single <code>createSession</code>/token call indefinitely</strong> rather than failing and retrying.
 The Multiplexer restarts a baseline listener every ~1s on a <em>returned</em> (retriable) error, but a wedged call never returns, so no retry happens and the RunnerGroup never registers a session within the test budget.

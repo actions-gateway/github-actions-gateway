@@ -2794,7 +2794,8 @@ See <a href="../q438-worker-lifetime-deadline/">q438-worker-lifetime-deadline.md
 <ul>
 <li><strong>Does GitHub redeliver a <code>JobCompleted</code> after a multi-hour gap with no session?</strong> cluster-only / live only.
   The fake's queue log is deliberately session-independent, which is the <em>permissive</em> assumption; real retention is unknown and could be shorter.
-  Q438's research confirmed this is genuinely <strong>undocumented</strong> — the published contract covers only within-session redelivery of unacknowledged messages, not retention across a session gap — so it needs a live measurement rather than more reading. <strong>Answered by <a href="../q468-jobcompleted-retention/">Q468</a> on 2026-07-29: GitHub does redeliver</strong>, observed at a 13 h 3 m gap with no session in existence — past the 12 h <code>maxWorkerLifetime</code> beyond which no unstamped <code>Running</code> worker survives for redelivery to help, so the permissive assumption holds over the range that matters and the replay path is a genuine recovery path.
+  Q438's research confirmed this is genuinely <strong>undocumented</strong> — the published contract covers only within-session redelivery of unacknowledged messages, not retention across a session gap — so it needs a live measurement rather than more reading.
+  <strong>Answered by <a href="../q468-jobcompleted-retention/">Q468</a> on 2026-07-29: GitHub does redeliver</strong>, observed at a 13 h 3 m gap with no session in existence — past the 12 h <code>maxWorkerLifetime</code> beyond which no unstamped <code>Running</code> worker survives for redelivery to help, so the permissive assumption holds over the range that matters and the replay path is a genuine recovery path.
   Q438's cap is on by default either way, which is why the answer changed confidence rather than design.</li>
 </ul>
 

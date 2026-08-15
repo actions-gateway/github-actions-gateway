@@ -2745,7 +2745,8 @@ The stub therefore resolves its base per request through a <code>BaseURL func(*h
 <li><code>/api/v3/actions/runner-registration</code> and <code>/api/v3/{orgs,repos}/…/actions/runners/registration-token</code> — the two REST hops of the bootstrap, prefix-stripped onto the same handler.</li>
 </ul>
 <p>The classic <code>/api/v3/…/actions/runners</code> routes (generate-jitconfig, list, delete) stay on fakegithub's own runner registry.
-The scale-set happy path never touches them — it mints runners through <code>generatejitconfig</code> on the Actions Service — so the two registries do not have to agree. <code>DeregisterRunnerByName</code>, which does use the REST routes, is only reached on a runner-name 409, which this venue does not produce.</p>
+The scale-set happy path never touches them — it mints runners through <code>generatejitconfig</code> on the Actions Service — so the two registries do not have to agree.
+<code>DeregisterRunnerByName</code>, which does use the REST routes, is only reached on a runner-name 409, which this venue does not produce.</p>
 <p>Control endpoints, alongside the existing classic ones:</p>
 <ul>
 <li><code>POST /control/scaleset/enqueue?name=&lt;scale set&gt;</code> — queue a job.</li>
@@ -2789,7 +2790,8 @@ Two worker pods, each carrying the run identity its assignment delivered.</p>
 <p><strong>Why the call log is in the spec and not just in this doc.</strong> The whole chain runs in-cluster against a stub whose long polls wake the instant a job is enqueued, so the GHES spec completes in ~34 ms end to end.
 At that resolution a genuine pass and a vacuous one — assertions satisfied by state that predates the enqueue — are indistinguishable from spec timings, which is exactly what the first green run looked like before the log was captured.
 The log is diagnostics, not a gate; the assertions remain the gate.</p>
-<p><strong>Two things the run did not exercise</strong>, recorded so neither is read into the result. <code>ResolveRunnerGroup</code> is absent from the log — the listener carried no group name, so the scale set was created against group 1 directly.
+<p><strong>Two things the run did not exercise</strong>, recorded so neither is read into the result.
+<code>ResolveRunnerGroup</code> is absent from the log — the listener carried no group name, so the scale set was created against group 1 directly.
 And no runner ever starts: fakegithub's JIT config is a syntactic placeholder, so the spec's terminal assertion is the staged JIT-config Secret the worker pod mounts, not a pod phase.
 A real runner executing a real job stays with the live-GitHub tier.</p>
 <h2 id="status">Status<a class="headerlink" href="#status" title="Permanent link">&para;</a></h2>

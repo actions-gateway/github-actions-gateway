@@ -2751,7 +2751,8 @@ That is not a race; it is deterministic.</p>
 <li><strong>Same batch.</strong> A run cancelled or fast-failing between two polls delivers <code>JobAssigned(X)</code> and <code>JobCompleted(X)</code> together.
    Guaranteed stall.</li>
 <li><strong>Adjacent batches.</strong> The completion lands while the pod is still Pending on ordinary scheduling latency (image pull, node scale-up).</li>
-<li><strong>Restart replay.</strong> A re-created session polls from cursor 0 with empty <code>provisioned</code>/<code>completed</code>/<code>abandoned</code> sets and replays the whole queue, provisioning workers for long-gone jobs and then completing them. <strong>8 pods at once fits a replayed queue far better than 8 independent cancellations</strong>, so this is the most likely trigger of the actual capture.
+<li><strong>Restart replay.</strong> A re-created session polls from cursor 0 with empty <code>provisioned</code>/<code>completed</code>/<code>abandoned</code> sets and replays the whole queue, provisioning workers for long-gone jobs and then completing them.
+   <strong>8 pods at once fits a replayed queue far better than 8 independent cancellations</strong>, so this is the most likely trigger of the actual capture.
    The replay itself is Q583 and is explicitly out of scope here — but the stall it produces is this defect, and fixing this defect bounds its damage.</li>
 </ol>
 <h2 id="fix">Fix<a class="headerlink" href="#fix" title="Permanent link">&para;</a></h2>

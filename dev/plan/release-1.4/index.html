@@ -2723,7 +2723,8 @@
 <blockquote>
 <p><strong>Status: scope decided 2026-08-05.
 No gating Queue rows remain.</strong> All three <code>1.4-gate</code> items shipped 2026-08-08: Q691, Q554 (its <a href="../archive/runner-template-library/">plan</a> archived), and Q166.
-Everything else the release contains is already merged. <code>v1.4.0-rc.1</code> was cut from <code>162d97a7</code> on 2026-08-09 and its dogfood validation <strong>PASSED on the first attempt</strong>.
+Everything else the release contains is already merged.
+<code>v1.4.0-rc.1</code> was cut from <code>162d97a7</code> on 2026-08-09 and its dogfood validation <strong>PASSED on the first attempt</strong>.
 Work landed after that commit (the Q766 ScaleSet port and the docs sweep), so rc.1 is no longer the candidate: <strong>an rc.2 follows once those merge</strong>, and it is the one that has to validate before the stable tag.</p>
 </blockquote>
 <h2 id="the-minor-was-forced-before-anyone-chose-it">The minor was forced before anyone chose it<a class="headerlink" href="#the-minor-was-forced-before-anyone-chose-it" title="Permanent link">&para;</a></h2>
@@ -2763,13 +2764,15 @@ Six change the shipped artifact, so a patch release stopped being available the 
 </tr>
 </tbody>
 </table>
-<p>The other eleven <code>feat</code> commits are <code>agent</code>, <code>ci</code>, <code>scripts</code>, <code>backlog</code>, <code>docs</code>, <code>metrics</code> and <code>probe</code>: development tooling and CI that no released binary or chart contains. <strong>The classification is by scope, not by conventional-commit type</strong>, which is why a raw <code>feat</code> count answers the wrong question.</p>
+<p>The other eleven <code>feat</code> commits are <code>agent</code>, <code>ci</code>, <code>scripts</code>, <code>backlog</code>, <code>docs</code>, <code>metrics</code> and <code>probe</code>: development tooling and CI that no released binary or chart contains.
+<strong>The classification is by scope, not by conventional-commit type</strong>, which is why a raw <code>feat</code> count answers the wrong question.</p>
 <p>Nothing tracked this.
 There is no <code>CHANGELOG.md</code>, no unreleased-changes file, and the <code>1.0-gate</code>/<code>1.3-gate</code>/<code>2.0-gate</code> labels were carried by <strong>zero</strong> rows when this scope was decided.
 The floor was discoverable only by hand-classifying 120 commit subjects, which is why it was discovered at scoping time rather than when it moved.
 A semver-floor instrument is being built to close that; until it lands, the floor is a manual reading.</p>
 <h2 id="what-140-adds-beyond-what-is-merged">What 1.4.0 adds beyond what is merged<a class="headerlink" href="#what-140-adds-beyond-what-is-merged" title="Permanent link">&para;</a></h2>
-<p><strong>Q166: v2 API M4, cross-namespace EgressProxy sharing. — shipped.</strong> The one item here whose absence was a liability rather than a deferral. <code>sharing.allowedNamespaces</code> was <strong>served in the v2beta1 API with no enforcement</strong>, so an operator could set a field that nothing honoured.
+<p><strong>Q166: v2 API M4, cross-namespace EgressProxy sharing. — shipped.</strong> The one item here whose absence was a liability rather than a deferral.
+<code>sharing.allowedNamespaces</code> was <strong>served in the v2beta1 API with no enforcement</strong>, so an operator could set a field that nothing honoured.
 That is a shipped defect wearing a feature label, and every release that shipped it that way hardened a dormant contract further.
 Demand fired 2026-08-01.</p>
 <p>Delivered whole: the consent check, CA distribution, and dual-side NetworkPolicy.
@@ -2781,7 +2784,8 @@ Packaging rather than new behaviour, and the constraint that only CI-exercised t
 That constraint is now a gate rather than a convention: <code>make template-library-check</code> reconciles the shipped and exercised sets both ways, and every entry is admitted by a real apiserver on each integration run.
 The operator surface is <a href="../../operations/runner-template-library/">runner-template-library.md</a>; the implementation findings are in the <a href="../archive/runner-template-library/">archived plan</a>.</p>
 <p><strong>Q691: auto re-run a force-cancelled abandoned run.</strong> Closes a gap this cycle opened.
-Q683's cancelled ending accepts <code>rerun-failed-jobs</code>, measured, so operators re-ran by hand. <strong>Shipped 2026-08-08:</strong> the run is re-run when a worker pod binds for the owner again, and the loop a re-run into a starved pool would otherwise cause is bounded by the existing per-run retry budget, with exhaustion on <code>eviction_retries_exhausted_total{cause="abandoned"}</code> and expiry on <code>abandoned_run_rerun_waits_total{outcome="expired"}</code>.</p>
+Q683's cancelled ending accepts <code>rerun-failed-jobs</code>, measured, so operators re-ran by hand.
+<strong>Shipped 2026-08-08:</strong> the run is re-run when a worker pod binds for the owner again, and the loop a re-run into a starved pool would otherwise cause is bounded by the existing per-run retry budget, with exhaustion on <code>eviction_retries_exhausted_total{cause="abandoned"}</code> and expiry on <code>abandoned_run_rerun_waits_total{outcome="expired"}</code>.</p>
 <h2 id="deferred-out-of-14-and-why">Deferred out of 1.4, and why<a class="headerlink" href="#deferred-out-of-14-and-why" title="Permanent link">&para;</a></h2>
 <blockquote>
 <p><strong>Corrected 2026-08-09.</strong> This section was headed "Deferred to 1.5.0", which promised a release none of these rows was ever labelled for.
@@ -2804,17 +2808,23 @@ This is docs-only, touches no shipped artifact, and does not need a gate row; it
 <p><strong>The inaccurate claims land here, not in 1.5.</strong> They are wrong now, and every day they stay up is a day a prospect can check one and stop trusting the page:</p>
 <ul>
 <li>The executive summary promised OOM-killed and node-lost jobs re-run automatically, in three places.
-  The provisioner recovers eviction, preemption, and external graceful deletion; an OOM-killed container is explicitly excluded as "the job failed on its own merits". <strong>Corrected 2026-08-06.</strong></li>
+  The provisioner recovers eviction, preemption, and external graceful deletion; an OOM-killed container is explicitly excluded as "the job failed on its own merits".
+  <strong>Corrected 2026-08-06.</strong></li>
 <li>The ~10 minute recovery figure was the worst case quoted as the case.
-  A preemption or drain concludes in a measured 15-26s. <strong>Corrected 2026-08-06.</strong></li>
-<li>GitHub's queue timeout is 24 hours; "up to 48 h" came from a GHES page that has since been rewritten. <strong>Corrected 2026-08-06.</strong></li>
-<li>Two ARC-side comparison rows went false at datable upstream releases: 0.13.1 made quota-blocked pod creation self-healing, and 0.14.0 added multi-label scale sets, which GAG does not have. <strong>Corrected 2026-08-08.</strong></li>
+  A preemption or drain concludes in a measured 15-26s.
+  <strong>Corrected 2026-08-06.</strong></li>
+<li>GitHub's queue timeout is 24 hours; "up to 48 h" came from a GHES page that has since been rewritten.
+  <strong>Corrected 2026-08-06.</strong></li>
+<li>Two ARC-side comparison rows went false at datable upstream releases: 0.13.1 made quota-blocked pod creation self-healing, and 0.14.0 added multi-label scale sets, which GAG does not have.
+  <strong>Corrected 2026-08-08.</strong></li>
 <li><code>why-gag.md</code> states ARC ships no bundled dashboard; it ships a per-scale-set Grafana sample.
-  The defensible claim is that nothing aggregates across scale sets or per tenant. <strong>Corrected 2026-08-08.</strong></li>
+  The defensible claim is that nothing aggregates across scale sets or per tenant.
+  <strong>Corrected 2026-08-08.</strong></li>
 </ul>
 <p><strong><code>docs/features.md</code> is the inventory and needs a sweep.</strong> It was created 2026-08-01 and is close to complete, but 1.4 adds six user-facing features ahead of the three gating rows, and a feature that never reaches the inventory never reaches the curated surfaces either.</p>
 <p><strong>One under-claim is worth pulling up now</strong> rather than waiting for 1.5's larger pass: no-PEM workload identity gets a single line in <code>features.md</code> and a nine-word aside inside a YAML footnote, while the weaker claim ("App keys never in env") occupies a security pillar.
-ARC reads the App private key from a Secret, so "the key never enters the cluster" is a row that writes itself. <strong>Shipped 2026-08-09:</strong> <code>why-gag.md</code> gains a credential row in the ARC table, and the security pillar carries the stronger claim under the weaker one.</p>
+ARC reads the App private key from a Secret, so "the key never enters the cluster" is a row that writes itself.
+<strong>Shipped 2026-08-09:</strong> <code>why-gag.md</code> gains a credential row in the ARC table, and the security pillar carries the stronger claim under the weaker one.</p>
 <p>The row is narrower than the paragraph above assumed, and the difference is the whole point of measuring before writing a comparative claim.
 ARC's <em>default</em> does read the key from a Secret, and copies it into the listener config Secret the controller generates, so the PEM is at rest twice.
 But 0.14.2 also ships an opt-in Azure Key Vault path in the released chart, and there nothing holds the key in etcd: the listener fetches the value itself at runtime, against an Azure client certificate read from a path in its pod.
@@ -2828,7 +2838,8 @@ Every mechanical gate was already green, including <code>doc-links</code>, <code
 Three content gaps remained, all created this cycle, and all are now closed.</p>
 <p><strong>The auto-re-run docs did not agree with each other about Q683 and Q691, and none of them carried the tier scope.</strong> <code>04-operational-flows.md</code> records the scope correctly ("Classic tier only, matching the force-cancel it recovers"); no operator-facing or marketing surface repeated it.
 Measured from source: <code>forceCancelAbandonedRun</code> has one caller, inside the classic <code>provision()</code> handler, and the ScaleSet tier's <code>disruptionAwaitingRecovery</code> has three arms (eviction, preemption, deletion) with no abandoned case, deliberately.
-So on the ScaleSet tier, which is the v2 default every new tenant runs, a worker reaped while Pending still concludes at GitHub's ~15-minute unstarted-job timeout and needs a manual re-run. <code>features.md</code> had been advertising the capability to those tenants unscoped, and it also said the run "accepts a re-run afterwards", which describes the pre-Q691 manual state.
+So on the ScaleSet tier, which is the v2 default every new tenant runs, a worker reaped while Pending still concludes at GitHub's ~15-minute unstarted-job timeout and needs a manual re-run.
+<code>features.md</code> had been advertising the capability to those tenants unscoped, and it also said the run "accepts a re-run afterwards", which describes the pre-Q691 manual state.
 The consolidated matrix in <code>troubleshooting.md</code> said the opposite, excluding a never-started worker "by design" with no note that the classic tier now recovers it.
 All three are corrected, and the matrix preamble names <code>abandoned</code> as the fifth, out-of-table cause.
 This was a propagation failure rather than a code gap: the design doc had the answer the whole time.</p>
@@ -2847,7 +2858,8 @@ The <code>upgrade.md</code> migration note says so directly.</p>
 The gap existed for a few days and no operator surface named it, which is the failure the pre-flight sweep exists to catch, and it was caught by reading the code rather than the plan doc.
 The <code>upgrade.md</code> placement also turned out to be the load-bearing part: <code>operator-caveats-since.sh</code> builds the curated notes from the <code>docs/operations/</code> diff, so a tier scope documented only in a design doc never reaches them either way.</p>
 <h2 id="pre-flight-the-api-surface-this-tag-publishes">Pre-flight: the API surface this tag publishes<a class="headerlink" href="#pre-flight-the-api-surface-this-tag-publishes" title="Permanent link">&para;</a></h2>
-<p>Recorded 2026-08-09 from <code>scripts/release/api-surface-since.sh</code> over <code>v1.3.0..162d97a7</code>, the commit <code>v1.4.0-rc.1</code> was cut from, per <a href="../../operations/release/#1-pre-flight">release.md § Pre-flight</a>. <strong>Verdict: ship as-is.</strong> Four wire fields and one condition reason are published for the first time; no enum constraint and no default changed.</p>
+<p>Recorded 2026-08-09 from <code>scripts/release/api-surface-since.sh</code> over <code>v1.3.0..162d97a7</code>, the commit <code>v1.4.0-rc.1</code> was cut from, per <a href="../../operations/release/#1-pre-flight">release.md § Pre-flight</a>.
+<strong>Verdict: ship as-is.</strong> Four wire fields and one condition reason are published for the first time; no enum constraint and no default changed.</p>
 <table>
 <thead>
 <tr>
@@ -2926,7 +2938,8 @@ Each green check was re-run against a deliberately wrong identity (a <code>refs/
 <h3 id="no-candidate-had-cleared-this-gate-on-the-first-attempt-before">No candidate had cleared this gate on the first attempt before<a class="headerlink" href="#no-candidate-had-cleared-this-gate-on-the-first-attempt-before" title="Permanent link">&para;</a></h3>
 <p>Worth stating in the notes because it is checkable and because it is the return on this cycle's release-tooling work, not a lucky run.
 The 1.3 line needed four candidates to produce any verdict at all: rc.1 aborted when the gate's then repo-wide e2e routing caught concurrent sessions' CI, rc.2 returned Q550 and Q551 instead of a result, rc.3 aborted at <code>start.sh</code>'s AGC wait, and rc.4 was "the first verdict any RC in this line has produced" (<a href="../release-1.3/">release-1.3.md</a>).</p>
-<p><strong>Scope the claim to what the record supports.</strong> <code>validate-release.sh</code> landed 2026-07-12 (Q294, #619), the day <code>v1.1.0</code> was tagged, so <code>v1.0.0</code> and <code>v1.1.0</code> predate it entirely. <code>v1.2.0</code> had a single RC and the gate did exist by then, but no plan doc records a validation run for it, and no record is not the same as no run.
+<p><strong>Scope the claim to what the record supports.</strong> <code>validate-release.sh</code> landed 2026-07-12 (Q294, #619), the day <code>v1.1.0</code> was tagged, so <code>v1.0.0</code> and <code>v1.1.0</code> predate it entirely.
+<code>v1.2.0</code> had a single RC and the gate did exist by then, but no plan doc records a validation run for it, and no record is not the same as no run.
 So the defensible sentence is that 1.3 is the only prior line with a recorded validation history and rc.1 here is the first candidate to pass first time, not that this has never happened.</p>
 <p>The three failure modes that cost the 1.3 line its early candidates were each fixed since: run-scoped dispatch replaced repo-wide routing (repo-wide is now an explicit <code>E2E_ROUTE_VAR=1</code> opt-in), the gate settles the e2e lane before it scales a node, and Q629, Q640 and Q630 bounded the run watch, reclaimed orphaned leases, and reconciled sentinel silence against run status.
 Q630 earned itself on this run: the one stall event it raised came only after the run was no longer live, which is the reconciliation behaving as designed rather than a false positive on a quiet leg.</p>

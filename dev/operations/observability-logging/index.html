@@ -2878,7 +2878,8 @@ See <a href="../../design/05-security/">security §5 — credential handling</a>
 <li><strong><code>RunnerGroup.Reconcile</code></strong> — one span per reconcile, attributed with <code>k8s.namespace.name</code> / <code>gateway.runnergroup.name</code>.
   Errors set the span status.</li>
 <li><strong><code>Provisioner.provision</code></strong> — one span per acquired job (the job-to-pod path), with child spans <code>stageJobSecret</code>, <code>countActivePods</code>, <code>createPod</code>, and <code>waitForCompletion</code>.
-  The root span carries <code>k8s.namespace.name</code>, <code>gateway.owner.name</code>, <code>gateway.plan.id</code>, <code>k8s.pod.name</code>, <code>gateway.active_pods</code>, <code>gateway.ceiling_held</code>, <code>gateway.priority_class</code>, and the final <code>gateway.pod.phase</code> / <code>gateway.pod.reason</code> / <code>gateway.provision.duration_seconds</code>. <code>waitForCompletion</code> is usually the long pole, so its child span tells you whether latency is in scheduling/runtime versus the controller.</li>
+  The root span carries <code>k8s.namespace.name</code>, <code>gateway.owner.name</code>, <code>gateway.plan.id</code>, <code>k8s.pod.name</code>, <code>gateway.active_pods</code>, <code>gateway.ceiling_held</code>, <code>gateway.priority_class</code>, and the final <code>gateway.pod.phase</code> / <code>gateway.pod.reason</code> / <code>gateway.provision.duration_seconds</code>.
+  <code>waitForCompletion</code> is usually the long pole, so its child span tells you whether latency is in scheduling/runtime versus the controller.</li>
 </ul>
 <blockquote>
 <p>Span attribute names follow the <a href="https://opentelemetry.io/docs/specs/semconv/">OpenTelemetry semantic conventions</a>: Kubernetes-native attributes use the <code>k8s.*</code> keys (<code>k8s.namespace.name</code>, <code>k8s.pod.name</code>); project-specific attributes are namespaced under <code>gateway.</code>.

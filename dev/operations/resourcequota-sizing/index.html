@@ -3348,7 +3348,8 @@ Swapping in <code>deploy/dogfood-e2e/overlays/kata/</code>'s worker adds one 100
 </tr>
 </tbody>
 </table>
-<p>Set only the keys you intend to constrain — but whichever you set, size it for all 12. <code>WorkerQuotaPressure</code> trips on the tightest of them.</p>
+<p>Set only the keys you intend to constrain — but whichever you set, size it for all 12.
+<code>WorkerQuotaPressure</code> trips on the tightest of them.</p>
 <p><strong><code>limits.cpu</code> is deliberately absent</strong> from the quota below: neither worker container declares a CPU limit, so constraining it would reject every worker pod.</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">v1</span>
 <a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ResourceQuota</span>

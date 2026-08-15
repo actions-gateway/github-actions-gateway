@@ -2976,11 +2976,13 @@ Each entry needs a different amount of groundwork.</p>
 <h3 id="kata-dind-and-privileged-dind"><code>kata-dind</code> and <code>privileged-dind</code><a class="headerlink" href="#kata-dind-and-privileged-dind" title="Permanent link">&para;</a></h3>
 <p><strong>A build-capable runner image.</strong> Both ship <code>spec.workerImage</code> set to <code>example.invalid/build-capable-runner:replace-me</code> and you must replace it.
 The runner container needs a Docker CLI on <code>PATH</code>; the sidecar supplies the daemon, not the client, and the stock <code>ghcr.io/actions/actions-runner</code> image ships neither.
-The reserved <code>.invalid</code> host is chosen so an unreplaced value fails at image pull rather than succeeding into a job that dies on <code>docker: not found</code> twenty minutes in. <code>scripts/dogfood/e2e-runner/Dockerfile</code> in this repo is a worked example.</p>
+The reserved <code>.invalid</code> host is chosen so an unreplaced value fails at image pull rather than succeeding into a job that dies on <code>docker: not found</code> twenty minutes in.
+<code>scripts/dogfood/e2e-runner/Dockerfile</code> in this repo is a worked example.</p>
 <p><strong>Watch the worker pod, not the <code>RunnerSet</code>, when you suspect an unreplaced image.</strong> The pod reports the problem within seconds: it binds to a node and then sits Pending in <code>ImagePullBackOff</code>, with a <code>Failed</code> event naming the host it could not resolve.</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>kubectl<span class="w"> </span>get<span class="w"> </span>pods<span class="w"> </span>-n<span class="w"> </span>team-a<span class="w"> </span>-l<span class="w"> </span>actions-gateway.com/runner-set<span class="o">=</span>linux
 </code></pre></div>
-<p>The <code>RunnerSet</code> stays quiet for much longer, because a pod that cannot pull its image still scheduled perfectly well. <code>WorkersUnschedulable</code> reports only the scheduler's verdict, so it stays False and <code>actions_gateway_runnerset_workers_unschedulable</code> stays 0 for the whole window.
+<p>The <code>RunnerSet</code> stays quiet for much longer, because a pod that cannot pull its image still scheduled perfectly well.
+<code>WorkersUnschedulable</code> reports only the scheduler's verdict, so it stays False and <code>actions_gateway_runnerset_workers_unschedulable</code> stays 0 for the whole window.
 The first <code>RunnerSet</code>-level signal is the <code>WorkerPodStuckPending</code> Warning event the reaper emits when it deletes the pod at <code>spec.pendingPodDeadline</code>, 10 minutes after the pod was created unless you lower that field.
 Until then the pod holds a concurrency slot, and each further job the set acquires starts the same cycle again.</p>
 <p><strong>A namespace at PSA <code>privileged</code>, plus GAG's three gates.</strong> Both entries need capabilities that Pod Security Standards <code>baseline</code> forbids, and PSA has no Kata-aware level in between.
@@ -3045,7 +3047,8 @@ Under RFC 7386 a list is <strong>replaced wholesale</strong> rather than merged 
 <a id="__codelineno-4-14" name="__codelineno-4-14" href="#__codelineno-4-14"></a><span class="w">                    </span><span class="no">cpu: &quot;3&quot;</span>
 </code></pre></div>
 <p>produces a <code>dind</code> container with <em>only</em> <code>name</code> and <code>resources</code>.
-Its <code>image</code>, <code>restartPolicy: Always</code>, the entire capability set, the startup probe and the <code>volumeDevices</code> binding the block volume are gone. <code>kubectl kustomize</code> prints this and exits <strong>0</strong>.
+Its <code>image</code>, <code>restartPolicy: Always</code>, the entire capability set, the startup probe and the <code>volumeDevices</code> binding the block volume are gone.
+<code>kubectl kustomize</code> prints this and exits <strong>0</strong>.
 The pod then fails at admission or, worse, starts without the daemon the runner is configured to reach.
 Measured on kustomize v5.8.1, as embedded in kubectl 1.36.</p>
 <p>Scalars and maps are safe either way.
@@ -3116,7 +3119,8 @@ Writing the obvious thing,</p>
 That is indistinguishable from having written no schema at all.
 Declare the merge keys inline on the paths you patch, as above, and confirm by rendering and diffing rather than by the exit code.</p>
 <p>This repo stays on option 1 because option 2 means hand-maintaining a schema against a CRD that changes, and a schema that drifts fails open.</p>
-<p>GAG's own end-to-end suite is the worked example for option 1: the overlays under <code>deploy/dogfood-e2e/overlays/</code> consume these bases and patch in their cluster specifics and nothing else. <code>make template-library-check</code> rejects a strategic-merge patch against a <code>ClusterRunnerTemplate</code> in this repo, and compares each overlay's render against its base to catch a list that lost entries by any route.</p>
+<p>GAG's own end-to-end suite is the worked example for option 1: the overlays under <code>deploy/dogfood-e2e/overlays/</code> consume these bases and patch in their cluster specifics and nothing else.
+<code>make template-library-check</code> rejects a strategic-merge patch against a <code>ClusterRunnerTemplate</code> in this repo, and compares each overlay's render against its base to catch a list that lost entries by any route.</p>
 <h2 id="sizing">Sizing<a class="headerlink" href="#sizing" title="Permanent link">&para;</a></h2>
 <p>The resource requests and limits in <code>kata-dind</code> and <code>privileged-dind</code> are measured, not guessed, but they are measured on <strong>GAG's own end-to-end suite</strong>: a compile-heavy runner driving a nested Kubernetes cluster inside the sidecar.
 That is a plausible starting point for an image-building runner and a poor one for a job with a different shape.</p>

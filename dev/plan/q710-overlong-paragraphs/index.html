@@ -2836,12 +2836,14 @@ It does not move meaning.</p>
 <li><strong>Do not orphan a bare cross-reference.</strong> A lone "See [runbook] for X" left as its own paragraph is the word count being served rather than the reader.</li>
 </ul>
 <h2 id="how-the-split-is-verified">How the split is verified<a class="headerlink" href="#how-the-split-is-verified" title="Permanent link">&para;</a></h2>
-<p>Not by re-reading the diff, and not by the gates. <code>doc-links</code> resolves links and <code>em-dash-check</code> counts punctuation; neither reads prose, so a dropped qualifier or a mistyped bound passes every check in the repo.</p>
+<p>Not by re-reading the diff, and not by the gates.
+<code>doc-links</code> resolves links and <code>em-dash-check</code> counts punctuation; neither reads prose, so a dropped qualifier or a mistyped bound passes every check in the repo.</p>
 <p>Reconcile the token multiset instead.
 Snapshot each file at <code>HEAD</code> before editing, then compare <code>collections.Counter</code> over whitespace-split tokens before and after.
 Every token the diff drops has to be justified one by one: a <code>;</code> that became a <code>.</code>, an <code>(a)</code> that became a <code>*</code>, an article dropped by a deliberate rewrite.
 A content word in that list is a lost qualifier.</p>
-<p>Phase 1 reconciled to +19 tokens across five files, every one accounted for, and to +64 more once the <code>####</code> subheadings landed, which the same check showed to be exactly the heading texts and nothing else. <code>01-executive-summary.md</code> finished on an <em>identical</em> multiset, which is what a pure paragraph break looks like and is the target for every file.</p>
+<p>Phase 1 reconciled to +19 tokens across five files, every one accounted for, and to +64 more once the <code>####</code> subheadings landed, which the same check showed to be exactly the heading texts and nothing else.
+<code>01-executive-summary.md</code> finished on an <em>identical</em> multiset, which is what a pure paragraph break looks like and is the target for every file.</p>
 <p><strong>Reconciliation does not prove the split is correct.</strong> It catches a <em>deletion</em>.
 It is blind to words the edit <em>adds</em>, and that is where the one real defect in Phase 1 came from.
 A split moved the sentence "This lets a platform team express 'GPU runners always get at least 5 slots…'" two paragraphs away from <code>priorityTiers</code>, and the reopened sentence read "Together these let a platform team express…".

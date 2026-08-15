@@ -2978,7 +2978,8 @@ Factor:</p>
 <h3 id="25-consistent-build-invocation-style">2.5 Consistent build invocation style<a class="headerlink" href="#25-consistent-build-invocation-style" title="Permanent link">&para;</a></h3>
 <p>Root <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/Makefile#L31">Makefile:31,34</a> uses Go's <code>-C cmd/agc</code> flag.
 <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/Makefile#L71">Makefile:71</a> uses shell <code>cd cmd/gmc &amp;&amp;</code>.
-Pick one. <code>go build -C</code> is cleaner for Go invocations; for ginkgo (not a Go subcommand) <code>cd &amp;&amp; ...</code> is fine — but the inconsistency is worth a comment if both stay.</p>
+Pick one.
+<code>go build -C</code> is cleaner for Go invocations; for ginkgo (not a Go subcommand) <code>cd &amp;&amp; ...</code> is fine — but the inconsistency is worth a comment if both stay.</p>
 <h3 id="26-align-all-semantics-across-makefiles">2.6 Align <code>all</code> semantics across Makefiles<a class="headerlink" href="#26-align-all-semantics-across-makefiles" title="Permanent link">&para;</a></h3>
 <p>Root: <code>all: build</code>.
 <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/Makefile#L7">cmd/agc/Makefile:7</a>: <code>all: generate build test</code>.

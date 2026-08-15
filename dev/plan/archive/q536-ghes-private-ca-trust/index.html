@@ -2795,7 +2795,8 @@ A GHES tenant whose AGC trusts the appliance but whose runners do not is still b
 <li><strong>Fixed key <code>ca.crt</code>.</strong> Matches <code>metricsCACertKey</code> and the upstream <code>kube-root-ca.crt</code> convention.
   A <code>key</code> override is reachable additively later if demand appears.</li>
 <li><strong>Optional pointer, no default.</strong> Unset and "empty bundle" are different states; unset must mean "system roots only", which is the safe direction.</li>
-<li><strong>A new ref type, not <code>LocalObjectRef</code>.</strong> <code>LocalObjectRef</code> carries the v2 52-character object-name budget (§H.6); a ConfigMap is a core object with the 253-character DNS-subdomain budget. <code>LocalConfigMapReference</code> mirrors the existing <code>LocalSecretReference</code> shape.</li>
+<li><strong>A new ref type, not <code>LocalObjectRef</code>.</strong> <code>LocalObjectRef</code> carries the v2 52-character object-name budget (§H.6); a ConfigMap is a core object with the 253-character DNS-subdomain budget.
+  <code>LocalConfigMapReference</code> mirrors the existing <code>LocalSecretReference</code> shape.</li>
 </ul>
 <h3 id="resolution-is-a-runtime-condition-not-admission">Resolution is a runtime condition, not admission<a class="headerlink" href="#resolution-is-a-runtime-condition-not-admission" title="Permanent link">&para;</a></h3>
 <p>Per §H.7, a reference to a not-yet-applied object is well formed.
@@ -2818,7 +2819,8 @@ The GMC resolves it in the reconcile and fails closed the same way <code>default
 </tr>
 </tbody>
 </table>
-<p>No new condition type. <code>ProxyNotFound</code> already sets <code>Degraded</code> for the sibling case of an unresolvable reference, and a condition type carries no version and no conversion path — the cheaper surface is the right one.</p>
+<p>No new condition type.
+<code>ProxyNotFound</code> already sets <code>Degraded</code> for the sibling case of an unresolvable reference, and a condition type carries no version and no conversion path — the cheaper surface is the right one.</p>
 <p>Parsing in the GMC rather than letting the AGC fail at startup is deliberate: a <code>Degraded</code> condition naming the ConfigMap is a better operator signal than a <code>CrashLoopBackOff</code>.</p>
 <p><strong>The read is uncached and the recovery is a poll, not a watch.</strong> The sibling credential Secret converges on a <code>WatchesMetadata</code>, and that was the first design here too.
 It does not work: <code>buildCacheOptions</code> pins the GMC's ConfigMap informer to a single object in the GMC's <em>own</em> namespace precisely so the GMC needs no cluster-wide ConfigMap read (Q188/Q242 G.1).

@@ -2817,7 +2817,8 @@ One escaped pipe in any cell shifts every field, measured:</p>
 <p><code>St</code> then reads the label cell and <code>Notes</code> reads the size, so the row's rules evaluate the wrong cells and pass.
 This fails <em>silently wrong</em>, not loudly, which is why it is worth closing before it happens rather than after.
 Filed as latent: "zero occurrences in <code>STATUS.md</code> today", which the build disproved: Q625 carried one, and the gate was reading 13 characters of a 243-character cell (<a href="#phase-2-result-q613">Phase 2 result</a>).</p>
-<p>Second defect, latent: <code>awk</code>'s <code>length()</code> counts <strong>bytes</strong> on this host (BWK awk 20200816) and <strong>runes</strong> under <code>gawk</code> in a UTF-8 locale. <code>STATUS.md</code> carries 52 em dashes, 51 🔲, 26 ✅.
+<p>Second defect, latent: <code>awk</code>'s <code>length()</code> counts <strong>bytes</strong> on this host (BWK awk 20200816) and <strong>runes</strong> under <code>gawk</code> in a UTF-8 locale.
+<code>STATUS.md</code> carries 52 em dashes, 51 🔲, 26 ✅.
 Measuring every cell exactly as the script extracts it, the longest is <a href="../../STATUS/#Q555">Q555</a> at <strong>249 bytes / 249 characters</strong> — one byte of margin against the 250 cap, and Q640 (measured before it shipped, so no row to link) tied it on bytes at 249/245.
 Nothing diverges today, but rows are routinely authored to fill the budget, and one at 251/249 would pass in one environment and fail in the other.</p>
 <h3 id="runtime-is-not-the-argument">Runtime is not the argument<a class="headerlink" href="#runtime-is-not-the-argument" title="Permanent link">&para;</a></h3>
@@ -2897,7 +2898,8 @@ A merge driver must reconstruct the file <strong>line for line</strong>, includi
 Rewriting it onto goldmark would be actively wrong, not merely unnecessary.</p>
 <p>Also out: <code>check-codegen-drift.sh</code>, the <code>chart-*-check.sh</code> family, <code>validate-egress-ip.sh</code>, <code>dogfood/setup.sh</code>, and the <code>e2e/</code> scripts.
 They are long, but they orchestrate external CLIs (<code>kubectl</code>, <code>helm</code>, <code>docker</code>, <code>controller-gen</code>).
-Shell is the right language; Go would be <code>exec.Command</code> soup. <strong>Length is not the signal; parsing is.</strong></p>
+Shell is the right language; Go would be <code>exec.Command</code> soup.
+<strong>Length is not the signal; parsing is.</strong></p>
 <h2 id="validation">Validation<a class="headerlink" href="#validation" title="Permanent link">&para;</a></h2>
 <p>A rewrite that merely passes on the current tree proves nothing: the <code>awk</code> gate also passes, and that is the bug.
 Per <a href="../../development/testing/#a-bulk-mechanical-change-proves-itself-by-reconciliation-not-by-an-empty-leftover-query">testing.md</a>, each phase reconciles rather than greps:</p>
@@ -3053,7 +3055,8 @@ Runtime 0.49 s → 0.69 s, still sub-second, still not the argument.</p>
 No new module, no new <code>make</code> target, no new path filter: the <code>devtools/**</code> filters Q612 wired already cover them.</p>
 <p><strong>The parse layer grew three general things</strong>, not one-caller helpers: <code>Tables()</code> gains a <code>Text</code> reading of each cell beside Q613's source reading, <code>TopLevelListItems()</code> reports a bullet's text, its lead bold run, its HTML comments and whether it links, and <code>SectionRange()</code> gives the lines a heading's section spans.
 Plus <code>ParseRow()</code>, for the case Q612 did not have: <strong>a table row with no table around it.</strong> The metrics replay reads <code>git log -p</code> output, where every row is a lone <code>+</code>/<code>-</code> diff line.
-GFM only recognizes a table whose delimiter is at least as wide as its header, and pads a narrower header out, so acceptance is monotone in the width and the narrowest accepted width <em>is</em> the row's cell count. <code>ParseRow</code> binary-searches it, which leaves every escaping rule to goldmark instead of restating it.</p>
+GFM only recognizes a table whose delimiter is at least as wide as its header, and pads a narrower header out, so acceptance is monotone in the width and the narrowest accepted width <em>is</em> the row's cell count.
+<code>ParseRow</code> binary-searches it, which leaves every escaping rule to goldmark instead of restating it.</p>
 <p><strong><code>check-roadmap</code> reconciled</strong> to the same verdict and the same counts (18 bullets, 57 features), with byte-identical output.
 Every bullet's annotation IDs and link flag match.
 Word counts all fell, by 5 to 24 on the roadmap and by exactly 1 on <code>features.md</code>:</p>

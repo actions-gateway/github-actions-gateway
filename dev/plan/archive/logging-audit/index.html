@@ -2681,13 +2681,15 @@ It <em>does</em> break ingestion: the busiest AGC code paths emit unparseable te
 <li><code>cmd/agc/main.go</code> passes <code>nil</code> for the provisioner logger (<code>NewProvisioner(mgr.GetClient(), m, nil)</code>) and the pod waiter (<code>NewInformerPodWaiter(mgr.GetCache(), nil)</code>); both fall back to <code>slog.Default()</code> (<code>provisioner.go</code> <code>logFor</code>, <code>podwaiter.go</code> <code>NewInformerPodWaiter</code>).</li>
 <li><code>RunnerGroupReconciler.Log</code> is never set in <code>main.go</code>, so it too falls back to <code>slog.Default()</code> (<code>runnergroup_controller.go</code>).</li>
 <li>The busiest files log through these: <code>listener/{goroutine.go, multiplexer.go}</code>, <code>provisioner/{provisioner.go,podwaiter.go}</code>, <code>controller/runnergroup_controller.go</code>, <code>agentpool/pool.go</code>.</li>
-<li>GMC — <code>internal/controller/ipranges.go</code> logs via <code>slog.Default()</code> (TEXT) while the manager logs zap JSON. <code>ActionsGatewayReconciler.Log *slog.Logger</code> is a <strong>dead field</strong> (declared, never set, never read).</li>
+<li>GMC — <code>internal/controller/ipranges.go</code> logs via <code>slog.Default()</code> (TEXT) while the manager logs zap JSON.
+  <code>ActionsGatewayReconciler.Log *slog.Logger</code> is a <strong>dead field</strong> (declared, never set, never read).</li>
 <li>Worker — <code>cmd/worker/main.go</code> uses <code>slog.Info/Warn/Error</code> package funcs = default TEXT handler.</li>
 <li>Proxy — <code>cmd/proxy/main.go</code> correctly uses <code>slog.NewJSONHandler</code> but with <code>nil</code> <code>HandlerOptions</code> (hard-coded info level, no level source).</li>
 </ul>
 <p><strong>Fix (this PR).</strong> Pick one shape — zap JSON — and route everything through it:</p>
 <ol>
-<li>After <code>ctrl.SetLogger(...)</code> in <strong>both</strong> <code>cmd/agc/main.go</code> and <code>cmd/gmc/cmd/main.go</code>, call <code>slog.SetDefault(slog.New(logr.ToSlogHandler(ctrl.Log)))</code> so <code>slog.Default()</code> becomes a logr→zap bridge: a single JSON shape, a single level source (<code>--zap-log-level</code>). <code>logr.ToSlogHandler</code> is available in the vendored <code>go-logr/logr</code> v1.4.3.</li>
+<li>After <code>ctrl.SetLogger(...)</code> in <strong>both</strong> <code>cmd/agc/main.go</code> and <code>cmd/gmc/cmd/main.go</code>, call <code>slog.SetDefault(slog.New(logr.ToSlogHandler(ctrl.Log)))</code> so <code>slog.Default()</code> becomes a logr→zap bridge: a single JSON shape, a single level source (<code>--zap-log-level</code>).
+   <code>logr.ToSlogHandler</code> is available in the vendored <code>go-logr/logr</code> v1.4.3.</li>
 <li>Inject named logr-backed loggers into the provisioner, pod waiter, and reconciler instead of <code>nil</code>, so component lines carry a <code>logger=</code> name.</li>
 <li>Remove the dead <code>ActionsGatewayReconciler.Log</code> field.</li>
 <li>Give the worker a <code>slog.NewJSONHandler</code> via <code>slog.SetDefault</code> at startup.</li>
@@ -2698,13 +2700,15 @@ It <em>does</em> break ingestion: the busiest AGC code paths emit unparseable te
 <h2 id="theme-b--credential-leak-surface-q86--security">Theme B — Credential-leak surface (Q86) — <code>security</code><a class="headerlink" href="#theme-b--credential-leak-surface-q86--security" title="Permanent link">&para;</a></h2>
 <p>✅ <strong>Resolved</strong> — a single shared redactor, <code>githubapp.SanitizeBody(body, max)</code> (<code>githubapp/sanitize.go</code>), now caps <strong>and</strong> redacts every upstream body before it is interpolated into an error or log.
 It strips GitHub token formats (<code>gh[pousr]_</code>, <code>github_pat_</code>), JWTs, the JSON values of sensitive keys (<code>access_token</code>, <code>refresh_token</code>, <code>token</code>, <code>encoded_jit_config</code>, <code>client_secret</code>, <code>private_key</code>, <code>password</code>, <code>secret</code>), and long opaque base64 blobs; redaction runs before capping so a secret straddling the cap boundary cannot survive in the tail.
-Applied at all sites: <code>runner_auth.go</code> (:248/:259), <code>github_registrar.go</code> (generate-jitconfig + deregister), <code>broker/client.go</code> (via <code>capBody</code>), and <code>cmd/probe/main.go</code>. <code>broker</code> reuses the helper rather than duplicating redaction (the <code>broker → githubapp</code> module edge already existed via <code>replace</code>; both are GitHub-domain libs and there is no standalone broker binary).
+Applied at all sites: <code>runner_auth.go</code> (:248/:259), <code>github_registrar.go</code> (generate-jitconfig + deregister), <code>broker/client.go</code> (via <code>capBody</code>), and <code>cmd/probe/main.go</code>.
+<code>broker</code> reuses the helper rather than duplicating redaction (the <code>broker → githubapp</code> module edge already existed via <code>replace</code>; both are GitHub-domain libs and there is no standalone broker binary).
 Note added to <a href="../../../design/05-security/">05-security.md</a> §5.2.</p>
 <p>No <strong>direct</strong> secret logging exists anywhere — tokens, keys, and PEM are never logged, and that posture must be preserved.
 But several error paths interpolate the upstream HTTP <strong>response body</strong> into an error that callers log.
 Two are <strong>uncapped</strong> and can carry credential material:</p>
 <ul>
-<li><code>githubapp/runner_auth.go:248</code> — <code>"runner token endpoint returned %d: %s"</code> (status, <strong>body</strong>) — uncapped. <code>:259</code> — <code>"...missing access_token: %s"</code> (<strong>body</strong>) — uncapped, and this is the <strong>200-OK path</strong>: the OAuth token-endpoint body can carry credential material.</li>
+<li><code>githubapp/runner_auth.go:248</code> — <code>"runner token endpoint returned %d: %s"</code> (status, <strong>body</strong>) — uncapped.
+  <code>:259</code> — <code>"...missing access_token: %s"</code> (<strong>body</strong>) — uncapped, and this is the <strong>200-OK path</strong>: the OAuth token-endpoint body can carry credential material.</li>
 <li><code>cmd/agc/internal/agentpool/github_registrar.go:97</code> — <code>"generate jit config: unexpected status %d: %s"</code> (status, <strong>respBody</strong>) — uncapped.
   The success body of this endpoint is the runner <strong>JIT registration credential + RSA key</strong>.</li>
 <li><code>broker/client.go</code> (~239/252/385/418) — already capped to 200 bytes via <code>capBody(...)</code>; lower risk but still an unredacted body.
@@ -2760,7 +2764,8 @@ Operator-facing grep anchors documented in <a href="../../../operations/observab
 The GMC threads it to <strong>both</strong> the AGC and the egress proxy as the <code>LOG_LEVEL</code> environment variable in <code>builder.go</code> (<code>buildAGCDeployment</code> and <code>buildProxyDeployment</code> via <code>logLevelOrDefault</code>), exactly as <code>spec.securityProfile</code> flows as <code>SECURITY_PROFILE</code>.
 The proxy already read <code>LOG_LEVEL</code> (Theme A); the AGC now reads it too (<code>cmd/agc/main.go</code> <code>zapLevelFromEnv</code>) to set its zap level unless an explicit <code>--zap-log-level</code> flag is passed — the GMC never stamps one, so in production <code>LOG_LEVEL</code> is the sole level source.
 Because the env lives on the pod template, flipping <code>spec.logLevel</code> is a <strong>rolling restart</strong> of the AGC and proxy (not a hot reload).
-Default is <code>info</code>, never <code>debug</code>, so a CR omitting the field never silently runs at debug verbosity. <code>debug</code> surfaces the Theme D/F per-session/per-job correlation lines.
+Default is <code>info</code>, never <code>debug</code>, so a CR omitting the field never silently runs at debug verbosity.
+<code>debug</code> surfaces the Theme D/F per-session/per-job correlation lines.
 Tests: envtest defaulting + enum rejection (<code>crd_admission_test.go</code>) and the restart-on-change path (<code>log_level_test.go</code>); builder unit tests for both Deployments (<code>builder_test.go</code>); AGC level-mapping unit test (<code>main_test.go</code>).
 Docs updated: <a href="../../../design/03-api-contracts/">03-api-contracts.md</a>, <a href="../../../design/02-architecture/">02-architecture.md</a>, <a href="../../../operations/tenant-onboarding/">tenant-onboarding.md</a>, and <a href="../../../operations/observability/">observability.md</a>.</p>
 <hr />

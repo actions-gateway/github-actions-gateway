@@ -2901,7 +2901,8 @@
 <p><strong>Status: ✅ Complete — Phases 1–3 shipped 2026-07-21/22 and live-validated across three dogfood sessions (two on 2026-07-25, one on 2026-07-28).
 Residuals: <a href="../../STATUS/#Q416">Q416</a> and, for the one profile still short of a live run, <a href="../../STATUS/#Q448">Q448</a>.</strong> Usage observability, the status recommendation and its derivation, restart persistence, and the below-confidence fallback were confirmed in the first dogfood session.
 The two behaviours gated on 20 sampled jobs, the <code>SizingDrift</code> verdict and <code>Binpack</code> actuating, were confirmed in a second session after Q399 migrated the tenant off the Classic protocol (which had orphaned 81% of the jobs it acquired, capping samples at 10); <a href="#throughput-actuating-live-2026-07-28"><code>Throughput</code> actuated live</a> on the same tenant three days later.
-See <a href="#live-validation-2026-07-25">Live validation</a> and <a href="#both-20-sample-paths-confirmed-2026-07-25-second-session">Both ≥20-sample paths confirmed</a>. <strong><code>NodeShare</code> is the one actuating profile with no live run yet</strong> — it carries envtest confidence only, tracked as Q448.
+See <a href="#live-validation-2026-07-25">Live validation</a> and <a href="#both-20-sample-paths-confirmed-2026-07-25-second-session">Both ≥20-sample paths confirmed</a>.
+<strong><code>NodeShare</code> is the one actuating profile with no live run yet</strong> — it carries envtest confidence only, tracked as Q448.
 Both bugs this validation surfaced are Classic-tier defects rather than sizing gaps: <a href="#editing-a-classic-runnerset-needed-an-explicit-version-fixed">Q398</a> is fixed, and Q416 waits on a Classic operator report.
 This doc is the design sketch, the phase record, and the validation record.</p>
 </blockquote>
@@ -2948,7 +2949,8 @@ Unit-tested (peak-max across ticks, single finalize, unsampled short jobs, disap
 <h3 id="phase-2--recommendations-in-runnersetstatus-m---shipped-2026-07-21">Phase 2 — recommendations in <code>RunnerSet.status</code> (M) — ✅ shipped 2026-07-21<a class="headerlink" href="#phase-2--recommendations-in-runnersetstatus-m---shipped-2026-07-21" title="Permanent link">&para;</a></h3>
 <ul>
 <li><code>status.sizingRecommendation</code>: per-container recommended <code>requests</code>/<code>limits</code> (derived from Phase 1 aggregates), plus sample count and window so operators can judge confidence.</li>
-<li>A condition (e.g. <code>SizingDrift</code>) when the template's ask deviates from the recommendation beyond a threshold in either direction (waste or OOM risk).</li>
+<li>A condition (e.g.
+  <code>SizingDrift</code>) when the template's ask deviates from the recommendation beyond a threshold in either direction (waste or OOM risk).</li>
 <li><strong>Persistence:</strong> aggregates flush into status periodically and merge back on AGC restart — status is the store; no new backing store.</li>
 <li>Recommendations are advisory only in this phase; nothing changes pod specs.</li>
 </ul>
@@ -3017,7 +3019,8 @@ Unit-tested (peak-max across ticks, single finalize, unsampled short jobs, disap
 </tbody>
 </table>
 <p>Each assertion was confirmed to fail against a mutated implementation before being trusted (headroom constant, the CPU-limit <code>delete</code>, the runner-container guard, and the clamp call each removed in turn).</p>
-<p><strong>Resolved for <code>Throughput</code> on 2026-07-28</strong> (<a href="#throughput-actuating-live-2026-07-28">Throughput actuating live</a>, Q449). <code>Binpack</code> was already live (<a href="#live-validation-2026-07-25">Live validation</a>), so <code>NodeShare</code> is now the only profile carrying envtest confidence rather than dogfood confidence — and the more consequential one to leave there, since it needs no warm-up and so is the profile an operator can enable on day one.
+<p><strong>Resolved for <code>Throughput</code> on 2026-07-28</strong> (<a href="#throughput-actuating-live-2026-07-28">Throughput actuating live</a>, Q449).
+<code>Binpack</code> was already live (<a href="#live-validation-2026-07-25">Live validation</a>), so <code>NodeShare</code> is now the only profile carrying envtest confidence rather than dogfood confidence — and the more consequential one to leave there, since it needs no warm-up and so is the profile an operator can enable on day one.
 The live path is below.</p>
 <h3 id="the-live-path-and-why-the-rc-gate-could-not-have-found-this">The live path, and why the RC gate could not have found this<a class="headerlink" href="#the-live-path-and-why-the-rc-gate-could-not-have-found-this" title="Permanent link">&para;</a></h3>
 <p>Auditing what <code>validate-release.sh</code> would actually exercise turned up something worse than the missing envtests: <strong>neither dogfood tenant declared <code>spec.sizing</code> at all</strong>, so the gate provisioned every worker at the <code>Static</code> default and would have passed an RC having validated none of the four profiles.
@@ -3063,7 +3066,8 @@ The trivial <code>÷1</code> divisor is fine here on purpose: the envtests above
 <li><strong><code>NodeShare</code> declares the envelope</strong> (<code>nodeShare.allocatable</code> + <code>workersPerNode</code>) rather than the AGC reading Node objects — the AGC is deliberately namespace-scoped (no cluster RBAC), and the operator knows which node shape the set's scheduling constraints target.
   Applied to the runner container only; sidecars are the operator's accounting.</li>
 <li><strong>Quota/LimitRange conflicts stay a runtime signal</strong> — the planned admission-reject rail is deliberately NOT implemented: cross-object admission validation is what §H.7's "runtime conditions, not admission" philosophy avoids (apply-order coupling, GitOps hostility), and the existing <code>WorkerQuota*</code> conditions + quota retries already surface the conflict.
-  The <code>maxRequests</code> clamp is the preventive knob. <strong>Amended (Q489):</strong> those cover the conflicts admission <em>rejects</em>.
+  The <code>maxRequests</code> clamp is the preventive knob.
+  <strong>Amended (Q489):</strong> those cover the conflicts admission <em>rejects</em>.
   The one that rejects nothing — an injected CPU limit cancelling <code>Throughput</code>, whose mechanism is that limit's absence — got its own condition, <code>SizingProfileOverridden</code>, computed by comparing the pods the profile built against what the apiserver admitted rather than by reading any policy object.</li>
 <li>Open question 3 (ship <code>NodeShare</code> first) became moot — it shipped with the phase.
   Question 4 confirmed: profile parameters live on the <code>RunnerSet</code> (differently-tuned sets can share one template).</li>
@@ -3329,7 +3333,8 @@ Worth stating in the operator doc, because the failure is silent until pods stop
 <p><code>SizingProfileState: Active</code> short-circuits the drift judgment (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/controller/runnerset_sizing.go"><code>runnerset_sizing.go</code></a>), so the drift branches must be exercised <strong>before</strong> enabling a profile, or the condition reports <code>SizingProfileActive</code> instead of a verdict.</p>
 <h3 id="session-artifacts-worth-not-repeating">Session artifacts worth not repeating<a class="headerlink" href="#session-artifacts-worth-not-repeating" title="Permanent link">&para;</a></h3>
 <ul>
-<li><strong>Size the system pool from <code>required_system_nodes</code>, not by hand.</strong> A manual resize to 1 node left the AGC unschedulable (one <code>e2-standard-2</code> cannot hold GMC + Athens + AGC), and the tenant ran with no controller for 16 minutes. <code>scripts/dogfood/start.sh</code> derives the count and warns on a low pin.</li>
+<li><strong>Size the system pool from <code>required_system_nodes</code>, not by hand.</strong> A manual resize to 1 node left the AGC unschedulable (one <code>e2-standard-2</code> cannot hold GMC + Athens + AGC), and the tenant ran with no controller for 16 minutes.
+  <code>scripts/dogfood/start.sh</code> derives the count and warns on a low pin.</li>
 <li><strong><code>maxWorkers</code> is bounded by the namespace <code>ResourceQuota</code>, not just nodes.</strong> Raising it 8 → 16 against a <code>pods: 12</code> quota put the AGC into a provision/quota-deny/retry/abandon loop and stalled sample accrual entirely.
   The quota conditions reported it precisely (<code>WorkerQuotaExceeded=True</code>, <code>QuotaExhausted</code>, with <code>WorkerQuotaPressure</code> correctly <code>Superseded</code>), which is the capacity observability doing its job on a real fault.</li>
 <li><strong>A Running scale-set worker has no reap deadline, so an idle one is immortal.</strong> After that churn, 8 worker pods remained alive with <strong>zero</strong> jobs outstanding, occupying 10 of 12 quota slots and all 6 worker nodes until deleted by hand.
@@ -3390,11 +3395,13 @@ The operator doc's clamp warning was scoped to <code>Binpack</code> and has been
 <p><strong>Pods created before the patch stayed <code>Static</code></strong> (<code>cpu 2</code> / <code>memory 2Gi</code>, limit <code>3Gi</code>) — actuation is a pod-build transform, not retroactive, matching the 07-25 <code>Binpack</code> observation.</p>
 <h3 id="why-this-could-not-be-deployed-until-now">Why this could not be deployed until now<a class="headerlink" href="#why-this-could-not-be-deployed-until-now" title="Permanent link">&para;</a></h3>
 <p>The cluster was at <strong>0 nodes across every pool</strong> (normal at-rest state after <code>stop.sh</code>), so the GMC pod had been <code>Pending</code> ~10h and <code>webhook-service</code> had no endpoints.
-The <code>RunnerSet</code> CRD stores <code>v2beta1</code> with <code>Webhook</code> conversion, and <code>vrunnerset-v2alpha1.kb.io</code> is <code>failurePolicy: Fail</code> with <code>matchPolicy: Equivalent</code> — so a write to <em>either</em> served version is routed through the down webhook. <strong>No CR write of any kind can land while the dogfood cluster is stopped.</strong> Bring the cluster up first; there is no offline path.</p>
+The <code>RunnerSet</code> CRD stores <code>v2beta1</code> with <code>Webhook</code> conversion, and <code>vrunnerset-v2alpha1.kb.io</code> is <code>failurePolicy: Fail</code> with <code>matchPolicy: Equivalent</code> — so a write to <em>either</em> served version is routed through the down webhook.
+<strong>No CR write of any kind can land while the dogfood cluster is stopped.</strong> Bring the cluster up first; there is no offline path.</p>
 <h3 id="the-multi-day-soak-was-not-needed">The multi-day soak was not needed<a class="headerlink" href="#the-multi-day-soak-was-not-needed" title="Permanent link">&para;</a></h3>
 <p>Q449 was filed expecting a days-long accrual before the RC.
 It was not required: the aggregate is <strong>cumulative with no TTL or eviction</strong>, and <code>seedFromStatus</code> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/usage/aggregate.go"><code>aggregate.go</code></a>) rebuilds it from persisted <code>status.sizingRecommendation</code>.
-All 36 samples from 07-25 were still counted after the stop, so the deploy was a single short window — start, patch, verify, stop — rather than a soak. <strong>Any future sizing deploy on this tenant inherits the same property</strong>: history is durable across stop/start, so it never has to be re-earned.</p>
+All 36 samples from 07-25 were still counted after the stop, so the deploy was a single short window — start, patch, verify, stop — rather than a soak.
+<strong>Any future sizing deploy on this tenant inherits the same property</strong>: history is durable across stop/start, so it never has to be re-earned.</p>
 <p>What survives is the <em>summary</em>, not the raw distribution, and that is by design: <code>seed</code> reconstructs the histogram from the persisted <code>(sampleCount, observedP95, observedPeak)</code> triple by putting 95% of the mass at the p95 and the rest at the max.
 Sample count and peak come back exact and the p95 to bucket resolution — precisely the three statistics the recommendation reads — while the shape below the p95 is deliberately not persisted.
 So "durable" means the <em>derivation</em> is reproducible across a stop, not that the tenant's job history is archived; a stop still costs the sub-p95 detail, which nothing downstream uses.</p>

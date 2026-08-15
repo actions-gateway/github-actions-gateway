@@ -2670,7 +2670,8 @@ The GMC module already imports all three type sets (gmc v1, agc v1, neutral v2),
 </table>
 <p><strong>Decisions (recorded; H.17 invariants):</strong></p>
 <ul>
-<li><strong>Reuse / object-size invariant.</strong> Template identity key = canonical JSON of the <em>built v2 <code>RunnerTemplateSpec</code></em> (<code>podTemplate</code> <strong>and</strong> <code>workerImage</code>). <code>workerImage</code> participates in equality: it selects the runner container image, a material part of the pod shape, so two groups differing only in <code>workerImage</code> must NOT collapse.
+<li><strong>Reuse / object-size invariant.</strong> Template identity key = canonical JSON of the <em>built v2 <code>RunnerTemplateSpec</code></em> (<code>podTemplate</code> <strong>and</strong> <code>workerImage</code>).
+  <code>workerImage</code> participates in equality: it selects the runner container image, a material part of the pod shape, so two groups differing only in <code>workerImage</code> must NOT collapse.
   K groups with an identical key collapse to one <code>RunnerTemplate</code>; the name is a pure function of that key (<code>rt-&lt;12 hex of sha256&gt;</code>), so identical content yields one object by construction.</li>
 <li><strong>No silent direct egress (invariant 1).</strong> The v1 proxy is required, so the tool always emits an <code>EgressProxy</code> and always sets <code>defaultProxyRef</code> on the gateway.
   The AGC resolves an unset <code>RunnerSet.proxyRef</code> to <code>defaultProxyRef</code> and fails closed (<code>ProxyNotFound</code>) if neither resolves — so leaving <code>proxyRef</code> unset is proxied, never <code>Direct</code>.</li>

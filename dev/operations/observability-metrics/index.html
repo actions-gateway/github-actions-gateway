@@ -3888,7 +3888,8 @@ Neither binary acquires jobs, so neither has a tier.</p>
 </tbody>
 </table>
 <h3 id="label-value-reach">Label-value reach<a class="headerlink" href="#label-value-reach" title="Permanent link">&para;</a></h3>
-<p>A series can be <strong>Both</strong> while one of its label values is not. <code>actions_gateway_eviction_retries_total</code> populates on either tier, and <code>cause="vanished"</code> only ever comes from a scale-set set, so a query filtered to that value reads a permanent zero on classic, and the row above says the opposite.</p>
+<p>A series can be <strong>Both</strong> while one of its label values is not.
+<code>actions_gateway_eviction_retries_total</code> populates on either tier, and <code>cause="vanished"</code> only ever comes from a scale-set set, so a query filtered to that value reads a permanent zero on classic, and the row above says the opposite.</p>
 <p>Each row here records one such exception.
 The <a href="../../development/testing/#the-make-check-pre-review-gate">gate</a> derives the values each series emits from the AGC source and fails when one it can prove single-tier has no row, when a row is refuted by where the source names its value, and when the <code>Help</code> text an operator scrapes off <code>/metrics</code> has fallen behind the vocabulary the code emits.</p>
 <p>Only the two single-tier answers appear here: a value that reaches both tiers needs no row, and the <code>tier</code> label is the axis itself rather than a value on it.
@@ -3958,7 +3959,8 @@ Where the file layout cannot prove the claim, because the value is named in a fi
 <hr />
 <h2 id="condition-and-event-tier-reach">Condition and Event tier reach<a class="headerlink" href="#condition-and-event-tier-reach" title="Permanent link">&para;</a></h2>
 <p>The same question as <a href="#acquisition-tier-reach">Acquisition-tier reach</a> above, asked of the other two signals an operator reads: the <code>reason</code> on a <code>.status.conditions[]</code> entry, and the <code>Reason</code> on a Kubernetes Event.
-A capability that reaches only one tier is as invisible in a condition as it is in a counter, so the same four values apply and the same gate holds these tables to the source. <code>make reason-tiers-check</code> fails a reason the AGC emits without a row here, a row the source refutes, and an Event reason that has no <a href="../troubleshooting/#job-lifecycle-events-on-a-runnergroup--runnerset">runbook</a> entry.</p>
+A capability that reaches only one tier is as invisible in a condition as it is in a counter, so the same four values apply and the same gate holds these tables to the source.
+<code>make reason-tiers-check</code> fails a reason the AGC emits without a row here, a row the source refutes, and an Event reason that has no <a href="../troubleshooting/#job-lifecycle-events-on-a-runnergroup--runnerset">runbook</a> entry.</p>
 <p>Two things follow from how the AGC records these, and both are worth knowing before reading the tables:</p>
 <ul>
 <li><strong>A condition reason is often an Event reason too.</strong> Several reconcile paths record an Event on a genuine condition transition, reusing the condition's own reason string.
@@ -4488,7 +4490,8 @@ Do not remove or overwrite them.</p>
 </table>
 <p>All four are controller-set: never set them by hand.
 Editing or removing <code>runner-name</code> in particular makes the pod's runner record uncollectable, which is what leaves stale registrations behind — see <a href="../troubleshooting/#scale-set-job-stranded-by-a-stale-runner-record-runner-name-409">Scale-Set Job Stranded by a Stale Runner Record</a>.</p>
-<p>Worker pods on <strong>either</strong> tier gain one more annotation at end of life: <code>actions-gateway.com/deletion-reason</code>, stamped with the reap reason (e.g. <code>completed_ttl</code>, <code>pending_deadline</code>) immediately before the AGC's reaper deletes the pod (Q502).
+<p>Worker pods on <strong>either</strong> tier gain one more annotation at end of life: <code>actions-gateway.com/deletion-reason</code>, stamped with the reap reason (e.g.
+<code>completed_ttl</code>, <code>pending_deadline</code>) immediately before the AGC's reaper deletes the pod (Q502).
 It marks the deletion as the AGC's own, which is what excludes reaper cleanup from the graceful-deletion recovery that a drain or a manual delete triggers.
 Controller-set; never set it by hand — a hand-set stamp suppresses automatic recovery for that pod.</p>
 <p>To see them in a table:</p>

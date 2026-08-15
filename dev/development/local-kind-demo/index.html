@@ -2719,7 +2719,8 @@ It uses the repo's <code>make</code> targets and a local image registry, so run 
 <a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a><span class="w">  </span>--from-literal<span class="o">=</span><span class="nv">installationId</span><span class="o">=</span><span class="s2">&quot;</span><span class="nv">$INSTALL_ID</span><span class="s2">&quot;</span><span class="w"> </span><span class="se">\</span>
 <a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a><span class="w">  </span>--from-file<span class="o">=</span><span class="nv">privateKey</span><span class="o">=</span>app.pem
 </code></pre></div>
-<p>Apply one <code>ActionsGateway</code> CR. <code>completedPodTTL: 0s</code> deletes each worker pod the moment its job finishes (the default retains terminal pods for 5 minutes so their logs stay inspectable):</p>
+<p>Apply one <code>ActionsGateway</code> CR.
+<code>completedPodTTL: 0s</code> deletes each worker pod the moment its job finishes (the default retains terminal pods for 5 minutes so their logs stay inspectable):</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="c1"># actionsgateway.yaml</span>
 <a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">actions-gateway.github.com/v1alpha1</span>
 <a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ActionsGateway</span>

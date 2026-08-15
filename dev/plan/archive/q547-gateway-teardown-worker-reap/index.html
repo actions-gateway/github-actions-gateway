@@ -2777,7 +2777,8 @@ On that signal the reconciler:</p>
 <li>reaps <strong>every</strong> worker pod carrying the set's <code>LabelRunnerSet</code>, unconditionally — no TTL, no deadline — under a new <code>gateway_deleted</code> reap reason;</li>
 <li>zeroes <code>status.activeJobs</code> / <code>status.pendingJobs</code> and sets <code>Ready=False</code> / <code>GatewayTerminating</code>.</li>
 </ol>
-<p>The trigger is a <strong>non-zero <code>deletionTimestamp</code> on a gateway that still exists</strong>, deliberately not a <code>NotFound</code>. <code>GatewayNotFound</code> keeps today's behaviour: an operator who deletes and immediately recreates a gateway must not have live workers reaped in the gap, and an AGC that restarts after teardown finished has no way to tell that gap from a real teardown.</p>
+<p>The trigger is a <strong>non-zero <code>deletionTimestamp</code> on a gateway that still exists</strong>, deliberately not a <code>NotFound</code>.
+<code>GatewayNotFound</code> keeps today's behaviour: an operator who deletes and immediately recreates a gateway must not have live workers reaped in the gap, and an AGC that restarts after teardown finished has no way to tell that gap from a real teardown.</p>
 <p>The check runs before reference resolution, not after, so a set whose template or proxy is also missing still reaps.</p>
 <p><strong>Why the counts are a sufficient gate.</strong> The shared reaper skips pods that already carry a <code>deletionTimestamp</code> before counting them (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/controller/runner_shared.go"><code>runner_shared.go:291</code></a>), so the counts fall to zero as soon as the deletes are <em>issued</em>.
 That is the right moment: once a pod has a deletion timestamp the kubelet finishes it with no controller involved, which is precisely the property Q547 is missing today.</p>

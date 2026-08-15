@@ -2651,7 +2651,8 @@ This document describes how the credentials are stored and how to provision the 
 </table>
 <p>The private key is stored in the macOS Keychain — <strong>not</strong> on disk or in the repository.</p>
 <h2 id="storing-the-private-key-one-time-setup">Storing the private key (one-time setup)<a class="headerlink" href="#storing-the-private-key-one-time-setup" title="Permanent link">&para;</a></h2>
-<p>Download the <code>.pem</code> file from the GitHub App settings page and keep it on disk. <code>security add-generic-password</code> takes no file argument, so the key has to reach it some other way — and the two obvious routes are both wrong.
+<p>Download the <code>.pem</code> file from the GitHub App settings page and keep it on disk.
+<code>security add-generic-password</code> takes no file argument, so the key has to reach it some other way — and the two obvious routes are both wrong.
 Feed the command below its input on <strong>stdin</strong>, which is neither:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="c1"># The file you just downloaded. Name it exactly — see the warning below.</span>
 <a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="nv">KEY_FILE</span><span class="o">=</span>~/Downloads/actions-gateway-test.2026-01-01.private-key.pem
@@ -2660,14 +2661,16 @@ Feed the command below its input on <strong>stdin</strong>, which is neither:</p
 <a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="w">  </span>xxd<span class="w"> </span>-p<span class="w"> </span>-c<span class="w"> </span><span class="m">1000000</span><span class="w"> </span><span class="s2">&quot;</span><span class="nv">$KEY_FILE</span><span class="s2">&quot;</span><span class="p">;</span><span class="w"> </span><span class="o">}</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>security<span class="w"> </span>-i
 </code></pre></div>
 <p><code>xxd</code> reads the downloaded file in place; there is no temp copy to make or clean up, which is one fewer copy of the key on disk than any staging approach.</p>
-<p><code>security -i</code> reads <em>commands</em> from stdin, so the key never becomes a process argument: <code>xxd</code> is invoked with only a filename and writes the hex to its stdout, and <code>security</code> is invoked with only <code>-i</code>. <code>xxd</code> is what makes this possible at all — <code>-X</code> wants one hex string, and hex is single-line.</p>
+<p><code>security -i</code> reads <em>commands</em> from stdin, so the key never becomes a process argument: <code>xxd</code> is invoked with only a filename and writes the hex to its stdout, and <code>security</code> is invoked with only <code>-i</code>.
+<code>xxd</code> is what makes this possible at all — <code>-X</code> wants one hex string, and hex is single-line.</p>
 <p>Keep the two halves as a literal <code>printf</code> and a separate <code>xxd</code>.
 Collapsing them into <code>printf '… -X %s' "$(xxd …)"</code> happens to avoid a leak only because <code>printf</code> is a shell builtin and no process is spawned; with <code>/usr/bin/printf</code> the key is back in <code>ps</code>.</p>
 <blockquote>
 <p><strong>Give <code>xxd</code> one explicit path, never a glob.</strong> <code>xxd</code>'s second positional argument is an <em>output</em> file, so <code>xxd -p -c 1000000 ~/Downloads/*.private-key.pem</code> with two keys in <code>~/Downloads</code> writes the hex of the first <strong>over the second</strong> — exit 0, no warning, the other key destroyed.
 Quote <code>"$KEY_FILE"</code> so the shell cannot expand it either.</p>
 <p><strong>Do not use the <code>-w</code> prompt for this key.</strong> It is line-oriented — a multi-line PEM's second line is consumed as the "retype" and the command fails — and it silently truncates input at <strong>128 characters</strong>, which a 2048-bit key exceeds many times over.
-It exits 0 and stores a fragment; the only symptom is authentication failing later. <code>-w "$(cat &lt;file&gt;)"</code> avoids the truncation but puts the key in <code>ps</code>.</p>
+It exits 0 and stores a fragment; the only symptom is authentication failing later.
+<code>-w "$(cat &lt;file&gt;)"</code> avoids the truncation but puts the key in <code>ps</code>.</p>
 </blockquote>
 <p>Verify the entry round-trips:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>security<span class="w"> </span>find-generic-password<span class="w"> </span>-a<span class="w"> </span><span class="s2">&quot;actions-gateway-test&quot;</span><span class="w"> </span>-s<span class="w"> </span><span class="s2">&quot;github-app-private-key&quot;</span><span class="w"> </span>-w<span class="w"> </span><span class="se">\</span>
@@ -2718,7 +2721,8 @@ Only the PEM goes via the temp file.</p>
 <li>Delete the downloaded <code>.pem</code> file from <code>~/Downloads</code>.</li>
 <li>Recreate the Kubernetes Secret using the <code>mktemp</code> + <code>--from-file</code> flow from the previous section (the <code>trap</code> ensures the temp file is removed even if <code>kubectl</code> fails), then restart the consumers so they re-read it — for the dogfood tenant, <code>kubectl rollout restart deployment/actions-gateway-controller</code>.
    Worker pods are single-job and interrupting one costs a job, so check <code>kubectl get pods -l app.kubernetes.io/managed-by=actions-gateway-controller</code> first and roll during a quiet window.</li>
-<li>Delete the old key from the GitHub App settings page. <strong>This is the step that actually ends the exposure</strong> — everything before it only migrates you onto the new key.
+<li>Delete the old key from the GitHub App settings page.
+   <strong>This is the step that actually ends the exposure</strong> — everything before it only migrates you onto the new key.
    Do it even if the rest is deferred.</li>
 </ol>
 

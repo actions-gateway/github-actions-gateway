@@ -2667,10 +2667,12 @@ Do not hide the channel inside a closure or call site.</p>
 <p><strong>Fix:</strong> Change the signature to return <code>(stop func(), done &lt;-chan struct{})</code> and update every caller to receive the channel (callers may then choose to wait, ignore, or <code>select</code> against it).</p>
 <p><strong>Acceptance:</strong> Signature updated; existing tests pass; new test asserts <code>done</code> closes after <code>stop()</code> returns.</p>
 <h2 id="3-extend-goleak-coverage--done">3. Extend <code>goleak</code> coverage ✅ DONE<a class="headerlink" href="#3-extend-goleak-coverage--done" title="Permanent link">&para;</a></h2>
-<p><strong>Queue row:</strong> #41 · <strong>Size:</strong> S · <strong>Label:</strong> <code>tests</code> · <strong>Status:</strong> shipped — <code>cmd/worker</code> now runs <code>goleak.VerifyTestMain(m)</code> (its <code>run()</code> spawns a payload-writer and an output-drain goroutine, both joined before return). <code>broker/</code> was already covered by the <code>TestMain</code> in <code>broker/client_test.go</code>, so no change was needed there; its only sub-package, <code>broker/brokertest/</code>, is a test helper with no test files.
+<p><strong>Queue row:</strong> #41 · <strong>Size:</strong> S · <strong>Label:</strong> <code>tests</code> · <strong>Status:</strong> shipped — <code>cmd/worker</code> now runs <code>goleak.VerifyTestMain(m)</code> (its <code>run()</code> spawns a payload-writer and an output-drain goroutine, both joined before return).
+<code>broker/</code> was already covered by the <code>TestMain</code> in <code>broker/client_test.go</code>, so no change was needed there; its only sub-package, <code>broker/brokertest/</code>, is a test helper with no test files.
 Both modules' tests are green under goleak and <code>make check</code> passes.</p>
 <p><code>broker/</code> and <code>cmd/worker/</code> both spawn goroutines but their test suites don't apply <code>goleak.VerifyNone</code> in <code>TestMain</code>.
-The pattern is already established in <code>cmd/proxy/proxy_test.go</code> and the <code>cmd/agc/internal/{listener,token}/*_test.go</code> files. <code>goleak</code> is already a <code>broker/</code> dependency — it's just unused.</p>
+The pattern is already established in <code>cmd/proxy/proxy_test.go</code> and the <code>cmd/agc/internal/{listener,token}/*_test.go</code> files.
+<code>goleak</code> is already a <code>broker/</code> dependency — it's just unused.</p>
 <p><strong>Fix:</strong> Add a <code>TestMain</code> in each module's package root that calls <code>goleak.VerifyTestMain(m)</code>.
 Where intentional long-lived goroutines exist (e.g. test-server background loops), add the precise <code>goleak.IgnoreCurrent()</code> option rather than disabling the check.</p>
 <p><strong>Acceptance:</strong> Both modules' tests run goleak; CI green.</p>

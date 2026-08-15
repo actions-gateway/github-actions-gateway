@@ -2810,7 +2810,8 @@ One run, two JIT runners, both registered repo-level against this repo (the org 
 <li>Register JIT runners <strong>A</strong> and <strong>B</strong> with the probe label (<code>gag-q645-abandoned</code>) via <code>generate-jitconfig</code>, and open a broker v2 session for each.
    This is the registration, OAuth-exchange, and session flow the AGC's agent pool and listener run (<code>agentpool.GithubRegistrar</code> / <code>listener.createSession</code>), reproduced in the probe over the shared <code>githubapp</code> and <code>broker</code> packages.</li>
 <li>Dispatch the fixture workflow (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/q645-abandoned-probe.yml"><code>q645-abandoned-probe.yml</code></a>): one job, <code>runs-on: gag-q645-abandoned</code>, nothing ever runs it.</li>
-<li>Both sessions receive the fan-out <code>RunnerJobRequest</code>. <strong>A acquires</strong> its delivery (<code>acquirejob</code> on the delivered <code>run_service_url</code>); B only polls and logs.
+<li>Both sessions receive the fan-out <code>RunnerJobRequest</code>.
+   <strong>A acquires</strong> its delivery (<code>acquirejob</code> on the delivered <code>run_service_url</code>); B only polls and logs.
    The probe resolves the run REST-side (newest queued run of the fixture workflow) before acquiring, so the REST watch has a subject.</li>
 <li><strong>A completes its assignment with <code>result=abandoned</code></strong>: the Q628 call, nothing else in between.
    No renew loop is needed, since the initial lock outlasts the seconds between acquire and complete.
@@ -2969,7 +2970,8 @@ Full logs in the session record; fixture runs named per row.</p>
 </tr>
 </tbody>
 </table>
-<p>Every accepted completejob value drives the run to <code>success</code>, <code>failed</code> is refused, and the green conclusion arms no re-run. <strong>The completejob family cannot produce an honest outcome for an acquired-but-never-run job; saying nothing produces the only honest one</strong>: <code>cancelled</code> at GitHub's ~15-minute unstarted-job horizon.</p>
+<p>Every accepted completejob value drives the run to <code>success</code>, <code>failed</code> is refused, and the green conclusion arms no re-run.
+<strong>The completejob family cannot produce an honest outcome for an acquired-but-never-run job; saying nothing produces the only honest one</strong>: <code>cancelled</code> at GitHub's ~15-minute unstarted-job horizon.</p>
 <h3 id="the-remedy">The remedy<a class="headerlink" href="#the-remedy" title="Permanent link">&para;</a></h3>
 <p>The listener <strong>reports nothing</strong> for its own unrun delivery: the Q628 <code>completejob(abandoned)</code> release is removed (it was live <strong>by default</strong>, since <code>AGC_FANOUT_COMPLETION</code> defaults on, contrary to what the pre-remedy comments here and in <code>broker/types.go</code> claimed), and a reaped-Pending worker's job now ends in the measured told-nothing cancel.
 The Q260 sibling fan-out completion is untouched: with the winner's own delivery still open, sibling completions conclude nothing (the 2026-07-04 dogfood re-route #5 measured per-delivery scoping), though the sibling <code>skipped</code> value has no live probe measurement.
@@ -3024,7 +3026,8 @@ This arm automates it, and the whole design question is <em>when</em>, not <em>w
 Fire it unconditionally and a capacity shortage becomes a re-run storm that deepens the shortage.</p>
 <h3 id="what-capacity-returned-means">What "capacity returned" means<a class="headerlink" href="#what-capacity-returned-means" title="Permanent link">&para;</a></h3>
 <p>The codebase already answers this, for the Q512 capacity-gate latch: a worker pod that <strong>bound to a node</strong> (<code>PodScheduled=True</code>) after the decline is the evidence capacity came back, and the binding rather than the phase is the signal, because a bound pod still pulling images proves as much as a running one.
-Q691 reuses that definition verbatim, with the abandonment time as the "after". <code>podScheduledAt</code> moves from the controller package to the provisioner as <code>PodScheduledAt</code>, so both readers share one answer instead of two.</p>
+Q691 reuses that definition verbatim, with the abandonment time as the "after".
+<code>podScheduledAt</code> moves from the controller package to the provisioner as <code>PodScheduledAt</code>, so both readers share one answer instead of two.</p>
 <p>An entry is registered only on the <code>cancelled</code> force-cancel outcome.
 That is the state the 2026-08-05 measurement showed accepts <code>rerun-failed-jobs</code>; <code>identity_unknown</code> has no endpoint to address, and after an <code>error</code> the run has not been concluded by us at all.</p>
 <h3 id="the-loop-budget">The loop budget<a class="headerlink" href="#the-loop-budget" title="Permanent link">&para;</a></h3>

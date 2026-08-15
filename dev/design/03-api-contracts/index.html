@@ -2778,7 +2778,9 @@
 <li><a href="#35-github-api-rate-limit-budget">3.5. GitHub API Rate Limit Budget</a></li>
 </ul>
 <h2 id="31-kubernetes-crd-schemas">3.1. Kubernetes CRD Schemas<a class="headerlink" href="#31-kubernetes-crd-schemas" title="Permanent link">&para;</a></h2>
-<p>Two Custom Resource Definitions are introduced. <code>ActionsGateway</code> is namespace-scoped and owned by the GMC. <code>RunnerGroup</code> is namespace-scoped and owned by the AGC.
+<p>Two Custom Resource Definitions are introduced.
+<code>ActionsGateway</code> is namespace-scoped and owned by the GMC.
+<code>RunnerGroup</code> is namespace-scoped and owned by the AGC.
 Both live in the tenant's namespace.
 The GMC creates <code>RunnerGroup</code> resources as part of AGC bootstrapping.</p>
 <blockquote>
@@ -3613,7 +3615,9 @@ This pattern makes rotation observable (it is a normal Deployment rollout), test
 <hr />
 <h2 id="33-re-implemented-broker-api-endpoints">3.3. Re-implemented Broker API Endpoints<a class="headerlink" href="#33-re-implemented-broker-api-endpoints" title="Permanent link">&para;</a></h2>
 <blockquote>
-<p><strong>Common pitfall — the two-URL model.</strong> GitHub's broker protocol uses two distinct base URLs and it is easy to conflate them in client code. <strong><code>broker_url</code></strong> is static for a given runner registration and is used by <code>POST /sessions</code> and <code>GET /message</code>. <strong><code>run_service_url</code></strong> is dynamic, extracted from each <code>GetMessage</code> response body, and is the base for that job's <code>POST /acquirejob</code> and <code>POST /renewjob</code> calls.
+<p><strong>Common pitfall — the two-URL model.</strong> GitHub's broker protocol uses two distinct base URLs and it is easy to conflate them in client code.
+<strong><code>broker_url</code></strong> is static for a given runner registration and is used by <code>POST /sessions</code> and <code>GET /message</code>.
+<strong><code>run_service_url</code></strong> is dynamic, extracted from each <code>GetMessage</code> response body, and is the base for that job's <code>POST /acquirejob</code> and <code>POST /renewjob</code> calls.
 The run service URL differs per job and must not be cached globally — caching it across jobs is the most common cause of mysterious 404s in custom broker clients.</p>
 </blockquote>
 <p>These endpoints are called by each AGC instance.
@@ -3667,7 +3671,9 @@ The GMC has no direct relationship with this API.</p>
 </tbody>
 </table>
 <p><strong>Retry policy for <code>GET /message</code>:</strong> Based on <code>MessageListener.cs</code> in the official runner source, the AGC session goroutine should implement a two-tier random backoff on errors: up to 5 consecutive errors use [15s, 30s] jitter; beyond 5 errors the window widens to [30s, 60s].
-After 50 consecutive empty-body (202) responses within 30 minutes, apply the same [15s, 30s] backoff as a server-anomaly guard. <strong>Non-retriable errors</strong> (surface as a <code>RunnerGroup</code> status Condition, do not retry in a tight loop): session not found, pool not found, unauthorized, access denied. <strong>Special case:</strong> a session-expired error should trigger session recreation before resuming the poll loop.</p>
+After 50 consecutive empty-body (202) responses within 30 minutes, apply the same [15s, 30s] backoff as a server-anomaly guard.
+<strong>Non-retriable errors</strong> (surface as a <code>RunnerGroup</code> status Condition, do not retry in a tight loop): session not found, pool not found, unauthorized, access denied.
+<strong>Special case:</strong> a session-expired error should trigger session recreation before resuming the poll loop.</p>
 <p><strong>Session reuse after <code>acquirejob</code>.</strong> Confirmed in Milestone 1 (Investigation C): a goroutine may call <code>GET /message</code> again on the same <code>sessionId</code> immediately after a successful <code>acquirejob</code> — the session remains live and returns <code>202</code> without error.
 The AGC does not need a delete→create cycle between jobs.</p>
 <p><strong>One active session per registered runner agent.</strong> <code>POST /sessions</code> returns <code>409 Conflict</code> if the supplied <code>agentId</code> already has an active session (confirmed in Milestone 1, Investigation D).
@@ -3769,7 +3775,8 @@ The AGC's per-session and per-job request mix produces a predictable steady-stat
 <p><strong>Per-active-job steady-state cost</strong> (one goroutine with a running job):</p>
 <ul>
 <li><code>POST /renewjob</code> — every 60s for the duration of the job, so ~60 requests/hour while the job runs.</li>
-<li>One-shot calls (<code>POST /sessions</code> once per session create, <code>POST /acquirejob</code> once per job) are negligible against the hourly budget. <code>POST /acknowledge</code> is confirmed optional (Investigation A) and is not counted.</li>
+<li>One-shot calls (<code>POST /sessions</code> once per session create, <code>POST /acquirejob</code> once per job) are negligible against the hourly budget.
+  <code>POST /acknowledge</code> is confirmed optional (Investigation A) and is not counted.</li>
 </ul>
 <p><strong>Steady-state ceiling.</strong> A reasonable safe target is <strong>≤ 250 concurrent sessions per installation</strong>, leaving headroom for bursts:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>  250 sessions × 72 message-polls/hr   = 18,000  -- already exceeds 15K alone
