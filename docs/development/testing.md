@@ -1117,8 +1117,14 @@ Before concluding a test failure is a code bug, check whether the problem is in 
 ## Diagnosing failures: measure before asserting a root cause
 
 A root-cause claim needs evidence measured from *this* failure, not a resemblance to a remembered one.
-Two shortcuts recur and both produce confident-but-wrong diagnoses:
+These shortcuts recur, and each produces confident-but-wrong diagnoses:
 
+- **Treating a reproduction you built as the mechanism.** A scenario you construct that produces the failure's exact signature shows the symptom is *achievable* that way, never that it *happened* that way, and the closer the match the more convincing the wrong answer.
+  [Q820](../STATUS.md#Q820)'s plan doc reproduced its signature line for line by racing a `rm -rf` against a live git in the same repository, then spent three rounds hunting a remover that exists nowhere in the suite or the fan-out around it.
+  The trees were intact at the moment of failure, so there was never a remover to find.
+  Promote a reproduction to a diagnosis only on a reading taken from the *failing* system that no rival mechanism could produce: there it was the state of the throwaway trees, which cost ten lines of `ERR` trap and refuted the family the first time it fired.
+  The same instinct helps when the question is narrower than a root cause.
+  To learn which command emits a message, break the operation deterministically rather than racing it: `chmod 500` on `.git/objects` fails every object write on demand, and settled in one run a discriminator whose racing predecessor had generalized from the wrong case.
 - **Symptom-matching a prior issue.** When a failure looks like a known issue — a flake row on the [backlog](../STATUS.md), a previously fixed bug, a memory of "this is always X" — that match is a **hypothesis, not a diagnosis**.
   The same surface symptom (a scheduling timeout, an egress blip, a wedged run) can have a different cause each time.
   Before acting on the remembered cause — and above all before spending a billable re-run, a fix PR, or a state-changing command on it — take a direct measurement from the failing system: read the actual events, describe the actual pod, pull the actual log line.
