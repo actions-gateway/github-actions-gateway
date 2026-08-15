@@ -24,28 +24,21 @@ Resolve the tag target once, as a SHA, and use it for every check afterwards:
 git fetch origin main && git rev-parse origin/main
 ```
 
-**Gates run in more than one lane, so query by SHA and not by branch.** A `push`-lane run sits behind the previous push's per-ref concurrency group and can read `in_progress` or `pending` for a long time while the merge queue has already validated the identical commit.
-`gh run list --branch main` **excludes** merge-queue runs, which is how a green commit reads as unvalidated:
-
 ```bash
-for w in unit-test.yml integration-test.yml security-scan.yml e2e-test.yml; do
-  printf "%-22s " "$w"
-  gh run list --workflow=$w -L 14 --json headSha,event,conclusion,status \
-    -q '[.[] | select(.headSha | startswith("<SHA>"))] | map("\(.event):\(.status)/\(.conclusion // "-")") | join("  ")'
-  echo
-done
+scripts/release/check-gates-green.sh origin/main
 ```
 
-All four green on the target SHA in *some* lane is the bar.
+**It asks by commit, not by branch, and that is the point.** `gh run list --branch main` excludes merge-queue runs, and the queue is where a commit is validated before it lands, while the `push`-lane run for the same commit sits behind the previous push's concurrency group reading `pending`.
+Querying the branch says "not validated" about a commit that is.
+The script passes a gate when *some* lane succeeded on the SHA, and names the lane that answered.
 
 **A path-gated gate that skipped is not automatically a problem, and not automatically fine.** When docs-only merges sit on top of the last code change, prove the code is the same tree instead of re-running anything:
 
 ```bash
-git diff <last-fully-validated-sha>..origin/main --stat -- \
-  'api/**' 'cmd/**' 'broker/**' 'scaleset/**' 'githubapp/**' 'charts/**' 'config/**' 'deploy/**'
+scripts/release/check-artifact-unchanged.sh <last-fully-validated-sha> origin/main
 ```
 
-Empty means the shipped surface is byte-identical and the earlier full run still covers it.
+Exit 0 means nothing on the released surface moved, so the earlier full run still covers it.
 Say which commit you are relying on.
 
 Then confirm no gating row remains, and run the local gate **from a tree that matches the target**, a branch cut from `origin/main`, since a worktree cannot check out `main`:
@@ -159,6 +152,22 @@ Confirm the cluster returned to 0 nodes by **asking the cluster** (`ops.sh at-re
 ## 6. Stop and hand back the decision
 
 Record the verdict in the release plan doc either way, then:
+
+### What may land between a validated candidate and the stable tag
+
+A candidate's validation covers the tree it was cut from, so anything merged after it that moves an artifact makes the verdict cover something other than what ships.
+That is how `v1.5.0-rc.1` was superseded: it validated, eight rows merged on top, and its verdict stopped describing `main`.
+
+**The rule is byte-identical artifacts, not "docs only".** Documentation changes are expected in this window and cannot be avoided, because the validation verdict does not exist until the candidate is tagged, so the notes' Validation section is necessarily written afterwards.
+But the labels do not line up: `charts/actions-gateway/README.md` is a markdown file that **ships inside the chart tarball**, so a pure-docs pull request can change a published chart's bytes.
+
+Check rather than classify, before tagging the stable release:
+
+```bash
+scripts/release/check-artifact-unchanged.sh <validated-candidate-sha> origin/main
+```
+
+Exit 1 means the stable tag would ship something no candidate validated: revert it, or cut and validate a new candidate.
 
 **Green.** Report the evidence (e2e counts, sizing legs, CRD smoke, the artifact checks) and **ask whether to promote**.
 Do not tag a stable release, and do not treat the question as rhetorical.

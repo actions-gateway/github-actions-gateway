@@ -43,9 +43,11 @@
 //	semverfloor [-from REF] [-to REF]
 //	semverfloor [-from REF] [-to REF] -notes
 //	semverfloor -check-sources
+//	git diff --name-only A..B | semverfloor -ships
 package main
 
 import (
+	"bufio"
 	"flag"
 	"fmt"
 	"os"
@@ -61,13 +63,63 @@ func main() {
 		to           = flag.String("to", "", "end of the window (default: origin/main, else HEAD)")
 		checkSources = flag.Bool("check-sources", false, "assert the release surface derivation still matches publish.yml; exit 1 if not")
 		notes        = flag.Bool("notes", false, "enumerate the window for the release notes, with the residue path-classified")
+		ships        = flag.Bool("ships", false, "read paths on stdin, print those on the released surface; ignores commit type entirely")
 	)
 	flag.Parse()
+
+	if *ships {
+		if err := runShips(); err != nil {
+			_, _ = fmt.Fprintln(os.Stderr, "semverfloor:", err)
+			os.Exit(1)
+		}
+		return
+	}
 
 	if err := run(*from, *to, *checkSources, *notes); err != nil {
 		_, _ = fmt.Fprintln(os.Stderr, "semverfloor:", err)
 		os.Exit(1)
 	}
+}
+
+// runShips filters stdin paths through the derived release surface and prints the
+// ones a released artifact is built from.
+//
+// It exists because the floor answers a different question. The floor reads a
+// commit's *type* first, so a `build:` or `docs:` commit that edits a shipped file
+// is withheld from it by design — correct for choosing a version bump, wrong for
+// asking whether an artifact moved. A chart README is the case that separates them:
+// it ships inside the chart tarball and carries no semver weight.
+//
+// Callers get the derivation rather than a path list of their own: the surface
+// follows publish.yml's image matrix through each Dockerfile's COPY --from= edges
+// to the go build behind it, so adding an image or a chart needs nothing updated
+// here. A hand-kept list in a caller would silently stop covering a new artifact.
+func runShips() error {
+	root, err := repoRoot()
+	if err != nil {
+		return err
+	}
+	sources, err := DeriveSources(root)
+	if err != nil {
+		return err
+	}
+	surface, err := deriveSurface(root, sources)
+	if err != nil {
+		return err
+	}
+
+	sc := bufio.NewScanner(os.Stdin)
+	sc.Buffer(make([]byte, 0, 64*1024), 4*1024*1024)
+	for sc.Scan() {
+		p := strings.TrimSpace(sc.Text())
+		if p == "" {
+			continue
+		}
+		if surface.Ships(p) {
+			fmt.Println(p)
+		}
+	}
+	return sc.Err()
 }
 
 func run(from, to string, checkSources, notes bool) error {
