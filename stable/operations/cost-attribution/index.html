@@ -2850,7 +2850,7 @@ That is the live, measured version of the idle-floor saving the calculator estim
 <a href="#how-zero-idle-compute-shows-up-in-the-reports">How zero-idle shows up</a> below shows what to look for.</p>
 <hr />
 <h2 id="the-labels-and-namespaces-to-query">The labels and namespaces to query<a class="headerlink" href="#the-labels-and-namespaces-to-query" title="Permanent link">&para;</a></h2>
-<p>These are the labels GAG actually stamps (verified against the code in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.5.0/api/apilabels/labels.go"><code>api/apilabels/labels.go</code></a> and the AGC/GMC builders).
+<p>These are the labels GAG actually stamps (verified against the code in <a href="../../api/apilabels/labels.go"><code>api/apilabels/labels.go</code></a> and the AGC/GMC builders).
 They are <strong>additive metadata</strong> — never build an allocation <em>filter you depend on for billing</em> around the controllers' functional selectors (<code>app:</code>, <code>actions-gateway/component: workload</code>); those exist for NetworkPolicy/Service wiring and may change.
 Use the <code>app.kubernetes.io/*</code> set below, which is the stable contract for tooling.</p>
 <table>
