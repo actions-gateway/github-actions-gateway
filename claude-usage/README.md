@@ -125,6 +125,7 @@ Each is regenerable from the CSVs.
 ### Overview — all three tokens/lines views together
 ![Tokens vs lines, cost per line, and the lines composition on one timeline](charts/tokens_overview.png) The three tokens-vs-lines views combined into one shared-timeline figure: **(1)** magnitude — tokens vs lines authored on a log axis (gap = cost/line); **(2)** breakdown — what those lines are (the composition); **(3)** cost — cumulative tokens ÷ line, with the value at each weekly guide.
 Event lines run through all three panels (labelled along the bottom of panel 1).
+Where one crosses a value label it passes *behind* the digits and breaks around them, rather than striking through: the labels are drawn above the lines and cut them with their own white halo, so a gap in an event line at a number is the number winning, not a change of line style.
 The standalone versions follow below.
 
 ### Daily token usage by model
