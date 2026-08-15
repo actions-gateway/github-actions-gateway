@@ -197,10 +197,11 @@ Its bars and their trend cover the whole project; the commits-per-hour line star
 ![What the project does on each day of the week](charts/rhythm_weekday.png) ![The same, by local hour](charts/rhythm_hour.png) Aggregates rather than time series: every day of the project lands in one bucket.
 Built to look rather than to confirm, since which of these would differ by the clock was not known in advance.
 
-**Wednesday is the outlier, on every panel at once.** Fewest commits (13.6 a day against Saturday's 30.0), the *most* tokens spent (4.2M a day, the highest of any day), the least time at the keyboard (26% against Saturday's 60%), and the longest PR waits by both median and p90.
-Most spend, least output, least presence.
-That is one fact seen five ways rather than five findings: it is the day the maintainer is least available, so sessions run on without anyone to steer or merge them.
-Wednesday's *median* commit count is lowest too, so it is a consistent property of the twelve Wednesdays rather than one bad day dragging a mean.
+**Which day it is moves these series more than any tooling change did.** Commits per day range from 13.6 to 30.0 across the week, a wider spread than the step at any model or machine marker on the timeline charts.
+
+**Spend and output do not move together across that range.** The heaviest-spend day is not the heaviest-output day, and the days with the least time at the keyboard are the ones where the two diverge most.
+That is what unattended running looks like from the outside: the machine keeps working when nobody is there to steer it or merge the result.
+It is also the clearest evidence here for the caveat in Methodology below, that the input none of these series measures is how many hours a person gave the project.
 
 **Weekends run 1.4× weekdays**, 28.0 commits a day against 19.9.
 A permutation test over 20,000 shuffles puts that gap at p = 0.020, so it is not the day-to-day variance.
