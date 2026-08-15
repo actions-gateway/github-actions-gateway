@@ -2,7 +2,8 @@
 
 > **Status: scope decided 2026-08-05.
 > No gating Queue rows remain.** All three `1.4-gate` items shipped 2026-08-08: Q691, Q554 (its [plan](archive/runner-template-library.md) archived), and Q166.
-> Everything else the release contains is already merged. `v1.4.0-rc.1` was cut from `162d97a7` on 2026-08-09 and its dogfood validation **PASSED on the first attempt**.
+> Everything else the release contains is already merged.
+> `v1.4.0-rc.1` was cut from `162d97a7` on 2026-08-09 and its dogfood validation **PASSED on the first attempt**.
 > Work landed after that commit (the Q766 ScaleSet port and the docs sweep), so rc.1 is no longer the candidate: **an rc.2 follows once those merge**, and it is the one that has to validate before the stable tag.
 
 ## The minor was forced before anyone chose it
@@ -19,7 +20,8 @@ Six change the shipped artifact, so a patch release stopped being available the 
 | Force-cancel an abandoned job's run (Q683) | Runtime behaviour operators observe |
 | Scale-set conclusion guards persisted across a hard kill (Q606) | Durability behaviour change |
 
-The other eleven `feat` commits are `agent`, `ci`, `scripts`, `backlog`, `docs`, `metrics` and `probe`: development tooling and CI that no released binary or chart contains. **The classification is by scope, not by conventional-commit type**, which is why a raw `feat` count answers the wrong question.
+The other eleven `feat` commits are `agent`, `ci`, `scripts`, `backlog`, `docs`, `metrics` and `probe`: development tooling and CI that no released binary or chart contains.
+**The classification is by scope, not by conventional-commit type**, which is why a raw `feat` count answers the wrong question.
 
 Nothing tracked this.
 There is no `CHANGELOG.md`, no unreleased-changes file, and the `1.0-gate`/`1.3-gate`/`2.0-gate` labels were carried by **zero** rows when this scope was decided.
@@ -28,7 +30,8 @@ A semver-floor instrument is being built to close that; until it lands, the floo
 
 ## What 1.4.0 adds beyond what is merged
 
-**Q166: v2 API M4, cross-namespace EgressProxy sharing. — shipped.** The one item here whose absence was a liability rather than a deferral. `sharing.allowedNamespaces` was **served in the v2beta1 API with no enforcement**, so an operator could set a field that nothing honoured.
+**Q166: v2 API M4, cross-namespace EgressProxy sharing. — shipped.** The one item here whose absence was a liability rather than a deferral.
+`sharing.allowedNamespaces` was **served in the v2beta1 API with no enforcement**, so an operator could set a field that nothing honoured.
 That is a shipped defect wearing a feature label, and every release that shipped it that way hardened a dormant contract further.
 Demand fired 2026-08-01.
 
@@ -43,7 +46,8 @@ That constraint is now a gate rather than a convention: `make template-library-c
 The operator surface is [runner-template-library.md](../operations/runner-template-library.md); the implementation findings are in the [archived plan](archive/runner-template-library.md).
 
 **Q691: auto re-run a force-cancelled abandoned run.** Closes a gap this cycle opened.
-Q683's cancelled ending accepts `rerun-failed-jobs`, measured, so operators re-ran by hand. **Shipped 2026-08-08:** the run is re-run when a worker pod binds for the owner again, and the loop a re-run into a starved pool would otherwise cause is bounded by the existing per-run retry budget, with exhaustion on `eviction_retries_exhausted_total{cause="abandoned"}` and expiry on `abandoned_run_rerun_waits_total{outcome="expired"}`.
+Q683's cancelled ending accepts `rerun-failed-jobs`, measured, so operators re-ran by hand.
+**Shipped 2026-08-08:** the run is re-run when a worker pod binds for the owner again, and the loop a re-run into a starved pool would otherwise cause is bounded by the existing per-run retry budget, with exhaustion on `eviction_retries_exhausted_total{cause="abandoned"}` and expiry on `abandoned_run_rerun_waits_total{outcome="expired"}`.
 
 ## Deferred out of 1.4, and why
 
@@ -73,18 +77,24 @@ This is docs-only, touches no shipped artifact, and does not need a gate row; it
 **The inaccurate claims land here, not in 1.5.** They are wrong now, and every day they stay up is a day a prospect can check one and stop trusting the page:
 
 - The executive summary promised OOM-killed and node-lost jobs re-run automatically, in three places.
-  The provisioner recovers eviction, preemption, and external graceful deletion; an OOM-killed container is explicitly excluded as "the job failed on its own merits". **Corrected 2026-08-06.**
+  The provisioner recovers eviction, preemption, and external graceful deletion; an OOM-killed container is explicitly excluded as "the job failed on its own merits".
+  **Corrected 2026-08-06.**
 - The ~10 minute recovery figure was the worst case quoted as the case.
-  A preemption or drain concludes in a measured 15-26s. **Corrected 2026-08-06.**
-- GitHub's queue timeout is 24 hours; "up to 48 h" came from a GHES page that has since been rewritten. **Corrected 2026-08-06.**
-- Two ARC-side comparison rows went false at datable upstream releases: 0.13.1 made quota-blocked pod creation self-healing, and 0.14.0 added multi-label scale sets, which GAG does not have. **Corrected 2026-08-08.**
+  A preemption or drain concludes in a measured 15-26s.
+  **Corrected 2026-08-06.**
+- GitHub's queue timeout is 24 hours; "up to 48 h" came from a GHES page that has since been rewritten.
+  **Corrected 2026-08-06.**
+- Two ARC-side comparison rows went false at datable upstream releases: 0.13.1 made quota-blocked pod creation self-healing, and 0.14.0 added multi-label scale sets, which GAG does not have.
+  **Corrected 2026-08-08.**
 - `why-gag.md` states ARC ships no bundled dashboard; it ships a per-scale-set Grafana sample.
-  The defensible claim is that nothing aggregates across scale sets or per tenant. **Corrected 2026-08-08.**
+  The defensible claim is that nothing aggregates across scale sets or per tenant.
+  **Corrected 2026-08-08.**
 
 **`docs/features.md` is the inventory and needs a sweep.** It was created 2026-08-01 and is close to complete, but 1.4 adds six user-facing features ahead of the three gating rows, and a feature that never reaches the inventory never reaches the curated surfaces either.
 
 **One under-claim is worth pulling up now** rather than waiting for 1.5's larger pass: no-PEM workload identity gets a single line in `features.md` and a nine-word aside inside a YAML footnote, while the weaker claim ("App keys never in env") occupies a security pillar.
-ARC reads the App private key from a Secret, so "the key never enters the cluster" is a row that writes itself. **Shipped 2026-08-09:** `why-gag.md` gains a credential row in the ARC table, and the security pillar carries the stronger claim under the weaker one.
+ARC reads the App private key from a Secret, so "the key never enters the cluster" is a row that writes itself.
+**Shipped 2026-08-09:** `why-gag.md` gains a credential row in the ARC table, and the security pillar carries the stronger claim under the weaker one.
 
 The row is narrower than the paragraph above assumed, and the difference is the whole point of measuring before writing a comparative claim.
 ARC's *default* does read the key from a Secret, and copies it into the listener config Secret the controller generates, so the PEM is at rest twice.
@@ -103,7 +113,8 @@ Three content gaps remained, all created this cycle, and all are now closed.
 
 **The auto-re-run docs did not agree with each other about Q683 and Q691, and none of them carried the tier scope.** `04-operational-flows.md` records the scope correctly ("Classic tier only, matching the force-cancel it recovers"); no operator-facing or marketing surface repeated it.
 Measured from source: `forceCancelAbandonedRun` has one caller, inside the classic `provision()` handler, and the ScaleSet tier's `disruptionAwaitingRecovery` has three arms (eviction, preemption, deletion) with no abandoned case, deliberately.
-So on the ScaleSet tier, which is the v2 default every new tenant runs, a worker reaped while Pending still concludes at GitHub's ~15-minute unstarted-job timeout and needs a manual re-run. `features.md` had been advertising the capability to those tenants unscoped, and it also said the run "accepts a re-run afterwards", which describes the pre-Q691 manual state.
+So on the ScaleSet tier, which is the v2 default every new tenant runs, a worker reaped while Pending still concludes at GitHub's ~15-minute unstarted-job timeout and needs a manual re-run.
+`features.md` had been advertising the capability to those tenants unscoped, and it also said the run "accepts a re-run afterwards", which describes the pre-Q691 manual state.
 The consolidated matrix in `troubleshooting.md` said the opposite, excluding a never-started worker "by design" with no note that the classic tier now recovers it.
 All three are corrected, and the matrix preamble names `abandoned` as the fifth, out-of-table cause.
 This was a propagation failure rather than a code gap: the design doc had the answer the whole time.
@@ -130,7 +141,8 @@ The `upgrade.md` placement also turned out to be the load-bearing part: `operato
 
 ## Pre-flight: the API surface this tag publishes
 
-Recorded 2026-08-09 from `scripts/release/api-surface-since.sh` over `v1.3.0..162d97a7`, the commit `v1.4.0-rc.1` was cut from, per [release.md § Pre-flight](../operations/release.md#1-pre-flight). **Verdict: ship as-is.** Four wire fields and one condition reason are published for the first time; no enum constraint and no default changed.
+Recorded 2026-08-09 from `scripts/release/api-surface-since.sh` over `v1.3.0..162d97a7`, the commit `v1.4.0-rc.1` was cut from, per [release.md § Pre-flight](../operations/release.md#1-pre-flight).
+**Verdict: ship as-is.** Four wire fields and one condition reason are published for the first time; no enum constraint and no default changed.
 
 | Addition | Carried on | Why the shape is right |
 |---|---|---|
@@ -166,7 +178,8 @@ Each green check was re-run against a deliberately wrong identity (a `refs/heads
 Worth stating in the notes because it is checkable and because it is the return on this cycle's release-tooling work, not a lucky run.
 The 1.3 line needed four candidates to produce any verdict at all: rc.1 aborted when the gate's then repo-wide e2e routing caught concurrent sessions' CI, rc.2 returned Q550 and Q551 instead of a result, rc.3 aborted at `start.sh`'s AGC wait, and rc.4 was "the first verdict any RC in this line has produced" ([release-1.3.md](release-1.3.md)).
 
-**Scope the claim to what the record supports.** `validate-release.sh` landed 2026-07-12 (Q294, #619), the day `v1.1.0` was tagged, so `v1.0.0` and `v1.1.0` predate it entirely. `v1.2.0` had a single RC and the gate did exist by then, but no plan doc records a validation run for it, and no record is not the same as no run.
+**Scope the claim to what the record supports.** `validate-release.sh` landed 2026-07-12 (Q294, #619), the day `v1.1.0` was tagged, so `v1.0.0` and `v1.1.0` predate it entirely.
+`v1.2.0` had a single RC and the gate did exist by then, but no plan doc records a validation run for it, and no record is not the same as no run.
 So the defensible sentence is that 1.3 is the only prior line with a recorded validation history and rc.1 here is the first candidate to pass first time, not that this has never happened.
 
 The three failure modes that cost the 1.3 line its early candidates were each fixed since: run-scoped dispatch replaced repo-wide routing (repo-wide is now an explicit `E2E_ROUTE_VAR=1` opt-in), the gate settles the e2e lane before it scales a node, and Q629, Q640 and Q630 bounded the run watch, reclaimed orphaned leases, and reconciled sentinel silence against run status.

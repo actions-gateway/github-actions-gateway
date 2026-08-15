@@ -42,7 +42,8 @@ Per-item detail follows below for historical context.
 
 ### H1 — No metric assertions for any M3 Prometheus metrics ✅ Done
 
-**What's missing:** The provisioner tests pass `nil` for `*listener.Metrics`, so `JobDuration`, `EvictionRetries`, and `EvictionRetriesExhausted` are never asserted. `PodCreationLatency` is declared in `Metrics` but never emitted anywhere in `provisioner.go` — dead code that a metric assertion would immediately surface.
+**What's missing:** The provisioner tests pass `nil` for `*listener.Metrics`, so `JobDuration`, `EvictionRetries`, and `EvictionRetriesExhausted` are never asserted.
+`PodCreationLatency` is declared in `Metrics` but never emitted anywhere in `provisioner.go` — dead code that a metric assertion would immediately surface.
 
 **Proposed fix:**
 
@@ -127,7 +128,8 @@ A bug that sets `aesKey` to an empty slice instead of `nil` in branch (b) would 
 
 ### M2 — `writePayloadToPipe` with an empty payload is untested ✅ Done
 
-**What's missing:** A misconfigured empty Kubernetes Secret produces a `[0,0,0,0]` wire message with no body bytes. `Runner.Worker` would then read zero bytes after the prefix, potentially hanging or erroring.
+**What's missing:** A misconfigured empty Kubernetes Secret produces a `[0,0,0,0]` wire message with no body bytes.
+`Runner.Worker` would then read zero bytes after the prefix, potentially hanging or erroring.
 No test covers this case or verifies the length prefix round-trips correctly for large payloads.
 
 **Proposed fix:**

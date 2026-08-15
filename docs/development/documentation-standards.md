@@ -64,7 +64,8 @@ Length is the most common defect in this tree and the hardest to see from inside
 Run these four passes before touching wording.
 Every example below is from one review of the marketing pages, where 24 rounds of feedback collapsed into these four causes.
 
-**Ask whether the block belongs on this page at all.** Three questions: does *this* page's reader need it, does it belong on another page, and what audience wants it and where would they look for it. `why-gag.md` carried a 424-word section on the v2 API decomposition, 22% of the page's height, whose four comparison points were already rows in the table directly above it, and whose subject was a GAG v1-to-v2 contrast rather than the ARC comparison the page exists for.
+**Ask whether the block belongs on this page at all.** Three questions: does *this* page's reader need it, does it belong on another page, and what audience wants it and where would they look for it.
+`why-gag.md` carried a 424-word section on the v2 API decomposition, 22% of the page's height, whose four comparison points were already rows in the table directly above it, and whose subject was a GAG v1-to-v2 contrast rather than the ARC comparison the page exists for.
 Deleting it lost nothing: `features.md` and [appendix H](../design/appendix-h-v2-api-decomposition.md) already served the reader who wanted it.
 
 **Never restate in prose what a diagram or table already carries.** Prose beside a visual is the visual admitting it did not work.
@@ -119,7 +120,8 @@ Earn trust by being specific and honest.
   Several per paragraph is a signature, and it is the surface tell readers spot fastest.
   Reach for a comma, a period, a colon, or parentheses first, and keep the dash only where the aside really does interrupt the sentence and no other mark carries it.
   Two dashes in one sentence almost always means the sentence wants to be two sentences.
-  Above roughly 3 per 1,000 words, rewrite. `make em-dash-check` enforces it: see [Enforcing the em-dash rule](#enforcing-the-em-dash-rule).
+  Above roughly 3 per 1,000 words, rewrite.
+  `make em-dash-check` enforces it: see [Enforcing the em-dash rule](#enforcing-the-em-dash-rule).
 - **Formatting in moderation.** Bold the keyword, not the sentence; sentence-case headings, not Title Case; no emoji as bullets or status markers.
   Mechanical, every-line formatting is itself a tell.
   (The one sanctioned Title-Case heading is the `## Table of Contents` index — a fixed, doc-wide convention, not prose.)
@@ -151,7 +153,8 @@ A gate set at 3 would land red on everything and be switched off, so [`scripts/d
 A listed file may not gain em-dashes; a file with no entry, including every new doc, is held to the rule itself.
 
 [Q650](../STATUS.md#Q650) is the cleanup.
-As it lands, `make em-dash-baseline` re-records the ceilings and the diff is the measure of what it cleared; an entry disappears once its file reaches the rule, and an empty baseline means the ratchet is done. `make em-dash-report` prints every file's density, worst first, which is the worklist.
+As it lands, `make em-dash-baseline` re-records the ceilings and the diff is the measure of what it cleared; an entry disappears once its file reaches the rule, and an empty baseline means the ratchet is done.
+`make em-dash-report` prints every file's density, worst first, which is the worklist.
 
 ## An upstream-behavior claim cites a measurement
 
@@ -233,7 +236,8 @@ From [`autoscaler_verdict.go`](../../cmd/agc/internal/controller/autoscaler_verd
 When the measurement needs more than a clause, it goes in `docs/` and the comment links there.
 Growing a provenance paragraph in the source is not the compliant form.
 
-**A live gate beats a date.** Where a gate re-measures the claim on every run, name the gate instead: it is fresher than any date, and it turns red when upstream moves. `make test-autoscaler` and `make test-karpenter` drive real autoscalers and assert the matcher's verdict on the events that come back, which is why the reason constants they pin carry no per-claim date.
+**A live gate beats a date.** Where a gate re-measures the claim on every run, name the gate instead: it is fresher than any date, and it turns red when upstream moves.
+`make test-autoscaler` and `make test-karpenter` drive real autoscalers and assert the matcher's verdict on the events that come back, which is why the reason constants they pin carry no per-claim date.
 
 ### A competitor-side verdict carries its own stamp
 
@@ -247,7 +251,8 @@ The rule is therefore per cell, and mechanical enough to gate:
 
 - a **verdict** carries exactly one `<span class="gag-asof">VERSION · DATE</span>`, naming the upstream version it was read at and the day it was read;
 - **`.gag-unverified`** is the state for a claim we believe and have not checked, and it carries no stamp, because a stamp is what a verdict rests on;
-- there is no third case. `make comparison-stamps-check` fails the page, in `make check`.
+- there is no third case.
+  `make comparison-stamps-check` fails the page, in `make check`.
 
 Only the competitor column is stamped.
 A wrong claim about this repo's own behaviour goes red in a test, which is the "our own behaviour is not upstream" exemption above; requiring a citation there would add nothing to that gate and would make every GAG cell unfixable without one nobody can produce.
@@ -328,7 +333,8 @@ make md-reflow
 ```
 
 `make md-reflow-check` reports what is unformatted without writing, `make md-reflow-diff` prints the change, and `make md-reflow-explain` names every paragraph the formatter declines, where it is, and why.
-The check is in `make check` and costs about a second for the whole tree. `.mdreflow.yaml` at the repo root holds the configuration: `sentence` mode at `max-width: 0`, excluding the two generated docs, `docs/STATUS.md`, and the `AGENTS.md` symlink. mdreflow always excludes `vendor/`, so the 471 tracked vendored Markdown files are never walked.
+The check is in `make check` and costs about a second for the whole tree.
+`.mdreflow.yaml` at the repo root holds the configuration: `sentence` mode at `max-width: 0`, excluding the two generated docs, `docs/STATUS.md`, and the `AGENTS.md` symlink. mdreflow always excludes `vendor/`, so the 471 tracked vendored Markdown files are never walked.
 
 ### What stays hard-wrapped, and why it stays that way
 
@@ -364,7 +370,8 @@ The coverage figure counts line breaks.
 It cannot see whether a page still renders what it should, and that difference is not academic: a MkDocs callout flattened into a paragraph still scores as sentence-per-line, because it is.
 
 Adopting this convention destroyed 7 of 17 callouts on this tree and every gate stayed green, because the output was still valid Markdown that built.
-What caught it was rendering the site before and after and diffing every page. **A change that moves line breaks across the docs is verified by a `mkdocs build` diff, not by `make check` and not by a coverage number.**
+What caught it was rendering the site before and after and diffing every page.
+**A change that moves line breaks across the docs is verified by a `mkdocs build` diff, not by `make check` and not by a coverage number.**
 
 Two pages differ structurally under that diff today, and both are the reflow fixing latent bugs rather than causing them: a sentence wrapped so `10.` began a line had been rendering as a stray list item, and a heading missing from a page's nav now appears.
 Wrapping mid-sentence is what puts a number, a `---`, or another block-starting token at line start where Markdown reinterprets it.

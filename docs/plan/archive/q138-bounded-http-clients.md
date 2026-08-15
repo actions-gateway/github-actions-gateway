@@ -33,7 +33,8 @@ Also retrofit the two explicit prod clients that already carry a 60s timeout so 
 ## Long-poll exception
 
 `broker.NewHTTPClient()` already sets a `ResponseHeaderTimeout` sized just above the broker's 50s long-poll hold and deliberately sets **no** overall `Timeout` (an overall deadline would sever a healthy long-poll).
-Change `Client.httpClient()` so the zero-value fallback returns a package-level `defaultBrokerClient = NewHTTPClient()` instead of `http.DefaultClient`, and document it as the one sanctioned exception. `brokertest.Server.HTTPClient()` keeps `http.DefaultClient` (talks to a local `httptest` server) with an inline `//nolint:forbidigo` + reason.
+Change `Client.httpClient()` so the zero-value fallback returns a package-level `defaultBrokerClient = NewHTTPClient()` instead of `http.DefaultClient`, and document it as the one sanctioned exception.
+`brokertest.Server.HTTPClient()` keeps `http.DefaultClient` (talks to a local `httptest` server) with an inline `//nolint:forbidigo` + reason.
 
 ## Lint gate (root `.golangci.yml`)
 
@@ -48,10 +49,12 @@ Change `Client.httpClient()` so the zero-value fallback returns a package-level 
 
 ## Docs
 
-- `docs/operations/troubleshooting.md`: added a "Reconcile or Token Mint Hangs on a Slow GitHub Endpoint" section (sibling to the Q108 long-poll stall), describing the new fail-fast behaviour and the long-poll exception. **Done.**
+- `docs/operations/troubleshooting.md`: added a "Reconcile or Token Mint Hangs on a Slow GitHub Endpoint" section (sibling to the Q108 long-poll stall), describing the new fail-fast behaviour and the long-poll exception.
+  **Done.**
 - Remove the Q138 Queue row (its own isolated commit).
 
 ## Outcome
 
 - `lint`/`noctx`: noctx was evaluated and **dropped** — golangci-lint exposes no noctx config, so it also fails `net.Listen` / `net.DialTimeout` / `os/exec.Command` (the egress proxy's listeners, the e2e harness), all unrelated to the no-read-timeout class. forbidigo alone precisely gates the HTTP entrypoints; prod request construction already uses `http.NewRequestWithContext` throughout.
-- Gate verified: a fresh `http.DefaultClient` / `http.Get` use is rejected by `make lint`. `make check` green.
+- Gate verified: a fresh `http.DefaultClient` / `http.Get` use is rejected by `make lint`.
+  `make check` green.

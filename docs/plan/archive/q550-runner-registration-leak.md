@@ -26,10 +26,12 @@ The two shipped separately the same day: this fix removes most of what *causes* 
 **The stub could not express the bug.** `handleGenerateJIT` never recorded the name it minted, so no test at any tier could observe a leaked registration — the leak was invisible to the whole suite by construction.
 Teaching the fake to register on mint (and to `409` a re-mint of a live name, as the real endpoint does) is a finding about the real interface, not test scaffolding: it is what made the two cases below distinguishable.
 
-**Q334's reclaim already covers the self-collision — when the record resolves.** With the faithful stub, a job that fails to provision three times and retries ends with exactly one record: each attempt's `409` triggers the by-name delete and re-registers under the same base name. `TestListener_RetryReclaimsItsOwnLeftoverRegistration` pins that, and it is why the original framing of "retries 409 against their own leftovers" is not by itself the accumulation mechanism.
+**Q334's reclaim already covers the self-collision — when the record resolves.** With the faithful stub, a job that fails to provision three times and retries ends with exactly one record: each attempt's `409` triggers the by-name delete and re-registers under the same base name.
+`TestListener_RetryReclaimsItsOwnLeftoverRegistration` pins that, and it is why the original framing of "retries 409 against their own leftovers" is not by itself the accumulation mechanism.
 
 **The accumulation needs the reclaim to resolve nothing.** When a record holds the name at `generatejitconfig` but the REST name filter does not return it, `DeregisterRunnerByName` reports `(false, nil)` — which the code ignored silently, with no log at any level — and every retry escalates to a suffixed name that no later attempt ever revisits.
-Each of those registers a record nothing will collect. `TestListener_UnresolvableLeftoverAccumulatesSuffixedRecords` pins it.
+Each of those registers a record nothing will collect.
+`TestListener_UnresolvableLeftoverAccumulatesSuffixedRecords` pins it.
 This is hypothesis (2) below, now demonstrated as *a* sufficient mechanism against the fake; whether it is what the live API did on 2026-07-31 is still unconfirmed, which is why the `(false, nil)` branch now logs at `Warn` — an operator hitting it will see it named.
 
 The fix closes the leak under either mechanism, so nothing here blocked implementation.
@@ -43,9 +45,11 @@ These come from reading the code and from the incident, not from a live probe:
 - `Client.GenerateJITConfig` pre-registers a runner record server-side ([client.go:512](../../../scaleset/client.go)).
   The listener mints one per assigned job before provisioning.
 - The runner name is `{scaleSetName}-{jobID}`, deterministic per job (`Listener.runnerName`), with `-1`/`-2`/`-3` suffixes on the conflict-retry path.
-- Nothing in the reap path deregisters anything. `reapWorkerPodsByLabel` ([runner_shared.go:232](../../../cmd/agc/internal/controller/runner_shared.go)) patches a deletion reason and deletes the pod.
+- Nothing in the reap path deregisters anything.
+  `reapWorkerPodsByLabel` ([runner_shared.go:232](../../../cmd/agc/internal/controller/runner_shared.go)) patches a deletion reason and deletes the pod.
   It has no GitHub client and no runner name to act on.
-- **The minted runner name never leaves the listener.** `scalesetlistener.Job` carries `RunnerName`, but `ensureScaleSetListener`'s `Provision` closure ([runnerset_scaleset.go:165](../../../cmd/agc/internal/controller/runnerset_scaleset.go)) copies `JobID`, `JITConfig`, and the run identity into `provisioner.ScaleSetJob` and drops `RunnerName` on the floor. `ScaleSetJob` has no such field.
+- **The minted runner name never leaves the listener.** `scalesetlistener.Job` carries `RunnerName`, but `ensureScaleSetListener`'s `Provision` closure ([runnerset_scaleset.go:165](../../../cmd/agc/internal/controller/runnerset_scaleset.go)) copies `JobID`, `JITConfig`, and the run identity into `provisioner.ScaleSetJob` and drops `RunnerName` on the floor.
+  `ScaleSetJob` has no such field.
   So no downstream component *could* deregister the right record today.
 - A record is removed only by the ephemeral runner deregistering itself after it completes a job, or by Q334's opportunistic reclaim on a 409 (`generateJITConfig`'s base-name branch).
 
@@ -62,7 +66,8 @@ Two things it does not cover, either of which produces the observed accumulation
    If scale-set JIT records are not visible under the REST prefix the client derives, *no* reclaim ever works and every retry leaks a fresh name.
 
 (1) is certain from the code.
-(2) is a hypothesis about the live API; Phase 0 records which one the 22 records are consistent with. **The fix below closes the leak under either**, so implementation does not block on the answer — but a `(false, nil)` from a name we believe is registered is worth a log line, and Phase 0 adds one either way.
+(2) is a hypothesis about the live API; Phase 0 records which one the 22 records are consistent with.
+**The fix below closes the leak under either**, so implementation does not block on the answer — but a `(false, nil)` from a name we believe is registered is worth a log line, and Phase 0 adds one either way.
 
 ## Design: the worker pod is the registry
 

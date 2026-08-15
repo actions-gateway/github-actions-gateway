@@ -29,7 +29,9 @@ See [appendix-h §H.15](../../design/appendix-h-v2-api-decomposition.md#h15-othe
 
 1. **API** (`api/v2alpha1`): `CredentialTypeWorkloadIdentity` enum value; `WorkloadIdentity` member on `GitHubCredentials`; `ExternalSigner` (provider discriminator) + `VaultSigner` + `VaultKubernetesAuth` types; a per-member CEL `iff` rule that *extends* the union (never an N-way "exactly one of"); a per-provider CEL `iff` on `ExternalSigner`.
    Regenerate deepcopy + CRDs + sync Helm chart CRDs.
-2. **`githubapp.Signer` interface**: pluggable JWT signing. `pemSigner` wraps the existing in-cluster crypto path (RS256/EdDSA) with **zero behavior change**. `NewInstallationTokenProviderWithSigner` builds a provider around any `Signer`.
+2. **`githubapp.Signer` interface**: pluggable JWT signing.
+   `pemSigner` wraps the existing in-cluster crypto path (RS256/EdDSA) with **zero behavior change**.
+   `NewInstallationTokenProviderWithSigner` builds a provider around any `Signer`.
 3. **`githubapp/vaultsigner`**: the MVP external signer.
    Vault Kubernetes auth login (projected SA token → Vault client token, cached to its lease) + Vault transit `sign` (RSA pkcs1v15 + sha2-256 = RS256).
    HTTPS-by-default with an explicit dev/test opt-in.

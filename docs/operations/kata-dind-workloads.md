@@ -1,6 +1,7 @@
 # Running DinD / image-build workloads under Kata Containers
 
-**Audience:** Platform engineers running a GitHub Actions Gateway (GAG) cluster. **Goal:** run a Docker-in-Docker (DinD) or in-runner image-build job under [Kata Containers](https://katacontainers.io/) — a Kernel-based Virtual Machine (KVM) micro-VM runtime — with **no** `privileged: true` container anywhere in the worker pod.
+**Audience:** Platform engineers running a GitHub Actions Gateway (GAG) cluster.
+**Goal:** run a Docker-in-Docker (DinD) or in-runner image-build job under [Kata Containers](https://katacontainers.io/) — a Kernel-based Virtual Machine (KVM) micro-VM runtime — with **no** `privileged: true` container anywhere in the worker pod.
 
 Kata is the only approach in [In-runner image builds](in-runner-image-builds.md) that gives a real machine boundary around an *inner Docker daemon*.
 Rootless BuildKit and Kaniko avoid the daemon entirely; Sysbox runs the daemon behind a user-namespace; classic privileged DinD runs it on the host kernel.
@@ -213,19 +214,23 @@ Record the final minimal capability set for your runbook.
 Dropping `privileged: true` does not come free — six things must be arranged that a privileged container gets implicitly.
 All were validated live; the reference implementation is the `args:` block of [`deploy/kata-ci/runner-pod.yaml`](../../deploy/kata-ci/runner-pod.yaml).
 
-1. **`/var/lib/docker` must be a raw block volume, not an `emptyDir`.** Kata surfaces an `emptyDir` as **virtiofs**, and Docker cannot run `overlay2` on it — it silently falls back to `vfs`. `kind` then switches its node snapshotter to `fuse-overlayfs`, which needs `/dev/fuse` (absent from the guest), and the inner kubelet never becomes healthy.
+1. **`/var/lib/docker` must be a raw block volume, not an `emptyDir`.** Kata surfaces an `emptyDir` as **virtiofs**, and Docker cannot run `overlay2` on it — it silently falls back to `vfs`.
+   `kind` then switches its node snapshotter to `fuse-overlayfs`, which needs `/dev/fuse` (absent from the guest), and the inner kubelet never becomes healthy.
    Use a PVC with `volumeMode: Block` + `volumeDevices`, then `mkfs.ext4` it inside the guest.
    Beware: the `docker:dind` image declares `VOLUME /var/lib/docker` and Kata pre-mounts virtiofs there, so a "is it mounted?" check passes and silently skips your ext4 mount — test for the **device**.
    Also do **not** gate the `mkfs` on `blkid` (root-caused live under Q286): `docker:dind`'s `blkid` is **busybox** blkid, which exits 0 even on a blank device, so `blkid || mkfs` skips the format on every fresh volume and the mount fails `EINVAL`.
    Mount-first and `mkfs` on failure instead — the device is a disposable per-pod cache, so reformatting on any mount failure is safe.
-2. **`/dev/kmsg` does not exist in the Kata guest**, and a nested kubelet requires it. `mknod /dev/kmsg c 1 11` (needs `CAP_MKNOD`).
-3. **`/sys/fs/cgroup` is read-only** for a non-privileged container, so `runc` cannot create the nested container's cgroup. `mount -o remount,rw /sys/fs/cgroup` works with `CAP_SYS_ADMIN`.
+2. **`/dev/kmsg` does not exist in the Kata guest**, and a nested kubelet requires it.
+   `mknod /dev/kmsg c 1 11` (needs `CAP_MKNOD`).
+3. **`/sys/fs/cgroup` is read-only** for a non-privileged container, so `runc` cannot create the nested container's cgroup.
+   `mount -o remount,rw /sys/fs/cgroup` works with `CAP_SYS_ADMIN`.
    Under Kata that hierarchy is the **guest** kernel's — the remount grants nothing on the host.
    Under plain `runc` the same tree is the host's, which is exactly why classic DinD demands `privileged: true`.
 4. **`/proc/sys` is read-only** likewise; Docker writes per-veth `net.ipv6.conf.<iface>.disable_ipv6`.
    Same remount, same reasoning.
 5. **cgroup v2 nesting.** cgroup v2 forbids a cgroup from holding processes *and* delegating controllers to children, so systemd in a nested container cannot create `/init.scope` (`Structure needs cleaning`).
-   Move the cgroup-namespace root's processes into a leaf, then populate `cgroup.subtree_control`. `docker:dind`'s own entrypoint does this — you only need it if you override `command:`.
+   Move the cgroup-namespace root's processes into a leaf, then populate `cgroup.subtree_control`.
+   `docker:dind`'s own entrypoint does this — you only need it if you override `command:`.
 6. **IPv6 is disabled in the guest**, yet `kind` creates its Docker network with `--ipv6`.
    Pre-create an IPv4-only bridge network named `kind`.
 
@@ -313,7 +318,8 @@ Kata alone is not the control.
   At `maxWorkers: 4` that is `4` claims and `400Gi`.
   Unlike a CPU or memory shortfall, an exhausted storage quota does **not** reject the pod: the PVC is created after the pod is admitted, so the worker sits `Pending` on an unbound volume holding a job already claimed from GitHub.
   The AGC counts these keys in the worker footprint to refuse before claiming — see [the storage keys](resourcequota-sizing.md#step-3--the-storage-keys).
-- **Nested-virt capacity can be scarce.** During validation, `n2-standard-4` and `n2d-standard-4` were both `ZONE_RESOURCE_POOL_EXHAUSTED` in `us-central1-a` while CPU quota sat at 0/200 — a stockout, not a quota problem (a plain non-nested-virt `n2` failed too, so nested virt itself does not narrow the pool). `c2`/`c2d` worked.
+- **Nested-virt capacity can be scarce.** During validation, `n2-standard-4` and `n2d-standard-4` were both `ZONE_RESOURCE_POOL_EXHAUSTED` in `us-central1-a` while CPU quota sat at 0/200 — a stockout, not a quota problem (a plain non-nested-virt `n2` failed too, so nested virt itself does not narrow the pool).
+  `c2`/`c2d` worked.
   Check the **per-family** regional quota: `C2_CPUS` defaults to 8 on a fresh project, which is one node of an 8-vCPU shape; `N2_CPUS` defaults to 200.
 
   **`c2d` no longer takes `--enable-nested-virtualization`.** As of 2026-08-02 GCP rejects the create and names the families that can, which is the list in [the machine-family row](#prerequisite--nested-virtualization-nodes): no `C2D`, no `N2D`.

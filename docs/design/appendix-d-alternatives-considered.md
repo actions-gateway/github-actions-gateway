@@ -212,7 +212,8 @@ Three consequences follow: pods can only be sized *at creation* (there is no ste
 
 **Alternative 1 — stock Vertical Pod Autoscaler (VPA).** Fails on all three facts.
 Its `targetRef` requires a `/scale` subresource `RunnerSet` cannot meaningfully offer; its actuation is evict-and-resize, which on a one-job pod means killing the CI job to resize it; and its recommender models long-running services (usage distributions with half-life decay, OOM-event feedback), the wrong statistic for run-to-completion work.
-Recommendation dashboards layered on VPA (Goldilocks, Kubecost's request right-sizing) inherit the same foundation. **Verdict:** structurally unfit, not merely inconvenient.
+Recommendation dashboards layered on VPA (Goldilocks, Kubecost's request right-sizing) inherit the same foundation.
+**Verdict:** structurally unfit, not merely inconvenient.
 
 **Alternative 2 — VPA with a custom recommender.** VPA's recommender is pluggable, so a batch-aware recommender could in principle replace the stock model.
 But the actuation and grouping problems remain (a webhook applying "Initial"-style values still needs a pod-grouping convention VPA does not have for `/scale`-less owners), so this path amounts to writing the hard parts from scratch *inside someone else's framing* — more total machinery than the native implementation, spread across more failure domains.
@@ -267,7 +268,8 @@ It is an operator input, and on a fixed-size cluster (on-premises, a contracted 
 A burst of *N* wasted claims becomes roughly one per deadline window while a Pending pod remains present for much of it, which keeps any autoscaler being asked and keeps the tenant discovering recovery.
 Rate-bounding, not elimination, is the achievable property.
 
-**Predicting placement in-process is not a fourth option.** Reimplementing the scheduler's filter plugins (taints, affinity, topology spread, DRA, extended resources) is a large surface that will drift from the scheduler. `WorkersUnschedulable` deliberately reads the scheduler's verdict rather than guessing, and any capacity rung should delegate for the same reason.
+**Predicting placement in-process is not a fourth option.** Reimplementing the scheduler's filter plugins (taints, affinity, topology spread, DRA, extended resources) is a large surface that will drift from the scheduler.
+`WorkersUnschedulable` deliberately reads the scheduler's verdict rather than guessing, and any capacity rung should delegate for the same reason.
 
 **Verdict:** the quota rung is unconditionally safe and is implemented; the scheduler-verdict rung is safe exactly where nothing will act on the pod, so it belongs behind an explicit, off-by-default operator choice; the autoscaler's own declination and a solicited `ProvisioningRequest` answer are both safe and differ only in cost.
 The sequencing of those rungs is planned in [capacity-aware-intake.md](../plan/capacity-aware-intake.md).
@@ -276,7 +278,8 @@ The sequencing of those rungs is planned in [capacity-aware-intake.md](../plan/c
 
 Sections D.1–D.8 cover the alternatives that were weighed while designing this system.
 The sections below cover *other runner control planes and CI systems* an adopter may already be running or actively evaluating.
-They were added after a competitive review on 2026-08-06; each records what the alternative does, where it overlaps, the differentiator, and a verdict, on the same terms as the sections above. **Every claim about a third-party system is dated, because they move.**
+They were added after a competitive review on 2026-08-06; each records what the alternative does, where it overlaps, the differentiator, and a verdict, on the same terms as the sections above.
+**Every claim about a third-party system is dated, because they move.**
 
 ## D.9. ForgeMT and Cloud-Identity Tenant Boundaries
 

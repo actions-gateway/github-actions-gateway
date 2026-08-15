@@ -42,7 +42,8 @@ Within it, the slowest individual tests are:
 
 ### Problem
 
-`TestRenewLoop_TicksAt60s` and `TestRenewLoop_NonOKContinues` each take ~1.8s despite using a `fakeClock`. `StartRenewLoop` waits for `clk.After(60 * time.Second)`.
+`TestRenewLoop_TicksAt60s` and `TestRenewLoop_NonOKContinues` each take ~1.8s despite using a `fakeClock`.
+`StartRenewLoop` waits for `clk.After(60 * time.Second)`.
 The tests verify each of 3 RenewJob calls in a loop:
 
 ```go
@@ -139,7 +140,8 @@ Tests that use `newMuxWithServers` can then pass `restartDelay: 0` to skip the b
 
 ### Problem
 
-Every call to `makeAgent()` in `goroutine_test.go` generates a fresh 2048-bit RSA key (~100ms each). `makeAgent` is called once per test that uses `makeCfg` or `newMuxWithServers`, plus multiple direct calls in `broker/crypto_test.go` and `githubapp/auth_test.go` and `githubapp/runner_auth_test.go`.
+Every call to `makeAgent()` in `goroutine_test.go` generates a fresh 2048-bit RSA key (~100ms each).
+`makeAgent` is called once per test that uses `makeCfg` or `newMuxWithServers`, plus multiple direct calls in `broker/crypto_test.go` and `githubapp/auth_test.go` and `githubapp/runner_auth_test.go`.
 
 Approximate count:
 - `goroutine_test.go` — `makeAgent` called in ~9 tests

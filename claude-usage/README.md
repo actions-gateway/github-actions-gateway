@@ -60,7 +60,8 @@ python3 -m venv .venv && .venv/bin/pip install -r claude-usage/requirements.txt
 ```
 
 `compute_metrics.py` reads the transcripts for *this* machine's copy of the project.
-Override the lookup with `CLAUDE_PROJECTS_GLOB` if your transcripts live elsewhere. `make_charts.py` reads **only** the committed CSVs, so the charts reproduce identically on any machine, even with no transcripts present.
+Override the lookup with `CLAUDE_PROJECTS_GLOB` if your transcripts live elsewhere.
+`make_charts.py` reads **only** the committed CSVs, so the charts reproduce identically on any machine, even with no transcripts present.
 
 The merge semantics are covered by [`test_compute_metrics.py`](test_compute_metrics.py):
 
@@ -110,7 +111,8 @@ The date carries a grey dotted marker on the three lines-and-ratio charts, and `
 The Max 20x weekly token allowance also hit **99% for the first time**, in the seven-day window that ended when it reset on the morning of Monday 2026-08-10.
 That ceiling is not visible in anything here, and it is not this project's headline figure hitting a wall: the allowance meters Anthropic's own weighted accounting across every project on the account, and this project's 96.4M for that window was in fact *below* the preceding week's 98.6M.
 
-This snapshot spans a machine handover. `mac-1` measured everything through 2026-07-26 and has since been **retired**; `mac-2` replaced it, taking over mid-morning that day and measuring through 2026-08-12.
+This snapshot spans a machine handover.
+`mac-1` measured everything through 2026-07-26 and has since been **retired**; `mac-2` replaced it, taking over mid-morning that day and measuring through 2026-08-12.
 They overlap on 2026-07-26 alone, and the overlap is clean rather than double-counted: mac-1 recorded that morning, and every mac-2 record for the day starts at 10:26 local — the minute the replacement cloned the repo — so the day's total is their sum with no session counted on both.
 
 Because mac-1 is gone, its rows are final and 2026-07-27 onward is mac-2 only and **complete**, not a day awaiting a second reporter.
@@ -147,7 +149,8 @@ The undistorted breakdown of those lines is in the next chart.
 
 ### Tokens per line authored (the trend & the breakdown)
 ![Cost per line over time above a stacked breakdown of the lines](charts/tokens_per_line.png) **Top:** cumulative tokens ÷ lines authored, by day (measured days only).
-It climbs from ~406 tokens/line in week one to ~2,527 by month three — each line costs ~6× more once the easy scaffolding is done and the work shifts to logic, tests, review, and debugging. **Bottom:** the denominator itself, decomposed — Go code, Go tests, Markdown docs, hand-written YAML, scripts & web.
+It climbs from ~406 tokens/line in week one to ~2,527 by month three — each line costs ~6× more once the easy scaffolding is done and the work shifts to logic, tests, review, and debugging.
+**Bottom:** the denominator itself, decomposed — Go code, Go tests, Markdown docs, hand-written YAML, scripts & web.
 Its total height at any date *is* the divisor above, so "a line" is shown, not just named; tests and docs together dwarf non-test Go code.
 The grey dotted line on 2026-08-09 is the sentence-per-line reflow, which is why the Docs band notches down under it and the ratio above steps up: the same words on 18.6k fewer lines cost the same tokens, so roughly 200 of the ratio's climb past 2,300 is the reformat rather than the work.
 
@@ -160,8 +163,10 @@ Write once, replay ~55×.
 Both plan upgrades and the `mac-1`→`mac-2` handover are marked; the curve visibly steepens at the last of them.
 
 ### Parallel sessions
-![Peak concurrent sessions per day, over the share of the day that was parallel](charts/parallel_sessions.png) How much of the work runs concurrently. **Top:** mean concurrency (line) against the day's peak (bars).
-The peak is the dramatic number — up to 16 — but it lasts a single bucket; the **mean of 3.0** is what actually multiplies a day's output. **Bottom:** time on Claude each day, wall-clock against session-hours.
+![Peak concurrent sessions per day, over the share of the day that was parallel](charts/parallel_sessions.png) How much of the work runs concurrently.
+**Top:** mean concurrency (line) against the day's peak (bars).
+The peak is the dramatic number — up to 16 — but it lasts a single bucket; the **mean of 3.0** is what actually multiplies a day's output.
+**Bottom:** time on Claude each day, wall-clock against session-hours.
 The gap between the two bands *is* the mean concurrency: **184h at the keyboard produced 564h of session-time** over the window, a 3.1× multiplier.
 68% of active time had two or more sessions running, on 4–54 sessions a day.
 
@@ -242,7 +247,8 @@ Totals split into `measured` / `estimated` / `combined` (summed from the persist
   It is a dated note in Results above, not a series.
 - **Date basis differs by source.** Token dates are UTC (from message timestamps); git dates are author-local (`--date=short`).
   Close enough at daily granularity, but they can disagree by a day at midnight boundaries.
-- **`go_code` is approximate in the daily series** (non-blank minus line comments, so block comments count as code). `summary.json`'s HEAD snapshot uses an exact comment-aware split; the two agree to within ~0.1%.
+- **`go_code` is approximate in the daily series** (non-blank minus line comments, so block comments count as code).
+  `summary.json`'s HEAD snapshot uses an exact comment-aware split; the two agree to within ~0.1%.
 - **Messages are fuzzy.** The original post's "20k messages" came from a counter that can't be reconstructed from these logs; treat `assistant_msgs` / `user_msgs` as the well-defined replacements, not as the same quantity.
 
 [post1]: https://bsky.app/profile/karlkfi.bsky.social/post/3mmpo56ds6c23

@@ -28,7 +28,8 @@ Closed 2026-08-11: `v2beta1` registers every label, so the escape hatch is no lo
 So 1.6 is not the pre-2.0 repair slot any more.
 What justifies it is [Q719](../STATUS.md#Q719) and [Q727](../STATUS.md#Q727), which are the last two [ARC parity](arc-parity.md) gaps and cannot compress into 1.5: Q727 is `L` and strictly depends on Q719's `ReadWriteMany` validation, and 1.5 already carries three `M` items plus a marketing body of work.
 
-The soak argument is unchanged and still favours a separate minor. `v2-ga.md` Phase 1 requires no incompatible `v2beta1` shape change across at least two minors of real use; 1.4 and 1.5 are those two, so 1.6 lands the ports without restarting the clock.
+The soak argument is unchanged and still favours a separate minor.
+`v2-ga.md` Phase 1 requires no incompatible `v2beta1` shape change across at least two minors of real use; 1.4 and 1.5 are those two, so 1.6 lands the ports without restarting the clock.
 
 If Q719 and Q727 both slip on demand, 1.6 has no contents and should not be cut.
 That is the honest reading of a ladder whose middle rung exists to carry two specific items.
@@ -64,7 +65,8 @@ Deferred is not a graveyard here, it is a trigger list, and every row in it name
 **Applied 2026-08-09.** The seven punted items above moved to Deferred with the triggers this page names, and [Q719](../STATUS.md#Q719) and [Q727](../STATUS.md#Q727) now carry `1.6-gate`, which is what publishes the commitment where an adopter reads it.
 
 That does not make 1.6 a decided release.
-The labels encode the target, and the reading above still governs: if both items slip on demand, the labels come off rather than an empty tag being cut. `release-1.6.md` gets written when 1.5 tags, on the same evidence the other release plans use.
+The labels encode the target, and the reading above still governs: if both items slip on demand, the labels come off rather than an empty tag being cut.
+`release-1.6.md` gets written when 1.5 tags, on the same evidence the other release plans use.
 
 The one hard constraint the ladder encoded — Q726 landing before `v2.0.0`, since 2.0 removes the `v2alpha1` escape hatch its godoc pointed at — is satisfied: it landed in 1.5.
 Its `1.5-gate` label is what enforces that, a release earlier than strictly required.

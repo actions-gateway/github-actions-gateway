@@ -41,7 +41,8 @@ Copy only the dashboards you actually changed.
 The synthetic workload differs run to run, so re-committing an unchanged dashboard's PNG is pure binary churn.
 
 Prerequisites: `docker`, `kind`, `helm`, `kubectl`, `curl` on `PATH`.
-(On macOS the script adds Docker Desktop's bundled `kubectl` automatically if it isn't already on `PATH`.) `magick` (ImageMagick) is optional — when present, each PNG is auto-cropped to remove the dead space Grafana leaves below the last panel row; without it the render keeps the full `HEIGHT`.
+(On macOS the script adds Docker Desktop's bundled `kubectl` automatically if it isn't already on `PATH`.)
+`magick` (ImageMagick) is optional — when present, each PNG is auto-cropped to remove the dead space Grafana leaves below the last panel row; without it the render keeps the full `HEIGHT`.
 
 Common knobs (environment variables):
 
@@ -65,7 +66,8 @@ The synthetic metric names and labels are kept in lockstep with the real registr
 ### Adding a counter to `exporter.py`
 
 Emit it through `counter_total()`, not a hand-rolled `int(rate * elapsed)`.
-A counter only ever lives for `WAIT` seconds and is only ever shown across the `FROM` window, so a rate below `1/WAIT` never reaches its first integer: the series renders as a flat line that looks exactly like a real metric sitting at zero, and a `barchart` of `increase()` over it renders empty. `counter_total()` refuses a rate below `MIN_COUNTER_RATE` (a handful of events per render window) and `render.sh` sees the exporter crash on startup rather than producing a screenshot that looks populated.
+A counter only ever lives for `WAIT` seconds and is only ever shown across the `FROM` window, so a rate below `1/WAIT` never reaches its first integer: the series renders as a flat line that looks exactly like a real metric sitting at zero, and a `barchart` of `increase()` over it renders empty.
+`counter_total()` refuses a rate below `MIN_COUNTER_RATE` (a handful of events per render window) and `render.sh` sees the exporter crash on startup rather than producing a screenshot that looks populated.
 
 A counter that is *meant* to read zero, such as a healthy error counter, stays a literal `0` and skips `counter_total()`.
 That zero is a deliberate statement about a healthy system; the floor exists to stop an accidental one from impersonating it.

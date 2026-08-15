@@ -7,7 +7,8 @@
 > **No gating Queue row remained: both 2026-07-31 gates closed the same day they were filed.** Q550 and Q551 came out of the `v1.3.0-rc.2` validation window, where the RC gate's dispatched e2e job was wedged by the AGC itself: provisioning leaked runner registrations at GitHub (reap never deregistered them, and names derive from the job ID, so retries 409 against their own leftovers — Q550), and after four attempts the listener dropped the job permanently with no retry, condition, or Event (Q551).
 > Both were availability bugs in the scale-set listener an ordinary tenant could hit — any burst of provisioning failures (quota, stockout, admission) starts the same cycle — so they gated the tag rather than riding the backlog.
 >
-> **Q550** ([plan](archive/q550-runner-registration-leak.md)) made the worker pod the record of its own registration: it carries the runner name, the reaper deregisters that record before deleting the pod, and a listener start sweeps records no live pod claims. **Q551** kept the skip that stops one stuck assignment wedging the batch, but now holds the job and re-offers it on a backoff, surfacing the stall as `JobProvisionStalled` plus a deferred-jobs gauge.
+> **Q550** ([plan](archive/q550-runner-registration-leak.md)) made the worker pod the record of its own registration: it carries the runner name, the reaper deregisters that record before deleting the pod, and a listener start sweeps records no live pod claims.
+> **Q551** kept the skip that stops one stuck assignment wedging the batch, but now holds the job and re-offers it on a backoff, surfacing the stall as `JobProvisionStalled` plus a deferred-jobs gauge.
 > Q550 removes most of what causes the collisions; Q551 makes what remains recoverable and visible.
 >
 > **The fixes are verified at unit and integration only.** Neither can be re-confirmed against the live API below a dogfood run, so the RC validation below is where that lands.
@@ -25,12 +26,14 @@
 >
 > Three runs were needed.
 > Two died in the gate rather than the release: a watcher that treated a queued job's log 404 as a failed run, and a scale-up blocked by **`CPUS_ALL_REGIONS`** — a global 32-vCPU limit the cluster's own nodes saturated exactly, which no per-family or regional quota reading revealed.
-> Both fixed; the quota is now 64. **Cut `v1.3.0` from `main`** so the line carries those harness fixes.
+> Both fixed; the quota is now 64.
+> **Cut `v1.3.0` from `main`** so the line carries those harness fixes.
 >
 > **2026-08-02: `v1.3.0-rc.4` is published, verified, and its dogfood validation PASSED** — the first verdict any RC in this line has produced.
 > Details in [The rc.4 validation verdict](#the-rc4-validation-verdict-2026-08-02); the paragraphs below record the earlier history.
 >
-> **`v1.3.0-rc.3` was published and verified; its dogfood validation was owed.** Tagged 2026-08-01 off `7c18872d`, it is the first RC carrying the Q550/Q551 fixes above — which is the reason it exists, since rc.2's own validation window is what exposed them and rc.2 therefore cannot be the artifact that clears them. `publish.yml` ran green and every artifact verification passed: `make verify-release` (five images, both charts), the v2 CRD manifest and `SHA256SUMS` blob signatures, an SBOM attestation spot-check on the amd64 manifest, SLSA provenance binding to `7c18872d`, and both arches on the index.
+> **`v1.3.0-rc.3` was published and verified; its dogfood validation was owed.** Tagged 2026-08-01 off `7c18872d`, it is the first RC carrying the Q550/Q551 fixes above — which is the reason it exists, since rc.2's own validation window is what exposed them and rc.2 therefore cannot be the artifact that clears them.
+> `publish.yml` ran green and every artifact verification passed: `make verify-release` (five images, both charts), the v2 CRD manifest and `SHA256SUMS` blob signatures, an SBOM attestation spot-check on the amd64 manifest, SLSA provenance binding to `7c18872d`, and both arches on the index.
 >
 > **Neither earlier RC produced a validation verdict**, for unrelated reasons. rc.1 (2026-07-31, `2d85b4c6`) published and verified clean, but its validation aborted: the gate's then-repo-wide e2e routing caught concurrent sessions' CI, the teardown deleted the e2e AGC under a caught job, and the stranded queued runs wedged `main`'s e2e concurrency group until they were cancelled.
 > That is fixed — the gate routes through a run-scoped `workflow_dispatch` input and `e2e-stop.sh` drains before deleting the AGC — and the orphaned-worker-pod product defect the incident exposed is Queue-tracked (GMC cascade reap). rc.2 then reached the live API and returned Q550 and Q551 instead of a verdict.
@@ -93,7 +96,8 @@ Each was diagnosed on its own, which is how three consecutive misses went unrema
 ### What rc.4 carries, and the two scope calls behind it
 
 rc.3's validation window produced five defects (Q575–Q578, Q580) plus a revive trigger on Q553.
-Q575, Q576, Q578, and Q580 have shipped; Q577 is unblocked by Q575 landing, and closed at the gate as [not a defect](#q577-closed-the-behaviour-is-the-fail-safe-not-the-bug). **Q576, Q552, and Q553 gate rather than ride** for the same reason Q550 and Q551 did: each is an availability bug an ordinary tenant reaches, not a dogfood-harness artifact.
+Q575, Q576, Q578, and Q580 have shipped; Q577 is unblocked by Q575 landing, and closed at the gate as [not a defect](#q577-closed-the-behaviour-is-the-fail-safe-not-the-bug).
+**Q576, Q552, and Q553 gate rather than ride** for the same reason Q550 and Q551 did: each is an availability bug an ordinary tenant reaches, not a dogfood-harness artifact.
 Q576 in particular spun a saturated scale set at ~0.8 provisioning attempts/s for 14 minutes, issuing 704 GitHub deregister calls for a single job.
 
 **Q582 was pulled into scope by an explicit maintainer decision (2026-08-01), though it was not an rc.3 finding.** It surfaced while diagnosing the Q570 e2e flake: the v1 and v2 proxy pools both stamp `app: actions-gateway-proxy`, so during coexistence each pool's pods match the other's PDB and both HPAs wedge on `AmbiguousSelector` — neither autoscales.
@@ -177,7 +181,8 @@ The e2e node pool never scaled.
 Its kata runner pod stayed `Pending` behind `FailedScaleUp: GCE quota exceeded`, and the autoscaler went into backoff (`2 in backoff after failed scale-up`).
 
 **The capacity was there; the autoscaler could not reach it.** A direct probe — scaling the pool 0→1 by hand — brings up a `c2-standard-8` carrying `katacontainers.io/kata-runtime=true`, satisfying the pending pod's selector exactly, at `C2_CPUS` 8/8.
-The cluster autoscaler asking for the same one node fails with `GCE quota exceeded` and then stays in backoff (`NotTriggerScaleUp: 1 in backoff after failed scale-up`) at `targetSize: 0`. **Why the two paths differ is unverified.** It is not simple exhaustion: at the second attempt every relevant quota had headroom — `C2_CPUS` 0/8, `INSTANCES` 3/24, `IN_USE_ADDRESSES` 3/16 — and the autoscaler still would not retry.
+The cluster autoscaler asking for the same one node fails with `GCE quota exceeded` and then stays in backoff (`NotTriggerScaleUp: 1 in backoff after failed scale-up`) at `targetSize: 0`.
+**Why the two paths differ is unverified.** It is not simple exhaustion: at the second attempt every relevant quota had headroom — `C2_CPUS` 0/8, `INSTANCES` 3/24, `IN_USE_ADDRESSES` 3/16 — and the autoscaler still would not retry.
 
 An earlier revision of this section called the refusal transient and said a full-length wait would have recovered it.
 The [second attempt](#the-rc5-re-run-2026-08-02) disproves that: the gate waited 30+ minutes and the autoscaler never left backoff.
@@ -216,7 +221,8 @@ This is the verdict the tag has been owed since it was cut, and it clears the le
 
 **This pass is strictly stronger than rc.4's.** rc.4 cleared `NodeShare`'s state assertion but reported `derived value NOT checked — no live worker pod was caught during the matrix`, leaving the pod-level envelope arithmetic unconfirmed ([Q448](../STATUS.md#Q448)).
 This run caught a live worker: **1500m derived where the templates ask 2 and 3**.
-The release's headline feature is now confirmed at the pod level on real GKE rather than inferred from a condition. `Throughput` at 158 samples additionally means this RC ran the repo's own CI on derived sizing — validated in use.
+The release's headline feature is now confirmed at the pod level on real GKE rather than inferred from a condition.
+`Throughput` at 158 samples additionally means this RC ran the repo's own CI on derived sizing — validated in use.
 
 **What unblocked it was a quota nobody had measured.** Two earlier attempts died on `FailedScaleUp: GCE quota exceeded` while every per-family and regional quota sat near zero.
 The binding constraint was **`CPUS_ALL_REGIONS`** — a *global* limit of 32, which the cluster's own nodes saturated exactly (2×`e2-standard-2` + 7×`e2-standard-4` = 32).
@@ -229,7 +235,8 @@ The delta from rc.5 to `main` remains non-shipping: test files, docs, and dogfoo
 
 ### The rc.5 re-run (2026-08-02)
 
-Run against `main` at `c993c897`, with the watcher fix in. **No verdict: stopped by hand at t+33m with the e2e leg unable to start.** What it settled, and what it turned up, are both worth more than the missing verdict.
+Run against `main` at `c993c897`, with the watcher fix in.
+**No verdict: stopped by hand at t+33m with the e2e leg unable to start.** What it settled, and what it turned up, are both worth more than the missing verdict.
 
 **The watcher fix is confirmed.** It sat in the e2e leg for 33 minutes where the first attempt died after 13 seconds.
 That is the whole of what #1171 claimed.
@@ -253,7 +260,8 @@ Throughout, the RunnerSet reported `Ready=True … 1 job(s) assigned`, `WorkersU
 A job was assigned and waiting the entire time.
 The dispatched run never left `queued`.
 
-**The mechanism, since confirmed in tests.** A reaped Pending worker is reported to the listener as a **successful job**. `InformerPodWaiter.onPodDelete` resolves the wait with `Phase: PodSucceeded` and `ExternallyDeleted` deliberately unset; the session then maps anything that is not `PodFailed` to `broker.TaskResultSucceeded`, and every disruption-recovery arm requires `PodFailed`, so none fires.
+**The mechanism, since confirmed in tests.** A reaped Pending worker is reported to the listener as a **successful job**.
+`InformerPodWaiter.onPodDelete` resolves the wait with `Phase: PodSucceeded` and `ExternallyDeleted` deliberately unset; the session then maps anything that is not `PodFailed` to `broker.TaskResultSucceeded`, and every disruption-recovery arm requires `PodFailed`, so none fires.
 The assignment is concluded, its message deleted, and the job is never re-offered — while at GitHub the workflow job is still queued, no runner having ever registered.
 That is the 16 minutes of silence: from the AGC's point of view there was nothing left to do.
 
@@ -369,7 +377,8 @@ The notice now exists in both halves the policy needs, the API surface and the d
 
 > **Q411 is closed (2026-07-26): the deprecation reaches the apiserver.** All five `actions-gateway.com` kinds carry `+kubebuilder:deprecatedversion` on `v2alpha1`, so the regenerated CRDs (and their chart copies) set `deprecated: true` plus a `deprecationWarning` naming `v2beta1` as the replacement and `v2.0.0` as the removal release.
 > Verified against a real apiserver, not just the generated YAML: on a kind cluster carrying `api/config/crd`, a `v2alpha1` read *and* write each emit `Warning: actions-gateway.com/v2alpha1 RunnerTemplate is deprecated; use actions-gateway.com/v2beta1. v2alpha1 is served until v2.0.0, which removes it.`, the write still succeeds, and the same object read at `v2beta1` emits nothing.
-> The warning names `v2.0.0` itself, so the API surface and the docs state one removal release rather than two half-answers. `check-v2-api-sync.sh` now normalises the marker as an entitled per-version difference, alongside `+kubebuilder:storageversion`.
+> The warning names `v2.0.0` itself, so the API surface and the docs state one removal release rather than two half-answers.
+> `check-v2-api-sync.sh` now normalises the marker as an entitled per-version difference, alongside `+kubebuilder:storageversion`.
 
 > **Q412 is closed (2026-07-26): `v2.0.0` is named.** [v1alpha1-deprecation.md](../operations/v1alpha1-deprecation.md) is now the standing notice for all three removals rather than for `v1alpha1` alone: it leads with a what-`v2.0.0`-removes table (each row with its replacement and the move), states the coupling, and ends with a pre-upgrade checklist.
 > The name is repeated wherever an operator forms a plan from the docs (README, roadmap, getting-started, install, upgrade, tenant-onboarding, migration-v1-to-v2, migration-from-arc, troubleshooting, why-gag) and in the design half (Appendix H, 03-api-contracts).
@@ -385,7 +394,8 @@ That settles which version new tenants onboard on, which was the open question t
 
 No open gating row: Q393 closed 2026-07-26.
 
-> The docs-site announce bar's version is now derived from the git tags at build time rather than hand-edited per release, so `v1.3.0` names itself with no pre-flight step and cannot ship the stale banner every prior stable tag did. `publish.yml`'s `announce-bar` job still gates the release, but now by building the site at the tag and asserting the *rendered* banner names it.
+> The docs-site announce bar's version is now derived from the git tags at build time rather than hand-edited per release, so `v1.3.0` names itself with no pre-flight step and cannot ship the stale banner every prior stable tag did.
+> `publish.yml`'s `announce-bar` job still gates the release, but now by building the site at the tag and asserting the *rendered* banner names it.
 > Details: [website.md § The announce bar](../development/website.md#the-announce-bar).
 
 ### D. Gate integrity (*satisfied*)
@@ -394,7 +404,8 @@ No open gating row: Q400 and Q404 both closed 2026-07-26.
 
 Both mattered for the same reason, which is why they were scoped together: a gate that never ran leaves `main` green on evidence it never gathered, and that undermines the "`main` is green" precondition that [release.md](../operations/release.md) pre-flight assumes.
 
-Q404 closed 2026-07-26: `make check` compiled no build-tagged file, so a compile break in an `integration`/`e2e`/`load` package reached only CI's path-gated heavy tiers, which may not even run on the PR that introduced it. `make build-tags-check` now vets the workspace with every first-party tag enabled, in both the local gate and CI's `lint` job, and a coverage assertion fails the gate if a *new* build tag appears that its list does not cover, so the hole cannot reopen in a new shape.
+Q404 closed 2026-07-26: `make check` compiled no build-tagged file, so a compile break in an `integration`/`e2e`/`load` package reached only CI's path-gated heavy tiers, which may not even run on the PR that introduced it.
+`make build-tags-check` now vets the workspace with every first-party tag enabled, in both the local gate and CI's `lint` job, and a coverage assertion fails the gate if a *new* build tag appears that its list does not cover, so the hole cannot reopen in a new shape.
 Deliberately out of the fix: widening `golangci-lint` itself to the tagged trees, which needed its own triage pass and landed separately as Q430 (closed 2026-07-27) — `run.build-tags` now covers the same 102 files, and the 21 findings estimated here turned out to be 100 once golangci-lint's default `max-same-issues: 3` cap was lifted.
 Detail: [testing.md § The build-tag gate](../development/testing.md#the-build-tag-gate).
 
@@ -419,20 +430,24 @@ And `status.sizingRecommendation[].windowStart` → `windowStartTime` (Q485, clo
 The rename had to land in **both** v2alpha1 and v2beta1: the spoke↔hub conversion is a JSON round-trip (`api/v2alpha1/conversion.go`), so a tag renamed on one side only would have silently dropped the field on conversion rather than failing to compile.
 
 **Found and shipped as-is, deliberately:** Q481 — `sizing.profile` carries two axes (where the request comes from; what limits follow) the same way `capacityGate.mode` did before Q470, leaving a Guaranteed node share and history-derived-requests-under-hand-set-limits without a profile of their own.
-Gating because the tag freezes the shape either way. **Closed 2026-07-28 without an API change**, on three grounds: the cost that made Q470 worth a break is absent here — both axes are the set owner's own choice, so nothing asks a tenant to assert a fact they do not own; the axes are not orthogonal, so a split shape still needs a `only meaningful when …` CEL rule for the headroom percent (which is defined off the *observed peak*, and a peak exists only under the usage source); and both cells are reachable **additively** in any later minor, which is the difference that matters — Q470 had to beat its tag because its fix removed enum values, and this one does not.
+Gating because the tag freezes the shape either way.
+**Closed 2026-07-28 without an API change**, on three grounds: the cost that made Q470 worth a break is absent here — both axes are the set owner's own choice, so nothing asks a tenant to assert a fact they do not own; the axes are not orthogonal, so a split shape still needs a `only meaningful when …` CEL rule for the headroom percent (which is defined off the *observed peak*, and a peak exists only under the usage source); and both cells are reachable **additively** in any later minor, which is the difference that matters — Q470 had to beat its tag because its fix removed enum values, and this one does not.
 The review also found the Guaranteed node share is reachable *today*, as a side effect of the limit-lift guard rather than by design — verified, pinned by `TestApplySizingProfileNodeShareLiftedLimitsReachGuaranteed`, and written up for operators in [worker-rightsizing.md](../operations/worker-rightsizing.md#getting-guaranteed-qos-out-of-nodeshare).
 Full rationale, and the rule for extending the enum (`profile` is an intent enum: new values name a distinct operator intent, mechanism recombinations go in a sibling field): [appendix-h §H.7](../design/appendix-h-v2-api-decomposition.md#h7-reference-integrity--runtime-conditions-not-admission).
 
-> The premise the row was filed under — "the sizing model is unvalidated" — **expired before the close, and in the direction that made shipping as-is easier, not harder.** `Binpack` was live-validated 2026-07-25 and `Throughput` on the dogfood `ci` tenant days later (Q449), which turns the derivation the split would have had to redefine from an unproven rule into a measured one. `NodeShare` is still envtest-only (Q448) — and it is the profile whose missing cell was the complaint, so the case for reshaping around it is weaker still.
+> The premise the row was filed under — "the sizing model is unvalidated" — **expired before the close, and in the direction that made shipping as-is easier, not harder.** `Binpack` was live-validated 2026-07-25 and `Throughput` on the dogfood `ci` tenant days later (Q449), which turns the derivation the split would have had to redefine from an unproven rule into a measured one.
+> `NodeShare` is still envtest-only (Q448) — and it is the profile whose missing cell was the complaint, so the case for reshaping around it is weaker still.
 
 **Also shipped as-is, deliberately:** Q486 — 1.3 publishes two managed-autoscaler opt-ins with **different shapes**: `EgressProxy.spec.managedAutoscaling` is a `*bool` defaulting `true` (an *opt-out* of a managed HorizontalPodAutoscaler, Q173), while `ActionsGateway.spec.agcAutoscaling` is a block whose *presence* is the opt-in into a managed VerticalPodAutoscaler and which carries its own `mode` enum (Q360).
-An operator meeting both in one changelog can fairly ask why "managed autoscaling" is spelled two ways. **Closed 2026-07-28 without an API change**, on three grounds, each of which decides its own side independently:
+An operator meeting both in one changelog can fairly ask why "managed autoscaling" is spelled two ways.
+**Closed 2026-07-28 without an API change**, on three grounds, each of which decides its own side independently:
 
 1. **The direction is not a style choice — it follows what already ships.** The proxy pool's HPA was managed *before* 1.3; Q173 adds only the ability to stop managing it, so the field must default to today's behaviour and can only be an opt-out.
    The AGC VerticalPodAutoscaler is new, with no behaviour to preserve, so it defaults off.
    Reversing either is the actual defect: an opt-in `managedAutoscaling` deletes the HPA of every pool that upgrades, and a default-on `agcAutoscaling` hands the single AGC pod's requests to an autoscaler nobody asked for.
    Making them symmetric would mean breaking one of those two, so this difference survives any redesign.
-2. **The container follows whether the opt-in carries knobs.** `managedAutoscaling` is a pure ownership toggle — the HPA's knobs (`minReplicas`, `maxReplicas`, `targetCPUUtilizationPercentage`) already exist as siblings and predate it, so a block would have to either move them (a wire break) or sit next to them holding nothing. `agcAutoscaling` carries `mode`, which is meaningful only when opted in; block presence gives that knob a home *and* is the switch, so there is no `enabled: true` + `mode:` pair to keep consistent — which is exactly the "sibling fields gated by one value" tell under [one field answers one question](../development/api-review.md#one-field-answers-one-question).
+2. **The container follows whether the opt-in carries knobs.** `managedAutoscaling` is a pure ownership toggle — the HPA's knobs (`minReplicas`, `maxReplicas`, `targetCPUUtilizationPercentage`) already exist as siblings and predate it, so a block would have to either move them (a wire break) or sit next to them holding nothing.
+   `agcAutoscaling` carries `mode`, which is meaningful only when opted in; block presence gives that knob a home *and* is the switch, so there is no `enabled: true` + `mode:` pair to keep consistent — which is exactly the "sibling fields gated by one value" tell under [one field answers one question](../development/api-review.md#one-field-answers-one-question).
 3. **Consistency is owed to the field's neighbours, not to the other CRD.** `managedAutoscaling` sits beside `managedNetworkPolicy` on the same `EgressProxySpec` — same `*bool`, same `+kubebuilder:default=true`, same "the GMC owns this object unless you say otherwise" meaning — and `managedNetworkPolicy` shipped in `v1.1.0`, so that pattern is already published and already learned.
    Reshaping `managedAutoscaling` to match a field on a different CRD would make it the odd one out in the object an operator actually reads it in.
 

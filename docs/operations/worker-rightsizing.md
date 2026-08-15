@@ -129,19 +129,23 @@ Safety rails, in all profiles:
 - **Extended resources (GPUs) are never modified** — only the cpu/memory keys are ever derived; the shape's job-selected identity passes through byte-identical.
   This is also why `nodeShare.allocatable` must declare `cpu`, `memory`, or both: an envelope naming only extended resources divides nothing, so the apiserver rejects it at admission rather than letting the profile report `Active` over untouched template values ([runbook](troubleshooting.md#runnerset-rejected-nodeshareallocatable-declares-neither-cpu-nor-memory)).
   Declaring just one of the two is fine — the other keeps the template's ask.
-- **History-based profiles fall back to `Static` until confident** — `Binpack` and `Throughput` apply only once *every* template container has a recommendation with ≥20 sampled jobs (whole-pod, so QoS stays predictable). `status.sizingProfileState` reports which side you're on: `Active` (derived values applied) or `AwaitingSamples` (template values, history accumulating).
+- **History-based profiles fall back to `Static` until confident** — `Binpack` and `Throughput` apply only once *every* template container has a recommendation with ≥20 sampled jobs (whole-pod, so QoS stays predictable).
+  `status.sizingProfileState` reports which side you're on: `Active` (derived values applied) or `AwaitingSamples` (template values, history accumulating).
 - **Clamps** — `minRequests`/`maxRequests` bound every derived request, so a skewed history (one pathological job) cannot push pods beyond an operator-set envelope.
   Size the ceiling against the namespace `ResourceQuota` and any `LimitRange`: derived values are still subject to both at admission, and the existing `WorkerQuota*` conditions and quota retries surface a conflict at runtime.
   An admission mutation that cancels `Throughput` rejects nothing, so it gets its own condition — [`SizingProfileOverridden`](#when-something-re-injects-the-cpu-limit-throughput-removes).
 
   > **Set `maxRequests` before enabling `Binpack` *or* `Throughput` on a shape whose measured peak approaches node allocatable.** Both derive `requests` from the observed history, and a derived request above a node's allocatable CPU is simply unschedulable: every worker pod sits `Pending` and no job runs.
-  > This is not hypothetical — on the project's own dogfood tenant a measured CPU peak of ~3750m derived a **request of 3800m** against an `e2-standard-4`'s ~3.4 vCPU allocatable, so either profile without `maxRequests: {cpu: "3"}` would have wedged the pool. **`Throughput` is not exempt because it drops the CPU *limit*:** scheduling is decided by the *request*, so the clamp matters exactly as much — and it is the derived request, not the peak, you size against allocatable, since the request is the p95 rounded up and can land above the peak.
-  > The failure is silent until pods stop scheduling, so clamp first, then enable. `WorkersUnschedulable` is the condition that fires if you get it wrong.
+  > This is not hypothetical — on the project's own dogfood tenant a measured CPU peak of ~3750m derived a **request of 3800m** against an `e2-standard-4`'s ~3.4 vCPU allocatable, so either profile without `maxRequests: {cpu: "3"}` would have wedged the pool.
+  > **`Throughput` is not exempt because it drops the CPU *limit*:** scheduling is decided by the *request*, so the clamp matters exactly as much — and it is the derived request, not the peak, you size against allocatable, since the request is the p95 rounded up and can land above the peak.
+  > The failure is silent until pods stop scheduling, so clamp first, then enable.
+  > `WorkersUnschedulable` is the condition that fires if you get it wrong.
 - **Drift reporting steps aside** — while a profile is `Active`, the `SizingDrift` condition reports `False/SizingProfileActive` (pods no longer run the template ask, so judging it would mislead).
 
 ### Getting Guaranteed QoS out of `NodeShare`
 
-`Binpack` is the profile that sets `requests == limits` for you. `NodeShare` does not — it derives the runner container's *requests* and leaves limits to the template — so a GPU pool that wants both an even node split **and** Guaranteed QoS has to arrange the second part itself.
+`Binpack` is the profile that sets `requests == limits` for you.
+`NodeShare` does not — it derives the runner container's *requests* and leaves limits to the template — so a GPU pool that wants both an even node split **and** Guaranteed QoS has to arrange the second part itself.
 It can:
 
 Set the runner container's template CPU **and** memory limits at or below the share you expect (`allocatable ÷ workersPerNode`).
@@ -222,7 +226,8 @@ The AGC log line `list PodMetrics (is metrics-server installed?)` carries the un
 **All jobs land in `…_jobs_unsampled_total`** — the workload's jobs finish faster than the sampling interval.
 There is no per-job signal to size from at 15s resolution; size such a RunnerSet by its node-shape share instead (see the `NodeShare` idea in the [sizing-profiles plan](../plan/runner-sizing-profiles.md)).
 
-**`Throughput` is `Active` but jobs still run at the old CPU ceiling** — read `SizingProfileOverridden` on the `RunnerSet`. `True/CPULimitInjected` means a pod the profile built without a CPU limit was admitted with one; the message names the pod and the limit, and [the three ways out](#when-something-re-injects-the-cpu-limit-throughput-removes) start with the namespace `LimitRange`.
+**`Throughput` is `Active` but jobs still run at the old CPU ceiling** — read `SizingProfileOverridden` on the `RunnerSet`.
+`True/CPULimitInjected` means a pod the profile built without a CPU limit was admitted with one; the message names the pod and the limit, and [the three ways out](#when-something-re-injects-the-cpu-limit-throughput-removes) start with the namespace `LimitRange`.
 If that comes back clean, the injector is a mutating webhook or policy engine — `kubectl get mutatingwebhookconfiguration` and your policy engine's rules are the next stop.
 
 **Gauges reset after an AGC rollout** — the `…_usage_cpu_peak_cores` / `…_usage_memory_peak_bytes` gauges are peaks *since AGC start* by design.

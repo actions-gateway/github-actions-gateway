@@ -12,7 +12,8 @@ The group rename folds in for free: `v2alpha1` *is* `actions-gateway.com` from b
 
 ## Non-goals
 
-- **No behavior change.** v2 re-shapes the API; runtime semantics (job acquisition, worker provisioning, quota/PSA enforcement, egress restriction) are preserved. `v2alpha1` tracks v1 behavior wherever a field is unchanged.
+- **No behavior change.** v2 re-shapes the API; runtime semantics (job acquisition, worker provisioning, quota/PSA enforcement, egress restriction) are preserved.
+  `v2alpha1` tracks v1 behavior wherever a field is unchanged.
 - **No in-place v1→v2 conversion** — the split is a tooled fan-out (M5), not a conversion webhook.
 - **Not the admin policy layer, worker-image allowlist, credentials union, or cross-namespace sharing** — all out of the `v2alpha1` scope (see below and Appendix H §H.14/§H.15).
   The credentials union is now scheduled for the `v2beta1` cut ([v2beta1.md](v2beta1.md)); the rest stay deferred.
@@ -53,7 +54,8 @@ Each milestone is independently reviewable and leaves the tree green.
 
 ### M2 — Data kinds (nouns)
 
-- `EgressProxy` reconciler in the GMC: owns its proxy Deployment / Service / HPA / PDB ([§H.8](../design/appendix-h-v2-api-decomposition.md#h8-ownership-gc-and-deletion)). **Same-namespace only** at this stage.
+- `EgressProxy` reconciler in the GMC: owns its proxy Deployment / Service / HPA / PDB ([§H.8](../design/appendix-h-v2-api-decomposition.md#h8-ownership-gc-and-deletion)).
+  **Same-namespace only** at this stage.
 - `RunnerTemplate` / `ClusterRunnerTemplate`: pure data; the reserved-pod-field rejection webhook moves here from `RunnerGroup` ([§H.4](../design/appendix-h-v2-api-decomposition.md#h4-spec-sketches)).
 - **Free observability win:** because each `EgressProxy` Deployment is now per-gateway, its proxy metrics carry the gateway label automatically — the per-tenant proxy-connection visibility v1's shared-proxy shape could not express.
 - **Exit:** a standalone `EgressProxy` reconciles a working proxy pool; a `RunnerTemplate` validates and is readable by name; envtest coverage for both.
@@ -110,7 +112,8 @@ Each box is a self-contained unit of work; a milestone is done when every box is
 
 ### M3a — Single-gateway parity (Q164) + securityProfile relocation (Q175)
 
-- [x] **securityProfile → namespace (Q175, §H.16 #7).** `SecurityProfile` removed from the v2 `ActionsGatewaySpec`; the namespace `actions-gateway.com/security-profile` label is the new selector. `NamespacePSAReconciler` (GMC) stamps the six PSA labels from it; the `gmc-namespace-security-profile-guard` ValidatingAdmissionPolicy guards enum / no-silent-downgrade / privileged-eligibility (none weaker than the v1 webhook, now a VAP because the checks no longer cross objects).
+- [x] **securityProfile → namespace (Q175, §H.16 #7).** `SecurityProfile` removed from the v2 `ActionsGatewaySpec`; the namespace `actions-gateway.com/security-profile` label is the new selector.
+  `NamespacePSAReconciler` (GMC) stamps the six PSA labels from it; the `gmc-namespace-security-profile-guard` ValidatingAdmissionPolicy guards enum / no-silent-downgrade / privileged-eligibility (none weaker than the v1 webhook, now a VAP because the checks no longer cross objects).
   The `namespace-psa-guard` and `tenant-resource-guard` VAPs dual-read the v1/v2 tenant markers so the GMC can stamp and provision in v2 tenant namespaces. envtest covers the VAP and the reconciler.
 - [x] `ActionsGateway` reconciler (GMC): AGC Deployment/SA/RoleBinding, credential mount, AGC + workload NetworkPolicy, metrics certs; proxy egress wired from `defaultProxyRef` → resolved `EgressProxy`; one gateway/ns.
   (PSA stamping is now the `NamespacePSAReconciler`'s job; proxy pool / HPA / PDB are the `EgressProxy` reconciler's — both removed from the gateway's responsibility vs. v1.)
@@ -127,11 +130,13 @@ Each box is a self-contained unit of work; a milestone is done when every box is
   - **Provisioner owner-ref seam.** The `provisioner`/`listener`/`multiplexer` stack is pervasively typed to `*v1alpha1.RunnerGroup`, and worker pods/Secrets carry an OwnerReference to it — a synthesized in-memory RunnerGroup cannot be used (its dangling owner-ref would make the apiserver immediately GC every worker pod), so the provisioner must be refactored to own-ref the real `RunnerSet`.
     Tracked as the runtime half of M3a.
 - [x] Proxy required (`proxyRef`/`defaultProxyRef`, same-namespace).
-- [x] envtest (both suites: GMC provisioning + owner-refs + fail-closed conditions; AGC ref-resolution + fail-closed conditions + end-to-end worker provisioning via the broker stub). **kind e2e** (a live job → worker pod → proxied egress → GitHub run) is deferred to M3b per the task — the M3a minimum is envtest; the worker→pod→proxy path is exercised by the AGC envtest's broker-stub job-delivery test.
+- [x] envtest (both suites: GMC provisioning + owner-refs + fail-closed conditions; AGC ref-resolution + fail-closed conditions + end-to-end worker provisioning via the broker stub).
+  **kind e2e** (a live job → worker pod → proxied egress → GitHub run) is deferred to M3b per the task — the M3a minimum is envtest; the worker→pod→proxy path is exercised by the AGC envtest's broker-stub job-delivery test.
 
 #### Per-field / -condition parity checklist (gates M3a exit)
 
-The v1 `RunnerGroup` + `ActionsGateway` behavior the v2 shape must preserve, and where each lands in v2. **✓** = implemented + tested this milestone; **◻** = remaining.
+The v1 `RunnerGroup` + `ActionsGateway` behavior the v2 shape must preserve, and where each lands in v2.
+**✓** = implemented + tested this milestone; **◻** = remaining.
 
 | v1 behavior | v2 home | Status |
 |---|---|---|
@@ -152,13 +157,16 @@ The v1 `RunnerGroup` + `ActionsGateway` behavior the v2 shape must preserve, and
 
 ### M3b — Multi-gateway (Q167) + the M3a-deferred tail (closes Q164)
 
-- [x] Per-gateway derived naming across every GMC-created AGC child (52-char cap): `<ag>-agc` (Deployment/SA/RoleBinding/Service/AGC NetworkPolicy + pod `app` label), `<ag>-worker` (worker SA), `<ag>-workload` (workload NetworkPolicy), and `<ag>-agc-metrics-{tls,client}` (metrics Secrets). `buildAGCDeploymentFrom`/ `buildAGCNetworkPolicyFrom` take per-gateway names; v1 passes the fixed singleton names (no behavior change).
+- [x] Per-gateway derived naming across every GMC-created AGC child (52-char cap): `<ag>-agc` (Deployment/SA/RoleBinding/Service/AGC NetworkPolicy + pod `app` label), `<ag>-worker` (worker SA), `<ag>-workload` (workload NetworkPolicy), and `<ag>-agc-metrics-{tls,client}` (metrics Secrets).
+  `buildAGCDeploymentFrom`/ `buildAGCNetworkPolicyFrom` take per-gateway names; v1 passes the fixed singleton names (no behavior change).
   The `gmc-tenant-resource-guard` VAP is unchanged (it keys on the namespace marker, not names).
-- [x] AGC watch-scoping via the `gatewayRef` field selector (server-side): the GMC stamps `GATEWAY_NAME` on each AGC Deployment; the AGC scopes its RunnerSet informer with `cache.ByObject{Field: spec.gatewayRef.name=<gw>}` (KEP-4358) plus a defense-in-depth guard in `Reconcile`. **Requires k8s ≥ 1.31** (alpha-off in 1.30); the integration-test CI tier was bumped from envtest **1.30.x → 1.35.x** (`.github/workflows/integration-test.yml`) so the scoping test runs in CI.
+- [x] AGC watch-scoping via the `gatewayRef` field selector (server-side): the GMC stamps `GATEWAY_NAME` on each AGC Deployment; the AGC scopes its RunnerSet informer with `cache.ByObject{Field: spec.gatewayRef.name=<gw>}` (KEP-4358) plus a defense-in-depth guard in `Reconcile`.
+  **Requires k8s ≥ 1.31** (alpha-off in 1.30); the integration-test CI tier was bumped from envtest **1.30.x → 1.35.x** (`.github/workflows/integration-test.yml`) so the scoping test runs in CI.
   The e2e kind cluster is already v1.35.
 - [x] Per-gateway ownership refs for clean cascade GC: per-gateway names mean deleting one gateway GCs only its own children.
   The cluster-scoped ClusterRunnerTemplate ClusterRoleBinding cannot carry a cross-scope owner ref, so `reconcileDelete` removes it explicitly.
-- [x] **ClusterRunnerTemplate access (the M3a deferral, closes Q164):** shipped read-only ClusterRole `agc-clusterrunnertemplate-reader`; the GMC creates a per-gateway ClusterRoleBinding (holds only `bind` on that name) so the AGC gains least-privilege cluster-scoped read. `resolveTemplate` resolves ClusterRunnerTemplate live and the RunnerSet watches the kind.
+- [x] **ClusterRunnerTemplate access (the M3a deferral, closes Q164):** shipped read-only ClusterRole `agc-clusterrunnertemplate-reader`; the GMC creates a per-gateway ClusterRoleBinding (holds only `bind` on that name) so the AGC gains least-privilege cluster-scoped read.
+  `resolveTemplate` resolves ClusterRunnerTemplate live and the RunnerSet watches the kind.
 - [x] envtest (both suites: AGC field-scoped isolation + ClusterRunnerTemplate resolution; GMC per-gateway naming + per-gateway ownership/GC) **and kind e2e** (`E2E_V2_MultiGateway`): two gateways in one namespace, each AGC scoped to its RunnerSet (proven by the worker pod's per-gateway worker ServiceAccount), plus a workload pod reaching GitHub through the v2 EgressProxy (proxy-egress parity).
 
 ### M5 — Migration + cutover (Q165)
@@ -168,7 +176,8 @@ The v1 `RunnerGroup` + `ActionsGateway` behavior the v2 shape must preserve, and
 - [x] Dual-read window: the three VAPs (M3a/M3b) **and** the v1 GMC `ActionsGateway` webhook (M5) accept both domains *and* both values; tool relabels keys/values additively (adds v2 keys, keeps v1 keys, so nothing is stranded).
   Finalizer names migrated as code constants (v2 objects carry v2 finalizers; v1 objects keep theirs until v1 removal).
 - [x] Operator migration guide ([migration-v1-to-v2.md](../operations/migration-v1-to-v2.md)); [`v1alpha1` deprecation notice](../operations/v1alpha1-deprecation.md) (named removal release announced at removal time).
-- [ ] Conversion scaffolding (Q74 `Hub`/`Convertible`) staged for the `v2alpha1`→`v2beta1` graduation. **Deferred — distinct from the M5 fan-out:** a conversion webhook is an in-place graduation mechanism the fan-out tool cannot replace, and it lands at the first graduation hop, not the v1→v2 cutover (see [graduation path](#api-maturity--graduation-v2alpha1--v2beta1--v2)).
+- [ ] Conversion scaffolding (Q74 `Hub`/`Convertible`) staged for the `v2alpha1`→`v2beta1` graduation.
+  **Deferred — distinct from the M5 fan-out:** a conversion webhook is an in-place graduation mechanism the fan-out tool cannot replace, and it lands at the first graduation hop, not the v1→v2 cutover (see [graduation path](#api-maturity--graduation-v2alpha1--v2beta1--v2)).
   Tracked as Q74.
 - [x] Coexistence test (v1 keeps working while v2 served) + migration golden tests (golden-manifest unit tests + envtest apply-path/dual-read/coexistence).
 - [x] **Behavior-preservation acceptance checks** ([§H.17](../design/appendix-h-v2-api-decomposition.md#h17-migration-correctness--the-fan-outs-untested-invariants)): proxied→proxied (always wires `defaultProxyRef`, never silent direct egress); `maxListeners` pinned to the v1 effective value; emitted objects pass v2 CEL under envtest; K identical templates → one content-addressed `RunnerTemplate`; standalone-vs-inline precedence (standalone wins) defined.
@@ -176,7 +185,8 @@ The v1 `RunnerGroup` + `ActionsGateway` behavior the v2 shape must preserve, and
 ## API maturity & graduation (`v2alpha1` → `v2beta1` → `v2`)
 
 **Why `v2alpha1` and not `v1alpha1` in the new group?** Nothing technical forces the version bump: a CRD is identified by **group + kind**, and the version is orthogonal, so `actionsgateways.actions-gateway.com` would coexist with `actionsgateways.actions-gateway.github.com` just as cleanly at `v1alpha1`.
-The breaking-ness comes entirely from the group rename and the decomposition (the fan-out the migration tool handles), not from the version number. `v2alpha1` is a **deliberate communication choice**: this whole effort is named "v2" throughout the docs, the migration is "v1→v2", and the graduation ladder targets `v2` — so serving it as `v1alpha1` would leave the API surface contradicting how everyone refers to it.
+The breaking-ness comes entirely from the group rename and the decomposition (the fan-out the migration tool handles), not from the version number.
+`v2alpha1` is a **deliberate communication choice**: this whole effort is named "v2" throughout the docs, the migration is "v1→v2", and the graduation ladder targets `v2` — so serving it as `v1alpha1` would leave the API surface contradicting how everyone refers to it.
 It also keeps the in-module Go layout unambiguous (`api/v1alpha1` + `api/v2alpha1`, rather than two `api/v1alpha1` packages).
 The minor cost — a fresh group whose first GA is `v2`, skipping `v1` — is accepted.
 (Confirmed 2026-06-21.)
@@ -223,7 +233,8 @@ See [§H.10](../design/appendix-h-v2-api-decomposition.md#h10-the-egress-proxy-b
 
 ### Optional default RunnerTemplate (Q172) — **shipped**
 
-The parallel relaxation for `templateRef`, now implemented. `templateRef` is optional: omit it and resolve via the chain `rs.templateRef` → `ActionsGateway.defaultTemplateRef` → the single default-marked `ClusterRunnerTemplate` (annotation `actions-gateway.com/is-default-template: "true"`, the `StorageClass` pattern) → **fail-closed** `TemplateNotFound`, never a synthesized phantom pod.
+The parallel relaxation for `templateRef`, now implemented.
+`templateRef` is optional: omit it and resolve via the chain `rs.templateRef` → `ActionsGateway.defaultTemplateRef` → the single default-marked `ClusterRunnerTemplate` (annotation `actions-gateway.com/is-default-template: "true"`, the `StorageClass` pattern) → **fail-closed** `TemplateNotFound`, never a synthesized phantom pod.
 At-most-one cluster-default is enforced at runtime (`AmbiguousDefault` if two are marked, not a silent pick); `status.templateSource` reports which rung resolved.
 Required → optional is backward-compatible.
 See [§H.4](../design/appendix-h-v2-api-decomposition.md#h4-spec-sketches).
@@ -239,13 +250,15 @@ See [§H.4](../design/appendix-h-v2-api-decomposition.md#h4-spec-sketches).
 ### Bring-your-own proxy TLS certificate (Q174)
 
 The proxy CA/cert is GMC-generated (self-signed) by default.
-Same pattern: add an operator-supplied `certificateSecretRef` on `EgressProxy` — when set, GMC uses that TLS Secret instead of generating one, letting operators source proxy certs from an external PKI/Vault (different algorithm, lifetime, or HSM-backed issuance). **Security invariant:** the referenced Secret must be a same-namespace TLS Secret — no cross-tenant reuse.
+Same pattern: add an operator-supplied `certificateSecretRef` on `EgressProxy` — when set, GMC uses that TLS Secret instead of generating one, letting operators source proxy certs from an external PKI/Vault (different algorithm, lifetime, or HSM-backed issuance).
+**Security invariant:** the referenced Secret must be a same-namespace TLS Secret — no cross-tenant reuse.
 Additive optional field, deferred until an operator with managed PKI asks.
 Instantiates [design goal 6](../design/01-executive-summary.md#design-goals).
 
 ### M4 — Cross-namespace `EgressProxy` sharing — **shipped** (Q166)
 
-Demand fired 2026-08-01 and it shipped into 1.4.0. `spec.sharing.allowedNamespaces` had been served by `v2beta1` since `v1.3.0` with **no enforcement**, so every release hardened a dormant field; implementing it while it was still effectively unused was what kept the fix from being a breaking change.
+Demand fired 2026-08-01 and it shipped into 1.4.0.
+`spec.sharing.allowedNamespaces` had been served by `v2beta1` since `v1.3.0` with **no enforcement**, so every release hardened a dormant field; implementing it while it was still effectively unused was what kept the fix from being a breaking change.
 
 Delivered: the proxy references carry an optional `namespace` on a dedicated `ProxyObjectRef` (not on the shared `ObjectRef`, which would have opened `gatewayRef`/`templateRef` too); provider-side consent failing closed with `ProxyShareNotGranted`; CA distribution as a ConfigMap into granted namespaces only; dual-side NetworkPolicy, with the granted peer carrying both selectors in one entry so they AND.
 Absent or empty `sharing` denies, so the same-namespace-only posture is both the default and the unset case.

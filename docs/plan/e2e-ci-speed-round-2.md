@@ -53,7 +53,8 @@ gmc 177s │ agc 170s │ proxy 74s │ fakegithub 69s │ worker 41s │ wrappe
 ~570 s of compile contending for a 4-vCPU runner, every run, because:
 
 - **Each image compiled the shared dependency closure separately.** Six Dockerfiles meant six `builder` stages; BuildKit can only share a build step between targets when it is the same stage in the same Dockerfile, so the `--mount=type=cache` on `/root/.cache/go-build` that round 1 added (§2) never paid off across targets — all six started cold simultaneously and raced.
-- **`GOCACHE` was cold on every run.** Round 1 noted this and left it: "the cache mount … does not persist across runs unless BuildKit state itself is cached." `docker/setup-buildx-action` boots a fresh builder each run, so it never is.
+- **`GOCACHE` was cold on every run.** Round 1 noted this and left it: "the cache mount … does not persist across runs unless BuildKit state itself is cached."
+  `docker/setup-buildx-action` boots a fresh builder each run, so it never is.
   Meanwhile `cache-to type=gha` could not help either, because `COPY . .` invalidates the build layer on every PR.
 - **The wrapper binary was compiled twice.** `cmd/worker/Dockerfile` and `cmd/worker/Dockerfile.wrapper` ran an identical `go build ./cmd/worker` in identical builder stages (log steps `#41` and `#47`, 41 s each).
   Two files, so BuildKit could not deduplicate them.
@@ -207,7 +208,8 @@ The general rule behind that — the two guarantees, and the mutual exclusion it
 The HPA cannot report `ScalingActive=True` until metrics-server has scraped, so the default resolution sits directly in front of this spec.
 Lowering it to 10 s — metrics-server's minimum *accepted* value — looked like free latency.
 
-It is not. `--metric-resolution` must also **exceed kubelet's housekeeping interval** (10 s by default).
+It is not.
+`--metric-resolution` must also **exceed kubelet's housekeeping interval** (10 s by default).
 At exactly 10 s metrics-server keeps re-reading unchanged cAdvisor samples, discards them as duplicate timestamps, and never serves usage at all — so the outcome is not a slower HPA but a dead one.
 
 On PR #874 both specs that gate on `ScalingActive=True` timed out:

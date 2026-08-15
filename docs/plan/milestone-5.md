@@ -132,13 +132,15 @@ Q219 closes the remaining gap: the **production posture** on the **proxied** pri
 **Install (secure default, no dev opt-outs).** `helm install` of the current chart with `gmc`/`agc`/`proxy`/`wrapper` all pinned by **digest** (published `v1.1.0-rc.4` images) — no `allowFloatingImageTags` — and `certManager.enabled=true`. cert-manager issued `webhook-server-cert`; the GMC rolled out 2/2.
 The `actions-gateway-crds-v2` chart was installed at the matching tag so the GMC's v2 controllers had their kinds.
 
-**Tenant (clean path, zero workarounds).** A namespace marked `actions-gateway.github.com/tenant=true`, a `github-app-creds` Secret (`appId`/`installationId`/`privateKey`), and a `v1alpha1` `ActionsGateway` carrying just `gitHubAppRef` + `gitHubURL` + a `runnerGroups[0]` with `runnerLabels: ["e2e"]`. **No `--allow-agc-extra-env`** (Q116 made `gitHubURL` first-class) and **no per-tenant `runAsUser`** (Q115 gap-fills it) — confirming both earlier workarounds are retired.
+**Tenant (clean path, zero workarounds).** A namespace marked `actions-gateway.github.com/tenant=true`, a `github-app-creds` Secret (`appId`/`installationId`/`privateKey`), and a `v1alpha1` `ActionsGateway` carrying just `gitHubAppRef` + `gitHubURL` + a `runnerGroups[0]` with `runnerLabels: ["e2e"]`.
+**No `--allow-agc-extra-env`** (Q116 made `gitHubURL` first-class) and **no per-tenant `runAsUser`** (Q115 gap-fills it) — confirming both earlier workarounds are retired.
 The gateway reached `Ready=True`, proxy 2/2, AGC 1/1.
 
 **Bug found and fixed (the headline result).** On the proxied secure-default path the AGC could fetch its installation token but **failed every runner registration** with `proxyconnect tcp: tls: failed to verify certificate: x509: certificate signed by unknown authority` — so no runner ever came online.
 Root cause: the AGC's registration/provisioner fallback HTTP clients were package-level vars built at package-init, **before** `main()` installs the egress-proxy CA into `http.DefaultTransport`, so they trusted only the system roots.
 Fixed by building them lazily (`sync.OnceValue`), with an `httpx` regression test and an operator [troubleshooting entry](../operations/troubleshooting.md#runners-never-appear-online--agc-unknown-authority-through-the-egress-proxy).
-This bug shipped in `v1.1.0-rc.4` and breaks every proxied (v1, or v2-with-EgressProxy) install; the dogfood missed it by running direct-egress. **Q219's live install is exactly what surfaced it.**
+This bug shipped in `v1.1.0-rc.4` and breaks every proxied (v1, or v2-with-EgressProxy) install; the dogfood missed it by running direct-egress.
+**Q219's live install is exactly what surfaced it.**
 
 **End-to-end after the fix.** With the patched AGC image the runner registered (`ActiveSessions ≥ 1`) and appeared `online` in the repo runner list; a real `workflow_dispatch` job acquired a worker pod and concluded **success** ([run 28350404745](https://github.com/actions-gateway/gateway-test/actions/runs/28350404745)), with all worker log/result uploads routed through the proxy at 4/4.
 The post-job agent re-registered (Q114 self-heal), deleting the tenant CR deregistered its runners, and `helm uninstall` **retained both CRDs** (`helm.sh/resource-policy: keep`).
@@ -165,7 +167,8 @@ Three pieces:
 
 - **Tenant generator** — builds N independent RunnerGroups (default 10), each with its own `agentpool.Pool` (fake-client Secrets, in-memory registrar) and `listener.Multiplexer` sized to M listeners.
 - **In-process broker stub** (`broker_stub.go`) — implements the broker v2 wire protocol (`/token`, `/session`, `/message`, `/acquirejob`, `/renewjob`) with two production-faithful behaviours the load model depends on: a **long-poll hold** on `GET /message` (so idle sessions don't busy-spin to idle-shutdown, mirroring the real ~50s broker hold — Q148) and the **single-use JIT lifecycle** (Q114): acquiring a job consumes the delivering session's agent, so the goroutine must re-register before it can poll again.
-- **Job driver** — keeps every session saturated so the pool ramps to M listeners per tenant and stays there; each delivered job costs one `AcquireJob` + one agent **re-registration** (the Q114 per-job cost this harness exists to measure — it never assumes a long-lived runner). `LOAD_JOB_DURATION` sets how long a session "holds" a job (the simulated worker-pod runtime) before recycling, which tunes the blend between concurrency-holding and re-registration churn.
+- **Job driver** — keeps every session saturated so the pool ramps to M listeners per tenant and stays there; each delivered job costs one `AcquireJob` + one agent **re-registration** (the Q114 per-job cost this harness exists to measure — it never assumes a long-lived runner).
+  `LOAD_JOB_DURATION` sets how long a session "holds" a job (the simulated worker-pod runtime) before recycling, which tunes the blend between concurrency-holding and re-registration churn.
 
 A virtual runner session **is** a listener goroutine; sustained concurrent sessions = the sum of `Multiplexer.ActiveCount()` across tenants (cross-checked against `actions_gateway_active_sessions` and `runtime.NumGoroutine`).
 
@@ -245,7 +248,8 @@ Both halves landed:
 - **kube-bench (manual, documented).** kube-bench is a CIS scan against a **live node**, so it cannot run in our manifest-only CI.
   The expected pre-production procedure (run the upstream Job, triage `[FAIL]`s, which are cluster-admin vs. chart concerns) is documented as an operator runbook in [security-operations.md](../operations/security-operations.md#cis-benchmark-posture--kube-bench-manual-pre-production).
 
-**Decision — gate on `danger`, report `warning` (block vs. report-only).** `danger` findings are real security regressions (privileged container, host namespace, dangerous capabilities, missing `securityContext`, a floating `:latest` image tag) — a chart change that introduces one must not merge, so the gate blocks. `warning` findings are heuristic and frequently false-positive against a Helm-packaged operator chart, so blocking on them would red-gate unrelated work; they are printed for visibility instead.
+**Decision — gate on `danger`, report `warning` (block vs. report-only).** `danger` findings are real security regressions (privileged container, host namespace, dangerous capabilities, missing `securityContext`, a floating `:latest` image tag) — a chart change that introduces one must not merge, so the gate blocks.
+`warning` findings are heuristic and frequently false-positive against a Helm-packaged operator chart, so blocking on them would red-gate unrelated work; they are printed for visibility instead.
 The false-positive warnings are tuned to `ignore` in [`charts/actions-gateway/polaris.yaml`](../../charts/actions-gateway/polaris.yaml) (via `--merge-config`, so every default `danger` check stays active), each with a justifying comment.
 The digest-pinned default install scores **100** with zero danger findings.
 

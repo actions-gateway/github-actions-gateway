@@ -242,22 +242,27 @@ Everything below was discovered by running it.
 See [`deploy/kata-ci/runner-pod.yaml`](../../../deploy/kata-ci/runner-pod.yaml).
 
 1. **`/var/lib/docker` must be a raw block volume, not an `emptyDir`.** Kata surfaces an `emptyDir` as **virtiofs**, on which Docker cannot use `overlay2`; it silently falls back to `vfs`. kind then switches its node snapshotter to `fuse-overlayfs`, which needs `/dev/fuse` — absent from the guest — and the inner kubelet dies with `failed to create kubelet: open /dev/kmsg` / snapshotter errors.
-   Use `volumeMode: Block` + `volumeDevices`, then `mkfs.ext4` inside the guest. *Gotcha:* `docker:dind` declares `VOLUME /var/lib/docker` and Kata pre-mounts virtiofs there, so a naive "is it mounted?" check passes and skips your ext4 mount.
+   Use `volumeMode: Block` + `volumeDevices`, then `mkfs.ext4` inside the guest.
+   *Gotcha:* `docker:dind` declares `VOLUME /var/lib/docker` and Kata pre-mounts virtiofs there, so a naive "is it mounted?" check passes and skips your ext4 mount.
    Test for the **device**, not the mountpoint.
-2. **`/dev/kmsg` does not exist in the Kata guest**, and the inner kubelet hard-requires it (`open /dev/kmsg: no such file or directory`). `mknod /dev/kmsg c 1 11` (needs `CAP_MKNOD`), then bind it into kind's node container via `extraMounts`.
-3. **`/sys/fs/cgroup` is mounted read-only** for a non-privileged container, so `runc` cannot create the kind node's cgroup. `mount -o remount,rw /sys/fs/cgroup` succeeds with `CAP_SYS_ADMIN`.
+2. **`/dev/kmsg` does not exist in the Kata guest**, and the inner kubelet hard-requires it (`open /dev/kmsg: no such file or directory`).
+   `mknod /dev/kmsg c 1 11` (needs `CAP_MKNOD`), then bind it into kind's node container via `extraMounts`.
+3. **`/sys/fs/cgroup` is mounted read-only** for a non-privileged container, so `runc` cannot create the kind node's cgroup.
+   `mount -o remount,rw /sys/fs/cgroup` succeeds with `CAP_SYS_ADMIN`.
    Under Kata this hierarchy belongs to the **guest** kernel, so the remount grants nothing on the host — under plain runc the same tree is the host's, which is precisely why classic DinD demands `privileged: true`.
 4. **`/proc/sys` is read-only** likewise; Docker writes per-veth `net.ipv6.conf.<iface>.disable_ipv6`.
    Same remount, same guest-only reasoning.
    (`net.ipv4.ip_forward` is already `1` in the guest, so Docker never writes it.)
 5. **cgroup v2 nesting.** The cgroup-namespace root holds our shell + `dockerd`, and cgroup v2 forbids a cgroup from holding processes *and* delegating controllers to children — so systemd inside kind's node cannot create `/init.scope` (`Failed to create /init.scope control group: Structure needs cleaning`).
-   Evacuate the root into a leaf cgroup, then populate `cgroup.subtree_control`. `docker:dind`'s own entrypoint does this; overriding `command:` skips it.
+   Evacuate the root into a leaf cgroup, then populate `cgroup.subtree_control`.
+   `docker:dind`'s own entrypoint does this; overriding `command:` skips it.
 6. **IPv6 is disabled in the guest**, but kind unconditionally creates its Docker network with `--ipv6`.
    Pre-create an IPv4-only bridge network named `kind`; kind reuses it.
 
 ### 4. Capabilities
 
-`drop: [ALL]`, then add Docker's default set plus four extras. `privileged: true` is never needed and must never be added.
+`drop: [ALL]`, then add Docker's default set plus four extras.
+`privileged: true` is never needed and must never be added.
 
 ```
 CHOWN DAC_OVERRIDE FSETID FOWNER MKNOD NET_RAW SETGID SETUID
@@ -272,7 +277,8 @@ Two of these are easy to miss: **`FOWNER`** (image layer unpack `chmod`s files i
 ## Constraints and gotchas found
 
 - **Capacity, not quota.** `n2-standard-4` and `n2d-standard-4` were both `ZONE_RESOURCE_POOL_EXHAUSTED` in `us-central1-a` while `N2_CPUS` quota sat at 0/200.
-  A plain non-nested-virt `n2` also failed, so nested virt does **not** narrow the capacity pool, and `n2d` is not rejected for lacking AMD SVM — the `n2/n2d/c2/c2d` allowlist in [`scripts/dev/kata-node-pool.sh`](../../../scripts/dev/kata-node-pool.sh) is correct. `c2-standard-4` and `c2d-standard-4` both worked.
+  A plain non-nested-virt `n2` also failed, so nested virt does **not** narrow the capacity pool, and `n2d` is not rejected for lacking AMD SVM — the `n2/n2d/c2/c2d` allowlist in [`scripts/dev/kata-node-pool.sh`](../../../scripts/dev/kata-node-pool.sh) is correct.
+  `c2-standard-4` and `c2d-standard-4` both worked.
   Watch the per-family regional quota: `C2_CPUS` defaulted to **8** on a fresh project.
 - **A stockout wedges the cluster.** A failing `CREATE_NODE_POOL` op holds a cluster-level lock (`Cluster is running incompatible operation`) and blocks even deleting the pool, for tens of minutes.
   Prefer creating the nested-virt pool as the cluster's *initial* pool (`clusters create --enable-nested-virtualization`) so a stockout fails fast.
@@ -331,7 +337,8 @@ The Q286 wiring has since landed in-repo; what follows records what shipped, the
 ### The design correction: the namespace cannot stay PSA-baseline
 
 Earlier revisions of this plan (and the overlay stub) claimed the Kata variant keeps the namespace at `baseline` with no privileged profile.
-That is wrong: the unprivileged `dockerd`'s validated capability set (`SYS_ADMIN`, `NET_ADMIN`, `SYS_RESOURCE`, `SYS_PTRACE`, `NET_RAW`) exceeds PSS baseline's fixed `capabilities.add` allowlist, and PSA is not Kata-aware — it cannot credit the VM boundary. **Verified against a real apiserver** (envtest, 2026-07-16): a namespace with `enforce=baseline` rejects the Kata worker pod as Forbidden; `enforce=privileged` admits it.
+That is wrong: the unprivileged `dockerd`'s validated capability set (`SYS_ADMIN`, `NET_ADMIN`, `SYS_RESOURCE`, `SYS_PTRACE`, `NET_RAW`) exceeds PSS baseline's fixed `capabilities.add` allowlist, and PSA is not Kata-aware — it cannot credit the VM boundary.
+**Verified against a real apiserver** (envtest, 2026-07-16): a namespace with `enforce=baseline` rejects the Kata worker pod as Forbidden; `enforce=privileged` admits it.
 So the kata overlay carries the same four privileged-namespace gates as dind, and the "no privileged container" property is enforced by the worker shape being a **platform-owned `ClusterRunnerTemplate`** (v2 refuses tenant-authored privileged shapes; tenants cannot edit cluster-scoped templates), not by the PSA level.
 A second Kata-specific delta: **CPU limits are load-bearing** in the kata overlay — Kata sizes the guest VM's vCPUs from them — so the dind overlay's "requests-only CPU" idiom does not port.
 
@@ -358,9 +365,12 @@ The checklist's step 1 prediction held (the live pool was `e2-standard-8`/COS, n
 
 1. **The cluster had no Workload Identity pool** — `--workload-metadata=GKE_METADATA` is rejected with a 400 without cluster-level `--workload-pool` (the Q226 spike ran on a spike cluster that had it).
    Enabled live; the Part A create command in [gke-dogfood.md](../gke-dogfood.md) now carries `--workload-pool` plus a retrofit note.
-2. **`helm --set` typed the pool label as a boolean** — `nodeSelector` values must be strings, so kata-deploy's server-side apply failed. `e2e-setup.sh` now uses `--set-string`.
-3. **kata-deploy ships no tolerations** — it could never schedule onto the `dedicated=e2e:NoSchedule` pool. `e2e-setup.sh` now passes a matching `tolerations[0]` value.
-4. **Autoscale-from-zero never fired**: the `kata` RuntimeClass schedules on `katacontainers.io/kata-runtime=true`, which kata-deploy applies post-install — but the cluster autoscaler simulates against the pool's *configured* labels only, so no Kata pod could ever trigger the 0→N scale-up. `e2e-setup.sh` now bakes the runtime label into the pool's `--node-labels` (the same pattern GKE uses for gVisor sandbox pools); the bind-before-install window resolves via kubelet sandbox-create retries.
+2. **`helm --set` typed the pool label as a boolean** — `nodeSelector` values must be strings, so kata-deploy's server-side apply failed.
+   `e2e-setup.sh` now uses `--set-string`.
+3. **kata-deploy ships no tolerations** — it could never schedule onto the `dedicated=e2e:NoSchedule` pool.
+   `e2e-setup.sh` now passes a matching `tolerations[0]` value.
+4. **Autoscale-from-zero never fired**: the `kata` RuntimeClass schedules on `katacontainers.io/kata-runtime=true`, which kata-deploy applies post-install — but the cluster autoscaler simulates against the pool's *configured* labels only, so no Kata pod could ever trigger the 0→N scale-up.
+   `e2e-setup.sh` now bakes the runtime label into the pool's `--node-labels` (the same pattern GKE uses for gVisor sandbox pools); the bind-before-install window resolves via kubelet sandbox-create retries.
 5. **`blkid || mkfs` never formatted the fresh PVC** — `docker:dind`'s `blkid` is busybox blkid, which exits 0 on a blank device, so the mkfs was skipped and the ext4 mount failed `EINVAL` on every fresh ephemeral volume.
    The Q226 spike masked this: its *static* PVC had been formatted once by hand, so the gate always found a filesystem.
    Isolated by cloning the AGC-rendered pod and bisecting against a working debug pod.

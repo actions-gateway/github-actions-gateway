@@ -102,7 +102,8 @@ Status legend: ✅ done, ⚠️ partial (residual accepted), ❌ open, ⓘ infor
 
 ### C-1. RunnerGroup `PodTemplate` is not validated; tenant can ship privileged worker pods
 
-- **Status (2026-05-23): Done.** Closed by W2. `SecurityProfile` enum on `ActionsGatewaySpec` (default `baseline`); `applyNamespacePSA` in [actionsgateway_controller.go:509](../../cmd/gmc/internal/controller/actionsgateway_controller.go) stamps `pod-security.kubernetes.io/{enforce,warn,audit}` labels on the tenant namespace at every reconcile.
+- **Status (2026-05-23): Done.** Closed by W2.
+  `SecurityProfile` enum on `ActionsGatewaySpec` (default `baseline`); `applyNamespacePSA` in [actionsgateway_controller.go:509](../../cmd/gmc/internal/controller/actionsgateway_controller.go) stamps `pod-security.kubernetes.io/{enforce,warn,audit}` labels on the tenant namespace at every reconcile.
   The in-tree PodSecurity admission plugin rejects any worker pod that violates the profile, including pods built by the AGC from a tenant's PodTemplate.
   A CEL `XValidation` on `RunnerGroupSpec.PodTemplate` also rejects `privileged: true` at `kubectl apply` time for the kinder failure path (per D-7).
 - **Location:** [cmd/agc/api/v1alpha1/runnergroup_types.go:30-60](../../cmd/agc/api/v1alpha1/runnergroup_types.go), [cmd/agc/internal/provisioner/provisioner.go:349-439](../../cmd/agc/internal/provisioner/provisioner.go), [cmd/gmc/internal/controller/actionsgateway_controller.go](../../cmd/gmc/internal/controller/actionsgateway_controller.go)
@@ -112,7 +113,8 @@ Status legend: ✅ done, ⚠️ partial (residual accepted), ❌ open, ⓘ infor
   Today the code has no admission-time guard; the AGC's per-PodSpec overrides cover only `hostPID`/`hostNetwork`/`hostIPC`/`automountServiceAccountToken` and leave everything else (privileged, capabilities, hostPath, etc.) to whichever cluster-wide policy engine the operator happens to install.
   That dependency is invisible to the GMC and silent to the tenant.
 - **Description:** The CRD field `RunnerGroupSpec.PodTemplate` is a verbatim `corev1.PodTemplateSpec`.
-  No CEL `XValidation` rules constrain it. `Provisioner.buildPod` overrides `HostPID`/`HostNetwork`/`HostIPC` and forces `AutomountServiceAccountToken: false`, but it does *not* touch:
+  No CEL `XValidation` rules constrain it.
+  `Provisioner.buildPod` overrides `HostPID`/`HostNetwork`/`HostIPC` and forces `AutomountServiceAccountToken: false`, but it does *not* touch:
   - `securityContext.privileged`, `runAsUser=0`, `allowPrivilegeEscalation`, `capabilities.add`
   - `hostPath` volumes
   - `PodSecurityContext.Sysctls`
@@ -133,7 +135,8 @@ Status legend: ✅ done, ⚠️ partial (residual accepted), ❌ open, ⓘ infor
   3. **AGC PodSpec invariants remain unconditional.** Regardless of the selected profile, `provisioner.buildPod` continues to force `HostPID=false`, `HostNetwork=false`, `HostIPC=false`, `AutomountServiceAccountToken=false`, and the worker `ServiceAccountName`.
      PSA is the safety net at the namespace boundary; the AGC's overrides are the floor at pod construction.
      This ensures a `privileged`-profile tenant still cannot project Kubernetes API credentials into a worker pod or share host namespaces.
-  4. **Tenants who need both privileged and non-privileged workloads** deploy two `ActionsGateway` CRs in two namespaces (e.g. `myteam-builds` with `privileged` for DinD, `myteam-tests` with `baseline` for everything else).
+  4. **Tenants who need both privileged and non-privileged workloads** deploy two `ActionsGateway` CRs in two namespaces (e.g.
+     `myteam-builds` with `privileged` for DinD, `myteam-tests` with `baseline` for everything else).
      Per-`ActionsGateway` is the granularity at which the profile is chosen; per-`RunnerGroup` within one namespace is not supported in v1 (PSA is namespace-scoped).
      [Appendix G](../design/appendix-g-future-enhancements.md) records finer granularity as a candidate future enhancement.
   5. **`privileged` tenants are strongly encouraged to pair the profile with a sandbox runtime** (`runtimeClassName: kata-containers` or `gvisor` in the `PodTemplate`).
@@ -155,7 +158,9 @@ Status legend: ✅ done, ⚠️ partial (residual accepted), ❌ open, ⓘ infor
 
 ### H-1. GitHub App private key injected into AGC pod as an environment variable
 
-- **Status (2026-05-23): Done.** Closed by W3. `buildAGCDeployment` mounts the `gitHubAppRef` Secret as a volume at `/etc/actions-gateway/github-app/` with mode `0o400` ([builder.go:33,450,481](../../cmd/gmc/internal/controller/builder.go)). `cmd/agc/main.go:91-111` reads `appId`, `installationId`, and `privateKey` from files.
+- **Status (2026-05-23): Done.** Closed by W3.
+  `buildAGCDeployment` mounts the `gitHubAppRef` Secret as a volume at `/etc/actions-gateway/github-app/` with mode `0o400` ([builder.go:33,450,481](../../cmd/gmc/internal/controller/builder.go)).
+  `cmd/agc/main.go:91-111` reads `appId`, `installationId`, and `privateKey` from files.
   The three `GITHUB_APP_*` env-var entries are gone; `kubectl describe pod` no longer shows the key bytes.
 - **Location:** [cmd/gmc/internal/controller/builder.go:291-321](../../cmd/gmc/internal/controller/builder.go), [cmd/agc/main.go:42-55](../../cmd/agc/main.go)
 - **Category:** OWASP A02:2025 — Cryptographic Failures / A05:2025 — Misconfiguration
@@ -174,7 +179,8 @@ Status legend: ✅ done, ⚠️ partial (residual accepted), ❌ open, ⓘ infor
   The `gitHubAppRef` Secret schema is already correct (keys `appId`, `installationId`, `privateKey`) and test fixtures already create real Secrets via [`CreateGitHubAppSecret`](../../cmd/gmc/test/utils/resources.go).
   Only the AGC's *consumption* of the Secret needs to change.
 - **Mitigation:** Project the `gitHubAppRef` Secret as a file volume on the AGC pod at `/etc/actions-gateway/github-app/` with `defaultMode: 0o400`.
-  Update `cmd/agc/main.go` to read `appId`, `installationId`, and `privateKey` from files. `loadPEM` already supports the file-path form.
+  Update `cmd/agc/main.go` to read `appId`, `installationId`, and `privateKey` from files.
+  `loadPEM` already supports the file-path form.
   Delete the three `GITHUB_APP_*` env-var entries from `buildAGCDeployment`.
 
   Scope is limited to credential material.
@@ -199,7 +205,8 @@ Status legend: ✅ done, ⚠️ partial (residual accepted), ❌ open, ⓘ infor
   The broad `create` would let it stage a Secret that another workload mounts.
 - **Mitigation (implemented, partially):** Four controls landed:
 
-  1. **`list`/`watch` were initially removed** (commit where W4 first shipped), but this broke the agent pool's Secret enumeration — the pool must enumerate its own per-runner Secrets to reconcile state (`EnsureAgents`). `list` was restored (dc80293).
+  1. **`list`/`watch` were initially removed** (commit where W4 first shipped), but this broke the agent pool's Secret enumeration — the pool must enumerate its own per-runner Secrets to reconcile state (`EnsureAgents`).
+     `list` was restored (dc80293).
 
   2. **Secret cache disabled on the AGC manager** (`Client.Cache.DisableFor [*corev1.Secret]`, commit 8ea6f5f) — all Secret reads (`Get` and `List`) bypass the controller-runtime in-process cache and go direct to the API server.
      A compromised AGC cannot silently drain Secret bodies from memory; any exfiltration requires live API server calls that appear in the audit log.
@@ -214,7 +221,8 @@ Status legend: ✅ done, ⚠️ partial (residual accepted), ❌ open, ⓘ infor
      The metadata list's GVK resolves to Secret, which matches the DisableFor set above, so it also bypasses the cache and starts no informer.
      Asserted by `TestPool_EnumeratesSecretsAsMetadataOnly`.
 
-- **Residual risk (accepted):** The AGC Role still grants the `list` *verb* on all Secrets in the tenant namespace, so a compromised AGC binary could issue a full-body `list` out-of-band to enumerate user-managed Secrets (e.g. `ghcr-pull-token`, `slack-webhook`) — RBAC cannot scope `list` by name or label (see below).
+- **Residual risk (accepted):** The AGC Role still grants the `list` *verb* on all Secrets in the tenant namespace, so a compromised AGC binary could issue a full-body `list` out-of-band to enumerate user-managed Secrets (e.g.
+  `ghcr-pull-token`, `slack-webhook`) — RBAC cannot scope `list` by name or label (see below).
   The legitimate code path no longer does this (control 4), and any such read still hits the API server in the audit log.
   The `watch` verb was removed from the AGC Role (Q26), so only `list` remains as residual.
   Two paths to closing `list` were evaluated and rejected for v1:
@@ -222,7 +230,8 @@ Status legend: ✅ done, ⚠️ partial (residual accepted), ❌ open, ⓘ infor
   - **`resourceNames` restriction** — not viable: RBAC doesn't support glob patterns and agent Secret names are dynamic (created per acquisition).
     Static enumeration would require the GMC to update the Role on every agent-pool resize.
 
-  - **Label-selector-restricted RBAC (KEP-4601)** — KEP-4601 ("Authorize with Field and Label Selectors") reached GA in Kubernetes 1.34 and is enabled by default in 1.35 (the cluster version used here), but it extends the *authorizer* layer, not the `rbacv1.PolicyRule` API. `PolicyRule` has no `LabelSelector` field even in k8s.io/api v0.35.
+  - **Label-selector-restricted RBAC (KEP-4601)** — KEP-4601 ("Authorize with Field and Label Selectors") reached GA in Kubernetes 1.34 and is enabled by default in 1.35 (the cluster version used here), but it extends the *authorizer* layer, not the `rbacv1.PolicyRule` API.
+    `PolicyRule` has no `LabelSelector` field even in k8s.io/api v0.35.
     The feature benefits webhook authorizers (OPA, Kyverno) but does not let standard RBAC roles scope `list` to label-filtered resources.
 
   - **Split ServiceAccount** — a second SA with `list`/`watch`/`get` for the agent pool; the main AGC SA keeps `create`/`delete`.
@@ -292,7 +301,8 @@ Status legend: ✅ done, ⚠️ partial (residual accepted), ❌ open, ⓘ infor
 
 ### M-3. AES-CBC unpadding has padding-oracle-shaped error returns
 
-- **Status (2026-05-23): Done.** Closed by W6. `pkcs7Unpad` in [broker/crypto.go:84](../../broker/crypto.go) now returns a single `errInvalidPadding` sentinel for every malformed input (empty, bad length, wrong byte).
+- **Status (2026-05-23): Done.** Closed by W6.
+  `pkcs7Unpad` in [broker/crypto.go:84](../../broker/crypto.go) now returns a single `errInvalidPadding` sentinel for every malformed input (empty, bad length, wrong byte).
   The byte comparison runs in constant time via `crypto/subtle`.
   The oracle shape is eliminated regardless of how the error is surfaced.
 - **Location:** [broker/crypto.go:75-89](../../broker/crypto.go)
@@ -304,13 +314,15 @@ Status legend: ✅ done, ⚠️ partial (residual accepted), ❌ open, ⓘ infor
   AES-CBC + PKCS#7 + no MAC = padding oracle if an attacker can submit chosen ciphertexts and observe oracle output.
 - **Mitigation:**
   1. Replace the error returns with a single sentinel error `errInvalidPadding` returned for *all* unpadding failures (empty, bad length, wrong byte).
-  2. Make the comparison constant-time: collect a single `ok` bit across all bytes (e.g. `mask |= data[i] ^ byte(padLen)`) and return after the loop.
+  2. Make the comparison constant-time: collect a single `ok` bit across all bytes (e.g.
+     `mask |= data[i] ^ byte(padLen)`) and return after the loop.
   3. Add a Note that this decrypt routine MUST NOT be exposed as a network-callable handler.
   4. Long-term: ask GitHub's broker to switch to AES-GCM or otherwise AEAD-protect the message body; the AES-CBC choice is dictated by compatibility with the .NET runner, not by us.
 
 ### M-4. `rerun-failed-jobs` URL built from job payload values without validation
 
-- **Status (2026-05-23): Done.** Closed by W6. `rerunFailedJobs` at [provisioner.go:250-276](../../cmd/agc/internal/provisioner/provisioner.go) rejects any `owner`/`repo` not matching `repoSegmentRE` (line 526: `^[A-Za-z0-9][A-Za-z0-9._-]*$`) before building the URL, and wraps each segment in `neturl.PathEscape`.
+- **Status (2026-05-23): Done.** Closed by W6.
+  `rerunFailedJobs` at [provisioner.go:250-276](../../cmd/agc/internal/provisioner/provisioner.go) rejects any `owner`/`repo` not matching `repoSegmentRE` (line 526: `^[A-Za-z0-9][A-Za-z0-9._-]*$`) before building the URL, and wraps each segment in `neturl.PathEscape`.
   A unit test feeds adversarial `system.github.repository` values and asserts the call is rejected pre-HTTP.
 - **Location:** [cmd/agc/internal/provisioner/provisioner.go:248-293](../../cmd/agc/internal/provisioner/provisioner.go)
 - **Category:** OWASP A03:2025 — Injection (URL/path injection)
@@ -318,7 +330,9 @@ Status legend: ✅ done, ⚠️ partial (residual accepted), ❌ open, ⓘ infor
   An attacker would need to MitM that channel or compromise the broker.
   The class is injection, but the input is server-derived.
   Worth fixing because the cost is low and the contract from GitHub is not formally guaranteed.
-- **Description:** `rerunFailedJobs` builds `%s/repos/%s/%s/actions/runs/%s/rerun-failed-jobs` from `owner`, `repo`, and `runID`. `owner` and `repo` are extracted from `acquirePayload.Variables["system.github.repository"]` via `strings.SplitN("/", 2)`. `runID` is parsed as `%d` (safe).
+- **Description:** `rerunFailedJobs` builds `%s/repos/%s/%s/actions/runs/%s/rerun-failed-jobs` from `owner`, `repo`, and `runID`.
+  `owner` and `repo` are extracted from `acquirePayload.Variables["system.github.repository"]` via `strings.SplitN("/", 2)`.
+  `runID` is parsed as `%d` (safe).
   There is no validation that `owner`/`repo` contain only `[A-Za-z0-9_.-]`.
 - **Mitigation:**
   1. Reject any `owner`/`repo` that contains a character outside `[A-Za-z0-9._-]` before building the URL.
@@ -364,7 +378,8 @@ Status legend: ✅ done, ⚠️ partial (residual accepted), ❌ open, ⓘ infor
 
 ### M-7. AGC Deployment lacks SecurityContext
 
-- **Status (2026-05-23): Done.** Closed by W8. `buildAGCDeployment` now sets `RunAsNonRoot: true`, `ReadOnlyRootFilesystem: true`, `AllowPrivilegeEscalation: false`, `Capabilities.Drop: ALL`, and `SeccompProfile: RuntimeDefault` on the AGC container ([builder.go:492-497](../../cmd/gmc/internal/controller/builder.go)).
+- **Status (2026-05-23): Done.** Closed by W8.
+  `buildAGCDeployment` now sets `RunAsNonRoot: true`, `ReadOnlyRootFilesystem: true`, `AllowPrivilegeEscalation: false`, `Capabilities.Drop: ALL`, and `SeccompProfile: RuntimeDefault` on the AGC container ([builder.go:492-497](../../cmd/gmc/internal/controller/builder.go)).
   The same hardening was applied to the proxy container (line 323-327) alongside `Capabilities`/`SeccompProfile` that were missing there.
 - **Location:** [cmd/gmc/internal/controller/builder.go:291-321](../../cmd/gmc/internal/controller/builder.go)
 - **Category:** OWASP A05:2025 — Security Misconfiguration
@@ -397,7 +412,8 @@ Status legend: ✅ done, ⚠️ partial (residual accepted), ❌ open, ⓘ infor
 
 ### M-9. `IPRangeReconciler` drops worker→proxy egress rule on every refresh
 
-- **Status (2026-05-23): Done.** Closed by W1. `patchNetworkPolicy` now only refreshes the proxy NetworkPolicy (`npProxyName`); the workload policy carrying the worker→proxy egress rule is left untouched ([ipranges.go:193-204](../../cmd/gmc/internal/controller/ipranges.go)).
+- **Status (2026-05-23): Done.** Closed by W1.
+  `patchNetworkPolicy` now only refreshes the proxy NetworkPolicy (`npProxyName`); the workload policy carrying the worker→proxy egress rule is left untouched ([ipranges.go:193-204](../../cmd/gmc/internal/controller/ipranges.go)).
   The separation of policies makes the previous code-path conflation impossible by construction.
 - **Location:** [cmd/gmc/internal/controller/ipranges.go:162-173](../../cmd/gmc/internal/controller/ipranges.go)
 - **Category:** OWASP A04:2025 — Insecure Design
@@ -450,7 +466,8 @@ Status legend: ✅ done, ⚠️ partial (residual accepted), ❌ open, ⓘ infor
 - **Category:** OWASP A09:2025 — Logging Failures (verbose error)
 - **Description:** Errors include the full response body.
   GitHub may return request IDs and partial token echoes in error bodies — these end up in AGC logs that are aggregated cluster-wide and often retained.
-- **Mitigation:** Cap body output (e.g. `body[:200]`) and add a `log.Debug` path with the full body gated by an env-var debug switch.
+- **Mitigation:** Cap body output (e.g.
+  `body[:200]`) and add a `log.Debug` path with the full body gated by an env-var debug switch.
 
 ### M-14. GMC forwards `AGC_EXTRA_*` env vars to every tenant AGC
 
@@ -475,7 +492,8 @@ Status legend: ✅ done, ⚠️ partial (residual accepted), ❌ open, ⓘ infor
   **Option B — replace with a per-tenant typed field.** Add an optional `proxy.endpointOverrides` (or similarly named) block to `ActionsGatewaySpec` with strongly-typed fields: `apiBaseURL`, `brokerURL`, `stubAuthURL`, `stubBrokerURL`.
   The GMC reads these from each CR and stamps them onto that tenant's AGC Deployment as ordinary env vars.
   CRD CEL validation rejects values that aren't `https://` URLs (or `http://` against `*.svc.cluster.local` for the test case).
-  The GMC pod's environment has no special privileged role anymore — every override is visible in the CR. `AGC_EXTRA_*` is deleted.
+  The GMC pod's environment has no special privileged role anymore — every override is visible in the CR.
+  `AGC_EXTRA_*` is deleted.
 
   Option B is the cleaner outcome (typed, per-tenant, no cluster-wide side channel) but adds a CRD field whose only legitimate production use case is "I want to point one tenant at a private GitHub Enterprise endpoint" — which is plausible but not a current requirement.
   Option A is one flag + one `if` and removes the silent-default-on misconfiguration risk.
@@ -499,7 +517,8 @@ Status legend: ✅ done, ⚠️ partial (residual accepted), ❌ open, ⓘ infor
 - **Location:** [cmd/agc/internal/provisioner/provisioner.go:508-526](../../cmd/agc/internal/provisioner/provisioner.go), [cmd/gmc/internal/controller/builder.go:454-466](../../cmd/gmc/internal/controller/builder.go)
 - **Category:** OWASP A04:2025 — Insecure Design
 - **Description:** Both `safeName` variants replace any non-DNS character with `-`.
-  Two distinct inputs (e.g. `gpu/a100` and `gpu_a100`) yield the same Kubernetes object name, causing a silent overwrite.
+  Two distinct inputs (e.g.
+  `gpu/a100` and `gpu_a100`) yield the same Kubernetes object name, causing a silent overwrite.
   For job payload Secrets keyed on planID, this is theoretically a cross-job leak: if planIDs from two different acquisitions normalize to the same name, the Secret content is overwritten.
   GitHub planIDs are GUIDs in practice, but the contract is not declared.
 - **Mitigation:** When collapsing, append a hash suffix of the original input (`-<8 hex bytes>`) so distinct inputs produce distinct names.
@@ -525,14 +544,16 @@ Status legend: ✅ done, ⚠️ partial (residual accepted), ❌ open, ⓘ infor
 
 - **Location:** [cmd/proxy/proxy.go:148-158](../../cmd/proxy/proxy.go)
 - **Category:** OWASP A04:2025 — Insecure Design (resource exhaustion)
-- **Why Medium:** Resource starvation rather than privilege escalation. `ResourceQuota` caps pod count and HPA caps replica count, but a flood of hung tunnels within a single pod degrades throughput before either control reacts.
+- **Why Medium:** Resource starvation rather than privilege escalation.
+  `ResourceQuota` caps pod count and HPA caps replica count, but a flood of hung tunnels within a single pod degrades throughput before either control reacts.
   Compounds with M-17 to widen the slowloris surface.
 - **Description:** `handleConnect` calls `io.Copy` in two goroutines and waits on a single done signal.
   There is no read deadline on the hijacked client conn or the upstream conn, and no upper bound on tunnel lifetime.
   A long-poll that stalls keeps the relay goroutines alive until the OS TCP timeout (minutes-to-hours on Linux).
 - **Mitigation:**
   1. Wrap the tunnel in `ctx, cancel := context.WithTimeout(r.Context(), maxTunnelLifetime)` (default e.g. 6h, configurable on `Server`) and cancel on the first `done` receive.
-  2. In each relay goroutine, after a successful copy chunk, refresh a per-conn idle deadline (e.g. `dst.SetDeadline(time.Now().Add(idleTimeout))`, default 5min) so a stalled stream is torn down.
+  2. In each relay goroutine, after a successful copy chunk, refresh a per-conn idle deadline (e.g.
+     `dst.SetDeadline(time.Now().Add(idleTimeout))`, default 5min) so a stalled stream is torn down.
   3. Add an `actions_gateway_proxy_tunnel_duration_seconds` histogram so the chosen ceilings are observable.
 
 ### M-19. Worker Dockerfile base image is not digest-pinned — **Resolved 2026-06-01**
@@ -581,7 +602,8 @@ Status legend: ✅ done, ⚠️ partial (residual accepted), ❌ open, ⓘ infor
 - **Category:** OWASP A04:2025 — Insecure Design
 - **Description:** Both functions look for `"401"`, `"403"`, `"404"`, `"410"` as substrings of the error message.
   Fragile — a response body containing those digits in an unrelated context can match.
-- **Mitigation:** Return typed errors from `broker.Client` (e.g. `*UnauthorizedError`, `*SessionExpiredError`) and use `errors.As`.
+- **Mitigation:** Return typed errors from `broker.Client` (e.g.
+  `*UnauthorizedError`, `*SessionExpiredError`) and use `errors.As`.
 
 ### L-5. PEM key parsing accepts only PKCS#1 in `agentpool/crypto.go` (asymmetric with `githubapp/auth.go`)
 
@@ -738,7 +760,8 @@ See [docs/plan/worker-egress-proxy.md](worker-egress-proxy.md) for the full rati
 #### W2 — Security profiles via PSA (closes C-1) — **Done (2026-05-23, commit `1155d6f`)**
 
 - **What shipped:**
-  - `cmd/gmc/api/v1alpha1/actionsgateway_types.go` — `SecurityProfile` enum field (`baseline | restricted | privileged`, default `baseline`) with CEL `enum` validation. `zz_generated.deepcopy.go` regenerated.
+  - `cmd/gmc/api/v1alpha1/actionsgateway_types.go` — `SecurityProfile` enum field (`baseline | restricted | privileged`, default `baseline`) with CEL `enum` validation.
+    `zz_generated.deepcopy.go` regenerated.
   - `cmd/gmc/internal/controller/actionsgateway_controller.go` — `applyNamespacePSA` (line 509) stamps `pod-security.kubernetes.io/{enforce,warn,audit}` and matching `*-version` labels on the tenant namespace at every reconcile.
     Idempotent label merge; called from `reconcileResources`.
   - `cmd/agc/api/v1alpha1/runnergroup_types.go` — CEL `XValidation` rejects `privileged: true` in `RunnerGroupSpec.PodTemplate` at `kubectl apply` time (per D-7).
@@ -769,7 +792,8 @@ See [docs/plan/worker-egress-proxy.md](worker-egress-proxy.md) for the full rati
   - **Permission set documented** (`cmd/gmc/config/agc-tenant-role/agc_tenant_role.yaml`): the shipped ClusterRole that per-tenant RoleBindings reference.
     Its header comment explains why `list`/`watch` on `secrets` are required and points to the cache-disable as the substitute control.
 
-  `list`/`watch` on all Secrets in the tenant namespace remain in the ClusterRole. `resourceNames` restriction is not viable (dynamic names, no glob support).
+  `list`/`watch` on all Secrets in the tenant namespace remain in the ClusterRole.
+  `resourceNames` restriction is not viable (dynamic names, no glob support).
   KEP-4601 (GA in k8s 1.34) does not extend `rbacv1.PolicyRule` — it helps webhook authorizers, not standard RBAC.
   Split-SA was evaluated and declined (D-3 reasoning: AGC compromise already implies access to credentials it minted).
   The residual enumeration risk is accepted for v1 and documented in the H-2 finding above.
@@ -795,7 +819,8 @@ Originally framed as the next milestone after Phase 1; shipped in the same push.
 - **What shipped:**
   - `broker/crypto.go:19,84` — `errInvalidPadding` is the single sentinel returned by `pkcs7Unpad` for every malformed input.
     Byte comparison runs through `crypto/subtle` in constant time.
-  - `cmd/agc/internal/provisioner/provisioner.go` — `repoSegmentRE` (line 526) restricts `owner`/`repo` to `^[A-Za-z0-9][A-Za-z0-9._-]*$`. `rerunFailedJobs` (lines 250-276) rejects non-matching values pre-HTTP and wraps each path segment in `neturl.PathEscape`.
+  - `cmd/agc/internal/provisioner/provisioner.go` — `repoSegmentRE` (line 526) restricts `owner`/`repo` to `^[A-Za-z0-9][A-Za-z0-9._-]*$`.
+    `rerunFailedJobs` (lines 250-276) rejects non-matching values pre-HTTP and wraps each path segment in `neturl.PathEscape`.
   - `broker/client.go` — `GetMessage` (line 293) and `DeleteSession` (line 313) build URLs through `url.Parse` + `url.Values` with `RawQuery = q.Encode()`.
     No raw string concatenation in the URL path.
 - **Tests:** unit tests with adversarial `system.github.repository` inputs cover the M-4 reject path; crypto round-trip tests exercise the M-3 sentinel; broker tests assert correct URL composition.
@@ -809,8 +834,10 @@ See D-4 for the rationale.
 
 - **Files:**
   - `cmd/gmc/internal/controller/builder.go` — new helper `buildProxyCertSecret(ag)` generates a 2048-bit RSA keypair and a self-signed cert via `crypto/x509.CreateCertificate` with the proxy ClusterIP/DNS name as SAN, ~1-year lifetime.
-    Store the cert+key in a Secret (e.g. `actions-gateway-proxy-tls`).
-    The proxy Deployment mounts the Secret at `/etc/actions-gateway/proxy-tls/` mode `0400`; the AGC Deployment mounts only the cert (public part) at `/etc/actions-gateway/proxy-ca/`. `buildProxyServiceAddr` returns `https://`.
+    Store the cert+key in a Secret (e.g.
+    `actions-gateway-proxy-tls`).
+    The proxy Deployment mounts the Secret at `/etc/actions-gateway/proxy-tls/` mode `0400`; the AGC Deployment mounts only the cert (public part) at `/etc/actions-gateway/proxy-ca/`.
+    `buildProxyServiceAddr` returns `https://`.
   - `cmd/gmc/internal/controller/actionsgateway_controller.go` — `reconcileResources` ensures the Secret exists and re-issues when expiry is within (say) 30 days.
     Reconciler-driven rotation; no external controller needed.
   - `cmd/proxy/proxy.go` and `cmd/proxy/main.go` — accept `PROXY_TLS_CERT_PATH` and `PROXY_TLS_KEY_PATH`.
@@ -950,7 +977,8 @@ No cluster required.
 | L-1 — jti | existing JWT tests | `jti` claim is unique per-request and included in the signed assertion. | ✓ done |
 | L-4 — typed errors | `broker/client_test.go`, `cmd/agc/internal/listener/goroutine_test.go` | `CreateSession` returns `*UnauthorizedError` for 401/403; `isUnauthorized`/`isSessionExpired` use `errors.As` only (no substring fallback). | ✓ done |
 
-**W4 residual risk (H-2 accepted):** The AGC Role grants `get`, `list`, `watch`, `create`, and `delete` on all Secrets in the tenant namespace. `list` is required by the agent pool's Secret enumeration (`agentpool.Pool.listSecretMeta`); narrowing it by label is not possible through standard `rbacv1.PolicyRule` (no `LabelSelector` field even in k8s.io/api v0.35 / KEP-4601 GA).
+**W4 residual risk (H-2 accepted):** The AGC Role grants `get`, `list`, `watch`, `create`, and `delete` on all Secrets in the tenant namespace.
+`list` is required by the agent pool's Secret enumeration (`agentpool.Pool.listSecretMeta`); narrowing it by label is not possible through standard `rbacv1.PolicyRule` (no `LabelSelector` field even in k8s.io/api v0.35 / KEP-4601 GA).
 The substitute controls are `Client.Cache.DisableFor[*corev1.Secret]` in the AGC manager (Secret bodies are never held in-process) and the metadata-only bulk list (Q57) so the legitimate `list` path returns no bodies; bodies are read per-name via `get`.
 Do not write a test asserting that `list` or `get` on an unrelated Secret is denied; both are currently allowed and the design knowingly accepts this.
 See H-2 for full rationale.
@@ -1089,7 +1117,8 @@ kubectl --context kind-d2-probe exec -n runner-restricted-probe runner-probe \
 # → 2.334.0, exit 0
 ```
 
-**Result:** pod admitted and runner binary executed successfully. `restricted` is a viable production profile.
+**Result:** pod admitted and runner binary executed successfully.
+`restricted` is a viable production profile.
 Tenants must set `runAsUser: 1001` and `runAsGroup: 1001` in their `RunnerGroup.spec.podTemplate`; without a numeric UID Kubernetes rejects the pod with "cannot verify user is non-root".
 
 #### CI gating

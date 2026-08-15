@@ -13,7 +13,8 @@ The interesting part is what a wrong verdict did once it was believed: it entere
   It was not.
 - A dispatched worker session was given "unbreak `main`" as its first instruction.
   Roughly half its run went to a defect that did not exist.
-- No shipped artifact was affected. `main` was green throughout, the release was never blocked, and no code changed on the strength of the claim.
+- No shipped artifact was affected.
+  `main` was green throughout, the release was never blocked, and no code changed on the strength of the claim.
 
 ## What the defect was
 
@@ -35,9 +36,11 @@ The two environments diverge silently and only on the developer's side.
 
 **2026-08-09.** `.build/mdreflow` is built from the then-current pin.
 
-**2026-08-13.** [#1462](https://github.com/actions-gateway/github-actions-gateway/pull/1462) adopts mdreflow v0.1.7. `tools/go.mod` changes; the binary does not.
+**2026-08-13.** [#1462](https://github.com/actions-gateway/github-actions-gateway/pull/1462) adopts mdreflow v0.1.7.
+`tools/go.mod` changes; the binary does not.
 
-**2026-08-13.** A release-readiness session runs `make check`. `md-reflow-check` reports four files as needing reflow.
+**2026-08-13.** A release-readiness session runs `make check`.
+`md-reflow-check` reports four files as needing reflow.
 The tree is clean; the binary is four days stale.
 
 The reading taken is that `main` is broken.
@@ -55,7 +58,9 @@ The first half has nothing to fix.
 **2026-08-14.** Q831's fix wires `md-reflow-check` into `doc-links.yml`.
 A run on main's tip now reports the `md-reflow` job as **passed**, while the local run still fails.
 
-**2026-08-14.** The contradiction forces the comparison. `.build/mdreflow` is dated 2026-08-09, the pin is v0.1.7, the binary is deleted, make rebuilds it, and `make md-reflow-check` passes. `make check` passes whole for the first time in the session.
+**2026-08-14.** The contradiction forces the comparison.
+`.build/mdreflow` is dated 2026-08-09, the pin is v0.1.7, the binary is deleted, make rebuilds it, and `make md-reflow-check` passes.
+`make check` passes whole for the first time in the session.
 
 ## Contributing factors
 

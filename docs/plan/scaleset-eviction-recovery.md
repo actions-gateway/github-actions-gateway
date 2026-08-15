@@ -130,7 +130,9 @@ Extending it to scale-set, with no `timeout-minutes` confound, is the cheapest g
 
 The fast-release mechanism `#811` proposes does exist on classic: `broker.Client.CompleteJob` posts a terminal `TaskResult` with the job-scoped token the AGC already holds for renewal, and its 404/410 handling is already a documented benign no-op.
 
-Wiring it is real work rather than a one-liner. `handleEviction` receives only `owner`, `repo`, `runID`; the `planID`, `runServiceURL`, and job token live in the listener (`cmd/agc/internal/listener/job.go`). `SiblingDelivery` already carries the right shape, so the plumbing is tractable, but it crosses a layer boundary and moves a job-scoped credential into the provisioner.
+Wiring it is real work rather than a one-liner.
+`handleEviction` receives only `owner`, `repo`, `runID`; the `planID`, `runServiceURL`, and job token live in the listener (`cmd/agc/internal/listener/job.go`).
+`SiblingDelivery` already carries the right shape, so the plumbing is tractable, but it crosses a layer boundary and moves a job-scoped credential into the provisioner.
 
 Against a tier scheduled for removal at `v2.0.0`, that cost buys a capability that ships and then is deleted.
 Do not implement classic-only.
@@ -165,13 +167,16 @@ Independently valuable, and correct to do regardless of Phase 1's outcome, since
 Shipped 2026-07-26 (Q417).
 Each planned step and what it became:
 
-1. **Establish run identity** — resolved above. `scaleset.JobMessage` now models `ownerName`, `repositoryName`, `workflowRunId`, and `jobDisplayName`, with `RunIdentity()` returning the `(owner, repo, run_id, ok)` triple.
+1. **Establish run identity** — resolved above.
+   `scaleset.JobMessage` now models `ownerName`, `repositoryName`, `workflowRunId`, and `jobDisplayName`, with `RunIdentity()` returning the `(owner, repo, run_id, ok)` triple.
    The listener passes it through `scalesetlistener.Job`; `ProvisionScaleSetWorker` stamps it as the existing `actions-gateway.com/run-id` / `/repository` annotations, so both tiers share one worker-pod annotation vocabulary.
    The `scalesettest` fake now delivers the fields too, because the real backend does — a fake that answered with them empty would have hidden the gap until a live run.
 2. **Detect the eviction** — pod watch, not the terminal `JobCompleted`, and via the **owning reconciler** rather than a per-job goroutine.
    The reconciler already watches worker pods for phase changes and already lists them every reconcile to reap them, so detection costs one cached List.
-   Choosing the reconciler over a goroutine is the same call Q420 made and for the same reason: a fire-and-forget tier has no process-scoped place to keep the state, so the pod has to carry it, and recovery then survives an AGC restart between the eviction and the rerun. `RecoverEvictedScaleSetWorkers` runs **before** the reaper, since the reaper would otherwise delete the evidence.
-3. **Reuse the retry budget** — unchanged. `handleEviction`, `reserveEvictionRetry`, the sharded per-`run_id` lock, and the sweeper are all shared; the only addition is a `tier` argument that labels the metrics.
+   Choosing the reconciler over a goroutine is the same call Q420 made and for the same reason: a fire-and-forget tier has no process-scoped place to keep the state, so the pod has to carry it, and recovery then survives an AGC restart between the eviction and the rerun.
+   `RecoverEvictedScaleSetWorkers` runs **before** the reaper, since the reaper would otherwise delete the evidence.
+3. **Reuse the retry budget** — unchanged.
+   `handleEviction`, `reserveEvictionRetry`, the sharded per-`run_id` lock, and the sweeper are all shared; the only addition is a `tier` argument that labels the metrics.
    The Q106 invariant now holds *across* tiers, which the concurrency regression test exercises by driving half its evictions down each path.
 
 Against the design constraints listed below:
@@ -204,7 +209,8 @@ Probe order, per #811, cheapest first:
   Q385's SIGTERM relay already covers every case where something in the pod gets to run.
   The 404/410 no-op covers the race, but make the intent explicit rather than relying on it.
 - **Cover deletion, not only terminal phase.** Classic's branch fires on `PodFailed`/`Evicted`, which is the kubelet's node-pressure signal.
-  API-initiated eviction (`kubectl drain`) deletes the pod instead, and `waitForPodCompletion` reads a vanished pod as `PodSucceeded`, so the drain path appears to reach no recovery at all. **Measured 2026-07-27 (Q421) and confirmed on both tiers** — a drained worker pod publishes no terminal phase before it disappears, so no rerun fires ([result](eviction-oversubscription-validation.md#result-measured-2026-07-27)).
+  API-initiated eviction (`kubectl drain`) deletes the pod instead, and `waitForPodCompletion` reads a vanished pod as `PodSucceeded`, so the drain path appears to reach no recovery at all.
+  **Measured 2026-07-27 (Q421) and confirmed on both tiers** — a drained worker pod publishes no terminal phase before it disappears, so no rerun fires ([result](eviction-oversubscription-validation.md#result-measured-2026-07-27)).
   The pod watch this phase adds should not inherit the gap; whether to close it at all is [Q459](archive/q459-drained-worker-recovery.md).
 - **Ordering and budget.** Report the terminal result, then rerun, consuming exactly one slot from the per-run budget.
 - **Observability.** A distinct metric or Event so a fast release is distinguishable from a lapse in the field.

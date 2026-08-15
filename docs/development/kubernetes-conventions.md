@@ -14,7 +14,8 @@ Why:
 - **YAML coercion footgun.** In a manifest, `my-label: true` parses as a YAML boolean, not the string `"true"`.
   A Kubernetes label/annotation value must be a string, so the unquoted form either errors or has to be remembered as `"true"` (quoted) every time.
   YAML 1.1 coerces `yes`/`no`/`on`/`off` (and their capitalised variants) the same way, so the trap is wider than just `true`/`false`.
-- **Self-documenting.** `actions-gateway.github.com/privileged-profile: allowed` reads as a deliberate grant. `…: "true"` carries no meaning and invites the reader to drop the quotes.
+- **Self-documenting.** `actions-gateway.github.com/privileged-profile: allowed` reads as a deliberate grant.
+  `…: "true"` carries no meaning and invites the reader to drop the quotes.
 
 The value is always matched **exactly** and the check is **fail-closed**: any value other than the sentinel keyword (and an absent label) is treated as "not granted".
 So even if someone fat-fingers `true`, eligibility is denied rather than silently granted.
@@ -81,11 +82,13 @@ The agent pool is the worked example and the one that got this wrong: identical 
 | Selector label | `actions-gateway/runner-group` | `actions-gateway.com/runner-set` |
 | GitHub runner name | `<name>-<index>` | `rs-<name>-<index>` |
 
-Two rules follow. **The v1 spelling never moves** — v1 is the rollback target, so it has to keep finding the objects and registrations it already owns; v2 is the side that gets the discriminator.
+Two rules follow.
+**The v1 spelling never moves** — v1 is the rollback target, so it has to keep finding the objects and registrations it already owns; v2 is the side that gets the discriminator.
 And **splitting the Kubernetes name is not enough on its own**: the GitHub runner name is unique per registration scope, so two pools sharing one take turns deregistering each other's live record through the 409-conflict path.
 Split every derived identity or none of them.
 
-Renaming a derived object in a shipped release also has to carry the existing ones across, not orphan them. `agentpool.AdoptLegacyRunnerSetSecrets` is the pattern: on the first reconcile after the rename, copy each old-named object to its new name (preserving the payload, so no external registration is re-issued) and delete the original, gated on a check that the old name is not in use by the *other* kind.
+Renaming a derived object in a shipped release also has to carry the existing ones across, not orphan them.
+`agentpool.AdoptLegacyRunnerSetSecrets` is the pattern: on the first reconcile after the rename, copy each old-named object to its new name (preserving the payload, so no external registration is re-issued) and delete the original, gated on a check that the old name is not in use by the *other* kind.
 
 ### A selector a coexisting controller also matches is a cross-wire (Q582)
 
@@ -100,8 +103,10 @@ Three things to carry forward when adding a label to a v2 object:
 - **A shared label is a shared selector until proven otherwise.** Trace every consumer before stamping one: PDBs, `Service`s, `NetworkPolicy` pod selectors *and peers*, pod (anti-)affinity terms, and CNI-native policy selectors.
   An HPA is the trap — it has no selector of its own, so it never appears in a grep for the label, yet it inherits its scale target's and wedges on an overlap.
 - **`Deployment.spec.selector` is immutable**, so narrowing one is a delete-and-recreate of a live workload, not a patch.
-  Prefer the fix that lands on the *newer* side: v2's pools are alpha and a migration creates them after the upgrade, whereas every install has a running v1 pool. `EgressProxyReconciler.applyDeployment` carries the recreate for pools that predate the narrowing, mirroring `applyRoleBinding`'s immutable-`roleRef` path.
-- **Generic identity belongs in the recommended labels**, which nothing selects on. `app.kubernetes.io/name=actions-gateway-proxy` is on both pools' pods and is the version-agnostic way to list every proxy pod; a functional selector must key on the owning object's identity label instead.
+  Prefer the fix that lands on the *newer* side: v2's pools are alpha and a migration creates them after the upgrade, whereas every install has a running v1 pool.
+  `EgressProxyReconciler.applyDeployment` carries the recreate for pools that predate the narrowing, mirroring `applyRoleBinding`'s immutable-`roleRef` path.
+- **Generic identity belongs in the recommended labels**, which nothing selects on.
+  `app.kubernetes.io/name=actions-gateway-proxy` is on both pools' pods and is the version-agnostic way to list every proxy pod; a functional selector must key on the owning object's identity label instead.
 
 ### Derive every name through `api/apinames` (Q467, Q473)
 
@@ -116,9 +121,11 @@ The v1 `<gateway>-<label>` RunnerGroup name was never bounded: past 63 character
 A 15-character gateway with a 40-character runner label was enough. v2 avoids this class with a 52-char CEL cap on CR names ([§H.6](../design/appendix-h-v2-api-decomposition.md#h6-naming-and-length-budgets)); v1 has no such cap, so the bound is applied where the name is derived.
 
 **Split the budget before you join the segments.** A name has rules beyond "≤63 characters" — it must also start and end with an alphanumeric character.
-Building `<prefix>-<owner>-<id>` and then cutting the result at 63 satisfies the length rule and violates the other one whenever the cut lands on a hyphen, and the hyphens in a UUID sit at fixed indices. `apinames.Join` splits the budget first (`apinames.Shares` gives each part an equal share and redistributes what a shorter part leaves over), so no cut can reach a separator.
+Building `<prefix>-<owner>-<id>` and then cutting the result at 63 satisfies the length rule and violates the other one whenever the cut lands on a hyphen, and the hyphens in a UUID sit at fixed indices.
+`apinames.Join` splits the budget first (`apinames.Shares` gives each part an equal share and redistributes what a shorter part leaves over), so no cut can reach a separator.
 
-**Never trade validity for collisions.** Trimming a trailing hyphen is not a fix on its own: it shortens the entropy-bearing suffix, and two objects that collide on a name are a worse failure than one the API server rejects. `apinames.Truncate` replaces the discarded tail with a hash of the *whole* segment, so every segment stays injective at every budget.
+**Never trade validity for collisions.** Trimming a trailing hyphen is not a fix on its own: it shortens the entropy-bearing suffix, and two objects that collide on a name are a worse failure than one the API server rejects.
+`apinames.Truncate` replaces the discarded tail with a hash of the *whole* segment, so every segment stays injective at every budget.
 
 **A name that already fits is never changed.** `Join` returns the plain concatenation whenever it is within budget.
 That is what makes the helper adoptable: bounding a derivation renames only the tenants that were already broken, never a healthy one.
@@ -164,7 +171,8 @@ Adding a key here is a decision to give up reconciliation of that key — take i
 ### Recommended `app.kubernetes.io/*` labels (Q205)
 
 Every object the GMC or AGC creates also carries the Kubernetes [recommended labels](https://kubernetes.io/docs/concepts/overview/working-with-objects/common-labels/) — `app.kubernetes.io/{name,instance,component,part-of,managed-by}` (and `version` where a meaningful one exists) — stamped via the shared [`api/apilabels`](../../api/apilabels/labels.go) helper so the GMC and AGC never diverge on the keys or the `part-of` value.
-They are **additive metadata**: stamp them *alongside* the functional selector labels above, never in place of them, and never build a controller's pod/Service selector on them (an operator may relabel them). `apilabels.Merge` preserves any existing key, so it cannot clobber a selector label.
+They are **additive metadata**: stamp them *alongside* the functional selector labels above, never in place of them, and never build a controller's pod/Service selector on them (an operator may relabel them).
+`apilabels.Merge` preserves any existing key, so it cannot clobber a selector label.
 The canonical per-component values and operator `kubectl -l` recipes live in [observability.md](../operations/observability-metrics.md#selecting-gag-objects-with-the-recommended-labels).
 
 Controller-set annotations on worker pods (both v1 and v2, stamped by the provisioner at pod creation time — from the AcquireJob payload on the classic tier, from the assignment message's `JobMessageBase` fields on the scale-set tier):
@@ -191,7 +199,8 @@ One further controller-set annotation is stamped at pod build, on both tiers, on
 
 One controller-set annotation is stamped at pod creation on the ScaleSet tier only:
 
-- `actions-gateway.com/runner-name` (`provisioner.AnnotationRunnerName`) — the name the listener pre-registered this pod's runner under at GitHub. `generatejitconfig` creates the record before the pod exists, and nothing else remembers the name once the listener goroutine that minted it has moved on, so the pod is the record: the reaper reads it back to deregister the registration when it deletes the pod, and the listener's start-up sweep treats a name stamped on a live pod as claimed and therefore not collectable (Q550).
+- `actions-gateway.com/runner-name` (`provisioner.AnnotationRunnerName`) — the name the listener pre-registered this pod's runner under at GitHub.
+  `generatejitconfig` creates the record before the pod exists, and nothing else remembers the name once the listener goroutine that minted it has moved on, so the pod is the record: the reaper reads it back to deregister the registration when it deletes the pod, and the listener's start-up sweep treats a name stamped on a live pod as claimed and therefore not collectable (Q550).
   Load-bearing in the same sense as `run-id` on this tier — a pod without it is reaped with its GitHub registration left behind, and because runner names derive from the job ID, that leftover is what the job's own retries collide with.
   Never set it by hand.
 
@@ -206,11 +215,14 @@ Two further controller-set annotations are stamped *after* pod creation, on the 
 
 One further controller-set annotation is stamped *after* pod creation, on **both** tiers:
 
-- `actions-gateway.com/deletion-reason` (`provisioner.AnnotationDeletionReason`) — the reap reason (e.g. `completed_ttl`, `pending_deadline`), stamped immediately before the reaper deletes the pod (Q502).
-  It marks the deletion as the AGC's own, which is what excludes reaper cleanup from graceful-deletion recovery — an unstamped deletion of a worker that then publishes a terminal phase is read as a drain and re-runs the interrupted job. **Any new AGC code path that deletes a worker pod must stamp this annotation before the delete** (stamp-then-delete, in that order), or its deletions become re-run triggers; the reaper's `reapWorkerPodsByLabel` is the pattern.
+- `actions-gateway.com/deletion-reason` (`provisioner.AnnotationDeletionReason`) — the reap reason (e.g.
+  `completed_ttl`, `pending_deadline`), stamped immediately before the reaper deletes the pod (Q502).
+  It marks the deletion as the AGC's own, which is what excludes reaper cleanup from graceful-deletion recovery — an unstamped deletion of a worker that then publishes a terminal phase is read as a drain and re-runs the interrupted job.
+  **Any new AGC code path that deletes a worker pod must stamp this annotation before the delete** (stamp-then-delete, in that order), or its deletions become re-run triggers; the reaper's `reapWorkerPodsByLabel` is the pattern.
   The one exception is a delete of a pod that has *already* reached its terminal phase (the `completedPodTTL: 0` cleanup), which the detection's ordering rule excludes on its own.
 
-  **A new delete also owes the specs.** What a worker pod publishes at its terminal phase is what the drain/cancel specs assert, so a new deleter can falsify one without failing it, and the live-GitHub half skips without credentials, so its green means nothing (Q599; see [testing.md](testing.md#a-credential-gated-spec-that-skips-is-not-defending-anything)). `cmd/agc/internal/provisioner/deletion_inventory_test.go` is the tripwire: it fails on any added, moved, or renamed client `Delete` in the `agc` module and prints the spec roster to read before updating it.
+  **A new delete also owes the specs.** What a worker pod publishes at its terminal phase is what the drain/cancel specs assert, so a new deleter can falsify one without failing it, and the live-GitHub half skips without credentials, so its green means nothing (Q599; see [testing.md](testing.md#a-credential-gated-spec-that-skips-is-not-defending-anything)).
+  `cmd/agc/internal/provisioner/deletion_inventory_test.go` is the tripwire: it fails on any added, moved, or renamed client `Delete` in the `agc` module and prints the spec roster to read before updating it.
 
 Alongside them, the scale-set tier stamps one controller-set **label** at pod creation:
 
@@ -263,16 +275,19 @@ The two outcomes, both bad:
 The only recovery is restarting kube-apiserver, which managed control planes (GKE/EKS/AKS) do not offer.
 
 Measured, not inferred: [`scripts/e2e/vap-param-informer-check.sh`](../../scripts/e2e/vap-param-informer-check.sh) runs the identical empty-binding-set transition against a ConfigMap `paramKind` and a CRD one on a single apiserver — the ConfigMap arm breaks, the CRD arm stays fresh.
-Upstream: [kubernetes/kubernetes#130887](https://github.com/kubernetes/kubernetes/issues/130887) (unfixed; do not wait for it). `scripts/e2e/chart-reinstall-check.sh` gates the product-level cycle in CI.
+Upstream: [kubernetes/kubernetes#130887](https://github.com/kubernetes/kubernetes/issues/130887) (unfixed; do not wait for it).
+`scripts/e2e/chart-reinstall-check.sh` gates the product-level cycle in CI.
 
 **CRD schema/CEL validation runs before a policy sees the request.** An update that trips an `x-kubernetes-validations` rule is rejected with the CEL message and never reaches any `ValidatingAdmissionPolicy` — so a test asserting a policy's denial must mutate a field no CRD CEL rule constrains, or the CEL error masks the policy verdict (observed in the Q518 integration test: `maxWorkers` is CEL-coupled to the last tier threshold, so mutating it never exercised the policy).
 
 **Corollaries for a new policy:**
 
-- Give the policy a small, purpose-built cluster-scoped CRD for its params. `PriorityClassAllowlist` (`api/v2beta1`) is the worked example.
+- Give the policy a small, purpose-built cluster-scoped CRD for its params.
+  `PriorityClassAllowlist` (`api/v2beta1`) is the worked example.
 - Keep `parameterNotFoundAction: Deny`.
   It is the fail-closed default and the reason a broken `paramKind` is so loud; the fix is the CRD, not weakening this.
-- Do **not** try to fix it by retaining the binding across uninstall (`helm.sh/resource-policy: keep`). `scripts/manifest/manifest-validate.sh` forbids that on a VAPB, because a retained binding keeps enforcing after the release is gone and makes `admissionPolicy.enabled=false` a silent no-op.
+- Do **not** try to fix it by retaining the binding across uninstall (`helm.sh/resource-policy: keep`).
+  `scripts/manifest/manifest-validate.sh` forbids that on a VAPB, because a retained binding keeps enforcing after the release is gone and makes `admissionPolicy.enabled=false` a silent no-op.
 - A chart that renders both a CRD and a CR of it must ship that CRD in the chart-root `crds/` dir: Helm resolves REST mappings for the whole manifest before applying any of it, so a CR whose CRD is a template in the same release fails the install with `no matches for kind`.
 
 ## Status conditions & alertable condition metrics
@@ -385,10 +400,12 @@ defer cancel()
 Bound it, retry inside the bound (a teardown call is usually the *only* one that work will ever get), and log loudly with the resource's identity when you give up — a silent leak is unactionable.
 Q222 shipped both halves of this.
 
-**4. `http.Server.Shutdown` does not wait for hijacked connections.** From the stdlib: *"Shutdown does not attempt to close nor wait for hijacked connections such as WebSockets.
+**4.
+`http.Server.Shutdown` does not wait for hijacked connections.** From the stdlib: *"Shutdown does not attempt to close nor wait for hijacked connections such as WebSockets.
 The caller of Shutdown should separately notify such long-lived connections of shutdown and wait for them to close."* Any CONNECT tunnel, WebSocket, or upgraded stream needs its own tracking (a `WaitGroup` or a connection set, plus `Server.RegisterOnShutdown`) — `Shutdown` returning is not evidence they finished.
 
-The egress proxy is the worked example (Q384). `cmd/proxy` registers each tunnel with a tracker **before** hijacking the client connection — up to the hijack net/http still counts the connection as active and `Shutdown` waits for it, so registering first is what closes the window in which `Shutdown` could return between a hijack and its registration and see an empty tracker.
+The egress proxy is the worked example (Q384).
+`cmd/proxy` registers each tunnel with a tracker **before** hijacking the client connection — up to the hijack net/http still counts the connection as active and `Shutdown` waits for it, so registering first is what closes the window in which `Shutdown` could return between a hijack and its registration and see an empty tracker.
 Shutdown then waits on the tracker *after* `Shutdown` returns, by which point the listener is closed and the tracked set can only shrink.
 
 **5.

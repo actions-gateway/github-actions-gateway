@@ -4,7 +4,8 @@
 Remove `spec.namespaceQuota` from the `ActionsGateway` CRD and drop the GMC's `resourcequotas`/`limitranges` write RBAC.
 A breaking CRD change, done **pre-1.0 while it is free** (post-1.0 it would need a conversion webhook — see deferred [Q74](../../STATUS.md)).
 
-Tracked as STATUS Queue Q130. **Implemented (2026-06-14):** the CRD/RBAC/controller/docs edits landed; see the Status section below.
+Tracked as STATUS Queue Q130.
+**Implemented (2026-06-14):** the CRD/RBAC/controller/docs edits landed; see the Status section below.
 
 ## Why
 
@@ -60,7 +61,8 @@ Captured here; may split into its own item after the quota change lands.
 
 - **API/CRD:** removed `NamespaceQuota` from `ActionsGatewaySpec` ([actionsgateway_types.go](../../../cmd/gmc/api/v1alpha1/actionsgateway_types.go)); regenerated deepcopy, the CRD bases, the GMC-bundled chart CRD copy, and RBAC.
   Structural-schema pruning silently drops the now-unknown field from existing CRs (no apply rejection) pre-1.0.
-- **Controller/builder:** removed `buildResourceQuota`, the reconcile apply path, the teardown delete, and the `applyResourceQuota` helper. `maxQuotaRetries` / `quotaRetryDelay` (AGC reacting to a *full* quota) are kept — those are operating *within* a quota, not owning it.
+- **Controller/builder:** removed `buildResourceQuota`, the reconcile apply path, the teardown delete, and the `applyResourceQuota` helper.
+  `maxQuotaRetries` / `quotaRetryDelay` (AGC reacting to a *full* quota) are kept — those are operating *within* a quota, not owning it.
 - **RBAC:** dropped the `resourcequotas` verbs from [role.yaml](../../../cmd/gmc/config/rbac/role.yaml) and the chart [rbac.yaml](../../../charts/actions-gateway/templates/rbac.yaml).
   No `limitranges` grant existed.
   Partially subsumes [Q122](../security-audit-2026-06.md#q122--gmc-workload-writes-are-cluster-wide-docs-claim-confinement-high--resolved).

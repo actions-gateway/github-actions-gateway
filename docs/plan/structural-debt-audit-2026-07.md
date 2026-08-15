@@ -35,7 +35,9 @@ It clusters in three places:
 `ProvisionScaleSetWorker` ([provisioner.go:548](../../cmd/agc/internal/provisioner/provisioner.go)) stages `job-ss-<jobID>` at :573, then has three failure exits (:585 ceiling held, :597 scale-up throttle, :608 pod-create) — none delete it, and neither does the success path.
 The classic `provision()` deletes on all five failure paths and on success (:436, :446, :464, :473, :488, :526).
 
-Its doc comment delegates cleanup: *"Per-job Secret cleanup in steady state is the caller's responsibility (the reconciler wiring that drives this method)."* The caller is a one-line closure at [runnerset_scaleset.go:170](../../cmd/agc/internal/controller/runnerset_scaleset.go) that does no cleanup. `grep -rn 'job-ss'` returns exactly two hits — the construction site and one test. `runner_shared.go`'s reaper contains **zero** Secret references.
+Its doc comment delegates cleanup: *"Per-job Secret cleanup in steady state is the caller's responsibility (the reconciler wiring that drives this method)."* The caller is a one-line closure at [runnerset_scaleset.go:170](../../cmd/agc/internal/controller/runnerset_scaleset.go) that does no cleanup.
+`grep -rn 'job-ss'` returns exactly two hits — the construction site and one test.
+`runner_shared.go`'s reaper contains **zero** Secret references.
 
 Effect: credential-bearing Secrets accumulate one-per-job for the RunnerSet's lifetime, reclaimed only by cascade-GC on RunnerSet deletion — on what is now the **default** acquisition protocol.
 This is a documented-as-handled contract with no implementer, which is why it is a bug rather than debt.
@@ -97,14 +99,16 @@ Remedy, cheapest first: (a) generalize the script to a file list covering all ni
 **Shipped in Q374.** Both halves, split by whether the file holds versioned types.
 
 *Shared.* The condition/reason vocabulary moved to `api/apiconditions` and the worker-pod sidecar contract to `api/apisidecar` — neither holds an API struct or a kubebuilder marker, so neither needs per-version duplication at all.
-The version packages keep thin re-export blocks (a one-line alias per name; a `RunnerTemplateSpec`-typed wrapper for the heuristic) so all 410 existing `v2alpha1.ConditionX` call sites compile unchanged. `conditions.go` fell 363 → 97 lines and `sidecar.go` 83 → 28, with the values and the rationale now living in one place where they cannot diverge.
+The version packages keep thin re-export blocks (a one-line alias per name; a `RunnerTemplateSpec`-typed wrapper for the heuristic) so all 410 existing `v2alpha1.ConditionX` call sites compile unchanged.
+`conditions.go` fell 363 → 97 lines and `sidecar.go` 83 → 28, with the values and the rationale now living in one place where they cannot diverge.
 Generated output — the five CRD manifests and both `zz_generated.deepcopy.go` — is byte-identical after `make -C api generate`.
 
 *Gated.* `check-conditions-sync.sh` became `check-v2-api-sync.sh` with the default inverted: every `.go` file present in both packages must match unless named in an `EXEMPT` list with a reason, so a file added to both is covered the day it lands.
 Two differences are normalised away — the `package` clause and `+kubebuilder:storageversion` — which is what brings the three near-identical `*_types.go` files (804 lines) under the gate.
 Coverage went 363 → 1,397 lines across 8 files; a stale exemption fails the gate so the list cannot rot.
 
-Re-measured at implementation time, the audit's table had already shifted: `conditions.go` was 363 lines (not 332), `zz_generated.deepcopy.go` 1,001 (not 879), and `actionsgateway_types.go`/`egressproxy_types.go`/`runnertemplate_types.go` differed only by a `storageversion` marker (not 7 and 1 lines). `zz_generated.deepcopy.go` is exempt rather than gated: it is controller-gen output derived from the *versioned* `runnerset_types.go`, so requiring cross-version identity would assert an invariant the generator, not a contributor, decides — and `make generate` drift already guards it.
+Re-measured at implementation time, the audit's table had already shifted: `conditions.go` was 363 lines (not 332), `zz_generated.deepcopy.go` 1,001 (not 879), and `actionsgateway_types.go`/`egressproxy_types.go`/`runnertemplate_types.go` differed only by a `storageversion` marker (not 7 and 1 lines).
+`zz_generated.deepcopy.go` is exempt rather than gated: it is controller-gen output derived from the *versioned* `runnerset_types.go`, so requiring cross-version identity would assert an invariant the generator, not a contributor, decides — and `make generate` drift already guards it.
 
 Two things surfaced on the way: the gate had never run in CI at all (`make check` only, so the drift it guards could reach `main`), and `api/**` was missing from `unit-test.yml`'s `code` paths-filter, so an api-only change skipped its own gofmt, golangci-lint, and unit tests.
 Both fixed in the same change.
@@ -124,7 +128,8 @@ A `reflect.DeepEqual` drift test pins the GitHub rule to the helper's output (it
 
 **F5 — Four hand-rolled implementations of one broker wire protocol.** ✅ **Shipped** (Q368)
 
-`broker/brokertest/server.go` (746) + `test/fakegithub/main.go` (1118) + `cmd/agc/test/load/broker_stub.go` (373), plus the probe (F2). `handleSession`, `handleMessage`, `handleAcquireJob`, `handleRenewJob` recur across all of them — down to identical session-ID minting (`fmt.Sprintf("session-%d", …)`) and the same bearer-token DELETE fallback. ~1,200 of ~2,240 stub-server lines look recoverable.
+`broker/brokertest/server.go` (746) + `test/fakegithub/main.go` (1118) + `cmd/agc/test/load/broker_stub.go` (373), plus the probe (F2).
+`handleSession`, `handleMessage`, `handleAcquireJob`, `handleRenewJob` recur across all of them — down to identical session-ID minting (`fmt.Sprintf("session-%d", …)`) and the same bearer-token DELETE fallback. ~1,200 of ~2,240 stub-server lines look recoverable.
 
 These carry real production cost: `test/fakegithub` is built and published as a container image, Dependabot-tracked, Trivy-scanned, and Dockerfile-linted — a shipped product surface at 1,118 lines with its own 661-line test suite.
 
@@ -135,7 +140,8 @@ A check asserting no `package main`-reachable file imports `httptest` would make
 **Shipped in Q368.** The session and credential *mechanics* — minting `session-<n>` IDs, resolving a DELETE by `sessionId` query param or bearer token, owner-scoped session listing, the `#POST − #DELETE` active count, connection-reuse-safe JSON framing, and the JWT-issuer extraction — moved to one stdlib-only library, `broker/brokerstub`.
 All three doubles build on it.
 What stayed per-double is the *policy* that legitimately differs: fan-out job accounting (Q260) in `brokertest`, the single-use JIT lifecycle + opportunistic redelivery + Q154 lease model + registration/control APIs in `fakegithub`, saturated auto-delivery in the load stub.
-Folding those divergent `handleMessage`/`handleAcquireJob` bodies into one configurable handler would produce the "worse function than either" the [deliberate non-findings](#deliberate-non-findings) warn against — these are different test scenarios, not reimplementations of the wire protocol, which now exists once. `broker/brokerstub` is kept dependency-free so `fakegithub` links no third-party code (the `broker` client would pull in githubapp/JWT/Prometheus): the distroless Trivy-scanned image gains only the repo's own module, no new scan surface.
+Folding those divergent `handleMessage`/`handleAcquireJob` bodies into one configurable handler would produce the "worse function than either" the [deliberate non-findings](#deliberate-non-findings) warn against — these are different test scenarios, not reimplementations of the wire protocol, which now exists once.
+`broker/brokerstub` is kept dependency-free so `fakegithub` links no third-party code (the `broker` client would pull in githubapp/JWT/Prometheus): the distroless Trivy-scanned image gains only the repo's own module, no new scan surface.
 
 The `httptest` guarantee is now real, not conventional: `TestNoPackageMainReachesHTTPTest` (in `cmd/probe/compat`) walks every `package main` in the workspace and fails if any transitively imports `net/http/httptest` in its compiled build graph — `go list -deps`, so a `_test.go` httptest import (fakegithub's own tests) is correctly ignored.
 It runs in `make check`.
@@ -210,7 +216,8 @@ The `funlen`/`nolintlint` gates that would lock this in stay with Q371.
 **F9 — `broker` and `scaleset` duplicate the error taxonomy verbatim.** ✅ **Shipped** (Q369)
 
 `RateLimitError` and `UnauthorizedError` are each declared twice ([broker/client.go:33,47](../../broker/client.go) and [scaleset/errors.go:90,12](../../scaleset/errors.go)), and `parseRateLimitError` exists in both ([broker/client.go:647](../../broker/client.go), [scaleset/client.go:789](../../scaleset/client.go)) with identical bodies differing only in parameter type (`*http.Response` vs `http.Header`).
-Callers handling both protocols must type-switch on two unrelated types with the same name. `githubapp/httpx/` already exists as the natural home.
+Callers handling both protocols must type-switch on two unrelated types with the same name.
+`githubapp/httpx/` already exists as the natural home.
 
 **Shipped in Q369, premise confirmed on re-measurement.** The two pairs were semantically identical — same single field (`RetryAfter time.Duration` with the same -1 "no header, back off exponentially" sentinel; `StatusCode int`), no `Unwrap`/`Is` method on either, and `Error()` text differing only in the `broker: ` / `scaleset: ` prefix — so unifying them changed no protocol's behavior.
 Both now alias one declaration in [githubapp/httpx/errors.go](../../githubapp/httpx/errors.go), which carries a `Source` field (`SourceBroker`/`SourceScaleSet`) purely to keep those message prefixes; it never gates matching.
@@ -225,12 +232,15 @@ Both halves were verified to fail by temporarily re-declaring a distinct `scales
 - `scripts/dogfood/setup.sh` — 688 lines / 32KB, 15 functions spanning cluster creation, node pools, credentials, CRD install, Helm install, CA-bundle patching, namespace, secrets, quota, an Athens proxy, and CR apply behind one `main()`.
   Larger than any Go file in scope; `scripts/dogfood/lib/` already exists as the home for the split.
 - `scripts/lib/common.sh` is sourced by **26 of 69** scripts.
-  The largest non-adopters re-roll its helpers: `probe-live-run.sh` and `probe-investigations-cd.sh` each define their own `step()`/`die()`/`gh_curl()`. `repo_root=` is recomputed in 11 scripts; ad-hoc `command -v` guards appear in 12 despite `common.sh`'s `require_cmd`.
+  The largest non-adopters re-roll its helpers: `probe-live-run.sh` and `probe-investigations-cd.sh` each define their own `step()`/`die()`/`gh_curl()`.
+  `repo_root=` is recomputed in 11 scripts; ad-hoc `command -v` guards appear in 12 despite `common.sh`'s `require_cmd`.
 - `scripts/sync-chart-{crds,rbac,webhook}.sh` triplicate an identical trap/`render`/`sync`/`check`/`main` skeleton — even the header comments are verbatim copies.
   Extract to `scripts/lib/chart-sync.sh`.
 
 **Shipped in Q370, two of the three threads — the other two premises were stale on re-measurement.** The `sync-chart-*.sh` triplication is gone: the temp-file registry, EXIT-trap cleanup, and `--check`/write/usage dispatch moved to the new `scripts/lib/chart-sync.sh`, which the three now source (each keeps only its genuinely-different `render`/`sync`/`check`).
-The two named `common.sh` non-adopters now source it: the byte-identical `step`/`die`/`gh_curl` were promoted into `common.sh` and the local copies deleted (`info`/`warn` stayed local to `probe-investigations-cd.sh` — single-script, not duplicated). `docs-preview.sh`'s `die` was left alone: it prints a script-name-prefixed message, so it is not the same contract. `setup.sh` needed no work — re-measured at 730 lines but **already decomposed** into 16 concern-scoped functions (`create_cluster`, `install_gag`, `apply_cr`, …) behind a clean orchestrating `main()`; the length is inherent step complexity, not a god function, and moving single-use bootstrap functions into `dogfood/lib/` would split the from-zero flow across files for no reuse gain while risking the Q380 bootstrap.
+The two named `common.sh` non-adopters now source it: the byte-identical `step`/`die`/`gh_curl` were promoted into `common.sh` and the local copies deleted (`info`/`warn` stayed local to `probe-investigations-cd.sh` — single-script, not duplicated).
+`docs-preview.sh`'s `die` was left alone: it prints a script-name-prefixed message, so it is not the same contract.
+`setup.sh` needed no work — re-measured at 730 lines but **already decomposed** into 16 concern-scoped functions (`create_cluster`, `install_gag`, `apply_cr`, …) behind a clean orchestrating `main()`; the length is inherent step complexity, not a god function, and moving single-use bootstrap functions into `dogfood/lib/` would split the from-zero flow across files for no reuse gain while risking the Q380 bootstrap.
 The `command -v`/`repo_root` counts were also stale: `repo_root="$(git rev-parse …)"` is the required pre-source idiom (`common.sh`'s own header mandates it, not sprawl), and the remaining `command -v` guards are graceful-detection sites where `require_cmd`'s fail-fast `exit 1` would be wrong (the tool-checker itself, the `PreToolUse` hooks, `local-throttle.sh`'s optional probes) — no clean swap exists, so none was forced.
 
 ## Prevention: what a linter could and could not have caught

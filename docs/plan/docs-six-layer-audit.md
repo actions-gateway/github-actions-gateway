@@ -71,7 +71,8 @@ After fixes: 0 broken file links and 0 broken in-page anchors across the doc set
 
 Tasks:
 
-1. **Fix the one broken link** — ✅ done. `docs/plan/archive/milestone-2-tests.md` linked to `milestone-2.md` (moved up a directory) → `../milestone-2.md`.
+1. **Fix the one broken link** — ✅ done.
+   `docs/plan/archive/milestone-2-tests.md` linked to `milestone-2.md` (moved up a directory) → `../milestone-2.md`.
    Full relative-`.md`-link scan: 0 broken project links.
 2. **Anchor spot-check** — ✅ done (full check, not just spot).
    Validated all 127 in-page `#anchor` links against the GitHub heading-slug algorithm; found and fixed 5 pre-existing broken anchors: 3 in `design/README.md` (TOC pointed at richer text than the actual `01-executive-summary.md` subheadings), 1 in `02-architecture.md` (`§11.A` said `investigation`, heading is `protocol`), and 1 in `security.md` (the `worker-egress-proxy.md` "Implementation status" heading carried a volatile date+commit — stabilized the heading so the anchor is durable).
@@ -90,7 +91,8 @@ The repo's analogue is the implemented-vs-planned distinction, which CLAUDE.md e
 Task:
 
 1. **Implemented-vs-planned prose audit** — ✅ audited; one significant finding.
-   The highest-signal check was cross-referencing every documented Prometheus metric name against the metric literals actually registered in non-test Go (`cmd/proxy/proxy.go`, `cmd/agc/internal/listener/metrics.go`). **15 metrics are implemented; the docs reference 6 that have no code definition at all** — operator docs document telemetry an operator cannot scrape.
+   The highest-signal check was cross-referencing every documented Prometheus metric name against the metric literals actually registered in non-test Go (`cmd/proxy/proxy.go`, `cmd/agc/internal/listener/metrics.go`).
+   **15 metrics are implemented; the docs reference 6 that have no code definition at all** — operator docs document telemetry an operator cannot scrape.
 
    | Documented metric | Originally implemented? | Resolution (Q51) |
    |---|---|---|
@@ -128,7 +130,8 @@ Source of truth: per-directory `README.md` indexes, design-doc breadcrumbs, and 
 
 Tasks:
 
-1. **Add `docs/README.md` landing page** — the highest-value single fix. `docs/` root holds `getting-started.md`, `STATUS.md`, and four subdirs with nothing tying them together.
+1. **Add `docs/README.md` landing page** — the highest-value single fix.
+   `docs/` root holds `getting-started.md`, `STATUS.md`, and four subdirs with nothing tying them together.
    Add a top-level index: one line per subdir + the two root docs, plus the role-based entry points (mirror, don't duplicate, the `design/README.md` paths).
 2. **Orphan check.** Confirm every doc is reachable from some index — appendices, `network-architecture.md` (un-numbered, sits outside the breadcrumb sequence), `k8s-best-practices.md`.
 3. **Heading hierarchy + case sweep.** Confirm each design doc uses `#` title / `##` sections consistently and heading case (sentence vs title) is uniform within the set.
@@ -140,7 +143,8 @@ Tasks:
 No include mechanism and none will be added (see Decisions).
 Framework-free reuse = pick one canonical location and cross-link to it; do not paste-and-drift.
 
-**Direction constraint (important):** human-facing docs must never link to `CLAUDE.md`. `CLAUDE.md` (symlinked `AGENTS.md`) is the entrypoint *for Claude only*; humans start at `README.md`.
+**Direction constraint (important):** human-facing docs must never link to `CLAUDE.md`.
+`CLAUDE.md` (symlinked `AGENTS.md`) is the entrypoint *for Claude only*; humans start at `README.md`.
 So a shared block lives canonically in the `docs/` tree, and `CLAUDE.md` may hold its own self-contained copy or link *to* the human doc — never the reverse.
 
 Outcome:

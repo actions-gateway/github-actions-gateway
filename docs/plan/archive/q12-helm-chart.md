@@ -10,7 +10,8 @@ Not a second distribution path — the `cmd/*/config/` kustomize bases stay the 
 
 ## What the chart installs
 
-The GMC is the only thing installed. **AGC instances and proxy pools are provisioned by the GMC at runtime** from each `ActionsGateway` CR — they are *not* chart resources.
+The GMC is the only thing installed.
+**AGC instances and proxy pools are provisioned by the GMC at runtime** from each `ActionsGateway` CR — they are *not* chart resources.
 Verified against [builder.go](../../../cmd/gmc/internal/controller/builder.go) (`buildAGCDeployment`/`buildProxyDeployment`) and [main.go](../../../cmd/gmc/cmd/main.go) (`AGCImage`/`ProxyImage` injected into the reconciler), and the `docs/operations/tenant-onboarding.md` flow.
 
 Resources, sourced 1:1 from the kustomize bases:
@@ -50,7 +51,9 @@ Every templated default matches the kustomize posture; no security property is t
 - `namespace-psa-guard` VAP binding ships `validationActions: [Deny]`.
 - Leader election on, 2 replicas, HA defaults.
 - **Image digest pinning is the secure default.** The GMC rejects floating `AGC_IMAGE`/`PROXY_IMAGE` tags unless `--allow-floating-image-tags` is set ([main.go](../../../cmd/gmc/cmd/main.go) `validateImageDigest`).
-  The chart does **not** pass that flag by default and leaves digests empty, so an unconfigured install fails closed at GMC startup until the operator pins `agc.image.digest`/`proxy.image.digest`. `values.yaml` documents this prominently. `allowFloatingImageTags=true` is the documented dev-only opt-out.
+  The chart does **not** pass that flag by default and leaves digests empty, so an unconfigured install fails closed at GMC startup until the operator pins `agc.image.digest`/`proxy.image.digest`.
+  `values.yaml` documents this prominently.
+  `allowFloatingImageTags=true` is the documented dev-only opt-out.
 
 ## Operator-facing values (`values.yaml` + README table)
 

@@ -22,8 +22,10 @@ There the path is: enable the provider's control-plane audit logging and transla
   EKS's fixed policy logs Secret access at `Metadata`.
   Query with CloudWatch Logs Insights.
 - **GKE** — Secret **reads** are Cloud Audit Logs **Data Access** logs (`DATA_READ`/`ADMIN_READ`), **off by default** — enable them for the Kubernetes Engine API.
-  Writes are Admin Activity logs (always on). `methodName` is `io.k8s.core.v1.secrets.get` etc.; query in Logs Explorer.
-- **AKS** — forward the **`kube-audit`** diagnostic category to Log Analytics / storage / Event Hub. **`kube-audit-admin` excludes `get`/`list`** — so it cannot see Secret reads; the compromised-Secret detection requires the full `kube-audit` category.
+  Writes are Admin Activity logs (always on).
+  `methodName` is `io.k8s.core.v1.secrets.get` etc.; query in Logs Explorer.
+- **AKS** — forward the **`kube-audit`** diagnostic category to Log Analytics / storage / Event Hub.
+  **`kube-audit-admin` excludes `get`/`list`** — so it cannot see Secret reads; the compromised-Secret detection requires the full `kube-audit` category.
   Query with KQL.
 
 ## Acceptance

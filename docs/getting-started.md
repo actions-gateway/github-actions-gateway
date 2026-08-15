@@ -3,8 +3,11 @@
 > **Want to see it first?** The [Demo](demo.md) walks one real GitHub job through a local kind cluster (job → ephemeral worker pod → green on GitHub) with the exact commands to reproduce it.
 
 !!! tip "New tenants: start on `v2beta1`"
-    The recommended shape for a new tenant is the **v2 API** at **`actions-gateway.com/v2beta1`**: a decomposed `ActionsGateway` + `RunnerSet` + `RunnerTemplate` (+ optional `EgressProxy`), shown in [Step 4](#4-create-your-gateway-and-runner-set-v2-recommended) below. `v2beta1` is the graduated, ScaleSet-only storage and hub version, v2's first stability contract, and where new capabilities land. `v2alpha1` stays served as the [`gag-migrate`](operations/migration-v1-to-v2.md) on-ramp, carrying the `acquisitionProtocol` selector a migrating v1 tenant needs and a new tenant does not, and the apiserver converts between the two.
-    The older single-custom-resource (CR) **`v1alpha1`** API is still fully served but **[deprecated](operations/v1alpha1-deprecation.md)**: reach for it only if you have a specific reason to, and see the [legacy v1 path](#legacy-the-v1alpha1-api-deprecated). `v1alpha1`, `v2alpha1`, and the classic acquisition protocol are all [removed at `v2.0.0`](operations/v1alpha1-deprecation.md); `v2beta1` is not.
+    The recommended shape for a new tenant is the **v2 API** at **`actions-gateway.com/v2beta1`**: a decomposed `ActionsGateway` + `RunnerSet` + `RunnerTemplate` (+ optional `EgressProxy`), shown in [Step 4](#4-create-your-gateway-and-runner-set-v2-recommended) below.
+    `v2beta1` is the graduated, ScaleSet-only storage and hub version, v2's first stability contract, and where new capabilities land.
+    `v2alpha1` stays served as the [`gag-migrate`](operations/migration-v1-to-v2.md) on-ramp, carrying the `acquisitionProtocol` selector a migrating v1 tenant needs and a new tenant does not, and the apiserver converts between the two.
+    The older single-custom-resource (CR) **`v1alpha1`** API is still fully served but **[deprecated](operations/v1alpha1-deprecation.md)**: reach for it only if you have a specific reason to, and see the [legacy v1 path](#legacy-the-v1alpha1-api-deprecated).
+    `v1alpha1`, `v2alpha1`, and the classic acquisition protocol are all [removed at `v2.0.0`](operations/v1alpha1-deprecation.md); `v2beta1` is not.
     Already on v1?
     [`gag-migrate`](operations/migration-v1-to-v2.md) moves you across without changing how your jobs are acquired.
 

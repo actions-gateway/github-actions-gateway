@@ -5,14 +5,16 @@ Implemented together.
 
 ## Q121 — GMC Secret RBAC: cluster-wide vs. name-scoped claim
 
-`role.yaml` grants `secrets: get/list/create/update/watch` cluster-wide. `05-security.md` claimed "no cluster-wide Secret read", metadata-only list, "`get` on specific names only" — all false.
+`role.yaml` grants `secrets: get/list/create/update/watch` cluster-wide.
+`05-security.md` claimed "no cluster-wide Secret read", metadata-only list, "`get` on specific names only" — all false.
 
 **What is tightenable, what is not:**
 
 - **Writes** (`create`/`update`) go through admission, so a `ValidatingAdmissionPolicy` *can* confine them to tenant-marked namespaces. → enforced by the new `gmc-tenant-resource-guard` VAP.
 - **Reads** (`get`/`list`/`watch`) do **not** go through admission — VAP never sees read verbs.
   RBAC `resourceNames` cannot scope `list`/`watch`, and tenant Secret names are dynamic so it cannot scope `get` either.
-  The metadata informer additionally needs cluster-wide `list`/`watch` because the GMC discovers tenant namespaces at runtime. **Full read-confinement is therefore not achievable via VAP/RBAC alone.**
+  The metadata informer additionally needs cluster-wide `list`/`watch` because the GMC discovers tenant namespaces at runtime.
+  **Full read-confinement is therefore not achievable via VAP/RBAC alone.**
 
 **Resolution (claim == reality):** tighten writes via the VAP; correct `05-security.md` to state the honest read scope (cluster-wide get + metadata list/watch) and the compensating controls: metadata-only informer (no `.data` cached), uncached direct `get` of only the named credential Secret in the CR namespace, the write-confinement VAP, and the Q29 detective audit policy.
 No more "no cluster-wide read" / "specific names only" claims.
@@ -39,7 +41,8 @@ Shipped by the Helm chart (`templates/tenant-resource-guard.yaml`, gated by the 
 
 `deleteIfExists` swallowed non-NotFound delete errors and `reconcileDelete` removed the finalizer unconditionally → a transient API failure orphaned a live credentialed AGC Deployment + RoleBinding with no retry.
 
-**Fix:** `deleteIfExists` returns its error (NotFound → nil = success). `reconcileDelete` collects errors across all deletes; if any are non-nil it emits a `TeardownIncomplete` Warning event and returns the joined error to requeue **without removing the finalizer**.
+**Fix:** `deleteIfExists` returns its error (NotFound → nil = success).
+`reconcileDelete` collects errors across all deletes; if any are non-nil it emits a `TeardownIncomplete` Warning event and returns the joined error to requeue **without removing the finalizer**.
 The finalizer is removed only once every delete is confirmed gone.
 Idempotent: repeated passes re-list RunnerGroups (gone → skip) and re-issue deletes (NotFound → success), so it converges.
 

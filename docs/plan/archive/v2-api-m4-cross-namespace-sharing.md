@@ -18,7 +18,8 @@ Two findings from reading the code, both of which change the shape of the work.
 
 ### Cross-namespace references are not expressible
 
-No reference type carries a namespace. `ObjectRef` and `LocalObjectRef` are name-only, and both resolution sites resolve in the referrer's own namespace: [`actionsgateway_v2_controller.go:221`](../../../cmd/gmc/internal/controller/actionsgateway_v2_controller.go) for `defaultProxyRef`, [`runnerset_target.go:476`](../../../cmd/agc/internal/controller/runnerset_target.go) for `proxyRef`.
+No reference type carries a namespace.
+`ObjectRef` and `LocalObjectRef` are name-only, and both resolution sites resolve in the referrer's own namespace: [`actionsgateway_v2_controller.go:221`](../../../cmd/gmc/internal/controller/actionsgateway_v2_controller.go) for `defaultProxyRef`, [`runnerset_target.go:476`](../../../cmd/agc/internal/controller/runnerset_target.go) for `proxyRef`.
 
 So `allowedNamespaces` cannot gate anything today: there is no reference for it to refuse.
 M4 builds the path and the consent check together.
@@ -31,7 +32,8 @@ Every change below has to preserve that for an absent or empty `allowedNamespace
 
 This is the finding that decides the architecture.
 The AGC's cache is pinned to its own tenant namespace so that it needs only the per-tenant `Role` the GMC creates, rather than a `ClusterRole`.
-See [`cmd/agc/main.go:284-292`](../../../cmd/agc/main.go), deliberate and documented in place. `RunnerSet.spec.proxyRef` is resolved by the AGC.
+See [`cmd/agc/main.go:284-292`](../../../cmd/agc/main.go), deliberate and documented in place.
+`RunnerSet.spec.proxyRef` is resolved by the AGC.
 So the worker path cannot be built by teaching the AGC to read across namespaces without either widening its RBAC or adding a projection mechanism.
 
 Three ways out, and why one wins:
@@ -109,7 +111,9 @@ Recorded as work lands.
 Nothing here is written ahead of the evidence.
 
 - 2026-08-08: scope decided (full M4, both paths); architecture decided (GMC-mediated projection); API shape decided (`ProxyObjectRef`).
-- 2026-08-08: API landed. `ProxyObjectRef` in both version packages, `ProxyShareNotGranted` in `apiconditions` and both re-exports, `LocalObjectRef` retired as unused. `make v2-api-sync-check` green; CRDs, chart CRDs, deepcopy and `docs/reference/api.md` regenerated.
+- 2026-08-08: API landed.
+  `ProxyObjectRef` in both version packages, `ProxyShareNotGranted` in `apiconditions` and both re-exports, `LocalObjectRef` retired as unused.
+  `make v2-api-sync-check` green; CRDs, chart CRDs, deepcopy and `docs/reference/api.md` regenerated.
 - 2026-08-08: enforcement landed.
   Consent check on both resolution sites, CA projection with prune-on-revoke, dual-side NetworkPolicy, cross-namespace watch mappers.
   The proxy's GitHub-host allowlist now also spans granted remote referrers, which same-namespace assembly had missed.

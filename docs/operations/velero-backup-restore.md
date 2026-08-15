@@ -111,7 +111,8 @@ For multi-tenant clusters, drive one schedule per tenant namespace, or select ac
    This restores the `Namespace`, the `ResourceQuota`, the GitHub App credential `Secret`, the `ActionsGateway` CR, and any `EgressProxy` CR — and **nothing else**.
 
 3. **Let the controllers reconcile.** Once the CRs land, the GMC re-provisions every owned child within ~30 seconds and **regenerates the metrics TLS Secrets fresh** (new key material — exactly as in a normal re-apply).
-   The cluster-scoped `ClusterRoleBinding` the AGC needs is recreated by the GMC's reconcile, not by Velero. `RunnerSet`s that target the gateway re-bind automatically.
+   The cluster-scoped `ClusterRoleBinding` the AGC needs is recreated by the GMC's reconcile, not by Velero.
+   `RunnerSet`s that target the gateway re-bind automatically.
 
 > **Ordering within step 2 is handled for you.** Velero restores the `Namespace` and `Secret` before the CRs (namespaces and secrets also precede custom resources in the default priority list), so the gateway does not transiently report `CredentialUnavailable`.
 > If you restore the `EgressProxy` from a *separate* backup, restore it before (or alongside) the `ActionsGateway`, or the gateway fails closed with `ProxyNotFound` until it appears — then reconciles on its own.

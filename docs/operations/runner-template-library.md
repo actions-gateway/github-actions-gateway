@@ -64,7 +64,8 @@ The v2 CRDs must be installed (the opt-in `actions-gateway-crds-v2` chart), and 
 
 **A build-capable runner image.** Both ship `spec.workerImage` set to `example.invalid/build-capable-runner:replace-me` and you must replace it.
 The runner container needs a Docker CLI on `PATH`; the sidecar supplies the daemon, not the client, and the stock `ghcr.io/actions/actions-runner` image ships neither.
-The reserved `.invalid` host is chosen so an unreplaced value fails at image pull rather than succeeding into a job that dies on `docker: not found` twenty minutes in. `scripts/dogfood/e2e-runner/Dockerfile` in this repo is a worked example.
+The reserved `.invalid` host is chosen so an unreplaced value fails at image pull rather than succeeding into a job that dies on `docker: not found` twenty minutes in.
+`scripts/dogfood/e2e-runner/Dockerfile` in this repo is a worked example.
 
 **Watch the worker pod, not the `RunnerSet`, when you suspect an unreplaced image.** The pod reports the problem within seconds: it binds to a node and then sits Pending in `ImagePullBackOff`, with a `Failed` event naming the host it could not resolve.
 
@@ -72,7 +73,8 @@ The reserved `.invalid` host is chosen so an unreplaced value fails at image pul
 kubectl get pods -n team-a -l actions-gateway.com/runner-set=linux
 ```
 
-The `RunnerSet` stays quiet for much longer, because a pod that cannot pull its image still scheduled perfectly well. `WorkersUnschedulable` reports only the scheduler's verdict, so it stays False and `actions_gateway_runnerset_workers_unschedulable` stays 0 for the whole window.
+The `RunnerSet` stays quiet for much longer, because a pod that cannot pull its image still scheduled perfectly well.
+`WorkersUnschedulable` reports only the scheduler's verdict, so it stays False and `actions_gateway_runnerset_workers_unschedulable` stays 0 for the whole window.
 The first `RunnerSet`-level signal is the `WorkerPodStuckPending` Warning event the reaper emits when it deletes the pod at `spec.pendingPodDeadline`, 10 minutes after the pod was created unless you lower that field.
 Until then the pod holds a concurrency slot, and each further job the set acquires starts the same cycle again.
 
@@ -155,7 +157,8 @@ patches:
 ```
 
 produces a `dind` container with *only* `name` and `resources`.
-Its `image`, `restartPolicy: Always`, the entire capability set, the startup probe and the `volumeDevices` binding the block volume are gone. `kubectl kustomize` prints this and exits **0**.
+Its `image`, `restartPolicy: Always`, the entire capability set, the startup probe and the `volumeDevices` binding the block volume are gone.
+`kubectl kustomize` prints this and exits **0**.
 The pod then fails at admission or, worse, starts without the daemon the runner is configured to reach.
 Measured on kustomize v5.8.1, as embedded in kubectl 1.36.
 
@@ -244,7 +247,8 @@ Declare the merge keys inline on the paths you patch, as above, and confirm by r
 
 This repo stays on option 1 because option 2 means hand-maintaining a schema against a CRD that changes, and a schema that drifts fails open.
 
-GAG's own end-to-end suite is the worked example for option 1: the overlays under `deploy/dogfood-e2e/overlays/` consume these bases and patch in their cluster specifics and nothing else. `make template-library-check` rejects a strategic-merge patch against a `ClusterRunnerTemplate` in this repo, and compares each overlay's render against its base to catch a list that lost entries by any route.
+GAG's own end-to-end suite is the worked example for option 1: the overlays under `deploy/dogfood-e2e/overlays/` consume these bases and patch in their cluster specifics and nothing else.
+`make template-library-check` rejects a strategic-merge patch against a `ClusterRunnerTemplate` in this repo, and compares each overlay's render against its base to catch a list that lost entries by any route.
 
 ## Sizing
 

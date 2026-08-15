@@ -368,7 +368,8 @@ spec:
     All gateways in a namespace share one level.
 3.  `credentials.githubApp.name` references a `Secret` in this namespace holding the GitHub App `appId`, `installationId`, and `privateKey`.
     The GMC watches the reference name, not the Secret contents.
-    See [credential rotation](getting-started.md#rotating-github-app-credentials). `WorkloadIdentity` is the opt-in no-PEM credential member.
+    See [credential rotation](getting-started.md#rotating-github-app-credentials).
+    `WorkloadIdentity` is the opt-in no-PEM credential member.
 4.  Both runner sets reference the **same** `RunnerTemplate`.
     There is no `ResourceQuota` field on any of these CRs.
     The single quota every runner set shares is **platform-owned**, set on the namespace by the platform admin, so it is a real cap the tenant cannot raise.

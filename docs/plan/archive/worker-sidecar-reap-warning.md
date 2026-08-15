@@ -2,7 +2,8 @@
 
 > **Status: ✅ Done — shipped 2026-07-03 (Q249).** Discovered during the GKE-dogfood privileged-DinD e2e validation (2026-06-30): a `docker:dind` sidecar declared as a **regular** container kept the worker pod at `1/2` after the runner exited, so the AGC counted it as an active session and `maxWorkers` saturated — the [Q247](gke-dogfood-turnup-findings.md) stranding symptom, reproduced deterministically.
 > This surfaces that misconfiguration at admission
-> + status + metrics and steers operators to native sidecars. **No custom reaper.**
+> + status + metrics and steers operators to native sidecars.
+>   **No custom reaper.**
 >
 > **What shipped.** Shared detection helper `ReapBlockingSidecars` + `SelfExitingSidecarsAnnotation` / `RunnerContainerName` constants in the neutral `api/v2alpha1` module ([sidecar.go](../../../api/v2alpha1/sidecar.go)).
 > Three non-blocking outlets, all gated by the name-list opt-out: (a) a GMC validating- webhook admission **Warning** on RunnerTemplate/ClusterRunnerTemplate create+update ([runnertemplate_webhook.go](../../../cmd/gmc/internal/webhook/v2alpha1/runnertemplate_webhook.go)); (b) the advisory `PossibleReapBlockingSidecar` RunnerSet condition, set/cleared from the resolved template by the AGC reconciler ([runnerset_controller.go](../../../cmd/agc/internal/controller/runnerset_controller.go)); (c) the `actions_gateway_reap_blocking_sidecar_templates` gauge.
@@ -20,7 +21,8 @@ The intent is to *train operators toward native sidecars*, not to enforce or to 
 ## Background — why this, not a reaper
 
 A GAG worker pod is one "main" runner container plus, optionally, sidecars.
-If a sidecar is a **regular** `spec.containers[]` entry that runs forever (e.g. `dockerd` for DinD), the pod never reaches `Completed` — a pod terminates only when **all** its regular containers exit.
+If a sidecar is a **regular** `spec.containers[]` entry that runs forever (e.g.
+`dockerd` for DinD), the pod never reaches `Completed` — a pod terminates only when **all** its regular containers exit.
 The pod lingers `1/2`, the AGC keeps counting it active, and the runner pool strands.
 
 **The upstream fix already exists — we rely on it, not on a reaper.** Native sidecars ([KEP-753](https://github.com/kubernetes/enhancements/tree/master/keps/sig-node/753-sidecar-containers)): a `restartPolicy: Always` **init container** that Kubernetes tears down when the main container exits, so the pod completes on its own.

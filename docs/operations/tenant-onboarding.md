@@ -4,7 +4,8 @@
 
 This checklist walks from pre-conditions through first successful job.
 For the full setup reference, see [Getting Started](../getting-started.md).
-For day-2 operations after onboarding, see the [Runbook](runbook.md). **Coming from Actions Runner Controller (ARC)?** Start with the [Migrating from ARC guide](migration-from-arc.md) — it maps ARC scale-set concepts onto the steps below and walks one runner group across.
+For day-2 operations after onboarding, see the [Runbook](runbook.md).
+**Coming from Actions Runner Controller (ARC)?** Start with the [Migrating from ARC guide](migration-from-arc.md) — it maps ARC scale-set concepts onto the steps below and walks one runner group across.
 
 !!! tip "New tenants: onboard on the v2 API"
     Steps 0–3 (GitHub App, Secret, `ResourceQuota`) are the same for every tenant.
@@ -65,7 +66,8 @@ Before beginning, confirm all of the following:
 - [ ] **PriorityClass objects exist and are allowlisted** (priority-tiered tenants only).
   Any `priorityClassName` a tenant references in `priorityTiers` must (1) be pre-created at the cluster level by the platform (`kubectl get priorityclass`) **and** (2) appear on the GMC `--allowed-priority-classes` flag.
   The GMC validating webhook rejects any `priorityClassName` not on the allowlist (an empty allowlist rejects *all* of them) — this stops a tenant naming a high-priority, preempting class and evicting other tenants' worker pods.
-  Create allowlisted classes with `preemptionPolicy: Never` unless cross-tenant preemption is genuinely intended for that tier; see [security-operations.md § Priority classes](security-operations.md#priority-classes-the-allowed-priority-classes-allowlist). **If you do enable a preempting tier, tell the tenant what preemption costs them:** a preempted worker's job concludes on GitHub *and* is re-run automatically (Q497), but the re-run starts from the beginning rather than resuming — so a long, expensive job in a displaceable tier pays its whole runtime again.
+  Create allowlisted classes with `preemptionPolicy: Never` unless cross-tenant preemption is genuinely intended for that tier; see [security-operations.md § Priority classes](security-operations.md#priority-classes-the-allowed-priority-classes-allowlist).
+  **If you do enable a preempting tier, tell the tenant what preemption costs them:** a preempted worker's job concludes on GitHub *and* is re-run automatically (Q497), but the re-run starts from the beginning rather than resuming — so a long, expensive job in a displaceable tier pays its whole runtime again.
   Put cheap-to-repeat work in the tiers that can be displaced.
   See [troubleshooting: a preempted worker's job is not re-run](troubleshooting.md#a-preempted-workers-job-is-not-re-run).
 - [ ] **`noProxyCIDRs` is left unset unless the tenant has its own internal destination.** The cluster-internal exemptions — `svc.cluster.local`, `kubernetes.default.svc`, `localhost`, `127.0.0.1`, and the cluster's API server ClusterIP — are appended automatically on every distribution, so neither the service CIDR nor the API server needs to be named here (this was not true before Q465; see [troubleshooting: AGC crash-loops dialling the API server through the egress proxy](troubleshooting.md#agc-crash-loops-dialling-the-api-server-through-the-egress-proxy)).
@@ -181,7 +183,8 @@ You now have the three values [Step 1](#step-1-create-the-github-app-secret) nee
 ## Step 1: Create the GitHub App Secret
 
 Create this in the tenant's namespace.
-Use a stable, versioned name (e.g. `github-app-v1`) to enable clean credential rotation later.
+Use a stable, versioned name (e.g.
+`github-app-v1`) to enable clean credential rotation later.
 The Secret holds three keys — `appId`, `installationId`, and `privateKey` — which the GMC projects into the AGC pod as files the controller reads at startup (`cmd/agc/main.go`).
 
 **Recommended — create from the downloaded file (secure).** Pass the `.pem` straight into `kubectl` with `--from-file`; this preserves the key byte-for-byte (sidestepping every PEM pitfall above) and never exposes it in a shell argument, an environment variable, or your shell history.
@@ -366,7 +369,9 @@ spec:
 kubectl apply -f actionsgateway.yaml
 ```
 
-**Optional — worker-pod lifecycle.** Each `runnerGroups[]` entry accepts two cleanup knobs. `completedPodTTL` (default `5m`) is how long a finished worker pod (Succeeded/Failed) is kept before the AGC deletes it — the retention window is your chance to `kubectl logs`/`describe` a failed pod; `"0s"` deletes pods immediately on completion. `pendingPodDeadline` (default `10m`, minimum `1s`) is how long a worker pod may sit Pending (unpullable image, unschedulable constraints) before the AGC deletes it and frees the concurrency slot it was holding — raise it above your worst-case node-autoscaling time for GPU pools, e.g.:
+**Optional — worker-pod lifecycle.** Each `runnerGroups[]` entry accepts two cleanup knobs.
+`completedPodTTL` (default `5m`) is how long a finished worker pod (Succeeded/Failed) is kept before the AGC deletes it — the retention window is your chance to `kubectl logs`/`describe` a failed pod; `"0s"` deletes pods immediately on completion.
+`pendingPodDeadline` (default `10m`, minimum `1s`) is how long a worker pod may sit Pending (unpullable image, unschedulable constraints) before the AGC deletes it and frees the concurrency slot it was holding — raise it above your worst-case node-autoscaling time for GPU pools, e.g.:
 
 ```yaml
   runnerGroups:
@@ -456,11 +461,14 @@ spec:
     nodeAutoscaling: Absent   # Present (default) | Absent
 ```
 
-**The default is the safe direction, not the common one.** Under `Present` the gate refuses intake only on an explicit autoscaler declination, so leaving it unset — or getting it wrong — can only ever *under*-gate, which is the behaviour you already have. `Absent` gates on the scheduler's verdict alone, so setting it on a cluster that *can* grow refuses jobs on pods the autoscaler was about to rescue. **Only set `Absent` if you own the node contract and it is fixed.** The AGC never infers this: an autoscaler is legitimately silent during backoff, during a cooldown after a failed scale-up, or for a pod it filters out, so "no autoscaler events appeared" is absence of evidence, and reading it as evidence of absence would starve a tenant.
+**The default is the safe direction, not the common one.** Under `Present` the gate refuses intake only on an explicit autoscaler declination, so leaving it unset — or getting it wrong — can only ever *under*-gate, which is the behaviour you already have.
+`Absent` gates on the scheduler's verdict alone, so setting it on a cluster that *can* grow refuses jobs on pods the autoscaler was about to rescue.
+**Only set `Absent` if you own the node contract and it is fixed.** The AGC never infers this: an autoscaler is legitimately silent during backoff, during a cooldown after a failed scale-up, or for a pod it filters out, so "no autoscaler events appeared" is absence of evidence, and reading it as evidence of absence would starve a tenant.
 
 Three things to know about the `Present` (elastic) signal specifically:
 
-- **Recognition is narrow on purpose.** It reads cluster autoscaler's `NotTriggerScaleUp` and Karpenter's `FailedScheduling`, and nothing else. `FailedScheduling` counts only when it came from a reporter that is **not** your scheduler — that reason is kube-scheduler's own for every ordinary transient placement failure, and reading those as declinations would refuse jobs your cluster was about to run.
+- **Recognition is narrow on purpose.** It reads cluster autoscaler's `NotTriggerScaleUp` and Karpenter's `FailedScheduling`, and nothing else.
+  `FailedScheduling` counts only when it came from a reporter that is **not** your scheduler — that reason is kube-scheduler's own for every ordinary transient placement failure, and reading those as declinations would refuse jobs your cluster was about to run.
   A commercial optimizer (CAST AI, Spot Ocean, Zesty) emits its own vocabulary, so the gate simply never closes for it, which is today's behavior.
 - **It reads Events, and Events expire.** The AGC reads a stuck pod's Events directly (no Event watch, and only for pods already past the scheduling grace).
   Events are garbage-collected on the apiserver's `--event-ttl`, commonly one hour; that is well outside the `pendingPodDeadline` window the gate consults, and an expired Event means the gate opens rather than errors.
@@ -501,7 +509,8 @@ RUN apt-get update \
 USER runner   # keep the non-root UID 1001 the AGC expects
 ```
 
-A working reference you can copy and extend lives at [`scripts/dogfood/runner/Dockerfile`](../../scripts/dogfood/runner/Dockerfile) (built by [`scripts/dogfood/runner-build.sh`](../../scripts/dogfood/runner-build.sh)); it adds just enough to run a `make`-based Go CI. **It is a reference example, not an officially supported image** — GAG signs and CVE-scans only its five first-party images, so a runner image you ship (or copy from the example) is yours to pin by digest and scan.
+A working reference you can copy and extend lives at [`scripts/dogfood/runner/Dockerfile`](../../scripts/dogfood/runner/Dockerfile) (built by [`scripts/dogfood/runner-build.sh`](../../scripts/dogfood/runner-build.sh)); it adds just enough to run a `make`-based Go CI.
+**It is a reference example, not an officially supported image** — GAG signs and CVE-scans only its five first-party images, so a runner image you ship (or copy from the example) is yours to pin by digest and scan.
 Keep the runner version in step with the default the AGC would otherwise inject.
 GitHub refuses to register a runner below its enforced minimum, currently `2.329.0`, and separately requires each new runner release be installed within 30 days of publication to keep executing jobs.
 
@@ -525,7 +534,8 @@ kubectl logs -n <namespace> <worker-pod> -c runner | grep "runner version"
 `runner version detected version=2.335.1` is the real answer for a custom image; `runner version not detected` means the image is not `actions/runner`-derived in the expected layout.
 
 **Optional — distributed tracing.** To send the AGC's OpenTelemetry traces to a collector, add a `spec.tracing` block.
-Setting `endpoint` is what turns tracing on; leave the block out to keep it off (the default). `sampler` is a fixed enum — an unrecognized value is rejected by admission (see [troubleshooting: tracing sampler rejected](troubleshooting.md#tracing-sampler-rejected-by-admission)).
+Setting `endpoint` is what turns tracing on; leave the block out to keep it off (the default).
+`sampler` is a fixed enum — an unrecognized value is rejected by admission (see [troubleshooting: tracing sampler rejected](troubleshooting.md#tracing-sampler-rejected-by-admission)).
 
 ```yaml
 spec:
@@ -709,7 +719,9 @@ Onboarding is complete when:
 ## v2 API: multiple gateways per namespace
 
 > **Audience:** Platform engineer onboarding a tenant on the **`actions-gateway.com`** API, at **`v2beta1`** — the graduated, ScaleSet-only storage and hub version, and the version every **new** tenant should use.
-> It is served *beside* `v1alpha1`, so everything above (the deprecated `actions-gateway.github.com/v1alpha1` flow) keeps working while you adopt it. `v2alpha1` is also still served, but only as the [`gag-migrate`](migration-v1-to-v2.md) on-ramp for tenants moving off v1: it carries the deprecated [`acquisitionProtocol`](#acquisition-protocol-v2alpha1-only) selector, which a new tenant does not need. `v2alpha1` is itself deprecated and [removed at `v2.0.0`](v1alpha1-deprecation.md); `v2beta1` is not.
+> It is served *beside* `v1alpha1`, so everything above (the deprecated `actions-gateway.github.com/v1alpha1` flow) keeps working while you adopt it.
+> `v2alpha1` is also still served, but only as the [`gag-migrate`](migration-v1-to-v2.md) on-ramp for tenants moving off v1: it carries the deprecated [`acquisitionProtocol`](#acquisition-protocol-v2alpha1-only) selector, which a new tenant does not need.
+> `v2alpha1` is itself deprecated and [removed at `v2.0.0`](v1alpha1-deprecation.md); `v2beta1` is not.
 > Install the opt-in `actions-gateway-crds-v2` chart first; see [Getting Started — Deploy the GMC](../getting-started.md#1-deploy-the-gmc).
 
 The biggest onboarding change in v2 is that a single namespace may hold **multiple `ActionsGateway`s**, lifting the v1 one-gateway-per-namespace rule ([Step 2](#step-2-create-the-actionsgateway-resource)).
@@ -724,7 +736,8 @@ What that changes when onboarding a v2 tenant:
   On a 1.30 cluster a v2 AGC's `RunnerSet` informer fails to sync (`field label not supported`) and the pod never becomes ready.
   Confirm the cluster is ≥ 1.31 before onboarding any v2 gateway.
 - **Co-located gateways share one namespace security profile.** In v2 the Pod Security level is a property of the **namespace**, not the gateway (see the v2 callout in [Pre-Conditions](#pre-conditions)) — so all gateways in a namespace run under the same `actions-gateway.com/security-profile` label.
-  Tenants needing different postures (e.g. `baseline` vs `privileged`) still use separate namespaces, exactly as in v1.
+  Tenants needing different postures (e.g.
+  `baseline` vs `privileged`) still use separate namespaces, exactly as in v1.
 
 For the full reference — the naming table, per-gateway garbage-collection behavior, the CRD chart prerequisite, and the failure modes — see [Troubleshooting — Multiple v2 gateways in one namespace](troubleshooting.md#multiple-v2-gateways-in-one-namespace-naming-scoping-prerequisites) and [Appendix H — v2 API decomposition](../design/appendix-h-v2-api-decomposition.md).
 
@@ -823,7 +836,8 @@ spec:
   maxWorkers: 50
 ```
 
-- **A new tenant should never need this.** Author on `v2beta1`, with as many labels per set as your workflows target. `Classic` is deprecated and, together with `v2alpha1` and `v1alpha1`, [removed at `v2.0.0`](v1alpha1-deprecation.md); `spec.maxListeners` goes with it.
+- **A new tenant should never need this.** Author on `v2beta1`, with as many labels per set as your workflows target.
+  `Classic` is deprecated and, together with `v2alpha1` and `v1alpha1`, [removed at `v2.0.0`](v1alpha1-deprecation.md); `spec.maxListeners` goes with it.
 - **`gag-migrate` writes `acquisitionProtocol: Classic`** onto every set it emits, so a migrated tenant's groups keep the protocol they were registered under.
   Opting one into the scale-set protocol later means creating a fresh set, not editing the old one — the field is **immutable**, because switching a live set's protocol is a re-registration storm.
 - **Editing a Classic set works unqualified, labels included.** An unqualified `kubectl edit/patch/apply` addresses the `v2beta1` storage version, which admits the same multi-label shape.
@@ -877,7 +891,8 @@ GAG only registers the tenant's scale sets into the group you named; if the grou
 
 ### Starting from a shipped template
 
-Before hand-authoring a `RunnerTemplate`, check whether one of the three shipped entries already fits. `kubectl apply -k deploy/templates/plain` gives a baseline worker; `kata-dind` and `privileged-dind` cover jobs that build container images.
+Before hand-authoring a `RunnerTemplate`, check whether one of the three shipped entries already fits.
+`kubectl apply -k deploy/templates/plain` gives a baseline worker; `kata-dind` and `privileged-dind` cover jobs that build container images.
 A `RunnerSet` then names one with `templateRef: { name: plain, kind: ClusterRunnerTemplate }`.
 They are cluster-scoped and platform-applied, none is marked as the cluster default, and each carries prerequisites the template cannot express: see the [runner template library](runner-template-library.md).
 
@@ -1002,7 +1017,8 @@ The GMC's own control plane has the same opt-in at the chart level — the `vpa.
 ### Workload-identity credentials (external signer)
 
 `spec.credentials` is a discriminated union (keyed by `credentials.type`) with two members.
-The default, `GitHubApp` (every example above), is the **possession model**: the App's RSA private key lives in a namespace `Secret` ([Step 1](#step-1-create-the-github-app-secret)) and the AGC signs the App JWT in-process. `WorkloadIdentity` is the opt-in **delegation model**: **no App private key is ever stored in the cluster** — an external signer signs the App JWT, and the AGC proves its own pod identity to that signer.
+The default, `GitHubApp` (every example above), is the **possession model**: the App's RSA private key lives in a namespace `Secret` ([Step 1](#step-1-create-the-github-app-secret)) and the AGC signs the App JWT in-process.
+`WorkloadIdentity` is the opt-in **delegation model**: **no App private key is ever stored in the cluster** — an external signer signs the App JWT, and the AGC proves its own pod identity to that signer.
 Use it when policy forbids a long-lived signing key at rest in the cluster and you run a signer (HashiCorp Vault in the MVP) the AGC can reach.
 See [security §5.7](../design/05-security.md#57-workload-identity-the-no-pem-delegation-model) for the trust model.
 

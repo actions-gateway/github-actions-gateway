@@ -54,7 +54,8 @@ Lead the website with it.
 - ~60 KiB goroutine per runner group in one shared pod vs ~256 MiB .NET listener pod per scale set (~600 KiB vs ~2.5 GiB across ten groups).
   Matters with today's high memory cost — but **far less important than avoiding idle GPUs.**
 - Subtle extra angle: combined listeners mean you don't schedule a **new listener pod per scale set**, which could help latency — especially if the cluster is full and a fresh ARC listener would go `Pending`.
-- **Counterpoint (investigate):** if the cluster is too full for a listener pod, it's probably too full for a runner pod too, so the latency win may be marginal. **VERIFY** whether ARC puts listener scheduling on the critical path under contention in a way that actually adds job latency.
+- **Counterpoint (investigate):** if the cluster is too full for a listener pod, it's probably too full for a runner pod too, so the latency win may be marginal.
+  **VERIFY** whether ARC puts listener scheduling on the critical path under contention in a way that actually adds job latency.
 - **Website: memory numbers only** (high confidence).
   Keep the latency hypothesis off the site until investigated.
 

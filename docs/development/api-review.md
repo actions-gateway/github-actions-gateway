@@ -79,12 +79,14 @@ Three follow-ups decide it, in ascending order of how much they settle:
 
 1. *Whose facts are the axes?* Q470's split was forced because one axis was the platform operator's and the other the tenant's — [whose fact is it](#ask-whose-fact-it-is) is the argument that made it worth a break.
    When both axes belong to the same party, that argument is simply unavailable.
-2. *Are the axes actually orthogonal?* If one axis's parameter is defined in terms of the other's mechanism, splitting **relocates** the `only meaningful when` rule rather than removing it, and the cross-product gains undefined cells rather than useful ones. `Throughput`'s headroom multiplies an *observed peak*, which exists only under the usage source.
+2. *Are the axes actually orthogonal?* If one axis's parameter is defined in terms of the other's mechanism, splitting **relocates** the `only meaningful when` rule rather than removing it, and the cross-product gains undefined cells rather than useful ones.
+   `Throughput`'s headroom multiplies an *observed peak*, which exists only under the usage source.
 3. *Is the missing cell reachable additively?* This is the one that decides whether the question must beat a tag.
    Q470's fix **removed** enum values, so it had to land first; a gap a later minor can fill with one defaulted field does not.
    Check whether it is reachable *at all* first — Q481's headline gap, a Guaranteed node share, turned out to be reachable already, by a side effect of an unrelated guard.
 
-When the answer is "ship bundled", record what the enum bundles *on purpose*. `sizing.profile` is an **intent** enum — every value names what the operator wants, and the mechanism follows — which is a legitimate shape and, more usefully, hands the next reviewer the rule for extending it: new values name a distinct intent, mechanism recombinations go in a sibling field.
+When the answer is "ship bundled", record what the enum bundles *on purpose*.
+`sizing.profile` is an **intent** enum — every value names what the operator wants, and the mechanism follows — which is a legitimate shape and, more usefully, hands the next reviewer the rule for extending it: new values name a distinct intent, mechanism recombinations go in a sibling field.
 Worked example: [appendix-h §H.7](../design/appendix-h-v2-api-decomposition.md#h7-reference-integrity--runtime-conditions-not-admission).
 
 ### Name the method, not the on-state
@@ -116,7 +118,8 @@ Three separate questions, and a field can fail any one of them:
    When the correct value is identical for every object in the cluster and known to whoever runs the nodes, it belongs on the platform-owned object — `clusterCapacity.nodeAutoscaling` on `ActionsGateway`, not on each `RunnerSet` (Q470).
 2. **Who is allowed to decide?** A cap a tenant can raise is not a cap.
    Q130 removed `spec.namespaceQuota` outright and made the namespace `ResourceQuota` platform-owned; the tenant-facing fields that survived (`maxQuotaRetries`, `quotaRetryDelay`) are about *operating within* a quota, not owning one.
-3. **What happens if the tenant lies?** Sometimes the tenant may legitimately *name* a thing while the platform decides which names are legal. `priorityTiers[].priorityClassName` is tenant-authored but checked against `--allowed-priority-classes` by the GMC webhook, so a tenant cannot name a preempting class and evict other tenants (Q132).
+3. **What happens if the tenant lies?** Sometimes the tenant may legitimately *name* a thing while the platform decides which names are legal.
+   `priorityTiers[].priorityClassName` is tenant-authored but checked against `--allowed-priority-classes` by the GMC webhook, so a tenant cannot name a preempting class and evict other tenants (Q132).
    Privileged eligibility goes further: it lives on a namespace label the tenant cannot set at all.
 
 ### Make the default fail in the safe direction
@@ -156,7 +159,8 @@ They are one decision with four outputs, and getting a corner wrong is silent.
 
 Two things that bite:
 
-- **`omitempty` decides optionality, not `+optional`.** controller-gen reads the JSON tag. `RunnerGroupSpec.MaxListeners` has `omitempty` and no `+optional`, and lands optional; `RunnerGroupStatus.ActiveSessions` has neither, and lands in the generated CRD's `required` list.
+- **`omitempty` decides optionality, not `+optional`.** controller-gen reads the JSON tag.
+  `RunnerGroupSpec.MaxListeners` has `omitempty` and no `+optional`, and lands optional; `RunnerGroupStatus.ActiveSessions` has neither, and lands in the generated CRD's `required` list.
   That one is harmless — the controller always writes status — but the same slip on a spec field rejects every existing manifest.
 - **A CRD default is written into stored objects.** It applies at admission, so changing it later does not change existing objects — you get two populations and a behaviour change for new ones.
   That is why a default you are unsure about belongs in the controller, where it stays changeable.
@@ -221,7 +225,8 @@ A field that CRD does not declare fails server-side apply midway through the upg
 failed to create typed patch object: .spec.<newField>: field not declared in schema
 ```
 
-Midway is the damage — the release revision has already advanced, leaving a half-upgraded cluster. `make check` cannot see this; the signal comes from [`chart-released-upgrade-check.sh`](../../scripts/e2e/chart-released-upgrade-check.sh), which runs in e2e.
+Midway is the damage — the release revision has already advanced, leaving a half-upgraded cluster.
+`make check` cannot see this; the signal comes from [`chart-released-upgrade-check.sh`](../../scripts/e2e/chart-released-upgrade-check.sh), which runs in e2e.
 
 So render the key only when the value is non-empty:
 
@@ -259,7 +264,8 @@ Each sat at the *merged, before the tag* row of [the cost curve](#the-cost-curve
 git grep -l '<field>' "$(git tag --list 'v*' --sort=-v:refname | grep -v -- '-' | head -1)" -- api cmd/agc/api cmd/gmc/api
 ```
 
-No hit means no cluster can be holding it and no manifest can name it: not breaking. `scripts/release/api-surface-since.sh <tag>` lists everything a tag cut now would publish for the first time, which is the same question asked over the whole surface at once.
+No hit means no cluster can be holding it and no manifest can name it: not breaking.
+`scripts/release/api-surface-since.sh <tag>` lists everything a tag cut now would publish for the first time, which is the same question asked over the whole surface at once.
 If you still mark the commit `!` for a Go-symbol break, say so in the body — nothing downstream can tell the two kinds of break apart, and only the wire kind bears on the tag.
 
 **2.

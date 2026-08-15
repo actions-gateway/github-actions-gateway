@@ -73,7 +73,8 @@ On that signal the reconciler:
 2. reaps **every** worker pod carrying the set's `LabelRunnerSet`, unconditionally — no TTL, no deadline — under a new `gateway_deleted` reap reason;
 3. zeroes `status.activeJobs` / `status.pendingJobs` and sets `Ready=False` / `GatewayTerminating`.
 
-The trigger is a **non-zero `deletionTimestamp` on a gateway that still exists**, deliberately not a `NotFound`. `GatewayNotFound` keeps today's behaviour: an operator who deletes and immediately recreates a gateway must not have live workers reaped in the gap, and an AGC that restarts after teardown finished has no way to tell that gap from a real teardown.
+The trigger is a **non-zero `deletionTimestamp` on a gateway that still exists**, deliberately not a `NotFound`.
+`GatewayNotFound` keeps today's behaviour: an operator who deletes and immediately recreates a gateway must not have live workers reaped in the gap, and an AGC that restarts after teardown finished has no way to tell that gap from a real teardown.
 
 The check runs before reference resolution, not after, so a set whose template or proxy is also missing still reaps.
 

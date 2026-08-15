@@ -120,7 +120,8 @@ A gate that cannot first be stated as a rule is one whose failure mode is not ye
 
 #### A plan doc is not a destination
 
-Plan docs are archived when their plan completes, so a finding recorded only in one is scheduled for deletion along with it. `make plan-index-check` enforces the archival, not the rescue.
+Plan docs are archived when their plan completes, so a finding recorded only in one is scheduled for deletion along with it.
+`make plan-index-check` enforces the archival, not the rescue.
 Lift the finding into its owning page in the same change that archives the plan.
 
 #### Co-location is the mechanism

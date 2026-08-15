@@ -24,7 +24,8 @@ The **redacted** raw `AcquireJob` response body captured from a live probe run (
 It is the ground-truth fixture for Milestone 3's worker pod handoff tests.
 
 It is also the only artefact in the repo that records what GitHub actually sends, so the AGC's payload parsing is asserted against it directly, by `cmd/agc/internal/provisioner/payload_groundtruth_test.go`.
-That test exists because the parser once read run identity from `system.github.*` variables this capture plainly does not contain, and every hand-written test payload agreed with the parser rather than with GitHub (Q495). **Do not redact or trim `contextData.github` when refreshing this capture** — `run_id` and `repository` there are what eviction recovery names a run with.
+That test exists because the parser once read run identity from `system.github.*` variables this capture plainly does not contain, and every hand-written test payload agreed with the parser rather than with GitHub (Q495).
+**Do not redact or trim `contextData.github` when refreshing this capture** — `run_id` and `repository` there are what eviction recovery names a run with.
 
 Top-level fields in the payload:
 

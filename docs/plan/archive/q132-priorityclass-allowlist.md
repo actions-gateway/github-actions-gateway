@@ -72,7 +72,8 @@ Rejected for the cost above.
   Drive the validator with a known allowlist via the constructor (as reserved-namespace tests do).
 - Unit tests for the membership logic.
 - Provisioner/CRD tests that previously set `PreemptionPolicy` (none found in code; only the type defined it) — confirm `make check` stays green after field removal.
-- Run gmc under `-race` per testing.md. **No kind e2e** — admission rejection is envtest-provable; scheduler preemption is a k8s property we don't re-prove.
+- Run gmc under `-race` per testing.md.
+  **No kind e2e** — admission rejection is envtest-provable; scheduler preemption is a k8s property we don't re-prove.
 
 ### Docs
 - `03-api-contracts.md`: drop `preemptionPolicy` from the `PriorityTier` contract; add the allowlist gate to the `priorityClassName` description.

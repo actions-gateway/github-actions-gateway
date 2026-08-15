@@ -65,7 +65,8 @@ Both argue for resolving the tag dynamically rather than hardcoding.
 
 ## Why this is worth a gate rather than a checklist item
 
-The failure is invisible to every local signal. `helm template`, `helm lint`, `kubeconform`, `make check` and the full e2e suite all pass on a chart that no existing release can upgrade to, because none of them has an older release to upgrade *from*.
+The failure is invisible to every local signal.
+`helm template`, `helm lint`, `kubeconform`, `make check` and the full e2e suite all pass on a chart that no existing release can upgrade to, because none of them has an older release to upgrade *from*.
 A reviewer would have to know Helm's `crds/` rule and think to ask.
 That is exactly the shape that belongs in CI rather than in a human's memory.
 

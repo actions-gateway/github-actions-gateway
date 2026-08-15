@@ -6,7 +6,8 @@ Backlog IDs are allocated by claiming a git ref on the remote, not by a counter 
 make queue-id TITLE='GMC CRD manifest drifts from the AGC types it embeds'
 ```
 
-That searches the backlog for near-duplicates of the title, prints any candidates to stderr, then claims and prints one ID (`Q423`). `TARGET=<link>` sharpens the search when the Item cell's link is already decided.
+That searches the backlog for near-duplicates of the title, prints any candidates to stderr, then claims and prints one ID (`Q423`).
+`TARGET=<link>` sharpens the search when the Item cell's link is already decided.
 The script is [`scripts/docs/alloc-queue-id.sh`](../../scripts/docs/alloc-queue-id.sh), which takes one title argument per ID — several titles claim several IDs, each searched on its own.
 
 Claim an ID when you file the row, use it, and move on.
@@ -15,7 +16,8 @@ There is nothing to release and nothing to clean up.
 **Every path through the target claims, and an ID you did not claim will not lint.** Those are the two halves of the same rule: the only way to learn an ID is to hold it, and a row carrying an ID nobody holds fails [`lint-backlog`](maintaining-backlog.md) rule 12 at the commit that files it.
 Both are below, under [Reserving, not reporting](#reserving-not-reporting).
 
-**The title is mandatory, and there is no untitled batch form.** This target is the one chokepoint every filed row passes through, so it is where the near-duplicate search belongs — and an optional argument would be a gate nobody passes through. `-n <count>` used to claim IDs without naming a row; it is gone, because a door beside the gate is the same as no gate.
+**The title is mandatory, and there is no untitled batch form.** This target is the one chokepoint every filed row passes through, so it is where the near-duplicate search belongs — and an optional argument would be a gate nobody passes through.
+`-n <count>` used to claim IDs without naming a row; it is gone, because a door beside the gate is the same as no gate.
 Why the search keys on what it does, and what it costs in false positives: [maintaining-backlog.md § Search before you file](maintaining-backlog.md#search-before-you-file).
 
 ## Why a ref
@@ -29,7 +31,8 @@ The mechanism is a single API call:
 gh api -X POST "repos/$REPO/git/refs" -f ref=refs/queue-ids/Q423 -f sha="$SENTINEL"
 ```
 
-`201` means you won. `422 Reference already exists` means someone beat you, so advance and retry.
+`201` means you won.
+`422 Reference already exists` means someone beat you, so advance and retry.
 
 ## Reserving, not reporting
 
@@ -37,15 +40,18 @@ A ref claim is only a reservation for the sessions that make one.
 Q656 measured what the rest costs.
 
 On 2026-08-03 a row carrying Q644 was committed at 09:30:59.
-Another session allocated at 10:14:06, was handed Q643 and Q644, and therefore saw a floor of 642. **No Q644 claim existed 43 minutes after a row was already using it.** Two sessions running the allocator cannot both be handed Q644; the create-ref call fails for the second, atomically.
+Another session allocated at 10:14:06, was handed Q643 and Q644, and therefore saw a floor of 642.
+**No Q644 claim existed 43 minutes after a row was already using it.** Two sessions running the allocator cannot both be handed Q644; the create-ref call fails for the second, atomically.
 The collision proves one of them never made the call.
 The one that did held the ID legitimately, merged second, and paid the renumber across a commit message, a PR body and a plan doc.
 
 There were two ways to hold an ID without reserving it, and both are closed:
 
 - **`--peek` / `PEEK=1`** printed the next free ID and claimed nothing.
-  That is the `**Next ID:** QN` counter this mechanism replaced, behind a flag: two sessions reading it concurrently read the same answer. **Removed.** Knowing the next ID without taking it has no use that survives the session, and IDs are free: if you want to know, claim it.
-- **Reading the file's highest ID and adding one.** No tool can prevent that, so it fails loudly instead. `lint-backlog` rule 12 requires every Q-ID a branch *adds* to hold a `refs/queue-ids/QN` claim, and it runs in the pre-commit hook, `make check`, and CI — so an unreserved ID is caught at the commit that files it rather than at the rebase that collides.
+  That is the `**Next ID:** QN` counter this mechanism replaced, behind a flag: two sessions reading it concurrently read the same answer.
+  **Removed.** Knowing the next ID without taking it has no use that survives the session, and IDs are free: if you want to know, claim it.
+- **Reading the file's highest ID and adding one.** No tool can prevent that, so it fails loudly instead.
+  `lint-backlog` rule 12 requires every Q-ID a branch *adds* to hold a `refs/queue-ids/QN` claim, and it runs in the pre-commit hook, `make check`, and CI — so an unreserved ID is caught at the commit that files it rather than at the rebase that collides.
   The message names the fix, and `BACKLOG_ALLOW_UNCLAIMED_ID="Q1 Q2"` is there for an ID claimed from another clone.
 
 What rule 12 costs and what it still misses:

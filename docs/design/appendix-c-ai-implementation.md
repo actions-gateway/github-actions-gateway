@@ -31,12 +31,17 @@ AI-assisted implementation is well-suited to this design for several reasons:
 
 AI-assisted implementation introduces specific failure modes that are worth naming explicitly.
 
-* **Plausible but wrong code.** AI tools confidently produce code that compiles and reads correctly but is wrong in subtle ways — calling the wrong endpoint, conflating `broker_url` and `run_service_url`, treating a Secret as mutable when it isn't, or skipping a critical `defer` on a mutex. **Mitigation:** every AI-generated PR is reviewed by an engineer who has read the relevant section of this design doc; the design doc, not the AI tool, is the source of truth.
-* **Hidden security regressions.** AI tools may generate ClusterRoles with overly broad verbs (`*` on `secrets`, wildcard resource selectors) because that is the path of least resistance. **Mitigation:** the [§7.1](07-test-plan.md#71-unit-tests) "GMC RBAC boundary assertions" test exists specifically to catch this; run it on every PR and fail the build on violations.
-* **Drift from the design doc.** AI tools optimize for solving the immediate prompt and will happily diverge from the documented API contracts if not corrected. **Mitigation:** feed the specific design-doc section into the prompt for each task, not just the high-level goal; cross-reference generated CRD field names against [§3.1](03-api-contracts.md#31-kubernetes-crd-schemas) before merging.
-* **Test coverage that mirrors the code.** AI tools generating tests after the implementation tend to test what the code *does*, not what it *should* do. **Mitigation:** write the test specification (the bullet under [§7](07-test-plan.md)) before asking the AI to implement either the code or the test.
+* **Plausible but wrong code.** AI tools confidently produce code that compiles and reads correctly but is wrong in subtle ways — calling the wrong endpoint, conflating `broker_url` and `run_service_url`, treating a Secret as mutable when it isn't, or skipping a critical `defer` on a mutex.
+  **Mitigation:** every AI-generated PR is reviewed by an engineer who has read the relevant section of this design doc; the design doc, not the AI tool, is the source of truth.
+* **Hidden security regressions.** AI tools may generate ClusterRoles with overly broad verbs (`*` on `secrets`, wildcard resource selectors) because that is the path of least resistance.
+  **Mitigation:** the [§7.1](07-test-plan.md#71-unit-tests) "GMC RBAC boundary assertions" test exists specifically to catch this; run it on every PR and fail the build on violations.
+* **Drift from the design doc.** AI tools optimize for solving the immediate prompt and will happily diverge from the documented API contracts if not corrected.
+  **Mitigation:** feed the specific design-doc section into the prompt for each task, not just the high-level goal; cross-reference generated CRD field names against [§3.1](03-api-contracts.md#31-kubernetes-crd-schemas) before merging.
+* **Test coverage that mirrors the code.** AI tools generating tests after the implementation tend to test what the code *does*, not what it *should* do.
+  **Mitigation:** write the test specification (the bullet under [§7](07-test-plan.md)) before asking the AI to implement either the code or the test.
   Treat the design doc's test list as the contract.
-* **Erosion of mental model.** Engineers who rely heavily on AI for implementation may end up with a shallower understanding of the resulting system, slowing later debugging. **Mitigation:** the engineer is expected to be able to explain every merged PR without referring back to the AI conversation.
+* **Erosion of mental model.** Engineers who rely heavily on AI for implementation may end up with a shallower understanding of the resulting system, slowing later debugging.
+  **Mitigation:** the engineer is expected to be able to explain every merged PR without referring back to the AI conversation.
   If they cannot, the PR is not ready to merge.
 
 ---
@@ -60,7 +65,8 @@ Each milestone references the design-doc section that should be pasted into the 
   Pay close attention to generated RBAC — write the [§7.1](07-test-plan.md#71-unit-tests) "GMC RBAC boundary assertions" test *first*, before merging the GMC code.
   The CONNECT proxy itself is a small artifact (~150 lines) and an excellent target for AI generation.
 * **[Milestone 5](06-implementation-phases.md#milestone-5-hardening--load-testing-days-2326) (Hardening & Load).** Ask for NetworkPolicy manifests scoped to the proxy label, PodSecurityContext hardening for both proxy and AGC, and per-namespace ResourceQuota definitions derived from [§5](05-security.md) and [Appendix A](appendix-a-capacity-slos.md).
-  Extend the load harness from Milestone 1 to multiple tenants. **Review all generated security manifests by hand before applying to any real cluster** — this is the highest-stakes review pass of the entire project.
+  Extend the load harness from Milestone 1 to multiple tenants.
+  **Review all generated security manifests by hand before applying to any real cluster** — this is the highest-stakes review pass of the entire project.
 
 ---
 

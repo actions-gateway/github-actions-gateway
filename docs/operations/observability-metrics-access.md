@@ -74,7 +74,8 @@ Three things are wired per tenant so Prometheus can scrape them:
    These exist regardless of the scrape toggle.
 2. **Per-tenant `ServiceMonitor`s (opt-in).** When `metrics.serviceMonitor.enabled=true`, the GMC also creates one `ServiceMonitor` per component in the tenant namespace (`actions-gateway-proxy-metrics`, `actions-gateway-controller-metrics`).
    Each selects only its own component's Service via the tenant's owner labels, so one tenant's monitor never selects another tenant's pods.
-3. **The scraper client bundle (mTLS).** Each `ServiceMonitor` presents the per-tenant scraper client bundle from the `actions-gateway-metrics-client` Secret in the tenant namespace — `tls.crt`/`tls.key` authenticate the scraper to the listener and `ca.crt` verifies the listener's server cert. `serverName` is the component's `<service>.<namespace>.svc` DNS name (a SAN on the server cert), so the scrape is verified end-to-end and **not** MITM-able:
+3. **The scraper client bundle (mTLS).** Each `ServiceMonitor` presents the per-tenant scraper client bundle from the `actions-gateway-metrics-client` Secret in the tenant namespace — `tls.crt`/`tls.key` authenticate the scraper to the listener and `ca.crt` verifies the listener's server cert.
+   `serverName` is the component's `<service>.<namespace>.svc` DNS name (a SAN on the server cert), so the scrape is verified end-to-end and **not** MITM-able:
 
    ```yaml
    tlsConfig:

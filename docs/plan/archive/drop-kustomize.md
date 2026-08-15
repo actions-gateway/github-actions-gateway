@@ -26,7 +26,8 @@ The GMC's bundled `config/crd/bases/...runnergroups.yaml` is controller-gen outp
 - **Authoritative sources** (owned by each module's controller-gen):
   - `cmd/gmc/config/crd/bases/...actionsgateways.yaml` (GMC owns `ActionsGateway`)
   - `cmd/agc/config/crd/...runnergroups.yaml` (AGC owns `RunnerGroup`)
-- **`scripts/manifest/sync-chart-crds.sh`** generates the two chart CRD templates from those sources, injecting the per-CRD `helm.sh/resource-policy: keep` annotation block. `make chart-crds` writes them.
+- **`scripts/manifest/sync-chart-crds.sh`** generates the two chart CRD templates from those sources, injecting the per-CRD `helm.sh/resource-policy: keep` annotation block.
+  `make chart-crds` writes them.
 - **`make chart-crds-check`** (vendor-check pattern) re-runs the sync and `git diff --exit-code`s the chart copies, **and** asserts the GMC-bundled RunnerGroup is byte-identical to the AGC-authoritative copy.
   Wired into `make check` and `manifest-validate.yml`.
   A future field add that isn't propagated, or an api-skew drift, fails CI.
@@ -45,9 +46,12 @@ The green e2e CI run on the PR is the proof.
 Removed the kustomize *deploy* path: `config/default`, `config/manager`, `config/certmanager`, `config/network-policy`, `config/prometheus`, `config/samples`, the `config/agc-tenant-role` copy, and the deploy-only `config/rbac` scaffolding (leader-election, metrics, editor/viewer/admin roles, service account, role binding, kustomizations), plus the `make deploy`/`install` kustomize wiring.
 The chart owns every one of those resources.
 
-**What stays** under `cmd/*/config/` is the codegen + envtest substrate, NOT an install vehicle: the controller-gen CRD/RBAC/webhook outputs (also the single-source inputs to the chart generators, and what `rbac_test.go` + envtest load) and the two `admission-policy` ValidatingAdmissionPolicies the GMC integration suite applies in envtest. `make manifests` reproduces them.
+**What stays** under `cmd/*/config/` is the codegen + envtest substrate, NOT an install vehicle: the controller-gen CRD/RBAC/webhook outputs (also the single-source inputs to the chart generators, and what `rbac_test.go` + envtest load) and the two `admission-policy` ValidatingAdmissionPolicies the GMC integration suite applies in envtest.
+`make manifests` reproduces them.
 
-**RBAC seam — single-sourced now** (user decision, this PR). `scripts/manifest/sync-chart-rbac.sh` generates `charts/actions-gateway/files/manager-role-rules.yaml` from `cmd/gmc/config/rbac/role.yaml`; the chart's `manager-role` template embeds it via `.Files.Get`, and `make chart-rbac-check` gates drift (wired into `make check` and `make manifest-validate`) — mirroring slice A's CRD gate. `manifest-validate` no longer renders any kustomize overlay; it schema-validates the retained controller-gen manifests + VAPs as standalone files plus the chart renders.
+**RBAC seam — single-sourced now** (user decision, this PR).
+`scripts/manifest/sync-chart-rbac.sh` generates `charts/actions-gateway/files/manager-role-rules.yaml` from `cmd/gmc/config/rbac/role.yaml`; the chart's `manager-role` template embeds it via `.Files.Get`, and `make chart-rbac-check` gates drift (wired into `make check` and `make manifest-validate`) — mirroring slice A's CRD gate.
+`manifest-validate` no longer renders any kustomize overlay; it schema-validates the retained controller-gen manifests + VAPs as standalone files plus the chart renders.
 
 ## Out of scope (follow-ups)
 

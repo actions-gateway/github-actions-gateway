@@ -113,8 +113,10 @@ The DNS-exfiltration containment below (port-53 confined to cluster DNS) is unch
 > **Pod placement is CR-author-settable, so per-tenant egress-IP *attribution* is a property of the cluster's policy layer, not of GAG alone (Q282).** A per-tenant egress IP is realized by pinning a tenant's pods to a node pool whose egress path (cloud NAT gateway, dedicated subnet) owns that IP — so the pod's **node** decides which IP its traffic leaves by.
 > GAG passes placement through to the CR author in three places: `RunnerTemplate.spec.podTemplate` (a full `PodTemplateSpec`, always has), and — since Q282 — `EgressProxy.spec.scheduling` and `ActionsGateway.spec.scheduling`, each carrying `nodeSelector`/`tolerations`/`affinity`.
 > This is **deliberate and not admin-gated**: choosing an egress path is a *feature* (tenants should not share a rate limit or a block radius).
-> Stated precisely, since the symmetry with worker pods is only partial — in `proxyMode: Direct` worker placement already selects the egress IP with no gate, but in the **proxied default** it does not (NetworkPolicy forces worker traffic through the proxy, so the *proxy pool's* placement selects the IP). `EgressProxy.spec.scheduling` therefore *does* extend the capability to the default posture; gating it would still leave the direct-egress path open, and — see below — no *validating* gate on these fields can be sound anyway.
-> What this means precisely: a CR author who retargets its pods onto another pool's egress path makes both tenants' traffic leave via one IP, so **attribution** no longer holds. **Isolation, RBAC, and the egress choke point are unchanged** — the pods still traverse the same default-deny NetworkPolicy and the same proxy.
+> Stated precisely, since the symmetry with worker pods is only partial — in `proxyMode: Direct` worker placement already selects the egress IP with no gate, but in the **proxied default** it does not (NetworkPolicy forces worker traffic through the proxy, so the *proxy pool's* placement selects the IP).
+> `EgressProxy.spec.scheduling` therefore *does* extend the capability to the default posture; gating it would still leave the direct-egress path open, and — see below — no *validating* gate on these fields can be sound anyway.
+> What this means precisely: a CR author who retargets its pods onto another pool's egress path makes both tenants' traffic leave via one IP, so **attribution** no longer holds.
+> **Isolation, RBAC, and the egress choke point are unchanged** — the pods still traverse the same default-deny NetworkPolicy and the same proxy.
 > Operators who attribute traffic by source IP (a downstream firewall allowlist, an audit trail) and do not fully trust their tenant CR authors must constrain placement in the **pod admission layer**.
 > Note that a validating *allowlist* of `nodeSelector` values is unsound — `affinity.nodeAffinity` supports `NotIn`/`DoesNotExist`, so "any pool but mine" is expressible — whereas pinning `nodeSelector` by **mutation** is sound, since Kubernetes ANDs it with `nodeAffinity` and affinity can only narrow.
 > Ready-to-apply Kyverno and Gatekeeper samples: [admission-policies.md § Governing where GAG pods schedule](../operations/admission-policies.md#governing-where-gag-pods-schedule).
@@ -122,7 +124,8 @@ The DNS-exfiltration containment below (port-53 confined to cluster DNS) is unch
 
 > **Worker egress beyond GitHub is a platform-gated, deny-by-default opt-in (Q242 G.1).** By default the proxy carries GitHub only.
 > A platform admin can allow a small, explicit set of **non-GitHub** destinations a v2 `EgressProxy` may forward to — by DNS host suffix (`spec.destinationFQDNs`) and CIDR (`spec.destinationCIDRs`) — so CI jobs reach their build dependencies without forfeiting per-tenant egress-IP attribution or the DNS-exfil containment.
-> Because the `EgressProxy` is tenant-authorable, the destinations are **governed by a platform-owned allowlist**, not the CR's ownership: the GMC `--allowed-egress-fqdns` (suffix match) / `--allowed-egress-cidrs` (subnet containment) flags — optionally augmented by a watched ConfigMap — plus a validating webhook that **rejects** any destination not on the allowlist. **Both empty ⇒ deny-all-non-GitHub**, identical in spirit to the empty `--allowed-priority-classes` default (Q132/Q188).
+> Because the `EgressProxy` is tenant-authorable, the destinations are **governed by a platform-owned allowlist**, not the CR's ownership: the GMC `--allowed-egress-fqdns` (suffix match) / `--allowed-egress-cidrs` (subnet containment) flags — optionally augmented by a watched ConfigMap — plus a validating webhook that **rejects** any destination not on the allowlist.
+> **Both empty ⇒ deny-all-non-GitHub**, identical in spirit to the empty `--allowed-priority-classes` default (Q132/Q188).
 > The destinations widen one source into two enforcement surfaces (CIDR `ipBlock` / FQDN `toFQDNs` on the pod-egress policy, and the proxy CONNECT allowlist as defense-in-depth with DNS-rebinding revalidation on the CIDR path); GitHub stays implicit.
 > This is a **deliberate, bounded relaxation** of the GitHub-only posture, accepted with the trade-offs recorded — the residual is that a compromised worker can exfiltrate to an allowlisted destination, which the allowlist bounds but does not eliminate; the docs therefore steer operators to an **in-cluster caching mirror** first and reserve the allowlist for what a mirror can't proxy.
 > See the threat row below, [network-architecture.md § Worker egress to allowlisted non-GitHub destinations](network-architecture.md#worker-egress-to-allowlisted-non-github-destinations-opt-in-q242-g1), the operator runbook [security-operations.md § Worker egress destinations](../operations/security-operations.md#worker-egress-destinations-the-egress-allowlist), and the design [Q242 plan](../plan/archive/q242-g1-proxy-destination-allowlist.md).
@@ -138,10 +141,12 @@ The DNS-exfiltration containment below (port-53 confined to cluster DNS) is unch
 > The API server entry cannot be dropped: client-go's in-cluster config dials by IP, so without it a proxied AGC CONNECTs to the API server through the tenant's proxy, fails to verify the proxy CA, and crash-loops.
 > It also cannot be a hardcoded range — the ClusterIP differs on every distribution.
 > It was previously written as the kubeadm Service CIDR `10.96.0.0/12`, which was **both a correctness bug and a widening**: wrong (so broken) on every managed distribution, and on a cluster whose pod or node addresses fall inside that range it exempted arbitrary unrelated traffic from the proxy.
-> Worker pods get a strictly smaller set (no API server entry at all — they hold no kubeconfig and run with `automountServiceAccountToken: false`). `TestBuildNoProxy_DefaultsAreMinimal` pins the exact set, so widening it is a deliberate edit rather than a drift.
+> Worker pods get a strictly smaller set (no API server entry at all — they hold no kubeconfig and run with `automountServiceAccountToken: false`).
+> `TestBuildNoProxy_DefaultsAreMinimal` pins the exact set, so widening it is a deliberate edit rather than a drift.
 
 > **Cross-namespace proxy sharing is provider-consented and deny-by-default (Q166, M4).** A v2 `proxyRef`/`defaultProxyRef` may name an `EgressProxy` in another namespace, but naming it authorizes nothing.
-> Consent is **provider-side**: the proxy owner lists consumer namespaces in `spec.sharing.allowedNamespaces`, mirroring Gateway API's `ReferenceGrant`, where the grant lives in the target namespace. **Absent or empty `sharing` denies**, so a namespace never gains reach because a field was left unset, and every reference that predates the feature keeps resolving in its own namespace exactly as before.
+> Consent is **provider-side**: the proxy owner lists consumer namespaces in `spec.sharing.allowedNamespaces`, mirroring Gateway API's `ReferenceGrant`, where the grant lives in the target namespace.
+> **Absent or empty `sharing` denies**, so a namespace never gains reach because a field was left unset, and every reference that predates the feature keeps resolving in its own namespace exactly as before.
 > An unconsented reference fails closed with `ProxyShareNotGranted` and no wiring at all: no NetworkPolicy peer, no CA, no worker pod.
 > Three surfaces enforce it rather than one: the controller's consent check gates provisioning; the **provider's** ingress admits a granted namespace through a single peer carrying both a `NamespaceSelector` and a `PodSelector`, which AND (two separate peers would OR and admit every pod in that namespace *and* every workload pod cluster-wide); and the consumer's egress peer is emitted only for a consented reference.
 > Traffic needs both halves, so neither side alone opens a path.
@@ -222,7 +227,8 @@ Kyverno, OPA Gatekeeper) — the GMC does not enforce this itself because regist
 
 The gateway's own CI runs two supply-chain gates on every PR (`security-scan.yml`): `govulncheck` across all Go modules and `trivy` image scans of all five built images — see [testing.md § Security scanning](../development/testing.md#security-scanning).
 The four images built from a minimal/distroless base block on fixable HIGH/CRITICAL findings; the default worker image (built `FROM` the upstream actions-runner) is scanned report-only because its CVEs live in upstream components, with base bumps automated via dependabot.
-Tenants supplying their own `WorkerImage` are still expected to scan it themselves. `imagePullPolicy: IfNotPresent` (digest) or `Always` (tag) ensures the kubelet does not serve a stale, possibly tampered local copy.
+Tenants supplying their own `WorkerImage` are still expected to scan it themselves.
+`imagePullPolicy: IfNotPresent` (digest) or `Always` (tag) ensures the kubelet does not serve a stale, possibly tampered local copy.
 
 #### First-party digests are enforced at chart render time
 
@@ -318,7 +324,8 @@ An **empty allowlist forbids every named class** (secure default), so out of the
 The cluster-scoped `ClusterRunnerTemplate` is exempt: a tenant cannot create cluster-scoped objects, so gating it would only bind the platform against itself — the same reasoning that lets it declare privileged containers (§H.4/§H.6).
 
 Because `PriorityClass` is global, the platform should create allowlisted classes with `preemptionPolicy: Never` unless cross-tenant preemption is genuinely intended for that tier — see [security-operations.md § Priority classes](../operations/security-operations.md).
-The dead tenant-settable per-tier `preemptionPolicy` field was removed pre-1.0 (it was never wired to pods and was a tenant-controlled preemption lever the platform must own). **Closed (Q132 v1 tiers, Q289 podTemplate + v2 `RunnerSet` tiers); watched-object source added Q188.**
+The dead tenant-settable per-tier `preemptionPolicy` field was removed pre-1.0 (it was never wired to pods and was a tenant-controlled preemption lever the platform must own).
+**Closed (Q132 v1 tiers, Q289 podTemplate + v2 `RunnerSet` tiers); watched-object source added Q188.**
 
 #### A ValidatingAdmissionPolicy closes the webhook residual
 
@@ -354,7 +361,8 @@ A write is exempt only when *both* hold:
   The rare-but-legal *spec change on a deleting object* stays fully validated, so even a deleting object can never acquire a new class name (or any other newly-forbidden spec state) through the exemption — no reasoning about controller behavior on deleting objects is needed.
 
 The simple `deletionTimestamp`-only form was considered and rejected: it would admit spec changes on deleting objects, whose safety rests on the claim that no controller provisions from a deleting object — true of ours today, but a behavioral invariant rather than an admission invariant, and the narrow form costs one extra CEL disjunct.
-The exemption applies uniformly at the top of each `ValidateUpdate` (not just to the PriorityClass check): with an unchanged spec, every spec-derived check reproduces its stored verdict, and the checks that consult *external* state — an allowlist, an eligibility label, a sibling list — are exactly the ones that can wedge teardown the same way. **Closed (Q518).** Operator-facing detail: [security-operations.md § Narrowing the allowlist](../operations/security-operations.md#narrowing-the-allowlist-drain-stored-references-first).
+The exemption applies uniformly at the top of each `ValidateUpdate` (not just to the PriorityClass check): with an unchanged spec, every spec-derived check reproduces its stored verdict, and the checks that consult *external* state — an allowlist, an eligibility label, a sibling list — are exactly the ones that can wedge teardown the same way.
+**Closed (Q518).** Operator-facing detail: [security-operations.md § Narrowing the allowlist](../operations/security-operations.md#narrowing-the-allowlist-drain-stored-references-first).
 
 #### The two PriorityClass allowlists must stay disjoint (worker vs. infra, Q284)
 
@@ -369,7 +377,8 @@ This is gated too — but by a **separate** allowlist, `--allowed-infra-priority
 - **`priorityClassName` is the one `PodScheduling` field behind a gate**, and the asymmetry is principled.
   The rest of the block (`nodeSelector`/`tolerations`/`affinity`/`topologySpreadConstraints`) is tenant-settable and ungated because it is a choice about the tenant's *own* traffic — it weakens *attribution* (two tenants may egress via one IP), not *isolation*, and cannot preempt another tenant.
   Priority is a cluster-wide, cross-tenant preemption lever: distinct in kind, so gated where placement is not.
-  And because `system-*` classes are nameable from any namespace (above), an ungated infra `priorityClassName` would be the same cluster-wide preemption escape the worker gate closes — reopened on a new path. **Any future `PodTemplateSpec`/priority passthrough on a tenant-writable CR must be audited for this.**
+  And because `system-*` classes are nameable from any namespace (above), an ungated infra `priorityClassName` would be the same cluster-wide preemption escape the worker gate closes — reopened on a new path.
+  **Any future `PodTemplateSpec`/priority passthrough on a tenant-writable CR must be audited for this.**
 
 - **A boot-time check is not sufficient once either set is editable at runtime.** Both allowlists take an additive, fail-safe dynamic half from the watched `PriorityClassAllowlist` CR (Q188 worker, Q298 infra), so an edit is a route to an overlap the startup check never sees.
   Disjointness therefore holds at four points, each covering what the others structurally cannot: the **startup check** on the two flags; a **CRD CEL rule** rejecting a write that puts one class on both of the object's lists; the **GMC reconciler**, which refuses a CR whose list collides with the *other surface's flag* — invisible to CEL, which cannot read a controller flag — by dropping **both** dynamic sets back to the flags rather than applying half a pair; and the **admission read path**, where the two allowlist instances are paired so a name reaching both is admitted on neither surface.
@@ -377,7 +386,8 @@ This is gated too — but by a **separate** allowlist, `--allowed-infra-priority
 - **Wholesale refusal is the point, not collateral damage.** A partially applied pair is exactly how the overlap becomes real, so a bad CR withholds both lists — the observable cost is that recently self-serviced classes stop being accepted together, never that an unintended class becomes allowed.
 
 The infra webhook carries the same residual as the worker one (G.7): direct RBAC on the underlying resource bypasses the webhook, and stored objects are never re-validated.
-A `ValidatingAdmissionPolicy` backstop for the infra allowlist, following the G.7 `paramKind` pattern, is the planned closure; the worker-facing `priorityclass-allowlist-guard` policy reads only `allowedPriorityClasses`, since the kind it exists for (`runnergroups`, which has no webhook) carries no infra scheduling block. **Closed (Q284): flag, disjointness check, and both webhooks (`EgressProxy` extended; a new v2 `ActionsGateway` webhook stood up, since none existed).
+A `ValidatingAdmissionPolicy` backstop for the infra allowlist, following the G.7 `paramKind` pattern, is the planned closure; the worker-facing `priorityclass-allowlist-guard` policy reads only `allowedPriorityClasses`, since the kind it exists for (`runnergroups`, which has no webhook) carries no infra scheduling block.
+**Closed (Q284): flag, disjointness check, and both webhooks (`EgressProxy` extended; a new v2 `ActionsGateway` webhook stood up, since none existed).
 Dynamic augmentation Q298.**
 
 ### Unbounded job intake via the installation's default runner group
@@ -410,7 +420,8 @@ So the guarantee is exactly "the tenant's runners live in the group you named" a
 See [tenant onboarding](../operations/tenant-onboarding.md#bind-a-runner-set-to-a-github-runner-group).
 
 The field is tenant-authored, and the [whose-fact](../development/api-review.md#ask-whose-fact-it-is) question resolves benignly: a tenant naming a group that is not theirs volunteers *its own* runners to that group's repositories.
-It costs the tenant that lied and escalates nothing across tenants, which is why it is not gated by a platform allowlist the way `priorityClassName` is. **Closed (Q712).**
+It costs the tenant that lied and escalates nothing across tenants, which is why it is not gated by a platform allowlist the way `priorityClassName` is.
+**Closed (Q712).**
 
 ### Cross-tenant job acquisition via a shared scale-set name
 
@@ -449,7 +460,8 @@ Both boundary properties carry over: the condition names only the applying gatew
 The reconciler's read is cached, unlike admission's: it reports a persisted state rather than arbitrating a write, so the stale-cache race the webhook guards against does not apply.
 
 **What stays outside GAG's control.** A scale set registered at GitHub by something *other* than GAG (ARC, or a hand-registered set) is not in the cluster and cannot be seen at admission or at reconcile.
-The AGC adopts such a set by name rather than failing, which is the intended behaviour for migration ([migrating from ARC](../operations/migration-from-arc.md)) and the reason ARC and GAG must not run one scale-set name concurrently. **Closed (Q791 admission, Q849 reconcile).**
+The AGC adopts such a set by name rather than failing, which is the intended behaviour for migration ([migrating from ARC](../operations/migration-from-arc.md)) and the reason ARC and GAG must not run one scale-set name concurrently.
+**Closed (Q791 admission, Q849 reconcile).**
 
 ---
 
@@ -618,8 +630,10 @@ These invariants are non-negotiable across all profiles.
 
 ### Secure-by-default pod SecurityContext and resources
 
-Floor invariants above are non-negotiable. *On top of them*, the AGC stamps a secure-by-default `SecurityContext` and resource requests/limits onto every worker pod.
-These defaults **gap-fill only** — an explicit value in the tenant `PodTemplate` always wins, so a tenant can opt out of any individual default (e.g. `runAsNonRoot: false` for a root-based image) without escalating to the `privileged` profile.
+Floor invariants above are non-negotiable.
+*On top of them*, the AGC stamps a secure-by-default `SecurityContext` and resource requests/limits onto every worker pod.
+These defaults **gap-fill only** — an explicit value in the tenant `PodTemplate` always wins, so a tenant can opt out of any individual default (e.g.
+`runAsNonRoot: false` for a root-based image) without escalating to the `privileged` profile.
 
 The hardening scales to the namespace's PSA profile (propagated to the AGC via the `SECURITY_PROFILE` env var the GMC sets on the AGC Deployment):
 
@@ -666,7 +680,8 @@ The flow holds no long-lived secret in the cluster:
 3. It asks **Vault transit** (`POST <transit>/sign/<key>`) to sign the App JWT's `header.payload` with an RSA key Vault holds — RSASSA-PKCS1-v1_5 over SHA-256, i.e. JWS `RS256`.
    The private key never leaves Vault.
 
-The signing material's location is abstracted behind a `githubapp.Signer` interface (`JWTAlg`/`Sign`), so cloud KMS/HSM signers (AWS/GCP/Azure) add as new implementations + new `signer.provider` union members without another breaking change. **No code path logs, returns in an error, or env-passes the projected ServiceAccount token, the Vault client token, or the produced signature** — Vault error responses surface only operational messages (`permission denied`) and HTTP status.
+The signing material's location is abstracted behind a `githubapp.Signer` interface (`JWTAlg`/`Sign`), so cloud KMS/HSM signers (AWS/GCP/Azure) add as new implementations + new `signer.provider` union members without another breaking change.
+**No code path logs, returns in an error, or env-passes the projected ServiceAccount token, the Vault client token, or the produced signature** — Vault error responses surface only operational messages (`permission denied`) and HTTP status.
 The Vault address is HTTPS-by-default (the ServiceAccount token transits it at login); a plaintext address is permitted only under an explicit dev/test opt-in, mirroring the GitHub-API-base-URL rule above.
 
 Operator configuration is in [tenant-onboarding.md § Workload-identity credentials](../operations/tenant-onboarding.md#workload-identity-credentials-external-signer).

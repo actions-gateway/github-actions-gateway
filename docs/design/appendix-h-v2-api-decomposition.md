@@ -4,7 +4,9 @@
 
 ---
 
-> **Status: shipped — `v2alpha1`, served beside `v1alpha1`.** This appendix is the design source of truth for the `v2alpha1` API (`actions-gateway.com` group) that replaces the monolithic `ActionsGateway` + `RunnerGroup` model. **All milestones M1–M5 have landed**: the five kinds, their GMC/AGC reconcilers, multiple gateways per namespace, the namespace-scoped security profile, and the one-shot v1→v2 migration tool are all built. `v2alpha1` is an **alpha** API served side by side with `v1alpha1` during the coexistence window — nothing in the shipped `v1alpha1` API changes, and tenants migrate on their own schedule via the migration tool, a deliberate tool-assisted fan-out (see [§H.11](#h11-migration-v2-tool-assisted)).
+> **Status: shipped — `v2alpha1`, served beside `v1alpha1`.** This appendix is the design source of truth for the `v2alpha1` API (`actions-gateway.com` group) that replaces the monolithic `ActionsGateway` + `RunnerGroup` model.
+> **All milestones M1–M5 have landed**: the five kinds, their GMC/AGC reconcilers, multiple gateways per namespace, the namespace-scoped security profile, and the one-shot v1→v2 migration tool are all built.
+> `v2alpha1` is an **alpha** API served side by side with `v1alpha1` during the coexistence window — nothing in the shipped `v1alpha1` API changes, and tenants migrate on their own schedule via the migration tool, a deliberate tool-assisted fan-out (see [§H.11](#h11-migration-v2-tool-assisted)).
 > Milestone sequencing and the itemized task record are in the [v2 API plan](../plan/v2-api.md).
 
 ---
@@ -26,7 +28,8 @@ Three independent pressures all trace back to the same root cause — the curren
 
 ### Non-goals
 
-- **Not a behavior change.** v2 re-shapes the API; the runtime semantics (job acquisition, worker provisioning, quota/PSA enforcement, egress restriction) are preserved. `v2alpha1` tracks v1 behavior wherever a field is unchanged.
+- **Not a behavior change.** v2 re-shapes the API; the runtime semantics (job acquisition, worker provisioning, quota/PSA enforcement, egress restriction) are preserved.
+  `v2alpha1` tracks v1 behavior wherever a field is unchanged.
 - **Not an in-place conversion.** The v1→v2 split is a fan-out handled by a migration tool ([§H.11](#h11-migration-v2-tool-assisted)), not a conversion webhook.
 - **Not the admin policy layer.** Tiered admin policy (singleton/class) is explicitly deferred ([§H.14](#h14-admin-policy-layer--deferred-until-tiering-is-real)).
 - **Not cross-namespace sharing on day one.** Same-namespace `EgressProxy` sharing ships first; cross-namespace consent + CA distribution follow on demand ([§H.9](#h9-cross-namespace-proxy-sharing)).
@@ -237,7 +240,8 @@ type RunnerSetSpec struct {
 
 **Why `templateRef` and `proxyRef` are both optional — but resolve differently.** They look parallel but the *fallback* differs.
 An unset `proxyRef` has a well-defined *behavior* — direct egress, still NetworkPolicy-restricted — so the dependency can simply be dropped (Q168, **shipped**): both `proxyRef` and `defaultProxyRef` unset resolves to direct egress, with `proxyMode: Direct` + an `EgressUnattributed` condition in status.
-A `RunnerSet` with no template has no such drop-the-dependency fallback — the AGC cannot synthesize a worker pod without a pod shape — so instead of a behavior it resolves a *default template* (Q172, **shipped**). `templateRef` was required at GA; it has been relaxed to optional-with-a-default — a backward-compatible required → optional change, so a set that sets `templateRef` behaves exactly as before.
+A `RunnerSet` with no template has no such drop-the-dependency fallback — the AGC cannot synthesize a worker pod without a pod shape — so instead of a behavior it resolves a *default template* (Q172, **shipped**).
+`templateRef` was required at GA; it has been relaxed to optional-with-a-default — a backward-compatible required → optional change, so a set that sets `templateRef` behaves exactly as before.
 
 The resolution chain for an unset `templateRef` (runtime, fail-closed, §H.7) is:
 
@@ -281,7 +285,8 @@ The gateway half is what makes the guard hold rather than merely usually hold: a
 Two sets naming one gateway still collide even before that gateway exists, since they share whatever scope it turns out to bind.
 
 Scopes compare case-insensitively on host and path, matching how GitHub resolves owner names, and the port is dropped; both err toward rejecting, the safe direction for a guard against sharing.
-The rejection names the conflicting set only when it sits in the applying tenant's own namespace; a cross-tenant holder is withheld from the API error and written to the GMC log, so the message cannot be used to enumerate other tenants' namespaces and label usage. `Classic` sets are unaffected throughout: they register no scale-set object, so they claim no name.
+The rejection names the conflicting set only when it sits in the applying tenant's own namespace; a cross-tenant holder is withheld from the API error and written to the GMC log, so the message cannot be used to enumerate other tenants' namespaces and label usage.
+`Classic` sets are unaffected throughout: they register no scale-set object, so they claim no name.
 
 **A pair admission never saw is reported at reconcile (Q849, shipped).** A webhook fires on a write, so a collision already stored when the guard shipped is never re-validated: an upgrade from a release before Q791, or a window with the webhook uninstalled.
 The GMC's gateway reconciler reads the same inventory each reconcile and reports it on the advisory `ScaleSetNameCollision` condition, a Warning Event on the transition (including the absent→`True` first observation, which is the upgrade case), and the `actions_gateway_scale_set_name_collision` gauge.
@@ -293,7 +298,8 @@ See [§5.2](05-security.md#cross-tenant-job-acquisition-via-a-shared-scale-set-n
 It is an additive, per-key overlay of the platform default — the [Appendix A](appendix-a-capacity-slos.md) sizing (`requests {cpu: 500m, memory: 2Gi}`, `limits {cpu: 2, memory: 4Gi}`): the GMC stamps the default and replaces only the request/limit keys the tenant sets, so an unset field reproduces the default unchanged (non-breaking) and a value that sets one knob keeps the default for the rest.
 There is no admission-time floor on the values — sizing guidance and the recommended floor (don't set a memory limit below the working set; don't request more than a node/quota can schedule) are operator-owned in [tenant-onboarding](../operations/tenant-onboarding.md#tuning-agc-control-plane-resources). v1alpha1 has no equivalent field; its AGC carries no GMC-stamped resources (unchanged).
 
-**GHES private-CA trust — `githubCABundleRef` (Q536, shipped).** The AGC and the worker pods it provisions trust the OS system roots plus the per-tenant egress proxy's own CA, so a GitHub Enterprise Server appliance fronted by an internal certificate authority failed the TLS handshake on every call — and no CRD field, Helm value, or GMC flag could extend that trust. `ActionsGateway.spec.githubCABundleRef` names a `ConfigMap` in the gateway's namespace holding a PEM bundle under `ca.crt`.
+**GHES private-CA trust — `githubCABundleRef` (Q536, shipped).** The AGC and the worker pods it provisions trust the OS system roots plus the per-tenant egress proxy's own CA, so a GitHub Enterprise Server appliance fronted by an internal certificate authority failed the TLS handshake on every call — and no CRD field, Helm value, or GMC flag could extend that trust.
+`ActionsGateway.spec.githubCABundleRef` names a `ConfigMap` in the gateway's namespace holding a PEM bundle under `ca.crt`.
 A `ConfigMap` rather than a `Secret` because a certificate is public material; the field is the tenant's because it is the same party that supplies `githubURL`, and widening trust reaches only that tenant's own AGC and worker pods.
 The bundle is **additive** — `BuildTrustPool` seeds from the system roots and appends every supplied PEM — so a gateway on public GitHub with a bundle set behaves identically, and replacing the roots is not offered.
 The GMC mounts it on the AGC `Deployment` and stamps `GITHUB_CA_CONFIGMAP_NAME`; the AGC's pod provisioner projects the same `ConfigMap` into each worker pod, where the wrapper concatenates it with the image's own trust store behind `SSL_CERT_FILE`, so the control plane and the runners trust the same appliance.
@@ -360,7 +366,8 @@ This shows the renamed group, the noun/verb split, and that proxy-less is the mi
 
 ## H.5. How each pressure is resolved
 
-- **Object size.** The large `PodTemplateSpec` lives only in `RunnerTemplate`/`ClusterRunnerTemplate`. `ActionsGateway` and `RunnerSet` become small, fixed-size objects, and nothing embeds a template anymore.
+- **Object size.** The large `PodTemplateSpec` lives only in `RunnerTemplate`/`ClusterRunnerTemplate`.
+  `ActionsGateway` and `RunnerSet` become small, fixed-size objects, and nothing embeds a template anymore.
   Reuse means one 40 KB sysbox template exists once and is referenced N times instead of copied into N runner sets; a `ClusterRunnerTemplate` lets the platform own it once cluster-wide.
 - **Shared egress.** Any number of `RunnerSet`s point `proxyRef` at one `EgressProxy`; setting `defaultProxyRef` on the gateway makes every runner set inherit it — one tenant proxy, many runner sets.
 - **One namespace, free rebalancing.** Multiple `ActionsGateway`s and `RunnerSet`s are permitted per namespace, all drawing on the single namespace `ResourceQuota`.
@@ -369,7 +376,8 @@ This shows the renamed group, the noun/verb split, and that proxy-less is the mi
 
 ## H.6. Naming and length budgets
 
-The one rename worth insisting on: **`RunnerGroup` → `RunnerSet`.** "Runner group" is already a first-class GitHub concept (runner groups gate which repos may use which runners), so the current kind name collides with the domain. `RunnerSet` also aligns with ARC's `AutoscalingRunnerSet`/`EphemeralRunnerSet`.
+The one rename worth insisting on: **`RunnerGroup` → `RunnerSet`.** "Runner group" is already a first-class GitHub concept (runner groups gate which repos may use which runners), so the current kind name collides with the domain.
+`RunnerSet` also aligns with ARC's `AutoscalingRunnerSet`/`EphemeralRunnerSet`.
 
 | New kind | Short | Scope | Role | Derives | Label value |
 |---|---|---|---|---|---|
@@ -386,7 +394,8 @@ These CR names become both selector label values *and* `<name>-<suffix>` Service
 - `RunnerSet` → worker pod `generateName` plus the random tail, and the name is also a label value ⇒ ≤ **63**, practically ≤ ~57 for headroom.
 - **Recommendation:** put an explicit `maxLength` of **52** on every v2 CR name (leaves 11 for any derived suffix, stays well under 63 as a label value) and document it in the CRD field comment so it is discoverable, not a runtime surprise.
 
-**Shipped, and the v1 gap this closed.** The 52-char cap is enforced by CEL on every v2 CR name, so v2 derivations are bounded at the input. `v1alpha1` has no equivalent — an `ActionsGateway` name may be 253 characters — and its derived `<gateway>-<runner-label>` `RunnerGroup` name was never bounded at the output either.
+**Shipped, and the v1 gap this closed.** The 52-char cap is enforced by CEL on every v2 CR name, so v2 derivations are bounded at the input.
+`v1alpha1` has no equivalent — an `ActionsGateway` name may be 253 characters — and its derived `<gateway>-<runner-label>` `RunnerGroup` name was never bounded at the output either.
 Past 63 characters that name is a legal object name and an **illegal label value**, so the `RunnerGroup` reconciled while every worker pod carrying it as `actions-gateway/runner-group` was rejected: the tenant ran no jobs and GitHub reported only that the runner had lost communication (Q473). v1 therefore applies the bound where the name is derived, through the shared `api/apinames` helpers that also own the worker-pod budget (Q467).
 The rule generalises: **budget against the tightest consumer of a name (63), not the limit of the object being created (253)** — see [kubernetes-conventions.md](../development/kubernetes-conventions.md#derive-every-name-through-apiapinames-q467-q473).
 
@@ -420,7 +429,8 @@ So responsibilities split by what admission is actually good at:
 - **Webhook keeps (static, order-independent):** structural/shape validation, the cross-field rule (`maxWorkers == priorityTiers[last].threshold`), reserved-pod-field rejection on `RunnerTemplate`, name `maxLength`, reference *well-formedness*, and whether a cross-namespace reference is *permitted by operator policy* at all.
 
   *Reserved-pod-field split (M2, implemented).* The scalar pod-level reserved fields (`serviceAccountName`, `host{PID,Network,IPC}`, `automountServiceAccountToken`) are CRD CEL rules (M1).
-  The per-container checks that exceed the CEL cost budget — an unbounded containers-array walk — are the GMC-hosted validating webhook (M2): it rejects the AGC-injected egress-proxy env vars (`HTTP_PROXY`/`HTTPS_PROXY`/`NO_PROXY`/`PROXY_CA_CERT_PATH`, the variables v1 silently overwrote at pod-build time) on every container of **both** template kinds. **Privileged containers** are rejected on the namespaced `RunnerTemplate` (a tenant must not self-author a privileged worker shape) but **allowed** on the cluster-scoped `ClusterRunnerTemplate` — that kind is platform-authored (tenants cannot create cluster-scoped objects) and exists precisely to hold golden privileged templates (DinD/sysbox, §H.6).
+  The per-container checks that exceed the CEL cost budget — an unbounded containers-array walk — are the GMC-hosted validating webhook (M2): it rejects the AGC-injected egress-proxy env vars (`HTTP_PROXY`/`HTTPS_PROXY`/`NO_PROXY`/`PROXY_CA_CERT_PATH`, the variables v1 silently overwrote at pod-build time) on every container of **both** template kinds.
+  **Privileged containers** are rejected on the namespaced `RunnerTemplate` (a tenant must not self-author a privileged worker shape) but **allowed** on the cluster-scoped `ClusterRunnerTemplate` — that kind is platform-authored (tenants cannot create cluster-scoped objects) and exists precisely to hold golden privileged templates (DinD/sysbox, §H.6).
   A `RunnerTemplate` carries no `securityProfile`, so a v1-style *profile-aware* privileged decision is impossible at the template layer; Pod Security Admission — which stamps the namespace's enforcement level from the effective `securityProfile` (§H.16 #7) — stays the runtime backstop for both kinds, so allowing privileged on the cluster-scoped kind is no weaker than v1.
 - **Runtime condition (existence/referential):** does the template exist, does the proxy exist, does the cross-namespace grant exist.
   The controller watches referents and re-reconciles when they appear:
@@ -455,7 +465,8 @@ The operator-facing Event reason vocabulary is tabulated in [troubleshooting.md]
 Because v2 `RunnerSet`s are not *owned* by the gateway (they only reference it via `spec.gatewayRef`, [§H.8](#h8-ownership-gc-and-deletion)), the binding is resolved by matching `gatewayRef.name` within the namespace — the same scoping the AGC applies server-side via its `spec.gatewayRef.name` field selector, not owner labels.
 A set is *impaired* (not serving jobs) on either of two axes: its `Ready` is `False` for a non-transient reason — a reference did not resolve or a provisioning step failed, anything but the benign startup `NoActiveSessions`, which is how v2 surfaces the reference/provisioning failures that had no standalone condition — **or** any of its abnormal-is-True impairing conditions is `True` (`v2alpha1.ImpairingConditionTypes()`: `Degraded`, `CredentialUnavailable`, `RunnerVersionTooOld`, `WorkersUnschedulable`).
 The second axis is load-bearing because the shared listener pushes `Degraded`/`RunnerVersionTooOld` onto the `RunnerSet` independently of `Ready` (Q330): a classic set whose sessions are all rejected as unauthorized converges to `Ready=NoActiveSessions` while `Degraded=True` sits on its own condition, so an `Ready`-only rollup would silently miss it.
-The advisory conditions (`RateLimited`, the `WorkerQuota` ladder, `EgressUnattributed`, `PossibleReapBlockingSidecar`, `JobProvisionStalled`, `RunnerLabelsIncomplete`) are excluded so the rollup does not flap on normal load. `RunnerLabelsIncomplete` (Q726) is excluded for a different reason from the rest: it does not flap at all, it simply is not an outage.
+The advisory conditions (`RateLimited`, the `WorkerQuota` ladder, `EgressUnattributed`, `PossibleReapBlockingSidecar`, `JobProvisionStalled`, `RunnerLabelsIncomplete`) are excluded so the rollup does not flap on normal load.
+`RunnerLabelsIncomplete` (Q726) is excluded for a different reason from the rest: it does not flap at all, it simply is not an outage.
 The set serves every job targeting the labels that did register, and the ones that did not are a configuration mismatch for the tenant to fix.
 Like the v1 rollup it is advisory — it does **not** gate `Ready`, since the gateway's own AGC control plane can be healthy while one tenant's set is impaired.
 The GMC watches bound `RunnerSet`s (predicated on a change to a set's impaired signature, dropping high-frequency `activeSessions`/ `pendingJobs` churn) so a child's health change refreshes the parent promptly.
@@ -506,9 +517,11 @@ Nothing is reserved on either axis today, the other contrast with the gate, whic
 In-place pod resize — the one extension the plan anticipates — changes *when* actuation happens, not where values come from or what limits follow, so it is a sibling field rather than a fifth profile.
 If the intent framing ever fails, `v2.0.0` is already a scheduled break.
 
-**Opt-in intake gating: `spec.capacityGate` (Q405, Q406, Q470).** A `RunnerSet` may opt into the placeability rung of the admission ladder — the AGC refuses to take on jobs whose worker pod the cluster cannot currently place, instead of claiming them and stalling. `capacityGate.mode` selects `Off` (the default, today's behavior exactly) or `Observe`.
+**Opt-in intake gating: `spec.capacityGate` (Q405, Q406, Q470).** A `RunnerSet` may opt into the placeability rung of the admission ladder — the AGC refuses to take on jobs whose worker pod the cluster cannot currently place, instead of claiming them and stalling.
+`capacityGate.mode` selects `Off` (the default, today's behavior exactly) or `Observe`.
 
-The values name *how the AGC learns* the cluster cannot place a worker, not merely whether the gate is enabled (Q476). `Observe` decides from evidence an already-stuck pod produced; the reserved `Probe`/`Provision` (Q407) solicit an answer instead.
+The values name *how the AGC learns* the cluster cannot place a worker, not merely whether the gate is enabled (Q476).
+`Observe` decides from evidence an already-stuck pod produced; the reserved `Probe`/`Provision` (Q407) solicit an answer instead.
 Every value but `Off` refuses jobs — there is no report-only tier on this axis.
 
 **Two axes, two owners.** The mode is deliberately *not* a choice of signal:
@@ -617,7 +630,8 @@ Cross-namespace sharing forces two mechanisms that same-namespace sharing does n
 
 ### What implementing it settled
 
-**The reference needed a namespace, and it could not go on `ObjectRef`.** Nothing in the v2 API could express a cross-namespace reference at all: `ObjectRef` and `LocalObjectRef` were name-only, and both resolution sites resolved in the referrer's own namespace. `ObjectRef` also backs `gatewayRef`, `templateRef` and `defaultTemplateRef`, so adding `Namespace` there would have made four references cross-namespace at once, three of them with no consent handshake behind them.
+**The reference needed a namespace, and it could not go on `ObjectRef`.** Nothing in the v2 API could express a cross-namespace reference at all: `ObjectRef` and `LocalObjectRef` were name-only, and both resolution sites resolved in the referrer's own namespace.
+`ObjectRef` also backs `gatewayRef`, `templateRef` and `defaultTemplateRef`, so adding `Namespace` there would have made four references cross-namespace at once, three of them with no consent handshake behind them.
 The proxy references therefore moved to their own `ProxyObjectRef` (`name` + optional `namespace`).
 Empty `namespace` means the referrer's own, so every existing manifest keeps its meaning.
 This dropped the optional `kind` property from `proxyRef`'s schema, whose enum admitted only the two template kinds and which nothing read; structural-schema pruning means a manifest that set it still applies.
@@ -689,7 +703,8 @@ The choice is sound because `gag-migrate` is run by a platform administrator, th
 Emitted cluster-template names are namespace-qualified (`crt-<ns>-<hash>`) so two tenants sharing a worker shape do not silently share one cluster-scoped object, and each carries an `actions-gateway.com/migrated-from-namespace` provenance label — the one migration output namespace deletion does not garbage-collect.
 
 **`--apply` rides out a transiently unreachable webhook (Q461).** The fan-out above is a non-atomic sequence of creates followed by the namespace patch, and every create is gated by a v2 validating webhook under `failurePolicy: Fail` that the apiserver does not retry on its own.
-A single stalled webhook POST — endpoint mid-rollout, node drain, cold TLS listener — therefore aborted `--apply` partway, leaving the earlier objects created; for a privileged tenant that includes the cluster-scoped `ClusterRunnerTemplate`, the one output namespace deletion does not reclaim. `--apply` now retries each individual create (and the namespace read-modify-write) for a bounded 90s while the apiserver reports it could not *reach* a webhook, reporting progress on stderr.
+A single stalled webhook POST — endpoint mid-rollout, node drain, cold TLS listener — therefore aborted `--apply` partway, leaving the earlier objects created; for a privileged tenant that includes the cluster-scoped `ClusterRunnerTemplate`, the one output namespace deletion does not reclaim.
+`--apply` now retries each individual create (and the namespace read-modify-write) for a bounded 90s while the apiserver reports it could not *reach* a webhook, reporting progress on stderr.
 The retry is deliberately narrow: a webhook that ran and **denied** the request, and every other error (`AlreadyExists`, RBAC `Forbidden`, a CEL rejection), still fails on the first attempt, so admission verdicts stay fast and loud.
 The transport-error signatures are kept identical to the e2e helper's (Q392) so the two cannot drift apart on what counts as transient.
 
@@ -724,10 +739,12 @@ Two shipped keys still carry boolean-looking `"true"` values that predate the [n
 - `actions-gateway.github.com/allow-profile-downgrade: "true"` — the downgrade opt-in annotation, matched by the GMC validating webhook.
 
 Aligning them (→ `tenant: managed`, `allow-profile-downgrade: allowed`, following the existing `privileged-profile: allowed` precedent) is a breaking change to deployed clusters: it touches VAP CEL, onboarding, runbooks, and the label/annotation on every live tenant namespace.
-The convention doc therefore defers it to "a separate, deliberate migration." **The v2 cutover is that migration** — it is already breaking, already ships a migration tool ([§H.11](#h11-migration-v2-tool-assisted)), and already reworks the same VAPs and onboarding for multi-gateway-per-namespace.
+The convention doc therefore defers it to "a separate, deliberate migration."
+**The v2 cutover is that migration** — it is already breaking, already ships a migration tool ([§H.11](#h11-migration-v2-tool-assisted)), and already reworks the same VAPs and onboarding for multi-gateway-per-namespace.
 Folding Q147 in here costs almost nothing extra and avoids a second, standalone breaking migration later.
 
-**The key *prefixes* migrate too, not just the values.** The v2 [API group rename](#h15-other-breaking-changes-worth-batching) moves these keys off the `actions-gateway.github.com/` domain to `actions-gateway.com/` (e.g. `actions-gateway.com/tenant`), together with the other domain-prefixed identifiers — `privileged-profile`, `agentpool-cleanup`, `gmc-cleanup`, the version label, and the finalizer names.
+**The key *prefixes* migrate too, not just the values.** The v2 [API group rename](#h15-other-breaking-changes-worth-batching) moves these keys off the `actions-gateway.github.com/` domain to `actions-gateway.com/` (e.g.
+`actions-gateway.com/tenant`), together with the other domain-prefixed identifiers — `privileged-profile`, `agentpool-cleanup`, `gmc-cleanup`, the version label, and the finalizer names.
 This is the same class of breaking change as the value alignment and rides the **same dual-read window**: every consumer accepts either domain *and* either value until `v1alpha1` removal, and the migration tool relabels in one pass.
 Renaming the API group but leaving the labels on the old domain would be a permanent inconsistency, so the prefixes move *with* the group.
 
@@ -826,7 +843,8 @@ Today the admin/tenant boundary is real but lives *outside the API*, scattered a
 | Reserved namespaces | Go constant + `POD_NAMESPACE` |
 | Namespace ResourceQuota | platform-stamped, out-of-band |
 
-Promoting this into a first-class API object turns the boundary into a clean RBAC split (admin writes the policy kind; tenants cannot) and makes "what is this tenant allowed to do?" a `kubectl get` away. **But it is not a problem we have today, and the abstraction is addable without a second breaking change** — so v2 does *not* ship it.
+Promoting this into a first-class API object turns the boundary into a clean RBAC split (admin writes the policy kind; tenants cannot) and makes "what is this tenant allowed to do?" a `kubectl get` away.
+**But it is not a problem we have today, and the abstraction is addable without a second breaking change** — so v2 does *not* ship it.
 This section records the capability ladder and the exact trigger, so the decision is captured rather than rediscovered.
 
 ### The capability ladder
@@ -874,7 +892,8 @@ The one constraint to honor now: **whatever policy lands in v2 — flags or a si
 ### v2 decision
 
 **v2 keeps the controller flags.** A singleton/class earns its keep only at the triggers above, none of which is a problem we have today, and every rung is additive — so promoting later costs nothing, while building now would be abstraction ahead of need.
-The single obligation v2 carries is to shape the flag-backed policy so a future singleton/class inherits its schema field-for- field. **Ship neither the singleton nor the class.** Promote to the singleton at the flags→singleton trigger; introduce the class at the two-part class trigger.
+The single obligation v2 carries is to shape the flag-backed policy so a future singleton/class inherits its schema field-for- field.
+**Ship neither the singleton nor the class.** Promote to the singleton at the flags→singleton trigger; introduce the class at the two-part class trigger.
 
 ## H.15. Other breaking changes worth batching
 
@@ -904,8 +923,10 @@ A few small changes are only *possible* at a major break, or are awkward to add 
   Every check moved out of the fail-closed validating webhook is one fewer thing whose outage blocks all admission — an availability and operability win, best taken during the schema rewrite.
 
 - **Credentials as a discriminated union — _shipped in `v2alpha1` (Q196/Q197)._** A flat `workloadIdentityRef` sibling is *mechanically* additive, but additive *into a permanently worse shape*: once `githubAppRef` is top-level under beta it can never move under a parent without a breaking change + storage migration.
-  Since `alpha → beta` is the last free break and workload identity is on-strategy (removes the App key from the cluster — the secure-by-default direction), the credential is nested under an explicit-discriminator `spec.credentials` parent **in `v2alpha1`** — a free reshape while alpha carries no stability contract, so the beta cut inherits the right shape and the conversion webhook (Q74) round-trips it as an identity for the credentials block. `spec.credentials` is a discriminated union keyed by `credentials.type` (`+unionDiscriminator`): `githubApp` (a name-only `LocalSecretReference`, the possession model) and `workloadIdentity` (the no-PEM delegation model, Q197).
-  The union's "exactly the named member is set" invariant is enforced by a per-member CEL `iff` rule that each new member extends — never an N-way "exactly one of" that grows with the union. **`workloadIdentity` (Q197) shipped as the second member**: an external signer signs the App JWT so the App private key never enters the cluster (MVP = HashiCorp Vault transit + Vault Kubernetes auth, behind a `githubapp.Signer` interface so cloud KMS providers add without another breaking change).
+  Since `alpha → beta` is the last free break and workload identity is on-strategy (removes the App key from the cluster — the secure-by-default direction), the credential is nested under an explicit-discriminator `spec.credentials` parent **in `v2alpha1`** — a free reshape while alpha carries no stability contract, so the beta cut inherits the right shape and the conversion webhook (Q74) round-trips it as an identity for the credentials block.
+  `spec.credentials` is a discriminated union keyed by `credentials.type` (`+unionDiscriminator`): `githubApp` (a name-only `LocalSecretReference`, the possession model) and `workloadIdentity` (the no-PEM delegation model, Q197).
+  The union's "exactly the named member is set" invariant is enforced by a per-member CEL `iff` rule that each new member extends — never an N-way "exactly one of" that grows with the union.
+  **`workloadIdentity` (Q197) shipped as the second member**: an external signer signs the App JWT so the App private key never enters the cluster (MVP = HashiCorp Vault transit + Vault Kubernetes auth, behind a `githubapp.Signer` interface so cloud KMS providers add without another breaking change).
   Adding it validated the shape against a real second consumer, the whole point of fixing the shape before the freeze.
   See [05-security.md §5.7](05-security.md#57-workload-identity-the-no-pem-delegation-model) for the trust model.
   Plan + schema sketch: [v2beta1.md](../plan/v2beta1.md).

@@ -232,7 +232,8 @@ Swapping in `deploy/dogfood-e2e/overlays/kata/`'s worker adds one 100Gi ephemera
 | `standard-rwo.storageclass.storage.k8s.io/persistentvolumeclaims` | 12 |
 | `standard-rwo.storageclass.storage.k8s.io/requests.storage` | `1200Gi` |
 
-Set only the keys you intend to constrain — but whichever you set, size it for all 12. `WorkerQuotaPressure` trips on the tightest of them.
+Set only the keys you intend to constrain — but whichever you set, size it for all 12.
+`WorkerQuotaPressure` trips on the tightest of them.
 
 **`limits.cpu` is deliberately absent** from the quota below: neither worker container declares a CPU limit, so constraining it would reject every worker pod.
 

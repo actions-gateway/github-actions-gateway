@@ -138,9 +138,11 @@ Differences and quirks an ARC operator should know:
   These rules are inert unless your Container Network Interface (CNI) plugin enforces egress NetworkPolicy — Calico or Cilium do; kind's default kindnet does **not**.
   If you ran ARC on a cluster whose CNI does not enforce egress, **isolation is silently void** until you switch CNI.
   Validate with the probes in [network-architecture § How to Validate Network Isolation](../design/network-architecture.md#how-to-validate-network-isolation).
-- **The GitHub IP allow-list is maintained for you.** The GMC refreshes the GitHub CIDR set the proxy permits, so the egress allow-list tracks GitHub's published ranges without operator action. `egressPolicyMode: FQDN` allow-lists GitHub by hostname instead, where your CNI supports it.
+- **The GitHub IP allow-list is maintained for you.** The GMC refreshes the GitHub CIDR set the proxy permits, so the egress allow-list tracks GitHub's published ranges without operator action.
+  `egressPolicyMode: FQDN` allow-lists GitHub by hostname instead, where your CNI supports it.
 - **Internal destinations need `noProxyCIDRs`.** Anything your jobs reach *inside* the cluster or your network (artifact stores, internal registries) must be excluded from the proxy via `EgressProxy.spec.noProxyCIDRs` (CIDRs, bare IPs, or `NO_PROXY` domain suffixes).
-  Cluster-internal defaults are appended automatically on every distribution — `svc.cluster.local`, `kubernetes.default.svc`, `localhost`, `127.0.0.1`, and the cluster's API server ClusterIP — so neither the API server nor the service CIDR belongs in this field. **Admission rejects any entry that would route GitHub traffic around the proxy** (a host matching `githubURL` or `github.com` / `githubusercontent.com` / `ghcr.io`) — that would break egress-IP attribution.
+  Cluster-internal defaults are appended automatically on every distribution — `svc.cluster.local`, `kubernetes.default.svc`, `localhost`, `127.0.0.1`, and the cluster's API server ClusterIP — so neither the API server nor the service CIDR belongs in this field.
+  **Admission rejects any entry that would route GitHub traffic around the proxy** (a host matching `githubURL` or `github.com` / `githubusercontent.com` / `ghcr.io`) — that would break egress-IP attribution.
 - **The AGC↔proxy hop is HTTPS with a pinned cert.** The GMC issues a per-tenant self-signed cert and pins it into the AGC trust store, so the proxy hop is not eavesdroppable by other tenants on the cluster.
 
 ---
@@ -176,7 +178,8 @@ When a set should never be starved by cheaper runners, use `priorityTiers` to re
 
 ARC's `containerMode: dind` becomes two platform-owned grants in GAG v2, neither tenant-settable:
 
-1. **A privileged namespace.** The Pod Security level is a **namespace label** in v2 (`actions-gateway.com/security-profile`), shared by every gateway in the namespace. `privileged` additionally requires the namespace to carry `actions-gateway.com/privileged-profile: allowed`, applied by an administrator, or admission rejects it.
+1. **A privileged namespace.** The Pod Security level is a **namespace label** in v2 (`actions-gateway.com/security-profile`), shared by every gateway in the namespace.
+   `privileged` additionally requires the namespace to carry `actions-gateway.com/privileged-profile: allowed`, applied by an administrator, or admission rejects it.
 2. **A privileged template.** A namespaced `RunnerTemplate` may **not** declare privileged containers — a tenant must not self-author a privileged worker shape.
    Privileged DinD/sysbox/Kata shapes are published by a platform admin as a cluster-scoped `ClusterRunnerTemplate`, which a `RunnerSet` references with `templateRef: { kind: ClusterRunnerTemplate, name: … }`.
 
@@ -195,7 +198,8 @@ Worked example: an ARC scale set named **`gpu-large`** in namespace **`team-a`**
 ### 0. Confirm prerequisites
 
 The GMC is installed **with the v2 CRD chart** ([Install](install.md#optional-the-v2-api-crds)), the cluster is **Kubernetes ≥ 1.31**, and its CNI enforces egress NetworkPolicy ([Egress isolation](#egress-isolation-the-big-difference)).
-Confirm the namespace is marked a managed tenant, carries its security-profile label, and has a platform-owned `ResourceQuota` — see the [tenant-onboarding Pre-Conditions](tenant-onboarding.md#pre-conditions). **Leave the ARC scale set running** throughout.
+Confirm the namespace is marked a managed tenant, carries its security-profile label, and has a platform-owned `ResourceQuota` — see the [tenant-onboarding Pre-Conditions](tenant-onboarding.md#pre-conditions).
+**Leave the ARC scale set running** throughout.
 
 ### 1. Create the GitHub App Secret
 

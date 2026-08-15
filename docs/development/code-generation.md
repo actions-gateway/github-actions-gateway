@@ -26,7 +26,9 @@ Reach for `make manifests` only when a change alters no Go type: adding or remov
 Both cost about two seconds.
 Because `make generate` covers every module, it also handles the cross-module case below — an AGC type edit reaches the GMC manifest without you having to know it embeds one.
 
-This has to stay true. `cmd/gmc`'s `generate` was once DeepCopy-only, so the root loop over the three modules' `generate` skipped GMC's manifests — the one module whose CRD embeds another module's types, and so the exact miss behind [Q440](../STATUS.md) ([Q458](../STATUS.md)). **A module's `generate` must keep depending on its `manifests`**; if one stops, the root target silently under-covers again and only `make codegen-check` notices.
+This has to stay true.
+`cmd/gmc`'s `generate` was once DeepCopy-only, so the root loop over the three modules' `generate` skipped GMC's manifests — the one module whose CRD embeds another module's types, and so the exact miss behind [Q440](../STATUS.md) ([Q458](../STATUS.md)).
+**A module's `generate` must keep depending on its `manifests`**; if one stops, the root target silently under-covers again and only `make codegen-check` notices.
 
 ## Per-module targets
 
@@ -54,20 +56,24 @@ make -C cmd/agc generate   # regenerates zz_generated.deepcopy.go + CRD YAML + R
 make -C cmd/gmc generate   # regenerates zz_generated.deepcopy.go + CRD YAML + RBAC + webhook manifests
 ```
 
-Each module also exposes the two halves separately — `manifests` (CRD/RBAC/webhook YAML) and `deepcopy` (`zz_generated.deepcopy.go`) — but `generate` runs both, and running both is what you want after a type change. **The manifests half is the one that is easy to skip and expensive to skip**: leaving the CRD YAML out of sync with the Go types makes the apiserver silently prune unknown fields, so tests that set those fields see the zero value instead.
+Each module also exposes the two halves separately — `manifests` (CRD/RBAC/webhook YAML) and `deepcopy` (`zz_generated.deepcopy.go`) — but `generate` runs both, and running both is what you want after a type change.
+**The manifests half is the one that is easy to skip and expensive to skip**: leaving the CRD YAML out of sync with the Go types makes the apiserver silently prune unknown fields, so tests that set those fields see the zero value instead.
 
 ## Codegen drift is gated by `make check`
 
 `make codegen-check` ([`scripts/go/check-codegen-drift.sh`](../../scripts/go/check-codegen-drift.sh)) regenerates every module's CRD/RBAC/webhook manifests **and** its `zz_generated.deepcopy.go` into a scratch tree and fails if any committed copy differs.
 It runs in `make check` and in CI's `lint` job, so a forgotten `make generate` is caught on the PR that caused it rather than by the next contributor.
 
-**The cross-module case is why it exists.** The GMC's `ActionsGateway` CRD embeds AGC types (`RunnerGroupSpec`), so a doc comment or field edited in `cmd/agc/api/` changes the *GMC* manifest — and only `make -C cmd/gmc manifests` propagates it. `make -C cmd/agc manifests` does not.
+**The cross-module case is why it exists.** The GMC's `ActionsGateway` CRD embeds AGC types (`RunnerGroupSpec`), so a doc comment or field edited in `cmd/agc/api/` changes the *GMC* manifest — and only `make -C cmd/gmc manifests` propagates it.
+`make -C cmd/agc manifests` does not.
 PR #793 edited a `quotaRetryDelay` doc comment in `RunnerGroupSpec` and the GMC CRD stayed stale, handing every later GMC contributor that hunk as unrelated diff noise ([Q440](../STATUS.md)).
 
-The root `make generate` (or `make manifests`) is the way not to have to reason about this: it covers all three modules, so an AGC type edit reaches the GMC manifest without you knowing it had to. **If you use the per-module targets instead, regenerate every module that embeds the type you changed, not just the one you edited.**
+The root `make generate` (or `make manifests`) is the way not to have to reason about this: it covers all three modules, so an AGC type edit reaches the GMC manifest without you knowing it had to.
+**If you use the per-module targets instead, regenerate every module that embeds the type you changed, not just the one you edited.**
 
 **The DeepCopy half is gated for a different reason.** Missing DeepCopy code was assumed to fail the build, and for a *changed* type it does.
-For an *added* one it does not: `ClusterCapacity` ([Q470](../STATUS.md)) shipped with no `DeepCopy`/`DeepCopyInto` and an `ActionsGatewaySpec.DeepCopyInto` that never copied the field, so `ActionsGateway.DeepCopy()` handed back an object aliasing the caller's pointer into the shared informer cache — compiling cleanly and passing CI ([Q477](../STATUS.md)). **`make manifests` alone no longer satisfies the gate after a type change; `make generate` does.**
+For an *added* one it does not: `ClusterCapacity` ([Q470](../STATUS.md)) shipped with no `DeepCopy`/`DeepCopyInto` and an `ActionsGatewaySpec.DeepCopyInto` that never copied the field, so `ActionsGateway.DeepCopy()` handed back an object aliasing the caller's pointer into the shared informer cache — compiling cleanly and passing CI ([Q477](../STATUS.md)).
+**`make manifests` alone no longer satisfies the gate after a type change; `make generate` does.**
 
 The gate also fails if a module gains a `manifests:` or `deepcopy:` target without being registered in the script's `MODULES` table or `DEEPCOPY_MODULES` list, or if a registration stops matching the module's own recipe — so it cannot quietly under-cover.
 Full assertion list: [testing.md § The codegen drift gate](testing.md#the-codegen-drift-gate).
@@ -89,16 +95,21 @@ make api-reference-check  # the drift gate, run by `make check` and CI's lint jo
 
 `crd-ref-docs` is pinned in the vendored `tools/` module like controller-gen, so `make tools` builds it into `.build/` and no host install is involved.
 
-**Scope is `api/v2beta1` only** — the served, storage, non-deprecated version. `v1alpha1` and `v2alpha1` are removed at v2.0.0; a deprecated version documented field by field beside the current one reads as a supported choice, and `v2alpha1` is `v2beta1`'s shape anyway apart from the two RunnerSet fields the conversion webhook round-trips.
-Readers on either get `kubectl explain` and the [deprecation](../operations/v1alpha1-deprecation.md) and [migration](../operations/migration-v1-to-v2.md) pages instead — spelled out on the [reference overview](../reference/README.md). **Adding a version to the page is a deliberate decision, not a mechanical one**; adding a *kind* to `v2beta1` needs nothing beyond `make api-reference`, but do add it to the generator's completeness assertion (below).
+**Scope is `api/v2beta1` only** — the served, storage, non-deprecated version.
+`v1alpha1` and `v2alpha1` are removed at v2.0.0; a deprecated version documented field by field beside the current one reads as a supported choice, and `v2alpha1` is `v2beta1`'s shape anyway apart from the two RunnerSet fields the conversion webhook round-trips.
+Readers on either get `kubectl explain` and the [deprecation](../operations/v1alpha1-deprecation.md) and [migration](../operations/migration-v1-to-v2.md) pages instead — spelled out on the [reference overview](../reference/README.md).
+**Adding a version to the page is a deliberate decision, not a mechanical one**; adding a *kind* to `v2beta1` needs nothing beyond `make api-reference`, but do add it to the generator's completeness assertion (below).
 
 Three inputs shape the output, all under [`api/hack/crd-ref-docs/`](../../api/hack/crd-ref-docs/):
 
-- **`config.yaml`** — the ignored types/fields, and `render.kubernetesVersion`, which pins the Kubernetes release the embedded core types (`PodTemplateSpec`, `Affinity`, `ObjectMeta`) link to on kubernetes.io. **Bump it alongside the `k8s.io/api` minor in `api/go.mod`** so the linked schema is the one the CRDs actually embed (`k8s.io/api` v0.36.x is Kubernetes 1.36).
+- **`config.yaml`** — the ignored types/fields, and `render.kubernetesVersion`, which pins the Kubernetes release the embedded core types (`PodTemplateSpec`, `Affinity`, `ObjectMeta`) link to on kubernetes.io.
+  **Bump it alongside the `k8s.io/api` minor in `api/go.mod`** so the linked schema is the one the CRDs actually embed (`k8s.io/api` v0.36.x is Kubernetes 1.36).
 - **`templates/*.tpl`** — a fork of the tool's built-in markdown set.
   A `--templates-dir` replaces the whole set, so all four are present even where only one changed.
   Three changes: the page preamble in `gv_list.tpl`; a regex in `gv_details.tpl`/`type.tpl` that renders godoc's `# Section` heading syntax as a bold lead (left alone those become `<h1>`s in the middle of the page and put package-internal asides in the site TOC beside the kinds); and the `field_doc` helper in `type_members.tpl` that every doc cell renders through.
-  The tool's `markdownRenderFieldDoc` turns *every* newline into `<br />`, so a description reached the table cell still wrapped at the Go source's ~80 columns and broke mid-sentence at a width the browser never chose; `field_doc` joins the soft wraps back into prose and keeps a break only for a blank line or a list item. **Doc comments are reflowed, so write them for godoc**: the site no longer inherits their wrap points. **Re-diff the fork against `tools/vendor/github.com/elastic/crd-ref-docs/templates/markdown/` when the pinned `crd-ref-docs` version moves.** A Dependabot bump that changes the rendering turns `api-reference-check` red on its own PR — `tools/**` is in the gate's CI path filter — and `make api-reference` is the remedy.
+  The tool's `markdownRenderFieldDoc` turns *every* newline into `<br />`, so a description reached the table cell still wrapped at the Go source's ~80 columns and broke mid-sentence at a width the browser never chose; `field_doc` joins the soft wraps back into prose and keeps a break only for a blank line or a list item.
+  **Doc comments are reflowed, so write them for godoc**: the site no longer inherits their wrap points.
+  **Re-diff the fork against `tools/vendor/github.com/elastic/crd-ref-docs/templates/markdown/` when the pinned `crd-ref-docs` version moves.** A Dependabot bump that changes the rendering turns `api-reference-check` red on its own PR — `tools/**` is in the gate's CI path filter — and `make api-reference` is the remedy.
 - **the kind list in [`gen-api-reference.sh`](../../scripts/docs/gen-api-reference.sh)** — the script fails unless every `v2beta1` kind has a section in the output.
   A tool that finds no API types exits 0 having rendered a stub, which would make `--check` pass on any tree and the writing mode quietly replace a good page.
 
@@ -120,7 +131,8 @@ After regenerating manifests, re-sync:
 make chart-crds   # scripts/manifest/sync-chart-crds.sh — regenerates the chart CRD templates from the sources
 ```
 
-`make chart-crds-check` (run by `make check`, `make manifest-validate`, and CI's `manifest-validate.yml`) fails if a chart copy drifted from its source, or if the **GMC-bundled** RunnerGroup CRD (`cmd/gmc/config/crd/bases/…runnergroups.yaml`, a bundled copy of the *imported* type) has drifted from the AGC-authoritative copy — a k8s.io/api skew that would otherwise silently prune fields on deploy ([Q73](../STATUS.md)). **`make -C cmd/gmc manifests` cannot refresh the bundled copy** — controller-gen walks only the GMC module's own packages (`paths="./..."`), and the `RunnerGroup` type lives in `cmd/agc/api/`.
+`make chart-crds-check` (run by `make check`, `make manifest-validate`, and CI's `manifest-validate.yml`) fails if a chart copy drifted from its source, or if the **GMC-bundled** RunnerGroup CRD (`cmd/gmc/config/crd/bases/…runnergroups.yaml`, a bundled copy of the *imported* type) has drifted from the AGC-authoritative copy — a k8s.io/api skew that would otherwise silently prune fields on deploy ([Q73](../STATUS.md)).
+**`make -C cmd/gmc manifests` cannot refresh the bundled copy** — controller-gen walks only the GMC module's own packages (`paths="./..."`), and the `RunnerGroup` type lives in `cmd/agc/api/`.
 The remedy after any RunnerGroup type change: regenerate the AGC copy (`make -C cmd/agc manifests`), `cp` it over the GMC-bundled path, then `make chart-crds`.
 For a k8s.io/api skew, align the module versions ([Q68](../STATUS.md)) first, then do the same.
 
@@ -155,7 +167,8 @@ Both AGC ClusterRoles the chart ships are hand-maintained, and both are gated by
 ### agc-tenant-role
 
 The `agc-tenant-role` ClusterRole — the permission set every AGC ServiceAccount runs as — is **not** generated from a `+kubebuilder:rbac` marker.
-It deliberately withholds permissions the AGC's own marker role (`cmd/agc/config/rbac/role.yaml`, ClusterRole `agc-role`) grants (e.g. `runnergroups` create/delete, `secrets` patch) for least privilege, so generating it from the markers would be a privilege escalation.
+It deliberately withholds permissions the AGC's own marker role (`cmd/agc/config/rbac/role.yaml`, ClusterRole `agc-role`) grants (e.g.
+`runnergroups` create/delete, `secrets` patch) for least privilege, so generating it from the markers would be a privilege escalation.
 Its single source is the hand-maintained fragment `charts/actions-gateway/files/agc-tenant-role-rules.yaml`: the chart embeds it via `.Files.Get` in `templates/agc-tenant-role.yaml`, and the GMC integration suite (`installAGCTenantClusterRole`) reads the same file — so the shipped role and the RBAC-scope test can never drift.
 Edit the fragment, not either consumer ([Q143](../STATUS.md)).
 
@@ -199,7 +212,9 @@ Each is a claim about how gofmt, controller-gen, or the apiserver behaves, so a 
   Never use empty-string literals in XValidation: write `size(x) == 0`, not `x == ''`.
 - **`selectableFields` on one served version only.** On a multi-version CRD, declaring `+kubebuilder:selectablefield` markers on more than one version makes controller-gen hoist them in a way the apiserver rejects at CRD apply time.
   Declare them on a single version.
-- **The v2 condition vocabulary lives in `api/apiconditions`, not in the version packages.** Condition types and reasons are runtime `.status.conditions[]` values, not schema, so they carry no version — they are declared once, with their doc comments, in [`api/apiconditions`](../../api/apiconditions/conditions.go). `api/v2alpha1/conditions.go` and `api/v2beta1/conditions.go` are thin re-export blocks that keep every existing `v2alpha1.ConditionReady` call site compiling. **Adding a condition or reason: declare it in `apiconditions`, then add the one-line re-export to both version files.** They must stay byte-identical except the `package` line — `make v2-api-sync-check` fails on a one-sided add, naming the divergent lines.
+- **The v2 condition vocabulary lives in `api/apiconditions`, not in the version packages.** Condition types and reasons are runtime `.status.conditions[]` values, not schema, so they carry no version — they are declared once, with their doc comments, in [`api/apiconditions`](../../api/apiconditions/conditions.go).
+  `api/v2alpha1/conditions.go` and `api/v2beta1/conditions.go` are thin re-export blocks that keep every existing `v2alpha1.ConditionReady` call site compiling.
+  **Adding a condition or reason: declare it in `apiconditions`, then add the one-line re-export to both version files.** They must stay byte-identical except the `package` line — `make v2-api-sync-check` fails on a one-sided add, naming the divergent lines.
   A new condition needs **no** `make manifests`/`make generate`.
   The same split applies to the worker-pod sidecar contract ([`api/apisidecar`](../../api/apisidecar/sidecar.go)): the heuristic and the annotation key live there, and each version keeps a `RunnerTemplateSpec`-typed wrapper.
 - **Everything else the two v2 packages share must stay identical.** Kubernetes requires the *versioned types* to be duplicated per version, but the shared spec fragments beside them (`shared_types.go`, `scheduling_types.go`, the near-identical `actionsgateway_types.go`/`egressproxy_types.go`/`runnertemplate_types.go`) are identical by contract, and a one-sided edit breaks the storage/hub conversion silently.
@@ -209,6 +224,7 @@ Each is a claim about how gofmt, controller-gen, or the apiserver behaves, so a 
 ## No per-file license headers
 
 First-party Go files carry **no** per-file Apache license header — the repo-root `LICENSE` (Apache-2.0) is the canonical, sufficient grant, so the boilerplate that Kubebuilder scaffolds is redundant.
-The codegen boilerplate sources (`api/hack/boilerplate.go.txt`, `cmd/agc/hack/boilerplate.go.txt`, `cmd/gmc/hack/boilerplate.go.txt`) are intentionally **empty**, so `make generate`/`make manifests` emit header-free files — keep them empty. `make check` runs `scripts/go/check-no-license-headers.sh`, which fails if any first-party `.go` file reintroduces the header.
+The codegen boilerplate sources (`api/hack/boilerplate.go.txt`, `cmd/agc/hack/boilerplate.go.txt`, `cmd/gmc/hack/boilerplate.go.txt`) are intentionally **empty**, so `make generate`/`make manifests` emit header-free files — keep them empty.
+`make check` runs `scripts/go/check-no-license-headers.sh`, which fails if any first-party `.go` file reintroduces the header.
 Vendored trees (`vendor/`, `tools/vendor/`) keep their headers — those third-party notices are legally required and are excluded from the check.
 This is unrelated to the `license-notices` / `THIRD-PARTY-NOTICES` tooling, which aggregates *dependency* notices for image distribution.

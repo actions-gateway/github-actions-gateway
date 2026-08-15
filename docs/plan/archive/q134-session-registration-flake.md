@@ -8,7 +8,8 @@ One spec per run times out (180–240s) on `fakegithubActiveSessionsForOwner(...
 - **Not a regression from `5e490d9` (Q134's own "fix", PR #226).** The identical failure (`worker_securitycontext_test.go:96`, "no session registered", 180s) occurred on `main` at `5bab2d50e` (run 27505615811), *before* the "last green" `ac54a78`.
   The apparent `ac54a78`-green / `5e490d9`-red bisect boundary is an artifact of an intermittent flake landing on a green run by luck.
   It predates the commit.
-- **Not the gate added by `5e490d9`.** `WaitForRunnerGroupReconciled` waits for `RunnerGroup.status.observedGeneration`, which the reconciler sets (`runnergroup_controller.go:327`) *synchronously, right after `mux.Start()` returns*. `mux.Start()` only *spawns* the listener goroutine — it does not wait for `createSession` to succeed.
+- **Not the gate added by `5e490d9`.** `WaitForRunnerGroupReconciled` waits for `RunnerGroup.status.observedGeneration`, which the reconciler sets (`runnergroup_controller.go:327`) *synchronously, right after `mux.Start()` returns*.
+  `mux.Start()` only *spawns* the listener goroutine — it does not wait for `createSession` to succeed.
   So `observedGeneration` is set ~9s after the tenant is applied (CI timeline) while the session is still not registered; the gate passes in <1s and the 180s session wait then fails.
   The gate's premise ("observedGeneration ⇒ a broker session is imminent") is incomplete.
   It is harmless but did not address the flake.
@@ -17,7 +18,8 @@ One spec per run times out (180–240s) on `fakegithubActiveSessionsForOwner(...
 
 ## Root cause
 
-The listener's session-establishment broker calls have **no per-call deadline**. `createSession` (`goroutine.go`) and the OAuth token exchange (`refreshBrokerToken` → `githubapp.FetchRunnerOAuthToken`) run on the goroutine's context, which derives from the **long-lived manager context** (cancelled only at AGC shutdown).
+The listener's session-establishment broker calls have **no per-call deadline**.
+`createSession` (`goroutine.go`) and the OAuth token exchange (`refreshBrokerToken` → `githubapp.FetchRunnerOAuthToken`) run on the goroutine's context, which derives from the **long-lived manager context** (cancelled only at AGC shutdown).
 The per-agent `broker.Client` is built with `HTTPClient: nil` (`BrokerConfig.HTTPClient` is never set in `cmd/agc/main.go`), so it falls back to `http.DefaultClient` — which has no overall/read timeout.
 
 Consequently, if fakegithub *accepts the TCP connection but is slow to respond* — plausible for a single-replica service under 6-proc parallel CI load — the goroutine blocks **inside a single `createSession`/token call indefinitely** rather than failing and retrying.

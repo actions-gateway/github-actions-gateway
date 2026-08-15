@@ -15,7 +15,8 @@ Two findings from that experiment decide the design here:
    Only kube-scheduler writes it — not a human `kubectl delete pod`, not a drain, not a job failing on its own.
 
 That second point is what let this slice close first.
-The *drain / plain delete* slice must key on `deletionTimestamp`, which a human cancel might also set, so it could not be switched on without measuring whether a cancel is distinguishable — the risk being a re-run of a run an operator deliberately stopped. `PreemptionByScheduler` carries no such ambiguity and needed no such measurement, so this plan deliberately covers **only** the preemption cause and leaves the rest of the graceful-removal path exactly as it is.
+The *drain / plain delete* slice must key on `deletionTimestamp`, which a human cancel might also set, so it could not be switched on without measuring whether a cancel is distinguishable — the risk being a re-run of a run an operator deliberately stopped.
+`PreemptionByScheduler` carries no such ambiguity and needed no such measurement, so this plan deliberately covers **only** the preemption cause and leaves the rest of the graceful-removal path exactly as it is.
 
 (That measurement landed the same day, while this work was in flight: a cancelled run's worker publishes no deletion mark, so the drain slice is decided as well; Q502 carried its implementation, since shipped ([q459-drained-worker-recovery.md](q459-drained-worker-recovery.md)).
 It did not change anything here — the two slices key on different signals and ship independently — but it does mean the "stays open" framing this plan was written against is now only true of the code, not of the decision.)

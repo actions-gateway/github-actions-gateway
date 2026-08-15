@@ -109,5 +109,6 @@ Use the tag names already in use verbatim: an unlisted spelling silently creates
 **Every tag is a role on this page, with one exception.** `All` means every persona, and a page carrying it stays visible under any chip.
 This page and the [glossary](../design/08-glossary.md) use it, which is why the audience line above names no roles: a page about who the roles are is not addressed to one of them.
 
-Otherwise, tag with a role name. **Do not reintroduce a job title as a tag.** A tag exists to route a reader to the right page, so it has to answer "is this for me?", and a title that both sides of the boundary use cannot.
+Otherwise, tag with a role name.
+**Do not reintroduce a job title as a tag.** A tag exists to route a reader to the right page, so it has to answer "is this for me?", and a title that both sides of the boundary use cannot.
 If a new tag seems necessary, the question to answer first is what scope, domain, and responsibility it names.

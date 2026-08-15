@@ -121,7 +121,8 @@ The remedy for a worker that keeps running after you cancel its run is to delete
 That arm now reads the run's conclusion before it calls, on both acquisition tiers, and stands down when GitHub concluded the run `cancelled` (Q811).
 
 A withheld re-run is visible rather than silent: `actions_gateway_eviction_rerun_withheld_total{reason="run_cancelled"}` is new here, and a **Normal** `EvictionRerunWithheld` Event names the run.
-The disruption's retry slot is still spent, since it is reserved when the disruption is detected, minutes before GitHub has a conclusion to read, so `eviction_retries_total` keeps counting these; read the two together. `actions_gateway_eviction_rerun_failures_total` also gains `reason="conclusion_unknown"`, for a recovery whose re-run window closed with the run's conclusion unreadable: a conclusion the AGC cannot read is not assumed to be uncancelled, so no re-run is fired and the run needs a manual one.
+The disruption's retry slot is still spent, since it is reserved when the disruption is detected, minutes before GitHub has a conclusion to read, so `eviction_retries_total` keeps counting these; read the two together.
+`actions_gateway_eviction_rerun_failures_total` also gains `reason="conclusion_unknown"`, for a recovery whose re-run window closed with the run's conclusion unreadable: a conclusion the AGC cannot read is not assumed to be uncancelled, so no re-run is fired and the run needs a manual one.
 
 No action is required at upgrade time.
 What changes for an operator is that deleting to reclaim capacity is now safe on a cancelled run, but only once GitHub shows it `completed`/`cancelled`, which takes up to GitHub's ~5-minute cancellation grace; delete before that and the job is re-queued as before.
@@ -159,7 +160,8 @@ The warning is advisory client-side output; it does not fail an `apply`, and con
 The AGC and GMC receive the same warning through their own Kubernetes clients but log it once per unique message per process (deduplicated), so a tenant reconciling under churn does not flood its controller log.
 
 **What to do about it.** Run [`gag-migrate`](migration-v1-to-v2.md) at your convenience — it is a one-shot fan-out of one v1 object into several v2 objects, and it preserves how jobs are acquired.
-Onboard new tenants on `v2beta1` instead ([tenant onboarding](tenant-onboarding.md)). `v1alpha1` is one of three things `v2.0.0` removes; the standing notice for all three, with a pre-upgrade checklist, is the [deprecation and removal notice](v1alpha1-deprecation.md).
+Onboard new tenants on `v2beta1` instead ([tenant onboarding](tenant-onboarding.md)).
+`v1alpha1` is one of three things `v2.0.0` removes; the standing notice for all three, with a pre-upgrade checklist, is the [deprecation and removal notice](v1alpha1-deprecation.md).
 
 ### Non-breaking: an `EgressProxy` pool's pods drop the `app: actions-gateway-proxy` label (its pool is recreated once)
 
@@ -217,7 +219,8 @@ One of those copies tested `github.com` as a substring of the whole URL, so a GH
 
 - **FQDN egress modes** now carry every referrer's GHES host into the CNI policy and the proxy CONNECT allowlist automatically.
   Nothing to do.
-- **CIDR mode (the default)** allows only the ranges `api.github.com/meta` publishes, which never contain a customer appliance. **You must supply the appliance's ranges in the `EgressProxy`'s `spec.destinationCIDRs`** — and, because that field is gated by the platform `--allowed-egress-cidrs` allowlist, a platform admin must allowlist them first.
+- **CIDR mode (the default)** allows only the ranges `api.github.com/meta` publishes, which never contain a customer appliance.
+  **You must supply the appliance's ranges in the `EgressProxy`'s `spec.destinationCIDRs`** — and, because that field is gated by the platform `--allowed-egress-cidrs` allowlist, a platform admin must allowlist them first.
   A pool in this state now reports `GitHubEgressIncomplete=True` with reason `ApplianceRangesRequired`, naming the unreachable host, instead of failing as an unexplained connect timeout.
 
 **Post-upgrade check** for a GHES tenant:
@@ -259,7 +262,8 @@ Runbook: [troubleshooting.md § a GHES appliance's certificate is not trusted](t
 
 **Egress remains a separate obligation.** Trusting the CA does not put the appliance's address space in the NetworkPolicy; see the CIDR-mode note above.
 
-**Rolling back** restores the defect for these tenants. `v1alpha1` has no equivalent field and never will — it is frozen and removed at `v2.0.0`.
+**Rolling back** restores the defect for these tenants.
+`v1alpha1` has no equivalent field and never will — it is frozen and removed at `v2.0.0`.
 
 ### Scale-set name uniqueness is now enforced across the whole GitHub scope, not per namespace
 
@@ -360,7 +364,8 @@ What you will observe after upgrading:
 ### Non-breaking: eviction auto-retry now honours `GITHUB_API_BASE_URL` (it never did on GHES)
 
 **Who is affected:** any deployment that sets `GITHUB_API_BASE_URL`.
-Deployments against `github.com` (the default) are unaffected: the endpoint they were reaching is the one they were meant to reach. **No action is required, and nothing you configured was wrong.**
+Deployments against `github.com` (the default) are unaffected: the endpoint they were reaching is the one they were meant to reach.
+**No action is required, and nothing you configured was wrong.**
 
 > **Correction.** This note originally said that meant "every GitHub Enterprise Server install".
 > It did not: at the time, no GMC-provisioned AGC could set the variable at all, so this fix reached only hand-rolled deployments until [GHES gateways now reach their own appliance](#non-breaking-github-enterprise-server-gateways-now-reach-their-own-appliance-they-never-did) made the GMC derive it.
@@ -425,11 +430,13 @@ Nothing else is affected; no configuration restores the recovery on an older ima
 ### Non-breaking: classic-tier eviction auto-retry now fires (it never did against real GitHub)
 
 **Who is affected:** any tenant on the classic acquisition tier — a `RunnerGroup`, or a `RunnerSet` with `spec.acquisitionProtocol: Classic`.
-Scale-set tenants are unaffected; that tier takes its run identity from the assignment message and has always worked. **No action is required, and nothing you configured was wrong.**
+Scale-set tenants are unaffected; that tier takes its run identity from the assignment message and has always worked.
+**No action is required, and nothing you configured was wrong.**
 
 Before this version the AGC looked for a classic job's workflow run in the `system.github.run_id` and `system.github.repository` job variables.
 A real `acquirejob` response carries neither: the run identity lives in the payload's serialised `github` context.
-The run therefore resolved to `0`, and every eviction of a classic worker took `handleEviction`'s early return — logging `pod evicted but run_id unknown; skipping auto-retry` and calling nothing. `maxEvictionRetries` was configurable but unreachable.
+The run therefore resolved to `0`, and every eviction of a classic worker took `handleEviction`'s early return — logging `pod evicted but run_id unknown; skipping auto-retry` and calling nothing.
+`maxEvictionRetries` was configurable but unreachable.
 The same lookup fed the worker-pod annotations, so real classic worker pods also carried no `actions-gateway.com/run-id`, `/repository`, or `/workflow`.
 
 After the upgrade, on the classic tier:
@@ -451,7 +458,8 @@ There is no configuration that restores the behaviour on an older image.
 **Who is affected:** only a `RunnerSet` that set `spec.capacityGate.mode` to `SchedulerVerdict`, `AutoscalerVerdict`, or `On`.
 None of those values ever appeared in a tagged release — they existed only on `main`, and the field defaults to `Off` — so an install tracking releases has nothing to do here.
 
-`Observe` is the name the single gating value settled on. `On` said only *that* the gate was enabled; `Observe` says *how* it decides — from evidence an already-stuck worker pod produced, rather than by asking.
+`Observe` is the name the single gating value settled on.
+`On` said only *that* the gate was enabled; `Observe` says *how* it decides — from evidence an already-stuck worker pod produced, rather than by asking.
 That distinction is invisible with one gating value and load-bearing once the reserved `Probe`/`Provision` values ([Q407](https://github.com/actions-gateway/github-actions-gateway/blob/main/docs/design/appendix-g-future-enhancements.md#g16-provisioningrequest-pre-acquire-capacity-probe-check-capacity)) join the same axis by soliciting an answer instead.
 Renaming now cost nothing; renaming after the value shipped would have needed a conversion shim and a deprecation window.
 
@@ -496,7 +504,8 @@ Object names may be 253 characters but **label values stop at 63**, so a derived
 A 15-character gateway name with a 40-character runner label was enough to reach it.
 The derivation is now bounded to 63 characters, with a hash replacing whatever is cut (Q473).
 
-`v1alpha1` only. `v2alpha1`/`v2beta1` cap CR names at 52 characters for exactly this reason, so v2 tenants are unaffected.
+`v1alpha1` only.
+`v2alpha1`/`v2beta1` cap CR names at 52 characters for exactly this reason, so v2 tenants are unaffected.
 
 **Almost every install sees no change at all**: a derived name that already fit is returned byte for byte as before, so existing `RunnerGroup`s keep their names.
 Only a gateway whose derived name exceeded 63 characters is affected — on the first reconcile after the upgrade the GMC creates the correctly-named `RunnerGroup` and prunes the old one.
@@ -548,12 +557,15 @@ Warning: actions-gateway.com/v2alpha1 RunnerSet is deprecated; use actions-gatew
 The warning is advisory client-side output; it does not fail an `apply`, and controllers or CI that ignore warnings are unaffected.
 The AGC and GMC receive the same warning through their Kubernetes clients but log it once per unique message per process (deduplicated), so a controller reconciling `v2alpha1` objects under churn does not flood its own log.
 
-**What to do about it.** Onboard new tenants on `v2beta1` (see [tenant onboarding](tenant-onboarding.md)), and move existing `v2alpha1` objects to `v2beta1` at your convenience by re-applying the same object with the `apiVersion` changed, since the two versions convert both ways. `v2alpha1` remains the [`gag-migrate`](migration-v1-to-v2.md) on-ramp for tenants coming off `v1alpha1`, so a freshly migrated tenant emits these warnings until it is moved onto `v2beta1`.
-Note that `v2beta1` is ScaleSet-only: a `RunnerSet` still on `acquisitionProtocol: Classic` must adopt the runner-scale-set protocol as part of that move (see ["`RunnerSet` Rejected: `acquisitionProtocol`"](troubleshooting.md#runnerset-rejected-acquisitionprotocol-v2alpha1-early-adopter)). `v2alpha1` is one of three things `v2.0.0` removes; the standing notice for all three, with a pre-upgrade checklist, is the [deprecation and removal notice](v1alpha1-deprecation.md).
+**What to do about it.** Onboard new tenants on `v2beta1` (see [tenant onboarding](tenant-onboarding.md)), and move existing `v2alpha1` objects to `v2beta1` at your convenience by re-applying the same object with the `apiVersion` changed, since the two versions convert both ways.
+`v2alpha1` remains the [`gag-migrate`](migration-v1-to-v2.md) on-ramp for tenants coming off `v1alpha1`, so a freshly migrated tenant emits these warnings until it is moved onto `v2beta1`.
+Note that `v2beta1` is ScaleSet-only: a `RunnerSet` still on `acquisitionProtocol: Classic` must adopt the runner-scale-set protocol as part of that move (see ["`RunnerSet` Rejected: `acquisitionProtocol`"](troubleshooting.md#runnerset-rejected-acquisitionprotocol-v2alpha1-early-adopter)).
+`v2alpha1` is one of three things `v2.0.0` removes; the standing notice for all three, with a pre-upgrade checklist, is the [deprecation and removal notice](v1alpha1-deprecation.md).
 
 ### Non-breaking: `v2alpha1` CRDs ship in a separate, opt-in chart
 
-The v2 (`actions-gateway.com`) API is introduced as a decomposed set of five CRDs — `actionsgateways`, `egressproxies`, `runnersets`, `runnertemplates`, and the cluster-scoped `clusterrunnertemplates`. **The main `actions-gateway` chart upgrade is unchanged: it does not install these.** They ship in a separate, opt-in chart, `actions-gateway-crds-v2`, because the `RunnerTemplate`/`ClusterRunnerTemplate` CRDs each embed a full pod template (~1.1 MB apiece, served at `v2beta1` + `v2alpha1`) and would otherwise push the main chart's Helm release Secret past its hard 1 MiB limit.
+The v2 (`actions-gateway.com`) API is introduced as a decomposed set of five CRDs — `actionsgateways`, `egressproxies`, `runnersets`, `runnertemplates`, and the cluster-scoped `clusterrunnertemplates`.
+**The main `actions-gateway` chart upgrade is unchanged: it does not install these.** They ship in a separate, opt-in chart, `actions-gateway-crds-v2`, because the `RunnerTemplate`/`ClusterRunnerTemplate` CRDs each embed a full pod template (~1.1 MB apiece, served at `v2beta1` + `v2alpha1`) and would otherwise push the main chart's Helm release Secret past its hard 1 MiB limit.
 
 **No action is required for existing tenants.** Install the v2 CRDs only when you want the v2 API available.
 They are **applied server-side, not `helm install`ed** — the chart is over the 1 MiB release-Secret limit — and the same command upgrades them (re-apply with the newer tag to carry CRD field changes).
@@ -644,7 +656,8 @@ Migration steps:
 ### Tenant namespaces now require the `actions-gateway.github.com/tenant` marker label
 
 The GMC's cluster-wide write grants are now gated by two ValidatingAdmissionPolicies (both shipped by the Helm chart, gated on `admissionPolicy.enabled`): `namespace-psa-guard` gates `namespaces:patch`, and `gmc-tenant-resource-guard` gates create/update/delete of all tenant provisioning resources (Deployments, Services, ServiceAccounts, RoleBindings, Roles, NetworkPolicies, HPAs, PDBs, RunnerGroups, and Secret create/update).
-Both deny the GMC unless the target namespace already carries `actions-gateway.github.com/tenant: "true"`. **Existing tenant namespaces created before this change do not have the label**, so after upgrade the GMC cannot stamp their Pod Security Admission labels *or provision any resources in them*, and each affected `ActionsGateway` will emit a `NamespaceMarkerMissing` warning event.
+Both deny the GMC unless the target namespace already carries `actions-gateway.github.com/tenant: "true"`.
+**Existing tenant namespaces created before this change do not have the label**, so after upgrade the GMC cannot stamp their Pod Security Admission labels *or provision any resources in them*, and each affected `ActionsGateway` will emit a `NamespaceMarkerMissing` warning event.
 
 Before (or immediately after) upgrading, label every existing tenant namespace:
 
@@ -674,7 +687,8 @@ For a Docker-in-Docker (DinD) or Kata tenant the reported footprint goes **up**:
 | Privileged DinD | `1` CPU / `3Gi` requests; `4Gi` memory limit |
 | Kata | `2` CPU / `6Gi` requests; `4` CPU / `8Gi` limits; plus `250m` / `160Mi` overhead; plus `1` PVC and `100Gi` of `requests.storage` |
 
-So an affected tenant whose quota was sized against the old numbers can come up with `WorkerQuotaPressure=True` (or `WorkerQuotaExceeded=True`) after upgrade with no change to the quota or the workload. **Nothing got worse** — a compute shortfall was already quota-rejecting those pods at creation and retrying, and a storage shortfall was already stranding them `Pending` on a PVC that could not be created.
+So an affected tenant whose quota was sized against the old numbers can come up with `WorkerQuotaPressure=True` (or `WorkerQuotaExceeded=True`) after upgrade with no change to the quota or the workload.
+**Nothing got worse** — a compute shortfall was already quota-rejecting those pods at creation and retrying, and a storage shortfall was already stranding them `Pending` on a PVC that could not be created.
 The condition now reports it up front instead of surfacing it as burnt lock time.
 Re-derive the affected quotas with [sizing the platform-owned `ResourceQuota`](resourcequota-sizing.md).
 
@@ -728,7 +742,8 @@ After upgrading the GMC:
 ### GMC manager NetworkPolicy is now enabled by default
 
 The default install ships the GMC manager NetworkPolicy enabled (`networkPolicy.enabled=true`).
-This flips the controller-manager pod to default-deny ingress and admits its `:8443` `/metrics` endpoint **only** from namespaces labelled `metrics: enabled`. **If your Prometheus runs in an unlabelled namespace, GMC manager scrapes will start failing after upgrade.** Label it before (or right after) upgrading:
+This flips the controller-manager pod to default-deny ingress and admits its `:8443` `/metrics` endpoint **only** from namespaces labelled `metrics: enabled`.
+**If your Prometheus runs in an unlabelled namespace, GMC manager scrapes will start failing after upgrade.** Label it before (or right after) upgrading:
 
 ```sh
 kubectl label namespace <prometheus-namespace> metrics=enabled --overwrite
@@ -780,7 +795,8 @@ This holds for any restart of an unchanged GMC.
 Every tenant whose template changes rolls, so a GMC upgrade fans out into one [AGC drain window](#agc-upgrade) per tenant, concurrently and unstaged — dropped long polls and abandoned RenewJob loops across the whole fleet rather than in one namespace.
 Schedule a GMC upgrade in the low-traffic window you would give an AGC upgrade, and validate with the [AGC post-upgrade checks](#agc-upgrade) as well as the GMC ones.
 
-**Do not hand-edit a GMC-managed AGC `Deployment`.** The reconciler watches the Deployments it owns and replaces the whole spec from its own render, so a `kubectl set image` — or any other direct edit — is reverted within seconds. `kubectl rollout restart` is the one exception, and its history is a trap of its own: see [`kubectl rollout restart` of a Managed Deployment Reports Success but Nothing Restarts](troubleshooting.md#kubectl-rollout-restart-of-a-managed-deployment-reports-success-but-nothing-restarts).
+**Do not hand-edit a GMC-managed AGC `Deployment`.** The reconciler watches the Deployments it owns and replaces the whole spec from its own render, so a `kubectl set image` — or any other direct edit — is reverted within seconds.
+`kubectl rollout restart` is the one exception, and its history is a trap of its own: see [`kubectl rollout restart` of a Managed Deployment Reports Success but Nothing Restarts](troubleshooting.md#kubectl-rollout-restart-of-a-managed-deployment-reports-success-but-nothing-restarts).
 
 ### GMC install and upgrade via Helm (recommended)
 
@@ -835,7 +851,8 @@ The following upgrade-time behaviors are specific to this chart:
   A missing block would then render as "unset", and for a security-relevant key — `admissionPolicy`, `networkPolicy` — that silently disables a guard on upgrade.
   Failing the render loudly is the safe direction; reaching for the right flag is the fix.
   See the [troubleshooting runbook](troubleshooting.md#helm-upgrade-fails-with-nil-pointer-evaluating-interface-field).
-- **All four image digests are required at render time.** Both `helm install` and `helm upgrade` fail with `<image>.image must be pinned by digest …` (naming `gmc`/`agc`/`proxy`/`wrapper`) when the release values carry no digest for one of the four — e.g. a values file that omits it, or `--reset-values`. `--reset-then-reuse-values` and `--reuse-values` both carry the previously pinned digests forward; pass `--set <image>.image.digest=sha256:<new>` for each image you are moving to the new release's build.
+- **All four image digests are required at render time.** Both `helm install` and `helm upgrade` fail with `<image>.image must be pinned by digest …` (naming `gmc`/`agc`/`proxy`/`wrapper`) when the release values carry no digest for one of the four — e.g. a values file that omits it, or `--reset-values`.
+  `--reset-then-reuse-values` and `--reuse-values` both carry the previously pinned digests forward; pass `--set <image>.image.digest=sha256:<new>` for each image you are moving to the new release's build.
   See the [troubleshooting runbook](troubleshooting.md#helm-render-fails-gmcimage-must-be-pinned-by-digest).
   Dev/test only: `allowFloatingImageTags=true` opts out.
 - **Most CRDs upgrade with the release; one does not, so apply the chart's CRDs every time.** The `ActionsGateway` and `RunnerGroup` CRDs ship as templates under `templates/crds/` with `helm.sh/resource-policy: keep`, so `helm upgrade` applies their additive field changes automatically and `helm uninstall` preserves them (and every tenant's objects) rather than cascade-deleting.
@@ -891,7 +908,8 @@ It is both the GMC's restart-free dynamic source (Q188) and the `priorityclass-a
 That was the Q444 cluster-wide outage: every `runnergroups`/`runnersets`/ `runnertemplates` write denied with `no params found for policy binding`, and no recovery short of a kube-apiserver restart.
 A CRD `paramKind` gets a fresh dynamic informer per context and survives the same transition, so this removes the exposure rather than mitigating it.
 
-**Why the CRD needs a manual step.** This is the one CRD the chart ships in the chart-root `crds/` directory rather than `templates/crds/`, because the same release also *creates* a `PriorityClassAllowlist` object — and Helm resolves REST mappings for the entire manifest before applying any of it, so a CR whose CRD is a template in the same release fails the install outright. `crds/` is the only directory Helm installs early enough.
+**Why the CRD needs a manual step.** This is the one CRD the chart ships in the chart-root `crds/` directory rather than `templates/crds/`, because the same release also *creates* a `PriorityClassAllowlist` object — and Helm resolves REST mappings for the entire manifest before applying any of it, so a CR whose CRD is a template in the same release fails the install outright.
+`crds/` is the only directory Helm installs early enough.
 The cost is that Helm skips `crds/` entirely on upgrade, so an existing release never receives it.
 
 #### 1. Apply the chart's CRDs
@@ -1046,7 +1064,8 @@ CRDs carry `helm.sh/resource-policy: keep`, so they are not rolled back automati
 
 ## AGC Upgrade
 
-The AGC runs `replicas: 1`. **Every AGC upgrade incurs a brief drain window** — the period between the old pod terminating and the new pod acquiring sessions.
+The AGC runs `replicas: 1`.
+**Every AGC upgrade incurs a brief drain window** — the period between the old pod terminating and the new pod acquiring sessions.
 During this window:
 
 - **In-flight long polls** are dropped.
@@ -1087,7 +1106,8 @@ It is harmless but wastes a runner slot for the TTL; a burst of these lines duri
 
 The GMC manages the AGC Deployment, so the AGC image is a GMC-level setting, not a per-namespace one: update the GMC's Helm values with the new AGC image and upgrade the GMC, which then rolls **every** tenant's AGC Deployment at once — see [A GMC restart costs tenants nothing; a GMC upgrade rolls every one of them](#a-gmc-restart-costs-tenants-nothing-a-gmc-upgrade-rolls-every-one-of-them) before you schedule it.
 
-There is no per-namespace alternative. `kubectl set image deploy/actions-gateway-controller -n <namespace>` appears to work and is reverted on the next reconcile, because the reconciler replaces the managed Deployment's whole spec from its own render.
+There is no per-namespace alternative.
+`kubectl set image deploy/actions-gateway-controller -n <namespace>` appears to work and is reverted on the next reconcile, because the reconciler replaces the managed Deployment's whole spec from its own render.
 
 **Step 3: Watch the rollout**
 
@@ -1224,7 +1244,8 @@ This ensures the exact same image is used for all jobs until explicitly changed,
 
 To test a new image on a subset of jobs before rolling it out broadly:
 
-1. Add a second `RunnerGroup` with the new image and a distinct label (e.g. `canary`).
+1. Add a second `RunnerGroup` with the new image and a distinct label (e.g.
+   `canary`).
 2. Update a subset of workflows to use `runs-on: [self-hosted, canary]`.
 3. Monitor job success rates.
    If healthy, update the main `RunnerGroup` and remove the canary group.

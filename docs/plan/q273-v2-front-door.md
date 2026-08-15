@@ -1,6 +1,7 @@
 # Q273 — Make v2 the front door + exemplary v1→v2 migration (plan)
 
-**Status:** ▶ Started 2026-07-06. **Scope:** the *do-now* front-door / positioning / onboarding / migration slice of [Q273](../STATUS.md#Q273).
+**Status:** ▶ Started 2026-07-06.
+**Scope:** the *do-now* front-door / positioning / onboarding / migration slice of [Q273](../STATUS.md#Q273).
 Full "v2-only" (v1 removal) stays gated on v2beta1 (Q74) — **this plan removes nothing**.
 Strategy source: [v1-classic-sunset-review.md §6.2](v1-classic-sunset-review.md).
 
@@ -16,7 +17,8 @@ Positioning stays true whether or not the sibling P5 ScaleSet-default flip has m
 
 ## Doc-ownership partition (avoid collision with the Q264-P5 chip)
 
-**P5 owns:** the code default flip + the `acquisitionProtocol` CRD field docs + the classic-protocol operator reference (in `docs/operations/` protocol section and the `tenant-onboarding` field reference). **This chip owns:** everything front-door / positioning / onboarding-flow / migration.
+**P5 owns:** the code default flip + the `acquisitionProtocol` CRD field docs + the classic-protocol operator reference (in `docs/operations/` protocol section and the `tenant-onboarding` field reference).
+**This chip owns:** everything front-door / positioning / onboarding-flow / migration.
 - **Do NOT edit** the `acquisitionProtocol` field reference or classic-protocol operator docs.
   On conflict, rebase and defer to P5 on protocol-field specifics.
 - Positioning frames the single-acquirer ScaleSet model as v2's acquisition story **without hard-asserting the shipped default is already ScaleSet** (true whether or not P5 has merged).
@@ -42,5 +44,6 @@ Positioning stays true whether or not the sibling P5 ScaleSet-default flip has m
 - Fresh `claude/` worktree; rebased on origin/main.
   No cluster / no dogfood.
 - `docs/STATUS.md` edit is an ISOLATED commit (keep Q273 row; note do-now routing done, full v2-only still gated on Q74).
-- Human docs never link to `CLAUDE.md`. `make check` (+ docs build if touched) green before PR.
+- Human docs never link to `CLAUDE.md`.
+  `make check` (+ docs build if touched) green before PR.
   No Claude attribution. </content> </invoke>

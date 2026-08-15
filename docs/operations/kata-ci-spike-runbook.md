@@ -165,7 +165,8 @@ Spike timings: 58 s cold / 43 s warm for `kind create cluster`; 2 s for `kind lo
 ## Step 5 — Confirm the metadata server is closed
 
 Kata isolates the kernel, not the pod network.
-Verify Workload Identity is doing its job. **Never print the token body.**
+Verify Workload Identity is doing its job.
+**Never print the token body.**
 
 ```bash
 kubectl --context "$CTX" run meta-id --image=busybox:1.36 --restart=Never \

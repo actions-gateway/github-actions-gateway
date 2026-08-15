@@ -1,6 +1,7 @@
 # Live-GKE Egress-Validation Campaign — Q243 + Q245 + Q230
 
-> **Status (2026-07-07): COMPLETE — cluster torn down.** One coordinated live-GKE campaign on ONE throwaway Dataplane V2 cluster, batching three deferred live validations that share a platform and a theme (egress on GKE DPv2). **Results: Q245 PASS, Q230 PASS, Q243 mechanism PASS + API-pinning gap found (follow-up filed).** Evidence below; folded back into each item's own plan doc + STATUS.
+> **Status (2026-07-07): COMPLETE — cluster torn down.** One coordinated live-GKE campaign on ONE throwaway Dataplane V2 cluster, batching three deferred live validations that share a platform and a theme (egress on GKE DPv2).
+> **Results: Q245 PASS, Q230 PASS, Q243 mechanism PASS + API-pinning gap found (follow-up filed).** Evidence below; folded back into each item's own plan doc + STATUS.
 > The throwaway project `gag-egress-val-260707` was deleted same-session (atomic teardown — cluster, node pools, subnets, Cloud NATs, static IPs, router).
 
 ## Cluster as built (for reproducibility)
@@ -9,7 +10,8 @@
 - Flags: `--enable-dataplane-v2 --enable-fqdn-network-policy --addons=...,NodeLocalDNS --enable-private-nodes --disable-default-snat` (private nodes + `--disable-default-snat` so **pod IPs** are the Cloud NAT source, enabling per-pod-range → per-IP mapping; Private Google Access on the subnet so nodes bootstrap before NAT exists).
 - Custom VPC `gag-val-net` / subnet `gag-val-subnet` (10.0.0.0/22) with **three pod secondary ranges**: `pods-default` (10.4/16), `pods-a` (10.5/16), `pods-b` (10.6/16), plus `svc`.
   Node pools: `default-pool` (GMC), `pool-a` (`--pod-ipv4-range=pods-a`), `pool-b` (`--pod-ipv4-range=pods-b`).
-- One Cloud Router + **three Cloud NAT gateways** on it, each scoped to a disjoint range (`nat-default` = primary+pods-default → 34.23.242.48; `nat-a` = pods-a → 34.24.58.224; `nat-b` = pods-b → 34.26.87.185). **Finding:** three NATs on one router covering disjoint secondary ranges of one subnet is accepted by GCP — this is the single-cluster per-tenant-IP mechanism (the reference arch's "dedicated subnet per tenant" is inaccurate for GKE, which puts all node pools on the cluster subnet; the accurate primitive is per-pod-secondary-range NAT + `--disable-default-snat`).
+- One Cloud Router + **three Cloud NAT gateways** on it, each scoped to a disjoint range (`nat-default` = primary+pods-default → 34.23.242.48; `nat-a` = pods-a → 34.24.58.224; `nat-b` = pods-b → 34.26.87.185).
+  **Finding:** three NATs on one router covering disjoint secondary ranges of one subnet is accepted by GCP — this is the single-cluster per-tenant-IP mechanism (the reference arch's "dedicated subnet per tenant" is inaccurate for GKE, which puts all node pools on the cluster subnet; the accurate primitive is per-pod-secondary-range NAT + `--disable-default-snat`).
 - GMC built from HEAD (`daf977b`, has #576 gke backend + Q229 DNS fix), pushed to `ghcr.io/actions-gateway/gmc`, installed `--fqdn-policy-backend=gke`.
   Proxy image reused `proxy:0ef4c6fa`.
   No AGC/RunnerSet/workers/GitHub-App needed.
@@ -34,7 +36,8 @@ Q243 needs an egress-IP mechanism; the [reference arch](q243-egress-ip-reference
 
 ## Topology
 
-One GKE **Standard zonal** cluster, Dataplane V2, `us-east1-b` (same region as dogfood — known-good quota), in a **dedicated throwaway GCP project** deleted wholesale at teardown (atomic cost hygiene — no orphaned static IPs / NAT / subnets). **NOT** the dogfood cluster/project (`gag-dogfood` / `actions-gateway-dogfood`, prod-classified by `.claude/prod-guard.json`).
+One GKE **Standard zonal** cluster, Dataplane V2, `us-east1-b` (same region as dogfood — known-good quota), in a **dedicated throwaway GCP project** deleted wholesale at teardown (atomic cost hygiene — no orphaned static IPs / NAT / subnets).
+**NOT** the dogfood cluster/project (`gag-dogfood` / `actions-gateway-dogfood`, prod-classified by `.claude/prod-guard.json`).
 
 ```
   validation cluster (GKE Standard, Dataplane V2 + FQDN NP + NodeLocal DNSCache)
@@ -94,7 +97,8 @@ Confirm the project ID is the throwaway (NOT `actions-gateway-dogfood`) before d
 ### Q245 — gke `FQDNNetworkPolicy` enforcement
 
 - **Setup:** EgressProxy `egressPolicyMode: FQDN`, GMC `--fqdn-policy-backend=gke`.
-- **Assert:** `FQDNNetworkPolicy` (`networking.gke.io/v1alpha1`) emitted + owned; from a governed pod, GitHub host (e.g. `api.github.com:443`) reachable; a **non-allowlisted** host blocked by the base default-deny NP (additive-allow invariant: FQDN policy widens, never replaces default-deny).
+- **Assert:** `FQDNNetworkPolicy` (`networking.gke.io/v1alpha1`) emitted + owned; from a governed pod, GitHub host (e.g.
+  `api.github.com:443`) reachable; a **non-allowlisted** host blocked by the base default-deny NP (additive-allow invariant: FQDN policy widens, never replaces default-deny).
   Confirm fail-closed if `--enable-fqdn-network-policy`/CRD absent (egress stays denied).
 - **PASS** = GitHub allowed, everything else denied, base NP still fail-closed; **FAIL** = non-GitHub egress leaks, or GitHub blocked, or not fail-closed.
 

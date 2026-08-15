@@ -32,7 +32,8 @@ brew install bash
 ```
 
 Homebrew installs to `/opt/homebrew/bin` (Apple silicon) or `/usr/local/bin` (Intel), which must come before `/bin` on your `PATH`.
-Current Linux distributions are all well past 4.4, so this is a macOS concern in practice. `make doctor` reports the version it found and, on a bash below the floor, names it instead of failing on the shopt.
+Current Linux distributions are all well past 4.4, so this is a macOS concern in practice.
+`make doctor` reports the version it found and, on a bash below the floor, names it instead of failing on the shopt.
 
 That registry is also the project's **approved list of host CLI dependencies**.
 If new work needs a tool that isn't listed, raise it before relying on it — once agreed, add a row to [`scripts/ci/check-tools.sh`](scripts/ci/check-tools.sh) (and to the prerequisites above when it's a hard requirement) so every contributor and `make doctor` stay in sync.
@@ -110,7 +111,8 @@ Note the repo-level value in `.git/config` is shared by every worktree, so `make
 `make merge-driver` is a per-clone `git config` that makes `docs/STATUS.md` conflicts resolve by backlog row ID, `docs/plan/README.md` conflicts by plan path, and `docs/roadmap.md` conflicts by each bullet's `<!-- q:QN -->` backlog annotation, instead of by line position — all three files are high-contention and their conflicts are usually an artifact of two rows being adjacent, not a real disagreement.
 Git will not let a tracked file define a merge driver's command, so this half cannot be committed.
 It is genuinely optional: without it, git uses its built-in three-way merge, and with it anything ambiguous still gets ordinary conflict markers.
-Details: [`docs/development/maintaining-backlog.md`](docs/development/maintaining-backlog.md#the-merge-driver-resolve-queue-rows-by-id-not-by-line-position). **The config stores the driver script's path**, so a clone that installed it before the script moved to `scripts/docs/` has a dead path — re-run `make merge-driver`.
+Details: [`docs/development/maintaining-backlog.md`](docs/development/maintaining-backlog.md#the-merge-driver-resolve-queue-rows-by-id-not-by-line-position).
+**The config stores the driver script's path**, so a clone that installed it before the script moved to `scripts/docs/` has a dead path — re-run `make merge-driver`.
 
 ## Design first
 
@@ -128,7 +130,8 @@ See [`docs/development/building.md`](docs/development/building.md) for the full 
 
 ## Testing
 
-The repo uses a `go.work` workspace. `go test ./...` from the root does **not** work — use per-module commands:
+The repo uses a `go.work` workspace.
+`go test ./...` from the root does **not** work — use per-module commands:
 
 ```bash
 (cd broker     && go test ./...)
@@ -164,7 +167,9 @@ See [`docs/development/testing.md`](docs/development/testing.md#path-gated-workf
 
 ## Linting
 
-`make lint` runs `gofmt -s` and `golangci-lint` across every workspace module. `golangci-lint` runs `govet` internally (enabled in [`.golangci.yml`](.golangci.yml)), so it is not invoked separately. `golangci-lint` is vendored in `tools/` and built into `.build/golangci-lint`.
+`make lint` runs `gofmt -s` and `golangci-lint` across every workspace module.
+`golangci-lint` runs `govet` internally (enabled in [`.golangci.yml`](.golangci.yml)), so it is not invoked separately.
+`golangci-lint` is vendored in `tools/` and built into `.build/golangci-lint`.
 CI runs the same gates in `.github/workflows/unit-test.yml`.
 
 For the full e2e suite against a local kind cluster:
@@ -278,7 +283,8 @@ Rebasing onto a moved `main` is still worth it when what moved can affect your g
 The local-gate window varies by an order of magnitude across the machines this repo has been measured on (a cold `make check` is ~21 min on a 4-core Intel i7 and 102 s on an 18-core M5 Max — [measurements](docs/plan/archive/local-gate-throughput.md)), so the longer your gate, the more of `main`'s merge traffic lands inside it.
 
 **A hook asks about the overlap at the push itself** (Q665), because the rule above is read before the gate starts and the push happens after it.
-It fires only when what `main` gained overlaps the files this branch changes. `main` takes ~47 merges a day, so "the base moved" alone is true at nearly every push and would be accepted without reading.
+It fires only when what `main` gained overlaps the files this branch changes.
+`main` takes ~47 merges a day, so "the base moved" alone is true at nearly every push and would be accepted without reading.
 It reads the local `origin/main` ref and never fetches, so it under-reports until you do, and it stays silent when the probe fails.
 The merge-driver-owned files are discounted, but only while the merge really resolves them, which the hook settles by asking `git merge-tree` rather than by assuming (Q790).
 The driver refuses on a row deleted on one side and edited on the other, the shape every flake-row move takes, and a branch whose only changed file is `docs/STATUS.md` can be `DIRTY` on that alone.
@@ -328,7 +334,8 @@ The exception is a fix the open PR **cannot go green without** — a blocking bu
 Branching that off `main` leaves the first PR red with no path forward, so branch it off `main`, then rebase the blocked PR **onto the fix branch** and say so in the PR body.
 Reviewers merge the fix first.
 
-The same stacking applies to work that *depends on* an open PR (needs a file only that branch has): base on its branch and open the stacked PR against it. **Re-check the base PR's state immediately before `gh pr create`** — it can merge (and its branch delete) between your fetch and the create, at which point the create fails with `Base ref must be a branch`; the fix is the `--onto` rebase below, then a plain PR against `main`.
+The same stacking applies to work that *depends on* an open PR (needs a file only that branch has): base on its branch and open the stacked PR against it.
+**Re-check the base PR's state immediately before `gh pr create`** — it can merge (and its branch delete) between your fetch and the create, at which point the create fails with `Base ref must be a branch`; the fix is the `--onto` rebase below, then a plain PR against `main`.
 
 Two mechanics make the follow-through safe once the base lands:
 
@@ -352,7 +359,8 @@ Wait for that PR to merge and rebase onto `main`; stack on its branch per [When 
 Do not write a second fix: both land on the same line, and one of you takes a conflict for nothing.
 
 **Own it if nobody has,** and claim it by opening the PR as a **draft** the moment the branch carries the fix, before you have finished verifying it.
-The draft is what makes the search above work. `gh pr list --state open` includes drafts, so the next blocked session finds it, and the `gh pr create` overlap check (Q668) names it to that session without anyone having to look.
+The draft is what makes the search above work.
+`gh pr list --state open` includes drafts, so the next blocked session finds it, and the `gh pr create` overlap check (Q668) names it to that session without anyone having to look.
 An issue would not: the check reads open PRs.
 Take it out of draft when it is genuinely ready.
 
@@ -381,7 +389,8 @@ When you see that, resolve by rehoming, then diff your result against the other 
 git diff origin/main -- <the file you restructured>
 ```
 
-Queue items in `docs/STATUS.md` are identified by `Q`-prefixed IDs (e.g. `Q44`).
+Queue items in `docs/STATUS.md` are identified by `Q`-prefixed IDs (e.g.
+`Q44`).
 Use the bare ID in commit messages and PR bodies — its `Q` prefix is what keeps GitHub from auto-linking to PR/issue 44 (`#44` would be linked, `Q44` is not).
 
 ## Security

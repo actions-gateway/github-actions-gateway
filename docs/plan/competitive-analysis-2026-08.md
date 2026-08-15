@@ -8,7 +8,8 @@
 Everything below was measured on **2026-08-06** against **ARC 0.14.2** (released 2026-05-22) and its `master` branch, by reading controller source, chart values, release notes, and issue state rather than documentation.
 GitHub popularity came from the API, not from prose.
 
-Two measurements in the original research failed verification and were dropped rather than used: a claimed assertion in the broker stub about rate-limit headers, and a GitLab `retry_limits` example. **Treat any file-and-line citation that cannot be reproduced as a lead, not a fact.**
+Two measurements in the original research failed verification and were dropped rather than used: a claimed assertion in the broker stub about rate-limit headers, and a GitLab `retry_limits` example.
+**Treat any file-and-line citation that cannot be reproduced as a lead, not a fact.**
 
 ## Which differentiators are durable
 
@@ -109,7 +110,8 @@ All were generated as moat candidates and killed on review:
 
 ## Why the marketing drifted, and the fix
 
-The comparison table's errors were not authoring mistakes. `#308` (2026-06-19) converted a hedged prose comparison into a green-check/red-X **verdict table**, and a verdict table requires a definite cell in every row.
+The comparison table's errors were not authoring mistakes.
+`#308` (2026-06-19) converted a hedged prose comparison into a green-check/red-X **verdict table**, and a verdict table requires a definite cell in every row.
 The working notes it was built from had marked most competitor-side facts `VERIFY`.
 The format had nowhere to put "we believe this but have not checked it", so **11 unverified ARC-side facts shipped as red X's**, none of them citing an ARC version or a measurement date.
 

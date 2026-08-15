@@ -22,7 +22,8 @@ The GMC module already imports all three type sets (gmc v1, agc v1, neutral v2),
 
 **Decisions (recorded; H.17 invariants):**
 
-- **Reuse / object-size invariant.** Template identity key = canonical JSON of the *built v2 `RunnerTemplateSpec`* (`podTemplate` **and** `workerImage`). `workerImage` participates in equality: it selects the runner container image, a material part of the pod shape, so two groups differing only in `workerImage` must NOT collapse.
+- **Reuse / object-size invariant.** Template identity key = canonical JSON of the *built v2 `RunnerTemplateSpec`* (`podTemplate` **and** `workerImage`).
+  `workerImage` participates in equality: it selects the runner container image, a material part of the pod shape, so two groups differing only in `workerImage` must NOT collapse.
   K groups with an identical key collapse to one `RunnerTemplate`; the name is a pure function of that key (`rt-<12 hex of sha256>`), so identical content yields one object by construction.
 - **No silent direct egress (invariant 1).** The v1 proxy is required, so the tool always emits an `EgressProxy` and always sets `defaultProxyRef` on the gateway.
   The AGC resolves an unset `RunnerSet.proxyRef` to `defaultProxyRef` and fails closed (`ProxyNotFound`) if neither resolves — so leaving `proxyRef` unset is proxied, never `Direct`.

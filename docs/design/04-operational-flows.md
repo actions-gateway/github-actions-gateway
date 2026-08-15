@@ -107,7 +107,11 @@ sequenceDiagram
 1. **Poll:** A dedicated AGC goroutine fires a `GetMessage` request via the proxy pool.
    GitHub holds the connection for up to 50 seconds; returns `202 Accepted` if no job is queued.
 2. **Intercept:** GitHub responds with a `RunnerJobRequest` message containing `run_service_url`, `runner_request_id`, and `billing_owner_id` in the decoded body.
-   2a. **Admit (Q59, #784, Q405, Q406):** Before claiming the job, the goroutine consults the pre-acquisition admission gate, which asks three questions in order. **Quota:** can the namespace `ResourceQuota` admit one more worker pod right now (`hard − used` against this owner's worker footprint)? **Capacity:** if the owner opted into a capacity gate, can the cluster currently *place* one more worker pod of this shape? **Ceiling:** is the in-memory, per-RunnerGroup reservation counter below the worker ceiling (`maxWorkers` / the maximum `priorityTiers` threshold)?
+   2a.
+   **Admit (Q59, #784, Q405, Q406):** Before claiming the job, the goroutine consults the pre-acquisition admission gate, which asks three questions in order.
+   **Quota:** can the namespace `ResourceQuota` admit one more worker pod right now (`hard − used` against this owner's worker footprint)?
+   **Capacity:** if the owner opted into a capacity gate, can the cluster currently *place* one more worker pod of this shape?
+   **Ceiling:** is the in-memory, per-RunnerGroup reservation counter below the worker ceiling (`maxWorkers` / the maximum `priorityTiers` threshold)?
    A no from any of them **skips `acquirejob`**, increments `actions_gateway_jobs_admission_rejected_total{reason}` (`quota`, `capacity`, or `ceiling`), and resumes polling at step 1 — the job stays queued at GitHub and is redelivered to a sibling session with capacity, rather than acquired-then-dropped.
    When the gate admits, it reserves a slot held until the job completes (step 11), then proceeds to step 3.
    The two observed rungs fail open and reserve nothing, which is why they precede the ceiling; the reservation is fail-safe soft state (reset on AGC restart).
@@ -129,7 +133,8 @@ sequenceDiagram
 
    **The two signals.** With `nodeAutoscaling: Absent` the gate reads the scheduler's verdict, sound because nothing is waiting on those pods.
    With `Present` (the default) it reads the *autoscaler's own declination* — cluster-autoscaler's `NotTriggerScaleUp`, or Karpenter's `FailedScheduling` from a non-scheduler reporter — recorded as an Event on a stuck worker pod, because only the autoscaler saying it will not act is evidence that no node is coming.
-   Both feed the identical rung, condition, and metric label. `Present` is the default deliberately: it can only ever *under*-gate, so a cluster whose operator never set the field keeps today's behavior.
+   Both feed the identical rung, condition, and metric label.
+   `Present` is the default deliberately: it can only ever *under*-gate, so a cluster whose operator never set the field keeps today's behavior.
    The reporter check is load-bearing, because `FailedScheduling` is also kube-scheduler's own reason for every ordinary transient placement failure.
    So is recency: the verdict is the newest relevant event, so an autoscaler that declined and then scaled up reopens the gate rather than being remembered as a no. Recency is deliberately asymmetric — one autoscaler loop can record both verdicts for one pod milliseconds apart, so a declination counts as superseding a scale-up only from more than a second later, and a closer pair resolves open.
    Events are read uncached, field-selected to one pod, only for pods already stuck past the scheduling grace, and bounded per reconcile — there is no Event informer, and a healthy set costs zero reads.
@@ -151,7 +156,8 @@ sequenceDiagram
    The wrapper stays resident as PID 1 and relays SIGTERM/SIGINT down to the engine, so a pod termination (eviction, node drain) reaches the process that can actually abort the job and report it (Q385).
    Note the precondition: the relay carries a *pod* termination.
    A run **cancelled at GitHub** does not terminate the pod — the cancellation arrives on the AGC's broker session and nothing forwards it to the worker, so the runner executes its remaining steps while GitHub concludes the job at its own ~5-minute cancellation grace (measured 2026-07-29: a `sleep 600` job ran the full 600s after its run was cancelled).
-   [Q501](../STATUS.md#Q501) carries that gap; what it has closed so far is the *actuator* — when the AGC does give up on a job (step 5's lock loss), the worker pod is now deleted rather than left running to the `maxWorkerLifetime` cap. **The gap is specific to this tier.** On **ScaleSet** the listener holds a message queue for the whole job, and a cancelled run puts a terminal `JobCompleted` on it — measured live at ~0.2 s for a job with no runner attached (Q468) — which stamps `actions-gateway.com/job-completed-at` on the worker and hands it to the reaper's five-minute `Running` grace (step 11, Q420).
+   [Q501](../STATUS.md#Q501) carries that gap; what it has closed so far is the *actuator* — when the AGC does give up on a job (step 5's lock loss), the worker pod is now deleted rather than left running to the `maxWorkerLifetime` cap.
+   **The gap is specific to this tier.** On **ScaleSet** the listener holds a message queue for the whole job, and a cancelled run puts a terminal `JobCompleted` on it — measured live at ~0.2 s for a job with no runner attached (Q468) — which stamps `actions-gateway.com/job-completed-at` on the worker and hands it to the reaper's five-minute `Running` grace (step 11, Q420).
    So the ScaleSet worst case is GitHub's cancellation grace plus the reap grace, against classic's *whole remaining job* bounded only by `maxWorkerLifetime`.
    Detail: [q501-cancel-relay.md](../plan/q501-cancel-relay.md).
 8. **Stream:** The worker pod streams live execution logs to GitHub's Twirp Results Service via the proxy pool.
@@ -290,7 +296,8 @@ See [Troubleshooting — Sessions stuck in 401/EOF GetMessage loops](../operatio
 
 ### Worker Pod Eviction and Auto-Retry
 
-> **Both acquisition tiers, by two different routes.** The flow below is the classic `provision()` path, which blocks on the worker pod's terminal phase. `ProvisionScaleSetWorker` is fire-and-forget by design — the runner pulls and completes its own job — so it observes nothing, and until Q417 an evicted `ScaleSet` worker got no rerun at all.
+> **Both acquisition tiers, by two different routes.** The flow below is the classic `provision()` path, which blocks on the worker pod's terminal phase.
+> `ProvisionScaleSetWorker` is fire-and-forget by design — the runner pulls and completes its own job — so it observes nothing, and until Q417 an evicted `ScaleSet` worker got no rerun at all.
 > That mattered because `ScaleSet` is the default protocol (Q264 P5) and the only one `v2beta1` offers, so the capability covered only the *deprecated* tier.
 > The port relocates both of the classic path's inputs onto the worker pod; see [On the scale-set tier](#on-the-scale-set-tier-q417) below.
 
@@ -483,7 +490,8 @@ The original scale-set detection deliberately excluded every *deleted* pod on th
 That argument does not carry to preemption, and the distinction is worth keeping explicit because it is what makes recovering this path safe:
 
 **The relay makes the job *conclude* at GitHub; it does not make the job *succeed*.** Q459 measured the conclusion on the graceful path at live-GitHub — `failure` within 15–26s, with `rerun-failed-jobs` accepted.
-The run really is left failed, so the re-run is the repair rather than a duplicate. `rerun-failed-jobs` also re-runs only a run's *failed* jobs, so a run whose jobs all completed before the preemption landed has nothing to re-run and GitHub rejects the call — which the existing error path logs and drops.
+The run really is left failed, so the re-run is the repair rather than a duplicate.
+`rerun-failed-jobs` also re-runs only a run's *failed* jobs, so a run whose jobs all completed before the preemption landed has nothing to re-run and GitHub rejects the call — which the existing error path logs and drops.
 
 **Q421 measured that exclusion on both tiers, 2026-07-27; Q459 then measured the two facts that let Q502 close it.** The report does get out on the graceful path: a drained *running* worker's relayed report reaches GitHub, the job concludes `failure` well under a minute after the disruption (15–26s across five runs), and `rerun-failed-jobs` is accepted — so an automatic re-run is available.
 And the shape is discriminable: a disrupted worker lands in `PodFailed` with an *empty* reason — the same shape a genuinely failing job produces — but it lands there **while carrying its `deletionTimestamp`**, which a run cancelled by a human (measured 2026-07-29: nothing in the gateway deletes a cancelled run's pod) and a genuine failure both lack.
@@ -519,7 +527,8 @@ Two residuals stay, both narrower than the one they replace and both bounded by 
 
 * A previous process that reaped a terminal pod and then died before reading that job's completion re-runs a genuinely failed job once.
   Reaching it needs the completion to have gone unread for at least `completedPodTTL` while the listener was polling, and then a kill inside that state.
-* A worker deleted before any container ran is re-run rather than force-cancelled first (Q766's ordering), because whether the container started is a fact about the pod. `rerun-failed-jobs` against a run with no failed job is refused, logged, and dropped, so the outcome is a manual re-run rather than a wrong one.
+* A worker deleted before any container ran is re-run rather than force-cancelled first (Q766's ordering), because whether the container started is a fact about the pod.
+  `rerun-failed-jobs` against a run with no failed job is refused, logged, and dropped, so the outcome is a manual re-run rather than a wrong one.
 
 What keeps the windows reachable in normal operation is the worker-pod watch predicate: it admits the update where a pod *newly becomes* a preemption victim (a preemption changes no phase), and the drain shape arrives on the phase-change edge itself.
 The classic tier has no such window: its provisioning goroutine is already watching the pod and reads both markers off the resolving event, including the informer's delete event.

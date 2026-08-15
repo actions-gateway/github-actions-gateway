@@ -69,7 +69,8 @@ Options, in order of preference:
 1. **Project page on this repo** (recommended): serve at `actions-gateway.github.io/github-actions-gateway/`.
    Zero new repos, site lives beside the code so docs never drift.
    Set `site_url` accordingly and use a relative base path.
-2. **Custom domain** (e.g. `actions-gateway.dev`): a single `CNAME` file on this repo plus DNS records.
+2. **Custom domain** (e.g.
+   `actions-gateway.dev`): a single `CNAME` file on this repo plus DNS records.
    The org move makes this a clean *later* upgrade rather than a need — no rebuild, no content change, just DNS.
    Recommend deferring until/unless we want a vanity domain.
 3. **Bare org apex** `actions-gateway.github.io/`: requires a *separate* repo named `actions-gateway.github.io`.

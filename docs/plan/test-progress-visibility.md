@@ -58,7 +58,8 @@ Three pieces:
 
 1. **A phase event stream.** The script appends `{"phase":…,"state":…}` events to a status file as it moves through deploy → route CI → e2e tenant → dispatch → e2e run → sizing assertion → CRD smoke → teardown.
    Same JSONL shape as Phase 0, so one renderer can consume both.
-2. **Relay the remote heartbeat.** The dispatched run's log already carries the `[e2e t+…]` lines. `gh run view --log` refuses on an in-progress run, but `gh api repos/…/actions/jobs/<id>/logs` returns partial logs for a running job — measured, and the mechanism that makes this phase possible at all.
+2. **Relay the remote heartbeat.** The dispatched run's log already carries the `[e2e t+…]` lines.
+   `gh run view --log` refuses on an in-progress run, but `gh api repos/…/actions/jobs/<id>/logs` returns partial logs for a running job — measured, and the mechanism that makes this phase possible at all.
    Poll it on the existing `E2E_POLL_INTERVAL` and re-emit new heartbeat lines locally.
 3. **Render the JUnit report on the way out.** After the watch returns, download the run's `e2e-junit-report-*` artifact and pipe it through `e2e-report-summary.sh`, so a red gate names the failing specs in the operator's terminal instead of handing them a URL.
 
@@ -93,10 +94,13 @@ Three deliverables:
 
 **Three things the build settled that the plan did not anticipate.**
 
-1. **The e2e heartbeat had to enter the stream, not just the terminal.** The e2e leg is one ~25-minute phase, so a status object built from phase events alone reports "e2e, 18 minutes" for the whole of it — the phase is the only thing that does not change. `e2e-run-watch.sh` now folds the newest relayed line into the stream as a `heartbeat` record. **This was also load-bearing for the stall detector, and that part was wrong** (Q630): the heartbeat needs a fetchable job log, GitHub served `BlobNotFound` for a whole 30-minute run that passed, and since the stall threshold is shorter than a healthy leg the detector then reported a false stall on every poll.
+1. **The e2e heartbeat had to enter the stream, not just the terminal.** The e2e leg is one ~25-minute phase, so a status object built from phase events alone reports "e2e, 18 minutes" for the whole of it — the phase is the only thing that does not change.
+   `e2e-run-watch.sh` now folds the newest relayed line into the stream as a `heartbeat` record.
+   **This was also load-bearing for the stall detector, and that part was wrong** (Q630): the heartbeat needs a fetchable job log, GitHub served `BlobNotFound` for a whole 30-minute run that passed, and since the stall threshold is shorter than a healthy leg the detector then reported a false stall on every poll.
    The stream cannot be the only witness to a phase whose only writer depends on someone else's storage — the detector now reconciles silence against the run's own status.
 2. **A gate's failure is reported by its first failing phase, not its last.** The teardown trap records `gate fail` after the phase that actually broke records its own, so taking the newest failure would answer every failed run with "the gate exited 1".
-3. **A wedge is the absence of events, so the sentinel needs a stall event.** Waking only on transitions cannot report a gate that stops transitioning — which is exactly the failure a walk-away command hides. `idle` (age of the newest event) crossing `RELEASE_SENTINEL_STALL` is a wake in its own right, and only for a `running` gate: preflight has no stream to be quiet on and a finished gate is expected to be silent.
+3. **A wedge is the absence of events, so the sentinel needs a stall event.** Waking only on transitions cannot report a gate that stops transitioning — which is exactly the failure a walk-away command hides.
+   `idle` (age of the newest event) crossing `RELEASE_SENTINEL_STALL` is a wake in its own right, and only for a `running` gate: preflight has no stream to be quiet on and a finished gate is expected to be silent.
    Q630 added the other half: absence of events is a *hypothesis* of a wedge, confirmed against the run status before it is reported, and remembered afterwards so a relaunched watcher does not re-report the same silence the instant it starts.
 
 ## Phase 3 — the remaining tiers, by measurement
@@ -129,7 +133,8 @@ Two things the build changed from this plan:
   That is what makes it a Go program in `devtools/` rather than the bash+jq the earlier phases used — `Output` fields are JSON-escaped free text, and getting a compile error's bytes back intact is not a job for awk.
 - **The denominator arrived at the package level, not the test level** — see [Open decisions](#open-decisions) #2.
 
-A property worth recording, because it was not the reason for the change and is larger than the heartbeat: plain `go test` releases package output **in command-line order**, so a slow early package holds back every package behind it. `-json` has no such barrier (measured), so package results now appear as they complete.
+A property worth recording, because it was not the reason for the change and is larger than the heartbeat: plain `go test` releases package output **in command-line order**, so a slow early package holds back every package behind it.
+`-json` has no such barrier (measured), so package results now appear as they complete.
 
 Not covered: `make check` reaches the unit tests through `coverage.sh`, a separate invocation that still runs plain `go test`.
 Its silence has not been measured, and design rule 5 says that measurement comes before the fix.
@@ -138,7 +143,8 @@ Its silence has not been measured, and design rule 5 says that measurement comes
 
 **Conclusion: no. For progress reporting specifically, migrating to Ginkgo would make things materially worse, which is the opposite of the intuition.**
 
-The measurement. `go test -json` against the e2e suite in dry-run, and against one plain package:
+The measurement.
+`go test -json` against the e2e suite in dry-run, and against one plain package:
 
 | Suite | Tests visible to `go test -json` |
 |---|---|

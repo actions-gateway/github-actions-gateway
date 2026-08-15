@@ -56,7 +56,8 @@ A real runner was executing a real job — GitHub reported it `in_progress` befo
 | Re-run outcome | **`403 This workflow is already running`** |
 
 **The confound is gone and the number survives it.** 9m36s is close to the U5 probe's ~9.5 minutes, so that figure was accidentally right about magnitude — but it is only now attributable.
-With no `timeout-minutes` in play, the only mechanism left that can end the job is GitHub's own detection of a lock that stopped being renewed, and the design's "at worst ~10 minutes from the last renewal" is what the measurement lands on. **Quote it as "about 9–10 minutes, bounded by the job lock's TTL", not as the workflow timeout it used to be confused with.**
+With no `timeout-minutes` in play, the only mechanism left that can end the job is GitHub's own detection of a lock that stopped being renewed, and the design's "at worst ~10 minutes from the last renewal" is what the measurement lands on.
+**Quote it as "about 9–10 minutes, bounded by the job lock's TTL", not as the workflow timeout it used to be confused with.**
 
 **The headline finding is not the latency.
 It is that classic-tier eviction recovery never actually recovers the job.** The AGC waits `evictionRetryDelay` (default 5s) after seeing the eviction and then calls `rerun-failed-jobs` — which, per the line above, lands ~9.5 minutes *before* GitHub concludes the run.
@@ -146,7 +147,8 @@ The scale-set spec adds the `job-completed-at` annotation its listener stamps an
 Same `v1.3.0` image pins as the runs above, on a throwaway kind cluster.
 
 **Attempt 1 evicted a worker that had no job.** The AGC log shows the listener provisioned two workers ten seconds apart: one for jobID `22463488…` at 23:59:05 — whose job Secret it reclaimed and whose job-completion it stamped in the same second — and one for jobID `cec0e443…` at 23:59:15, after the dispatch.
-GitHub ran the job on the first (`runner_name: real-ag-ss-22463488-…`). `scaleSetWorkerForRun` matched the second on its `run-id` annotation and returned it, because that lookup takes whichever candidate the API lists first.
+GitHub ran the job on the first (`runner_name: real-ag-ss-22463488-…`).
+`scaleSetWorkerForRun` matched the second on its `run-id` annotation and returned it, because that lookup takes whichever candidate the API lists first.
 
 Nothing downstream noticed.
 The AGC detected the eviction and attributed it correctly — `runID 30864091648`, `tier=scaleset`, `attempt 1`, `cause=eviction` — and the only tell was the runner exiting **143** rather than 137: it was still `Listening for Jobs`, so it shut down inside its grace period.
@@ -175,7 +177,8 @@ The shape a *reported* loss leaves is still uncaptured.
 
 **Where that leaves the claim.** Four scale-set attempts now exist: 9m38s, 17s, one that evicted the wrong worker, and 9m45s.
 Three of the four are consistent with the lock TTL being the only mechanism.
-The 17s run is the sole evidence for "a kubelet ephemeral-storage eviction is not reliably ungraceful", and it predates the identity check, so it cannot be said to have evicted the runner that was executing the job. **Treat that claim as unsupported rather than established** — it is not refuted either, because attempt 1 exited 143 where the 17s run exited 137, so "it evicted an idle worker" does not fully account for it.
+The 17s run is the sole evidence for "a kubelet ephemeral-storage eviction is not reliably ungraceful", and it predates the identity check, so it cannot be said to have evicted the runner that was executing the job.
+**Treat that claim as unsupported rather than established** — it is not refuted either, because attempt 1 exited 143 where the 17s run exited 137, so "it evicted an idle worker" does not fully account for it.
 Quoting ~10 minutes for the case where nothing is reported remains correct and is now backed by three clean observations across both tiers.
 
 **Two capture defects the runs found in the instrument itself, both fixed.** Recording them because each one produced a plausible-looking false reading:
@@ -199,7 +202,8 @@ The runner name is the proof: the listener composes it as `<scaleSetName>-<jobID
 So `real-ag-ss-22463488-…` is a whole jobID with its tail elided, not a numeric id of some other kind.
 
 **A replay cannot produce two jobIDs.** Redelivery is keyed on the jobID at both seams: the listener's `provisioned`/`completed`/`abandoned` sets in [listener.go](../../cmd/agc/internal/scalesetlistener/listener.go), and the provisioner's Secret and pod names, which are derived from the jobID and treat `AlreadyExists` as success.
-The same jobID arriving twice is a no-op even across a process restart, where the listener's in-memory sets are empty and the deterministic names are the only guard left. `oversubscribe_q661_test.go` pins both halves against one queue log, and deleting the listener's jobID guard turns three deliveries of one assignment into three workers, which is the shape the row described.
+The same jobID arriving twice is a no-op even across a process restart, where the listener's in-memory sets are empty and the deterministic names are the only guard left.
+`oversubscribe_q661_test.go` pins both halves against one queue log, and deleting the listener's jobID guard turns three deliveries of one assignment into three workers, which is the shape the row described.
 
 **So GitHub assigned two distinct jobs carrying `workflowRunId` 30864091648, and provisioning both is the contract.** A workflow run has many jobs; the listener is handed one assignment per job and must build one worker per assignment.
 The run id was never a worker identity, which is exactly the defect Q657 found and fixed in the harness.
@@ -208,14 +212,16 @@ The listener has no defect to fix here, and a run-scoped dedup would be a bug.
 **What is still open is on GitHub's side**, not the AGC's: why the second job's runner never received a job.
 That is the Q420 class (an assignment that lapses leaves a worker at `Listening for Jobs`), whose only bound when no terminal `JobCompleted` follows is `maxWorkerLifetime`.
 The capture cannot say more, because the raw AGC log was not kept and the surviving prose cannot separate "the first job's Secret was reclaimed in the second it was provisioned" from "reclaimed later, in the same second as its completion stamp".
-The first would be a real anomaly against GitHub reporting that same runner ran the job to completion; the second is the ordinary lifecycle. **Settling it needs a fresh capture, not more reading**: the scale-set tenant's unfiltered AGC log retained as a run artifact, read against the per-job records.
+The first would be a real anomaly against GitHub reporting that same runner ran the job to completion; the second is the ordinary lifecycle.
+**Settling it needs a fresh capture, not more reading**: the scale-set tenant's unfiltered AGC log retained as a run artifact, read against the per-job records.
 The provisioning log line now carries `runID` alongside `jobID` so that capture can be read without reconstructing the pairing from pod annotations.
 
 ### The scale-set half: how it was measured
 
 The harness behind the result above, and the two verifications that rode the same work.
 
-**The run is pinned to published images, so the result can be cited.** The 2026-07-29 measurement is quotable for latency but not for recovery, because its images came from `719e67f1` and predate the Q495 fix — the defect and the build are inseparable in it. `v1.3.0` (tagged 2026-08-03) carries both behaviours under measurement, verified by content rather than by SHA: `rerunUntilAccepted` in [eviction.go](../../cmd/agc/internal/provisioner/eviction.go) (Q503) and the `contextData.github.run_id` extraction in [payload.go](../../cmd/agc/internal/provisioner/payload.go) (Q495).
+**The run is pinned to published images, so the result can be cited.** The 2026-07-29 measurement is quotable for latency but not for recovery, because its images came from `719e67f1` and predate the Q495 fix — the defect and the build are inseparable in it.
+`v1.3.0` (tagged 2026-08-03) carries both behaviours under measurement, verified by content rather than by SHA: `rerunUntilAccepted` in [eviction.go](../../cmd/agc/internal/provisioner/eviction.go) (Q503) and the `contextData.github.run_id` extraction in [payload.go](../../cmd/agc/internal/provisioner/payload.go) (Q495).
 All five images are published at that tag, so the run sets `GMC_IMG`/`AGC_IMG`/`WORKER_IMG`/`WRAPPER_IMG`/ `PROXY_IMG` to `ghcr.io/actions-gateway/<name>:v1.3.0` and lets the specs compile from the branch.
 Test code does not ship in the image, so the new assertions run against released binaries.
 
@@ -224,7 +230,8 @@ A defect found on the scale-set arm would move that arm's pin to whichever relea
 
 **Two verifications rode the same work, and both are now closed.** Neither needed a tier of its own, so both became assertions on the classic spec:
 
-- **Q503 — verified, 20 calls.** The retry loop shipped 2026-07-30 (#1010) and `E2E_GitHub_EvictedWorkerLatencyAndRerun` already failed a refused re-run (Q510), but it could not separate "the loop outlasted GitHub's refusal window" from "GitHub accepted the first call" — a fire-once recovery would have passed on any run GitHub happened to have concluded. `rerunUntilAccepted` logs `rerunCalls` on the acceptance line ([eviction.go](../../cmd/agc/internal/provisioner/eviction.go)), so the spec now reads that count and requires at least one absorbed refusal.
+- **Q503 — verified, 20 calls.** The retry loop shipped 2026-07-30 (#1010) and `E2E_GitHub_EvictedWorkerLatencyAndRerun` already failed a refused re-run (Q510), but it could not separate "the loop outlasted GitHub's refusal window" from "GitHub accepted the first call" — a fire-once recovery would have passed on any run GitHub happened to have concluded.
+  `rerunUntilAccepted` logs `rerunCalls` on the acceptance line ([eviction.go](../../cmd/agc/internal/provisioner/eviction.go)), so the spec now reads that count and requires at least one absorbed refusal.
   Measured 2026-08-03: **20** on the classic tier and **20** on scale-set, against a ~9.5-minute conclusion at a 30-second retry interval.
 - **Q544 — verified.** The `run-id` and `repository` annotations were both present on a real worker at live-GitHub, on a `v1.3.0` build.
   The spec no longer accepts their absence: worker lookup matches on the annotation and nothing else, so resolving at all proves `run-id`, and `repository` is asserted alongside it because the two arrive from the same payload context and `rerun-failed-jobs` needs both.
@@ -235,7 +242,8 @@ A defect found on the scale-set arm would move that arm's pin to whichever relea
   On 2026-08-03 the cancel-path spec dispatched run `30856065695` and was handed a worker annotated `30856024324`; before the assertion it would have cancel-tested a run it never dispatched, and passed.
   Freshness is gone as an identity signal.
 
-**The scale-set arm needs a tenant that has never existed.** The live-GitHub suite runs one classic v1 tenant. `E2E_AGC_ScaleSetAcquisition` and `E2E_AGC_ScaleSetRecovery` both run against fakegithub, and `cmd/probe` Investigation E drives the scale-set wire from a standalone binary rather than from a deployed AGC.
+**The scale-set arm needs a tenant that has never existed.** The live-GitHub suite runs one classic v1 tenant.
+`E2E_AGC_ScaleSetAcquisition` and `E2E_AGC_ScaleSetRecovery` both run against fakegithub, and `cmd/probe` Investigation E drives the scale-set wire from a standalone binary rather than from a deployed AGC.
 So this measurement stands up a v2 object set — `ActionsGateway`, `RunnerTemplate`, ScaleSet-protocol `RunnerSet` — with `githubURL` naming the fixture repo directly, in its own namespace, inside the existing `github-real` `Ordered` container (a second top-level container would run concurrently with it, which is the Q511 collision inside one process).
 
 Three constraints shape it:
@@ -244,7 +252,8 @@ Three constraints shape it:
    So the fixture workflow's `runs-on` has to be that label, and it cannot be `e2e` without colliding with the classic tenant's runner group.
 2. **The fixture workflow takes `runs-on` as a `workflow_dispatch` input.** `drain-probe.yml` in `actions-gateway/gateway-test` pinned `runs-on: e2e`; it now takes an input defaulting to `e2e`, so the classic measurement is unchanged and one fixture serves both tiers.
    This is also the change [Q530](../STATUS.md#Q530) names as its prerequisite for live-run isolation, so that row is partly unblocked.
-3. **The listener's bootstrap is asserted before anything is dispatched.** A tenant that never registers its scale set would otherwise surface as "the job stayed queued for ten minutes" — indistinguishable from GitHub being slow, from a label mismatch, and from the runner group's public-repository rule. `Listener.Start` publishes `Degraded=False/SessionAuthorized` only after ensuring the scale set *and* opening the session, so that condition is checked first and its failure dumps every condition on the RunnerSet.
+3. **The listener's bootstrap is asserted before anything is dispatched.** A tenant that never registers its scale set would otherwise surface as "the job stayed queued for ten minutes" — indistinguishable from GitHub being slow, from a label mismatch, and from the runner group's public-repository rule.
+   `Listener.Start` publishes `Degraded=False/SessionAuthorized` only after ensuring the scale set *and* opening the session, so that condition is checked first and its failure dumps every condition on the RunnerSet.
 
 The eviction arm then mirrors the classic spec: overshoot the runner container's ephemeral-storage limit, wait for `Failed/Evicted`, measure the kubelet's `finishedAt` against GitHub's `completed_at`, and assert one budget slot reserved at `tier="scaleset"`, a re-run accepted after more than one call, and a second attempt created.
 
@@ -253,8 +262,10 @@ Pointing `githubURL` at the fixture repo was sufficient: it registered, sessione
 
 **What cost two runs instead was the container's shape**, and both causes are now fixed in the harness rather than worked around:
 
-- The container's `BeforeAll` strips the GMC's `AGC_EXTRA_*` fakegithub overrides cluster-wide, so the rest of the suite cannot run beside it — five fakegithub-backed specs timed out unable to register a session. `SUITE=live-github` selects the label.
-- `--timeout` is a whole-suite budget and 30m does not fit an `Ordered` container whose specs wait out two ~10-minute conclusions; a run was interrupted in the sixth of seven specs. `SUITE=live-github` raises it to 90m.
+- The container's `BeforeAll` strips the GMC's `AGC_EXTRA_*` fakegithub overrides cluster-wide, so the rest of the suite cannot run beside it — five fakegithub-backed specs timed out unable to register a session.
+  `SUITE=live-github` selects the label.
+- `--timeout` is a whole-suite budget and 30m does not fit an `Ordered` container whose specs wait out two ~10-minute conclusions; a run was interrupted in the sixth of seven specs.
+  `SUITE=live-github` raises it to 90m.
 - Ginkgo skips the remainder of an `Ordered` container after a failure, so this spec being declared last made every spec ahead of it a gate — it lost two full runs that way at ~55 minutes each.
   It now carries a `scaleset-live` label (`SUITE=live-github-scaleset`) so the measurement can be retaken alone.
 
@@ -307,7 +318,8 @@ On a post-Q495 build that is the branch it takes.
 Two sessions ran live-GitHub on 2026-07-29 from separate worktrees and separate kind clusters, and still collided.
 Cluster isolation does not help, because the shared resources are on GitHub's side:
 
-- **One fixture repo and one workflow.** Both sessions dispatch `drain-probe.yml` to `actions-gateway/gateway-test`. `dispatchAndResolveRun` identifies its run as "the one that was not there before" — which is the *other* session's run when two dispatches land seconds apart.
+- **One fixture repo and one workflow.** Both sessions dispatch `drain-probe.yml` to `actions-gateway/gateway-test`.
+  `dispatchAndResolveRun` identifies its run as "the one that was not there before" — which is the *other* session's run when two dispatches land seconds apart.
 - **One `runs-on` label, one org.** Every live-GitHub tenant registers runners labelled `e2e` in the `actions-gateway` org, so GitHub may route either session's job to either cluster's gateway.
   The two are entangled even when the clusters are not.
 - **No run-id annotation to disambiguate by** — Q495, since fixed, but absent for these runs — so `runningWorkerForRun` fell back to "the sole Running worker" and gave up when there were two.
@@ -386,7 +398,8 @@ The pod never published *any* terminal phase, let alone `PodFailed`/`Evicted`: i
 Nothing either tier's detection reads ever existed.
 Observing the rerun at this tier needed fakegithub to answer and record the call at all, which it now does (`/control/reruns`); the spec first asserts the AGC's `GITHUB_API_BASE_URL` points at fakegithub, so the absence it measures cannot be an absence of instrumentation.
 
-**The second finding, which the experiment was not looking for.** The AGC stamps every worker pod `safe-to-evict: false`, Karpenter `do-not-disrupt`, and the descheduler's prefer-no-eviction marker ([`defaults.go`](../../cmd/agc/internal/provisioner/defaults.go)) precisely so a mid-job worker is not disrupted. `kubectl drain` honours none of them — they are advisory to autoscalers and deschedulers, not to the Eviction API — and worker pods carry no PodDisruptionBudget.
+**The second finding, which the experiment was not looking for.** The AGC stamps every worker pod `safe-to-evict: false`, Karpenter `do-not-disrupt`, and the descheduler's prefer-no-eviction marker ([`defaults.go`](../../cmd/agc/internal/provisioner/defaults.go)) precisely so a mid-job worker is not disrupted.
+`kubectl drain` honours none of them — they are advisory to autoscalers and deschedulers, not to the Eviction API — and worker pods carry no PodDisruptionBudget.
 So an operator draining a node is the one disruption source that is *neither* deflected by the disruption-safety markers *nor* recovered by eviction recovery.
 Every other disruption path is covered by one or the other.
 
@@ -526,7 +539,8 @@ A preemption is the same removal, so the same answer is expected — but it is i
 
 Fill the namespace `ResourceQuota`, submit more jobs than fit, and assert they stay queued server-side rather than claimed-and-stalled.
 
-**Correction under review: this is cheaper than #819 assumed, and it splits.** The "visible in metrics or Events" half is already instrumented. `actions_gateway_jobs_admission_rejected_total{reason="quota"}` ships with [#793](https://github.com/actions-gateway/github-actions-gateway/pull/793) and is documented in [§4.2](../design/04-operational-flows.md#42-job-execution-flow-agc) step 2a, so asserting it needs no new plumbing.
+**Correction under review: this is cheaper than #819 assumed, and it splits.** The "visible in metrics or Events" half is already instrumented.
+`actions_gateway_jobs_admission_rejected_total{reason="quota"}` ships with [#793](https://github.com/actions-gateway/github-actions-gateway/pull/793) and is documented in [§4.2](../design/04-operational-flows.md#42-job-execution-flow-agc) step 2a, so asserting it needs no new plumbing.
 
 - **Half A (envtest) — done 2026-07-26.** Covered by [`q422_quota_admission_test.go`](../../cmd/agc/internal/controller/integration/q422_quota_admission_test.go), one test per tier the rung serves.
   Findings below.
@@ -560,8 +574,10 @@ Four choices carry the spec, each answering a way it could have passed without d
 - **The sibling gateway is stood up *after* the decline is observed.** Both gateways register into the org's Default runner group under the same `e2e` label, so GitHub may offer the job to either.
   With both up at dispatch, the sibling could take it on the first offer and the blocked gateway would never see it — a green run with no decline in it.
   Bringing the sibling in late makes the ordering a property of the spec instead of GitHub's routing.
-- **The claim is disproven by the backstop's silence, not by an absent pod.** A job that *was* claimed and whose worker pod the quota then rejected also leaves no pod; that claim-and-stall is the exact failure the rung exists to prevent, and half A names the same trap. `createPodWithQuotaRetry` logs `pod creation blocked by namespace quota` at Info on every quota-rejected create, so **zero** such lines, beside the gate's own `reason=quota` decline, is what says the job was left at GitHub rather than claimed and abandoned.
-- **The quota constrains `pods`, not `requests.cpu`.** A CPU quota rejects any pod that declares no CPU request, which is why a quota'd tenant needs a `LimitRange` (Q262) — the tenant's own control plane would become collateral. `pods` filled to the namespace's live occupancy models a busy namespace the way half A's `hard − used` arithmetic does, without that side effect.
+- **The claim is disproven by the backstop's silence, not by an absent pod.** A job that *was* claimed and whose worker pod the quota then rejected also leaves no pod; that claim-and-stall is the exact failure the rung exists to prevent, and half A names the same trap.
+  `createPodWithQuotaRetry` logs `pod creation blocked by namespace quota` at Info on every quota-rejected create, so **zero** such lines, beside the gate's own `reason=quota` decline, is what says the job was left at GitHub rather than claimed and abandoned.
+- **The quota constrains `pods`, not `requests.cpu`.** A CPU quota rejects any pod that declares no CPU request, which is why a quota'd tenant needs a `LimitRange` (Q262) — the tenant's own control plane would become collateral.
+  `pods` filled to the namespace's live occupancy models a busy namespace the way half A's `hard − used` arithmetic does, without that side effect.
 - **The observable is the AGC log, not the rejection counter.** The counter (`..._admission_rejected_total{reason="quota"}`) is half A's observable and is asserted there directly.
   At this tier the AGC's metrics endpoint is TLS- and authn-gated inside the tenant namespace, and reaching it means a scrape pod in a namespace this spec has deliberately filled to its pod ceiling.
   The decline log line carries the same `reason` label and states the consequence — the job is left queued — so it is the cheaper read of the same fact.

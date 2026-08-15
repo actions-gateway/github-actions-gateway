@@ -3,7 +3,8 @@
 **Status:** **Option A live-confirmed by re-route #5 (2026-07-04) and flipped ON by default (`AGC_FANOUT_COMPLETION`, opt out with `=false`).
 Q260 DONE; Q224's fan-out blocker cleared (a pristine full-matrix green is now gated only on `maxWorkers` worker-capacity tuning, Q248 — not the accounting gap).** The winner of a fanned-out job tracks every deduped sibling delivery and, on completion, fans a `completejob` out to each (keyed on the sibling's own `RunnerRequestID`, with the winner's pod-phase-proxy result); a late redelivery within the linger window is resolved with the recorded terminal result.
 The one load-bearing assumption — does GitHub honour a non-running delivery's completion, and does resolving *all* siblings conclude the job? — is **confirmed YES**: re-route #5 observed `completejob` on a live sibling's own job ID return **OK** (not "already resolved"), the winner's own delivery carry the real workflow result, previously-wedged concurrent jobs conclude **green**, the Q259 recycle 422 clear per job on winner completion, and **no** job cancel at the ~15-minute timeout.
-Completion is **per-delivery, not planID-scoped**, so the secure-by-default concern (a green sibling proxy masking a red workflow) does not arise — the flag is on by default. `TestAGC_Q260_FanoutCompletionReconciles` (the gate) passes; the companion `…AccountingGap` (flag off) still asserts the pre-fix wedge.
+Completion is **per-delivery, not planID-scoped**, so the secure-by-default concern (a green sibling proxy masking a red workflow) does not arise — the flag is on by default.
+`TestAGC_Q260_FanoutCompletionReconciles` (the gate) passes; the companion `…AccountingGap` (flag off) still asserts the pre-fix wedge.
 
 This closed the last blocker for Q224 "route production CI green," after the earlier Q260 work closed capacity (Q248), Secret/Pod collisions (#512), and the planID dedup key ([`q260-planid-dedup-refix.md`](q260-planid-dedup-refix.md)).
 Full live evidence: [`gke-dogfood.md`](gke-dogfood-turnup-findings.md) re-route #4 (fails-today control) + re-route #5 (Option A confirmed).
@@ -58,7 +59,8 @@ Modern ARC (`gha-runner-scale-set`) never surfaces it because it runs **one** `R
 ARC separates *acquire* (one listener) from *run* (a fresh pod).
 
 GAG instead runs a permanent baseline plus up to `maxListeners` concurrent long-polling sessions per RunnerGroup, **each independently able to `acquirejob`** ([`02-architecture.md`](../../design/02-architecture.md)).
-That is the ~60 KiB/session virtual-runner model GAG is built on — and it is exactly what lets GitHub hand one job to several sessions, all acquire it (shared planID), and leave N assignments for one logical job. **The fan-out is intrinsic to the many-acquirers topology**; the dedup and this completion reconciliation are the tax that topology pays.
+That is the ~60 KiB/session virtual-runner model GAG is built on — and it is exactly what lets GitHub hand one job to several sessions, all acquire it (shared planID), and leave N assignments for one logical job.
+**The fan-out is intrinsic to the many-acquirers topology**; the dedup and this completion reconciliation are the tax that topology pays.
 Option E treats the cause instead of the symptom.
 
 ---
@@ -215,7 +217,8 @@ Full evidence: [`gke-dogfood.md`](gke-dogfood-turnup-findings.md) re-route #5.
 The alternative outcomes the experiment was designed to distinguish, for the record:
 - **`skipped` acks but a real result concludes** → wire the pod-phase proxy (already the default in #521).
   Confirmed: the winner's real result concludes the job; siblings only need releasing.
-- **Even resolving all siblings does not conclude the job** (most-recent-delivery authority) → would have been a **NO-GO**: gap GitHub-server-side, Q224 infeasible via many-acquirers, **Option E (single-acquirer topology)** the path. **This did not occur** — resolving all siblings concludes the job.
+- **Even resolving all siblings does not conclude the job** (most-recent-delivery authority) → would have been a **NO-GO**: gap GitHub-server-side, Q224 infeasible via many-acquirers, **Option E (single-acquirer topology)** the path.
+  **This did not occur** — resolving all siblings concludes the job.
 
 Also fix the orthogonal Q239 regression before #5 (the dogfood `RunnerTemplate` reverted to the toolchain-less upstream image — `make: command not found`), so a non-green result is attributable to accounting, not the runner image ([`gke-dogfood.md`](gke-dogfood-turnup-findings.md) re-route #4 secondary observation).
 
@@ -223,7 +226,8 @@ Also fix the orthogonal Q239 regression before #5 (the dogfood `RunnerTemplate` 
 
 ## 6. Test strategy
 
-- **Offline gate — ✅ green.** The fan-out accounting model + the two listener tests in §3. `TestAGC_Q260_FanoutCompletionReconciles` (the acceptance gate, `t.Skip` removed) now passes with the flag on; `…AccountingGap` (flag off) still asserts the cancelled wedge.
+- **Offline gate — ✅ green.** The fan-out accounting model + the two listener tests in §3.
+  `TestAGC_Q260_FanoutCompletionReconciles` (the acceptance gate, `t.Skip` removed) now passes with the flag on; `…AccountingGap` (flag off) still asserts the cancelled wedge.
   No turn-up needed.
 - **Option A unit/envtest coverage — ✅ landed.**
   - `TestAGC_Q260_WinnerCompletesEachSibling` (listener): the winner issues exactly one `completejob` per deduped sibling, keyed on the sibling's own `RunnerRequestID`, with the pod-phase-proxy result.
@@ -257,7 +261,8 @@ The residual throughput blocker is a **fixable AGC recycle-robustness gap**, not
   Built `agc:e2e-cacd4c6` (amd64, `sha256:ec25509…`), deployed via the GMC `AGC_IMAGE` patch with the explicit `AGC_FANOUT_COMPLETION` env **removed** — verifying the *shipped* default-on (confirmed live: warm-up 5×, run 2 2× `completed a deduped sibling delivery via completejob`).
 - Capacity = the re-route #4/#5 stable pool: non-preemptible `workers-od` (`e2-standard-4` ×3, on-demand), default-pool 2, spot `workers` pinned to 0/0 (no preemption confound).
   SSD `3×100 + 2×50 + 20 = 420 < 500`.
-- The Q265 lever: `maxListeners` set **far above** `maxWorkers × fan-out-width` (48, then 16; fan-out width ≈ 6 per re-route #4) so listener supply could not bottleneck. `maxWorkers = 4` (SSD-bounded — see caveat).
+- The Q265 lever: `maxListeners` set **far above** `maxWorkers × fan-out-width` (48, then 16; fan-out width ≈ 6 per re-route #4) so listener supply could not bottleneck.
+  `maxWorkers = 4` (SSD-bounded — see caveat).
 - Load: the same ~7-job concurrent matrix as re-route #5 (`unit-test.yml` 6 jobs + `integration-test.yml`), push-event reruns (concurrency-immune).
 - Sampled every 15 s: online runners (≈ active listener sessions), busy runners, worker-pod occupancy (`actions-gateway/plan-id`), + AGC debug-log marker counts.
 
@@ -291,13 +296,15 @@ A clean "pool holds at maxWorkers" measurement was **not** achieved:
   A 4-worker pool cannot prove no-wall at a *wide* pool; the tax, even shown non-binding here, is untested at `maxWorkers ≫ 4`.
 - **Stale runner-record clutter** (47 offline `ci-*` records — prior re-routes + this session's `maxListeners` changes) inflates the 409/422 recycle-conflict rate.
   Cleaning it (mass runner-record delete) was **denied by the write-safety guard** on the shared repo, so a clean-namespace run was impossible in-session. re-route #5 (which *recovered* to 5 sessions) ran on a cleaner namespace, `maxListeners = 8`, longer jobs — consistent with the collapse being *provoked* (not purely inherent) by clutter + over-cranked `maxListeners` + short/failing jobs.
-- So the two live possibilities — (a) clutter-only artifact, Option A sufficient with namespace hygiene; (b) a fundamental slot-stranding gap needing the recycle fix — **cannot be distinguished without a clean run**. **Both** agree the tax is not the wall.
+- So the two live possibilities — (a) clutter-only artifact, Option A sufficient with namespace hygiene; (b) a fundamental slot-stranding gap needing the recycle fix — **cannot be distinguished without a clean run**.
+  **Both** agree the tax is not the wall.
 
 ### Recommendation
 
 - **Q264 stays DEFERRED.** No completion-tax wall observed; the tax is never the binding constraint.
   Do not start the Option E rewrite on this evidence.
-- **Fix the recycle slot-stranding seam** (new Queue item, Q259/Q114 family), then **re-benchmark on a fresh, clean dogfood namespace** at moderate `maxListeners` (≈ 8–16), with `maxWorkers` widened, to obtain the clean "holds at maxWorkers" measurement Q265 set out to get. **Update (re-route #7, 2026-07-05):** the `maxWorkers` widening needs **no SSD-quota bump** — right-sizing the worker boot disk `pd-balanced → pd-standard` takes it off the SSD quota (Q248, done).
+- **Fix the recycle slot-stranding seam** (new Queue item, Q259/Q114 family), then **re-benchmark on a fresh, clean dogfood namespace** at moderate `maxListeners` (≈ 8–16), with `maxWorkers` widened, to obtain the clean "holds at maxWorkers" measurement Q265 set out to get.
+  **Update (re-route #7, 2026-07-05):** the `maxWorkers` widening needs **no SSD-quota bump** — right-sizing the worker boot disk `pd-balanced → pd-standard` takes it off the SSD quota (Q248, done).
   The re-benchmark then confirmed Q266's seam is gone but surfaced the *real* residual: the online-session / broker-credential recycle churn keeps the online idle pool near 0 (see §8 and re-route #7), so the clean measurement is still gated on that seam + a clean namespace.
 - **Q224's throughput residual** stays open, now attributed to (a) the recycle seam above and (b) worker capacity ([Q248](../../STATUS.md)) — both tuning/fix, not architectural.
 
@@ -324,7 +331,8 @@ Key properties:
 **Regression test.** `TestListener_Q266_FanoutLoserDefersRecycleUntilWinnerCompletes` ([`goroutine_q266_test.go`](../../../cmd/agc/internal/listener/goroutine_q266_test.go)) drives a sustained fan-out burst through the `brokertest` fan-out model with a `RecycleAgent` that `422`s until the winner concludes (the live mechanism), and asserts the pool **holds** — no loser strands+exits while the winner runs, and each loser recycles in place on the winner's conclusion.
 It FAILS against pre-Q266 behaviour (the eager losers exit) and needs no GKE turn-up.
 
-**Live re-benchmark (2026-07-05, [`gke-dogfood.md`](gke-dogfood-turnup-findings.md) re-route #7).** Q266's targeted seam is **confirmed eliminated live**: at moderate `maxListeners = 12` the fatal `deregister conflicting`/`recycle blocked` listener exits that collapsed the pool in §7 (41/38) were **0**; deduped losers **park** (busy-at-GitHub, pod-less) instead of exiting; Option A `completejob` (5) and dedup (7) fired. **But full-matrix green / "holds at `maxWorkers`" was STILL not obtained.** The residual is neither Q266's seam nor the `completejob` tax (0 `worker capacity full`) — it is a **two-way bind**: throughput needs `maxListeners ≈ maxWorkers × fan-out`, yet a wide `maxListeners` (48) multiplies GitHub runner records and inflates the **broker-credential / registration recycle churn** (Q259/Q114 — `"Registration … was not found"`) that keeps the **online idle pool near 0**, collapsing to `online = 0`; a moderate `maxListeners` (12) is stable but serializes to ≈ `maxListeners / fan-out ≈ 2` concurrent jobs.
+**Live re-benchmark (2026-07-05, [`gke-dogfood.md`](gke-dogfood-turnup-findings.md) re-route #7).** Q266's targeted seam is **confirmed eliminated live**: at moderate `maxListeners = 12` the fatal `deregister conflicting`/`recycle blocked` listener exits that collapsed the pool in §7 (41/38) were **0**; deduped losers **park** (busy-at-GitHub, pod-less) instead of exiting; Option A `completejob` (5) and dedup (7) fired.
+**But full-matrix green / "holds at `maxWorkers`" was STILL not obtained.** The residual is neither Q266's seam nor the `completejob` tax (0 `worker capacity full`) — it is a **two-way bind**: throughput needs `maxListeners ≈ maxWorkers × fan-out`, yet a wide `maxListeners` (48) multiplies GitHub runner records and inflates the **broker-credential / registration recycle churn** (Q259/Q114 — `"Registration … was not found"`) that keeps the **online idle pool near 0**, collapsing to `online = 0`; a moderate `maxListeners` (12) is stable but serializes to ≈ `maxListeners / fan-out ≈ 2` concurrent jobs.
 Un-cleanable stale records (guard-blocked mass-delete) compound it.
 A clean measurement needs the **online-session / broker-credential recycle seam** fixed *and* a clean namespace — both still blocked in-session, so [Q224](../../STATUS.md) full-matrix green **cannot yet be claimed**.
 Separately, the `maxWorkers ≈ 4` SSD ceiling §7's honest-bounds flagged is **resolved** — not via an SSD-quota bump but by right-sizing the worker boot disk to `pd-standard` (off the SSD quota entirely), see [`dogfood-runner-rightsizing.md`](../dogfood-runner-rightsizing.md#node-pool-disk-class-the-real-maxworkers-ceiling-q248-2026-07-05).
@@ -334,7 +342,8 @@ Separately, the `maxWorkers ≈ 4` SSD ceiling §7's honest-bounds flagged is **
 The clean-namespace wide-pool close-out ([`gke-dogfood.md`](gke-dogfood-turnup-findings.md) re-route #8, `agc:e2e-63cddfc`, fresh `dogfood8`/`ci8`/`gag-ci8`, `maxListeners = 48`, `maxWorkers = 8`, non-preemptible `pd-standard` capacity, no mid-run restart) closes out the seam accounting from re-route #7:
 
 - **The broker-credential recycle collapse seam is GONE.** At the exact `maxListeners = 48` that collapsed #7's pool to `online = 0`, the pool **held** for a 20-minute window with **0** token-400 (`"Registration … was not found"`), **0** Q267 ride-out retries, **0** fatal `deregister conflicting` exits, **0** `worker capacity full`.
-  (Nuance: the token-400 *condition never arose* — 0 occurrences — because Q266 parks losers instead of recycling and the clean namespace removed the stale-record amplifier; so the wide-pool hold is a property of the **Q266 + Q267 + clean-ns** stack, and Q267's retry path stays covered by its offline repro, not exercised live.) **Q267: DONE.**
+  (Nuance: the token-400 *condition never arose* — 0 occurrences — because Q266 parks losers instead of recycling and the clean namespace removed the stale-record amplifier; so the wide-pool hold is a property of the **Q266 + Q267 + clean-ns** stack, and Q267's retry path stays covered by its offline repro, not exercised live.)
+  **Q267: DONE.**
 
 - **Option A's accounting is correct — but fan-out *dispatch* starves distinct jobs.** The AGC received **only 2 distinct planIDs**; both ran and concluded **green**.
   GitHub fanned **one** planID out as ~6 sibling deliveries (all deduped + `completejob`-released, correctly), but the **other 5 jobs' planIDs were never delivered** while GitHub marked those jobs `in_progress` on the recycled stable-named runners — leaving them wedged `in_progress` **indefinitely** (run-level status froze `completed/success` while the jobs API stayed `in_progress` >1h).
@@ -342,14 +351,17 @@ The clean-namespace wide-pool close-out ([`gke-dogfood.md`](gke-dogfood-turnup-f
   This **refines §5's "reconcilable AGC-side"**: the *completion* accounting is reconcilable (a job that *receives its planID* concludes green), but the fan-out *dispatch* stochastically starves distinct jobs (#5 got 3/7 green, #8 got 2/7 with 5 wedged), so a **reliable** full-matrix green is **not** achievable on the classic many-acquirers protocol.
 
 - **Consequence for Q264.** This is a real throughput/assignment **wall** — distinct from the `completejob`-tax wall §7 ruled out (0 capacity rejections) — driven by GitHub's server-side fan-out assignment against GAG's many-acquirers + stable-name single-use ([Q114](../../STATUS.md)) topology.
-  It **strengthens the [Option E / Q264](../q264-scale-set-protocol.md) case** (one acquirer, one authoritative stream, no sibling deliveries, no per-name recycle) — which eliminates the class by construction — though Q264 stays a deferred v-next decision, not force-triggered. **Q224/Q242 stay open**, now blocked on the fan-out dispatch topology, not on any recycle/capacity/tax seam (all resolved).
+  It **strengthens the [Option E / Q264](../q264-scale-set-protocol.md) case** (one acquirer, one authoritative stream, no sibling deliveries, no per-name recycle) — which eliminates the class by construction — though Q264 stays a deferred v-next decision, not force-triggered.
+  **Q224/Q242 stay open**, now blocked on the fan-out dispatch topology, not on any recycle/capacity/tax seam (all resolved).
   Evidence: AGC debug logs (`agc:e2e-63cddfc`), reruns `28734640377`/`28734640415` (burst `08:50:22Z`).
 
-- **AGC-side escape-hatch spike — none found (2026-07-05).** #8's "Option E is the structural fix" conclusion was stress-tested for an AGC-side lever before the Q264 go/no-go, in [`q224-fanout-dispatch-lever-spike.md`](../q224-fanout-dispatch-lever-spike.md): unique/ephemeral names are a non-lever (add no distinct idle sessions; #8 orphaning is runner-id churn), and a warm idle **listener** baseline (≠ Q261 warm *worker* pods) is at best a probabilistic green-rate stopgap that converges on a dominated reimplementation of the scale-set model. **Verdict: Option E ([Q264](../q264-scale-set-protocol.md)) is the only reliable fix — #530 stands.**
+- **AGC-side escape-hatch spike — none found (2026-07-05).** #8's "Option E is the structural fix" conclusion was stress-tested for an AGC-side lever before the Q264 go/no-go, in [`q224-fanout-dispatch-lever-spike.md`](../q224-fanout-dispatch-lever-spike.md): unique/ephemeral names are a non-lever (add no distinct idle sessions; #8 orphaning is runner-id churn), and a warm idle **listener** baseline (≠ Q261 warm *worker* pods) is at best a probabilistic green-rate stopgap that converges on a dominated reimplementation of the scale-set model.
+  **Verdict: Option E ([Q264](../q264-scale-set-protocol.md)) is the only reliable fix — #530 stands.**
 
 ## 10. Q265 — close-out: comparison settled, ScaleSet decisively wins (2026-07-06)
 
-Q265 asked for a head-to-head fan-out (Option A / classic) vs scale-set throughput benchmark at a wide worker pool. **Both sides have now been measured live on the dogfood cluster under the clean conditions Q265 required — the two confounders that previously blocked a clean "holds at `maxWorkers`" run (the Q266 loser-slot-stranding seam §8 and the Q267 online-session / broker-credential recycle seam §9) are fixed, and the SSD `maxWorkers` cap is gone (workers on `pd-standard`, [Q248](../../STATUS.md)).
+Q265 asked for a head-to-head fan-out (Option A / classic) vs scale-set throughput benchmark at a wide worker pool.
+**Both sides have now been measured live on the dogfood cluster under the clean conditions Q265 required — the two confounders that previously blocked a clean "holds at `maxWorkers`" run (the Q266 loser-slot-stranding seam §8 and the Q267 online-session / broker-credential recycle seam §9) are fixed, and the SSD `maxWorkers` cap is gone (workers on `pd-standard`, [Q248](../../STATUS.md)).
 No further turn-up is needed: the comparison is decided.**
 
 ### The measured comparison

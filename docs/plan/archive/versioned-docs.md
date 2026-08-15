@@ -29,11 +29,14 @@ Adopt [`mike`](https://github.com/jimporter/mike), MkDocs Material's first-party
 - **Pages source stays "GitHub Actions" (not branch-serving).** mike maintains the version tree on the `gh-pages` branch; the `publish` job serves that tree as the Pages **artifact**.
   This keeps full control of the artifact root, which matters for the custom domain: mike does **not** keep a root `CNAME`, so the workflow re-asserts `docs/CNAME` at the artifact root every deploy.
   Branch-serving would have required a server-side Pages-source change and risked mike clobbering the root CNAME.
-- **`--alias-type=copy` for aliases.** GitHub Pages artifact deploys don't follow symlinks, so mike's default symlinked `stable/` would 404 on deep links. `copy` makes `stable/` a real directory; `stable/operations/…` resolves.
+- **`--alias-type=copy` for aliases.** GitHub Pages artifact deploys don't follow symlinks, so mike's default symlinked `stable/` would 404 on deep links.
+  `copy` makes `stable/` a real directory; `stable/operations/…` resolves.
 - **Trigger model mirrors `publish.yml`.** A stable `v*` tag deploys the release; a prerelease tag (`0.x`, `-rc`/`-alpha`/`-beta`) does not deploy — the same prerelease test `publish.yml` uses (Q293), so the site republishes on exactly the tags that ship a stable chart.
-  A `main` push refreshes `dev`. `workflow_dispatch` deploys an explicit `version`/`alias` (for seeding and manual redeploys).
+  A `main` push refreshes `dev`.
+  `workflow_dispatch` deploys an explicit `version`/`alias` (for seeding and manual redeploys).
 - **`stable`/default is semver-aware, not latest-tag-wins.** A stable tag claims the `stable` alias + the default root redirect **only when it is the highest released version** (`mike list` → `sort -V`).
-  This handles patch releases: a backport to an older supported line (e.g. `v1.2.5` cut after `v1.3.0`) publishes its own version without demoting the site from `1.3.0`.
+  This handles patch releases: a backport to an older supported line (e.g.
+  `v1.2.5` cut after `v1.3.0`) publishes its own version without demoting the site from `1.3.0`.
   Because `mike` builds each version from its tag, a patch tagged off the release line (not off feature-ahead `main`) carries only that line's content — so correct release engineering makes the docs correct for free; no docs-specific branch is needed.
   See [release.md § Patch releases and backports](../../operations/release.md#patch-releases-and-backports).
 

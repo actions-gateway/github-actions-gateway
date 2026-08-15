@@ -32,7 +32,8 @@ Identical in all three sightings:
 Two different ephemeral runners on two different pull requests, plus one local run, is what rules out the host temp pressure sighting 1 suspected: an ephemeral runner starts clean.
 Sighting 3's job ran on GitHub-hosted `ubuntu-latest` (`runner_group_name: GitHub Actions`), not on a self-hosted dogfood runner.
 
-**Reading sighting 3 costs a step-level look.** The failing check is named `shellcheck` and shellcheck itself passed: the job runs several steps, and the one that failed is `scripts behavioural tests (make scripts-test)`. `unit-test-gate` also reported failure because it aggregates the gating jobs' results.
+**Reading sighting 3 costs a step-level look.** The failing check is named `shellcheck` and shellcheck itself passed: the job runs several steps, and the one that failed is `scripts behavioural tests (make scripts-test)`.
+`unit-test-gate` also reported failure because it aggregates the gating jobs' results.
 One root cause, two red checks, and neither check name points at the suite.
 Read the step conclusions:
 

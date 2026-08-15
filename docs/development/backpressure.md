@@ -37,7 +37,8 @@ Real-CNI / kube-proxy / kubelet / TLS-over-tunnel behaviours are only observable
 
 ## Compress success, expand failure
 
-Test output is non-verbose by default. `go test` without `-v` prints one `ok <pkg>` line per passing package and the **full** output of any package that fails — so passing runs stay quiet and failures keep all their detail.
+Test output is non-verbose by default.
+`go test` without `-v` prints one `ok <pkg>` line per passing package and the **full** output of any package that fails — so passing runs stay quiet and failures keep all their detail.
 Add `V=1` (`make check V=1` or `make test V=1`) to stream output live when debugging a slow or hanging test: without `-v`, `go test` buffers each package's output until the package completes, so a hung test shows nothing — not even its `t.Log` lines — until it finishes or hits `-timeout`; with `-v` the output streams as it is produced.
 See [testing.md](testing.md#the-make-check-pre-review-gate).
 
@@ -72,7 +73,8 @@ Held just short of A because expectations are spread across prose plus the one c
 
 ### Self-reinforcing (correct twice → automate) — A
 The article's core principle is visibly practiced.
-[`.golangci.yml`](../../.golangci.yml) states its scope is to "catch regressions of the bugs and idiom violations tracked in Queue items 38–41." `scripts/docs/lint-backlog.sh` exists solely because the `docs/STATUS.md` format (e.g. the 250-char Notes cap) kept getting violated.
+[`.golangci.yml`](../../.golangci.yml) states its scope is to "catch regressions of the bugs and idiom violations tracked in Queue items 38–41."
+`scripts/docs/lint-backlog.sh` exists solely because the `docs/STATUS.md` format (e.g. the 250-char Notes cap) kept getting violated.
 The workspace-guard PreToolUse hook is real-time backpressure on file operations, and branch-guard is the same on git operations — prompting before commits, pushes, or destructive commands on a protected branch.
 (These two guards are harness/`CLAUDE.md`-level, not repo-tracked hook scripts; the repo does track two PreToolUse hooks of its own, `scripts/agent/claude-go-throttle-hook.sh` and `scripts/agent/claude-no-subagent-workers-hook.sh`.)
 Each is a repeated correction turned into an automated gate.

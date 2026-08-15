@@ -15,7 +15,8 @@ The GMC tests and a handful of AGC provisioner tests have not been brought in li
 
 **Files:** `cmd/gmc/internal/controller/integration/` (all test files)
 
-Every `Eventually` call in the GMC suite uses a 500ms polling interval. `TestGMC_TenantProvisioning_AllResourcesCreated` alone has 11 serial `Eventually` calls — each condition resolves in <10ms against envtest, but the test then waits up to 490ms for the next poll.
+Every `Eventually` call in the GMC suite uses a 500ms polling interval.
+`TestGMC_TenantProvisioning_AllResourcesCreated` alone has 11 serial `Eventually` calls — each condition resolves in <10ms against envtest, but the test then waits up to 490ms for the next poll.
 At 11 calls that is up to 5.5 seconds of dead time in one test.
 
 Changing all GMC `Eventually` polling from `500*time.Millisecond` to `25*time.Millisecond` is safe: envtest never needs 500ms to process a write, and 25ms gives plenty of headroom on a loaded CI machine.

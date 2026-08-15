@@ -66,7 +66,8 @@ kind get kubeconfig --name actions-gateway-e2e > tmp/kubeconfig
 ```
 
 then set `KUBECONFIG=$PWD/tmp/kubeconfig` on the `ginkgo`/`make e2e` invocation.
-The suite and everything it shells out to inherit it, no shared file is touched, and a parallel session's `use-context` cannot steal the run mid-flight. `tmp/` at the repo root is gitignored and inside the workspace, which is where scratch files belong.
+The suite and everything it shells out to inherit it, no shared file is touched, and a parallel session's `use-context` cannot steal the run mid-flight.
+`tmp/` at the repo root is gitignored and inside the workspace, which is where scratch files belong.
 
 Without it the first `kubectl` fails against the empty default — `dial tcp [::1]:8080: connect: connection refused`, usually surfacing as a cert-manager install failure in `SynchronizedBeforeSuite` rather than as anything about contexts.
 
@@ -107,7 +108,8 @@ This is the shared-resource case of the general rule that a claim cites a measur
 
 ### Image tag caching
 
-Kind nodes use `imagePullPolicy: IfNotPresent` and will keep serving the cached layer when you re-push the same tag. **Pushing to `127.0.0.1:5000/foo:e2e-abc123` a second time does not refresh what kubelet runs.**
+Kind nodes use `imagePullPolicy: IfNotPresent` and will keep serving the cached layer when you re-push the same tag.
+**Pushing to `127.0.0.1:5000/foo:e2e-abc123` a second time does not refresh what kubelet runs.**
 
 Two options:
 - Push to a unique tag per iteration (`-v2`, `-v3`, or a content hash) and update the deployment image:
@@ -241,7 +243,8 @@ A full `make e2e-up` run is ~10 minutes per cycle.
 To iterate on a single component:
 
 1. Stand up the cluster + cert-manager + GMC once with `E2E_SKIP_TEARDOWN=true make e2e RUN='<spec>'`.
-   The suite leaves the GMC, fakegithub, and cert-manager in place after it exits. `RUN` is a regex over the spec's full text, passed to ginkgo as `--focus`; it composes with `SUITE`, which picks a labelled subset.
+   The suite leaves the GMC, fakegithub, and cert-manager in place after it exits.
+   `RUN` is a regex over the spec's full text, passed to ginkgo as `--focus`; it composes with `SUITE`, which picks a labelled subset.
    A `RUN` matching no spec **fails** the run rather than reporting a green e2e: the target passes `--fail-on-empty`.
 2. Rebuild the changed component only: `docker buildx bake --file docker-bake.hcl --set "<target>.tags=127.0.0.1:5000/<name>:<unique-tag>" <target>`.
 3. Update the deployment image: `kubectl set image` (or `kubectl set env` for `AGC_IMAGE`/`PROXY_IMAGE`/`WRAPPER_IMAGE` on the GMC).
@@ -263,7 +266,8 @@ Apply failed with 1 conflict: conflict with "kubectl-patch" using apps/v1:
 `setupGMC` deletes the leftover Deployment before `make deploy` for exactly this reason (Q590), and Helm recreates it chart-owned.
 Nothing else the skipped teardown left is touched, so the fakegithub, cert-manager, and tenant-namespace state of a failed run stays inspectable right up until you start the next run.
 
-An ad-hoc `helm upgrade` against a standing release hits the same conflict. `--force-conflicts` reclaims ownership (Helm 4 only: Helm 3 has no server-side apply, so there is nothing to reclaim), which is what [`scripts/e2e/chart-upgrade-check.sh`](../../scripts/e2e/chart-upgrade-check.sh) does in its normalize step, deliberately *not* on the upgrade its assertions rest on.
+An ad-hoc `helm upgrade` against a standing release hits the same conflict.
+`--force-conflicts` reclaims ownership (Helm 4 only: Helm 3 has no server-side apply, so there is nothing to reclaim), which is what [`scripts/e2e/chart-upgrade-check.sh`](../../scripts/e2e/chart-upgrade-check.sh) does in its normalize step, deliberately *not* on the upgrade its assertions rest on.
 
 ## Watching what's actually happening
 

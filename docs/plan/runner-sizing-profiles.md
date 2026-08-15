@@ -3,7 +3,8 @@
 > **Status: ✅ Complete — Phases 1–3 shipped 2026-07-21/22 and live-validated across three dogfood sessions (two on 2026-07-25, one on 2026-07-28).
 > Residuals: [Q416](../STATUS.md#Q416) and, for the one profile still short of a live run, [Q448](../STATUS.md#Q448).** Usage observability, the status recommendation and its derivation, restart persistence, and the below-confidence fallback were confirmed in the first dogfood session.
 > The two behaviours gated on 20 sampled jobs, the `SizingDrift` verdict and `Binpack` actuating, were confirmed in a second session after Q399 migrated the tenant off the Classic protocol (which had orphaned 81% of the jobs it acquired, capping samples at 10); [`Throughput` actuated live](#throughput-actuating-live-2026-07-28) on the same tenant three days later.
-> See [Live validation](#live-validation-2026-07-25) and [Both ≥20-sample paths confirmed](#both-20-sample-paths-confirmed-2026-07-25-second-session). **`NodeShare` is the one actuating profile with no live run yet** — it carries envtest confidence only, tracked as Q448.
+> See [Live validation](#live-validation-2026-07-25) and [Both ≥20-sample paths confirmed](#both-20-sample-paths-confirmed-2026-07-25-second-session).
+> **`NodeShare` is the one actuating profile with no live run yet** — it carries envtest confidence only, tracked as Q448.
 > Both bugs this validation surfaced are Classic-tier defects rather than sizing gaps: [Q398](#editing-a-classic-runnerset-needed-an-explicit-version-fixed) is fixed, and Q416 waits on a Classic operator report.
 > This doc is the design sketch, the phase record, and the validation record.
 
@@ -57,7 +58,8 @@ Unit-tested (peak-max across ticks, single finalize, unsampled short jobs, disap
 ### Phase 2 — recommendations in `RunnerSet.status` (M) — ✅ shipped 2026-07-21
 
 - `status.sizingRecommendation`: per-container recommended `requests`/`limits` (derived from Phase 1 aggregates), plus sample count and window so operators can judge confidence.
-- A condition (e.g. `SizingDrift`) when the template's ask deviates from the recommendation beyond a threshold in either direction (waste or OOM risk).
+- A condition (e.g.
+  `SizingDrift`) when the template's ask deviates from the recommendation beyond a threshold in either direction (waste or OOM risk).
 - **Persistence:** aggregates flush into status periodically and merge back on AGC restart — status is the store; no new backing store.
 - Recommendations are advisory only in this phase; nothing changes pod specs.
 
@@ -101,7 +103,8 @@ Safety rails: never modify extended resources (GPUs); clamp within configured fl
 
 Each assertion was confirmed to fail against a mutated implementation before being trusted (headroom constant, the CPU-limit `delete`, the runner-container guard, and the clamp call each removed in turn).
 
-**Resolved for `Throughput` on 2026-07-28** ([Throughput actuating live](#throughput-actuating-live-2026-07-28), Q449). `Binpack` was already live ([Live validation](#live-validation-2026-07-25)), so `NodeShare` is now the only profile carrying envtest confidence rather than dogfood confidence — and the more consequential one to leave there, since it needs no warm-up and so is the profile an operator can enable on day one.
+**Resolved for `Throughput` on 2026-07-28** ([Throughput actuating live](#throughput-actuating-live-2026-07-28), Q449).
+`Binpack` was already live ([Live validation](#live-validation-2026-07-25)), so `NodeShare` is now the only profile carrying envtest confidence rather than dogfood confidence — and the more consequential one to leave there, since it needs no warm-up and so is the profile an operator can enable on day one.
 The live path is below.
 
 ### The live path, and why the RC gate could not have found this
@@ -133,7 +136,8 @@ Decisions taken at pickup (implementation: `cmd/agc/internal/controller/runnerse
 - **`NodeShare` declares the envelope** (`nodeShare.allocatable` + `workersPerNode`) rather than the AGC reading Node objects — the AGC is deliberately namespace-scoped (no cluster RBAC), and the operator knows which node shape the set's scheduling constraints target.
   Applied to the runner container only; sidecars are the operator's accounting.
 - **Quota/LimitRange conflicts stay a runtime signal** — the planned admission-reject rail is deliberately NOT implemented: cross-object admission validation is what §H.7's "runtime conditions, not admission" philosophy avoids (apply-order coupling, GitOps hostility), and the existing `WorkerQuota*` conditions + quota retries already surface the conflict.
-  The `maxRequests` clamp is the preventive knob. **Amended (Q489):** those cover the conflicts admission *rejects*.
+  The `maxRequests` clamp is the preventive knob.
+  **Amended (Q489):** those cover the conflicts admission *rejects*.
   The one that rejects nothing — an injected CPU limit cancelling `Throughput`, whose mechanism is that limit's absence — got its own condition, `SizingProfileOverridden`, computed by comparing the pods the profile built against what the apiserver admitted rather than by reading any policy object.
 - Open question 3 (ship `NodeShare` first) became moot — it shipped with the phase.
   Question 4 confirmed: profile parameters live on the `RunnerSet` (differently-tuned sets can share one template).
@@ -361,7 +365,8 @@ Worth stating in the operator doc, because the failure is silent until pods stop
 
 ### Session artifacts worth not repeating
 
-- **Size the system pool from `required_system_nodes`, not by hand.** A manual resize to 1 node left the AGC unschedulable (one `e2-standard-2` cannot hold GMC + Athens + AGC), and the tenant ran with no controller for 16 minutes. `scripts/dogfood/start.sh` derives the count and warns on a low pin.
+- **Size the system pool from `required_system_nodes`, not by hand.** A manual resize to 1 node left the AGC unschedulable (one `e2-standard-2` cannot hold GMC + Athens + AGC), and the tenant ran with no controller for 16 minutes.
+  `scripts/dogfood/start.sh` derives the count and warns on a low pin.
 - **`maxWorkers` is bounded by the namespace `ResourceQuota`, not just nodes.** Raising it 8 → 16 against a `pods: 12` quota put the AGC into a provision/quota-deny/retry/abandon loop and stalled sample accrual entirely.
   The quota conditions reported it precisely (`WorkerQuotaExceeded=True`, `QuotaExhausted`, with `WorkerQuotaPressure` correctly `Superseded`), which is the capacity observability doing its job on a real fault.
 - **A Running scale-set worker has no reap deadline, so an idle one is immortal.** After that churn, 8 worker pods remained alive with **zero** jobs outstanding, occupying 10 of 12 quota slots and all 6 worker nodes until deleted by hand.
@@ -401,13 +406,15 @@ The operator doc's clamp warning was scoped to `Binpack` and has been broadened 
 ### Why this could not be deployed until now
 
 The cluster was at **0 nodes across every pool** (normal at-rest state after `stop.sh`), so the GMC pod had been `Pending` ~10h and `webhook-service` had no endpoints.
-The `RunnerSet` CRD stores `v2beta1` with `Webhook` conversion, and `vrunnerset-v2alpha1.kb.io` is `failurePolicy: Fail` with `matchPolicy: Equivalent` — so a write to *either* served version is routed through the down webhook. **No CR write of any kind can land while the dogfood cluster is stopped.** Bring the cluster up first; there is no offline path.
+The `RunnerSet` CRD stores `v2beta1` with `Webhook` conversion, and `vrunnerset-v2alpha1.kb.io` is `failurePolicy: Fail` with `matchPolicy: Equivalent` — so a write to *either* served version is routed through the down webhook.
+**No CR write of any kind can land while the dogfood cluster is stopped.** Bring the cluster up first; there is no offline path.
 
 ### The multi-day soak was not needed
 
 Q449 was filed expecting a days-long accrual before the RC.
 It was not required: the aggregate is **cumulative with no TTL or eviction**, and `seedFromStatus` ([`aggregate.go`](../../cmd/agc/internal/usage/aggregate.go)) rebuilds it from persisted `status.sizingRecommendation`.
-All 36 samples from 07-25 were still counted after the stop, so the deploy was a single short window — start, patch, verify, stop — rather than a soak. **Any future sizing deploy on this tenant inherits the same property**: history is durable across stop/start, so it never has to be re-earned.
+All 36 samples from 07-25 were still counted after the stop, so the deploy was a single short window — start, patch, verify, stop — rather than a soak.
+**Any future sizing deploy on this tenant inherits the same property**: history is durable across stop/start, so it never has to be re-earned.
 
 What survives is the *summary*, not the raw distribution, and that is by design: `seed` reconstructs the histogram from the persisted `(sampleCount, observedP95, observedPeak)` triple by putting 95% of the mass at the p95 and the rest at the max.
 Sample count and peak come back exact and the p95 to bucket resolution — precisely the three statistics the recommendation reads — while the shape below the p95 is deliberately not persisted.

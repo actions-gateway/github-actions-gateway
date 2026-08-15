@@ -3,7 +3,8 @@
 ## Running tests
 
 The repo is a Go workspace (`go.work`), so `go test ./...` from the repo root does **not** work; run tests per module, or use explicit per-module patterns from the root (`go test ./broker/... ./cmd/agc/...`), which the workspace does resolve.
-See [go-workspaces.md](go-workspaces.md) for why. `make test` runs the whole workspace as **one** multi-module `go test` invocation (all `./<module>/...` patterns at once) so the modules compile and test as a single parallel build graph instead of serially (Q17).
+See [go-workspaces.md](go-workspaces.md) for why.
+`make test` runs the whole workspace as **one** multi-module `go test` invocation (all `./<module>/...` patterns at once) so the modules compile and test as a single parallel build graph instead of serially (Q17).
 
 ```bash
 (cd broker     && go test ./...)    # broker module
@@ -78,7 +79,8 @@ make e2e SUITE=single-node RUN='E2E_GMC_ProxyServiceCreated'
 ```
 
 **A filter that matches nothing is a failure, not a pass.** Left alone, both tools report success on a miss: `go test -run` prints `[no tests to run]` and exits 0, and ginkgo exits 0 having run 0 specs.
-A mistyped name then reads exactly like the test passing, which is the knob's whole purpose inverted (Q680). `make test` therefore fails when no test ran in **any** module, and `make e2e` passes `--fail-on-empty`, which also catches a `SUITE` that selects nothing:
+A mistyped name then reads exactly like the test passing, which is the knob's whole purpose inverted (Q680).
+`make test` therefore fails when no test ran in **any** module, and `make e2e` passes `--fail-on-empty`, which also catches a `SUITE` that selects nothing:
 
 ```
 ==> RUN='TestNoSuchThingAnywhere' matched no tests in any module — nothing ran
@@ -91,7 +93,8 @@ FAIL! - Detected no specs ran and --fail-on-empty is set
 
 For the one-command gate before requesting review, run `make check` from the repo root.
 To see exactly what it runs, run `make list-gates`: it prints every gate in execution order with what each one covers, rendered from the `CHECK_FAST_GATES` and `CHECK_HEAVY_GATES` variables the `check` target itself expands.
-That is the list — this page names the target rather than transcribing it, because the transcription drifted: it went the whole life of `license-header-check` and `conflict-markers-check` without mentioning either, while `make check` ran both (Q649). `make list-script-tests` does the same for the `scripts/` suites the `scripts-test` gate fans out over, for the same reason: that list was transcribed into a 1,399-character help line naming 50 of its 55 suites (Q671).
+That is the list — this page names the target rather than transcribing it, because the transcription drifted: it went the whole life of `license-header-check` and `conflict-markers-check` without mentioning either, while `make check` ran both (Q649).
+`make list-script-tests` does the same for the `scripts/` suites the `scripts-test` gate fans out over, for the same reason: that list was transcribed into a 1,399-character help line naming 50 of its 55 suites (Q671).
 
 The shape is two phases.
 First a concurrent fan-out of the cheap gates — the `docs/STATUS.md` and roadmap/plan-index coherence lints, the single-Go-version and license-header and conflict-marker checks, the v2 API and CI path-filter reconciliations, `shellcheck` and `actionlint`, the chart and codegen and API-reference drift gates, the Markdown link check, and the `scripts-test` and `claude-usage-test` suites — none of which takes a [heavy-build slot](#resource-auto-throttle-on-gui-dev-machines).
@@ -118,12 +121,14 @@ So after any dependency change, run `make vendor-sync` (the one-shot remedy) and
 As a backstop, `make check` prints a one-line reminder (via `scripts/ci/check-dep-advisory.sh`, its last step) whenever the change it sees touches a dependency file — advisory only, it never fails the gate, and it does not fire on an import-only change.
 
 **A background run's verdict covers only the tree it saw.** `make check` is routinely launched as a *background* task so the doc updates, the `docs/STATUS.md` row, and the PR body can be written while it runs — that is the recommended shape ([parallel-dispatch.md § Run the local gate in the background](parallel-dispatch.md#run-the-local-gate-in-the-background-not-on-the-critical-path)), but it means a green report can describe a tree that no longer exists.
-Every edit made while the gate is running is unverified, and that includes the parallel work itself: `docs/STATUS.md`, `docs/**`, and the plan docs are gated by `lint-backlog`, `doc-links`, `roadmap-check`, and `plan-index-check`. **Re-run `make check` over the final tree before concluding.** The confirming run is cheap — the gates covering that work are the fast ones, which take no heavy-build slot, and the heavy phases are cache-warm.
+Every edit made while the gate is running is unverified, and that includes the parallel work itself: `docs/STATUS.md`, `docs/**`, and the plan docs are gated by `lint-backlog`, `doc-links`, `roadmap-check`, and `plan-index-check`.
+**Re-run `make check` over the final tree before concluding.** The confirming run is cheap — the gates covering that work are the fast ones, which take no heavy-build slot, and the heavy phases are cache-warm.
 A **code** edit voids the verdict outright rather than merely narrowing it, and "code" means anything the gate compiles or lints: `scripts/*.sh` and the `Makefile` count, not only Go.
 
 **A `Bash` tool call during the run can turn the gate red on its own, without touching a file.** Every Bash call runs the piped-gate `PreToolUse` hook, which rebuilds the shared `.build/pipedgate` binary; `claude-piped-gate-hook-test`'s no-toolchain case `rm -f`s that same binary and then asserts the hook falls back, so a rebuild landing inside its window makes the case read a real deny payload and fail ([Q825](../STATUS.md)).
 Measured 2026-08-14: two failures in one session, the second reproducing on demand while tool calls continued and clearing immediately once the run was left alone.
-The failure names a suite the change never touched, so it reads as ambient flake rather than as something the session caused. **Once the confirming run starts, wait for its task notification and issue no Bash calls**: not a status peek, not a `git` read.
+The failure names a suite the change never touched, so it reads as ambient flake rather than as something the session caused.
+**Once the confirming run starts, wait for its task notification and issue no Bash calls**: not a status peek, not a `git` read.
 That is also the cheapest way to keep the run from being voided by an edit, since the two habits are one habit.
 
 **The exit code you read has to belong to the gate.** A verdict is only as good as the command that reported it, and the usual way that breaks is wrapping the gate in something that has an exit status of its own.
@@ -166,8 +171,10 @@ It holds one branch to its own ceiling; two branches each sitting *at* a ceiling
 Before benchmarking any change to the throttle, the parallelism cap, or the slot count, read the phase costs already measured in [local-gate-throughput.md](../plan/archive/local-gate-throughput.md) and pick a workload from them.
 Two facts there decide the experiment, and re-deriving them costs a session:
 
-- **`golangci-lint` is what saturates.** It fans out one worker per logical CPU and ignores `GOMAXPROCS`, so it — with coverage — is where `make check` spends its time. **`-race` is not part of `make check` at all**, and the full workspace race tier measures ~12–14 % mean CPU on an 18-core machine: far too little to tell two configurations apart.
-- **Only the cold-cache case is CPU-heavy — and this applies to every tier, not just lint.** Since `-trimpath` made the test-result cache shared across worktrees, a warm gate runs at ~12–14 % CPU and no throttle setting is load-bearing. **`GOCACHE` is the cache that has to be cold**, not `GOLANGCI_LINT_CACHE`: bust only the latter and a module lints in ~1 s off the warm Go build cache.
+- **`golangci-lint` is what saturates.** It fans out one worker per logical CPU and ignores `GOMAXPROCS`, so it — with coverage — is where `make check` spends its time.
+  **`-race` is not part of `make check` at all**, and the full workspace race tier measures ~12–14 % mean CPU on an 18-core machine: far too little to tell two configurations apart.
+- **Only the cold-cache case is CPU-heavy — and this applies to every tier, not just lint.** Since `-trimpath` made the test-result cache shared across worktrees, a warm gate runs at ~12–14 % CPU and no throttle setting is load-bearing.
+  **`GOCACHE` is the cache that has to be cold**, not `GOLANGCI_LINT_CACHE`: bust only the latter and a module lints in ~1 s off the warm Go build cache.
   The same trap catches the unit tier — `go test -count=1` with a warm build cache defeats only the *result* cache, leaving a few suites waiting on timers and envtest, which measured 18–36 % CPU and an identical 40 s at every `jobs` from 4 to 24 (`INVALID`).
   Warm, every tier here is execution-bound and cannot discriminate between settings; bust `GOCACHE` or expect a null.
 
@@ -194,7 +201,8 @@ Detection and sizing live in [`scripts/agent/local-throttle.sh`](../../scripts/a
 On macOS the I/O demotion matters as much as the CPU demotion: an unthrottled build already runs at a lower QoS than WindowServer yet still trips the watchdog, so the fix is throttling the build's I/O so the compositor's I/O isn't stuck behind it — and `taskpolicy` is the only macOS way to express that (there is no `ionice`).
 
 **Demote the two separately; don't clamp QoS.** The macOS prefix was `taskpolicy -c utility` until Q441.
-A `-c` clamp does more than deprioritize — it confines the entire build to one CPU cluster at a pinned frequency (21 % of an M5 Max on synthetic load, 37–39 % mean CPU on a real cold-cache lint), and because `-c` only ratchets QoS *down* there is no higher tier to select. `-d throttle` sets the disk I/O policy on its own and `nice -n 10` supplies the CPU demotion, which returns the idle clusters: **3.6× faster on the cold-cache lint that dominates `make check`, for +1.4 ms of p99 desktop scheduling latency**, with no stutter past 50 ms, no swapins and no WindowServer reports across nine runs.
+A `-c` clamp does more than deprioritize — it confines the entire build to one CPU cluster at a pinned frequency (21 % of an M5 Max on synthetic load, 37–39 % mean CPU on a real cold-cache lint), and because `-c` only ratchets QoS *down* there is no higher tier to select.
+`-d throttle` sets the disk I/O policy on its own and `nice -n 10` supplies the CPU demotion, which returns the idle clusters: **3.6× faster on the cold-cache lint that dominates `make check`, for +1.4 ms of p99 desktop scheduling latency**, with no stutter past 50 ms, no swapins and no WindowServer reports across nine runs.
 Keeping the `nice` was free — that variant beat bare `-d throttle` on *both* wall time and p99 — so a demotion of each kind is retained.
 Measurements: [local-gate-throughput.md](../plan/archive/local-gate-throughput.md).
 
@@ -212,11 +220,13 @@ Slot 1 keeps the original single-lock filename so a worktree still on the pre-se
 
 **2 is where the knee is, measured.** Aggregate throughput of M concurrent cold-cache lints, relative to one holder: 2 → 1.25×, 3 → 1.30×, 4 → 1.31×.
 Only the second slot pays for itself; beyond it the desktop tail keeps growing for nothing (worst single wake 16.8 ms at 4 holders, past a 60 Hz frame).
-A single run already reaches 81–85 % CPU on an 18-core machine, so there is little left for a second to claim — and slot 2 is worth having as much for latency as throughput, since two holders finish in 36.7 s where strict serialization needs 46 s. **Don't raise it without re-measuring**; these numbers are one machine and one repo, and the sub-4-core floor covers a case none of them touch.
+A single run already reaches 81–85 % CPU on an 18-core machine, so there is little left for a second to claim — and slot 2 is worth having as much for latency as throughput, since two holders finish in 36.7 s where strict serialization needs 46 s.
+**Don't raise it without re-measuring**; these numbers are one machine and one repo, and the sub-4-core floor covers a case none of them touch.
 Method and full tables: [local-gate-throughput.md](../plan/archive/local-gate-throughput.md).
 
 **A queued run reports itself.** While waiting for a slot it prints `==> waiting for a heavy-build slot (2 in use, queued 90s)...` on entry and every 30 s after, then `==> heavy-build slot acquired after Ns queued` once admitted (elided under 5 s).
-This matters most for a gate run in the background, where the log is the only signal there is — a single line followed by open-ended silence is indistinguishable from a hang, which is why the queue depth the semaphore exists to bound was for a long time only anecdotal. **Under a batch of parallel sessions, run the gate in the background and do your docs/PR work while it queues**, then re-run it over the final tree; the mechanics and the reason a start-time stagger does *not* help are in [parallel-dispatch.md § Run the local gate in the background](parallel-dispatch.md#run-the-local-gate-in-the-background-not-on-the-critical-path).
+This matters most for a gate run in the background, where the log is the only signal there is — a single line followed by open-ended silence is indistinguishable from a hang, which is why the queue depth the semaphore exists to bound was for a long time only anecdotal.
+**Under a batch of parallel sessions, run the gate in the background and do your docs/PR work while it queues**, then re-run it over the final tree; the mechanics and the reason a start-time stagger does *not* help are in [parallel-dispatch.md § Run the local gate in the background](parallel-dispatch.md#run-the-local-gate-in-the-background-not-on-the-critical-path).
 
 Only the make targets (via their scripts) throttle themselves, so a bare `go build`/`go test` run directly (not via `make`) bypasses it — a heavy `-race` run that way once froze the macOS GUI.
 Two safety nets cover that gap, both reusing `scripts/agent/local-throttle.sh` so they share the same activation rules and stay no-ops on CI/headless/SSH:
@@ -295,7 +305,8 @@ Measured (2026-07): **`GOCACHE` is machine-shared and path-independent at its de
 
 - **Go build cache** (`GOCACHE`, default `~/Library/Caches/go-build` on macOS, `~/.cache/go-build` on Linux).
   Compile artifacts are content-keyed and hit across worktree paths: compiling the `broker` module against an empty cache took ~12 s in one worktree and ~0.6 s in a second worktree sharing that same cache.
-- **golangci-lint analysis cache** (`GOLANGCI_LINT_CACHE`). **Per worktree on local runs** — [`scripts/go/go-lint.sh`](../../scripts/go/go-lint.sh) points it at the worktree's gitignored `tmp/golangci-lint` (an explicit `GOLANGCI_LINT_CACHE` still wins).
+- **golangci-lint analysis cache** (`GOLANGCI_LINT_CACHE`).
+  **Per worktree on local runs** — [`scripts/go/go-lint.sh`](../../scripts/go/go-lint.sh) points it at the worktree's gitignored `tmp/golangci-lint` (an explicit `GOLANGCI_LINT_CACHE` still wins).
   The user-level default (`~/Library/Caches/golangci-lint` / `~/.cache/golangci-lint`) is shared and path-independent for the expensive analysis, but a cached entry keeps the absolute path of the worktree that produced it, and worktrees get deleted: the post-processors then cannot read the source they are reporting on and emit `failed to parse file … no such file or directory` warnings followed by *contradictory* findings — observed 2026-07 (Q516) as a simultaneous `G204: Subprocess launched with variable` **and** `directive //nolint:gosec … is unused for linter "gosec"` on the same two lines, in a file whose directive was present and correct.
   Scoping trades away little: `GOCACHE` (still shared) holds the load-bearing artifacts, and off a warm build cache the analysis re-runs in ~1 s per module (see the [throttle measurements](#resource-auto-throttle-on-gui-dev-machines)) — the shared-cache hit saved ~7 s per worktree per content change, not the ~2 min cold cost.
   CI keeps the default path: runners are fresh, so the failure mode cannot occur, and `unit-test.yml`'s `actions/cache` of `~/.cache/golangci-lint` stays keyed to it.
@@ -305,7 +316,8 @@ The **test-result** cache is the third one, and it is path-keyed *at the default
 Q343 concluded from that there was "no supported knob to share test results across paths"; there is one, and the unit tier now passes it (2026-07):
 
 - **`-trimpath` makes the result cache path-independent.** The flag removes the absolute worktree path from the test binary, so the cache key depends on content alone.
-  Measured on `cmd/agc` with `-coverprofile`: **226 s cold in one worktree, 5 s on the first-ever run in a second worktree** (12 packages cached), emitting a byte-identical coverage profile — so the ratchet reads the same number either way. `broker` reproduces it: without the flag the sibling worktree re-runs, with it the sibling prints `(cached)` immediately.
+  Measured on `cmd/agc` with `-coverprofile`: **226 s cold in one worktree, 5 s on the first-ever run in a second worktree** (12 packages cached), emitting a byte-identical coverage profile — so the ratchet reads the same number either way.
+  `broker` reproduces it: without the flag the sibling worktree re-runs, with it the sibling prints `(cached)` immediately.
   [`scripts/go/go-test.sh`](../../scripts/go/go-test.sh) and [`scripts/go/coverage.sh`](../../scripts/go/coverage.sh) pass it, so a fresh worktree at an already-tested commit re-runs only the packages whose content actually changed.
 - **Do not promote it to a global `GOFLAGS`.** [`cmd/gmc/test/e2e`](../../cmd/gmc/test/e2e/e2e_suite_test.go) resolves the v2 CRD chart directory from `runtime.Caller(0)`, which a trimmed path breaks.
   The unit tier does no such thing, and the release images already build with `-trimpath`.
@@ -344,7 +356,8 @@ It is deliberately a separate target from `make test`/`make check` so the fast l
 
 ### Watching a unit run in progress
 
-Measured on the CI `-race` gate: 200 s of wall clock at 8 % output density, 58 s between any two lines — and a *deadlocked* test prints nothing whatsoever until `-timeout` fires five minutes later, leaving you to infer which test hung from a goroutine dump. `make test` and `make test-race` therefore stream through [`devtools/gotest/progress`](../../devtools/gotest/progress/main.go), which prints one line per 30 s:
+Measured on the CI `-race` gate: 200 s of wall clock at 8 % output density, 58 s between any two lines — and a *deadlocked* test prints nothing whatsoever until `-timeout` fires five minutes later, leaving you to infer which test hung from a goroutine dump.
+`make test` and `make test-race` therefore stream through [`devtools/gotest/progress`](../../devtools/gotest/progress/main.go), which prints one line per 30 s:
 
 ```
 [unit t+2:14] 37/48 pkgs | 1204 ok, 0 failed, 3 skipped | running: broker.TestLeaseExpiry (58s), cmd/agc/controller.TestReconcile/case-3 (12s)
@@ -368,7 +381,8 @@ Two deliberate differences from plain `go test` output:
 - **A failing test keeps its `=== RUN` header, with its log lines in emission order**, where plain output re-groups them under `--- FAIL`.
   Output from every test that passed or skipped is dropped, so a green package is still one `ok` line.
 
-**There is no test-level denominator**, and adding one is not worth its price. `go test -json` has no total, and recovering it needs a `go test -list '.*'` pre-pass — measured at 22 s wall / 131 s CPU with a warm build cache, because `-list` compiles every test binary *before* any test runs, which also serializes the compile that [`go-test.sh`](../../scripts/go/go-test.sh)'s single workspace-wide invocation exists to overlap with test execution.
+**There is no test-level denominator**, and adding one is not worth its price.
+`go test -json` has no total, and recovering it needs a `go test -list '.*'` pre-pass — measured at 22 s wall / 131 s CPU with a warm build cache, because `-list` compiles every test binary *before* any test runs, which also serializes the compile that [`go-test.sh`](../../scripts/go/go-test.sh)'s single workspace-wide invocation exists to overlap with test execution.
 The package denominator comes from `go list` instead: ~0.3 s, no compilation.
 The test tally counts top-level tests only — subtests are created at run time, so counting them would make the number depend on which table cases happened to execute.
 
@@ -422,7 +436,8 @@ Lowering a floor is allowed but lands as an explicit, reviewable diff in that fi
 A floor is one `grep` away in a file the gate itself reads, so a second copy earns nothing and misleads whoever trusts it.
 
 Unlike `make test-race` and `make vulncheck`, `cover-check` **is** the unit-test step of `make check`: it supersets `make test` — the same unit-test packages, the same single workspace-wide invocation, streamed as the same `ok <pkg>` lines (honouring `V=1`), just run with `-cover` and then gated against the floors — so the local gate runs the suite a single time, not twice, and never lets a coverage regression slip past a green `make check`.
-It carries the same [local throttle](#resource-auto-throttle-on-gui-dev-machines) and machine-wide serialize lock as `make test`, so a GUI run stays desktop-safe; on CI the prefix is a no-op. `make test` remains the no-coverage target for the fastest inner loop, and `make cover-check` runs standalone when you just want the ratchet.
+It carries the same [local throttle](#resource-auto-throttle-on-gui-dev-machines) and machine-wide serialize lock as `make test`, so a GUI run stays desktop-safe; on CI the prefix is a no-op.
+`make test` remains the no-coverage target for the fastest inner loop, and `make cover-check` runs standalone when you just want the ratchet.
 
 ### Gates scan present files, not just tracked ones
 
@@ -481,7 +496,8 @@ The `lint` job is golangci-lint; a workflow-only PR shipped unlinted, and the cl
 | `uses: actions/checkout@` — empty ref | `owner and repo and ref should not be empty` \[action] |
 | Unquoted expansion in an inline `run:` block | `SC2086 … Double quote to prevent globbing` \[shellcheck] |
 
-Plus the workflow schema, expression syntax and context typing, and `runs-on:` labels. **It does not verify that a ref is a SHA rather than a tag** — it enforces that a ref is present and well-formed, which is the precondition for pinning, not the pin itself.
+Plus the workflow schema, expression syntax and context typing, and `runs-on:` labels.
+**It does not verify that a ref is a SHA rather than a tag** — it enforces that a ref is present and well-formed, which is the precondition for pinning, not the pin itself.
 Dependabot's `github-actions` ecosystem is what keeps the SHAs themselves current (see [dependency-updates.md](dependency-updates.md)).
 
 **Self-hosted `runs-on:` labels are declared** in [`.github/actionlint.yaml`](../../.github/actionlint.yaml), because actionlint rejects any label outside GitHub's hosted set.
@@ -513,7 +529,8 @@ The checker resolves a relative link against a path list the script hands it, no
 That keeps a link to a brand-new untracked file green (Q619) and a link to a file deleted from the worktree red (Q663).
 Behaviour is asserted beside the packages in Go; the file-selection half is `scripts/docs/check-doc-links-test.sh` under `make scripts-test`.
 
-**This gate speaks for github.com only.** MkDocs resolves slugs and paths differently, so a link can pass here and 404 on the published site — 11 did (Q560). `make docs-build` is the site-side half, running `mkdocs build --strict` over both publication scopes; CI runs it in `pages.yml`'s PR `build` job.
+**This gate speaks for github.com only.** MkDocs resolves slugs and paths differently, so a link can pass here and 404 on the published site — 11 did (Q560).
+`make docs-build` is the site-side half, running `mkdocs build --strict` over both publication scopes; CI runs it in `pages.yml`'s PR `build` job.
 It is not in `make check` (it needs the pinned Python venv, and `pages.yml` is already path-gated on the docs sources), so **run it yourself when a change adds a heading or a relative link under `docs/`**.
 What diverges, and how to write links that survive both: [website.md § The two link gates](website.md#the-two-link-gates).
 
@@ -525,16 +542,19 @@ The runbook step said `X.Y.Z` and named no files, so the bump was remembered rat
 It is wired into `make check` and into a second job in the same [`doc-links.yml`](../../.github/workflows/doc-links.yml) workflow, whose checkout uses `fetch-depth: 0` because the gate derives the current release from the tags.
 
 The scan asserts that **every** release-version literal in the five pin-bearing pages names the current release — not a list of known pin sites, so a pin added to one of those pages is covered the day it lands.
-That is only tractable because the noise floor there was measured first: two literals, both exempted in the script header (a line beginning `Measured on kind`, whose version records what was actually installed for a measurement, and `v2.0.0`, the announced `v1alpha1`/`v2alpha1` removal release — v-prefixed only, since a chart pin never carries the `v`). **Do not widen the file set to `docs/` at large**: `troubleshooting.md` and `release.md` are full of legitimate "before `v1.3.0`" history, and an exemption list that size would hide the drift the gate exists to catch.
+That is only tractable because the noise floor there was measured first: two literals, both exempted in the script header (a line beginning `Measured on kind`, whose version records what was actually installed for a measurement, and `v2.0.0`, the announced `v1alpha1`/`v2alpha1` removal release — v-prefixed only, since a chart pin never carries the `v`).
+**Do not widen the file set to `docs/` at large**: `troubleshooting.md` and `release.md` are full of legitimate "before `v1.3.0`" history, and an exemption list that size would hide the drift the gate exists to catch.
 
 A page that yields **no** pin at all fails rather than passes — an empty result cannot distinguish "this page has no stale pin" from "the pin moved and the scan no longer sees it".
 Behaviour is asserted by `scripts/docs/check-release-pins-test.sh` under `make scripts-test`, mostly as planted failures: a checker that silently matches nothing passes a stale tree exactly like a clean one.
 
 ### The release-link gate
 
-`make release-links-check` (`scripts/docs/check-release-links.sh`) resolves the release notes' absolute links into the versioned site. `docs/releases/` is the one doc whose links are *all* absolute — those files are excluded from every site version, so a relative link would fail `mkdocs build --strict` — and the doc-link gate above skips external URLs by design, so nothing resolved them (Q636).
+`make release-links-check` (`scripts/docs/check-release-links.sh`) resolves the release notes' absolute links into the versioned site.
+`docs/releases/` is the one doc whose links are *all* absolute — those files are excluded from every site version, so a relative link would fail `mkdocs build --strict` — and the doc-link gate above skips external URLs by design, so nothing resolved them (Q636).
 
-The oracle is a local `mkdocs build`, never the network: a gate that fetches URLs fails when a third party sneezes. `mkdocs build` lays the release publication scope out exactly as the site serves it, so `https://actions-gateway.com/1.3.0/operations/upgrade/#gmc-rollback` resolves to `site/operations/upgrade/index.html` carrying `id="gmc-rollback"`.
+The oracle is a local `mkdocs build`, never the network: a gate that fetches URLs fails when a third party sneezes.
+`mkdocs build` lays the release publication scope out exactly as the site serves it, so `https://actions-gateway.com/1.3.0/operations/upgrade/#gmc-rollback` resolves to `site/operations/upgrade/index.html` carrying `id="gmc-rollback"`.
 That also fixes the scope: **the exclusion in `check-doc-links.sh` stays**.
 "External" there means "unresolvable", and these are resolvable only because the site is built from this same tree — widening that gate globally would mean fetching URLs.
 
@@ -617,10 +637,12 @@ That suite's `tree-in-sync` assertion is the one that runs the gate against the 
 
 ### The build-tag gate
 
-`make build-tags-check` ([`scripts/go/go-vet-tags.sh`](../../scripts/go/go-vet-tags.sh)) compiles and vets the Go files that no other fast gate builds: everything behind `//go:build integration`, `e2e`, or `load`. `make lint` and `make test` (and so `make check` and CI's `unit-test` job) build the workspace with the **default** tag set, which excludes those files entirely.
+`make build-tags-check` ([`scripts/go/go-vet-tags.sh`](../../scripts/go/go-vet-tags.sh)) compiles and vets the Go files that no other fast gate builds: everything behind `//go:build integration`, `e2e`, or `load`.
+`make lint` and `make test` (and so `make check` and CI's `unit-test` job) build the workspace with the **default** tag set, which excludes those files entirely.
 So a refactor could leave an unused import or a stale call signature in an envtest suite, `make check` would pass green, and the break would surface only on CI's path-gated integration/e2e leg, which may not even run on the PR that introduced it (Q404).
 
-It runs one workspace-wide `go vet -tags integration,e2e,load` over every `go.work` module. `go vet` typechecks what it analyses, so a compile break fails the gate, and it needs no envtest assets, no cluster, and runs no tests.
+It runs one workspace-wide `go vet -tags integration,e2e,load` over every `go.work` module.
+`go vet` typechecks what it analyses, so a compile break fails the gate, and it needs no envtest assets, no cluster, and runs no tests.
 Actually *running* the tagged suites remains the job of [`make test-integration`](#integration-tests), the [e2e tiers](#end-to-end-tests), and [`make load-test-quick`](#load-tests).
 
 Enabling all three tags at once is sound because they select disjoint package trees rather than alternative implementations of one package: no first-party file is constrained on the negation of another's tag.
@@ -646,10 +668,14 @@ Six assertions, cheapest first:
    Failures name the module, the workflow, and the exact pattern to add, one per gap.
 3. **Live paths.** Every pattern's literal prefix still exists on disk.
    A pattern left behind by a rename matches nothing, which narrows its gate as silently as a missing module does.
-4. **Shared-lane agreement.** Two filters gating the same reusable workflow list the same `scripts/` patterns. `SHARED_LANE_FILTERS` pairs them; the failure prints a diff of the two sets. `e2e-test.yml` and `e2e-calico.yml` both call `e2e-reusable.yml` yet disagreed by roughly 60× about which scripts it runs — the Calico lane named two of the six the reusable workflow invokes directly, so a `free-runner-disk.sh` change skipped the lane that exercises it (Q571).
-5. **Push-trigger agreement.** A workflow that scopes its post-merge leg with `on.push.paths` lists the same paths as its `changes` filter. `PUSH_TRIGGER_FILTERS` registers the pairs.
+4. **Shared-lane agreement.** Two filters gating the same reusable workflow list the same `scripts/` patterns.
+   `SHARED_LANE_FILTERS` pairs them; the failure prints a diff of the two sets.
+   `e2e-test.yml` and `e2e-calico.yml` both call `e2e-reusable.yml` yet disagreed by roughly 60× about which scripts it runs — the Calico lane named two of the six the reusable workflow invokes directly, so a `free-runner-disk.sh` change skipped the lane that exercises it (Q571).
+5. **Push-trigger agreement.** A workflow that scopes its post-merge leg with `on.push.paths` lists the same paths as its `changes` filter.
+   `PUSH_TRIGGER_FILTERS` registers the pairs.
    See below for why this one is easy to miss.
-6. **Globstar placement.** Every `filters:` pattern spells `**` where picomatch still expands it. `cmd/**.go` reads as every Go file under `cmd/` and matches nothing, and assertion 3 passes it because the literal prefix `cmd` exists.
+6. **Globstar placement.** Every `filters:` pattern spells `**` where picomatch still expands it.
+   `cmd/**.go` reads as every Go file under `cmd/` and matches nothing, and assertion 3 passes it because the literal prefix `cmd` exists.
    Scoped to `filters:` blocks only; see below.
 
 **So adding a workspace module now fails the gate instead of slipping through** — but the gate only knows about *whole-workspace* coverage.
@@ -695,7 +721,8 @@ Three workflows — `e2e-calico.yml`, `plan-hygiene.yml`, `status-lint.yml` — 
 - **The PR leg** triggers on every `pull_request` with no path filter (so its `gate` job always reports its required check) and is scoped by the internal `changes` filter.
 - **The post-merge leg** triggers on `push` to `main` and is scoped by `on.push.paths` — a plain GitHub Actions trigger filter, not a `dorny/paths-filter` block.
 
-GitHub Actions does not reliably resolve YAML anchors, so the list is duplicated rather than shared. **Drift between the two is invisible on a PR.** Every PR classifies correctly off the filter; only the post-merge leg silently stops running, and a leg that does not run leaves nothing red to notice.
+GitHub Actions does not reliably resolve YAML anchors, so the list is duplicated rather than shared.
+**Drift between the two is invisible on a PR.** Every PR classifies correctly off the filter; only the post-merge leg silently stops running, and a leg that does not run leaves nothing red to notice.
 
 Q571 shipped exactly that regression and merged green: it rewrote `e2e-calico.yml`'s filter to `scripts/{e2e,fetch,lib}/**` and left the push list naming the two now-moved files it had always enumerated.
 Assertion 5 is the recurrence guard — it compares the two as sorted sets and prints a diff of the difference.
@@ -705,7 +732,8 @@ That is the same hazard in a different shape and is **not** yet gated; both list
 
 #### `scripts/` is grouped by blast radius
 
-The other half of keeping these filters honest is where a script lives. `scripts/` has no top-level files: every script sits in a subdirectory named for the gate that consumes it — `e2e/`, `go/`, `docs/`, `security/`, `manifest/`, `release/`, `ci/`, `fetch/`, `agent/`, `dev/`, plus the pre-existing `dogfood/`, `lib/` and `updatecli/`.
+The other half of keeping these filters honest is where a script lives.
+`scripts/` has no top-level files: every script sits in a subdirectory named for the gate that consumes it — `e2e/`, `go/`, `docs/`, `security/`, `manifest/`, `release/`, `ci/`, `fetch/`, `agent/`, `dev/`, plus the pre-existing `dogfood/`, `lib/` and `updatecli/`.
 [`scripts/README.md`](../../scripts/README.md) is the map.
 
 That makes every filter a prefix glob (`scripts/e2e/**`) instead of an enumeration that drifts or a catch-all that over-triggers.
@@ -730,16 +758,19 @@ That list must stay in step with `BUILD_TAGS` in `scripts/go/go-vet-tags.sh`; th
 
 Two things to know when a finding lands in a tagged package:
 
-- **`gosec` `G204` is narrowed by *source*, not by path.** A repo-wide exclusion rule drops `G204` only where the launched binary is a string literal (`exec.Command("kubectl"|"gh"|"make", …)`). `os/exec` does not go through a shell, so a variable *argument* to a fixed binary cannot inject a command, and the e2e harness does exactly that ~60 times with generated namespace, pod, and selector names.
+- **`gosec` `G204` is narrowed by *source*, not by path.** A repo-wide exclusion rule drops `G204` only where the launched binary is a string literal (`exec.Command("kubectl"|"gh"|"make", …)`).
+  `os/exec` does not go through a shell, so a variable *argument* to a fixed binary cannot inject a command, and the e2e harness does exactly that ~60 times with generated namespace, pod, and selector names.
   The two forms that can actually go wrong — a shell (`exec.Command("bash", "-c", script)`) and a variable binary name (`exec.Command(somePath(), …)`) — still fail the gate everywhere, including in production code, and the two that exist today carry audited inline accepts.
   Adding a binary to that list means making the same argument for it.
-- **Everything else is per-occurrence.** Test scaffolding gets no blanket pass: the `_test.go` exclusions are limited to `dupl`, `funlen`, and `forbidigo` (see the rules in `.golangci.yml`), so a `gosec`, `errcheck`, `staticcheck`, or `unused` finding in a tagged file is fixed or annotated with a justified `//nolint:<linter> // <rule>: <reason>`. `nolintlint` (`allow-unused: false`) then fails the build if that annotation ever stops suppressing anything.
+- **Everything else is per-occurrence.** Test scaffolding gets no blanket pass: the `_test.go` exclusions are limited to `dupl`, `funlen`, and `forbidigo` (see the rules in `.golangci.yml`), so a `gosec`, `errcheck`, `staticcheck`, or `unused` finding in a tagged file is fixed or annotated with a justified `//nolint:<linter> // <rule>: <reason>`.
+  `nolintlint` (`allow-unused: false`) then fails the build if that annotation ever stops suppressing anything.
 
 Widening the tag set costs about 4% of lint wall-clock — measured over the full per-module sweep, 3.00s → 3.13s warm and 34.9s → 36.6s cold — so it does not move [the inner loop](#the-inner-loop-cheap-checks-while-iterating-make-check-once-pre-pr) or the CI critical path.
 
 ### The gate-list gate
 
-`make gate-lists-check` ([`scripts/ci/gate-list.sh`](../../scripts/ci/gate-list.sh)) keeps two lists from acquiring a second copy: the gates `make check` runs, and the `scripts/` suites its `scripts-test` gate fans out over. `CHECK_FAST_GATES`, `CHECK_HEAVY_GATES` and `SCRIPTS_TESTS` in the root [`Makefile`](../../Makefile) are the source of truth; the `check` recipe, `make list-gates`, `make list-script-tests`, and this page all derive from them.
+`make gate-lists-check` ([`scripts/ci/gate-list.sh`](../../scripts/ci/gate-list.sh)) keeps two lists from acquiring a second copy: the gates `make check` runs, and the `scripts/` suites its `scripts-test` gate fans out over.
+`CHECK_FAST_GATES`, `CHECK_HEAVY_GATES` and `SCRIPTS_TESTS` in the root [`Makefile`](../../Makefile) are the source of truth; the `check` recipe, `make list-gates`, `make list-script-tests`, and this page all derive from them.
 Adding a gate is one edit: append the target name to `CHECK_FAST_GATES` and give the target its own `.PHONY` line and a `##` help line beside its rule.
 Adding a `scripts/` suite is one edit too: append its `group/name-test` path to `SCRIPTS_TESTS`.
 
@@ -754,7 +785,9 @@ It fails when:
 - a fast gate *outside* `STATUS_GATES` selects `docs/STATUS.md`, which is the direction that had no enforcement: `em-dash-check` and `page-density-check` both scanned the file for as long as they had existed, while the comment above the variable called the list complete (Q749).
   Membership is derived from the pathspec each gate's script hands git, the same question the gate itself asks.
   A gate whose recipe runs no `scripts/` file has no derivable file set and declares instead, with a `# status-scope: none` comment and its reason directly above its `.PHONY`, as `md-reflow-check` does;
-- a gate runs in `make check` but in no workflow, so it gates nothing on a PR. `make check` is then the only thing enforcing it, and the failure reports as a clean gate list — every rule above stays green (Q831). `comparison-stamps-check` shipped that way, and by the time the rule was written five gates were unwired: `license-header-check`, `page-density-check`, `semver-floor-sources-check`, `md-reflow-check` and `promql-check`.
+- a gate runs in `make check` but in no workflow, so it gates nothing on a PR.
+  `make check` is then the only thing enforcing it, and the failure reports as a clean gate list — every rule above stays green (Q831).
+  `comparison-stamps-check` shipped that way, and by the time the rule was written five gates were unwired: `license-header-check`, `page-density-check`, `semver-floor-sources-check`, `md-reflow-check` and `promql-check`.
   A gate counts as wired when a workflow runs its own `make` target, or when every `scripts/` file its recipe runs is run by CI another way — through a different make target a workflow invokes (`manifest-validate` runs the three `chart-*-check` scripts) or invoked directly (`status-lint.yml` runs `lint-backlog.sh` without make).
   Workflow **comments are excluded** from that match: these files explain themselves in prose that names their own targets, so a gate merely mentioned would read as covered.
   A gate that is deliberately local-only declares `# ci-scope: none` with its reason directly above its `.PHONY`, the same shape the rule above uses;
@@ -788,7 +821,8 @@ It regenerates into a scratch tree, never into the working tree, so it detects d
 Cost is six controller-gen runs over already-parsed packages plus one ~30 MB copy of the working tree, ~4 s, plus the one-time `.build/controller-gen` build.
 
 **When it fails**, the remedy is `make generate` from the repo root — that regenerates both halves for the same three modules the gate checks, so running it is exactly what makes the gate pass.
-Then `make chart-crds` to carry a CRD change into the Helm chart, and commit both. `make manifests` alone covers only the manifests half.
+Then `make chart-crds` to carry a CRD change into the Helm chart, and commit both.
+`make manifests` alone covers only the manifests half.
 The failure message names the single `make -C <module> manifests`/`deepcopy` if you prefer the narrower run.
 Never hand-edit the generated YAML or Go.
 
@@ -809,7 +843,8 @@ The drift is caused by a Go type change that need not touch either module's YAML
 A hardcoded year would fail every build the following January.
 It reaches no output today, because the boilerplate files are [empty by design](code-generation.md#no-per-file-license-headers), but the gate runs the module's call rather than a simplification of it.
 
-**The recipe parsing is tab-sensitive, so it is tested.** Assertions 1 and 2 read each module's `manifests:` and `deepcopy:` recipes straight out of its `Makefile`, and a make recipe is indented with tabs and wrapped with backslash continuations. `module_recipe` folds those continuations into one line **and converts every tab to a space**, because `assert_registry_fidelity` matches each generator as `" $gen "` with `grep -F`: a generator that begins a wrapped continuation line is preceded by a tab, and without the conversion it is simply not found, so a faithful `MODULES` row gets reported as unfaithful.
+**The recipe parsing is tab-sensitive, so it is tested.** Assertions 1 and 2 read each module's `manifests:` and `deepcopy:` recipes straight out of its `Makefile`, and a make recipe is indented with tabs and wrapped with backslash continuations.
+`module_recipe` folds those continuations into one line **and converts every tab to a space**, because `assert_registry_fidelity` matches each generator as `" $gen "` with `grep -F`: a generator that begins a wrapped continuation line is preceded by a tab, and without the conversion it is simply not found, so a faithful `MODULES` row gets reported as unfaithful.
 PR #886 nearly shipped exactly that, and it would have stayed dormant — every real recipe happens to put all of its generators on the first line today, so the gate would have broken on the first rewrap of a `manifests:` target, not on the change that introduced the bug (Q457).
 
 **A commented-out recipe line is not a recipe line.** `module_recipe` strips shell comments before folding, by the same rule the shell applies when it runs the recipe: an unquoted `#` at the start of a word begins a comment and everything to the end of that physical line is dropped — trailing backslash included, since a backslash inside a comment continues nothing.
@@ -817,7 +852,8 @@ A `#` that is quoted (`"… # …"`, `'… # …'`), backslash-escaped, or mid-w
 Before Q464 nothing was stripped, and a commented-out call folded in as live text three ways: its `#` read as a generator, so the module was rejected for *"runs generator `#`"* — a name no generator has, over a call `make` never runs; a generator surviving only in a comment satisfied the registered-generator presence check, so the gate regenerated output `make manifests` no longer writes; and a commented-out `output:` rule satisfied the dir match that the live rule should have, letting a row point at the wrong committed dir.
 That bug was found by the fixtures added with the suite itself, one PR after they landed (Q457 → Q464).
 
-Two recipe shapes still truncate the parse: a blank line, and a make comment at column 0 (no tab). `make` ignores both and keeps reading; this parser stops.
+Two recipe shapes still truncate the parse: a blank line, and a make comment at column 0 (no tab).
+`make` ignores both and keeps reading; this parser stops.
 Both are tolerable for the same reason — they truncate toward a **loud** failure, because the generators on the dropped lines then read as unregistered rather than being quietly skipped — and both are pinned as such.
 
 That whole class is invisible to review and obvious to a fixture, so [`scripts/go/check-codegen-drift-test.sh`](../../scripts/go/check-codegen-drift-test.sh) (under `make scripts-test`) pins it: recipe fragments covering tabs, wrapping, quoting, a target with prerequisites, a module with no `manifests:` target, and every comment shape above, each with its expected parse, plus end-to-end fidelity cases asserting a faithful row over a tab-wrapped recipe passes and each unfaithful shape fails with an explanatory message.
@@ -830,7 +866,8 @@ Assertion 3 (drift) still needs a real controller-gen run and stays in `make cod
 ### The claude-usage snapshot gate
 
 `make claude-usage-test` ([`scripts/agent/claude-usage-test.sh`](../../scripts/agent/claude-usage-test.sh)) runs the Python unit tests in [`claude-usage/`](../../claude-usage/README.md) — the only tests in the repo that aren't Go or bash.
-That module is the committed record of the project's Claude Code usage, and for days whose session transcripts have since been archived its CSVs are the **only** surviving copy, so `compute_metrics.py`'s merge rule (never revise a recorded day downward, never collapse two machines' shares of one day) is load-bearing. `test_compute_metrics.py` pins it, but the module matched no `dorny/paths-filter` list — it is neither Go code nor a shell script — so the suite ran only when someone remembered to run it by hand, and PR #841 shipped a model-mapping fix that no gate would have caught (Q437).
+That module is the committed record of the project's Claude Code usage, and for days whose session transcripts have since been archived its CSVs are the **only** surviving copy, so `compute_metrics.py`'s merge rule (never revise a recorded day downward, never collapse two machines' shares of one day) is load-bearing.
+`test_compute_metrics.py` pins it, but the module matched no `dorny/paths-filter` list — it is neither Go code nor a shell script — so the suite ran only when someone remembered to run it by hand, and PR #841 shipped a model-mapping fix that no gate would have caught (Q437).
 
 Wired into `make check` and the `claude-usage-test` job in [`unit-test.yml`](../../.github/workflows/unit-test.yml), gated on a `claude_usage` filter (`claude-usage/**`, the gate script, the `Makefile`, the workflow).
 The suite is stdlib-only — no venv, no `pip install`; that is only needed for `make_charts.py`'s matplotlib/numpy — so the job is a checkout, `setup-python`, and one `make` target, in seconds.
@@ -891,9 +928,11 @@ Pick the timeout from the tier's real cost (see [Cost & cadence](#cost--cadence-
 
 **Read a background run's output, not its reported exit status.** The status you get back is the *last thing the command did* — which is rarely the thing under test.
 
-- **Piped**: a run through `tail`, `head`, or `grep` reports the filter's code. `go test … | tail -30` reports exit 0 even when the suite failed.
+- **Piped**: a run through `tail`, `head`, or `grep` reports the filter's code.
+  `go test … | tail -30` reports exit 0 even when the suite failed.
   Drop the pipe (the output file is readable in full anyway) or add `set -o pipefail`.
-- **Sequenced**: the same trap, one step removed, and easier to miss because nothing looks filtered. `make check > check.log 2>&1; tail -20 check.log` reports **`tail`'s** status, so a failed gate arrives as a green completion notification.
+- **Sequenced**: the same trap, one step removed, and easier to miss because nothing looks filtered.
+  `make check > check.log 2>&1; tail -20 check.log` reports **`tail`'s** status, so a failed gate arrives as a green completion notification.
   Redirecting to a log and then peeking at it is the natural way to run a slow gate in the background, which is exactly why this one bites.
 
 The fix for the sequenced form is to record the real status *into* the artifact and read it back, rather than trusting the notification:
@@ -917,14 +956,16 @@ Killing a run to reclaim compute is legitimate and often correct.
 The machine is shared across parallel worktree sessions, `make check` is long, and the heavy tiers (the kind e2e clusters, the dogfood validation gate) are effectively singletons that do not run concurrently on a small host.
 Abandoning a run whose premise died is the right call, not a failure of discipline.
 
-What is never right is naming the **program** rather than the **run**. `pkill -f "usr/bin/make check"` matches every parallel session's gate, not just the one you started.
+What is never right is naming the **program** rather than the **run**.
+`pkill -f "usr/bin/make check"` matches every parallel session's gate, not just the one you started.
 Across local session transcripts, of 38 shell-kill targets exactly two carried a worktree anchor; the rest were bare program names (`ginkgo run --tags e2e`, `e2e.test`, `.build/ginkgo`, `make scripts-test`).
 Q690's load harness cleaned up with `pkill -f 'make scripts-test'`, which matched the `make check` running for verification in the same worktree: the gate died mid-run, a sampled suite that had printed `all assertions passed` was recorded as a failure, and both contaminated results read as genuine red.
 
 In order of preference:
 
 - **Stop the background task by its handle.** The launching task is the only reference that cannot match somebody else's process.
-- **Then the launch record**, if the run was started through [`record-launch.sh`](#the-launch-record), which holds the same handle on disk where a compaction cannot reach it. `scripts/agent/record-launch.sh --list` prints what is running and the command that stops it.
+- **Then the launch record**, if the run was started through [`record-launch.sh`](#the-launch-record), which holds the same handle on disk where a compaction cannot reach it.
+  `scripts/agent/record-launch.sh --list` prints what is running and the command that stops it.
 - **If neither exists**, run `pgrep -fl <pattern>` first, read what it *would* hit, then kill by PID.
 - **If a pattern is unavoidable**, anchor it to the worktree path.
   Every process a session starts carries its worktree directory in the argv or cwd, so `pkill -f "<worktree>/.build/ginkgo"` is safe where `pkill -f ginkgo` is not.
@@ -945,13 +986,15 @@ So put the handle on disk: launch long background work through the wrapper rathe
 scripts/agent/record-launch.sh make check > tmp/check.log 2>&1
 ```
 
-[`scripts/agent/record-launch.sh`](../../scripts/agent/record-launch.sh) writes one `key=value` record per run under `tmp/launches/` (pid, worktree, the command, and a `stop=` line to run verbatim) and removes it when the run ends, so what is on disk is what is live. `--list` reads them back and `--prune` drops the ones whose process is gone.
+[`scripts/agent/record-launch.sh`](../../scripts/agent/record-launch.sh) writes one `key=value` record per run under `tmp/launches/` (pid, worktree, the command, and a `stop=` line to run verbatim) and removes it when the run ends, so what is on disk is what is live.
+`--list` reads them back and `--prune` drops the ones whose process is gone.
 Reading a record is not recall, which is the whole point: the fields are there after the context that created them is not.
 
 Two properties make a record safe to act on, and both are asserted against real processes by [`record-launch-test.sh`](../../scripts/agent/record-launch-test.sh):
 
 - **The run is its own process group**, so the recorded `kill -TERM -- -<pgid>` takes its children too.
-  A `make` killed alone leaves its whole fan-out behind, which is exactly what sends the next person back to a pattern kill. `set -m` is what buys this; delete that line and the suite goes red on a surviving grandchild.
+  A `make` killed alone leaves its whole fan-out behind, which is exactly what sends the next person back to a pattern kill.
+  `set -m` is what buys this; delete that line and the suite goes red on a surviving grandchild.
   If job control does not deliver a new group, the wrapper measures that (`ps -o pgid=`) and records the plain `kill -TERM <pid>` instead, since a group kill aimed at the wrapper's own group would take the session with it.
 - **Liveness is pid plus command-line marker**, the `lease.sh` rule: a recycled pid is a live process that is not the run, so `--list` calls it `stale` rather than offering a stop command aimed at a stranger.
 
@@ -979,7 +1022,8 @@ The launch record exists to keep a compute-heavy run killable after a compaction
 
 ### Ad-hoc shell varies: don't rely on word-splitting
 
-Committed scripts under `scripts/` are `#!/usr/bin/env bash` and follow [bash-style.md](bash-style.md), so their behaviour is pinned by the shebang. **Ad-hoc commands are not pinned** — they run in whatever login shell the contributor has: zsh on macOS (the default since Catalina), bash on most Linux distributions and CI images.
+Committed scripts under `scripts/` are `#!/usr/bin/env bash` and follow [bash-style.md](bash-style.md), so their behaviour is pinned by the shebang.
+**Ad-hoc commands are not pinned** — they run in whatever login shell the contributor has: zsh on macOS (the default since Catalina), bash on most Linux distributions and CI images.
 Check yours with `echo $0` rather than assuming.
 
 That matters because the shells disagree on **word-splitting of unquoted parameter expansions** — bash and `sh` split, zsh does not:
@@ -1017,7 +1061,8 @@ Two things to avoid:
 
 #### Sourcing a `scripts/` helper unpins it
 
-The shebang pins a script's shell when the file is **executed**. `source` bypasses it, and that is the difference the sentence at the top of this section hides: `source scripts/lib/common.sh` from the Bash tool defines those functions in **zsh**, so calling one runs bash code under a shell that reads parts of it differently.
+The shebang pins a script's shell when the file is **executed**.
+`source` bypasses it, and that is the difference the sentence at the top of this section hides: `source scripts/lib/common.sh` from the Bash tool defines those functions in **zsh**, so calling one runs bash code under a shell that reads parts of it differently.
 Sourcing is the natural way to probe a single helper without running a whole gate, which is exactly what makes it a trap.
 
 The declarations that diverge quietly are the ones a rewrite reaches for: `local -A`, `[[ -v arr[key] ]]`, and array subscripts generally.
@@ -1055,7 +1100,8 @@ Prefer the narrowest tier that can actually *observe* the bug class — but no n
   Both `cmd/agc` and `cmd/gmc` already have envtest suites at `internal/controller/integration/` (build tag `integration`, see [Integration tests](#integration-tests)) — add to them rather than concluding none exists; confirm with a directory listing before deciding a tier is missing.
   Example: PR #143 (Q65) migrated the GMC `apply*` helpers to `CreateOrPatch`; a fake-client test could verify field-level behavior, but only `apply_nochurn_test.go` (envtest, asserting `resourceVersion` stability across periodic reconciles) could prove the whole-`Spec` helpers don't churn.
   A test that needs its own `envtest.Environment`, because it mutates something the shared suite depends on (as `v1_only_install_test.go` and `crd_schema_stale_test.go` do), **must write v2 objects at `v2beta1`**.
-  The v2 CRDs declare a conversion webhook, and envtest rewrites its `clientConfig` to the environment's own serving host and port, which in a standalone environment nothing is listening on: a create at `v2alpha1` dies on `conversion webhook … dial tcp … connect: connection refused`, naming a port that is not the shared suite's. `v2beta1` is the storage version, so no conversion is invoked and the write lands.
+  The v2 CRDs declare a conversion webhook, and envtest rewrites its `clientConfig` to the environment's own serving host and port, which in a standalone environment nothing is listening on: a create at `v2alpha1` dies on `conversion webhook … dial tcp … connect: connection refused`, naming a port that is not the shared suite's.
+  `v2beta1` is the storage version, so no conversion is invoked and the write lands.
 - **cluster-only kind e2e** — behaviors that emerge from real Container Network Interface (CNI), kube-proxy Destination NAT (DNAT), kubelet image-pull policy, or TLS-over-tunnel.
   When a feature crosses one of those boundaries, the cluster-only test (see [design §7.3](../design/07-test-plan.md#73-end-to-end-tests) and [End-to-end tests](#end-to-end-tests)) is the only thing that proves it works.
   Example: PR #59 fixed 5 bugs that all unit tests passed for — a single planned-but-unimplemented cluster-only test (`E2E_GMC_TenantProvisioning_ProxyConnectWorks`) would have caught 4 of them locally.
@@ -1084,7 +1130,8 @@ Two shortcuts recur and both produce confident-but-wrong diagnoses:
   Recover the original with `gh run view <id> --attempt N --log`, and — since an empty result is only evidence of absence once the command is known to have run — grep for a string you *know* that log contains before reading any emptiness as a finding.
   Q648 was only findable this way: the attribution banner it turns on was present in attempt 1 and absent from the post-re-run view.
   Capture the evidence **before** spending the re-run where you can.
-- **Waiting out a matrix to read a leg that already failed.** `gh run view --job <id> --log-failed` refuses while the *run* is in progress ("logs will be available when it is complete"), so one slow leg withholds every finished leg's log, and pr-sentinel's captured excerpt reads `(no failed-step log available for run <id>)` for the same reason. `gh api "repos/<owner>/<repo>/actions/jobs/<id>/logs"` reads a completed job's log immediately, whatever its run is doing; get the ids from `gh run view <run-id> --json jobs --jq '.jobs[] | select(.conclusion=="failure") | .databaseId'`.
+- **Waiting out a matrix to read a leg that already failed.** `gh run view --job <id> --log-failed` refuses while the *run* is in progress ("logs will be available when it is complete"), so one slow leg withholds every finished leg's log, and pr-sentinel's captured excerpt reads `(no failed-step log available for run <id>)` for the same reason.
+  `gh api "repos/<owner>/<repo>/actions/jobs/<id>/logs"` reads a completed job's log immediately, whatever its run is doing; get the ids from `gh run view <run-id> --json jobs --jq '.jobs[] | select(.conclusion=="failure") | .databaseId'`.
   Measured 2026-08-12 on run `31622300898`, job `94201728982`: `--log-failed` answered `run 31622300898 is still in progress; logs will be available when it is complete` while that job had read `completed failure` for minutes and `trivy (proxy, 1)` was still `in_progress`; `gh api` returned the job's 1,639-line log in the same minute, naming a syft download that exhausted its retry budget against a release-CDN `503`.
   Reach for it whenever a red job's cause decides what you do next, rather than treating the wait as unavoidable.
 
@@ -1127,7 +1174,8 @@ Each is a claim about state, and each has a cheap way of being wrong:
 - **A sound instrument still answers only its own question, which is usually narrower than the claim.** The bullets above are corrupted or absent signals; this one is a probe working perfectly and being read for more than it measures.
   Q710 shipped a wrong sentence twice this way.
   A token-multiset reconciliation over a prose edit came back clean and was reported as "no qualifier was lost", which was true, and as "the split preserved the meaning", which it cannot see, because the defect was a pronoun the edit *added*.
-  Then a scan for damaged paragraph labels reported 22 sites by finding every label with an unlabelled paragraph after it, never asking which of those *this change* produced; the answer was 8, and two structural edits had already been made on the 22. **A claim about what a change did needs a before-and-after measurement, not a scan of the after.** Run the probe against the base tree too, and diff the two.
+  Then a scan for damaged paragraph labels reported 22 sites by finding every label with an unlabelled paragraph after it, never asking which of those *this change* produced; the answer was 8, and two structural edits had already been made on the 22.
+  **A claim about what a change did needs a before-and-after measurement, not a scan of the after.** Run the probe against the base tree too, and diff the two.
   The discriminator is to **ask what the signal would read if the alternative were true**: when the answer is "the same", the reading cannot settle the question however sound the instrument is.
   Two instances from 2026-08-12, blunter than Q710's and both in tooling used to check tooling.
   A `gh pr view <n> --json state` read returned `MERGED` and was taken as merged to `main`; the field is true and carries no base, and `baseRefName` was already on the object fetched (Q805 retro).
@@ -1146,7 +1194,8 @@ Each is a claim about state, and each has a cheap way of being wrong:
   The blind spots named above are named once, when a measurement is reported.
   A gate runs forever, and its coverage can regress long after it was written: a rename introduces a second function of the same name, the resolver can no longer place a call, and a value it used to derive stops being demanded.
   Nothing turns red, because the check that would have fired is the one that went missing.
-  Under-derivation is not a missing refusal, it is a refusal that will never be attempted. **So a gate that derives its own inventory has to fail on an input it cannot place**, as a finding rather than a logged note.
+  Under-derivation is not a missing refusal, it is a refusal that will never be attempted.
+  **So a gate that derives its own inventory has to fail on an input it cannot place**, as a finding rather than a logged note.
   Two scanners built in the 1.5 cycle each grew one independently: `metrictiers`' `values-derivation` (Q851) and `reasontiers`' `resolution` (Q850).
   Converging twice in one cycle is the signal that a derived inventory needs this by construction, not as an afterthought.
   The tier now says it for you: a breach of the [envtest suite budget](#the-envtest-suite-budget) reports that the *suite* ran out of time and names the panic's test as a bystander, rather than leaving the reader to notice that the name moved.
@@ -1163,7 +1212,8 @@ Each is a claim about state, and each has a cheap way of being wrong:
   The report went out as "run complete" with `build-tags-check`, `lint` and `cover-check` not yet started (measured 2026-08-12).
   The trap is the run's own vocabulary: a marker chosen to mean "finished" is usually also a word the run says while working, and the false fire looks exactly like the real one.
   Grep the marker against a full log of an earlier run before arming a watcher on it, and prefer the process exiting, since a background task's completion notification cannot fire early.
-- **Green checks say the run passed, never that your change is gated.** The two come apart exactly when a gate is new, which is when nobody thinks to look. `comparison-stamps-check` shipped into `CHECK_FAST_GATES` and into no workflow, so it ran under a local `make check` and never on a PR: `unit-test.yml` path-ignores docs, and `doc-links.yml` names each docs gate as its own job rather than running `make check`.
+- **Green checks say the run passed, never that your change is gated.** The two come apart exactly when a gate is new, which is when nobody thinks to look.
+  `comparison-stamps-check` shipped into `CHECK_FAST_GATES` and into no workflow, so it ran under a local `make check` and never on a PR: `unit-test.yml` path-ignores docs, and `doc-links.yml` names each docs gate as its own job rather than running `make check`.
   Ten green checks on the head SHA said nothing about it, and `gate-lists-check` stayed green throughout, because it reconciled the Makefile, the tree and this file, never `.github/workflows/`.
   It reads the workflows now, and finding four more unwired gates when it first did is the measure of how quietly this accumulates (Q831) — but the reconciler only knows the routes it was taught, so verify a new gate by naming its **job** in the run's job list (`gh run view <id> --json jobs`) rather than by the workflow's conclusion.
 - **A local gate that disagrees with CI indicts your toolchain before the tree.** CI checks out fresh and builds its tools from the pin; your `.build/` holds whatever it held last time.
@@ -1231,7 +1281,8 @@ Three instances measured on 2026-08-14, in one session:
   Re-run against a file, every row was present.
 
 What the three share is that each was about to support a **negative** claim, the direction with no natural contradiction: a wrong positive gets argued with by the thing it names, while a wrong negative simply agrees with whatever was already suspected.
-So before a negative decides anything, run the same probe against a value known to be present. `make --dry-run tools` fired nine rules where the relative target fired none, and `git config --get-regexp '^merge\.'` listed five installed drivers where the guessed key listed nothing.
+So before a negative decides anything, run the same probe against a value known to be present.
+`make --dry-run tools` fired nine rules where the relative target fired none, and `git config --get-regexp '^merge\.'` listed five installed drivers where the guessed key listed nothing.
 
 ### A correct check can pass without looking at what was wrong
 
@@ -1240,7 +1291,8 @@ This one is about running the right one and still learning nothing: the check is
 Nothing in a pass announces the gap, because the pass is not a mistake.
 
 **A gate built for exactly this staleness missed an instance of it.** `check-plan-index.sh`'s third invariant (Q800) requires a `QNNN` in a plan's Status cell to be a link while its Queue row lives and bare once the row is gone, so a closing row cannot leave a cell claiming live work.
-The `release-1.3.md` cell read `❌ Open — one gate left from the pre-release API review, Q484`. `Q484` is bare and its row was gone, so the invariant held and `make plan-index-check` passed, on `main`, every day for the nine days after `v1.3.0` shipped as a final release (Q802).
+The `release-1.3.md` cell read `❌ Open — one gate left from the pre-release API review, Q484`.
+`Q484` is bare and its row was gone, so the invariant held and `make plan-index-check` passed, on `main`, every day for the nine days after `v1.3.0` shipped as a final release (Q802).
 The gate reads the *form of an ID*; the staleness was in the prose around it.
 The gap is now closed by a second, non-overlapping rule (Q812): a `release-X.Y.md` row cannot carry an open marker once the project has published that release, because the tag is a fact the cell cannot argue with.
 The fixtures that pin it replay the real cell and are green with the new rule removed, which is the assertion that the two rules read different things.
@@ -1260,7 +1312,8 @@ So when you build or trust a check:
 ### Check for a committed capture before booking a live measurement
 
 "Measure it" does not always mean "run it".
-Before scheduling a Tier C run, a dogfood dispatch, or anything else that costs a credential and a wall-clock hour, check whether the repo already holds a **recorded observation** of the same interface. `cmd/probe` exists to capture exactly that, and [`testdata/README.md`](../../testdata/README.md) documents what each capture contains.
+Before scheduling a Tier C run, a dogfood dispatch, or anything else that costs a credential and a wall-clock hour, check whether the repo already holds a **recorded observation** of the same interface.
+`cmd/probe` exists to capture exactly that, and [`testdata/README.md`](../../testdata/README.md) documents what each capture contains.
 
 Q495 is the worked example.
 Its backlog row read "confirm, then fix", and both it and the [Q459 plan](../plan/archive/q459-drained-worker-recovery.md) budgeted a Tier C run that would evict a real job and watch for the skip.
@@ -1376,7 +1429,8 @@ Distinguish the two kinds of assertion a script test makes:
 The remedy `run <script> yourself for the report` is not one.
 In CI there is nobody at that shell, and if the cause was transient the re-run is green and the evidence is gone for good.
 
-Q596 is the worked example, and it cost a full session. `check-v2-api-sync-test`'s `tree-in-sync` — the one assertion reading the live `api/` tree — ran the gate as `>/dev/null 2>&1` and printed `packages diverge` for *any* non-zero exit.
+Q596 is the worked example, and it cost a full session.
+`check-v2-api-sync-test`'s `tree-in-sync` — the one assertion reading the live `api/` tree — ran the gate as `>/dev/null 2>&1` and printed `packages diverge` for *any* non-zero exit.
 Replaying it against stubs exiting 1 (real drift), 2 (missing directory) and 3 (mid-run abort) produced three identical, evidence-free lines.
 The single occurrence was undiagnosable by construction, and 2,418 reproduction runs never recovered the trigger.
 Note the shape: in all three of the scripts that had this bug, the *fixture* helper in the same file captured output correctly and only the live-state assertion threw it away.
@@ -1384,7 +1438,8 @@ Note the shape: in all three of the scripts that had this bug, the *fixture* hel
 ### A test's environment assumptions must be probed, not inferred
 
 `runs-on` is an expression here, not a constant.
-Nine jobs resolve theirs at run time — seven in `unit-test.yml`, `integration-test`, and the e2e job in `e2e-reusable.yml` — so a `workflow_dispatch` with `target_gag=true` (or, for e2e, merely `vars.GAG_E2E_RUNNER` being set, which is not dispatch-gated) routes them to the self-hosted dogfood runner instead of `ubuntu-latest`. **"It passed in CI" is a statement about one runner image, not about where the test runs next.**
+Nine jobs resolve theirs at run time — seven in `unit-test.yml`, `integration-test`, and the e2e job in `e2e-reusable.yml` — so a `workflow_dispatch` with `target_gag=true` (or, for e2e, merely `vars.GAG_E2E_RUNNER` being set, which is not dispatch-gated) routes them to the self-hosted dogfood runner instead of `ubuntu-latest`.
+**"It passed in CI" is a statement about one runner image, not about where the test runs next.**
 
 So a test that depends on the environment — the uid it runs as, a tool on `PATH`, whether mode bits bite — must **attempt the operation and branch on the result**:
 
@@ -1395,12 +1450,16 @@ So a test that depends on the environment — the uid it runs as, a tool on `PAT
 
 The reviewer's tell: a test that names an environment fact in a comment or skip message but never reads it.
 
-Both remedies are in the record. **Q482** is the provision case: the `shellcheck` job runs `make scripts-test`, whose `scripts/go/go-vet-tags-test.sh` shells out to a real `go`. `ubuntu-latest` preinstalls one; the dogfood runner image omits it by design.
+Both remedies are in the record.
+**Q482** is the provision case: the `shellcheck` job runs `make scripts-test`, whose `scripts/go/go-vet-tags-test.sh` shells out to a real `go`.
+`ubuntu-latest` preinstalls one; the dogfood runner image omits it by design.
 The dependency was never written down or checked, so every `target_gag=true` dispatch reported a red that was not a failure.
-The fix added the same pinned `setup-go` step its six sibling jobs already had. **Q596** is the probe case: `check-v2-api-sync-test`'s `unreadable-file` assertion `chmod 000`s a fixture and requires the gate to call it trouble, gated on whether `cat` actually fails — not on `$EUID`, precisely because uid does not settle whether the mode bits bite on this runner.
+The fix added the same pinned `setup-go` step its six sibling jobs already had.
+**Q596** is the probe case: `check-v2-api-sync-test`'s `unreadable-file` assertion `chmod 000`s a fixture and requires the gate to call it trouble, gated on whether `cat` actually fails — not on `$EUID`, precisely because uid does not settle whether the mode bits bite on this runner.
 
 Q482 established this for the Go toolchain only.
-It covers both languages and every tier those nine jobs carry: Go unit tests, the `scripts/` shell suites under `make scripts-test`, integration, and e2e. `TestBuildTrustPool_PreservesSystemRoots` (`cmd/agc/internal/transport/trustpool_test.go`) and the `python3` guards in `scripts/docs/*-hook-test.sh` are the models in each.
+It covers both languages and every tier those nine jobs carry: Go unit tests, the `scripts/` shell suites under `make scripts-test`, integration, and e2e.
+`TestBuildTrustPool_PreservesSystemRoots` (`cmd/agc/internal/transport/trustpool_test.go`) and the `python3` guards in `scripts/docs/*-hook-test.sh` are the models in each.
 For the mode-bits case in Go, `writeUnreadable` (`cmd/worker/worker_test.go`) is the direct port of Q596's shell probe: it `chmod 000`s the fixture, reads it back, and skips only when that read succeeds (Q641).
 
 ### Proving a flake fix: invert it
@@ -1450,7 +1509,8 @@ Q490 hit it twice while deflaking the Q260 fan-out gate and burned a full baseli
 
 ### A `-count≥2` run fails absolute assertions on process-global metrics
 
-The other stress-run look-alike. `runnercore.NewMetrics` registers with the global controller-runtime registry, which panics on duplicate registration, so a test binary builds it once and every test — and every `-count` repetition — shares the instance.
+The other stress-run look-alike.
+`runnercore.NewMetrics` registers with the global controller-runtime registry, which panics on duplicate registration, so a test binary builds it once and every test — and every `-count` repetition — shares the instance.
 A test asserting a counter's **absolute** value passes at `-count=1` and fails deterministically from the second repetition on, because the previous run already incremented the same series.
 Reached exactly when stress-running a flake, and it reads like one, but the tell is the inverse of a real flake's: it reproduces at any load and any `GOMAXPROCS`, always at repetition ≥ 2, with `actual = expected × count`.
 Prefer building the metrics the exercised path records into as a fresh, **unregistered** `&runnercore.Metrics{…}` per test, so no series is shared in the first place — `newTestMetrics` (`cmd/agc/internal/provisioner/provisioner_test.go`) and `rerunLoopMetrics` (`eviction_internal_test.go`) are the models, and `p.Metrics` field accesses are nil-guarded for exactly this.
@@ -1474,7 +1534,8 @@ So when you write a negative assertion:
   This is the cheap fix and usually the right one.
 - **Guard the observability first, in the same spec.** Assert that a firing would have been visible before asserting it did not fire — the preemption and drain specs check `GITHUB_API_BASE_URL` addresses fakegithub and pin a payload carrying a complete run identity, precisely so an absent re-run cannot be an absent *instrument*.
   That guard is what keeps the test honest; note it still could not catch Q504, because it validated the AGC's env var rather than where the call actually went.
-- **Prefer asserting the specific wrong thing did not happen** over asserting nothing happened. `seq` must not contain `Failed/Evicted` is a claim about a mechanism; "the counter stayed 0" is a claim about the whole world, and the world has many ways to be quiet.
+- **Prefer asserting the specific wrong thing did not happen** over asserting nothing happened.
+  `seq` must not contain `Failed/Evicted` is a claim about a mechanism; "the counter stayed 0" is a claim about the whole world, and the world has many ways to be quiet.
 - **A poll or sampler cannot establish "X never happens."** A negative claim about an API-object transition needs watch/informer-level evidence: Q502 designed against "a drained Pending worker publishes no terminal phase," measured by a 200 ms phase sampler — but a real kubelet publishes a *transient* `Failed`-with-`deletionTimestamp` that samplers miss and the production informer sees, and the mark-only rule built on that measurement re-ran a job that never ran.
   A sampler bounds how often X was *observed*, never whether X *happened*.
 
@@ -1513,7 +1574,8 @@ A pool of two cannot produce four deduped siblings; an assertion that still pass
 ### A bulk mechanical change proves itself by reconciliation, not by an empty leftover query
 
 A repo-wide rename or rewrite — moving a directory, renaming a symbol, re-pointing every reference to a path — is finished when *every* site changed.
-The natural check is to grep for the old form and see nothing. **That check cannot distinguish "no sites remain" from "my query never matched the sites."** Both print nothing, and a rewrite and its verification query are usually written minutes apart from the same wrong mental model, so they fail together.
+The natural check is to grep for the old form and see nothing.
+**That check cannot distinguish "no sites remain" from "my query never matched the sites."** Both print nothing, and a rewrite and its verification query are usually written minutes apart from the same wrong mental model, so they fail together.
 
 Q571 moved 99 scripts and rewrote their references.
 The rewrite's regex carried a lookbehind that excluded a preceding `/`, so every `"$REPO_ROOT/scripts/foo.sh"` was silently skipped — 62 files.
@@ -1527,7 +1589,8 @@ Two checks, both cheap, and the first is the one that actually catches this:
 - **A positive control.** Before trusting the sweep, name one site you *know* must change and assert it did.
   One `grep` for a known-affected line is enough.
   A query that cannot match its own known case is broken, and this is the only check that says so.
-- **Reconcile counts.** Count occurrences of the old form before, count the new form after, and require them to agree. `762 rewritten` means nothing on its own; `762 rewritten, 762 found beforehand` is the claim worth making.
+- **Reconcile counts.** Count occurrences of the old form before, count the new form after, and require them to agree.
+  `762 rewritten` means nothing on its own; `762 rewritten, 762 found beforehand` is the claim worth making.
   A shortfall names how many sites the sweep missed even when you cannot yet say which.
 - **Take the baseline with a query that spans every shape.** Reconciliation compares two numbers, so if both come from the same too-narrow query they agree and the sweep is still half-done — the check reports success at exactly the moment it is blind.
   Splitting the `infra` Queue label counted rows by reading the Labels cell as the fourth `|`-field: right for the Queue and Deferred tables, wrong for the Progress table, where it is the third.
@@ -1604,7 +1667,8 @@ Count one block by hand, require the scan to agree with it, and only then believ
 A spec that `Skip`s for want of credentials reports the same colour as one that ran and passed.
 Nothing in CI tells the two apart, so the invariant it asserts stops being enforced the moment the credentials are absent, which for the live-GitHub tier is every PR.
 
-Q599 is the case. `E2E_GitHub_CancelledRunLeavesNoDeletionMark` asserted that a cancelled run's worker pod never publishes a `deletionTimestamp`. #1032 then gave the AGC a delete for exactly that pod (the Q501 reclaim of an abandoned job's worker).
+Q599 is the case.
+`E2E_GitHub_CancelledRunLeavesNoDeletionMark` asserted that a cancelled run's worker pod never publishes a `deletionTimestamp`. #1032 then gave the AGC a delete for exactly that pod (the Q501 reclaim of an abandoned job's worker).
 The spec's assertion was now false against a *working* gateway, and no gate said so; the contradiction shipped and was found later, by reading.
 The code obligation had been written down (`deletion.go` requires any new deletion path to apply the AGC-own exclusion) and #1032 honoured it.
 The specs obligation was written down nowhere, so nothing pointed at the assertion that had just gone stale.
@@ -1615,7 +1679,8 @@ What works is a gate on the code path itself, so the change that could invalidat
 - [`deletion_inventory_test.go`](../../cmd/agc/internal/provisioner/deletion_inventory_test.go) inventories every client `Delete` call in the `agc` module.
   Adding, moving, or renaming one fails the test, and the failure prints every spec that pins the deletion boundary, flagging with `[CRED]` the ones that skip without credentials and are therefore not evidence of anything when CI is green.
 - A second case asserts each named spec still exists at its recorded path, so the roster cannot decay into names nothing answers to.
-- A third sweeps the heavy-tier test trees for files that read the deletion mark and requires each to be accounted for: either it contributes a spec to the roster, or it is written off with a reason. **A roster guarded only against rot is still only as complete as whoever last read the design docs**, a gap found by retro after the first two cases had shipped.
+- A third sweeps the heavy-tier test trees for files that read the deletion mark and requires each to be accounted for: either it contributes a spec to the roster, or it is written off with a reason.
+  **A roster guarded only against rot is still only as complete as whoever last read the design docs**, a gap found by retro after the first two cases had shipped.
   It classifies per file, not per spec, so a brand-new boundary test file is caught and a new spec inside a roster file is not; the roster's own entry is what points a reader into that file.
   Unit tests stay out of scope on purpose: they run on every `make check`, so they go red on their own and need no pointer.
 
@@ -1723,8 +1788,10 @@ Generating it by calling Ginkgo's own `reporters.GenerateJUnitReport` — a thro
 The hand-written fixture would have used the named form, the parser handled only the named form, and the two would have agreed while every spec name containing a quote reached the job summary with raw entities in it.
 The generator cost about five minutes; the bug was invisible to every other gate.
 
-The release gate's CPU reservation is the null-vs-absent instance, measured 2026-08-14. `quota-test.sh` modelled a node pool's autoscaling row as `0\t8`, and `lib/quota.sh` read it back with a default-IFS `read -r min max`; both were written in the same change, and both assumed GKE reports a `minNodeCount` of 0.
-It omits the field instead, since proto3 drops an integer holding its default (the same hole Q779 found in `currentNodeCount`), so the live row arrives as `\t8`. `read` then discards that leading tab whatever IFS is set to, because tab is IFS *whitespace*, and no IFS can recover an empty first field from a tab-separated row.
+The release gate's CPU reservation is the null-vs-absent instance, measured 2026-08-14.
+`quota-test.sh` modelled a node pool's autoscaling row as `0\t8`, and `lib/quota.sh` read it back with a default-IFS `read -r min max`; both were written in the same change, and both assumed GKE reports a `minNodeCount` of 0.
+It omits the field instead, since proto3 drops an integer holding its default (the same hole Q779 found in `currentNodeCount`), so the live row arrives as `\t8`.
+`read` then discards that leading tab whatever IFS is set to, because tab is IFS *whitespace*, and no IFS can recover an empty first field from a tab-separated row.
 The max landed in `min`, and the gate refused to start against a correctly configured cluster, reporting the `e2e` pool as having no autoscale ceiling.
 Nine assertions covered the arithmetic downstream of that read and all nine passed, because the fixture and the parser were wrong in the same direction.
 What let it reach a release is that the preflight merged three days after the last dogfood run, so until `v1.5.0-rc.1` needed validating, the fake was the only thing it had ever run against.
@@ -1787,7 +1854,8 @@ Waiting on the metric fixed all three — and is safe in the other direction, si
 
 Reach for the ordering deliberately: identify which effect the code emits **last**, synchronize on that, and let the earlier ones be implied.
 
-The gap can also sit **inside a single stub handler**, which is harder to see because one HTTP call looks atomic from the test. `brokertest`'s `handleCompleteJob` incremented `CompleteJobCalls` on entry and committed the fan-out accounting several statements later; `TestAGC_Q260_FanoutCompletionReconciles` waited for the count to reach N and then fired `ExpireUnstartedDeliveries`, which could beat the Nth handler to the accounting lock and cancel a job whose deliveries had all in fact completed (Q490).
+The gap can also sit **inside a single stub handler**, which is harder to see because one HTTP call looks atomic from the test.
+`brokertest`'s `handleCompleteJob` incremented `CompleteJobCalls` on entry and committed the fan-out accounting several statements later; `TestAGC_Q260_FanoutCompletionReconciles` waited for the count to reach N and then fired `ExpireUnstartedDeliveries`, which could beat the Nth handler to the accounting lock and cancel a job whose deliveries had all in fact completed (Q490).
 Two rules come out of it:
 
 - **Writing a stub: publish the observable counter last**, after every piece of state the handler records, so waiting on the counter is a valid happens-before gate for everything it wrote.
@@ -1795,10 +1863,12 @@ Two rules come out of it:
 - **Writing the test: wait on the state, not the call count.** A count says a call was *served*, not that it *resolved* anything — a request whose body never arrives (cancelled client context) is still served and still counted.
   Q490's test now waits on `DeliveryResults`, the accounting it actually asserts about.
 
-**Publishing the counter last is not enough when the effect you assert on is deliberately deferred to a later cycle.** The scale-set listener honours the rule — `abandonDeferredBefore` calls `settle` before it increments the abandoned counter — but `settle` only marks the job concluded *in memory*, and the wire delete that actually releases the message is issued by the next `flushDeletes` cycle, by design ("runs per cycle rather than only at settle time"). `TestListener_AbandonedJobDoesNotSurviveARestart` waited on the counter and then stopped the listener, so a stop landing before that cycle left the message unreleased and the restart replayed it — the very thing the test asserts must not happen (Q602).
+**Publishing the counter last is not enough when the effect you assert on is deliberately deferred to a later cycle.** The scale-set listener honours the rule — `abandonDeferredBefore` calls `settle` before it increments the abandoned counter — but `settle` only marks the job concluded *in memory*, and the wire delete that actually releases the message is issued by the next `flushDeletes` cycle, by design ("runs per cycle rather than only at settle time").
+`TestListener_AbandonedJobDoesNotSurviveARestart` waited on the counter and then stopped the listener, so a stop landing before that cycle left the message unreleased and the restart replayed it — the very thing the test asserts must not happen (Q602).
 When the code splits an operation across cycles on purpose, the counter marks the *decision*, not the *effect*: wait on the effect, here the stub's own `delete-message` call.
 
-**And the signal can come from a component that is not the system under test at all.** Q602's counter was at least the listener's own. `TestListener_RestartDoesNotReprovisionAConcludedJob` waited on `AssignedJobCount == 0`, the *stub's* record that the job ended, before taking the listener away.
+**And the signal can come from a component that is not the system under test at all.** Q602's counter was at least the listener's own.
+`TestListener_RestartDoesNotReprovisionAConcludedJob` waited on `AssignedJobCount == 0`, the *stub's* record that the job ended, before taking the listener away.
 But `recordingProvisioner.provision` is what calls `CompleteAssignedJob`, so that count drops while the listener is still inside `handleMessage` for the assignment, and the `JobCompleted` it appends is a queue message the listener only reads a poll later.
 The wait was satisfied by the test's own provisioner, a round trip before the listener knew anything, and a stop landing in that gap left an assignment the listener still believed was owed a worker, which the restart duly re-provisioned (Q685).
 Correlated over 60 runs taken at maximum stop pressure: of the 4 that stopped before any delete, every one replayed; of the 56 that issued it, none did.
@@ -1827,7 +1897,8 @@ There need not be a stub involved at all.
 A controller-runtime manager serves reads from its informer cache while an envtest suite's `k8sClient` reads the apiserver directly, so one status condition has **two observers that never update together**: the apiserver first, the cache a watch-delivery later.
 A test that waits on `k8sClient` and then does something the *controller* must judge has synchronized on the earlier of the two.
 
-Q559 is the worked example. `TestV2_RunnerSet_CapacityGate_FixedClusterSkipsAcquire` waited for `WorkerCapacityDeclined` through `k8sClient`, then enqueued one job and asserted it was rejected with `reason=capacity`.
+Q559 is the worked example.
+`TestV2_RunnerSet_CapacityGate_FixedClusterSkipsAcquire` waited for `WorkerCapacityDeclined` through `k8sClient`, then enqueued one job and asserted it was rejected with `reason=capacity`.
 The admission rung reads that same condition back through `mgr.GetClient()`'s cache (`runnerSetTarget.capacityGateCondition`), so a delivery landing inside the gap is admitted and **acquired** — the CI failure's own log carries the `AcquireJob` line the passing run does not.
 The classic tier delivers a job once, so nothing redelivers and no larger timeout could have helped.
 
@@ -1848,7 +1919,8 @@ Two rules follow:
 Synchronizing on the right signal is not enough when the controller produces that signal from state it holds **in memory**, downstream of something durable it has already written.
 The outcome then depends on one process surviving a window, and a process replaced inside that window forecloses the outcome permanently — so the wait expires on a decision already made, no timeout reaches it, and the failure reads as exactly the defect the test was written to catch.
 
-Q549 is the worked case. `RecoverEvictedScaleSetWorkers` claims a disrupted scale-set worker by stamping `actions-gateway.com/eviction-handled-at` on the pod, and only then hands off to `handleEviction`, which waits out `evictionRetryDelay` on a goroutine before calling GitHub.
+Q549 is the worked case.
+`RecoverEvictedScaleSetWorkers` claims a disrupted scale-set worker by stamping `actions-gateway.com/eviction-handled-at` on the pod, and only then hands off to `handleEviction`, which waits out `evictionRetryDelay` on a goroutine before calling GitHub.
 The claim is durable and at-most-once — every later scan skips an annotated pod, deliberately, because the deletion arm's evidence *is* the pod and the deletion removes it.
 The re-run is neither durable nor replayable.
 On run 30658951388 the GMC rolled the tenant's AGC Deployment mid-window: the outgoing pod won the claim at 20:00:19Z, the incoming pod's only claim attempt lost the optimistic lock a second later and skipped, and the e2e re-run wait spent its 90 s on an outcome already decided.
@@ -1859,7 +1931,8 @@ An unchanged pin turns "no re-run" into a real failure worth reporting; a change
 
 ### Script tests: neutralize the clock, never measure it
 
-The rules above are written for the Go tiers, but the `scripts/` tier needs its own statement of them, because it is the **most load-contended tier in the repo** and the one most likely to be written with a real-clock assertion. `make scripts-test` runs every `scripts/` suite concurrently through [`scripts/ci/run-parallel.sh`](../../scripts/ci/run-parallel.sh) (`make list-script-tests` names them), inside a `make check` that is already saturating the machine with the Go tests.
+The rules above are written for the Go tiers, but the `scripts/` tier needs its own statement of them, because it is the **most load-contended tier in the repo** and the one most likely to be written with a real-clock assertion.
+`make scripts-test` runs every `scripts/` suite concurrently through [`scripts/ci/run-parallel.sh`](../../scripts/ci/run-parallel.sh) (`make list-script-tests` names them), inside a `make check` that is already saturating the machine with the Go tests.
 A bound on real elapsed seconds is least reliable exactly where it is cheapest to write.
 
 **So a script test must never assert on wall-clock time it actually spent.** Stub `sleep` — it is a plain command, so a shell function shadows it — and assert on what the stub recorded.
@@ -1892,7 +1965,8 @@ A stub `sleep` ahead of the real one on `PATH` records the tick and kills the pr
 "Off" becomes zero ticks, a regression fails on the tick it took instead of spinning for the length of the gate, and both outcomes terminate through the program's own control flow — so neither end needs a deadline.
 The kill still surfaces as a non-zero exit, which keeps a genuine hang from passing as a clean one.
 
-Prove it by widening the window, exactly as [Q490](#synchronize-on-the-signal-you-assert-on) does: a `/bin/sleep 12` injected into `main` reproduces the reported `exit 137` on the old assertion every time, and the rewritten one passes against that same delay. `/bin/sleep`, not `sleep`, so the injected delay bypasses the stub on `PATH`.
+Prove it by widening the window, exactly as [Q490](#synchronize-on-the-signal-you-assert-on) does: a `/bin/sleep 12` injected into `main` reproduces the reported `exit 137` on the old assertion every time, and the rewritten one passes against that same delay.
+`/bin/sleep`, not `sleep`, so the injected delay bypasses the stub on `PATH`.
 
 #### Two clocks in one assertion
 
@@ -1949,7 +2023,8 @@ func verdictBudget(window time.Duration) time.Duration {
 The multiplier is the only guess left, and it now covers scheduler delay alone, because every real wait is already in the sum.
 Say so in the failure text: "3x the 43.3s its own configuration can spend … so it is wedged, not slow" tells the next reader which of the two they are looking at, where "did not reach a verdict" told them nothing.
 
-The same reasoning retires an iteration cap. `record-launch-test.sh` waited `100 × sleep 0.1` for a launch record and `alloc-queue-id-test.sh` `1000 × sleep 0.01` for its eight-worker fleet, both failing with "within 10s" (Q752, Q706).
+The same reasoning retires an iteration cap.
+`record-launch-test.sh` waited `100 × sleep 0.1` for a launch record and `alloc-queue-id-test.sh` `1000 × sleep 0.01` for its eight-worker fleet, both failing with "within 10s" (Q752, Q706).
 Ten seconds is inside the measured startup distribution, not outside it: Q642 put shell startup at p99 469 ms with **0.45% still starting at 10 s**, so across a fleet roughly one run in 28 met the cap, and the suite blamed the subject for the scheduler.
 Where a blocking primitive exists, use it: the record-launch suite `wait`s on the wrapper, which waits on the run, so the run's own exit ends the wait with no clock in it at all.
 Where none does, keep polling the signal, add the *other* real outcome as its own exit (the wrapper dying without writing a record is a failure you can observe rather than infer), and push the cap far enough out that reaching it means broken rather than busy.
@@ -1964,7 +2039,8 @@ It is throwaway code, which is exactly why it gets written without the checks th
   A load harness must **assert its own load is running** before it draws any conclusion from a green sample, and print the figure it measured, exactly as [an empty search result is only evidence once the command is known to have run](#a-bulk-mechanical-change-proves-itself-by-reconciliation-not-by-an-empty-leftover-query).
 - **The harness killed the thing it was measuring.** That same harness cleaned up with `pkill -f 'make scripts-test'`, which matched the `make check` running for verification in the same worktree.
   The gate died mid-run and reported a non-zero exit, and a sampled suite that had printed `all assertions passed` was recorded as a failure because `wait` returned non-zero.
-  Both read as genuine red. **Scope a harness's cleanup to its own processes**, with a stop file the loops poll or a marker in the command line that the pattern anchors on, and never `pkill` a pattern that a real gate's own command line matches.
+  Both read as genuine red.
+  **Scope a harness's cleanup to its own processes**, with a stop file the loops poll or a marker in the command line that the pattern anchors on, and never `pkill` a pattern that a real gate's own command line matches.
 
 - **The harness's own verdict was wrong.** Both failure modes above are about the load; this one is about the oracle, and it is the worse kind because the samples are real and only the classification is broken.
   Q703's race probe reported 50 failures in 50 attempts, which read as a spectacular reproduction until the log showed every one was the probe passing `-exist-file /dev/null` to the checker, so every link in the file was dead.
@@ -1972,7 +2048,8 @@ It is throwaway code, which is exactly why it gets written without the checks th
 
 - **The subject changed under the harness.** The first three are about the load, the oracle, and the cleanup; this one is about the thing being measured, and it is the easiest to walk into because the harness runs for minutes while you keep working.
   Q703's loop reported a hit on run 8 that was its own session's in-flight edit: a `trace()` call had been temporarily made unconditional to check that an assertion went red without it, and the loop caught that tree.
-  It reads as a reproduction, and it is the flake's own signature, so nothing about the log says otherwise. **Freeze the tree for a load run's duration, and discard every round that overlapped an edit to the subject**, including doc and comment edits, since the gates read those too.
+  It reads as a reproduction, and it is the flake's own signature, so nothing about the log says otherwise.
+  **Freeze the tree for a load run's duration, and discard every round that overlapped an edit to the subject**, including doc and comment edits, since the gates read those too.
   Land the code first, then measure; the doc and backlog work that fills the wait is exactly the work a running gate does not decide ([run the local gate in the background](parallel-dispatch.md#run-the-local-gate-in-the-background-not-on-the-critical-path)), so do that against a tree the harness is not sampling.
 
 The general rule is the one this whole section is about, turned on the instrument: a measurement you cannot show ran is not a measurement.
@@ -2008,7 +2085,8 @@ So `e2e-run-watch-test.sh` appended three `owner/repo` run events to the real st
 The gate still passed, which is the part worth noticing: the damage was to the artifact a human was reading to decide whether the candidate was good.
 
 Set `RELEASE_PROGRESS_FILE` to a path under the suite's own `$WORK` **before** the `source` line, as [`release-status-test.sh`](../../scripts/dogfood/release-status-test.sh) and [`release-sentinel-test.sh`](../../scripts/dogfood/release-sentinel-test.sh) do.
-The library defaults on *unset*, so an assignment after the source line is too late for anything that line already ran. `RELEASE_STATUS_FILE` defaults beside the stream rather than to a fixed path, so that one assignment scopes both, and `RELEASE_PROGRESS_FILE=` leaves no live path reachable at all for a suite that wants no stream (Q786).
+The library defaults on *unset*, so an assignment after the source line is too late for anything that line already ran.
+`RELEASE_STATUS_FILE` defaults beside the stream rather than to a fixed path, so that one assignment scopes both, and `RELEASE_PROGRESS_FILE=` leaves no live path reachable at all for a suite that wants no stream (Q786).
 Set `RELEASE_STATUS_FILE` as well when the suite wants it somewhere other than the stream's own directory; both suites above name it explicitly, which is also the clearer thing to read.
 
 Then assert the positive, and name the path rather than the variable.
@@ -2167,7 +2245,8 @@ Picking a session from that global list — e.g. `RegisteredSessions()[len-1]` �
 Two rules keep a new test deterministic:
 
 - **Scope every session assertion and enqueue to your CR's owner.** Use `ActiveSessionsForOwner("<cr-name>")` and `enqueueJobOnOwnerSession(...)` instead of the global accessors.
-  A CR name is unique to one test, so owner-scoping returns exactly the sessions you created — never a sibling's. `enqueueJobOnOwnerSession` also retries until an owner session is present, so it is immune to the picked session having just idle-shut.
+  A CR name is unique to one test, so owner-scoping returns exactly the sessions you created — never a sibling's.
+  `enqueueJobOnOwnerSession` also retries until an owner session is present, so it is immune to the picked session having just idle-shut.
   The filter matches `"<cr-name>-<agentIndex>"` with the index segment exact, so a sibling CR whose name *extends* yours keeps its own bucket.
   It does **not** separate kinds: the AGC builds `ownerName` from the bare CR name for a RunnerGroup and a RunnerSet alike, so a same-named pair sends byte-identical owners and shares one bucket (Q677).
   A test that runs both kinds must give them different names.
@@ -2179,7 +2258,8 @@ Two rules keep a new test deterministic:
 Both GitHub doubles model the real backend's long poll: an empty poll is **held** until a message lands or a poll window elapses.
 A double that answers "nothing to deliver" instantly turns any polling client into a spin loop, which burns CI CPU on every unrelated test in the package and widens the timing windows other tests race against.
 
-- [`scaleset/scalesettest`](../../scaleset/scalesettest/) — `DefaultPollTimeout` (1s) bounds the wait, and a parked poll wakes the instant the queue changes (a job enqueued, acquired, or completed; the session dropped), so delivery stays immediate and tests stay fast. `Server.SetPollTimeout(0)` restores the non-blocking behavior — use it *only* in a test that asserts the 202 itself, never in one that drives a polling client.
+- [`scaleset/scalesettest`](../../scaleset/scalesettest/) — `DefaultPollTimeout` (1s) bounds the wait, and a parked poll wakes the instant the queue changes (a job enqueued, acquired, or completed; the session dropped), so delivery stays immediate and tests stay fast.
+  `Server.SetPollTimeout(0)` restores the non-blocking behavior — use it *only* in a test that asserts the 202 itself, never in one that drives a polling client.
   Before this landed (Q287) an idle scale-set listener polled the stub ~5,000×/s; it is now ~1/s.
 - [`test/fakegithub`](../../test/fakegithub/) — long-polls job delivery for the same reason (Q148, where an instantly-returning fake collapsed the listener pool: replacement listeners idle-exited in milliseconds).
 
@@ -2194,7 +2274,8 @@ A test that waits for burst goroutines to drain has to size N against its own `E
 
 Three broker doubles implement the GitHub Actions broker wire protocol: [`broker/brokertest`](../../broker/brokertest/) (the in-process integration stub), [`test/fakegithub`](../../test/fakegithub/) (the deployed fake-GitHub e2e image), and the [load harness stub](../../cmd/agc/test/load/broker_stub.go).
 They diverge in what a job delivery and an AcquireJob *mean* — fan-out accounting (Q260), single-use JIT consumption (Q114), saturated auto-delivery — but the session and credential *mechanics* are identical: minting `session-<n>` IDs, resolving a DELETE by its `sessionId` query param or bearer token, owner-scoped session listing, and the connection-reuse-safe JSON framing.
-Those live once in [`broker/brokerstub`](../../broker/brokerstub/) (Q368); each double layers its own delivery/acquire policy on top. `broker/brokerstub` is deliberately **standard-library-only** so the fakegithub distroless image links no third-party code — do not import the `broker` client (or anything else) into it.
+Those live once in [`broker/brokerstub`](../../broker/brokerstub/) (Q368); each double layers its own delivery/acquire policy on top.
+`broker/brokerstub` is deliberately **standard-library-only** so the fakegithub distroless image links no third-party code — do not import the `broker` client (or anything else) into it.
 
 ### The scale-set protocol has exactly one model
 
@@ -2217,7 +2298,8 @@ Reach for `SeedMessage`/`SeedRawMessage` only for the shapes the model cannot re
 Unlike `broker/brokerstub`, `scalesetstub` is not standard-library-only: it encodes responses with the `scaleset` package's own wire types, so a renamed field breaks the build rather than the test.
 The cost is that fakegithub's image now links `githubapp` and `golang-jwt/jwt/v5` — already blocking-scanned in the `agc` and `gmc` Trivy legs, so no new module enters the scanned surface.
 
-**No `package main` may reach `net/http/httptest`.** A production binary must never link a test server. `TestNoPackageMainReachesHTTPTest` (in `cmd/probe/compat`) enforces this: it walks every `package main` in the workspace and fails if any transitively imports `net/http/httptest` in its compiled build graph (`go list -deps`, so a `_test.go` file importing httptest — as fakegithub's own tests do — is correctly ignored).
+**No `package main` may reach `net/http/httptest`.** A production binary must never link a test server.
+`TestNoPackageMainReachesHTTPTest` (in `cmd/probe/compat`) enforces this: it walks every `package main` in the workspace and fails if any transitively imports `net/http/httptest` in its compiled build graph (`go list -deps`, so a `_test.go` file importing httptest — as fakegithub's own tests do — is correctly ignored).
 It runs in `make check`; a stray import of a broker double into a shipped binary fails the gate.
 
 ## Load tests
@@ -2259,7 +2341,8 @@ make test-karpenter            # three cases, ~1 min
 make karpenter-cluster-delete  # tear down when done
 ```
 
-- **Each arm gets its own cluster, and neither is the e2e one.** A live autoscaler creating and deleting nodes underneath the e2e suite would perturb every spec in it, and two autoscalers contending for the same pending pods would make both arms flaky. `AUTOSCALER_CLUSTER` (default `gag-autoscaler`) and `KARPENTER_CLUSTER` (default `gag-karpenter`) name them; `CA_VERSION`, `KARPENTER_VERSION` and `KWOK_VERSION` pin what gets installed, in [`scripts/e2e/autoscaler-cluster.sh`](../../scripts/e2e/autoscaler-cluster.sh) and [`scripts/e2e/karpenter-cluster.sh`](../../scripts/e2e/karpenter-cluster.sh).
+- **Each arm gets its own cluster, and neither is the e2e one.** A live autoscaler creating and deleting nodes underneath the e2e suite would perturb every spec in it, and two autoscalers contending for the same pending pods would make both arms flaky.
+  `AUTOSCALER_CLUSTER` (default `gag-autoscaler`) and `KARPENTER_CLUSTER` (default `gag-karpenter`) name them; `CA_VERSION`, `KARPENTER_VERSION` and `KWOK_VERSION` pin what gets installed, in [`scripts/e2e/autoscaler-cluster.sh`](../../scripts/e2e/autoscaler-cluster.sh) and [`scripts/e2e/karpenter-cluster.sh`](../../scripts/e2e/karpenter-cluster.sh).
   Manifests live in [`test/autoscaler/`](../../test/autoscaler/) and [`test/karpenter/`](../../test/karpenter/).
 - **Build tags `autoscaler` and `karpenter`**, in `cmd/agc/internal/controller/autoscaler_verdict_live_test.go` and `karpenter_verdict_live_test.go` (shared plumbing in `live_harness_test.go`), in-package so they call the unexported matcher directly rather than widening its API for a test.
 - **They fail rather than skip when the cluster is absent.** A drift detector that skips itself detects nothing; the failure message names the make target.
@@ -2281,7 +2364,8 @@ What makes that fire without anyone remembering to run it is a coupling worth kn
 > That is why `CA_VERSION` (v1.36.x) tracks kind's default rather than the deliberately-pinned-down `KIND_NODE_IMAGE` the e2e tier uses (v1.35.5).
 
 `KIND_VERSION` is pinned in this workflow as well as [`e2e-reusable.yml`](../../.github/workflows/e2e-reusable.yml), and [`updatecli.d/kind.yaml`](../../updatecli.d/kind.yaml) rewrites both weekly.
-So the kind bump PR trips this workflow's `changes` filter and runs the gate; when that bump moves the default node image's minor, `CA_VERSION` must move to the matching CA minor in the same PR — and a CA minor is where a vocabulary reword lands. **A kind bump PR whose autoscaler-drift job fails on version skew is telling you to bump `CA_VERSION`, not to pin the node image.**
+So the kind bump PR trips this workflow's `changes` filter and runs the gate; when that bump moves the default node image's minor, `CA_VERSION` must move to the matching CA minor in the same PR — and a CA minor is where a vocabulary reword lands.
+**A kind bump PR whose autoscaler-drift job fails on version skew is telling you to bump `CA_VERSION`, not to pin the node image.**
 
 `KARPENTER_VERSION` has no such coupling: Karpenter is not released per Kubernetes minor (one release supports a wide range), so no kind bump ever prompts that pin.
 Its trigger is [`updatecli.d/karpenter.yaml`](../../updatecli.d/karpenter.yaml) (Q529), which weekly resolves the **latest** upstream release — minor or patch, since with no minor coupling there is no skew to guard and a minor is where a reword most likely lands — and opens a PR moving the pin.
@@ -2359,7 +2443,8 @@ Two independent guarantees hold it up, both verifiable in the vendored source:
    So no other container can interleave between a suite's specs and reassign what its `BeforeAll` set.
 
 **What this does not grant: mutual exclusion.** Two different `Ordered` containers still run *concurrently* in different processes.
-The package var is safe because each process has its own copy and each suite writes a distinct base port before use — not because Ginkgo serialises anything. `Ordered` orders specs within a container; it does not order containers against each other.
+The package var is safe because each process has its own copy and each suite writes a distinct base port before use — not because Ginkgo serialises anything.
+`Ordered` orders specs within a container; it does not order containers against each other.
 A resource that is genuinely shared *outside* the process — a cluster object, a fixed host port, a GitHub session — gets no protection from `Ordered` and needs `Serial`, an owner-scoped filter, or a per-process derivation such as `GinkgoParallelProcess()`.
 
 Dropping `Serial` from a suite is therefore a claim about *external* isolation, never about package state.
@@ -2389,12 +2474,14 @@ Pick by what the suite is waiting on:
 | A broker session, a worker pod, a job | `DumpAGCSessionDiagnostics` | RunnerGroup status, AGC log tail, ReplicaSet templates, fakegithub |
 | Provisioning, a CR condition, RBAC, a NetworkPolicy verdict | `DumpProvisioningDiagnostics` | Namespace labels, ActionsGateway status, NetworkPolicies, per-pod log tails, the manager's policies and log tail |
 
-**Watch the volume when you extend one.** A dump nobody can read is a dump that did not happen. `DumpProvisioningDiagnostics` samples the NetworkPolicy `ipBlock` lists for exactly this reason: measured on a forced-failure run of `E2E_GMC_Teardown`, the tenant workload policy's GitHub meta ranges were 7352 entries filling 14704 of that section's 14901 lines, and the whole dump was 15450 lines.
+**Watch the volume when you extend one.** A dump nobody can read is a dump that did not happen.
+`DumpProvisioningDiagnostics` samples the NetworkPolicy `ipBlock` lists for exactly this reason: measured on a forced-failure run of `E2E_GMC_Teardown`, the tenant workload policy's GitHub meta ranges were 7352 entries filling 14704 of that section's 14901 lines, and the whole dump was 15450 lines.
 Sampling five and printing the elided count brought it to 758 with every section intact.
 Before adding a `-o yaml` of anything, check what it looks like on a real tenant rather than what it looks like in the type definition.
 
 Both are best-effort — a failed command prints one line and the dump continues, so it can never mask the real failure — and neither reads a Secret.
-Keep it that way when extending them: these dumps run against live tenant namespaces, and credentials reach a tenant pod as volume mounts, which `kubectl describe` renders as a Secret *name*. `TestDumpProvisioningDiagnosticsNeverReadsASecret` fails the build if a `get secret` is ever added.
+Keep it that way when extending them: these dumps run against live tenant namespaces, and credentials reach a tenant pod as volume mounts, which `kubectl describe` renders as a Secret *name*.
+`TestDumpProvisioningDiagnosticsNeverReadsASecret` fails the build if a `get secret` is ever added.
 
 **`AfterEach` is the right node, and `DeferCleanup` is not.** Ginkgo runs `JustAfterEach`, then `AfterEach`/`AfterAll`, and only on a later pass the `DeferCleanup` nodes ([`internal/group.go:249-258`](../../vendor/github.com/onsi/ginkgo/v2/internal/group.go)).
 An `AfterEach` dump therefore beats *every* cleanup the suite registered — the `DeleteNamespace` in an `AfterAll`, and also the per-spec `DeferCleanup` that deletes a probe pod, so the probe's logs are still fetchable when the dump runs.
@@ -2402,7 +2489,8 @@ Putting the dump in a `DeferCleanup` gives up that ordering: cleanups run last-r
 
 ### Watching an e2e run in progress
 
-At `--procs 6` Ginkgo's own output is close to silent: it suppresses spec-start entirely in parallel mode, prints a passing spec as a bare `•`, and two measured CI runs went 98 s and 78 s between any output. `make e2e` therefore runs [`scripts/e2e/progress-watch.sh`](../../scripts/e2e/progress-watch.sh) alongside the suite, which prints one line per 30 s:
+At `--procs 6` Ginkgo's own output is close to silent: it suppresses spec-start entirely in parallel mode, prints a passing spec as a bare `•`, and two measured CI runs went 98 s and 78 s between any output.
+`make e2e` therefore runs [`scripts/e2e/progress-watch.sh`](../../scripts/e2e/progress-watch.sh) alongside the suite, which prints one line per 30 s:
 
 ```
 [e2e t+04:12] 31/73 specs | 29 ok, 1 failed, 1 skipped | running: E2E_GMC_Isolation cross... (3m58s), E2E_AGC_WorkerDrain a dr... (2m01s)
@@ -2415,14 +2503,17 @@ Knobs: `TEST_PROGRESS_INTERVAL` (seconds between lines — the same knob paces [
 
 Two things to know when changing the event format:
 
-- **Event lines must stay under `PIPE_BUF` (4 KiB).** All six processes append to one file with no lock; below that size an `O_APPEND` write lands atomically, above it two processes interleave bytes and corrupt both records silently. `TestProgressEventFitsPipeBuf` guards the budget — spec text is truncated to keep it.
+- **Event lines must stay under `PIPE_BUF` (4 KiB).** All six processes append to one file with no lock; below that size an `O_APPEND` write lands atomically, above it two processes interleave bytes and corrupt both records silently.
+  `TestProgressEventFitsPipeBuf` guards the budget — spec text is truncated to keep it.
 - **Render from the event stream, never from Ginkgo's log.** Reporter output is not a stable contract, so a regex scraper over it drifts silently — the same failure mode [the live-autoscaler drift gate](#the-live-autoscaler-drift-gate) exists to catch.
 
 After the run, [`scripts/e2e/e2e-report-summary.sh`](../../scripts/e2e/e2e-report-summary.sh) renders `tmp/e2e-report.xml` into the job summary — counts, every failure with its message, and the ten slowest specs — and emits one `::error::` annotation per failed spec.
 It runs `if: always()` in `e2e-reusable.yml` and never exits non-zero, because it runs on the path where the suite may have died before writing a report.
 Run it locally against any report to get the same table.
 
-**Egress-enforcing CNI profile.** `make e2e-cluster KIND_CNI=calico` builds the cluster with Calico instead of kindnet (see [kind-iteration.md § CNI selection](kind-iteration.md#cni-selection-kindnet-default-vs-calico)). **Five** specs gate on `egressEnforcingCNI()`, skipping themselves on kindnet (whose enforcer does not drop egress) and asserting real packet drops only on a Calico/Cilium cluster: the two runtime egress negatives (`E2E_GMC_TenantProvisioning_WorkloadEgressBlockedToNonProxyPod`, `E2E_GMC_TenantProvisioning_WorkerCannotReachK8sAPI`), the two manager metrics-NP specs (`E2E_GMC_ManagerMetricsNP_DeniesUnlabeledNamespace`, `E2E_GMC_ManagerMetricsNP_AllowsLabeledNamespace`), and `E2E_V2_DirectEgress_NonGitHubBlocked`. `egressEnforcingCNI()` is the authoritative list; prose copies of it have gone stale twice, so grep the call sites rather than trusting a count.
+**Egress-enforcing CNI profile.** `make e2e-cluster KIND_CNI=calico` builds the cluster with Calico instead of kindnet (see [kind-iteration.md § CNI selection](kind-iteration.md#cni-selection-kindnet-default-vs-calico)).
+**Five** specs gate on `egressEnforcingCNI()`, skipping themselves on kindnet (whose enforcer does not drop egress) and asserting real packet drops only on a Calico/Cilium cluster: the two runtime egress negatives (`E2E_GMC_TenantProvisioning_WorkloadEgressBlockedToNonProxyPod`, `E2E_GMC_TenantProvisioning_WorkerCannotReachK8sAPI`), the two manager metrics-NP specs (`E2E_GMC_ManagerMetricsNP_DeniesUnlabeledNamespace`, `E2E_GMC_ManagerMetricsNP_AllowsLabeledNamespace`), and `E2E_V2_DirectEgress_NonGitHubBlocked`.
+`egressEnforcingCNI()` is the authoritative list; prose copies of it have gone stale twice, so grep the call sites rather than trusting a count.
 Run them with the Calico profile when validating NetworkPolicy enforcement changes (Q7b/Q83).
 
 **A spurious allow is a claim about the enforcer, not only the policy.** All five containers therefore call `utils.DumpCNIEnforcerState()` from their failure path, which reads both lanes' enforcers (`app=kindnet`, `k8s-app=calico-node`) and prints restart attribution, termination reason, and cgroup pressure.
@@ -2464,7 +2555,8 @@ That was Q570's proximate cause: the v1 pool's HPA scaled to 2 about 15 s in, an
 A v2 pool is now selected solely by `actions-gateway.com/egress-proxy: <proxy>`, which no v1 pod carries, so each anti-affinity term repels only its own pool's replicas and two coexisting pools fit on `max(v1, v2)` nodes rather than `v1+v2`.
 
 **Waiting for the AGC, not just its Deployment.** A spec that waits for a broker session (or anything else that needs the AGC operational) must gate on `utils.WaitForRunnerGroupReconciled`, not only `utils.WaitForDeploymentReady`.
-Deployment readiness means only that the AGC's health server is up — it binds within seconds of pod start and is deliberately decoupled from the GitHub-App token fetch (`cmd/agc/main.go`), whose budget alone is up to ~2 minutes. `WaitForRunnerGroupReconciled` waits for `RunnerGroup.status.observedGeneration` to be set, which the AGC does only after token + agent registration + listener-multiplexer start all succeed.
+Deployment readiness means only that the AGC's health server is up — it binds within seconds of pod start and is deliberately decoupled from the GitHub-App token fetch (`cmd/agc/main.go`), whose budget alone is up to ~2 minutes.
+`WaitForRunnerGroupReconciled` waits for `RunnerGroup.status.observedGeneration` to be set, which the AGC does only after token + agent registration + listener-multiplexer start all succeed.
 Gating on Deployment readiness alone folds the AGC's whole startup into the session wait's budget, which under parallel CI load (token/registration/session round-trips to the shared single-replica fakegithub) can exhaust it and surface as a misleading "no session registered" timeout (Q134).
 
 **An `AfterAll` deletes the tenant CRs in dependency order — waiting on each — before the namespace.** `utils.DeleteNamespace` is `--wait=false`, so a bare namespace delete races the cascade against the tenant's own AGC pod.
@@ -2489,7 +2581,8 @@ The GitHub App key is in the macOS keychain; see the GitHub App reference memory
 - **The rest of the suite cannot run alongside it.** The container's `BeforeAll` strips the GMC's `AGC_EXTRA_*` fakegithub overrides cluster-wide and holds them off until its `AfterAll`, so any fakegithub-backed spec that stands up a tenant in that window gets an AGC pointed at real GitHub.
   It never registers a session and times out after 4 minutes on `no live session for this RunnerGroup` — a signature that reads as a defect in the spec rather than as contention.
   Measured 2026-08-03: five specs failed exactly that way in one full-suite run, with the GMC confirmed carrying `AGC_EXTRA_GITHUB_ORG_URL` alone at the time.
-- **30m does not fit the container.** It is `Ordered`, so its specs are serial, and two of them wait out GitHub's ~10-minute post-eviction conclusion. `--timeout` is a whole-suite budget: Ginkgo interrupts whatever is running and skips the rest, so an under-set value surfaces as a failure in spec N and silence about N+1.
+- **30m does not fit the container.** It is `Ordered`, so its specs are serial, and two of them wait out GitHub's ~10-minute post-eviction conclusion.
+  `--timeout` is a whole-suite budget: Ginkgo interrupts whatever is running and skips the rest, so an under-set value surfaces as a failure in spec N and silence about N+1.
   Measured 2026-08-03: a 30m run was interrupted in the sixth of seven live specs and the seventh never ran.
   Override further with `E2E_TIMEOUT=<dur>` if specs are added.
 
@@ -2536,7 +2629,8 @@ It deregisters the suite's runners from the fixture repo and cancels any run sti
 It reads `GITHUB_E2E_ORG`/`GITHUB_E2E_REPO`, confirms before acting, and takes `ARGS='--dry-run'` to report without changing anything.
 It is destructive against real GitHub and cannot distinguish a peer session's live run from wreckage, so confirm no live-GitHub run is in flight anywhere first.
 
-The live-GitHub tier is the only one that hands the harness a **live** App key — every other tier stamps the same Secret with a throwaway RSA key. `utils.CreateGitHubAppSecret` therefore routes the PEM through a `0600` temp file and `--from-file`, per [the credential rule](github-app-credentials.md#creating-the-kubernetes-secret).
+The live-GitHub tier is the only one that hands the harness a **live** App key — every other tier stamps the same Secret with a throwaway RSA key.
+`utils.CreateGitHubAppSecret` therefore routes the PEM through a `0600` temp file and `--from-file`, per [the credential rule](github-app-credentials.md#creating-the-kubernetes-secret).
 Never switch it back to `--from-literal`: `utils.Run` echoes each command's argv to the `GinkgoWriter` and folds it into the failure message, so a literal PEM would land in the run log, the JUnit report, and any `ps` snapshot taken mid-run (Q493).
 
 ### The credential-gated probe scenarios
@@ -2551,10 +2645,14 @@ They are operator-run, never CI-run: they need live App credentials and, in one 
 | Investigation F | `PROBE_RETENTION_TEST=arm\|check\|cleanup` | Does GitHub redeliver an unacknowledged `JobCompleted` to a session created after a multi-hour gap with no session at all? The Q435 replay path depends on it and the contract does not cover it. **Answered 2026-07-29: yes at a 13 h gap** — re-arm it against a future GitHub rather than trusting the number indefinitely. | [q468-jobcompleted-retention.md](../plan/archive/q468-jobcompleted-retention.md) |
 
 | Investigation G | `PROBE_REPLAY_TEST=true` | Does a **cursor-acked but undeleted** message replay to a fresh session polling from cursor 0, and does `DeleteMessage` stop it?
-The Q583 fix rests on both, and the `DeleteMessage` wire shape is the P2-surfaced P4 unknown Q264 left open. | [q583-restart-replay.md](../plan/archive/q583-restart-replay.md) | | Investigation H | `PROBE_ABANDONED_TEST=true` | What does the run service do with a completion for an acquired-but-never-run assignment? **Answered 2026-08-04 across four arms** (`PROBE_ABANDONED_RESULT` selects; `none` sends nothing): `abandoned` and `canceled` conclude the run `success` in one second (a false green), `failed` is refused 401, and silence gets an honest run+job `cancelled` at the ~15-minute unstarted-job horizon — so the listener reports nothing (Q676). `PROBE_ABANDONED_FORCECANCEL=true` adds the Q683 remedy arm, **answered 2026-08-05: a standalone REST force-cancel in the told-nothing state concludes run and job `cancelled` in ~1 s and unpins the runner record**, so the provisioner now ships it. `PROBE_ABANDONED_RERUN_CHECK=true` adds a `rerun-failed-jobs` measurement after a concluded-run verdict. | [q645-abandoned-completion.md](../plan/q645-abandoned-completion.md) |
+The Q583 fix rests on both, and the `DeleteMessage` wire shape is the P2-surfaced P4 unknown Q264 left open. | [q583-restart-replay.md](../plan/archive/q583-restart-replay.md) | | Investigation H | `PROBE_ABANDONED_TEST=true` | What does the run service do with a completion for an acquired-but-never-run assignment?
+**Answered 2026-08-04 across four arms** (`PROBE_ABANDONED_RESULT` selects; `none` sends nothing): `abandoned` and `canceled` conclude the run `success` in one second (a false green), `failed` is refused 401, and silence gets an honest run+job `cancelled` at the ~15-minute unstarted-job horizon — so the listener reports nothing (Q676).
+`PROBE_ABANDONED_FORCECANCEL=true` adds the Q683 remedy arm, **answered 2026-08-05: a standalone REST force-cancel in the told-nothing state concludes run and job `cancelled` in ~1 s and unpins the runner record**, so the provisioner now ships it.
+`PROBE_ABANDONED_RERUN_CHECK=true` adds a `rerun-failed-jobs` measurement after a concluded-run verdict. | [q645-abandoned-completion.md](../plan/q645-abandoned-completion.md) |
 
 Investigation G is one run, three session generations, so it needs no state file and no multi-hour gap.
-Its `DeleteMessage` verdict turns on **whether the wire deleted anything**, not on the client's error: a 404/410 completes an ack (for a listener, a message already gone is nothing left to do) but deletes nothing, and a backend that does not serve the endpoint answers 404 too. `Client.DeleteMessage` returns that distinction as its first result (Q609); the response status is recorded alongside the verdict as the evidence it rests on.
+Its `DeleteMessage` verdict turns on **whether the wire deleted anything**, not on the client's error: a 404/410 completes an ack (for a listener, a message already gone is nothing left to do) but deletes nothing, and a backend that does not serve the endpoint answers 404 too.
+`Client.DeleteMessage` returns that distinction as its first result (Q609); the response status is recorded alongside the verdict as the evidence it rests on.
 
 Investigation F is three phases around a state file rather than one run, because the gap it measures has to pass with **no session in existence** — so it must outlive the process, and the experiment lives on disk.
 Its `arm` phase leaves the message under test deliberately unacknowledged; do not "tidy up" by acknowledging it, and do not leave a session behind between phases, or the next gap measures something shorter than it claims.
@@ -2582,7 +2680,9 @@ It runs against a cluster that already has the release installed, captures the r
 make chart-reinstall-check KIND_CLUSTER=actions-gateway-e2e
 ```
 
-It ran as a **reproducer, not a gate**, while Q444 was open — the defect was unfixed, so wiring it in would have pinned every run red. **Q492 made it a gate**: the guard's `paramKind` moved from a `ConfigMap` to the cluster-scoped `PriorityClassAllowlist` CRD, for which the apiserver allocates a fresh dynamic informer per context rather than tearing down a shared one, so the cycle is now expected to pass. `e2e-reusable.yml` runs it after the Ginkgo suite and after the `helm upgrade` gate — `E2E_SKIP_TEARDOWN` leaves the release up, and this step destroys and recreates it, so only the [released-chart upgrade gate](#the-released-chart-upgrade-gate-q507) (which replaces the release entirely) may follow it.
+It ran as a **reproducer, not a gate**, while Q444 was open — the defect was unfixed, so wiring it in would have pinned every run red.
+**Q492 made it a gate**: the guard's `paramKind` moved from a `ConfigMap` to the cluster-scoped `PriorityClassAllowlist` CRD, for which the apiserver allocates a fresh dynamic informer per context rather than tearing down a shared one, so the cycle is now expected to pass.
+`e2e-reusable.yml` runs it after the Ginkgo suite and after the `helm upgrade` gate — `E2E_SKIP_TEARDOWN` leaves the release up, and this step destroys and recreates it, so only the [released-chart upgrade gate](#the-released-chart-upgrade-gate-q507) (which replaces the release entirely) may follow it.
 Kindnet only (`e2e-calico.yml` passes `chart_reinstall_check: false`): the property is a kube-apiserver informer behaviour, not a CNI one.
 
 **What it protects.** A regression to any core-type `paramKind` — in this policy or a new one — brings the outage back.
@@ -2601,7 +2701,8 @@ For the apiserver defect itself, use [`scripts/e2e/vap-param-informer-check.sh`]
 | 3 | cluster-scoped CRD | emptied for the gap | `FRESH-PARAM` — the Q492 shape |
 | 2 | ConfigMap | emptied for the gap | `STALE-PARAM` or `NO-PARAMS` |
 
-Arm 1 vs arm 2 isolates the trigger to the empty-set transition. **Arm 3 vs arm 2** — the byte-identical transition one GVK apart — is the measured evidence that moving the `paramKind` to a CRD is a fix rather than an inference from reading the apiserver source.
+Arm 1 vs arm 2 isolates the trigger to the empty-set transition.
+**Arm 3 vs arm 2** — the byte-identical transition one GVK apart — is the measured evidence that moving the `paramKind` to a CRD is a fix rather than an inference from reading the apiserver source.
 Arm 3 runs before arm 2 so a pass cannot be attributed to contamination.
 
 ```bash
@@ -2614,7 +2715,8 @@ Mechanism and measurements: [`q444-vap-param-resolution.md`](../plan/archive/q44
 
 ### The chart `helm upgrade` gate (Q475)
 
-The other half of the same gap. `make deploy` runs `helm upgrade --install`, but only ever against a cluster with no prior release, so the `--install` half was the only half any tier exercised — day-2 upgrade over a **live** release was untested.
+The other half of the same gap.
+`make deploy` runs `helm upgrade --install`, but only ever against a cluster with no prior release, so the `--install` half was the only half any tier exercised — day-2 upgrade over a **live** release was untested.
 
 What rests on it: the chart ships its CRDs under `templates/crds/` rather than the chart-root `crds/` directory **because Helm installs `crds/` once and never upgrades it**.
 Move them, and every existing installation silently stops receiving CRD field changes — a failure with no error message and no symptom until a tenant sets a field the apiserver then prunes.
@@ -2685,7 +2787,8 @@ Do not hand-roll `curl` + `sha256sum -c` in a new step; use the script, and keep
 
 The script exists because both halves of that fetch are easy to get subtly wrong:
 
-- **Retry.** Two ways to get this wrong, both measured here. `curl --retry` covers 408/429/5xx and connection failures **only**, so a GitHub releases-CDN **403** (the denial the CDN actually serves under load) fails the download instantly, in well under a second, with `curl: (22)`.
+- **Retry.** Two ways to get this wrong, both measured here.
+  `curl --retry` covers 408/429/5xx and connection failures **only**, so a GitHub releases-CDN **403** (the denial the CDN actually serves under load) fails the download instantly, in well under a second, with `curl: (22)`.
   That reddened a whole PR run via `security-scan-gate` (Q433, PR #828).
   And `curl --retry-delay` pins the wait flat, so six attempts spent the entire budget in 10.3s against a syft release 503 that was still going (Q829, #1440).
   So the schedule lives in the script rather than in `curl`: it retries **any** nonzero `curl` exit, which is wider than `--retry-all-errors`, on the same exponential jittered backoff as [`pull-image-with-retry.sh`](#registry-pulls-always-via-pull-image-with-retrysh) below (`DOWNLOAD_RETRIES`/`DOWNLOAD_RETRY_DELAY`/`DOWNLOAD_RETRY_MAX_DELAY`, default 5 retries, a 5s base doubling to a 60s cap, plus up to 50% jitter, so 135–202s).
@@ -2743,7 +2846,8 @@ A step that trips it also emits a `::warning::` so the degradation is visible in
 Note this is deliberately not a retry: re-running the classifier could still return a wrong answer, whereas running the gated jobs is always safe.
 
 **Adding a Go module means editing every filter that covers it (Q400).** The filters are hand-maintained lists, and a module absent from a gate that does compile it makes that gate stay green by *skipping*, not by passing.
-Both modules added after the initial filters were written hit this: `api/` and `scaleset/` were in `unit-test.yml` but in none of `integration-test.yml`, `security-scan.yml`, or `e2e-test.yml`, so an `api`- or `scaleset`-only change skipped the envtest tier (whose AGC ScaleSet suite imports `scaleset/scalesettest` directly), govulncheck, trivy, and e2e. `manifest-validate.yml` had the same gap for the five v2 CRDs under `api/config/crd/`, which `scripts/manifest/manifest-validate.sh` validates by name.
+Both modules added after the initial filters were written hit this: `api/` and `scaleset/` were in `unit-test.yml` but in none of `integration-test.yml`, `security-scan.yml`, or `e2e-test.yml`, so an `api`- or `scaleset`-only change skipped the envtest tier (whose AGC ScaleSet suite imports `scaleset/scalesettest` directly), govulncheck, trivy, and e2e.
+`manifest-validate.yml` had the same gap for the five v2 CRDs under `api/config/crd/`, which `scripts/manifest/manifest-validate.sh` validates by name.
 
 The whole-workspace half of that is now mechanical: the [path-filter gate](#the-path-filter-gate) (`make path-filters-check`, in `make check` and CI) fails when a `go.work` module is missing from a filter whose jobs exercise the whole workspace, when a filter is not classified, or when a pattern points at a path that no longer exists.
 The judgement half is not automatable and remains yours: for the deliberately narrow filters, walk every `filters:` block in `.github/workflows/` and ask what that gate actually compiles, scans, or bakes — not what its filter happens to list today.
@@ -2765,7 +2869,8 @@ gh run list --commit <sha> --limit 30               # which workflows actually r
 Read the output as a **checklist against the expected set above**, not as a pass/fail summary.
 A PR with zero rows, or with only the lightweight docs workflows listed, has not been tested — it just has nothing to fail.
 
-**Filter the runs by commit, not by branch.** `gh run list --branch <branch>` lists every run the branch has ever had, so after a rebase heal and force-push it still shows the superseded runs, and a success from the pre-rebase head reads as a success on the code you are about to merge. `--commit <sha>` is the flag that answers the question asked.
+**Filter the runs by commit, not by branch.** `gh run list --branch <branch>` lists every run the branch has ever had, so after a rebase heal and force-push it still shows the superseded runs, and a success from the pre-rebase head reads as a success on the code you are about to merge.
+`--commit <sha>` is the flag that answers the question asked.
 Do not hand-roll the equivalent as a `--jq` filter on `headSha`: a malformed expression matches everything and exits 0, which produces a confident, wrong "the heavy gates ran".
 
 **Check at the sentinel's `ready` wake, not straight after opening the PR.** For the first minute or so every check is `pending` or `queued`, which looks identical to the gates being absent and invites a `sleep`-then-recheck loop, which [Never foreground-poll CI, logs, or files](#never-foreground-poll-ci-logs-or-files) forbids and foreground-guard blocks.
@@ -2784,7 +2889,8 @@ The grepped log line is the proof the assertion ran; the job's conclusion only p
 
 **Absence of checks is not green (Q383).** There are two distinct ways a PR ends up under-tested, and they need different fixes:
 
-- **Gates skipped by the diff classifier** — the workflow ran, its `changes` job classified the diff as irrelevant, and the real jobs were skipped. `gh pr checks` shows the `gate` contexts as green.
+- **Gates skipped by the diff classifier** — the workflow ran, its `changes` job classified the diff as irrelevant, and the real jobs were skipped.
+  `gh pr checks` shows the `gate` contexts as green.
   Confirm against the expected-gate list above; if a gate that should cover the change is missing, the classifier's path filters are wrong.
 - **No workflow runs attached at all** — the push registered, but GitHub never dispatched any workflow for the head SHA.
   Observed on this repo for **~10 minutes** after a push: `gh run list --branch <branch>` returned nothing for that commit while the PR page showed no checks section whatsoever.
@@ -2796,13 +2902,15 @@ Then re-verify with the commands above (asynchronously — see [Never foreground
 
 ### A focused run is a path filter you applied yourself
 
-The rule above is about a gate that narrowed the work for you. `--focus` is the same green with the filter written by hand: `ginkgo run --focus '<spec>'` is the correct inner loop for iterating on a new spec ([kind-iteration.md § Tightening the inner loop](kind-iteration.md#tightening-the-inner-loop)) and it is not a verification, because it reports on the specs you named and stays silent about every sibling you excluded.
+The rule above is about a gate that narrowed the work for you.
+`--focus` is the same green with the filter written by hand: `ginkgo run --focus '<spec>'` is the correct inner loop for iterating on a new spec ([kind-iteration.md § Tightening the inner loop](kind-iteration.md#tightening-the-inner-loop)) and it is not a verification, because it reports on the specs you named and stays silent about every sibling you excluded.
 
 **Run a new spec's whole family once before calling it done** — the family being whatever shares mutable state with it.
 In the e2e suite that state is the cluster, and the sharpest instance of it is the GMC's `AGC_EXTRA_*` env: it is set deployment-wide and reaches every tenant AGC, so a spec that bends it to reach a double bends it for all its siblings too.
 A focused run cannot observe that, and neither can the sibling's own focused run — both are green, and only a run holding both is not.
 
-Q528 is the worked example. `E2E_AGC_ScaleSetAcquisition` needed the AGC's scale-set endpoints re-pointed at the in-cluster stub, and the first form rewrote them for **every** gateway whenever the `STUB_AUTH_URL`/`STUB_BROKER_URL` pair was set.
+Q528 is the worked example.
+`E2E_AGC_ScaleSetAcquisition` needed the AGC's scale-set endpoints re-pointed at the in-cluster stub, and the first form rewrote them for **every** gateway whenever the `STUB_AUTH_URL`/`STUB_BROKER_URL` pair was set.
 Its sibling `E2E_AGC_ScaleSetRecovery` depends on a listener that stays *down*: its gateway named fakegithub's plaintext port over `https` so the bootstrap would die on the TLS handshake — precisely the scheme the new rewrite swapped.
 The new spec was green on three consecutive focused runs against a local kind cluster; the sibling went red in CI on `scale-set listener active`.
 The repair was to narrow the rewrite to gateways already naming the stub's `host:port`, and to move the recovery spec onto a host that does not resolve, which no rewrite can re-point.
@@ -2866,7 +2974,8 @@ Getting it wrong the other way is just as costly — a verdict of `BLOCKED` on a
 
   **When it runs:** **at merge-queue time (and on push to main) only when the diff touches NetworkPolicy/proxy code** — the GMC (`cmd/gmc/**`, which generates the tenant + manager policies and the proxy), the egress proxy (`cmd/proxy/**`), the chart's policy templates (`charts/actions-gateway/**`), or the CNI/cluster plumbing (`scripts/e2e/**`, `scripts/fetch/**`, `scripts/lib/**`, `Makefile`, the two e2e workflows — the script groups held identical to `e2e-test.yml`'s by [assertion 4](#the-path-filter-gate) of the path-filter gate).
   Queue entries that cannot regress enforcement skip this lane entirely and pay no Calico cost.
-  The path filter is the *sole* automatic gate (there is no nightly catch-all), so it deliberately errs toward the components that produce or police the enforced traffic. **Trigger it manually** any time from the Actions tab → *e2e (calico)* → *Run workflow* (`workflow_dispatch`).
+  The path filter is the *sole* automatic gate (there is no nightly catch-all), so it deliberately errs toward the components that produce or police the enforced traffic.
+  **Trigger it manually** any time from the Actions tab → *e2e (calico)* → *Run workflow* (`workflow_dispatch`).
 
   Like the kindnet lane it is queue-time rather than per-PR (Q675), and for the same reason plus one of its own: it was the *longer* of the two lanes (870s against kindnet's 804s) and ran on roughly 70% of PR branches, so it set the PR-side critical path rather than kindnet.
   A change to the lane itself is therefore validated on the queue entry rather than on the PR, which is the one review affordance the demotion gives up; dispatch it manually when editing this workflow.
@@ -2876,7 +2985,8 @@ Getting it wrong the other way is just as costly — a verdict of `BLOCKED` on a
   **Calico image caching.** The Calico manifest pulls `calico/node`, `calico/cni`, and `calico/kube-controllers` from quay.io/docker.io on every node during install — and those pulls happen *before* the local registry is wired into the nodes, so they cannot be mirrored the way the curl image is.
   Instead the lane pre-pulls the exact image refs the pinned manifest references into the runner's Docker daemon (cached via `actions/cache`, keyed on `CALICO_VERSION`, retried), and `scripts/e2e/kind-with-registry.sh` `kind load`s whatever is present onto the nodes so the rollout never touches quay.io.
   This keeps the per-PR Calico cost bounded and quay.io off the critical path.
-  Calico still gets a 60-minute timeout vs. the kindnet leg's 45 for rollout headroom. `CALICO_VERSION` is pinned in both the root `Makefile` and the workflow env — bump them together.
+  Calico still gets a 60-minute timeout vs. the kindnet leg's 45 for rollout headroom.
+  `CALICO_VERSION` is pinned in both the root `Makefile` and the workflow env — bump them together.
 
 ### The Dockerfile-lint gate
 
@@ -2946,7 +3056,8 @@ It first runs the chart CRD/RBAC drift gates (`make chart-crds-check` + `make ch
 - **yamllint** lints the `controller-gen` YAML and the chart metadata against [`.yamllint.yaml`](../../.yamllint.yaml).
   The config targets real defects (tabs, trailing whitespace, duplicate keys, a missing final newline, truthy typos) and relaxes the purely cosmetic rules that would only ever fire on machine-generated style — `line-length` (CRD `description` lines are verbatim Go doc comments well over 200 chars) and `indentation` (the generated YAML mixes block-sequence indent styles).
   Helm templates are excluded — they embed `{{ ... }}` and are not parseable YAML; their rendered output is validated below instead.
-- **kubeconform** schema-validates against the cluster API at the chart's `kubeVersion` floor (1.30.0 — validating the oldest supported version catches a field that does not exist there): the controller-gen manifests + the two ValidatingAdmissionPolicies under `cmd/*/config/` (the codegen + envtest substrate; there is no longer a kustomize overlay to render), and `helm template` output in digest-pinned, dev/test opt-out (`allowFloatingImageTags=true`), and all-optional-features form, plus `helm lint` on the chart and a fail-closed check that a render with any of the four image digests (`gmc`/`agc`/`proxy`/`wrapper`) empty is **rejected** — each image is tested independently with the other three pinned (all four required — Q96/Q307 secure-by-default; the check fails if any rejection ever stops happening). `-ignore-missing-schemas` skips only third-party/custom kinds whose schema is not in the upstream Kubernetes set (cert-manager `Certificate`/`Issuer`, the Prometheus Operator `ServiceMonitor`, and our own `ActionsGateway`/`RunnerGroup` CRs); the `CustomResourceDefinition`s that define them **are** validated, since that is a native `apiextensions` kind.
+- **kubeconform** schema-validates against the cluster API at the chart's `kubeVersion` floor (1.30.0 — validating the oldest supported version catches a field that does not exist there): the controller-gen manifests + the two ValidatingAdmissionPolicies under `cmd/*/config/` (the codegen + envtest substrate; there is no longer a kustomize overlay to render), and `helm template` output in digest-pinned, dev/test opt-out (`allowFloatingImageTags=true`), and all-optional-features form, plus `helm lint` on the chart and a fail-closed check that a render with any of the four image digests (`gmc`/`agc`/`proxy`/`wrapper`) empty is **rejected** — each image is tested independently with the other three pinned (all four required — Q96/Q307 secure-by-default; the check fails if any rejection ever stops happening).
+  `-ignore-missing-schemas` skips only third-party/custom kinds whose schema is not in the upstream Kubernetes set (cert-manager `Certificate`/`Issuer`, the Prometheus Operator `ServiceMonitor`, and our own `ActionsGateway`/`RunnerGroup` CRs); the `CustomResourceDefinition`s that define them **are** validated, since that is a native `apiextensions` kind.
 
 It also asserts that **no `ValidatingAdmissionPolicyBinding` carries `helm.sh/resource-policy: keep`**.
 A binding is what makes a policy enforce, so retaining one across `helm uninstall` would leave the guard active after the release is gone and make `admissionPolicy.enabled=false` a silent no-op.

@@ -21,7 +21,8 @@ Beta's "production-relyable" signal is itself an adoption driver (nobody relies 
 
 ## The blocker sequence
 
-Ordered in the [Queue](../STATUS.md). **Q191/Q196/Q197/Q15/Q218 are independent and run in parallel; Q74 waits for all five.**
+Ordered in the [Queue](../STATUS.md).
+**Q191/Q196/Q197/Q15/Q218 are independent and run in parallel; Q74 waits for all five.**
 
 ### 1. Q191 — Broker-compatibility sweep *(run first)*
 
@@ -110,11 +111,13 @@ spec:
 
 Workload identity is not "a different Secret" — it is a different trust model, so it needs a different field set:
 
-- **GitHub App = possession model.** Hold the App's RSA private key. `{appId, installationId, privateKeyRef → Secret}`.
+- **GitHub App = possession model.** Hold the App's RSA private key.
+  `{appId, installationId, privateKeyRef → Secret}`.
   Signing material sits at rest in the namespace.
 - **Workload identity = delegation model.** Hold no key.
   The signing material lives in an external trust anchor (Vault, cloud KMS/HSM) or is federated via OIDC.
-  The pod proves its identity (Vault Kubernetes auth / IRSA / GKE WI / Azure WI) and the anchor signs the JWT or releases a short-lived token. **No `privateKey` field at all.**
+  The pod proves its identity (Vault Kubernetes auth / IRSA / GKE WI / Azure WI) and the anchor signs the JWT or releases a short-lived token.
+  **No `privateKey` field at all.**
 
 ```yaml
 spec:

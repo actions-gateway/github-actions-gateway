@@ -6,10 +6,12 @@
 
 **Status:** SHIPPED (P0–P5), archived.
 The Option E rewrite is committed.
-Phases **P0 (spike)**, **P1 (live wire probes**, Investigations E and E2, §2a/§2b — `cmd/probe` scenarios, run 2026-07-04**)**, **P2 (the `scaleset/` client package + its `scalesettest` fake, §6)**, **P3 (AGC wiring behind the `acquisitionProtocol` field)**, and **P4 (live dogfood validation — clean-green achieved 2026-07-05, Q224 CLOSED) are DONE** — sub-PRs (a) (API field + CEL + GMC webhook), (b) (the standalone `scalesetlistener` engine + the fan-out-free acceptance twin), (c) (the worker `run.sh --jitconfig` mode + provisioner JIT staging), and (d) (the RunnerSet-controller wiring that makes `ScaleSet` live behind the field + its lifecycle envtest) are landed, **all default `Classic`** so nothing changes for existing users until P5. **P4 (live dogfood validation) is DONE — the Q224 fan-out distinct-delivery starvation is ELIMINATED by construction and, on the 2026-07-05 clean-green re-run, the whole CI matrix went ACTUALLY all-green.
+Phases **P0 (spike)**, **P1 (live wire probes**, Investigations E and E2, §2a/§2b — `cmd/probe` scenarios, run 2026-07-04**)**, **P2 (the `scaleset/` client package + its `scalesettest` fake, §6)**, **P3 (AGC wiring behind the `acquisitionProtocol` field)**, and **P4 (live dogfood validation — clean-green achieved 2026-07-05, Q224 CLOSED) are DONE** — sub-PRs (a) (API field + CEL + GMC webhook), (b) (the standalone `scalesetlistener` engine + the fan-out-free acceptance twin), (c) (the worker `run.sh --jitconfig` mode + provisioner JIT staging), and (d) (the RunnerSet-controller wiring that makes `ScaleSet` live behind the field + its lifecycle envtest) are landed, **all default `Classic`** so nothing changes for existing users until P5.
+**P4 (live dogfood validation) is DONE — the Q224 fan-out distinct-delivery starvation is ELIMINATED by construction and, on the 2026-07-05 clean-green re-run, the whole CI matrix went ACTUALLY all-green.
 The single-acquirer listener assigned, ran, and terminally concluded ALL 7 distinct jobs (vs classic's 2/7 with 5 starved forever), zero dedup/collision.
 First P4 pass (2026-07-05, sha `4ea41f6`) left 4 of 7 CI jobs non-green for reasons ORTHOGONAL to acquisition — a self-referential `WORKER_MODE` test-env leak (Q269) and node CPU capacity; both were fixed and the RE-RUN on `main`@`2025557` (Q269 #542 + Q270 #544) landed **all 7 GAG jobs GREEN** on a fresh scale set (`gag-scaleset3`, scaleSetID 5) with 0 dedup/wedge, `unit-test`+`coverage` green (WORKER_MODE fix holds) and `lint`/`integration-test` green on 6-node CPU headroom.
-Q224 is CLOSED. **P5 default-flip is DONE (2026-07-06): the v2alpha1 `acquisitionProtocol` default is now `ScaleSet` and `Classic` is deprecated; the one-minor-release deprecation window + the classic-machinery removal are the remaining P5 residual (§6-P5).** Full §6-P4.** A Classic RunnerSet's acquisition path is **byte-for-byte unchanged**.
+Q224 is CLOSED.
+**P5 default-flip is DONE (2026-07-06): the v2alpha1 `acquisitionProtocol` default is now `ScaleSet` and `Classic` is deprecated; the one-minor-release deprecation window + the classic-machinery removal are the remaining P5 residual (§6-P5).** Full §6-P4.** A Classic RunnerSet's acquisition path is **byte-for-byte unchanged**.
 Every protocol-level unknown is probed; the residuals are integration-level (P4).
 This is [Option E in the Q260 design](q260-fanout-completion-reconciliation.md#option-e--single-acquirer-topology--adopt-the-runner-scale-set-protocol-treat-the-cause): the deferred fallback pursued **only if live re-route #5 rules Option A (winner fan-out completion) infeasible**.
 The go/no-go stays with re-route #5; this doc exists so that fork is not started cold.
@@ -41,7 +43,8 @@ Auth bootstraps in two hops, then pivots off the public REST API entirely:
 
 1. **Registration token** — `POST /orgs/{org}/actions/runners/registration-token` (or `/repos/{owner}/{repo}/...`, `/enterprises/{ent}/...`) with a PAT or App installation token → short-lived `{token, expires_at}`.
    Same call GAG's classic registrar family already uses.
-2. **Admin connection** — `POST {github}/actions/runner-registration` with the nonstandard header `Authorization: RemoteAuth <registration token>` and body `{"url": <configURL>, "runner_event": "register"}` → returns the runtime-discovered **Actions Service tenant URL** (e.g. `https://pipelines.actions.githubusercontent.com/<tenant>`) and an **admin JWT** (~1 h; ARC parses `exp` and refreshes 60 s before expiry — `updateTokenIfNeeded`, ARC `client.go:1246`).
+2. **Admin connection** — `POST {github}/actions/runner-registration` with the nonstandard header `Authorization: RemoteAuth <registration token>` and body `{"url": <configURL>, "runner_event": "register"}` → returns the runtime-discovered **Actions Service tenant URL** (e.g.
+   `https://pipelines.actions.githubusercontent.com/<tenant>`) and an **admin JWT** (~1 h; ARC parses `exp` and refreshes 60 s before expiry — `updateTokenIfNeeded`, ARC `client.go:1246`).
 
 Everything else targets `{actionsServiceURL}/_apis/runtime/...` with `Authorization: Bearer <admin JWT>` and `api-version=6.0-preview` (Azure-DevOps-style `{count, value}` envelopes):
 
@@ -58,8 +61,11 @@ The **scale set's `name` is its single `runs-on` label** — there is no free-fo
 
 ### 2.2 Session + message queue: one authoritative stream per scale set
 
-- `POST /_apis/runtime/runnerscalesets/{id}/sessions` (body `{"ownerName": <listener identity>}`) → `RunnerScaleSetSession{sessionId, messageQueueUrl, messageQueueAccessToken, statistics}`. **One active session per scale set** — a second create conflicts until the first is deleted or expires. `PATCH .../sessions/{id}` refreshes the queue token (ARC triggers it on a 401 from the queue); `DELETE` on shutdown.
-- Long-poll: `GET {messageQueueUrl}?lastMessageId={N}` with `Authorization: Bearer <messageQueueAccessToken>` and header `X-ScaleSetMaxCapacity: <maxRunners>`. `200` → one `RunnerScaleSetMessage`; `202` → empty, poll again (server holds ~50 s).
+- `POST /_apis/runtime/runnerscalesets/{id}/sessions` (body `{"ownerName": <listener identity>}`) → `RunnerScaleSetSession{sessionId, messageQueueUrl, messageQueueAccessToken, statistics}`.
+  **One active session per scale set** — a second create conflicts until the first is deleted or expires.
+  `PATCH .../sessions/{id}` refreshes the queue token (ARC triggers it on a 401 from the queue); `DELETE` on shutdown.
+- Long-poll: `GET {messageQueueUrl}?lastMessageId={N}` with `Authorization: Bearer <messageQueueAccessToken>` and header `X-ScaleSetMaxCapacity: <maxRunners>`.
+  `200` → one `RunnerScaleSetMessage`; `202` → empty, poll again (server holds ~50 s).
 - A message carries `messageId`, batched typed bodies — `JobAvailable`, `JobAssigned`, `JobStarted`, `JobCompleted` — and a `RunnerScaleSetStatistic{totalAvailableJobs, totalAcquiredJobs, totalAssignedJobs, totalRunningJobs, totalRegisteredRunners, totalBusyRunners, totalIdleRunners}` snapshot.
   The `actions/scaleset` README is explicit: scale on `statistics.TotalAssignedJobs`, not by counting individual messages — the ARC listener's exact formula is `clamp(statistics.TotalAssignedJobs, minRunners, maxRunners)` (`autoScalerService.go` `scaleForAssignedJobCount`), i.e. the assigned-but-not-completed count is **server-authoritative**, read off every envelope rather than reconstructed client-side.
 - Ack = advance `lastMessageId` on the next poll **and** `DELETE {messageQueueUrl}/{messageId}` (the official listener does both).
@@ -77,7 +83,8 @@ Body:     [10234, 10235, 10241]                     ← runnerRequestIds from Jo
 Response: {"count": 2, "value": [10234, 10241]}     ← the subset actually acquired
 ```
 
-One listener claims an arbitrary **batch** in one transactional call; the response is the authoritative list of wins. `JobAssigned` messages then confirm each assignment.
+One listener claims an arbitrary **batch** in one transactional call; the response is the authoritative list of wins.
+`JobAssigned` messages then confirm each assignment.
 Because each job is enqueued **once** in the scale set's **single** serialized queue and claimed by its **single** session, there are no sibling deliveries, no per-delivery completion fan-out, and nothing to reconcile — the entire Q260/Q247-completion/Q259-recycle class cannot occur.
 The N racing consumers of the classic protocol become 1 listener that demultiplexes into N runners *after* acquisition.
 
@@ -105,7 +112,8 @@ The entrypoint wrapper survives for proxy-CA trust setup; the pipes handoff and 
 
 ## 2a. Investigation E — live wire probe (2026-07-04)
 
-`PROBE_SCALESET_TEST=true` in [`cmd/probe`](../../../cmd/probe/scaleset.go) runs the full chain against real GitHub with only App credentials — registration-token → RemoteAuth hop → runner-group lookup → throwaway scale set → session → queue long-poll → acquire-shape probes → `generatejitconfig` → full cleanup. `PROBE_SCALESET_JOB_TEST=true` additionally waits for a real job (queued by the dispatch-only [`scaleset-probe.yml`](../../../.github/workflows/scaleset-probe.yml) fixture, `runs-on: gag-probe-scaleset`).
+`PROBE_SCALESET_TEST=true` in [`cmd/probe`](../../../cmd/probe/scaleset.go) runs the full chain against real GitHub with only App credentials — registration-token → RemoteAuth hop → runner-group lookup → throwaway scale set → session → queue long-poll → acquire-shape probes → `generatejitconfig` → full cleanup.
+`PROBE_SCALESET_JOB_TEST=true` additionally waits for a real job (queued by the dispatch-only [`scaleset-probe.yml`](../../../.github/workflows/scaleset-probe.yml) fixture, `runs-on: gag-probe-scaleset`).
 Runbook: export `GITHUB_APP_ID`, `GITHUB_APP_PRIVATE_KEY`, `GITHUB_APP_INSTALLATION_ID`, `GITHUB_ORG_URL`; logs prefix `INVESTIGATION-E:`; tokens and the JIT blob are never logged.
 
 Findings (all live, `actions-gateway` org / `github-actions-gateway` repo):
@@ -144,7 +152,8 @@ Logs prefix `INVESTIGATION-E2:`.
 3. **Recovery-by-recreate confirmed (the §3 claim)**: after `DELETE` + re-`POST` of the session, a `lastMessageId=0` poll on the **fresh** session **replayed** the earlier `JobAssigned` message (same `messageId`) — the message stream is scale-set-scoped, not session-scoped.
    An AGC restart re-reads assigned-but-unprovisioned jobs from the queue; no in-memory registry to lose.
 4. **U3 core resolved — a real ephemeral runner works against a probe-minted JIT config.** Two `actions-runner` containers started with `run.sh --jitconfig <blob>`: both connected and picked up a job **~2 s** after start; the fast job ran to completion and its runner **exited 0 and deregistered itself** (single-use lifecycle end-to-end).
-   The scale-set queue meanwhile streamed the lifecycle telemetry: `JobStarted` messages with `runnerName`, and statistics transitions (`totalRegisteredRunners: 2`, `totalRunningJobs: 1`, `totalAssignedJobs` 2→1 as the fast job concluded) — completion accounting is fully observable from the listener session. *Residual for P4:* the same flow behind the per-tenant egress proxy with the proxy-CA trust bundle, and job-start latency under pod (not local-docker) conditions.
+   The scale-set queue meanwhile streamed the lifecycle telemetry: `JobStarted` messages with `runnerName`, and statistics transitions (`totalRegisteredRunners: 2`, `totalRunningJobs: 1`, `totalAssignedJobs` 2→1 as the fast job concluded) — completion accounting is fully observable from the listener session.
+   *Residual for P4:* the same flow behind the per-tenant egress proxy with the proxy-CA trust bundle, and job-start latency under pod (not local-docker) conditions.
 5. **U5 core measured — killed-runner cancel latency ≈ 9.5 minutes.** `docker kill` (SIGKILL) on the runner mid-job at 16:19:06Z; GitHub concluded the job `failure` at 16:28:40Z (annotation: *"The self-hosted runner lost communication with the server"* — coinciding with the job's 10-minute `timeout-minutes` boundary).
    Same order as the classic protocol's ~10-minute lock-TTL lapse: Option E neither gains nor loses on dead-runner detection, and GAG's AGC-side pod-death → rerun-API fast path remains the differentiator to port.
 6. **Terminal results are delivered to the listener.** The hold loop received `JobCompleted` with `result: "failed"`, the `runnerId`/`runnerName` that held the job, and `finishTime`, statistics zeroing in the same message — the authoritative signal the ported eviction-retry (and job-duration metrics) can key off, something the classic AGC never gets (§1 of the Q260 doc: the JobHandler never learns the real result).
@@ -173,7 +182,8 @@ What Option E discards, reworks, carries over, and improves — against the conc
 ### Reworked
 
 - **Admission gate (Q59) — gets *simpler and stronger*.** Today the gate skips `acquirejob` per delivery and the provisioner backstops post-acquire.
-  Under scale-set, capacity gating is *the batch size*: acquire only as many `runnerRequestId`s as there are free worker slots; unacquired jobs stay queued at GitHub with zero AGC-side state, and `X-ScaleSetMaxCapacity` advertises the ceiling upstream. `priorityTiers` re-expresses as which-tier-the-next-pod-gets at provision time — unchanged mechanics, driven by `JobAssigned` count instead of per-delivery arrival.
+  Under scale-set, capacity gating is *the batch size*: acquire only as many `runnerRequestId`s as there are free worker slots; unacquired jobs stay queued at GitHub with zero AGC-side state, and `X-ScaleSetMaxCapacity` advertises the ceiling upstream.
+  `priorityTiers` re-expresses as which-tier-the-next-pod-gets at provision time — unchanged mechanics, driven by `JobAssigned` count instead of per-delivery arrival.
 - **Registration/auth:** the `GithubRegistrar` family shrinks to the two-hop bootstrap + scale-set CRUD + per-job `generatejitconfig`; the token manager gains two new lifecycles (admin JWT, queue token).
 - **CRD surface:** `maxListeners` loses its meaning (acquisition concurrency is the batch, not a session count); `runnerLabels` collapses to the scale-set name (see §4 cost).
   A per-group protocol selector (or v2-only adoption) is the migration lever — §6.
@@ -194,7 +204,8 @@ The JIT-credential-in-worker-Secret surface is **not new** — the provisioner a
 
 ## 4. Honest cost list (delta vs the Q260 §4E estimate)
 
-The Q260 doc priced Option E as "reverse-engineering and depending on a second GitHub-internal protocol." **That cost has materially dropped**: the protocol now has an official, supported Go client (`actions/scaleset`, Public Preview, MIT-licensed) that may be directly vendorable.
+The Q260 doc priced Option E as "reverse-engineering and depending on a second GitHub-internal protocol."
+**That cost has materially dropped**: the protocol now has an official, supported Go client (`actions/scaleset`, Public Preview, MIT-licensed) that may be directly vendorable.
 The remaining real costs:
 
 1. **Worker handoff rework (forced, was not in the Q260 cost list).** The M3 pipes/`Runner.Worker` handoff cannot survive — the payload never reaches the listener (§2.4).
@@ -207,7 +218,8 @@ The remaining real costs:
    Recovery becomes session re-create + queue replay, which is well-defined (§3 Improves).
    Hot-hot listener HA is impossible by protocol design — that constraint *is* the fan-out fix.
 4. **Auth/registration scope limits.** Org-scope App permissions: Organization "Self-hosted runners: RW" (GAG's App model fits).
-   Repo-scope needs Repository "Administration: RW" — **broader than today's repo-scope JIT registration**; verify per install. **Enterprise scope is PAT-only** (no App auth) — GAG is App-based, so enterprise-scope gateways would be unsupported or need a PAT credential mode (decision, §5).
+   Repo-scope needs Repository "Administration: RW" — **broader than today's repo-scope JIT registration**; verify per install.
+   **Enterprise scope is PAT-only** (no App auth) — GAG is App-based, so enterprise-scope gateways would be unsupported or need a PAT credential mode (decision, §5).
 5. **GHES floor rises to 3.9** (scale-set support begins there).
    Classic machinery would need to survive for older GHES, or the floor is documented.
 6. **Public Preview instability.** GitHub says interfaces "may change."
@@ -224,7 +236,8 @@ The admission gate strengthens (§3 Reworked).
 ## 5. Load-bearing unknowns
 
 > **AGC-side escape-hatch checked — none found (2026-07-05).** Before committing to this rewrite, the two proposed classic-protocol levers for re-route #8's fan-out distinct-delivery starvation were tested against the mechanism and the live evidence in a dedicated spike ([`q224-fanout-dispatch-lever-spike.md`](../q224-fanout-dispatch-lever-spike.md)).
-> Verdict: **no reliable AGC-side lever.** Unique/ephemeral runner names are a non-lever (they add no distinct idle sessions and the #8 orphaning is runner-id churn, not name reuse); a warm idle **listener** baseline (distinct from Q261's warm *worker* pods) is at best a probabilistic green-*rate* stopgap whose very efficacy is unconfirmed and whose favourable case converges on reimplementing this scale-set capacity model on the fan-out-prone protocol. **Option E remains the only structural fix** — the spike *strengthens* the case here without force-triggering it.
+> Verdict: **no reliable AGC-side lever.** Unique/ephemeral runner names are a non-lever (they add no distinct idle sessions and the #8 orphaning is runner-id churn, not name reuse); a warm idle **listener** baseline (distinct from Q261's warm *worker* pods) is at best a probabilistic green-*rate* stopgap whose very efficacy is unconfirmed and whose favourable case converges on reimplementing this scale-set capacity model on the fan-out-prone protocol.
+> **Option E remains the only structural fix** — the spike *strengthens* the case here without force-triggering it.
 > A live classic-dispatch probe that would settle the one residual GitHub-side unknown (warm-wide classic: spread vs fan-out) is designed and ready in that doc's §5 but was not run, as its outcome does not move this go/no-go.
 
 Each is marked **probe** (a `cmd/probe` scenario answers it live), **decision** (the user/design owns it), or **✅ probed** (settled by Investigation E, §2a).
@@ -244,7 +257,8 @@ Each is marked **probe** (a `cmd/probe` scenario answers it live), **decision** 
 ## 5a. The three decisions — analysis and recommendations (2026-07-04)
 
 Researched exhaustively (upstream `actions/scaleset` inspected at HEAD `1b6da87`; ARC master `go.mod`; GHES release lifecycle; GAG's v2 API, scope support, and dependency conventions).
-Each subsection: options, the facts that discriminate, a recommendation. **All three recommendations were signed off 2026-07-04 — these are now the decisions of record.**
+Each subsection: options, the facts that discriminate, a recommendation.
+**All three recommendations were signed off 2026-07-04 — these are now the decisions of record.**
 
 ### U6 — wire client: vendor `actions/scaleset` vs GAG-owned implementation
 
@@ -295,8 +309,10 @@ A per-set field reaches the AGC directly through its RunnerSet informer — no G
 - **Immutable** via CEL `oldSelf` (H.15 pattern): switching a live set is a re-registration storm; start immutable — *relaxing* immutability later is compatible, adding it later is breaking.
 - **Admission (CEL):** `ScaleSet` ⇒ `size(runnerLabels) == 1` — the scale set's name **is** the single label (the tenant's `runs-on` contract), not the RunnerSet object name.
   Webhook-level check: no two `ScaleSet`-protocol RunnerSets under one gateway may share that label (two scale sets with one name would collide at GitHub).
-- **v2-exclusive by design** (signed off with explicit rationale 2026-07-04): the field never appears on v1alpha1 — zero changes to the frozen v1 surface, and the fan-out-free acquisition model becomes a concrete, user-visible reason to migrate to v2, alongside the decomposed kinds. `gag-migrate` maps v1 groups to `Classic` RunnerSets unchanged; a tenant opts into `ScaleSet` by editing the migrated RunnerSet (a new object, so the immutability rule never blocks the migration itself).
-- **The field is transitional — v2beta1 is ScaleSet-only** (signed off 2026-07-04): `acquisitionProtocol` exists only on v2alpha1, as the per-set canary/rollback lever P3–P4 need (the Q260 lesson: live validation wants per-set opt-in, and rollback must be a field edit, not an AGC image downgrade across every v2 tenant). **v2beta1 never serves `Classic`**: the Q74 graduation conversion strips the field, and `maxListeners` — meaningless under ScaleSet (one session per set; concurrency is governed by `maxWorkers`/`priorityTiers` via the capacity header) — is removed from RunnerSet at the same graduation (documented as ignored for `ScaleSet` sets in the interim).
+- **v2-exclusive by design** (signed off with explicit rationale 2026-07-04): the field never appears on v1alpha1 — zero changes to the frozen v1 surface, and the fan-out-free acquisition model becomes a concrete, user-visible reason to migrate to v2, alongside the decomposed kinds.
+  `gag-migrate` maps v1 groups to `Classic` RunnerSets unchanged; a tenant opts into `ScaleSet` by editing the migrated RunnerSet (a new object, so the immutability rule never blocks the migration itself).
+- **The field is transitional — v2beta1 is ScaleSet-only** (signed off 2026-07-04): `acquisitionProtocol` exists only on v2alpha1, as the per-set canary/rollback lever P3–P4 need (the Q260 lesson: live validation wants per-set opt-in, and rollback must be a field edit, not an AGC image downgrade across every v2 tenant).
+  **v2beta1 never serves `Classic`**: the Q74 graduation conversion strips the field, and `maxListeners` — meaningless under ScaleSet (one session per set; concurrency is governed by `maxWorkers`/`priorityTiers` via the capacity header) — is removed from RunnerSet at the same graduation (documented as ignored for `ScaleSet` sets in the interim).
   End state: the protocol is an API-version property — v1 = classic (deprecated), v2 = scale-set — with no enum surviving.
 
 ### U8 — support-matrix policy
@@ -340,7 +356,9 @@ Mirrors the M1 → M2 pattern that built the classic tier: probe first, then a p
 - **P2 — scale-set client package (M). ✅ DONE** — the new leaf module [`scaleset/`](../../../scaleset/) (`broker/`-style — httpx bounded clients that clone the proxy-patched `http.DefaultTransport`, typed errors, a nil-safe `MetricsRecorder`), promoting the probe's live-validated flows with types mirroring `actions/scaleset` for wire parity (not vendored — U6-C).
   Covers: the two-hop auth bootstrap; lazy admin-JWT refresh ~60s pre-expiry (§2b-7); scale-set CRUD + runner-group resolve + per-job `generatejitconfig`; session create/refresh(PATCH)/delete; the capacity-gated queue long-poll; both acquisition paths as one rule (`AvailableJobIDs`→`AcquireJobs` on GHES, `AssignedJobs` authoritative regardless of origin — §5a-U8); and the token matrix (queue token, not admin JWT, on `acquirejobs` + poll — §2.5).
   Plus the [`scalesettest`](../../../scaleset/scalesettest/server.go) fake (modelled on [`brokertest`](../../../broker/brokertest/server.go)) encoding the §2a/§2b semantics: auto-assign under advertised capacity **and** the GHES-style `JobAvailable`→acquire flow, cursor-based at-least-once replay to a re-created session, admin- and queue-token expiry, and claim-once acquisition.
-  Unit + client-vs-fake coverage (81.6%, race-clean); no envtest (a pure network-client package — coverage is entirely client-vs-fake); **no AGC wiring** (P3). **P2-surfaced unknown for P4:** the message-DELETE ack endpoint shape (`DELETE {messageQueueUrl}/{messageId}`, §2.2) is source-derived from the official listener but was **not** exercised by the live probe (which acked by cursor only); `Client.DeleteMessage` implements it and the fake tests the construction, but P4 must confirm the URL shape and status semantics on a live tenant before the P3 listener relies on delete-acking over pure cursor advance. **P3 now builds on:** `scaleset.Client` (one per RunnerSet) + the `scalesettest` fake for the listener's acceptance twin.
+  Unit + client-vs-fake coverage (81.6%, race-clean); no envtest (a pure network-client package — coverage is entirely client-vs-fake); **no AGC wiring** (P3).
+  **P2-surfaced unknown for P4:** the message-DELETE ack endpoint shape (`DELETE {messageQueueUrl}/{messageId}`, §2.2) is source-derived from the official listener but was **not** exercised by the live probe (which acked by cursor only); `Client.DeleteMessage` implements it and the fake tests the construction, but P4 must confirm the URL shape and status semantics on a live tenant before the P3 listener relies on delete-acking over pure cursor advance.
+  **P3 now builds on:** `scaleset.Client` (one per RunnerSet) + the `scalesettest` fake for the listener's acceptance twin.
 - **P3 — parallel acquisition tier behind the API field (L). ✅ DONE.** Per U7 (§5a): `RunnerSet.spec.acquisitionProtocol` (v2alpha1, default `Classic`, immutable, CEL-validated single label) selects a scale-set listener per set (one goroutine: session + capacity-gated poll + dispatch) and the `run.sh --jitconfig` worker path.
   The Q260 `TestAGC_Q260_FanoutCompletionReconciles` acceptance shape gets a scale-set twin: N concurrent jobs, every one concludes `completed`, zero dedup involved.
   Landing as a sequence of PRs, all under Q264 P3 and **all behind default `Classic`** (nothing changes for existing users until P5):
@@ -351,7 +369,8 @@ Mirrors the M1 → M2 pattern that built the classic tier: probe first, then a p
     Acking is **cursor-only** (the live-proven semantics, §2b-4) — it deliberately does not rely on the unproven `DeleteMessage` (P4); recovery is queue replay to a re-created session, made idempotent by process-scoped provisioned/completed sets.
     The engine is **not yet wired into the RunnerSet reconciler** (default Classic trivially preserved); that + the real provisioner/worker path is (c).
     Tests (race-clean) against the `scalesettest` fake: one-worker-per-job/zero-dedup, capacity gating, assigned-count reconciliation, session-recreate replay without double-provision, the GHES acquire path, and **the fan-out-free acceptance twin** — the scale-set analog of `TestAGC_Q260_FanoutCompletionReconciles`: N concurrent jobs, every one concludes `completed`, zero dedup.
-  - **(c) worker path + provisioner staging — ✅ DONE.** The entrypoint wrapper ([`cmd/worker`](../../../cmd/worker/main.go)) gains a `WORKER_MODE=scaleset` mode: no payload handoff — the pod runs the full runner via `run.sh --jitconfig`, which pulls and completes its own job (§2.4); the wrapper keeps only its proxy-CA trust duty (the pipes handoff + Runner.Worker spawn do not run). `Provisioner.ProvisionScaleSetWorker` stages a JIT-config Secret (the blob, no acquired payload) and creates a scale-set-mode worker pod, fire-and-forget and idempotent per jobID.
+  - **(c) worker path + provisioner staging — ✅ DONE.** The entrypoint wrapper ([`cmd/worker`](../../../cmd/worker/main.go)) gains a `WORKER_MODE=scaleset` mode: no payload handoff — the pod runs the full runner via `run.sh --jitconfig`, which pulls and completes its own job (§2.4); the wrapper keeps only its proxy-CA trust duty (the pipes handoff + Runner.Worker spawn do not run).
+    `Provisioner.ProvisionScaleSetWorker` stages a JIT-config Secret (the blob, no acquired payload) and creates a scale-set-mode worker pod, fire-and-forget and idempotent per jobID.
     Not yet called by any reconciler (default Classic unchanged).
     Unit tests: the wrapper's run.sh exec + proxy-CA trust, and the provisioner's JIT Secret staging + scale-set pod mode.
   - **(d) RunnerSet-controller wiring + envtest — ✅ DONE.** The AGC RunnerSet reconciler now branches on `spec.acquisitionProtocol == ScaleSet` ([`runnerset_scaleset.go`](../../../cmd/agc/internal/controller/runnerset_scaleset.go)): once references resolve it starts exactly one `scalesetlistener` per set (session + capacity-gated poll + provision-on-`JobAssigned`) via a per-set `scaleset.Client` (config URL/API base from the resolved gateway's `githubURL`; a `ScaleSetClientFactory` seam points tests at the `scalesettest` fake), with Provision → `Provisioner.ProvisionScaleSetWorker` and Capacity → the maxWorkers/priorityTiers ceiling advertised as `X-ScaleSetMaxCapacity` (default 10 when neither is set).
@@ -372,7 +391,8 @@ Mirrors the M1 → M2 pattern that built the classic tier: probe first, then a p
   - **ALL 7 GAG jobs concluded GREEN** on `gag-scaleset3-<jobUUID>` runners (1:1 with the provisioned pods): `unit-test` ✅ + `coverage` ✅ (**Q269 WORKER_MODE fix HOLDS** — the two jobs that failed the first pass are now green), `shellcheck`/`tidy-check`/`vendor-check` ✅, `lint` ✅ (no `timeout-minutes: 10` lapse — the first pass's timeout was CPU saturation, gone with 6-node headroom), `integration-test` ✅ (no envtest `context canceled` — the first pass's capacity confound, [Q248](../../STATUS.md#Q248), resolved by the node bump).
     Both runs concluded `success`.
     Worker pods reaped `phase: Succeeded` (runners exited 0).
-  - **Verdict.** ScaleSet **eliminates the Q224 fan-out starvation by construction AND runs the real CI matrix pristine-green** — Option E is fully validated live. **Q224 is CLOSED; P5 (default flip / classic retirement) is UNBLOCKED**; [Q242](q242-g1-proxy-destination-allowlist.md) concurrent-green is achieved.
+  - **Verdict.** ScaleSet **eliminates the Q224 fan-out starvation by construction AND runs the real CI matrix pristine-green** — Option E is fully validated live.
+    **Q224 is CLOSED; P5 (default flip / classic retirement) is UNBLOCKED**; [Q242](q242-g1-proxy-destination-allowlist.md) concurrent-green is achieved.
     Evidence: AGC debug logs (`agc:e2e-2025557`, scaleSetID 5), runs `28759754797`/`28759755655` (burst `00:11:30Z`, sha `2025557`).
 
   **First pass — 2026-07-05, `main`@`8a29b75` (the acquisition proof).** Deployed a fresh AGC built off `main`@`8a29b75` (=#537, all P3 in) — `ghcr.io/actions-gateway/agc:e2e-8a29b75` (index `sha256:4c88631d…`, amd64 `sha256:91dd52ad…`) — via the GMC `AGC_IMAGE` patch, **plus the matching P3c wrapper** `ghcr.io/actions-gateway/wrapper:e2e-8a29b75` (index `sha256:0040ae1e…`, via the GMC `WRAPPER_IMAGE` patch — see finding 3 below).
@@ -382,10 +402,15 @@ Mirrors the M1 → M2 pattern that built the classic tier: probe first, then a p
   Fired the same ~7-job matrix as classic re-routes #5–#8 — push-event reruns of unit-test.yml `28752455482` (6 jobs) + integration-test.yml `28752455509` (1 job) on sha `4ea41f6`, routed via `GAG_RUNNER → "gag-scaleset2"`.
   - **Q224 GATE — MET.** The single-acquirer listener received **7 distinct `JobAssigned` messages** and provisioned **7 distinct worker pods in 3 seconds** (one per job) — **zero dedup, zero `create Secret … already exists`, zero `create Pod … already exists`**.
     All 7 jobs **ran** and all 7 reached a **terminal conclusion**; **none wedged `in_progress` indefinitely** — the decisive contrast with classic (re-routes #5/#8: **2/7**, 5 jobs starved forever because their distinct planIDs never arrived).
-    One acquirer, one authoritative queue, no sibling deliveries → the starvation class cannot occur, confirmed live. `maxWorkers=8` advertised as `X-ScaleSetMaxCapacity`; GitHub assigned exactly the 7 queued jobs (≤ capacity), one worker each.
-  - **Terminal conclusions: 3 clean green, 4 non-green — every non-green ORTHOGONAL to acquisition.** `shellcheck`/`tidy-check`/`vendor-check` ✅ (the last confirms Athens under the scale-set worker). `unit-test` ❌ + `coverage` ❌: **a self-referential dogfooding artifact** — the provisioner sets `WORKER_MODE=scaleset` on the runner *container* (§2.4), so the job's `go test` inherits it and the `cmd/worker` tests take the jitconfig branch and fail their classic-payload assertions (`TestRun_ReadPayloadErrorIsWrapped`, …); `cover-check` runs the same suite.
-    Only bites because GAG dogfoods its **own** CI on its **own** scale-set worker — a normal tenant is unaffected. **Fix = `cmd/worker` tests must pin `WORKER_MODE` (Queue item); it must land on `main` before a clean-green re-run is possible.** `integration-test` ❌: envtest `context canceled` under node CPU saturation (98–101%) — capacity confound ([Q248](../../STATUS.md#Q248)). `lint` (cancelled): hit its own `timeout-minutes: 10` (golangci-lint pathologically slow on the saturated node) — a mundane timeout, **not** a lock lapse.
-  - **U3 residual — CORE SETTLED under pod conditions (direct-egress):** the `run.sh --jitconfig` worker ran in a real pod, connected, pulled its job, executed, and **its runner reported its own true terminal result** (`Job … completed with result: Failed`). **Residual:** the same flow behind the per-tenant **egress proxy** (proxy-CA trust bundle) was not exercised (direct-egress tenant) — stays a follow-up.
+    One acquirer, one authoritative queue, no sibling deliveries → the starvation class cannot occur, confirmed live.
+    `maxWorkers=8` advertised as `X-ScaleSetMaxCapacity`; GitHub assigned exactly the 7 queued jobs (≤ capacity), one worker each.
+  - **Terminal conclusions: 3 clean green, 4 non-green — every non-green ORTHOGONAL to acquisition.** `shellcheck`/`tidy-check`/`vendor-check` ✅ (the last confirms Athens under the scale-set worker).
+    `unit-test` ❌ + `coverage` ❌: **a self-referential dogfooding artifact** — the provisioner sets `WORKER_MODE=scaleset` on the runner *container* (§2.4), so the job's `go test` inherits it and the `cmd/worker` tests take the jitconfig branch and fail their classic-payload assertions (`TestRun_ReadPayloadErrorIsWrapped`, …); `cover-check` runs the same suite.
+    Only bites because GAG dogfoods its **own** CI on its **own** scale-set worker — a normal tenant is unaffected.
+    **Fix = `cmd/worker` tests must pin `WORKER_MODE` (Queue item); it must land on `main` before a clean-green re-run is possible.** `integration-test` ❌: envtest `context canceled` under node CPU saturation (98–101%) — capacity confound ([Q248](../../STATUS.md#Q248)).
+    `lint` (cancelled): hit its own `timeout-minutes: 10` (golangci-lint pathologically slow on the saturated node) — a mundane timeout, **not** a lock lapse.
+  - **U3 residual — CORE SETTLED under pod conditions (direct-egress):** the `run.sh --jitconfig` worker ran in a real pod, connected, pulled its job, executed, and **its runner reported its own true terminal result** (`Job … completed with result: Failed`).
+    **Residual:** the same flow behind the per-tenant **egress proxy** (proxy-CA trust bundle) was not exercised (direct-egress tenant) — stays a follow-up.
   - **U5 residual — NOT tested this run:** no mid-job eviction performed (the two ~10-min durations were natural runtime / a job timeout, not lock lapses).
     U5-core was offline-probed (§2b-5); U5-under-pod-eviction stays a follow-up.
   - **Minor code findings (Queue):** (1) ✅ **FIXED (Q270).** `scaleset.statusError` mapped **every** 409 to `SessionConflictError` — a `generatejitconfig` runner-name conflict was mislabeled.
@@ -398,7 +423,8 @@ Mirrors the M1 → M2 pattern that built the classic tier: probe first, then a p
     At the time this pass left Q224 open pending the `WORKER_MODE` fix on `main` + a clean re-run on adequate CPU — **both delivered on the 2026-07-05 re-run (all 7 green), so Q224 is now CLOSED and P5 is unblocked.** First-pass evidence: AGC debug logs (`agc:e2e-8a29b75`, scaleSetID 4), reruns `28752455482`/`28752455509` (burst `19:55:54Z`, sha `4ea41f6`).
 
   *Observability prep (done, #538):* the tier emits per-`RunnerSet` Prometheus counters (`actions_gateway_scaleset_jobs_assigned_total` / `…_jobs_provisioned_total` / `…_provision_errors_total` / `…_jobs_completed_total{result}`) via a `scalesetlistener.Metrics` recorder wired into the listener `Config`.
-  Documented in [observability.md](../../operations/observability-metrics.md#scale-set-acquisition-tier-q264). *Prerequisite fixed (Q269):* `cmd/worker`'s tests now clear the ambient `WORKER_MODE` in `TestMain`, so the classic-path unit tests stay deterministic when GAG's own CI runs on a `WORKER_MODE=scaleset` runner pod — otherwise the P4 dogfood CI (which runs `main`'s code) fails unit-test+coverage before the Q224 matrix can even run.
+  Documented in [observability.md](../../operations/observability-metrics.md#scale-set-acquisition-tier-q264).
+  *Prerequisite fixed (Q269):* `cmd/worker`'s tests now clear the ambient `WORKER_MODE` in `TestMain`, so the classic-path unit tests stay deterministic when GAG's own CI runs on a `WORKER_MODE=scaleset` runner pod — otherwise the P4 dogfood CI (which runs `main`'s code) fails unit-test+coverage before the Q224 matrix can even run.
 - **P5 — cutover + retirement (M). ▶ default flip DONE 2026-07-06; deprecation window + classic removal are the remaining residual.** The default of `RunnerSet.spec.acquisitionProtocol` (v2alpha1) is flipped `Classic → ScaleSet` (`+kubebuilder:default=ScaleSet`, CRD + both chart copies regenerated); `Classic` is marked **deprecated** (godoc `Deprecated:` + the field doc + operator docs).
   Secure-by-default holds — the flip relaxes no security property (single-acquirer topology, same egress/isolation/NetworkPolicy; §5a): Classic was default only for stability-by-default, now satisfied by P4 clean-green.
   - **Consequences of the flip, handled in this step:**
@@ -439,5 +465,6 @@ Fetched 2026-07-04; all public:
 - **docs.github.com**: ARC "Runner scale sets" concepts, "Authenticate to the API" (App permission matrix; enterprise = PAT-only), "Deploying runner scale sets with ARC" (GHES ≥ 3.9).
 - **§5a decision research (2026-07-04)**: `actions/scaleset` @ HEAD `1b6da87` — `go.mod`/LICENSE, `client.go`/`session_client.go`/`common_client.go`/ `errors.go`/`config.go`, `listener/listener.go`, releases v0.1.0–v0.4.0, issues #75/#90 (GHES acquire-flow removal + restore), #104 (client mutex), #107 (auto-assign, unanswered); ARC master `go.mod` (requires `scaleset v0.4.0`); GHES release lifecycle (supported window ~3.17–3.20 as of 2026-07); ARC authentication docs (enterprise scope PAT-only).
 
-Per the repo rule that source-inspection findings are unverified until exercised end-to-end, §2's wire-level specifics were treated as unconfirmed until the P1 probe ran. **Investigation E (§2a) has now live-confirmed the registration/session/queue/JIT chain — and corrected the acquisition model on the current backend** (auto-assign, no client acquire).
+Per the repo rule that source-inspection findings are unverified until exercised end-to-end, §2's wire-level specifics were treated as unconfirmed until the P1 probe ran.
+**Investigation E (§2a) has now live-confirmed the registration/session/queue/JIT chain — and corrected the acquisition model on the current backend** (auto-assign, no client acquire).
 Full probe logs: `INVESTIGATION-E:` lines from the 2026-07-04 runs.

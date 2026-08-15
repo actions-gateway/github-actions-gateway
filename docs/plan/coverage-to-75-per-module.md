@@ -107,7 +107,8 @@ Optionally fold a one-case buffer test into whichever module sits on the toleran
 
 ### B — `cmd/worker` → ~77% (test-only, one PR)
 
-Extend `cmd/worker/worker_test.go` with cases for the uncovered branches of `run()` (65%) and `installSelf()` (71.4%) — the extracted, testable paths (bad dir, missing binary, env fallbacks). `main()` stays 0% by design (thin dispatch).
+Extend `cmd/worker/worker_test.go` with cases for the uncovered branches of `run()` (65%) and `installSelf()` (71.4%) — the extracted, testable paths (bad dir, missing binary, env fallbacks).
+`main()` stays 0% by design (thin dispatch).
 
 ### C — `cmd/gmc` pure helpers (test-only, part of the gmc PR)
 
@@ -140,7 +141,8 @@ Extract from `run()`:
 - `parseProbeConfig(getenv func(string) string) (probeConfig, error)` — the ~60-line env/config block (app ID/installation ID parsing, PEM load, broker URL/v2 selection, pool ID) with all its error branches.
 - keep the `investigate*`/`probeAcknowledge` broker calls at package scope (they already are).
 
-`run()` shrinks to thin orchestration (mint token → open session → dispatch investigations). **Existing tests stay green and unchanged** — that is the safety proof.
+`run()` shrinks to thin orchestration (mint token → open session → dispatch investigations).
+**Existing tests stay green and unchanged** — that is the safety proof.
 No new tests in this commit.
 
 **E2 — tests only.** Unit-test:

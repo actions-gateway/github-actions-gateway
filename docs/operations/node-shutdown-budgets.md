@@ -169,7 +169,8 @@ Both termination paths — ordinary delete, and the 116965 graceful-node-shutdow
 
 **Ordinary `kubectl delete`.** The readiness probe (1s period, failure threshold 1) began failing at SIGTERM and kept failing.
 The pod's `Ready` condition stayed `True` for the entire 48-second termination and never flipped.
-The endpoint *was* withdrawn immediately, but by the `deletionTimestamp`, not by readiness. **The probe runs and fails, but its result never reaches the `Ready` condition — endpoint removal is driven by `deletionTimestamp` regardless.**
+The endpoint *was* withdrawn immediately, but by the `deletionTimestamp`, not by readiness.
+**The probe runs and fails, but its result never reaches the `Ready` condition — endpoint removal is driven by `deletionTimestamp` regardless.**
 
 Note this is *adjacent to but distinct from* 124648, which is scoped to the eviction path and whose reporter states the probe works during termination on ordinary delete.
 On this evidence the delete-path behaviour (probe results never reflected into `Ready` during termination) appears to be unreported upstream — Q401 tracks filing it.
@@ -199,7 +200,8 @@ It simply does not work yet: as measured above (Q388), the probe's failures neve
 !!! note "Reproducing this yourself: kind needs dbus first"
 
     Stock kind **cannot** run graceful node shutdown.
-    The kubelet logs `Failed to start node shutdown manager: dial unix /var/run/dbus/system_bus_socket: no such file or directory`, because the node image ships no dbus at all. `apt-get install dbus`, start `dbus` and `systemd-logind`, restart the kubelet, and confirm with `systemd-inhibit --list` that the kubelet holds a `shutdown` lock before trusting any result.
+    The kubelet logs `Failed to start node shutdown manager: dial unix /var/run/dbus/system_bus_socket: no such file or directory`, because the node image ships no dbus at all.
+    `apt-get install dbus`, start `dbus` and `systemd-logind`, restart the kubelet, and confirm with `systemd-inhibit --list` that the kubelet holds a `shutdown` lock before trusting any result.
     This is the same missing-`systemd-logind` mechanism that disables the feature on Bottlerocket.
 
 ### What the newer traffic-engineering features do and don't fix
@@ -217,7 +219,8 @@ It rescues the single-replica / `internalTrafficPolicy: Local` case, which is re
 
 ### The `preStop` sleep, if you use one
 
-- Use the **native `sleep` handler** (KEP-3960: beta and on by default in **1.30**, GA'd after a reverted attempt in 1.32). `exec: ["sleep", …]` fails at runtime on distroless images — no shell, no `sleep` binary — and the pod proceeds straight to SIGTERM, silently reintroducing the race.
+- Use the **native `sleep` handler** (KEP-3960: beta and on by default in **1.30**, GA'd after a reverted attempt in 1.32).
+  `exec: ["sleep", …]` fails at runtime on distroless images — no shell, no `sleep` binary — and the pod proceeds straight to SIGTERM, silently reintroducing the race.
   Zero-valued sleeps became usable in **1.33** (KEP-4818), which makes the field templatable.
 - Community guidance clusters at **5–15s**.
   Upstream examples use 15s.

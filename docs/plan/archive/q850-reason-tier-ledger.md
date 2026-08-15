@@ -73,7 +73,8 @@ The rest sit in files both protocols execute, so the tier came from where the ca
 - Everything **after** it is the classic arm alone: the installation-token fetch, the agent pool, and the multiplexer.
   That is why `TokenUnavailable`, `AgentProvisioningFailed` and `ListenerStartFailed` are classic-only.
   The scale-set arm hands the token manager to its listener rather than fetching at reconcile, and reports a start failure as `NoActiveSessions` with `ScaleSetListenerStartFailed` carrying the cause.
-- A `RunnerGroup` only ever acquires classically, so a reason no v2 path writes is classic-only by construction. `CredentialAvailable` is the only row that rests on this alone.
+- A `RunnerGroup` only ever acquires classically, so a reason no v2 path writes is classic-only by construction.
+  `CredentialAvailable` is the only row that rests on this alone.
 
 ## 6. What the walk found
 

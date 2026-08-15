@@ -1,10 +1,13 @@
 # v2 ↔ v1 gap analysis (API + controller behavior)
 
-**Type:** ⓘ Review / evidence record. **Date:** 2026-07-14. **Status (2026-08-09):** every gap recorded below has since shipped, and the last v2 API milestone (M4 cross-namespace sharing, Q166) landed 2026-08-08.
+**Type:** ⓘ Review / evidence record.
+**Date:** 2026-07-14.
+**Status (2026-08-09):** every gap recorded below has since shipped, and the last v2 API milestone (M4 cross-namespace sharing, Q166) landed 2026-08-08.
 The audit's own scope is therefore closed.
 One capability drop survives it:
 
-- **Multi-label runner sets** (Q726). ✅ Closed 2026-08-11. `v1alpha1` set `MinItems=1` with no ceiling; `v2beta1` CEL-enforced `size(self) == 1` because the single label doubled as the scale-set name.
+- **Multi-label runner sets** (Q726). ✅ Closed 2026-08-11.
+  `v1alpha1` set `MinItems=1` with no ceiling; `v2beta1` CEL-enforced `size(self) == 1` because the single label doubled as the scale-set name.
   The rule is gone: every label is registered on the scale set and the *first* one names it.
   Deliberate, and the field's godoc offers a migration path (stay on a `v2alpha1` Classic RunnerSet), but that path expires with `v2alpha1` at `v2.0.0` ([Q264](../STATUS.md#Q264)), which is what makes it permanent.
 
@@ -12,7 +15,8 @@ A second one opened and closed inside the same release.
 Q683 and Q691 shipped in August wired only into the classic `provision()` path, and `v2beta1` is ScaleSet-only, so for a few days `v2` tenants had neither; Q766 ported both and 1.4 ships them on both tiers.
 It is worth recording because it is the shape [04-operational-flows.md](../design/04-operational-flows.md) calls a silent capability deletion, the one Q417 and Q443 were ported to avoid, and it reappeared without anyone deciding to reopen it.
 
-The doc is kept as the evidence record and, above all, as the list of [intentional differences](#intentional-differences--verified-no-action) so future audits do not re-litigate them. **Scope:** the v1 API (`actions-gateway.github.com/v1alpha1`: GMC `ActionsGateway` + AGC `RunnerGroup`) versus the v2 API (`actions-gateway.com` — `v2alpha1` served/reconciled, `v2beta1` storage/hub: `ActionsGateway`, `EgressProxy`, `RunnerSet`, `RunnerTemplate`/`ClusterRunnerTemplate`), covering both the API surface and what each controller/webhook actually does.
+The doc is kept as the evidence record and, above all, as the list of [intentional differences](#intentional-differences--verified-no-action) so future audits do not re-litigate them.
+**Scope:** the v1 API (`actions-gateway.github.com/v1alpha1`: GMC `ActionsGateway` + AGC `RunnerGroup`) versus the v2 API (`actions-gateway.com` — `v2alpha1` served/reconciled, `v2beta1` storage/hub: `ActionsGateway`, `EgressProxy`, `RunnerSet`, `RunnerTemplate`/`ClusterRunnerTemplate`), covering both the API surface and what each controller/webhook actually does.
 Goal: find v1 behavior not yet ported to v2, now that v2 is the recommended front door (Q273) and v1 removal is on the deprecation clock (Q264/Q273).
 
 **Method:** field-by-field API comparison plus four parallel end-to-end code reads — GMC gateway reconcilers, proxy provisioning (v1 inline vs v2 `EgressProxy`), the full admission surface (webhooks + VAPs + CEL), and the AGC `RunnerGroup` vs `RunnerSet` controllers.
@@ -51,7 +55,8 @@ The Q322 follow-up closed it from **both** webhook sides (`gmc/internal/webhook/
 - *`gitHubURL` structural validation:* v1 validates https/host/org-path-segment in the webhook (`v1alpha1/actionsgateway_webhook.go`); as found, v2 kept only `Pattern=^https://` + the (new, good) immutability CEL — `https://x` with no org segment was admitted.
   Fixed by extracting the v1 check into the shared `gmc/internal/webhook/validation` package (so it survives the planned v1 sunset) and running it in the v2 ActionsGateway webhook on create and update.
 - *Reserved-namespace create rejection:* v1 rejects an ActionsGateway created in `kube-system`/`kube-public`/`gmc-system`/POD_NAMESPACE; as found, no v2 kind had an equivalent check.
-  Fixed via the same shared package, wired into the two v2 kinds that make the GMC provision workloads into their namespace: `ActionsGateway` (AGC control plane) and `EgressProxy` (proxy Deployment/NetworkPolicies). `RunnerSet`/`RunnerTemplate` deliberately carry no guard — a RunnerSet is fail-closed (`GatewayNotFound`) without a same-namespace gateway and a template is inert, so blocking gateway+proxy blocks the chain.
+  Fixed via the same shared package, wired into the two v2 kinds that make the GMC provision workloads into their namespace: `ActionsGateway` (AGC control plane) and `EgressProxy` (proxy Deployment/NetworkPolicies).
+  `RunnerSet`/`RunnerTemplate` deliberately carry no guard — a RunnerSet is fail-closed (`GatewayNotFound`) without a same-namespace gateway and a template is inert, so blocking gateway+proxy blocks the chain.
 - *PriorityClass VAP backstop:* `priorityclass-allowlist-guard.yaml` matched only v1 `runnergroups`; v2 `runnersets`/`runnertemplates` relied on the `failurePolicy=fail` webhooks alone, so stored-object re-validation and webhook-outage defense-in-depth were v1-only.
   Fixed by adding an `actions-gateway.com` `v2alpha1`+`v2beta1` `runnersets`/`runnertemplates` rule to both policy copies (the shared has()-guarded CEL variables are total across all three shapes); `ClusterRunnerTemplate` stays exempt as platform-authored, matching its webhook exemptions.
   Covered live by the extended VAP envtest.
@@ -106,7 +111,8 @@ The runtime machinery is shared through owner-agnostic seams (provisioner `Targe
 **Gap — ScaleSet path surfaces no failures (Q325; FIXED).** `Degraded`, `RateLimited`, and `RunnerVersionTooOld` conditions (and the `RunnerVersionTooOld`/`SessionUnauthorized` events) are produced inside the *classic* listener goroutine (`listener/goroutine.go:434,679-688`) and reached the RunnerSet only on the classic path; as found, `scalesetlistener/listener.go` never called `SetCondition` — so on the **default** acquisition protocol these failure classes were invisible: the set stayed Ready while e.g. GitHub rate-limited the queue.
 Adjacent to (not covered by) Q311's metrics/alerting scope and Q309's vocabulary cleanup.
 The fix wires owner-bound `Conditions`/`Events` sinks into the scale-set listener (mirroring its `MetricsRecorder` seam) reusing the reconciler's existing condition/event drain channels: sustained-429 polling (ten-minute window, classic parity) surfaces `RateLimited=True/SustainedRateLimit`, and an unauthorized session create/refresh surfaces `Degraded=True/Unauthorized` plus a `SessionUnauthorized` Warning event once per episode.
-Beyond classic parity the listener publishes the healthy baseline on start and clears an abnormal condition on recovery (new `PollingHealthy`/`SessionAuthorized` False-reasons in both v2 packages). `RunnerVersionTooOld` was left classic-only — the scale-set protocol carries no runner version at session creation, so the *session-rejection* class cannot occur — which left the ScaleSet tier with no runner-version signal of any kind.
+Beyond classic parity the listener publishes the healthy baseline on start and clears an abnormal condition on recovery (new `PollingHealthy`/`SessionAuthorized` False-reasons in both v2 packages).
+`RunnerVersionTooOld` was left classic-only — the scale-set protocol carries no runner version at session creation, so the *session-rejection* class cannot occur — which left the ScaleSet tier with no runner-version signal of any kind.
 Q715 closes that from the other side: both reconcilers read the version off the effective worker image every reconcile and publish the same condition under the `WorkerImage*` reasons, needing no session.
 
 **Gap — classic listener never cleared recovered failure conditions (Q332; FIXED).** The reverse of the Q325 gap: the *classic* listener goroutine only ever set the abnormal (True) states — a recovered `RateLimited` sat stale until the process restarted, and a `Degraded` surfaced by a prior failed instance was never cleared.
@@ -117,14 +123,16 @@ The `PollingHealthy`/`SessionAuthorized` False-reasons now exist in v1alpha1 too
 The Q326 fix adds the same watch (`quotaToRunnerSets` + the shared `quotaHardChangedPredicate`), proven in envtest.
 
 **Gap — condition gauges (pre-existing Q319/Q321).** The `worker_quota_pressure`/`worker_quota_exceeded`/`workers_unschedulable` collectors List only `RunnerGroupList` and register only in the v1 reconciler (`runnergroup_controller.go:160-161`); no `RunnerSetsDegraded` gauge exists either.
-Already tracked; the analysis confirms both. **Both have since FIXED:** Q321 landed the gateway-level gauges, and Q319 exported the v2 RunnerSet worker-capacity conditions as gauges, with Q643 adding the `WorkerCapacityDeclined` reason label.
+Already tracked; the analysis confirms both.
+**Both have since FIXED:** Q321 landed the gateway-level gauges, and Q319 exported the v2 RunnerSet worker-capacity conditions as gauges, with Q643 adding the `WorkerCapacityDeclined` reason label.
 
 **Minor (Q329):** ~~v2alpha1 lacks `ConditionRateLimited`/`ConditionRunnerVersionTooOld` constants — the classic path writes raw v1 strings onto RunnerSet status~~ — resolved with Q309, which declared the classic-listener vocabulary in both v2 packages (value-parity + mirror-sync tests) and documented it; ~~v2 AGC RBAC lives only in chart files (`charts/actions-gateway/files/agc-*-rules.yaml`) with no `+kubebuilder:rbac` markers, a drift risk relative to v1's generated role~~ — closed with Q329 (see the Minor section below).
 
 <a id="observability"></a>
 ## Observability roll-up
 
-Cross-cutting view of the gaps above plus what was on the Queue at audit time. **All of them have since closed:** v2 proxy metrics-mTLS and the per-`EgressProxy` ServiceMonitor (Q324); the gateway-level condition gauges (Q321) and the RunnerSet worker-capacity gauges (Q319, extended by Q643's reason label); the ScaleSet tier's missing failure conditions and events (Q325); its alerts and dashboards (Q311); and the dead v2 condition vocabulary (Q309).
+Cross-cutting view of the gaps above plus what was on the Queue at audit time.
+**All of them have since closed:** v2 proxy metrics-mTLS and the per-`EgressProxy` ServiceMonitor (Q324); the gateway-level condition gauges (Q321) and the RunnerSet worker-capacity gauges (Q319, extended by Q643's reason label); the ScaleSet tier's missing failure conditions and events (Q325); its alerts and dashboards (Q311); and the dead v2 condition vocabulary (Q309).
 
 The audit's closing verdict, that an operator running pure-v2 had status conditions and scale-set counters but almost no alertable Prometheus surface for them, no longer holds: [observability-alerting.md](../operations/observability-alerting.md) ships scale-set alert rules, and both shipped dashboards carry the tier.
 

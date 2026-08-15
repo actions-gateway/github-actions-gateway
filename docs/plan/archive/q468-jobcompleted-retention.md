@@ -111,7 +111,8 @@ The stub grew one route for this — `POST /repos/{owner}/{repo}/actions/runs/{i
 That models the causal chain the arming phase depends on, so the test covers the probe's cancel wiring rather than stubbing around it.
 
 What these tests cannot cover is the measurement itself: the stub's queue never expires, so `RETAINED` is the only outcome it can produce from a real arm.
-The `LOST` case is driven from a state file pointing at an empty queue. **A green suite here means the harness works, not that the replay path does.**
+The `LOST` case is driven from a state file pointing at an empty queue.
+**A green suite here means the harness works, not that the replay path does.**
 
 ## Findings
 

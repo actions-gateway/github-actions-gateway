@@ -42,8 +42,11 @@ What the log contains during those silences:
 
 ## Two constraints that shape the design
 
-1. **Live progress cannot be printed from inside the suite.** Ginkgo installs a `dup2`-based output interceptor around spec execution, so anything a spec or a `ReportAfterEach` writes to stdout is captured and replayed when the spec ends — precisely the buffering we are trying to escape. `--output-interceptor-mode=none` would stream it at the cost of per-spec failure capture, which is a bad trade. **File writes are not intercepted**, so the suite can emit to a file and a process *outside* Ginkgo can do the printing.
-2. **The Actions log is append-only.** No cursor addressing, so no redrawing progress bar; heartbeat lines must each stand alone. `GITHUB_STEP_SUMMARY` renders after the job, not during it, so it serves the post-run view and cannot serve the live one.
+1. **Live progress cannot be printed from inside the suite.** Ginkgo installs a `dup2`-based output interceptor around spec execution, so anything a spec or a `ReportAfterEach` writes to stdout is captured and replayed when the spec ends — precisely the buffering we are trying to escape.
+   `--output-interceptor-mode=none` would stream it at the cost of per-spec failure capture, which is a bad trade.
+   **File writes are not intercepted**, so the suite can emit to a file and a process *outside* Ginkgo can do the printing.
+2. **The Actions log is append-only.** No cursor addressing, so no redrawing progress bar; heartbeat lines must each stand alone.
+   `GITHUB_STEP_SUMMARY` renders after the job, not during it, so it serves the post-run view and cannot serve the live one.
 
 Together these force the shape: **the suite writes a structured event stream to a file; a separate watcher process renders it to the step log.**
 
@@ -60,7 +63,8 @@ Unset disables the whole mechanism, so a plain `go test` run is unaffected.
 
 Events: `total` (from `PreRunStats.SpecsThatWillRun`, once), `start`, `end` (with state and duration).
 
-**The atomicity constraint is load-bearing.** Six parallel processes append to one file. `O_APPEND` writes to a regular file are atomic only below `PIPE_BUF` (4 KiB), so event lines carry spec text and state — never captured output — and the writer truncates each line defensively.
+**The atomicity constraint is load-bearing.** Six parallel processes append to one file.
+`O_APPEND` writes to a regular file are atomic only below `PIPE_BUF` (4 KiB), so event lines carry spec text and state — never captured output — and the writer truncates each line defensively.
 A spec name long enough to breach the limit would interleave two processes' bytes and corrupt both records.
 
 Rendering must consume *this* stream, not Ginkgo's human-readable log.

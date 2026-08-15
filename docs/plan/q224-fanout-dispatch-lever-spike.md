@@ -35,11 +35,13 @@ Outcome — **2/7 green, 5/7 wedged `in_progress` indefinitely**:
 
 Pinned to the multiplexer/listener code, not assumed:
 
-1. **Baseline is exactly one permanent poller.** `Multiplexer.Start` spawns a single permanent baseline goroutine (`m.spawn(ctx, true)`, [`multiplexer.go:152`](../../cmd/agc/internal/listener/multiplexer.go)); there is **no** `minIdleListeners` / eager-warm knob. `maxListeners` is only a *ceiling* (`SpawnReplacement` no-ops at the cap, [`multiplexer.go:174`](../../cmd/agc/internal/listener/multiplexer.go)).
+1. **Baseline is exactly one permanent poller.** `Multiplexer.Start` spawns a single permanent baseline goroutine (`m.spawn(ctx, true)`, [`multiplexer.go:152`](../../cmd/agc/internal/listener/multiplexer.go)); there is **no** `minIdleListeners` / eager-warm knob.
+   `maxListeners` is only a *ceiling* (`SpawnReplacement` no-ops at the cap, [`multiplexer.go:174`](../../cmd/agc/internal/listener/multiplexer.go)).
 2. **Growth is reactive and 1:1, triggered only by a distinct-planID acquisition.** `SpawnReplacement` is called by a listener **after it wins a job** ([`goroutine.go:924`](../../cmd/agc/internal/listener/goroutine.go)) — *after* the `ClaimJob` dedup gate.
    A **deduped loser skips SpawnReplacement entirely** (`goroutine.go:866`: "SpawnReplacement/renew/provision are all skipped for the loser"; the loser returns at `goroutine.go:909`).
    So **F duplicate deliveries of one job grow the pool by exactly 1** (the single winner), not by F.
-3. **Therefore, from an idle start, the pool can only grow as fast as *distinct* planIDs are won.** When GitHub feeds the small idle pool duplicates of one job (§1), each duplicate is a loser → no growth → the pool never climbs toward 48. `maxListeners` width is **not** the lever (#8 confirmed a 3-session stall at 48); the reactive, winner-only, demand-driven growth is.
+3. **Therefore, from an idle start, the pool can only grow as fast as *distinct* planIDs are won.** When GitHub feeds the small idle pool duplicates of one job (§1), each duplicate is a loser → no growth → the pool never climbs toward 48.
+   `maxListeners` width is **not** the lever (#8 confirmed a 3-session stall at 48); the reactive, winner-only, demand-driven growth is.
 
 This is genuinely AGC-side and changeable — an eager warm baseline of idle listeners *would* present more distinct idle runners at t=0 (that is H1).
 Whether that helps is decided entirely by §4.
@@ -72,7 +74,8 @@ That conflates two different things and the distinction is load-bearing:
   A pre-scheduled idle **pod** cuts pod-schedule latency after a job is *acquired*.
   It is **not** a long-poll session and presents **no** extra idle runner to GitHub → **zero** effect on dispatch starvation.
   Reviving Q261 as specified does **not** address Q224's blocker.
-- **Warm idle *listeners*** = a *new* `minIdleListeners` / `baselineListeners` knob that eagerly maintains N idle long-poll sessions (each a distinct registered idle runner) instead of the single reactive baseline (§2). *This* is what H1 needs, and it does not exist today.
+- **Warm idle *listeners*** = a *new* `minIdleListeners` / `baselineListeners` knob that eagerly maintains N idle long-poll sessions (each a distinct registered idle runner) instead of the single reactive baseline (§2).
+  *This* is what H1 needs, and it does not exist today.
 
 So even to *try* H1 faithfully you build the warm-listener baseline, not Q261.
 
@@ -88,7 +91,8 @@ But the existing evidence **leans toward (b)**:
 
 - **#8 is the strongest tell.** Faced with 7 queued jobs and a small idle pool, GitHub fed the ~3 idle slots **~6 duplicates of ONE planID** while **5 distinct planIDs went undelivered**.
   If GitHub load-balanced distinct jobs across idle runners (a), those 5 planIDs would have gone to the idle slots; instead the same job was re-offered/fanned.
-  That is the signature of (b). *(Consistent-with, not proof: the 5 could in principle have been withheld by an unrelated per-group serialization — which is exactly what the §5 probe would settle.)*
+  That is the signature of (b).
+  *(Consistent-with, not proof: the 5 could in principle have been withheld by an unrelated per-group serialization — which is exactly what the §5 probe would settle.)*
 - **The scale-set 1:1 result does *not* transfer.** Investigation E2 ([q264 §2b](archive/q264-scale-set-protocol-phases.md#2b-investigation-e2--capacity-gating-recovery-and-a-real-runner-2026-07-04)) showed GitHub delivering distinct jobs 1:1 — but on the **auto-assign scale-set backend** (server pushes assignments up to a capacity header), a *different dispatch algorithm* from classic offer-to-many long-poll.
   It proves GitHub *can* spread when it owns the assignment; it says nothing about classic pollers.
 
@@ -117,7 +121,8 @@ New: a `classic_dispatch.go` scenario that
 1. **Registers M distinct classic runners** into a runner group carrying a dedicated label, varying the naming axis: **stable/recycled** (`probe-N`) vs **unique/ephemeral** (`probe-<nonce>`) — the H2 variable.
 2. **Opens all M long-poll sessions and confirms all M are idle-polling (warm)** *before* queuing — the H1 variable (contrast: reactively grow from 1).
 3. **Queues N distinct jobs** near-simultaneously via a fixture workflow (`classic-dispatch-probe.yml`, an N-job `matrix` on `runs-on: [self-hosted, <label>]`), analogous to `scaleset-probe.yml`.
-4. **Records, per delivery**: which session/runner received it, the `planID` (post-`AcquireJob`) and `RunnerRequestID`, and time. **Metric:** distinct planIDs delivered vs duplicate deliveries, and their distribution across the M sessions.
+4. **Records, per delivery**: which session/runner received it, the `planID` (post-`AcquireJob`) and `RunnerRequestID`, and time.
+   **Metric:** distinct planIDs delivered vs duplicate deliveries, and their distribution across the M sessions.
 5. **Cleans up** all M runner records (a fresh dedicated group/label to avoid the shared-repo `ci-N` clutter hazard).
 
 Run the 2×2: {stable, unique} × {warm, reactive}, N ≈ M ≈ 6–8.

@@ -14,7 +14,8 @@ Use the `model-advisor` skill to assess the right model and thinking level at se
 
 Build the right thing AND build it well.
 Before writing any code, state the goal in one sentence and the approach in two or three.
-If the goal is unclear, ask one focused question rather than guessing. **Verify any technical claim before putting it to the user — a recommended approach is itself a claim** — they decide on it and cannot check it (Q561 offered an option describing `predicate-quantifier: every` with inverted semantics; the approved approach survived only by luck.
+If the goal is unclear, ask one focused question rather than guessing.
+**Verify any technical claim before putting it to the user — a recommended approach is itself a claim** — they decide on it and cannot check it (Q561 offered an option describing `predicate-quantifier: every` with inverted semantics; the approved approach survived only by luck.
 Q1085 recommended a CSS fix whose facts were all true but which the unmeasured layout could not accommodate at any viewport width — approved, built, then reworked).
 
 Make the smallest change that achieves the goal.
@@ -57,16 +58,20 @@ Exception: a Go build-/codegen-time tool may be added to the vendored `tools/` m
      Detail: testing.md § Diagnosing failures.
    - **"I can't do that" is a claim too.** Before telling the user a task needs something you lack — credentials, a tool, access, a live cluster — grep for it: this repo documents the GitHub App key's keychain retrieval ([github-app-credentials.md](docs/development/github-app-credentials.md)) and every credential-gated probe scenario (testing.md § Credential-gated probe scenarios).
      Q583 offered the user an option premised on not having App credentials that were a documented `security find-generic-password` away, and the correction reshaped the session.
-   - **The status you report is a claim too.** "Green", "stuck", "converging" need a measurement, not an inference: an exit code read through a pipe is the pipe's (`make check | tail` reports `tail`'s), a backgrounded `; echo "EXIT=$?"` chain reports the `echo`'s 0 to the task notification (end it `rc=$?; echo "EXIT=$rc"; exit $rc`), a tool that exits 0 silently may have checked nothing, a state seen once is not a steady state, a count grouped by symptom is not a measurement of cause (exercise the system that would produce the effect; don't correlate records), a count or superlative you cite is re-derived as you write it, never recalled from an earlier scan, a gate that fails on your branch is not yours until it fails on the base too (Q741 cost two wrong hypotheses), and a check sequenced before a state-changing command with `;` does not gate it. **An explanation you offer the user is a claim too, and this repo has usually written the answer down already** — grep the Queue, the shipping release's plan doc, and the runbook before explaining *why* something behaved as it did (1.5 cycle: four unchecked explanations, three caught by the user asking; one called Q630's designed behaviour a defect, one contradicted an open row).
+   - **The status you report is a claim too.** "Green", "stuck", "converging" need a measurement, not an inference: an exit code read through a pipe is the pipe's (`make check | tail` reports `tail`'s), a backgrounded `; echo "EXIT=$?"` chain reports the `echo`'s 0 to the task notification (end it `rc=$?; echo "EXIT=$rc"; exit $rc`), a tool that exits 0 silently may have checked nothing, a state seen once is not a steady state, a count grouped by symptom is not a measurement of cause (exercise the system that would produce the effect; don't correlate records), a count or superlative you cite is re-derived as you write it, never recalled from an earlier scan, a gate that fails on your branch is not yours until it fails on the base too (Q741 cost two wrong hypotheses), and a check sequenced before a state-changing command with `;` does not gate it.
+     **An explanation you offer the user is a claim too, and this repo has usually written the answer down already** — grep the Queue, the shipping release's plan doc, and the runbook before explaining *why* something behaved as it did (1.5 cycle: four unchecked explanations, three caught by the user asking; one called Q630's designed behaviour a defect, one contradicted an open row).
      Detail: testing.md § [The status you report is a claim too](docs/development/testing.md#the-status-you-report-is-a-claim-too).
 2. **For complex tasks** — write an explicit plan to `docs/plan/` and follow it.
    Keep it updated as the session progresses so completed scope is verifiable at the end; revise it when new information changes the approach.
    Status/Findings sections record only what has actually happened — never draft conclusion-shaped content (root causes, "fix shipped", metrics) ahead of the evidence, even as a placeholder.
 3. **After making changes** — review the diff to confirm it matches the design, is well tested, and achieves the intent.
-   Update docs proactively per the change-type → docs mapping in `docs/development/doc-update-matrix.md` — do not wait to be asked. **A design-doc-only update is not sufficient: if a change alters what an operator does, configures, or observes (defaults, fields, failure modes, annotations, metrics, admission rejections), the operator-facing `docs/operations/` docs must be updated too.** Then update `docs/STATUS.md`: remove the completed Queue row — **except a `flake` row, which moves to Deferred § Flake watch instead of being deleted** (`lint-backlog.sh` rule 8); update the Progress table if a plan-level status changed. **Deleting a row reaches outside `STATUS.md`** — dead `#QNNN` anchors, a roadmap bullet whose orphaned continuation line breaks the *previous* bullet's word cap, a plan doc to archive (which re-bases its own outbound links) and its `docs/plan/README.md` row.
+   Update docs proactively per the change-type → docs mapping in `docs/development/doc-update-matrix.md` — do not wait to be asked.
+   **A design-doc-only update is not sufficient: if a change alters what an operator does, configures, or observes (defaults, fields, failure modes, annotations, metrics, admission rejections), the operator-facing `docs/operations/` docs must be updated too.** Then update `docs/STATUS.md`: remove the completed Queue row — **except a `flake` row, which moves to Deferred § Flake watch instead of being deleted** (`lint-backlog.sh` rule 8); update the Progress table if a plan-level status changed.
+   **Deleting a row reaches outside `STATUS.md`** — dead `#QNNN` anchors, a roadmap bullet whose orphaned continuation line breaks the *previous* bullet's word cap, a plan doc to archive (which re-bases its own outbound links) and its `docs/plan/README.md` row.
    Read `docs/development/maintaining-backlog.md#closing-a-row-what-else-moves` and do all four in the same change; don't defer to an audit.
    - **Run `make docs-gates` the moment prose is written or a doc moves, `make shellcheck` the moment a `scripts/*.sh` is edited, and `make lint` while the Go is being written — not after the code gate.** Each is every gate that change can fail, in seconds (`shellcheck` 37 s over all 210 scripts; `lint` is change-scoped to the modules the branch can affect); `make check` runs the same ones ten minutes later at its very end, `lint` as one of three sequential heavy phases, which is where this lands otherwise (Q699, the session that closed it, Q715, Q844, Q870).
-     Read their lines in the output rather than only the exit code. `docs-gates` runs neither `shellcheck` nor `lint`, so a shell or Go edit needs its own call ([why it bites](docs/development/testing.md#the-make-check-pre-review-gate), [the inner loop](docs/development/testing.md#the-inner-loop-cheap-checks-while-iterating-make-check-once-pre-pr)).
+     Read their lines in the output rather than only the exit code.
+     `docs-gates` runs neither `shellcheck` nor `lint`, so a shell or Go edit needs its own call ([why it bites](docs/development/testing.md#the-make-check-pre-review-gate), [the inner loop](docs/development/testing.md#the-inner-loop-cheap-checks-while-iterating-make-check-once-pre-pr)).
 4. **Commit when done** — automatically, without asking for permission (see Commits below).
 5. **Open a PR when the task is finished** — after committing and pushing, open it with `gh pr create`, automatically and without asking.
    But first, the self-check: **"Is this ready for review?"** — yes to all of:
@@ -76,14 +81,16 @@ Exception: a Go build-/codegen-time tool may be added to the vendored `tools/` m
    - The PR is scoped to one concern; unrelated work goes in its own PR, **including a fix for a broken `main`**, however completely it blocks this PR's gate.
      Search for a standalone fix first (`gh pr list`), wait and rebase if one is open, own it in a **draft** PR if none is ([CONTRIBUTING.md](CONTRIBUTING.md#when-main-is-broken)).
    - The description explains *what* changed and *why*, references Queue items by bare ID (`Q44`, never `#44`), and notes how it was tested.
-   - **Concurrent work re-checked just now**, not at session start, in both halves: `git fetch origin main && git log --oneline HEAD..origin/main` for what *merged* under you (rebase when it touches your own gate), and `gh pr list` for an open PR whose files or gates overlap yours (duplicated or mutually-invalidating work). **Fetch first**: `git diff HEAD...origin/main` compares against a local ref, so without it a moved base reads as clean.
+   - **Concurrent work re-checked just now**, not at session start, in both halves: `git fetch origin main && git log --oneline HEAD..origin/main` for what *merged* under you (rebase when it touches your own gate), and `gh pr list` for an open PR whose files or gates overlap yours (duplicated or mutually-invalidating work).
+     **Fetch first**: `git diff HEAD...origin/main` compares against a local ref, so without it a moved base reads as clean.
      The jointly-red case is machine-checked at merge time by the merge queue, so there is no pre-merge freshness check: enqueue and let the queue arbitrate ([CONTRIBUTING.md](CONTRIBUTING.md#re-check-concurrent-work-before-opening)).
 
    If any answer is no, finish the work first — don't open a PR to "get feedback" on something you know is incomplete.
    If the task is too ambiguous to judge review-readiness, say so and ask.
 
    **Once CI attaches, confirm the path-gated heavy gates actually RAN — green is not enough.** A PR opened docs-only then given code can show all-green/`CLEAN` while integration/security never tested it; never treat such a PR as ready or merge it.
-   Put code in the PR's first push to avoid it; if a gate is missing, `gh pr close <n> && gh pr reopen <n>` to force it. **Exception: both e2e lanes are merge-group-only (Q675), so their heavy jobs never run on a PR and only the `e2e-gate`/`e2e-calico-gate` contexts report.** An absent e2e run on a PR is expected, not a symptom: don't chase it, and don't read the green gate as the suite having run.
+   Put code in the PR's first push to avoid it; if a gate is missing, `gh pr close <n> && gh pr reopen <n>` to force it.
+   **Exception: both e2e lanes are merge-group-only (Q675), so their heavy jobs never run on a PR and only the `e2e-gate`/`e2e-calico-gate` contexts report.** An absent e2e run on a PR is expected, not a symptom: don't chase it, and don't read the green gate as the suite having run.
    Get an earlier verdict from `make e2e` or a `workflow_dispatch`.
    Verify/fix: [`docs/development/testing.md`](docs/development/testing.md#path-gated-workflows-verify-the-heavy-gates-actually-ran).
 
@@ -109,7 +116,8 @@ Exception: a Go build-/codegen-time tool may be added to the vendored `tools/` m
 ### Bash
 
 Any new or edited shell script must follow `docs/development/bash-style.md` — `set -euo pipefail`, `local` in functions, `[[ ]]`/`(( ))`, quoted expansions, cleanup `trap`s, `awk` over `sed` for variable substitutions, subshell-wrapped pipelines when capturing exit codes via `wait`.
-Scripts under `scripts/` are shellcheck-gated by `make check`. **A new script goes in a `scripts/<group>/` directory named for the gate that runs it — never at the top level** (`scripts/README.md` maps them; a `*-test.sh` sits beside its subject, a cross-gate helper in `fetch/` or `lib/`).
+Scripts under `scripts/` are shellcheck-gated by `make check`.
+**A new script goes in a `scripts/<group>/` directory named for the gate that runs it — never at the top level** (`scripts/README.md` maps them; a `*-test.sh` sits beside its subject, a cross-gate helper in `fetch/` or `lib/`).
 
 ## Hooks: minimizing approval prompts
 
@@ -173,7 +181,8 @@ Isolate every directory change in a subshell (`(cd cmd/agc && go test ./...)`) s
   Detail: testing.md § [An aggregate counter cannot count distinct participants](docs/development/testing.md#an-aggregate-counter-cannot-count-distinct-participants).
 - **Settle a "this code caused that" test by deleting the mechanism** — comment out the code it claims to exercise, require red on the assertion that names the behaviour, restore.
   A first-try green proves nothing until then (testing.md § [Verify a causation claim by deleting the mechanism](docs/development/testing.md#verify-a-causation-claim-by-deleting-the-mechanism)).
-- **A test's environment assumptions get probed, not inferred** — uid, tooling on `PATH`, whether mode bits bite. `runs-on` is an expression here, so nine jobs can route to the self-hosted dogfood runner; `os.Geteuid()`/`id -u` answer a different question than the one asserted.
+- **A test's environment assumptions get probed, not inferred** — uid, tooling on `PATH`, whether mode bits bite.
+  `runs-on` is an expression here, so nine jobs can route to the self-hosted dogfood runner; `os.Geteuid()`/`id -u` answer a different question than the one asserted.
   Detail: testing.md § [A test's environment assumptions must be probed](docs/development/testing.md#a-tests-environment-assumptions-must-be-probed-not-inferred).
 - **Flake fixes go first.** If a CI test passes on rerun without a code change, file a Queue item and move it to the top of the Queue before continuing other work — flake cost compounds across every future PR (see `docs/development/maintaining-backlog.md#flake-fixes-go-first`).
 - **Never foreground-poll CI, logs, or files** — foreground-guard prompts on watch/poll forms; take one non-blocking snapshot or use a background task (testing.md § [Never foreground-poll CI, logs, or files](docs/development/testing.md#never-foreground-poll-ci-logs-or-files)).
@@ -193,7 +202,8 @@ Examples of regressions that must not silently become defaults:
 - Removing a validation, admission check, or network policy
 - Relaxing a pod security profile
 
-**Keep secrets out of environment variables.** Prefer writing a secret to a file and reading it from there, deleting the file as soon as it is no longer needed (e.g. `mktemp` + `--from-file`), over passing it through an env var.
+**Keep secrets out of environment variables.** Prefer writing a secret to a file and reading it from there, deleting the file as soon as it is no longer needed (e.g.
+`mktemp` + `--from-file`), over passing it through an env var.
 Env vars leak into process listings, logs, and child processes.
 
 When in doubt, ask before shipping.
@@ -228,7 +238,9 @@ When in doubt, write the detail in `docs/` and link it; prefer tightening an exi
   A push to a queued PR is **rejected** (`GH006`, measured 2026-08-12); wait for the queue to land or evict it rather than dequeuing, which would revoke a human's merge decision.
   Prefer everything in the first push and weigh the CI a push restarts (docs-only gates are seconds; the e2e matrix is a quarter-hour).
   A stale base no longer blocks merging — only a textual conflict (`mergeStateStatus: DIRTY`) does; rebase when the conflict arrives or when `git diff HEAD...origin/main --stat` shows something that affects your gate, since a queue kickback costs a full check cycle a local re-run would have caught.
-  For separable work on an open PR, branch off `origin/main` and open a new one — unless it *blocks* the open PR, which must then be rebased onto it ([CONTRIBUTING.md](CONTRIBUTING.md#pushing-to-a-pr-that-is-already-open) covers both, and the `--onto` rebase after a base squash-merges). **Exception — self-healing your own open PR always pushes:** a CI fix or a `git rebase origin/main` conflict heal that a pr-sentinel wake asked for is repairing *this* PR, not adding scope, so push it once the queue releases it (`--force-with-lease` after a rebase; branch-guard's default `strict` policy auto-approves a force-push of the worktree's own branch) and relaunch the watcher. **A heal that follows a queue eviction may also re-enqueue**, but only when `scripts/agent/pr-requeue-eligible.sh --assess <pr>` (before the rebase) and `--confirm <pr>` (after CI) both pass — a prior *human* enqueue, no current queue entry, and conflicts confined to the merge-driver-owned files.
+  For separable work on an open PR, branch off `origin/main` and open a new one — unless it *blocks* the open PR, which must then be rebased onto it ([CONTRIBUTING.md](CONTRIBUTING.md#pushing-to-a-pr-that-is-already-open) covers both, and the `--onto` rebase after a base squash-merges).
+  **Exception — self-healing your own open PR always pushes:** a CI fix or a `git rebase origin/main` conflict heal that a pr-sentinel wake asked for is repairing *this* PR, not adding scope, so push it once the queue releases it (`--force-with-lease` after a rebase; branch-guard's default `strict` policy auto-approves a force-push of the worktree's own branch) and relaunch the watcher.
+  **A heal that follows a queue eviction may also re-enqueue**, but only when `scripts/agent/pr-requeue-eligible.sh --assess <pr>` (before the rebase) and `--confirm <pr>` (after CI) both pass — a prior *human* enqueue, no current queue entry, and conflicts confined to the merge-driver-owned files.
   That restores the maintainer's own decision; a **first** enqueue is never yours to make (Q692).
   Both verdicts are advisory until `gh` can enqueue at all: report the `ELIGIBLE` line and hand the re-enqueue back, rather than reading the failed `gh pr merge` as a defect to work around.
   Verify what landed by content (`git show origin/main:<path>`), never by SHA — a squash orphans your SHAs, and a rebase rewrites them.

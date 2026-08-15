@@ -77,14 +77,16 @@ It does not move meaning.
 
 ## How the split is verified
 
-Not by re-reading the diff, and not by the gates. `doc-links` resolves links and `em-dash-check` counts punctuation; neither reads prose, so a dropped qualifier or a mistyped bound passes every check in the repo.
+Not by re-reading the diff, and not by the gates.
+`doc-links` resolves links and `em-dash-check` counts punctuation; neither reads prose, so a dropped qualifier or a mistyped bound passes every check in the repo.
 
 Reconcile the token multiset instead.
 Snapshot each file at `HEAD` before editing, then compare `collections.Counter` over whitespace-split tokens before and after.
 Every token the diff drops has to be justified one by one: a `;` that became a `.`, an `(a)` that became a `*`, an article dropped by a deliberate rewrite.
 A content word in that list is a lost qualifier.
 
-Phase 1 reconciled to +19 tokens across five files, every one accounted for, and to +64 more once the `####` subheadings landed, which the same check showed to be exactly the heading texts and nothing else. `01-executive-summary.md` finished on an *identical* multiset, which is what a pure paragraph break looks like and is the target for every file.
+Phase 1 reconciled to +19 tokens across five files, every one accounted for, and to +64 more once the `####` subheadings landed, which the same check showed to be exactly the heading texts and nothing else.
+`01-executive-summary.md` finished on an *identical* multiset, which is what a pure paragraph break looks like and is the target for every file.
 
 **Reconciliation does not prove the split is correct.** It catches a *deletion*.
 It is blind to words the edit *adds*, and that is where the one real defect in Phase 1 came from.

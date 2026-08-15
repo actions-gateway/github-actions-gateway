@@ -71,7 +71,8 @@ Its source is the registry's own OCI tag list rather than GitHub releases: the h
 | [`karpenter.yaml`](../../updatecli.d/karpenter.yaml) | `KARPENTER_VERSION` in `scripts/e2e/karpenter-cluster.sh` | none (version-only; `githubrelease` — the harness builds from the git tag, so the repo's releases are the datasource) |
 
 **Gate tools open PRs that may go red.** shellcheck and polaris are lint/scan gates: a new release can add findings.
-The bump PR running CI is exactly the point — a human adopts the new version (fixing or justifying the new findings) or holds it, instead of the pin silently rotting. `cluster-autoscaler.yaml` and `karpenter.yaml` are the strongest form of this: the bump is not a refresh with a test attached, it *is* the experiment.
+The bump PR running CI is exactly the point — a human adopts the new version (fixing or justifying the new findings) or holds it, instead of the pin silently rotting.
+`cluster-autoscaler.yaml` and `karpenter.yaml` are the strongest form of this: the bump is not a refresh with a test attached, it *is* the experiment.
 Their PRs exist so the [live-autoscaler drift gate](testing.md#its-cadence-the-version-bump-not-a-clock) installs the new release and checks whether upstream reworded the event vocabulary the capacity gate matches on.
 
 ### Running it locally
@@ -93,7 +94,8 @@ The scheduled [`updatecli.yml`](../../.github/workflows/updatecli.yml) workflow 
 
 - **Repo setting prerequisite.** updatecli opens PRs with the default `GITHUB_TOKEN`, so *Settings → Actions → General → "Allow GitHub Actions to create and approve pull requests"* must be enabled.
 - **CI does not auto-run on the bump PR.** GitHub never triggers workflows from a `GITHUB_TOKEN`-authored PR (the same constraint [`dependabot-go-sync.yml`](../../.github/workflows/dependabot-go-sync.yml) documents).
-  The relevant gate must run before merge — e2e for a kind or Calico bump, the lint job for shellcheck — so a maintainer re-triggers checks by closing and reopening the PR. **On a kind, cluster-autoscaler, or Karpenter bump this step is the whole point, not a formality:** those PRs are the only triggers the [live-autoscaler drift gate](testing.md#its-cadence-the-version-bump-not-a-clock) has, so merging one without re-running checks is the one path that lets an upstream vocabulary reword through unobserved.
+  The relevant gate must run before merge — e2e for a kind or Calico bump, the lint job for shellcheck — so a maintainer re-triggers checks by closing and reopening the PR.
+  **On a kind, cluster-autoscaler, or Karpenter bump this step is the whole point, not a formality:** those PRs are the only triggers the [live-autoscaler drift gate](testing.md#its-cadence-the-version-bump-not-a-clock) has, so merging one without re-running checks is the one path that lets an upstream vocabulary reword through unobserved.
   A stored App token would remove this step; it is deliberately not used yet (one more secret to manage), matching the go-sync rationale.
 - **Triage cadence.** updatecli is scheduled just after Dependabot so all dependency PRs land together and are reviewed in one weekly pass.
 - **A stale Go bump PR rebases itself, but never merge one by hand.** The vendor sync commit makes Dependabot disown the branch, so a Go bump PR left unmerged while `main` moves goes conflicting and cannot self-rebase.

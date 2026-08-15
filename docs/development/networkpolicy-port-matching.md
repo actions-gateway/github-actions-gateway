@@ -97,7 +97,8 @@ kubernetes   IPv4          6443    172.18.0.3   59m
 ```
 
 So the Service does port translation: `ClusterIP:443 → node-ip:6443`.
-In most managed Kubernetes (GKE, EKS, AKS), the kubernetes Service's backend port is `443` (the apiserver front-end LB or HAProxy listens on `443` directly), so post-DNAT dport is `443`, and an NP rule on `443` matches. **The AGC NP works in production by accident** — production happens to be the configuration the rule was written for; kind isn't.
+In most managed Kubernetes (GKE, EKS, AKS), the kubernetes Service's backend port is `443` (the apiserver front-end LB or HAProxy listens on `443` directly), so post-DNAT dport is `443`, and an NP rule on `443` matches.
+**The AGC NP works in production by accident** — production happens to be the configuration the rule was written for; kind isn't.
 
 Other major NetworkPolicy implementations have the same constraint when the apiserver Endpoints expose a different port: every reference NP example for "allow access to kube-apiserver" either uses `port: 6443` explicitly, omits the port restriction, or selects by Endpoints address. e.g. the [cluster-kube-apiserver-operator policy](https://github.com/openshift/cluster-kube-apiserver-operator/pull/2029) uses `port: 6443`.
 

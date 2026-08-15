@@ -87,7 +87,8 @@ It does **not** hold `resourcequotas`/`limitranges` write verbs: the namespace `
   (In the `v2alpha1` (`actions-gateway.com`) API this `spec.securityProfile` field is **removed**: the level is chosen by the namespace label `actions-gateway.com/security-profile` instead — GMC-guarded, namespace-scoped, shared by co-located gateways — see [Appendix H §H.16 #7](appendix-h-v2-api-decomposition.md).
   The stamping mechanism described here is unchanged.)
 * **Proxy Deployer:** Creates and manages a proxy `Deployment` and `ClusterIP` `Service` within the tenant namespace, along with a `HorizontalPodAutoscaler` that scales the proxy pool based on CPU utilization.
-  Proxy pods are given explicit `resources.requests` and `resources.limits` so the HPA can compute CPU utilization percentages. `podAntiAffinity` rules spread replicas across nodes and a `PodDisruptionBudget` ensures at least one proxy pod survives node drains.
+  Proxy pods are given explicit `resources.requests` and `resources.limits` so the HPA can compute CPU utilization percentages.
+  `podAntiAffinity` rules spread replicas across nodes and a `PodDisruptionBudget` ensures at least one proxy pod survives node drains.
   The AGC Deployment and all worker pod templates are injected with `HTTP_PROXY`, `HTTPS_PROXY`, and `NO_PROXY` environment variables — `NO_PROXY` includes `svc.cluster.local`, `localhost`, and `127.0.0.1`, and — on the AGC, which dials the API server by ClusterIP — `kubernetes.default.svc` plus this cluster's API server ClusterIP, read from `KUBERNETES_SERVICE_HOST` rather than assumed from a Service CIDR (Q465), so that Kubernetes API calls are never routed through the egress proxy.
   The proxy's TLS cert is signed by a per-tenant cert-manager-issued self-signed CA stored in the `actions-gateway-proxy-tls` Secret; the Proxy Deployer projects the cert into the AGC pod (cert only, via `Items: [tls.crt]`) and, via the `PROXY_TLS_SECRET_NAME` env on the AGC, instructs the AGC's pod provisioner to project the same cert into every worker pod at `/etc/actions-gateway/proxy-ca/tls.crt`.
   The private key (`tls.key`) is never projected outside the proxy pod itself.
@@ -115,7 +116,8 @@ type GitHubIPRangeFetcher interface {
 ### Design choice: reconciler writes use `CreateOrPatch`, not Server-Side Apply
 
 The GMC's per-reconcile `apply*` helpers (`applyServiceAccount`/`RoleBinding`/`NetworkPolicy`/`ResourceQuota`/`Deployment`/`Service`/`PDB`/`HPA`/`RunnerGroup`, plus `applyOwnedSecret`) write child resources with `controllerutil.CreateOrPatch` rather than Server-Side Apply (SSA).
-Both are strict improvements over the naive `Get → full-object Update`, which carried the object's `resourceVersion` as a precondition (so a racing write produced a spurious `409 Conflict` + requeue) and replaced the whole object, clobbering fields the controller doesn't manage. `CreateOrPatch` is **not** universally better than SSA; it was the better fit for *this* reconciler, for three reasons:
+Both are strict improvements over the naive `Get → full-object Update`, which carried the object's `resourceVersion` as a precondition (so a racing write produced a spurious `409 Conflict` + requeue) and replaced the whole object, clobbering fields the controller doesn't manage.
+`CreateOrPatch` is **not** universally better than SSA; it was the better fit for *this* reconciler, for three reasons:
 
 - **Typed builders vs. applyconfigurations.** The helpers already receive fully-built *typed* objects from the `build*` functions, so `CreateOrPatch` slots in with a small mutate closure.
   Doing SSA *correctly* needs applyconfiguration builders (`appsv1ac.Deployment(...)`): a typed Go struct can't distinguish "field unset" from "field == zero value", so applying a typed object claims ownership of every zero-valued field and fights other managers / strips defaults.
@@ -208,7 +210,8 @@ It runs with RBAC permissions limited to its own namespace and manages the lifec
   > The M4 live run showed this does **not** hold for the JIT-registered agents the AGC actually uses: GitHub deletes a JIT runner record at job acquisition, killing the session ([M4 §12](../plan/milestone-4.md#12-live-multi-tenant-validation-evidence-2026-06-1112), Q114).
   > The listener re-registers and opens a fresh session after every job — see the self-heal paragraph above.
   >
-  > *One active session per registered runner agent enforced* (Investigation D). `POST /sessions` returns `409 Conflict` if the supplied `agentId` already has an active session.
+  > *One active session per registered runner agent enforced* (Investigation D).
+  > `POST /sessions` returns `409 Conflict` if the supplied `agentId` already has an active session.
   > This means each concurrent listener goroutine must hold a **distinct pre-registered runner agent** (distinct `agentId`).
   > The Session Multiplexer must therefore maintain a pool of up to `maxListeners` pre-registered agents per RunnerGroup at startup, and assign one agent to each goroutine for the duration of its session.
   > Agent registrations are persistent (created once at RunnerGroup provisioning time and deleted when the RunnerGroup is removed); sessions are ephemeral (created and deleted per listener goroutine lifecycle).
@@ -341,7 +344,10 @@ It runs with RBAC permissions limited to its own namespace and manages the lifec
     The pod itself is retained for `completedPodTTL` (default 5m — a window for operators to inspect a just-failed pod before it disappears; terminal pods consume no compute or quota) and then deleted by the worker-pod reaper.
     Setting `completedPodTTL: 0s` makes the session goroutine delete the pod immediately on completion instead.
 
-  * **Disruption.** Three mechanisms qualify, and they look nothing alike. **Node-pressure eviction:** the worker pod enters `Failed` with `reason: Evicted`, set by the kubelet when the node runs out of memory or disk. **Scheduler preemption:** kube-scheduler *deletes* the victim to make room for a higher `priorityTiers` tier, stamping a `DisruptionTarget` condition with reason `PreemptionByScheduler` on the way out — it never produces `Evicted`, and its terminal phase is the interrupted container's own exit status, so the condition rather than the phase is what identifies it (Q497). **External graceful deletion:** a `kubectl drain` or a bare `kubectl delete pod` of a running worker, identified by the pod's `deletionTimestamp` being set at the moment its `Failed` phase publishes and predating the container's recorded exit — the mark a human cancel and a genuine failure both lack (measured, Q459/Q502), with the AGC's own deletions — the reaper's, and the reclaim of a worker whose job the renewer abandoned (Q501) — excluded by the `deletion-reason` stamp written before each.
+  * **Disruption.** Three mechanisms qualify, and they look nothing alike.
+    **Node-pressure eviction:** the worker pod enters `Failed` with `reason: Evicted`, set by the kubelet when the node runs out of memory or disk.
+    **Scheduler preemption:** kube-scheduler *deletes* the victim to make room for a higher `priorityTiers` tier, stamping a `DisruptionTarget` condition with reason `PreemptionByScheduler` on the way out — it never produces `Evicted`, and its terminal phase is the interrupted container's own exit status, so the condition rather than the phase is what identifies it (Q497).
+    **External graceful deletion:** a `kubectl drain` or a bare `kubectl delete pod` of a running worker, identified by the pod's `deletionTimestamp` being set at the moment its `Failed` phase publishes and predating the container's recorded exit — the mark a human cancel and a genuine failure both lack (measured, Q459/Q502), with the AGC's own deletions — the reaper's, and the reclaim of a worker whose job the renewer abandoned (Q501) — excluded by the `deletion-reason` stamp written before each.
     On any of these, the renewer immediately stops renewal rather than waiting for the lock window to lapse, allowing GitHub to cancel the job promptly.
     After a short configurable delay (`evictionRetryDelay`, default 5s), the renewer calls `POST /repos/{owner}/{repo}/actions/runs/{run_id}/rerun-failed-jobs` using the AGC's installation access token — and keeps calling it while GitHub answers `403 This workflow is already running`, the refusal every re-run gets until GitHub concludes the original run, which after an ungraceful kill takes until the job lock's TTL lapses (~10 minutes, measured 9m36-9m45s when the runner's report does not escape — Q503, Q396).
     The retries are paced 30s apart inside a 15-minute window and cost one slot of the retry budget in total, so the job is automatically re-queued without user intervention once GitHub will accept it; a re-run still refused past the window is surfaced via `actions_gateway_eviction_rerun_failures_total` and an `EvictionRerunFailed` Event.
@@ -391,7 +397,8 @@ It runs with RBAC permissions limited to its own namespace and manages the lifec
   See [Q435](../plan/archive/q435-restart-orphan-reclaim.md) for the measurement and [Q438](../plan/archive/q438-worker-lifetime-deadline.md) for why the cap is a fixed default rather than derived from the job's own `timeout-minutes` (that timeout is not on the wire — measured).
   Time-based expiry between pod events is driven by the reconciler's `RequeueAfter` — the only carrier a reap deadline has, since a pod sitting `Pending` raises no further watch event and controller-runtime drops `RequeueAfter` from any reconcile that also returns an error.
   Both reconcilers therefore cap their work queue's retry backoff at 30s (client-go's default escalates to 1000s), so a run of reconcile errors — an optimistic-lock conflict on the owner's status is the routine one — delays a reap by at most that cap instead of stranding it.
-  As a final backstop, every worker pod and job Secret carries a controller `OwnerReference` to its RunnerGroup, so deleting the RunnerGroup — directly or via tenant teardown — cascade-deletes everything the provisioner ever staged. **That backstop does not reach v2's gateway teardown** (Q547): a v2 worker pod is owned by its `RunnerSet`, and RunnerSets survive gateway deletion by design (they only *reference* the gateway, so a tenant can re-apply it and resume), which leaves the pods owned by a live object with their only reaper deleted.
+  As a final backstop, every worker pod and job Secret carries a controller `OwnerReference` to its RunnerGroup, so deleting the RunnerGroup — directly or via tenant teardown — cascade-deletes everything the provisioner ever staged.
+  **That backstop does not reach v2's gateway teardown** (Q547): a v2 worker pod is owned by its `RunnerSet`, and RunnerSets survive gateway deletion by design (they only *reference* the gateway, so a tenant can re-apply it and resume), which leaves the pods owned by a live object with their only reaper deleted.
   The AGC therefore reaps them itself: on observing a `deletionTimestamp` on its `ActionsGateway` it stops both acquisition tiers and deletes every worker pod under `reason="gateway_deleted"`, with a `WorkerPodsReapedOnGatewayTeardown` Warning Event and `Ready=False`/`GatewayTerminating` on the set.
   The GMC cooperates by holding teardown open until `status.activeJobs`/`pendingJobs` reach zero across the bound sets before it deletes a single child — a SIGTERM-time reap cannot work, because teardown deletes the AGC's RoleBinding and ServiceAccount within milliseconds of its Deployment and the AGC would lose both its authorization and its token before it could act.
   A Running pod is reaped only once its own job is over: the scale-set listener stamps `actions-gateway.com/job-completed-at` on the worker pod when GitHub reports the job terminal, and the reaper deletes a pod still Running more than five minutes later, emitting a `WorkerPodOrphanedRunning` Warning Event and `reason="orphaned_running"`.
@@ -409,7 +416,8 @@ It runs with RBAC permissions limited to its own namespace and manages the lifec
   Multi-gateway safe: candidate pods are matched against the (namespace- and gateway-scoped) RunnerSet cache, so co-located AGCs never double-count each other's workers.
   Actuation is opt-in per `RunnerSet` (`spec.sizing.profile`: `Binpack`/`Throughput` from the measured history with whole-pod confidence fallback, `NodeShare` from a declared per-node envelope): the profile transform runs at pod-build time per acquired job, only ever derives the cpu/memory keys (GPUs pass through byte-identical), and reports its state in `status.sizingProfileState` (see [Appendix H §H.7](appendix-h-v2-api-decomposition.md#h7-reference-integrity--runtime-conditions-not-admission)).
 
-**Why long-poll, not webhooks.** GitHub's broker protocol is the only mechanism for *claiming* and *executing* runner jobs. `workflow_job` webhooks signal that work has queued, but they do not deliver the job payload or the broker session — only the broker's `GetMessage` long-poll returns a `RunnerJobRequest` that can be acquired.
+**Why long-poll, not webhooks.** GitHub's broker protocol is the only mechanism for *claiming* and *executing* runner jobs.
+`workflow_job` webhooks signal that work has queued, but they do not deliver the job payload or the broker session — only the broker's `GetMessage` long-poll returns a `RunnerJobRequest` that can be acquired.
 Webhooks are useful as a scaling signal (and could pre-warm goroutines in a future revision), but they cannot replace the polling loop.
 
 **Single replica, job-level HA.** The AGC runs at `replicas: 1` because the session registry and per-job RenewJob goroutines are in-memory state; two replicas would race on session creation and produce duplicate acquires.
@@ -440,7 +448,8 @@ All outbound GitHub traffic from both the AGC and worker pods routes through thi
 * **Stateless CONNECT proxy:** Handles only `CONNECT` tunneling — it does not inspect or terminate TLS.
   This keeps the proxy simple, fast, and horizontally scalable without shared state.
 * **HPA-managed scaling:** A `HorizontalPodAutoscaler` targets the proxy `Deployment`, scaling replica count between `proxy.minReplicas` and `proxy.maxReplicas` based on CPU utilization.
-  As job concurrency rises, the proxy pool grows automatically; it scales back down during idle periods. `.spec.replicas` on that Deployment is the HPA's to set — the reconciler seeds it once at create (and restores it if the pool is found at zero, which an HPA cannot recover from) and otherwise leaves it alone; see the `apply*` helper discussion above.
+  As job concurrency rises, the proxy pool grows automatically; it scales back down during idle periods.
+  `.spec.replicas` on that Deployment is the HPA's to set — the reconciler seeds it once at create (and restores it if the pool is found at zero, which an HPA cannot recover from) and otherwise leaves it alone; see the `apply*` helper discussion above.
   CPU is a coarse proxy for connection load — under bursty, low-CPU workloads (the common case for CONNECT tunneling) the HPA may lag.
   The v2 upgrade path is a custom `active_connections` metric exposed via prometheus-adapter; CPU is chosen for v1 because it requires no metrics-server extension.
   On the v2 API the managed HPA is also replaceable outright: `EgressProxy.spec.managedAutoscaling: false` makes the GMC provision no HPA at all, so an operator can attach KEDA, VPA, or a custom HPA to the proxy Deployment instead (Q173; see [Appendix H §H.4](appendix-h-v2-api-decomposition.md#h4-spec-sketches)).
@@ -505,7 +514,8 @@ Runs inside the tenant namespace alongside the AGC.
 * **ARC alignment:** ARC's `AutoscalingRunnerSet` exposes the runner container's scheduling and resource surface through `spec.template` (a `corev1.PodTemplateSpec`).
   The gateway's `RunnerGroup.spec.podTemplate` embeds the same type, so `resources`, `nodeSelector`, `tolerations`, `affinity`, `topologySpreadConstraints`, `runtimeClassName`, `securityContext`, `volumes`, and init/sidecar containers all transfer one-to-one with no schema translation.
   The field is named `podTemplate` rather than ARC's `template` to keep the underlying Kubernetes type unambiguous; the default `workerImage` is `ghcr.io/actions/actions-runner` to match the ARC `gha-runner-scale-set` chart default.
-* **Sandboxed runtime (optional):** Operators concerned about container-escape attacks can set `runtimeClassName` (e.g. `gvisor`, `kata-containers`) in the `PodTemplate`.
+* **Sandboxed runtime (optional):** Operators concerned about container-escape attacks can set `runtimeClassName` (e.g.
+  `gvisor`, `kata-containers`) in the `PodTemplate`.
   The system functions correctly on the default `runc` runtime; sandboxed runtimes are a hardening option, not a requirement.
   See [Appendix B](appendix-b-worker-isolation.md) for tradeoffs.
 
@@ -621,7 +631,8 @@ The session goroutine surfaces this as a `RunnerGroup` condition (see [§7.1](07
 
 That rejection is classic-only, since the scale-set protocol carries no runner version at session creation, and it arrives only once the version has already stopped working.
 So both reconcilers independently read the runner version off the effective worker image reference each reconcile and publish the same `RunnerVersionTooOld` condition from it, with the `WorkerImage*` reasons: `True` below the enforced minimum, `False` at or above it, `Unknown` when the reference names no version and nothing has been checked.
-Two versions are in play and they answer different questions. `agent.version`, sent at session creation, is the AGC's own listener protocol version, and stays pinned to the version GAG implements: the AGC is the registered agent on the classic path, whatever image a worker pod runs.
+Two versions are in play and they answer different questions.
+`agent.version`, sent at session creation, is the AGC's own listener protocol version, and stays pinned to the version GAG implements: the AGC is the registered agent on the classic path, whatever image a worker pod runs.
 The worker image's runner version is what will execute the job, and is the one this condition reports.
 The injected wrapper logs it from the runner's own dependency manifest at worker startup, which is the only reading that holds for an image whose tag says nothing.
 

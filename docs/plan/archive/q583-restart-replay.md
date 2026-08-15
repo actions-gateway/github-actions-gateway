@@ -10,7 +10,8 @@ That instruction is discharged here: the measurement was already in the repo, tw
 
 ## The defect
 
-The scale-set listener acks by advancing a cursor and nothing else. `advanceCursor` ([listener.go](../../../cmd/agc/internal/scalesetlistener/listener.go)) moves an in-memory `lastMessageID`; no code path in `scalesetlistener` calls `Client.DeleteMessage`.
+The scale-set listener acks by advancing a cursor and nothing else.
+`advanceCursor` ([listener.go](../../../cmd/agc/internal/scalesetlistener/listener.go)) moves an in-memory `lastMessageID`; no code path in `scalesetlistener` calls `Client.DeleteMessage`.
 The queue log is scale-set-scoped, so it outlives both the session and the process, and a new session polls from cursor 0.
 
 What makes the replay harmful rather than merely redundant is that the guards against it are process-scoped maps — `provisioned`, `completed`, and `abandoned` (the last one Q553's give-up guard).
@@ -78,7 +79,8 @@ A different owner name per generation is deliberate: it is what makes the backen
 
 ### A 404 reads as success, so the verdict comes off the wire
 
-Building the probe surfaced something that would have invalidated its own headline result. `Client.DeleteMessage` reports a 404 or 410 as success — for a listener that is right, since a message already gone is a benign ack — but a backend that does not serve the endpoint **also** answers 404.
+Building the probe surfaced something that would have invalidated its own headline result.
+`Client.DeleteMessage` reports a 404 or 410 as success — for a listener that is right, since a message already gone is a benign ack — but a backend that does not serve the endpoint **also** answers 404.
 The typed return says "acked" for the case the fix depends on and for the case that kills it.
 
 So measurement 2 is read from the response status via a `ResponseObserver`, not from the error.
@@ -151,7 +153,8 @@ A failed delete keeps its entry and is retried on the following cycle, because t
 
 The wait is the whole safety argument, and each of its three cases has a test that fails without it: a job provisioned but still running, a Q551 deferred job the previous process never provisioned, and a completion whose Secret reclaim failed all hold their message in the queue, so a restart still re-reads them.
 
-One trap worth recording, because it cost a wrong-green test before it was caught. `Client.DeleteMessage` reports a 404 as success, so a stub answering 404 made the listener believe it had deleted a message it had not, and the retry test passed while testing nothing.
+One trap worth recording, because it cost a wrong-green test before it was caught.
+`Client.DeleteMessage` reports a 404 as success, so a stub answering 404 made the listener believe it had deleted a message it had not, and the retry test passed while testing nothing.
 Treating a 404 as an ack is nonetheless right *here* — Investigation G proved the endpoint is served, so a 404 means the message is genuinely gone — but it means a failure that must be retried has to be a 5xx.
 The stub's lever now takes the status rather than a bool, which forces each test to say which backend it is modelling.
 
