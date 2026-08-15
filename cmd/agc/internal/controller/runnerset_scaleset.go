@@ -254,7 +254,7 @@ func (r *RunnerSetReconciler) ensureScaleSetListener(ctx context.Context, log *s
 		ScaleSetName: scaleSetName,
 		ExtraLabels:  extraLabels,
 		OwnerName:    key.Namespace + "/" + key.Name,
-		// The forge-side authorization boundary: which repositories may target this
+		// The GitHub-side authorization boundary: which repositories may target this
 		// set's runners (Q712).
 		RunnerGroupName: runnerGroup,
 		// Asked before each assigned job's JIT config is minted, so a job the ceiling
@@ -342,7 +342,7 @@ func (r *RunnerSetReconciler) ensureScaleSetListener(ctx context.Context, log *s
 // resolveRunnerGroupName returns the GitHub runner group a set's scale set belongs in:
 // the set's own spec.runnerGroup, else its gateway's defaultRunnerGroup, else empty
 // (GitHub's default group). Mirrors the templateRef/proxyRef inheritance chain (§H.4)
-// so a tenant declares its forge-side boundary once, on the gateway.
+// so a tenant declares its GitHub-side boundary once, on the gateway.
 func resolveRunnerGroupName(rs *v2alpha1.RunnerSet, gw *v2alpha1.ActionsGateway) string {
 	if rs.Spec.RunnerGroup != "" {
 		return rs.Spec.RunnerGroup

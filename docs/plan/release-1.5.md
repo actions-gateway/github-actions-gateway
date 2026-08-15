@@ -20,7 +20,7 @@ It is the one [ARC parity](arc-parity.md) gap that breaks the zero-edit migratio
 `RunnerGroupName` exists on the scale-set listener config (`cmd/agc/internal/scalesetlistener/listener.go`) and is resolved when non-empty, but the sole production construction site in `cmd/agc/internal/controller/runnerset_scaleset.go` never set it.
 Every scale set therefore registered into the installation's default runner group.
 
-The GitHub runner group is the **forge-side authorization point** for which repositories may target which runners.
+The GitHub runner group is the **GitHub-side authorization point** for which repositories may target which runners.
 With every tenant's scale set in one group, a repository outside a tenant can name that scale set in `runs-on` and route work into the tenant's namespace, quota, and egress IP.
 GAG's pod-level isolation is unaffected; what is unbounded is *who can cause a job to run there*.
 
@@ -143,7 +143,7 @@ Not gaps, and not for the next audit to re-litigate.
 Preemption and drain recovery were listed here until 2026-08-14, on the grounds that only restart-safety differed; Q844 moved them out, because the difference was one the published claim does not make and the classic tier does not have, and then closed it:
 
 - GitHub's session rejection for a too-old runner version stays classic-only, because the scale-set protocol carries no runner version at session creation.
-  Q715 gives the ScaleSet tier a reconcile-time warning instead, so both tiers carry a signal and only classic has the forge-side rejection.
+  Q715 gives the ScaleSet tier a reconcile-time warning instead, so both tiers carry a signal and only classic has the GitHub-side rejection.
 - The capacity ceiling uses a different pre-check and a different fallback on the scale-set tier (Q576), because a ScaleSet states its capacity as one integer per poll rather than as a decision per job.
 - Several counters are absent from the scale-set tier by construction, being artifacts of the many-acquirers and JIT-agent models `ScaleSet` removes.
   [v2-ga.md](v2-ga.md#capability-parity-is-a-precondition-of-the-removal) holds the list, and Q776 reconciles against it.
@@ -168,7 +168,7 @@ The surface stopped moving before the review: Q844 landed controller code on 202
 | `defaultRunnerGroup` (Q712) | `ActionsGateway` | Inherited only by RunnerSets that set no `runnerGroup`, so the narrower field always wins, matching `templateRef`/`proxyRef`. |
 | `RunnerLabelsIncomplete` (Q726) | `RunnerSet` condition | Abnormal-true, like the existing `RunnerVersionTooOld`, and deliberately outside the gateway's `RunnerSetsDegraded` rollup: a declared label missing at GitHub is a configuration mismatch, not an outage. |
 | `LabelsNotRegistered` / `LabelsRegistered` (Q726) | `RunnerLabelsIncomplete` | The True and False reasons of one condition, named for the state each reports. |
-| `RunnerGroupNotFound` (Q712) | `Ready` | Fail-closed is the design, not an error path: falling back to the default group would widen the forge-side boundary at the moment an operator narrows it. |
+| `RunnerGroupNotFound` (Q712) | `Ready` | Fail-closed is the design, not an error path: falling back to the default group would widen the GitHub-side boundary at the moment an operator narrows it. |
 | `WorkerImageBelowMinimum` / `WorkerImageCurrent` / `WorkerImageVersionUnknown` (Q715) | `RunnerVersionTooOld` | Three states rather than two. A digest-only or tenant-tagged image declares no version, and that reports `Unknown` rather than `False` because a custom image is where a stale runner hides. |
 
 ### Two that were decisions rather than ticks

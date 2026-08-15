@@ -118,7 +118,7 @@ func TestScaleSetSessionHeld_MatchesThroughTheStartWrap(t *testing.T) {
 	}
 }
 
-// TestResolveRunnerGroupName pins the forge-side boundary's resolution chain (Q712):
+// TestResolveRunnerGroupName pins the GitHub-side boundary's resolution chain (Q712):
 // the set's own spec.runnerGroup, else its gateway's defaultRunnerGroup, else empty
 // (GitHub's default group). It mirrors templateRef/proxyRef inheritance, so a tenant
 // declares the group once on the gateway and a set overrides it only when it means to.

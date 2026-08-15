@@ -252,8 +252,8 @@ The ≤1 invariant is checked at *resolution time* in the AGC reconciler, not at
 The trade-off — admission would give earlier feedback — is accepted; the condition surfaces the moment a `RunnerSet` actually depends on the ambiguous default, and clears the moment one default is demoted (the `ClusterRunnerTemplate` watch re-enqueues).
 A `defaultTemplateRef`/`templateRef` that *names a missing* template still fails closed (`TemplateNotFound`), exactly like a missing proxy fails closed (`ProxyNotFound`); only an entirely-unset reference falls through to the next rung.
 
-**The forge-side boundary: `runnerGroup` / `defaultRunnerGroup` (Q712, shipped).** Everything else in this appendix bounds what a tenant's runners *may do*; the GitHub runner group bounds *who may cause them to run*.
-It is the forge's own authorization point for which repositories can target a scale set, and it sits outside the cluster entirely, so no NetworkPolicy, PSA label, or admission rule reaches it.
+**The GitHub-side boundary: `runnerGroup` / `defaultRunnerGroup` (Q712, shipped).** Everything else in this appendix bounds what a tenant's runners *may do*; the GitHub runner group bounds *who may cause them to run*.
+It is GitHub's own authorization point for which repositories can target a scale set, and it sits outside the cluster entirely, so no NetworkPolicy, PSA label, or admission rule reaches it.
 A scale set left in the installation's default group is targetable by every repository that group admits, typically the whole organization, so a repository outside the tenant can name the set in `runs-on` and route work into the tenant's namespace, quota, and egress IP.
 Pod-level isolation is unaffected by this; what is unbounded without a group is the *intake*.
 
@@ -269,7 +269,7 @@ What GAG does **not** own: creating runner groups, and configuring which reposit
 Both are the platform admin's, at GitHub.
 See [tenant onboarding](../operations/tenant-onboarding.md#bind-a-runner-set-to-a-github-runner-group).
 
-**The scale-set name is a forge-side namespace too (Q791, shipped).** The runner group bounds who may *target* a set; this bounds who may *be* it.
+**The scale-set name is a GitHub-side namespace too (Q791, shipped).** The runner group bounds who may *target* a set; this bounds who may *be* it.
 A `ScaleSet` set's first `runnerLabel` is its scale-set name, and the AGC adopts a scale set **by name** against the Actions service its gateway's `githubURL` reaches, creating one only when no such name exists.
 That name is therefore unique per GitHub org, enterprise, or repo, and a Kubernetes namespace is invisible to it.
 Two `RunnerSet`s in different namespaces whose gateways name one org and one first label are two AGCs driving a single scale set, each opening a session on it and acquiring the other tenant's jobs, with that tenant's pods, quota, and egress IP.

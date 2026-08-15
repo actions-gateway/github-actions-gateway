@@ -92,7 +92,7 @@ type RunnerSetSpec struct {
 	// CR. Unset means inherit the gateway's defaultRunnerGroup; both unset means
 	// GitHub's default group.
 	//
-	// The runner group is the forge-side authorization point for which repositories
+	// The runner group is the GitHub-side authorization point for which repositories
 	// may target these runners. A scale set left in the default group is reachable
 	// by every repository that group admits, typically the whole organization, so a
 	// repository outside the tenant can name this set in runs-on and route work into

@@ -88,7 +88,7 @@ type ActionsGatewaySpec struct {
 	// grouping, not the deprecated v1alpha1 RunnerGroup CR. Optional: unset on both
 	// objects leaves the scale set in GitHub's default group.
 	//
-	// This is where a tenant's forge-side boundary is declared once. The runner group
+	// This is where a tenant's GitHub-side boundary is declared once. The runner group
 	// decides which repositories may target the tenant's runners, so a gateway whose
 	// sets all land in the default group is reachable by every repository that group
 	// admits, typically the whole organization. Resolved at runtime and fail-closed

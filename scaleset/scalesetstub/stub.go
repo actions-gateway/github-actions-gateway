@@ -887,7 +887,7 @@ func (s *Stub) ScaleSetIDByName(name string) (int, bool) {
 
 // ScaleSetGroupID returns the runner group id the scale set with the given id is
 // registered in, and whether that scale set exists. It is how a controller test reads
-// back the forge-side boundary the reconciler asked for (Q712) — the group is not
+// back the GitHub-side boundary the reconciler asked for (Q712) — the group is not
 // otherwise observable from outside the create/patch calls.
 func (s *Stub) ScaleSetGroupID(scaleSetID int) (int, bool) {
 	s.mu.Lock()
