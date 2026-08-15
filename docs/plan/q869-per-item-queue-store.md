@@ -113,6 +113,14 @@ A site-generated table has that anchor on the site but not on github.com, where 
 Per-item pages fix this rather than paper over it: `Q408` becomes `queue/Q408.md`, a real address that resolves on both surfaces and survives the row being reordered.
 The rewrite is mechanical and both link gates already cover it.
 
+**Outbound links re-base too, and that is a second rewrite this plan originally missed.** A row's own links are written relative to `docs/`, and an item file sits one level down in `docs/queue/`, so every one of them gains a `../`.
+Measured 2026-08-15 across the live item rows: 206 link destinations, of which 135 are relative to `docs/`, 52 already escape it with `../`, and 19 are `#QNNN` anchors pointing at sibling rows.
+
+That fixes the storage form.
+Links are held in each item file relative to **that file**, so the page works unrendered on github.com and on the site, and the renderer strips one `../` when it emits the table.
+The transformation is deterministic in both directions, including the sibling case, where a `#QNNN` anchor becomes `QNNN.md` and a destination matching `^Q\d+\.md$` becomes an anchor again.
+The round-trip test is what holds both halves honest, and `check-doc-links` resolves the result the way github.com does.
+
 ## Phases
 
 **Phase 1: format and generator, no cutover.** Add `devtools/docs/queuestore` on the existing `devtools/docs/markdown` parse layer: read item files, compute the order, render the table.
