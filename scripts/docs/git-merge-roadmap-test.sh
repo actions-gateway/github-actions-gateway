@@ -33,6 +33,14 @@ TARGET='docs/roadmap.md'
 WORKDIR="$(mktemp -d)"
 trap 'rm -rf "$WORKDIR"' EXIT
 
+# Q820: the plan-index sibling dies under the parallel runner on a git temp-file
+# error whose message names no command, and passes on rerun. This suite shares
+# its scaffolding, so it gets the same instrumentation before a sighting rather
+# than after one. errtrace is what reaches run_merge's two commits; the other
+# four are at top level, where the trap fires without it.
+set -o errtrace
+trap 'printf "%s:%s: FAILED (rc=%s): %s\n" "${BASH_SOURCE[0]##*/}" "$LINENO" "$?" "$BASH_COMMAND" >&2' ERR
+
 fails=0
 
 # Assembled from a character class so this file never trips
