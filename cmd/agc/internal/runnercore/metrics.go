@@ -252,7 +252,7 @@ func NewMetrics() *Metrics {
 
 		EvictionRerunFailures: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: "actions_gateway_eviction_rerun_failures_total",
-			Help: "Disruption recoveries whose re-run was never accepted by GitHub, so the job requires a manual re-run despite the spent retry slot, by acquisition tier (classic, scaleset), cause (eviction, preemption, deletion, abandoned, vanished), and reason (run_never_concluded, api_error). cause=vanished is scale-set only, as above.",
+			Help: "Disruption recoveries whose re-run was never accepted by GitHub, so the job requires a manual re-run despite the spent retry slot, by acquisition tier (classic, scaleset), cause (eviction, preemption, deletion, abandoned, vanished), and reason (run_never_concluded, api_error, conclusion_unknown). cause=vanished is scale-set only, as above; reason=conclusion_unknown is the deletion arm only, whose cancel check never reached a verdict inside the window.",
 		}, []string{"namespace", "runner_group", "tier", "cause", "reason"}),
 
 		EvictionRerunWithheld: prometheus.NewCounterVec(prometheus.CounterOpts{

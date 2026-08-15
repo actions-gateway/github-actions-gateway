@@ -348,6 +348,7 @@ Each also has a [runbook entry](troubleshooting.md#job-lifecycle-events-on-a-run
 | `EvictionRecoveryEvidenceLost` | Scale-set only | On this tier the disrupted pod is the disruption's only record (Q809); the classic tier holds it in process. |
 | `EvictionRecoveryIdentityUnknown` | Scale-set only | The classic tier reads the run identity from the payload its acquiring goroutine still holds, so it cannot lose it. |
 | `EvictionRerunFailed` | Both | Recorded by the shared re-run path both tiers hand recoveries to (Q503). |
+| `EvictionRerunWithheld` | Both | Recorded on the same shared re-run path, from the graceful-deletion arm both tiers detect (Q811). |
 | `EvictionRetriesExhausted` | Both | Both tiers spend one shared per-run retry budget (Q417). |
 | `JobAcquisitionFailed` | Classic only | Counts a failed `acquirejob`, a call the scale-set protocol does not make. Its counterpart there is `ScaleSetListenerStartFailed` for a session that cannot start, and `actions_gateway_scaleset_provision_errors_total` for a job that cannot be provisioned. |
 | `JobProvisionStalled` | Scale-set only | Assigned jobs that cannot register a runner name, held and re-offered. The classic tier has no held assignment. |

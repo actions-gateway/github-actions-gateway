@@ -202,7 +202,7 @@ func (p *Provisioner) rerunUntilAccepted(ctx context.Context, target Target, own
 		case errors.Is(err, errRunCancelled):
 			log.Info("the run was cancelled at GitHub, so the disruption auto-retry stands down rather than undoing the cancel",
 				"runID", runID, "attempt", attempt, "cause", cause, "rerunCalls", call)
-			p.recordRerunWithheld(target, runID, tier, cause, rerunWithheldReasonRunCancelled)
+			p.recordRerunWithheld(target, runID, tier, rerunWithheldReasonRunCancelled)
 			return
 		case !errors.Is(err, errRunNotConcluded) && !errors.Is(err, errRunConclusionUnreadable):
 			log.Error("disruption auto-retry failed; manual rerun may be required",
@@ -281,13 +281,19 @@ func (p *Provisioner) canReadRun(owner, repo string) bool {
 // The Event is Normal, not Warning: nothing is wrong and no manual re-run is wanted —
 // the operator's cancel is being honoured — but the disruption's counters moved, so
 // without this the story reads as a recovery that silently did nothing (Q811).
-func (p *Provisioner) recordRerunWithheld(target Target, runID, tier, cause, reason string) {
+//
+// The cause is stamped rather than passed: only the graceful-deletion arm reaches a
+// withheld re-run, since errRunCancelled is raised inside attemptRerun's
+// recoveryCauseDeletion branch and nowhere else. Taking it as a parameter would let the
+// series carry four causes it can never emit, which is what an operator reading the
+// label vocabulary — and the acquisition-tier ledger's value derivation — would believe.
+func (p *Provisioner) recordRerunWithheld(target Target, runID, tier, reason string) {
 	key := target.Key()
 	if p.Metrics != nil && p.Metrics.EvictionRerunWithheld != nil {
-		p.Metrics.EvictionRerunWithheld.WithLabelValues(key.Namespace, key.Name, tier, cause, reason).Inc()
+		p.Metrics.EvictionRerunWithheld.WithLabelValues(key.Namespace, key.Name, tier, recoveryCauseDeletion, reason).Inc()
 	}
 	target.RecordEvent(corev1.EventTypeNormal, "EvictionRerunWithheld", "RetryEvictedJob",
-		fmt.Sprintf("worker pod for run %s was lost to %s, but GitHub concluded the run cancelled, so no automatic re-run was requested; re-run it by hand if the cancellation was not intended", runID, cause))
+		fmt.Sprintf("worker pod for run %s was lost to %s, but GitHub concluded the run cancelled, so no automatic re-run was requested; re-run it by hand if the cancellation was not intended", runID, recoveryCauseDeletion))
 }
 
 // recordRerunFailure surfaces a recovery whose re-run never landed: the retry budget
