@@ -141,6 +141,7 @@ It walked the tier seams once, in July, and a capability added to `provision()` 
 Q683, Q691 and Q713 all arrived that way, and Q844 made four on 2026-08-14, found by hand rather than by any gate.
 
 **The metric surface now re-walks itself.** Q776 closed that half: every `actions_gateway_*` series the AGC defines carries a tier in the [acquisition-tier ledger](../operations/observability-metrics.md#acquisition-tier-reach), and `make metric-tiers-check` fails a series added without one, a ledger row the source refutes, and a name on the absent-by-design list above that the ledger does not call classic-only.
+Q851 took the same obligation inside the series, to the label values a `Both` row hides: the checker resolves the values each series emits out of the AGC source, and the [Label-value reach](../operations/observability-metrics.md#label-value-reach) table records the seven that reach one tier only.
 The re-walk it required found two: `renew_job_errors_total` and `renew_job_teardowns_total` were classic-only by construction and on no list, and `eviction_recovery_evidence_lost_total` reached no operator doc at all.
 
 That gate covers metrics, not capabilities, so the manual step survives for anything with no series behind it: Q844 had one only because the recovery it ported reports through a counter that already spanned both tiers.

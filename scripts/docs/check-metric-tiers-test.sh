@@ -89,6 +89,28 @@ awk '{ if ($0 ~ /^\| `actions_gateway_job_duration_seconds` \| Both \|/) \
 expect_output "an unknown tier value fails" "which is not one of" -- \
     "$GATE" "$AGC_SRC" "$TMP/bad-tier.md" "$PARITY_DOC"
 
+# The label-value half (Q851). A series can be Both while one of its values is
+# not, so dropping the row for a value the source proves single-tier must fail.
+awk '!/^\| `actions_gateway_eviction_retries_total` \| `cause` \| `vanished`/' \
+    "$METRICS_DOC" > "$TMP/no-value-row.md"
+expect_output "a single-tier label value with no row fails" 'give it a "### Label-value reach" row' -- \
+    "$GATE" "$AGC_SRC" "$TMP/no-value-row.md" "$PARITY_DOC"
+
+# The other direction, as for the series table: a value row the source refutes.
+awk '{ if ($0 ~ /^\| `actions_gateway_eviction_retries_total` \| `cause` \| `vanished`/) \
+         print "| `actions_gateway_eviction_retries_total` | `cause` | `vanished` | Classic only | Seeded defect. |"; \
+       else print }' "$METRICS_DOC" > "$TMP/flipped-value.md"
+expect_output "a value row the source refutes fails" "is named here, and the ledger calls it" -- \
+    "$GATE" "$AGC_SRC" "$TMP/flipped-value.md" "$PARITY_DOC"
+
+# A claim the file layout cannot prove rests on a guard, and the row must cite it
+# — otherwise the value table is the hand-kept list the ledger exists to replace.
+awk '{ if ($0 ~ /^\| `actions_gateway_worker_pods_reaped_total` \| `reason` \| `job_abandoned`/) \
+         print "| `actions_gateway_worker_pods_reaped_total` | `reason` | `job_abandoned` | Classic only | Seeded defect, uncited. |"; \
+       else print }' "$METRICS_DOC" > "$TMP/uncited-value.md"
+expect_output "an unprovable value row with no citation fails" "cite the .go file whose guard does" -- \
+    "$GATE" "$AGC_SRC" "$TMP/uncited-value.md" "$PARITY_DOC"
+
 # The ledger is the gate's only input for the tier question, so its absence must
 # be an error rather than a green run over zero rows.
 awk '!/^## Acquisition-tier reach$/' "$METRICS_DOC" > "$TMP/no-ledger.md"

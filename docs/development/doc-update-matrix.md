@@ -35,6 +35,7 @@ Two places it costs the most:
 - **Metrics tables.** A counter emitted from one tier reads a flat zero on the other, and zero looks like "nothing happened" rather than "nothing is watching".
   Say which tier emits it, and name the signal that substitutes.
   This is the one place the convention is enforced rather than remembered: every `actions_gateway_*` series the AGC defines needs a row in the [acquisition-tier ledger](../operations/observability-metrics.md#acquisition-tier-reach), and `make metric-tiers-check` fails a new series that has none, plus a single-tier row the source refutes (Q776).
+  The same gate reaches inside a series (Q851): a new label value on a `Both` series needs a [Label-value reach](../operations/observability-metrics.md#label-value-reach) row when the source shows it reaching one tier only, and the value must appear in the metric's `Help` text, which is what an operator reads off `/metrics` with no docs open.
   A `Both` claim is still yours to get right, since no static check can confirm one.
 - **Condition and Event reasons.** The same obligation, enforced the same way (Q850): a condition reason or Event reason the AGC emits needs a row in the [condition and Event ledger](../operations/observability-metrics.md#condition-and-event-tier-reach), and `make reason-tiers-check` fails one that has none.
   An Event reason additionally needs a [runbook](../operations/troubleshooting.md#job-lifecycle-events-on-a-runnergroup--runnerset) entry, because an operator meets it in `kubectl describe` and a tier alone is no remedy.

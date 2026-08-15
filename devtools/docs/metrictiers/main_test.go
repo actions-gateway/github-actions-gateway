@@ -23,6 +23,7 @@ import "github.com/prometheus/client_golang/prometheus"
 type Metrics struct {
 	JobsAcquired *prometheus.CounterVec
 	PodsReaped   *prometheus.CounterVec
+	Retries      *prometheus.CounterVec
 }
 
 func NewMetrics() *Metrics {
@@ -35,8 +36,38 @@ func NewMetrics() *Metrics {
 			Name: "actions_gateway_worker_pods_reaped_total",
 			Help: "h",
 		}, []string{"namespace"}),
+		Retries: prometheus.NewCounterVec(prometheus.CounterOpts{
+			Name: "actions_gateway_eviction_retries_total",
+			Help: "h, by cause (eviction, vanished, abandoned).",
+		}, []string{"namespace", "tier", "cause"}),
 	}
 }
+`
+
+	// The label-value shape the real tree has: the counter is written in a helper
+	// whose cause parameter the callers name, one of them from a scale-set-only
+	// file. Nothing about the emission site says which tier a cause reaches — the
+	// call that names the constant is what does.
+	evictionSrc = `package provisioner
+
+const (
+	causeEviction = "eviction"
+	causeVanished = "vanished"
+	causeAbandoned = "abandoned"
+)
+
+func (p *P) handleEviction(tier, cause string) {
+	p.Metrics.Retries.WithLabelValues(p.ns, tier, cause).Inc()
+}
+
+func (p *P) classic() {
+	p.handleEviction("classic", causeEviction)
+	p.handleEviction("classic", causeAbandoned)
+}
+`
+	orphanedScaleSetSrc = `package provisioner
+
+func (p *P) orphaned() { p.handleEviction("scaleset", causeVanished) }
 `
 	// The classic listener writes the acquire counter; the shared reconciler
 	// writes the reap counter, so one metric is single-tier and one is not.
@@ -97,15 +128,25 @@ func (x *c) Collect(ch chan<- prometheus.Metric) {
 		"| `actions_gateway_jobs_acquired_total` | Jobs acquired. |\n" +
 		"| `actions_gateway_worker_pods_reaped_total` | Pods reaped. |\n" +
 		"| `actions_gateway_scaleset_jobs_assigned_total` | Jobs assigned. |\n" +
-		"| `actions_gateway_worker_quota_pressure` | Quota pressure. |\n\n"
+		"| `actions_gateway_worker_quota_pressure` | Quota pressure. |\n" +
+		"| `actions_gateway_eviction_retries_total` | Recoveries started. |\n\n"
 
 	goodLedger = "## Acquisition-tier reach\n\n" +
 		"| Metric | Tier | Why |\n| --- | --- | --- |\n" +
 		"| `actions_gateway_jobs_acquired_total` | Classic only | No acquirejob on the other tier. |\n" +
 		"| `actions_gateway_worker_pods_reaped_total` | Both | The reaper is protocol-agnostic. |\n" +
 		"| `actions_gateway_scaleset_jobs_assigned_total` | Scale-set only | The queue's own delivery signal. |\n" +
-		"| `actions_gateway_worker_quota_pressure` | Classic only | A v1 collector. |\n\n" +
+		"| `actions_gateway_worker_quota_pressure` | Classic only | A v1 collector. |\n" +
+		"| `actions_gateway_eviction_retries_total` | Both | Ported, split by the tier label. |\n\n" +
+		goodValues +
 		"## Next\n"
+
+	// One derived row, whose tier the scale-set-only file proves, and one the
+	// file layout cannot prove, which therefore cites the guard instead.
+	goodValues = "### Label-value reach\n\n" +
+		"| Metric | Label | Value | Tier | Why |\n| --- | --- | --- | --- | --- |\n" +
+		"| `actions_gateway_eviction_retries_total` | `cause` | `vanished` | Scale-set only | Only the orphan scan produces it. |\n" +
+		"| `actions_gateway_eviction_retries_total` | `cause` | `abandoned` | Classic only | The renew loop is the only producer (`internal/provisioner/eviction.go`). |\n\n"
 
 	goodParity = "### Capability parity\n\n" +
 		"**Correctly absent from the scale-set tier** are `jobs_acquired_total` and " +
@@ -129,11 +170,13 @@ func tree(t *testing.T, overrides map[string]string) string {
 	t.Helper()
 	dir := t.TempDir()
 	files := map[string]string{
-		"internal/runnercore/metrics.go":       coreSrc,
-		"internal/listener/goroutine.go":       listenerSrc,
-		"internal/controller/runner_shared.go": sharedSrc,
-		"internal/scalesetlistener/metrics.go": scaleSetSrc,
-		"internal/controller/worker_quota.go":  collectorSrc,
+		"internal/runnercore/metrics.go":            coreSrc,
+		"internal/listener/goroutine.go":            listenerSrc,
+		"internal/controller/runner_shared.go":      sharedSrc,
+		"internal/scalesetlistener/metrics.go":      scaleSetSrc,
+		"internal/controller/worker_quota.go":       collectorSrc,
+		"internal/provisioner/eviction.go":          evictionSrc,
+		"internal/provisioner/orphaned_scaleset.go": orphanedScaleSetSrc,
 	}
 	for name, body := range overrides {
 		files[name] = body
@@ -190,8 +233,10 @@ func TestMetricMissingFromLedgerFails(t *testing.T) {
 }
 
 func TestLedgerRowWithoutAMetricFails(t *testing.T) {
-	ledger := strings.Replace(goodLedger, "## Next\n",
-		"| `actions_gateway_gone_total` | Both | Removed last release. |\n\n## Next\n", 1)
+	ledger := strings.Replace(goodLedger,
+		"| `actions_gateway_eviction_retries_total` | Both | Ported, split by the tier label. |\n",
+		"| `actions_gateway_eviction_retries_total` | Both | Ported, split by the tier label. |\n"+
+			"| `actions_gateway_gone_total` | Both | Removed last release. |\n", 1)
 	findings := runCase(t, tree(t, nil), goodReference+ledger, goodParity)
 	requireFinding(t, findings, "actions_gateway_gone_total is listed in")
 }
@@ -305,5 +350,152 @@ func TestX() {
 	findings := runCase(t, src, goodReference+goodLedger, goodParity)
 	if len(findings) != 0 {
 		t.Fatalf("expected no findings, got %v", findings)
+	}
+}
+
+// The Q851 case: a series populates on both tiers while one of its label values
+// reaches only one, which every series-level check reads as healthy.
+func TestSingleTierValueWithoutARowFails(t *testing.T) {
+	ledger := strings.Replace(goodLedger,
+		"| `actions_gateway_eviction_retries_total` | `cause` | `vanished` | Scale-set only | Only the orphan scan produces it. |\n", "", 1)
+	findings := runCase(t, tree(t, nil), goodReference+ledger, goodParity)
+	requireFinding(t, findings, `actions_gateway_eviction_retries_total{cause="vanished"}`)
+	requireFinding(t, findings, "give it a \"### Label-value reach\" row")
+}
+
+// The other direction, matching the series-level contradiction check: the row
+// names a tier, and the file naming the value is the other tier's.
+func TestValueRowTheSourceRefutesFails(t *testing.T) {
+	ledger := strings.Replace(goodLedger,
+		"| `actions_gateway_eviction_retries_total` | `cause` | `vanished` | Scale-set only | Only the orphan scan produces it. |",
+		"| `actions_gateway_eviction_retries_total` | `cause` | `vanished` | Classic only | Seeded defect. |", 1)
+	findings := runCase(t, tree(t, nil), goodReference+ledger, goodParity)
+	requireFinding(t, findings, "is named here, and the ledger calls it \"Classic only\"")
+}
+
+// A claim the file layout cannot prove rests on a guard, and the row has to point
+// at it — otherwise the value table is the hand-kept list the ledger replaced.
+func TestUnprovableValueRowWithoutACitationFails(t *testing.T) {
+	ledger := strings.Replace(goodLedger,
+		"The renew loop is the only producer (`internal/provisioner/eviction.go`).",
+		"The renew loop is the only producer.", 1)
+	findings := runCase(t, tree(t, nil), goodReference+ledger, goodParity)
+	requireFinding(t, findings, "cite the .go file whose guard does")
+}
+
+func TestValueRowCitingAMissingFileFails(t *testing.T) {
+	ledger := strings.Replace(goodLedger,
+		"`internal/provisioner/eviction.go`", "`internal/provisioner/gone.go`", 1)
+	findings := runCase(t, tree(t, nil), goodReference+ledger, goodParity)
+	requireFinding(t, findings, "which is not a file the AGC scan parsed")
+}
+
+// The vocabulary is closed for the same reason the series table's is: a value row
+// records an exception, so "Both" is not an answer it can carry.
+func TestValueRowWithANonExceptionTierFails(t *testing.T) {
+	ledger := strings.Replace(goodLedger, "| `vanished` | Scale-set only |", "| `vanished` | Both |", 1)
+	findings := runCase(t, tree(t, nil), goodReference+ledger, goodParity)
+	requireFinding(t, findings, "a value row records an exception")
+}
+
+func TestValueRowNamingAnAbsentLabelFails(t *testing.T) {
+	ledger := strings.Replace(goodLedger,
+		"| `actions_gateway_eviction_retries_total` | `cause` | `vanished` |",
+		"| `actions_gateway_eviction_retries_total` | `outcome` | `vanished` |", 1)
+	findings := runCase(t, tree(t, nil), goodReference+ledger, goodParity)
+	requireFinding(t, findings, `has no "outcome" label`)
+}
+
+func TestValueRowNamingAnUnemittedValueFails(t *testing.T) {
+	ledger := strings.Replace(goodLedger, "| `vanished` | Scale-set only |", "| `evaporated` | Scale-set only |", 1)
+	findings := runCase(t, tree(t, nil), goodReference+ledger, goodParity)
+	requireFinding(t, findings, "no site in the AGC source names that value")
+}
+
+// The tier label is the axis, not a value on it, so a row about it would restate
+// the series row and go stale on its own schedule.
+func TestValueRowOnTheTierLabelFails(t *testing.T) {
+	ledger := strings.Replace(goodLedger, "## Next\n",
+		"| `actions_gateway_eviction_retries_total` | `tier` | `scaleset` | Scale-set only | Tautology. |\n\n## Next\n", 1)
+	findings := runCase(t, tree(t, nil), goodReference+ledger, goodParity)
+	requireFinding(t, findings, "states the acquisition tier as its own value")
+}
+
+// Help is what an operator reads off /metrics with no docs open, so a vocabulary
+// the code has outgrown reads there as a value that cannot occur.
+func TestHelpMissingAnEmittedValueFails(t *testing.T) {
+	src := tree(t, map[string]string{
+		"internal/runnercore/metrics.go": strings.Replace(coreSrc,
+			"h, by cause (eviction, vanished, abandoned).", "h, by cause (eviction, abandoned).", 1),
+	})
+	findings := runCase(t, src, goodReference+goodLedger, goodParity)
+	requireFinding(t, findings, `emits cause="vanished"`)
+	requireFinding(t, findings, "its Help does not name it")
+}
+
+// The seam that sets the resolution bound: the scale-set arm reaches a shared
+// counter through a wrapper and a classifier, so a derivation that stops early
+// sees the classic literals alone and calls every value classic-only.
+func TestValueReachedThroughAWrapperAndClassifierIsNotSingleTier(t *testing.T) {
+	src := tree(t, map[string]string{
+		"internal/provisioner/orphaned_scaleset.go": `package provisioner
+
+func classify() string { return causeEviction }
+
+func (p *P) orphaned() {
+	p.handleEviction("scaleset", causeVanished)
+	p.wrap(classify())
+}
+
+func (p *P) wrap(cause string) { p.handleEviction("scaleset", cause) }
+`,
+	})
+	findings := runCase(t, src, goodReference+goodLedger, goodParity)
+	for _, f := range findings {
+		if strings.Contains(f, `cause="eviction"`) {
+			t.Fatalf("eviction reaches both tiers and must not be called single-tier: %s", f)
+		}
+	}
+
+	// A derivation that stopped working entirely would also produce no finding
+	// here, so assert the chain positively rather than reading silence as proof.
+	files, _, parsed, err := scanSource(src)
+	if err != nil {
+		t.Fatalf("scanSource: %v", err)
+	}
+	values, _ := deriveValues(parsed, files)
+	var origins []string
+	for _, v := range values["actions_gateway_eviction_retries_total"]["cause"] {
+		if v.value == "eviction" {
+			origins = v.origins
+		}
+	}
+	if len(origins) < 2 {
+		t.Fatalf("eviction must be derived from both the shared and the scale-set file, got %v", origins)
+	}
+}
+
+// The retro behind #1530: 58 of the AGC's 580 function names have more than one
+// declaration, so reading argument N off a call placed by name alone can invent a
+// value. An unplaceable call is reported because under-derivation is the silent
+// failure — a value that goes underived also goes undemanded.
+func TestAmbiguousCalleeInALabelPositionIsReported(t *testing.T) {
+	src := tree(t, map[string]string{
+		// A second handleEviction on another receiver in the same package, holding
+		// cause at a different index. A call names one of the two and only the
+		// receiver's type says which, so neither can be placed.
+		"internal/provisioner/eviction_twin.go": `package provisioner
+
+func (q *Q) handleEviction(cause, tier string) { _ = cause }
+
+func (q *Q) drive() { q.handleEviction("some_reason", "classic") }
+`,
+	})
+	findings := runCase(t, src, goodReference+goodLedger, goodParity)
+	requireFinding(t, findings, "handleEviction has more than one declaration")
+	for _, f := range findings {
+		if strings.Contains(f, `cause="some_reason"`) {
+			t.Fatalf("a value from the same-named twin must not be attributed: %s", f)
+		}
 	}
 }

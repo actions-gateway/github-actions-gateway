@@ -568,7 +568,7 @@
       "datasource": { "type": "prometheus", "uid": "${datasource}" },
       "gridPos": { "h": 7, "w": 6, "x": 0, "y": 38 },
       "id": 45,
-      "description": "The reaper counter's scale-set series (runner_set label, Q514), joinable with the capacity gauges on (namespace, runner_set). reason=orphaned_running is the scale-set-specific reap: a worker that registered but never received its job.",
+      "description": "The reaper counter's per-RunnerSet series (runner_set label, Q514), joinable with the capacity gauges on (namespace, runner_set). The label keys on the owning kind, so a Classic-protocol RunnerSet appears here too. reason=orphaned_running and reason=completed_pending are the scale-set-only reaps: both read a job-completion annotation the classic tier never stamps.",
       "fieldConfig": { "defaults": { "unit": "ops", "custom": { "fillOpacity": 10 } }, "overrides": [] },
       "targets": [
         {
