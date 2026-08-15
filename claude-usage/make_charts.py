@@ -950,41 +950,53 @@ def chart_lines_vs_words():
     alone, so drawing both puts the 2026-08-09 reflow where it belongs: a cliff in
     one series and nothing in the other.
 
-    Both panels are indexed to 100 at the first measured day and share one axis.
-    On twin axes each series is scaled to its own range, which flattens exactly the
-    divergence this chart exists to show — the per-line and per-word ratios looked
-    alike there while one had stepped and the other had not.
+    Log y, absolute counts, the same choice `chart_tokens_vs_lines` makes: words
+    outnumber lines by an order of magnitude, and on a linear axis the smaller
+    series is a sliver. Indexing both to a common baseline was worse still — it
+    reads as magnitude and is not, so two series 17x apart drew on top of each
+    other. On a log axis the vertical gap *is* the ratio, which is the mechanism
+    here: sentence-per-line put the same words on fewer lines, so the gap widens
+    at the reflow rather than either curve behaving strangely.
     """
     git, dates, xs, ys, cum_on, lines = _per_line_series()
     if not dates or "words" not in git[dates[0]]:
         return
 
-    def idx(vals):
-        base = next((v for v in vals if v), None)
-        return [100 * v / base for v in vals] if base else vals
-
-    md_l = idx([int(git[d].get("md") or 0) for d in dates])
-    md_w = idx([int(git[d].get("md_words") or 0) for d in dates])
+    md_l = [int(git[d].get("md") or 0) for d in dates]
+    md_w = [int(git[d].get("md_words") or 0) for d in dates]
     words = [int(git[d].get("words") or 0) for d in dates]
-    per_word = idx([cum_on[d] / w if w else 0 for d, w in zip(dates, words)])
-    per_line = idx(ys)
+    per_word = [cum_on[d] / w if w else None for d, w in zip(dates, words)]
 
     fig, (a1, a2) = plt.subplots(2, 1, figsize=(11, 8.4), sharex=True,
                                  gridspec_kw=dict(height_ratios=[1, 1], hspace=0.22))
-    series = [
-        (a1, md_l, md_w, ("Docs in lines", "Docs in words"), OI["green"], OI["blue"],
-         "The same docs, counted in lines and in words"),
-        (a2, per_line, per_word, ("Tokens ÷ line", "Tokens ÷ word"), GOLD, OI["vermillion"],
-         "What each costs — only the per-line ratio steps at the reflow"),
-    ]
-    for ax, sl, sw, (lab_l, lab_w), cl, cw, title in series:
-        ax.plot(xs, sl, color=cl, lw=2.8, zorder=4, path_effects=HALO, label=lab_l)
-        ax.plot(xs, sw, color=cw, lw=2.8, ls=(0, (6, 2)), zorder=4, path_effects=HALO,
-                label=lab_w)
-        ax.set_ylabel("indexed, first day = 100", fontsize=10.5)
-        ax.set_title(title, fontsize=12.5, fontweight="bold", loc="left")
-        ax.grid(axis="y", alpha=0.22)
-        ax.legend(loc="upper left", fontsize=9.5, frameon=False)
+
+    a1.set_yscale("log")
+    a1.fill_between(xs, md_l, md_w, color=GOLD, alpha=0.12, lw=0, zorder=1)
+    a1.plot(xs, md_w, color=OI["blue"], lw=2.8, ls=(0, (6, 2)), zorder=4,
+            path_effects=HALO, label="Docs, in words")
+    a1.plot(xs, md_l, color=OI["green"], lw=2.8, zorder=4, path_effects=HALO,
+            label="Docs, in lines")
+    a1.set_ylabel("count (log scale)", fontsize=10.5)
+    a1.set_title("The same docs, counted in lines and in words", fontsize=12.5,
+                 fontweight="bold", loc="left")
+    a1.annotate(f"{md_w[-1] / md_l[-1]:.1f} words / line", (xs[-1], (md_l[-1] * md_w[-1]) ** 0.5),
+                xytext=(-10, 0), textcoords="offset points", ha="right", fontsize=11.5,
+                fontweight="bold", color=GOLD, path_effects=HALO, zorder=LABEL_Z)
+
+    a2.set_yscale("log")
+    a2.plot(xs, ys, color=GOLD, lw=2.8, zorder=4, path_effects=HALO, label="Tokens ÷ line")
+    a2.plot([x for x, v in zip(xs, per_word) if v], [v for v in per_word if v],
+            color=OI["vermillion"], lw=2.8, ls=(0, (6, 2)), zorder=4, path_effects=HALO,
+            label="Tokens ÷ word")
+    a2.set_ylabel("tokens (log scale)", fontsize=10.5)
+    a2.set_title("What each costs — only the per-line ratio steps at the reflow",
+                 fontsize=12.5, fontweight="bold", loc="left")
+
+    # Panel 2's legend goes upper-left: the reflow marker's rotated label sits along
+    # the bottom, and lower-right put the two on top of each other.
+    for ax, loc in ((a1, "lower right"), (a2, "upper left")):
+        ax.grid(axis="y", which="both", alpha=0.16)
+        ax.legend(loc=loc, fontsize=9.5, frameon=False)
         ax.set_xlim(xs[0], xs[-1])
         for sp in ("top", "right"):
             ax.spines[sp].set_visible(False)
@@ -994,7 +1006,8 @@ def chart_lines_vs_words():
     a2.xaxis.set_major_locator(mdates.DayLocator(interval=4))
     plt.setp(a2.get_xticklabels(), rotation=45, ha="right", fontsize=8.5)
     fig.text(0.012, 0.006,
-             "solid = lines · dashed = words · same non-blank text both times, only the unit differs",
+             "same non-blank text both times, only the unit differs · "
+             "on a log axis the gap between two curves is their ratio",
              fontsize=7.5, color="#999")
     save(fig, "lines_vs_words")
 

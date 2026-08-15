@@ -176,14 +176,15 @@ Two shaded regions mark where a series cannot yet mean what its axis says: befor
 **Panel 4 is not hours worked.** Sessions run unattended and keep committing with nobody watching, and merges get cleared in bulk, so it shows when work *landed* rather than when anyone was present.
 
 ### Lines vs. words, the same corpus in two units
-![Docs and cost ratios indexed, in lines and in words](charts/lines_vs_words.png) A rewrap moves every line count that spans a paragraph and leaves the words alone, which is what makes this pair readable.
+![Docs and cost ratios in lines and in words, log scale](charts/lines_vs_words.png) A rewrap moves every line count that spans a paragraph and leaves the words alone, which is what makes this pair readable.
 On the reflow day Markdown went **−17,574 lines and +15,098 words**.
 The line series reads as a catastrophe, the word series as an ordinary productive day.
 
-Both panels are indexed to 100 at the first measured day and share one axis, because on twin axes each series is scaled to its own range, which flattens exactly the divergence the chart exists to show.
-**Top:** the docs corpus in each unit.
+Log y, absolute counts, the same choice the tokens-vs-lines chart makes: words outnumber lines about 17 to 1, so a linear axis leaves the smaller series a sliver.
+**Top:** the docs corpus in each unit, with the shaded gap between them being the words-per-line ratio, since on a log axis a ratio is a vertical gap.
 **Bottom:** cumulative tokens ÷ line against tokens ÷ word.
 Only the per-line ratio steps on 2026-08-09.
+The gap in the top panel is where the mechanism shows: sentence-per-line put the same words on fewer lines, so words per line went from 12.2 to 16.9 overnight and the band visibly widens.
 
 The underlying climb is real in both units, which is the more interesting finding: cost per word still rose ~5.6× over the project, so the tokens-per-line trend is not an artifact; only the 2026-08-09 jump in it is ([Q824](../docs/STATUS.md#Q824)).
 
