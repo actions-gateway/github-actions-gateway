@@ -249,16 +249,38 @@ func TestFileLevelRules(t *testing.T) {
 	}
 }
 
-// A row wider than its header is an unescaped pipe, which GFM truncates. The
-// rules must fail loudly on it rather than read a shifted cell as valid.
+// Rule 13. A row wider than its header is an unescaped pipe, and GFM drops the
+// overflow from the rendered table, so the finding must name the width rather
+// than leave the shift to be noticed by whichever rule happens to read a moved
+// cell.
 func TestUnescapedPipeFailsLoudly(t *testing.T) {
 	row := `| <a id="Q1"></a>Q1 | Item | pipe | ` + "`ci`" + ` | 🔲 | S | short |`
 	got := lint(t, labelsDec+queueHead+row+"\n"+deferHead)
 	if len(got) == 0 {
 		t.Fatal("an unescaped pipe passed silently")
 	}
-	if !strings.Contains(got[0], "Q1 St must be 🔲 or 🚫") {
-		t.Errorf("finding = %q, want the shifted St to be rejected", got[0])
+	if !strings.Contains(got[0], "Q1 has 7 cells but the header declares 6") {
+		t.Errorf("finding = %q, want the row width to be rejected", got[0])
+	}
+}
+
+// The control differs from the case above only by the escape: `\|` is a literal
+// pipe to GFM even inside a code span, so the row stays six cells wide. Without
+// it the rule would pass by rejecting every row that mentions a pipe at all.
+func TestEscapedPipeIsOneCell(t *testing.T) {
+	row := qrow("Q1", "Item", "🔲", "scans for `\\|`-prefixed lines")
+	if got := lint(t, labelsDec+queueHead+row+"\n"+deferHead); len(got) != 0 {
+		t.Errorf("escaped pipe rejected: %q", got)
+	}
+}
+
+// A Deferred row is five cells wide, so the rule reads each table's own header
+// rather than one hard-coded width.
+func TestUnescapedPipeInDeferredRow(t *testing.T) {
+	row := `| <a id="Q1"></a>Q1 | Item | pipe | ` + "`ci`" + ` | S | **Demand:** soon |`
+	got := lint(t, labelsDec+queueHead+deferHead+row+"\n")
+	if len(got) == 0 || !strings.Contains(got[0], "Q1 has 6 cells but the header declares 5") {
+		t.Errorf("findings = %q, want the Deferred row width to be rejected", got)
 	}
 }
 

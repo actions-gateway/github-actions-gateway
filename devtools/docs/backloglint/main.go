@@ -33,6 +33,8 @@
 //  11. Every label a row wears is declared on the `**Labels:**` line.
 //  12. A Q-ID this branch ADDS holds a `refs/queue-ids/QN` claim on the remote,
 //     so no concurrent session can be handed it (Q656).
+//  13. A row spells no more cells than its table header declares, so an
+//     unescaped `|` cannot silently truncate it (Q870).
 //
 // Rules 8, 9, 10 and 12 compare against a git baseline, since a deletion — or
 // a newly added row — is invisible from the file alone. That baseline is the
@@ -210,6 +212,11 @@ type row struct {
 	cells  []string
 	line   int
 	anchor string // the id spelled by the row's <a id="…"> anchor, "" if absent
+	// srcCells is how many cells the source line spells and hdrCells how many
+	// the table header declares. cells is already truncated to hdrCells, so
+	// rule 13 needs the untruncated count; see sourceCells.
+	srcCells int
+	hdrCells int
 }
 
 func (r row) cell(i int) string {
@@ -239,6 +246,7 @@ type textLine struct {
 func parseBacklog(src []byte) *backlog {
 	doc := markdown.Parse(src)
 	b := &backlog{}
+	srcLines := strings.Split(string(src), "\n")
 
 	headings := doc.Headings()
 	// section names the `## ` heading a line sits under; a `### ` sub-heading
@@ -272,7 +280,10 @@ func parseBacklog(src []byte) *backlog {
 			continue
 		}
 		for _, r := range t.Rows {
-			*dst = append(*dst, newRow(r))
+			nr := newRow(r)
+			nr.hdrCells = len(t.Header.Cells)
+			nr.srcCells = sourceCells(srcLines, r.Line, nr.hdrCells)
+			*dst = append(*dst, nr)
 		}
 	}
 
@@ -339,6 +350,22 @@ func newRow(r markdown.Row) row {
 	return out
 }
 
+// sourceCells reports how many cells the row's source line spells. A row wider
+// than its header is truncated in the AST, as GFM renders it, so Row.Cells can
+// never exceed the header and rule 13 has to re-read the line on its own, where
+// ParseRow finds its natural width. Falls back to want, leaving the rule
+// silent, when the line does not read as a row on its own.
+func sourceCells(srcLines []string, line, want int) int {
+	if line < 1 || line > len(srcLines) {
+		return want
+	}
+	r, ok := markdown.ParseRow(srcLines[line-1])
+	if !ok {
+		return want
+	}
+	return len(r.Cells)
+}
+
 // plain strips HTML tags and Markdown link syntax so a cell reads plainly in a
 // message.
 func plain(cell string) string {
@@ -347,7 +374,35 @@ func plain(cell string) string {
 
 // --- content rules ----------------------------------------------------------
 
+// checkWidths enforces rule 13. GFM reads a `|` as a column separator even
+// inside a code span, so one written raw splits the row and everything past the
+// header's last column is dropped from the rendered table, on github.com and on
+// the site both. Q866 lost two thirds of its Notes that way, and the truncation
+// hid an over-cap cell from rule 4 on top.
+func (l *linter) checkWidths(b *backlog) {
+	for _, section := range [][]row{b.progress, b.queue, b.deferred} {
+		for _, r := range section {
+			if r.srcCells <= r.hdrCells {
+				continue
+			}
+			l.fail(r.line, fmt.Sprintf(
+				"%s has %d cells but the header declares %d; an unescaped | splits a row even inside a code span, and GFM drops the overflow. Write it as \\|",
+				rowName(r), r.srcCells, r.hdrCells))
+		}
+	}
+}
+
+// rowName names a row in a message: its ID, or its first cell for a Progress
+// row, which carries none.
+func rowName(r row) string {
+	if r.id != "" {
+		return r.id
+	}
+	return truncate(plain(r.cell(0)), 40)
+}
+
 func (l *linter) checkContent(b *backlog) {
+	l.checkWidths(b)
 	declared, declaredList, seenDecl := declaredLabels(b)
 	warnedNoDecl := false
 	checkLabels := func(line int, who, cell string) {

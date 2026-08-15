@@ -438,6 +438,37 @@ expect 'pipe: control, same Item no \|  -> clean' 0 \
 expect 'pipe: \| counts as two chars   -> fail' 1 \
 	"$(qrow Q1 "$LINK_ITEM" 🔲 "$(repeat a 249)\\|")"
 
+# --- Rule 13: a row is no wider than its header (Q870) -----------------------
+
+# A raw `|` is a column separator to GFM even inside a code span, so it splits
+# the row and everything past the header's last column is dropped from the
+# rendered table, silently, on github.com and on the site both. Q866 shipped
+# with one and lost two thirds of its Notes.
+#
+# The pair differs only by the escape, so a rule that fired on every mention of
+# a pipe would fail the second case. Both cells are single-quoted: the backticks
+# are markdown, and inside double quotes the shell would run them.
+#
+# shellcheck disable=SC2016
+RAW_PIPE_NOTES='scans for `|`-prefixed lines'
+# shellcheck disable=SC2016
+ESC_PIPE_NOTES='scans for `\|`-prefixed lines'
+# shellcheck disable=SC2016
+RAW_PIPE_TRIGGER='**Demand:** a `|` somewhere'
+# shellcheck disable=SC2016
+ESC_PIPE_TRIGGER='**Demand:** a `\|` somewhere'
+
+expect 'width: raw | in a code span    -> fail' 1 \
+	"$(qrow Q1 "$PLAIN_ITEM" 🔲 "$RAW_PIPE_NOTES")"
+expect 'width: escaped \| in a code span -> clean' 0 \
+	"$(qrow Q1 "$PLAIN_ITEM" 🔲 "$ESC_PIPE_NOTES")"
+
+# Each table is measured against its own header, not one hard-coded width.
+expect 'width: raw | in a Deferred row -> fail' 1 --deferred \
+	"$(drow Q1 "$PLAIN_ITEM" "$RAW_PIPE_TRIGGER")"
+expect 'width: escaped \| in Deferred  -> clean' 0 --deferred \
+	"$(drow Q1 "$PLAIN_ITEM" "$ESC_PIPE_TRIGGER")"
+
 # --- Cell length is runes, not bytes (Q613) ----------------------------------
 
 # `awk`'s length() counts bytes under BWK awk and mawk but runes under gawk in a
