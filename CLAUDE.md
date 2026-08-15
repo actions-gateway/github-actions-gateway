@@ -222,6 +222,7 @@ When in doubt, write the detail in `docs/` and link it; prefer tightening an exi
   Test and build targets also regenerate tracked files as prerequisites (`make test-integration` → `config/crd`), so a directory add silently ships someone else's codegen drift; #847 broke CI that way.
 - Amending an unpushed commit is fine — fix up the message or staged changes without asking.
   Once pushed (but before a PR exists), prefer a follow-up commit; only amend + force-push (always `--force-with-lease`, never on `main`/`master`) when the user asks for it.
+  For an *earlier* unpushed commit use `git commit --fixup=<sha>` + `GIT_SEQUENCE_EDITOR=true git rebase --autosquash origin/main` (autosquash works though interactive rebase does not); `git commit --amend -- <path>` rewrites `HEAD`, never the commit owning the path.
 - **Merges go through the merge queue, which only the web UI can enqueue into** — `gh pr merge` routes a queue enqueue through `enablePullRequestAutoMerge`, and this repo sets `allow_auto_merge: false`, so every form of it fails `Auto merge is not allowed for this repository` (measured 2026-08-14 on #1525, gh 2.96.0).
   The queue validates the candidate merge result and a failing entry is kicked back to its PR with the failure attached (the signal pr-sentinel reacts to).
   A push to a queued PR is **rejected** (`GH006`, measured 2026-08-12); wait for the queue to land or evict it rather than dequeuing, which would revoke a human's merge decision.
