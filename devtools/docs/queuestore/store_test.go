@@ -60,6 +60,46 @@ func TestReadStoreRejectsAMismatchedFilename(t *testing.T) {
 	}
 }
 
+// Closing a row and re-importing has to leave a correct store. Without pruning
+// the orphan file survives, and the next `make check` rejects a store the
+// documented workflow just produced.
+func TestWriteStorePrunesClosedItemsAndSparesTheReadme(t *testing.T) {
+	dir := t.TempDir()
+	readme := filepath.Join(dir, "README.md")
+	if err := os.WriteFile(readme, []byte("# docs\n"), 0o600); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	both := []Item{
+		{ID: "Q1", Rank: "a0", Status: StatusReady, Size: "S", Title: "One"},
+		{ID: "Q2", Rank: "a1", Status: StatusReady, Size: "S", Title: "Two"},
+	}
+	if err := WriteStore(dir, both); err != nil {
+		t.Fatalf("WriteStore: %v", err)
+	}
+	if err := WriteStore(dir, both[:1]); err != nil {
+		t.Fatalf("WriteStore after closing Q2: %v", err)
+	}
+
+	if _, err := os.Stat(filepath.Join(dir, "Q2.md")); !os.IsNotExist(err) {
+		t.Errorf("Q2.md survived after its item was closed (stat err: %v)", err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "Q1.md")); err != nil {
+		t.Errorf("Q1.md should still be here: %v", err)
+	}
+	if _, err := os.Stat(readme); err != nil {
+		t.Errorf("pruning removed README.md, which is not an item: %v", err)
+	}
+
+	back, err := ReadStore(dir)
+	if err != nil {
+		t.Fatalf("ReadStore: %v", err)
+	}
+	if len(back) != 1 || back[0].ID != "Q1" {
+		t.Errorf("store holds %d items after the prune, want just Q1", len(back))
+	}
+}
+
 func TestUnmarshalItemRejectsMalformedFiles(t *testing.T) {
 	for name, src := range map[string]string{
 		"no frontmatter": "# A title\n",

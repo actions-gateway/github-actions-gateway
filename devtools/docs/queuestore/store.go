@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 
@@ -23,6 +24,10 @@ type frontmatter struct {
 }
 
 const fence = "---"
+
+// itemFileRE matches an item file's name, so pruning never considers a doc
+// that merely lives in the directory.
+var itemFileRE = regexp.MustCompile(`^Q\d+\.md$`)
 
 // Marshal renders an item as its file: YAML frontmatter, an H1 carrying the
 // title, then the notes.
@@ -109,6 +114,31 @@ func WriteStore(dir string, items []Item) error {
 			return err
 		}
 		if err := os.WriteFile(filepath.Join(dir, it.ID+".md"), body, 0o600); err != nil {
+			return err
+		}
+	}
+	return pruneStore(dir, items)
+}
+
+// pruneStore removes item files for items that no longer exist, so closing a
+// row and re-importing leaves a correct store rather than an orphan the drift
+// gate then rejects. Only `QN.md` files are considered: README.md documents the
+// directory and is not an item.
+func pruneStore(dir string, items []Item) error {
+	keep := make(map[string]bool, len(items))
+	for _, it := range items {
+		keep[it.ID+".md"] = true
+	}
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return err
+	}
+	for _, e := range entries {
+		name := e.Name()
+		if e.IsDir() || keep[name] || !itemFileRE.MatchString(name) {
+			continue
+		}
+		if err := os.Remove(filepath.Join(dir, name)); err != nil {
 			return err
 		}
 	}

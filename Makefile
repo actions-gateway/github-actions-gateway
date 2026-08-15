@@ -555,6 +555,18 @@ queue-id: export QUEUE_ID_TARGET = $(TARGET)
 queue-id: ## Search the backlog for near-duplicates, then allocate a Q-ID (make queue-id TITLE="..." [TARGET=path])
 	@scripts/docs/alloc-queue-id.sh $${QUEUE_ID_TARGET:+--target "$$QUEUE_ID_TARGET"} "$$QUEUE_ID_TITLE"
 
+# Regenerate the per-item store from the tables (Q869). Both representations are
+# committed until the cutover and docs/STATUS.md is the one you edit, so this is
+# the step after a backlog edit: queuestore's drift test fails `make check` when
+# the store and the tables disagree. Deterministic, so a no-op edit regenerates
+# to no diff, and a rebase resolves by re-running it rather than by merging 169
+# files. devtools/ is outside the Go workspace, hence GOWORK=off.
+.PHONY: queue-import
+queue-import: ## Regenerate docs/queue/ from the docs/STATUS.md Queue and Deferred tables
+	@mkdir -p $(REPO_ROOT)/.build
+	@cd $(REPO_ROOT)/devtools && GOWORK=off go build -o $(REPO_ROOT)/.build/queuestore ./docs/queuestore
+	@$(REPO_ROOT)/.build/queuestore import $(REPO_ROOT)/docs/STATUS.md $(REPO_ROOT)/docs/queue
+
 # The public roadmap and the backlog drift apart silently — a 2026-07-25 audit
 # found six of seven "near-term" items already shipped. Because done Queue rows
 # are deleted, a roadmap bullet naming a Q-ID that STATUS.md no longer has is an

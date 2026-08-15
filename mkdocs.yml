@@ -26,7 +26,12 @@ copyright: Licensed under the Apache License 2.0.
 # equivalent and would publish as literal text, and their links already point at
 # the versioned site. The dev override in pages.yml carries this entry too.
 # See website.md § Publication scope.
-exclude_docs: !ENV [MKDOCS_EXCLUDE_DOCS, "/README.md\n/STATUS.md\n/plan/\n/development/\n/postmortems/\n/releases/\n/assets/README.md\n/assets/fonts/README.md\n"]
+# /queue/ holds the per-item backlog store (Q869), and it tracks /STATUS.md:
+# excluded from released versions, which carry operator docs only, and
+# published on `dev`, whose override below is a shorter list. It is in
+# not_in_nav for the same reason /plan/ is — 169 item pages are reached from
+# the backlog, never from the operator TOC.
+exclude_docs: !ENV [MKDOCS_EXCLUDE_DOCS, "/README.md\n/STATUS.md\n/queue/\n/plan/\n/development/\n/postmortems/\n/releases/\n/assets/README.md\n/assets/fonts/README.md\n"]
 
 # Published but deliberately absent from the nav, which stays the operator-facing
 # table of contents on every version: the repo-internal tree the `dev` version
@@ -46,6 +51,7 @@ exclude_docs: !ENV [MKDOCS_EXCLUDE_DOCS, "/README.md\n/STATUS.md\n/plan/\n/devel
 not_in_nav: |
   /README.md
   /STATUS.md
+  /queue/
   /plan/
   /development/
   /postmortems/

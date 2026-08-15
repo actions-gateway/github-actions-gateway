@@ -27,6 +27,6 @@ exclude:
   # one line by construction — reflowing it to sentence-per-line would stop the
   # item rendering back into the table at all. The contention this gate exists
   # to reduce is already gone here: one item, one file.
-  - "docs/queue/*.md"
+  - "docs/queue/Q*.md"
   # Symlink to CLAUDE.md; formatting it walks the same bytes twice.
   - "AGENTS.md"
