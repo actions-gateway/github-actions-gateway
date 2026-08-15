@@ -856,7 +856,6 @@ def chart_velocity():
     if not git or "prs" not in next(iter(git.values())):
         return
     days = sorted(git)
-    start = dparse(days[0])
 
     def delta(col):
         out, prev = {}, 0
@@ -868,21 +867,10 @@ def chart_velocity():
 
     d_prs, d_tests, d_queue, d_commits = (delta(c) for c in ("prs", "tests", "queue_closed", "commits"))
 
-    # Weekly bins from project day 1, so the bars line up with the day-7/14/21
-    # guides the other charts mark.
-    bins = {}
-    for d in days:
-        k = start + timedelta(days=7 * ((dparse(d) - start).days // 7))
-        b = bins.setdefault(k, {"prs": 0, "tests": 0, "queue": 0})
-        b["prs"] += d_prs[d]
-        b["tests"] += d_tests[d]
-        b["queue"] += d_queue[d]
-    bxs = sorted(bins)
-    # The last bin is short whenever the snapshot doesn't land on a week boundary,
-    # and a 3-day bar beside 7-day ones reads as a collapse. Hatched rather than
-    # dropped, the same trade the estimated bars make elsewhere.
-    partial = (dparse(days[-1]) - bxs[-1]).days + 1 < 7
-
+    # Per day, matching every other chart here. Weekly bars smooth the series into
+    # something easier to read and lose what the reader needs: a day is the unit
+    # the events are dated in, and a bin wide enough to hold two of them hides that
+    # Opus 5 and mac-2 are a day apart.
     hours = [int(git[d].get("active_hours") or 0) for d in days]
     dxs = [dparse(d) for d in days]
     per_hour = [d_commits[d] / h if h else 0 for d, h in zip(days, hours)]
@@ -892,16 +880,13 @@ def chart_velocity():
     a1, a2, a3, a4 = axes
 
     panels = [
-        (a1, "prs", OI["blue"], "PRs merged", "Pull requests merged per week"),
-        (a2, "tests", OI["purple"], "tests added", "Tests added per week"),
-        (a3, "queue", OI["vermillion"], "rows closed", "Backlog rows closed per week"),
+        (a1, d_prs, OI["blue"], "PRs merged", "Pull requests merged per day"),
+        (a2, d_tests, OI["purple"], "tests added", "Tests added per day"),
+        (a3, d_queue, OI["vermillion"], "rows closed", "Backlog rows closed per day"),
     ]
-    for ax, key, col, ylab, title in panels:
-        bars = ax.bar(bxs, [bins[b][key] for b in bxs], width=5.4, color=col, alpha=0.75,
-                      edgecolor="white", linewidth=0.6, zorder=3)
-        if partial:
-            bars[-1].set_hatch("///")
-            bars[-1].set_alpha(0.4)
+    for ax, series, col, ylab, title in panels:
+        ax.bar(dxs, [series[d] for d in days], width=0.72, color=col, alpha=0.8,
+               edgecolor="white", linewidth=0.4, zorder=3)
         ax.set_ylabel(ylab, fontsize=10.5)
         ax.set_title(title, fontsize=12.5, fontweight="bold", loc="left")
         ax.grid(axis="y", alpha=0.22)
@@ -951,11 +936,10 @@ def chart_velocity():
     a4.xaxis.set_major_formatter(mdates.DateFormatter("%b %-d"))
     a4.xaxis.set_major_locator(mdates.DayLocator(interval=4))
     plt.setp(a4.get_xticklabels(), rotation=45, ha="right", fontsize=8.5)
-    note = ("shaded = the series cannot mean what its axis says yet · "
-            "Opus 5 and mac-2 land one day apart, so this data cannot separate model from machine")
-    if partial:
-        note += " · hatched final bar is a part-week"
-    fig.text(0.012, 0.006, note, fontsize=7.5, color="#999")
+    fig.text(0.012, 0.006,
+             "shaded = the series cannot mean what its axis says yet · "
+             "Opus 5 and mac-2 land one day apart, so this data cannot separate model from machine",
+             fontsize=7.5, color="#999")
     save(fig, "velocity")
 
 

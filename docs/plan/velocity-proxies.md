@@ -97,10 +97,12 @@ Walking `docs/STATUS.md` history must be **one** `git log -p` call, not a `git s
 
 ### 2. A `velocity` chart, four panels on one timeline
 
-1. **PRs merged per week**, as bars.
+Per day, not per week: every other chart here is daily, and a bin wide enough to hold both July events hides that they are one day apart.
+
+1. **PRs merged per day**, as bars.
    The pre-2026-06-09 region is shaded and labelled as no-PR-workflow rather than drawn as zero.
-2. **Tests added per week**, as bars, full project.
-3. **Queue rows closed per week**, as bars, shaded before 2026-05-31.
+2. **Tests added per day**, as bars, full project.
+3. **Queue rows closed per day**, as bars, shaded before 2026-05-31.
 4. **When work landed**: hours-with-a-commit per day as bars, with commits-per-such-hour as a line over them, the idiom `parallel_sessions` already uses for a mean over a peak.
    Titled for what it measures, never as hours worked.
 

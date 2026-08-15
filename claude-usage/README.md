@@ -159,7 +159,7 @@ Its total height at any date *is* the divisor above, so "a line" is shown, not j
 The grey dotted line on 2026-08-09 is the sentence-per-line reflow, which is why the Docs band notches down under it and the ratio above steps up: the same words on 18.6k fewer lines cost the same tokens, so roughly 200 of the ratio's climb past 2,400 is the reformat rather than the work.
 
 ### Work shipped, on proxies a reformat can't move
-![PRs merged, tests added, backlog rows closed per week, and when work landed](charts/velocity.png) Tokens are an input and lines carry the reflow, so neither is a velocity series.
+![PRs merged, tests added, backlog rows closed per day, and when work landed](charts/velocity.png) Tokens are an input and lines carry the reflow, so neither is a velocity series.
 These four are immune to both: **PRs merged**, **tests added**, **backlog rows closed**, and the spread of the day work landed across.
 
 Read the top three together and the plan upgrade disappears: Max 5x to 20x on 2026-07-05 raised the ceiling and moved nothing (tests/day 20.3 → 19.4, Go lines/day 1,058 → 963).
