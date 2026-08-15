@@ -3886,6 +3886,12 @@ The <code>chart-publish</code> job's "Compose and create the GitHub Release" ste
 So the default flow for this step is: <strong>nothing — verify the auto-created Release looks right.</strong></p>
 <p>The step only creates a Release when the tag has <strong>none yet</strong>, so it never clobbers curated notes.
 If you want richer notes (highlights, upgrade caveats), <strong>create the Release before pushing the tag</strong> — e.g. <code>gh release create vX.Y.Z --draft --notes-file …</code> — and the pipeline will leave your body untouched while still attaching the signed v2 CRD manifest asset.</p>
+<p><strong>The Release is created as a draft and published by the pipeline's last step</strong>, because this repo's releases are immutable: publishing seals the assets, and every upload after that point fails <code>HTTP 422: Cannot upload assets to an immutable release</code>.
+Draft, attach, then publish is <a href="https://docs.github.com/en/code-security/concepts/supply-chain-security/immutable-releases">GitHub's own recommended order</a> for that reason, and it is what <code>chart-publish</code> now does.
+Two consequences for this step: a pre-created Release of your own should be a <strong>draft</strong> (as above), since the pipeline publishes whatever draft it finds once the assets are on; and a run that dies before the final step leaves a draft rather than a published Release missing its CRD manifest and checksums.</p>
+<p><strong>What immutability does and does not freeze.</strong> The title and the notes stay editable after publication, so <a href="#4-record-the-published-digests">step 4</a>'s <code>gh release edit --notes-file</code> still works and the curated body can be finished after the digests exist.
+The assets and the <strong>tag</strong> do not: a published Release locks its tag to one commit, which cannot be moved or deleted while the Release exists.
+So a tag pushed at the wrong commit is not recoverable by re-tagging — cut the next candidate number instead. <code>v1.5.0-rc.2</code> was pushed at a commit three merges stale and had to be superseded by an rc.3.</p>
 <h4 id="writing-the-curated-notes">Writing the curated notes<a class="headerlink" href="#writing-the-curated-notes" title="Permanent link">&para;</a></h4>
 <p>A minor release accumulates more than a generated changelog can convey, and the two inputs that feed it, <code>operator-caveats-since.sh</code> and the commit log, both mislead in specific ways.
 What follows is the method, written after <code>v1.3.0</code>.</p>
@@ -3909,6 +3915,12 @@ Link a Highlight from its bold lead, and link group headings rather than every l
 It does not shorten the notes: <code>v1.3.0</code> shipped 2100 words and 25 links, because enumerations kept being added — a feature list, a fix list, the API surface, the condition reasons.
 Prose is what gets cut; lists are what a reader actually searches.
 Fold the lists (below) and the length costs nothing.</p>
+<p><strong>A caveat that says a number moves is re-derived from the code, never paraphrased from the change that moved it.</strong> <code>v1.5.0</code>'s job-duration caveat said the classic tier's old span <em>excluded</em> the pre-creation window, and that cost attribution had been reading <em>low</em>.
+Both are inverted.
+The span ran from job acquisition to the pod going terminal, so it charged the staging, quota-retry and <code>spec.scaleUp</code> throttle window, and attribution read high.
+What let it through is that the commit and <a href="../../plan/release-1.5/">the plan doc</a> were both correct: the note was written from a sibling artifact instead of from <code>provisioner.go</code>, and a paraphrase can reverse a direction while keeping every noun in place.
+It then survived a full pre-flight and <code>rc.1</code>, because <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/release/operator-caveats-since.sh"><code>operator-caveats-since.sh</code></a> reports what changed and never judges a claim, by design.
+So for any caveat asserting that a value rises, falls, widens or narrows, open the diff that moved it and read both states before writing which way (#1529).</p>
 <h5 id="the-section-skeleton">The section skeleton<a class="headerlink" href="#the-section-skeleton" title="Permanent link">&para;</a></h5>
 <p><code>v1.3.0</code> arrived at this order after several passes.
 It is ordered by what a reader needs first, not by what took the most work:</p>
