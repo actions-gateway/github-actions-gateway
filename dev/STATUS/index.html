@@ -2824,6 +2824,30 @@
 </thead>
 <tbody>
 <tr>
+<td><a id="Q871"></a>Q871</td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/test/fakegithub/main.go">Fail a PR when the AGC calls a GitHub endpoint the e2e fake does not serve</a></td>
+<td><code>ci</code> <code>tests</code> <code>debt</code> <code>retro</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>Q811 added a run GET; fakegithub serves two paths and 404s the rest, so the drained-worker spec failed 13 merge-queue entries while the PR stayed green. Derive both sides from source the way <code>metric-tiers</code> does.</td>
+</tr>
+<tr>
+<td><a id="Q872"></a>Q872</td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/e2e-test.yml"><code>e2e-gate</code> reports green on a PR where the suite never ran</a></td>
+<td><code>ci</code> <code>debt</code> <code>retro</code></td>
+<td>🔲</td>
+<td>S</td>
+<td><code>if: always()</code> counts a <code>skipped</code> heavy job as passing, so a PR breaking e2e looks identical to one that does not, and #1515 read ready 13 times. Say so in the job summary; the required check and Q675's trade stay as they are.</td>
+</tr>
+<tr>
+<td><a id="Q873"></a>Q873</td>
+<td><a href="../development/testing/#the-e2e-workflows-kindnet-and-calico">Record that merge-group-only e2e was priced against flakes, not deterministic breaks</a></td>
+<td><code>docs</code> <code>ci</code> <code>retro</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>Q675 accepted queue-time kickbacks "against a measured 1% e2e failure rate". A flake costs ~1 extra cycle; a deterministic break costs unbounded ones, measured at 13 on #1515. Add the missing term so whoever revisits the trade has it.</td>
+</tr>
+<tr>
 <td><a id="Q862"></a>Q862</td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/devtools/agent/pipedgate/repostate.go">The PR-overlap check intersects file paths, so disjoint hunks in one file read as overlap</a></td>
 <td><code>ci</code> <code>debt</code> <code>retro</code></td>
@@ -2857,11 +2881,11 @@
 </tr>
 <tr>
 <td><a id="Q820"></a>Q820</td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/docs/git-merge-plan-index-test.sh"><code>git-merge-plan-index-test</code> dies on a temp-file error under the parallel scripts-test runner</a></td>
+<td><a href="../plan/q820-scripts-test-temp-file-flake/"><code>git-merge-plan-index-test</code> dies on a temp-file error under the parallel scripts-test runner</a></td>
 <td><code>flake</code> <code>ci</code></td>
 <td>🔲</td>
 <td>S</td>
-<td>Two sightings, one signature: <code>unable to create temporary file</code>, the repo gone mid-merge. 2026-08-12 local under <code>make check</code>; 2026-08-14 in CI on an ephemeral runner (#1511), which rules out the host temp pressure the first sighting suspected.</td>
+<td>Three sightings, one signature: <code>unable to create temporary file</code>. 2026-08-12 local under <code>make check</code>; CI #1511 (08-14) and #1534 (08-15) on two ephemeral runners, ruling out host temp pressure. Failure family reproduced, remover still unknown.</td>
 </tr>
 <tr>
 <td><a id="Q408"></a>Q408</td>

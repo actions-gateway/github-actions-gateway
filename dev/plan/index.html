@@ -2857,6 +2857,11 @@ The durable design rationale for what the unit/integration/e2e layers cover live
 <td>Systemic kindnet <code>e2e / e2e</code> leg flakiness: different unrelated specs fail run to run — the original CFS-throttling root cause (kind's 100m CPU limit on kindnetd starving its in-band kube-network-policies enforcer) is fixed and confirmed closed; one unexplained NetworkPolicy fail-open event (07-15) remains under watch</td>
 <td>❌ Open — throttle mechanism closed (0 throttled in every post-fix dump); failure dump upgraded (nfqueue/memory counters, full-window logs) to attribute the next occurrence (<a href="../STATUS/#Q300">Q300</a>)</td>
 </tr>
+<tr>
+<td><a href="q820-scripts-test-temp-file-flake/">q820-scripts-test-temp-file-flake.md</a></td>
+<td><code>git-merge-plan-index-test</code> dies on a git temp-file error under the <code>make scripts-test</code> fan-out and passes on rerun: the exclusion record, so a fourth sighting starts from what is already ruled out rather than re-deriving it</td>
+<td>❌ Open — the failure <em>family</em> is reproduced (a <code>rm -rf</code> racing a live git in the same repo gives the exact signature), but nothing in the suite or the fan-out is a candidate remover, and 40 local <code>make scripts-test</code> runs did not hit it (<a href="../STATUS/#Q820">Q820</a>)</td>
+</tr>
 </tbody>
 </table>
 <h2 id="speed-improvements">Speed improvements<a class="headerlink" href="#speed-improvements" title="Permanent link">&para;</a></h2>
