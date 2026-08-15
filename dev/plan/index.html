@@ -2859,8 +2859,8 @@ The durable design rationale for what the unit/integration/e2e layers cover live
 </tr>
 <tr>
 <td><a href="q820-scripts-test-temp-file-flake/">q820-scripts-test-temp-file-flake.md</a></td>
-<td><code>git-merge-plan-index-test</code> dies on a git temp-file error under the <code>make scripts-test</code> fan-out and passes on rerun: the exclusion record, so a fourth sighting starts from what is already ruled out rather than re-deriving it</td>
-<td>❌ Open — the failure <em>family</em> is reproduced (a <code>rm -rf</code> racing a live git in the same repo gives the exact signature), but nothing in the suite or the fan-out is a candidate remover, and 40 local <code>make scripts-test</code> runs did not hit it (<a href="../STATUS/#Q820">Q820</a>)</td>
+<td><code>git-merge-plan-index-test</code> dies on a git temp-file error under the <code>make check</code> fan-out and passes on rerun: the exclusion record, so the next sighting starts from what is already ruled out rather than re-deriving it</td>
+<td>❌ Open — sighting 4 read every throwaway repo intact at the moment of failure, so the <code>rm -rf</code>-racing-a-live-git family that matched the signature is a look-alike, not the cause; no mechanism yet explains a temp-file creation that fails with the tree present (<a href="../STATUS/#Q820">Q820</a>)</td>
 </tr>
 </tbody>
 </table>

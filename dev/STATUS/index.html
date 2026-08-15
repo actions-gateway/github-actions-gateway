@@ -2885,7 +2885,7 @@
 <td><code>flake</code> <code>ci</code></td>
 <td>🔲</td>
 <td>S</td>
-<td>Three sightings, one signature: <code>unable to create temporary file</code>. 2026-08-12 local under <code>make check</code>; CI #1511 (08-14) and #1534 (08-15) on two ephemeral runners, ruling out host temp pressure. Failure family reproduced, remover still unknown.</td>
+<td>Four sightings, one shape: <code>unable to create temporary file</code>, rc 128, under the <code>make check</code> fan-out. Sighting 4 (local, 08-15) read every repo intact at failure, so the concurrent-removal theory is out. Cause unknown; errno differs macOS vs CI.</td>
 </tr>
 <tr>
 <td><a id="Q408"></a>Q408</td>
