@@ -30,9 +30,11 @@ scripts/release/check-gates-green.sh origin/main
 
 **It asks by commit, not by branch, and that is the point.** `gh run list --branch main` excludes merge-queue runs, and the queue is where a commit is validated before it lands, while the `push`-lane run for the same commit sits behind the previous push's concurrency group reading `pending`.
 Querying the branch says "not validated" about a commit that is.
-The script passes a gate when *some* lane succeeded on the SHA, and names the lane that answered.
+The script passes a gate when *some* lane ran it in full on the SHA, and names the lane that answered.
 
-**A path-gated gate that skipped is not automatically a problem, and not automatically fine.** When docs-only merges sit on top of the last code change, prove the code is the same tree instead of re-running anything:
+**Expect `SKIPPED`, and do not read it as either green or red.** It is the ordinary shape of a release tip: docs-only merges sit on top of the last code change, so the heavy jobs path-gate themselves away.
+Every one of the nine required workflows had skipped its real job on the commit `v1.5.0` was tagged at, and the release was still sound, because the code was the same tree an earlier commit had validated.
+Prove exactly that rather than re-running anything:
 
 ```bash
 scripts/release/check-artifact-unchanged.sh <last-fully-validated-sha> origin/main
@@ -40,6 +42,9 @@ scripts/release/check-artifact-unchanged.sh <last-fully-validated-sha> origin/ma
 
 Exit 0 means nothing on the released surface moved, so the earlier full run still covers it.
 Say which commit you are relying on.
+
+A `NOT GREEN` line is the different answer: a lane failed, or none reported at all.
+That one blocks the tag.
 
 Then confirm no gating row remains, and run the local gate **from a tree that matches the target**, a branch cut from `origin/main`, since a worktree cannot check out `main`:
 
@@ -172,6 +177,7 @@ Exit 1 means the stable tag would ship something no candidate validated: revert 
 **Green.** Report the evidence (e2e counts, sizing legs, CRD smoke, the artifact checks) and **ask whether to promote**.
 Do not tag a stable release, and do not treat the question as rhetorical.
 Name what still binds at the stable tag but not at a candidate: the marketing reconciliation, the operator-caveat pass, the roadmap and `features.md` reconciliation, the announce-bar highlight, and substituting this run's verdict for the previous candidate's in the notes' Validation section.
+If the answer is yes, the [`release`](../release/SKILL.md) skill carries those out; this one ends here.
 
 **Red.** Report what failed, and separate the two questions that look alike:
 
