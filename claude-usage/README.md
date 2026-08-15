@@ -193,6 +193,26 @@ That is not automatically bad, since filing more can mean finding more real work
 **Panel 4 is not hours worked.** Sessions sometimes run unattended and keep committing with nobody watching, and merges get cleared in bulk, so it shows when work *landed* rather than when anyone was present.
 Its bars and their trend cover the whole project; the commits-per-hour line starts later, because its numerator is `commits` and that series changes units at the PR-workflow switch.
 
+### The project's rhythm, by weekday and by hour
+![What the project does on each day of the week](charts/rhythm_weekday.png) ![The same, by local hour](charts/rhythm_hour.png) Aggregates rather than time series: every day of the project lands in one bucket.
+Built to look rather than to confirm, since which of these would differ by the clock was not known in advance.
+
+**Wednesday is the outlier, on every panel at once.** Fewest commits (13.6 a day against Saturday's 30.0), the *most* tokens spent (4.2M a day, the highest of any day), the least time at the keyboard (26% against Saturday's 60%), and the longest PR waits by both median and p90.
+Most spend, least output, least presence.
+That is one fact seen five ways rather than five findings: it is the day the maintainer is least available, so sessions run on without anyone to steer or merge them.
+Wednesday's *median* commit count is lowest too, so it is a consistent property of the twelve Wednesdays rather than one bad day dragging a mean.
+
+**Weekends run 1.4× weekdays**, 28.0 commits a day against 19.9.
+A permutation test over 20,000 shuffles puts that gap at p = 0.020, so it is not the day-to-day variance.
+Sunday has the highest p25 of any day, meaning Sundays are reliably productive; Saturday is right-skewed, a few very large days.
+This is the time-investment variable made visible: weekdays compete with paid work and weekends do not.
+
+By hour, the work runs 07:00 to 23:00 local with a sharp 09:00 peak in both commits and spend, a midday dip, and a long evening plateau.
+Presence is lowest just after midnight, which is where the unattended share is largest.
+
+Everything is bucketed in **local** time, and the offset comes from the repo's own git timestamps rather than a setting.
+UTC would have moved most of an evening's work onto the following day and flattened the very patterns these charts exist to show.
+
 ### How the work went, not just how much
 ![Churn, PR cycle time, and code survival](charts/velocity_quality.png) The volume proxies above cannot tell 85 PRs of progress from 85 PRs of churn.
 These three can say something about it, each with a different blind spot, which is why they are drawn side by side rather than combined into a score.
@@ -356,6 +376,15 @@ Non-test Go only, because docs and YAML move for reasons that say nothing about 
 Both sides are bucketed by **author** date.
 `git log --since/--until` filter on commit date and `git blame` reports author time, and this repo rebases constantly, so mixing them credits a week with survivors it never wrote.
 `rate` is not clamped: a value above 1 would mean the two sides disagree, and capping it would hide exactly that.
+
+### `rhythm_metrics.csv` — merge-preserved
+Rows keyed `(dim, bucket)` where `dim` is `weekday` (0–6) or `hour` (0–23), plus one `offset_hours` row recording the UTC offset everything was bucketed in, so the charts bucket pull-request timestamps identically instead of assuming it.
+Columns: `days`, `commits`, `prs`, `feat`, `fix`, `tokens`, `attended_buckets`, `active_buckets`.
+
+Merge-preserved because the hourly resolution exists only in the transcripts and cannot be rebuilt from the daily CSVs, so a recompute after they are archived would quietly lower it.
+
+**Wait times are deliberately not aggregated here.** They are skewed enough that a stored sum and count yield only a mean, and the mean inverts the reading: pull requests opened at 05:00 average 19h and have a median of 0.32h, the fastest hour of the day, because a handful waited days.
+The charts take percentiles from `pr_metrics.csv` instead, which holds every request individually.
 
 ### `summary.json`
 Totals split into `measured` / `estimated` / `combined` (summed from the persisted rows, so archival-safe), an `estimation` block documenting the per-commit method, a `sessions` block (bucket width, span, session-days, mean and peak concurrency, hours using Claude, session-hours, parallel share), per-model and per-machine (`by_host`) splits, an accurate HEAD working-tree snapshot, and full provenance — including which machine took the snapshot, which machines are on record, and the dates that break a series (the two plan upgrades and the docs reflow).

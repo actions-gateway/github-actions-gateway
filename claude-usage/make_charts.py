@@ -25,12 +25,14 @@ Outputs PNGs (1x + @2x) to claude-usage/charts/:
     velocity             work shipped per day on reformat- and workflow-proof proxies
     velocity_quality     churn, PR cycle time, and code survival
     lines_vs_words       the same corpus in lines and in words, and each cost ratio
+    rhythm_weekday       what the project does on each day of the week
+    rhythm_hour          the same, by local hour of the day
 """
 
 import csv
 import json
 import os
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 
 import matplotlib
 matplotlib.use("Agg")
@@ -1189,6 +1191,113 @@ def chart_velocity_quality():
     save(fig, "velocity_quality")
 
 
+DOW = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+
+
+def local_offset_hours():
+    """UTC offset the rhythm table was bucketed in, read back off that table.
+
+    The charts must bucket PR timestamps the same way ``rhythm_series`` did, and
+    that offset is derived from git rather than configured, so it is recovered
+    here rather than assumed.
+    """
+    for r in load("rhythm_metrics.csv"):
+        if r.get("dim") == "offset_hours":
+            return float(r.get("bucket") or 0)
+    return -7.0
+
+
+def chart_rhythm(dim):
+    """When the work happens: by weekday, or by local hour.
+
+    An aggregate rather than a time series, so the x axis is a bucket and every
+    day of the project lands in one. Exploratory by intent: the panels were chosen
+    because they are the measures that could plausibly differ by the clock, not
+    because any of them was known to.
+    """
+    rows = {}
+    for r in load("rhythm_metrics.csv"):
+        if r["dim"] == dim:
+            rows[int(r["bucket"])] = r
+    if not rows:
+        return
+    if dim == "weekday":
+        keys = list(range(7))
+        labels = DOW
+        title_of = "day of the week"
+        # 12-14 observations each, close but not equal, so per-observed-day.
+        norm = [max(int(rows.get(k, {}).get("days") or 0), 1) for k in keys]
+        unit = " per day"
+    else:
+        keys = list(range(24))
+        labels = [f"{h:02d}" for h in keys]
+        title_of = "hour of the day, local"
+        norm = [1] * len(keys)
+        unit = ", total"
+
+    def col(name, scale=1.0):
+        return [int(rows.get(k, {}).get(name) or 0) / n / scale for k, n in zip(keys, norm)]
+
+    att = [int(rows.get(k, {}).get("attended_buckets") or 0) for k in keys]
+    act = [int(rows.get(k, {}).get("active_buckets") or 0) for k in keys]
+    share = [100 * a / b if b else 0 for a, b in zip(att, act)]
+    # Percentiles from the per-PR rows, not a stored mean. Wait times are skewed
+    # enough that the mean inverts the reading: PRs opened at 05:00 average 19h and
+    # have a median of 0.32h, the fastest hour of the day, because a few waited days.
+    tz = timezone(timedelta(hours=local_offset_hours()))
+    waits = {}
+    for r in load("pr_metrics.csv"):
+        try:
+            op = datetime.fromisoformat(r["created_at"].replace("Z", "+00:00")).astimezone(tz)
+        except (ValueError, KeyError):
+            continue
+        waits.setdefault(op.weekday() if dim == "weekday" else op.hour, []).append(
+            float(r["cycle_hours"]))
+
+    def q(vals, p):
+        v = sorted(vals)
+        return v[min(int(len(v) * p), len(v) - 1)] if v else 0
+
+    cyc_med = [q(waits.get(k, []), 0.50) for k in keys]
+    cyc_p90 = [q(waits.get(k, []), 0.90) for k in keys]
+
+    panels = [
+        (col("commits"), OI["grey"], f"commits{unit}", "Commits"),
+        (col("tokens", 1e6), OI["vermillion"], f"M tokens{unit}", "Token spend"),
+        (share, OI["green"], "% of active buckets", "Share of the time a person was at the keyboard"),
+        (cyc_med, OI["skyblue"], "hours, median", "How long a PR opened then usually waited"),
+        (cyc_p90, OI["purple"], "hours, p90", "The slow tenth of those waits, which is mostly absence"),
+    ]
+    fig, axes = plt.subplots(len(panels), 1, figsize=(11, 12.5), sharex=True,
+                             gridspec_kw=dict(hspace=0.30))
+    xs = list(range(len(keys)))
+    for ax, (vals, c, ylab, title) in zip(axes, panels):
+        bars = ax.bar(xs, vals, color=c, alpha=0.75, edgecolor="white", linewidth=0.6, zorder=3)
+        if dim == "weekday":
+            for i in (5, 6):  # weekend, hatched so it reads without colour
+                bars[i].set_hatch("//")
+        hi = max(range(len(vals)), key=lambda i: vals[i])
+        ax.annotate(f"{vals[hi]:,.1f}" if max(vals) < 100 else f"{vals[hi]:,.0f}",
+                    (xs[hi], vals[hi]), xytext=(0, 4), textcoords="offset points",
+                    ha="center", fontsize=9, fontweight="bold", color=darken(c),
+                    zorder=LABEL_Z, path_effects=HALO)
+        ax.set_ylabel(ylab, fontsize=10.5)
+        ax.set_title(title, fontsize=12.5, fontweight="bold", loc="left")
+        ax.grid(axis="y", alpha=0.22)
+        for sp in ("top", "right"):
+            ax.spines[sp].set_visible(False)
+    axes[-1].set_xticks(xs)
+    axes[-1].set_xticklabels(labels, fontsize=9.5)
+    fig.suptitle(f"The project's rhythm by {title_of}", fontsize=14, fontweight="bold",
+                 x=0.012, ha="left", y=0.995)
+    note = ("every timestamp bucketed in local time, since UTC would move an evening onto the next day"
+            " · keyboard share and token spend only exist from 2026-07-26")
+    if dim == "weekday":
+        note = "hatched = weekend · " + note
+    fig.text(0.012, 0.006, note, fontsize=7.5, color="#999")
+    save(fig, f"rhythm_{dim}")
+
+
 def chart_lines_vs_words():
     """The same corpus counted two ways, so a reformat is visible as a reformat.
 
@@ -1268,6 +1377,8 @@ def main():
     chart_parallel_sessions()
     chart_velocity()
     chart_velocity_quality()
+    chart_rhythm("weekday")
+    chart_rhythm("hour")
     chart_lines_vs_words()
     print(f"wrote charts to {CHARTS}")
 

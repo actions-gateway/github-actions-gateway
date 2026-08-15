@@ -45,7 +45,7 @@ import os
 import re
 import subprocess
 from collections import defaultdict
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 DATA = os.path.join(HERE, "data")
@@ -545,6 +545,134 @@ def survival_series(existing_weeks):
     return rows
 
 
+def local_offset():
+    """The repo's usual UTC offset, in hours, from git author timestamps.
+
+    Derived rather than configured: a day-of-week or hour-of-day view keyed on UTC
+    puts an evening in one zone onto the next day, and this project's work runs
+    late. Taking the commonest offset in the history follows the machine if it
+    moves, and needs no setting anyone can forget.
+    """
+    seen = defaultdict(int)
+    for ln in git("log", "--format=%ad", "--date=format:%z").splitlines():
+        ln = ln.strip()
+        if len(ln) == 5 and ln[0] in "+-":
+            seen[ln] += 1
+    if not seen:
+        return 0
+    best = max(seen, key=seen.get)
+    return (1 if best[0] == "+" else -1) * (int(best[1:3]) + int(best[3:5]) / 60)
+
+
+def rhythm_series(offset_hours):
+    """Per weekday and per local hour, what the project does in it.
+
+    Two questions the daily series cannot answer: which days the work lands on,
+    and which hours. Both are aggregates over the whole span rather than a time
+    series, so they get their own table keyed ``(dim, bucket)``.
+
+    Everything is bucketed in local time. Every transcript timestamp is UTC and
+    this project works evenings, so a UTC key would move most of a night's work
+    onto the following day and flatten exactly the pattern being looked for.
+    """
+    tz = timezone(timedelta(hours=offset_hours))
+    rows = {}
+
+    def cell(dim, bucket):
+        return rows.setdefault((dim, bucket), {
+            "dim": dim, "bucket": bucket, "days": 0, "commits": 0, "prs": 0,
+            "feat": 0, "fix": 0, "tokens": 0, "attended_buckets": 0,
+            "active_buckets": 0,
+        })
+
+    # git: commits and their conventional type, by author time
+    dates_seen = defaultdict(set)
+    for ln in git("log", "--format=%ad|%s", "--date=format:%Y-%m-%d %u %H").splitlines():
+        stamp, _, subj = ln.partition("|")
+        parts = stamp.split()
+        if len(parts) != 3:
+            continue
+        d, u, h = parts
+        for dim, b in (("weekday", int(u) - 1), ("hour", int(h))):
+            c = cell(dim, b)
+            c["commits"] += 1
+            dates_seen[(dim, b)].add(d)
+            m = CONVENTIONAL.match(subj.strip())
+            if m and m.group(1) in ("feat", "fix"):
+                c[m.group(1)] += 1
+    for k, ds in dates_seen.items():
+        rows[k]["days"] = len(ds)
+
+    # pull requests: merged when, and how long one opened in this hour waited
+    try:
+        with open(os.path.join(DATA, "pr_metrics.csv")) as fh:
+            for r in csv.DictReader(fh):
+                try:
+                    op = datetime.fromisoformat(r["created_at"].replace("Z", "+00:00")).astimezone(tz)
+                    mg = datetime.fromisoformat(r["merged_at"].replace("Z", "+00:00")).astimezone(tz)
+                    hrs = float(r["cycle_hours"])
+                except (ValueError, KeyError):
+                    continue
+                for dim, b in (("weekday", mg.weekday()), ("hour", mg.hour)):
+                    cell(dim, b)["prs"] += 1
+                # Wait times are NOT aggregated here. They are heavily skewed, so a
+                # stored sum and count can only yield a mean, and the mean says the
+                # opposite of the truth: PRs opened at 05:00 average 19h and have a
+                # median of 0.32h, the fastest of any hour, because a handful waited
+                # days. The charts read pr_metrics.csv and take percentiles.
+                del op, hrs
+    except OSError:
+        pass
+
+    # transcripts: spend, and whether a person was there
+    files = []
+    for d in glob.glob(PROJECTS_GLOB):
+        files += glob.glob(os.path.join(d, "*.jsonl"))
+    seen_msg = set()
+    active = defaultdict(set)
+    attended = defaultdict(set)
+    for f in files:
+        try:
+            fh = open(f, errors="replace")
+        except OSError:
+            continue
+        with fh:
+            for line in fh:
+                try:
+                    rec = json.loads(line)
+                except ValueError:
+                    continue
+                ts = rec.get("timestamp")
+                if not ts:
+                    continue
+                try:
+                    dt = datetime.fromisoformat(ts.replace("Z", "+00:00")).astimezone(tz)
+                except ValueError:
+                    continue
+                b10 = dt.replace(minute=(dt.minute // SESSION_BUCKET_MIN) * SESSION_BUCKET_MIN,
+                                 second=0, microsecond=0)
+                for dim, b in (("weekday", dt.weekday()), ("hour", dt.hour)):
+                    active[(dim, b)].add(b10)
+                    if is_human_prompt(rec):
+                        attended[(dim, b)].add(b10)
+                if rec.get("type") == "assistant":
+                    m = rec.get("message") or {}
+                    key = (m.get("id"), rec.get("requestId"))
+                    if key in seen_msg:
+                        continue
+                    seen_msg.add(key)
+                    u = m.get("usage") or {}
+                    for dim, b in (("weekday", dt.weekday()), ("hour", dt.hour)):
+                        cell(dim, b)["tokens"] += (u.get("input_tokens", 0)
+                                                   + u.get("output_tokens", 0)
+                                                   + u.get("cache_creation_input_tokens", 0))
+    for k, v in active.items():
+        cell(*k)["active_buckets"] = len(v)
+    for k, v in attended.items():
+        cell(*k)["attended_buckets"] = len(v)
+    return rows
+
+
 def git_series():
     """Per-day cumulative commits, test count, and authored LOC at each day's last commit.
 
@@ -984,6 +1112,7 @@ def main():
     sess_csv = os.path.join(DATA, "session_metrics.csv")
     pr_csv = os.path.join(DATA, "pr_metrics.csv")
     surv_csv = os.path.join(DATA, "survival_metrics.csv")
+    rhythm_csv = os.path.join(DATA, "rhythm_metrics.csv")
 
     git_rows = git_series()
     write_csv(git_csv, ["date", "commits", "tests", "go_code", "go_test", "md", "yaml", "scripts",
@@ -1022,6 +1151,22 @@ def main():
         write_csv(surv_csv, ["week_start", "added", "survived", "horizon_days", "rate"],
                   [surv_rows[w] for w in sorted(surv_rows)])
     print(f"code survival      : {len(surv_rows)} week(s) final (+{len(surv_rows) - s_before} this run)")
+
+    # Weekday and hour-of-day aggregates. Merge-preserved on the counts for the same
+    # reason the token series is: the hourly resolution exists only in the
+    # transcripts, so a recompute after they are archived would silently lower it.
+    rnum = ["days", "commits", "prs", "feat", "fix", "tokens", "attended_buckets",
+            "active_buckets"]
+    rkey = ["dim", "bucket"]
+    offset = local_offset()
+    r_measured = load_measured(rhythm_csv, rkey, rnum)
+    merge_max_into(r_measured, rhythm_series(offset), rkey, rnum)
+    # One row records the offset everything else was bucketed in, so make_charts
+    # can bucket PR timestamps identically without re-deriving or assuming it.
+    r_measured[("offset_hours", offset)] = {"dim": "offset_hours", "bucket": offset,
+                                            **{c: 0 for c in rnum}}
+    write_csv(rhythm_csv, rkey + rnum, [r_measured[k] for k in sorted(r_measured, key=str)])
+    print(f"rhythm             : local UTC{offset:+g}, {len(r_measured)} weekday/hour buckets")
 
     deltas = commit_deltas(git_rows)
 
@@ -1181,7 +1326,7 @@ def main():
     print(f"headline combined  : {headline(comb):,}")
     print(f"  + cache_read     : {headline(comb) + comb['cache_read']:,}")
     print(f"cache reuse        : {summary['totals']['combined']['cache_reuse_ratio']}x")
-    print(f"wrote {token_csv}, {model_csv}, {git_csv}, {sess_csv}, {pr_csv}, {surv_csv}, summary.json")
+    print(f"wrote {token_csv}, {model_csv}, {git_csv}, {sess_csv}, {pr_csv}, {surv_csv}, {rhythm_csv}, summary.json")
 
 
 if __name__ == "__main__":
