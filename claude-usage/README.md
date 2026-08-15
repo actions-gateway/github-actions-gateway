@@ -193,6 +193,11 @@ A rewrap moves every line count that spans a paragraph and leaves the words alon
 On the reflow day Markdown went **−17,574 lines and +15,098 words**.
 A second, much smaller reformat then landed on 2026-08-15 ([#1555](https://github.com/actions-gateway/github-actions-gateway/pull/1555), an mdreflow upgrade): **+1,251 lines and +60 words**.
 The headline ratio did not notice it, which is the case for the switch made concretely rather than argued.
+
+**Only the first reformat carries a marker, and the test is magnitude rather than category.** The 08-09 reflow moved the line series 26.4% in a day, 0.133 of a decade on a log axis, which reads as deleted docs unless something says otherwise.
+The 08-15 one moved it 3.4%, 0.015 of a decade, and roughly a third of even that was the day's ordinary writing rather than the reformat.
+A line there would mark something a reader cannot see and would then have to explain away.
+In words, the unit the headline now uses, the second reformat is 1.4% against the *first* reflow day's 1.9%: neither is visible, which is the whole point of the denominator.
 The line series reads as a catastrophe, the word series as an ordinary productive day.
 
 Log y, absolute counts, the same choice the tokens-vs-lines chart makes: words outnumber lines about 17 to 1, so a linear axis leaves the smaller series a sliver.
