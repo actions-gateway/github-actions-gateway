@@ -6,8 +6,8 @@ Under [`make scripts-test`](../../scripts/ci/run-parallel.sh), which launches ev
 **Status:** watching.
 The failure *family* is reproduced (a `rm -rf` racing a live git in the same repository gives the exact signature), but **no candidate remover exists** in the suite or in the fan-out around it, so the mechanism is not established.
 This file exists so a fourth sighting starts from what has already been excluded rather than re-deriving it.
-Nothing has been changed in the suite.
-A speculative fix was deliberately not written, because every fix that follows from the reproduction would target a removal nothing has been shown to perform.
+No fix has been written, because every fix that follows from the reproduction would target a removal nothing has been shown to perform.
+The suite carries instrumentation only: an `ERR` trap naming the failing line, so a fourth sighting is diagnosable instead of being another rerun.
 
 ## The signature
 
@@ -130,8 +130,9 @@ That is a self-inflicted transient rather than this flake, and the exit status t
 
 1. **The step-level conclusions**, per the `gh api` call above.
    The check name will again say `shellcheck`.
-2. **Which of the six `commit -qam` calls failed.** The last line narrows it to that set but not to one call.
-   Running the suite under `set -x` with a `PS4` carrying `$LINENO` would turn the next occurrence into a pointer at one line, and that single fact is what the exclusion list above is missing.
+2. **Which of the six `commit -qam` calls failed.** The signature's last line narrows it to that set but not to one call, so the suite now answers it itself.
+   An `ERR` trap prints `git-merge-plan-index-test.sh:<line>: FAILED (rc=128): <command>` just above the git errors, and `set -o errtrace` carries the trap into `run_merge`, where four of the six commits live.
+   Measured by injecting a failing `git rev-parse` into `run_merge`: the trap named the injected line and reproduced the rc=128 the sightings carry, and a clean run prints nothing.
 3. **Whether the racing `rm` also errored.** A `rm: … Directory not empty` line anywhere in the suite's output is the remover announcing itself, since that is what a `rm -rf` racing a live git produces.
    None of the three sightings has one, which is the main reason the concurrent-removal family, though reproducible, still has no owner.
 4. **Whether a sibling suite failed in the same run.** [Q826](../STATUS.md#Q826) is a sibling flake in [`git-merge-gate-lists-test.sh`](../../scripts/ci/git-merge-gate-lists-test.sh) with a different signature, and [Q822](../STATUS.md#Q822) tracks unrelated suites failing under concurrent load.

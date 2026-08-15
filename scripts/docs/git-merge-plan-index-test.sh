@@ -23,6 +23,13 @@ TARGET='docs/plan/README.md'
 WORKDIR="$(mktemp -d)"
 trap 'rm -rf "$WORKDIR"' EXIT
 
+# Q820: under the parallel runner this suite occasionally dies on a git
+# temp-file error whose message names no command, and it passes on rerun, so the
+# next occurrence is the only chance to see which call failed. errtrace carries
+# the ERR trap into functions, where run_merge's commits live.
+set -o errtrace
+trap 'printf "%s:%s: FAILED (rc=%s): %s\n" "${BASH_SOURCE[0]##*/}" "$LINENO" "$?" "$BASH_COMMAND" >&2' ERR
+
 fails=0
 
 # Assembled from a character class so this file never trips
