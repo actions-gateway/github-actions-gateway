@@ -25,6 +25,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/jbeda/mdreflow/internal/gm"
 	"github.com/jbeda/mdreflow/internal/segment"
 	"github.com/yuin/goldmark/ast"
 	gfmast "github.com/yuin/goldmark/extension/ast"
@@ -61,6 +62,15 @@ type Paragraph struct {
 	// and must be emitted byte-for-byte; package reflow never joins across
 	// it.
 	Boundary []bool
+	// EscapeIsContent marks a paragraph that is prose only to the dialect's
+	// own renderer, and an indented code block to the CommonMark parser
+	// mdreflow reflows against — the MkDocs admonition body admonitionBodies
+	// recognizes. A backslash reflow adds to keep a wrapped line from
+	// reparsing as a list or a fence is markup to MkDocs and literal text to
+	// CommonMark, so the two renders cannot both be preserved. Package
+	// reflow backs the whole paragraph out to its source bytes rather than
+	// emit an escape here; see writeParagraph.
+	EscapeIsContent bool
 }
 
 // SkipReason says which guard froze a paragraph — which distinct branch
@@ -196,7 +206,7 @@ func scanLineFacts(source []byte) map[int]lineFacts {
 		}
 		line := bytes.TrimRight(source[ls:end], "\r")
 		f := lineFacts{
-			chainStart:      defChainStartRE.Match(line),
+			chainStart:      defChainStartRE.Match(line) || parsesAsDefLine(line),
 			orphanCloser:    orphanDefCloserRE.Match(line),
 			bareCaretOpener: bareCaretOpenerRE.Match(line),
 			defAbove:        seen,
@@ -210,6 +220,36 @@ func scanLineFacts(source []byte) map[int]lineFacts {
 		ls = end + 1
 	}
 	return m
+}
+
+// containerPrefixRE matches the blockquote/list-marker prefix
+// defChainStartRE tolerates before a definition opener. parsesAsDefLine
+// strips it so the remainder can be parsed on its own.
+var containerPrefixRE = regexp.MustCompile(`^[ \t>]*(?:(?:[-+*]|\d{1,9}[.)])[ \t]+[ \t>]*)*`)
+
+// parsesAsDefLine reports whether line, with any container prefix removed,
+// is a complete link reference definition to goldmark itself.
+//
+// This is the label-shape-agnostic half of the def-chain-start fact, and it
+// is what closes issue #58. The regexes beside it exclude caret labels, on
+// the reasoning that "[^1]:" is a footnote and a footnote body is prose —
+// but no footnote extension is registered in package gm, so goldmark reads
+// "[^1]: /url" as an ordinary definition whose title may sit on the line
+// below. Sentence mode splitting that paragraph then feeds the definition
+// its own first line, which disappears from the rendered page.
+//
+// Asking the parser rather than widening the regexes is what keeps issue
+// #41's coverage: a real footnote body ("[^1]: some ordinary prose") is not
+// a definition to goldmark and answers false, so back-to-back footnote
+// layouts still reflow. Only caret lines that genuinely are definitions —
+// a bare destination, "[^1]: /url" or "[^1]: one" — newly set the fact, and
+// those are live definition machinery whatever the label looks like.
+//
+// The verdict reads only the line above a paragraph, which is inside the
+// definition run and so is never reflowed, keeping it stable across passes.
+func parsesAsDefLine(line []byte) bool {
+	rest := line[len(containerPrefixRE.Find(line)):]
+	return gm.IsCompleteLinkRefDefLine(string(rest))
 }
 
 // maxContainerDepth caps how many List/Blockquote container levels deep a
@@ -291,7 +331,7 @@ func collect(n ast.Node, source []byte, inBlockquote bool, depth int, fmEnd int,
 			// shape, from build's own raw-byte scan (see
 			// inLinkRefDefZone) — design.md's "The link-reference-
 			// definition zone: skip bluntly, by shape".
-			if pp, reason := build(c, source, inBlockquote, fmEnd, precededByTable, facts); reason == SkipNone {
+			if pp, reason := build(c, source, inBlockquote, fmEnd, precededByTable, facts, mkdocs); reason == SkipNone {
 				*out = append(*out, pp)
 			} else {
 				recordSkip(c, reason)
@@ -317,8 +357,10 @@ func collect(n ast.Node, source []byte, inBlockquote bool, depth int, fmEnd int,
 // offset (frontMatterEnd(source), or -1 if source has no front matter) —
 // see its use below. precededByTable is true when p's immediately
 // preceding sibling in the AST is a GFM *ast.Table — see its use below
-// for why.
-func build(p ast.Node, source []byte, inBlockquote bool, fmEnd int, precededByTable bool, facts map[int]lineFacts) (pp Paragraph, reason SkipReason) {
+// for why. mkdocs gates the admonition-marker boundary check below: a
+// line starting "!!!"/"???" is only treated as an immovable marker under
+// the mkdocs dialect.
+func build(p ast.Node, source []byte, inBlockquote bool, fmEnd int, precededByTable bool, facts map[int]lineFacts, mkdocs bool) (pp Paragraph, reason SkipReason) {
 	lines := p.Lines()
 	n := lines.Len()
 	if n == 0 {
@@ -608,7 +650,7 @@ func build(p ast.Node, source []byte, inBlockquote bool, fmEnd int, precededByTa
 		// nesting), not a replacement for it.
 		contPrefix += "    "
 	}
-	if admonitionMarkerRE.MatchString(trimmed[0]) {
+	if mkdocs && admonitionMarkerPunctRE.MatchString(trimmed[0]) {
 		// A MkDocs admonition written without a blank line after its
 		// marker is one paragraph here: the indented body is a lazy
 		// continuation, not the code block the blank-line spelling
@@ -616,9 +658,19 @@ func build(p ast.Node, source []byte, inBlockquote bool, fmEnd int, precededByTa
 		// callout, and so does dropping the body's indent, so the marker
 		// line is immovable and the body carries the 4-space indent the
 		// extension requires. Same treatment as the footnote definition
-		// above, for the same reason.
+		// above, for the same reason. Gated on the mkdocs dialect: under
+		// GFM a line starting "!!!"/"???" is ordinary prose.
+		//
+		// The line is pinned on the opening punctuation alone, but only a
+		// line that also carries a class word is a marker whose body takes
+		// the indent: pinning keeps the verdict stable across passes (see
+		// admonitionMarkerPunctRE), while indenting under a non-marker like
+		// a bare "!!!" would turn ordinary prose into an indented code
+		// block.
 		boundary[0] = true
-		contPrefix += "    "
+		if admonitionMarkerRE.MatchString(trimmed[0]) {
+			contPrefix += "    "
+		}
 	}
 
 	return Paragraph{
@@ -1330,10 +1382,41 @@ func couldFormLinkRefDef(trimmedLines []string) bool {
 }
 
 // admonitionMarkerRE matches a MkDocs / Python-Markdown admonition marker
-// line: "!!! note", "??? warning", "???+ tip", optionally with a quoted
-// title. The type word is required, which is what keeps an ordinary
-// paragraph merely starting with "!!!" from claiming the block below it.
-var admonitionMarkerRE = regexp.MustCompile(`^(?:!{3}|\?{3}\+?)[ \t]+[A-Za-z][\w-]*(?:[ \t]+"[^"]*")?[ \t]*$`)
+// line: "!!!" or "???"/"???+", a whitespace run, then at least one more
+// byte. Everything it reads is a bounded prefix; nothing depends on where
+// the line ends, which is the property that matters, since reflow is
+// exactly what moves a line ending. An end-anchored, type-word-requiring
+// version let a wrap cut turn a paragraph's own break point into a marker
+// match on the next pass (issue #51).
+//
+// Deliberately looser than Python-Markdown's own grammar in what may
+// follow the whitespace: it accepts any class word, so Material for
+// MkDocs's inline modifiers ("!!! note inline end \"Title\"") and
+// non-alphabetic types both match. Requiring a specific shape there is
+// what made the old pattern miss real admonitions.
+//
+// The trailing "\S" is load-bearing, not decoration. Without it, shapes
+// that are not admonitions at all — "!!!!x", "!!!bang", "???01010", a
+// bare "!!!" — claim the indented block below them. When that block is an
+// indented code block, treating it as admonition prose reflows and
+// escapes its contents, which changes what the document renders to.
+//
+// Callers gate this on the mkdocs dialect (see admonitionBodies and
+// build's use of it); under other dialects a line starting with "!!!" is
+// ordinary prose.
+var admonitionMarkerRE = regexp.MustCompile(`^(?:!{3}|\?{3}\+?)[ \t]+\S`)
+
+// admonitionMarkerPunctRE matches the opening punctuation of an admonition
+// marker without requiring the class word admonitionMarkerRE demands.
+//
+// A paragraph's first line decides whether the paragraph is the no-blank-
+// line admonition form, and reflow can rewrite that line: joining the next
+// source line onto a bare "!!!" produces "!!! word", which the next pass
+// reads as a marker and indents the body under — output that never settles.
+// The first line's opening bytes are the one part of a paragraph reflow
+// cannot move, so pinning the line whenever it opens with the punctuation
+// keeps the marker verdict identical on every pass.
+var admonitionMarkerPunctRE = regexp.MustCompile(`^(?:!{3}|\?{3}\+?)`)
 
 // admonitionBody reports whether cb is the indented body of a MkDocs
 // admonition and, if so, describes it as a reflow-eligible paragraph.
@@ -1369,7 +1452,17 @@ func admonitionBodies(cb *ast.CodeBlock, source []byte, mkdocs bool) []Paragraph
 	}
 	for i := 0; i < lines.Len(); i++ {
 		seg := lines.At(i)
-		t := bytes.TrimLeft(seg.Value(source), " \t")
+		v := seg.Value(source)
+		// A line indented past the admonition's own 4 spaces keeps that
+		// extra whitespace as code-block content, and reflow re-emits
+		// every body line at exactly the 4-space indent — so reflowing
+		// such a line deletes bytes that are content to the CommonMark
+		// reading of the block. Callout bodies worth reflowing sit flush
+		// at 4 spaces; anything deeper is left alone.
+		if len(v) > 0 && (v[0] == ' ' || v[0] == '\t') {
+			return nil
+		}
+		t := bytes.TrimLeft(v, " \t")
 		if bytes.HasPrefix(t, []byte("```")) || bytes.HasPrefix(t, []byte("~~~")) {
 			return nil
 		}
@@ -1395,10 +1488,11 @@ func admonitionBodies(cb *ast.CodeBlock, source []byte, mkdocs bool) []Paragraph
 	}
 	last := lines.At(lines.Len() - 1)
 	return []Paragraph{{
-		Node:       cb,
-		Start:      first.Start,
-		End:        last.Stop,
-		ContPrefix: contPrefix,
-		Boundary:   make([]bool, lines.Len()),
+		Node:            cb,
+		Start:           first.Start,
+		End:             last.Stop,
+		ContPrefix:      contPrefix,
+		Boundary:        make([]bool, lines.Len()),
+		EscapeIsContent: true,
 	}}
 }

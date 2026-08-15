@@ -9,6 +9,73 @@ At release time the section is retitled to the version and the prose lead is wri
 
 ## Unreleased
 
+## v0.3.0 (2026-08-14)
+
+**Expect a one-time reflow across your docs on this upgrade.** Sentence mode now splits before a sentence that opens with inline code or emphasis, which is common in technical prose, so most files that use it will pick up new line breaks the first time you run this version.
+On a real 272-file MkDocs docset the upgrade reformatted 203 files (75%) and added about 1,200 line breaks; the built site was unchanged.
+Nothing renders differently — the change moves line breaks inside paragraphs, which HTML collapses — but a repo running `mdreflow --check` in CI will go red until the formatter is run once.
+Run `mdreflow .` and commit the result as its own change, so the reflow does not ride along in an unrelated diff.
+
+- A paragraph next to a footnote-style `[^1]:` definition, or one whose own text could be split into a definition, no longer stops the whole file from formatting.
+  Reflow could feed such a definition its title, or manufacture one mid-paragraph, deleting prose from the rendered page; the safety check that compares renders caught it and returned the file untouched, so the file silently stopped formatting while `--check` reported it clean (#58).
+  Both cases are now detected by asking the Markdown parser, and only the affected paragraph is left alone instead of the entire file.
+- Sentence mode now starts a new line for a sentence that opens with inline code or emphasis (`` `code` ``, `**bold**`, `*italic*`, `_italic_`), instead of joining it onto the sentence before it.
+  A sentence opening with a link already split; these now behave the same way.
+  Whether a delimiter opens a real code span or emphasis run is settled by the Markdown parse, so a stray `` ` `` or `*` in prose still joins as it always did, and a sentence opening with a code span written in three or more backticks stays joined rather than becoming a code fence.
+
+## v0.2.0 (2026-08-12)
+
+mdreflow no longer has an opinion about how you encode a hard line break.
+
+It used to normalize every hard break — trailing double-space, trailing backslash, `<br>` — to one configured style.
+The three encodings turned out not to be interchangeable: each fails at certain positions, and `<br>` is raw HTML, a different class of content than the Markdown around it.
+Normalizing to a single style therefore produced breaks that didn't work where they landed, which is where four of this release's fixes came from.
+
+The rule now: a hard break keeps the encoding the source used.
+The one exception is a trailing double-space, promoted to a backslash — double spaces are invisible in an editor and routinely stripped in transit.
+That promotion does not happen under `--dialect mkdocs`, where Python-Markdown has no backslash break and renders one as a literal `\`; there the double-space is kept as written. mdreflow never introduces raw HTML into a document that didn't already contain it, and where a backslash can't land, the fallback is two spaces, never `<br>`.
+
+The other theme is MkDocs admonitions under `--dialect mkdocs`.
+Markers are now recognized by their opening punctuation plus a class word rather than by a pattern matching the whole line, so narrow-width wrapping can no longer manufacture something that reads as a marker and destabilizes output.
+Admonitions carrying inline modifiers or non-alphabetic types now get their bodies reflowed instead of being silently skipped, and a body that reflow cannot rewrite without changing what a CommonMark parser reads out of it is left alone rather than reflowed at the cost of one renderer or the other.
+
+Act on these when upgrading:
+
+- Delete any `hard-breaks:` key from `.mdreflow.yaml`.
+  It is now an unknown-key error rather than a silently ignored line — and this repo's own README and `--help` shipped `hard-breaks: br` in their sample config, so a config copied from here will fail until the line goes.
+- Remove `--hard-breaks` and `--strip-sentence-terminal-breaks` from any invocation; both are gone with no replacement.
+- Library callers: `Options.HardBreaks`, `HardBreakStyle` and its constants, and `Options.StripSentenceTerminalBreaks` are removed.
+
+### Changed
+
+- **Breaking:** hard line breaks (trailing double-space, trailing backslash, `<br>`) are no longer normalized to a configured style — mdreflow now keeps the spelling the source used, promoting only a trailing double-space to a backslash (double spaces are invisible and routinely stripped by editors in transit). mdreflow no longer introduces raw HTML (`<br>`) into a document that didn't already use it.
+  Under `--dialect mkdocs` a double-space is kept as-is instead: Python-Markdown has no backslash hard break and renders one as a literal `\`, so there is no spelling to promote to.
+  This fixes four bugs found in the narrow contexts where the old normalized spelling didn't actually work at its landing position (#40, #47, #49, #52).
+  **Removed:** the `--hard-breaks` flag, `Options.HardBreaks`, `HardBreakStyle` and its constants, and the `hard-breaks:` config key.
+  If your `.mdreflow.yaml` has a `hard-breaks:` key, delete it — mdreflow now refuses the file with an unknown-key error instead of silently ignoring it.
+- **Breaking:** removed the unused `--strip-sentence-terminal-breaks` flag and `Options.StripSentenceTerminalBreaks`.
+  If you set this option or flag, remove it; there is no replacement.
+
+### Fixed
+
+- Under `--dialect mkdocs`, an admonition marker is now recognized by its opening punctuation plus a class word (`!!! note`, `??? tip`, `???+ warning`) rather than by a pattern anchored to the end of the line.
+  A narrow-width wrap could previously cut a line into something the old pattern read as a marker, so the next `mdreflow` run indented the line below it and output stopped being stable (#51).
+  Marker lines are left alone whatever follows the class word, so Material for MkDocs's inline modifiers are handled.
+- A paragraph whose line ending folds several line-ending sequences together (a bare CR followed by a CRLF) is now left alone when the content before it ends in a hard-break spelling.
+  Normalizing those bytes to a single newline put the spelling directly against the line ending and so invented a hard break the source never had.
+- Under `--dialect mkdocs`, an admonition body is now left alone when wrapping it would put a list- or fence-shaped token at the start of a line.
+  Reflow escapes such a token so it cannot change what the line parses as, but a callout body is prose only to MkDocs — every CommonMark renderer reads it as code, where the backslash is literal text.
+  The body keeps its source form rather than pick one renderer over the other; bodies that wrap without needing an escape are unaffected.
+- Under `--dialect mkdocs`, wrapping a paragraph that opens with `!!!` or `???` and no callout type no longer manufactures an admonition marker out of ordinary prose.
+  Pulling the next word up onto the opening line produced something the following run read as a marker and indented the rest of the paragraph under, so output never settled and the file was returned unformatted.
+  Such an opening line is now left where the author put it.
+- Under `--dialect mkdocs`, a single admonition whose body is indented past the 4 spaces the extension requires no longer stops the whole file from formatting.
+  Reflow re-emits a callout body at exactly 4 spaces, which would have deleted the extra indent — content, to a CommonMark parser reading that block as code — so the safety check that compares renders was returning the file untouched.
+  Such a body is now left alone and the rest of the file formats normally; bodies flush at 4 spaces are unaffected.
+- MkDocs admonitions whose marker carries an inline modifier (`!!! note inline end "Title"`, `!!! note inline "Title"`) or a non-alphabetic type now have their bodies reflowed under `--dialect mkdocs`.
+  They were silently skipped.
+  This dialect's admonition-marker recognition no longer runs at all under `--dialect gfm`.
+
 ## v0.1.7 (2026-08-11)
 
 When mdreflow declines to reflow a paragraph, it can now tell you why.

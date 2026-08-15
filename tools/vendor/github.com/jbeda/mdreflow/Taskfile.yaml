@@ -30,18 +30,58 @@ tasks:
       - go install -ldflags "{{ .LDFLAGS }}" ./cmd/mdreflow
 
   verify:
-    desc: "Full verification chain: build, vet, gofmt, lint, tests"
+    desc: "Full verification chain: build, vet, gofmt, lint, tests, dogfood"
     cmds:
       - go build ./...
       - go vet ./...
       - test -z "$(gofmt -l .)" || { gofmt -l .; exit 1; }
       - golangci-lint run
       - go test ./... -count=1
+      - task: dogfood-check
 
   fuzz:
     desc: "Foreground fuzz soak (FUZZTIME=300s default); required after any reflow-logic change"
     cmds:
       - go test -fuzz=FuzzFormat -fuzztime={{ .FUZZTIME }} .
+
+  fuzz-gate:
+    desc: "Release-gate fuzz soak (FUZZTIME=300s default): fails only on panics, typed-refusal breaches, and production instability; reports the rate of inputs needing a second pass or changing render"
+    cmds:
+      - rm -f fuzz-gate.log
+      - MDREFLOW_FUZZ_GATE=1 go test -fuzz=FuzzFormat -fuzztime={{ .FUZZTIME }} .
+      - silent: true
+        cmd: |
+          awk -F'\t' '
+          /^gate-counts/ {
+            for (i = 2; i <= NF; i++) { split($i, kv, "="); tot[kv[1]] += kv[2] }
+            workers++
+          }
+          /^gate-dark/ { dark[$2] += $3 }
+          END {
+            if (!workers) { print "no gate counts recorded"; exit }
+            n = tot["inputs"]
+            checked = tot["render-checked"]
+            printf "--- recorded tier (non-gating), %d worker(s) ---\n", workers
+            printf "inputs evaluated: %d\n", n
+            printf "needed a 2nd pass to settle: %d (%.3f%%)\n", tot["multipass"], 100*tot["multipass"]/n
+            if (checked > 0)
+              printf "render changed: %d (%.3f%% of the %d checked)\n", tot["render-changed"], 100*tot["render-changed"]/checked, checked
+            printf "render oracle dark: %d of %d (%.1f%%) — exempt shapes, never compared\n", tot["render-dark"], n, 100*tot["render-dark"]/n
+            for (g in dark) printf "    %-32s %d\n", g, dark[g]
+            print  "(same-corpus before/after signal only — the corpus is adversarial"
+            print  " fragments, not representative prose; see docs/design.md)"
+          }' fuzz-gate.log
+        ignore_error: true
+
+  fuzz-hunt:
+    desc: "Focused triage soak (CATEGORY=core-multipass|core-render-changed, EXCLUDE=comma-separated substrings): minimizes, dedups and logs one category to fuzz-gate.log. Slow by design; only worth running during a deliberate drive-down."
+    requires:
+      vars: [CATEGORY]
+    cmds:
+      - rm -f fuzz-gate.log
+      - MDREFLOW_FUZZ_HUNT='{{ .CATEGORY }}' MDREFLOW_FUZZ_HUNT_EXCLUDE='{{ .EXCLUDE }}' go test -fuzz=FuzzFormat -fuzztime={{ .FUZZTIME }} .
+      - cmd: 'test -s fuzz-gate.log && { echo "--- {{ .CATEGORY }} samples ---"; grep -v "^gate-counts\|^gate-dark" fuzz-gate.log || true; } || echo "no findings recorded"'
+        ignore_error: true
 
   vulncheck:
     desc: "Run govulncheck locally (also runs weekly + on tags in CI)"
@@ -90,9 +130,23 @@ tasks:
       - '{{ .TMP }}/mdreflow --version'
       - printf 'Two sentences here. Split please.\n' | {{ .TMP }}/mdreflow | diff - <(printf 'Two sentences here.\nSplit please.\n')
       # Pull the version through the public module proxy (makes it visible
-      # to `go install @latest`) and ask pkg.go.dev to index it. The final
-      # page check is soft: indexing can lag by minutes.
+      # to `go install @latest`). This one is a real gate: the proxy either
+      # has the version or the release did not land.
       - "curl -sf -o /dev/null https://proxy.golang.org/github.com/jbeda/mdreflow/@v/{{ .VERSION }}.info"
-      - "curl -sf -X POST -o /dev/null https://pkg.go.dev/fetch/github.com/jbeda/mdreflow@{{ .VERSION }}"
+      # Then ask pkg.go.dev to index it and wait for the page. Indexing is
+      # asynchronous, and the /fetch endpoint answers 408 ("still working on
+      # it") both while indexing and after the version is already live — so
+      # its status says nothing about success and must not gate the task.
+      # The page itself is the real signal; it is polled, and a miss is
+      # reported rather than failed, since a lagging index does not make a
+      # published release bad.
+      - cmd: |
+          curl -s -X POST -o /dev/null https://pkg.go.dev/fetch/github.com/jbeda/mdreflow@{{ .VERSION }} || true
+          for i in $(seq 1 12); do
+            code=$(curl -s -o /dev/null -w '%{http_code}' https://pkg.go.dev/github.com/jbeda/mdreflow@{{ .VERSION }})
+            if [ "$code" = "200" ]; then echo "pkg.go.dev is serving {{ .VERSION }}"; exit 0; fi
+            sleep 15
+          done
+          echo "NOTE: pkg.go.dev has not indexed {{ .VERSION }} yet (last HTTP $code); the release itself is fine, re-check later."
       - "curl -sf -o /dev/null https://pkg.go.dev/github.com/jbeda/mdreflow@{{ .VERSION }} && echo 'pkg.go.dev indexed {{ .VERSION }}' || echo 'pkg.go.dev not showing {{ .VERSION }} yet (indexing lags; re-check in a few minutes)'"
       - echo "release {{ .VERSION }} verified"
