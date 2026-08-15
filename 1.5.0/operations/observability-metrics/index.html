@@ -1,0 +1,4868 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="An Actions Runner Controller (ARC) alternative for self-hosted GitHub Actions runners on multi-tenant Kubernetes — oversubscribe a shared quota, recover evicted jobs automatically, and isolate every tenant's GitHub egress.">
+      
+      
+      
+        <link rel="canonical" href="https://actions-gateway.com/1.5.0/operations/observability-metrics/">
+      
+      
+        <link rel="prev" href="../observability/">
+      
+      
+        <link rel="next" href="../observability-metrics-access/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../assets/favicon.svg">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
+    
+    
+      
+        <title>Metrics reference - GitHub Actions Gateway</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.484c7ddc.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+    
+    
+      <link rel="stylesheet" href="../../stylesheets/extra.css">
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+  
+
+
+    
+    
+  
+  
+  <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/IBMPlexSans-Regular.woff2">
+  <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/IBMPlexSans-Bold.woff2">
+  <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/MonaspaceNeon-Medium.woff2">
+  
+  <meta property="og:image" content="https://actions-gateway.com/1.5.0assets/social-preview.png">
+  <meta property="og:image:width" content="1280">
+  <meta property="og:image:height" content="640">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:image" content="https://actions-gateway.com/1.5.0assets/social-preview.png">
+  
+  <link rel="apple-touch-icon" href="https://actions-gateway.com/1.5.0assets/apple-touch-icon.png">
+  <link rel="alternate icon" href="https://actions-gateway.com/1.5.0assets/favicon.ico">
+  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/1.5.0assets/icon-512.png">
+  
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "SoftwareSourceCode",
+    "name": "GitHub Actions Gateway",
+    "description": "An Actions Runner Controller (ARC) alternative for self-hosted GitHub Actions runners on multi-tenant Kubernetes \u2014 oversubscribe a shared quota, recover evicted jobs automatically, and isolate every tenant\u0027s GitHub egress.",
+    "url": "https://actions-gateway.com/1.5.0",
+    "codeRepository": "https://github.com/actions-gateway/github-actions-gateway",
+    "programmingLanguage": "Go",
+    "license": "https://www.apache.org/licenses/LICENSE-2.0",
+    "author": {
+      "@type": "Organization",
+      "name": "GitHub Actions Gateway",
+      "url": "https://actions-gateway.com/1.5.0"
+    }
+  }
+  </script>
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "Organization",
+    "name": "GitHub Actions Gateway",
+    "url": "https://actions-gateway.com/1.5.0",
+    "logo": "https://actions-gateway.com/1.5.0assets/icon-512.png",
+    "sameAs": ["https://github.com/actions-gateway/github-actions-gateway"]
+  }
+  </script>
+  
+  
+
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="black" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#metrics-reference" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+        <aside class="md-banner">
+          <div class="md-banner__inner md-grid md-typeset">
+            
+            <strong>v1.5.0 is here.</strong>
+      A per-tenant GitHub runner group boundary, multi-label runner sets that migrate a <code>runs-on</code> array unedited, and job duration and latency metrics on the acquisition tier every new tenant runs.
+          </div>
+          
+        </aside>
+      
+    </div>
+    
+      <div data-md-color-scheme="default" data-md-component="outdated" hidden>
+        
+          <aside class="md-banner md-banner--warning">
+            <div class="md-banner__inner md-grid md-typeset">
+              You're not viewing the latest release.
+  <a href="https://actions-gateway.com/1.5.0"><strong>Go to the current docs.</strong></a>
+
+            </div>
+            <script>var el=document.querySelector("[data-md-component=outdated]"),base=new URL("../.."),outdated=__md_get("__outdated",sessionStorage,base);!0===outdated&&el&&(el.hidden=!1)</script>
+          </aside>
+        
+      </div>
+    
+    
+      
+
+<header class="md-header" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="GitHub Actions Gateway" class="md-header__button md-logo" aria-label="GitHub Actions Gateway" data-md-component="logo">
+      
+  <img src="../../assets/logo.svg" alt="logo">
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            GitHub Actions Gateway
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Metrics reference
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="black" data-md-color-accent="indigo"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m17.75 4.09-2.53 1.94.91 3.06-2.63-1.81-2.63 1.81.91-3.06-2.53-1.94L12.44 4l1.06-3 1.06 3zm3.5 6.91-1.64 1.25.59 1.98-1.7-1.17-1.7 1.17.59-1.98L15.75 11l2.06-.05L18.5 9l.69 1.95zm-2.28 4.95c.83-.08 1.72 1.1 1.19 1.85-.32.45-.66.87-1.08 1.27C15.17 23 8.84 23 4.94 19.07c-3.91-3.9-3.91-10.24 0-14.14.4-.4.82-.76 1.27-1.08.75-.53 1.93.36 1.85 1.19-.27 2.86.69 5.83 2.89 8.02a9.96 9.96 0 0 0 8.02 2.89m-1.64 2.02a12.08 12.08 0 0 1-7.8-3.47c-2.17-2.19-3.33-5-3.49-7.82-2.81 3.14-2.7 7.96.31 10.98 3.02 3.01 7.84 3.12 10.98.31"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="black" data-md-color-accent="indigo"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 7a5 5 0 0 1 5 5 5 5 0 0 1-5 5 5 5 0 0 1-5-5 5 5 0 0 1 5-5m0 2a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3m0-7 2.39 3.42C13.65 5.15 12.84 5 12 5s-1.65.15-2.39.42zM3.34 7l4.16-.35A7.2 7.2 0 0 0 5.94 8.5c-.44.74-.69 1.5-.83 2.29zm.02 10 1.76-3.77a7.131 7.131 0 0 0 2.38 4.14zM20.65 7l-1.77 3.79a7.02 7.02 0 0 0-2.38-4.15zm-.01 10-4.14.36c.59-.51 1.12-1.14 1.54-1.86.42-.73.69-1.5.83-2.29zM12 22l-2.41-3.44c.74.27 1.55.44 2.41.44.82 0 1.63-.17 2.37-.44z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/actions-gateway/github-actions-gateway" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    actions-gateway/github-actions-gateway
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+            
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../.." class="md-tabs__link">
+        
+  
+  
+    
+  
+  Home
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../why-gag/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Why GAG
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../alternatives/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Alternatives
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../features/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Features
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../demo/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Demo
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../getting-started/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Get started
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../roadmap/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Roadmap
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../design/" class="md-tabs__link">
+          
+  
+  
+    
+  
+  Design
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+    
+  
+  
+    
+    
+      <li class="md-tabs__item md-tabs__item--active">
+        <a href="../" class="md-tabs__link">
+          
+  
+  
+    
+  
+  Operations
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../reference/" class="md-tabs__link">
+          
+  
+  
+    
+  
+  Reference
+
+        </a>
+      </li>
+    
+  
+
+      
+    </ul>
+  </div>
+</nav>
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+<nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="GitHub Actions Gateway" class="md-nav__button md-logo" aria-label="GitHub Actions Gateway" data-md-component="logo">
+      
+  <img src="../../assets/logo.svg" alt="logo">
+
+    </a>
+    GitHub Actions Gateway
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/actions-gateway/github-actions-gateway" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    actions-gateway/github-actions-gateway
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../why-gag/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Why GAG
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../alternatives/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Alternatives
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Features
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../demo/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Demo
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting-started/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Get started
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../roadmap/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Roadmap
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+          
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" >
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../../design/" class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Design
+  
+
+    
+  </span>
+  
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_8" id="__nav_8_label" tabindex="0">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_8">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Design
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/01-executive-summary/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Executive summary
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/02-architecture/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/network-architecture/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Network architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/03-api-contracts/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API & data contracts
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/04-operational-flows/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Operational flows
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/05-security/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Security
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/06-implementation-phases/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Implementation phases
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/07-test-plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Test plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/08-glossary/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Glossary
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/appendix-a-capacity-slos/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Appendix A — Capacity & SLOs
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/appendix-b-worker-isolation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Appendix B — Worker isolation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/appendix-c-ai-implementation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Appendix C — AI-assisted implementation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/appendix-d-alternatives-considered/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Appendix D — Alternatives considered
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/appendix-e-capacity-planning/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Appendix E — Capacity planning
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/appendix-f-cost-model/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Appendix F — Cost model
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/appendix-g-future-enhancements/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Appendix G — Future enhancements
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/appendix-h-v2-api-decomposition/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Appendix H — v2 API decomposition
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/github-protocol-dependencies/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    GitHub protocol dependencies
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+      
+        
+          
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9" checked>
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../" class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Operations
+  
+
+    
+  </span>
+  
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_9" id="__nav_9_label" tabindex="">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_9_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_9">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Operations
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../personas/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Personas: who owns what
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../install/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Install
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../air-gapped-install/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Air-gapped install
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../gitops/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    GitOps install (Argo CD / Flux)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../upgrade/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Upgrade
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../migration-from-arc/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Migrate from ARC
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../migration-v1-to-v2/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Migrate v1 → v2
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../v1alpha1-deprecation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Deprecations & the v2.0.0 removal
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../tenant-onboarding/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tenant onboarding
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../resourcequota-sizing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ResourceQuota sizing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../runner-template-library/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Runner template library
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../in-runner-image-builds/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    In-runner image builds
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../kata-dind-workloads/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Kata DinD / image-build workloads
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../p2p-image-distribution/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    P2P image distribution
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../service-mesh-coexistence/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Service mesh coexistence
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+          
+          
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9_17" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_9_17" id="__nav_9_17_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Observability
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_9_17_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_9_17">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Observability
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../observability/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Metrics reference
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Metrics reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#full-metrics-reference" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Full Metrics Reference
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Full Metrics Reference">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#scale-set-acquisition-tier-q264" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scale-set acquisition tier (Q264)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#worker-usage--right-sizing-metrics-q359" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Worker usage / right-sizing metrics (Q359)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#proxy-metrics" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Proxy metrics
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#acquisition-tier-reach" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Acquisition-tier reach
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Acquisition-tier reach">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#label-value-reach" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Label-value reach
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#condition-and-event-tier-reach" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Condition and Event tier reach
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Condition and Event tier reach">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#condition-reasons" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Condition reasons
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#event-reasons" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Event reasons
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#crd-status-fields-kubectl-columns" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CRD Status Fields (kubectl columns)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="CRD Status Fields (kubectl columns)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#drilling-down-to-individual-runner-pods" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Drilling down to individual runner pods
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#selecting-gag-objects-with-the-recommended-labels" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Selecting GAG objects with the recommended labels
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#node-disruption-safety-annotations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Node-disruption-safety annotations
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#label-cardinality-warning" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Label Cardinality Warning
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#breaking-observability-changes-q417" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Breaking observability changes (Q417)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#breaking-observability-changes-q205" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Breaking observability changes (Q205)
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../observability-metrics-access/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Accessing metrics (scraping)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../observability-alerting/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Alerting & SLOs
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../observability-dashboards/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Grafana dashboards
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../observability-logging/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Logging & tracing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../cost-attribution/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cost attribution
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../worker-rightsizing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Worker right-sizing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../node-shutdown-budgets/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Node shutdown budgets
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../runbook/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Runbook
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../backup-restore/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Backup & restore
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../velero-backup-restore/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Velero backup & restore
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../troubleshooting/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Troubleshooting
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../security-operations/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Security operations
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../admission-policies/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Admission policies (Kyverno / Gatekeeper)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../release/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Release
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../kata-ci-spike-runbook/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Kata-on-GKE spike runbook
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+          
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_10" >
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../../reference/" class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference
+  
+
+    
+  </span>
+  
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_10" id="__nav_10_label" tabindex="0">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_10_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_10">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/api/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API reference (v2beta1)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#full-metrics-reference" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Full Metrics Reference
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Full Metrics Reference">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#scale-set-acquisition-tier-q264" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scale-set acquisition tier (Q264)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#worker-usage--right-sizing-metrics-q359" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Worker usage / right-sizing metrics (Q359)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#proxy-metrics" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Proxy metrics
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#acquisition-tier-reach" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Acquisition-tier reach
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Acquisition-tier reach">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#label-value-reach" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Label-value reach
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#condition-and-event-tier-reach" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Condition and Event tier reach
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Condition and Event tier reach">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#condition-reasons" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Condition reasons
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#event-reasons" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Event reasons
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#crd-status-fields-kubectl-columns" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CRD Status Fields (kubectl columns)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="CRD Status Fields (kubectl columns)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#drilling-down-to-individual-runner-pods" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Drilling down to individual runner pods
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#selecting-gag-objects-with-the-recommended-labels" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Selecting GAG objects with the recommended labels
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#node-disruption-safety-annotations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Node-disruption-safety annotations
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#label-cardinality-warning" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Label Cardinality Warning
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#breaking-observability-changes-q417" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Breaking observability changes (Q417)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#breaking-observability-changes-q205" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Breaking observability changes (Q205)
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="metrics-reference">Metrics Reference<a class="headerlink" href="#metrics-reference" title="Permanent link">&para;</a></h1>
+<blockquote>
+<p><strong>Audience:</strong> Platform engineer, Tenant operator</p>
+</blockquote>
+<p>Part of the <a href="../observability/">Observability</a> guide.
+To scrape these metrics, see <a href="../observability-metrics-access/">Accessing metrics (scraping setup)</a>; to alert on them, see <a href="../observability-alerting/">Alerting &amp; SLOs</a>.
+For SLO targets, see <a href="../../design/appendix-a-capacity-slos/">Appendix A — Capacity Targets &amp; SLOs</a>.</p>
+<h2 id="full-metrics-reference">Full Metrics Reference<a class="headerlink" href="#full-metrics-reference" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Metric</th>
+<th>Type</th>
+<th>Labels</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>actions_gateway_active_sessions</code></td>
+<td>Gauge</td>
+<td><code>namespace</code>, <code>runner_group</code></td>
+<td>Currently open long-poll sessions. One per RunnerGroup at steady state; rises toward <code>maxListeners</code> during bursts.</td>
+</tr>
+<tr>
+<td><code>actions_gateway_jobs_acquired_total</code></td>
+<td>Counter</td>
+<td><code>namespace</code>, <code>runner_group</code></td>
+<td>Jobs successfully acquired from the broker.</td>
+</tr>
+<tr>
+<td><code>actions_gateway_jobs_admission_rejected_total</code></td>
+<td>Counter</td>
+<td><code>namespace</code>, <code>runner_group</code>, <code>reason</code></td>
+<td>Delivered jobs the pre-acquisition capacity gate left queued at GitHub (acquire skipped). Expected to rise under sustained saturation; a persistent gap vs. <code>jobs_acquired_total</code> means demand exceeds available capacity. The <code>reason</code> label says which limit bound and therefore what to raise: <code>reason="ceiling"</code> — the owner is at its configured <code>maxWorkers</code> / max <code>priorityTiers</code> threshold (Q59); <code>reason="quota"</code> — the namespace <code>ResourceQuota</code> has no headroom for another worker pod, so the AGC declined to claim rather than claim-and-stall (#784). Read the owner's <code>WorkerQuotaExceeded</code> condition for the binding resource; <code>reason="capacity"</code> — the owner opted into <code>spec.capacityGate</code> and the cluster cannot currently <em>place</em> another worker pod of its shape, so the AGC declined rather than spend a JIT runner record on a pod that would be reaped (Q405, Q406). Read the set's <code>WorkerCapacityDeclined</code> condition for which signal said so: <code>reason: ScaleUpDeclined</code> is the cluster autoscaler's own declination (the default, where the gateway reports <code>clusterCapacity.nodeAutoscaling: Present</code>), <code>reason: PodsUnschedulable</code> is the scheduler's verdict (<code>Absent</code>), and <code>reason: AwaitingProbe</code> is the latched state — the declined pods were reaped and intake is limited to one probe job per <code>pendingPodDeadline</code> window until a worker pod schedules (Q512). One label value covers both on purpose — the rung, the refusal, and the operator's remedy are the same; only the evidence differs, and the condition carries that. Off by default: this series is absent until a <code>RunnerSet</code> sets <code>spec.capacityGate.mode</code>. <strong>Classic acquisition only</strong> — this is the <em>per-delivered-job</em> form of the gate, so both <code>reason</code> series read a flat zero on a <code>ScaleSet</code> set. That set enforces the same ladder as a capacity integer instead, and its equivalents are <a href="#scale-set-acquisition-tier-q264"><code>scaleset_advertised_capacity</code> / <code>scaleset_capacity_withheld</code></a> (Q443).</td>
+</tr>
+<tr>
+<td><code>actions_gateway_jobs_duplicate_delivery_total</code></td>
+<td>Counter</td>
+<td><code>namespace</code>, <code>runner_group</code></td>
+<td>Duplicate job deliveries deduplicated (Q260): the broker delivered the same job (same <code>planID</code>, distinct <code>RunnerRequestID</code>) to more than one sibling session and this one skipped provisioning — recycling its runner instead — because the <code>planID</code> was already claimed in this AGC. The dedup keys on <code>planID</code> (only known post-<code>acquirejob</code>), so a deduplicated delivery still ran <code>acquirejob</code>; the win is that it does not collide on the shared <code>job-&lt;planID&gt;</code> worker Secret or the winner's <code>runner-…-&lt;planID&gt;</code> pod. Two cases both count here: a <strong>concurrent burst</strong> (a sibling is provisioning the <code>planID</code> right now) and a <strong>late redelivery</strong> (the winner already completed, but its terminal worker pod has not yet been reaped, so the claim is retained for <code>completedPodTTL</code> past completion to keep deduping — otherwise the redelivery would re-provision and hit <code>create Pod … already exists</code>). A steady low rate during bursts is normal and benign — the gate is protecting runner slots. A sudden spike proportional to a stalled matrix indicates heavy fan-out; correlate with <code>jobs_acquired_total</code> (which should keep climbing) to confirm work is still being provisioned.</td>
+</tr>
+<tr>
+<td><code>actions_gateway_abandoned_delivery_completions_total</code></td>
+<td>Counter</td>
+<td><code>namespace</code>, <code>runner_group</code>, <code>outcome</code></td>
+<td>A <code>completejob</code> the AGC issues on a deduped sibling delivery of a fanned-out job — released by the winner on completion or on a late redelivery within the linger window (Q260 Option A) — so GitHub does not cancel the whole job at its ~15-minute unstarted-job timeout. A session's <strong>own</strong> delivery whose worker was removed before any container started is deliberately <em>not</em> completed and does not count here: every accepted <code>completejob</code> value concludes the run as <code>success</code>, a false green for a job that never ran (measured, Q645/Q676). <code>outcome="completed"</code> resolved the assignment (or found it already gone server-side); <code>outcome="error"</code> failed and the job may still be cancelled. <strong>On by default</strong> (opt out with <code>AGC_FANOUT_COMPLETION=false</code>), so a steady <code>completed</code> rate under concurrent bursts is normal. A rising <code>error</code> rate warrants investigating the run service's <code>completejob</code> responses.</td>
+</tr>
+<tr>
+<td><code>actions_gateway_fanout_loser_recycle_deferred_total</code></td>
+<td>Counter</td>
+<td><code>namespace</code>, <code>runner_group</code>, <code>outcome</code></td>
+<td>A deduped fan-out loser <strong>deferring its slot recycle until its winner concluded</strong> (Q266). A loser ran <code>acquirejob</code>, so GitHub holds its runner as assigned to the job; its recycle would <code>422</code> ("runner is currently running a job and cannot be deleted") for the winner's whole runtime — past the bounded recycle backoff — so recycling eagerly would exit the listener and, under sustained burst, collapse the pool. Instead the loser holds its slot until the winner concludes (fanning <code>completejob</code> out to this delivery clears the <code>422</code>), then recycles in place. <code>outcome="winner_concluded"</code> is the normal path; <code>outcome="fallback_timeout"</code> means the winner never concluded within the bound and the loser recycled anyway (GitHub's unstarted-job timeout should have released the assignment by then) — a sustained rate here is <strong>alert-worthy</strong> (a class of stuck winners); <code>outcome="context_cancelled"</code> is AGC shutdown. Only emitted when fan-out completion (Q260 Option A) is enabled.</td>
+</tr>
+<tr>
+<td><code>actions_gateway_job_acquisition_errors_total</code></td>
+<td>Counter</td>
+<td><code>namespace</code>, <code>reason</code></td>
+<td>Acquisition failures. Reason values: <code>already_claimed</code> (benign race), <code>delivery_window_expired</code> (job redelivered), <code>version_too_old</code>, <code>acquirejob_failed</code> (the call itself was refused or errored), <code>other</code>. An <code>acquirejob</code> failure also emits a <code>JobAcquisitionFailed</code> Warning Event on the owning <code>RunnerGroup</code>/<code>RunnerSet</code> (Q170).</td>
+</tr>
+<tr>
+<td><code>actions_gateway_job_duration_seconds</code></td>
+<td>Histogram</td>
+<td><code>namespace</code>, <code>runner_group</code></td>
+<td>Worker pod wall time: creation to the last container finishing, or to the deletion request for a worker removed mid-run. <strong>Both acquisition tiers</strong>, observed off the shared pod informer (Q713). This is the span the <a href="../../design/appendix-f-cost-model/">cost model</a> bills against: a pod is charged from creation, not from the acquisition that preceded it, so the pre-creation staging and any <code>spec.scaleUp</code> throttle wait are deliberately outside it. A pod that never started a container is not observed: it ran no job and occupied no node time.</td>
+</tr>
+<tr>
+<td><code>actions_gateway_pod_creation_latency_seconds</code></td>
+<td>Histogram</td>
+<td><code>namespace</code></td>
+<td>Time from worker pod creation to the runner container starting (scheduling + image pull). Key SLO metric — see <a href="../../design/appendix-a-capacity-slos/">Appendix A</a>. <strong>Both acquisition tiers</strong>, observed off the shared pod informer alongside <code>job_duration_seconds</code> (Q713). Both are emitted once per pod when its lifetime ends, so a long-running job contributes its latency observation only at completion. Neither is re-observed for pods already terminal when an AGC restarts and re-lists them.</td>
+</tr>
+<tr>
+<td><code>actions_gateway_token_refreshes_total</code></td>
+<td>Counter</td>
+<td><code>namespace</code></td>
+<td>Successful GitHub App installation token refreshes.</td>
+</tr>
+<tr>
+<td><code>actions_gateway_token_refresh_errors_total</code></td>
+<td>Counter</td>
+<td><code>namespace</code></td>
+<td>Failed token refresh attempts. See SLO threshold below.</td>
+</tr>
+<tr>
+<td><code>actions_gateway_renew_job_errors_total</code></td>
+<td>Counter</td>
+<td><code>namespace</code></td>
+<td>Failed <code>renewjob</code> calls. Leading indicator for cancelled jobs. (Renamed from <code>…_renewjob_errors_total</code> in Q205 — see <a href="#breaking-observability-changes-q205">Breaking observability changes</a>.)</td>
+</tr>
+<tr>
+<td><code>actions_gateway_renew_job_teardowns_total</code></td>
+<td>Counter</td>
+<td><code>namespace</code>, <code>reason</code></td>
+<td>Workers self-cancelled because the job's lock was definitively lost (Q254), avoiding an orphan pod — each also deletes the worker pod and increments <code>worker_pods_reaped_total{reason="job_abandoned"}</code> (Q501). <code>reason="job_not_found"</code> is a definitive 404/410 from the run service (job recycled/reassigned); <code>reason="consecutive_failures"</code> is 5 consecutive renewal failures (~5 min). See the <a href="../troubleshooting/#renewjob-failures-rising">runbook</a>.</td>
+</tr>
+<tr>
+<td><code>actions_gateway_eviction_retries_total</code></td>
+<td>Counter</td>
+<td><code>namespace</code>, <code>runner_group</code>, <code>tier</code>, <code>cause</code></td>
+<td>Recoveries <strong>started</strong> after a worker pod disruption — one per reserved retry-budget slot, incremented before the API calls. A recovery now outlasts GitHub's refusal window: the re-run is retried while GitHub answers <code>403 This workflow is already running</code> (which after an ungraceful eviction lasts until the job lock's TTL lapses, ~10 minutes — Q503), so in steady state each increment corresponds to a re-run that eventually lands. The recoveries that instead never landed are counted by <code>actions_gateway_eviction_rerun_failures_total</code> below — read the two together: <code>retries_total − rerun_failures_total</code> is the honest recovery count. <code>tier="classic"</code> is the classic acquisition path, where the goroutine that acquired the job watches its own worker pod; <code>tier="scaleset"</code> is the scale-set path, where the owning reconciler detects the disruption from the worker pod itself (Q417). <code>cause="eviction"</code> is the kubelet's node-pressure eviction; <code>cause="preemption"</code> is kube-scheduler displacing the worker for a higher <code>priorityTiers</code> tier (Q497); <code>cause="deletion"</code> is an external graceful deletion — a drain or a <code>kubectl delete pod</code> — whose worker published a terminal phase carrying the deletion mark (Q502; graceful too, with a measured 15–26s conclusion latency, so the retry loop lands it within a few paced attempts); <code>cause="abandoned"</code> is a worker reaped while still Pending, whose run was force-cancelled and is re-run once the owner places a worker pod again (Q691, both tiers since Q766, and unlike the others its re-run is deferred until that placement rather than fired at once). <code>cause="vanished"</code> is a scale-set worker that was already gone when the AGC started, with its job never concluded: the shape preemption and drain leave behind when the controller was down for the pod's teardown, recovered off the run identity the listener persisted rather than off the pod (Q844); it names what was observed rather than what happened, because which disruption took the worker went with the pod. The retry budget is <strong>shared</strong> — it is keyed by run ID alone, so <code>maxEvictionRetries</code> bounds re-runs per run across both tiers <strong>and all causes</strong> together, not once per combination. Labels added in Q417 (<code>tier</code>) and Q497 (<code>cause</code>); see <a href="#breaking-observability-changes-q417">Breaking observability changes</a>.</td>
+</tr>
+<tr>
+<td><code>actions_gateway_eviction_retries_exhausted_total</code></td>
+<td>Counter</td>
+<td><code>namespace</code>, <code>runner_group</code>, <code>tier</code>, <code>cause</code></td>
+<td>Disruption retries exhausted; job requires manual re-run. Each occurrence also emits an <code>EvictionRetriesExhausted</code> Warning Event on the owning <code>RunnerGroup</code>/<code>RunnerSet</code> (Q170). <code>tier</code> and <code>cause</code> as above.</td>
+</tr>
+<tr>
+<td><code>actions_gateway_eviction_rerun_failures_total</code></td>
+<td>Counter</td>
+<td><code>namespace</code>, <code>runner_group</code>, <code>tier</code>, <code>cause</code>, <code>reason</code></td>
+<td>Disruption recoveries whose re-run was <strong>never accepted</strong> by GitHub, so the budget slot is spent but the job was not re-run and needs a manual <code>gh run rerun</code> (Q503). <code>reason="run_never_concluded"</code>: GitHub was still answering <code>403 This workflow is already running</code> when the 15-minute re-run window closed — the original run outlived the job lock's ~10-minute TTL bound, which is itself worth investigating. <code>reason="api_error"</code>: a terminal API failure (a non-403 error, or a 403 that is a permissions problem rather than the still-running refusal). <code>reason="conclusion_unknown"</code>: the window closed with the deletion arm's cancel check (Q811, next row) still unable to reach the run for fifteen minutes (the request never completed, or GitHub answered 5xx), so no verdict was taken and no re-run was fired, because a run whose conclusion cannot be read is not assumed to be uncancelled. A 4xx, or a 2xx carrying something that is not a run, is <code>api_error</code> instead: neither becomes a verdict inside the window. Each occurrence also emits an <code>EvictionRerunFailed</code> Warning Event naming the run. <strong>Expected to be zero</strong>; see the <a href="../troubleshooting/#evicted-worker-pods-exhausting-retry-budget">runbook</a>.</td>
+</tr>
+<tr>
+<td><code>actions_gateway_eviction_rerun_withheld_total</code></td>
+<td>Counter</td>
+<td><code>namespace</code>, <code>runner_group</code>, <code>tier</code>, <code>cause</code>, <code>reason</code></td>
+<td>Disruption recoveries that deliberately made <strong>no</strong> re-run call, because making one would undo a decision GitHub already recorded (Q811). <code>reason="run_cancelled"</code> with <code>cause="deletion"</code> is the only shape today: the run concluded <code>cancelled</code>, and <code>rerun-failed-jobs</code> accepts a cancelled run (measured live 2026-08-05) where a <code>success</code> conclusion refuses it. Without the check, the <a href="../troubleshooting/#cancelling-a-run-does-not-stop-its-worker-pod">cancel runbook</a>'s own remedy for a worker that will not stop (delete its pod, which supplies the deletion mark the recovery keys on) re-queued the job the operator had just stopped. Each occurrence also emits a <strong>Normal</strong> <code>EvictionRerunWithheld</code> Event naming the run. The retry slot is spent, since it is reserved at detection, minutes before GitHub concludes the run, so read this alongside <code>eviction_retries_total</code>, whose increment it explains. <strong>Not</strong> a failure and <strong>not</strong> something to alert on: no manual re-run is wanted.</td>
+</tr>
+<tr>
+<td><code>actions_gateway_eviction_recovery_identity_unknown_total</code></td>
+<td>Counter</td>
+<td><code>namespace</code>, <code>runner_group</code>, <code>cause</code></td>
+<td>Disrupted <strong>scale-set</strong> worker pods that carried no workflow-run identity, so no automatic re-run could be attempted and the job stays failed until a human re-runs it (Q417). Each occurrence also emits an <code>EvictionRecoveryIdentityUnknown</code> Warning Event on the owning <code>RunnerSet</code>. This is the one failure mode that makes scale-set eviction recovery silently inert, which is why it is counted separately from an exhausted budget: an exhausted budget means a tenant is evicting more than <code>maxEvictionRetries</code> allows, while this means GitHub did not send the assignment fields (<code>ownerName</code>, <code>repositoryName</code>, <code>workflowRunId</code>) the mechanism reads. <strong>Expected to be zero</strong> — the assignment fields were confirmed present on live GitHub on 2026-07-26, so a sustained rate is a protocol-level regression, not a capacity problem — see the <a href="../troubleshooting/#evicted-scale-set-jobs-are-not-re-run-automatically">runbook</a>.</td>
+</tr>
+<tr>
+<td><code>actions_gateway_eviction_recovery_evidence_lost_total</code></td>
+<td>Counter</td>
+<td><code>namespace</code>, <code>runner_group</code>, <code>cause</code></td>
+<td>Disrupted <strong>scale-set</strong> worker pods deleted before the recovery could be claimed, so no automatic re-run was attempted and none can be attempted later: on that tier the pod is the disruption's only record, and it is gone (Q809). Each occurrence also emits an <code>EvictionRecoveryEvidenceLost</code> Warning Event on the owning <code>RunnerSet</code>. <code>cause="preemption"</code> and <code>cause="deletion"</code> are the exposed arms, since both act on a pod that is already terminating; the recovery scan reads pods from the informer cache and claims them through the live API, so a pod removed in between yields a claim that finds nothing. <strong>Expected to be zero</strong>, and distinct from <code>…_identity_unknown_total</code>, which means the pod was there and carried no run identity. See the <a href="../troubleshooting/#a-preempted-workers-job-is-not-re-run">runbook</a>.</td>
+</tr>
+<tr>
+<td><code>actions_gateway_abandoned_run_force_cancels_total</code></td>
+<td>Counter</td>
+<td><code>namespace</code>, <code>runner_group</code>, <code>tier</code>, <code>outcome</code></td>
+<td>REST <code>force-cancel</code>s of the workflow run behind a worker pod removed before it ran: the fast honest ending for a job nothing will ever report (Q683). No <code>completejob</code> value ends such a job honestly (Q645/Q676), and told nothing GitHub cancels run and job at its ~15-minute unstarted-job timeout; the standalone force-cancel reaches the same <strong><code>cancelled</code></strong> conclusion in about a second (measured live 2026-08-05), and the cancelled run accepts <code>rerun-failed-jobs</code> where the false-green ending refused it. <code>outcome="cancelled"</code>: accepted. <code>outcome="identity_unknown"</code>: the acquire payload carried no <code>owner/repo/run_id</code>, so there was no endpoint to address. <code>outcome="error"</code>: GitHub refused the call or the API failed. On the latter two the unstarted-job timeout remains the honest backstop, so they cost latency, not correctness; a sustained non-zero rate on either is worth investigating. <code>tier="classic"</code> is the acquiring goroutine, woken by its own worker pod's deletion; <code>tier="scaleset"</code> is the owning reconciler, which reads the run identity off the pod as the reaper deletes it (Q766), so on that tier <code>outcome="identity_unknown"</code> is unreachable, and the same failure is counted as <code>eviction_recovery_identity_unknown_total{cause="abandoned"}</code> instead. Increments alongside <code>worker_pods_reaped_total{reason="pending_deadline"}</code>; see the <a href="../troubleshooting/#worker-pod-reaped-while-pending-workerpodstuckpending">runbook</a>. An <code>outcome="cancelled"</code> run is then queued for automatic re-run, tracked by the next row.</td>
+</tr>
+<tr>
+<td><code>actions_gateway_abandoned_run_rerun_waits_total</code></td>
+<td>Counter</td>
+<td><code>namespace</code>, <code>runner_group</code>, <code>tier</code>, <code>outcome</code></td>
+<td>How the wait for capacity ended for a force-cancelled abandoned run queued for automatic re-run (Q691). The re-run is deliberately <strong>deferred</strong>: the job was abandoned because its worker could not be scheduled, so re-queueing it at once would put it back into the pool that was starved, and a shortage would compound into a re-run storm. It fires when a worker pod of the same owner <strong>binds to a node</strong> (<code>PodScheduled=True</code>) after the abandonment, the same evidence-of-capacity test the Q512 capacity-gate latch uses. <code>outcome="capacity_returned"</code>: a worker was placed and the re-run was handed to the shared per-run retry budget, where it continues as <code>eviction_retries_total{cause="abandoned"}</code> (and <code>eviction_retries_exhausted_total{cause="abandoned"}</code> once <code>maxEvictionRetries</code> re-runs are spent, which is the loop bound). <code>outcome="expired"</code>: nothing was placed within the 30-minute wait window, so the run stays cancelled and needs a manual re-run. A sustained <code>expired</code> rate means jobs are being lost silently to a pool that never recovers, and is worth alerting on. <code>tier</code> carries the acquisition tier the abandonment was detected on, matching the force-cancel it recovers (both tiers since Q766); the wait, the evidence, and the retry budget are identical on each.</td>
+</tr>
+<tr>
+<td><code>actions_gateway_quota_retries_total</code></td>
+<td>Counter</td>
+<td><code>namespace</code>, <code>runner_group</code></td>
+<td>Pod creation attempts retried after the namespace <code>ResourceQuota</code> rejected the worker pod. A brief non-zero rate under burst is normal (the listener backs off and retries); a sustained rate means quota headroom is tight — raise the quota or lower <code>maxWorkers</code>.</td>
+</tr>
+<tr>
+<td><code>actions_gateway_quota_retries_exhausted_total</code></td>
+<td>Counter</td>
+<td><code>namespace</code>, <code>runner_group</code></td>
+<td>Quota retries exhausted; the job was abandoned after the quota retry budget ran out and requires a manual re-run.</td>
+</tr>
+<tr>
+<td><code>actions_gateway_worker_pods_reaped_total</code></td>
+<td>Counter</td>
+<td><code>namespace</code>, <code>runner_group</code>, <code>runner_set</code>, <code>reason</code></td>
+<td>Worker pods the AGC deleted — the lifecycle reaper's five reasons, plus the job-abandoned reclaim. <code>runner_group</code> carries the owning CR's name on <strong>both</strong> acquisition tiers (a <code>RunnerSet</code>'s reaps land there too, unchanged, so existing <code>runner_group</code>-keyed queries keep working); <code>runner_set</code> additionally carries the set name on every v2 <code>RunnerSet</code>'s reaps and is empty for a v1 <code>RunnerGroup</code> (added in Q514), so the reap series join the <a href="#scale-set-acquisition-tier-q264"><code>runner_set</code>-labelled <code>scaleset_*</code> gauges</a> on <code>(namespace, runner_set)</code> — filter with <code>{runner_set!=""}</code> for the v2 view. The label keys on the owning kind, not on the acquisition protocol, so a <code>RunnerSet</code> running <code>acquisitionProtocol: Classic</code> carries it too; <code>{runner_set!=""}</code> is therefore not a scale-set filter. <code>reason="completed_ttl"</code> is routine cleanup after <code>completedPodTTL</code>; <code>reason="pending_deadline"</code> means a pod was stuck Pending past <code>pendingPodDeadline</code> and its job was cancelled — each such reap also emits a <code>WorkerPodStuckPending</code> Warning Event on the RunnerGroup. <code>reason="completed_pending"</code> means a pod was still Pending thirty seconds after GitHub reported its job terminal — the job ended before the pod could start, so the pod had nothing to run and (on the scale-set tier) no longer has the JIT-config Secret it mounts — and emits a <code>WorkerPodCompletedPending</code> Warning Event; it is deliberately distinct from <code>pending_deadline</code>, which would send you after a scheduling problem that does not exist; see the <a href="../troubleshooting/#worker-pod-reaped-while-pending-after-its-job-completed-workerpodcompletedpending">runbook</a>. <code>reason="orphaned_running"</code> means a pod was still Running five minutes after GitHub reported its job terminal — a ScaleSet worker that registered but never received its job, or a pod held open by a container that outlived the runner — and emits a <code>WorkerPodOrphanedRunning</code> Warning Event; see the <a href="../troubleshooting/#worker-pod-reaped-while-running-workerpodorphanedrunning">runbook</a>. <code>reason="lifetime_exceeded"</code> means the kubelet killed the pod for outliving <code>maxWorkerLifetime</code> (default 12h, the pod's <code>activeDeadlineSeconds</code>) and emits a <code>WorkerPodLifetimeExceeded</code> Warning Event — the unconditional backstop for a worker orphaned while the AGC was down, and the one reap reason that fires with no AGC running; see the <a href="../troubleshooting/#worker-killed-by-the-lifetime-cap-workerpodlifetimeexceeded">runbook</a>. <code>reason="gateway_deleted"</code> means the pod's <code>ActionsGateway</code> is being deleted: the AGC is the pods' only reaper and is torn down with the gateway, so it stops acquiring and deletes them itself rather than strand them — any job they were running is lost, and a single <code>WorkerPodsReapedOnGatewayTeardown</code> Warning Event names the count; see the <a href="../troubleshooting/#worker-pods-reaped-on-gateway-teardown-workerpodsreapedongatewayteardown">runbook</a>. <code>reason="job_abandoned"</code> is the one non-reaper source: the classic-tier provisioner reclaiming the worker of a job whose lock was definitively lost, immediately after the matching <code>renew_job_teardowns_total</code> increment — it should track that counter, and see the <a href="../troubleshooting/#renewjob-failures-rising">runbook</a>.</td>
+</tr>
+<tr>
+<td><code>actions_gateway_worker_scaleup_throttled_total</code></td>
+<td>Counter</td>
+<td><code>namespace</code>, <code>runner_group</code></td>
+<td>Worker-pod creations delayed by the opt-in per-RunnerGroup scale-up rate limit (<code>spec.scaleUp</code>): the token bucket was empty so the acquired job waited for a token before its pod was created (Q223). <strong>Zero unless a group sets <code>scaleUp</code></strong> — it is default-off. A sustained rate means the ramp is actively smoothing a cold-start burst on a shared egress path (NAT/firewall/VPN); that is the knob doing its job, not an error. If it is <em>persistently</em> high, the ramp may be holding already-claimed jobs too long — raise <code>maxPerSecond</code>/<code>burst</code>, or confirm a rate limit is the right tool for the burst (see <a href="../tenant-onboarding/#step-2-create-the-actionsgateway-resource">tenant-onboarding: worker scale-up rate limit</a>).</td>
+</tr>
+<tr>
+<td><code>actions_gateway_message_poll_errors_total</code></td>
+<td>Counter</td>
+<td><code>namespace</code>, <code>reason</code></td>
+<td><code>GetMessage</code> errors (excludes empty polls and session expiry — those are normal). <code>reason="rate_limited"</code> is a 429; <code>reason="timeout"</code> is a black-holed long-poll the broker accepted but never answered, bounded by the client response-header deadline and retried (see <a href="../troubleshooting/#listener-stalls-for-minutes-after-a-black-holed-broker-connection">Listener Stalls After a Black-Holed Broker Connection</a>); <code>reason="other"</code> is any remaining transport/decode error. <strong>Both acquisition tiers</strong> — a <code>ScaleSet</code> set writes the same <code>namespace</code>/<code>reason</code> series as a Classic group (Q446), so one query covers a mixed fleet and keeps working after Classic is removed. Credential rejection (401/403) and session expiry (404/410) are <em>not</em> counted on either tier: both are heal paths, not poll failures. On a <code>ScaleSet</code> set the counter is the rate-able half of a picture the conditions complete — <code>Degraded</code>/<code>Unauthorized</code> on a rejected session refresh, and <code>RateLimited</code> once a 429 episode outlasts ten minutes — so a stream of brief episodes shows up here even though no condition trips.</td>
+</tr>
+<tr>
+<td><code>actions_gateway_agent_recycles_total</code></td>
+<td>Counter</td>
+<td><code>namespace</code>, <code>runner_group</code>, <code>trigger</code></td>
+<td>Single-use JIT agents re-registered. <code>trigger="post_job"</code> is routine (one per completed job); <code>stale_session</code>/<code>startup</code> mean a dead agent was detected and healed after the fact; <code>reconcile_repair</code> means a parked agent was repaired by the reconciler.</td>
+</tr>
+<tr>
+<td><code>actions_gateway_agent_recycle_errors_total</code></td>
+<td>Counter</td>
+<td><code>namespace</code>, <code>runner_group</code></td>
+<td>Failed agent re-registration attempts. Sustained growth shrinks listener capacity — see the <a href="../troubleshooting/#sessions-stuck-in-401eof-getmessage-loops-tenant-throughput-decays-to-zero">runbook</a>.</td>
+</tr>
+<tr>
+<td><code>actions_gateway_broker_session_leaks_total</code></td>
+<td>Counter</td>
+<td><code>namespace</code>, <code>runner_group</code></td>
+<td>Broker sessions the AGC gave up deleting: every <code>DELETE /sessions</code> attempt failed (3 tries inside a 10 s budget), so the session stays registered at GitHub until it expires server-side (Q436). The listener recovers either way — it opens a fresh session and keeps its polling slot — so this is <strong>not</strong> an availability alarm on its own. A one-off during a GitHub blip or a fleet-wide teardown is expected. A <strong>sustained</strong> rate means the tenant is accumulating server-side sessions nobody polls, and points at a slow or unreachable broker on the control-plane path: check <code>actions_gateway_message_poll_errors_total{reason="timeout"}</code> and the egress proxy for the same tenant.</td>
+</tr>
+<tr>
+<td><code>actions_gateway_broker_token_propagation_retries_total</code></td>
+<td>Counter</td>
+<td><code>namespace</code>, <code>runner_group</code></td>
+<td>Broker OAuth token-exchange retries a freshly recycled agent made while GitHub's token endpoint still returned a transient <code>400 "Registration … was not found"</code> for its just-created runner record (the <code>generate-jitconfig</code> → OAuth-service propagation window, Q267). The listener rides these out with a bounded, jittered backoff instead of exiting and churning a new record. A brief non-zero blip during a burst is normal; a <strong>sustained</strong> rate means wide-pool recycle churn is repeatedly hitting the propagation seam — see the <a href="../troubleshooting/#concurrent-job-burst-serializes-to-1-worker-recycle-blocked-on-a-still-running-runner">runbook</a>.</td>
+</tr>
+<tr>
+<td><code>actions_gateway_worker_quota_pressure</code></td>
+<td>Gauge</td>
+<td><code>namespace</code>, <code>runner_group</code></td>
+<td><code>1</code> when <code>WorkerQuotaPressure=True</code> (Q82): workers can't scale to the configured ceiling within the namespace <code>ResourceQuota</code> headroom. Warning — load-dependent; alert with <code>for:</code>, don't page.</td>
+</tr>
+<tr>
+<td><code>actions_gateway_worker_quota_exceeded</code></td>
+<td>Gauge</td>
+<td><code>namespace</code>, <code>runner_group</code></td>
+<td><code>1</code> when <code>WorkerQuotaExceeded=True</code> (Q82): the <code>ResourceQuota</code> can't admit another worker pod — the next acquired job's pod will be rejected. Error — page.</td>
+</tr>
+<tr>
+<td><code>actions_gateway_workers_unschedulable</code></td>
+<td>Gauge</td>
+<td><code>namespace</code>, <code>runner_group</code></td>
+<td><code>1</code> when <code>WorkersUnschedulable=True</code> (Q157): worker pods are stuck Pending past the scheduling grace because the scheduler can't place them (no matching node / affinity / taints — <strong>not</strong> quota, which <code>WorkerQuotaExceeded</code> covers). Capacity is not materializing — page if sustained. The stuck pods and the scheduler verdict are named in the condition message.</td>
+</tr>
+<tr>
+<td><code>actions_gateway_runnerset_worker_quota_pressure</code></td>
+<td>Gauge</td>
+<td><code>namespace</code>, <code>runner_set</code></td>
+<td><code>1</code> when <code>WorkerQuotaPressure=True</code> on a v2 <code>RunnerSet</code> (Q303, exported in Q319) — the per-set twin of <code>actions_gateway_worker_quota_pressure</code>, same semantics and same warning grade. Alert with <code>for:</code>, don't page.</td>
+</tr>
+<tr>
+<td><code>actions_gateway_runnerset_worker_quota_exceeded</code></td>
+<td>Gauge</td>
+<td><code>namespace</code>, <code>runner_set</code></td>
+<td><code>1</code> when <code>WorkerQuotaExceeded=True</code> on a v2 <code>RunnerSet</code> — the per-set twin of <code>actions_gateway_worker_quota_exceeded</code>: the <code>ResourceQuota</code> can't admit another worker pod. Error — page. On a <code>ScaleSet</code> set the same headroom also drives <code>scaleset_capacity_withheld{reason="quota"}</code>, but the two are not equivalent: that gauge counts the slots quota removed from the ceiling, while this one trips only once there is no room for even one more worker pod.</td>
+</tr>
+<tr>
+<td><code>actions_gateway_runnerset_workers_unschedulable</code></td>
+<td>Gauge</td>
+<td><code>namespace</code>, <code>runner_set</code></td>
+<td><code>1</code> when <code>WorkersUnschedulable=True</code> on a v2 <code>RunnerSet</code> — the per-set twin of <code>actions_gateway_workers_unschedulable</code>: worker pods are stuck Pending past the scheduling grace because the scheduler can't place them (<strong>not</strong> quota). Page if sustained; the stuck pods and the scheduler verdict are named in the condition message.</td>
+</tr>
+<tr>
+<td><code>actions_gateway_runnerset_worker_capacity_declined</code></td>
+<td>Gauge</td>
+<td><code>namespace</code>, <code>runner_set</code>, <code>reason</code></td>
+<td><code>1</code> when <code>WorkerCapacityDeclined=True</code> on a v2 <code>RunnerSet</code> (Q405, Q406; gauged in Q643): the opt-in capacity gate is refusing job intake because the cluster cannot place another worker pod of this set's shape. <strong>Emitted only for a set that set <code>spec.capacityGate.mode</code></strong> — a set with no gate carries no condition, and an absent series is what says so; a <code>0</code> would read as "gate evaluated, capacity available". <code>reason</code> is the condition's current reason and is the label to alert and group on: <code>PodsUnschedulable</code> is the scheduler's verdict (a fixed-size cluster, <code>clusterCapacity.nodeAutoscaling: Absent</code>), <code>ScaleUpDeclined</code> is the cluster autoscaler's own declination (the default, <code>Present</code>), and <code>AwaitingProbe</code> is the <strong>latched</strong> state (Q512) — the declined pods were reaped, so intake is throttled to one probe job per <code>pendingPodDeadline</code> window until a worker pod schedules. <code>CapacityAvailable</code> and <code>GateModeUnsupported</code> are the two <code>False</code> reasons and read <code>0</code>. Exactly one series exists per gated set: a reason change replaces it rather than adding one, so <code>max by (reason) (…) == 1</code> is safe. <strong>The <code>AwaitingProbe</code> row is the one that needs the label.</strong> It outlives the stuck pod that produced it, so <code>actions_gateway_runnerset_workers_unschedulable</code> has already fallen back to <code>0</code> while this reads <code>1</code> — an operator watching only the scheduler signal sees a recovered set whose intake is still throttled.</td>
+</tr>
+<tr>
+<td><code>actions_gateway_reap_blocking_sidecar_templates</code></td>
+<td>Gauge</td>
+<td><code>namespace</code>, <code>runner_set</code></td>
+<td>Number of regular (non-native) sidecar containers in a <code>RunnerSet</code>'s resolved worker template that may keep the worker pod alive after the runner container exits, stranding the runner slot against <code>maxWorkers</code> (Q249). <code>&gt; 0</code> also sets the advisory <code>PossibleReapBlockingSidecar=True</code> condition on the <code>RunnerSet</code> naming the offending containers. Config warning, not load — fix the template: declare the sidecar as a native sidecar (<code>restartPolicy: Always</code> init container, Kubernetes ≥ 1.29) so the pod terminates when the runner exits, or, if it exits cleanly on its own, acknowledge it in the <code>actions-gateway.com/self-exiting-sidecars</code> annotation. Advisory — does not gate <code>Ready</code>.</td>
+</tr>
+<tr>
+<td><code>controller_runtime_reconcile_errors_total</code></td>
+<td>Counter</td>
+<td><code>controller</code></td>
+<td>GMC/AGC reconcile errors. Emitted by controller-runtime (no <code>actions_gateway_</code> prefix); the <code>controller</code> label distinguishes <code>actionsgateway</code>, <code>runnergroup</code>, etc. Non-zero values deserve investigation.</td>
+</tr>
+<tr>
+<td><code>actions_gateway_ip_range_updates_total</code></td>
+<td>Counter</td>
+<td><code>namespace</code></td>
+<td><code>NetworkPolicy</code> egress rule refreshes from GitHub meta API.</td>
+</tr>
+<tr>
+<td><code>actions_gateway_managed_gateways</code></td>
+<td>Gauge</td>
+<td>—</td>
+<td>Total <code>ActionsGateway</code> CRs (v1 <strong>and</strong> v2) currently managed by the GMC (Q320).</td>
+</tr>
+<tr>
+<td><code>actions_gateway_proxy_quota_pressure</code></td>
+<td>Gauge</td>
+<td><code>namespace</code>, <code>name</code></td>
+<td><code>1</code> when <code>ProxyQuotaPressure=True</code> (Q82): the proxy pool can't scale to <code>maxReplicas</code> within the namespace <code>ResourceQuota</code> headroom. Warning — alert with <code>for:</code>, don't page. <code>name</code> is the v1 <code>ActionsGateway</code> or, on a v2 deploy, the <code>EgressProxy</code> owning the pool (Q320).</td>
+</tr>
+<tr>
+<td><code>actions_gateway_proxy_quota_exceeded</code></td>
+<td>Gauge</td>
+<td><code>namespace</code>, <code>name</code></td>
+<td><code>1</code> when <code>ProxyQuotaExceeded=True</code> (Q82): proxy replica creates are being rejected by the <code>ResourceQuota</code> now. Error — page. <code>name</code> is the v1 <code>ActionsGateway</code> or, on a v2 deploy, the <code>EgressProxy</code> owning the pool (Q320).</td>
+</tr>
+<tr>
+<td><code>actions_gateway_runnergroups_degraded</code></td>
+<td>Gauge</td>
+<td><code>namespace</code>, <code>name</code></td>
+<td><code>1</code> when <code>RunnerGroupsDegraded=True</code> (Q158): one or more of the gateway's owned <code>RunnerGroup</code>s report an impairing condition (<code>CredentialUnavailable</code>/<code>Degraded</code>/<code>RunnerVersionTooOld</code>/<code>WorkersUnschedulable</code>). Rolls child health up to the gateway; the impaired groups are named in the condition message. Advisory — does not gate <code>Ready</code>. v1 only — the v2 twin is <code>actions_gateway_runnersets_degraded</code> below.</td>
+</tr>
+<tr>
+<td><code>actions_gateway_egress_rules_stale</code></td>
+<td>Gauge</td>
+<td><code>namespace</code>, <code>name</code></td>
+<td><code>1</code> when <code>EgressRulesStale=True</code> (Q157): the GitHub egress IP-range allowlist has not been refreshed within the staleness window (just over two of the ~24h refresh cycles), so a stalled refresh loop may have let the proxy <code>NetworkPolicy</code> drift from GitHub's published ranges. Advisory — does not gate <code>Ready</code>; page if sustained, as new GitHub ranges will be silently dropped. <code>name</code> is the v1 <code>ActionsGateway</code> or, on a v2 deploy, the CIDR-mode <code>EgressProxy</code> carrying the condition (an FQDN-mode proxy carries no refreshed CIDR rule, so it never trips) (Q320).</td>
+</tr>
+<tr>
+<td><code>actions_gateway_github_egress_incomplete</code></td>
+<td>Gauge</td>
+<td><code>namespace</code>, <code>name</code></td>
+<td><code>1</code> when an <code>EgressProxy</code>'s <code>GitHubEgressIncomplete=True</code> (Q506): a referring gateway names a GitHub Enterprise Server host, and the pool's <code>CIDR</code>-mode allowlist carries only the ranges <code>api.github.com/meta</code> publishes — which never contain a customer appliance, so the tenant's GitHub traffic is denied. Advisory — does not gate <code>Ready</code>, but the affected tenant acquires no jobs; ticket it, as the fix is an operator config change (<code>spec.destinationCIDRs</code> or an FQDN egress mode) that will not self-heal. See <a href="../troubleshooting/#a-ghes-tenants-traffic-never-reaches-the-appliance">A GHES Tenant's Traffic Never Reaches the Appliance</a>. v2 only, emitted only on a v2 install (Q537).</td>
+</tr>
+<tr>
+<td><code>actions_gateway_runnersets_degraded</code></td>
+<td>Gauge</td>
+<td><code>namespace</code>, <code>name</code></td>
+<td><code>1</code> when a v2 <code>ActionsGateway</code>'s <code>RunnerSetsDegraded=True</code> (Q304): one or more of the <code>RunnerSet</code>s bound to the gateway (<code>spec.gatewayRef</code>) report an impairing condition. The v2 twin of <code>actions_gateway_runnergroups_degraded</code>; rolls child health up to the gateway, naming the impaired sets in the condition message. Advisory — does not gate <code>Ready</code>. v2 only, emitted only on a v2 install (Q321).</td>
+</tr>
+<tr>
+<td><code>actions_gateway_agc_available</code></td>
+<td>Gauge</td>
+<td><code>namespace</code>, <code>name</code></td>
+<td><code>1</code> when a v2 <code>ActionsGateway</code>'s <code>AGCAvailable=True</code>: the tenant's AGC <code>Deployment</code> has a ready replica (the gateway's control plane is up). Drops to <code>0</code> while the AGC is rolling out or unavailable — correlate with <code>Ready</code>. v2 only, emitted only on a v2 install (Q321).</td>
+</tr>
+<tr>
+<td><code>actions_gateway_egress_unattributed</code></td>
+<td>Gauge</td>
+<td><code>namespace</code>, <code>name</code></td>
+<td><code>1</code> when a v2 <code>ActionsGateway</code>'s <code>EgressUnattributed=True</code> (§H.10): the gateway runs in <strong>direct</strong> egress mode, so its GitHub traffic is not attributed to a per-tenant egress proxy. Advisory — expected and <code>0</code> on a proxied deploy; a <code>1</code> on a deploy meant to be proxied flags a misconfiguration. v2 only, emitted only on a v2 install (Q321).</td>
+</tr>
+<tr>
+<td><code>actions_gateway_agc_autoscaling_unavailable</code></td>
+<td>Gauge</td>
+<td><code>namespace</code>, <code>name</code></td>
+<td><code>1</code> when a v2 <code>ActionsGateway</code>'s <code>AGCAutoscalingUnavailable=True</code> (Q360, §E.11): the gateway opted into managed AGC right-sizing (<code>agcAutoscaling</code>) but it cannot be satisfied — the <code>VerticalPodAutoscaler</code> CRDs are not installed (<code>VPACRDNotInstalled</code>) or a precedence conflict blocks the managed VPA. Advisory — the AGC still runs on its stamped <code>agcResources</code> sizing and <code>Ready</code> is unaffected; the opt-in is simply inert until the blocker clears. <code>0</code> when satisfied or not opted in. Without this gauge the unsatisfiable opt-in is visible only via <code>kubectl describe</code> (Q390). v2 only, emitted only on a v2 install (Q321).</td>
+</tr>
+<tr>
+<td><code>actions_gateway_scale_set_name_collision</code></td>
+<td>Gauge</td>
+<td><code>namespace</code>, <code>name</code></td>
+<td><code>1</code> when a v2 <code>ActionsGateway</code>'s <code>ScaleSetNameCollision=True</code> (Q849, §5.2): a <code>ScaleSet</code> <code>RunnerSet</code> bound to this gateway claims a scale-set name (its <strong>first</strong> <code>runnerLabel</code>) that another <code>RunnerSet</code> already claims in the same GitHub org/enterprise/repo, so both tenants' AGCs drive one scale set at GitHub and each acquires the other's jobs. Advisory: it does not gate <code>Ready</code>, and GAG does not pick a winner. <strong>Page on any <code>1</code></strong>: admission rejects every new such pair (Q791), so a <code>1</code> is a pair that predates the guard (an upgrade from before <code>v1.5.0</code>) or was applied with the validating webhook uninstalled, and it does not self-heal. See <a href="../troubleshooting/#actionsgateway-reports-scalesetnamecollision">ActionsGateway reports ScaleSetNameCollision</a>. v2 only, emitted only on a v2 install.</td>
+</tr>
+<tr>
+<td><code>actions_gateway_build_info</code></td>
+<td>Gauge</td>
+<td><code>component</code>, <code>version</code></td>
+<td>Constant <code>1</code> per running control-plane binary, following the Prometheus <code>*_build_info</code> convention (Q318). Emitted by the GMC, AGC, and proxy — <code>component</code> is <code>gmc</code>/<code>agc</code>/<code>proxy</code> and <code>version</code> is the build tag stamped into the binary (<code>dev</code> for un-stamped local builds). Not load-bearing for alerting; join it into other series to correlate the running version during an incident (worker pods carry <code>app.kubernetes.io/version</code>, but the control plane otherwise does not expose its version in metrics). Both shipped <a href="../observability-dashboards/">dashboards</a> surface it, which is how an operator tells whether a tenant's <code>job_duration_seconds</code> is the pre- or post-v1.5.0 span.</td>
+</tr>
+</tbody>
+</table>
+<blockquote>
+<p><strong>Reading the eviction metrics across tiers and causes.</strong> Both <code>eviction_retries_total</code> and <code>eviction_retries_exhausted_total</code> are emitted on <strong>both</strong> acquisition tiers, split by the <code>tier</code> label (Q417), and for the <strong>four</strong> recovered disruptions, split by the <code>cause</code> label (Q497, Q502, Q691).
+Detection differs across every combination — an inline pod wait on classic, the owning reconciler's recovery pass on scale-set; a <code>PodFailed</code>/<code>Evicted</code> phase for an eviction, a <code>DisruptionTarget</code> condition for a preemption, the pod's <code>deletionTimestamp</code> at terminal publish for an external deletion, a force-cancelled run plus a later worker placement for an abandonment — but they share one budget, keyed by workflow run alone, so <code>maxEvictionRetries</code> caps re-runs per run across the whole set rather than once per combination.</p>
+<p><strong>The <code>cause</code> split is a diagnosis, not decoration.</strong> A climbing <code>cause="eviction"</code> rate means node pressure: memory or disk exhaustion on the nodes, and the fix is capacity or worker sizing.
+A climbing <code>cause="preemption"</code> rate means a <code>priorityTiers</code> floor is displacing more opportunistic work than the tenant sized for, and the fix is tier thresholds or where the work is placed.
+A climbing <code>cause="deletion"</code> rate means something outside the gateway is deleting live workers — node drains from upgrades or autoscaler consolidation, a descheduler, or hand-run deletes — and the fix is finding the deleter.
+A climbing <code>cause="abandoned"</code> rate means workers are not being placed at all before <code>pendingPodDeadline</code> reaps them (Q691), and the fix is whatever is blocking scheduling: cluster capacity, an unpullable image, or constraints no node satisfies.
+A climbing <code>cause="vanished"</code> rate means the AGC is missing worker teardowns entirely, and the fix is its own availability: restarts, OOM kills, or evictions of the controller pod, not anything about the workers.
+Reading one as another sends an operator hunting in entirely the wrong place.</p>
+<p>A flat zero on <code>tier="scaleset"</code> while workers are visibly being disrupted means the recovery is not firing, not that nothing happened.
+Check <code>kubectl get pods --field-selector=status.phase=Failed</code> for <code>Evicted</code> pods, then <code>actions_gateway_eviction_recovery_identity_unknown_total</code> and the <a href="../troubleshooting/#evicted-scale-set-jobs-are-not-re-run-automatically">runbook</a>.
+For preemption specifically, see <a href="../troubleshooting/#a-preempted-workers-job-is-not-re-run">A Preempted Worker's Job Is Not Re-Run</a> — its scale-set path has a time limit the eviction path does not.</p>
+<p><strong>Proxy conditions on a v2 deploy.</strong> On a v2 install (the opt-in <code>actions-gateway-crds-v2</code> CRDs), the GMC also counts v2 <code>ActionsGateway</code>s in <code>managed_gateways</code> and reflects each <code>EgressProxy</code>'s proxy conditions in <code>proxy_quota_pressure</code>, <code>proxy_quota_exceeded</code>, and <code>egress_rules_stale</code> — the EgressProxy reconciler sets those conditions with the same semantics as the v1 <code>ActionsGateway</code> (a namespace-<code>ResourceQuota</code>-bounded, HPA-scaled pool whose default CIDR-mode <code>NetworkPolicy</code> is refreshed from the shared GitHub IP-range cache) (Q320).
+The v1 and v2 series share one metric family; the <code>name</code> label distinguishes them by object — both kinds carry the same <code>namespace</code>/<code>name</code> labels, so nothing about the v1 series changes.
+The worker-capacity gauges below take the other route, and the note on them says why.</p>
+<p><code>github_egress_incomplete</code> is the exception among the proxy gauges: its condition exists only on the <code>EgressProxy</code> — v1 has no twin — so the family is emitted only on a v2 install (Q537).</p>
+<p><strong>Worker-capacity conditions on v2 <code>RunnerSet</code>s.</strong> The <code>WorkerQuotaPressure</code>, <code>WorkerQuotaExceeded</code>, and <code>WorkersUnschedulable</code> conditions are also set on a v2 <code>RunnerSet</code> (Q303) with the same semantics as the v1 <code>RunnerGroup</code>, so a stalled set surfaces the capacity blocker in <code>.status.conditions</code> instead of only a rising <code>pendingJobs</code> with <code>Ready=True</code>.
+Each has its own gauge — the <code>actions_gateway_runnerset_*</code> triplet above (Q319) — so a <code>RunnerSet</code> is alertable without scraping CRD conditions through kube-state-metrics.</p>
+<p><strong><code>WorkerCapacityDeclined</code> is gauged too, and differs in two ways</strong> (Q643).
+It carries a <code>reason</code> label, because the value alone cannot separate a live decline from the latched <code>AwaitingProbe</code> state, and those call for different actions — one has stuck pods to inspect, the other has none and means intake is throttled to one probe job per <code>pendingPodDeadline</code> window.
+And it is emitted only for a set whose gate is on, because the reconciler <em>removes</em> the condition for an ungated set rather than publishing it <code>False</code>; the family follows the condition, so absence means "no gate here".
+The per-consequence series stay as they are: <code>jobs_admission_rejected_total{reason="capacity"}</code> counts jobs the classic tier left queued and <code>scaleset_capacity_withheld{reason="capacity"}</code> counts slots the scale-set tier withheld.
+Those answer "how much did the gate cost this tenant"; this gauge answers "is the gate closed right now, and on what evidence".</p>
+<p><strong>Why separate families instead of a <code>runner_set</code> label on the v1 gauges.</strong> Unlike the proxy conditions above, the two objects do not share a label set: the v1 series key on <code>runner_group</code>, which a <code>RunnerSet</code> has none of.
+Folding both into one family would leave every set at <code>runner_group=""</code>, which silently breaks the <code>sum by (namespace, runner_group)</code> groupings the v1 series promise — every set would collapse into a single unnamed bucket — and would add an always-empty <code>runner_set</code> label to every existing v1 series.
+Separate names cost existing queries nothing, and a v2 dashboard selects on <code>runner_set</code> directly rather than filtering <code>{runner_set!=""}</code> on every query.
+The v1 families are unchanged and stay <code>RunnerGroup</code>-only.</p>
+<p><strong><code>RunnerSetsDegraded</code> on a v2 <code>ActionsGateway</code>.</strong> The v2 <code>ActionsGateway</code> carries a <code>RunnerSetsDegraded</code> condition (Q304) — the child-health rollup counterpart of the v1 <code>RunnerGroupsDegraded</code> above.
+It is <code>True</code> when one or more of the <code>RunnerSet</code>s bound to the gateway (<code>spec.gatewayRef</code>) are impaired — not serving jobs: a non-transient <code>Ready=False</code> (a reference did not resolve or a provisioning step failed) <strong>or</strong> any abnormal-is-True impairing condition — <code>Degraded</code> (revoked/invalid credentials, pushed by the listener independently of <code>Ready</code>, Q330), <code>CredentialUnavailable</code>, <code>RunnerVersionTooOld</code>, or <code>WorkersUnschedulable</code>.
+The advisory conditions (<code>RateLimited</code>, the <code>WorkerQuota</code> ladder, <code>EgressUnattributed</code>, <code>PossibleReapBlockingSidecar</code>, <code>JobProvisionStalled</code>) are excluded so the rollup does not flap on normal load.
+The condition message names the impaired sets and their tripped signals, giving the operator a single pane without inspecting each child.
+Advisory — like the v1 rollup it does <strong>not</strong> gate <code>Ready</code>, since the gateway's own AGC control plane can be healthy while a tenant's set is impaired.
+It is exported as the <code>actions_gateway_runnersets_degraded</code> gauge (Q321), alongside <code>actions_gateway_agc_available</code>, <code>actions_gateway_egress_unattributed</code>, <code>actions_gateway_agc_autoscaling_unavailable</code>, and <code>actions_gateway_scale_set_name_collision</code> for the gateway's <code>AGCAvailable</code>, <code>EgressUnattributed</code>, <code>AGCAutoscalingUnavailable</code>, and <code>ScaleSetNameCollision</code> conditions — the v2 twins of the v1 <code>ActionsGateway</code> condition gauges.
+Every v2 gateway condition thus has a metric twin, so the advisory <code>agcAutoscaling</code> opt-in (Q360/Q390) is alertable rather than only visible via <code>kubectl describe</code>.
+All are emitted only on a v2 install and labelled per gateway (<code>namespace</code>, <code>name</code>).</p>
+</blockquote>
+<h3 id="scale-set-acquisition-tier-q264">Scale-set acquisition tier (Q264)<a class="headerlink" href="#scale-set-acquisition-tier-q264" title="Permanent link">&para;</a></h3>
+<p>These series are emitted <strong>only</strong> by a <code>RunnerSet</code> with <code>spec.acquisitionProtocol: ScaleSet</code> (Q264 Option E, the default since P5), which drives one runner-scale-set session per set — one job : one queue entry : one acquirer : one runner — instead of the classic many-acquirers pool.
+A <code>Classic</code> (deprecated) <code>RunnerSet</code> never touches them, so they read zero on a Classic-only deployment; the classic <code>actions_gateway_jobs_*</code> series above are what a Classic set emits.
+All are labelled per <code>RunnerSet</code> (<code>namespace</code>, <code>runner_set</code>).
+During the P4 dogfood validation (the Q224 fan-out acceptance gate) the counters are the primary signal that a scale-set set is assigning and provisioning jobs 1:1 with no fan-out.</p>
+<table>
+<thead>
+<tr>
+<th>Metric</th>
+<th>Type</th>
+<th>Labels</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>actions_gateway_scaleset_jobs_assigned_total</code></td>
+<td>Counter</td>
+<td><code>namespace</code>, <code>runner_set</code></td>
+<td>Jobs the scale set's queue delivered as <code>JobAssigned</code> to the listener. Because the scale-set protocol assigns each job exactly once (no sibling fan-out), this tracks demand 1:1 — unlike the classic <code>jobs_acquired_total</code>, there is no duplicate-delivery series to correlate against.</td>
+</tr>
+<tr>
+<td><code>actions_gateway_scaleset_jobs_provisioned_total</code></td>
+<td>Counter</td>
+<td><code>namespace</code>, <code>runner_set</code></td>
+<td>Worker pods successfully provisioned, one per assigned job. A steady gap below <code>…_jobs_assigned_total</code> means provisioning is lagging or failing — correlate with <code>…_provision_errors_total</code> and the worker-pod <code>ResourceQuota</code> gauges.</td>
+</tr>
+<tr>
+<td><code>actions_gateway_scaleset_provision_errors_total</code></td>
+<td>Counter</td>
+<td><code>namespace</code>, <code>runner_set</code></td>
+<td>Failed provision attempts (JIT-config mint or worker pod create). A transient failure leaves the job un-provisioned to retry on a later poll. A <code>generate-jitconfig</code> <strong>runner-name conflict</strong> (HTTP 409) instead retries under a fresh runner name; if it still conflicts after a bounded number of tries the job is <strong>deferred</strong> (counted here once per round) so it cannot wedge the queue cursor behind it (Q270), and re-offered on a backoff until it runs — see <code>…_jobs_deferred</code> below. A job held because the set is at its <strong>worker ceiling</strong> is <em>not</em> counted here (Q576): it is backpressure rather than a failure, and <code>…_jobs_deferred{reason="ceiling"}</code> carries it. A sustained rate warrants checking the run service's <code>generate-jitconfig</code> responses and namespace quota headroom.</td>
+</tr>
+<tr>
+<td><code>actions_gateway_scaleset_jobs_completed_total</code></td>
+<td>Counter</td>
+<td><code>namespace</code>, <code>runner_set</code>, <code>result</code></td>
+<td>Terminal <code>JobCompleted</code> messages the queue delivered, by GitHub-reported <code>result</code> (e.g. <code>succeeded</code>, <code>failed</code>, <code>canceled</code>). This is the completion signal the classic many-acquirers protocol never delivered, so it is unique to the scale-set tier. Counted at most once per job even if a re-created session replays the message.</td>
+</tr>
+<tr>
+<td><code>actions_gateway_scaleset_jobs_deferred</code></td>
+<td>Gauge</td>
+<td><code>namespace</code>, <code>runner_set</code>, <code>reason</code></td>
+<td>Assigned jobs the listener is holding for a later re-offer, by why. Each one is a workflow run queued at GitHub with no worker running it, and it is the metric twin of the <code>RunnerSet</code>'s advisory <code>JobProvisionStalled</code> condition, whose message names the job ids. <strong>Alert on the reason, not the total</strong> — the two mean different things. <code>reason="name_conflict"</code>: the runner name will not register — a <code>generate-jitconfig</code> 409 that neither deleting the stale record nor a fresh suffixed name could clear (Q551). An anomaly; <strong>any non-zero value is worth alerting on</strong>, fix per <a href="../troubleshooting/#scale-set-job-stranded-by-a-stale-runner-record-runner-name-409">Scale-Set Job Stranded by a Stale Runner Record</a>. <code>reason="ceiling"</code>: the set is already running as many workers as its spec allows (Q576) — expected backpressure that clears as workers finish, so alert only on it being <em>sustained</em>, if at all; see <a href="../troubleshooting/#scale-set-jobs-waiting-at-the-worker-ceiling-workerceilingreached">Scale-Set Jobs Waiting at the Worker Ceiling</a>. Both reasons are published on every update, zero included, so a series never freezes at its last non-zero reading. Dropped when the <code>RunnerSet</code> is deleted.</td>
+</tr>
+<tr>
+<td><code>actions_gateway_scaleset_jobs_abandoned_total</code></td>
+<td>Counter</td>
+<td><code>namespace</code>, <code>runner_set</code></td>
+<td>Assigned jobs the listener gave up on because the scale set stopped counting them as assigned — GitHub is no longer holding the job and never reported it complete (Q553). Each is a <strong>workflow run that will not run</strong>, so unlike <code>…_jobs_deferred</code> this is a loss, not backpressure: it is what distinguishes a deferred set that cleared because its jobs ran from one that cleared because they evaporated. <strong>Any non-zero value is worth alerting on</strong>; see <a href="../troubleshooting/#scale-set-assignments-abandoned-assignmentabandoned">Scale-Set Assignments Abandoned</a>. It is expected to stay flat in steady state — a small burst around a mass run cancellation or a <code>stop.sh</code> drain is the designed behaviour, a sustained rate is not.</td>
+</tr>
+<tr>
+<td><code>actions_gateway_scaleset_advertised_capacity</code></td>
+<td>Gauge</td>
+<td><code>namespace</code>, <code>runner_set</code></td>
+<td>The <code>X-ScaleSetMaxCapacity</code> most recently advertised for the set: the total jobs GitHub may keep assigned to it at once. This is the scale-set tier's whole admission decision — the minimum of the declared worker ceiling, live namespace-<code>ResourceQuota</code> headroom (Q443), and — when the set opts in — its capacity gate (Q405). A value below the set's <code>maxWorkers</code> means a rung is binding; <strong><code>0</code> means GitHub will assign nothing at all</strong> until it recovers. Dropped when the <code>RunnerSet</code> is deleted, so a stale series does not outlive the set.</td>
+</tr>
+<tr>
+<td><code>actions_gateway_scaleset_capacity_withheld</code></td>
+<td>Gauge</td>
+<td><code>namespace</code>, <code>runner_set</code>, <code>reason</code></td>
+<td>Slots the named rung removed from the declared ceiling on that same poll — <code>advertised_capacity</code> plus the sum of these equals the ceiling. <code>reason="quota"</code> is namespace-<code>ResourceQuota</code> headroom; <code>reason="capacity"</code> is the opt-in capacity gate, which bounds the total at the set's own in-flight workers while the cluster cannot place another (Q405) — plus one probe slot per <code>pendingPodDeadline</code> window while the gate is latched (<code>AwaitingProbe</code>, Q512), so under a sustained decline expect this series to <em>hold</em> near the ceiling across reap cycles rather than sawtooth back to <code>0</code>. Every evaluated rung publishes a value each poll, <strong>including an explicit <code>0</code></strong>, so a series never sits frozen at its last non-zero reading — the capacity rung publishes its zero even with the gate <code>Off</code>, because the gate is per-set spec rather than a rung the AGC skips. Nothing is published for a rung an operator has turned off AGC-wide (<code>AGC_QUOTA_ADMISSION=false</code>).</td>
+</tr>
+</tbody>
+</table>
+<blockquote>
+<p><strong>Why gauges and not a rejection counter.</strong> On the classic tier a declined job is a delivered job, counted by <code>actions_gateway_jobs_admission_rejected_total{reason}</code>.
+On the scale-set tier the equivalent job is never assigned in the first place, so there is nothing to count — which is why that counter reads a flat zero here, and why these two gauges are its counterpart.
+Pair them with the set's <code>WorkerQuotaPressure</code>/<code>WorkerQuotaExceeded</code> conditions, which name the binding resource in their message.</p>
+</blockquote>
+<h3 id="worker-usage--right-sizing-metrics-q359">Worker usage / right-sizing metrics (Q359)<a class="headerlink" href="#worker-usage--right-sizing-metrics-q359" title="Permanent link">&para;</a></h3>
+<p>The AGC samples worker pod CPU/memory usage from the <code>metrics.k8s.io</code> API (metrics-server) every 15s (<code>WORKER_USAGE_SAMPLE_INTERVAL</code> on the AGC Deployment; <code>0</code>/<code>off</code> disables) and folds each finished pod's peak into these series.
+One worker pod runs exactly one job, so a per-pod peak is a <strong>per-job peak</strong>.
+Emitted for v2 <code>RunnerSet</code> workers only, labelled per RunnerSet and container (bounded cardinality: one series per RunnerSet × container name).
+These are the input to the <a href="../worker-rightsizing/">worker right-sizing recipe</a>; without metrics-server they stay empty and <code>…_poll_errors_total</code> counts instead.</p>
+<p>The same sampled history also drives two status surfaces on the v2 <code>RunnerSet</code> (Q359 Phase 2): <code>status.sizingRecommendation</code> (per-container recommended <code>requests</code>/<code>limits</code> with observed p95/max, sample count, and window) and the advisory <code>SizingDrift</code> condition — <code>True</code> when, after ≥20 sampled jobs, the template's ask is ≥2× the recommendation (waste) or a memory limit is below the observed per-job peak (OOM risk).
+Advisory only; never gates <code>Ready</code>.
+A set that opts into a sizing profile (<code>spec.sizing.profile</code>) additionally reports <code>status.sizingProfileState</code> (<code>Active</code>/<code>AwaitingSamples</code>), and <code>SizingDrift</code> reads <code>False/SizingProfileActive</code> while the profile actuates.
+A set on the <code>Throughput</code> profile also carries the advisory <code>SizingProfileOverridden</code> condition — <code>True</code> when a worker pod the profile built <em>without</em> a CPU limit was admitted <em>with</em> one (a <code>LimitRange</code> cpu default, a mutating webhook, a policy engine), which cancels the profile while rejecting nothing (<a href="../worker-rightsizing/#when-something-re-injects-the-cpu-limit-throughput-removes">detail</a>).
+See the <a href="../worker-rightsizing/#step-0--read-the-built-in-recommendation-first">right-sizing recipe</a>.</p>
+<table>
+<thead>
+<tr>
+<th>Metric</th>
+<th>Type</th>
+<th>Labels</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>actions_gateway_worker_usage_job_cpu_peak_cores</code></td>
+<td>Histogram</td>
+<td><code>namespace</code>, <code>runner_set</code>, <code>container</code></td>
+<td>Per-job CPU peak (cores), one observation per sampled job. <code>histogram_quantile</code> over a chosen window gives the p50/p95 the right-sizing derivation needs.</td>
+</tr>
+<tr>
+<td><code>actions_gateway_worker_usage_job_memory_peak_bytes</code></td>
+<td>Histogram</td>
+<td><code>namespace</code>, <code>runner_set</code>, <code>container</code></td>
+<td>Per-job memory peak (bytes), one observation per sampled job.</td>
+</tr>
+<tr>
+<td><code>actions_gateway_worker_usage_cpu_peak_cores</code></td>
+<td>Gauge</td>
+<td><code>namespace</code>, <code>runner_set</code>, <code>container</code></td>
+<td>Highest per-job CPU peak seen since AGC start — the absolute-max cross-check for the interpolated histogram quantiles. Resets on AGC restart (bridge with <code>max_over_time</code>).</td>
+</tr>
+<tr>
+<td><code>actions_gateway_worker_usage_memory_peak_bytes</code></td>
+<td>Gauge</td>
+<td><code>namespace</code>, <code>runner_set</code>, <code>container</code></td>
+<td>Highest per-job memory peak seen since AGC start.</td>
+</tr>
+<tr>
+<td><code>actions_gateway_worker_usage_jobs_sampled_total</code></td>
+<td>Counter</td>
+<td><code>namespace</code>, <code>runner_set</code></td>
+<td>Jobs that finished with at least one usage sample in the histograms.</td>
+</tr>
+<tr>
+<td><code>actions_gateway_worker_usage_jobs_unsampled_total</code></td>
+<td>Counter</td>
+<td><code>namespace</code>, <code>runner_set</code></td>
+<td>Jobs that finished before any sample landed (shorter than ~one sampling interval). A high ratio vs <code>…_jobs_sampled_total</code> means the histograms under-represent the workload.</td>
+</tr>
+<tr>
+<td><code>actions_gateway_worker_usage_poll_errors_total</code></td>
+<td>Counter</td>
+<td><code>namespace</code></td>
+<td>Failed <code>PodMetrics</code> list calls. A constant rate means usage is not being sampled at all — metrics-server missing or the RBAC grant absent; see <a href="../worker-rightsizing/#troubleshooting">troubleshooting</a>.</td>
+</tr>
+</tbody>
+</table>
+<h3 id="proxy-metrics">Proxy metrics<a class="headerlink" href="#proxy-metrics" title="Permanent link">&para;</a></h3>
+<p>The per-tenant egress proxy exposes its own metrics on <code>:8443</code> over <strong>mutual TLS</strong> — the same posture as the AGC (see <a href="../observability-metrics-access/#scraping-per-tenant-agc-and-proxy-metrics-mtls">Scraping per-tenant AGC and proxy metrics (mTLS)</a>), and restricted by the L-8 NetworkPolicy (see <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.5.0/docs/plan/security.md">security.md L-8</a>).
+The proxy's <code>:8081</code> port serves only the plaintext health probes (<code>/healthz</code>, <code>/readyz</code>), not metrics.
+Each proxy is a separate scrape target; these metrics carry no intrinsic <code>namespace</code> label.
+The GMC-generated per-tenant proxy <code>ServiceMonitor</code> stamps one via a relabeling (<code>namespace</code> ← the scrape target's namespace, which is the tenant's namespace), so the tenant Grafana dashboard's proxy panels filter by <code>$namespace</code> for per-tenant attribution.
+If you scrape the proxy with a hand-written scrape config instead of the generated <code>ServiceMonitor</code>, add the equivalent relabeling to get the <code>namespace</code> label.</p>
+<table>
+<thead>
+<tr>
+<th>Metric</th>
+<th>Type</th>
+<th>Labels</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>actions_gateway_proxy_connections_active</code></td>
+<td>Gauge</td>
+<td><code>namespace</code>¹</td>
+<td>Currently open CONNECT tunnels.</td>
+</tr>
+<tr>
+<td><code>actions_gateway_proxy_connections_total</code></td>
+<td>Counter</td>
+<td><code>namespace</code>¹</td>
+<td>Total CONNECT tunnels opened.</td>
+</tr>
+<tr>
+<td><code>actions_gateway_proxy_dial_errors_total</code></td>
+<td>Counter</td>
+<td><code>namespace</code>¹</td>
+<td>Upstream dial failures (e.g. transient network errors reaching an allowed destination).</td>
+</tr>
+<tr>
+<td><code>actions_gateway_proxy_connect_denied_total</code></td>
+<td>Counter</td>
+<td><code>namespace</code>¹</td>
+<td>CONNECT requests refused because the destination is not on the egress allowlist. A precise Server-Side Request Forgery (SSRF) / egress-policy signal: unlike <code>…_dial_errors_total</code> (which also counts transient dial failures to <em>allowed</em> hosts), every increment here is an explicit allowlist denial — a workload attempting to reach a blocked destination. A sustained rate is alert-worthy; see <a href="../security-operations/#threat--signal-map">security-operations.md § Threat → signal map</a>.</td>
+</tr>
+<tr>
+<td><code>actions_gateway_proxy_tunnel_duration_seconds</code></td>
+<td>Histogram</td>
+<td><code>namespace</code>¹</td>
+<td>Tunnel lifetime, observed at close. Buckets reach 21600s (the 6h absolute lifetime cap).</td>
+</tr>
+</tbody>
+</table>
+<p>¹ Not exposed by the proxy itself — added by the per-tenant <code>ServiceMonitor</code> relabeling described above.
+Absent if you scrape without that relabeling.</p>
+<p>For abuse/compromise detection built on these metrics (slowloris, eviction-retry loops, credential-harvesting), see <a href="../security-operations/">security-operations.md</a>.</p>
+<hr />
+<h2 id="acquisition-tier-reach">Acquisition-tier reach<a class="headerlink" href="#acquisition-tier-reach" title="Permanent link">&para;</a></h2>
+<p>Which acquisition tier emits each AGC series, so a flat zero can be read as <em>this tier does not emit it</em> rather than <em>nothing happened</em>.
+Every <code>actions_gateway_*</code> metric the AGC defines is listed; the <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.5.0/docs/development/testing.md#the-make-check-pre-review-gate">gate</a> fails when one is added without a row here, and when a row calls a series single-tier that the source emits from the tier it excludes.</p>
+<p>Four values, and no others:</p>
+<ul>
+<li><strong>Both</strong> is the parity claim: the series populates on a <code>Classic</code> and a <code>ScaleSet</code> set alike.</li>
+<li><strong>Classic only</strong> and <strong>Scale-set only</strong> mean the other tier reads a permanent zero, and the row says why, and what to read there instead.</li>
+<li><strong>Tier-neutral</strong> is a series with no acquisition tier at all.</li>
+</ul>
+<p>A <strong>Classic only</strong> series is not a gap by itself.
+Most are artifacts of the many-acquirers and JIT-agent models the scale-set protocol removes, so they disappear <em>with</em> classic at <code>v2.0.0</code> rather than being ported; <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.5.0/docs/plan/v2-ga.md#capability-parity-is-a-precondition-of-the-removal">v2-ga.md</a> is where that judgement is recorded and where the removal is gated on it.
+What the row must never be is silent: a capability that reaches only the tier every new tenant is <em>not</em> on is the failure this table exists to make visible.</p>
+<p>The GMC and proxy series above are not listed.
+Neither binary acquires jobs, so neither has a tier.</p>
+<table>
+<thead>
+<tr>
+<th>Metric</th>
+<th>Tier</th>
+<th>Why, and what to read on the other tier</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>actions_gateway_active_sessions</code></td>
+<td>Classic only</td>
+<td>Counts open long-poll sessions in the many-acquirers pool. A scale set runs one session per set by construction; <code>actions_gateway_scaleset_jobs_assigned_total</code> is the documented substitute for reading demand.</td>
+</tr>
+<tr>
+<td><code>actions_gateway_jobs_acquired_total</code></td>
+<td>Classic only</td>
+<td>Counts <code>acquirejob</code> wins. The scale-set queue assigns each job to one acquirer instead, counted by <code>actions_gateway_scaleset_jobs_assigned_total</code> and <code>…_scaleset_jobs_provisioned_total</code>.</td>
+</tr>
+<tr>
+<td><code>actions_gateway_job_acquisition_errors_total</code></td>
+<td>Classic only</td>
+<td>There is no <code>acquirejob</code> call to fail. <code>actions_gateway_scaleset_provision_errors_total</code> carries the equivalent, and <a href="../observability-alerting/">alerting</a> ships <code>actions_gateway:scaleset_provision_success_rate:rate5m</code> alongside the classic success-rate rule so the rules do not go silent at the cut.</td>
+</tr>
+<tr>
+<td><code>actions_gateway_jobs_admission_rejected_total</code></td>
+<td>Classic only</td>
+<td>The per-delivered-job form of the capacity ladder. The scale-set tier states the same ladder as an integer, so a refused job is never assigned and there is nothing to count: read <code>actions_gateway_scaleset_advertised_capacity</code> and <code>…_scaleset_capacity_withheld</code> (Q443).</td>
+</tr>
+<tr>
+<td><code>actions_gateway_jobs_duplicate_delivery_total</code></td>
+<td>Classic only</td>
+<td>Absent by design. The scale-set protocol delivers each job once, so there is no sibling fan-out to deduplicate.</td>
+</tr>
+<tr>
+<td><code>actions_gateway_abandoned_delivery_completions_total</code></td>
+<td>Classic only</td>
+<td>Absent by design. Releases an assignment a deduplicated sibling acquired, which only the many-acquirers model produces.</td>
+</tr>
+<tr>
+<td><code>actions_gateway_fanout_loser_recycle_deferred_total</code></td>
+<td>Classic only</td>
+<td>Absent by design. A fan-out loser only exists where several sessions acquire against one pool.</td>
+</tr>
+<tr>
+<td><code>actions_gateway_renew_job_errors_total</code></td>
+<td>Classic only</td>
+<td>Absent by design. On the scale-set tier the runner renews and completes its own job, so the AGC never calls <code>renewjob</code>. Worker loss on that tier surfaces through the reap and eviction-recovery series instead.</td>
+</tr>
+<tr>
+<td><code>actions_gateway_renew_job_teardowns_total</code></td>
+<td>Classic only</td>
+<td>Absent by design, for the same reason: with no renew loop there is no lock the AGC can observe being lost. <code>actions_gateway_worker_pods_reaped_total</code> carries the scale-set tier's worker reclaims.</td>
+</tr>
+<tr>
+<td><code>actions_gateway_agent_recycles_total</code></td>
+<td>Classic only</td>
+<td>Absent by design. Single-use JIT agents are a classic-pool artifact; a scale set mints JIT config per assigned job.</td>
+</tr>
+<tr>
+<td><code>actions_gateway_agent_recycle_errors_total</code></td>
+<td>Classic only</td>
+<td>Absent by design, as above.</td>
+</tr>
+<tr>
+<td><code>actions_gateway_broker_token_propagation_retries_total</code></td>
+<td>Classic only</td>
+<td>Absent by design. The retry rides the agent-recycle seam, which the scale-set tier does not have.</td>
+</tr>
+<tr>
+<td><code>actions_gateway_broker_session_leaks_total</code></td>
+<td>Classic only</td>
+<td>Absent by design. One long-lived session per set cannot accumulate the abandoned sessions a recycling pool does.</td>
+</tr>
+<tr>
+<td><code>actions_gateway_worker_quota_pressure</code></td>
+<td>Classic only</td>
+<td>A v1 <code>RunnerGroup</code> collector, and a <code>RunnerGroup</code> only acquires classically. <code>actions_gateway_runnerset_worker_quota_pressure</code> is the v2 twin and covers both tiers.</td>
+</tr>
+<tr>
+<td><code>actions_gateway_worker_quota_exceeded</code></td>
+<td>Classic only</td>
+<td>As above; the twin is <code>actions_gateway_runnerset_worker_quota_exceeded</code>.</td>
+</tr>
+<tr>
+<td><code>actions_gateway_workers_unschedulable</code></td>
+<td>Classic only</td>
+<td>As above; the twin is <code>actions_gateway_runnerset_workers_unschedulable</code>.</td>
+</tr>
+<tr>
+<td><code>actions_gateway_eviction_recovery_identity_unknown_total</code></td>
+<td>Scale-set only</td>
+<td>The classic tier reads the run identity from the payload its acquiring goroutine still holds, so it cannot lose it. That tier counts the same failure as <code>actions_gateway_abandoned_run_force_cancels_total{outcome="identity_unknown"}</code>.</td>
+</tr>
+<tr>
+<td><code>actions_gateway_eviction_recovery_evidence_lost_total</code></td>
+<td>Scale-set only</td>
+<td>On this tier the disrupted pod is the disruption's only record (Q809). The classic tier holds it in process, so there is no evidence to lose.</td>
+</tr>
+<tr>
+<td><code>actions_gateway_scaleset_jobs_assigned_total</code></td>
+<td>Scale-set only</td>
+<td>The scale-set queue's own delivery signal. <code>actions_gateway_jobs_acquired_total</code> is the classic counterpart.</td>
+</tr>
+<tr>
+<td><code>actions_gateway_scaleset_jobs_provisioned_total</code></td>
+<td>Scale-set only</td>
+<td>Worker pods provisioned per assigned job. A classic set provisions inline after <code>acquirejob</code>, so the two are one event there.</td>
+</tr>
+<tr>
+<td><code>actions_gateway_scaleset_provision_errors_total</code></td>
+<td>Scale-set only</td>
+<td>Provision failures on a fire-and-forget path. <code>actions_gateway_job_acquisition_errors_total</code> is the classic counterpart.</td>
+</tr>
+<tr>
+<td><code>actions_gateway_scaleset_jobs_completed_total</code></td>
+<td>Scale-set only</td>
+<td>The terminal <code>JobCompleted</code> message the classic many-acquirers protocol never delivered, so there is nothing to count on that tier.</td>
+</tr>
+<tr>
+<td><code>actions_gateway_scaleset_jobs_deferred</code></td>
+<td>Scale-set only</td>
+<td>Assignments held for a later re-offer, which requires a queue cursor the classic protocol does not have.</td>
+</tr>
+<tr>
+<td><code>actions_gateway_scaleset_jobs_abandoned_total</code></td>
+<td>Scale-set only</td>
+<td>Assignments the set stopped counting, likewise a property of the queue.</td>
+</tr>
+<tr>
+<td><code>actions_gateway_scaleset_advertised_capacity</code></td>
+<td>Scale-set only</td>
+<td>The capacity integer this tier advertises in place of a per-job admission decision; <code>actions_gateway_jobs_admission_rejected_total</code> is the classic form (Q443).</td>
+</tr>
+<tr>
+<td><code>actions_gateway_scaleset_capacity_withheld</code></td>
+<td>Scale-set only</td>
+<td>The per-rung breakdown behind that integer, same reason.</td>
+</tr>
+<tr>
+<td><code>actions_gateway_token_refreshes_total</code></td>
+<td>Both</td>
+<td>One installation-token manager serves both listeners.</td>
+</tr>
+<tr>
+<td><code>actions_gateway_token_refresh_errors_total</code></td>
+<td>Both</td>
+<td>As above.</td>
+</tr>
+<tr>
+<td><code>actions_gateway_message_poll_errors_total</code></td>
+<td>Both</td>
+<td>Ported by Q446 under the same <code>namespace</code>/<code>reason</code> vocabulary, so one query covers a mixed fleet and keeps working after classic is removed.</td>
+</tr>
+<tr>
+<td><code>actions_gateway_pod_creation_latency_seconds</code></td>
+<td>Both</td>
+<td>Observed off the shared pod informer since Q713, which sees a scale-set worker pod and a classic one identically.</td>
+</tr>
+<tr>
+<td><code>actions_gateway_job_duration_seconds</code></td>
+<td>Both</td>
+<td>As above (Q713).</td>
+</tr>
+<tr>
+<td><code>actions_gateway_eviction_retries_total</code></td>
+<td>Both</td>
+<td>Ported by Q417; split by the <code>tier</code> label.</td>
+</tr>
+<tr>
+<td><code>actions_gateway_eviction_retries_exhausted_total</code></td>
+<td>Both</td>
+<td>As above (Q417).</td>
+</tr>
+<tr>
+<td><code>actions_gateway_eviction_rerun_failures_total</code></td>
+<td>Both</td>
+<td>Recorded by the shared re-run path both tiers hand recoveries to (Q503).</td>
+</tr>
+<tr>
+<td><code>actions_gateway_eviction_rerun_withheld_total</code></td>
+<td>Both</td>
+<td>As above: the cancel check sits in that shared path, and both tiers detect the graceful deletion that arms it (Q811).</td>
+</tr>
+<tr>
+<td><code>actions_gateway_abandoned_run_force_cancels_total</code></td>
+<td>Both</td>
+<td>Ported by Q766; split by the <code>tier</code> label.</td>
+</tr>
+<tr>
+<td><code>actions_gateway_abandoned_run_rerun_waits_total</code></td>
+<td>Both</td>
+<td>As above (Q766).</td>
+</tr>
+<tr>
+<td><code>actions_gateway_quota_retries_total</code></td>
+<td>Both</td>
+<td>Both provisioning paths create the worker pod through the same quota-retry helper.</td>
+</tr>
+<tr>
+<td><code>actions_gateway_quota_retries_exhausted_total</code></td>
+<td>Both</td>
+<td>As above.</td>
+</tr>
+<tr>
+<td><code>actions_gateway_worker_scaleup_throttled_total</code></td>
+<td>Both</td>
+<td>The opt-in <code>spec.scaleUp</code> limiter is applied on both provisioning paths.</td>
+</tr>
+<tr>
+<td><code>actions_gateway_worker_pods_reaped_total</code></td>
+<td>Both</td>
+<td>The reaper is protocol-agnostic; <code>runner_set</code> is additionally set on scale-set reaps (Q514).</td>
+</tr>
+<tr>
+<td><code>actions_gateway_reap_blocking_sidecar_templates</code></td>
+<td>Both</td>
+<td>Set from the resolved worker template before the reconciler routes by protocol.</td>
+</tr>
+<tr>
+<td><code>actions_gateway_runnerset_worker_quota_pressure</code></td>
+<td>Both</td>
+<td>A v2 <code>RunnerSet</code> condition gauge, and the condition is written on either protocol.</td>
+</tr>
+<tr>
+<td><code>actions_gateway_runnerset_worker_quota_exceeded</code></td>
+<td>Both</td>
+<td>As above.</td>
+</tr>
+<tr>
+<td><code>actions_gateway_runnerset_workers_unschedulable</code></td>
+<td>Both</td>
+<td>As above.</td>
+</tr>
+<tr>
+<td><code>actions_gateway_runnerset_worker_capacity_declined</code></td>
+<td>Both</td>
+<td>As above; emitted only for a set whose capacity gate is enabled.</td>
+</tr>
+<tr>
+<td><code>actions_gateway_worker_usage_job_cpu_peak_cores</code></td>
+<td>Both</td>
+<td>Sampled from every v2 <code>RunnerSet</code> worker pod, which both protocols label identically.</td>
+</tr>
+<tr>
+<td><code>actions_gateway_worker_usage_job_memory_peak_bytes</code></td>
+<td>Both</td>
+<td>As above.</td>
+</tr>
+<tr>
+<td><code>actions_gateway_worker_usage_cpu_peak_cores</code></td>
+<td>Both</td>
+<td>As above.</td>
+</tr>
+<tr>
+<td><code>actions_gateway_worker_usage_memory_peak_bytes</code></td>
+<td>Both</td>
+<td>As above.</td>
+</tr>
+<tr>
+<td><code>actions_gateway_worker_usage_jobs_sampled_total</code></td>
+<td>Both</td>
+<td>As above.</td>
+</tr>
+<tr>
+<td><code>actions_gateway_worker_usage_jobs_unsampled_total</code></td>
+<td>Both</td>
+<td>As above.</td>
+</tr>
+<tr>
+<td><code>actions_gateway_worker_usage_poll_errors_total</code></td>
+<td>Both</td>
+<td>Counts <code>metrics.k8s.io</code> list failures, which are per-namespace rather than per-tier.</td>
+</tr>
+<tr>
+<td><code>actions_gateway_build_info</code></td>
+<td>Tier-neutral</td>
+<td>Build metadata of the running binary.</td>
+</tr>
+</tbody>
+</table>
+<h3 id="label-value-reach">Label-value reach<a class="headerlink" href="#label-value-reach" title="Permanent link">&para;</a></h3>
+<p>A series can be <strong>Both</strong> while one of its label values is not.
+<code>actions_gateway_eviction_retries_total</code> populates on either tier, and <code>cause="vanished"</code> only ever comes from a scale-set set, so a query filtered to that value reads a permanent zero on classic, and the row above says the opposite.</p>
+<p>Each row here records one such exception.
+The <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.5.0/docs/development/testing.md#the-make-check-pre-review-gate">gate</a> derives the values each series emits from the AGC source and fails when one it can prove single-tier has no row, when a row is refuted by where the source names its value, and when the <code>Help</code> text an operator scrapes off <code>/metrics</code> has fallen behind the vocabulary the code emits.</p>
+<p>Only the two single-tier answers appear here: a value that reaches both tiers needs no row, and the <code>tier</code> label is the axis itself rather than a value on it.
+Where the file layout cannot prove the claim, because the value is named in a file both tiers run and a guard is what keeps one of them away from it, the row cites the guard, and the gate holds that citation to a real source file.</p>
+<table>
+<thead>
+<tr>
+<th>Metric</th>
+<th>Label</th>
+<th>Value</th>
+<th>Tier</th>
+<th>Why, and what the other tier counts instead</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>actions_gateway_eviction_retries_total</code></td>
+<td><code>cause</code></td>
+<td><code>vanished</code></td>
+<td>Scale-set only</td>
+<td>Names a worker already gone when the AGC started, recovered off the run identity the listener persisted rather than off the pod (Q844). The classic tier's acquiring goroutine holds the payload in process, so it never loses the worker unobserved and has no such recovery to count.</td>
+</tr>
+<tr>
+<td><code>actions_gateway_eviction_retries_exhausted_total</code></td>
+<td><code>cause</code></td>
+<td><code>vanished</code></td>
+<td>Scale-set only</td>
+<td>As above: the exhausted arm of the same recovery.</td>
+</tr>
+<tr>
+<td><code>actions_gateway_eviction_rerun_failures_total</code></td>
+<td><code>cause</code></td>
+<td><code>vanished</code></td>
+<td>Scale-set only</td>
+<td>As above: the re-run-refused arm of the same recovery.</td>
+</tr>
+<tr>
+<td><code>actions_gateway_abandoned_run_force_cancels_total</code></td>
+<td><code>outcome</code></td>
+<td><code>identity_unknown</code></td>
+<td>Classic only</td>
+<td>The scale-set arm resolves the run identity off the worker pod <em>before</em> it force-cancels, and returns early when the pod carries none (<code>cmd/agc/internal/provisioner/abandoned_scaleset.go</code>), counting <code>actions_gateway_eviction_recovery_identity_unknown_total{cause="abandoned"}</code> instead. The two counters stay disjoint, so read that series for this failure on a scale-set set.</td>
+</tr>
+<tr>
+<td><code>actions_gateway_worker_pods_reaped_total</code></td>
+<td><code>reason</code></td>
+<td><code>completed_pending</code></td>
+<td>Scale-set only</td>
+<td>The arm reads the job-completion annotation the reaper tests in <code>cmd/agc/internal/controller/runner_shared.go</code>, and only the scale-set cleanup path stamps it; the classic tier's <code>provision()</code> goroutine owns its pod through to a terminal phase (Q420). An unstamped classic pod falls to <code>pending_deadline</code>.</td>
+</tr>
+<tr>
+<td><code>actions_gateway_worker_pods_reaped_total</code></td>
+<td><code>reason</code></td>
+<td><code>orphaned_running</code></td>
+<td>Scale-set only</td>
+<td>Same annotation, same guard in <code>cmd/agc/internal/controller/runner_shared.go</code>: a classic pod is never stamped, so it is never found still Running past its job's end. The classic tier reclaims that shape through the renew loop as <code>job_abandoned</code>.</td>
+</tr>
+<tr>
+<td><code>actions_gateway_worker_pods_reaped_total</code></td>
+<td><code>reason</code></td>
+<td><code>job_abandoned</code></td>
+<td>Classic only</td>
+<td>The reclaim fires only when the job context was cancelled with the classic renew loop's sentinel (<code>cmd/agc/internal/provisioner/completion.go</code>). The scale-set tier has no renew loop, since the runner renews its own job, so worker loss there surfaces through the reap and eviction-recovery series instead.</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="condition-and-event-tier-reach">Condition and Event tier reach<a class="headerlink" href="#condition-and-event-tier-reach" title="Permanent link">&para;</a></h2>
+<p>The same question as <a href="#acquisition-tier-reach">Acquisition-tier reach</a> above, asked of the other two signals an operator reads: the <code>reason</code> on a <code>.status.conditions[]</code> entry, and the <code>Reason</code> on a Kubernetes Event.
+A capability that reaches only one tier is as invisible in a condition as it is in a counter, so the same four values apply and the same gate holds these tables to the source.
+<code>make reason-tiers-check</code> fails a reason the AGC emits without a row here, a row the source refutes, and an Event reason that has no <a href="../troubleshooting/#job-lifecycle-events-on-a-runnergroup--runnerset">runbook</a> entry.</p>
+<p>Two things follow from how the AGC records these, and both are worth knowing before reading the tables:</p>
+<ul>
+<li><strong>A condition reason is often an Event reason too.</strong> Several reconcile paths record an Event on a genuine condition transition, reusing the condition's own reason string.
+  Those reasons appear in the condition table only; the Event table lists the reasons that are decided at the recording site.</li>
+<li><strong>The reasons are the AGC's.</strong> The GMC's own conditions are not listed, for the reason the metric ledger gives: the GMC acquires no jobs, so it has no tier.</li>
+</ul>
+<h3 id="condition-reasons">Condition reasons<a class="headerlink" href="#condition-reasons" title="Permanent link">&para;</a></h3>
+<p>The <code>reason</code> field of a <code>.status.conditions[]</code> entry on a <code>RunnerGroup</code> (<code>v1alpha1</code>) or <code>RunnerSet</code> (<code>v2alpha1</code>).
+A <code>RunnerGroup</code> only ever acquires classically, so a reason no v2 path writes is classic-only by construction.</p>
+<table>
+<thead>
+<tr>
+<th>Reason</th>
+<th>Tier</th>
+<th>Why, and what to read on the other tier</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>AgentProvisioningFailed</code></td>
+<td>Classic only</td>
+<td>The agent pool is the many-acquirers model's credential machinery. A scale set mints JIT config per assigned job and provisions no agent Secrets, so it reports a start failure as <code>NoActiveSessions</code> instead.</td>
+</tr>
+<tr>
+<td><code>AmbiguousDefault</code></td>
+<td>Both</td>
+<td>Reference resolution runs before the reconciler routes by protocol.</td>
+</tr>
+<tr>
+<td><code>AwaitingProbe</code></td>
+<td>Both</td>
+<td>The capacity gate's latched state; <code>applyWorkerCapacityConditions</code> is called from both arms.</td>
+</tr>
+<tr>
+<td><code>AwaitingWorkerPods</code></td>
+<td>Both</td>
+<td>The sizing-profile override reads worker pods, which both tiers label identically.</td>
+</tr>
+<tr>
+<td><code>CPULimitInjected</code></td>
+<td>Both</td>
+<td>As above.</td>
+</tr>
+<tr>
+<td><code>CapacityAvailable</code></td>
+<td>Both</td>
+<td>The capacity gate's cleared state, from the same shared call.</td>
+</tr>
+<tr>
+<td><code>CredentialAvailable</code></td>
+<td>Classic only</td>
+<td>A <code>RunnerGroup</code> condition, and a <code>RunnerGroup</code> only acquires classically. A v2 set reports the same state as <code>Ready</code>/<code>TokenUnavailable</code>.</td>
+</tr>
+<tr>
+<td><code>DirectEgress</code></td>
+<td>Both</td>
+<td>Egress mode is recorded before the protocol routing.</td>
+</tr>
+<tr>
+<td><code>GateModeUnsupported</code></td>
+<td>Both</td>
+<td>The capacity gate refusing an unsupported mode, from the same shared call.</td>
+</tr>
+<tr>
+<td><code>GatewayNotFound</code></td>
+<td>Both</td>
+<td>Reference resolution, before the routing.</td>
+</tr>
+<tr>
+<td><code>GatewayTerminating</code></td>
+<td>Both</td>
+<td>Gateway teardown stops both tiers before deleting worker pods.</td>
+</tr>
+<tr>
+<td><code>InsufficientSamples</code></td>
+<td>Both</td>
+<td>The sizing verdict is computed from worker-pod usage, before the routing.</td>
+</tr>
+<tr>
+<td><code>JobsProvisioning</code></td>
+<td>Scale-set only</td>
+<td>Clears <code>JobProvisionStalled</code>, which only the scale-set queue can raise: it is the state of assignments held for re-offer. The classic tier acquires or does not, with nothing held in between.</td>
+</tr>
+<tr>
+<td><code>LabelsNotRegistered</code></td>
+<td>Scale-set only</td>
+<td>GitHub registers a scale set's labels at the set, and only that protocol can find them missing. A classic set carries its labels on each session.</td>
+</tr>
+<tr>
+<td><code>LabelsRegistered</code></td>
+<td>Scale-set only</td>
+<td>As above, cleared.</td>
+</tr>
+<tr>
+<td><code>ListenerActive</code></td>
+<td>Both</td>
+<td>The <code>Ready=True</code> reason on both arms: one multiplexer's goroutines on classic, one scale-set session on the other.</td>
+</tr>
+<tr>
+<td><code>ListenerStartFailed</code></td>
+<td>Classic only</td>
+<td>Distinguishes a failed multiplexer restart from the benign idle state (Q308). The scale-set arm reports its own start failure as <code>NoActiveSessions</code> with the <code>ScaleSetListenerStartFailed</code> Event carrying the cause.</td>
+</tr>
+<tr>
+<td><code>NoActiveSessions</code></td>
+<td>Both</td>
+<td>The benign <code>Ready=False</code> reason on both arms.</td>
+</tr>
+<tr>
+<td><code>NoCPULimitInjected</code></td>
+<td>Both</td>
+<td>The sizing-profile override, before the routing.</td>
+</tr>
+<tr>
+<td><code>NoReapBlockingSidecar</code></td>
+<td>Both</td>
+<td>Read off the resolved worker template, before the routing.</td>
+</tr>
+<tr>
+<td><code>PodsUnschedulable</code></td>
+<td>Both</td>
+<td>The scheduler's verdict on worker pods, evaluated for <code>RunnerGroup</code> and <code>RunnerSet</code> alike.</td>
+</tr>
+<tr>
+<td><code>PollingHealthy</code></td>
+<td>Both</td>
+<td>Both listeners publish the rate-limit baseline and clear on recovery (Q332).</td>
+</tr>
+<tr>
+<td><code>ProxiedEgress</code></td>
+<td>Both</td>
+<td>Egress mode, before the routing.</td>
+</tr>
+<tr>
+<td><code>ProxyDeleted</code></td>
+<td>Both</td>
+<td>Reference resolution, before the routing.</td>
+</tr>
+<tr>
+<td><code>ProxyNotFound</code></td>
+<td>Both</td>
+<td>As above.</td>
+</tr>
+<tr>
+<td><code>ProxyShareNotGranted</code></td>
+<td>Both</td>
+<td>As above.</td>
+</tr>
+<tr>
+<td><code>ReapBlockingSidecar</code></td>
+<td>Both</td>
+<td>Read off the resolved worker template, before the routing.</td>
+</tr>
+<tr>
+<td><code>RunnerGroupNotFound</code></td>
+<td>Scale-set only</td>
+<td><code>spec.runnerGroup</code> binds a scale set to a GitHub runner group (Q712); the classic tier has no such binding to fail.</td>
+</tr>
+<tr>
+<td><code>RunnerNameConflict</code></td>
+<td>Scale-set only</td>
+<td>A <code>generate-jitconfig</code> 409 no retry cleared. The classic tier registers through the agent pool and meets no runner-name collision.</td>
+</tr>
+<tr>
+<td><code>ScaleUpDeclined</code></td>
+<td>Both</td>
+<td>The cluster autoscaler's own declination, from the shared capacity call.</td>
+</tr>
+<tr>
+<td><code>SessionAuthorized</code></td>
+<td>Both</td>
+<td>Both listeners publish the healthy <code>Degraded=False</code> baseline (Q332).</td>
+</tr>
+<tr>
+<td><code>SizingDriftDetected</code></td>
+<td>Both</td>
+<td>The sizing verdict, before the routing.</td>
+</tr>
+<tr>
+<td><code>SizingProfileActive</code></td>
+<td>Both</td>
+<td>As above.</td>
+</tr>
+<tr>
+<td><code>SizingWithinRange</code></td>
+<td>Both</td>
+<td>As above.</td>
+</tr>
+<tr>
+<td><code>SustainedRateLimit</code></td>
+<td>Both</td>
+<td>Both listeners publish it after ten minutes of 429s.</td>
+</tr>
+<tr>
+<td><code>TemplateDeleted</code></td>
+<td>Both</td>
+<td>Reference resolution, before the routing.</td>
+</tr>
+<tr>
+<td><code>TemplateNotFound</code></td>
+<td>Both</td>
+<td>As above.</td>
+</tr>
+<tr>
+<td><code>TokenUnavailable</code></td>
+<td>Classic only</td>
+<td>The classic arm fetches an installation token at reconcile to manage the agent pool, so a token failure lands in status there. The scale-set arm hands the token manager to its listener instead and reports a failure to reach GitHub as <code>NoActiveSessions</code>.</td>
+</tr>
+<tr>
+<td><code>Unauthorized</code></td>
+<td>Both</td>
+<td>The <code>Degraded=True</code> reason both listeners push when session creation is rejected as unauthorized.</td>
+</tr>
+<tr>
+<td><code>VersionTooOld</code></td>
+<td>Classic only</td>
+<td>GitHub rejecting <code>agent.version</code> at session creation, which only the classic protocol sends. The scale-set tier reports the same condition <em>type</em> from the reconciler's own reading of the worker image, under <code>WorkerImageBelowMinimum</code> (Q715).</td>
+</tr>
+<tr>
+<td><code>WorkerCeilingReached</code></td>
+<td>Scale-set only</td>
+<td>Assignments waiting because the set is at its worker ceiling. The classic tier refuses the claim instead, counted by <code>actions_gateway_jobs_admission_rejected_total{reason="ceiling"}</code>.</td>
+</tr>
+<tr>
+<td><code>WorkerImageBelowMinimum</code></td>
+<td>Both</td>
+<td>The reconciler's own reading of the effective worker image, which asks GitHub nothing and so reports on both tiers (Q715).</td>
+</tr>
+<tr>
+<td><code>WorkerImageCurrent</code></td>
+<td>Both</td>
+<td>As above.</td>
+</tr>
+<tr>
+<td><code>WorkerImageVersionUnknown</code></td>
+<td>Both</td>
+<td>As above.</td>
+</tr>
+<tr>
+<td><code>WorkersSchedulable</code></td>
+<td>Both</td>
+<td>The cleared form of <code>PodsUnschedulable</code>, evaluated on both.</td>
+</tr>
+</tbody>
+</table>
+<h3 id="event-reasons">Event reasons<a class="headerlink" href="#event-reasons" title="Permanent link">&para;</a></h3>
+<p>The <code>Reason</code> on a Kubernetes Event the AGC records on the owning <code>RunnerGroup</code>/<code>RunnerSet</code>, listed by the reason string <code>kubectl get events --field-selector reason=…</code> matches.
+Each also has a <a href="../troubleshooting/#job-lifecycle-events-on-a-runnergroup--runnerset">runbook entry</a> naming the remedy, which the gate holds it to.</p>
+<table>
+<thead>
+<tr>
+<th>Reason</th>
+<th>Tier</th>
+<th>Why, and what to read on the other tier</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>AgentDeregistrationFailed</code></td>
+<td>Classic only</td>
+<td>Single-use JIT agents are a classic-pool artifact, so only that tier has registrations to clean up on delete.</td>
+</tr>
+<tr>
+<td><code>AgentPoolError</code></td>
+<td>Classic only</td>
+<td>As above: a scale set provisions no agent Secrets.</td>
+</tr>
+<tr>
+<td><code>AssignmentAbandoned</code></td>
+<td>Scale-set only</td>
+<td>The listener giving up on assignments the queue stopped reporting. The classic protocol delivers no assignment to abandon.</td>
+</tr>
+<tr>
+<td><code>EvictionRecoveryEvidenceLost</code></td>
+<td>Scale-set only</td>
+<td>On this tier the disrupted pod is the disruption's only record (Q809); the classic tier holds it in process.</td>
+</tr>
+<tr>
+<td><code>EvictionRecoveryIdentityUnknown</code></td>
+<td>Scale-set only</td>
+<td>The classic tier reads the run identity from the payload its acquiring goroutine still holds, so it cannot lose it.</td>
+</tr>
+<tr>
+<td><code>EvictionRerunFailed</code></td>
+<td>Both</td>
+<td>Recorded by the shared re-run path both tiers hand recoveries to (Q503).</td>
+</tr>
+<tr>
+<td><code>EvictionRerunWithheld</code></td>
+<td>Both</td>
+<td>Recorded on the same shared re-run path, from the graceful-deletion arm both tiers detect (Q811).</td>
+</tr>
+<tr>
+<td><code>EvictionRetriesExhausted</code></td>
+<td>Both</td>
+<td>Both tiers spend one shared per-run retry budget (Q417).</td>
+</tr>
+<tr>
+<td><code>JobAcquisitionFailed</code></td>
+<td>Classic only</td>
+<td>Counts a failed <code>acquirejob</code>, a call the scale-set protocol does not make. Its counterpart there is <code>ScaleSetListenerStartFailed</code> for a session that cannot start, and <code>actions_gateway_scaleset_provision_errors_total</code> for a job that cannot be provisioned.</td>
+</tr>
+<tr>
+<td><code>JobProvisionStalled</code></td>
+<td>Scale-set only</td>
+<td>Assigned jobs that cannot register a runner name, held and re-offered. The classic tier has no held assignment.</td>
+</tr>
+<tr>
+<td><code>ListenerStartFailed</code></td>
+<td>Classic only</td>
+<td>A failed multiplexer restart; the scale-set arm records <code>ScaleSetListenerStartFailed</code> instead.</td>
+</tr>
+<tr>
+<td><code>OrphanedWorkerRecovered</code></td>
+<td>Scale-set only</td>
+<td>Recovery of a worker already gone at process start, read from the in-flight set the scale-set listener persists (Q844). The classic tier holds that state in process and loses it with the process.</td>
+</tr>
+<tr>
+<td><code>QuotaRetriesExhausted</code></td>
+<td>Both</td>
+<td>Both provisioning paths create the worker pod through the same quota-retry helper.</td>
+</tr>
+<tr>
+<td><code>RunnerLabelsNotRegistered</code></td>
+<td>Scale-set only</td>
+<td>GitHub registers a scale set's labels at the set; a classic set carries them per session.</td>
+</tr>
+<tr>
+<td><code>RunnerVersionTooOld</code></td>
+<td>Classic only</td>
+<td>GitHub rejecting <code>agent.version</code> at session creation. The scale-set tier warns ahead of any rejection with <code>WorkerImageBelowMinimum</code>, from the reconciler's own image reading (Q715).</td>
+</tr>
+<tr>
+<td><code>ScaleSetListenerStartFailed</code></td>
+<td>Scale-set only</td>
+<td>A scale-set session that could not start; <code>ListenerStartFailed</code> is the classic counterpart.</td>
+</tr>
+<tr>
+<td><code>SessionUnauthorized</code></td>
+<td>Both</td>
+<td>Both listeners record it when session creation is rejected as unauthorized.</td>
+</tr>
+<tr>
+<td><code>TokenUnavailable</code></td>
+<td>Classic only</td>
+<td>The classic arm fetches the installation token at reconcile; the scale-set arm delegates it to the listener.</td>
+</tr>
+<tr>
+<td><code>WorkerCapacityDeclined</code></td>
+<td>Both</td>
+<td>The opt-in capacity gate refusing intake, from the shared capacity call.</td>
+</tr>
+<tr>
+<td><code>WorkerCeilingReached</code></td>
+<td>Scale-set only</td>
+<td>Expected backpressure while assignments wait for capacity, so <code>Normal</code> rather than <code>Warning</code>. The classic tier declines the claim instead.</td>
+</tr>
+<tr>
+<td><code>WorkerPodCompletedPending</code></td>
+<td>Both</td>
+<td>The reaper is protocol-agnostic and runs before the routing.</td>
+</tr>
+<tr>
+<td><code>WorkerPodCreateFailed</code></td>
+<td>Both</td>
+<td>The API server refusing a worker pod, on the shared provisioning path.</td>
+</tr>
+<tr>
+<td><code>WorkerPodLifetimeExceeded</code></td>
+<td>Both</td>
+<td>The reaper, as above.</td>
+</tr>
+<tr>
+<td><code>WorkerPodOrphanedRunning</code></td>
+<td>Both</td>
+<td>The reaper, as above.</td>
+</tr>
+<tr>
+<td><code>WorkerPodStuckPending</code></td>
+<td>Both</td>
+<td>The reaper, as above.</td>
+</tr>
+<tr>
+<td><code>WorkerPodsReapedOnGatewayTeardown</code></td>
+<td>Both</td>
+<td>Teardown stops both tiers before deleting their worker pods.</td>
+</tr>
+<tr>
+<td><code>WorkersUnschedulable</code></td>
+<td>Both</td>
+<td>The scheduler's verdict, recorded for <code>RunnerGroup</code> and <code>RunnerSet</code> alike.</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="crd-status-fields-kubectl-columns">CRD Status Fields (kubectl columns)<a class="headerlink" href="#crd-status-fields-kubectl-columns" title="Permanent link">&para;</a></h2>
+<p><code>kubectl get runnergroup</code> and <code>kubectl get runnerset</code> print a subset of each CR's <code>.status</code> as additional columns.
+These give an at-a-glance view of live job state without opening Grafana:</p>
+<table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Field</th>
+<th>RunnerGroup</th>
+<th>RunnerSet</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>ACTIVESESSIONS</code></td>
+<td><code>.status.activeSessions</code></td>
+<td>✓</td>
+<td>✓</td>
+<td>Currently open long-poll sessions. Rises toward <code>maxListeners</code> during bursts; <code>0</code> means the group is not polling for work.</td>
+</tr>
+<tr>
+<td><code>ACTIVEJOBS</code></td>
+<td><code>.status.activeJobs</code></td>
+<td>✓</td>
+<td>✓</td>
+<td>Worker pods in Running phase — jobs actively executing. Updated each reconcile (driven by pod phase-change events).</td>
+</tr>
+<tr>
+<td><code>PENDINGJOBS</code></td>
+<td><code>.status.pendingJobs</code></td>
+<td>✓</td>
+<td>✓</td>
+<td>Worker pods in Pending phase — jobs acquired, pod spawned but not yet running. A sustained non-zero value signals scheduling pressure; check <code>WorkersUnschedulable</code>, <code>kubectl describe pod</code>, and node capacity. Pods past <code>pendingPodDeadline</code> are automatically reaped (and counted in <code>worker_pods_reaped_total{reason="pending_deadline"}</code>).</td>
+</tr>
+<tr>
+<td><code>READY</code></td>
+<td><code>.status.conditions[Ready].status</code></td>
+<td>✓</td>
+<td>✓</td>
+<td><code>True</code> when at least one listener goroutine is running.</td>
+</tr>
+<tr>
+<td><code>EGRESS</code></td>
+<td><code>.status.proxyMode</code></td>
+<td>—</td>
+<td>✓</td>
+<td><code>Proxied</code> or <code>Direct</code>.</td>
+</tr>
+</tbody>
+</table>
+<blockquote>
+<p><strong>Note:</strong> <code>ACTIVEJOBS</code> and <code>PENDINGJOBS</code> are pod-phase counts derived at reconcile time.
+They reflect a snapshot of the last reconcile cycle (re-triggered on every pod phase-change event) — not a real-time counter.
+A pod that was just reaped in the same reconcile cycle appears in <code>PENDINGJOBS</code> until the pod-deletion event triggers the next reconcile (typically sub-second).</p>
+</blockquote>
+<h3 id="drilling-down-to-individual-runner-pods">Drilling down to individual runner pods<a class="headerlink" href="#drilling-down-to-individual-runner-pods" title="Permanent link">&para;</a></h3>
+<p>The count columns tell you <em>how many</em> jobs are running; to see <em>which</em> pods back them, filter by the owner label:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="c1"># RunnerGroup (v1alpha1)</span>
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>kubectl<span class="w"> </span>get<span class="w"> </span>pods<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>-l<span class="w"> </span>actions-gateway/runner-group<span class="o">=</span>&lt;name&gt;
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="c1"># RunnerSet (v2alpha1)</span>
+<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>kubectl<span class="w"> </span>get<span class="w"> </span>pods<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>-l<span class="w"> </span>actions-gateway.com/runner-set<span class="o">=</span>&lt;name&gt;
+</code></pre></div>
+<p>Add <code>-o wide</code> for node placement or <code>-w</code> to watch phase transitions live.</p>
+<p><strong>Correlating a pod with its GitHub Actions job:</strong> the AGC stamps these annotations on every worker pod at creation time:</p>
+<table>
+<thead>
+<tr>
+<th>Annotation</th>
+<th>Example</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>actions-gateway.com/run-id</code></td>
+<td><code>12345678</code></td>
+<td>GitHub workflow run ID</td>
+</tr>
+<tr>
+<td><code>actions-gateway.com/repository</code></td>
+<td><code>myorg/myrepo</code></td>
+<td>Repository the job belongs to</td>
+</tr>
+<tr>
+<td><code>actions-gateway.com/job-name</code></td>
+<td><code>build</code></td>
+<td>Job name as defined in the workflow YAML</td>
+</tr>
+<tr>
+<td><code>actions-gateway.com/workflow</code></td>
+<td><code>CI</code></td>
+<td>Workflow name. Classic only — the scale-set protocol delivers no workflow name</td>
+</tr>
+</tbody>
+</table>
+<p>On the scale-set tier these are more than diagnostics: <code>run-id</code> and <code>repository</code> are the <strong>only</strong> record of which workflow run a worker was serving, because that tier provisions fire-and-forget with no in-process job state.
+Eviction recovery reads them back off the pod to name the run to re-run (Q417), so a worker missing them cannot be recovered automatically — that case is counted by <code>actions_gateway_eviction_recovery_identity_unknown_total</code>.
+Do not remove or overwrite them.</p>
+<p>Scale-set worker pods additionally carry:</p>
+<table>
+<thead>
+<tr>
+<th>Metadata</th>
+<th>Example</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>actions-gateway.com/acquisition-protocol</code> (label)</td>
+<td><code>ScaleSet</code></td>
+<td>Marks the pod as provisioned by the scale-set tier. Present only on that tier, so <code>-l actions-gateway.com/acquisition-protocol=ScaleSet</code> selects exactly the scale-set workers</td>
+</tr>
+<tr>
+<td><code>actions-gateway.com/runner-name</code> (annotation)</td>
+<td><code>gag-ci-e2e-8f3c…</code></td>
+<td>The name this pod's runner is registered under at GitHub. The AGC deregisters that record when it reaps the pod, and treats a name stamped here as in-use when it sweeps stale records (Q550)</td>
+</tr>
+<tr>
+<td><code>actions-gateway.com/job-completed-at</code> (annotation)</td>
+<td><code>2026-07-26T12:00:00Z</code></td>
+<td>When GitHub reported the pod's job terminal. Gives a still-Running worker a reap deadline (Q420)</td>
+</tr>
+<tr>
+<td><code>actions-gateway.com/eviction-handled-at</code> (annotation)</td>
+<td><code>2026-07-26T12:04:00Z</code></td>
+<td>When the AGC adjudicated this pod's eviction. Its presence is what makes automatic recovery at-most-once per evicted pod across reconciles, restarts, and replicas (Q417)</td>
+</tr>
+</tbody>
+</table>
+<p>All four are controller-set: never set them by hand.
+Editing or removing <code>runner-name</code> in particular makes the pod's runner record uncollectable, which is what leaves stale registrations behind — see <a href="../troubleshooting/#scale-set-job-stranded-by-a-stale-runner-record-runner-name-409">Scale-Set Job Stranded by a Stale Runner Record</a>.</p>
+<p>Worker pods on <strong>either</strong> tier gain one more annotation at end of life: <code>actions-gateway.com/deletion-reason</code>, stamped with the reap reason (e.g.
+<code>completed_ttl</code>, <code>pending_deadline</code>) immediately before the AGC's reaper deletes the pod (Q502).
+It marks the deletion as the AGC's own, which is what excludes reaper cleanup from the graceful-deletion recovery that a drain or a manual delete triggers.
+Controller-set; never set it by hand — a hand-set stamp suppresses automatic recovery for that pod.</p>
+<p>To see them in a table:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>kubectl<span class="w"> </span>get<span class="w"> </span>pods<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>-l<span class="w"> </span>actions-gateway/runner-group<span class="o">=</span>&lt;name&gt;<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="w">  </span>-o<span class="w"> </span>custom-columns<span class="o">=</span><span class="s1">&#39;NAME:.metadata.name,PHASE:.status.phase,RUN:.metadata.annotations.actions-gateway\.com/run-id,JOB:.metadata.annotations.actions-gateway\.com/job-name,WORKFLOW:.metadata.annotations.actions-gateway\.com/workflow&#39;</span>
+</code></pre></div>
+<p>Or inspect a single pod in full:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>kubectl<span class="w"> </span>describe<span class="w"> </span>pod<span class="w"> </span>&lt;pod-name&gt;<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;
+</code></pre></div>
+<p>The annotations are absent if the job's identity did not reach the AGC: on the classic tier, an AcquireJob payload without the corresponding <code>system.github.*</code> variables (older GitHub runners or stub/test jobs); on the scale-set tier, an assignment message without <code>ownerName</code>/<code>repositoryName</code>/<code>workflowRunId</code>.</p>
+<h3 id="selecting-gag-objects-with-the-recommended-labels">Selecting GAG objects with the recommended labels<a class="headerlink" href="#selecting-gag-objects-with-the-recommended-labels" title="Permanent link">&para;</a></h3>
+<p>Every object GAG creates — AGC/proxy/worker pods, Deployments, Services, NetworkPolicies, ServiceAccounts, RBAC, Secrets, PDBs, HPAs, and the per-tenant CRs — carries the Kubernetes <a href="https://kubernetes.io/docs/concepts/overview/working-with-objects/common-labels/">recommended (<code>app.kubernetes.io/*</code>) labels</a>, so Lens / k9s / Argo CD grouping, Prometheus relabel rules, and OpenCost/Kubecost cost attribution work without learning the project-specific keys.
+They are <strong>additive metadata</strong> — the functional selectors the controllers rely on (<code>app:</code>, <code>actions-gateway/component: workload</code>, the per-gateway/runner-set identity labels) are untouched, so never build a controller's pod selector on the <code>app.kubernetes.io/*</code> labels.</p>
+<blockquote>
+<p>For live per-tenant <strong>cost</strong> attribution with OpenCost/Kubecost — mapping these labels and the per-tenant namespaces to allocation queries — see <a href="../cost-attribution/">Live per-tenant cost attribution</a>.</p>
+</blockquote>
+<table>
+<thead>
+<tr>
+<th>Label</th>
+<th>Values</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>app.kubernetes.io/name</code></td>
+<td><code>actions-gateway-controller</code> · <code>actions-gateway-proxy</code> · <code>actions-runner</code></td>
+</tr>
+<tr>
+<td><code>app.kubernetes.io/instance</code></td>
+<td>the owning <code>ActionsGateway</code> / <code>EgressProxy</code> / <code>RunnerGroup</code> / <code>RunnerSet</code> name</td>
+</tr>
+<tr>
+<td><code>app.kubernetes.io/component</code></td>
+<td><code>controller</code> · <code>proxy</code> · <code>runner</code></td>
+</tr>
+<tr>
+<td><code>app.kubernetes.io/part-of</code></td>
+<td><code>actions-gateway</code> (every GAG object)</td>
+</tr>
+<tr>
+<td><code>app.kubernetes.io/managed-by</code></td>
+<td><code>actions-gateway-gmc</code> (control-plane children) · <code>actions-gateway-controller</code> (worker pods + job Secrets, created by the AGC)</td>
+</tr>
+<tr>
+<td><code>app.kubernetes.io/version</code></td>
+<td>the runner version on worker pods and their job Secrets; omitted on versionless infra (RBAC, NetworkPolicies, Services, TLS Secrets) and control-plane objects</td>
+</tr>
+</tbody>
+</table>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="c1"># Everything GAG owns, across tenants:</span>
+<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>kubectl<span class="w"> </span>get<span class="w"> </span>all,networkpolicy,secret<span class="w"> </span>-A<span class="w"> </span>-l<span class="w"> </span>app.kubernetes.io/part-of<span class="o">=</span>actions-gateway
+<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>
+<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="c1"># One tenant&#39;s proxy pool:</span>
+<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a>kubectl<span class="w"> </span>get<span class="w"> </span>all<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a><span class="w">  </span>-l<span class="w"> </span>app.kubernetes.io/instance<span class="o">=</span>&lt;gateway&gt;,app.kubernetes.io/component<span class="o">=</span>proxy
+</code></pre></div>
+<h3 id="node-disruption-safety-annotations">Node-disruption-safety annotations<a class="headerlink" href="#node-disruption-safety-annotations" title="Permanent link">&para;</a></h3>
+<p>A worker pod runs exactly one CI job and has no replica or controller behind it: evict it mid-job and the job is stranded with no replacement.
+So the AGC also stamps every worker pod with the markers the common node autoscalers and the descheduler honor to leave a running pod alone:</p>
+<table>
+<thead>
+<tr>
+<th>Annotation</th>
+<th>Value</th>
+<th>Honored by</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>karpenter.sh/do-not-disrupt</code></td>
+<td><code>true</code></td>
+<td>Karpenter — skips the pod's node for consolidation/drift disruption</td>
+</tr>
+<tr>
+<td><code>cluster-autoscaler.kubernetes.io/safe-to-evict</code></td>
+<td><code>false</code></td>
+<td>Cluster Autoscaler — won't scale down a node running the pod</td>
+</tr>
+<tr>
+<td><code>descheduler.alpha.kubernetes.io/prefer-no-eviction</code></td>
+<td><code>true</code></td>
+<td>Descheduler — skips the pod (current well-known key; the older <code>descheduler.alpha.kubernetes.io/evict</code> is opt-<em>in</em> only and its value is ignored)</td>
+</tr>
+</tbody>
+</table>
+<p>These markers ride on the worker pod itself, so they are removed the moment the pod is torn down on job completion (immediately when <code>completedPodTTL: 0s</code>, otherwise by the reaper once the TTL elapses) — they never pin a node for a pod that is no longer running.</p>
+<p><strong>Overriding.</strong> The markers are gap-fill defaults: set any of these keys in the runner's <code>podTemplate.metadata.annotations</code> and your explicit value wins.
+For example, a job you know is safe to interrupt can opt back into eviction with <code>cluster-autoscaler.kubernetes.io/safe-to-evict: "true"</code>.
+Only these three keys are honored from the template; other <code>podTemplate</code> annotations are not copied onto worker pods.
+Prefer a <a href="https://kubernetes.io/docs/tasks/run-application/configure-pdb/">PodDisruptionBudget</a> if you need finer voluntary-disruption control.</p>
+<hr />
+<h2 id="label-cardinality-warning">Label Cardinality Warning<a class="headerlink" href="#label-cardinality-warning" title="Permanent link">&para;</a></h2>
+<p>Metric labels are scoped to <code>namespace</code> and <code>runner_group</code>.
+To avoid label cardinality explosion:</p>
+<ul>
+<li><strong>Do not use dynamically generated <code>runner_group</code> names</strong> (e.g. names incorporating PR numbers or commit SHAs).
+  Each unique combination of <code>namespace</code> + <code>runner_group</code> creates a distinct time series; thousands of unique names will cause memory pressure in Prometheus.</li>
+<li><strong>Stable, human-meaningful names</strong> like <code>gpu-2x</code>, <code>cpu-standard</code>, <code>gpu-a100</code> are correct.
+  These are configured in the <code>ActionsGateway</code> spec and should not change after initial setup.</li>
+<li>If you need per-workflow or per-repo attribution, use Prometheus recording rules or labels from job metadata, not from RunnerGroup names.</li>
+</ul>
+<h2 id="breaking-observability-changes-q417">Breaking observability changes (Q417)<a class="headerlink" href="#breaking-observability-changes-q417" title="Permanent link">&para;</a></h2>
+<p>Q417 ported eviction recovery to the scale-set acquisition tier and added a <code>tier</code> label to the two eviction counters so the two tiers' recoveries are distinguishable.
+Q497 extended recovery to scheduler preemption and added a <code>cause</code> label, on those two counters and on the identity counter, for the same reason — the two disruptions demand different operator responses:</p>
+<table>
+<thead>
+<tr>
+<th>Metric</th>
+<th>Labels before</th>
+<th>After Q417</th>
+<th>After Q497</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>actions_gateway_eviction_retries_total</code></td>
+<td><code>namespace</code>, <code>runner_group</code></td>
+<td>+ <code>tier</code></td>
+<td>+ <code>cause</code></td>
+</tr>
+<tr>
+<td><code>actions_gateway_eviction_retries_exhausted_total</code></td>
+<td><code>namespace</code>, <code>runner_group</code></td>
+<td>+ <code>tier</code></td>
+<td>+ <code>cause</code></td>
+</tr>
+<tr>
+<td><code>actions_gateway_eviction_recovery_identity_unknown_total</code></td>
+<td><code>namespace</code>, <code>runner_group</code></td>
+<td>—</td>
+<td>+ <code>cause</code></td>
+</tr>
+</tbody>
+</table>
+<p>Q766 then ported the abandoned-run force-cancel and its capacity-gated re-run to the scale-set tier, adding the same <code>tier</code> label to that pair for the same reason:</p>
+<table>
+<thead>
+<tr>
+<th>Metric</th>
+<th>Labels before</th>
+<th>After Q766</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>actions_gateway_abandoned_run_force_cancels_total</code></td>
+<td><code>namespace</code>, <code>runner_group</code>, <code>outcome</code></td>
+<td>+ <code>tier</code></td>
+</tr>
+<tr>
+<td><code>actions_gateway_abandoned_run_rerun_waits_total</code></td>
+<td><code>namespace</code>, <code>runner_group</code>, <code>outcome</code></td>
+<td>+ <code>tier</code></td>
+</tr>
+</tbody>
+</table>
+<p><strong>What breaks.</strong> Only queries that match the full label set exactly, or that render one series per metric and now render more.
+Aggregations are unaffected: <code>sum(...)</code>, <code>increase(...) &gt; 0</code>, and <code>sum by (namespace, runner_group) (...)</code> keep working unchanged, which covers the shipped dashboards and alert rules.
+Add <code>tier</code> or <code>cause</code> to a <code>by (...)</code> clause where you want the split.</p>
+<p><strong>One reading does change meaning even though no query breaks.</strong> Before Q497, <code>actions_gateway_eviction_retries_total</code> counted node-pressure evictions only, so a dashboard titled "evictions" was accurate.
+It now also counts preemptions, which are a routine consequence of running a <code>priorityTiers</code> floor rather than a sign of node trouble.
+An alert that pages on this counter rising should filter to <code>{cause="eviction"}</code> unless it genuinely wants both.</p>
+<p><strong>Continuity.</strong> Every counter keeps its name, so history is preserved; series recorded before the upgrade simply carry no <code>tier</code> label.</p>
+<p><strong>Q766 also changes what a zero means.</strong> Before it, an abandoned worker on a <code>ScaleSet</code> set produced no <code>abandoned_run_*</code> series at all, so a flat zero was the tier's normal state rather than the absence of abandonments.
+Those series now populate on both tiers, and a <code>ScaleSet</code> set that starts reporting them is not a regression.</p>
+<h2 id="breaking-observability-changes-q205">Breaking observability changes (Q205)<a class="headerlink" href="#breaking-observability-changes-q205" title="Permanent link">&para;</a></h2>
+<p>The Q205 naming audit aligned metric and span/attribute names to the Prometheus and OpenTelemetry conventions before the v2beta1 freeze.
+These are <strong>breaking</strong> for any dashboard, alert, recording rule, or trace query that references the old names — update them when you adopt a release that includes Q205.</p>
+<p><strong>Metric renames</strong></p>
+<table>
+<thead>
+<tr>
+<th>Old</th>
+<th>New</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>actions_gateway_renewjob_errors_total</code></td>
+<td><code>actions_gateway_renew_job_errors_total</code></td>
+</tr>
+</tbody>
+</table>
+<p>All other metric names were audited and kept: every counter already ends in <code>_total</code>, every histogram already carries the <code>_seconds</code> base unit, and the gauge names are already conventional.
+(<code>pod_creation_latency_seconds</code> was considered for a <code>…_duration_seconds</code> rename but kept — <code>latency</code> is a recognised Prometheus term and the rename's blast radius across dashboards and recording-rule names outweighed the stylistic gain.)</p>
+<p><strong>Span attribute renames</strong> (the span names themselves — <code>RunnerGroup.Reconcile</code>, <code>Provisioner.provision</code>, and the child spans — are unchanged):</p>
+<table>
+<thead>
+<tr>
+<th>Old</th>
+<th>New</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>owner.namespace</code>, <code>runnergroup.namespace</code></td>
+<td><code>k8s.namespace.name</code></td>
+</tr>
+<tr>
+<td><code>pod.name</code></td>
+<td><code>k8s.pod.name</code></td>
+</tr>
+<tr>
+<td><code>owner.name</code></td>
+<td><code>gateway.owner.name</code></td>
+</tr>
+<tr>
+<td><code>runnergroup.name</code></td>
+<td><code>gateway.runnergroup.name</code></td>
+</tr>
+<tr>
+<td><code>plan.id</code></td>
+<td><code>gateway.plan.id</code></td>
+</tr>
+<tr>
+<td><code>active_pods</code></td>
+<td><code>gateway.active_pods</code></td>
+</tr>
+<tr>
+<td><code>ceiling.held</code></td>
+<td><code>gateway.ceiling_held</code></td>
+</tr>
+<tr>
+<td><code>priority_class</code></td>
+<td><code>gateway.priority_class</code></td>
+</tr>
+<tr>
+<td><code>pod.phase</code></td>
+<td><code>gateway.pod.phase</code></td>
+</tr>
+<tr>
+<td><code>pod.reason</code></td>
+<td><code>gateway.pod.reason</code></td>
+</tr>
+<tr>
+<td><code>duration_seconds</code></td>
+<td><code>gateway.provision.duration_seconds</code></td>
+</tr>
+</tbody>
+</table>
+<hr />
+<p>← Back to <a href="../observability/">Observability</a></p>
+
+
+
+
+
+
+
+
+
+  
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+    
+      
+      <nav class="md-footer__inner md-grid" aria-label="Footer" >
+        
+          
+          <a href="../observability/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Overview">
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+            </div>
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Previous
+              </span>
+              <div class="md-ellipsis">
+                Overview
+              </div>
+            </div>
+          </a>
+        
+        
+          
+          <a href="../observability-metrics-access/" class="md-footer__link md-footer__link--next" aria-label="Next: Accessing metrics (scraping)">
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Next
+              </span>
+              <div class="md-ellipsis">
+                Accessing metrics (scraping)
+              </div>
+            </div>
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M4 11v2h12l-5.5 5.5 1.42 1.42L19.84 12l-7.92-7.92L10.5 5.5 16 11z"/></svg>
+            </div>
+          </a>
+        
+      </nav>
+    
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+    <div class="md-copyright__highlight">
+      Licensed under the Apache License 2.0.
+    </div>
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+        
+<div class="md-social">
+  
+    
+    
+    
+    
+    <a href="https://github.com/actions-gateway/github-actions-gateway" target="_blank" rel="noopener" title="GAG on GitHub" class="md-social__link">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+    </a>
+  
+    
+    
+    
+    
+    <a href="https://github.com/actions-gateway/github-actions-gateway/issues" target="_blank" rel="noopener" title="Questions &amp; issues" class="md-social__link">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2m0 14H5.2L4 17.2V4h16zM12.2 5.5c-.9 0-1.6.2-2.1.5-.6.4-.9 1-.8 1.7h2q0-.45.3-.6c.2-.1.4-.2.7-.2s.6.1.8.3.3.4.3.7-.1.5-.2.7c-.2.2-.4.4-.6.5-.5.3-.9.6-1.1.8-.4.3-.5.6-.5 1.1h2c0-.3.1-.5.1-.7.1-.2.3-.3.5-.5.5-.2.8-.5 1.1-.9s.4-.8.4-1.2c0-.7-.3-1.3-.8-1.7-.4-.3-1.2-.5-2.1-.5M11 12v2h2v-2z"/></svg>
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.tabs", "navigation.sections", "navigation.top", "navigation.tracking", "navigation.indexes", "navigation.footer", "toc.follow", "search.suggest", "search.highlight", "content.code.copy", "content.code.annotate", "content.tooltips"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"default": "stable", "provider": "mike"}}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+        <script src="../../javascripts/extra.js"></script>
+      
+    
+  </body>
+</html>

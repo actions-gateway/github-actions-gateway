@@ -1,0 +1,3837 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="An Actions Runner Controller (ARC) alternative for self-hosted GitHub Actions runners on multi-tenant Kubernetes — oversubscribe a shared quota, recover evicted jobs automatically, and isolate every tenant's GitHub egress.">
+      
+      
+      
+        <link rel="canonical" href="https://actions-gateway.com/1.5.0/design/02-architecture/">
+      
+      
+        <link rel="prev" href="../01-executive-summary/">
+      
+      
+        <link rel="next" href="../network-architecture/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../assets/favicon.svg">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
+    
+    
+      
+        <title>Architecture - GitHub Actions Gateway</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.484c7ddc.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+    
+    
+      <link rel="stylesheet" href="../../stylesheets/extra.css">
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+  
+
+
+    
+    
+  
+  
+  <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/IBMPlexSans-Regular.woff2">
+  <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/IBMPlexSans-Bold.woff2">
+  <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/MonaspaceNeon-Medium.woff2">
+  
+  <meta property="og:image" content="https://actions-gateway.com/1.5.0assets/social-preview.png">
+  <meta property="og:image:width" content="1280">
+  <meta property="og:image:height" content="640">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:image" content="https://actions-gateway.com/1.5.0assets/social-preview.png">
+  
+  <link rel="apple-touch-icon" href="https://actions-gateway.com/1.5.0assets/apple-touch-icon.png">
+  <link rel="alternate icon" href="https://actions-gateway.com/1.5.0assets/favicon.ico">
+  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/1.5.0assets/icon-512.png">
+  
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "SoftwareSourceCode",
+    "name": "GitHub Actions Gateway",
+    "description": "An Actions Runner Controller (ARC) alternative for self-hosted GitHub Actions runners on multi-tenant Kubernetes \u2014 oversubscribe a shared quota, recover evicted jobs automatically, and isolate every tenant\u0027s GitHub egress.",
+    "url": "https://actions-gateway.com/1.5.0",
+    "codeRepository": "https://github.com/actions-gateway/github-actions-gateway",
+    "programmingLanguage": "Go",
+    "license": "https://www.apache.org/licenses/LICENSE-2.0",
+    "author": {
+      "@type": "Organization",
+      "name": "GitHub Actions Gateway",
+      "url": "https://actions-gateway.com/1.5.0"
+    }
+  }
+  </script>
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "Organization",
+    "name": "GitHub Actions Gateway",
+    "url": "https://actions-gateway.com/1.5.0",
+    "logo": "https://actions-gateway.com/1.5.0assets/icon-512.png",
+    "sameAs": ["https://github.com/actions-gateway/github-actions-gateway"]
+  }
+  </script>
+  
+  
+
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="black" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#2-core-architectural-components" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+        <aside class="md-banner">
+          <div class="md-banner__inner md-grid md-typeset">
+            
+            <strong>v1.5.0 is here.</strong>
+      A per-tenant GitHub runner group boundary, multi-label runner sets that migrate a <code>runs-on</code> array unedited, and job duration and latency metrics on the acquisition tier every new tenant runs.
+          </div>
+          
+        </aside>
+      
+    </div>
+    
+      <div data-md-color-scheme="default" data-md-component="outdated" hidden>
+        
+          <aside class="md-banner md-banner--warning">
+            <div class="md-banner__inner md-grid md-typeset">
+              You're not viewing the latest release.
+  <a href="https://actions-gateway.com/1.5.0"><strong>Go to the current docs.</strong></a>
+
+            </div>
+            <script>var el=document.querySelector("[data-md-component=outdated]"),base=new URL("../.."),outdated=__md_get("__outdated",sessionStorage,base);!0===outdated&&el&&(el.hidden=!1)</script>
+          </aside>
+        
+      </div>
+    
+    
+      
+
+<header class="md-header" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="GitHub Actions Gateway" class="md-header__button md-logo" aria-label="GitHub Actions Gateway" data-md-component="logo">
+      
+  <img src="../../assets/logo.svg" alt="logo">
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            GitHub Actions Gateway
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Architecture
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="black" data-md-color-accent="indigo"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m17.75 4.09-2.53 1.94.91 3.06-2.63-1.81-2.63 1.81.91-3.06-2.53-1.94L12.44 4l1.06-3 1.06 3zm3.5 6.91-1.64 1.25.59 1.98-1.7-1.17-1.7 1.17.59-1.98L15.75 11l2.06-.05L18.5 9l.69 1.95zm-2.28 4.95c.83-.08 1.72 1.1 1.19 1.85-.32.45-.66.87-1.08 1.27C15.17 23 8.84 23 4.94 19.07c-3.91-3.9-3.91-10.24 0-14.14.4-.4.82-.76 1.27-1.08.75-.53 1.93.36 1.85 1.19-.27 2.86.69 5.83 2.89 8.02a9.96 9.96 0 0 0 8.02 2.89m-1.64 2.02a12.08 12.08 0 0 1-7.8-3.47c-2.17-2.19-3.33-5-3.49-7.82-2.81 3.14-2.7 7.96.31 10.98 3.02 3.01 7.84 3.12 10.98.31"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="black" data-md-color-accent="indigo"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 7a5 5 0 0 1 5 5 5 5 0 0 1-5 5 5 5 0 0 1-5-5 5 5 0 0 1 5-5m0 2a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3m0-7 2.39 3.42C13.65 5.15 12.84 5 12 5s-1.65.15-2.39.42zM3.34 7l4.16-.35A7.2 7.2 0 0 0 5.94 8.5c-.44.74-.69 1.5-.83 2.29zm.02 10 1.76-3.77a7.131 7.131 0 0 0 2.38 4.14zM20.65 7l-1.77 3.79a7.02 7.02 0 0 0-2.38-4.15zm-.01 10-4.14.36c.59-.51 1.12-1.14 1.54-1.86.42-.73.69-1.5.83-2.29zM12 22l-2.41-3.44c.74.27 1.55.44 2.41.44.82 0 1.63-.17 2.37-.44z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/actions-gateway/github-actions-gateway" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    actions-gateway/github-actions-gateway
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+            
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../.." class="md-tabs__link">
+        
+  
+  
+    
+  
+  Home
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../why-gag/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Why GAG
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../alternatives/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Alternatives
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../features/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Features
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../demo/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Demo
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../getting-started/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Get started
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../roadmap/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Roadmap
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+    
+  
+  
+    
+    
+      <li class="md-tabs__item md-tabs__item--active">
+        <a href="../" class="md-tabs__link">
+          
+  
+  
+    
+  
+  Design
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../operations/" class="md-tabs__link">
+          
+  
+  
+    
+  
+  Operations
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../reference/" class="md-tabs__link">
+          
+  
+  
+    
+  
+  Reference
+
+        </a>
+      </li>
+    
+  
+
+      
+    </ul>
+  </div>
+</nav>
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+<nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="GitHub Actions Gateway" class="md-nav__button md-logo" aria-label="GitHub Actions Gateway" data-md-component="logo">
+      
+  <img src="../../assets/logo.svg" alt="logo">
+
+    </a>
+    GitHub Actions Gateway
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/actions-gateway/github-actions-gateway" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    actions-gateway/github-actions-gateway
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../why-gag/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Why GAG
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../alternatives/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Alternatives
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Features
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../demo/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Demo
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting-started/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Get started
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../roadmap/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Roadmap
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+      
+        
+          
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" checked>
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../" class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Design
+  
+
+    
+  </span>
+  
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_8" id="__nav_8_label" tabindex="">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_8">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Design
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../01-executive-summary/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Executive summary
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#21-tier-1--gateway-manager-controller-gmc" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2.1. Tier 1 — Gateway Manager Controller (GMC)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="2.1. Tier 1 — Gateway Manager Controller (GMC)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#design-choice-reconciler-writes-use-createorpatch-not-server-side-apply" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Design choice: reconciler writes use CreateOrPatch, not Server-Side Apply
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#22-tier-2--actions-gateway-controller-agc" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2.2. Tier 2 — Actions Gateway Controller (AGC)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#23-tier-3--egress-proxy-pool" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2.3. Tier 3 — Egress Proxy Pool
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="2.3. Tier 3 — Egress Proxy Pool">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#design-choice-worker-egress-also-routes-through-the-proxy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Design choice: worker egress also routes through the proxy
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#24-tier-4--ephemeral-worker-pod" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2.4. Tier 4 — Ephemeral Worker Pod
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#25-observability" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2.5. Observability
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="2.5. Observability">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#kubernetes-events-for-job-lifecycle-transitions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Kubernetes Events for job-lifecycle transitions
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#distributed-tracing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Distributed tracing
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#26-upgrade-strategy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2.6. Upgrade Strategy
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../network-architecture/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Network architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../03-api-contracts/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API & data contracts
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../04-operational-flows/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Operational flows
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../05-security/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Security
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../06-implementation-phases/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Implementation phases
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../07-test-plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Test plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../08-glossary/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Glossary
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../appendix-a-capacity-slos/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Appendix A — Capacity & SLOs
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../appendix-b-worker-isolation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Appendix B — Worker isolation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../appendix-c-ai-implementation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Appendix C — AI-assisted implementation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../appendix-d-alternatives-considered/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Appendix D — Alternatives considered
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../appendix-e-capacity-planning/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Appendix E — Capacity planning
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../appendix-f-cost-model/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Appendix F — Cost model
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../appendix-g-future-enhancements/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Appendix G — Future enhancements
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../appendix-h-v2-api-decomposition/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Appendix H — v2 API decomposition
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../github-protocol-dependencies/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    GitHub protocol dependencies
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+          
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9" >
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../../operations/" class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Operations
+  
+
+    
+  </span>
+  
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_9" id="__nav_9_label" tabindex="0">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_9_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Operations
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/personas/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Personas: who owns what
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/install/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Install
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/air-gapped-install/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Air-gapped install
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/gitops/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    GitOps install (Argo CD / Flux)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/upgrade/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Upgrade
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/migration-from-arc/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Migrate from ARC
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/migration-v1-to-v2/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Migrate v1 → v2
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/v1alpha1-deprecation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Deprecations & the v2.0.0 removal
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/tenant-onboarding/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tenant onboarding
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/resourcequota-sizing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ResourceQuota sizing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/runner-template-library/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Runner template library
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/in-runner-image-builds/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    In-runner image builds
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/kata-dind-workloads/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Kata DinD / image-build workloads
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/p2p-image-distribution/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    P2P image distribution
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/service-mesh-coexistence/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Service mesh coexistence
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9_17" >
+        
+          
+          <label class="md-nav__link" for="__nav_9_17" id="__nav_9_17_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Observability
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_9_17_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9_17">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Observability
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/observability/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/observability-metrics/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Metrics reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/observability-metrics-access/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Accessing metrics (scraping)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/observability-alerting/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Alerting & SLOs
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/observability-dashboards/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Grafana dashboards
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/observability-logging/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Logging & tracing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/cost-attribution/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cost attribution
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/worker-rightsizing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Worker right-sizing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/node-shutdown-budgets/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Node shutdown budgets
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/runbook/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Runbook
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/backup-restore/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Backup & restore
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/velero-backup-restore/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Velero backup & restore
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/troubleshooting/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Troubleshooting
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/security-operations/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Security operations
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/admission-policies/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Admission policies (Kyverno / Gatekeeper)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/release/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Release
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/kata-ci-spike-runbook/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Kata-on-GKE spike runbook
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+          
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_10" >
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../../reference/" class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference
+  
+
+    
+  </span>
+  
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_10" id="__nav_10_label" tabindex="0">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_10_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_10">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/api/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API reference (v2beta1)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#21-tier-1--gateway-manager-controller-gmc" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2.1. Tier 1 — Gateway Manager Controller (GMC)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="2.1. Tier 1 — Gateway Manager Controller (GMC)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#design-choice-reconciler-writes-use-createorpatch-not-server-side-apply" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Design choice: reconciler writes use CreateOrPatch, not Server-Side Apply
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#22-tier-2--actions-gateway-controller-agc" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2.2. Tier 2 — Actions Gateway Controller (AGC)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#23-tier-3--egress-proxy-pool" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2.3. Tier 3 — Egress Proxy Pool
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="2.3. Tier 3 — Egress Proxy Pool">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#design-choice-worker-egress-also-routes-through-the-proxy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Design choice: worker egress also routes through the proxy
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#24-tier-4--ephemeral-worker-pod" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2.4. Tier 4 — Ephemeral Worker Pod
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#25-observability" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2.5. Observability
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="2.5. Observability">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#kubernetes-events-for-job-lifecycle-transitions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Kubernetes Events for job-lifecycle transitions
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#distributed-tracing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Distributed tracing
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#26-upgrade-strategy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2.6. Upgrade Strategy
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="2-core-architectural-components">2. Core Architectural Components<a class="headerlink" href="#2-core-architectural-components" title="Permanent link">&para;</a></h1>
+<p>← <a href="../01-executive-summary/">Executive Summary</a> | <a href="../">Back to index</a> | Next: <a href="../03-api-contracts/">API &amp; Data Contracts →</a></p>
+<hr />
+<p>The system has four layers.
+The GMC sits at the cluster level and manages tenant gateway instances.
+Each tenant's AGC handles the GitHub API control plane.
+A horizontally autoscaled proxy pool provides isolated, fault-tolerant egress for all GitHub traffic.
+Ephemeral worker pods form the execution data plane, fully isolated within the tenant's namespace.</p>
+<p>The architecture has two flows worth diagramming separately: <strong>provisioning</strong> (how a tenant's gateway comes into existence) and <strong>runtime</strong> (how a job is acquired and executed).
+The two flows touch overlapping resources but answer different questions.</p>
+<p><strong>Provisioning flow</strong> — what happens when a tenant applies an <code>ActionsGateway</code> CR.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>  Tenant namespace                           System namespace
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>  ════════════════                           ════════════════
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>  ┌──────────────────────┐                 ┌──────────────────────────────┐
+<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>  │  ActionsGateway CR   │─── watch (1) ──▶│  Gateway Manager Controller  │
+<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>  │  (namespace-scoped)  │                 │            (GMC)             │
+<a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>  └──────────────────────┘                 └───────────────┬──────────────┘
+<a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>                ┌──────────── reconciles (2) ──────────────┘
+<a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>                ▼
+<a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>  ┌──────────────────────────────────────────────────────────┐
+<a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a>  │  Tenant namespace resources created by GMC               │
+<a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a>  │  ─────────────────────────────────────────               │
+<a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a>  │    • ServiceAccount + Role + RoleBinding   (RBAC)        │
+<a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a>  │    • NetworkPolicy + ResourceQuota         (guardrails)  │
+<a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a>  │    • Proxy Deployment + Service + HPA + PDB              │
+<a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a>  │    • AGC Deployment   (replicas: 1, App creds mounted)   │
+<a id="__codelineno-0-17" name="__codelineno-0-17" href="#__codelineno-0-17"></a>  │    • RunnerGroup CRs  (bootstrap)                        │
+<a id="__codelineno-0-18" name="__codelineno-0-18" href="#__codelineno-0-18"></a>  └──────────────────────────────────────────────────────────┘
+</code></pre></div>
+<p><strong>Runtime flow</strong> — what happens once the gateway is running and a job arrives.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>                 ┌──────────────────────────┐
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>                 │  GitHub Actions Backend  │
+<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>                 └─────────────┬────────────┘
+<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>                               ↕ all egress
+<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>        ┌──────────────────────┴─────────────────────┐
+<a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a>        │      Egress Proxy Pool (HPA-managed)       │
+<a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a>        │             proxy-0 … proxy-N              │
+<a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a>        └────────┬──────────────────────────────┬────┘
+<a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a>                 ▲                              ▲
+<a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a> HTTP(S)_PROXY   │                              │ HTTP(S)_PROXY
+<a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a>    ┌────────────┴────────────┐    ┌────────────┴───────────┐
+<a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a>    │  AGC (1 replica)        │    │  Ephemeral Worker Pod  │
+<a id="__codelineno-1-13" name="__codelineno-1-13" href="#__codelineno-1-13"></a>    │  • session loops        │    │    (Runner.Worker)     │
+<a id="__codelineno-1-14" name="__codelineno-1-14" href="#__codelineno-1-14"></a>    │  • token manager        │    └────────────┬───────────┘
+<a id="__codelineno-1-15" name="__codelineno-1-15" href="#__codelineno-1-15"></a>    │  • renewjob goroutines  │                 ▲
+<a id="__codelineno-1-16" name="__codelineno-1-16" href="#__codelineno-1-16"></a>    └────────────┬────────────┘                 │ spawned by
+<a id="__codelineno-1-17" name="__codelineno-1-17" href="#__codelineno-1-17"></a>                 │ Create Secret + Pod          │ K8s scheduler
+<a id="__codelineno-1-18" name="__codelineno-1-18" href="#__codelineno-1-18"></a>                 │                              │
+<a id="__codelineno-1-19" name="__codelineno-1-19" href="#__codelineno-1-19"></a>    ┌────────────▼────────────┐                 │
+<a id="__codelineno-1-20" name="__codelineno-1-20" href="#__codelineno-1-20"></a>    │  Kubernetes API Server  ├─────────────────┘
+<a id="__codelineno-1-21" name="__codelineno-1-21" href="#__codelineno-1-21"></a>    └─────────────────────────┘
+</code></pre></div>
+<p>All AGC and worker traffic to GitHub flows through the proxy pool; Kubernetes API traffic from the AGC stays in-cluster (excluded via <code>NO_PROXY</code>).</p>
+<hr />
+<h2 id="21-tier-1--gateway-manager-controller-gmc">2.1. Tier 1 — Gateway Manager Controller (GMC)<a class="headerlink" href="#21-tier-1--gateway-manager-controller-gmc" title="Permanent link">&para;</a></h2>
+<p>Deployed once by the platform team in a dedicated system namespace.
+The default install uses <code>gmc-system</code>.
+It holds a ClusterRole that grants it read access to <code>ActionsGateway</code> resources across all namespaces, and write access (cluster-wide at the RBAC layer) to Deployments, Roles, RoleBindings, and NetworkPolicies.
+Per-namespace confinement of those writes is enforced not by RBAC — which cannot express "only namespaces carrying a marker label" — but by the <code>gmc-tenant-resource-guard</code> <code>ValidatingAdmissionPolicy</code>, which denies the GMC ServiceAccount any <code>create</code>/<code>update</code>/<code>delete</code> of those kinds outside namespaces an administrator has marked <code>actions-gateway.github.com/tenant: "true"</code> (Q122).
+It does <strong>not</strong> hold <code>resourcequotas</code>/<code>limitranges</code> write verbs: the namespace <code>ResourceQuota</code> is platform-owned and the GMC operates within it without creating or mutating it <em>(Q130 — dropping that grant is least privilege, partially subsuming Q122)</em>.</p>
+<ul>
+<li><strong>Deployment Model:</strong> Runs as a <code>Deployment</code> with <code>replicas: 2</code> and <code>controller-runtime</code> leader election enabled (<code>leaderElectionID: "actions-gateway-gmc-leader"</code>).
+  Only the leader pod actively reconciles; the standby is immediately promoted if the leader fails.
+  The GMC's reconciler is fully idempotent, so failover produces no duplicate or conflicting resources.</li>
+<li><strong>Tenant Provisioner:</strong> On <code>ActionsGateway</code> creation, the GMC operates entirely within the CR's own namespace — the namespace already exists because the tenant created the CR there.
+  It creates a scoped <code>ServiceAccount</code>, <code>Role</code>, and <code>RoleBinding</code> granting the AGC permission to manage Pods and Secrets only within that namespace, and applies a <code>NetworkPolicy</code> derived from the <code>ActionsGateway</code> spec.
+  The namespace <code>ResourceQuota</code> (and any <code>LimitRange</code>) is <strong>platform-owned</strong> — the platform admin provisions it on the namespace and the GMC operates within it without ever creating or mutating it (Q130).
+  The initial <code>NetworkPolicy</code> egress rules for the proxy pods are populated by fetching GitHub's current IP ranges from <code>api.github.com/meta</code> at provisioning time.
+  The Tenant Provisioner also stamps <code>pod-security.kubernetes.io/enforce</code> on the tenant namespace at the level chosen by <code>spec.securityProfile</code> (default <code>baseline</code>), so the in-tree PodSecurity admission plugin rejects privileged worker pods at admission without requiring an external policy engine.
+  Stamping PSA labels requires cluster-wide <code>namespaces:patch</code>; the <code>namespace-psa-guard</code> ValidatingAdmissionPolicy confines that grant to namespaces an administrator has marked <code>actions-gateway.github.com/tenant: "true"</code> (and to the PSA label keys only), so a compromised GMC cannot relabel system namespaces.
+  See <a href="../05-security/#53-security-profiles-and-the-privileged-opt-in">§5.3</a> for the profile semantics and the privileged opt-in pattern.
+  (In the <code>v2alpha1</code> (<code>actions-gateway.com</code>) API this <code>spec.securityProfile</code> field is <strong>removed</strong>: the level is chosen by the namespace label <code>actions-gateway.com/security-profile</code> instead — GMC-guarded, namespace-scoped, shared by co-located gateways — see <a href="../appendix-h-v2-api-decomposition/">Appendix H §H.16 #7</a>.
+  The stamping mechanism described here is unchanged.)</li>
+<li><strong>Proxy Deployer:</strong> Creates and manages a proxy <code>Deployment</code> and <code>ClusterIP</code> <code>Service</code> within the tenant namespace, along with a <code>HorizontalPodAutoscaler</code> that scales the proxy pool based on CPU utilization.
+  Proxy pods are given explicit <code>resources.requests</code> and <code>resources.limits</code> so the HPA can compute CPU utilization percentages.
+  <code>podAntiAffinity</code> rules spread replicas across nodes and a <code>PodDisruptionBudget</code> ensures at least one proxy pod survives node drains.
+  The AGC Deployment and all worker pod templates are injected with <code>HTTP_PROXY</code>, <code>HTTPS_PROXY</code>, and <code>NO_PROXY</code> environment variables — <code>NO_PROXY</code> includes <code>svc.cluster.local</code>, <code>localhost</code>, and <code>127.0.0.1</code>, and — on the AGC, which dials the API server by ClusterIP — <code>kubernetes.default.svc</code> plus this cluster's API server ClusterIP, read from <code>KUBERNETES_SERVICE_HOST</code> rather than assumed from a Service CIDR (Q465), so that Kubernetes API calls are never routed through the egress proxy.
+  The proxy's TLS cert is signed by a per-tenant cert-manager-issued self-signed CA stored in the <code>actions-gateway-proxy-tls</code> Secret; the Proxy Deployer projects the cert into the AGC pod (cert only, via <code>Items: [tls.crt]</code>) and, via the <code>PROXY_TLS_SECRET_NAME</code> env on the AGC, instructs the AGC's pod provisioner to project the same cert into every worker pod at <code>/etc/actions-gateway/proxy-ca/tls.crt</code>.
+  The private key (<code>tls.key</code>) is never projected outside the proxy pod itself.</li>
+<li><strong>AGC Deployer:</strong> Creates and manages a <code>Deployment</code> running the AGC binary with <code>replicas: 1</code> inside the CR's namespace, injecting the tenant's GitHub App credentials from the Secret referenced in the <code>ActionsGateway</code> spec.
+  The AGC is kept at a single replica to avoid multiple instances independently managing the goroutine session registry; HA is provided at the job level — any unacquired job is redelivered by GitHub.
+  The Deployer also threads <code>spec.logLevel</code> (<code>info</code>|<code>debug</code>, default <code>info</code>) to both the AGC and the proxy as the <code>LOG_LEVEL</code> environment variable — the same env-on-pod-template mechanism as <code>spec.securityProfile</code>'s <code>SECURITY_PROFILE</code> — so an operator can crank one tenant to <code>debug</code> for a bug repro via <code>kubectl edit</code> with no GMC redeploy.
+  Because the level lives on the pod template, flipping it is a rolling restart of the AGC and proxy, not a hot reload.
+  Since the AGC is single-replica, its only scaling axis is vertical: on the v2 API <code>ActionsGateway.spec.agcResources</code> sizes the container directly, and <code>spec.agcAutoscaling</code> optionally hands that sizing to a <code>VerticalPodAutoscaler</code> the GMC stamps beside the AGC Deployment — opt-in, recommendation-only by default, composing with <code>agcResources</code> rather than overriding it, and degrading to an advisory condition where the <code>autoscaling.k8s.io</code> CRDs are absent (Q360; see <a href="../appendix-e-capacity-planning/#e11-managed-vertical-right-sizing-of-the-control-planes">Appendix E §E.11</a>).</li>
+<li><strong>IP Range Reconciler:</strong> Runs a background loop every 24 hours that fetches the current GitHub IP ranges from <code>api.github.com/meta</code> and patches any proxy pod <code>NetworkPolicy</code> whose egress rules are stale.
+  The cached ranges also seed each proxy <code>NetworkPolicy</code>'s <code>ipBlock</code> egress allowlist at provisioning time, so the <em>initial</em> fetch is on the critical path for proxy egress: until it lands, the allowlist is empty and proxy→GitHub traffic is silently dropped.
+  Because the periodic interval is 24 hours, the reconciler retries the initial fetch on a capped exponential backoff (1s→30s) until it succeeds rather than waiting a full interval after a transient failure or stall; the subsequent patch pass repairs any <code>NetworkPolicy</code> created with the empty cache during the retry window.
+  Tenants running Cilium or Calico with FQDN-based egress policies can opt out of this feature via <code>spec.proxy.managedNetworkPolicy: false</code>.
+  The fetcher is abstracted behind a <code>GitHubIPRangeFetcher</code> interface (default implementation calls <code>https://api.github.com/meta</code>) so integration tests can inject a stub without network access:</li>
+</ul>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="kd">type</span><span class="w"> </span><span class="nx">GitHubIPRangeFetcher</span><span class="w"> </span><span class="kd">interface</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="w">    </span><span class="nx">FetchIPRanges</span><span class="p">(</span><span class="nx">ctx</span><span class="w"> </span><span class="nx">context</span><span class="p">.</span><span class="nx">Context</span><span class="p">)</span><span class="w"> </span><span class="p">([]</span><span class="nx">net</span><span class="p">.</span><span class="nx">IPNet</span><span class="p">,</span><span class="w"> </span><span class="kt">error</span><span class="p">)</span>
+<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="p">}</span>
+</code></pre></div>
+<ul>
+<li><strong>Lifecycle Manager:</strong> Propagates spec changes (resource limits, proxy scaling bounds, credential Secret reference changes) down to the tenant's AGC deployment and proxy HPA.
+  When <code>gitHubAppRef</code> changes, the GMC rolls the AGC Deployment so the new Pod mounts the new Secret — Secrets are treated as immutable and are never updated in place.
+  On <code>ActionsGateway</code> deletion, removes only the GMC-owned resources within the namespace — it does not delete the namespace itself, since the tenant owns it.</li>
+</ul>
+<h3 id="design-choice-reconciler-writes-use-createorpatch-not-server-side-apply">Design choice: reconciler writes use <code>CreateOrPatch</code>, not Server-Side Apply<a class="headerlink" href="#design-choice-reconciler-writes-use-createorpatch-not-server-side-apply" title="Permanent link">&para;</a></h3>
+<p>The GMC's per-reconcile <code>apply*</code> helpers (<code>applyServiceAccount</code>/<code>RoleBinding</code>/<code>NetworkPolicy</code>/<code>ResourceQuota</code>/<code>Deployment</code>/<code>Service</code>/<code>PDB</code>/<code>HPA</code>/<code>RunnerGroup</code>, plus <code>applyOwnedSecret</code>) write child resources with <code>controllerutil.CreateOrPatch</code> rather than Server-Side Apply (SSA).
+Both are strict improvements over the naive <code>Get → full-object Update</code>, which carried the object's <code>resourceVersion</code> as a precondition (so a racing write produced a spurious <code>409 Conflict</code> + requeue) and replaced the whole object, clobbering fields the controller doesn't manage.
+<code>CreateOrPatch</code> is <strong>not</strong> universally better than SSA; it was the better fit for <em>this</em> reconciler, for three reasons:</p>
+<ul>
+<li><strong>Typed builders vs. applyconfigurations.</strong> The helpers already receive fully-built <em>typed</em> objects from the <code>build*</code> functions, so <code>CreateOrPatch</code> slots in with a small mutate closure.
+  Doing SSA <em>correctly</em> needs applyconfiguration builders (<code>appsv1ac.Deployment(...)</code>): a typed Go struct can't distinguish "field unset" from "field == zero value", so applying a typed object claims ownership of every zero-valued field and fights other managers / strips defaults.
+  Clean SSA would mean rewriting all ten builders into a parallel applyconfiguration set — far larger and riskier than warranted.</li>
+<li><strong>Single-writer sufficiency.</strong> The GMC reconciler is single-writer (<code>MaxConcurrentReconciles: 1</code>), so <code>CreateOrPatch</code>'s no-precondition merge fully closes the conflict window; SSA's per-field ownership machinery buys little here.</li>
+<li><strong>One accepted wart.</strong> Because most closures do <code>obj.Spec = desired.Spec</code> (omitting server-defaulted fields like a Deployment's rollout <code>Strategy</code> or an HPA's <code>Behavior</code>), they emit a <em>non-empty</em> patch every reconcile that the apiserver then no-op-dedups (re-applies defaults, skips the write, no <code>resourceVersion</code> bump).
+  SSA-with-applyconfigurations would emit no patch traffic at all.
+  So <code>CreateOrPatch</code> here deliberately relies on the apiserver's no-op-write detection — verified against a real apiserver by the <code>apply_nochurn</code> envtest, since a fake client reproduces neither defaulting nor no-op dedup.</li>
+</ul>
+<p><strong>The cost of losing SSA's field ownership.</strong> Whole-<code>Spec</code> replacement is only correct where the GMC is the <em>only</em> writer of every field in that spec.
+Two children break that assumption and so assign fields selectively instead:</p>
+<ul>
+<li>The proxy <strong><code>Service</code></strong>: the apiserver assigns <code>.spec.clusterIP</code>, so the closure sets only <code>type</code>/<code>selector</code>/<code>ports</code>.</li>
+<li>The proxy <strong><code>Deployment</code></strong>: it is the <code>scaleTargetRef</code> of the pool's HPA, which owns <code>.spec.replicas</code> via the <code>scale</code> subresource.
+  Because both proxy reconcilers <code>Owns(&amp;appsv1.Deployment{})</code>, the HPA's own scale write requeues a reconcile — so a whole-<code>Spec</code> replacement (whose <code>Replicas</code> is the builder's <code>minReplicas</code>) reverted every scale-out within milliseconds and capped each tenant's egress capacity at the floor.
+  The split is now: <strong>the reconciler owns the replica floor, the HPA owns everything above it.</strong> The reconciler writes <code>.spec.replicas</code> only when creating the Deployment, or when it is found at <code>0</code> (an HPA refuses to scale a target off zero, so nothing else would revive the pool).
+  Scale-<em>down</em> below the floor is prevented by the HPA's own <code>spec.minReplicas</code>, which the reconciler does keep in sync with the CR.</li>
+</ul>
+<p>SSA would have made both cases fall out of per-field ownership for free; with <code>CreateOrPatch</code> they are a hand-maintained invariant, enforced by envtest (<code>hpa_scale_preservation</code>) because neither the <code>scale</code> subresource nor <code>.spec.replicas</code> defaulting exists on a fake client.</p>
+<p><strong>Where SSA remains the right tool:</strong> <code>applyNamespacePSA</code> keeps SSA (field manager <code>actionsgateway-controller-psa</code>) precisely because PSA labels are a security control — SSA records per-field-manager ownership and surfaces a conflict when a human admin changes a field the controller owns, so an out-of-band edit is detected and reported (a <code>PSALabelsOverridden</code> Warning Event) rather than silently re-asserted.
+See <a href="../05-security/#53-security-profiles-and-the-privileged-opt-in">§5.3</a>.</p>
+<hr />
+<h2 id="22-tier-2--actions-gateway-controller-agc">2.2. Tier 2 — Actions Gateway Controller (AGC)<a class="headerlink" href="#22-tier-2--actions-gateway-controller-agc" title="Permanent link">&para;</a></h2>
+<p>A namespace-scoped operator deployed and managed by the GMC, one instance per tenant.
+It runs with RBAC permissions limited to its own namespace and manages the lifecycle of <code>RunnerGroup</code> Custom Resources within that namespace.</p>
+<ul>
+<li><strong>Session Multiplexer:</strong> Spawns and manages an adaptive pool of long-polling listener goroutines per <code>RunnerGroup</code>.
+  Each RunnerGroup maintains a minimum of one permanent listener goroutine; additional listeners are spawned on demand as jobs arrive and shut themselves down once the queue is idle.
+  If the permanent baseline exits for a recoverable reason (e.g. a transient broker error), the multiplexer restarts it after a short backoff.
+  Starting the multiplexer is idempotent: while a baseline is running or waiting out that backoff, further starts are no-ops, so a reconcile firing during the backoff window — when the active count reads zero — cannot stack a second permanent baseline.
+  Stopping the multiplexer also cancels any restart still pending, so a retired multiplexer cannot resurrect a listener.</li>
+</ul>
+<p><strong>Agent pool.</strong> GitHub enforces one active session per registered runner agent (HTTP 409 on duplicate).
+  The AGC therefore maintains a pool of pre-registered runner agents per RunnerGroup — one agent registered per <code>maxListeners</code> slot — at RunnerGroup provisioning time.
+  Each listener goroutine is assigned an agent from the pool for the duration of its session; no two goroutines share an agent concurrently.
+  Agent registrations persist across idle periods and AGC restarts, but <strong>not across jobs</strong>: JIT-registered runners are single-use — GitHub deletes the runner record once it acquires a job (live-confirmed 2026-06-12, <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.5.0/docs/plan/milestone-4.md#12-live-multi-tenant-validation-evidence-2026-06-1112">M4 §12</a>) — so the pool re-registers each agent under its stable <code>&lt;group&gt;-&lt;index&gt;</code> name after every job (Q114, see the self-heal paragraph below).</p>
+<p><strong>Registration scope.</strong> Agents may be registered at either organization scope (<code>https://github.com/{org}</code>) or repository scope (<code>https://github.com/{owner}/{repo}</code>); the registrar selects the appropriate REST API endpoints — <code>/orgs/{org}/actions/runners/...</code> or <code>/repos/{owner}/{repo}/actions/runners/...</code> — from the shape of the configured GitHub URL.
+  Runner groups are an organization-level concept on GitHub's side, so the <code>group_id</code> field is included on the register payload only for org-scoped registration and is omitted for repo-scoped registration.
+  Both hosted github.com and GitHub Enterprise Server (GHES) endpoints are supported under the same selection logic.</p>
+<p><strong>One resolver for the API base (Q506).</strong> Which GitHub REST API a gateway addresses is derived from <code>spec.gitHubURL</code> in exactly one place — <code>githubapp.DeriveAPIBaseURL</code>: <code>https://api.github.com</code> for public GitHub, <code>https://&lt;host&gt;/api/v3</code> for a GHES appliance.
+  Three components had previously each derived it their own way, and the GMC derived it nowhere: it injected <code>GITHUB_ORG_URL</code> and left <code>GITHUB_API_BASE_URL</code> unset, so the AGC's token exchange defaulted to <code>api.github.com</code> and a GHES tenant failed to mint a token before acquiring any job.
+  The GMC now injects the derived base on the AGC <code>Deployment</code>, and the registrar and scale-set client call the same helper — so registration, token exchange, and the disruption auto-retry cannot drift onto different hosts.
+  Egress remains a separate obligation: an FQDN egress mode carries every referrer's GHES host automatically, while the default CIDR mode allows only GitHub's published ranges and needs the appliance's ranges supplied (<code>GitHubEgressIncomplete</code> names the gap).</p>
+<p>The lifecycle of a listener goroutine is as follows.
+  On startup the AGC spawns exactly one listener per RunnerGroup.
+  Each listener claims an agent from the pool, calls <code>POST /sessions</code> with that agent's ID to open a broker session, then enters a <code>GET /message</code> long-poll loop.
+  When a job message is received, the listener first consults the <strong>pre-acquisition admission gate</strong> (Q59): two capacity rungs, both re-read per delivery.
+  The first is a live namespace-<code>ResourceQuota</code> headroom check for one more worker pod (#784); the second is an in-memory, per-RunnerGroup reservation counter that mirrors the Pod Provisioner's concurrency ceiling.
+  If either refuses, the listener <strong>skips <code>acquirejob</code> entirely</strong> and continues polling, leaving the job queued at GitHub for redelivery to a sibling session with capacity — rather than claiming a job whose worker pod it cannot place, which would be cancelled when its unrenewed lock lapses.
+  Each skipped delivery increments <code>actions_gateway_jobs_admission_rejected_total</code> with <code>reason="ceiling"</code> or <code>reason="quota"</code>.
+  The quota rung fails open (an unreadable quota admits) and reserves nothing, so declining on quota leaves the ceiling budget untouched.
+  The ceiling reservation is soft state (lost on AGC restart, which is fail-safe — the budget simply resets).
+  Neither rung is authoritative: the Pod Provisioner's post-acquire ceiling check and its <code>maxQuotaRetries</code> loop remain the backstops for the races a per-delivery read cannot close — a sibling AGC, an eventually-consistent <code>ResourceQuota.status.used</code>, the restart window.
+  When the gate admits, the listener calls <code>POST /acquirejob</code> to claim the job (this must happen before pod creation), holding the reservation until the job completes, then spawns two goroutines: a replacement listener (to maintain polling capacity for the next job) and a Job Lock Renewer (to manage the running job's lock).
+  If the total active listener count is below <code>maxListeners</code>, the original listener may continue polling rather than exiting — up to <code>maxListeners</code> listeners can run concurrently during a burst.</p>
+<p><strong>Post-job re-registration and session self-heal (Q114).</strong> The job acquisition consumes the agent's single-use JIT runner record server-side, and the session dies with it — left alone, its <code>GET /message</code> degrades into <code>200</code>-with-empty-body (<code>decode response: EOF</code>) and later <code>401</code> loops forever, permanently burning one of the group's <code>maxListeners</code> slots per completed job.
+  The listener therefore self-heals: the moment <code>acquirejob</code> succeeds it marks the agent <em>consumed</em> on the pool, and once the job handler returns it deletes the dead session, re-registers the agent under its stable name (deregister-then-recreate; a <code>409 Already exists</code> from a surviving record is resolved by looking the record's ID up by name, deleting it, and retrying once), rewrites the agent Secret with the fresh credentials, and opens a new session — all without the goroutine exiting, so listener capacity is preserved.
+  The same heal ladder backs the poll loop for staleness discovered after the fact (e.g. across an AGC restart, where the consumed mark is lost): a <code>401/403</code> poll response first refreshes the broker OAuth token and recreates the session (which also fixes plain token expiry), and escalates to an agent recycle only if fresh credentials are still rejected; a run of three consecutive empty-<code>200</code> responses triggers the same path.
+  A consumed agent is never returned to the pool's available set un-recycled — if its goroutine exits before healing (error, shutdown), the agent is parked and the next reconcile re-registers it.
+  Heal failures exit the goroutine with a retriable error so the multiplexer's existing restart backoff paces retries; recycles are surfaced via <code>actions_gateway_agent_recycles_total</code> / <code>_errors_total</code>.</p>
+<p>Idle shutdown: a listener goroutine that receives more than a configurable number of consecutive empty <code>202</code> responses (default: 50, matching the GitHub runner client's anomaly threshold) and is not the last <em>poller</em> for its RunnerGroup calls <code>DELETE /sessions/{id}</code> to deregister and exits.
+  "Last poller" counts only goroutines currently long-polling for work — a sibling busy executing a job (inside the job handler) does not count, so the group never drains to zero pollers and stops acquiring jobs while a single in-flight job runs (Q152).
+  The RunnerGroup controller ensures at least one listener goroutine is always running, restarting it if it exits unexpectedly.
+  Empty polls are also floored at 100 ms apart (<code>broker.MinPollInterval</code>, Q788), so a backend that declines to hold the long poll (a GHES tenant with a short window, an intermediary that terminates it) cannot spin the loop into a request storm GitHub's rate limiter would answer instead.
+  The floor costs nothing against a backend that does hold the poll, and it is applied after the idle accounting so it can neither delay nor suppress an idle shutdown.</p>
+<p><strong>Reconcile triggers.</strong> Besides reconciling on <code>RunnerGroup</code> spec changes, the controller watches the worker Pods its provisioner creates (filtered by the <code>actions-gateway/runner-group</code> label, reusing the shared Pod informer).
+  A worker-Pod create (job acquired), terminal-phase transition, eviction, or delete re-triggers a reconcile, so <code>status.activeSessions</code> and any listener-pushed conditions refresh promptly off the most operationally visible signal — pod churn — rather than going stale until the next spec change or the cache resync.
+  The watch is Pods-only by design: a watch on the per-agent Secrets would establish a Secret informer and cache credential material in-process, which the AGC explicitly forbids (see <a href="../05-security/">§5 security</a>, H-2/W3 — Secrets bypass the cache).
+  A listener or provisioner goroutine also pushes conditions and Events back to the reconciler over in-process channels; those pushes additionally wake the reconciler directly through a controller-runtime <code>source.Channel</code> (Q333), so a condition raised on an otherwise-idle RunnerGroup — one with no pod churn — is drained on the next reconcile rather than lagging up to the cache-resync period.
+  A drained condition is retained until the live object is observed to reflect it, so a status write that loses a conflict with a concurrent update does not drop a one-shot listener condition.
+  The same wiring backs the v2 RunnerSet reconciler.</p>
+<p>This adaptive model means steady-state rate-limit consumption is one session per RunnerGroup (~72 <code>GET /message</code> requests/hour), regardless of the configured <code>maxListeners</code>.
+  Under burst load the session count climbs toward <code>maxListeners</code>, then drains back to one as the queue empties.
+  See <a href="../appendix-e-capacity-planning/">Appendix E</a> for rate-limit implications and sizing guidance.</p>
+<blockquote>
+<p><strong>Milestone 1 protocol findings</strong> (see <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.5.0/docs/plan/milestone-1.md#8-investigation-findings">docs/plan/milestone-1.md §8</a>):</p>
+<p><em>Session reuse confirmed</em> (Investigation C) — <strong>since invalidated for JIT-registered agents.</strong> The M1 probe (a <code>config.sh</code>-registered runner) could call <code>GET /message</code> on the same <code>sessionId</code> immediately after <code>acquirejob</code> returned.
+The M4 live run showed this does <strong>not</strong> hold for the JIT-registered agents the AGC actually uses: GitHub deletes a JIT runner record at job acquisition, killing the session (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.5.0/docs/plan/milestone-4.md#12-live-multi-tenant-validation-evidence-2026-06-1112">M4 §12</a>, Q114).
+The listener re-registers and opens a fresh session after every job — see the self-heal paragraph above.</p>
+<p><em>One active session per registered runner agent enforced</em> (Investigation D).
+<code>POST /sessions</code> returns <code>409 Conflict</code> if the supplied <code>agentId</code> already has an active session.
+This means each concurrent listener goroutine must hold a <strong>distinct pre-registered runner agent</strong> (distinct <code>agentId</code>).
+The Session Multiplexer must therefore maintain a pool of up to <code>maxListeners</code> pre-registered agents per RunnerGroup at startup, and assign one agent to each goroutine for the duration of its session.
+Agent registrations are persistent (created once at RunnerGroup provisioning time and deleted when the RunnerGroup is removed); sessions are ephemeral (created and deleted per listener goroutine lifecycle).</p>
+<p><em>Opportunistic job delivery supported</em> (inferred from Investigation C timing).
+A newly dispatched job appeared in <code>GetMessage</code> within ~1 second of the <code>workflow_dispatch</code> API call landing, strongly suggesting GitHub delivers to any active polling session rather than binding delivery to sessions present at queue time.
+Direct two-runner proof was not obtained (the second-session test was blocked by the 409 constraint using the same agentId), but the timing evidence is consistent with opportunistic delivery.
+No warm standby pool is needed.
+* <strong>Pod Provisioner:</strong> Intercepts workflow triggers, decrypts incoming payloads, maps runner labels to target pod configurations, and schedules ephemeral worker pods within the tenant namespace.
+  The provisioner extracts and stores the <code>run_id</code> from each acquired job payload alongside the pod reference — this is required by the eviction-retry path in the Job Lock Renewer.
+  Before creating a pod, the provisioner enforces whichever concurrency ceiling applies to the RunnerGroup, and handles two failure modes with configurable retry:</p>
+</blockquote>
+<ul>
+<li><strong><code>priorityTiers</code> set:</strong> The provisioner queries the active and pending worker pod count for the group (via a label-selector list against the Kubernetes API) and walks the tier list in ascending threshold order, assigning the <code>priorityClassName</code> of the first tier whose threshold the current count has not yet reached.
+    If the count equals or exceeds the last tier's threshold, the pod is held until the count drops — this is the effective <code>maxConcurrentJobs</code> ceiling for the group.</li>
+<li><strong><code>maxWorkers</code> set (without <code>priorityTiers</code>):</strong> The provisioner checks the active and pending pod count against <code>maxWorkers</code>.
+    If the count equals or exceeds <code>maxWorkers</code>, the pod is held.
+    No <code>priorityClassName</code> is set on the pod, so no cluster-scoped <code>PriorityClass</code> objects are required.</li>
+<li><strong>Neither set:</strong> No <code>priorityClassName</code> is set and the namespace <code>ResourceQuota</code> is the only active ceiling.</li>
+</ul>
+<p>When building the pod, the provisioner stamps a secure-by-default <code>SecurityContext</code> (scaled to the namespace's <code>securityProfile</code>) and default resource requests/limits (<code>500m</code>/<code>1Gi</code>) onto containers that omit them, gap-filling only so explicit tenant <code>PodTemplate</code> values always win.
+  See <a href="../05-security/#53-security-profiles-and-the-privileged-opt-in">§5.3</a> for the per-profile defaults.</p>
+<p>Pod-count queries are per-RunnerGroup, not namespace-wide, so groups with distinct runner labels are correctly accounted for independently.
+  The pod-count read and pod-create are not atomic — a benign race exists where two concurrent job acquisitions each observe count N and both proceed at the ceiling boundary, potentially scheduling one extra pod above the threshold.
+  This is acceptable; the namespace <code>ResourceQuota</code> remains the hard enforcement layer and the overshoot self-corrects as the next pod creation re-reads the live count.</p>
+<p>This pod-creation ceiling check runs <em>after</em> <code>acquirejob</code> has already claimed the job, so a job held here is dropped with its GitHub lock held.
+  The <strong>pre-acquisition admission gate</strong> in the Session Multiplexer (described above, Q59) moves the common case of this decision to <em>before</em> the claim, where a rejected job stays redeliverable; the provisioner's check remains as the authoritative backstop for the races the in-memory gate cannot close (a sibling AGC, the restart window, or the read-vs-create race above).
+  The two enforce the same ceiling — the gate reads <code>maxWorkers</code> / the maximum <code>priorityTiers</code> threshold — so they agree in steady state and the provisioner rarely has to hold a post-acquire job once the gate is active.</p>
+<p><strong>On the scale-set tier the same ceiling has a different pre-check and a different fallback (Q576).</strong> The gate above is classic-only; a ScaleSet set states its capacity as one integer per long-poll instead, and GitHub can still hand it a job the ceiling has no room for — the advertisement bounds jobs assigned, while the ceiling counts worker <em>pods</em>, and the two diverge whenever a finished job's pod is still terminating.
+  What the listener must not do with such a job is treat it as a transient failure: it acks by advancing a cursor, so "retry later" means holding the cursor, and the long-poll queue then redelivers immediately.
+  That is a spin, and an expensive one, because minting a job's JIT config <em>registers a runner at GitHub</em> — so every pass created a registration whose name the next pass then had to deregister (704 deregister calls against one job in a 14-minute window on the <code>v1.3.0-rc.3</code> dogfood gate).
+  Two changes close it.
+  The listener asks the provisioner whether the ceiling has room <strong>before</strong> minting, so a job it cannot run costs no registration at all; and a ceiling rejection — from that pre-check, or from the authoritative check when a sibling job took the last slot in between — is routed to the same deferred-job re-offer machinery a runner-name conflict uses (Q551) rather than to the cursor hold.
+  Deferred jobs are re-offered every 5s (flat, unlike the conflict path's exponential ladder, because a full ceiling clears the moment any worker finishes and a re-offer now costs no GitHub call), reported as <code>JobProvisionStalled=True/WorkerCeilingReached</code> with a Normal Event, and counted by <code>actions_gateway_scaleset_jobs_deferred{reason="ceiling"}</code>.
+  They are deliberately <strong>not</strong> counted as provision errors: a set at its declared ceiling is working as configured.
+  The advertisement itself is unchanged — a deferred job is still assigned, so it still counts against what the set may hold.</p>
+<p><strong>Holding a job is only safe if something ends the hold (Q553).</strong> The re-offer machinery above had exactly two exits: the job provisions, or the queue delivers a terminal <code>JobCompleted</code>.
+  The second is the backend's to volunteer, and it does not always arrive for an assignment GitHub has stopped honouring — a deleted run, a job re-queued elsewhere, one the run service concluded on its own.
+  A held job with no exit is re-offered forever, and each re-offer that gets through provisions a worker for a job that no longer exists.
+  That is what livelocks a drain: <code>stop.sh</code> waits on in-flight worker pods, and the listener keeps making them.
+  The <code>v1.3.0-rc.3</code> dogfood gate recorded the end state — fifteen assignments still being retried against a scale set whose statistics reported zero — on the <code>ci</code> tenant, cleared only by hand.
+  The missing signal was already on the wire.
+  A deferred job is by construction assigned-and-not-complete, so GitHub counts it in <code>statistics.totalAssignedJobs</code>; a reading of zero while the listener holds any is a contradiction with one resolution.
+  So while it is holding anything, the listener reads that count once a minute and, on a <strong>second</strong> consecutive zero reading, gives up on every job that was already held when the first one was taken.
+  Three properties make that safe.
+  The reading comes from a session refresh rather than a poll, because a stalled set has nothing to poll for and a 202 carries no statistics.
+  Two readings rather than one, because a count is server state a fresh assignment may briefly lead — the second bracket is what keeps a just-deferred job from being dropped while GitHub still waits for it.
+  And it acts only on zero: a positive count says how many assignments are live, never which, so the unambiguous case is the only one it can resolve — which is precisely the draining set this exists to unwedge.
+  An abandoned job id is remembered, because a re-created session polls from cursor 0 and would otherwise replay the very assignment the check just acted on; abandoning it also releases its queue message for deletion, so the give-up survives the process rather than only the session (Q583) — and the release is followed straight away by the delete that makes it durable, because the two used to be separated by a full round of re-offers (Q603).
+  Each loss is a workflow run that will not run, so it is reported as such: an <code>AssignmentAbandoned</code> Warning Event and <code>actions_gateway_scaleset_jobs_abandoned_total</code>, distinct from the deferred gauge it clears.</p>
+<p><strong>Acking is cursor advance plus a delete, and the delete waits (Q583).</strong> The cursor stops a message being redelivered within a session, but it is session-scoped at the backend while the queue log is scale-set-scoped — so a cursor-only ack left every message a listener had ever handled to replay to the <em>next</em> session.
+  Nothing pruned that queue, so the replay was not a recent window but the scale set's whole history, and a restarted AGC met it with empty <code>provisioned</code>/<code>completed</code>/<code>abandoned</code> guards: it provisioned a worker for every job the set had ever run.
+  A dogfood reconnect recorded exactly that on 2026-07-05, briefly building seven workers for a previous pass's jobs.
+  The fix issues the second half of the ack, <code>DeleteMessage</code>, whose wire shape had been source-derived but never exercised until <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.5.0/docs/plan/archive/q583-restart-replay.md">Investigation G</a> measured it answering 204 and confirmed that deleting prunes the log.
+  What makes it safe is <em>when</em>: a message is deleted only once <strong>every job it names has concluded</strong> — completed with its Secret reclaimed, or abandoned — because replay is the recovery path for everything still in flight.
+  A job provisioned but still running, a Q551 deferred job the previous process never provisioned, and a completion whose Secret reclaim failed all hold their message in the queue, so a restart still re-reads them.
+  A failed delete is retried on the next poll cycle rather than dropped, since the cursor has already moved past the message and nothing else would bring it back.
+  A delete the backend answers 404/410 is a third case: it completes the ack, since a message already gone is nothing left to do, but it removed nothing — and an endpoint that is not served answers the same way.
+  The client returns that distinction rather than folding it into success, so the listener logs it and a probe measuring the wire shape cannot read a working delete off one (Q609).</p>
+<p><strong>The delete has to follow the conclusion closely, and has to survive the process (Q603).</strong> Concluding a job and deleting its message are not one act: <code>settle</code> drops the job from every message waiting on it <em>in memory</em>, and a later <code>flushDeletes</code> issues the <code>DELETE</code>.
+  A process that stops in between leaves the message in the queue, where the next one reads it with all three guards empty — the same defect, arriving through the fix's own seam.
+  Two orderings close the half of it a stop can reach.
+  The flush runs immediately after each of the two places a job concludes — the give-up check and the message handler — rather than once at a fixed point in the cycle, so no network work separates a conclusion from its delete; the widest such gap was the give-up's, which sat behind a whole round of deferred-job re-offers.
+  And the loop issues whatever deletes are still outstanding on its way out, before the session is torn down and on a context detached from the cancelled one, so a rollout, drain, or eviction landing in the window does not strand the message.
+  What that leaves is a hard kill — SIGKILL at grace expiry, OOM, node loss — between the conclusion and a successful <code>DELETE</code>, which no ordering can prevent: the conclusion is in this process's memory and the ack is at GitHub, and the two cannot be made atomic from here.
+  Closing that is the persisted half, next.</p>
+<p><strong>The conclusion survives a hard kill by being persisted ahead of the delete (Q606).</strong> The listener writes its concluded-job guards (<code>completed</code> and <code>abandoned</code>; <code>provisioned</code> is deliberately excluded, since replaying a still-running job is the recovery path) to a per-<code>RunnerSet</code> ConfigMap, owner-ref'd to the set so it is garbage-collected with it.
+  The ordering is write-ahead and enforced: <code>flushDeletes</code> refuses to issue <em>any</em> <code>DELETE</code> while the state has changed and cannot be saved, so once a delete has even been attempted, the conclusion that authorised it is durable.
+  A kill between the conclusion and the save's landing leaves the messages in the queue, where the replay re-derives the conclusion (the completion redelivers; the give-up check re-detects), at worst re-counting a completion metric once.
+  A fresh listener loads the state before opening its session, and an unreadable store fails <code>Start</code> visibly rather than polling with the window silently reopen; a loaded entry is retired like any other guard, by the confirmed delete of the message that assigns it.
+  What the confirmed delete structurally cannot retire (a loaded entry whose messages the predecessor already deleted, and a <code>completed</code> entry re-added by a completion replayed after its assignment's message was gone) is swept whenever a <code>202</code> proves the queue drained: an unacked message redelivers instead of a <code>202</code>, so at that moment a guard no held message assigns has nothing left to answer.
+  That sweep is the retirement rule that keeps the persisted set bounded by the queue rather than accreting in etcd.
+  The one exemption is Q609's: guards kept because a delete removed nothing are marked retained and survive the sweep too, since their message may still be in the log.</p>
+<p><strong>The same object also records which runs currently have workers, for a reader that is not the listener (Q844).</strong> Beside the guards, the listener persists an <code>inFlight</code> entry per job whose worker it built, carrying the run identity <code>rerun-failed-jobs</code> addresses a run by.
+  It is added on a successful provision and dropped when the job concludes, on the same write-ahead save.
+  It is not a replay guard and answers no redelivered assignment; it exists so the owning reconciler can tell, on the way up, that a worker went away while no AGC was watching, which is the one disruption shape the pod itself cannot record because the disruption deletes the pod.
+  The reconciler only ever <em>reads</em> it, so the poll goroutine remains the single writer and <code>Save</code> can keep replacing the whole state rather than merging it.
+  A restarted listener does not adopt the entries it loads: the reconciler has already adjudicated them, and a still-running job rebuilds its own entry when its held assignment replays.
+  Bounded like the guards are, by the work outstanding rather than by history: every ordinary exit drops its own entry, and a 24-hour age sweep reclaims one whose conclusion never arrives at all.</p>
+<p><strong>A conclusion the listener never read needs no hard kill to strand its message (Q689).</strong> Q583, Q603, and Q606 all start from a conclusion the listener already holds, and Q606's residual was scoped to a hard kill on that basis.
+  There is a third window on the other side of the read: a job concludes at GitHub, its <code>JobCompleted</code> is written to the queue, and the process goes away before a poll delivers it.
+  Nothing the listener holds says the job is over (<code>completed</code> does not name it, so its assignment is legitimately unsettled and legitimately kept), so the exit flush leaves the message, the persisted guards have nothing to persist, and the next process provisions a worker for a job that already ran.
+  The poll loop is single-goroutine, so everything it does between two polls widens that window: minting a JIT config and creating a pod, walking the runner-name ladder for a deferred job, spending a session refresh on the give-up check.
+  A graceful stop landing there is enough; correlated over 60 stops taken at maximum pressure, all 4 that stopped before reading the completion replayed, and none of the 56 that had read it did.
+  The close is symmetric with Q603's: if the loop owes deletes on the way out, it also owes the read that authorises them, so it drains the conclusions the queue is already holding before it flushes.
+  The drain settles nothing on its own authority: only <code>completeJob</code>, off a terminal <code>JobCompleted</code>, on the same path the poll loop uses.
+  It neither provisions nor acks an assignment it reads past, whose message therefore still replays to the next session.
+  It runs only while some held message is still waiting on a conclusion, walks a cursor local to itself (a cursor ack is session-scoped, so skipping a message costs nothing), and advertises zero capacity, since a process that is leaving must not invite another assignment.
+  Its budget is a second, far smaller than the flush's, and not for symmetry: the session cannot be deleted until the drain returns, and a scale set allows one session at a time, so every millisecond here is a millisecond the <em>next</em> AGC cannot start acquiring.
+  The messages it exists to collect are already queued and come back immediately; the poll that finds nothing left is held for the backend's whole long-poll window and buys nothing.</p>
+<p><strong>A predecessor's session is a wait, not a fault (Q689).</strong> One session per scale set is a protocol invariant, so every rolling update has a window where the outgoing AGC still holds the session and the incoming one's <code>CreateSession</code> answers 409.
+  Treated as a start failure that window is far more expensive than it looks: the reconciler requeues on the work queue's exponential backoff, whose ceiling is much longer than the teardown being waited on, so a single collision leaves the set idle long after the session is free: measured as a listener that never acquired again within thirty seconds of the session being released.
+  The reconciler now recognises the conflict specifically and re-attempts on a short flat interval instead, with no Warning Event: nothing is wrong, and the thing it is waiting for is bounded by the exit teardown above.
+  Every other start failure keeps the loud path.</p>
+<p><strong>The same delete is what bounds the guards (Q597).</strong> <code>provisioned</code>, <code>completed</code>, and <code>abandoned</code> never shrank: a listener accumulated one entry per job for as long as it ran, unbounded over its lifetime.
+  They answer exactly one delivery — a replayed <code>JobAssigned</code> — and a replay can only carry a message still in the queue log.
+  The cursor never advances past a message the listener is not holding for delete, so what it holds <em>is</em> the set of messages it can be handed again: an entry whose job no held message assigns can never be consulted again, and is retired when the message that assigned it is deleted.
+  The bound inherits the delete-ack's safety rather than adding its own, because it is keyed on the same event — a message is deleted only once every job it names has concluded, so no guard can be retired for work still in flight, and the sets are bounded by what is in the queue rather than by how long the process has run.
+  Two details are load-bearing.
+  Retirement keys on the jobs a message <strong>assigned</strong>, not on every job it names, so a completion's delete retires nothing on its own — that job's assignment may still be ahead of the cursor (the Q575 replayed-after-completion case).
+  And it keys on what the held messages assign rather than on what they are still <em>waiting</em> on, because <code>settle</code> empties the waiting set the moment a job concludes while its assignment stays queued behind a sibling job that has not.
+  Retirement waits for the wire to confirm the delete <em>removed</em> something, which is the distinction Q609 made readable.
+  A 404 completes the ack — there is nothing left to delete — but it is also how a backend that does not serve the endpoint answers, and there the message is still queued; so such a message leaves the pending set while its guards stay, and the job keeps its entries.
+  That is the pre-Q597 behaviour for that job alone, on a queue already misbehaving, which is the safe direction to degrade in.
+  The one shape that remains undetectable is a backend answering 204 while leaving the message in the log: nothing on the wire distinguishes it, Investigation G measured 204-and-pruned on the real queue, and a bound that refused to rest on that measurement would have to be an arbitrary cap — which re-creates the double-provision by construction.</p>
+<ul>
+<li><strong>Quota rejection:</strong> If the Kubernetes API server rejects a pod create with a <code>Forbidden/exceeded-quota</code> error, the provisioner retries in place up to <code>maxQuotaRetries</code> times (default 5) with a <code>quotaRetryDelay</code> between attempts (default 30s).
+    The job lock is held throughout — quota typically clears as in-flight jobs complete, so retrying in place avoids losing the acquired job.
+    Non-quota creation errors (admission webhook rejection, name conflict) are returned immediately without retry.
+    Setting <code>maxQuotaRetries: 0</code> disables this path.</li>
+<li><strong>Token Manager:</strong> A single background goroutine holds the current GitHub App installation access token in a mutex-protected struct shared across all session goroutines.
+  Installation tokens expire after one hour; the Token Manager proactively refreshes at T-5 minutes before expiry.
+  In-flight long-poll connections are unaffected — the token is only consulted when initiating new connections, not mid-connection.
+  On refresh failure, the manager retries with exponential backoff (5s → 60s cap) and emits <code>actions_gateway_token_refresh_errors_total</code>; if the old token expires before refresh succeeds, in-flight session goroutines will start failing on next reconnection and re-register as the new token becomes available.</li>
+<li>
+<p><strong>Job Lock Renewer:</strong> After a job is acquired, a per-job background goroutine calls <code>renewjob</code> on the run service every 60 seconds to keep the job lock alive (GitHub grants a 10-minute window per renewal).
+  The renewer also watches the worker pod for terminal state changes — event-driven, via a single shared Pod-informer event handler that wakes the per-job goroutine when its pod reaches a terminal phase, rather than each goroutine polling pod state on a timer — and handles two distinct exit paths:</p>
+</li>
+<li>
+<p><strong>Normal completion:</strong> The worker pod exits with status <code>Succeeded</code> or <code>Failed</code> (non-eviction).
+    The renewer stops, the AGC deletes the job-payload Secret immediately, and the job is recorded as complete by GitHub via the Twirp Results Service.
+    The pod itself is retained for <code>completedPodTTL</code> (default 5m — a window for operators to inspect a just-failed pod before it disappears; terminal pods consume no compute or quota) and then deleted by the worker-pod reaper.
+    Setting <code>completedPodTTL: 0s</code> makes the session goroutine delete the pod immediately on completion instead.</p>
+</li>
+<li>
+<p><strong>Disruption.</strong> Three mechanisms qualify, and they look nothing alike.
+    <strong>Node-pressure eviction:</strong> the worker pod enters <code>Failed</code> with <code>reason: Evicted</code>, set by the kubelet when the node runs out of memory or disk.
+    <strong>Scheduler preemption:</strong> kube-scheduler <em>deletes</em> the victim to make room for a higher <code>priorityTiers</code> tier, stamping a <code>DisruptionTarget</code> condition with reason <code>PreemptionByScheduler</code> on the way out — it never produces <code>Evicted</code>, and its terminal phase is the interrupted container's own exit status, so the condition rather than the phase is what identifies it (Q497).
+    <strong>External graceful deletion:</strong> a <code>kubectl drain</code> or a bare <code>kubectl delete pod</code> of a running worker, identified by the pod's <code>deletionTimestamp</code> being set at the moment its <code>Failed</code> phase publishes and predating the container's recorded exit — the mark a human cancel and a genuine failure both lack (measured, Q459/Q502), with the AGC's own deletions — the reaper's, and the reclaim of a worker whose job the renewer abandoned (Q501) — excluded by the <code>deletion-reason</code> stamp written before each.
+    On any of these, the renewer immediately stops renewal rather than waiting for the lock window to lapse, allowing GitHub to cancel the job promptly.
+    After a short configurable delay (<code>evictionRetryDelay</code>, default 5s), the renewer calls <code>POST /repos/{owner}/{repo}/actions/runs/{run_id}/rerun-failed-jobs</code> using the AGC's installation access token — and keeps calling it while GitHub answers <code>403 This workflow is already running</code>, the refusal every re-run gets until GitHub concludes the original run, which after an ungraceful kill takes until the job lock's TTL lapses (~10 minutes, measured 9m36-9m45s when the runner's report does not escape — Q503, Q396).
+    The retries are paced 30s apart inside a 15-minute window and cost one slot of the retry budget in total, so the job is automatically re-queued without user intervention once GitHub will accept it; a re-run still refused past the window is surfaced via <code>actions_gateway_eviction_rerun_failures_total</code> and an <code>EvictionRerunFailed</code> Event.
+    On the external-deletion mechanism alone, each pass first reads the run's conclusion and stands the recovery down if GitHub concluded it <code>cancelled</code>.
+    The runbook's remedy for a worker that will not stop after a cancel is to delete its pod, which supplies the very mark that mechanism keys on, and <code>rerun-failed-jobs</code> accepts a cancelled run (Q811).
+    The <code>run_id</code> is extracted from the job payload by the Pod Provisioner at acquisition time and passed to the renewer alongside the pod reference.
+    It comes from the payload's serialised <code>github</code> context (<code>contextData.github.run_id</code>, with <code>.repository</code> supplying owner/repo) — the job <code>variables</code> carry no run identity, and reading them instead left this whole path inert against real GitHub until Q495: <code>run_id</code> resolved to <code>0</code>, so every classic eviction logged <code>pod evicted but run_id unknown</code> and skipped the re-run.</p>
+</li>
+</ul>
+<p>To prevent infinite retry loops, each job tracks a retry count in memory.
+  If a job has already been auto-retried <code>maxEvictionRetries</code> times (default 2, configurable per <code>RunnerGroup</code>), the renewer logs a warning, emits <code>actions_gateway_eviction_retries_exhausted_total</code>, and does not call the rerun API — the job remains cancelled and requires user action.
+  Retries are counted per original <code>run_id</code>; a job that succeeds after one retry resets no counters (the retry state is per-job-acquisition, not persistent).
+  The renewer distinguishes a disruption from an ordinary outcome by checking <code>pod.status.reason == "Evicted"</code>; separately, for a <code>DisruptionTarget=True</code> condition whose reason is exactly <code>PreemptionByScheduler</code> (matching the condition <em>type</em> alone would also match the eviction API's <code>EvictionByEvictionAPI</code>); and separately again, for a <code>Failed</code> phase that published while the pod carried a <code>deletionTimestamp</code> not stamped as the AGC's own and predating the container's recorded exit (Q502 — the mark is measured to be absent on a human cancel, so recovering on it cannot fight one; the ordering excludes both cleanup deletes of already-failed pods and deleted workers that never ran anything).
+  Everything else follows the normal completion path and is not auto-retried: workflow errors, image pull failures, an OOM without the eviction annotation, the reaper's own stamped deletions, and any deleted worker with no container exit on record.
+  The retry budget is one budget per <code>run_id</code> across both tiers and all causes, so no combination can spend it twice.</p>
+<p>The description above is the <strong>classic</strong> acquisition tier, where one goroutine holds the job's identity and watches its own pod.
+  The <strong>scale-set</strong> tier reaches the same outcome by a different route, because it has neither: it provisions fire-and-forget, so nothing is watching the pod, and it receives no acquired payload to read <code>run_id</code> from (Q417).
+  Two substitutions close the gap, both durable rather than process-scoped:</p>
+<ul>
+<li><strong>Identity on the pod.</strong> The scale-set assignment message carries <code>ownerName</code>, <code>repositoryName</code>, and <code>workflowRunId</code> (the protocol's <code>JobMessageBase</code>, as modelled by the official <code>actions/scaleset</code> client).
+    The provisioner stamps them as the <code>actions-gateway.com/run-id</code> and <code>actions-gateway.com/repository</code> annotations at pod creation, alongside an <code>actions-gateway.com/acquisition-protocol=ScaleSet</code> label marking the tier.
+    An assignment carrying no complete identity still provisions and runs; only automatic recovery degrades, counted by <code>actions_gateway_eviction_recovery_identity_unknown_total</code> and surfaced as an <code>EvictionRecoveryIdentityUnknown</code> Warning Event.</li>
+<li><strong>Detection in the reconciler.</strong> The owning <code>RunnerSet</code> reconcile — which already watches worker pods for phase changes and lists them to reap them — scans for disrupted scale-set workers — <code>Failed</code>/<code>Evicted</code>, the preemption condition, or a <code>Failed</code> phase carrying an unstamped deletion mark (Q502) — claims each one by stamping <code>actions-gateway.com/eviction-handled-at</code> under an optimistic lock, and calls the same <code>handleEviction</code>.
+    The claim is taken <strong>before</strong> the GitHub call, which makes recovery at-most-once per evicted pod across reconciles, restarts, and replicas; the scan runs <strong>before</strong> the reaper, so a terminal pod is never deleted before its identity is read.</li>
+</ul>
+<p>Both tiers share one retry budget, keyed by <code>run_id</code> alone: <code>maxEvictionRetries</code> bounds re-runs per run across the two together, not once per tier.
+  The <code>tier</code> label on the eviction counters splits the reporting without splitting the budget.</p>
+<p><strong>The same substitution closes the registration lifecycle</strong> (Q550).
+  A scale-set worker's runner record is created by <code>generatejitconfig</code> <em>before</em> its pod exists, and GitHub auto-removes an ephemeral runner's record only when that runner completes a job — so every worker killed first (reaped while <code>Pending</code>, killed by the lifetime cap, failed before the runner connected) leaves the record behind.
+  Because the name is <code>&lt;scaleSet&gt;-&lt;jobID&gt;</code>, that leftover is precisely what the job's own retry collides with, and a set can wedge against its own debris.
+  Nothing in the AGC remembers the name: the listener goroutine that minted it is long gone by the time the reaper runs, possibly in a different process.
+  So the name goes on the pod as <code>actions-gateway.com/runner-name</code>, for the same reason the run identity and the reap deadline do, and the pod becomes the registry — the reaper deregisters the record it names, and the listener's start-up sweep treats a name stamped on a live pod as claimed.
+  That claim check is what makes the sweep safe: a worker still <code>Pending</code> has an offline record indistinguishable from a stale one, and the REST runner object carries no timestamp to age records by, so pod-claimed-or-not is the only sound test available.</p>
+<p>A deletion whose worker never ran its container stays out of scope on both tiers: the job never ran to a reportable end, so there is no failed job for <code>rerun-failed-jobs</code> to act on.
+  For a running worker, Q385's SIGTERM relay hands the signal to the runner, which reports its own outcome — but the relay makes the job <em>conclude</em> (as <code>failure</code>), not succeed, so the Q502 re-run is the repair rather than a double report.
+  Both tiers order the deletion mark against the container's recorded <code>finishedAt</code>; that one rule excludes the never-ran worker (a real kubelet publishes a transient <code>Failed</code>-with-mark even for a drained still-<code>Pending</code> pod) and an operator's cleanup delete of an already-failed pod alike.</p>
+<ul>
+<li>
+<p><strong>Worker-Pod Reaper:</strong> A cleanup step at the start of every <code>RunnerGroup</code> reconcile that deletes worker pods the group no longer needs: pods in a terminal phase older than <code>completedPodTTL</code> (default 5m) and Pending pods older than <code>pendingPodDeadline</code> (default 10m).
+  The stuck-Pending case is the important one — a pod that can never start (unpullable <code>workerImage</code>, unschedulable <code>podTemplate</code> constraints) would otherwise hold one of the group's concurrency-ceiling slots forever, since the ceiling counts Pending pods.
+  Deleting the pod resolves its waiting session goroutine (the shared Pod-informer handler treats deletion as completion), which releases the listener and the slot, and emits a <code>WorkerPodStuckPending</code> Warning Event on the RunnerGroup plus the <code>actions_gateway_worker_pods_reaped_total</code> counter.
+  The reaper lives in the reconciler rather than the session goroutine so cleanup is restart-safe: it also reaps pods orphaned by an AGC crash — every orphan whose deadline is derivable from durable pod state (terminal phase, <code>Pending</code> age, or a completion stamp written before the crash) is reclaimed by a fresh AGC with no operator action, measured in Q435.
+  The one orphan the reconcile path cannot reclaim on its own is a <code>Running</code> worker whose job ended <em>while the AGC was down</em>, because nothing stamped it; that pod is reclaimed if GitHub redelivers its terminal <code>JobCompleted</code> to the restarted AGC's new session, which does stamp it (also measured — and GitHub does redeliver across a real multi-hour gap: a live probe observed an unacknowledged <code>JobCompleted</code> returned to a session created <strong>13 h</strong> after the scale set's last session was deleted, which outlasts the 12 h <code>maxWorkerLifetime</code> past which the kubelet has already killed the worker anyway, so the two mechanisms overlap rather than leaving a window between them — <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.5.0/docs/plan/archive/q468-jobcompleted-retention.md">Q468</a>, observed 2026-07-29, a lower bound rather than a published contract).
+  It is bounded unconditionally by <code>maxWorkerLifetime</code> (default 12h), stamped on every worker pod at provision time as its <code>activeDeadlineSeconds</code> and enforced by the <strong>kubelet</strong> — the mechanism deliberately does not depend on the AGC, because in the incident that motivated it the AGC was down for the whole 16 hours, so a reaper-side deadline would not have bounded it either.
+  A pod the kubelet kills this way lands in <code>Failed</code>/<code>DeadlineExceeded</code> and is reaped under <code>reason="lifetime_exceeded"</code> with a <code>WorkerPodLifetimeExceeded</code> Warning Event, rather than under the generic <code>completed_ttl</code>, so an operator debugging a killed long job sees the cap as the cause.
+  See <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.5.0/docs/plan/archive/q435-restart-orphan-reclaim.md">Q435</a> for the measurement and <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.5.0/docs/plan/archive/q438-worker-lifetime-deadline.md">Q438</a> for why the cap is a fixed default rather than derived from the job's own <code>timeout-minutes</code> (that timeout is not on the wire — measured).
+  Time-based expiry between pod events is driven by the reconciler's <code>RequeueAfter</code> — the only carrier a reap deadline has, since a pod sitting <code>Pending</code> raises no further watch event and controller-runtime drops <code>RequeueAfter</code> from any reconcile that also returns an error.
+  Both reconcilers therefore cap their work queue's retry backoff at 30s (client-go's default escalates to 1000s), so a run of reconcile errors — an optimistic-lock conflict on the owner's status is the routine one — delays a reap by at most that cap instead of stranding it.
+  As a final backstop, every worker pod and job Secret carries a controller <code>OwnerReference</code> to its RunnerGroup, so deleting the RunnerGroup — directly or via tenant teardown — cascade-deletes everything the provisioner ever staged.
+  <strong>That backstop does not reach v2's gateway teardown</strong> (Q547): a v2 worker pod is owned by its <code>RunnerSet</code>, and RunnerSets survive gateway deletion by design (they only <em>reference</em> the gateway, so a tenant can re-apply it and resume), which leaves the pods owned by a live object with their only reaper deleted.
+  The AGC therefore reaps them itself: on observing a <code>deletionTimestamp</code> on its <code>ActionsGateway</code> it stops both acquisition tiers and deletes every worker pod under <code>reason="gateway_deleted"</code>, with a <code>WorkerPodsReapedOnGatewayTeardown</code> Warning Event and <code>Ready=False</code>/<code>GatewayTerminating</code> on the set.
+  The GMC cooperates by holding teardown open until <code>status.activeJobs</code>/<code>pendingJobs</code> reach zero across the bound sets before it deletes a single child — a SIGTERM-time reap cannot work, because teardown deletes the AGC's RoleBinding and ServiceAccount within milliseconds of its Deployment and the AGC would lose both its authorization and its token before it could act.
+  A Running pod is reaped only once its own job is over: the scale-set listener stamps <code>actions-gateway.com/job-completed-at</code> on the worker pod when GitHub reports the job terminal, and the reaper deletes a pod still Running more than five minutes later, emitting a <code>WorkerPodOrphanedRunning</code> Warning Event and <code>reason="orphaned_running"</code>.
+  That covers the scale-set tier's fire-and-forget provisioning, where a worker that registers but never receives its job (assignment lapsed, cancelled, or completed elsewhere) would otherwise sit at <code>Listening for Jobs</code> holding a concurrency slot and a node forever (Q420) — the classic path cannot reach that state, because <code>provision()</code> owns its pod through to a terminal phase.
+  A Running pod whose job is still assigned is never reaped: it is bounded by GitHub's job-level timeout and the job-lock renewal contract.
+  The same stamp gives a <em>Pending</em> pod a much shorter deadline — thirty seconds — under <code>reason="completed_pending"</code> with a <code>WorkerPodCompletedPending</code> Warning Event: a worker whose job ended before the pod could start has nothing to run and, on the scale-set tier, no longer has the JIT-config Secret it mounts, because the terminal <code>JobCompleted</code> reclaims it.
+  Reading the stamp only in the Running arm left such a pod to the unrelated <code>pendingPodDeadline</code>, holding a slot and a node for ten minutes and then reporting itself as a scheduling stall (Q575).
+  The listener avoids creating these pods where it can — it handles a message batch's completions before its assignments, and refuses to provision a job it has already seen completed — so the reap arm covers only the orderings that guard cannot reach, chiefly a completion arriving after the pod already exists.</p>
+</li>
+<li>
+<p><strong>Worker Usage Sampler (Q359):</strong> A background loop (default 15s, <code>WORKER_USAGE_SAMPLE_INTERVAL</code>; <code>0</code>/<code>off</code> disables) that lists <code>metrics.k8s.io</code> <code>PodMetrics</code> for the worker pods of the v2 <code>RunnerSet</code>s this AGC reconciles, keeps the running CPU/memory peak per pod × container, and folds each finished pod's peaks into per-RunnerSet Prometheus series (<code>actions_gateway_worker_usage_*</code> — one worker pod is one job, so per-pod peaks are per-job peaks) plus in-memory per-container peak histograms.
+  From those histograms the <code>RunnerSet</code> reconciler surfaces a measured recommendation in <code>status.sizingRecommendation</code> (requests ≈ p95 of per-job peaks, memory limit ≈ observed max × headroom, sample count and window for confidence) and the advisory <code>SizingDrift</code> condition when the resolved template's ask deviates materially (≥2× waste, or a memory limit below the observed peak — OOM risk); the status field doubles as the aggregate store the sampler re-seeds from on restart, so the observation window survives rollouts with no separate store (see <a href="../appendix-h-v2-api-decomposition/#h7-reference-integrity--runtime-conditions-not-admission">Appendix H §H.7</a>).
+  This is the measure-and-recommend half of the worker right-sizing loop (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.5.0/docs/plan/runner-sizing-profiles.md">plan</a>); stock VerticalPodAutoscaler cannot fill this role because <code>RunnerSet</code> has no <code>/scale</code> subresource for its <code>targetRef</code> and evict-and-resize actuation is useless on minutes-lived pods — the full alternatives analysis (VPA variants, GitOps recommender, standalone webhook tool) is <a href="../appendix-d-alternatives-considered/#d7-worker-right-sizing-why-built-in-not-bolted-on">Appendix D §D.7</a>.
+  Degrades gracefully: without metrics-server the AGC runs normally and counts throttled poll errors.
+  Jobs shorter than one sampling interval finish unsampled and are counted separately, so the operator can judge coverage.
+  Multi-gateway safe: candidate pods are matched against the (namespace- and gateway-scoped) RunnerSet cache, so co-located AGCs never double-count each other's workers.
+  Actuation is opt-in per <code>RunnerSet</code> (<code>spec.sizing.profile</code>: <code>Binpack</code>/<code>Throughput</code> from the measured history with whole-pod confidence fallback, <code>NodeShare</code> from a declared per-node envelope): the profile transform runs at pod-build time per acquired job, only ever derives the cpu/memory keys (GPUs pass through byte-identical), and reports its state in <code>status.sizingProfileState</code> (see <a href="../appendix-h-v2-api-decomposition/#h7-reference-integrity--runtime-conditions-not-admission">Appendix H §H.7</a>).</p>
+</li>
+</ul>
+<p><strong>Why long-poll, not webhooks.</strong> GitHub's broker protocol is the only mechanism for <em>claiming</em> and <em>executing</em> runner jobs.
+<code>workflow_job</code> webhooks signal that work has queued, but they do not deliver the job payload or the broker session — only the broker's <code>GetMessage</code> long-poll returns a <code>RunnerJobRequest</code> that can be acquired.
+Webhooks are useful as a scaling signal (and could pre-warm goroutines in a future revision), but they cannot replace the polling loop.</p>
+<p><strong>Single replica, job-level HA.</strong> The AGC runs at <code>replicas: 1</code> because the session registry and per-job RenewJob goroutines are in-memory state; two replicas would race on session creation and produce duplicate acquires.
+HA is provided by GitHub's redelivery contract: any job not acquired within the 2-minute delivery window is redelivered to another session.
+An AGC restart drops all in-flight long polls (which GitHub redelivers) and abandons all per-job RenewJob loops — any job whose renewal window lapses before the AGC recovers will be cancelled by GitHub.
+The practical blackout budget is therefore <code>(remaining_lock_time on each in-flight job)</code>, where each renewal grants ~10 minutes.
+See <a href="../appendix-a-capacity-slos/">Appendix A</a> for the target recovery SLO.</p>
+<p><strong>Graceful shutdown.</strong> The AGC's SIGTERM handler iterates the session registry and issues <code>DELETE /sessions/{id}</code> for each open session before exiting, so GitHub can re-queue any unacquired work immediately rather than waiting for session TTL.
+Hard crashes (SIGKILL, OOM, node failure) fall back to GitHub's natural session expiry.</p>
+<p>The drain is a manager <code>Runnable</code>, so it is inside controller-runtime's graceful shutdown: <code>mgr.Start</code> does not return — and the process does not exit — until every listener goroutine has run its exit-defer DELETE.
+Each delete runs on a context <em>detached</em> from the cancelled manager context, retried within a 10-second budget, because that context cancellation is precisely what is happening when the delete is needed.
+RunnerGroups drain concurrently, so shutdown is bounded by that budget rather than by listener count.
+Without the barrier the process exited out from under goroutines mid-DELETE and leaked a GitHub-side session per in-flight listener on every rollout (Q222).</p>
+<p>The barrier covers both acquisition tiers, which it did not originally: scale-set listeners are held in their own map and were never in the drain, so SIGTERM cancelled their poll loops and the process exited without waiting for them.
+That tier's exit path carries more than a session DELETE: it reads the conclusions the queue is still holding (Q689) and deletes the messages those conclusions release (Q603), so skipping it left a concluded job's assignment in the queue for the next AGC to build a worker for.
+The two tiers drain concurrently, so the wait is the slower tier's rather than their sum (Q689).</p>
+<hr />
+<h2 id="23-tier-3--egress-proxy-pool">2.3. Tier 3 — Egress Proxy Pool<a class="headerlink" href="#23-tier-3--egress-proxy-pool" title="Permanent link">&para;</a></h2>
+<p>A pool of stateless HTTPS <code>CONNECT</code> proxy pods deployed per tenant by the GMC, exposed via a <code>ClusterIP</code> <code>Service</code>.
+All outbound GitHub traffic from both the AGC and worker pods routes through this pool, giving each tenant a distinct set of egress IPs that are never shared with other tenants.</p>
+<ul>
+<li><strong>Stateless CONNECT proxy:</strong> Handles only <code>CONNECT</code> tunneling — it does not inspect or terminate TLS.
+  This keeps the proxy simple, fast, and horizontally scalable without shared state.</li>
+<li><strong>HPA-managed scaling:</strong> A <code>HorizontalPodAutoscaler</code> targets the proxy <code>Deployment</code>, scaling replica count between <code>proxy.minReplicas</code> and <code>proxy.maxReplicas</code> based on CPU utilization.
+  As job concurrency rises, the proxy pool grows automatically; it scales back down during idle periods.
+  <code>.spec.replicas</code> on that Deployment is the HPA's to set — the reconciler seeds it once at create (and restores it if the pool is found at zero, which an HPA cannot recover from) and otherwise leaves it alone; see the <code>apply*</code> helper discussion above.
+  CPU is a coarse proxy for connection load — under bursty, low-CPU workloads (the common case for CONNECT tunneling) the HPA may lag.
+  The v2 upgrade path is a custom <code>active_connections</code> metric exposed via prometheus-adapter; CPU is chosen for v1 because it requires no metrics-server extension.
+  On the v2 API the managed HPA is also replaceable outright: <code>EgressProxy.spec.managedAutoscaling: false</code> makes the GMC provision no HPA at all, so an operator can attach KEDA, VPA, or a custom HPA to the proxy Deployment instead (Q173; see <a href="../appendix-h-v2-api-decomposition/#h4-spec-sketches">Appendix H §H.4</a>).</li>
+<li><strong>Fault tolerance:</strong> <code>podAntiAffinity</code> rules distribute replicas across nodes, and a <code>PodDisruptionBudget</code> with <code>minAvailable: 1</code> ensures at least one proxy pod remains healthy during node drains or rolling updates.</li>
+<li>
+<p><strong>Graceful shutdown:</strong> SIGTERM is not a signal that traffic has stopped arriving — marking the pod terminating, removing it from EndpointSlices, and each kube-proxy applying that removal are independent control loops.
+  Shutdown therefore clears two distinct hazards, both inside one budget.
+  First it fails <code>/readyz</code>, then deliberately holds the <code>CONNECT</code> listener <strong>open</strong> for a bounded <em>linger</em>, so connections still being steered here by an unconverged dataplane are served rather than refused (Q386).
+  The <code>/readyz</code> failure is not what drives endpoint removal, despite being the mechanism upstream intends: measured on Kubernetes 1.35 (Q388), the probe fails from SIGTERM onward but its result never reaches the pod's <code>Ready</code> condition, which stays <code>True</code> for the entire termination — so removal on the ordinary delete path is driven by the <code>deletionTimestamp</code> regardless.
+  (The related eviction-path gap, where the probe worker is halted outright, is <a href="https://github.com/kubernetes/kubernetes/issues/124648">kubernetes#124648</a>; the delete-path behaviour is the repo's own Q388 measurement.)
+  On the graceful-node-shutdown path neither fires, so the endpoint stays <code>Ready</code> until the pod is dead and the linger cannot quiesce; see <a href="../../operations/node-shutdown-budgets/#upstream-state-of-the-art">node shutdown budgets</a>.
+  Then it closes the listener and waits for in-flight tunnels; <code>http.Server.Shutdown</code> alone is not sufficient — it neither closes nor waits for hijacked connections, and every tunnel is hijacked — so tunnels are tracked separately (Q384).</p>
+<p>Rather than sleeping a fixed interval, the linger <strong>measures</strong>: the proxy is the server, so new-connection arrivals are directly observable, and it exits once none has arrived for a short quiescence interval — measured from the later of (shutdown start, last arrival), which makes that interval both a floor for an idle pod and an extending wait for one still being handed traffic.
+It is capped by <code>PROXY_SHUTDOWN_LINGER</code> (default 10s, negative disables).</p>
+<p>The linger is spent <strong>inside</strong> <code>PROXY_SHUTDOWN_DRAIN_TIMEOUT</code> (default 45s), not ahead of it: the two waits are for different things and overlap freely, since tunnels opened before SIGTERM keep finishing throughout.
+Worst case is <code>max(linger, drain)</code>, not their sum, which is what keeps <code>terminationGracePeriodSeconds</code> at 60s (45s drain + 7s force-close/health tail + 8s headroom) and what stops a truncated shutdown window — spot preemption, graceful node shutdown, where the kubelet grants <code>min(grace period, remaining window)</code> — from spending its scarce budget idling instead of draining.
+This is why there is no <code>preStop</code> sleep, the more common remedy: it is serial with the drain and its cost is unconditional.
+Tunnels still open at the deadline are force-closed and logged, because holding the pod longer only trades a logged cut for a silent SIGKILL.
+Without the linger new connections were refused mid-rollout; without the drain, every rollout severed live CI egress mid-request.</p>
+</li>
+</ul>
+<h3 id="design-choice-worker-egress-also-routes-through-the-proxy">Design choice: worker egress also routes through the proxy<a class="headerlink" href="#design-choice-worker-egress-also-routes-through-the-proxy" title="Permanent link">&para;</a></h3>
+<p>Both AGC traffic (control plane: token exchange, broker calls, rerun API) and worker traffic (data plane: artifact uploads, log streams, action downloads, image pulls if proxied) traverse the same per-tenant proxy pool.
+This is a deliberate choice, not a hard requirement of the broker protocol.
+The alternatives and their tradeoffs:</p>
+<table>
+<thead>
+<tr>
+<th>Path</th>
+<th>Egress IP at GitHub</th>
+<th>Throughput cost</th>
+<th>Failure surface</th>
+<th>Per-tenant kill-switch</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Worker via proxy</strong> <em>(chosen)</em></td>
+<td>Per-tenant, stable</td>
+<td>Proxy pool sized for AGC + worker bandwidth</td>
+<td>Proxy outage halts in-flight worker traffic</td>
+<td>Drain proxy pool to halt one tenant's egress</td>
+</tr>
+<tr>
+<td><strong>Worker direct to GitHub CIDRs</strong></td>
+<td>Node IP (shared across tenants)</td>
+<td>None</td>
+<td>Proxy outage affects AGC only</td>
+<td>Requires per-tenant NetworkPolicy or node-level control</td>
+</tr>
+</tbody>
+</table>
+<p>The chosen path makes the per-tenant egress-IP property hold for <em>all</em> GitHub-bound traffic, which is what enables GitHub-side IP allowlisting and per-tenant audit attribution to be coherent claims.
+The cost is that the proxy pool must be sized to carry worker data-plane bandwidth (multi-GB image pulls and artifact uploads under heavy load); CONNECT-only TCP forwarding without TLS termination keeps the per-byte CPU cost low, and the HPA absorbs burst load.</p>
+<p>See <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.5.0/docs/plan/worker-egress-proxy.md">docs/plan/worker-egress-proxy.md</a> for the full rationale, capacity-sizing model, and the implementation gap that currently lets workers bypass this path.</p>
+<hr />
+<h2 id="24-tier-4--ephemeral-worker-pod">2.4. Tier 4 — Ephemeral Worker Pod<a class="headerlink" href="#24-tier-4--ephemeral-worker-pod" title="Permanent link">&para;</a></h2>
+<p>A highly secure, short-lived pod optimized to do exactly one thing: execute a single allocated workflow job.
+Runs inside the tenant namespace alongside the AGC.</p>
+<ul>
+<li><strong>Entrypoint Wrapper:</strong> A lightweight utility acting as a dummy parent process.
+  It reads the job payload from a mounted Kubernetes Secret, writes it into local anonymous pipes (inherited file descriptors, not named FIFOs — see <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.5.0/docs/plan/milestone-3.md#11a--named-pipe-protocol">§11.A</a> for the protocol details), and initializes the execution engine.
+  Before exec'ing <code>Runner.Worker</code>, the wrapper also installs the per-tenant egress-proxy CA cert into a combined trust bundle and exports <code>SSL_CERT_FILE</code> so the runner's .NET HttpClient accepts the proxy's TLS handshake — without this, every outbound HTTPS call through <code>HTTPS_PROXY</code> fails the outer handshake with <code>UntrustedRoot</code> and the runner exits before the workflow can complete.
+  The CA path is signalled to the wrapper via <code>PROXY_CA_CERT_PATH</code> set by the AGC's pod provisioner; the wrapper tolerates the env being empty (no per-tenant proxy configured) as a no-op.
+  The wrapper is also PID 1 of the worker container, so it owns the pod's shutdown signal: Kubernetes delivers SIGTERM to PID 1 only, and the wrapper forwards it (and SIGINT) to its child — <code>Runner.Worker</code> in the classic mode, <code>run.sh</code> in the ScaleSet mode — then waits for the child to exit.
+  Without that relay the child never learns the pod is going away and runs until the cgroup SIGKILL, so an evicted, drained, or cancelled job never reports its outcome and GitHub waits out the job lock instead (Q385).
+  The handler is registered <em>before</em> the child is started, so a SIGTERM arriving in the first instants of the pod's life is held and forwarded to the child once it exists rather than dropped by PID 1's default disposition (Q445).
+  The wait is bounded by <code>WORKER_SHUTDOWN_GRACE</code> (default 25s, sized to stay inside the pod's <code>terminationGracePeriodSeconds</code>); a child still alive at the deadline is SIGKILLed by the wrapper so the overrun is logged rather than silent.
+  The child's exit code is still what the wrapper propagates, with a signalled child reported as 128 + signal (SIGTERM → 143).</li>
+<li><strong>Runner.Worker Engine:</strong> The native, open-source .NET binary harvested from <code>actions/runner</code>.
+  It parses the raw payload from the pipes, executes steps, compiles code, and handles real-time log ingestion back to GitHub via the <strong>Twirp Results Service</strong> — GitHub's protobuf-over-HTTP log and step-summary ingestion endpoint that the worker streams to over a long-lived HTTP/2 connection routed through the egress proxy.</li>
+<li><strong>Minimal RBAC Surface:</strong> Worker pods are created with <code>automountServiceAccountToken: false</code> and a dedicated, minimally-scoped service account.
+  These fields are overwritten by the AGC unconditionally after merging the tenant's <code>PodTemplate</code> — workflow code has no reason to call the Kubernetes API, and the token omission removes an unnecessary lateral-movement vector from any compromised workflow step.</li>
+<li><strong>Full <code>PodTemplateSpec</code> with controller-enforced invariants:</strong> The <code>RunnerGroup</code> <code>PodTemplate</code> field is a standard <code>corev1.PodTemplateSpec</code>, giving tenants access to the full range of Kubernetes pod configuration — init containers, sidecars, volumes, scheduling constraints, and so on — using the same schema and tooling they use for any other workload.
+  A small set of fields that the AGC depends on for correct operation (<code>serviceAccountName</code>, <code>automountServiceAccountToken</code>, <code>hostPID</code>, <code>hostNetwork</code>, <code>hostIPC</code>, and the reserved proxy env vars) are rejected at admission by CRD CEL validation rules and overwritten at pod-creation time.
+  All other security constraints are delegated to the cluster's admission policy engine (e.g.
+  Kyverno, OPA Gatekeeper); the AGC does not duplicate general-purpose policy enforcement.</li>
+<li><strong>ARC alignment:</strong> ARC's <code>AutoscalingRunnerSet</code> exposes the runner container's scheduling and resource surface through <code>spec.template</code> (a <code>corev1.PodTemplateSpec</code>).
+  The gateway's <code>RunnerGroup.spec.podTemplate</code> embeds the same type, so <code>resources</code>, <code>nodeSelector</code>, <code>tolerations</code>, <code>affinity</code>, <code>topologySpreadConstraints</code>, <code>runtimeClassName</code>, <code>securityContext</code>, <code>volumes</code>, and init/sidecar containers all transfer one-to-one with no schema translation.
+  The field is named <code>podTemplate</code> rather than ARC's <code>template</code> to keep the underlying Kubernetes type unambiguous; the default <code>workerImage</code> is <code>ghcr.io/actions/actions-runner</code> to match the ARC <code>gha-runner-scale-set</code> chart default.</li>
+<li><strong>Sandboxed runtime (optional):</strong> Operators concerned about container-escape attacks can set <code>runtimeClassName</code> (e.g.
+  <code>gvisor</code>, <code>kata-containers</code>) in the <code>PodTemplate</code>.
+  The system functions correctly on the default <code>runc</code> runtime; sandboxed runtimes are a hardening option, not a requirement.
+  See <a href="../appendix-b-worker-isolation/">Appendix B</a> for tradeoffs.</li>
+</ul>
+<hr />
+<h2 id="25-observability">2.5. Observability<a class="headerlink" href="#25-observability" title="Permanent link">&para;</a></h2>
+<p>Both the GMC and AGC expose Prometheus metrics via a <code>/metrics</code> endpoint (standard <code>controller-runtime</code> metrics server).
+The following metrics are the minimum required for production operation; additional <code>controller-runtime</code> built-ins (reconcile latency, queue depth, etc.) are emitted automatically.</p>
+<p>The per-tenant proxy and AGC serve metrics over <strong>mutual TLS</strong> on <code>:8443</code>: a scraper must present a client certificate signed by the per-tenant metrics CA that the GMC issues, and the GMC publishes the matching scraper bundle in the <code>actions-gateway-metrics-client</code> Secret in each tenant namespace.
+The AGC uses mTLS rather than the GMC's <code>TokenReview</code>-based filter to avoid giving the per-tenant components kube-API auth dependencies; the proxy — which has no kube-API access at all by design — could not use <code>TokenReview</code> without regressing that isolation.</p>
+<p>The proxy and the AGC both keep their plaintext <code>/healthz</code> + <code>/readyz</code> probes on <code>:8081</code> (the kubelet presents no client cert), so a wedged AGC is restarted by the kubelet rather than running invisibly.
+The AGC binds its health listener early in manager start — independently of the initial GitHub App token fetch, which runs as a manager runnable rather than a blocking pre-start wait — so the probes report process health without coupling Deployment readiness to GitHub reachability at startup.
+A <code>startupProbe</code> gives the informer cache room to sync before liveness takes over.</p>
+<p>The metrics-port NetworkPolicy ingress still admits <code>:8443</code> only from namespaces labelled <code>metrics: enabled</code>, so the mTLS requirement layers on top of the namespace gate as defense-in-depth.
+Operators label their Prometheus namespace <code>metrics: enabled</code> and configure the scrape with the published client bundle (see <a href="../../operations/troubleshooting/">troubleshooting</a>).
+Kubelet probes are unaffected by that rule: node-sourced traffic is exempt from NetworkPolicy enforcement.</p>
+<table>
+<thead>
+<tr>
+<th>Metric</th>
+<th>Type</th>
+<th>Labels</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>actions_gateway_active_sessions</code></td>
+<td>Gauge</td>
+<td><code>namespace</code>, <code>runner_group</code></td>
+<td>Currently open long-poll sessions</td>
+</tr>
+<tr>
+<td><code>actions_gateway_jobs_acquired_total</code></td>
+<td>Counter</td>
+<td><code>namespace</code>, <code>runner_group</code></td>
+<td>Jobs successfully acquired</td>
+</tr>
+<tr>
+<td><code>actions_gateway_jobs_admission_rejected_total</code></td>
+<td>Counter</td>
+<td><code>namespace</code>, <code>runner_group</code>, <code>reason</code></td>
+<td>Jobs left queued at GitHub because the pre-acquisition capacity gate refused (acquire skipped for redelivery). <code>reason="ceiling"</code>: at the configured worker ceiling. <code>reason="quota"</code>: the namespace <code>ResourceQuota</code> cannot admit another worker pod</td>
+</tr>
+<tr>
+<td><code>actions_gateway_job_acquisition_errors_total</code></td>
+<td>Counter</td>
+<td><code>namespace</code>, <code>reason</code></td>
+<td>Acquisition failures (404/409/422/other)</td>
+</tr>
+<tr>
+<td><code>actions_gateway_job_duration_seconds</code></td>
+<td>Histogram</td>
+<td><code>namespace</code>, <code>runner_group</code></td>
+<td>Worker pod wall time, from pod creation to its last container finishing</td>
+</tr>
+<tr>
+<td><code>actions_gateway_pod_creation_latency_seconds</code></td>
+<td>Histogram</td>
+<td><code>namespace</code></td>
+<td>Time from worker pod creation to runner container start (scheduling + image pull)</td>
+</tr>
+<tr>
+<td><code>actions_gateway_token_refreshes_total</code></td>
+<td>Counter</td>
+<td><code>namespace</code></td>
+<td>Successful installation token refreshes</td>
+</tr>
+<tr>
+<td><code>actions_gateway_token_refresh_errors_total</code></td>
+<td>Counter</td>
+<td><code>namespace</code></td>
+<td>Failed token refreshes</td>
+</tr>
+<tr>
+<td><code>actions_gateway_renew_job_errors_total</code></td>
+<td>Counter</td>
+<td><code>namespace</code></td>
+<td>RenewJob call failures (leading indicator for cancelled jobs)</td>
+</tr>
+<tr>
+<td><code>actions_gateway_eviction_retries_total</code></td>
+<td>Counter</td>
+<td><code>namespace</code>, <code>runner_group</code>, <code>tier</code>, <code>cause</code></td>
+<td>Jobs automatically re-queued after a worker pod disruption, by acquisition tier (<code>classic</code>, <code>scaleset</code>) and cause (<code>eviction</code>, <code>preemption</code>, <code>deletion</code>)</td>
+</tr>
+<tr>
+<td><code>actions_gateway_eviction_retries_exhausted_total</code></td>
+<td>Counter</td>
+<td><code>namespace</code>, <code>runner_group</code>, <code>tier</code>, <code>cause</code></td>
+<td>Disrupted jobs where retry budget was exhausted; requires manual re-run. The budget is shared across both tiers and both causes</td>
+</tr>
+<tr>
+<td><code>actions_gateway_eviction_rerun_withheld_total</code></td>
+<td>Counter</td>
+<td><code>namespace</code>, <code>runner_group</code>, <code>tier</code>, <code>cause</code>, <code>reason</code></td>
+<td>Disruption recoveries that deliberately made no re-run call. <code>reason="run_cancelled"</code>: the externally deleted worker's run had concluded <code>cancelled</code>, so re-running it would undo a human's cancel (Q811). The retry slot is spent, but nothing is wrong and no manual re-run is wanted</td>
+</tr>
+<tr>
+<td><code>actions_gateway_eviction_recovery_identity_unknown_total</code></td>
+<td>Counter</td>
+<td><code>namespace</code>, <code>runner_group</code></td>
+<td>Evicted scale-set workers carrying no workflow-run identity, so no automatic re-run was possible</td>
+</tr>
+<tr>
+<td><code>actions_gateway_eviction_recovery_evidence_lost_total</code></td>
+<td>Counter</td>
+<td><code>namespace</code>, <code>runner_group</code>, <code>cause</code></td>
+<td>Disrupted scale-set workers whose pod was deleted before the recovery could be claimed, so no automatic re-run was attempted and none can be attempted later; the pod is the disruption's only record (Q809). The <code>preemption</code> and <code>deletion</code> arms are the exposed ones, since both act on a pod that is already terminating</td>
+</tr>
+<tr>
+<td><code>actions_gateway_quota_retries_total</code></td>
+<td>Counter</td>
+<td><code>namespace</code>, <code>runner_group</code></td>
+<td>Pod creation attempts retried due to namespace ResourceQuota exhaustion</td>
+</tr>
+<tr>
+<td><code>actions_gateway_quota_retries_exhausted_total</code></td>
+<td>Counter</td>
+<td><code>namespace</code>, <code>runner_group</code></td>
+<td>Jobs abandoned after exhausting the quota retry budget</td>
+</tr>
+<tr>
+<td><code>actions_gateway_worker_pods_reaped_total</code></td>
+<td>Counter</td>
+<td><code>namespace</code>, <code>runner_group</code>, <code>runner_set</code>, <code>reason</code></td>
+<td>Worker pods deleted by the reaper (<code>completed_ttl</code>, <code>pending_deadline</code>, <code>completed_pending</code>, <code>orphaned_running</code>, <code>lifetime_exceeded</code>, or <code>gateway_deleted</code>). <code>runner_group</code> carries the owning CR's name on both tiers; <code>runner_set</code> additionally carries it on scale-set reaps (empty on classic) so the series join the <code>runner_set</code>-labelled <code>scaleset_*</code> gauges (Q514)</td>
+</tr>
+<tr>
+<td><code>actions_gateway_reap_blocking_sidecar_templates</code></td>
+<td>Gauge</td>
+<td><code>namespace</code>, <code>runner_set</code></td>
+<td>Regular (non-native) sidecar containers in a <code>RunnerSet</code>'s resolved worker template that may block pod reaping (Q249); pairs with the advisory <code>PossibleReapBlockingSidecar</code> condition</td>
+</tr>
+<tr>
+<td><code>actions_gateway_agent_recycles_total</code></td>
+<td>Counter</td>
+<td><code>namespace</code>, <code>runner_group</code>, <code>trigger</code></td>
+<td>Single-use JIT agents re-registered (<code>post_job</code>, <code>stale_session</code>, <code>startup</code>, <code>reconcile_repair</code>)</td>
+</tr>
+<tr>
+<td><code>actions_gateway_agent_recycle_errors_total</code></td>
+<td>Counter</td>
+<td><code>namespace</code>, <code>runner_group</code></td>
+<td>Failed attempts to re-register a single-use JIT agent</td>
+</tr>
+<tr>
+<td><code>actions_gateway_broker_session_leaks_total</code></td>
+<td>Counter</td>
+<td><code>namespace</code>, <code>runner_group</code></td>
+<td>Broker sessions abandoned after every <code>DELETE /sessions</code> attempt failed; each survives until GitHub expires it server-side (Q436)</td>
+</tr>
+<tr>
+<td><code>actions_gateway_message_poll_errors_total</code></td>
+<td>Counter</td>
+<td><code>namespace</code>, <code>reason</code></td>
+<td>GetMessage errors on either acquisition tier (non-empty-poll, non-session-expired, non-unauthorized — the last two are heal paths): <code>rate_limited</code>, <code>timeout</code>, <code>other</code></td>
+</tr>
+<tr>
+<td><code>controller_runtime_reconcile_errors_total</code></td>
+<td>Counter</td>
+<td><code>controller</code></td>
+<td>GMC/AGC reconcile errors (controller-runtime built-in; no <code>actions_gateway_</code> prefix)</td>
+</tr>
+<tr>
+<td><code>actions_gateway_ip_range_updates_total</code></td>
+<td>Counter</td>
+<td><code>namespace</code></td>
+<td>NetworkPolicy egress rule refreshes from GitHub meta API</td>
+</tr>
+<tr>
+<td><code>actions_gateway_managed_gateways</code></td>
+<td>Gauge</td>
+<td>—</td>
+<td>Total <code>ActionsGateway</code> CRs currently managed by the GMC</td>
+</tr>
+<tr>
+<td><code>actions_gateway_worker_usage_job_cpu_peak_cores</code></td>
+<td>Histogram</td>
+<td><code>namespace</code>, <code>runner_set</code>, <code>container</code></td>
+<td>Per-job CPU usage peak of a v2 <code>RunnerSet</code>'s worker pods, sampled from metrics.k8s.io (Q359 right-sizing input)</td>
+</tr>
+<tr>
+<td><code>actions_gateway_worker_usage_job_memory_peak_bytes</code></td>
+<td>Histogram</td>
+<td><code>namespace</code>, <code>runner_set</code>, <code>container</code></td>
+<td>Per-job memory usage peak (same sampler)</td>
+</tr>
+<tr>
+<td><code>actions_gateway_worker_usage_cpu_peak_cores</code> / <code>…_memory_peak_bytes</code></td>
+<td>Gauge</td>
+<td><code>namespace</code>, <code>runner_set</code>, <code>container</code></td>
+<td>Max per-job peak since AGC start</td>
+</tr>
+<tr>
+<td><code>actions_gateway_worker_usage_jobs_sampled_total</code> / <code>…_unsampled_total</code></td>
+<td>Counter</td>
+<td><code>namespace</code>, <code>runner_set</code></td>
+<td>Jobs whose peaks were / were not captured (unsampled = shorter than a sampling interval)</td>
+</tr>
+<tr>
+<td><code>actions_gateway_worker_usage_poll_errors_total</code></td>
+<td>Counter</td>
+<td><code>namespace</code></td>
+<td>Failed metrics.k8s.io PodMetrics lists (metrics-server absent or RBAC denied)</td>
+</tr>
+</tbody>
+</table>
+<h3 id="kubernetes-events-for-job-lifecycle-transitions">Kubernetes Events for job-lifecycle transitions<a class="headerlink" href="#kubernetes-events-for-job-lifecycle-transitions" title="Permanent link">&para;</a></h3>
+<p>Metrics and status conditions are the steady-state observability surface, but an operator triaging a single incident usually reaches for <code>kubectl describe</code> first.
+The AGC therefore also records <strong>Kubernetes Events</strong> on the owning <code>RunnerGroup</code>/<code>RunnerSet</code> for the job-lifecycle transitions that fail terminally (Q170) — the event-based companion to the counters above, surfacing the same incident in <code>kubectl describe</code> and event watchers without a Prometheus query.
+Each <code>Reason</code> mirrors the corresponding metric name so the two correlate:</p>
+<table>
+<thead>
+<tr>
+<th>Reason</th>
+<th>Type</th>
+<th>Mirrors metric</th>
+<th>Trigger</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>JobAcquisitionFailed</code></td>
+<td>Warning</td>
+<td><code>actions_gateway_job_acquisition_errors_total</code></td>
+<td><code>acquirejob</code> failed for a delivered job; it stays queued for redelivery</td>
+</tr>
+<tr>
+<td><code>RunnerVersionTooOld</code></td>
+<td>Warning</td>
+<td>— (also the <code>RunnerVersionTooOld</code> condition)</td>
+<td><code>POST /sessions</code> rejected: runner version too old (classic protocol only — the scale-set protocol carries no runner version)</td>
+</tr>
+<tr>
+<td><code>WorkerImageBelowMinimum</code></td>
+<td>Warning</td>
+<td>— (also the <code>RunnerVersionTooOld</code> condition)</td>
+<td>The effective worker image ships a runner below GitHub's enforced minimum, read at reconcile on both tiers. Emitted once per transition, ahead of any GitHub rejection (Q715)</td>
+</tr>
+<tr>
+<td><code>SessionUnauthorized</code></td>
+<td>Warning</td>
+<td>— (also the <code>Degraded</code> condition)</td>
+<td>A session call rejected as unauthorized (invalid/revoked credentials) — classic <code>POST /sessions</code>, or a ScaleSet-path session create/refresh (Q325)</td>
+</tr>
+<tr>
+<td><code>QuotaRetriesExhausted</code></td>
+<td>Warning</td>
+<td><code>actions_gateway_quota_retries_exhausted_total</code></td>
+<td>Pod creation abandoned after the <code>ResourceQuota</code> retry budget exhausted</td>
+</tr>
+<tr>
+<td><code>EvictionRetriesExhausted</code></td>
+<td>Warning</td>
+<td><code>actions_gateway_eviction_retries_exhausted_total</code></td>
+<td>Disrupted job's auto-retry budget exhausted; manual re-run required. The event names the cause (eviction, preemption, or deletion)</td>
+</tr>
+<tr>
+<td><code>EvictionRecoveryIdentityUnknown</code></td>
+<td>Warning</td>
+<td><code>actions_gateway_eviction_recovery_identity_unknown_total</code></td>
+<td>An evicted scale-set worker carried no workflow-run identity, so there was no run to re-run; manual re-run required (Q417)</td>
+</tr>
+<tr>
+<td><code>EvictionRecoveryEvidenceLost</code></td>
+<td>Warning</td>
+<td><code>actions_gateway_eviction_recovery_evidence_lost_total</code></td>
+<td>A disrupted scale-set worker's pod was deleted before its recovery could be claimed, so the run cannot be re-run automatically by this or any later reconcile; manual re-run required (Q809)</td>
+</tr>
+<tr>
+<td><code>OrphanedWorkerRecovered</code></td>
+<td>Warning</td>
+<td><code>actions_gateway_eviction_retries_total{cause="vanished"}</code></td>
+<td>A scale-set worker pod was already gone when this AGC started and its job had never concluded, so its run is being re-run; which disruption took the worker was lost with the pod (Q844)</td>
+</tr>
+<tr>
+<td><code>EvictionRerunWithheld</code></td>
+<td>Normal</td>
+<td><code>actions_gateway_eviction_rerun_withheld_total</code></td>
+<td>An externally deleted worker's run had already concluded <code>cancelled</code>, so no re-run was requested and the cancel stands; no operator action needed (Q811)</td>
+</tr>
+</tbody>
+</table>
+<p>These follow the established reaper precedent (<code>WorkerPodStuckPending</code>): they record on the owner an operator would <code>kubectl describe</code>, fire on a transition/terminal outcome (never per reconcile, so no spam), and where a status condition already captures the state the Event complements it rather than duplicating it.
+A listener/provisioner goroutine that detects the transition does not hold the live owner object, so it routes the Event back to the reconciler over a buffered channel — mirroring the existing condition-update channel — which records it on the next reconcile.
+See <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.5.0/docs/development/kubernetes-conventions.md#kubernetes-events-for-lifecycle-transitions">kubernetes-conventions</a> for the convention and <a href="../../operations/troubleshooting/#job-lifecycle-events-on-a-runnergroup--runnerset">troubleshooting</a> for the operator catalogue.</p>
+<h3 id="distributed-tracing">Distributed tracing<a class="headerlink" href="#distributed-tracing" title="Permanent link">&para;</a></h3>
+<p>Beyond metrics, the AGC emits <strong>OpenTelemetry traces</strong> for the reconcile path (<code>RunnerGroup.Reconcile</code>) and the job-to-pod path (<code>Provisioner.provision</code>, with child spans for secret staging, pod-count, pod creation, and the wait for completion).
+Tracing is opt-in and off by default: with no OTLP endpoint configured the global provider stays the no-op default, so the spans cost effectively nothing.</p>
+<p>Tracing is enabled — and fully configured (endpoint, sampler, resource attributes) — through the standard OpenTelemetry SDK environment variables, with no bespoke flag surface.
+For GMC-managed tenants the operator does not set those env vars directly: they declare <code>spec.tracing</code> on the <code>ActionsGateway</code> CR and the GMC translates it into the AGC Deployment's <code>OTEL_*</code> env.
+Auth headers (<code>OTEL_EXPORTER_OTLP_HEADERS</code>) are deliberately not exposed on the CR — they can carry credentials, so collector authentication is a network-layer concern.
+See <a href="../../operations/observability-logging/#distributed-tracing-agc">observability</a> for the variables and the CR-driven enablement path.</p>
+<hr />
+<h2 id="26-upgrade-strategy">2.6. Upgrade Strategy<a class="headerlink" href="#26-upgrade-strategy" title="Permanent link">&para;</a></h2>
+<p>The system has three independently versioned components — GMC binary, AGC binary, worker image.
+Each upgrades on its own cadence.</p>
+<ul>
+<li><strong>GMC upgrade:</strong> Standard rolling Deployment update.
+  Because the GMC runs <code>replicas: 2</code> with leader election, only one replica reconciles at any moment.
+  The outgoing leader releases its lease on shutdown, so leadership transfers in seconds rather than at a lease timeout.
+  In-flight tenant reconciliations are idempotent — the new leader re-derives state from the API server and converges without producing duplicate resources.
+  Idempotent is not the same as inert, though: the AGC image and the runner version are GMC-side inputs to the AGC pod template, so an upgrade that changes either re-renders every tenant's AGC and incurs the AGC blackout below fleet-wide and concurrently.
+  Only a <em>restart</em> of an unchanged GMC is free — it re-renders each template identically and rolls nothing.</li>
+<li><strong>AGC upgrade:</strong> Rolling update of the per-tenant AGC Deployment.
+  Because the AGC is <code>replicas: 1</code>, every upgrade incurs the same blackout window described in <a href="#22-tier-2--actions-gateway-controller-agc">§2.2</a> — in-flight long polls drop and GitHub redelivers within ~2 minutes, while per-job RenewJob loops resume after the new pod starts.
+  Jobs whose lock expires during the window are cancelled by GitHub.
+  Operators should schedule upgrades during low-traffic periods or accept the blackout as a known cost.
+  The SIGTERM session cleanup hook keeps the blackout bounded by the new pod's startup time rather than the full session TTL.</li>
+<li><strong>Worker image upgrade:</strong> Workers are versioned per <code>RunnerGroup</code> via <code>spec.workerImage</code>.
+  Bumping the field rolls forward all <em>future</em> worker pods on the next job; pods already running on the old image complete their current job and exit normally.
+  Roll-back is symmetrical — revert the field.
+  Because the field is per-RunnerGroup, blue/green or canary worker images can be tested by adding a second RunnerGroup with the new image and a distinct label selector before flipping the default.</li>
+</ul>
+<p>GitHub enforces a minimum runner version at session creation; tenants who let <code>workerImage</code> drift will start receiving <code>400 Bad Request</code> from <code>POST /sessions</code>.
+The session goroutine surfaces this as a <code>RunnerGroup</code> condition (see <a href="../07-test-plan/#71-unit-tests">§7.1</a>) so operators can detect the staleness without scraping pod logs.</p>
+<p>That rejection is classic-only, since the scale-set protocol carries no runner version at session creation, and it arrives only once the version has already stopped working.
+So both reconcilers independently read the runner version off the effective worker image reference each reconcile and publish the same <code>RunnerVersionTooOld</code> condition from it, with the <code>WorkerImage*</code> reasons: <code>True</code> below the enforced minimum, <code>False</code> at or above it, <code>Unknown</code> when the reference names no version and nothing has been checked.
+Two versions are in play and they answer different questions.
+<code>agent.version</code>, sent at session creation, is the AGC's own listener protocol version, and stays pinned to the version GAG implements: the AGC is the registered agent on the classic path, whatever image a worker pod runs.
+The worker image's runner version is what will execute the job, and is the one this condition reports.
+The injected wrapper logs it from the runner's own dependency manifest at worker startup, which is the only reading that holds for an image whose tag says nothing.</p>
+<hr />
+<p>← <a href="../01-executive-summary/">Executive Summary</a> | <a href="../">Back to index</a> | Next: <a href="../03-api-contracts/">API &amp; Data Contracts →</a></p>
+
+
+
+
+
+
+
+
+
+  
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+    
+      
+      <nav class="md-footer__inner md-grid" aria-label="Footer" >
+        
+          
+          <a href="../01-executive-summary/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Executive summary">
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+            </div>
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Previous
+              </span>
+              <div class="md-ellipsis">
+                Executive summary
+              </div>
+            </div>
+          </a>
+        
+        
+          
+          <a href="../network-architecture/" class="md-footer__link md-footer__link--next" aria-label="Next: Network architecture">
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Next
+              </span>
+              <div class="md-ellipsis">
+                Network architecture
+              </div>
+            </div>
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M4 11v2h12l-5.5 5.5 1.42 1.42L19.84 12l-7.92-7.92L10.5 5.5 16 11z"/></svg>
+            </div>
+          </a>
+        
+      </nav>
+    
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+    <div class="md-copyright__highlight">
+      Licensed under the Apache License 2.0.
+    </div>
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+        
+<div class="md-social">
+  
+    
+    
+    
+    
+    <a href="https://github.com/actions-gateway/github-actions-gateway" target="_blank" rel="noopener" title="GAG on GitHub" class="md-social__link">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+    </a>
+  
+    
+    
+    
+    
+    <a href="https://github.com/actions-gateway/github-actions-gateway/issues" target="_blank" rel="noopener" title="Questions &amp; issues" class="md-social__link">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2m0 14H5.2L4 17.2V4h16zM12.2 5.5c-.9 0-1.6.2-2.1.5-.6.4-.9 1-.8 1.7h2q0-.45.3-.6c.2-.1.4-.2.7-.2s.6.1.8.3.3.4.3.7-.1.5-.2.7c-.2.2-.4.4-.6.5-.5.3-.9.6-1.1.8-.4.3-.5.6-.5 1.1h2c0-.3.1-.5.1-.7.1-.2.3-.3.5-.5.5-.2.8-.5 1.1-.9s.4-.8.4-1.2c0-.7-.3-1.3-.8-1.7-.4-.3-1.2-.5-2.1-.5M11 12v2h2v-2z"/></svg>
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.tabs", "navigation.sections", "navigation.top", "navigation.tracking", "navigation.indexes", "navigation.footer", "toc.follow", "search.suggest", "search.highlight", "content.code.copy", "content.code.annotate", "content.tooltips"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"default": "stable", "provider": "mike"}}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+        <script src="../../javascripts/extra.js"></script>
+      
+    
+  </body>
+</html>
