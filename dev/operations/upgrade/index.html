@@ -1683,6 +1683,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#non-breaking-deleting-a-cancelled-runs-worker-no-longer-re-queues-the-job" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Non-breaking: deleting a cancelled run's worker no longer re-queues the job
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#non-breaking-an-abandoned-run-is-force-cancelled-and-re-run-automatically-on-both-acquisition-tiers" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3292,6 +3303,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#non-breaking-deleting-a-cancelled-runs-worker-no-longer-re-queues-the-job" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Non-breaking: deleting a cancelled run's worker no longer re-queues the job
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#non-breaking-an-abandoned-run-is-force-cancelled-and-re-run-automatically-on-both-acquisition-tiers" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -4009,6 +4031,14 @@ Anything costed off the series steps down with it.
 Re-baseline any threshold you set on classic job duration after the rollout settles, and treat pre-upgrade classic figures as a different measurement rather than a trend to extend.
 The shipped dashboards now mark this: the tenant dashboard's Job-duration panel carries the span in its description, with an <code>actions_gateway_build_info</code> version panel beneath it, and the platform dashboard has a Build Versions row so a staggered fleet shows which tenants have crossed over (<a href="../observability-dashboards/">dashboards</a>).</p>
 <p><strong>Rolling back</strong> returns the classic tier to the old, longer span and leaves the scale-set tier emitting nothing.</p>
+<h3 id="non-breaking-deleting-a-cancelled-runs-worker-no-longer-re-queues-the-job">Non-breaking: deleting a cancelled run's worker no longer re-queues the job<a class="headerlink" href="#non-breaking-deleting-a-cancelled-runs-worker-no-longer-re-queues-the-job" title="Permanent link">&para;</a></h3>
+<p>The remedy for a worker that keeps running after you cancel its run is to delete the pod, and that used to undo the cancel: a hand-deleted worker is the shape graceful-deletion recovery acts on, and <code>rerun-failed-jobs</code> is accepted for a <code>cancelled</code> conclusion.
+That arm now reads the run's conclusion before it calls, on both acquisition tiers, and stands down when GitHub concluded the run <code>cancelled</code> (Q811).</p>
+<p>A withheld re-run is visible rather than silent: <code>actions_gateway_eviction_rerun_withheld_total{reason="run_cancelled"}</code> is new here, and a <strong>Normal</strong> <code>EvictionRerunWithheld</code> Event names the run.
+The disruption's retry slot is still spent, since it is reserved when the disruption is detected, minutes before GitHub has a conclusion to read, so <code>eviction_retries_total</code> keeps counting these; read the two together. <code>actions_gateway_eviction_rerun_failures_total</code> also gains <code>reason="conclusion_unknown"</code>, for a recovery whose re-run window closed with the run's conclusion unreadable: a conclusion the AGC cannot read is not assumed to be uncancelled, so no re-run is fired and the run needs a manual one.</p>
+<p>No action is required at upgrade time.
+What changes for an operator is that deleting to reclaim capacity is now safe on a cancelled run, but only once GitHub shows it <code>completed</code>/<code>cancelled</code>, which takes up to GitHub's ~5-minute cancellation grace; delete before that and the job is re-queued as before.
+Behaviour is covered in <a href="../troubleshooting/#cancelling-a-run-does-not-stop-its-worker-pod">Cancelling a Run Does Not Stop Its Worker Pod</a>.</p>
 <h3 id="non-breaking-an-abandoned-run-is-force-cancelled-and-re-run-automatically-on-both-acquisition-tiers">Non-breaking: an abandoned run is force-cancelled and re-run automatically, on both acquisition tiers<a class="headerlink" href="#non-breaking-an-abandoned-run-is-force-cancelled-and-re-run-automatically-on-both-acquisition-tiers" title="Permanent link">&para;</a></h3>
 <p>This release adds two recoveries for a worker removed before its container ever ran, the <code>pendingPodDeadline</code> reap being the common cause: the run is force-cancelled in about a second instead of waiting out GitHub's ~15-minute unstarted-job timeout (Q683), and it is then re-run automatically once the runner set places a worker pod again (Q691).
 Both work on the classic <strong>and</strong> ScaleSet tiers (Q766), the latter being the default and <code>v2beta1</code>'s only option.</p>

@@ -6616,6 +6616,12 @@ An event is recorded on the owner's next reconcile, so it can trail the underlyi
 <td><a href="#evicted-worker-pods-exhausting-retry-budget">Evicted Worker Pods Exhausting Retry Budget</a></td>
 </tr>
 <tr>
+<td><code>EvictionRerunWithheld</code></td>
+<td>Normal</td>
+<td>An externally deleted worker's run had already concluded <code>cancelled</code>, so recovery deliberately did not ask GitHub to re-run it and the cancel stands (Q811). The budget slot is spent; no manual re-run is wanted. Normal, because nothing is wrong.</td>
+<td><a href="#cancelling-a-run-does-not-stop-its-worker-pod">Cancelling a Run Does Not Stop Its Worker Pod</a></td>
+</tr>
+<tr>
 <td><code>JobProvisionStalled</code></td>
 <td>Warning</td>
 <td>A scale-set job cannot register its runner name (<code>generate-jitconfig</code> 409 that no retry cleared), so no worker can be created for it. The job is held and re-offered on a backoff. Also sets the advisory <code>JobProvisionStalled</code> condition, whose message names the job ids. Once per episode.</td>
@@ -7515,6 +7521,9 @@ It is covered in <a href="#worker-pod-reaped-while-pending-workerpodstuckpending
 <li>A scale-set worker died before GitHub delivered its job — nothing to re-run: <a href="#runner-lost-communication-and-no-worker-pod-was-ever-created">"Runner Lost Communication" and No Worker Pod Was Ever Created</a>.</li>
 <li>GitHub refuses past the re-run window (<code>EvictionRerunFailed</code>): <a href="#evicted-worker-pods-exhausting-retry-budget">Evicted Worker Pods Exhausting Retry Budget</a>.</li>
 </ul>
+<p><strong>Fires and deliberately stands down</strong>, on the <code>deletion</code> cause only, and not a fault: the run had already concluded <code>cancelled</code>, so re-running it would undo a human's cancel.
+No call is made, <code>eviction_rerun_withheld_total{reason="run_cancelled"}</code> increments, and a Normal <code>EvictionRerunWithheld</code> Event names the run (Q811).
+See <a href="#cancelling-a-run-does-not-stop-its-worker-pod">Cancelling a Run Does Not Stop Its Worker Pod</a>.</p>
 <p>A quota-blocked job is deliberately absent from this table: it is <strong>never claimed</strong> in the first place, so it stays queued at GitHub with no re-run needed — see <a href="#jobs-failing-due-to-namespace-resourcequota-exhaustion">Jobs Failing Due to Namespace ResourceQuota Exhaustion</a>.</p>
 <hr />
 <h2 id="evicted-worker-pods-exhausting-retry-budget">Evicted Worker Pods Exhausting Retry Budget<a class="headerlink" href="#evicted-worker-pods-exhausting-retry-budget" title="Permanent link">&para;</a></h2>
@@ -7529,7 +7538,8 @@ On a fixed AGC, check the pod's annotation first: <code>kubectl get pod -n &lt;n
 The AGC retries that refusal every 30 seconds inside a 15-minute re-run window (Q503), so expect <code>disruption auto-retry triggered</code> in the AGC log <strong>~10 minutes</strong> after the eviction, not seconds, with <code>rerunCalls</code> in the tens — that attribute counts the calls the recovery made.
 A single-digit count is not a fault: it means GitHub had already concluded the run before the recovery started calling — which is what happens when the disrupted runner got its own report out, as a drain or a preemption lets it (15–26s, Q459).
 One eviction has been seen concluding that fast too (2026-08-03, 17s), but the run could not confirm which worker it disrupted, so do not read a low count after an eviction as proof the runner reported.
-A recovery that gave up instead logs <code>disruption auto-retry failed</code>, increments <code>actions_gateway_eviction_rerun_failures_total</code>, and emits an <code>EvictionRerunFailed</code> Warning Event naming the run — that job needs a manual re-run. <code>reason="run_never_concluded"</code> means the original run outlived the 15-minute window (check whether GitHub still shows it in progress); <code>reason="api_error"</code> means the API failed outright — check the AGC log line's error for a permissions 403 or an endpoint problem.
+A recovery that gave up instead logs <code>disruption auto-retry failed</code>, increments <code>actions_gateway_eviction_rerun_failures_total</code>, and emits an <code>EvictionRerunFailed</code> Warning Event naming the run — that job needs a manual re-run. <code>reason="run_never_concluded"</code> means the original run outlived the 15-minute window (check whether GitHub still shows it in progress); <code>reason="api_error"</code> means the API failed outright — check the AGC log line's error for a permissions 403 or an endpoint problem. <code>reason="conclusion_unknown"</code> is the deletion arm only: its cancel check (Q811) spent the whole window unable to reach the run (the request never completing, or a 5xx), so no re-run was fired rather than one fired blind against a possible cancel.
+A 4xx or an undecodable 2xx on that same check lands in <code>api_error</code> instead, and fails immediately rather than at the window: neither answer changes inside fifteen minutes, and a 2xx that is not a run means the configured endpoint is not the API.
 On an AGC older than the Q503 fix, the single un-retried re-run always lost this race and every evicted job needed a manual re-run.</p>
 </blockquote>
 <p><strong>Symptoms.</strong> <code>actions_gateway_eviction_retries_exhausted_total</code> is incrementing.
@@ -7716,17 +7726,17 @@ The composed chain has not been observed end to end for a job with a live worker
 <a id="__codelineno-126-9" name="__codelineno-126-9" href="#__codelineno-126-9"></a>kubectl<span class="w"> </span>logs<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>&lt;worker-pod&gt;<span class="w"> </span>--tail<span class="o">=</span><span class="m">50</span>
 </code></pre></div>
 <p><strong>Resolution.</strong>
-- <strong>Deleting the worker pod reclaims the capacity, and re-queues the job you cancelled.</strong> <code>kubectl delete pod -n &lt;namespace&gt; &lt;worker-pod&gt;</code> terminates it gracefully: the wrapper relays SIGTERM and the runner stops.
-  Only reach for it when you cancelled to free the slot rather than to stop the work.</p>
+- <strong>Delete the worker pod to reclaim the capacity.</strong> <code>kubectl delete pod -n &lt;namespace&gt; &lt;worker-pod&gt;</code> terminates it gracefully: the wrapper relays SIGTERM and the runner stops.
+  The cancel stands, and the job is <strong>not</strong> re-queued.</p>
 <blockquote>
-<p><strong>The delete undoes the cancel.</strong> A hand-deleted worker is the shape graceful-deletion recovery acts on (an external delete ordered before the container's exit), so the AGC asks GitHub to re-run the run's failed jobs.
-GitHub honours that for a <code>cancelled</code> conclusion: the <code>rerun-failed-jobs</code> call is accepted and the job is re-queued, where a <code>success</code> conclusion refuses it with a 403 (measured live 2026-08-05, <a href="../../plan/q645-abandoned-completion/#q683--the-fast-ending-measurement-2026-08-05">the Q683 measurement</a>).
-Nothing in the gateway deletes a cancelled run's pod, which is why the deletion mark is trusted as a disruption signal; this remedy is the one case where an operator produces that mark deliberately.
+<p><strong>Why the delete no longer undoes the cancel.</strong> A hand-deleted worker is the shape graceful-deletion recovery acts on (an external delete ordered before the container's exit), so the AGC would otherwise ask GitHub to re-run the run's failed jobs, and GitHub honours that for a <code>cancelled</code> conclusion, where a <code>success</code> conclusion refuses it with a 403 (measured live 2026-08-05, <a href="../../plan/q645-abandoned-completion/#q683--the-fast-ending-measurement-2026-08-05">the Q683 measurement</a>).
+Since Q811 that arm reads the run's conclusion first and stands down on <code>cancelled</code>, counting <code>actions_gateway_eviction_rerun_withheld_total{reason="run_cancelled"}</code> and emitting a Normal <code>EvictionRerunWithheld</code> Event on the owner instead of calling.
+Nothing in the gateway deletes a cancelled run's pod, which is why the deletion mark is trusted as a disruption signal; this remedy is the one case where an operator produces that mark deliberately, and the conclusion check is what separates the two.
 It applies on ScaleSet too: the tier's own reclaim carries the <code>actions-gateway.com/deletion-reason</code> stamp and is excluded, while a hand-delete carries no stamp and takes the recovery path.
-Each re-run spends one slot of the run's shared <code>maxEvictionRetries</code> budget (default 2, max 10), so a repeated cancel-then-delete cycle is bounded, ending in an <code>EvictionRetriesExhausted</code> warning Event on the owner.
-Whether recovery should read the run's conclusion before re-running is <a href="../../STATUS/#Q811">Q811</a>.
-- <strong>If you cancelled to stop the work, leave the pod alone</strong> and wait it out, or bound it with <code>maxWorkerLifetime</code> below.
-  There is no way today to free the slot <em>and</em> keep the run cancelled: the delete re-queues the job, and the new attempt has to be cancelled in turn.
+The recovery still spends one slot of the run's shared <code>maxEvictionRetries</code> budget (default 2, max 10), because the slot is reserved when the disruption is detected, minutes before GitHub has a conclusion to read.
+So a repeated cancel-then-delete cycle ends in an <code>EvictionRetriesExhausted</code> warning Event on the owner even though nothing was re-run.
+- <strong>If the run is still <code>in_progress</code> at GitHub when you delete, the job <em>is</em> re-queued.</strong> The check reads what GitHub has concluded, and a cancel takes up to GitHub's ~5-minute cancellation grace to land (measured 5m02s above); a delete that beats it looks exactly like a drain.
+  Confirm with <code>gh run view &lt;run-id&gt; --json status,conclusion</code> before deleting, and expect <code>status: completed</code>, <code>conclusion: cancelled</code>.
 - <strong>Bound the worst case with <code>maxWorkerLifetime</code></strong> on the runner group, which caps how long any worker — cancelled or not — can hold its slot.
 - Do <strong>not</strong> expect a lower <code>completedPodTTL</code> or <code>pendingPodDeadline</code> to help: both act on pods that have already stopped or never started, and this pod is running.</p>
 </blockquote>

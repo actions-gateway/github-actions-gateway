@@ -2904,14 +2904,6 @@
 <td>Three docs advise denying <code>169.254.169.254/32</code> and Q226 measured HTTP 200 from inside a Kata guest, but no test names the address. Kata bounds the kernel, not the pod network. Add a policy-enforcing-CNI negative assertion.</td>
 </tr>
 <tr>
-<td><a id="Q811"></a>Q811</td>
-<td><a href="../design/04-operational-flows/#which-disruptions-are-recovered-and-which-are-not">Graceful-deletion recovery cannot see a cancel, so a hand-deleted worker re-runs a cancelled run</a></td>
-<td><code>bug</code></td>
-<td>🔲</td>
-<td>S</td>
-<td><code>externallyDeletedBeforeTerminal</code> cannot see a cancel: the runbook's delete supplies the mark, and a <code>cancelled</code> conclusion accepts <code>rerun-failed-jobs</code> (measured 2026-08-05). Both tiers take it.</td>
-</tr>
-<tr>
 <td><a id="Q714"></a>Q714</td>
 <td><a href="../plan/capacity-aware-intake/">Gate intake on workers that schedule but never start</a></td>
 <td><code>bug</code> <code>feature</code></td>

@@ -3199,6 +3199,8 @@ No warm standby pool is needed.
     On any of these, the renewer immediately stops renewal rather than waiting for the lock window to lapse, allowing GitHub to cancel the job promptly.
     After a short configurable delay (<code>evictionRetryDelay</code>, default 5s), the renewer calls <code>POST /repos/{owner}/{repo}/actions/runs/{run_id}/rerun-failed-jobs</code> using the AGC's installation access token — and keeps calling it while GitHub answers <code>403 This workflow is already running</code>, the refusal every re-run gets until GitHub concludes the original run, which after an ungraceful kill takes until the job lock's TTL lapses (~10 minutes, measured 9m36-9m45s when the runner's report does not escape — Q503, Q396).
     The retries are paced 30s apart inside a 15-minute window and cost one slot of the retry budget in total, so the job is automatically re-queued without user intervention once GitHub will accept it; a re-run still refused past the window is surfaced via <code>actions_gateway_eviction_rerun_failures_total</code> and an <code>EvictionRerunFailed</code> Event.
+    On the external-deletion mechanism alone, each pass first reads the run's conclusion and stands the recovery down if GitHub concluded it <code>cancelled</code>.
+    The runbook's remedy for a worker that will not stop after a cancel is to delete its pod, which supplies the very mark that mechanism keys on, and <code>rerun-failed-jobs</code> accepts a cancelled run (Q811).
     The <code>run_id</code> is extracted from the job payload by the Pod Provisioner at acquisition time and passed to the renewer alongside the pod reference.
     It comes from the payload's serialised <code>github</code> context (<code>contextData.github.run_id</code>, with <code>.repository</code> supplying owner/repo) — the job <code>variables</code> carry no run identity, and reading them instead left this whole path inert against real GitHub until Q495: <code>run_id</code> resolved to <code>0</code>, so every classic eviction logged <code>pod evicted but run_id unknown</code> and skipped the re-run.</p>
 </li>
@@ -3460,6 +3462,12 @@ Kubelet probes are unaffected by that rule: node-sourced traffic is exempt from 
 <td>Disrupted jobs where retry budget was exhausted; requires manual re-run. The budget is shared across both tiers and both causes</td>
 </tr>
 <tr>
+<td><code>actions_gateway_eviction_rerun_withheld_total</code></td>
+<td>Counter</td>
+<td><code>namespace</code>, <code>runner_group</code>, <code>tier</code>, <code>cause</code>, <code>reason</code></td>
+<td>Disruption recoveries that deliberately made no re-run call. <code>reason="run_cancelled"</code>: the externally deleted worker's run had concluded <code>cancelled</code>, so re-running it would undo a human's cancel (Q811). The retry slot is spent, but nothing is wrong and no manual re-run is wanted</td>
+</tr>
+<tr>
 <td><code>actions_gateway_eviction_recovery_identity_unknown_total</code></td>
 <td>Counter</td>
 <td><code>namespace</code>, <code>runner_group</code></td>
@@ -3636,6 +3644,12 @@ Each <code>Reason</code> mirrors the corresponding metric name so the two correl
 <td>Warning</td>
 <td><code>actions_gateway_eviction_retries_total{cause="vanished"}</code></td>
 <td>A scale-set worker pod was already gone when this AGC started and its job had never concluded, so its run is being re-run; which disruption took the worker was lost with the pod (Q844)</td>
+</tr>
+<tr>
+<td><code>EvictionRerunWithheld</code></td>
+<td>Normal</td>
+<td><code>actions_gateway_eviction_rerun_withheld_total</code></td>
+<td>An externally deleted worker's run had already concluded <code>cancelled</code>, so no re-run was requested and the cancel stands; no operator action needed (Q811)</td>
 </tr>
 </tbody>
 </table>

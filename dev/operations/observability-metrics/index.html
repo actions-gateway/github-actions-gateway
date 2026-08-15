@@ -3150,7 +3150,13 @@ For SLO targets, see <a href="../../design/appendix-a-capacity-slos/">Appendix A
 <td><code>actions_gateway_eviction_rerun_failures_total</code></td>
 <td>Counter</td>
 <td><code>namespace</code>, <code>runner_group</code>, <code>tier</code>, <code>cause</code>, <code>reason</code></td>
-<td>Disruption recoveries whose re-run was <strong>never accepted</strong> by GitHub, so the budget slot is spent but the job was not re-run and needs a manual <code>gh run rerun</code> (Q503). <code>reason="run_never_concluded"</code>: GitHub was still answering <code>403 This workflow is already running</code> when the 15-minute re-run window closed — the original run outlived the job lock's ~10-minute TTL bound, which is itself worth investigating. <code>reason="api_error"</code>: a terminal API failure (a non-403 error, or a 403 that is a permissions problem rather than the still-running refusal). Each occurrence also emits an <code>EvictionRerunFailed</code> Warning Event naming the run. <strong>Expected to be zero</strong>; see the <a href="../troubleshooting/#evicted-worker-pods-exhausting-retry-budget">runbook</a>.</td>
+<td>Disruption recoveries whose re-run was <strong>never accepted</strong> by GitHub, so the budget slot is spent but the job was not re-run and needs a manual <code>gh run rerun</code> (Q503). <code>reason="run_never_concluded"</code>: GitHub was still answering <code>403 This workflow is already running</code> when the 15-minute re-run window closed — the original run outlived the job lock's ~10-minute TTL bound, which is itself worth investigating. <code>reason="api_error"</code>: a terminal API failure (a non-403 error, or a 403 that is a permissions problem rather than the still-running refusal). <code>reason="conclusion_unknown"</code>: the window closed with the deletion arm's cancel check (Q811, next row) still unable to reach the run for fifteen minutes (the request never completed, or GitHub answered 5xx), so no verdict was taken and no re-run was fired, because a run whose conclusion cannot be read is not assumed to be uncancelled. A 4xx, or a 2xx carrying something that is not a run, is <code>api_error</code> instead: neither becomes a verdict inside the window. Each occurrence also emits an <code>EvictionRerunFailed</code> Warning Event naming the run. <strong>Expected to be zero</strong>; see the <a href="../troubleshooting/#evicted-worker-pods-exhausting-retry-budget">runbook</a>.</td>
+</tr>
+<tr>
+<td><code>actions_gateway_eviction_rerun_withheld_total</code></td>
+<td>Counter</td>
+<td><code>namespace</code>, <code>runner_group</code>, <code>tier</code>, <code>cause</code>, <code>reason</code></td>
+<td>Disruption recoveries that deliberately made <strong>no</strong> re-run call, because making one would undo a decision GitHub already recorded (Q811). <code>reason="run_cancelled"</code> with <code>cause="deletion"</code> is the only shape today: the run concluded <code>cancelled</code>, and <code>rerun-failed-jobs</code> accepts a cancelled run (measured live 2026-08-05) where a <code>success</code> conclusion refuses it. Without the check, the <a href="../troubleshooting/#cancelling-a-run-does-not-stop-its-worker-pod">cancel runbook</a>'s own remedy for a worker that will not stop (delete its pod, which supplies the deletion mark the recovery keys on) re-queued the job the operator had just stopped. Each occurrence also emits a <strong>Normal</strong> <code>EvictionRerunWithheld</code> Event naming the run. The retry slot is spent, since it is reserved at detection, minutes before GitHub concludes the run, so read this alongside <code>eviction_retries_total</code>, whose increment it explains. <strong>Not</strong> a failure and <strong>not</strong> something to alert on: no manual re-run is wanted.</td>
 </tr>
 <tr>
 <td><code>actions_gateway_eviction_recovery_identity_unknown_total</code></td>
@@ -3780,6 +3786,11 @@ Neither binary acquires jobs, so neither has a tier.</p>
 <td>Recorded by the shared re-run path both tiers hand recoveries to (Q503).</td>
 </tr>
 <tr>
+<td><code>actions_gateway_eviction_rerun_withheld_total</code></td>
+<td>Both</td>
+<td>As above: the cancel check sits in that shared path, and both tiers detect the graceful deletion that arms it (Q811).</td>
+</tr>
+<tr>
 <td><code>actions_gateway_abandoned_run_force_cancels_total</code></td>
 <td>Both</td>
 <td>Ported by Q766; split by the <code>tier</code> label.</td>
@@ -4234,6 +4245,11 @@ Each also has a <a href="../troubleshooting/#job-lifecycle-events-on-a-runnergro
 <td><code>EvictionRerunFailed</code></td>
 <td>Both</td>
 <td>Recorded by the shared re-run path both tiers hand recoveries to (Q503).</td>
+</tr>
+<tr>
+<td><code>EvictionRerunWithheld</code></td>
+<td>Both</td>
+<td>Recorded on the same shared re-run path, from the graceful-deletion arm both tiers detect (Q811).</td>
 </tr>
 <tr>
 <td><code>EvictionRetriesExhausted</code></td>
