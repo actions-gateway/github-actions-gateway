@@ -3688,6 +3688,14 @@
 <td>It read <code>release-1.5</code> as a stale PR branch. Rebasing is the one thing that must never happen there: it publishes everything merged since the tag. Recurs on every backport.</td>
 </tr>
 <tr>
+<td><a id="Q888"></a>Q888</td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/claude-usage/compute_metrics.py">Refuse a merge into a CSV whose classifier has changed</a></td>
+<td><code>debt</code> <code>retro</code></td>
+<td>🔲</td>
+<td>S</td>
+<td><code>merge_max_into</code> only revises upward, so a sharpened classifier's downward correction is dropped silently, and the total still rising on new data hides it. Docstrings say rebuild; nothing enforces it.</td>
+</tr>
+<tr>
 <td><a id="Q885"></a>Q885</td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.githooks/pre-commit">A pathspec <code>git commit</code> bypasses the lint-backlog pre-commit backstop</a></td>
 <td><code>debt</code> <code>retro</code></td>
