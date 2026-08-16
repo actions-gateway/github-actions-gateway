@@ -49,7 +49,7 @@ Two practical notes:
 
 ## Roles
 
-Both halves of the model are globally-installed skills: [`session-orchestrator`](https://github.com/karlkfi/claude-skills) for the dispatcher and `session-worker` for each worker.
+Both halves of the model are globally-installed skills: [`session-orchestrator`](skills.md#session-orchestrator) for the dispatcher and [`session-worker`](skills.md#session-worker) for each worker.
 They carry the portable contract; this playbook carries what is true of *this* repo — the gate, the throttle, the merge queue, the `/goal` template, the no-subagent-workers hook, and every measurement taken here.
 Where they disagree, this playbook wins, and both skills say so.
 The role is called the **dispatcher** throughout this file; the skill calls it the orchestrator, and they are the same session.
@@ -82,7 +82,7 @@ It is a soft nudge (`ask`, not a block) tuned for low false positives: read-only
 
 ## The worker contract (self-healing)
 
-**The contract itself is the globally-installed [`session-worker`](https://github.com/karlkfi/claude-skills) skill**, which every worker follows by invocation rather than by being told.
+**The contract itself is the globally-installed [`session-worker`](skills.md#session-worker) skill**, which every worker follows by invocation rather than by being told.
 It owns the portable half: starting from the row and treating its asserted mechanism as a claim, worktree and branch boundaries, running the gate off the critical path and re-running it over the final tree, isolating the backlog-row commit, proving the heavy gates ran on the PR's head SHA, the background watcher loop, reporting every PR back, and never merging.
 Do not restate any of it here or in a prompt.
 
