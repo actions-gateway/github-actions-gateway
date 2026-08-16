@@ -3337,7 +3337,8 @@ Editing the headline <strong>text</strong> is subject to the same arithmetic: a 
 <h3 id="measure-the-render-the-source-cannot-answer-these-questions">Measure the render; the source cannot answer these questions<a class="headerlink" href="#measure-the-render-the-source-cannot-answer-these-questions" title="Permanent link">&para;</a></h3>
 <p>Every layout defect found in the 2026-08 marketing review was invisible in the Markdown and the CSS, and obvious in one measurement: tile heights, bullet wrapping, separator size, an alignment axis, a <code>display: flex</code> that turned prose into non-wrapping flex items, and 24px of horizontal scroll.
 <strong><code>make check</code> does not build the site</strong>, so nothing gates any of it.
-Run <code>make docs-serve</code> and measure.</p>
+Run <code>make docs-serve</code> and measure.
+The <code>rendered-page-review</code> skill drives that pass; the probes below are its repo-specific half.</p>
 <p><strong>Sweep the defect class, not the reported instance.</strong> This is the expensive lesson.
 One tile was reported as too tall; measuring only that tile missed a duplicated component on a second page, a wall of six admonitions, and two overflow bugs, which then arrived as separate rounds of feedback.
 When a visual problem is reported, probe every instance of its class on every page that uses the component.</p>
