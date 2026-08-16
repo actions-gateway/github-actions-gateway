@@ -359,7 +359,10 @@ def chart_tokens_by_model():
         # Vertical, like every other chart here. Horizontal labels needed a
         # read-inward rule near the right edge and still stacked the model and
         # machine events on top of each other, since they are one day apart.
-        labels.append(event_label(ax, xi - 0.5, 0.02, label, col, yc="axes fraction"))
+        # Anchored high: the label reads upward from here, so a low anchor runs it
+        # through the bars, which are dense across this whole timeline. The top
+        # band is empty at every event date.
+        labels.append(event_label(ax, xi - 0.5, 0.64, label, col, yc="axes fraction"))
     ax.set_title("Daily Claude Code token usage by model", fontsize=14, fontweight="bold", loc="left")
     ax.set_ylabel("tokens / day  (millions)", fontsize=11)
     ax.set_xticks(xs)
