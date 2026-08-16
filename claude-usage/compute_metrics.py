@@ -871,10 +871,21 @@ def is_estimated(row):
 
 
 # Text that arrives as a user record carrying ``origin.kind == "human"`` without a
-# human having typed anything: a hook's denial, a bash line and its output, a
-# slash command's expansion, an injected reminder. Q687's predicate, in code.
+# human having typed anything: a bash line and its output, a slash command's
+# expansion, an injected reminder, a message from another session. Q687's
+# predicate, in code.
+#
+# Three of these are observed here (``<system-reminder>`` 44, ``<bash-input>`` 19,
+# ``<create-pr-command>`` 6) and the rest are defensive. ``<cross-session-message>``
+# is the one that was missing: a peer session's message is not a keystroke, and 8
+# were being counted as prompts a person submitted.
+# Prefixes are matched literally, so a tag that carries attributes must be listed
+# without its closing bracket: a peer message opens ``<cross-session-message
+# from="uds:...">``, which ``<cross-session-message>`` never matches. Same reason
+# ``<local-command`` is written open-ended.
 NOT_A_PROMPT = ("<bash-input>", "<bash-stdout>", "<bash-stderr>", "<create-pr-command>",
-                "<system-reminder>", "<command-name>", "<local-command")
+                "<system-reminder>", "<command-name>", "<local-command",
+                "<cross-session-message")
 
 
 def record_text(rec):

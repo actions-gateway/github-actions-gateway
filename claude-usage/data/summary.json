@@ -1,8 +1,8 @@
 {
   "provenance": {
-    "snapshot_date": "2026-08-15",
+    "snapshot_date": "2026-08-16",
     "projects_glob": "/Users/karl/.claude/projects/*github-actions-gateway*",
-    "transcript_files_read": 429,
+    "transcript_files_read": 432,
     "snapshot_host": "mac-2",
     "hosts": [
       "mac-1",
@@ -48,13 +48,13 @@
   },
   "totals": {
     "measured": {
-      "input": 8418067,
-      "output": 92647781,
-      "cache_creation": 498594259,
-      "cache_read": 27998087302,
-      "assistant_msgs": 133663,
-      "user_msgs": 148838,
-      "headline_input_output_cachecreation": 599660107
+      "input": 8418768,
+      "output": 92945894,
+      "cache_creation": 500106341,
+      "cache_read": 28087353815,
+      "assistant_msgs": 134037,
+      "user_msgs": 149238,
+      "headline_input_output_cachecreation": 601471003
     },
     "estimated": {
       "input": 6559,
@@ -66,15 +66,15 @@
       "headline_input_output_cachecreation": 2494920
     },
     "combined": {
-      "input": 8424626,
-      "output": 93126717,
-      "cache_creation": 500603684,
-      "cache_read": 28065606145,
-      "assistant_msgs": 134405,
-      "user_msgs": 149699,
-      "headline_input_output_cachecreation": 602155027,
-      "grand_total_incl_cache_read": 28667761172,
-      "cache_reuse_ratio": 56.06
+      "input": 8425327,
+      "output": 93424830,
+      "cache_creation": 502115766,
+      "cache_read": 28154872658,
+      "assistant_msgs": 134779,
+      "user_msgs": 150099,
+      "headline_input_output_cachecreation": 603965923,
+      "grand_total_incl_cache_read": 28758838581,
+      "cache_reuse_ratio": 56.07
     }
   },
   "by_model": {
@@ -109,9 +109,9 @@
       "messages": 8356
     },
     "Opus 5": {
-      "headline": 296057542,
-      "output": 40453389,
-      "messages": 67735
+      "headline": 297868438,
+      "output": 40751502,
+      "messages": 68109
     }
   },
   "by_host": {
@@ -134,26 +134,26 @@
       "headline_input_output_cachecreation": 300762526
     },
     "mac-2": {
-      "input": 354045,
-      "output": 40685618,
-      "cache_creation": 257857918,
-      "cache_read": 16861696017,
-      "assistant_msgs": 67072,
-      "user_msgs": 74535,
-      "headline_input_output_cachecreation": 298897581
+      "input": 354746,
+      "output": 40983731,
+      "cache_creation": 259370000,
+      "cache_read": 16950962530,
+      "assistant_msgs": 67446,
+      "user_msgs": 74935,
+      "headline_input_output_cachecreation": 300708477
     }
   },
   "sessions": {
     "bucket_minutes": 10,
     "first_date": "2026-07-26",
     "last_date": "2026-08-16",
-    "session_days": 519,
+    "session_days": 523,
     "peak_concurrent": 16,
     "mean_concurrent": 3.0,
-    "hours_using_claude": 220.3,
-    "session_hours": 661.8,
+    "hours_using_claude": 222.7,
+    "session_hours": 667.0,
     "parallel_share_pct": 67,
-    "attended_hours": 103.7,
+    "attended_hours": 105.2,
     "attended_share_pct": 47,
     "attended_first_date": "2026-07-26",
     "prompts_note": "attended_hours scales with bucket_minutes and is a scale rather than a measurement; prompt_minutes.csv holds the parameter-free record, from which any bucket width or idle threshold is derivable",
@@ -162,10 +162,10 @@
   "head_snapshot": {
     "go_code": 117768,
     "go_comments": 41575,
-    "markdown_nonblank": 54011,
+    "markdown_nonblank": 54024,
     "yaml_handwritten": 12504,
     "yaml_generated": 131488,
     "tests": 2218,
-    "commits": 2031
+    "commits": 2032
   }
 }

@@ -450,6 +450,31 @@ class AuthoredPrompts(unittest.TestCase):
         return {"type": "user", "timestamp": "2026-08-10T00:00:00Z",
                 "origin": {"kind": kind}, "message": {"content": text}}
 
+    def test_a_message_from_another_session_is_not_a_prompt(self):
+        """A peer session's message carries origin.kind == "human" because it
+        enters the conversation the way a typed prompt does. Nobody typed it, so
+        counting it as presence is wrong."""
+        for text in ('<cross-session-message from="uds:/tmp/cc-socks/1.sock">hi</cross-session-message>',
+                     "<cross-session-message>hi</cross-session-message>"):
+            self.assertFalse(cm.is_human_prompt(self.rec(text)), text)
+
+    def test_a_prompt_that_merely_names_the_tag_still_counts(self):
+        """The strip is a prefix test, so a person asking about the tag is a
+        prompt. Guards the other direction of the rule above."""
+        self.assertTrue(cm.is_human_prompt(
+            self.rec("what does <cross-session-message> actually mean?")))
+
+    def test_every_stripped_prefix_is_matched_as_written(self):
+        """A tag carrying attributes is never matched by a prefix ending in '>'.
+        This is why <local-command and <cross-session-message are open-ended, and
+        the assertion exists so a later addition does not quietly close one."""
+        for prefix in cm.NOT_A_PROMPT:
+            opened = prefix[:-1] if prefix.endswith(">") else prefix
+            with_attrs = self.rec(opened + ' from="x">body')
+            if prefix.endswith(">"):
+                continue          # tags known to arrive bare
+            self.assertFalse(cm.is_human_prompt(with_attrs), prefix)
+
     def test_a_persona_opening_is_not_authored(self):
         r = self.rec("You are a worker session in a parallel-dispatch run. ...")
         self.assertTrue(cm.is_human_prompt(r))
