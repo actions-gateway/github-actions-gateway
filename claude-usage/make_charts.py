@@ -78,6 +78,16 @@ OI = {
     "yellow": "#F0E442", "blue": "#0072B2", "vermillion": "#D55E00",
     "purple": "#CC79A7", "grey": "#999999",
 }
+# Machine ids are write-once in the CSVs, because renaming one makes it re-measure
+# its whole history under the new id on top of the rows already filed under the old
+# one. So a readable name belongs here, on the way to the chart, and never in the
+# data.
+#
+# This maps to the whole label, not just the name: a named machine says only what
+# it is, which claims less than "begins" did and is also shorter, so it fits where
+# the id did. An unnamed one keeps the "<id> begins" form and its reasoning below.
+HOST_LABEL = {"mac-2": "MBP M5 Max"}
+
 GOLD = "#9A6E1E"  # single-series "cost / line" accent (no CB clash — used alone)
 
 MODEL_COLORS = {
@@ -145,7 +155,7 @@ def machine_starts():
         if h not in first or r["date"] < first[h]:
             first[h] = r["date"]
     order = sorted(first.items(), key=lambda kv: (kv[1], kv[0]))
-    return [(dparse(d), f"{h} begins") for h, d in order[1:]]
+    return [(dparse(d), HOST_LABEL.get(h, f"{h} begins")) for h, d in order[1:]]
 
 
 def leading_model_arrival():
