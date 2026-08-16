@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #
 # Unit tests for scripts/docs/lint-backlog.sh — the docs/STATUS.md format gate
-# (vendored from the backlog skill).
+# (vendored from the session-backlog skill).
 #
 # The caps rules (Notes ≤ 250 chars; > 200 chars must link a doc) decide
 # whether a Queue row may drop context on the floor, so they are asserted

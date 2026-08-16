@@ -531,7 +531,7 @@ lint: $(GOLANGCI_LINT) ## Run gofmt (all modules) + golangci-lint, change-scoped
 	GOLANGCI_LINT=$(GOLANGCI_LINT) scripts/go/go-lint.sh
 
 .PHONY: lint-backlog
-lint-backlog: ## Enforce backlog format rules on docs/STATUS.md (vendored from the backlog skill)
+lint-backlog: ## Enforce backlog format rules on docs/STATUS.md (vendored from the session-backlog skill)
 	scripts/docs/lint-backlog.sh
 
 # The pre-commit hook refuses to *stage* docs/STATUS.md next to another file,

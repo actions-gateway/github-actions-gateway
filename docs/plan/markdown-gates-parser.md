@@ -259,7 +259,7 @@ The line-break case is a positive **control**: it passes both, and pins that exc
 **A boundary the port does not cross, now pinned:** the replay reads diff lines, which carry no document around them, so a row inside a fence still registers as an arrival there even though the same fence is respected when the file itself is parsed for Deferred IDs.
 Asserted so a change to it is a deliberate one, since every metric moves with it.
 
-`backlog-metrics.sh` started as the backlog skill's script.
+`backlog-metrics.sh` started as the [`session-backlog`](../development/skills.md#session-backlog) skill's script.
 It has now diverged; `scripts/README.md` says so rather than implying a sync obligation.
 
 ## Sequencing
