@@ -54,6 +54,11 @@ Two practical notes:
 
 ## Roles
 
+Both halves of the model are globally-installed skills: [`session-orchestrator`](https://github.com/karlkfi/claude-skills) for the dispatcher and `session-worker` for each worker.
+They carry the portable contract; this playbook carries what is true of *this* repo — the gate, the throttle, the merge queue, the `/goal` template, the no-subagent-workers hook, and every measurement taken here.
+Where they disagree, this playbook wins, and both skills say so.
+The role is called the **dispatcher** throughout this file; the skill calls it the orchestrator, and they are the same session.
+
 **Dispatcher** (one session — typically the one you are in):
 - Selects the batch, decides ordering, groups by file contention ([what that actually optimizes for](#what-selection-actually-optimizes-for), which is not the Queue's priority order).
 - Spawns one worker session per task.
@@ -94,12 +99,26 @@ The small cost of chips — one click to start each — is the correct trade.
 
 ## The worker contract (self-healing)
 
-Bake this into **every** worker prompt from the first task.
-It is the single biggest reducer of dispatcher toil.
+**The contract itself is the globally-installed [`session-worker`](https://github.com/karlkfi/claude-skills) skill**, which every worker follows by invocation rather than by being told.
+It owns the portable half: starting from the row and treating its asserted mechanism as a claim, worktree and branch boundaries, running the gate off the critical path and re-running it over the final tree, isolating the backlog-row commit, proving the heavy gates ran on the PR's head SHA, the background watcher loop, reporting every PR back, and never merging.
+Do not restate any of it here or in a prompt.
 
-After opening its PR, a worker does **not** stop, and it does **not** sit in an active CI-polling loop.
-It hands post-PR watching to a **background** mechanism so its **main thread stays free** — you can ask it follow-up questions or iterate on the change while its PR churns toward green.
-The self-healing ladder, in preference order:
+What follows is only what that skill cannot know: this repo's gate, its tooling, and the measurements taken here.
+Where the two disagree, this playbook wins — the skill says so itself.
+
+### This repo's deltas
+
+- **The gate is `make check`**, and the fast prose gate is `make docs-gates`.
+  Run `docs-gates` the moment prose is written rather than waiting on the ten-minute gate; `em-dash-check` and `md-reflow-check` are the two it catches that nothing else does until then.
+  The sub-gates worth reading by name in `make check`'s output are `doc-links`, `lint-backlog`, `plan-index-check`, `no-plan-refs-check` and `em-dash-check`.
+- **Once the final gate is running, a `Bash` call is an edit.** Any Bash call runs the piped-gate hook, which rebuilds the shared `.build/pipedgate` binary that `claude-piped-gate-hook-test` deletes mid-run, so the suite reads a real deny payload and fails (Q825).
+  Wait for the task notification rather than polling.
+- **Allocate every new Queue ID with `make queue-id TITLE="…"`**, never by hand — it searches for near-duplicates before it claims, and concurrent workers otherwise pick the same number.
+- **A `flake` row is not deleted when it is fixed.** It moves to Deferred § Flake watch with a revive trigger, per `lint-backlog.sh` rule 8.
+  Match the rows already there.
+- **No live cluster unless the prompt scopes the worker to one.** The GKE dogfood cluster is classified production and prod-guard denies unpinned mutating commands, so pin the target on every one.
+
+The self-healing ladder below is this repo's implementation of the skill's background-watcher requirement, in preference order.
 
 ### Primary: the pr-sentinel background watcher
 
@@ -158,8 +177,8 @@ Override for one legitimate poll with `PR_SENTINEL_OVERRIDE=<reason>`.
 
 ### Fallback 1: a self-managed background watcher
 
-If pr-sentinel is not active in the worker's session, the worker runs its **own** background task (`run_in_background`) that loops: sleep → non-blocking `gh pr checks <n>` for check state **and** `gh pr view <n> --json mergeable` for conflict state → wake to push the real fix or `git rebase origin/main`, re-run `make check`, `git push --force-with-lease`, relaunch.
-**Never foreground-poll** — no `gh pr checks --watch` / `gh run watch` / `sleep`-loop on the main thread (it pins the session, and pr-sentinel's hook denies it outright where installed).
+The `session-worker` skill specifies this one: a background task that polls check state **and** mergeable state, sleeps between polls, and wakes the session on a transition.
+Here that means `gh pr checks <n>` and `gh pr view <n> --json mergeable`, healing with `git rebase origin/main`, `make check`, `git push --force-with-lease`, relaunch.
 
 ### Fallback 2: `/autofix-pr` cloud session (last resort)
 
@@ -169,18 +188,14 @@ Avoid it on public repos; reserve it for cases where neither the plugin nor a ba
 
 ### What stays true in every case
 
-- **"Green" means the code-exercising gates actually ran** — not merely that no check is red.
-  A path-gated workflow that was skipped reports *no* check, so a PR that opened docs-only (e.g. a `docs/STATUS.md` row) and later had code pushed can show all-green/`CLEAN` while build, lint, integration, and the security scans never tested the code.
-  Before declaring the PR ready, verify the relevant gates ran (`gh pr checks <n>`, `gh run list --commit <sha>`) and `gh pr close <n> && gh pr reopen <n>` to force them if they were skipped.
-  The e2e lanes are exempt: they are merge-group-only (Q675), so they never run on a PR and their absence there is expected rather than a skipped gate.
-  See [testing.md § Path-gated workflows](testing.md#path-gated-workflows-verify-the-heavy-gates-actually-ran).
-- **Never merge or enqueue.** A green + mergeable PR is handed to the dispatcher, which hands it to the maintainer (see [the merge model](#the-merge-model)).
-- **Relaunch the watcher after every actionable wake** — `check_failure`, `conflict`/`behind`, `timeout`, `error`.
-  An unwatched open PR heals nothing.
-  `ready` and `closed` end the watch; the safety valve below does too.
-- **Verify what landed by content, never by SHA.** A rebase rewrites the branch's commit SHAs (and the eventual squash-merge discards them regardless), so check `git show origin/main:<path>` rather than looking for a commit you remember.
-- **Safety valve.** If the PR can't be made green after ~5 attempts, post a PR comment summarizing the blocker and stop, so the dispatcher can intervene.
-- **No secrets.** Never read, print, log, or pass any secret while healing (see [the no-secrets rule](#the-no-secrets-rule)).
+The `session-worker` skill carries the general rules — verify the gates ran and filter by commit, relaunch after every actionable wake, verify what landed by content rather than by SHA, never merge.
+Three of them land differently here:
+
+- **The e2e lanes are exempt from "prove the gate ran".** Both are merge-group-only (Q675), so they never run on a PR and their absence there is expected rather than a skipped gate.
+  Everything else follows [testing.md § Path-gated workflows](testing.md#path-gated-workflows-verify-the-heavy-gates-actually-ran).
+- **Safety valve.** If the PR cannot be made green after ~5 attempts, post a PR comment summarizing the blocker and stop.
+  A PR comment reaches the dispatcher, which reads the PR; it does not reach the maintainer, who reviews the body and the diff.
+- **No secrets**, at any point including while healing (see [the no-secrets rule](#the-no-secrets-rule)).
 
 Self-healing also makes the contention problem mostly disappear: when one PR merges, every other open PR's watcher wakes on the now-conflicting mergeable state and rebases onto `main`.
 That only holds for PRs whose watcher is still running — see [the post-`ready` gap](#the-post-ready-gap) for the one window it does not cover.
@@ -218,9 +233,12 @@ Splitting the watch at `ready` puts each half where its output belongs, with CI 
 
 ### The worker prompt carries the delta, not the contract
 
-The contract is a repo-local skill, [`dispatch-worker`](../../.claude/skills/dispatch-worker/SKILL.md): gate placement, boundaries, STATUS.md commit isolation, heavy-gate verification, the pr-sentinel loop, and the never-merge rule.
-Invoke it and stop there.
+The contract is the globally-installed `session-worker` skill ([the worker contract](#the-worker-contract-self-healing)): gate placement, boundaries, backlog-row commit isolation, heavy-gate verification, the watcher loop, and the never-merge rule.
+Invoke it as a slash command and stop there.
 **Do not restate any of it in the prompt.**
+
+**Keep the slash invocation even when prose would deliver the same contract.** The harness records it in the transcript as a `<command-name>` tag, which is how tooling tells a dispatched session from a hand-typed one; prose pointing at the skill delivers the contract and drops the marker.
+Read the marker as a set rather than one string — `{"/dispatch-worker", "/session-worker"}` — because sessions dispatched before the skill was renamed carry the old spelling and stay valid.
 
 Restating was the earlier practice and it was waste twice over.
 `CLAUDE.md` auto-loads into every fresh session, so a "Rules" block duplicates what the worker already has; the rest duplicated this file, which the worker can read.
@@ -229,7 +247,7 @@ It also made the chips themselves unreviewable, which matters because the chip l
 So the prompt carries only what the skill and the Queue row cannot:
 
 - **The item** and the model to run on ([Model selection](#model-selection)); a fresh worker cannot run `model-advisor` interactively.
-- **The dispatcher's worktree name**, which is how the worker addresses it to report its PR (`dispatch-worker` skill §8).
+- **The dispatcher's worktree name**, which is how the worker addresses it to report its PR (`session-worker` skill §8).
   A session cannot look up its own name, so the dispatcher has to state it and the worker resolves it through `ListAgents`.
 - **What the dispatcher measured, and when.** The row's asserted mechanism is a claim; saying it was re-verified saves the worker repeating the check, and saying *where the row is stale* saves it implementing a fixed defect.
   **Say what you did not measure with the same care.** A prompt's claims read as settled where a row's read as claims, because the prompt says a session checked, and the worker then builds on them rather than testing them.
@@ -247,7 +265,7 @@ A prompt that fits in a few lines is one a maintainer can scan a whole wave of.
 If it is running long, the excess is usually contract that belongs in the skill, or task detail that belongs in the Queue row.
 
 > ```
-> /dispatch-worker Q664 — Opus 5. Verified 2026-08-04: the reap wait at
+> /session-worker Q664 — Opus 5. Verified 2026-08-04: the reap wait at
 > worker_lifecycle_test.go:187 times out with two pods still listed. Do NOT
 > raise the timeout; decide test-bug vs reaper-bug on evidence. Q666 is in
 > flight adding the failure dumps this needs.
@@ -258,13 +276,9 @@ If it is running long, the excess is usually contract that belongs in the skill,
 The dispatcher picks each worker's model and bakes it into the spawn prompt.
 A worker is a fresh, unattended session: it cannot pause to run the `model-advisor` skill (which prompts the user interactively), so the per-task choice is the dispatcher's to make up front.
 
-Match the model to the *task*, not the batch — a dispatch run usually mixes sizes:
+`session-orchestrator` §3 owns the rule — match the model to the task rather than the batch, and size up when unsure.
+The repo-specific part is why the choice cannot be deferred: `model-advisor` prompts the user interactively, so an unattended worker can never run it.
 
-- **Mechanical / well-understood work** (lint gates, CI wiring, packaging, docs-only edits, contained fixes) runs fine on a faster, cheaper model.
-  Most parallel-dispatch batches are dominated by these.
-- **Tasks with real judgment** (a fix touching the concurrency core, an admission/security change, anything where scope is easy to get wrong) warrant the strongest model — the dispatcher's scope review is the only gate, so the worker should not be under-powered.
-
-When unsure, size up: a worker that picks the wrong approach costs more dispatcher toil than the model delta.
 Record the per-task model choice in the `tmp/` tracker alongside task → chip → PR → state so the run stays auditable.
 
 ## The dispatcher loop
@@ -441,7 +455,7 @@ In practice the coordination is carried by built-in mechanisms — no shared mai
   Read-only and not permission-gated.
 - **PR + PR comments = worker → dispatcher results and escalation.** A green+mergeable PR is the "done" signal; the safety-valve PR comment is the "stuck" signal.
 - **Self-healing is the spine.** Workers launch the pr-sentinel background watcher, which wakes them on both CI failures and merge conflicts, so the dispatcher rarely needs to touch a running worker.
-- **Worker → dispatcher announcement = PR ownership.** On every `gh pr create`, and again on `ready`, the worker messages the dispatcher its Q-ID, PR number, branch, and the literal pr-sentinel watcher path from its nudge (`dispatch-worker` skill §8).
+- **Worker → dispatcher announcement = PR ownership.** On every `gh pr create`, and again on `ready`, the worker messages the dispatcher its Q-ID, PR number, branch, and the literal pr-sentinel watcher path from its nudge (`session-worker` skill §8).
   This is the only authoritative ownership record.
   The dispatcher can otherwise only infer it from the branch name, which carries the session name **just** for the branch the worktree was created on: a worker's second PR, or a worktree it did not create, drops out of that inference with no symptom.
   The watcher path is likewise unobtainable any other way, because the dispatcher never runs `gh pr create` and so never receives a nudge.
@@ -594,7 +608,7 @@ Some tasks simply cannot run autonomously under this rule (e.g. anything needing
 - [ ] PR-watcher gates on checks **and** mergeability and handles zero-check PRs.
 - [ ] Watcher launched **bare** (no inline `VAR=…` prefix, or the auto-allow lapses into a prompt) and relaunched after every actionable wake.
 - [ ] `PR_SENTINEL_WATCH_UNTIL` left at `ready`, so a worker goes idle at green and its session stops reading as busy.
-- [ ] Each spawn prompt names the **dispatcher's worktree**, so the worker can address it (`dispatch-worker` skill §8).
+- [ ] Each spawn prompt names the **dispatcher's worktree**, so the worker can address it (`session-worker` skill §8).
 - [ ] Post-`ready` conflict window covered — dispatcher runs `scripts/agent/pr-mergeability-watch.sh` per handed-off PR, and re-checks mergeability at the merge step (see [the post-`ready` gap](#the-post-ready-gap)).
 - [ ] No-secrets boundary set; credential-dependent items excluded up front.
 - [ ] Cleanup plan for leftover worktrees/branches at the end.
