@@ -424,7 +424,7 @@ In practice the coordination is carried by built-in mechanisms — no shared mai
   Read-only and not permission-gated.
 - **PR + PR comments = worker → dispatcher results and escalation.** A green+mergeable PR is the "done" signal; the safety-valve PR comment is the "stuck" signal.
 - **Self-healing is the spine.** Workers launch the pr-sentinel background watcher, which wakes them on both CI failures and merge conflicts, so the dispatcher rarely needs to touch a running worker.
-- **Worker → dispatcher announcement = PR ownership.** On every `gh pr create`, and again on `ready`, the worker messages the dispatcher its Q-ID, PR number, branch, and the literal pr-sentinel watcher path from its nudge (`session-worker` skill §8).
+- **Worker → dispatcher announcement = PR ownership.** On every `gh pr create`, and again on `ready`, the worker messages the dispatcher its Q-ID, PR number, branch, and the literal pr-sentinel watcher path from its nudge (`session-worker` skill, § Report every PR to the dispatcher).
   This is the only authoritative ownership record.
   The dispatcher can otherwise only infer it from the branch name, which carries the session name **just** for the branch the worktree was created on: a worker's second PR, or a worktree it did not create, drops out of that inference with no symptom.
   The watcher path is likewise unobtainable any other way, because the dispatcher never runs `gh pr create` and so never receives a nudge.
@@ -584,7 +584,7 @@ Some tasks simply cannot run autonomously under this rule (e.g. anything needing
 - [ ] PR-watcher gates on checks **and** mergeability and handles zero-check PRs.
 - [ ] Watcher launched **bare** (no inline `VAR=…` prefix, or the auto-allow lapses into a prompt) and relaunched after every actionable wake.
 - [ ] `PR_SENTINEL_WATCH_UNTIL` left at `ready`, so a worker goes idle at green and its session stops reading as busy.
-- [ ] Each spawn prompt names the **dispatcher's worktree**, so the worker can address it (`session-worker` skill §8).
+- [ ] Each spawn prompt names the **dispatcher's worktree**, so the worker can address it (`session-worker` skill, § Report every PR to the dispatcher).
 - [ ] Post-`ready` conflict window covered — dispatcher runs `scripts/agent/pr-mergeability-watch.sh` per handed-off PR, and re-checks mergeability at the merge step (see [the post-`ready` gap](#the-post-ready-gap)).
 - [ ] No-secrets boundary set; credential-dependent items excluded up front.
 - [ ] Cleanup plan for leftover worktrees/branches at the end.
