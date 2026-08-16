@@ -834,12 +834,21 @@ Prose is for framing.
 Anything a reader might need to act on individually gets its own line.
 
 **Fold long lists.** `<details><summary>` renders on the Releases page and keeps the top scannable.
-It is also the only lever against truncation: the Releases *index* collapses a long body behind a **"read more"** link, and a fold counts as its one summary line while collapsed.
-`v1.3.0` hit that limit and was folded back under it — eight folds.
-If the index is truncating, the fix is another fold, not a cut.
+That is what folding is for, and it is worth doing on its own terms.
 
-**Pick the next fold by measuring collapsed height, not by eye.** Sum each section's bytes with `<details>…</details>` bodies excluded; the biggest sections are rarely the ones that feel long.
-`v1.3.0` measured 9.5k collapsed, and the third-largest section was Validation — not an obvious candidate, since Upgrading and Highlights are larger but must both stay open.
+**Folding is not a lever against index truncation, and the ordering is.** Measured 2026-08-15 against the live Releases index: **every stable release this project has cut is truncated** behind a "Read more" link, `v1.3.0`, `v1.4.0` and `v1.5.0` alike, including the one this runbook previously recorded as having been folded back under the limit.
+The cut lands around **9k of source**, and the content past it is genuinely absent from the index page rather than merely hidden.
+
+So the question is never "how do I get under the limit" — you will not.
+It is **what does a reader see before clicking**, and the answer is decided by section order:
+
+```bash
+make release-notes-check
+```
+
+It names the sections above and below the cut for each note.
+`v1.5.0`'s six folds all begin past it, which is why a seventh would have changed nothing, and why its Deprecations section is not visible on the index where `v1.3.0`'s and `v1.4.0`'s were.
+A fold helps only when it collapses something that would otherwise sit inside the first 9k.
 
 **When the content being folded is evidence, put the evidence in the `<summary>`.** A fold whose summary reads "Validation details" hides the receipt; one that reads `73/73 e2e specs on Kata microVM workers, on live GKE — the four legs, and what none of them assert` *is* the receipt, and a reader who never expands it has still seen the number.
 That is the exception to the count-in-the-summary convention: enumerations carry a count, evidence carries the finding.
@@ -1093,9 +1102,9 @@ They are recorded here so the next reader reaches the measurement before rebuild
   Postmortems are not published to the site, so there is no versioned URL to point at and the source tree is the only target.
   A gate here needs an allowlist, and an allowlist of "documents that exist outside the site" is a second inventory to maintain for one link per release.
 
-- **Whether the notes are truncated on the Releases index.** GitHub publishes no threshold, so any number a gate enforced would be invented, and inventing one blocks a release over a guess.
-  `make release-notes-check` therefore **reports** collapsed height and ranks the unfolded sections by bytes, which is what the fold decision actually needs.
-  The watermark it warns at is the largest body known to render whole: `v1.3.0` at 12,019 bytes collapsed.
+- **Whether the notes are truncated on the Releases index.** They always are.
+  Every stable release this project has cut sits behind a "Read more", so a gate that failed on truncation would fail every release, and there is no threshold to get under.
+  `make release-notes-check` therefore **reports** which sections fall above and below the cut, because that decides what a reader sees before clicking, and the ordering is a judgement call worth making deliberately rather than a rule worth enforcing.
 
 What *is* gated is listed in [scripts/README.md](https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/README.md)'s `release/` table.
 The dividing line is whether a wrong answer is decidable from the file alone: a duplicate `# ` heading is, and whether a caveat is a landmine is not.

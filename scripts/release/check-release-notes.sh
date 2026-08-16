@@ -20,20 +20,31 @@
 #   - Images are tagged `vX.Y.Z` and charts `X.Y.Z`, so a copy-pasteable helm
 #     command carrying the `v` fails for the reader who trusts it.
 #
-# Collapsed height is reported, never failed. The Releases *index* collapses a
-# long body behind "read more", a <details> fold counts as its summary line while
-# collapsed, and the fix for truncation is another fold rather than a cut — but
-# GitHub publishes no threshold, so this prints the measurement the fold decision
-# needs (runbook: pick the next fold by measuring, not by eye) and warns above the
-# only watermark evidence supports: v1.3.0, the release recorded as having hit the
-# limit before it was folded back under.
+# Index truncation is reported, never failed, and what it reports is deliberately
+# NOT collapsed height.
+#
+# Measured 2026-08-15 against the live Releases index: every stable release this
+# project has cut is truncated behind "Read more" — v1.3.0, v1.4.0 and v1.5.0
+# alike — and the cut lands around 9k of source, before which the body is served
+# and after which it is genuinely absent from the page, not merely hidden.
+#
+# So folding is not the lever the runbook assumed. v1.5.0 carries six folds and
+# every one of them begins past the cut, which is why adding a seventh would
+# change nothing: the reader is already looking at the first 9k. Only content
+# ABOVE the cut is visible, so what this reports is how much of the body sits
+# there and whether any fold is positioned early enough to matter.
+#
+# Truncation is normal and not a defect. It is worth measuring because it decides
+# what a reader sees before clicking, which is where the danger banner and the
+# upgrade steps need to be.
 set -euo pipefail
 shopt -s inherit_errexit
 
-# Above the largest release known to render un-truncated: v1.3.0 measures 12,019
-# collapsed after it was folded back under the limit. So 12,019 is proven fine and
-# the real ceiling is somewhere above it, unknown. A watermark, not a threshold.
-WARN_COLLAPSED_BYTES=13000
+# Where the Releases index stopped serving the body, measured across the three
+# stable notes: ~8,955 bytes for v1.5.0 and ~9,387 for v1.4.0. A source-byte proxy
+# for whatever rendered budget GitHub actually applies, so it is reported as
+# approximate and never enforced.
+INDEX_CUT_BYTES=9000
 
 usage() {
 	cat >&2 <<-EOF
@@ -101,28 +112,31 @@ for note in "${notes[@]}"; do
 		findings=$((findings + 1))
 	fi
 
-	# Collapsed height, and the sections that dominate it.
-	read -r collapsed folds < <(awk '
-		/<details/ { infold = 1 }
-		{ if (!infold) bytes += length($0) + 1 }
-		/<summary>/ { if (infold) { bytes += length($0) + 1; folds++ } }
-		/<\/details>/ { infold = 0 }
-		END { print bytes + 0, folds + 0 }
-	' "$note")
-	printf '%s: %s bytes collapsed, %s fold(s)\n' "$name" "$collapsed" "$folds"
-	if ((collapsed > WARN_COLLAPSED_BYTES)); then
-		printf '  warning: above the %d-byte watermark (v1.3.0 renders un-truncated at 12,019).\n' \
-			"$WARN_COLLAPSED_BYTES" >&2
-		printf '  The fix is another <details> fold, not a cut. Unfolded sections, largest first:\n' >&2
-		# Ranked so the choice is made on bytes rather than on which section feels
-		# long — the runbook's point is that those are rarely the same section.
-		awk '
-			/<details/ { infold = 1 }
-			/<\/details>/ { infold = 0; next }
-			/^## / { sect = substr($0, 4); next }
-			!infold && sect != "" { size[sect] += length($0) + 1 }
-			END { for (s in size) printf "%8d  %s\n", size[s], s }
-		' "$note" | sort -rn | head -5 | sed 's/^/    /' >&2
+	# What the index shows before "Read more": the sections that fall entirely
+	# above the cut, and the first fold's position relative to it.
+	total="$(wc -c <"$note" | tr -d ' ')"
+	first_fold="$(awk '/<details/ { print off; exit } { off += length($0) + 1 }' "$note")"
+	printf '%s: %s bytes' "$name" "$total"
+	if [[ -n "$first_fold" ]]; then
+		printf ', first fold at %s' "$first_fold"
+	fi
+	printf ' (index serves ~%s)\n' "$INDEX_CUT_BYTES"
+
+	if ((total > INDEX_CUT_BYTES)); then
+		printf '  note: the index truncates this behind "Read more", as it does every\n'
+		printf '  stable release here. Sections a reader sees before clicking:\n'
+		awk -v cut="$INDEX_CUT_BYTES" '
+			/^## / { sect = substr($0, 4) }
+			{ off += length($0) + 1; if (sect != "" && off <= cut) shown[sect] = 1; else if (sect != "") cut_off[sect] = 1 }
+			END {
+				for (s in shown) printf "    visible  %s\n", s
+				for (s in cut_off) if (!(s in shown)) printf "    cut      %s\n", s
+			}
+		' "$note"
+		if [[ -n "$first_fold" ]] && ((first_fold > INDEX_CUT_BYTES)); then
+			printf '  Every fold begins past the cut, so another fold would not change what\n'
+			printf '  a reader sees. Move what matters above it instead.\n'
+		fi
 	fi
 done
 

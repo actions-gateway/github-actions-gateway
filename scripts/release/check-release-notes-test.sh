@@ -109,29 +109,76 @@ case_ "an image tag keeps its v" 0 '## Images
 `ghcr.io/actions-gateway/gmc:v1.5.0` is the image tag.
 '
 
-# --- collapsed height is reported, never failed ------------------------------
+# --- index truncation is reported, never failed ------------------------------
 #
-# A note far past the watermark must still exit 0: GitHub publishes no threshold,
-# so failing on an invented one would block a release over a guess.
+# A long note must still exit 0. Every stable release this project has cut is
+# truncated on the Releases index, so failing on it would block every release.
 big="## Highlights
 
 "
-for i in $(seq 1 400); do big+="Line ${i} of a very long unfolded section that pushes collapsed height well past the watermark.
+for i in $(seq 1 400); do big+="Line ${i} of a very long section that pushes the body well past what the index serves.
 "; done
-case_ "a body over the watermark warns without failing" 0 "$big"
+case_ "a body past the index cut still passes" 0 "$big"
 
 # Captured, not piped into grep: `grep -q` closes the pipe on its first match, and
-# under pipefail the producer's SIGPIPE (141) becomes the pipeline's status — so a
+# under pipefail the producer's SIGPIPE (141) becomes the pipeline's status, so a
 # successful match reads as a failure.
 printf '%s' "$big" >"$WORK/note.md"
 warn_out="$("$SUBJECT" "$WORK/note.md" 2>&1 || true)"
 case "$warn_out" in
-*"warning: above the"*) ok "the watermark warning is actually emitted" ;;
-*) bad "the watermark warning is actually emitted" ;;
+*"truncates this behind"*) ok "truncation is reported" ;;
+*) bad "truncation is reported" ;;
 esac
 case "$warn_out" in
-*"Highlights"*) ok "the warning ranks the sections to fold" ;;
-*) bad "the warning ranks the sections to fold" ;;
+*"visible  Highlights"*) ok "sections above the cut are named as visible" ;;
+*) bad "sections above the cut are named as visible" ;;
+esac
+
+# A short note says nothing about truncation, or the signal is worthless.
+printf '## Highlights\n\nShort enough to serve whole.\n' >"$WORK/short.md"
+short_out="$("$SUBJECT" "$WORK/short.md" 2>&1 || true)"
+case "$short_out" in
+*"truncates this behind"*) bad "a short note is not reported as truncated" ;;
+*) ok "a short note is not reported as truncated" ;;
+esac
+
+# The fold advice must only appear when folds really are past the cut, since that
+# is the case where adding another one changes nothing.
+folded="## Highlights
+
+"
+for i in $(seq 1 400); do folded+="Line ${i} of prose that sits above the cut and pushes the fold past it.
+"; done
+folded+="
+<details><summary>Later</summary>
+
+Folded content.
+
+</details>
+"
+printf '%s' "$folded" >"$WORK/folded.md"
+fold_out="$("$SUBJECT" "$WORK/folded.md" 2>&1 || true)"
+case "$fold_out" in
+*"another fold would not change"*) ok "a fold past the cut is called out as useless" ;;
+*) bad "a fold past the cut is called out as useless" ;;
+esac
+
+early="## Highlights
+
+<details><summary>Early</summary>
+
+Folded right at the top.
+
+</details>
+
+"
+for i in $(seq 1 400); do early+="Line ${i} of prose after an early fold.
+"; done
+printf '%s' "$early" >"$WORK/early.md"
+early_out="$("$SUBJECT" "$WORK/early.md" 2>&1 || true)"
+case "$early_out" in
+*"another fold would not change"*) bad "an early fold is not called useless" ;;
+*) ok "an early fold is not called useless" ;;
 esac
 
 # --- usage and reconciliation ------------------------------------------------
