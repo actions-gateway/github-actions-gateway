@@ -209,6 +209,21 @@ State a default's value only at the site that wires it.
 Everywhere else, say the switch exists and cite that site (or the operator doc that documents it), rather than copying the value into a sentence that can drift.
 When restating is genuinely clearer, treat the sentence like an upstream claim: name the wiring site in the same clause, so the reader can check it and the next editor knows what it depends on.
 
+### A section cross-reference outlives its target without a symptom
+
+Citing a section of a document outside this repo (`the session-worker skill §8`) is an upstream claim wearing a citation's hat, and it is the variant with no visible failure.
+A dead link is at least conspicuous.
+A dead section number is not: the sentence still parses, still reads as authoritative, and simply points at nothing.
+`doc-links` cannot help, because it resolves anchors in files it can see, and a section number inside a globally-installed skill is not one of them.
+
+Measured 2026-08-16 while retiring the local worker skill (#1573).
+Three sentences in `parallel-dispatch.md` cited `dispatch-worker` skill §8 for how a worker addresses the dispatcher.
+Retiring that skill in favour of `session-worker` read as a rename, so the obvious edit was to swap the name in all three and move on.
+The ported skill did keep a §8 carrying the same content, so the digit survived, but nothing in the change would have said otherwise.
+
+So assert the target before trusting the digit, and treat three outcomes as distinct: the section exists with the same content, so keep the number; the content moved, so name the section instead of numbering it; or the content is gone, which is a finding to send upstream rather than three sentences to quietly delete.
+Prefer naming a section over numbering it whenever the target is a document this repo does not gate.
+
 ### In prose
 
 State the claim, then the version and the date, or the run they came from.
