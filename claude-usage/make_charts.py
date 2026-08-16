@@ -1108,8 +1108,14 @@ def chart_velocity_quality():
     days = sorted(git)
     dxs = [dparse(d) for d in days]
 
-    fig, (b1, b2, b3) = plt.subplots(3, 1, figsize=(11, 10.5),
-                                     gridspec_kw=dict(height_ratios=[1, 1, 1], hspace=0.42))
+    # The churn panel is taller than the other two because it is the only one
+    # carrying event labels, and they are long: at equal heights the tallest
+    # ("Opus 5 arrives") ran to 1.08 of the panel and struck the title. Lowering
+    # the anchor instead would drive them through the ratio line, which reaches
+    # 3.4 at the first marker, so the panel gets the room rather than the label
+    # giving it up.
+    fig, (b1, b2, b3) = plt.subplots(3, 1, figsize=(11, 11.0),
+                                     gridspec_kw=dict(height_ratios=[1.5, 1, 1], hspace=0.42))
 
     # --- churn: fix against feat, over a week so the ratio has a denominator ---
     feat = rolling_mean([int(git[d].get("feat") or 0) for d in days])
