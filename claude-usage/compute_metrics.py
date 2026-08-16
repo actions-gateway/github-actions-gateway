@@ -34,6 +34,7 @@ Outputs (all under claude-usage/data/):
     token_metrics.csv   daily input/output/cache tokens + message counts (merge-preserved)
     model_daily.csv     daily per-model headline tokens (merge-preserved)
     session_metrics.csv daily session concurrency (merge-preserved, never estimated)
+    session_kinds.csv   daily sessions and spend split by who opened the session
     git_metrics.csv     daily commits, test count, Go/Markdown/YAML LOC (recomputed)
     summary.json        headline totals, per-model split, HEAD snapshot, provenance
 """
@@ -1118,6 +1119,96 @@ def session_series(host):
     }
 
 
+def session_kind_series(host):
+    """Per-day sessions and spend split by who opened the session.
+
+    Three kinds, keyed ``(date, host, kind)``:
+
+    ``manual``      its first prompt was written by a person.
+    ``dispatched``  its first prompt was a dispatcher brief (``is_authored_prompt``).
+    ``unprompted``  no human prompt at all: resumed, or spawned and never driven.
+
+    The split answers what the concurrency series cannot. Many sessions at once
+    is equally consistent with one person driving them all and with a dispatcher
+    fanning them out, and the two mean opposite things about how the work was
+    done. Which one it was is only visible in who composed the opening.
+
+    Two clocks, deliberately. ``sessions`` counts on the day a session *started*,
+    since a session has one opening and therefore one kind. ``headline`` lands on
+    the day each record was produced, since a session that runs past midnight
+    spends on both days and crediting it all to the opening would move spend to
+    the wrong day. So the columns answer "how many began" and "what was spent",
+    and only the second reconciles with the token series.
+
+    Sessions are walked in start order so the token dedup keeps the earliest
+    holder of a replayed record, matching ``session_series``. Without the
+    ordering, a resumed session could be credited with work it only re-read, and
+    which one won would depend on the filesystem.
+
+    ``kind`` comes from a classifier over prompt text, so a re-run after that
+    classifier changes wants to revise a row *downward* — which the upward-only
+    merge refuses. Same constraint as ``prompt_minutes``: rebuild the file rather
+    than re-running over it.
+    """
+    files = []
+    for d in glob.glob(PROJECTS_GLOB):
+        files += glob.glob(os.path.join(d, "*.jsonl"))
+
+    sessions = []   # (start, kind, start_date, [(date, usage_key, headline)])
+    for f in files:
+        start, kind, spend = None, None, []
+        try:
+            fh = open(f, errors="replace")
+        except OSError:
+            continue
+        with fh:
+            for line in fh:
+                try:
+                    rec = json.loads(line)
+                except ValueError:
+                    continue
+                ts = rec.get("timestamp")
+                if not ts:
+                    continue
+                try:
+                    dt = datetime.fromisoformat(ts.replace("Z", "+00:00"))
+                except ValueError:
+                    continue
+                if start is None or dt < start:
+                    start = dt
+                if kind is None and is_human_prompt(rec):
+                    kind = "manual" if is_authored_prompt(rec) else "dispatched"
+                if rec.get("type") != "assistant":
+                    continue
+                msg = rec.get("message")
+                if not isinstance(msg, dict):
+                    continue
+                u = msg.get("usage")
+                if not isinstance(u, dict):
+                    continue
+                spend.append((dt.date().isoformat(),
+                              (msg.get("id"), rec.get("requestId")),
+                              (u.get("input_tokens", 0) or 0)
+                              + (u.get("output_tokens", 0) or 0)
+                              + (u.get("cache_creation_input_tokens", 0) or 0)))
+        if start is None:
+            continue
+        sessions.append((start, kind or "unprompted", start.date().isoformat(), spend))
+
+    rows = defaultdict(lambda: {"sessions": 0, "headline": 0})
+    seen_usage = set()
+    for start, kind, start_date, spend in sorted(sessions, key=lambda s: s[0]):
+        rows[(start_date, host, kind)]["sessions"] += 1
+        for dk, key, headline in spend:
+            if key != (None, None):
+                if key in seen_usage:
+                    continue
+                seen_usage.add(key)
+            rows[(dk, host, kind)]["headline"] += headline
+
+    return {k: {"date": k[0], "host": k[1], "kind": k[2], **v} for k, v in rows.items()}
+
+
 def sessions_summary(rows):
     """Headline session figures, derived from the persisted bucket counts.
 
@@ -1254,6 +1345,7 @@ def main():
     surv_csv = os.path.join(DATA, "survival_metrics.csv")
     rhythm_csv = os.path.join(DATA, "rhythm_metrics.csv")
     pm_csv = os.path.join(DATA, "prompt_minutes.csv")
+    kind_csv = os.path.join(DATA, "session_kinds.csv")
 
     git_rows = git_series()
     write_csv(git_csv, ["date", "commits", "tests", "go_code", "go_test", "md", "yaml", "scripts",
@@ -1384,6 +1476,23 @@ def main():
     s_out = [s_measured[k] for k in sorted(s_measured)]
     write_csv(sess_csv, skey + snum, s_out)
 
+    # --- session kinds: who opened each session, and what it spent ---
+    knum = ["sessions", "headline"]
+    kkey = ["date", "host", "kind"]
+    k_measured = load_measured(kind_csv, kkey, knum)
+    merge_max_into(k_measured, session_kind_series(host), kkey, knum)
+    write_csv(kind_csv, kkey + knum, [k_measured[k] for k in sorted(k_measured)])
+    k_tot = defaultdict(lambda: {"sessions": 0, "headline": 0})
+    for r in k_measured.values():
+        for c in knum:
+            k_tot[r["kind"]][c] += int(r[c])
+    k_all = sum(v["sessions"] for v in k_tot.values()) or 1
+    k_spend = sum(v["headline"] for v in k_tot.values()) or 1
+    print("session kinds      : " + ", ".join(
+        f"{k} {v['sessions']} ({100 * v['sessions'] / k_all:.0f}%) "
+        f"/ {100 * v['headline'] / k_spend:.0f}% spend"
+        for k, v in sorted(k_tot.items())))
+
     # --- totals: measured vs estimated, summed from the persisted rows ---
     def total(rows, cols):
         return {c: sum(int(r[c]) for r in rows) for c in cols}
@@ -1483,7 +1592,7 @@ def main():
     print(f"headline combined  : {headline(comb):,}")
     print(f"  + cache_read     : {headline(comb) + comb['cache_read']:,}")
     print(f"cache reuse        : {summary['totals']['combined']['cache_reuse_ratio']}x")
-    print(f"wrote {token_csv}, {model_csv}, {git_csv}, {sess_csv}, {pr_csv}, {surv_csv}, {rhythm_csv}, {pm_csv}, summary.json")
+    print(f"wrote {token_csv}, {model_csv}, {git_csv}, {sess_csv}, {pr_csv}, {surv_csv}, {rhythm_csv}, {pm_csv}, {kind_csv}, summary.json")
 
 
 if __name__ == "__main__":

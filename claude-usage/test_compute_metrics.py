@@ -226,6 +226,91 @@ class SessionConcurrency(unittest.TestCase):
         self.assertEqual(cm.session_series("mac-x"), {})
 
 
+class SessionKinds(unittest.TestCase):
+    """The split runs on two clocks and one dedup, and each can go wrong alone."""
+
+    def setUp(self):
+        self._glob = cm.PROJECTS_GLOB
+        self._dir = tempfile.TemporaryDirectory()
+        self.addCleanup(self._dir.cleanup)
+        self.proj = os.path.join(self._dir.name, "proj")
+        os.makedirs(self.proj)
+        cm.PROJECTS_GLOB = os.path.join(self._dir.name, "*")
+
+    def tearDown(self):
+        cm.PROJECTS_GLOB = self._glob
+
+    def prompt(self, ts, text):
+        return {"type": "user", "uuid": text[:8], "timestamp": ts,
+                "origin": {"kind": "human"}, "message": {"content": text}}
+
+    def spend(self, ts, msg_id, tokens):
+        return {"type": "assistant", "uuid": msg_id, "timestamp": ts,
+                "requestId": "r-" + msg_id,
+                "message": {"id": msg_id, "usage": {"input_tokens": tokens}}}
+
+    def write(self, session, records):
+        with open(os.path.join(self.proj, f"{session}.jsonl"), "w") as fh:
+            for r in records:
+                fh.write(json.dumps(r) + "\n")
+
+    def rows(self):
+        return cm.session_kind_series("mac-x")
+
+    def test_the_opening_prompt_decides_the_kind(self):
+        self.write("a", [self.prompt("2026-07-26T09:00:00Z", "fix the flake"),
+                         self.spend("2026-07-26T09:01:00Z", "m1", 100)])
+        self.write("b", [self.prompt("2026-07-26T09:00:00Z",
+                                     "Read `.claude/skills/session-worker/SKILL.md` first."),
+                         self.spend("2026-07-26T09:01:00Z", "m2", 400)])
+        r = self.rows()
+        self.assertEqual(r[("2026-07-26", "mac-x", "manual")]["sessions"], 1)
+        self.assertEqual(r[("2026-07-26", "mac-x", "manual")]["headline"], 100)
+        self.assertEqual(r[("2026-07-26", "mac-x", "dispatched")]["headline"], 400)
+
+    def test_a_session_with_no_human_prompt_is_its_own_kind(self):
+        """Counting these as manual would credit a person with opening them."""
+        self.write("a", [self.spend("2026-07-26T09:00:00Z", "m1", 100)])
+        r = self.rows()
+        self.assertEqual(r[("2026-07-26", "mac-x", "unprompted")]["sessions"], 1)
+        self.assertNotIn(("2026-07-26", "mac-x", "manual"), r)
+
+    def test_spend_lands_on_its_own_day_but_the_session_on_its_first(self):
+        """A session running past midnight spends on both days. Crediting it all to
+        the opening would move spend to a day it was not spent."""
+        self.write("a", [self.prompt("2026-07-26T23:00:00Z", "keep going"),
+                         self.spend("2026-07-26T23:30:00Z", "m1", 100),
+                         self.spend("2026-07-27T00:30:00Z", "m2", 700)])
+        r = self.rows()
+        self.assertEqual(r[("2026-07-26", "mac-x", "manual")]["sessions"], 1)
+        self.assertEqual(r[("2026-07-26", "mac-x", "manual")]["headline"], 100)
+        self.assertEqual(r[("2026-07-27", "mac-x", "manual")]["sessions"], 0)
+        self.assertEqual(r[("2026-07-27", "mac-x", "manual")]["headline"], 700)
+
+    def test_a_replayed_record_is_credited_to_the_earlier_session(self):
+        """A resume replays the earlier session's records verbatim. Counting them
+        again would double the spend, and crediting them to the resuming session
+        would move it to whichever kind resumed."""
+        self.write("early", [self.prompt("2026-07-26T09:00:00Z", "start here"),
+                             self.spend("2026-07-26T09:01:00Z", "m1", 100)])
+        self.write("late", [self.prompt("2026-07-26T14:00:00Z",
+                                        "Read `.claude/skills/dispatch-worker/SKILL.md` first."),
+                            self.spend("2026-07-26T09:01:00Z", "m1", 100),   # replayed
+                            self.spend("2026-07-26T14:01:00Z", "m2", 50)])
+        # The walk order is forced to the wrong one. glob returns directory order,
+        # which is creation order on one filesystem here and alphabetical on
+        # another, so naming the files cannot reliably produce the order that
+        # breaks this — and a test that only fails on some machines is one that
+        # passes on luck on the rest. Handing the resuming session over first is
+        # what makes the missing sort fail here rather than somewhere else.
+        real = cm.glob.glob
+        self.addCleanup(setattr, cm.glob, "glob", real)
+        cm.glob.glob = lambda pat: sorted(real(pat), reverse=True)
+        r = self.rows()
+        self.assertEqual(r[("2026-07-26", "mac-x", "manual")]["headline"], 100)
+        self.assertEqual(r[("2026-07-26", "mac-x", "dispatched")]["headline"], 50)
+
+
 class PullRequestSubjects(unittest.TestCase):
     """``prs`` counts squash merges, which are recognised only by a trailing ``(#N)``.
 

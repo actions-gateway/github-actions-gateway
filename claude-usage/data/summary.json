@@ -48,13 +48,13 @@
   },
   "totals": {
     "measured": {
-      "input": 8417828,
-      "output": 92586452,
-      "cache_creation": 498133501,
-      "cache_read": 27971529695,
-      "assistant_msgs": 133536,
-      "user_msgs": 148708,
-      "headline_input_output_cachecreation": 599137781
+      "input": 8418067,
+      "output": 92647781,
+      "cache_creation": 498594259,
+      "cache_read": 27998087302,
+      "assistant_msgs": 133663,
+      "user_msgs": 148838,
+      "headline_input_output_cachecreation": 599660107
     },
     "estimated": {
       "input": 6559,
@@ -66,14 +66,14 @@
       "headline_input_output_cachecreation": 2494920
     },
     "combined": {
-      "input": 8424387,
-      "output": 93065388,
-      "cache_creation": 500142926,
-      "cache_read": 28039048538,
-      "assistant_msgs": 134278,
-      "user_msgs": 149569,
-      "headline_input_output_cachecreation": 601632701,
-      "grand_total_incl_cache_read": 28640681239,
+      "input": 8424626,
+      "output": 93126717,
+      "cache_creation": 500603684,
+      "cache_read": 28065606145,
+      "assistant_msgs": 134405,
+      "user_msgs": 149699,
+      "headline_input_output_cachecreation": 602155027,
+      "grand_total_incl_cache_read": 28667761172,
       "cache_reuse_ratio": 56.06
     }
   },
@@ -109,9 +109,9 @@
       "messages": 8356
     },
     "Opus 5": {
-      "headline": 295535216,
-      "output": 40392060,
-      "messages": 67608
+      "headline": 296057542,
+      "output": 40453389,
+      "messages": 67735
     }
   },
   "by_host": {
@@ -134,13 +134,13 @@
       "headline_input_output_cachecreation": 300762526
     },
     "mac-2": {
-      "input": 353806,
-      "output": 40624289,
-      "cache_creation": 257397160,
-      "cache_read": 16835138410,
-      "assistant_msgs": 66945,
-      "user_msgs": 74405,
-      "headline_input_output_cachecreation": 298375255
+      "input": 354045,
+      "output": 40685618,
+      "cache_creation": 257857918,
+      "cache_read": 16861696017,
+      "assistant_msgs": 67072,
+      "user_msgs": 74535,
+      "headline_input_output_cachecreation": 298897581
     }
   },
   "sessions": {
@@ -149,11 +149,11 @@
     "last_date": "2026-08-16",
     "session_days": 519,
     "peak_concurrent": 16,
-    "mean_concurrent": 3.01,
-    "hours_using_claude": 219.7,
-    "session_hours": 660.8,
+    "mean_concurrent": 3.0,
+    "hours_using_claude": 220.3,
+    "session_hours": 661.8,
     "parallel_share_pct": 67,
-    "attended_hours": 103.5,
+    "attended_hours": 103.7,
     "attended_share_pct": 47,
     "attended_first_date": "2026-07-26",
     "prompts_note": "attended_hours scales with bucket_minutes and is a scale rather than a measurement; prompt_minutes.csv holds the parameter-free record, from which any bucket width or idle threshold is derivable",
@@ -162,10 +162,10 @@
   "head_snapshot": {
     "go_code": 117768,
     "go_comments": 41575,
-    "markdown_nonblank": 53983,
+    "markdown_nonblank": 54011,
     "yaml_handwritten": 12504,
     "yaml_generated": 131488,
     "tests": 2218,
-    "commits": 2030
+    "commits": 2031
   }
 }

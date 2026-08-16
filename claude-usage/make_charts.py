@@ -1367,7 +1367,117 @@ def chart_lines_vs_words():
     save(fig, "lines_vs_words")
 
 
+KIND_BANDS = [
+    ("manual",     "opened by a person",  OI["blue"],       ""),
+    ("dispatched", "opened by dispatch",  OI["orange"],     "//"),
+    ("unprompted", "no human prompt",     OI["grey"],       ".."),
+]
+
+
+def chart_session_kinds():
+    """Who opened each session, against what each kind spent.
+
+    The concurrency chart cannot answer this. Sixteen sessions at once is equally
+    consistent with one person driving them all and with a dispatcher fanning them
+    out, and the two say opposite things about how the work was done. The opening
+    prompt is the only thing that distinguishes them.
+
+    The two share panels are the finding: the dispatched share of *sessions* runs
+    consistently above its share of *spend*, so dispatch is the smaller half of the
+    work by the measure that costs money. Drawn as shares rather than as tokens per
+    session because a daily ratio is undefined on any day a kind has no sessions,
+    which is most days for dispatch.
+    """
+    rows = load("session_kinds.csv")
+    if not rows:
+        return
+    days = sorted({r["date"] for r in rows})
+    dxs = [dparse(d) for d in days]
+    kinds = [k for k, _, _, _ in KIND_BANDS]
+    sess = {k: {d: 0 for d in days} for k in kinds}
+    spend = {k: {d: 0 for d in days} for k in kinds}
+    for r in rows:
+        k = r["kind"]
+        if k not in sess:
+            continue
+        sess[k][r["date"]] += int(r["sessions"])
+        spend[k][r["date"]] += int(r["headline"])
+
+    fig, (a0, a1, a2) = plt.subplots(3, 1, figsize=(11, 10.5), sharex=True,
+                                     gridspec_kw=dict(height_ratios=[1, 1, 0.85],
+                                                      hspace=0.26))
+
+    for ax, series, ylab, title, scale in (
+            (a0, sess, "sessions started",
+             "Sessions started per day, by who wrote the opening prompt", 1),
+            (a1, spend, "headline tokens (M)",
+             "Tokens spent per day, by the kind of session that spent them", 1e6)):
+        bottom = [0.0] * len(days)
+        for k, label, col, hatch in KIND_BANDS:
+            vals = [series[k][d] / scale for d in days]
+            ax.bar(dxs, vals, width=0.72, bottom=bottom, color=col, alpha=0.75,
+                   edgecolor="white", linewidth=0.4, hatch=hatch, zorder=3,
+                   label=label)
+            bottom = [b + v for b, v in zip(bottom, vals)]
+        ax.set_ylabel(ylab, fontsize=10.5)
+        ax.set_title(title, fontsize=12.5, fontweight="bold", loc="left")
+        ax.grid(axis="y", alpha=0.22)
+
+    # Panel 3: the same split as two shares, which is what makes the gap readable.
+    #
+    # The share is taken over each window's *sums*, not as a mean of daily shares.
+    # A day with no sessions has no share to average, and feeding it in as 0%
+    # would read as "dispatch did nothing that day" when the answer is that
+    # nothing happened at all — a quiet Sunday would drag the line down as hard as
+    # a busy day of purely manual work.
+    def share_trend(series):
+        num = rolling_mean([series["dispatched"][d] for d in days])
+        den = rolling_mean([sum(series[k][d] for k in kinds) for d in days])
+        return [None if n is None or not d else 100 * n / d for n, d in zip(num, den)]
+
+    for vals, col, ls, label in (
+            (share_trend(sess), darken(OI["orange"]), "-", "share of sessions started"),
+            (share_trend(spend), darken(OI["vermillion"]), (0, (5, 2)), "share of tokens spent")):
+        pts = [(x, v) for x, v in zip(dxs, vals) if v is not None]
+        a2.plot([x for x, _ in pts], [v for _, v in pts], color=col, lw=2.6, ls=ls,
+                zorder=5, path_effects=HALO, label=label)
+    a2.set_ylabel("dispatched share (%)", fontsize=10.5)
+    a2.set_title("Dispatch is a larger share of sessions than of spend",
+                 fontsize=12.5, fontweight="bold", loc="left")
+    a2.grid(axis="y", alpha=0.22)
+    a2.legend(loc="upper left", frameon=False, fontsize=9.5)
+
+    for ax in (a0, a1, a2):
+        ax.set_xlim(dxs[0], dxs[-1])
+        for s in ("top", "right"):
+            ax.spines[s].set_visible(False)
+        for ev_date, _, col, ls in event_markers():
+            if dxs[0] <= ev_date <= dxs[-1]:
+                ax.axvline(ev_date, color=col, ls=ls, lw=1.4, zorder=EVENT_Z)
+    # Labelled only where there is room to read one. This window opens within days
+    # of the machine and model markers, so a label at the left edge lands on the y
+    # axis and strikes the ylabel. The line still marks the date; the other charts
+    # carry the text.
+    labels = [event_label(a0, ev, 0.55, lbl, col, yc="axes fraction")
+              for ev, lbl, col, ls in event_markers()
+              if dxs[0] + timedelta(days=3) <= ev <= dxs[-1]]
+    stagger_labels(fig, [t for t in labels if t is not None], 0.11)
+
+    a2.xaxis.set_major_formatter(mdates.DateFormatter("%b %-d"))
+    a2.xaxis.set_major_locator(mdates.DayLocator(interval=2))
+    plt.setp(a2.get_xticklabels(), rotation=45, ha="right", fontsize=8.5)
+    a0.legend(loc="upper left", frameon=False, fontsize=9.5, ncol=3)
+    fig.text(0.012, 0.006,
+             "sessions counted on the day they started; tokens on the day they were spent · "
+             "lines are a 7-day centered mean · covers only days with surviving transcripts, "
+             "about half the project's spend · a session's kind is read from its opening prompt, "
+             "which is a convention the dispatcher follows rather than a marker it emits",
+             fontsize=7.5, color="#999")
+    save(fig, "session_kinds")
+
+
 def main():
+    chart_session_kinds()
     chart_tokens_by_model()
     chart_tokens_per_word()
     chart_tokens_vs_words()

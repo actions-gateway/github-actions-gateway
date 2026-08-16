@@ -321,6 +321,30 @@ And the ceiling on all of it is external, since days given to other projects or 
 Drawing it against the project timeline would show 71 empty days and read as idleness rather than missing data.
 The series is never estimated, for the same reason: unlike token volume, concurrency has no per-commit rate to model it from.
 
+### Who opened each session
+
+![Sessions started per day and tokens spent per day, split into manual, dispatched, and unprompted](charts/session_kinds.png) The concurrency chart above cannot answer this one.
+Sixteen sessions at once is equally consistent with one person driving them all and with a dispatcher fanning them out, and the two say opposite things about how the work was done.
+The only thing that separates them is who composed the opening prompt.
+
+**The parallelism is overwhelmingly hands-on.** Manual sessions are 60% of the count and **73% of the spend**; dispatched sessions are 28% of the count but only **20% of the spend**, at roughly 60% of the tokens per session.
+The remaining 12% opened with no human prompt at all (resumed, or spawned and never driven) and account for 7%.
+So the multiplier is one person running many conversations at once, not a dispatcher running them for him.
+Dispatch is real and useful, and it is the smaller half by the measure that costs money.
+
+The third panel is the finding rather than the totals: the dispatched share of sessions runs above its share of spend on **every one of the 16 days** a full 7-day window fits, not just in aggregate.
+It is drawn as two shares because tokens-per-session is undefined on any day a kind has no sessions, which is most days for dispatch.
+Each share is taken over its window's sums rather than as a mean of daily shares.
+A quiet day has no share to average, and feeding it in as 0% would read as "dispatch did nothing" when the answer is that nothing happened at all.
+
+Two clocks, deliberately: a session is counted on the day it **started**, since it has one opening and therefore one kind, while its tokens land on the day they were **spent**, so a session running past midnight doesn't move spend onto the wrong day.
+
+**Coverage is about half the project.** This needs session-level transcripts, so it starts 2026-07-26 like the concurrency chart, and covers 298.8M of the 601.6M headline total.
+Within its own window it accounts for 97.6% of measured spend; the missing 2.4% is days whose token rows were merge-preserved from sessions whose transcripts have since gone.
+
+**A session's kind is read from its opening prompt, which is a convention rather than a marker.** That convention has already changed once mid-window without notice — see the prompt section above — and the classifier had to be corrected after it did.
+Q883 is deferred on the dispatcher emitting something deliberate to read instead.
+
 ## Data files
 
 All under [`data/`](data/).
@@ -379,6 +403,20 @@ Summing across machines works for the bucket counts and `sessions`, but `peak_co
 
 A resumed session replays earlier records verbatim, which would credit the resuming session with work it only re-read, so each record is attributed to the earliest-starting session holding it.
 Replays are ~3% of records here and shift one day's peak by one.
+
+### `session_kinds.csv` — merge-preserved
+
+Per-day, per-`host`, per-`kind` sessions and spend: `kind` is `manual` (a person wrote the opening prompt), `dispatched` (a dispatcher composed it), or `unprompted` (no human prompt at all).
+
+`sessions` counts on the day a session **started**, since a session has one opening and therefore one kind.
+`headline` lands on the day each record was **produced**, since a session running past midnight spends on both days.
+Only the second column reconciles with `token_metrics.csv`, and only within this file's own shorter window.
+
+Sessions are walked in start order so the token dedup keeps the earliest holder of a replayed record, matching `session_metrics.csv`.
+Without that ordering, whichever session won would depend on the filesystem: `glob` returns directory order, which is creation order on one filesystem here and alphabetical on another.
+
+`kind` comes from a classifier over prompt text, so **a re-run after that classifier changes wants to revise a row downward, which the upward-only merge refuses**.
+Same constraint as `prompt_minutes.csv`: rebuild the file rather than re-running over it.
 
 ### `pr_metrics.csv` — merge-preserved, fetched incrementally
 One row per merged pull request: `number`, `merged_date`, `created_at`, `merged_at`, `cycle_hours`.
