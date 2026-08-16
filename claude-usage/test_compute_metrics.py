@@ -226,5 +226,339 @@ class SessionConcurrency(unittest.TestCase):
         self.assertEqual(cm.session_series("mac-x"), {})
 
 
+class SessionKinds(unittest.TestCase):
+    """The split runs on two clocks and one dedup, and each can go wrong alone."""
+
+    def setUp(self):
+        self._glob = cm.PROJECTS_GLOB
+        self._dir = tempfile.TemporaryDirectory()
+        self.addCleanup(self._dir.cleanup)
+        self.proj = os.path.join(self._dir.name, "proj")
+        os.makedirs(self.proj)
+        cm.PROJECTS_GLOB = os.path.join(self._dir.name, "*")
+
+    def tearDown(self):
+        cm.PROJECTS_GLOB = self._glob
+
+    def prompt(self, ts, text):
+        return {"type": "user", "uuid": text[:8], "timestamp": ts,
+                "origin": {"kind": "human"}, "message": {"content": text}}
+
+    def spend(self, ts, msg_id, tokens):
+        return {"type": "assistant", "uuid": msg_id, "timestamp": ts,
+                "requestId": "r-" + msg_id,
+                "message": {"id": msg_id, "usage": {"input_tokens": tokens}}}
+
+    def write(self, session, records):
+        with open(os.path.join(self.proj, f"{session}.jsonl"), "w") as fh:
+            for r in records:
+                fh.write(json.dumps(r) + "\n")
+
+    def rows(self):
+        return cm.session_kind_series("mac-x")
+
+    def test_the_opening_prompt_decides_the_kind(self):
+        self.write("a", [self.prompt("2026-07-26T09:00:00Z", "fix the flake"),
+                         self.spend("2026-07-26T09:01:00Z", "m1", 100)])
+        self.write("b", [self.prompt("2026-07-26T09:00:00Z",
+                                     "Read `.claude/skills/session-worker/SKILL.md` first."),
+                         self.spend("2026-07-26T09:01:00Z", "m2", 400)])
+        r = self.rows()
+        self.assertEqual(r[("2026-07-26", "mac-x", "manual")]["sessions"], 1)
+        self.assertEqual(r[("2026-07-26", "mac-x", "manual")]["headline"], 100)
+        self.assertEqual(r[("2026-07-26", "mac-x", "dispatched")]["headline"], 400)
+
+    def test_a_session_with_no_human_prompt_is_its_own_kind(self):
+        """Counting these as manual would credit a person with opening them."""
+        self.write("a", [self.spend("2026-07-26T09:00:00Z", "m1", 100)])
+        r = self.rows()
+        self.assertEqual(r[("2026-07-26", "mac-x", "unprompted")]["sessions"], 1)
+        self.assertNotIn(("2026-07-26", "mac-x", "manual"), r)
+
+    def test_spend_lands_on_its_own_day_but_the_session_on_its_first(self):
+        """A session running past midnight spends on both days. Crediting it all to
+        the opening would move spend to a day it was not spent."""
+        self.write("a", [self.prompt("2026-07-26T23:00:00Z", "keep going"),
+                         self.spend("2026-07-26T23:30:00Z", "m1", 100),
+                         self.spend("2026-07-27T00:30:00Z", "m2", 700)])
+        r = self.rows()
+        self.assertEqual(r[("2026-07-26", "mac-x", "manual")]["sessions"], 1)
+        self.assertEqual(r[("2026-07-26", "mac-x", "manual")]["headline"], 100)
+        self.assertEqual(r[("2026-07-27", "mac-x", "manual")]["sessions"], 0)
+        self.assertEqual(r[("2026-07-27", "mac-x", "manual")]["headline"], 700)
+
+    def test_a_replayed_record_is_credited_to_the_earlier_session(self):
+        """A resume replays the earlier session's records verbatim. Counting them
+        again would double the spend, and crediting them to the resuming session
+        would move it to whichever kind resumed."""
+        self.write("early", [self.prompt("2026-07-26T09:00:00Z", "start here"),
+                             self.spend("2026-07-26T09:01:00Z", "m1", 100)])
+        self.write("late", [self.prompt("2026-07-26T14:00:00Z",
+                                        "Read `.claude/skills/dispatch-worker/SKILL.md` first."),
+                            self.spend("2026-07-26T09:01:00Z", "m1", 100),   # replayed
+                            self.spend("2026-07-26T14:01:00Z", "m2", 50)])
+        # The walk order is forced to the wrong one. glob returns directory order,
+        # which is creation order on one filesystem here and alphabetical on
+        # another, so naming the files cannot reliably produce the order that
+        # breaks this — and a test that only fails on some machines is one that
+        # passes on luck on the rest. Handing the resuming session over first is
+        # what makes the missing sort fail here rather than somewhere else.
+        real = cm.glob.glob
+        self.addCleanup(setattr, cm.glob, "glob", real)
+        cm.glob.glob = lambda pat: sorted(real(pat), reverse=True)
+        r = self.rows()
+        self.assertEqual(r[("2026-07-26", "mac-x", "manual")]["headline"], 100)
+        self.assertEqual(r[("2026-07-26", "mac-x", "dispatched")]["headline"], 50)
+
+
+class PullRequestSubjects(unittest.TestCase):
+    """``prs`` counts squash merges, which are recognised only by a trailing ``(#N)``.
+
+    A subject that merely mentions an issue must not count, or the series silently
+    inflates on exactly the commits that talk about PRs rather than being one.
+    """
+
+    def test_a_trailing_reference_is_a_merge(self):
+        for subj in ("fix(agc): stand down a re-run (Q811) (#1515)",
+                     "docs: reflow (#1)"):
+            self.assertTrue(cm.PR_SUBJECT.search(subj), subj)
+
+    def test_a_reference_anywhere_else_is_not(self):
+        for subj in ("fix: revert the change from (#1515) that broke CI",
+                     "docs: explain why #1515 was reverted",
+                     "chore(metrics): refresh the snapshot (mac-2)",
+                     "feat: add a (#) placeholder"):
+            self.assertIsNone(cm.PR_SUBJECT.search(subj), subj)
+
+
+class QueueClosures(unittest.TestCase):
+    """``queue_closed`` counts a row leaving ``docs/STATUS.md``, once per id.
+
+    The walk reads one ``git log -p`` stream, so these drive it through the module's
+    own parser with a captured stream rather than asserting on a live repo, whose
+    history would make the expected counts move under the test.
+    """
+
+    def setUp(self):
+        self._git = cm.git
+
+    def tearDown(self):
+        cm.git = self._git
+
+    def feed(self, stream):
+        cm.git = lambda *a, **k: stream
+        return cm.queue_flow()[0]   # this class asserts on closures only
+
+    def test_a_removed_anchor_closes_on_its_date(self):
+        closed = self.feed(
+            '\x002026-06-01\n+| <a id="Q1"></a>Q1 | x |\n'
+            '\x002026-06-02\n-| <a id="Q1"></a>Q1 | x |\n')
+        self.assertEqual(dict(closed), {"2026-06-02": 1})
+
+    def test_a_row_moved_within_the_file_has_not_closed(self):
+        """Queue -> Deferred rewrites the row in place: gone from one table, present
+        in the other. The anchor is on both sides of the diff, so nothing closed."""
+        closed = self.feed(
+            '\x002026-06-02\n-| <a id="Q2"></a>Q2 | queue |\n+| <a id="Q2"></a>Q2 | deferred |\n')
+        self.assertEqual(dict(closed), {})
+
+    def test_a_refiled_id_cannot_close_twice(self):
+        """Q775's defect: a shipped id re-filed as a new row. Only the first removal
+        counts, so landing both can't book the same work again."""
+        closed = self.feed(
+            '\x002026-06-02\n-| <a id="Q3"></a>Q3 | x |\n'
+            '\x002026-06-05\n+| <a id="Q3"></a>Q3 | refiled |\n'
+            '\x002026-06-09\n-| <a id="Q3"></a>Q3 | refiled |\n')
+        self.assertEqual(dict(closed), {"2026-06-02": 1})
+
+    def test_diff_file_headers_are_not_rows(self):
+        closed = self.feed(
+            '\x002026-06-02\n--- a/docs/STATUS.md\n+++ b/docs/STATUS.md\n'
+            '-| <a id="Q4"></a>Q4 | x |\n')
+        self.assertEqual(dict(closed), {"2026-06-02": 1})
+
+
+class WordCounts(unittest.TestCase):
+    """``grep_word_count`` is the reformat-proof half: same text, unit that a rewrap
+    cannot move."""
+
+    def setUp(self):
+        self._git = cm.git
+
+    def tearDown(self):
+        cm.git = self._git
+
+    def test_a_rewrap_leaves_the_word_count_alone(self):
+        wrapped = "the quick brown\nfox jumps over\nthe lazy dog\n"
+        unwrapped = "the quick brown fox jumps over the lazy dog\n"
+        cm.git = lambda *a, **k: wrapped
+        before = cm.grep_word_count("rev", "x", ["*.md"])
+        cm.git = lambda *a, **k: unwrapped
+        after = cm.grep_word_count("rev", "x", ["*.md"])
+        self.assertEqual(before, after)
+        self.assertEqual(before, 9)
+        self.assertNotEqual(len(wrapped.splitlines()), len(unwrapped.splitlines()))
+
+
+class QueueFlow(unittest.TestCase):
+    """Both directions come from one walk, and a moved row is neither."""
+
+    def setUp(self):
+        self._git = cm.git
+
+    def tearDown(self):
+        cm.git = self._git
+
+    def feed(self, stream):
+        cm.git = lambda *a, **k: stream
+        return cm.queue_flow()
+
+    def test_added_is_filed_and_removed_is_closed(self):
+        closed, filed = self.feed(
+            '\x002026-06-01\n+| <a id="Q1"></a>Q1 | x |\n'
+            '\x002026-06-02\n-| <a id="Q1"></a>Q1 | x |\n')
+        self.assertEqual((dict(filed), dict(closed)),
+                         ({"2026-06-01": 1}, {"2026-06-02": 1}))
+
+    def test_a_moved_row_is_neither_filed_nor_closed(self):
+        closed, filed = self.feed(
+            '\x002026-06-02\n-| <a id="Q2"></a>Q2 | queue |\n+| <a id="Q2"></a>Q2 | deferred |\n')
+        self.assertEqual((dict(filed), dict(closed)), ({}, {}))
+
+
+class ConventionalSubjects(unittest.TestCase):
+    """The churn ratio counts commit types, so the type has to be the subject's."""
+
+    def test_types_are_read_from_the_prefix(self):
+        for subj, want in (("feat(agc): add a thing", "feat"),
+                           ("fix: repair it", "fix"),
+                           ("docs(metrics): explain", "docs")):
+            m = cm.CONVENTIONAL.match(subj)
+            self.assertIsNotNone(m, subj)
+            self.assertEqual(m.group(1), want)
+
+    def test_a_type_named_mid_subject_is_not_the_type(self):
+        m = cm.CONVENTIONAL.match("docs: why we fix: things")
+        self.assertEqual(m.group(1), "docs")
+
+
+class AuthoredPrompts(unittest.TestCase):
+    """Both dispatcher opening shapes are machine-composed, and the second one is
+    why the split is a set of tests rather than one prefix."""
+
+    def rec(self, text, kind="human"):
+        return {"type": "user", "timestamp": "2026-08-10T00:00:00Z",
+                "origin": {"kind": kind}, "message": {"content": text}}
+
+    def test_a_message_from_another_session_is_not_a_prompt(self):
+        """A peer session's message carries origin.kind == "human" because it
+        enters the conversation the way a typed prompt does. Nobody typed it, so
+        counting it as presence is wrong."""
+        for text in ('<cross-session-message from="uds:/tmp/cc-socks/1.sock">hi</cross-session-message>',
+                     "<cross-session-message>hi</cross-session-message>"):
+            self.assertFalse(cm.is_human_prompt(self.rec(text)), text)
+
+    def test_a_prompt_that_merely_names_the_tag_still_counts(self):
+        """The strip is a prefix test, so a person asking about the tag is a
+        prompt. Guards the other direction of the rule above."""
+        self.assertTrue(cm.is_human_prompt(
+            self.rec("what does <cross-session-message> actually mean?")))
+
+    def test_every_stripped_prefix_is_matched_as_written(self):
+        """A tag carrying attributes is never matched by a prefix ending in '>'.
+        This is why <local-command and <cross-session-message are open-ended, and
+        the assertion exists so a later addition does not quietly close one."""
+        for prefix in cm.NOT_A_PROMPT:
+            opened = prefix[:-1] if prefix.endswith(">") else prefix
+            with_attrs = self.rec(opened + ' from="x">body')
+            if prefix.endswith(">"):
+                continue          # tags known to arrive bare
+            self.assertFalse(cm.is_human_prompt(with_attrs), prefix)
+
+    def test_a_persona_opening_is_not_authored(self):
+        r = self.rec("You are a worker session in a parallel-dispatch run. ...")
+        self.assertTrue(cm.is_human_prompt(r))
+        self.assertFalse(cm.is_authored_prompt(r))
+
+    def test_a_prose_opening_naming_the_worker_skill_is_not_authored(self):
+        for skill in cm.WORKER_SKILLS:
+            r = self.rec("Work Q741 from the Queue in docs/STATUS.md. Read "
+                         "`.claude/skills/%s/SKILL.md` first for the worker "
+                         "contract." % skill)
+            self.assertFalse(cm.is_authored_prompt(r), skill)
+
+    def test_a_prose_opening_is_still_presence(self):
+        r = self.rec("Read `.claude/skills/session-worker/SKILL.md` first.")
+        self.assertTrue(cm.is_human_prompt(r),
+                        "accepting a chip is a keystroke, so it counts as presence")
+
+    def test_an_ordinary_prompt_is_authored(self):
+        for text in ("update the claude usage metrics",
+                     "Work Q741 from the Queue in docs/STATUS.md.",
+                     "the worker contract is fine, ship it"):
+            self.assertTrue(cm.is_authored_prompt(self.rec(text)), text)
+
+    def test_the_persona_prefix_misfiles_a_prompt_that_opens_that_way(self):
+        # Known and accepted: the prefix is broad, and the era it covers is closed
+        # (unused since 2026-08-04), so tightening it would only re-cut history.
+        self.assertFalse(cm.is_authored_prompt(self.rec("You are right, drop it.")))
+
+    def test_a_renamed_skill_leaves_the_older_name_classified(self):
+        self.assertIn("dispatch-worker", cm.WORKER_SKILLS)
+        self.assertIn("session-worker", cm.WORKER_SKILLS)
+        old = "Read `.claude/skills/dispatch-worker/SKILL.md` first."
+        self.assertFalse(cm.is_authored_prompt(self.rec(old)))
+
+
+class PullRequestFetch(unittest.TestCase):
+    """The fetch must fail soft, and must never re-ask for what it already holds."""
+
+    def setUp(self):
+        self._run = cm.subprocess.run
+
+    def tearDown(self):
+        cm.subprocess.run = self._run
+
+    def test_a_budget_under_the_floor_skips_the_fetch(self):
+        calls = []
+
+        class R:
+            stdout = str(cm.PR_RATE_FLOOR - 1)
+
+        def fake(cmd, *a, **k):
+            calls.append(cmd)
+            return R()
+
+        cm.subprocess.run = fake
+        self.assertEqual(cm.pr_series(0), {})
+        self.assertEqual(len(calls), 1, "must not call gh pr list after skipping")
+
+    def test_a_broken_gh_leaves_the_caller_empty_handed(self):
+        def fake(cmd, *a, **k):
+            raise OSError("no gh")
+        cm.subprocess.run = fake
+        self.assertEqual(cm.pr_series(0), {})
+
+    def test_rows_at_or_below_the_high_water_mark_are_not_refetched(self):
+        class R:
+            def __init__(self, out):
+                self.stdout = out
+
+        def fake(cmd, *a, **k):
+            if "rate_limit" in cmd:
+                return R("5000")
+            return R(json.dumps([
+                {"number": 7, "createdAt": "2026-08-01T00:00:00Z",
+                 "mergedAt": "2026-08-01T02:00:00Z"},
+                {"number": 5, "createdAt": "2026-07-01T00:00:00Z",
+                 "mergedAt": "2026-07-01T01:00:00Z"},
+            ]))
+
+        cm.subprocess.run = fake
+        got = cm.pr_series(5)
+        self.assertEqual(list(got), [7])
+        self.assertEqual(got[7]["cycle_hours"], "2.0000")
+
+
 if __name__ == "__main__":
     unittest.main()

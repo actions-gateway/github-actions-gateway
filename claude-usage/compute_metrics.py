@@ -34,6 +34,7 @@ Outputs (all under claude-usage/data/):
     token_metrics.csv   daily input/output/cache tokens + message counts (merge-preserved)
     model_daily.csv     daily per-model headline tokens (merge-preserved)
     session_metrics.csv daily session concurrency (merge-preserved, never estimated)
+    session_kinds.csv   daily sessions and spend split by who opened the session
     git_metrics.csv     daily commits, test count, Go/Markdown/YAML LOC (recomputed)
     summary.json        headline totals, per-model split, HEAD snapshot, provenance
 """
@@ -42,9 +43,10 @@ import csv
 import glob
 import json
 import os
+import re
 import subprocess
 from collections import defaultdict
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 DATA = os.path.join(HERE, "data")
@@ -281,6 +283,35 @@ def grep_count(rev, pattern, paths):
     return total
 
 
+def grep_word_count(rev, pattern, paths):
+    """Whitespace-separated words across matching lines at a revision.
+
+    The reformat-proof half of the lines series: rewrapping a paragraph moves
+    every line count that spans it and leaves the word count identical, so a
+    ratio built on words survives a reflow that a per-line ratio cannot.
+    ``-h`` drops the ``rev:path:`` prefix so it isn't counted as content.
+    """
+    out = git("grep", "-h", "-E", pattern, rev, "--", *paths)
+    return sum(len(ln.split()) for ln in out.splitlines())
+
+
+def grep_words_per_file(rev, pattern, paths):
+    """Word counts as a ``{path: words}`` map, so a path filter can be applied.
+
+    The YAML band needs this: ``grep_word_count`` over every ``*.yaml`` sums the
+    generated CRDs too, which the line series drops. Counting them would dilute
+    the cost ratio with output nobody authored.
+    """
+    out = git("grep", "-E", pattern, rev, "--", *paths)
+    counts = {}
+    for ln in out.splitlines():
+        parts = ln.split(":", 2)  # rev:path:content
+        if len(parts) < 3:
+            continue
+        counts[parts[1]] = counts.get(parts[1], 0) + len(parts[2].split())
+    return counts
+
+
 def grep_lines_per_file(rev, pattern, paths):
     """``git grep -c`` line counts as a ``{path: count}`` map at a revision."""
     out = git("grep", "-c", "-E", pattern, rev, "--", *paths)
@@ -302,6 +333,347 @@ def grep_files_matching(rev, pattern, paths):
     return {ln.split(":", 1)[1] for ln in out.splitlines() if ":" in ln}
 
 
+PR_SUBJECT = re.compile(r"\(#\d+\)$")  # the squash-merge signature this repo lands with
+CONVENTIONAL = re.compile(r"^(\w+)[(:]")   # the type in a Conventional Commits subject
+
+
+def queue_flow():
+    """``(closed, filed)`` maps of ``{date: count}`` for rows leaving and entering.
+
+    Closures alone cannot tell progress from treading water: this project closed
+    15 rows a day in its busiest stretch while filing 20, so the backlog grew.
+    Both directions are counted from one walk.
+
+    A row's anchor disappearing is work shipped in the common case, and a decline
+    or a prune in the rest — a work proxy, not a completion ledger. Only a Q-id's
+    *first* removal counts, so a row re-filed under a shipped id (the defect Q775
+    describes) can't book the same work twice.
+
+    One ``git log -p`` walk, not a ``git show`` per revision: that file has over a
+    thousand revisions and the per-revision form takes ~40 s.
+    """
+    out = git("log", "--reverse", "--format=%x00%ad", "--date=short",
+              "-p", "--", "docs/STATUS.md")
+    anchor = re.compile(r'id="(Q\d+)"')
+    closed, filed = defaultdict(int), defaultdict(int)
+    seen_closed, seen_filed, date = set(), set(), None
+    removed, added = set(), set()
+
+    def flush():
+        # An anchor on both sides moved within the file (Queue -> Deferred); only
+        # one gone from the revision entirely has closed, and only one that was not
+        # there before has been filed.
+        for q in removed - added:
+            if q not in seen_closed:
+                seen_closed.add(q)
+                closed[date] += 1
+        for q in added - removed:
+            if q not in seen_filed:
+                seen_filed.add(q)
+                filed[date] += 1
+        removed.clear()
+        added.clear()
+
+    for ln in out.splitlines():
+        if ln.startswith("\x00"):
+            if date:
+                flush()
+            date = ln[1:]
+        elif ln.startswith("-") and not ln.startswith("---"):
+            removed.update(anchor.findall(ln))
+        elif ln.startswith("+") and not ln.startswith("+++"):
+            added.update(anchor.findall(ln))
+    if date:
+        flush()
+    return closed, filed
+
+
+# Bounds on the pull-request fetch. Measured 2026-08-15: one 100-PR page costs 3
+# GraphQL points against a 5,000/hour budget, so a full 1,521-PR backfill is ~48
+# and an incremental run is 3. The floor still exists because this budget is
+# shared with every other tool on the account, and the page cap keeps a bug from
+# walking the whole repo history on every run.
+PR_RATE_FLOOR = 500
+PR_PAGE = 200
+PR_BACKFILL = 3000
+
+
+def pr_series(existing_max):
+    """Merged pull requests newer than ``existing_max``, as ``{number: row}``.
+
+    Returns ``{}`` and leaves the caller's data alone whenever the fetch cannot be
+    trusted: no ``gh``, no network, an API error, or a rate budget too low to
+    spend. Every other series is computed from git and transcripts, so a failure
+    here costs this one column and never the run.
+
+    A merged PR's timestamps never change, so rows are immutable once written and
+    the merge is an insert rather than the upward-only maximum the token series
+    needs.
+    """
+    try:
+        out = subprocess.run(
+            ["gh", "api", "rate_limit", "--jq", ".resources.graphql.remaining"],
+            capture_output=True, text=True, timeout=30)
+        remaining = int((out.stdout or "0").strip())
+    except (OSError, ValueError, subprocess.SubprocessError):
+        return {}
+    if remaining < PR_RATE_FLOOR:
+        print(f"pr_series: skipped, graphql budget {remaining} below floor {PR_RATE_FLOOR}")
+        return {}
+
+    limit = PR_BACKFILL if existing_max == 0 else PR_PAGE
+    try:
+        out = subprocess.run(
+            ["gh", "pr", "list", "--state", "merged", "--limit", str(limit),
+             "--json", "number,createdAt,mergedAt"],
+            capture_output=True, text=True, timeout=300, cwd=REPO)
+        rows = json.loads(out.stdout or "[]")
+    except (OSError, ValueError, subprocess.SubprocessError):
+        return {}
+
+    fresh = {}
+    for r in rows:
+        n = int(r["number"])
+        if n <= existing_max or not r.get("mergedAt"):
+            continue
+        try:
+            a = datetime.fromisoformat(r["createdAt"].replace("Z", "+00:00"))
+            b = datetime.fromisoformat(r["mergedAt"].replace("Z", "+00:00"))
+        except (ValueError, AttributeError):
+            continue
+        fresh[n] = {
+            "number": n,
+            "merged_date": r["mergedAt"][:10],
+            "created_at": r["createdAt"],
+            "merged_at": r["mergedAt"],
+            "cycle_hours": f"{(b - a).total_seconds() / 3600:.4f}",
+        }
+    # Every row on the page was new, so the gap is wider than one page. Say so
+    # rather than silently recording a hole the next run cannot detect.
+    if fresh and len(fresh) == len(rows) and existing_max:
+        print(f"pr_series: {len(fresh)} new PRs filled a full page; re-run to catch any older gap")
+    return fresh
+
+
+# How long after a week closes its survival is judged. Fixed horizon rather than
+# survival-to-HEAD so every week is measured over the same window and is therefore
+# comparable, and so a week's value is final once the horizon passes and can be
+# stored instead of recomputed.
+SURVIVAL_HORIZON_DAYS = 14
+
+
+def survival_series(existing_weeks):
+    """``{week_start: row}`` of code that outlived its first fortnight.
+
+    For each 7-day bin, what fraction of the Go lines written in it were still
+    present ``SURVIVAL_HORIZON_DAYS`` later. Volume says how much was produced;
+    this says how much of it was still standing two weeks on.
+
+    Restricted to non-test Go, the output whose churn the ratio is about: docs and
+    YAML move for reasons (a reflow, a regenerated CRD) that have nothing to do
+    with whether the work held up.
+
+    Weeks already in ``existing_weeks`` are skipped, and a week whose horizon is
+    still in the future is left alone until it is final.
+    """
+    log = git("log", "--reverse", "--format=%H|%ad", "--date=short").splitlines()
+    days = []
+    for ln in log:
+        if "|" in ln:
+            days.append(ln.split("|", 1))
+    if not days:
+        return {}
+    start = datetime.strptime(days[0][1], "%Y-%m-%d").date()
+    today = datetime.strptime(days[-1][1], "%Y-%m-%d").date()
+
+    added_by_week = {}
+    stat = git("log", "--reverse", "--format=%x00%ad", "--date=short", "--numstat",
+               "--", "*.go", ":!vendor/**", ":!**/vendor/**", ":!*_test.go")
+    cur = None
+    for ln in stat.splitlines():
+        if ln.startswith("\x00"):
+            d = datetime.strptime(ln[1:], "%Y-%m-%d").date()
+            cur = (start + timedelta(days=7 * ((d - start).days // 7))).isoformat()
+        elif cur and ln and ln[0].isdigit():
+            parts = ln.split("\t")
+            if len(parts) == 3 and parts[0].isdigit():
+                added_by_week[cur] = added_by_week.get(cur, 0) + int(parts[0])
+
+    rows = {}
+    week = 0
+    while True:
+        w0 = start + timedelta(days=7 * week)
+        w1 = w0 + timedelta(days=6)
+        horizon = w1 + timedelta(days=SURVIVAL_HORIZON_DAYS)
+        if w0 > today:
+            break
+        week += 1
+        key = w0.isoformat()
+        if key in existing_weeks or horizon > today:
+            continue
+        # Lines of non-test Go added during the week, bucketed by AUTHOR date.
+        # `--since/--until` filter on commit date, and this repo rebases constantly,
+        # so a commit authored in one week is frequently committed in the next. Blame
+        # reports author-time, so selecting on commit date would compare two clocks
+        # and report survivors the week never wrote.
+        added = added_by_week.get(key, 0)
+        if not added:
+            continue
+        # The tree as it stood at the horizon, blamed and bucketed by the date the
+        # line was introduced.
+        rev = git("rev-list", "-1", f"--before={horizon} 23:59:59", "HEAD").strip()
+        if not rev:
+            continue
+        files = git("ls-tree", "-r", "--name-only", rev, "--").splitlines()
+        survived = 0
+        for f in files:
+            if not f.endswith(".go") or f.endswith("_test.go") or "vendor/" in f:
+                continue
+            for bl in git("blame", "--line-porcelain", rev, "--", f).splitlines():
+                if bl.startswith("author-time "):
+                    d = datetime.utcfromtimestamp(int(bl.split()[1])).date()
+                    if w0 <= d <= w1:
+                        survived += 1
+        rows[key] = {
+            "week_start": key,
+            "added": added,
+            "survived": survived,
+            "horizon_days": SURVIVAL_HORIZON_DAYS,
+            # Not clamped: a rate above 1 would mean the two sides disagree, and
+            # capping it would hide exactly the defect worth seeing.
+            "rate": f"{survived / added:.4f}",
+        }
+    return rows
+
+
+def local_offset():
+    """The repo's usual UTC offset, in hours, from git author timestamps.
+
+    Derived rather than configured: a day-of-week or hour-of-day view keyed on UTC
+    puts an evening in one zone onto the next day, and this project's work runs
+    late. Taking the commonest offset in the history follows the machine if it
+    moves, and needs no setting anyone can forget.
+    """
+    seen = defaultdict(int)
+    for ln in git("log", "--format=%ad", "--date=format:%z").splitlines():
+        ln = ln.strip()
+        if len(ln) == 5 and ln[0] in "+-":
+            seen[ln] += 1
+    if not seen:
+        return 0
+    best = max(seen, key=seen.get)
+    return (1 if best[0] == "+" else -1) * (int(best[1:3]) + int(best[3:5]) / 60)
+
+
+def rhythm_series(offset_hours):
+    """Per weekday and per local hour, what the project does in it.
+
+    Two questions the daily series cannot answer: which days the work lands on,
+    and which hours. Both are aggregates over the whole span rather than a time
+    series, so they get their own table keyed ``(dim, bucket)``.
+
+    Everything is bucketed in local time. Every transcript timestamp is UTC and
+    this project works evenings, so a UTC key would move most of a night's work
+    onto the following day and flatten exactly the pattern being looked for.
+    """
+    tz = timezone(timedelta(hours=offset_hours))
+    rows = {}
+
+    def cell(dim, bucket):
+        return rows.setdefault((dim, bucket), {
+            "dim": dim, "bucket": bucket, "days": 0, "commits": 0, "prs": 0,
+            "feat": 0, "fix": 0, "tokens": 0, "attended_buckets": 0,
+            "active_buckets": 0,
+        })
+
+    # git: commits and their conventional type, by author time
+    dates_seen = defaultdict(set)
+    for ln in git("log", "--format=%ad|%s", "--date=format:%Y-%m-%d %u %H").splitlines():
+        stamp, _, subj = ln.partition("|")
+        parts = stamp.split()
+        if len(parts) != 3:
+            continue
+        d, u, h = parts
+        for dim, b in (("weekday", int(u) - 1), ("hour", int(h))):
+            c = cell(dim, b)
+            c["commits"] += 1
+            dates_seen[(dim, b)].add(d)
+            m = CONVENTIONAL.match(subj.strip())
+            if m and m.group(1) in ("feat", "fix"):
+                c[m.group(1)] += 1
+    for k, ds in dates_seen.items():
+        rows[k]["days"] = len(ds)
+
+    # pull requests: merged when, and how long one opened in this hour waited
+    try:
+        with open(os.path.join(DATA, "pr_metrics.csv")) as fh:
+            for r in csv.DictReader(fh):
+                try:
+                    op = datetime.fromisoformat(r["created_at"].replace("Z", "+00:00")).astimezone(tz)
+                    mg = datetime.fromisoformat(r["merged_at"].replace("Z", "+00:00")).astimezone(tz)
+                    hrs = float(r["cycle_hours"])
+                except (ValueError, KeyError):
+                    continue
+                for dim, b in (("weekday", mg.weekday()), ("hour", mg.hour)):
+                    cell(dim, b)["prs"] += 1
+                # Wait times are NOT aggregated here. They are heavily skewed, so a
+                # stored sum and count can only yield a mean, and the mean says the
+                # opposite of the truth: PRs opened at 05:00 average 19h and have a
+                # median of 0.32h, the fastest of any hour, because a handful waited
+                # days. The charts read pr_metrics.csv and take percentiles.
+                del op, hrs
+    except OSError:
+        pass
+
+    # transcripts: spend, and whether a person was there
+    files = []
+    for d in glob.glob(PROJECTS_GLOB):
+        files += glob.glob(os.path.join(d, "*.jsonl"))
+    seen_msg = set()
+    active = defaultdict(set)
+    attended = defaultdict(set)
+    for f in files:
+        try:
+            fh = open(f, errors="replace")
+        except OSError:
+            continue
+        with fh:
+            for line in fh:
+                try:
+                    rec = json.loads(line)
+                except ValueError:
+                    continue
+                ts = rec.get("timestamp")
+                if not ts:
+                    continue
+                try:
+                    dt = datetime.fromisoformat(ts.replace("Z", "+00:00")).astimezone(tz)
+                except ValueError:
+                    continue
+                b10 = dt.replace(minute=(dt.minute // SESSION_BUCKET_MIN) * SESSION_BUCKET_MIN,
+                                 second=0, microsecond=0)
+                for dim, b in (("weekday", dt.weekday()), ("hour", dt.hour)):
+                    active[(dim, b)].add(b10)
+                    if is_human_prompt(rec):
+                        attended[(dim, b)].add(b10)
+                if rec.get("type") == "assistant":
+                    m = rec.get("message") or {}
+                    key = (m.get("id"), rec.get("requestId"))
+                    if key in seen_msg:
+                        continue
+                    seen_msg.add(key)
+                    u = m.get("usage") or {}
+                    for dim, b in (("weekday", dt.weekday()), ("hour", dt.hour)):
+                        cell(dim, b)["tokens"] += (u.get("input_tokens", 0)
+                                                   + u.get("output_tokens", 0)
+                                                   + u.get("cache_creation_input_tokens", 0))
+    for k, v in active.items():
+        cell(*k)["active_buckets"] = len(v)
+    for k, v in attended.items():
+        cell(*k)["attended_buckets"] = len(v)
+    return rows
+
+
 def git_series():
     """Per-day cumulative commits, test count, and authored LOC at each day's last commit.
 
@@ -309,21 +681,50 @@ def git_series():
     non-blank Markdown; ``yaml`` is non-blank *hand-written* YAML — generated YAML
     (CRDs and other controller-gen output) is excluded with the same heuristic the
     HEAD snapshot uses, so it isn't credited as authored output.
+
+    ``prs`` and ``queue_closed`` are cumulative like the rest. ``active_hours`` is
+    not: it is the count of distinct clock hours that day with a commit landing in
+    them, a per-day quantity that means nothing accumulated. It says when work was
+    landing across the whole project, including the era whose transcripts are gone.
+
+    It is not hours worked. Sessions sometimes run unattended and keep committing
+    with nobody watching, and merges get cleared in bulk, so the spread of the day
+    this covers is a property of the system rather than of anyone's presence, and
+    the attended share of it varies with what kind of work is in flight.
     """
     rows = {}
-    log = git("log", "--reverse", "--format=%H|%ad", "--date=short").splitlines()
+    log = git("log", "--reverse", "--format=%H|%ad|%s",
+              "--date=format:%Y-%m-%d %H").splitlines()
     day_commits = defaultdict(int)
+    day_prs = defaultdict(int)
+    day_hours = defaultdict(set)
+    day_kind = defaultdict(lambda: defaultdict(int))
     last_hash = {}
     for ln in log:
         if "|" not in ln:
             continue
-        h, d = ln.split("|", 1)
+        h, stamp, subj = ln.split("|", 2)
+        d, _, hour = stamp.partition(" ")
         day_commits[d] += 1
+        day_hours[d].add(hour)
+        if PR_SUBJECT.search(subj.strip()):
+            day_prs[d] += 1
+        m = CONVENTIONAL.match(subj.strip())
+        if m and m.group(1) in ("feat", "fix"):
+            day_kind[d][m.group(1)] += 1
         last_hash[d] = h  # --reverse => last write wins => latest commit that day
+
+    closures, filings = queue_flow()
+    cum_prs = 0
+    cum_closed = 0
+    cum_filed = 0
 
     cum = 0
     for d in sorted(day_commits):
         cum += day_commits[d]
+        cum_prs += day_prs[d]
+        cum_closed += closures.get(d, 0)
+        cum_filed += filings.get(d, 0)
         rev = last_hash[d]
         nonblank = grep_count(rev, "[^[:space:]]", GO_PATHS)
         line_comments = grep_count(rev, "^[[:space:]]*//", GO_PATHS)
@@ -334,6 +735,12 @@ def git_series():
         generated = grep_files_matching(rev, "code generated|controller-gen", YAML_PATHS)
         yaml_hand = sum(c for p, c in yaml_counts.items()
                         if p not in generated and "/crd/" not in p)
+        go_w = grep_word_count(rev, "[^[:space:]]", GO_PATHS)
+        md_w = grep_word_count(rev, "[^[:space:]]", MD_PATHS)
+        yaml_words_per_file = grep_words_per_file(rev, "[^[:space:]]", YAML_PATHS)
+        yaml_w = sum(c for p, c in yaml_words_per_file.items()
+                     if p not in generated and "/crd/" not in p)
+        scripts_w = grep_word_count(rev, "[^[:space:]]", SCRIPT_PATHS)
         rows[d] = {
             "date": d,
             "commits": cum,
@@ -343,6 +750,25 @@ def git_series():
             "md": md,
             "yaml": yaml_hand,
             "scripts": grep_count(rev, "[^[:space:]]", SCRIPT_PATHS),  # shell/python/web/build
+            "prs": cum_prs,
+            "queue_closed": cum_closed,
+            "queue_filed": cum_filed,
+            "active_hours": len(day_hours[d]),  # per-day, not cumulative
+            # Also per-day: the churn signal. Coarse in two directions that do not
+            # cancel predictably, since a `fix` may repair something ancient and
+            # more gates catch more defects without more existing.
+            "feat": day_kind[d]["feat"],
+            "fix": day_kind[d]["fix"],
+            # The reformat-proof twins of the line counts, per band so the cost
+            # ratio's denominator can be decomposed the same way. Every one counts
+            # non-blank words including comments, so `words` is not `go_code + md +
+            # yaml + scripts` in another unit — it is the same corpus with nothing
+            # subtracted.
+            "go_words": go_w,
+            "md_words": md_w,
+            "yaml_words": yaml_w,
+            "scripts_words": scripts_w,
+            "words": go_w + md_w + yaml_w + scripts_w,
         }
     return rows
 
@@ -444,6 +870,170 @@ def is_estimated(row):
     return str(row.get("estimated", "0")) in ("1", "true", "True")
 
 
+# Text that arrives as a user record carrying ``origin.kind == "human"`` without a
+# human having typed anything: a bash line and its output, a slash command's
+# expansion, an injected reminder, a message from another session. Q687's
+# predicate, in code.
+#
+# Three of these are observed here (``<system-reminder>`` 44, ``<bash-input>`` 19,
+# ``<create-pr-command>`` 6) and the rest are defensive. ``<cross-session-message>``
+# is the one that was missing: a peer session's message is not a keystroke, and 8
+# were being counted as prompts a person submitted.
+# Prefixes are matched literally, so a tag that carries attributes must be listed
+# without its closing bracket: a peer message opens ``<cross-session-message
+# from="uds:...">``, which ``<cross-session-message>`` never matches. Same reason
+# ``<local-command`` is written open-ended.
+NOT_A_PROMPT = ("<bash-input>", "<bash-stdout>", "<bash-stderr>", "<create-pr-command>",
+                "<system-reminder>", "<command-name>", "<local-command",
+                "<cross-session-message")
+
+
+def record_text(rec):
+    """The text of a user record, whether it arrived as a string or as blocks."""
+    c = (rec.get("message") or {}).get("content")
+    if isinstance(c, str):
+        return c
+    if isinstance(c, list):
+        return " ".join(b.get("text", "") for b in c if isinstance(b, dict))
+    return ""
+
+
+def is_human_prompt(rec):
+    """True when a person actually typed this.
+
+    The only unambiguous presence signal in the transcripts. Everything else the
+    session series counts, including every assistant record, is produced whether
+    or not anyone is watching, so a bucket holding one of these is the one kind
+    that says somebody was at the keyboard.
+
+    ``origin.kind`` alone is not enough: four classes carry it without a person
+    typing, which is why they are stripped rather than trusted.
+    """
+    if rec.get("type") != "user" or not rec.get("timestamp"):
+        return False
+    if (rec.get("origin") or {}).get("kind") != "human":
+        return False
+    return not record_text(rec).lstrip().startswith(NOT_A_PROMPT)
+
+
+# A session opened by the dispatcher starts with a brief it composed rather than
+# anything a person wrote. Two shapes exist, because the convention changed:
+#
+#   2026-07-27 .. 08-04   a second-person persona brief, 97 openings, median
+#                         5,058 chars. A closed set: unused since 08-04.
+#   2026-08-08 ..         prose pointing the session at the worker skill, 21
+#                         openings, median 2,746 chars, no persona line at all.
+#
+# The persona test alone therefore stopped classifying anything on 08-04 and put
+# 21 later dispatches in the authored bucket, which is the silent-drift failure
+# its own comment predicted. Detected on opening rather than on length: 42
+# genuinely authored prompts here run past 2,000 characters.
+#
+# The skill-name half is deliberately a set, not a literal, because the skill was
+# renamed (``dispatch-worker`` -> ``session-worker``, karlkfi/claude-skills #45).
+# A further rename appends a name and leaves the history classified. Both shapes
+# remain conventions rather than contracts; Q883 is deferred on the dispatcher
+# emitting a deliberate marker to read instead.
+MACHINE_PERSONA = "You are "
+WORKER_SKILLS = ("dispatch-worker", "session-worker")
+MACHINE_BRIEF = re.compile(
+    r"skills/(?:%s)/SKILL\.md|for the worker contract"
+    % "|".join(re.escape(s) for s in WORKER_SKILLS))
+
+
+def is_authored_prompt(rec):
+    """A human prompt that is not a dispatcher-composed session opening.
+
+    Distinct from ``is_human_prompt``, which asks whether a person was *there*.
+    Both are wanted, for different questions. Accepting a dispatch chip is a
+    keystroke and counts as presence, but the brief arriving with it was written
+    by the dispatcher, so counting its characters as authored would be wrong.
+
+    It does **not** mean typed. A pasted hook hint, a pasted log, a pasted error
+    are all indistinguishable from typing in a transcript, which carries only the
+    submitted text and one timestamp. So this separates machine-composed openings
+    from everything else, and everything else still mixes writing with pasting.
+
+    Nothing here keys on a prompt's position in its session, so an authored
+    prompt discussing the worker skill by path would be misfiled. Measured at
+    zero across 1,428 human prompts: every match is its session's first.
+    """
+    if not is_human_prompt(rec):
+        return False
+    text = record_text(rec).lstrip()
+    return not (text.startswith(MACHINE_PERSONA) or MACHINE_BRIEF.search(text))
+
+
+def prompt_minutes():
+    """``{(date, minute): count}`` of UTC minutes a person submitted a prompt in.
+
+    The atomic fact behind every presence figure, stored at the finest resolution
+    the question needs, so nothing downstream has to be recomputed from
+    transcripts that may not survive.
+
+    Durations are *not* stored, because none of them is stable. A prompt is a
+    point event, so turning 1,408 of them into hours requires assuming how long
+    presence extends around each one, and the answer moves six- to twelvefold
+    across defensible assumptions: 18.4h at 1-minute buckets, 102h at 10, 224h at
+    60; 22.9h to 139.1h for a gap model as its idle threshold runs 5 to 60
+    minutes. The gap distribution offers no way out either, decaying smoothly with
+    no valley between "still here" and "left".
+
+    So this keeps what is parameter-free and lets any consumer pick its own
+    assumption: bucket widths, idle thresholds, counts and shapes are all
+    derivable from these rows, and none of them needs the transcripts again.
+
+    The ``authored`` column is the one value here a re-run can want to revise
+    *downward*, since sharpening the classifier moves prompts out of it. The
+    upward-only merge refuses that, so a classifier change means deleting
+    ``prompt_minutes.csv`` and rebuilding it rather than re-running over it. Safe
+    while every row still comes from live transcripts; once a row outlives its
+    session, the old classification is all there is.
+
+    These are submissions, not keystrokes. A user record carries one timestamp and
+    nothing about composition, so a prompt typed over three minutes is a single
+    instant here and the time spent writing it is invisible. Length cannot stand in
+    for it either, since a paste and a paragraph look the same. The bias therefore
+    runs one way: this undercounts time engaged, and a minute holding a submission
+    is a minute someone was demonstrably present rather than a minute they typed.
+    """
+    files = []
+    for d in glob.glob(PROJECTS_GLOB):
+        files += glob.glob(os.path.join(d, "*.jsonl"))
+    seen = set()
+    out = defaultdict(int)
+    authored = defaultdict(int)
+    for f in files:
+        try:
+            fh = open(f, errors="replace")
+        except OSError:
+            continue
+        with fh:
+            for line in fh:
+                try:
+                    rec = json.loads(line)
+                except ValueError:
+                    continue
+                if not is_human_prompt(rec):
+                    continue
+                # A resumed session replays earlier records verbatim, so the uuid
+                # is what keeps one submission from counting twice.
+                uid = rec.get("uuid")
+                if uid in seen:
+                    continue
+                seen.add(uid)
+                try:
+                    dt = datetime.fromisoformat(rec["timestamp"].replace("Z", "+00:00"))
+                except ValueError:
+                    continue
+                key = (dt.date().isoformat(), dt.hour * 60 + dt.minute)
+                out[key] += 1
+                if is_authored_prompt(rec):
+                    authored[key] += 1
+    return {k: {"date": k[0], "minute": k[1], "prompts": v, "authored": authored.get(k, 0)}
+            for k, v in out.items()}
+
+
 def session_series(host):
     """Per-day session concurrency for this machine, keyed ``(date, host)``.
 
@@ -465,6 +1055,7 @@ def session_series(host):
 
     recs = []    # (session, uuid, bucket)
     start = {}   # session -> its earliest bucket
+    attended = set()   # buckets a person typed in
     for f in files:
         sess = os.path.basename(f)[: -len(".jsonl")]
         try:
@@ -489,6 +1080,8 @@ def session_series(host):
                     continue
                 b = dt.replace(minute=(dt.minute // SESSION_BUCKET_MIN) * SESSION_BUCKET_MIN,
                                second=0, microsecond=0)
+                if is_human_prompt(rec):
+                    attended.add(b)
                 recs.append((sess, uuid, b))
                 if sess not in start or b < start[sess]:
                     start[sess] = b
@@ -505,12 +1098,14 @@ def session_series(host):
             active[b].add(sess)
 
     day = defaultdict(lambda: {"sessions": set(), "peak": 0, "active": 0, "parallel": 0,
-                               "session_buckets": 0})
+                               "session_buckets": 0, "attended": 0})
     for b, sessions in active.items():
         row = day[b.date().isoformat()]
         row["sessions"] |= sessions
         row["peak"] = max(row["peak"], len(sessions))
         row["active"] += 1
+        if b in attended:
+            row["attended"] += 1
         row["session_buckets"] += len(sessions)
         if len(sessions) > 1:
             row["parallel"] += 1
@@ -526,9 +1121,103 @@ def session_series(host):
             # this / buckets-per-hour. Stored as the integer rather than as either
             # derived figure: a ratio is not monotone, so it cannot be max-merged.
             "session_buckets": v["session_buckets"],
+            # Buckets a person typed in. Zero for any day before the transcripts
+            # began carrying `origin.kind`, which is why it is reported with its
+            # own first date rather than compared against the token series.
+            "attended_buckets": v["attended"],
         }
         for dk, v in day.items()
     }
+
+
+def session_kind_series(host):
+    """Per-day sessions and spend split by who opened the session.
+
+    Three kinds, keyed ``(date, host, kind)``:
+
+    ``manual``      its first prompt was written by a person.
+    ``dispatched``  its first prompt was a dispatcher brief (``is_authored_prompt``).
+    ``unprompted``  no human prompt at all: resumed, or spawned and never driven.
+
+    The split answers what the concurrency series cannot. Many sessions at once
+    is equally consistent with one person driving them all and with a dispatcher
+    fanning them out, and the two mean opposite things about how the work was
+    done. Which one it was is only visible in who composed the opening.
+
+    Two clocks, deliberately. ``sessions`` counts on the day a session *started*,
+    since a session has one opening and therefore one kind. ``headline`` lands on
+    the day each record was produced, since a session that runs past midnight
+    spends on both days and crediting it all to the opening would move spend to
+    the wrong day. So the columns answer "how many began" and "what was spent",
+    and only the second reconciles with the token series.
+
+    Sessions are walked in start order so the token dedup keeps the earliest
+    holder of a replayed record, matching ``session_series``. Without the
+    ordering, a resumed session could be credited with work it only re-read, and
+    which one won would depend on the filesystem.
+
+    ``kind`` comes from a classifier over prompt text, so a re-run after that
+    classifier changes wants to revise a row *downward* — which the upward-only
+    merge refuses. Same constraint as ``prompt_minutes``: rebuild the file rather
+    than re-running over it.
+    """
+    files = []
+    for d in glob.glob(PROJECTS_GLOB):
+        files += glob.glob(os.path.join(d, "*.jsonl"))
+
+    sessions = []   # (start, kind, start_date, [(date, usage_key, headline)])
+    for f in files:
+        start, kind, spend = None, None, []
+        try:
+            fh = open(f, errors="replace")
+        except OSError:
+            continue
+        with fh:
+            for line in fh:
+                try:
+                    rec = json.loads(line)
+                except ValueError:
+                    continue
+                ts = rec.get("timestamp")
+                if not ts:
+                    continue
+                try:
+                    dt = datetime.fromisoformat(ts.replace("Z", "+00:00"))
+                except ValueError:
+                    continue
+                if start is None or dt < start:
+                    start = dt
+                if kind is None and is_human_prompt(rec):
+                    kind = "manual" if is_authored_prompt(rec) else "dispatched"
+                if rec.get("type") != "assistant":
+                    continue
+                msg = rec.get("message")
+                if not isinstance(msg, dict):
+                    continue
+                u = msg.get("usage")
+                if not isinstance(u, dict):
+                    continue
+                spend.append((dt.date().isoformat(),
+                              (msg.get("id"), rec.get("requestId")),
+                              (u.get("input_tokens", 0) or 0)
+                              + (u.get("output_tokens", 0) or 0)
+                              + (u.get("cache_creation_input_tokens", 0) or 0)))
+        if start is None:
+            continue
+        sessions.append((start, kind or "unprompted", start.date().isoformat(), spend))
+
+    rows = defaultdict(lambda: {"sessions": 0, "headline": 0})
+    seen_usage = set()
+    for start, kind, start_date, spend in sorted(sessions, key=lambda s: s[0]):
+        rows[(start_date, host, kind)]["sessions"] += 1
+        for dk, key, headline in spend:
+            if key != (None, None):
+                if key in seen_usage:
+                    continue
+                seen_usage.add(key)
+            rows[(dk, host, kind)]["headline"] += headline
+
+    return {k: {"date": k[0], "host": k[1], "kind": k[2], **v} for k, v in rows.items()}
 
 
 def sessions_summary(rows):
@@ -537,11 +1226,17 @@ def sessions_summary(rows):
     ``hours_using_claude`` is wall-clock: buckets where at least one session did
     something, so a session left open overnight adds nothing. ``session_hours``
     sums concurrent sessions over the same buckets, and their ratio is the mean
-    concurrency — the multiplier between time spent and work in flight.
+    concurrency — the multiplier between elapsed time and work in flight.
+
+    Neither figure is human presence. A session left to run unattended produces
+    records the whole time it works, so these count hours the *system* was active
+    rather than hours anyone was watching it, and how much of it was attended
+    varies with the work and with whatever else the day held.
     """
     per_hour = 60 / SESSION_BUCKET_MIN
     active = sum(r["active_buckets"] for r in rows)
     sess_b = sum(r["session_buckets"] for r in rows)
+    att = sum(int(r.get("attended_buckets") or 0) for r in rows)
     return {
         "bucket_minutes": SESSION_BUCKET_MIN,
         "first_date": min((r["date"] for r in rows), default=None),
@@ -555,6 +1250,24 @@ def sessions_summary(rows):
         "session_hours": round(sess_b / per_hour, 1),
         "parallel_share_pct": (round(100 * sum(r["parallel_buckets"] for r in rows) / active)
                                if active else 0),
+        # Presence, not activity. Its own first date: the transcripts only began
+        # carrying the marker that identifies a typed prompt partway through, so
+        # this series starts later than the rest and cannot be compared with them
+        # across that boundary.
+        #
+        # The hours are a scale rather than a measurement. Prompts are sparse point
+        # events and each one credits a whole bucket, so the total scales with the
+        # bucket width: 18.4h at 1 minute, 102h at 10, 224h at 60. The wall-clock
+        # series above is far less sensitive because its records are dense. What
+        # holds regardless is the prompt count and the shape across buckets, since
+        # every bucket everywhere uses the one width.
+        "attended_hours": round(att / per_hour, 1),
+        "attended_share_pct": round(100 * att / active) if active else 0,
+        "attended_first_date": min((r["date"] for r in rows
+                                    if int(r.get("attended_buckets") or 0) > 0), default=None),
+        "prompts_note": ("attended_hours scales with bucket_minutes and is a scale rather "
+                         "than a measurement; prompt_minutes.csv holds the parameter-free "
+                         "record, from which any bucket width or idle threshold is derivable"),
         "note": ("Concurrency needs session-level transcripts, which no earlier CSV "
                  "preserved, so the series starts at the first day whose transcripts "
                  "survive rather than at the first project day. It is never estimated."),
@@ -567,10 +1280,22 @@ def load_measured(path, key_cols, num_cols, defaults=None):
     for k, r in load_csv(path, key_cols, defaults).items():
         if is_estimated(r):
             continue
+        k = _norm_key(k)
         merged[k] = {c: int(float(r.get(c) or 0)) for c in num_cols}
         for kc, kv in zip(key_cols, k):
             merged[k][kc] = kv
     return merged
+
+
+def _norm_key(k):
+    """Key tuple with every part as a string.
+
+    A key that round-trips through CSV comes back as text, so a producer handing
+    back ``("hour", 9)`` and a loader handing back ``("hour", "9")`` are two
+    entries for one row. The merge then preserves both and every re-run doubles
+    the table. Normalising both sides is what keeps a re-run idempotent.
+    """
+    return tuple(str(part) for part in k)
 
 
 def merge_max_into(merged, new_rows, key_cols, num_cols):
@@ -587,7 +1312,7 @@ def merge_max_into(merged, new_rows, key_cols, num_cols):
     only the busier one.
     """
     for k, r in new_rows.items():
-        kk = k if isinstance(k, tuple) else (k,)
+        kk = _norm_key(k if isinstance(k, tuple) else (k,))
         if kk in merged:
             for c in num_cols:
                 merged[kk][c] = max(merged[kk][c], int(r[c]))
@@ -627,10 +1352,82 @@ def main():
     model_csv = os.path.join(DATA, "model_daily.csv")
     git_csv = os.path.join(DATA, "git_metrics.csv")
     sess_csv = os.path.join(DATA, "session_metrics.csv")
+    pr_csv = os.path.join(DATA, "pr_metrics.csv")
+    surv_csv = os.path.join(DATA, "survival_metrics.csv")
+    rhythm_csv = os.path.join(DATA, "rhythm_metrics.csv")
+    pm_csv = os.path.join(DATA, "prompt_minutes.csv")
+    kind_csv = os.path.join(DATA, "session_kinds.csv")
 
     git_rows = git_series()
-    write_csv(git_csv, ["date", "commits", "tests", "go_code", "go_test", "md", "yaml", "scripts"],
+    write_csv(git_csv, ["date", "commits", "tests", "go_code", "go_test", "md", "yaml", "scripts",
+                        "prs", "queue_closed", "queue_filed", "active_hours", "feat", "fix",
+                        "go_words", "md_words", "yaml_words", "scripts_words", "words"],
               [git_rows[d] for d in sorted(git_rows)])
+    # Pull requests: merge-preserved and fetched incrementally, because the source
+    # is a remote API rather than something recomputable offline. Existing rows are
+    # never re-fetched; a failed fetch leaves them exactly as they are.
+    pr_rows = {}
+    try:
+        with open(pr_csv) as fh:
+            for r in csv.DictReader(fh):
+                pr_rows[int(r["number"])] = r
+    except (OSError, ValueError, KeyError):
+        pass
+    before = len(pr_rows)
+    pr_rows.update(pr_series(max(pr_rows) if pr_rows else 0))
+    if pr_rows:
+        write_csv(pr_csv, ["number", "merged_date", "created_at", "merged_at", "cycle_hours"],
+                  [pr_rows[n] for n in sorted(pr_rows)])
+    print(f"pull requests      : {len(pr_rows)} on record (+{len(pr_rows) - before} this run)")
+
+    # Code survival: immutable once a week's horizon passes, so stored weeks are
+    # never recomputed and only newly-final ones cost a blame pass.
+    surv_rows = {}
+    try:
+        with open(surv_csv) as fh:
+            for r in csv.DictReader(fh):
+                surv_rows[r["week_start"]] = r
+    except (OSError, KeyError):
+        pass
+    s_before = len(surv_rows)
+    surv_rows.update(survival_series(set(surv_rows)))
+    if surv_rows:
+        write_csv(surv_csv, ["week_start", "added", "survived", "horizon_days", "rate"],
+                  [surv_rows[w] for w in sorted(surv_rows)])
+    print(f"code survival      : {len(surv_rows)} week(s) final (+{len(surv_rows) - s_before} this run)")
+
+    # Weekday and hour-of-day aggregates. Merge-preserved on the counts for the same
+    # reason the token series is: the hourly resolution exists only in the
+    # transcripts, so a recompute after they are archived would silently lower it.
+    rnum = ["days", "commits", "prs", "feat", "fix", "tokens", "attended_buckets",
+            "active_buckets"]
+    rkey = ["dim", "bucket"]
+    offset = local_offset()
+    r_measured = load_measured(rhythm_csv, rkey, rnum)
+    merge_max_into(r_measured, rhythm_series(offset), rkey, rnum)
+    # One row records the offset everything else was bucketed in, so make_charts
+    # can bucket PR timestamps identically without re-deriving or assuming it.
+    # str, not float: this row is written straight into the merged map rather than
+    # through merge_max_into, so it has to carry the same normalised key shape the
+    # loader produces or a re-run adds a second copy of it.
+    r_measured[("offset_hours", str(offset))] = {"dim": "offset_hours", "bucket": offset,
+                                                 **{c: 0 for c in rnum}}
+    write_csv(rhythm_csv, rkey + rnum, [r_measured[k] for k in sorted(r_measured, key=str)])
+    print(f"rhythm             : local UTC{offset:+g}, {len(r_measured)} weekday/hour buckets")
+
+    # Typed prompts at minute resolution, merge-preserved. Once a minute is on
+    # record it stays, so this survives the transcripts being archived and every
+    # presence figure downstream can be recomputed from it without them.
+    pm_key, pm_num = ["date", "minute"], ["prompts", "authored"]
+    pm = load_measured(pm_csv, pm_key, pm_num)
+    merge_max_into(pm, prompt_minutes(), pm_key, pm_num)
+    write_csv(pm_csv, pm_key + pm_num, [pm[k] for k in sorted(pm, key=lambda t: (t[0], int(t[1])))])
+    n_prompts = sum(int(r["prompts"]) for r in pm.values())
+    n_auth = sum(int(r["authored"]) for r in pm.values())
+    print(f"prompts submitted  : {n_prompts} ({n_auth} authored, {n_prompts - n_auth} "
+          f"machine-composed openings) in {len(pm)} distinct minutes "
+          f"({len(pm) / 60:.1f}h holding a submission)")
+
     deltas = commit_deltas(git_rows)
 
     # --- tokens: preserve measured days, then backfill archived days as estimated ---
@@ -680,13 +1477,32 @@ def main():
     write_csv(model_csv, mkey + mnum + ["estimated"], m_out)
 
     # --- sessions: measured only, no backfill (see session_series) ---
+    # attended_buckets joins the upward-only merge like the rest: it is a count that
+    # can only rise as more transcripts become visible.
     snum = ["sessions", "peak_concurrent", "active_buckets", "parallel_buckets",
-            "session_buckets"]
+            "session_buckets", "attended_buckets"]
     skey = ["date", "host"]
     s_measured = load_measured(sess_csv, skey, snum)
     merge_max_into(s_measured, session_series(host), skey, snum)
     s_out = [s_measured[k] for k in sorted(s_measured)]
     write_csv(sess_csv, skey + snum, s_out)
+
+    # --- session kinds: who opened each session, and what it spent ---
+    knum = ["sessions", "headline"]
+    kkey = ["date", "host", "kind"]
+    k_measured = load_measured(kind_csv, kkey, knum)
+    merge_max_into(k_measured, session_kind_series(host), kkey, knum)
+    write_csv(kind_csv, kkey + knum, [k_measured[k] for k in sorted(k_measured)])
+    k_tot = defaultdict(lambda: {"sessions": 0, "headline": 0})
+    for r in k_measured.values():
+        for c in knum:
+            k_tot[r["kind"]][c] += int(r[c])
+    k_all = sum(v["sessions"] for v in k_tot.values()) or 1
+    k_spend = sum(v["headline"] for v in k_tot.values()) or 1
+    print("session kinds      : " + ", ".join(
+        f"{k} {v['sessions']} ({100 * v['sessions'] / k_all:.0f}%) "
+        f"/ {100 * v['headline'] / k_spend:.0f}% spend"
+        for k, v in sorted(k_tot.items())))
 
     # --- totals: measured vs estimated, summed from the persisted rows ---
     def total(rows, cols):
@@ -778,6 +1594,8 @@ def main():
           f"{ss['first_date']} -> {ss['last_date']}")
     print(f"  concurrency      : mean {ss['mean_concurrent']}, peak {ss['peak_concurrent']}, "
           f"{ss['parallel_share_pct']}% of active time parallel")
+    print(f"  at the keyboard  : {ss['attended_hours']}h attended "
+          f"({ss['attended_share_pct']}%), from {ss['attended_first_date']}")
     print(f"  time on claude   : {ss['hours_using_claude']}h wall-clock, "
           f"{ss['session_hours']}h session-time")
     print(f"headline measured  : {headline(meas):,}")
@@ -785,7 +1603,7 @@ def main():
     print(f"headline combined  : {headline(comb):,}")
     print(f"  + cache_read     : {headline(comb) + comb['cache_read']:,}")
     print(f"cache reuse        : {summary['totals']['combined']['cache_reuse_ratio']}x")
-    print(f"wrote {token_csv}, {model_csv}, {git_csv}, {sess_csv}, summary.json")
+    print(f"wrote {token_csv}, {model_csv}, {git_csv}, {sess_csv}, {pr_csv}, {surv_csv}, {rhythm_csv}, {pm_csv}, {kind_csv}, summary.json")
 
 
 if __name__ == "__main__":

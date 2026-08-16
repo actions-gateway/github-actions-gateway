@@ -16,18 +16,23 @@ Run:
 
 Outputs PNGs (1x + @2x) to claude-usage/charts/:
     tokens_by_model      daily token usage by model, with the plan-upgrade markers
-    tokens_per_line      cost-per-line ratio + the lines composition (stacked)
-    tokens_vs_lines      cumulative tokens vs lines authored (log scale)
-    tokens_overview      all three tokens/lines views stacked on one timeline
+    tokens_per_word      cost-per-word ratio + the words composition (stacked)
+    tokens_vs_words      cumulative tokens vs words authored (log scale)
+    tokens_overview      all three tokens/words views stacked on one timeline
     token_anatomy        daily input/output/cache tokens on a log scale
     cumulative_cache     cumulative cache reads vs writes (stacked area)
     parallel_sessions    peak concurrency + the parallel share (own shorter timeline)
+    velocity             work shipped per day on reformat- and workflow-proof proxies
+    velocity_quality     churn, PR cycle time, and code survival
+    lines_vs_words       the same corpus in lines and in words, and each cost ratio
+    rhythm_weekday       what the project does on each day of the week
+    rhythm_hour          the same, by local hour of the day
 """
 
 import csv
 import json
 import os
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 
 import matplotlib
 matplotlib.use("Agg")
@@ -55,8 +60,17 @@ DOCS_REFLOW = date(2026, 8, 9)
 # the lines series with no change in what was spent. Different causes, so
 # different styling — and the reflow is drawn only on the charts it distorts.
 PLAN_STYLE = ("#222", "--")
+MODEL_STYLE = ("#8C4A00", (0, (7, 2)))
 MACHINE_STYLE = ("#005E44", (0, (5, 2, 1, 2)))
 REFLOW_STYLE = ("#5B5B5B", (0, (1, 1.8)))
+
+# Event lines are drawn at zorder 5, after the series they cross. A value label
+# left at the default zorder is painted over and reads as struck through, so
+# every one of them sits above the lines and cuts them with its white halo —
+# the same trade `event_label` makes for the event's own text.
+EVENT_Z = 5
+LABEL_Z = 7
+HALO = [pe.Stroke(linewidth=3, foreground="white"), pe.Normal()]
 
 # Okabe–Ito colourblind-safe palette.
 OI = {
@@ -84,6 +98,16 @@ LINE_BANDS = [
     ("Docs",          OI["green"],      "/",  lambda g: int(g.get("md") or 0)),
     ("YAML",          OI["yellow"],     "x",  lambda g: int(g.get("yaml") or 0)),
     ("Scripts & web", OI["vermillion"], "\\", lambda g: int(g.get("scripts") or 0)),
+]
+# The same five bands counted in words. Words are the headline denominator: they
+# are the unit closest to what a token is, and a reformat cannot move them. The
+# honest cost is that a per-word ratio rewards length, so prose trimmed to say the
+# same thing in fewer words scores as less output.
+WORD_BANDS = [
+    ("Go",            OI["blue"],       "",   lambda g: int(g.get("go_words") or 0)),
+    ("Docs",          OI["green"],      "/",  lambda g: int(g.get("md_words") or 0)),
+    ("YAML",          OI["yellow"],     "x",  lambda g: int(g.get("yaml_words") or 0)),
+    ("Scripts & web", OI["vermillion"], "\\", lambda g: int(g.get("scripts_words") or 0)),
 ]
 EST_NOTE = "shaded / hatched = pre-transcript days estimated from the Pro-era per-commit rate"
 
@@ -124,10 +148,41 @@ def machine_starts():
     return [(dparse(d), f"{h} begins") for h, d in order[1:]]
 
 
+def leading_model_arrival():
+    """``[(date, "<model> arrives")]`` for the model holding the largest share.
+
+    Derived like ``machine_starts``, so the marker follows whichever model has
+    taken over rather than naming one in code. Only the leader is marked: every
+    model's first day would be six lines of clutter, and the one that matters is
+    the one an era is attributed to.
+    """
+    rows = load("model_daily.csv")
+    if not rows:
+        return []
+    total, first = {}, {}
+    for r in rows:
+        m = r.get("model", "")
+        if m in ("", "Other", "Unknown") or is_est(r):
+            continue
+        total[m] = total.get(m, 0) + int(r.get("headline") or 0)
+        if m not in first or r["date"] < first[m]:
+            first[m] = r["date"]
+    if not total:
+        return []
+    lead = max(total, key=total.get)
+    return [(dparse(first[lead]), f"{lead} arrives")]
+
+
 def event_markers():
-    """Plan upgrades and machine starts, in date order, each with its own style."""
+    """Plan upgrades, the leading model's arrival, and machine starts, in date order.
+
+    Three causes, three styles. They are returned together because a chart that
+    draws one has to draw the others: two events a day apart are only separable
+    to a reader who can see both, and this project has exactly that pair.
+    """
     events = [(PRO_TO_MAX, "Pro → Max 5x", *PLAN_STYLE),
               (MAX_5X_TO_20X, "Max 5x → 20x", *PLAN_STYLE)]
+    events += [(d, lbl, *MODEL_STYLE) for d, lbl in leading_model_arrival()]
     events += [(d, lbl, *MACHINE_STYLE) for d, lbl in machine_starts()]
     return sorted(events, key=lambda e: e[0])
 
@@ -154,8 +209,44 @@ def reflow_marker(axes, label_ax, y=0.01):
     """
     col, ls = REFLOW_STYLE
     for a in axes:
-        a.axvline(DOCS_REFLOW, color=col, ls=ls, lw=1.6, zorder=5)
+        a.axvline(DOCS_REFLOW, color=col, ls=ls, lw=1.6, zorder=EVENT_Z)
     event_label(label_ax, DOCS_REFLOW, y, "docs reflow", col, yc="axes fraction")
+
+
+def rolling_mean(vals, window=7):
+    """Centered rolling mean, ``None`` where the full window doesn't fit.
+
+    Centered, not trailing: a trailing mean lags by half its window, which would
+    slide every inflection later than the day it happened — fatal on a chart whose
+    point is that two events are one day apart. Edges stay ``None`` rather than
+    averaging a short window, so the line never ends on a partial figure that
+    swings and reads as a trend.
+    """
+    half = window // 2
+    out = []
+    for i in range(len(vals)):
+        if i < half or i + half >= len(vals):
+            out.append(None)
+        else:
+            out.append(sum(vals[i - half:i + half + 1]) / window)
+    return out
+
+
+def segments(xs, breaks, gap_days=3):
+    """``(lo, hi)`` spans of ``xs`` split at ``breaks``, with a gap either side.
+
+    A centered mean is only meaningful over a window whose values share a unit, so
+    a series whose unit changes is drawn as separate runs rather than one line
+    crossing the change. The gap is the mean's own half-window.
+    """
+    if not breaks:
+        return [(xs[0], xs[-1])]
+    out, lo = [], xs[0]
+    for b in sorted(breaks):
+        out.append((lo, b - timedelta(days=gap_days)))
+        lo = b + timedelta(days=gap_days)
+    out.append((lo, xs[-1]))
+    return out
 
 
 def stagger_labels(fig, texts, step):
@@ -292,7 +383,7 @@ def _per_line_series():
 
     Returns ``(git, dates, xs, ys, cum_on, lines)`` where ``git`` is the git_metrics
     rows by date, ``dates`` the measured days that have authored lines, ``xs`` their
-    datetimes, ``ys`` cumulative tokens ÷ lines authored, ``cum_on`` cumulative
+    datetimes, ``ys`` cumulative tokens ÷ words authored, ``cum_on`` cumulative
     headline tokens carried forward onto every date, and ``lines(g)`` the
     all-hand-authored line count for a git row.
     """
@@ -316,23 +407,27 @@ def _per_line_series():
             last = cum[d]
         cum_on[d] = last
     # Measured days that have authored lines (avoids divide-by-zero on day 1).
-    dates = [d for d in sorted(git) if lines(git[d]) > 0 and d not in est_dates]
+    def words(g):
+        return int(g.get("words") or 0)
+
+    dates = [d for d in sorted(git) if words(git[d]) > 0 and d not in est_dates]
     xs = [dparse(d) for d in dates]
-    ys = [cum_on[d] / lines(git[d]) for d in dates]
-    return git, dates, xs, ys, cum_on, lines
+    ys = [cum_on[d] / words(git[d]) for d in dates]      # the headline ratio
+    ys_line = [cum_on[d] / lines(git[d]) for d in dates]  # kept for lines_vs_words
+    return git, dates, xs, ys, cum_on, lines, words, ys_line
 
 
-def chart_tokens_per_line():
-    """Two panels: cost-per-line ratio on top, the line denominator decomposed below.
+def chart_tokens_per_word():
+    """Two panels: cost-per-word ratio on top, the word denominator decomposed below.
 
-    Top: total headline tokens to date ÷ lines authored that day — a single ratio
+    Top: total headline tokens to date ÷ words authored that day — a single ratio
     that climbs as the project matures (each line costs more once the easy
     scaffolding is done and work shifts to logic, tests, review, debugging).
     Bottom: the denominator itself as a stacked area — Go code, Go tests, Markdown
     docs, hand-written YAML, scripts & web — so "a line" is shown, not described.
     Estimated (pre-transcript) days are excluded so the ratio is measured-only.
     """
-    git, dates, xs, ys, _, _ = _per_line_series()
+    git, dates, xs, ys, _, _, _, _ = _per_line_series()
     gold = GOLD
 
     # Weekly guide dates = project day 7, 14, ... (from the first commit), so the
@@ -357,13 +452,15 @@ def chart_tokens_per_line():
     # --- top: the cost-per-line ratio ---
     ax.plot(xs, ys, color=gold, lw=3.2, solid_capstyle="round", zorder=3)
     ax.fill_between(xs, ys, 0, color=gold, alpha=0.10, zorder=2)
-    ax.annotate(f"{ys[-1]:,.0f} tokens / line", (xs[-1], ys[-1]), xytext=(-8, 14),
-                textcoords="offset points", ha="right", fontsize=13, fontweight="bold", color="#8A6216")
-    ax.annotate(f"{ys[0]:,.0f} / line", (xs[0], ys[0]), xytext=(6, -15),
-                textcoords="offset points", ha="left", fontsize=10.5, color="#8A6216")
-    ax.set_title("Each line costs more tokens as the project matures",
+    ax.annotate(f"{ys[-1]:,.0f} tokens / word", (xs[-1], ys[-1]), xytext=(-8, 14),
+                textcoords="offset points", ha="right", fontsize=13, fontweight="bold",
+                color="#8A6216", path_effects=HALO, zorder=LABEL_Z)
+    ax.annotate(f"{ys[0]:,.0f} / word", (xs[0], ys[0]), xytext=(6, -15),
+                textcoords="offset points", ha="left", fontsize=10.5, color="#8A6216",
+                path_effects=HALO, zorder=LABEL_Z)
+    ax.set_title("Each word costs more tokens as the project matures",
                  fontsize=14, fontweight="bold", loc="left")
-    ax.set_ylabel("cumulative tokens ÷ line", fontsize=11)
+    ax.set_ylabel("cumulative tokens ÷ word", fontsize=11)
     ax.set_ylim(0, max(ys) * 1.12)
     ax.yaxis.set_major_formatter(plt.FuncFormatter(lambda v, _: f"{v:,.0f}"))
     ax.grid(axis="y", alpha=0.22)
@@ -374,16 +471,16 @@ def chart_tokens_per_line():
     # Muted fills + a bold boundary line per band, so the composition reads from
     # crisp colour-coded lines rather than busy texture. Faint hatch stays as a
     # secondary, colourblind-safe cue.
-    stacks = [[fn(git[d]) / 1e3 for d in dates] for _, _, _, fn in LINE_BANDS]
-    polys = axb.stackplot(xs, *stacks, colors=[c for _, c, _, _ in LINE_BANDS],
+    stacks = [[fn(git[d]) / 1e3 for d in dates] for _, _, _, fn in WORD_BANDS]
+    polys = axb.stackplot(xs, *stacks, colors=[c for _, c, _, _ in WORD_BANDS],
                           alpha=0.28, zorder=2)
-    for poly, (_, col, hatch, _) in zip(polys, LINE_BANDS):
+    for poly, (_, col, hatch, _) in zip(polys, WORD_BANDS):
         poly.set_hatch(hatch)
         poly.set_edgecolor(darken(col))  # hatch draws in the edge colour
         poly.set_linewidth(0.0)
     cumtop = np.cumsum(np.array(stacks), axis=0)
     running = 0.0
-    for i, (label, col, _, _) in enumerate(LINE_BANDS):
+    for i, (label, col, _, _) in enumerate(WORD_BANDS):
         axb.plot(xs, cumtop[i], color=darken(col), lw=2.4, solid_capstyle="round", zorder=4)
         s = stacks[i]
         mid = running + s[-1] / 2
@@ -391,7 +488,7 @@ def chart_tokens_per_line():
         axb.annotate(f"{label}  {s[-1]:.0f}k", (xs[-1], mid), xytext=(7, 0),
                      textcoords="offset points", va="center", fontsize=9.5,
                      fontweight="bold", color=darken(col))
-    axb.set_ylabel("lines authored (thousands)", fontsize=11)
+    axb.set_ylabel("words authored (thousands)", fontsize=11)
     axb.set_ylim(0, running * 1.05)
     axb.set_xlim(xs[0], xs[-1])
     axb.xaxis.set_major_formatter(mdates.DateFormatter("%b %-d"))
@@ -415,16 +512,16 @@ def chart_tokens_per_line():
         ax.plot([wd], [v], "o", color=gold, ms=5, zorder=6)
         ax.annotate(f"{v:,.0f}", (wd, v), xytext=(0, 9), textcoords="offset points",
                     ha="center", fontsize=8.5, fontweight="bold", color=gold,
-                    path_effects=[pe.Stroke(linewidth=2.5, foreground="white"), pe.Normal()])
+                    path_effects=[pe.Stroke(linewidth=2.5, foreground="white"), pe.Normal()],
+                    zorder=LABEL_Z)
 
-    reflow_marker((ax, axb), axb)
     fig.text(0.012, 0.008, "generated CRD YAML, binaries & lockfiles excluded · tokens = input + output + cache writes",
              fontsize=7.5, color="#999")
-    save(fig, "tokens_per_line")  # save() crops with bbox_inches="tight"
+    save(fig, "tokens_per_word")  # save() crops with bbox_inches="tight"
 
 
-def chart_tokens_vs_lines():
-    """Log-scale magnitude: total tokens far above total lines authored.
+def chart_tokens_vs_words():
+    """Log-scale magnitude: total tokens far above total words authored.
 
     Log y so both the ~115M tokens and the ~60k lines are visible at once (a linear
     axis would crush the lines to an invisible sliver). Two curves — tokens up top,
@@ -432,10 +529,9 @@ def chart_tokens_vs_lines():
     a log axis a ratio is a vertical gap. No composition here: the undistorted
     breakdown of the lines lives in the tokens-per-line chart.
     """
-    git, dates, xs, ys, cum_on, lines = _per_line_series()
-    halo = [pe.Stroke(linewidth=3, foreground="white"), pe.Normal()]
+    git, dates, xs, ys, cum_on, lines, words, ys_line = _per_line_series()
     tok = [cum_on[d] for d in dates]
-    total = [lines(git[d]) for d in dates]
+    total = [words(git[d]) for d in dates]
 
     fig, ax = plt.subplots(figsize=(11, 6.2))
     ax.set_yscale("log")
@@ -448,47 +544,45 @@ def chart_tokens_vs_lines():
             label="Tokens spent (cumulative)")
     ax.plot(xs, total, color=OI["green"], lw=3.2, ls=(0, (6, 2)), zorder=4,
             path_effects=[pe.Stroke(linewidth=5.5, foreground="white"), pe.Normal()],
-            label="Lines authored (cumulative)")
+            label="Words authored (cumulative)")
 
     ax.annotate(f"{tok[-1] / 1e6:,.0f}M tokens", (xs[-1], tok[-1]), xytext=(-8, 10),
                 textcoords="offset points", ha="right", fontsize=12.5, fontweight="bold",
-                color=OI["blue"], path_effects=halo)
-    ax.annotate(f"{total[-1] / 1e3:,.0f}k lines", (xs[-1], total[-1]), xytext=(-8, -14),
+                color=OI["blue"], path_effects=HALO, zorder=LABEL_Z)
+    ax.annotate(f"{total[-1] / 1e3:,.0f}k words", (xs[-1], total[-1]), xytext=(-8, -14),
                 textcoords="offset points", ha="right", fontsize=12.5, fontweight="bold",
-                color="#1B7A5A", path_effects=halo)
+                color="#1B7A5A", path_effects=HALO, zorder=LABEL_Z)
     gap_mid = (total[-1] * tok[-1]) ** 0.5  # geometric mid of the gap, on a log axis
-    ax.annotate(f"≈ {ys[-1]:,.0f} tokens / line", (xs[-1], gap_mid), xytext=(-10, 0),
+    ax.annotate(f"≈ {ys[-1]:,.0f} tokens / word", (xs[-1], gap_mid), xytext=(-10, 0),
                 textcoords="offset points", ha="right", fontsize=13, fontweight="bold",
-                color=GOLD, path_effects=halo)
+                color=GOLD, path_effects=HALO, zorder=LABEL_Z)
 
-    ax.set_title("Tokens spent vs. lines authored (log scale)",
+    ax.set_title("Tokens spent vs. words authored (log scale)",
                  fontsize=14, fontweight="bold", loc="left")
     ax.set_ylabel("cumulative count (log scale)", fontsize=11)
     ax.xaxis.set_major_formatter(mdates.DateFormatter("%b %-d"))
     ax.xaxis.set_major_locator(mdates.DayLocator(interval=2))
     plt.setp(ax.get_xticklabels(), rotation=45, ha="right", fontsize=8.5)
-    reflow_marker((ax,), ax)
     ax.legend(loc="upper center", bbox_to_anchor=(0.5, -0.12), ncol=2, frameon=False, fontsize=10)
     ax.spines["top"].set_visible(False)
     ax.spines["right"].set_visible(False)
-    fig.text(0.012, 0.008, "lines authored = Go + tests + Markdown + hand-written YAML + scripts & web · tokens = input + output + cache writes",
+    fig.text(0.012, 0.008, "words authored = Go + Markdown + hand-written YAML + scripts & web, comments included · tokens = input + output + cache writes",
              fontsize=7.5, color="#999")
-    save(fig, "tokens_vs_lines")
+    save(fig, "tokens_vs_words")
 
 
 def chart_overview():
     """All three tokens/lines views in one shared-x figure (top → bottom):
 
-    1. magnitude — tokens vs lines authored on a log axis, gap = cost/line;
+    1. magnitude — tokens vs words authored on a log axis, gap = cost/word;
     2. breakdown — the lines composition as a muted stacked area with bold edges;
-    3. cost — cumulative tokens ÷ line over time ("what those lines cost"), with
+    3. cost — cumulative tokens ÷ word over time ("what those words cost"), with
        the value at each weekly guide.
     """
-    git, dates, xs, ys, cum_on, lines = _per_line_series()
+    git, dates, xs, ys, cum_on, lines, words, ys_line = _per_line_series()
     gold = GOLD
-    halo = [pe.Stroke(linewidth=3, foreground="white"), pe.Normal()]
     tok = [cum_on[d] for d in dates]
-    total = [lines(git[d]) for d in dates]
+    total = [words(git[d]) for d in dates]
 
     start = min(dparse(d) for d in git)
     val_at = dict(zip(xs, ys))
@@ -515,30 +609,29 @@ def chart_overview():
             path_effects=[pe.Stroke(linewidth=5, foreground="white"), pe.Normal()])
     a1.plot(xs, total, color=OI["green"], lw=3.0, ls=(0, (6, 2)), zorder=4,
             path_effects=[pe.Stroke(linewidth=5, foreground="white"), pe.Normal()])
-    # zorder above the event lines drawn later, so neither strikes through the text.
     a1.annotate(f"{tok[-1] / 1e6:,.0f}M tokens", (xs[-1], tok[-1]), xytext=(-8, 9),
                 textcoords="offset points", ha="right", fontsize=12, fontweight="bold",
-                color=OI["blue"], path_effects=halo, zorder=7)
-    a1.annotate(f"{total[-1] / 1e3:,.0f}k lines", (xs[-1], total[-1]), xytext=(-8, -13),
+                color=OI["blue"], path_effects=HALO, zorder=LABEL_Z)
+    a1.annotate(f"{total[-1] / 1e3:,.0f}k words", (xs[-1], total[-1]), xytext=(-8, -13),
                 textcoords="offset points", ha="right", fontsize=12, fontweight="bold",
-                color="#1B7A5A", path_effects=halo, zorder=7)
-    a1.annotate(f"≈ {ys[-1]:,.0f} tokens / line", (xs[-1], (total[-1] * tok[-1]) ** 0.5),
+                color="#1B7A5A", path_effects=HALO, zorder=LABEL_Z)
+    a1.annotate(f"≈ {ys[-1]:,.0f} tokens / word", (xs[-1], (total[-1] * tok[-1]) ** 0.5),
                 xytext=(-10, 0), textcoords="offset points", ha="right", fontsize=12.5,
-                fontweight="bold", color=gold, path_effects=halo, zorder=7)
+                fontweight="bold", color=gold, path_effects=HALO, zorder=LABEL_Z)
     a1.set_ylabel("count (log scale)", fontsize=11)
-    a1.set_title("Tokens spent vs. lines authored", fontsize=12.5, fontweight="bold", loc="left")
+    a1.set_title("Tokens spent vs. words authored", fontsize=12.5, fontweight="bold", loc="left")
     a1.grid(axis="y", which="both", alpha=0.16)
 
     # --- panel 2: composition ---
-    stacks = [[fn(git[d]) / 1e3 for d in dates] for _, _, _, fn in LINE_BANDS]
-    polys = a2.stackplot(xs, *stacks, colors=[c for _, c, _, _ in LINE_BANDS], alpha=0.28, zorder=2)
-    for poly, (_, col, hatch, _) in zip(polys, LINE_BANDS):
+    stacks = [[fn(git[d]) / 1e3 for d in dates] for _, _, _, fn in WORD_BANDS]
+    polys = a2.stackplot(xs, *stacks, colors=[c for _, c, _, _ in WORD_BANDS], alpha=0.28, zorder=2)
+    for poly, (_, col, hatch, _) in zip(polys, WORD_BANDS):
         poly.set_hatch(hatch)
         poly.set_edgecolor(darken(col))
         poly.set_linewidth(0.0)
     cumtop = np.cumsum(np.array(stacks), axis=0)
     running = 0.0
-    for i, (label, col, _, _) in enumerate(LINE_BANDS):
+    for i, (label, col, _, _) in enumerate(WORD_BANDS):
         a2.plot(xs, cumtop[i], color=darken(col), lw=2.2, solid_capstyle="round", zorder=4)
         s = stacks[i]
         mid = running + s[-1] / 2
@@ -548,7 +641,7 @@ def chart_overview():
                     color=darken(col))
     a2.set_ylim(0, running * 1.05)
     a2.set_ylabel("lines authored (thousands)", fontsize=11)
-    a2.set_title("What those lines are", fontsize=12.5, fontweight="bold", loc="left")
+    a2.set_title("What those words are", fontsize=12.5, fontweight="bold", loc="left")
     a2.grid(axis="y", alpha=0.22)
 
     # --- panel 3: what those lines cost (tokens per line), with weekly values ---
@@ -556,11 +649,12 @@ def chart_overview():
     a3.fill_between(xs, ys, 0, color=gold, alpha=0.10, zorder=2)
     a3.set_ylim(0, max(ys) * 1.16)
     a3.yaxis.set_major_formatter(plt.FuncFormatter(lambda v, _: f"{v:,.0f}"))
-    a3.annotate(f"{ys[-1]:,.0f} tokens / line", (xs[-1], ys[-1]), xytext=(-8, 12),
+    a3.annotate(f"{ys[-1]:,.0f} tokens / word", (xs[-1], ys[-1]), xytext=(-8, 12),
                 textcoords="offset points", ha="right", fontsize=12.5, fontweight="bold",
-                color=gold, path_effects=halo)
+                color=gold, path_effects=HALO, zorder=LABEL_Z)
     a3.annotate(f"{ys[0]:,.0f}", (xs[0], ys[0]), xytext=(4, -13), textcoords="offset points",
-                ha="left", fontsize=10, fontweight="bold", color=gold, path_effects=halo)
+                ha="left", fontsize=10, fontweight="bold", color=gold,
+                path_effects=HALO, zorder=LABEL_Z)
     for wd in week_dates:
         v = _val_on(wd)
         if v is None or wd == xs[-1]:
@@ -568,9 +662,10 @@ def chart_overview():
         a3.plot([wd], [v], "o", color=gold, ms=5, zorder=6)
         a3.annotate(f"{v:,.0f}", (wd, v), xytext=(0, 9), textcoords="offset points",
                     ha="center", fontsize=8.5, fontweight="bold", color=gold,
-                    path_effects=[pe.Stroke(linewidth=2.5, foreground="white"), pe.Normal()])
-    a3.set_ylabel("cumulative tokens ÷ line", fontsize=11)
-    a3.set_title("What those lines cost in tokens", fontsize=12.5, fontweight="bold", loc="left")
+                    path_effects=[pe.Stroke(linewidth=2.5, foreground="white"), pe.Normal()],
+                    zorder=LABEL_Z)
+    a3.set_ylabel("cumulative tokens ÷ word", fontsize=11)
+    a3.set_title("What those words cost in tokens", fontsize=12.5, fontweight="bold", loc="left")
     a3.grid(axis="y", alpha=0.22)
     a3.xaxis.set_major_formatter(mdates.DateFormatter("%b %-d"))
     a3.xaxis.set_major_locator(mdates.DayLocator(interval=2))
@@ -591,9 +686,8 @@ def chart_overview():
         if not xs[0] <= ev_date <= xs[-1]:
             continue
         for a in (a1, a2, a3):
-            a.axvline(ev_date, color=col, ls=ls, lw=1.4, zorder=5)
+            a.axvline(ev_date, color=col, ls=ls, lw=1.4, zorder=EVENT_Z)
         event_label(a1, ev_date, 0.01, label, col, yc="axes fraction")
-    reflow_marker((a1, a2, a3), a1)
     for a in (a1, a2):
         plt.setp(a.get_xticklabels(), visible=False)
 
@@ -704,17 +798,19 @@ def chart_parallel_sessions():
     per_hour = 60 / sess_meta.get("bucket_minutes", 10)
     by_day = {}
     for r in rows:  # combine machines
-        d = by_day.setdefault(r["date"], {"peak": 0, "active": 0, "buckets": 0})
+        d = by_day.setdefault(r["date"], {"peak": 0, "active": 0, "buckets": 0, "attended": 0})
         # Peak is a max, not a sum: two machines' peaks need not coincide in time.
         d["peak"] = max(d["peak"], int(r["peak_concurrent"]))
         d["active"] += int(r["active_buckets"])
         d["buckets"] += int(r["session_buckets"])
+        d["attended"] = d.get("attended", 0) + int(r.get("attended_buckets") or 0)
     days = sorted(by_day)
     xs = list(range(len(days)))
     peak = [by_day[d]["peak"] for d in days]
     mean = [by_day[d]["buckets"] / by_day[d]["active"] if by_day[d]["active"] else 0 for d in days]
     wall = [by_day[d]["active"] / per_hour for d in days]
     shrs = [by_day[d]["buckets"] / per_hour for d in days]
+    att = [by_day[d].get("attended", 0) / per_hour for d in days]
 
     fig, (a1, a2) = plt.subplots(2, 1, figsize=(11, 7.8), sharex=True,
                                  gridspec_kw=dict(height_ratios=[1.2, 1], hspace=0.30))
@@ -741,18 +837,28 @@ def chart_parallel_sessions():
                     label="session-hours  (summed over concurrent sessions)")
     a2.plot(xs, shrs, color=OI["blue"], lw=2.4, marker="s", ms=4, zorder=3, path_effects=halo)
     a2.fill_between(xs, 0, wall, color=OI["orange"], alpha=0.55, zorder=2)
+    # Three nested bands: someone typing, the system working, and that summed over
+    # concurrent sessions. The innermost is the only one that means presence, and
+    # it exists only from the day the transcripts began marking a typed prompt.
+    if any(att):
+        a2.fill_between(xs, 0, att, color=OI["vermillion"], alpha=0.65, zorder=3)
+        a2.plot(xs, att, color=darken(OI["vermillion"]), lw=2.0, zorder=5,
+                path_effects=halo)
     a2.plot(xs, wall, color=darken(OI["orange"]), lw=2.2, marker="o", ms=4, zorder=4,
             path_effects=halo)
     a2.set_ylabel("hours", fontsize=11)
-    a2.set_title(f"Time on Claude each day — {sum(wall):.0f}h at the keyboard, "
-                 f"{sum(shrs):.0f}h of session-time ({sum(shrs) / sum(wall):.1f}×)",
+    a2.set_title(f"Time on Claude each day — {sum(att):.0f}h at the keyboard, "
+                 f"{sum(wall):.0f}h elapsed, {sum(shrs):.0f}h of session-time",
                  fontsize=12, fontweight="bold", loc="left")
     a2.set_ylim(0, max(shrs) * 1.22)
-    a2.legend(handles=[mpatches.Patch(facecolor=OI["skyblue"], alpha=0.40,
-                                      label="session-hours (summed over concurrent sessions)"),
-                       mpatches.Patch(facecolor=OI["orange"], alpha=0.55,
-                                      label="hours using Claude (wall-clock)")],
-              frameon=False, fontsize=9.5, loc="upper left", ncol=2)
+    handles = [mpatches.Patch(facecolor=OI["skyblue"], alpha=0.40,
+                              label="session-hours (summed over concurrent sessions)"),
+               mpatches.Patch(facecolor=OI["orange"], alpha=0.55,
+                              label="Claude working (wall-clock)")]
+    if any(att):
+        handles.append(mpatches.Patch(facecolor=OI["vermillion"], alpha=0.65,
+                                      label="a person at the keyboard (a typed prompt in the bucket)"))
+    a2.legend(handles=handles, frameon=False, fontsize=9.5, loc="upper left", ncol=2)
 
     for a in (a1, a2):
         a.set_xlim(-0.6, len(days) - 0.4)
@@ -771,14 +877,619 @@ def chart_parallel_sessions():
     save(fig, "parallel_sessions")
 
 
+def pr_workflow_start(git):
+    """First date after which every commit is a PR squash, or ``None``.
+
+    Derived rather than hardcoded, the way ``machine_starts`` is: a project that
+    always used PRs marks nothing, and one that switches later marks itself. The
+    run length keeps a single quiet day from being read as the switch.
+    """
+    days = sorted(git)
+    run, first = 0, None
+    for a, b in zip(days, days[1:]):
+        dc = int(git[b]["commits"]) - int(git[a]["commits"])
+        dp = int(git[b].get("prs") or 0) - int(git[a].get("prs") or 0)
+        if dc <= 0:
+            continue
+        if dp == dc:
+            run += 1
+            if run == 1:
+                first = b
+            if run >= 5:
+                return dparse(first)
+        else:
+            run = 0
+    return None
+
+
+def chart_velocity():
+    """Work shipped over time, on proxies a reformat and a workflow change can't move.
+
+    The lines series carries the 2026-08-09 reflow, and commits change units
+    mid-project when a repo adopts PR squash-merges, so neither tells a velocity
+    story on its own. These four do — with the two methodology steps drawn where
+    they fall rather than smoothed over.
+
+    Panel 4 is when work *landed*, not hours worked: sessions sometimes run
+    unattended and merges get cleared in bulk, so the spread of the day it shows
+    belongs to the system, not to anyone's presence.
+    """
+    git = {r["date"]: r for r in load("git_metrics.csv")}
+    if not git or "prs" not in next(iter(git.values())):
+        return
+    days = sorted(git)
+
+    def delta(col):
+        out, prev = {}, 0
+        for d in days:
+            cur = int(git[d].get(col) or 0)
+            out[d] = max(0, cur - prev)
+            prev = cur
+        return out
+
+    d_prs, d_tests, d_queue, d_commits, d_filed = (
+        delta(c) for c in ("prs", "tests", "queue_closed", "commits", "queue_filed"))
+
+    # Per day, matching every other chart here. Weekly bars smooth the series into
+    # something easier to read and lose what the reader needs: a day is the unit
+    # the events are dated in, and a bin wide enough to hold two of them hides that
+    # Opus 5 and mac-2 are a day apart.
+    hours = [int(git[d].get("active_hours") or 0) for d in days]
+    dxs = [dparse(d) for d in days]
+    per_hour = [d_commits[d] / h if h else 0 for d, h in zip(days, hours)]
+
+    fig, axes = plt.subplots(5, 1, figsize=(11, 16.5), sharex=True,
+                             gridspec_kw=dict(height_ratios=[1, 1, 1, 1, 1.15], hspace=0.24))
+    a0, a1, a2, a3, a4 = axes
+
+    # Where each series starts meaning what its axis says. The trend line is
+    # suppressed before it: a mean spanning the boundary drags a real trend toward
+    # a period the series could not measure.
+    pr_start = pr_workflow_start(git)
+    backlog_start = next((dparse(d) for d in days
+                          if int(git[d].get("queue_closed") or 0) > 0), None)
+    # a0 (commits) is drawn despite the unit change, so it gets the marker rather
+    # than the omission: the vertical line is where a commit stops meaning one
+    # commit and starts meaning a squashed PR.
+    trend_from = {a1: pr_start, a3: backlog_start}
+
+    panels = [
+        (a0, d_commits, OI["grey"], "commits", "Commits per day (unit changes at the marker)"),
+        (a1, d_prs, OI["blue"], "PRs merged", "Pull requests merged per day"),
+        (a2, d_tests, OI["purple"], "tests added", "Tests added per day"),
+        (a3, d_queue, OI["vermillion"], "rows closed", "Backlog rows closed per day"),
+    ]
+    for ax, series, col, ylab, title in panels:
+        raw = [series[d] for d in days]
+        ax.bar(dxs, raw, width=0.72, color=col, alpha=0.5,
+               edgecolor="white", linewidth=0.4, zorder=3)
+        # Daily bars carry the truth; the 7-day centered mean is what makes an
+        # inflection legible, which the bars alone are too noisy to show.
+        trend = rolling_mean(raw)
+        since = trend_from.get(ax)
+        if since:
+            trend = [None if d < since else v for d, v in zip(dxs, trend)]
+        # No per-panel legend: every panel uses the one encoding and the footnote
+        # states it, while a legend box in the corner lands on an event label.
+        #
+        # The commits panel is drawn in two segments around its marker. A window
+        # straddling the switch averages raw commits with squashed PRs, and the
+        # mean of two units is not a number.
+        breaks = [pr_start] if (ax is a0 and pr_start) else []
+        for lo, hi in segments(dxs, breaks):
+            seg = [(x, v) for x, v in zip(dxs, trend) if v is not None and lo <= x <= hi]
+            if seg:
+                ax.plot([x for x, _ in seg], [v for _, v in seg],
+                        color=darken(col), lw=2.6, zorder=5, path_effects=HALO)
+        ax.set_ylabel(ylab, fontsize=10.5)
+        ax.set_title(title, fontsize=12.5, fontweight="bold", loc="left")
+        ax.grid(axis="y", alpha=0.22)
+
+    # Filed drawn over closed, because closures alone cannot tell progress from
+    # treading water: the busiest stretch closed 15 rows a day while filing 20.
+    filed_trend = rolling_mean([d_filed[d] for d in days])
+    if backlog_start:
+        filed_trend = [None if d < backlog_start else v for d, v in zip(dxs, filed_trend)]
+    a3.plot([x for x, v in zip(dxs, filed_trend) if v is not None],
+            [v for v in filed_trend if v is not None],
+            color=darken(OI["purple"]), lw=2.6, ls=(0, (5, 2)), zorder=6, path_effects=HALO)
+    a3.set_title("Backlog rows closed per day, against rows filed", fontsize=12.5,
+                 fontweight="bold", loc="left")
+
+    # Panel 4: when the work landed, plus how densely it landed in those hours.
+    a4.bar(dxs, hours, width=0.72, color=OI["green"], alpha=0.38, edgecolor="white",
+           linewidth=0.4, zorder=2)
+    h_trend = rolling_mean(hours)
+    a4.plot([x for x, v in zip(dxs, h_trend) if v is not None],
+            [v for v in h_trend if v is not None],
+            color=darken(OI["green"]), lw=2.6, zorder=5, path_effects=HALO)
+    a4b = a4.twinx()
+    # The ratio was the noisiest series on the figure and is derived anyway; the
+    # bars below it carry the daily truth, so only its trend is drawn.
+    #
+    # Suppressed before the PR-workflow switch for the same reason panel 1 is: its
+    # numerator is `commits`, whose unit changes there. Drawn across the boundary
+    # it runs high through May on raw commits and drops as they become squashed
+    # PRs, which reads as intensity falling when nothing about the work changed.
+    # The hours it divides by are unaffected, so only this line is cut.
+    r_trend = rolling_mean(per_hour)
+    if pr_start:
+        r_trend = [None if d < pr_start else v for d, v in zip(dxs, r_trend)]
+    a4b.plot([x for x, v in zip(dxs, r_trend) if v is not None],
+             [v for v in r_trend if v is not None],
+             color=OI["skyblue"], lw=2.4, ls=(0, (6, 2)), zorder=4, path_effects=HALO)
+    a4.set_ylabel("hours with a commit", fontsize=10.5)
+    a4b.set_ylabel("commits / hour", fontsize=10.5, color=darken(OI["skyblue"]))
+    a4.set_title("When work landed — not hours worked (sessions sometimes run unattended)",
+                 fontsize=12.5, fontweight="bold", loc="left")
+    a4.grid(axis="y", alpha=0.22)
+    for s in ("top",):
+        a4b.spines[s].set_visible(False)
+
+    # Methodology steps: a change in what the series counts, not in what was done.
+    # Styled like the reflow marker for that reason, and shading the region where
+    # the series cannot mean what its axis says.
+    mcol, mls = REFLOW_STYLE
+    for ax, since, label, shade in ((a0, pr_start, "unit changes", False),
+                                    (a1, pr_start, "PR workflow begins", True),
+                                    (a3, backlog_start, "backlog begins", True)):
+        if since is None:
+            continue
+        # Commits are real either side of their marker, just counted differently, so
+        # that panel takes the line without the shading. Shading says the axis cannot
+        # be read at all there, which is true of PRs and the backlog and not of this.
+        if shade:
+            ax.axvspan(dxs[0], since, color="#000000", alpha=0.05, zorder=1)
+        ax.axvline(since, color=mcol, ls=mls, lw=1.6, zorder=EVENT_Z)
+        event_label(ax, since, 0.04, label, mcol, yc="axes fraction")
+
+    for ax in axes:
+        ax.set_xlim(dxs[0], dxs[-1])
+        for s in ("top", "right"):
+            ax.spines[s].set_visible(False)
+        for ev_date, _, col, ls in event_markers():
+            if dxs[0] <= ev_date <= dxs[-1]:
+                ax.axvline(ev_date, color=col, ls=ls, lw=1.4, zorder=EVENT_Z)
+    a4.spines["right"].set_visible(False)
+    # Event labels on panel 1 only, staggered so the Opus 5 / mac-2 pair — one day
+    # apart, and the whole point of drawing both — stays readable.
+    labels = [event_label(a1, ev, 0.55, lbl, col, yc="axes fraction")
+              for ev, lbl, col, ls in event_markers() if dxs[0] <= ev <= dxs[-1]]
+    stagger_labels(fig, [t for t in labels if t is not None], 0.11)
+
+    a4.xaxis.set_major_formatter(mdates.DateFormatter("%b %-d"))
+    a4.xaxis.set_major_locator(mdates.DayLocator(interval=4))
+    plt.setp(a4.get_xticklabels(), rotation=45, ha="right", fontsize=8.5)
+    # One figure-level key rather than four inline ones: every panel shares the
+    # encoding, and a legend box inside any of them lands on an event label.
+    fig.legend(handles=[
+        mpatches.Patch(facecolor="#8A8A8A", alpha=0.5, label="daily value"),
+        Line2D([], [], color="#333333", lw=2.6, label="7-day centered mean"),
+        Line2D([], [], color=OI["skyblue"], lw=2.4, ls=(0, (6, 2)),
+               label="commits per such hour, 7-day mean (bottom panel, right axis)"),
+    ], loc="upper center", bbox_to_anchor=(0.5, 0.997), ncol=3, frameon=False, fontsize=9.5)
+    fig.subplots_adjust(top=0.958)
+    fig.text(0.012, 0.006,
+             "bars are daily · lines are a 7-day centered mean, stopping 3 days short at each end "
+             "rather than averaging a partial window · shaded = the series cannot mean what its axis "
+             "says yet · Opus 5 and mac-2 land one day apart, so this data cannot separate model from machine",
+             fontsize=7.5, color="#999")
+    save(fig, "velocity")
+
+
+def chart_velocity_quality():
+    """How the work went, rather than how much of it there was.
+
+    Volume proxies cannot tell 85 PRs of progress from 85 PRs of churn. These
+    three can say something about it, each with a different blind spot, which is
+    why they are drawn together rather than combined into a score.
+    """
+    git = {r["date"]: r for r in load("git_metrics.csv")}
+    if not git or "fix" not in next(iter(git.values())):
+        return
+    days = sorted(git)
+    dxs = [dparse(d) for d in days]
+
+    fig, (b1, b2, b3) = plt.subplots(3, 1, figsize=(11, 10.5),
+                                     gridspec_kw=dict(height_ratios=[1, 1, 1], hspace=0.42))
+
+    # --- churn: fix against feat, over a week so the ratio has a denominator ---
+    feat = rolling_mean([int(git[d].get("feat") or 0) for d in days])
+    fix = rolling_mean([int(git[d].get("fix") or 0) for d in days])
+    rat = [(f / t) if (f is not None and t) else None for f, t in zip(fix, feat)]
+    pts = [(x, v) for x, v in zip(dxs, rat) if v is not None]
+    b1.plot([x for x, _ in pts], [v for _, v in pts], color=OI["vermillion"], lw=2.6,
+            zorder=4, path_effects=HALO)
+    b1.axhline(1.0, color="#999", ls=(0, (3, 3)), lw=1.2, zorder=2)
+    b1.annotate("one fix per feature", (dxs[3], 1.0), xytext=(4, 5),
+                textcoords="offset points", fontsize=9, color="#777", zorder=LABEL_Z)
+    b1.set_ylabel("fix ÷ feat commits", fontsize=10.5)
+    b1.set_title("Churn: how much of the work is fixing rather than building",
+                 fontsize=12.5, fontweight="bold", loc="left")
+
+    # --- the remote loop: open to merge ---
+    prs = load("pr_metrics.csv")
+    if prs:
+        byday = {}
+        for r in prs:
+            try:
+                byday.setdefault(r["merged_date"], []).append(float(r["cycle_hours"]))
+            except (ValueError, KeyError):
+                continue
+        pd = sorted(byday)
+        pxs = [dparse(d) for d in pd]
+
+        def pct(vals, q):
+            v = sorted(vals)
+            return v[min(int(len(v) * q), len(v) - 1)]
+
+        # Two percentiles rather than a median, because they answer different
+        # questions and the median blends them. Merging needs a human to enqueue,
+        # so a PR opened while nobody is at the machine waits however long that
+        # lasts: the p99 reaches 34h and 90h in the earlier eras. The low
+        # percentile is the part availability cannot stretch, so it stands in for
+        # loop speed; the high one is mostly a record of being away.
+        for q, col, lab in ((0.25, OI["skyblue"], "p25, the loop when someone is there"),
+                            (0.90, OI["purple"], "p90, mostly time away from the machine")):
+            series = [pct(byday[d], q) for d in pd]
+            tr = rolling_mean(series)
+            seg = [(x, v) for x, v in zip(pxs, tr) if v is not None]
+            b2.plot([x for x, _ in seg], [v for _, v in seg], color=darken(col),
+                    lw=2.6, zorder=5, path_effects=HALO, label=lab)
+        b2.set_yscale("log")
+        b2.legend(loc="upper left", fontsize=9, frameon=False)
+        b2.set_ylabel("hours (log scale)", fontsize=10.5)
+        b2.set_title("Pull request open to merge — availability-bound, not a speed measure",
+                     fontsize=12.5, fontweight="bold", loc="left")
+
+    # --- durability: does a week's code outlive its first fortnight ---
+    surv = load("survival_metrics.csv")
+    if surv:
+        sxs = [dparse(r["week_start"]) for r in surv]
+        rate = [100 * float(r["rate"]) for r in surv]
+        b3.bar(sxs, rate, width=5.2, color=OI["green"], alpha=0.6, edgecolor="white",
+               linewidth=0.6, zorder=3)
+        for x, v in zip(sxs, rate):
+            b3.annotate(f"{v:.0f}", (x, v), xytext=(0, 4), textcoords="offset points",
+                        ha="center", fontsize=8.5, fontweight="bold",
+                        color=darken(OI["green"]), zorder=LABEL_Z, path_effects=HALO)
+        b3.set_ylim(0, 108)
+        b3.set_ylabel("% still present", fontsize=10.5)
+        hz = surv[0].get("horizon_days", "14")
+        b3.set_title(f"Code survival: non-test Go still present {hz} days later",
+                     fontsize=12.5, fontweight="bold", loc="left")
+        # The tail is deliberately empty rather than missing: those weeks have not
+        # reached their horizon, so they have no final value yet. Said on the chart,
+        # because a blank right edge otherwise reads as the data having stopped.
+        if sxs[-1] < dxs[-1]:
+            b3.axvspan(sxs[-1] + timedelta(days=7), dxs[-1], color="#000000",
+                       alpha=0.04, zorder=1)
+            b3.annotate(f"horizon not yet reached\n(needs {hz} days)",
+                        ((sxs[-1] + timedelta(days=7) + (dxs[-1] - sxs[-1]) / 2), 50),
+                        ha="center", va="center", fontsize=9, color="#888", zorder=LABEL_Z)
+
+    for ax in (b1, b2, b3):
+        ax.set_xlim(dxs[0], dxs[-1])
+        ax.grid(axis="y", alpha=0.22)
+        for sp in ("top", "right"):
+            ax.spines[sp].set_visible(False)
+        for ev_date, _, col, ls in event_markers():
+            if dxs[0] <= ev_date <= dxs[-1]:
+                ax.axvline(ev_date, color=col, ls=ls, lw=1.4, zorder=EVENT_Z)
+        ax.xaxis.set_major_formatter(mdates.DateFormatter("%b %-d"))
+        ax.xaxis.set_major_locator(mdates.DayLocator(interval=7))
+        plt.setp(ax.get_xticklabels(), rotation=45, ha="right", fontsize=8.5)
+    labels = [event_label(b1, ev, 0.55, lbl, col, yc="axes fraction")
+              for ev, lbl, col, ls in event_markers() if dxs[0] <= ev <= dxs[-1]]
+    stagger_labels(fig, [t for t in labels if t is not None], 0.13)
+
+    fig.text(0.012, 0.004,
+             "open-to-merge includes waiting for a human to enqueue, so it tracks availability "
+             "at least as much as speed · survival is a fixed 14-day horizon, so weeks are "
+             "comparable and a week's value is final once it passes",
+             fontsize=7.5, color="#999")
+    save(fig, "velocity_quality")
+
+
+DOW = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+
+
+def local_offset_hours():
+    """UTC offset the rhythm table was bucketed in, read back off that table.
+
+    The charts must bucket PR timestamps the same way ``rhythm_series`` did, and
+    that offset is derived from git rather than configured, so it is recovered
+    here rather than assumed.
+    """
+    for r in load("rhythm_metrics.csv"):
+        if r.get("dim") == "offset_hours":
+            return float(r.get("bucket") or 0)
+    return -7.0
+
+
+def chart_rhythm(dim):
+    """When the work happens: by weekday, or by local hour.
+
+    An aggregate rather than a time series, so the x axis is a bucket and every
+    day of the project lands in one. Exploratory by intent: the panels were chosen
+    because they are the measures that could plausibly differ by the clock, not
+    because any of them was known to.
+    """
+    rows = {}
+    for r in load("rhythm_metrics.csv"):
+        if r["dim"] == dim:
+            rows[int(r["bucket"])] = r
+    if not rows:
+        return
+    if dim == "weekday":
+        keys = list(range(7))
+        labels = DOW
+        title_of = "day of the week"
+        # 12-14 observations each, close but not equal, so per-observed-day.
+        norm = [max(int(rows.get(k, {}).get("days") or 0), 1) for k in keys]
+        unit = " per day"
+    else:
+        keys = list(range(24))
+        labels = [f"{h:02d}" for h in keys]
+        title_of = "hour of the day, local"
+        norm = [1] * len(keys)
+        unit = ", total"
+
+    def col(name, scale=1.0):
+        return [int(rows.get(k, {}).get(name) or 0) / n / scale for k, n in zip(keys, norm)]
+
+    att = [int(rows.get(k, {}).get("attended_buckets") or 0) for k in keys]
+    act = [int(rows.get(k, {}).get("active_buckets") or 0) for k in keys]
+    share = [100 * a / b if b else 0 for a, b in zip(att, act)]
+    # Percentiles from the per-PR rows, not a stored mean. Wait times are skewed
+    # enough that the mean inverts the reading: PRs opened at 05:00 average 19h and
+    # have a median of 0.32h, the fastest hour of the day, because a few waited days.
+    tz = timezone(timedelta(hours=local_offset_hours()))
+    waits = {}
+    for r in load("pr_metrics.csv"):
+        try:
+            op = datetime.fromisoformat(r["created_at"].replace("Z", "+00:00")).astimezone(tz)
+        except (ValueError, KeyError):
+            continue
+        waits.setdefault(op.weekday() if dim == "weekday" else op.hour, []).append(
+            float(r["cycle_hours"]))
+
+    def q(vals, p):
+        v = sorted(vals)
+        return v[min(int(len(v) * p), len(v) - 1)] if v else 0
+
+    cyc_med = [q(waits.get(k, []), 0.50) for k in keys]
+    cyc_p90 = [q(waits.get(k, []), 0.90) for k in keys]
+
+    panels = [
+        (col("commits"), OI["grey"], f"commits{unit}", "Commits"),
+        (col("tokens", 1e6), OI["vermillion"], f"M tokens{unit}", "Token spend"),
+        (share, OI["green"], "% of active buckets", "Share of the time a person was at the keyboard"),
+        (cyc_med, OI["skyblue"], "hours, median", "How long a PR opened then usually waited"),
+        (cyc_p90, OI["purple"], "hours, p90", "The slow tenth of those waits, which is mostly absence"),
+    ]
+    fig, axes = plt.subplots(len(panels), 1, figsize=(11, 12.5), sharex=True,
+                             gridspec_kw=dict(hspace=0.30))
+    xs = list(range(len(keys)))
+    for ax, (vals, c, ylab, title) in zip(axes, panels):
+        bars = ax.bar(xs, vals, color=c, alpha=0.75, edgecolor="white", linewidth=0.6, zorder=3)
+        if dim == "weekday":
+            for i in (5, 6):  # weekend, hatched so it reads without colour
+                bars[i].set_hatch("//")
+        hi = max(range(len(vals)), key=lambda i: vals[i])
+        ax.annotate(f"{vals[hi]:,.1f}" if max(vals) < 100 else f"{vals[hi]:,.0f}",
+                    (xs[hi], vals[hi]), xytext=(0, 4), textcoords="offset points",
+                    ha="center", fontsize=9, fontweight="bold", color=darken(c),
+                    zorder=LABEL_Z, path_effects=HALO)
+        ax.set_ylabel(ylab, fontsize=10.5)
+        ax.set_title(title, fontsize=12.5, fontweight="bold", loc="left")
+        ax.grid(axis="y", alpha=0.22)
+        for sp in ("top", "right"):
+            ax.spines[sp].set_visible(False)
+    axes[-1].set_xticks(xs)
+    axes[-1].set_xticklabels(labels, fontsize=9.5)
+    fig.suptitle(f"The project's rhythm by {title_of}", fontsize=14, fontweight="bold",
+                 x=0.012, ha="left", y=0.995)
+    note = ("every timestamp bucketed in local time, since UTC would move an evening onto the next day"
+            " · keyboard share and token spend only exist from 2026-07-26")
+    if dim == "weekday":
+        note = "hatched = weekend · " + note
+    fig.text(0.012, 0.006, note, fontsize=7.5, color="#999")
+    save(fig, f"rhythm_{dim}")
+
+
+def chart_lines_vs_words():
+    """The same corpus counted two ways, so a reformat is visible as a reformat.
+
+    A rewrap moves every line count that spans a paragraph and leaves the words
+    alone, so drawing both puts the 2026-08-09 reflow where it belongs: a cliff in
+    one series and nothing in the other.
+
+    Log y, absolute counts, the same choice `chart_tokens_vs_lines` makes: words
+    outnumber lines by an order of magnitude, and on a linear axis the smaller
+    series is a sliver. Indexing both to a common baseline was worse still — it
+    reads as magnitude and is not, so two series 17x apart drew on top of each
+    other. On a log axis the vertical gap *is* the ratio, which is the mechanism
+    here: sentence-per-line put the same words on fewer lines, so the gap widens
+    at the reflow rather than either curve behaving strangely.
+    """
+    git, dates, xs, ys, cum_on, lines, words, ys_line = _per_line_series()
+    if not dates or "words" not in git[dates[0]]:
+        return
+
+    md_l = [int(git[d].get("md") or 0) for d in dates]
+    md_w = [int(git[d].get("md_words") or 0) for d in dates]
+    per_word = ys          # the headline ratio
+    per_line = ys_line     # what it replaced
+
+    fig, (a1, a2) = plt.subplots(2, 1, figsize=(11, 8.4), sharex=True,
+                                 gridspec_kw=dict(height_ratios=[1, 1], hspace=0.22))
+
+    a1.set_yscale("log")
+    a1.fill_between(xs, md_l, md_w, color=GOLD, alpha=0.12, lw=0, zorder=1)
+    a1.plot(xs, md_w, color=OI["blue"], lw=2.8, ls=(0, (6, 2)), zorder=4,
+            path_effects=HALO, label="Docs, in words")
+    a1.plot(xs, md_l, color=OI["green"], lw=2.8, zorder=4, path_effects=HALO,
+            label="Docs, in lines")
+    a1.set_ylabel("count (log scale)", fontsize=10.5)
+    a1.set_title("The same docs, counted in lines and in words", fontsize=12.5,
+                 fontweight="bold", loc="left")
+    a1.annotate(f"{md_w[-1] / md_l[-1]:.1f} words / line", (xs[-1], (md_l[-1] * md_w[-1]) ** 0.5),
+                xytext=(-10, 0), textcoords="offset points", ha="right", fontsize=11.5,
+                fontweight="bold", color=GOLD, path_effects=HALO, zorder=LABEL_Z)
+
+    a2.set_yscale("log")
+    a2.plot(xs, per_line, color=GOLD, lw=2.8, zorder=4, path_effects=HALO,
+            label="Tokens ÷ line (retired)")
+    a2.plot(xs, per_word, color=OI["vermillion"], lw=2.8, ls=(0, (6, 2)), zorder=4,
+            path_effects=HALO, label="Tokens ÷ word (headline)")
+    a2.set_ylabel("tokens (log scale)", fontsize=10.5)
+    a2.set_title("What each costs — only the per-line ratio steps at the reflow",
+                 fontsize=12.5, fontweight="bold", loc="left")
+
+    # Panel 2's legend goes upper-left: the reflow marker's rotated label sits along
+    # the bottom, and lower-right put the two on top of each other.
+    for ax, loc in ((a1, "lower right"), (a2, "upper left")):
+        ax.grid(axis="y", which="both", alpha=0.16)
+        ax.legend(loc=loc, fontsize=9.5, frameon=False)
+        ax.set_xlim(xs[0], xs[-1])
+        for sp in ("top", "right"):
+            ax.spines[sp].set_visible(False)
+
+    reflow_marker((a1, a2), a2, y=0.05)
+    a2.xaxis.set_major_formatter(mdates.DateFormatter("%b %-d"))
+    a2.xaxis.set_major_locator(mdates.DayLocator(interval=4))
+    plt.setp(a2.get_xticklabels(), rotation=45, ha="right", fontsize=8.5)
+    fig.text(0.012, 0.006,
+             "same non-blank text both times, only the unit differs · "
+             "on a log axis the gap between two curves is their ratio",
+             fontsize=7.5, color="#999")
+    save(fig, "lines_vs_words")
+
+
+KIND_BANDS = [
+    ("manual",     "opened by a person",  OI["blue"],       ""),
+    ("dispatched", "opened by dispatch",  OI["orange"],     "//"),
+    ("unprompted", "no human prompt",     OI["grey"],       ".."),
+]
+
+
+def chart_session_kinds():
+    """Who opened each session, against what each kind spent.
+
+    The concurrency chart cannot answer this. Sixteen sessions at once is equally
+    consistent with one person driving them all and with a dispatcher fanning them
+    out, and the two say opposite things about how the work was done. The opening
+    prompt is the only thing that distinguishes them.
+
+    The two share panels are the finding: the dispatched share of *sessions* runs
+    consistently above its share of *spend*, so dispatch is the smaller half of the
+    work by the measure that costs money. Drawn as shares rather than as tokens per
+    session because a daily ratio is undefined on any day a kind has no sessions,
+    which is most days for dispatch.
+    """
+    rows = load("session_kinds.csv")
+    if not rows:
+        return
+    days = sorted({r["date"] for r in rows})
+    dxs = [dparse(d) for d in days]
+    kinds = [k for k, _, _, _ in KIND_BANDS]
+    sess = {k: {d: 0 for d in days} for k in kinds}
+    spend = {k: {d: 0 for d in days} for k in kinds}
+    for r in rows:
+        k = r["kind"]
+        if k not in sess:
+            continue
+        sess[k][r["date"]] += int(r["sessions"])
+        spend[k][r["date"]] += int(r["headline"])
+
+    fig, (a0, a1, a2) = plt.subplots(3, 1, figsize=(11, 10.5), sharex=True,
+                                     gridspec_kw=dict(height_ratios=[1, 1, 0.85],
+                                                      hspace=0.26))
+
+    for ax, series, ylab, title, scale in (
+            (a0, sess, "sessions started",
+             "Sessions started per day, by who wrote the opening prompt", 1),
+            (a1, spend, "headline tokens (M)",
+             "Tokens spent per day, by the kind of session that spent them", 1e6)):
+        bottom = [0.0] * len(days)
+        for k, label, col, hatch in KIND_BANDS:
+            vals = [series[k][d] / scale for d in days]
+            ax.bar(dxs, vals, width=0.72, bottom=bottom, color=col, alpha=0.75,
+                   edgecolor="white", linewidth=0.4, hatch=hatch, zorder=3,
+                   label=label)
+            bottom = [b + v for b, v in zip(bottom, vals)]
+        ax.set_ylabel(ylab, fontsize=10.5)
+        ax.set_title(title, fontsize=12.5, fontweight="bold", loc="left")
+        ax.grid(axis="y", alpha=0.22)
+
+    # Panel 3: the same split as two shares, which is what makes the gap readable.
+    #
+    # The share is taken over each window's *sums*, not as a mean of daily shares.
+    # A day with no sessions has no share to average, and feeding it in as 0%
+    # would read as "dispatch did nothing that day" when the answer is that
+    # nothing happened at all — a quiet Sunday would drag the line down as hard as
+    # a busy day of purely manual work.
+    def share_trend(series):
+        num = rolling_mean([series["dispatched"][d] for d in days])
+        den = rolling_mean([sum(series[k][d] for k in kinds) for d in days])
+        return [None if n is None or not d else 100 * n / d for n, d in zip(num, den)]
+
+    for vals, col, ls, label in (
+            (share_trend(sess), darken(OI["orange"]), "-", "share of sessions started"),
+            (share_trend(spend), darken(OI["vermillion"]), (0, (5, 2)), "share of tokens spent")):
+        pts = [(x, v) for x, v in zip(dxs, vals) if v is not None]
+        a2.plot([x for x, _ in pts], [v for _, v in pts], color=col, lw=2.6, ls=ls,
+                zorder=5, path_effects=HALO, label=label)
+    a2.set_ylabel("dispatched share (%)", fontsize=10.5)
+    a2.set_title("Dispatch is a larger share of sessions than of spend",
+                 fontsize=12.5, fontweight="bold", loc="left")
+    a2.grid(axis="y", alpha=0.22)
+    a2.legend(loc="upper left", frameon=False, fontsize=9.5)
+
+    for ax in (a0, a1, a2):
+        ax.set_xlim(dxs[0], dxs[-1])
+        for s in ("top", "right"):
+            ax.spines[s].set_visible(False)
+        for ev_date, _, col, ls in event_markers():
+            if dxs[0] <= ev_date <= dxs[-1]:
+                ax.axvline(ev_date, color=col, ls=ls, lw=1.4, zorder=EVENT_Z)
+    # Labelled only where there is room to read one. This window opens within days
+    # of the machine and model markers, so a label at the left edge lands on the y
+    # axis and strikes the ylabel. The line still marks the date; the other charts
+    # carry the text.
+    labels = [event_label(a0, ev, 0.55, lbl, col, yc="axes fraction")
+              for ev, lbl, col, ls in event_markers()
+              if dxs[0] + timedelta(days=3) <= ev <= dxs[-1]]
+    stagger_labels(fig, [t for t in labels if t is not None], 0.11)
+
+    a2.xaxis.set_major_formatter(mdates.DateFormatter("%b %-d"))
+    a2.xaxis.set_major_locator(mdates.DayLocator(interval=2))
+    plt.setp(a2.get_xticklabels(), rotation=45, ha="right", fontsize=8.5)
+    a0.legend(loc="upper left", frameon=False, fontsize=9.5, ncol=3)
+    fig.text(0.012, 0.006,
+             "sessions counted on the day they started; tokens on the day they were spent · "
+             "lines are a 7-day centered mean · covers only days with surviving transcripts, "
+             "about half the project's spend · a session's kind is read from its opening prompt, "
+             "which is a convention the dispatcher follows rather than a marker it emits",
+             fontsize=7.5, color="#999")
+    save(fig, "session_kinds")
+
+
 def main():
+    chart_session_kinds()
     chart_tokens_by_model()
-    chart_tokens_per_line()
-    chart_tokens_vs_lines()
+    chart_tokens_per_word()
+    chart_tokens_vs_words()
     chart_overview()
     chart_token_anatomy()
     chart_cumulative_cache()
     chart_parallel_sessions()
+    chart_velocity()
+    chart_velocity_quality()
+    chart_rhythm("weekday")
+    chart_rhythm("hour")
+    chart_lines_vs_words()
     print(f"wrote charts to {CHARTS}")
 
 
