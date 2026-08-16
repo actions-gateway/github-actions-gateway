@@ -12,9 +12,9 @@
 // depending on which awk ran it.
 //
 // The rules. This list is the numbering: rules 1 to 7 still line up with the
-// globally-installed backlog skill's own lint script, but 8 diverges (there it
-// is a `path:N` reference check) and 9 onward exist only here, so the skill is
-// not a second source to reconcile against.
+// globally-installed session-backlog skill's own lint script, but 8 diverges
+// (there it is a `path:N` reference check) and 9 onward exist only here, so
+// the skill is not a second source to reconcile against.
 //
 //  1. No `**Next ID:** QN` line — IDs come from a server-side ref allocator,
 //     and a file-local counter conflicts by construction (Q382).
