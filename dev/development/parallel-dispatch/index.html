@@ -2705,6 +2705,34 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#what-selection-actually-optimizes-for" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What selection actually optimizes for
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="What selection actually optimizes for">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#intent-teach-the-dispatcher-to-prioritize" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Intent: teach the dispatcher to prioritize
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#the-merge-model" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2924,7 +2952,7 @@ I can stop or amend the rules anytime.</p>
 </ul>
 <h2 id="roles">Roles<a class="headerlink" href="#roles" title="Permanent link">&para;</a></h2>
 <p><strong>Dispatcher</strong> (one session — typically the one you are in):
-- Selects the batch, decides priority and ordering, groups by file contention.
+- Selects the batch, decides ordering, groups by file contention (<a href="#what-selection-actually-optimizes-for">what that actually optimizes for</a>, which is not the Queue's priority order).
 - Spawns one worker session per task.
 - Watches each PR, verifies its <strong>scope</strong> (checks-green is necessary, not sufficient), hands it to the maintainer, and advances the next task.
 - Owns <strong>assignment</strong>, merge ordering, and scope review (see <a href="#the-dispatcher-owns-assignment-not-coordination-files">the dispatcher owns assignment</a>).
@@ -3102,7 +3130,7 @@ A worker is a fresh, unattended session: it cannot pause to run the <code>model-
 <p>When unsure, size up: a worker that picks the wrong approach costs more dispatcher toil than the model delta.
 Record the per-task model choice in the <code>tmp/</code> tracker alongside task → chip → PR → state so the run stays auditable.</p>
 <h2 id="the-dispatcher-loop">The dispatcher loop<a class="headerlink" href="#the-dispatcher-loop" title="Permanent link">&para;</a></h2>
-<p>For each task, in priority order and respecting the concurrency cap:</p>
+<p>For each task, respecting the concurrency cap and the selection trade-off below:</p>
 <ol>
 <li>Spawn the worker chip with a self-contained prompt.</li>
 <li>When its PR reaches <strong>green + mergeable</strong>, first <strong>confirm the code-exercising gates actually ran</strong> — green/<code>CLEAN</code> is not enough if a path-gated workflow was skipped (a PR opened docs-only then given code can show all-green while build / lint / integration / security-scan never tested it; <code>gh pr checks &lt;n&gt;</code> + <code>gh run list --commit &lt;sha&gt;</code>, and close→reopen to force them — see <a href="../testing/#path-gated-workflows-verify-the-heavy-gates-actually-ran">testing.md § Path-gated workflows</a>).
@@ -3117,6 +3145,36 @@ Record the per-task model choice in the <code>tmp/</code> tracker alongside task
 </ol>
 <p>Keep a small written tracker (a scratch file in the gitignored <code>tmp/</code>) of task → chip → PR → state, plus the decisions made.
 It is cheap and makes the run auditable and resumable.</p>
+<h2 id="what-selection-actually-optimizes-for">What selection actually optimizes for<a class="headerlink" href="#what-selection-actually-optimizes-for" title="Permanent link">&para;</a></h2>
+<p><strong>Selection is not the Queue's priority order, and pretending otherwise hides a real trade-off.</strong> Three rules in this playbook each bias the batch away from "take the top rows", and together they dominate:</p>
+<ul>
+<li><strong>Parallelizability.</strong> Items must be independent and one-PR-sized, so a task entangled with three others is passed over however high it sits.</li>
+<li><strong>Non-adjacency.</strong> <a href="#the-dispatcher-owns-assignment-not-coordination-files">Never hand one batch two adjacent Queue rows</a>, because their row deletions cannot merge clean.
+  Priority order is exactly the order that makes rows adjacent.</li>
+<li><strong>Size.</strong> Dispatch is <a href="#when-to-use-it">for roughly S–M items</a>.
+  Larger work is not dispatched at all, so it never competes for a slot.</li>
+</ul>
+<p>The size bias is the largest and the most measurable.
+Across the surviving transcript window, rows worked by dispatched sessions were 79% <code>S</code> and 20% <code>M</code>; rows worked by hand were 57% <code>S</code> and 41% <code>M</code>.
+That single bias is enough to explain why a dispatched session costs about 0.61× a manual one: it runs 0.77× the turns at 0.79× the tokens per turn, and a smaller task produces both, since fewer files to touch means fewer turns and less new context cached per turn.
+Measured from the session transcripts over 2026-07-26 to 08-16.</p>
+<p>Two caveats on those figures: a brief can name more than one Q-ID, and a manual session only enters the comparison when its opening names a row, which excludes exploratory work that never had one.
+Both push the same way, so the gap is a floor rather than a point estimate.</p>
+<p><strong>None of this is a defect.</strong> The constraints are real, and the historical fallback when priority genuinely mattered was to dispatch by hand from the Queue.
+It is a limitation to know about when reading a run: a cleared batch is evidence about what parallelizes, not about what mattered most.</p>
+<h3 id="intent-teach-the-dispatcher-to-prioritize">Intent: teach the dispatcher to prioritize<a class="headerlink" href="#intent-teach-the-dispatcher-to-prioritize" title="Permanent link">&para;</a></h3>
+<p>The goal is to dispatch more, and to have the dispatcher weigh Queue priority itself rather than having a human override it by hand-picking rows.
+That is not solved, and this section records the shape of the problem rather than a design.</p>
+<p>What makes it hard is that priority here is <strong>release-thematic</strong>, and the theme changes:</p>
+<ul>
+<li>Bug fixes ahead of features when a patch release is next; features ahead of fixes when a minor is.</li>
+<li>Retro and cleanup items when the aim is to clear work that does not affect users.</li>
+<li>A meta-milestone that cuts across all of those, where the release is defined by a theme rather than a version: v1/v2 parity, classic/scale-set parity, ARC parity for 1.6.</li>
+</ul>
+<p>A dispatcher cannot read that off the Queue, because the Queue records priority <em>within</em> the current theme and never the theme itself.
+Learning it from session history is the obvious direction, and the obvious gap is that history shows the choices without the use case behind them: the same row can be top of the batch in one release and skipped in the next.
+So the missing input is a statement of what the next release is <em>for</em>, in a form the dispatcher can weigh rows against.</p>
+<p>Until that exists, priority stays a human input: state the theme in the <code>/goal</code> prompt's batch scope, or hand-pick the rows.</p>
 <h2 id="the-merge-model">The merge model<a class="headerlink" href="#the-merge-model" title="Permanent link">&para;</a></h2>
 <p>This is the key design decision; get it right up front.</p>
 <ul>
