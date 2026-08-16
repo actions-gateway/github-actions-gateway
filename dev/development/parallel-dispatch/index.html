@@ -2947,7 +2947,7 @@ I can stop or amend the rules anytime.</p>
 <li><strong>Merge gating</strong> — not a knob.
   The maintainer reviews and enqueues; the dispatcher verifies and reports (<a href="#the-merge-model">the merge model</a>).</li>
 <li><strong>Model per task</strong> — match the model to the work, not the batch (see <a href="#model-selection">Model selection</a>).
-  The dispatcher sets each worker's model in its spawn prompt; an autonomous worker cannot run <code>model-advisor</code> interactively.</li>
+  The dispatcher sets each worker's model in its spawn prompt; an autonomous worker has nobody to ask.</li>
 </ul>
 <p>Two practical notes:</p>
 <ul>
@@ -3102,7 +3102,7 @@ Read the marker as a set rather than one string — <code>{"/dispatch-worker", "
 <p><code>session-orchestrator</code> §2 lists what the prompt carries — the item and its model, the dispatcher's worktree name, what was measured and when, the trap worth naming, and contention by file — and why restating anything else makes the chip list unreviewable.
 Three of those land differently here:</p>
 <ul>
-<li><strong>The model</strong> is picked because a fresh worker cannot run <code>model-advisor</code>, which prompts interactively (<a href="#model-selection">Model selection</a>).</li>
+<li><strong>The model</strong> is picked up front because a fresh worker has nobody to ask (<a href="#model-selection">Model selection</a>).</li>
 <li><strong>An unmeasured claim in a prompt is the expensive kind.</strong> Q805's chip forwarded the row's "all three fail closed" as fact and drew an instruction from it, not to change what the checker decides; the worker's first measurement found one probe failing <em>open</em>, on the call immediately before <code>gh pr merge --squash</code>.
   Mark an unverified claim as unverified, or leave it out.</li>
 <li><strong>Contention has a guard attached.</strong> When several workers will touch one large doc, say so <strong>and</strong> say what the resulting <code>gh pr create</code> denial means: <em>read the other PR and override with the reading</em>, never <em>re-scope this change</em>.
@@ -3119,9 +3119,8 @@ Three of those land differently here:</p>
 </blockquote>
 <h2 id="model-selection">Model selection<a class="headerlink" href="#model-selection" title="Permanent link">&para;</a></h2>
 <p>The dispatcher picks each worker's model and bakes it into the spawn prompt.
-A worker is a fresh, unattended session: it cannot pause to run the <code>model-advisor</code> skill (which prompts the user interactively), so the per-task choice is the dispatcher's to make up front.</p>
-<p><code>session-orchestrator</code> §3 owns the rule — match the model to the task rather than the batch, and size up when unsure.
-The repo-specific part is why the choice cannot be deferred: <code>model-advisor</code> prompts the user interactively, so an unattended worker can never run it.</p>
+A worker is a fresh, unattended session with nobody at the keyboard to choose, so the per-task choice is the dispatcher's to make up front.</p>
+<p><code>session-orchestrator</code> §3 owns the rule — match the model to the task rather than the batch, and size up when unsure.</p>
 <p>Record the per-task model choice in the <code>tmp/</code> tracker alongside task → chip → PR → state so the run stays auditable.</p>
 <h2 id="the-dispatcher-loop">The dispatcher loop<a class="headerlink" href="#the-dispatcher-loop" title="Permanent link">&para;</a></h2>
 <p>For each task, respecting the concurrency cap and the selection trade-off below:</p>
