@@ -187,17 +187,33 @@ def event_markers():
     return sorted(events, key=lambda e: e[0])
 
 
+# Which side of its line a label sits on, by the colour of the event. Machine
+# labels go right and everything else left, because the two events this project
+# most needs to tell apart — the leading model and the machine — land one day
+# apart, so two left-side labels overlap however far they are staggered down.
+# Opposite sides separate them at any date spacing; staggering alone cannot.
+LABEL_SIDE = {MACHINE_STYLE[0]: "right"}
+
+
 def event_label(ax, x, y, label, col, yc="data"):
     """Rotated event label reading upward, clear of the line it annotates.
 
     ``rotation_mode="anchor"`` with va="bottom" rotates the glyph body to the left
     of the anchor, so the line doesn't strike through the text.
+
+    The side comes from ``col`` rather than from the caller, so every chart that
+    draws these events gets the same separation without repeating the rule.
     """
-    ax.annotate(label, (x, y), xytext=(-3, 4), textcoords="offset points",
-                xycoords=("data", yc), rotation=90, rotation_mode="anchor",
-                ha="left", va="bottom", fontsize=9.5, fontweight="bold",
-                color=col, zorder=6,
-                path_effects=[pe.Stroke(linewidth=2.5, foreground="white"), pe.Normal()])
+    # va flips which side of the anchor the rotated glyph body falls on, so it is
+    # what actually moves a label across its line; the offset only nudges it.
+    right = LABEL_SIDE.get(col) == "right"
+    dx, va = (3, "top") if right else (-3, "bottom")
+    return ax.annotate(label, (x, y), xytext=(dx, 4), textcoords="offset points",
+                       xycoords=("data", yc), rotation=90, rotation_mode="anchor",
+                       ha="left", va=va, fontsize=9.5, fontweight="bold",
+                       color=col, zorder=6,
+                       path_effects=[pe.Stroke(linewidth=2.5, foreground="white"),
+                                     pe.Normal()])
 
 
 def reflow_marker(axes, label_ax, y=0.01):
@@ -339,12 +355,11 @@ def chart_tokens_by_model():
         if ev not in days:
             continue
         xi = days.index(ev)
-        ax.axvline(xi - 0.5, color=col, ls=ls, lw=1.4)
-        # Labels near the right edge read inward so they stay on the axes.
-        right = xi > len(days) * 0.78
-        labels.append(ax.text(xi + (-0.9 if right else -0.4), max(bottom) * 0.92, label,
-                              ha="right" if right else "left",
-                              fontsize=10, fontweight="bold", color=col))
+        ax.axvline(xi - 0.5, color=col, ls=ls, lw=1.4, zorder=EVENT_Z)
+        # Vertical, like every other chart here. Horizontal labels needed a
+        # read-inward rule near the right edge and still stacked the model and
+        # machine events on top of each other, since they are one day apart.
+        labels.append(event_label(ax, xi - 0.5, 0.02, label, col, yc="axes fraction"))
     ax.set_title("Daily Claude Code token usage by model", fontsize=14, fontweight="bold", loc="left")
     ax.set_ylabel("tokens / day  (millions)", fontsize=11)
     ax.set_xticks(xs)
@@ -357,7 +372,7 @@ def chart_tokens_by_model():
     ax.grid(axis="y", alpha=0.25)
     fig.text(0.012, 0.005, "hatched bars (May 16–18) estimated from archived sessions", fontsize=7.5, color="#999")
     fig.tight_layout()
-    stagger_labels(fig, labels, max(bottom) * 0.075)  # after layout: it measures the final axes box
+    stagger_labels(fig, labels, 0.085)  # after layout: it measures the final axes box
     save(fig, "tokens_by_model")
 
 
