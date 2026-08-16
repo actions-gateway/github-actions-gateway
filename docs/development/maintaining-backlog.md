@@ -3,11 +3,12 @@
 `docs/STATUS.md` is the single source of truth for project progress and priorities.
 It is high-contention — almost every session edits it — so keeping churn low matters as much as keeping it accurate.
 
-The format and process come from the globally-installed **`session-backlog` skill** (agents: invoke it for the full playbook: grooming checklist, staleness signals, parallel dispatch, migration).
-**This page is authoritative wherever the two overlap.** The skill is written to be portable across repos, so it states the general rule; this page states what is true here — the character caps, the ID allocator, the merge driver, the Progress table, the release scope ledger, and every measurement taken in this repo.
-Read a difference as this repo being more specific, not as the skill being wrong.
+The format and process come from the globally-installed **[`session-backlog`](skills.md#session-backlog) skill**, which agents invoke for the full playbook: the format, adding, picking, deferring, completing, the grooming checklist, staleness signals, and migration.
+**This page does not restate any of that.** It states what is true *here* — the character caps, the ID allocator, the merge driver, the Progress table, the release scope ledger, the flake-watch lifecycle, and every measurement taken in this repo.
+**Where the two overlap, this page wins**; read a difference as this repo being more specific, not as the skill being wrong.
 
-The repo vendors the skill's tooling so the rules hold for every contributor, with or without the skill:
+A contributor reading this page alone therefore gets the deltas rather than the process.
+What holds the rules for them is the vendored tooling below, which runs in `make check` and the pre-commit hook whether or not the skill is installed:
 
 - [`scripts/docs/lint-backlog.sh`](../../scripts/docs/lint-backlog.sh) — enforces every format rule below.
   It selects the file and maps the environment interface onto flags; the rules themselves are [`devtools/docs/backloglint`](../../devtools/docs/backloglint/), whose package comment is the canonical rule list.
@@ -31,44 +32,32 @@ The repo vendors the skill's tooling so the rules hold for every contributor, wi
   Read-only.
   The replay reads each diff line's cells through the shared Markdown parse layer, so an escaped pipe in a cell cannot shift a row's fields (Q614).
 
-## The shared process, in brief
+## Where the format differs from the skill
 
-- **Position is priority.** The Queue is read top-to-bottom; pick from the top.
-  Decide a new item's priority *before* inserting it and place the row where it belongs — never append by default.
-  Rank by severity/blast radius, then leverage (what it unblocks), ready over blocked; size only as a tiebreaker.
-- **Two Queue states only: 🔲 ready and 🚫 blocked.** Done rows are **deleted** (git is the archive), "started" is signaled by the open PR (run `gh pr list` before picking; skip rows an open PR covers), and parked rows live in the Deferred table.
-- **Verify 🚫 blockers before treating a row as blocked** — a prior session may have shipped the dependency without flipping the row; grep for its deliverables.
-  Cross-item blockers are machine-readable: a 🚫 row's Notes start with `Blocked by [QN](#QN)`, and `make queue-unblock ID=QN` lists every dependent when the blocker lands.
-- **Verify the defect a row asserts before implementing it.** A row's Notes are written at filing time from an observation that was never re-checked, so grep for the claimed defect the same way you grep for a blocker's deliverables — a prior session may have closed it without flipping the row, and Notes carry no observed-vs-suspected marker.
-  Q506's row named a `noproxy` GHES gap that Q322 had already fixed; taking the row at its word would have "fixed" a non-bug and missed the real one next to it.
-  An audit row inheriting an unverified premise is the sharpest case, but the rule is general.
-- **Search before you file** — `make queue-id` does it for you, and reading its candidates is the part that is on you.
-  Nothing else catches a semantic duplicate: two rows describing one problem in different words pass every lint, and both get worked.
-  [Details and calibration below](#search-before-you-file).
-- **Allocate IDs with `make queue-id TITLE="…"`**, which claims a `refs/queue-ids/QN` ref on the remote.
-  There is no counter line in the file: a shared mutable counter handed concurrent sessions the same ID and conflicted on the same line by construction, forcing a renumber ([Q382](queue-id-allocation.md#why-the-counter-had-to-go)).
-  IDs are sparse, stable, never reused or renumbered, and never get sub-IDs (`5a`) — a trackable child gets its own top-level ID.
-  The `Q` prefix keeps `Q44` from auto-linking to PR/issue #44; use the bare ID in commits and PRs.
-- **Notes are present tense, ≤ 250 characters (hard cap, counted as the cell is written — an em dash costs one, an escaped `\|` costs two); past 200 characters the row must link a doc** from its Item or Notes cell — a `#QN` sibling anchor doesn't count, since sibling rows are capped too.
-  No merged-PR lists or "SHIPPED" narration — history lives in `git log` and the plan doc.
+- **There is no `**Next ID:**` counter line.** IDs are claimed instead, with `make queue-id TITLE="…"`, which takes a `refs/queue-ids/QN` ref on the remote.
+  A shared mutable counter handed concurrent sessions the same ID and conflicted on the same line by construction, forcing a renumber ([Q382](queue-id-allocation.md#why-the-counter-had-to-go)).
+  Allocation also runs [the duplicate search](#search-before-you-file), which is the part of "search before you file" a mechanism can carry; reading the candidates it prints is the part that is on you.
+- **The Notes cap is hard, and counted as the cell is written**: ≤ 250 characters, where an em dash costs one and an escaped `\|` costs two.
+  Past 200 characters the row must link a doc from its Item or Notes cell — a `#QN` sibling anchor doesn't count, since sibling rows are capped too.
   The same caps apply to Deferred trigger cells.
-  Write for a skimmer: cut detail and link a doc rather than compressing into fragments.
-- **A literal pipe in any cell is written `\|`, code spans included.** GFM reads a raw `|` as a column separator wherever it appears, so it splits the row into more cells than the header declares and everything past the header's last column is dropped from the rendered table, on github.com and on the site both.
-  Nothing about the source line looks wrong, which is why it needs a gate: `lint-backlog` rule 13 compares each row's own width against its table header.
+- **A literal pipe is written `\|`, code spans included, and `lint-backlog` rule 13 gates it** by comparing each row's own width against its table header.
   Measured 2026-08-14: Q866's Notes rendered as far as its opening backtick, losing the remaining two thirds, and the truncation also hid an over-cap cell from rule 4.
   **Budget for that second half: escaping the pipe is not a one-character fix.** Every rule downstream had been reading the stub before the pipe, so the cell they measure changes the moment it renders whole, and one of them can newly fail on a row nobody edited.
   Q866's Notes went from a measured 100 characters to 269 against the 250 cap, and had to be trimmed in the same edit.
 - **A row never cites a count of the backlog.** "42 Queue rows", "60 parked" and friends go stale on the next filing — the file they measure is the one thing guaranteed to change under them, often the same day.
   State the *shape* instead ("the Queue is read top-down; the parked rows are only grepped on a trigger"), and put any dated figure in the linked plan doc, where a point-in-time measurement belongs.
   Q569's row was corrected twice in one session — 36 → 42 → 44 — before the count came out entirely.
-- **Deferred rows carry a concrete revive trigger**, tagged by source: `**Demand:**` (an outside ask) · `**Event:**` (an observable outside-our-control condition) · `**Decision:**` (our own call — grep `**Decision:**` for what we could move on unilaterally).
-  When the trigger fires, move the row back into the Queue at the position it then deserves.
-  A non-commitment belongs in [appendix-g](../design/appendix-g-future-enhancements.md), not Deferred.
-- **`docs/STATUS.md` edits are isolated commits** — never mixed with code or plan-doc changes, even when completing an item mid-feature ([enforced](#isolated-commits-and-what-actually-enforces-them)).
-  Use `docs(status):` subjects, and name the removal reason with a fixed verb — `complete QN`, `prune QN`, `merge QN into QM`, `defer QN` — so metrics can tell throughput from garbage collection.
-  Batch bulk additions (one audit's discoveries) into one commit; keep reshuffles separate from additions.
+- **A non-commitment belongs in [appendix-g](../design/appendix-g-future-enhancements.md)**, never parked in Deferred.
+  Deferred triggers are tagged by source here: `**Demand:**` (an outside ask) · `**Event:**` (an observable outside-our-control condition) · `**Decision:**` (our own call — grep `**Decision:**` for what we could move on unilaterally).
+- **`make queue-unblock ID=QN` lists every dependent** when a blocker lands, which is what makes the skill's `Blocked by [QN](#QN)` convention worth writing exactly.
+- **A row's asserted defect gets re-checked before it is implemented, not only when it is groomed.** Q506's row named a `noproxy` GHES gap that Q322 had already fixed; taking the row at its word would have "fixed" a non-bug and missed the real one next to it.
+  An audit row inheriting an unverified premise is the sharpest case, but the rule is general — [what a row can be wrong about, and what each mistake cost](#a-rows-asserted-defect-is-a-claim-not-a-finding).
+- **Backlog commits are isolated here by two enforcing gates, not by convention** ([which, and why neither subsumes the other](#isolated-commits-and-what-actually-enforces-them)).
   When a rebase or merge conflicts on this file, resolve it via the [fast path](#resolving-a-statusmd-only-conflict-verify-cheap-push-now) below.
-- **M/L items get a plan doc** under `docs/plan/`, linked from the Item cell.
+
+**The layout is the single table**, which is the one the skill's tooling and every gate here enforce.
+The skill also describes a per-item store as a destination; no cutover has landed on `main`, so this page and `lint-backlog` both describe the table.
+A page that starts describing the store before a cutover has landed on `main` is [acting on a decision it cannot confirm](parallel-dispatch.md#coordination-channels).
 
 ## Isolated commits, and what actually enforces them
 

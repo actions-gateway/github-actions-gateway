@@ -58,9 +58,9 @@
 21 docs/development/kind-iteration.md
 96 docs/development/kubernetes-conventions.md
 5 docs/development/local-kind-demo.md
-121 docs/development/maintaining-backlog.md
+112 docs/development/maintaining-backlog.md
 10 docs/development/networkpolicy-port-matching.md
-92 docs/development/parallel-dispatch.md
+39 docs/development/parallel-dispatch.md
 9 docs/development/queue-id-allocation.md
 47 docs/development/technical-debt.md
 594 docs/development/testing.md
