@@ -101,7 +101,8 @@ STATUS_GATES := lint-backlog status-isolation-check roadmap-check plan-index-che
 # Every entry is also in CHECK_FAST_GATES, so like STATUS_GATES this is a strict
 # subset of `make check` and never a second opinion.
 DOCS_GATES := doc-links plan-index-check no-plan-refs-check em-dash-check \
-              md-reflow-check page-density-check release-pins-check
+              md-reflow-check page-density-check release-pins-check \
+              release-notes-check
 
 # Behavioural assertions for the scripts/ tree that shellcheck (a linter) can't
 # express — the tags-only release signing-identity regexp (Q124), the
@@ -201,5 +202,8 @@ SCRIPTS_TESTS := agent/claude-go-throttle-hook-test agent/local-throttle-test \
                  go/go-vet-tags-test go/go-work-tidy-test \
                  release/download-cosign-test release/release-delta-test \
                  release/verify-release-test release/verify-published-docs-test \
+                 release/check-artifact-unchanged-test release/check-gates-green-test \
+                 release/render-release-body-test release/check-release-notes-test \
+                 release/check-release-digests-test \
                  updatecli/latest-cluster-autoscaler-patch-test \
                  docs/check-metric-tiers-test docs/check-reason-tiers-test

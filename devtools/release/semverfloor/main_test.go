@@ -122,3 +122,36 @@ func TestFloorEndToEnd(t *testing.T) {
 		t.Errorf("nonConventional = %d, want 1", len(r.NonConventional))
 	}
 }
+
+// TestShipsBytes pins the split between "on the released surface" and "can change
+// a released artifact's bytes". The two are not the same question, and the gap is
+// why -ships exists apart from the floor: Surface.Ships matches a Go package
+// directory whole, so a _test.go beside shipped code answers yes.
+//
+// Both directions are asserted. A filter answering no to everything would let a
+// real artifact change through the release freeze, and one answering yes to a test
+// file would cost a release candidate for added coverage.
+func TestShipsBytes(t *testing.T) {
+	surface := Surface{
+		PkgDirs: map[string]bool{"api/apiconditions": true},
+		Trees:   []string{"charts/actions-gateway"},
+	}
+
+	for _, tc := range []struct {
+		path string
+		want bool
+		why  string
+	}{
+		{"api/apiconditions/conditions.go", true, "shipped code"},
+		{"api/apiconditions/conditions_test.go", false, "test file in a shipped package"},
+		{"api/apiconditions/testdata/x.yaml", false, "testdata is not a package dir"},
+		{"charts/actions-gateway/README.md", true, "markdown packaged into the chart tarball"},
+		{"charts/actions-gateway/values_test.go", false, "test file inside a packaged tree"},
+		{"docs/development/testing.md", false, "documentation off the surface"},
+		{"internal/unshipped/thing.go", false, "package nothing released imports"},
+	} {
+		if got := shipsBytes(surface, tc.path); got != tc.want {
+			t.Errorf("shipsBytes(%q) = %v, want %v (%s)", tc.path, got, tc.want, tc.why)
+		}
+	}
+}

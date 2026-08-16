@@ -230,6 +230,15 @@ semver-floor: ## Report the minimum semver bump the merged work already requires
 release-links-check: ## Resolve release-note links into the versioned site against a local site/ build
 	scripts/docs/check-release-links.sh
 
+# The release-body rules a machine can settle: a duplicate h1, an in-page anchor
+# that renders dead, a helm command carrying an image-style chart version. Cheap
+# and offline, so it joins the docs gates. Collapsed height is reported rather
+# than failed — GitHub publishes no truncation threshold, and inventing one would
+# block a release over a guess.
+.PHONY: release-notes-check
+release-notes-check: ## Check docs/releases/ against the release-body rules that are mechanical
+	scripts/release/check-release-notes.sh
+
 # Enforce the "all go modules use the same Go version" rule (Q68). The two
 # go.work.gen files feed `make manifests` via GOWORK= and have silently drifted
 # off the repo `go` directive before, breaking code generation. This asserts the

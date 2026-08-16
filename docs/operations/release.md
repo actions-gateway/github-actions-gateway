@@ -147,8 +147,26 @@ Each of them found something real in the 1.5 cycle, and each found it *after* th
 Record the verdict in the release's plan doc as with the other pre-flight steps, and file what it turns up as gating rows.
 The point of doing it here rather than at the tag is that the answers are free before a candidate exists and cost a new RC afterwards: in 1.5 they arrived after `rc.1` had been cut, published and validated, and superseded it.
 
-- `main` is green: unit/integration/e2e and `security-scan.yml` all passing on the commit you are about to tag.
-  Run `make check` locally as a final gate.
+- `main` is green: every required gate passing on the commit you are about to tag.
+
+  ```bash
+  scripts/release/check-gates-green.sh origin/main
+  ```
+
+  It asks by commit across every lane, because `gh run list --branch main` hides merge-queue runs and so reports "not validated" about a commit that is.
+  It reads **job** conclusions rather than the run's, because each `<workflow>-gate` job passes on `skipped` as readily as on `success` ([testing.md](../development/testing.md#path-gated-workflows-verify-the-heavy-gates-actually-ran)).
+
+  **Expect `SKIPPED`, and do not read it as red.** It is the ordinary shape of a release tip: docs-only merges sit on top of the last code change, so the heavy jobs path-gate themselves away.
+  All nine required workflows had skipped their heavy job on the commit `v1.5.0` was tagged at, and the release was sound, because the code was the tree an earlier commit had validated in full.
+  Prove exactly that, and say which commit you are relying on:
+
+  ```bash
+  scripts/release/check-artifact-unchanged.sh <last-fully-validated-sha> origin/main
+  ```
+
+  A `NOT GREEN` line is the different answer: a lane failed, or none reported at all.
+  That one blocks the tag.
+  Run `make check` locally as a final gate, from a branch cut from `origin/main` so the tree matches the target.
 - Choose the version `vX.Y.Z` (semver).
   The tag **must** match `v*` or `publish.yml` will refuse to publish.
 - **Review the API surface this tag publishes for the first time.** A field, enum value, or default costs a rename to change before it ships and a conversion shim plus a deprecation window afterwards, so the tag is the moment the cheap window closes.
@@ -474,6 +492,21 @@ A red matrix, a failed CRD smoke, or a dead `NodeShare` profile is a **stop-ship
 
 ### 2. Tag and push
 
+**What may land between a validated candidate and the stable tag.** A candidate's dogfood validation covers the tree it was cut from, so anything merged after it that moves an artifact makes the verdict describe something other than what ships.
+That is how `v1.5.0-rc.1` was superseded: it validated, eight rows merged on top, and its verdict stopped describing `main`.
+
+The rule is **byte-identical artifacts, not "docs only"**.
+Documentation changes are expected in this window and cannot be avoided, because the validation verdict does not exist until the candidate is tagged, so the notes' Validation section is necessarily written afterwards.
+But the labels do not line up: `charts/actions-gateway/README.md` is a markdown file that **ships inside the chart tarball**, so a pure-docs pull request can change a published chart's bytes.
+Check rather than classify:
+
+```bash
+scripts/release/check-artifact-unchanged.sh <validated-candidate-sha> origin/main
+```
+
+Exit 1 means the stable tag would ship something no candidate validated.
+Revert it, or cut and validate a new candidate.
+
 **Land [step 7](#7-bump-the-pinned-release-in-the-docs)'s pin bump on `main` before you tag a stable release**, and confirm the gate names the version you are about to cut:
 
 ```bash
@@ -485,6 +518,8 @@ Three of the four releases cut since `1.0.0` shipped the previous version's inst
 
 Bumping early is possible because a tagged candidate makes it so: `check-release-pins.sh` accepts a pin naming a release that has a candidate and no stable tag yet.
 It accepts the *current* release too, so a green gate is not on its own evidence the bump has landed: read the version it prints.
+
+The pin bump is a documentation change, so it does not disturb the freeze check above.
 
 ```bash
 git switch main && git pull --ff-only
@@ -602,6 +637,14 @@ docker buildx imagetools inspect ghcr.io/actions-gateway/gmc:vX.Y.Z \
   --format '{{json .Manifest.Digest}}'
 ```
 
+**Reconcile what you transcribed against what published.** The `Container images` section is the only part of a note that cannot be written before the tag, so it is copied in by hand after the release is already sealed, into the document operators take their `--set …image.digest=` pins from:
+
+```bash
+scripts/release/check-release-digests.sh vX.Y.Z
+```
+
+It asserts each digest matches the registry **and** is a multi-arch index, because a digest can be wrong in two ways: provenance binds to the index while SBOM attestations bind per-arch, so a per-arch digest pasted here pins operators to one architecture and still verifies cleanly against its own attestation.
+
 ### 5. Cut the GitHub Release
 
 **`publish.yml` creates the GitHub Release itself** (Q293) — no manual step.
@@ -629,8 +672,11 @@ What follows is the method, written after `v1.3.0`.
 Publish from it:
 
 ```bash
-gh release edit vX.Y.Z --notes-file docs/releases/vX.Y.Z.md
+gh release edit vX.Y.Z --notes-file <(scripts/release/render-release-body.sh docs/releases/vX.Y.Z.md)
 ```
+
+Publish through the renderer, never the file directly: the file is sentence-per-line by gate, and comment-flavour GFM turns each of those newlines into a `<br>`.
+`make release-notes-check` covers the rest of what a machine can settle here (a duplicate `# ` heading, an in-page anchor that renders dead, a `helm` command carrying an image-style chart version) and reports collapsed height for the fold decision.
 
 `v1.3.0`'s notes were drafted under `tmp/` and edited straight on the Release.
 By the time they were right they had been through a wrong count, a dead anchor, 46 forced line breaks, two mismatched PR numbers, and a caveat that never said "GHES" — every one caught by hand, none by review, and none of it reviewable because the text was not in a diff.
@@ -788,12 +834,21 @@ Prose is for framing.
 Anything a reader might need to act on individually gets its own line.
 
 **Fold long lists.** `<details><summary>` renders on the Releases page and keeps the top scannable.
-It is also the only lever against truncation: the Releases *index* collapses a long body behind a **"read more"** link, and a fold counts as its one summary line while collapsed.
-`v1.3.0` hit that limit and was folded back under it — eight folds.
-If the index is truncating, the fix is another fold, not a cut.
+That is what folding is for, and it is worth doing on its own terms.
 
-**Pick the next fold by measuring collapsed height, not by eye.** Sum each section's bytes with `<details>…</details>` bodies excluded; the biggest sections are rarely the ones that feel long.
-`v1.3.0` measured 9.5k collapsed, and the third-largest section was Validation — not an obvious candidate, since Upgrading and Highlights are larger but must both stay open.
+**Folding is not a lever against index truncation, and the ordering is.** Measured 2026-08-15 against the live Releases index: **every stable release this project has cut is truncated** behind a "Read more" link, `v1.3.0`, `v1.4.0` and `v1.5.0` alike, including the one this runbook previously recorded as having been folded back under the limit.
+The cut lands around **9k of source**, and the content past it is genuinely absent from the index page rather than merely hidden.
+
+So the question is never "how do I get under the limit" — you will not.
+It is **what does a reader see before clicking**, and the answer is decided by section order:
+
+```bash
+make release-notes-check
+```
+
+It names the sections above and below the cut for each note.
+`v1.5.0`'s six folds all begin past it, which is why a seventh would have changed nothing, and why its Deprecations section is not visible on the index where `v1.3.0`'s and `v1.4.0`'s were.
+A fold helps only when it collapses something that would otherwise sit inside the first 9k.
 
 **When the content being folded is evidence, put the evidence in the `<summary>`.** A fold whose summary reads "Validation details" hides the receipt; one that reads `73/73 e2e specs on Kata microVM workers, on live GKE — the four legs, and what none of them assert` *is* the receipt, and a reader who never expands it has still seen the number.
 That is the exception to the count-in-the-summary convention: enumerations carry a count, evidence carries the finding.
@@ -843,9 +898,19 @@ The site-side ids for one page, when you want to read them directly:
 grep -oE 'id="[^"]*"' site/operations/upgrade/index.html | sed 's/id="//;s/"//'
 ```
 
-**Do not hard-wrap.** GitHub renders a release body with comment-flavour GFM, where a single newline becomes `<br>`.
-Keep every paragraph, blockquote, and list continuation on one line.
-`v1.3.0`'s hard-wrapped draft rendered 46 of them.
+**Do not hard-wrap**, but do not unwrap the file either, because `md-reflow-check` keeps every tracked markdown file at sentence-per-line and `docs/releases/` is not exempt.
+GitHub renders a release body with comment-flavour GFM, where a single newline becomes `<br>`, so the two rules pull in opposite directions and the gate is the one that wins.
+`v1.5.0` published with 59 `<br>` for that reason, and the count had grown every release: 20, 22, then 33 in-paragraph breaks at `v1.3.0`, `v1.4.0`, `v1.5.0`.
+
+Render at publish time and both rules hold.
+The source keeps its per-sentence diffs; the body reads as paragraphs:
+
+```bash
+scripts/release/render-release-body.sh docs/releases/vX.Y.Z.md > tmp/body.md
+```
+
+It joins paragraphs, list-item continuations and blockquote bodies, and leaves structure alone: fences, tables, headings, HTML and the bullets themselves come through byte for byte, and a `> [!WARNING]` marker keeps its own line or the alert stops rendering as one.
+On `v1.5.0` it takes 59 `<br>` to 0 with the word sequence unchanged.
 
 Check this against the **renderer**, not the source.
 `gh release view --json body` returns the raw Markdown, which never contains `<br>` however badly it is wrapped, so grepping that is a check that cannot fail.
@@ -1020,6 +1085,29 @@ helm install gag oci://ghcr.io/actions-gateway/charts/actions-gateway --version 
   --set proxy.image.digest=sha256:<proxy> \
   --set wrapper.image.digest=sha256:<wrapper>
 ```
+
+## Checks that stay human, and why
+
+Most of this runbook is judgement, and a gate that guessed at judgement would fail good releases until someone switched it off.
+The rules below **look** mechanical, were measured against the shipped notes, and were rejected on the evidence.
+They are recorded here so the next reader reaches the measurement before rebuilding the check.
+
+- **`<summary>` counts against the list beneath them.** The convention is that an enumerating fold carries a count, so "does the number match the number of bullets" reads like arithmetic.
+  It is not.
+  `v1.5.0`'s `New condition types (2) and reasons (8)` sits above **four** bullets and is correct: two of them add reasons to conditions that already existed, and the eight reasons are spread across all four.
+  Any rule simple enough to state here flags that section, so the gate's first act would be to report correct notes as broken.
+  Check counts when curating a list, which is when the list changes and when you can see what it enumerates.
+
+- **`blob/` links.** The rule is real (link the versioned site so a reader lands on *that* release's instructions), but it has a legitimate exception, and `v1.5.0`'s single `blob/` link is it.
+  Postmortems are not published to the site, so there is no versioned URL to point at and the source tree is the only target.
+  A gate here needs an allowlist, and an allowlist of "documents that exist outside the site" is a second inventory to maintain for one link per release.
+
+- **Whether the notes are truncated on the Releases index.** They always are.
+  Every stable release this project has cut sits behind a "Read more", so a gate that failed on truncation would fail every release, and there is no threshold to get under.
+  `make release-notes-check` therefore **reports** which sections fall above and below the cut, because that decides what a reader sees before clicking, and the ordering is a judgement call worth making deliberately rather than a rule worth enforcing.
+
+What *is* gated is listed in [scripts/README.md](https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/README.md)'s `release/` table.
+The dividing line is whether a wrong answer is decidable from the file alone: a duplicate `# ` heading is, and whether a caveat is a landmine is not.
 
 ## Patch releases and backports
 
