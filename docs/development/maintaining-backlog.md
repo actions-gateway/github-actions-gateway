@@ -686,6 +686,9 @@ Introduce a release label only once that release is *concretely scoped* — a pl
 Post-release estimates are guesses that move (churn without signal), position already encodes priority, and an undefined version anchors nothing.
 The right pattern is the one `1.0-gate` followed: scope the release in a plan doc first, then add the label.
 
+**What that release may contain is a SemVer question, not a priority one.** A patch is bugfix-only, so labelling a `feature` row for one is wrong however badly the release wants it, and the way out is a backport branch rather than a relabel: [release.md § Patch releases and backports](../operations/release.md#patch-releases-and-backports) is the rule and the mechanism both.
+Check it before adding a label, because the label is a public promise as much as an internal one (below).
+
 **The corollary: once a release *is* scoped, only what blocks the tag gets a label.** An item that is planned for the release but does not gate it belongs in that release's scope ledger (below), never in a second, softer label class.
 A soft `1.4-plan` label would be a guess nothing enforces — it goes stale silently, needs relabeling on every slip, and blurs the `-gate` label's one crisp meaning, *the tag waits for this*.
 The ledger can carry "planned" honestly because its lifecycle matches the release's: written when the release is scoped, archived when the tag is cut.

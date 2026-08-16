@@ -31,7 +31,8 @@ A ready-to-paste template:
 
 The knobs to set each run:
 
-- **Batch / scope** — which items (a label filter, a Queue range, an explicit list), plus the release theme priority rests on ([why the dispatcher cannot read it off the Queue](#priority-is-release-thematic-and-the-queue-does-not-record-the-theme)).
+- **Batch / scope** — which items (a label filter, a Queue range, an explicit list).
+  The release theme is no longer a knob to pre-state: the dispatcher asks for it before selecting anything, and "none" is a real answer ([what each half means here](#what-the-release-theme-means-here)).
 - **Concurrency cap** — `scripts/agent/local-throttle.sh workers` sizes it for the machine you are on ([Concurrency and contention](#concurrency-and-contention)).
 - **Exclusions** — anything needing real secrets or a live cluster; state it up front rather than making the dispatcher discover it mid-run.
 - **Model per task** — the dispatcher sets each worker's model in its spawn prompt, and records the choice in the `tmp/` tracker alongside task → chip → PR → state.
@@ -159,22 +160,24 @@ Measured from the session transcripts over 2026-07-26 to 08-16.
 Two caveats on those figures: a brief can name more than one Q-ID, and a manual session only enters the comparison when its opening names a row, which excludes exploratory work that never had one.
 Both push the same way, so the gap is a floor rather than a point estimate.
 
-### Priority is release-thematic, and the Queue does not record the theme
+### What the release theme means here
 
-The goal is to dispatch more, and to have the dispatcher weigh Queue priority itself rather than having a human override it by hand-picking rows.
-That is not solved, and this section records the shape of the problem rather than a design.
+`session-orchestrator` § What is this batch for? asks for the theme before selecting anything, and splits it into a *ceiling* that excludes and an *emphasis* that sorts.
+Both halves resolve to something this repo has already written down, so neither is invented per run.
 
-What makes it hard is that priority here changes with the release:
+**The ceiling is post-1.0 SemVer, and [release.md § Patch releases and backports](../operations/release.md#patch-releases-and-backports) is this project's statement of it.** The skill defers the question to the versioning scheme rather than hardcoding one; here a patch is bugfix-only, so a `feature` row is off-ceiling for a patch and a breaking change is off-ceiling for a minor.
+That page also carries the exception the skill says selection must never volunteer: the fix goes to a `release-X.Y` branch cut from the tag, which costs a branch decision and a second release.
 
-- Bug fixes ahead of features when a patch release is next; features ahead of fixes when a minor is.
-- Retro and cleanup items when the aim is to clear work that does not affect users.
-- A meta-milestone that cuts across all of those, where the release is defined by a theme rather than a version: v1/v2 parity, classic/scale-set parity, ARC parity for 1.6.
+**A scoped release states its own ceiling durably, so read it rather than asking again.** The skill holds the theme for the run and writes it nowhere, which is right for an emphasis and does not describe what happens here once a release is scoped: the ceiling is already recorded as a plan doc plus the `X.Y-gate` labels naming what the tag waits for ([the scope ledger](maintaining-backlog.md#cutting-a-release-the-scope-ledger)).
+A `-gate` row that the stated theme would exclude is the disagreement the skill says to report once and proceed through, not something to resolve silently.
 
-A dispatcher cannot read that off the Queue, because the Queue records priority *within* the current theme and never the theme itself.
-Learning it from session history is the obvious direction, and the obvious gap is that history shows the choices without the use case behind them: the same row can be top of the batch in one release and skipped in the next.
-So the missing input is a statement of what the next release is *for*, in a form the dispatcher can weigh rows against.
+**The emphases that recur here**, which are the candidates worth offering with their counts:
 
-Until that exists, priority stays a human input: state the theme in the `/goal` prompt's batch scope, or hand-pick the rows.
+- **Parity work**: v1/v2, classic/scale-set, ARC parity for 1.6.
+  These cut across versions, so the emphasis is the only thing that names them.
+- **The cleanup tail**: `debt` and `retro` rows, when the aim is work that does not affect users.
+- **Release harness**: the CI, test, docs and dogfood work that blocks a tag without being what anyone upgrades for.
+  A version number cannot express this one, which is why [a gate label answers two questions](maintaining-backlog.md#a-gate-label-and-its-roadmap-bullet-are-two-commits-and-the-first-one-is-red) and only its `feature`/`security` half owes a roadmap bullet.
 
 ## The merge model
 
@@ -383,7 +386,7 @@ Some tasks simply cannot run autonomously under this rule (e.g. anything needing
 
 Only the items this repo adds; the skills' own checks are theirs.
 
-- [ ] Batch chosen, each item independent and one-PR-sized, and the release theme stated in the `/goal` scope ([why](#priority-is-release-thematic-and-the-queue-does-not-record-the-theme)).
+- [ ] Batch chosen, each item independent and one-PR-sized, with the theme taken from the dispatcher's opening question and checked against the release plan doc where one exists ([what each half means here](#what-the-release-theme-means-here)).
 - [ ] No two assigned Queue rows adjacent ([why](#the-dispatcher-owns-assignment-not-coordination-files)); streams grouped by shared **docs** as well as code.
 - [ ] Concurrency cap taken from `scripts/agent/local-throttle.sh workers`, or a deliberate `GAG_DISPATCH_WORKERS` override.
 - [ ] pr-sentinel installed in each worker session, launched bare, with `PR_SENTINEL_TIMEOUT` and `PR_SENTINEL_WATCH_UNTIL` left to `.claude/settings.json`.
