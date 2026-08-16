@@ -6,10 +6,6 @@ Each instance is an Actions Gateway Controller (AGC) that multiplexes thousands 
 Per-tenant egress proxy pools give each tenant isolated egress IPs for GitHub traffic.
 See `DESIGN.md` and `docs/design/` for full design context.
 
-## Model selection
-
-Use the `model-advisor` skill to assess the right model and thinking level at session start and whenever the task type shifts significantly.
-
 ## Development philosophy
 
 Build the right thing AND build it well.
