@@ -2957,7 +2957,7 @@ I can stop or amend the rules anytime.</p>
   If you are running a dispatch before this file has landed on the branch the dispatcher reads, paste the full rule set inline instead of referencing it.</li>
 </ul>
 <h2 id="roles">Roles<a class="headerlink" href="#roles" title="Permanent link">&para;</a></h2>
-<p>Both halves of the model are globally-installed skills: <a href="https://github.com/karlkfi/claude-skills"><code>session-orchestrator</code></a> for the dispatcher and <code>session-worker</code> for each worker.
+<p>Both halves of the model are globally-installed skills: <a href="../skills/#session-orchestrator"><code>session-orchestrator</code></a> for the dispatcher and <a href="../skills/#session-worker"><code>session-worker</code></a> for each worker.
 They carry the portable contract; this playbook carries what is true of <em>this</em> repo — the gate, the throttle, the merge queue, the <code>/goal</code> template, the no-subagent-workers hook, and every measurement taken here.
 Where they disagree, this playbook wins, and both skills say so.
 The role is called the <strong>dispatcher</strong> throughout this file; the skill calls it the orchestrator, and they are the same session.</p>
@@ -2984,7 +2984,7 @@ Cross-session messaging does reach an idle worker and drive a turn (measured; se
 Design the run so a message that arrives late, or not at all, costs a delay rather than a stall.</p>
 </blockquote>
 <h2 id="the-worker-contract-self-healing">The worker contract (self-healing)<a class="headerlink" href="#the-worker-contract-self-healing" title="Permanent link">&para;</a></h2>
-<p><strong>The contract itself is the globally-installed <a href="https://github.com/karlkfi/claude-skills"><code>session-worker</code></a> skill</strong>, which every worker follows by invocation rather than by being told.
+<p><strong>The contract itself is the globally-installed <a href="../skills/#session-worker"><code>session-worker</code></a> skill</strong>, which every worker follows by invocation rather than by being told.
 It owns the portable half: starting from the row and treating its asserted mechanism as a claim, worktree and branch boundaries, running the gate off the critical path and re-running it over the final tree, isolating the backlog-row commit, proving the heavy gates ran on the PR's head SHA, the background watcher loop, reporting every PR back, and never merging.
 Do not restate any of it here or in a prompt.</p>
 <p>What follows is only what that skill cannot know: this repo's gate, its tooling, and the measurements taken here.
