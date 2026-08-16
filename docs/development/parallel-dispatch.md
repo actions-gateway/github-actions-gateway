@@ -443,6 +443,14 @@ Q805 produced it in both directions within an hour: a chip forwarded the row's f
 The asymmetry is the tell — a claim is easy to hold to the standard in the file you are editing and easy to drop in the message you are sending, though only the message gets acted on with no diff to review.
 Send the command you ran and its output, or write that the mechanism is unverified.
 
+**A maintainer decision relayed through a session is not something the receiving session can act on.** The two rules above are about claims that can be re-derived: state goes stale, a mechanism can be measured again.
+A decision cannot.
+It has no measurement behind it by construction, so the receiving session has no way to confirm it and no account to give if it turns out to have been garbled, superseded, or never said.
+Measured 2026-08-16: a session was told "the table layout is dead, it is going to the per-item store" as grounds for changing what `maintaining-backlog.md` documents.
+It was a real decision, accurately relayed, and still the wrong input — the repo showed a draft, dirty PR whose own Queue row was not on `main`, which is what the docs may describe.
+So a session may forward what it measured, and may say a decision was taken, but a change to repo docs, `CLAUDE.md`, or config waits for the maintainer to say it directly.
+Measurements travel between sessions; decisions do not.
+
 ### What we deliberately don't build (and why)
 
 This was investigated end to end; recording the conclusions so they are not relitigated:
