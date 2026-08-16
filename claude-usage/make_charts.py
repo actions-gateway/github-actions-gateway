@@ -83,10 +83,13 @@ OI = {
 # one. So a readable name belongs here, on the way to the chart, and never in the
 # data.
 #
-# This maps to the whole label, not just the name: a named machine says only what
-# it is, which claims less than "begins" did and is also shorter, so it fits where
-# the id did. An unnamed one keeps the "<id> begins" form and its reasoning below.
-HOST_LABEL = {"mac-2": "MBP M5 Max"}
+# This maps to the whole label, not just the name, and a mapped label may assert
+# what the series cannot: "Laptop Upgrade" says the earlier machine was replaced,
+# where `machine_starts` can only see that a new id started reporting. That is the
+# maintainer's own account, and the README states it directly ("mac-1 is
+# retired"). An unmapped id keeps the "<id> begins" form, which claims nothing and
+# is why that wording exists.
+HOST_LABEL = {"mac-2": "Laptop Upgrade"}
 
 GOLD = "#9A6E1E"  # single-series "cost / line" accent (no CB clash — used alone)
 
@@ -384,7 +387,7 @@ def chart_tokens_by_model():
         # Anchored high: the label reads upward from here, so a low anchor runs it
         # through the bars, which are dense across this whole timeline. The top
         # band is empty at every event date.
-        labels.append(event_label(ax, xi - 0.5, 0.64, label, col, yc="axes fraction"))
+        labels.append(event_label(ax, xi - 0.5, 0.60, label, col, yc="axes fraction"))
     ax.set_title("Daily Claude Code token usage by model", fontsize=14, fontweight="bold", loc="left")
     ax.set_ylabel("tokens / day  (millions)", fontsize=11)
     ax.set_xticks(xs)
@@ -1096,7 +1099,7 @@ def chart_velocity():
     a4.spines["right"].set_visible(False)
     # Event labels on panel 1 only, staggered so the Opus 5 / mac-2 pair — one day
     # apart, and the whole point of drawing both — stays readable.
-    labels = [event_label(a1, ev, 0.55, lbl, col, yc="axes fraction")
+    labels = [event_label(a1, ev, 0.43, lbl, col, yc="axes fraction")
               for ev, lbl, col, ls in event_markers() if dxs[0] <= ev <= dxs[-1]]
     stagger_labels(fig, labels, 0.11)
 
