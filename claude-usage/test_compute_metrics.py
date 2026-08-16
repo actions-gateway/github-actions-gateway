@@ -357,6 +357,49 @@ class ConventionalSubjects(unittest.TestCase):
         self.assertEqual(m.group(1), "docs")
 
 
+class AuthoredPrompts(unittest.TestCase):
+    """Both dispatcher opening shapes are machine-composed, and the second one is
+    why the split is a set of tests rather than one prefix."""
+
+    def rec(self, text, kind="human"):
+        return {"type": "user", "timestamp": "2026-08-10T00:00:00Z",
+                "origin": {"kind": kind}, "message": {"content": text}}
+
+    def test_a_persona_opening_is_not_authored(self):
+        r = self.rec("You are a worker session in a parallel-dispatch run. ...")
+        self.assertTrue(cm.is_human_prompt(r))
+        self.assertFalse(cm.is_authored_prompt(r))
+
+    def test_a_prose_opening_naming_the_worker_skill_is_not_authored(self):
+        for skill in cm.WORKER_SKILLS:
+            r = self.rec("Work Q741 from the Queue in docs/STATUS.md. Read "
+                         "`.claude/skills/%s/SKILL.md` first for the worker "
+                         "contract." % skill)
+            self.assertFalse(cm.is_authored_prompt(r), skill)
+
+    def test_a_prose_opening_is_still_presence(self):
+        r = self.rec("Read `.claude/skills/session-worker/SKILL.md` first.")
+        self.assertTrue(cm.is_human_prompt(r),
+                        "accepting a chip is a keystroke, so it counts as presence")
+
+    def test_an_ordinary_prompt_is_authored(self):
+        for text in ("update the claude usage metrics",
+                     "Work Q741 from the Queue in docs/STATUS.md.",
+                     "the worker contract is fine, ship it"):
+            self.assertTrue(cm.is_authored_prompt(self.rec(text)), text)
+
+    def test_the_persona_prefix_misfiles_a_prompt_that_opens_that_way(self):
+        # Known and accepted: the prefix is broad, and the era it covers is closed
+        # (unused since 2026-08-04), so tightening it would only re-cut history.
+        self.assertFalse(cm.is_authored_prompt(self.rec("You are right, drop it.")))
+
+    def test_a_renamed_skill_leaves_the_older_name_classified(self):
+        self.assertIn("dispatch-worker", cm.WORKER_SKILLS)
+        self.assertIn("session-worker", cm.WORKER_SKILLS)
+        old = "Read `.claude/skills/dispatch-worker/SKILL.md` first."
+        self.assertFalse(cm.is_authored_prompt(self.rec(old)))
+
+
 class PullRequestFetch(unittest.TestCase):
     """The fetch must fail soft, and must never re-ask for what it already holds."""
 

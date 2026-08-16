@@ -904,19 +904,29 @@ def is_human_prompt(rec):
     return not record_text(rec).lstrip().startswith(NOT_A_PROMPT)
 
 
-# A session opened by the dispatcher starts with a second-person persona brief
-# rather than anything a person wrote. Detected on that opening rather than on
-# length: 42 genuinely authored prompts here run past 2,000 characters, so a size
-# cutoff would misclassify them, while no persona brief is under 2,000 and every
-# one is its session's first prompt.
+# A session opened by the dispatcher starts with a brief it composed rather than
+# anything a person wrote. Two shapes exist, because the convention changed:
 #
-# This is a convention, not a contract, and it has already drifted: the corpus
-# holds two wordings, "You are a worker session in a parallel-dispatch run" and
-# "You are a parallel-dispatch worker session (contract: ...)". Both survive only
-# because they share an opening. A third rewording breaks the split silently, and
-# a prompt that legitimately opens "You are right" would be misfiled. Q883 tracks
-# replacing it with an explicit marker the dispatcher emits on purpose.
+#   2026-07-27 .. 08-04   a second-person persona brief, 97 openings, median
+#                         5,058 chars. A closed set: unused since 08-04.
+#   2026-08-08 ..         prose pointing the session at the worker skill, 21
+#                         openings, median 2,746 chars, no persona line at all.
+#
+# The persona test alone therefore stopped classifying anything on 08-04 and put
+# 21 later dispatches in the authored bucket, which is the silent-drift failure
+# its own comment predicted. Detected on opening rather than on length: 42
+# genuinely authored prompts here run past 2,000 characters.
+#
+# The skill-name half is deliberately a set, not a literal, because the skill was
+# renamed (``dispatch-worker`` -> ``session-worker``, karlkfi/claude-skills #45).
+# A further rename appends a name and leaves the history classified. Both shapes
+# remain conventions rather than contracts; Q883 is deferred on the dispatcher
+# emitting a deliberate marker to read instead.
 MACHINE_PERSONA = "You are "
+WORKER_SKILLS = ("dispatch-worker", "session-worker")
+MACHINE_BRIEF = re.compile(
+    r"skills/(?:%s)/SKILL\.md|for the worker contract"
+    % "|".join(re.escape(s) for s in WORKER_SKILLS))
 
 
 def is_authored_prompt(rec):
@@ -924,17 +934,22 @@ def is_authored_prompt(rec):
 
     Distinct from ``is_human_prompt``, which asks whether a person was *there*.
     Both are wanted, for different questions. Accepting a dispatch chip is a
-    keystroke and counts as presence, but the 5,000-character brief arriving with
-    it was written by the dispatcher, so counting its characters as authored would
-    be wrong: those openings are 7% of prompts here and 65% of all prompt
-    characters.
+    keystroke and counts as presence, but the brief arriving with it was written
+    by the dispatcher, so counting its characters as authored would be wrong.
 
     It does **not** mean typed. A pasted hook hint, a pasted log, a pasted error
     are all indistinguishable from typing in a transcript, which carries only the
     submitted text and one timestamp. So this separates machine-composed openings
     from everything else, and everything else still mixes writing with pasting.
+
+    Nothing here keys on a prompt's position in its session, so an authored
+    prompt discussing the worker skill by path would be misfiled. Measured at
+    zero across 1,428 human prompts: every match is its session's first.
     """
-    return is_human_prompt(rec) and not record_text(rec).lstrip().startswith(MACHINE_PERSONA)
+    if not is_human_prompt(rec):
+        return False
+    text = record_text(rec).lstrip()
+    return not (text.startswith(MACHINE_PERSONA) or MACHINE_BRIEF.search(text))
 
 
 def prompt_minutes():
@@ -955,6 +970,13 @@ def prompt_minutes():
     So this keeps what is parameter-free and lets any consumer pick its own
     assumption: bucket widths, idle thresholds, counts and shapes are all
     derivable from these rows, and none of them needs the transcripts again.
+
+    The ``authored`` column is the one value here a re-run can want to revise
+    *downward*, since sharpening the classifier moves prompts out of it. The
+    upward-only merge refuses that, so a classifier change means deleting
+    ``prompt_minutes.csv`` and rebuilding it rather than re-running over it. Safe
+    while every row still comes from live transcripts; once a row outlives its
+    session, the old classification is all there is.
 
     These are submissions, not keystrokes. A user record carries one timestamp and
     nothing about composition, so a prompt typed over three minutes is a single

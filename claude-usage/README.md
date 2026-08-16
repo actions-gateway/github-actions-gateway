@@ -84,12 +84,12 @@ The snapshots are announced as a quote-post chain (each post quotes the previous
 
 | Metric | Day 7 | Day 22 | Day 92 | Source |
 |---|--:|--:|--:|---|
-| Tokens (input + output + cache-creation) | ~10M | 56.2M | **600.3M** | transcripts + est. |
-| └ measured only | — | 53.7M | 597.8M | transcripts |
+| Tokens (input + output + cache-creation) | ~10M | 56.2M | **601.6M** | transcripts + est. |
+| └ measured only | — | 53.7M | 599.1M | transcripts |
 | └ estimated backfill (May 16–18) | — | +2.5M | +2.5M | per-commit estimate |
-| └ incl. cache reads | — | 2.02B | **28.4B** | transcripts + est. |
+| └ incl. cache reads | — | 2.02B | **28.6B** | transcripts + est. |
 | Cache reuse ratio (reads ÷ writes) | — | ~44× | **~56×** | transcripts |
-| Git commits | 232 | 617 | **2,019** | git |
+| Git commits | 232 | 617 | **2,030** | git |
 | Tests (`func Test*`) | 269 | 393 | **2,218** | git |
 | Lines of Go (code) | 15.5k | 20.9k | **117.8k** | git |
 | Lines of Go (comments) | 2.3k | 4.2k | **41.6k** | git |
@@ -100,12 +100,12 @@ The snapshots are announced as a quote-post chain (each post quotes the previous
 | **Tokens per word** | — | — | **276** | both |
 | Model mix | mostly Sonnet 4.6 | Sonnet 43% / Opus 57% | **Opus 5 49% / Opus 4.8 37% / Fable 7% / Sonnet 4% / Opus 4.7 3%** | transcripts |
 | Mean concurrent sessions | — | — | **3.0** (peak 16) | transcripts, since Jul 26 |
-| Hours using Claude (wall-clock) | — | — | **216.8h** → 655.3h session-time | transcripts, since Jul 26 |
-| Prompts submitted by a person | — | — | **1,320** | transcripts, since Jul 26 |
-| └ of those, authored rather than machine-composed | — | — | **1,224** | transcripts, since Jul 26 |
-| └ time at the keyboard | — | — | **~102h** (47%), width-dependent | transcripts, since Jul 26 |
+| Hours using Claude (wall-clock) | — | — | **219.7h** → 660.8h session-time | transcripts, since Jul 26 |
+| Prompts submitted by a person | — | — | **1,334** | transcripts, since Jul 26 |
+| └ of those, authored rather than machine-composed | — | — | **1,218** | transcripts, since Jul 26 |
+| └ time at the keyboard | — | — | **~103h** (47%), width-dependent | transcripts, since Jul 26 |
 
-The headline tokens figure **includes the ~2.5M estimated backfill** for the archived first three days; the measured-only floor is 597.8M.
+The headline tokens figure **includes the ~2.5M estimated backfill** for the archived first three days; the measured-only floor is 599.1M.
 Live totals (with the measured / estimated split) are always in [`data/summary.json`](data/summary.json).
 
 Markdown is the only count here still below where it stood two weeks ago (57.9k on 08-01), and nothing was deleted: the daily series runs 66.6k non-blank lines on 08-08, 49.0k the next day, 53.7k by 08-15.
@@ -280,25 +280,27 @@ The peak is the dramatic number, up to 16, but it lasts a single bucket; the **m
 The gap between the two bands *is* the mean concurrency: **217h elapsed produced 655h of session-time** over the window, a 3.0× multiplier.
 67% of active time had two or more sessions running, on 4–54 sessions a day.
 
-The innermost band is time someone spent at the keyboard: **~102h against 216.8h**, or 47%.
+The innermost band is time someone spent at the keyboard: **~103h against 219.7h**, or 47%.
 A 10-minute bucket counts as attended when a person actually typed in it, which is the only unambiguous presence signal the transcripts carry.
 Everything else here, every assistant record and every tool result, is produced whether or not anyone is watching.
 
-**Treat that 102 as a scale, not a measurement.** Prompts are sparse point events, 1,408 of them, and crediting each one a whole bucket makes the total scale with the bucket: 18.4h at 1-minute buckets, 102h at 10, 224h at 60.
-A session-of-presence model instead of buckets does not rescue it, giving 22.9h to 139.0h as its idle threshold moves from 5 to 60 minutes.
+**Treat that 103 as a scale, not a measurement.** Prompts are sparse point events, 1,334 of them, and crediting each one a whole bucket makes the total scale with the bucket: 18.8h at 1-minute buckets, 103.5h at 10, 227.0h at 60.
+A session-of-presence model instead of buckets does not rescue it, giving 25.4h to 140.1h as its idle threshold moves from 5 to 60 minutes.
 Any single figure here needs an arbitrary parameter and moves six- to twelve-fold across defensible choices, which is worse than the wall-clock series it sits inside, where dense records make the width matter far less.
 
-Two things survive that and are worth more than the hours: the **count**, 1,320 prompts, which no parameter touches, and the **shape**, since every bucket in every chart uses the one width, so comparisons across days and hours hold even where the level does not.
+Two things survive that and are worth more than the hours: the **count**, 1,334 prompts, which no parameter touches, and the **shape**, since every bucket in every chart uses the one width, so comparisons across days and hours hold even where the level does not.
 
-**Two of those counts are wanted, for different questions.** Accepting a parallel-dispatch chip is a keystroke, so all 1,320 count as presence.
-The brief that arrives with it was composed by the dispatcher, though, so only **1,224 were authored by a person**.
-Machine-composed openings are 7% of the prompts and **65% of all prompt characters**, which is why no character-based claim here may use the unsplit total.
-They are identified by their second-person opening rather than by length, since 42 genuinely authored prompts run past 2,000 characters while no dispatcher brief is under it.
+**Two of those counts are wanted, for different questions.** Accepting a parallel-dispatch chip is a keystroke, so all 1,334 count as presence.
+The brief that arrives with it was composed by the dispatcher, though, so only **1,218 were authored by a person**.
+Machine-composed openings are 9% of the prompts and **70% of all prompt characters**, which is why no character-based claim here may use the unsplit total.
+They are identified by their opening rather than by length, since 23 genuinely authored prompts run past 2,000 characters while no dispatcher brief is under it.
+Two opening shapes exist, because the convention changed mid-window: a second-person persona brief until 2026-08-04, and prose naming the worker skill's `SKILL.md` after it.
+Matching only the first put 19 later dispatches in the authored column until this was corrected, with nothing to signal it — which is what a convention rather than a contract costs.
 **"Authored" here means "not a dispatcher brief", not "typed".** A pasted hook hint, log or error is indistinguishable from typing in a transcript, which carries only the submitted text and one timestamp, so the authored count still mixes writing with pasting and no split here can separate them.
 
 **These are submissions, not keystrokes.** A user record carries one timestamp and nothing about composition, so a prompt written over three minutes is a single instant here.
-The median authored prompt is 34 characters, but 9 run past 5,000, and a paste looks exactly like typing, so length cannot stand in for the missing time either.
-The bias runs one way: **1,108 distinct minutes, 18.5 hours, is a floor on presence** rather than a measure of effort, because every minute spent composing is invisible to it.
+The median authored prompt is 33 characters, but 9 run past 5,000, and a paste looks exactly like typing, so length cannot stand in for the missing time either.
+The bias runs one way: **1,125 distinct minutes, 18.8 hours, is a floor on presence** rather than a measure of effort, because every minute spent composing is invisible to it.
 
 Identifying a typed prompt takes more than the record's own marker.
 `origin.kind == "human"` also arrives on four things nobody typed: a hook's denial text, a `<bash-input>` line and its output, a slash command's expansion, and an injected `<system-reminder>`.
@@ -419,7 +421,7 @@ Totals split into `measured` / `estimated` / `combined` (summed from the persist
   A retired machine can never report again, so whatever it had not captured by its last run is gone rather than pending.
 - **Archived early days are estimated, not measured.** The project's first commits (2026-05-16 to -18) predate the earliest surviving transcript (2026-05-19), so their token usage is gone from the logs.
   Those days are **backfilled** from the Pro-era per-commit rate and flagged `estimated=1` (see "Backfilled (estimated) days" above).
-  The ~2.5M backfill is a modeled figure, not a measurement — the defensible measured-only floor is 597.8M.
+  The ~2.5M backfill is a modeled figure, not a measurement — the defensible measured-only floor is 599.1M.
   The git series is fully measured from 2026-05-16.
 - **"Concurrent" is a bucket width, not a fact.** A session counts as active in a 10-minute bucket if it produced a record there, so two sessions are "concurrent" when both worked within the same 10 minutes — not necessarily in the same second.
   The width is a judgement: wide enough that a session waiting on a build still counts as in flight, narrow enough that work hours apart never collides.

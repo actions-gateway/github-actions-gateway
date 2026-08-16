@@ -2,7 +2,7 @@
   "provenance": {
     "snapshot_date": "2026-08-15",
     "projects_glob": "/Users/karl/.claude/projects/*github-actions-gateway*",
-    "transcript_files_read": 428,
+    "transcript_files_read": 429,
     "snapshot_host": "mac-2",
     "hosts": [
       "mac-1",
@@ -14,7 +14,7 @@
     "token_dedup": "(message.id, requestId)",
     "message_dedup": "record uuid (user) / (message.id, requestId) (assistant)",
     "first_measured_date": "2026-05-19",
-    "last_measured_date": "2026-08-15",
+    "last_measured_date": "2026-08-16",
     "first_project_date": "2026-05-16",
     "growth_chart_baseline": {
       "tokens": 10000000,
@@ -48,13 +48,13 @@
   },
   "totals": {
     "measured": {
-      "input": 8417248,
-      "output": 92353396,
-      "cache_creation": 497426316,
-      "cache_read": 27877261624,
-      "assistant_msgs": 133225,
-      "user_msgs": 148384,
-      "headline_input_output_cachecreation": 598196960
+      "input": 8417828,
+      "output": 92586452,
+      "cache_creation": 498133501,
+      "cache_read": 27971529695,
+      "assistant_msgs": 133536,
+      "user_msgs": 148708,
+      "headline_input_output_cachecreation": 599137781
     },
     "estimated": {
       "input": 6559,
@@ -66,15 +66,15 @@
       "headline_input_output_cachecreation": 2494920
     },
     "combined": {
-      "input": 8423807,
-      "output": 92832332,
-      "cache_creation": 499435741,
-      "cache_read": 27944780467,
-      "assistant_msgs": 133967,
-      "user_msgs": 149245,
-      "headline_input_output_cachecreation": 600691880,
-      "grand_total_incl_cache_read": 28545472347,
-      "cache_reuse_ratio": 55.95
+      "input": 8424387,
+      "output": 93065388,
+      "cache_creation": 500142926,
+      "cache_read": 28039048538,
+      "assistant_msgs": 134278,
+      "user_msgs": 149569,
+      "headline_input_output_cachecreation": 601632701,
+      "grand_total_incl_cache_read": 28640681239,
+      "cache_reuse_ratio": 56.06
     }
   },
   "by_model": {
@@ -86,7 +86,7 @@
     "Other": {
       "headline": 0,
       "output": 0,
-      "messages": 191
+      "messages": 192
     },
     "Opus 4.7": {
       "headline": 16947491,
@@ -109,9 +109,9 @@
       "messages": 8356
     },
     "Opus 5": {
-      "headline": 294594395,
-      "output": 40159004,
-      "messages": 67298
+      "headline": 295535216,
+      "output": 40392060,
+      "messages": 67608
     }
   },
   "by_host": {
@@ -134,26 +134,26 @@
       "headline_input_output_cachecreation": 300762526
     },
     "mac-2": {
-      "input": 353226,
-      "output": 40391233,
-      "cache_creation": 256689975,
-      "cache_read": 16740870339,
-      "assistant_msgs": 66634,
-      "user_msgs": 74081,
-      "headline_input_output_cachecreation": 297434434
+      "input": 353806,
+      "output": 40624289,
+      "cache_creation": 257397160,
+      "cache_read": 16835138410,
+      "assistant_msgs": 66945,
+      "user_msgs": 74405,
+      "headline_input_output_cachecreation": 298375255
     }
   },
   "sessions": {
     "bucket_minutes": 10,
     "first_date": "2026-07-26",
-    "last_date": "2026-08-15",
-    "session_days": 515,
+    "last_date": "2026-08-16",
+    "session_days": 519,
     "peak_concurrent": 16,
-    "mean_concurrent": 3.02,
-    "hours_using_claude": 218.0,
-    "session_hours": 657.5,
+    "mean_concurrent": 3.01,
+    "hours_using_claude": 219.7,
+    "session_hours": 660.8,
     "parallel_share_pct": 67,
-    "attended_hours": 102.5,
+    "attended_hours": 103.5,
     "attended_share_pct": 47,
     "attended_first_date": "2026-07-26",
     "prompts_note": "attended_hours scales with bucket_minutes and is a scale rather than a measurement; prompt_minutes.csv holds the parameter-free record, from which any bucket width or idle threshold is derivable",
@@ -162,10 +162,10 @@
   "head_snapshot": {
     "go_code": 117768,
     "go_comments": 41575,
-    "markdown_nonblank": 53976,
+    "markdown_nonblank": 53983,
     "yaml_handwritten": 12504,
     "yaml_generated": 131488,
     "tests": 2218,
-    "commits": 2026
+    "commits": 2030
   }
 }
