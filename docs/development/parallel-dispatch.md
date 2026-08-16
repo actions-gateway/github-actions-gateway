@@ -38,7 +38,7 @@ The knobs to set each run (everything else comes from this playbook):
 - **Merge gating** — not a knob.
   The maintainer reviews and enqueues; the dispatcher verifies and reports ([the merge model](#the-merge-model)).
 - **Model per task** — match the model to the work, not the batch (see [Model selection](#model-selection)).
-  The dispatcher sets each worker's model in its spawn prompt; an autonomous worker cannot run `model-advisor` interactively.
+  The dispatcher sets each worker's model in its spawn prompt; an autonomous worker has nobody to ask.
 
 Two practical notes:
 
@@ -226,7 +226,7 @@ Read the marker as a set rather than one string — `{"/dispatch-worker", "/sess
 `session-orchestrator` §2 lists what the prompt carries — the item and its model, the dispatcher's worktree name, what was measured and when, the trap worth naming, and contention by file — and why restating anything else makes the chip list unreviewable.
 Three of those land differently here:
 
-- **The model** is picked because a fresh worker cannot run `model-advisor`, which prompts interactively ([Model selection](#model-selection)).
+- **The model** is picked up front because a fresh worker has nobody to ask ([Model selection](#model-selection)).
 - **An unmeasured claim in a prompt is the expensive kind.** Q805's chip forwarded the row's "all three fail closed" as fact and drew an instruction from it, not to change what the checker decides; the worker's first measurement found one probe failing *open*, on the call immediately before `gh pr merge --squash`.
   Mark an unverified claim as unverified, or leave it out.
 - **Contention has a guard attached.** When several workers will touch one large doc, say so **and** say what the resulting `gh pr create` denial means: *read the other PR and override with the reading*, never *re-scope this change*.
@@ -244,10 +244,9 @@ Three of those land differently here:
 ## Model selection
 
 The dispatcher picks each worker's model and bakes it into the spawn prompt.
-A worker is a fresh, unattended session: it cannot pause to run the `model-advisor` skill (which prompts the user interactively), so the per-task choice is the dispatcher's to make up front.
+A worker is a fresh, unattended session with nobody at the keyboard to choose, so the per-task choice is the dispatcher's to make up front.
 
 `session-orchestrator` §3 owns the rule — match the model to the task rather than the batch, and size up when unsure.
-The repo-specific part is why the choice cannot be deferred: `model-advisor` prompts the user interactively, so an unattended worker can never run it.
 
 Record the per-task model choice in the `tmp/` tracker alongside task → chip → PR → state so the run stays auditable.
 

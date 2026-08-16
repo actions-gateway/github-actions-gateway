@@ -39,15 +39,13 @@ That registry is also the project's **approved list of host CLI dependencies**.
 If new work needs a tool that isn't listed, raise it before relying on it — once agreed, add a row to [`scripts/ci/check-tools.sh`](scripts/ci/check-tools.sh) (and to the prerequisites above when it's a hard requirement) so every contributor and `make doctor` stay in sync.
 Go build- and codegen-time tools are handled differently: pin them in the vendored [`tools/`](tools/README.md) module rather than adding a host dependency.
 
-**Optional — AI-assisted development (Claude Code):** Two skills from [`karlkfi/claude-skills`](https://github.com/karlkfi/claude-skills) are recommended:
+**Optional — AI-assisted development (Claude Code):** one skill from [`karlkfi/claude-skills`](https://github.com/karlkfi/claude-skills) is recommended:
 
-- [`model-advisor`](https://github.com/karlkfi/claude-skills/tree/main/model-advisor) — model and thinking-level recommendations at session start and on task shifts.
 - [`tech-docs-layers`](https://github.com/karlkfi/claude-skills/tree/main/tech-docs-layers) — applies the six-layer model of technical documentation when writing, editing, or restructuring docs.
 
 ```bash
 # clone once, then symlink into your user-level skills directory
 git clone git@github.com:karlkfi/claude-skills.git ~/workspace/claude-skills
-ln -s ~/workspace/claude-skills/model-advisor    ~/.claude/skills/model-advisor
 ln -s ~/workspace/claude-skills/tech-docs-layers ~/.claude/skills/tech-docs-layers
 ```
 
