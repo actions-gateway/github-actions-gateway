@@ -3664,6 +3664,22 @@
 <td><code>is_authored_prompt</code> keys on the <code>"You are "</code> prefix, which two wordings share by luck. Across 569 local sessions: 96 persona-opening (2026-07-27 to 2026-08-04, a closed set), 49 slash-invocation, 21 prose with no marker.</td>
 </tr>
 <tr>
+<td><a id="Q886"></a>Q886</td>
+<td><a href="../development/parallel-dispatch/">Agent process docs teach a superseded process where the skills iterated past them</a></td>
+<td><code>docs</code> <code>debt</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>The skills were iterated across sessions, not just generalised, so a passage can be stale rather than duplicate. <code>parallel-dispatch.md</code> line 3 still has the dispatcher merging each PR; line 315 says no agent does. Audit both for divergence.</td>
+</tr>
+<tr>
+<td><a id="Q887"></a>Q887</td>
+<td><a href="../development/parallel-dispatch/">Shrink the agent process playbooks to repo deltas</a></td>
+<td><code>docs</code> <code>debt</code></td>
+<td>🚫</td>
+<td>M</td>
+<td>Blocked by <a href="#Q886">Q886</a>. Both grew in the skill retirement (592→613, 792→796) because docs must be self-sufficient without the private skills. That reader is deferred: single maintainer, drive-by PRs don't groom. Cut to deltas; fix <code>skills.md</code>.</td>
+</tr>
+<tr>
 <td><a id="Q882"></a>Q882</td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.claude/piped-gate-guard.json">piped-gate tells a release branch to rebase onto main</a></td>
 <td><code>debt</code> <code>retro</code></td>
