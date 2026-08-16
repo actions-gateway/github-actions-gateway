@@ -165,6 +165,7 @@ Specific actionable items in priority order. Pick from the top; skip 🚫 items 
 | <a id="Q881"></a>Q881 | [`plan-hygiene` skips a PR that only adds a plan doc](../.github/workflows/plan-hygiene.yml) | `ci` `debt` `retro` | 🔲 | S | Its `plan` filter matches `docs/plan/README.md`, `docs/STATUS.md` and `**.go`, not `docs/plan/*.md`, so a PR adding only a plan doc skips the job that catches its missing row. |
 | <a id="Q882"></a>Q882 | [piped-gate tells a release branch to rebase onto main](../.claude/piped-gate-guard.json) | `debt` `retro` | 🔲 | S | It read `release-1.5` as a stale PR branch. Rebasing is the one thing that must never happen there: it publishes everything merged since the tag. Recurs on every backport. |
 | <a id="Q884"></a>Q884 | [Port seven diagnosis rules to `verify-claims` in `karlkfi/claude-skills`](development/testing.md#diagnosing-failures-measure-before-asserting-a-root-cause) | `docs` `debt` | 🔲 | S | Absent from the skill and its timing reference: argument-index by callee name, unreset scan scope, `pgrep` self-match, a completion predicate on a working word, a stand-in harness call, the recovery-property proxy, one-way reconciliation. |
+| <a id="Q885"></a>Q885 | [A pathspec `git commit` bypasses the lint-backlog pre-commit backstop](../.githooks/pre-commit) | `debt` `retro` | 🔲 | S | Measured 2026-08-16: an over-cap row left unstaged commits clean via `git commit -- docs/STATUS.md` while the hook runs; `--staged` catches it once `git add`ed. CLAUDE.md prefers that pathspec form. Mechanism unverified. |
 
 ---
 
