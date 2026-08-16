@@ -324,6 +324,7 @@ Editing the headline **text** is subject to the same arithmetic: a phrase longer
 Every layout defect found in the 2026-08 marketing review was invisible in the Markdown and the CSS, and obvious in one measurement: tile heights, bullet wrapping, separator size, an alignment axis, a `display: flex` that turned prose into non-wrapping flex items, and 24px of horizontal scroll.
 **`make check` does not build the site**, so nothing gates any of it.
 Run `make docs-serve` and measure.
+The `rendered-page-review` skill drives that pass; the probes below are its repo-specific half.
 
 **Sweep the defect class, not the reported instance.** This is the expensive lesson.
 One tile was reported as too tall; measuring only that tile missed a duplicated component on a second page, a wall of six admonitions, and two overflow bugs, which then arrived as separate rounds of feedback.
