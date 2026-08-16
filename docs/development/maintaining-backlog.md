@@ -8,7 +8,7 @@ The format and process come from the globally-installed **[`session-backlog`](sk
 **Where the two overlap, this page wins**; read a difference as this repo being more specific, not as the skill being wrong.
 
 A contributor reading this page alone therefore gets the deltas rather than the process.
-What holds the rules for them is the vendored tooling below, which runs in `make check` and the pre-commit hook whether or not the skill is installed:
+What holds the rules for them is the tooling below, which is in-tree and runs in `make check` and the pre-commit hook whether or not the skill is installed:
 
 - [`scripts/docs/lint-backlog.sh`](../../scripts/docs/lint-backlog.sh) — enforces every format rule below.
   It selects the file and maps the environment interface onto flags; the rules themselves are [`devtools/docs/backloglint`](../../devtools/docs/backloglint/), whose package comment is the canonical rule list.

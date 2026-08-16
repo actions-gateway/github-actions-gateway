@@ -22,7 +22,8 @@ If one of those pages ever reads as though the skill is required to follow it, t
 A contributor reading those two pages gets what is true *here*: the caps, the allocator, the gate, the merge queue, the tooling, the measurements.
 What they do not get is the process those deltas modify.
 
-What holds the rules for that reader is that the **tooling is vendored, not the prose**: `lint-backlog.sh`, the ID allocator, the merge drivers, `check-status-isolation.sh` and the dispatch hooks all run in `make check` and the pre-commit hook whether or not any skill is installed.
+What holds the rules for that reader is that the **tooling is in-tree and gate-enforced, where the prose is not**: `lint-backlog.sh`, the ID allocator, the merge drivers, `check-status-isolation.sh` and the dispatch hooks all run in `make check` and the pre-commit hook whether or not any skill is installed.
+Those five were written here rather than copied in, and the skill has no counterpart for most of them, so "vendored" would read the dependency backwards.
 A contributor cannot violate a rule that matters without a gate saying so.
 That is the trade this repo took, and the reader it accepts losing is the drive-by contributor who would groom the backlog or run a dispatch by hand, which nobody outside the maintainer does.
 Restoring the prose is what would have to change if that stops being true.
@@ -65,7 +66,7 @@ Everything under `docs/` publishes to [actions-gateway.com](https://actions-gate
 ### `session-backlog`
 
 The format and grooming process for the Queue in [docs/STATUS.md](../STATUS.md).
-[maintaining-backlog.md](maintaining-backlog.md) is authoritative wherever the two overlap, and the repo vendors the skill's tooling (`lint-backlog.sh`, the ID allocator, the merge driver) so the rules hold with or without it.
+[maintaining-backlog.md](maintaining-backlog.md) is authoritative wherever the two overlap, and this repo's own tooling (`lint-backlog.sh` over the `backloglint` rules, the ID allocator, the merge drivers) enforces the format with or without the skill installed.
 
 ### `session-orchestrator`
 
