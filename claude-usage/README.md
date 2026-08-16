@@ -511,6 +511,59 @@ Totals split into `measured` / `estimated` / `combined` (summed from the persist
   `summary.json`'s HEAD snapshot uses an exact comment-aware split; the two agree to within ~0.1%.
 - **Messages are fuzzy.** The original post's "20k messages" came from a counter that can't be reconstructed from these logs; treat `assistant_msgs` / `user_msgs` as the well-defined replacements, not as the same quantity.
 
+### A worked anomaly: the fresh-input regime change
+
+Fresh input (`input_tokens`: the part of a request neither read from cache nor written to it) sits near 0.1% of uncached input for most of the project, and between 2% and 8.5% from **2026-06-02 to 07-15**.
+Both transitions are single-day steps rather than a hump, so it is a regime change and not a change in the work.
+
+At the 07-16 edge three quantities move together:
+
+| window | fresh input | cache reuse | cache writes, share of traffic |
+|---|--:|--:|--:|
+| before 06-02 | 0.18% | 47.3× | 2.07% |
+| 06-02 to 07-15 | **4.59%** | 45.3× | 2.16% |
+| after 07-16 | 0.14% | **62.9×** | 1.57% |
+
+So the two edges are not one thing toggling: the onset moved fresh input alone, while the offset also lifted reuse from 45× to 63% more reads per write and cut writes per unit of traffic.
+That combination is what a change in cache-breakpoint placement would look like, since fresh input is exactly the content after the last breakpoint.
+
+**The offset has a documented cause.** Claude Code 2.1.211, released 2026-07-15, records: "Fixed a prompt-caching regression on Bedrock, Vertex, Mantle, and Foundry that billed the trailing system context block as fresh input tokens on every request" ([changelog](https://code.claude.com/docs/en/changelog)).
+The symptom names the exact quantity (fresh input tokens), the exact location (the trailing context block), and the fix lands the day before the step.
+
+One discrepancy is unresolved: the entry names third-party gateways, and this project ran on a first-party subscription.
+So either the regression was wider than the entry lists, or the match of symptom and date is coincidence.
+Nothing available here distinguishes those, and the entry is reported as the best external evidence rather than as a closed case.
+
+**The onset is still unexplained.** A regression fixed on 07-15 was introduced earlier, but the published changelog does not reach back to 2026-06-02, so the introducing release is not identifiable from it.
+
+What was eliminated, and by what test, because the tests generalize better than the answer:
+
+| candidate | eliminated by |
+|---|---|
+| Dispatcher-composed prompts | Dates: dispatched sessions ran 07-27 to 08-15, entirely after the window closed. Composition: dispatched sessions carry 0.14% fresh input against manual's 0.13%, indistinguishable. |
+| The human-prompt filter (`NOT_A_PROMPT`) | Data path. That filter reads *user* records to count prompts; this series sums `usage` off *assistant* records. No prompt filter can move it, and a verbose prompt that gets cached lands in `cache_creation`, never in `input`. |
+| The model | Explains one edge only. The onset tracks Opus 4.8 arriving, but on 07-16 fresh input collapses while the model is still Opus 4.8 at 100%. |
+| Context size (`CLAUDE.md`, `docs/`) | Direction. `docs/` grew 50 to 295 files and `CLAUDE.md` 8k to 40k while fresh input went low, high, then low. Between 06-10 and 06-25 `CLAUDE.md` *shrank* and fresh input *rose*. It moves against context size both ways. |
+| The `CLAUDE.md` commit on the onset date | Clock. It is authored `2026-06-02 23:46 -0700`, which is 06-03 06:46 UTC, and this series buckets by UTC. It lands after the step it would have to cause. |
+
+The local record that would have dated it is gone: transcripts carry a `version` field only from 2026-07-26, ten days after the offset, because earlier sessions were archived.
+**That absence was mistaken for the question being unanswerable.** It was answerable, from a source outside the dataset entirely, and the search that found it took one query.
+
+### What this dataset can and cannot answer
+
+Five habits that this investigation and its predecessors paid for.
+
+1. **A quantity's data path decides which filters can touch it.** Prompt classifiers act on user records; token series act on assistant `usage`.
+   Asking whether a prompt filter moved a token curve is answerable from the code alone, before any measurement.
+2. **Test a hypothesis on timing *and* composition.** Either alone is weak; a candidate that survives both is worth pursuing.
+   Dispatch failed both, and the composition test is the one that also explains *why*.
+3. **A correlate that explains one boundary is not a cause.** Stopping at the onset would have shipped "it is the Opus 4.8 era", which the offset refutes outright.
+4. **A size hypothesis is testable by direction.** A monotone input cannot produce a non-monotone response, so any "there was more of X" explanation dies on a chart of X against the effect.
+5. **The instrument bounds what *this* dataset can answer, not what is knowable.** Local transcripts cannot see cloud sessions, a `version` field starting after an event cannot date it, and archived days cannot be re-measured.
+   Establish that early.
+   But "not answerable from here" is a statement about the dataset, and it was wrongly promoted to "not answerable" for this very anomaly: the vendor changelog named the regression, the quantity, and the date.
+   **When a metric anomaly survives every internal test, check the changelog of whatever produced the numbers before concluding anything.** The tool is a dependency like any other, and its release notes are evidence.
+
 [post1]: https://bsky.app/profile/karlkfi.bsky.social/post/3mmpo56ds6c23
 [post2]: https://bsky.app/profile/karlkfi.bsky.social/post/3mnqwj3nlhk2x
 [post3]: https://bsky.app/profile/karlkfi.bsky.social/post/3moqxgrpouk23
