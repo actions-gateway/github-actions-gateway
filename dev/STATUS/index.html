@@ -3616,14 +3616,6 @@
 <td><code>make check &gt; log; echo "EXIT=$?"; grep …</code> backgrounded reports <code>grep</code>'s 0, so a red gate reads green. It already denies a backgrounded call ending in <code>echo</code>/<code>\|\|</code>/<code>&amp;</code>; this shape ends in a filter. Needs both-direction assertions.</td>
 </tr>
 <tr>
-<td><a id="Q687"></a>Q687</td>
-<td><a href="../development/">Document the predicate for a genuine human prompt in a transcript</a></td>
-<td><code>docs</code> <code>retro</code></td>
-<td>🔲</td>
-<td>S</td>
-<td>A real prompt is <code>origin.kind == "human"</code> minus four classes that also carry it: hook denial text, <code>&lt;bash-input&gt;</code>, <code>&lt;create-pr-command&gt;</code>, <code>&lt;system-reminder&gt;</code> prefixes. One use so far.</td>
-</tr>
-<tr>
 <td><a id="Q735"></a>Q735</td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/devtools/release/semverfloor/narrow.go">Narrow the semver floor past test files in released package dirs</a></td>
 <td><code>debt</code></td>
@@ -3646,14 +3638,6 @@
 <td>🔲</td>
 <td>S</td>
 <td>The one double that does not hold the poll, against this repo's own rule. Q788's client floor caps the spin at 10 req/s, so what remains is the timing-window distortion the rule is about; <code>scalesettest</code> is the shape to copy (wake on queue change).</td>
-</tr>
-<tr>
-<td><a id="Q824"></a>Q824</td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/claude-usage/README.md">A docs reformat moves the tokens-per-line metric</a></td>
-<td><code>debt</code> <code>docs</code></td>
-<td>🔲</td>
-<td>S</td>
-<td><code>git_metrics</code> counts the current tree, so the 2026-08-09 reflow cut Markdown 67.6k to 49.0k and lifted tokens/line ~8% on no extra spend. Cumulative diff additions would be reformat-proof.</td>
 </tr>
 <tr>
 <td><a id="Q879"></a>Q879</td>
@@ -3710,6 +3694,13 @@
 <td><code>bug</code></td>
 <td>S</td>
 <td><strong>Event:</strong> the next live-GitHub run reports <code>Q501 candidate A outcome</code> — the cancel spec now takes that reading, and nothing is buildable until it lands. Phase 0 closed the item to classic-only: ScaleSet bounds a cancel at two graces.</td>
+</tr>
+<tr>
+<td><a id="Q883"></a>Q883</td>
+<td><a href="../development/parallel-dispatch/">Read dispatched sessions from a marker, not the brief's wording</a></td>
+<td><code>debt</code> <code>docs</code></td>
+<td>S</td>
+<td><strong>Event:</strong> <code>karlkfi/claude-skills</code> ships a deliberate dispatch marker and it is upgraded locally. <code>claude-usage</code> then reads that instead of the "You are " opening, which two wordings already share by luck and a third would break silently.</td>
 </tr>
 <tr>
 <td><a id="Q530"></a>Q530</td>

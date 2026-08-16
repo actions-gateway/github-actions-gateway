@@ -3061,6 +3061,16 @@ The doc remains available — the rationale is often more valuable than the diff
 </thead>
 <tbody>
 <tr>
+<td><a href="archive/velocity-v2/">archive/velocity-v2.md</a></td>
+<td>Second velocity pass: proxies that measure progress rather than volume, so net backlog instead of closures alone, fix/feat churn, PR cycle time, and code survival at a fixed horizon</td>
+<td>2026-08-15. The busiest stretch closed 15 backlog rows a day while filing 20, which the old panel hid. Two defects caught in the build: the survival series mixed commit-date and author-date clocks and was only visible because a rate exceeded 1 (the first version clamped it, hiding it), and PR cycle time cannot separate machine from model because the local gate runs before a PR opens</td>
+</tr>
+<tr>
+<td><a href="archive/velocity-proxies/">archive/velocity-proxies.md</a></td>
+<td>A <code>claude-usage/</code> chart for work shipped per day that survives both the 2026-08-09 docs reflow and the mid-project switch from direct commits to PR squash-merges, and the measurement that made tokens-per-word the headline ratio</td>
+<td>2026-08-15, Q824. The plan upgrade moved no velocity series and cannot be read as having bought nothing, since the 5-hour limit it relieved is invisible here; the 2x at the handover splits into commits landing across 1.4x more hours of the day and 1.5x more per hour, which is system spread rather than hours worked. Q824's own remedy was refuted on measurement (cumulative diff additions spike +28.2k at the reflow, worse than the step they replace) and words shipped instead</td>
+</tr>
+<tr>
 <td><a href="archive/q850-reason-tier-ledger/">archive/q850-reason-tier-ledger.md</a></td>
 <td>Extend the derived acquisition-tier ledger from metrics (Q776) to the other two signals an operator reads: condition reasons and Event reasons, with the scanner's resolution rules and why the reason argument's index is read off the callee's declaration</td>
 <td>2026-08-14, Q850. 71 reasons walked and given a tier (45 condition, 26 Event), <code>make reason-tiers-check</code> holding both tables to the source and additionally failing an Event reason with no runbook entry. The walk found two such Events, <code>AgentDeregistrationFailed</code> and <code>OrphanedWorkerRecovered</code>; it found no condition reason single-tier by accident. The scanner's own first version was wrong in the extraction class this cycle keeps hitting, reading an action string as a reason because two recorders here share a name with the reason at different indexes</td>
