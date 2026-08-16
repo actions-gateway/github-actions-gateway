@@ -268,11 +268,23 @@ def segments(xs, breaks, gap_days=3):
 def stagger_labels(fig, texts, step):
     """Step a label down until it clears the ones already placed.
 
+    Raises on an empty list rather than returning quietly. This ran as a no-op
+    from the day it was written: ``event_label`` returned ``None``, every caller
+    filtered ``None`` out, and so every call staggered nothing while the labels
+    it exists to separate sat on top of each other. Nothing could notice, because
+    doing nothing is what this function looks like when it succeeds. A caller
+    with no labels to place should not be calling it.
+
     Horizontal event labels share one height, so two events close together on the
     x axis collide, and they get closer every time the timeline lengthens under a
     fixed figure width. Overlap is measured in display space, so a pair that fits
     is left alone at any date spacing.
     """
+    if not texts:
+        raise ValueError(
+            "stagger_labels got no labels: every call site has events to place, "
+            "so an empty list means they were dropped before arriving (see the "
+            "None-return trap in this docstring)")
     fig.canvas.draw()  # a renderer must exist before a text can be measured
     rend = fig.canvas.get_renderer()
     placed = []
@@ -1076,7 +1088,7 @@ def chart_velocity():
     # apart, and the whole point of drawing both — stays readable.
     labels = [event_label(a1, ev, 0.55, lbl, col, yc="axes fraction")
               for ev, lbl, col, ls in event_markers() if dxs[0] <= ev <= dxs[-1]]
-    stagger_labels(fig, [t for t in labels if t is not None], 0.11)
+    stagger_labels(fig, labels, 0.11)
 
     a4.xaxis.set_major_formatter(mdates.DateFormatter("%b %-d"))
     a4.xaxis.set_major_locator(mdates.DayLocator(interval=4))
@@ -1208,7 +1220,7 @@ def chart_velocity_quality():
         plt.setp(ax.get_xticklabels(), rotation=45, ha="right", fontsize=8.5)
     labels = [event_label(b1, ev, 0.55, lbl, col, yc="axes fraction")
               for ev, lbl, col, ls in event_markers() if dxs[0] <= ev <= dxs[-1]]
-    stagger_labels(fig, [t for t in labels if t is not None], 0.13)
+    stagger_labels(fig, labels, 0.13)
 
     fig.text(0.012, 0.004,
              "open-to-merge includes waiting for a human to enqueue, so it tracks availability "
@@ -1488,7 +1500,12 @@ def chart_session_kinds():
     labels = [event_label(a0, ev, 0.55, lbl, col, yc="axes fraction")
               for ev, lbl, col, ls in event_markers()
               if dxs[0] + timedelta(days=3) <= ev <= dxs[-1]]
-    stagger_labels(fig, [t for t in labels if t is not None], 0.11)
+    # This chart is the one that can legitimately place none: its window opens
+    # within three days of both markers, so the filter above can empty the list.
+    # Staggering nothing is correct here and an error everywhere else, which is
+    # why the emptiness is decided at the call site rather than swallowed inside.
+    if labels:
+        stagger_labels(fig, labels, 0.11)
 
     a2.xaxis.set_major_formatter(mdates.DateFormatter("%b %-d"))
     a2.xaxis.set_major_locator(mdates.DayLocator(interval=2))
