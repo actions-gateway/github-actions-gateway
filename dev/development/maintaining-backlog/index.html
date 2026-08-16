@@ -2645,8 +2645,10 @@
 <h1 id="agent-reference-maintaining-the-backlog">Agent reference: Maintaining the backlog<a class="headerlink" href="#agent-reference-maintaining-the-backlog" title="Permanent link">&para;</a></h1>
 <p><code>docs/STATUS.md</code> is the single source of truth for project progress and priorities.
 It is high-contention — almost every session edits it — so keeping churn low matters as much as keeping it accurate.</p>
-<p>The format and process come from the globally-installed <strong>backlog skill</strong> (agents: invoke the <code>backlog</code> skill for the full playbook: grooming checklist, staleness signals, parallel dispatch, migration).
-The repo vendors the skill's tooling so the rules hold for every contributor, with or without the skill:</p>
+<p>The format and process come from the globally-installed <strong><code>session-backlog</code> skill</strong> (agents: invoke it for the full playbook: grooming checklist, staleness signals, parallel dispatch, migration).
+<strong>This page is authoritative wherever the two overlap.</strong> The skill is written to be portable across repos, so it states the general rule; this page states what is true here — the character caps, the ID allocator, the merge driver, the Progress table, the release scope ledger, and every measurement taken in this repo.
+Read a difference as this repo being more specific, not as the skill being wrong.</p>
+<p>The repo vendors the skill's tooling so the rules hold for every contributor, with or without the skill:</p>
 <ul>
 <li><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/docs/lint-backlog.sh"><code>scripts/docs/lint-backlog.sh</code></a> — enforces every format rule below.
   It selects the file and maps the environment interface onto flags; the rules themselves are <a href="https://github.com/actions-gateway/github-actions-gateway/tree/main/devtools/docs/backloglint"><code>devtools/docs/backloglint</code></a>, whose package comment is the canonical rule list.

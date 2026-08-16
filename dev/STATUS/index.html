@@ -3240,14 +3240,6 @@
 <td>The checker gates an unattended merge, but the stub returns post-<code>--jq</code> text, so a malformed <code>--jq</code> in <code>human_enqueued</code> or <code>in_queue</code> fails as a live crash, not a red suite. All three reads ran live in Q805; the suite still cannot see them.</td>
 </tr>
 <tr>
-<td><a id="Q816"></a>Q816</td>
-<td><a href="../development/maintaining-backlog/#search-before-you-file">A Queue row's site list is a floor, not a census of the defect</a></td>
-<td><code>docs</code> <code>retro</code></td>
-<td>🔲</td>
-<td>S</td>
-<td>Q758 named 2 sites; 5 carried the claim, and fixing only the named 2 ships a self-contradictory tree. dispatch-worker §1 covers a row's mechanism and cause, not its extent, and "stay in scope" reads as license to stop at the named sites.</td>
-</tr>
-<tr>
 <td><a id="Q817"></a>Q817</td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/CONTRIBUTING.md#pushing-to-a-pr-that-is-already-open">Docs teach bare two-dot <code>git diff origin/main</code> for verifying a branch's own scope</a></td>
 <td><code>docs</code> <code>retro</code></td>
@@ -3589,7 +3581,7 @@
 <td><code>ci</code> <code>docs</code> <code>retro</code></td>
 <td>🔲</td>
 <td>S</td>
-<td>A dispatcher filed Q766 while its worker filed-and-deleted the same row, so landing both would have re-opened shipped work. <code>lint-backlog</code> rule 12 only checks the <code>refs/queue-ids</code> claim. Needs a parallel-dispatch note and a gate look.</td>
+<td>A dispatcher filed Q766 while its worker filed-and-deleted the same row, so landing both would have re-opened shipped work. Splits: the rule-12 gate half is the <code>session-backlog</code> skill's upstream; the parallel-dispatch note half stays here.</td>
 </tr>
 <tr>
 <td><a id="Q734"></a>Q734</td>
@@ -3664,6 +3656,14 @@
 <td>Its <code>plan</code> filter matches <code>docs/plan/README.md</code>, <code>docs/STATUS.md</code> and <code>**.go</code>, not <code>docs/plan/*.md</code>, so a PR adding only a plan doc skips the job that catches its missing row.</td>
 </tr>
 <tr>
+<td><a id="Q883"></a>Q883</td>
+<td><a href="../development/parallel-dispatch/">Read dispatched sessions from a marker, not the brief's wording</a></td>
+<td><code>debt</code> <code>docs</code></td>
+<td>🔲</td>
+<td>S</td>
+<td><code>is_authored_prompt</code> keys on the <code>"You are "</code> prefix, which two wordings share by luck. Across 569 local sessions: 96 persona-opening (2026-07-27 to 2026-08-04, a closed set), 49 slash-invocation, 21 prose with no marker.</td>
+</tr>
+<tr>
 <td><a id="Q882"></a>Q882</td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.claude/piped-gate-guard.json">piped-gate tells a release branch to rebase onto main</a></td>
 <td><code>debt</code> <code>retro</code></td>
@@ -3694,13 +3694,6 @@
 <td><code>bug</code></td>
 <td>S</td>
 <td><strong>Event:</strong> the next live-GitHub run reports <code>Q501 candidate A outcome</code> — the cancel spec now takes that reading, and nothing is buildable until it lands. Phase 0 closed the item to classic-only: ScaleSet bounds a cancel at two graces.</td>
-</tr>
-<tr>
-<td><a id="Q883"></a>Q883</td>
-<td><a href="../development/parallel-dispatch/">Read dispatched sessions from a marker, not the brief's wording</a></td>
-<td><code>debt</code> <code>docs</code></td>
-<td>S</td>
-<td><strong>Event:</strong> <code>karlkfi/claude-skills</code> ships a deliberate dispatch marker and it is upgraded locally. <code>claude-usage</code> then reads that instead of the "You are " opening, which two wordings already share by luck and a third would break silently.</td>
 </tr>
 <tr>
 <td><a id="Q530"></a>Q530</td>
