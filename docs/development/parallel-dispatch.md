@@ -7,13 +7,8 @@ It is deliberately opinionated: the defaults here are the ones that removed the 
 
 ## When to use it
 
-Reach for parallel dispatch when **all** of these hold:
-
-- You have a batch of **independent, well-scoped** backlog items (roughly S–M size) that can each become one focused PR.
-- The work is mostly **mechanical or well-understood** (lint gates, CI wiring, packaging, docs, contained fixes) rather than open-ended design.
-- You want **throughput** and are willing to keep a dispatcher session attending to merges.
-
-Do **not** use it for a single large feature, for exploratory design work, or for tightly coupled changes that all touch the same core files — those serialize anyway and the coordination overhead is not worth it.
+`session-orchestrator` states the gate: independent well-scoped items, mechanical or well-understood work, and a session that stays attending to the run.
+Here that means roughly S–M Queue rows, and *not* a single large feature, exploratory design, or tightly coupled changes to the same core files.
 
 ## How to start a run
 
@@ -74,24 +69,12 @@ The role is called the **dispatcher** throughout this file; the skill calls it t
 
 ## Spawn mechanism: task chips
 
-Spawn each worker as a **task chip** (a real, separate Claude Code session that starts in its own fresh worktree on a `claude/*` branch when started).
-This is the mechanism to use.
+Spawn each worker as a **task chip**: a real, separate Claude Code session starting in its own fresh worktree on a `claude/*` branch.
+`session-orchestrator` §1 owns the rule and the reasoning — never an `Agent`/`Task` sub-agent, and the one click per chip is the correct trade rather than a headless auto-start.
 
-**A worker must be a full, independent Claude Code session — not a sub-agent of the dispatcher.** Do **not** spawn workers with the Agent/Task tool or any other in-process sub-agent: a sub-agent shares the dispatcher's session and context, has no worktree or branch of its own, cannot open and self-heal its own PR, and dies when the dispatcher's turn ends.
-A task chip is a *peer* session — its own worktree, branch, context, permission gates, and entry in the session list — and that independence is what the whole model (one session + one PR per task, background self-healing, the dispatcher merging across sessions) depends on.
-If you find yourself reaching for the Agent tool to "parallelize" the work, that is the wrong mechanism here — use chips.
-
-Reasons chips are the right call:
-
-- They run under the normal permission gates — no blanket permission bypass.
-- Each session is isolated (own worktree, own context, visible in the session list).
-
-A `PreToolUse` hook (`scripts/agent/claude-no-subagent-workers-hook.sh`, wired in `.claude/settings.json`) backs this up: when an `Agent`/`Task` spawn looks like a worker — it requests its own worktree, or its prompt carries PR-producing verbs (`gh pr create`, `git push`/`commit`, "open a PR", self-heal, `implement Q<NN>`) — it asks for confirmation and points back here.
-It is a soft nudge (`ask`, not a block) tuned for low false positives: read-only agent types (`Explore`, `Plan`) pass untouched, so legitimate research/build agents are unaffected.
-
-Do **not** try to auto-start headless worker sessions with a "skip all permissions" flag.
-The safety classifier blocks it, and it is the less-secure path regardless.
-The small cost of chips — one click to start each — is the correct trade.
+What is local to this repo is that the rule is **enforced**.
+A `PreToolUse` hook (`scripts/agent/claude-no-subagent-workers-hook.sh`, wired in `.claude/settings.json`) fires when an `Agent`/`Task` spawn looks like a worker — it requests its own worktree, or its prompt carries PR-producing verbs (`gh pr create`, `git push`/`commit`, "open a PR", self-heal, `implement Q<NN>`) — and asks for confirmation, pointing back here.
+It is a soft nudge (`ask`, not a block) tuned for low false positives: read-only agent types (`Explore`, `Plan`) pass untouched, so legitimate research and build agents are unaffected.
 
 > One decision to settle **before** spawning: a worker must be able to finish its job without being nudged (next section).
 > Cross-session messaging does reach an idle worker and drive a turn (measured; see [Coordination channels](#coordination-channels)), so it is a usable channel, but its **timing** is not guaranteed.
@@ -240,29 +223,16 @@ Invoke it as a slash command and stop there.
 **Keep the slash invocation even when prose would deliver the same contract.** The harness records it in the transcript as a `<command-name>` tag, which is how tooling tells a dispatched session from a hand-typed one; prose pointing at the skill delivers the contract and drops the marker.
 Read the marker as a set rather than one string — `{"/dispatch-worker", "/session-worker"}` — because sessions dispatched before the skill was renamed carry the old spelling and stay valid.
 
-Restating was the earlier practice and it was waste twice over.
-`CLAUDE.md` auto-loads into every fresh session, so a "Rules" block duplicates what the worker already has; the rest duplicated this file, which the worker can read.
-It also made the chips themselves unreviewable, which matters because the chip list is where a maintainer scans what is about to run.
+`session-orchestrator` §2 lists what the prompt carries — the item and its model, the dispatcher's worktree name, what was measured and when, the trap worth naming, and contention by file — and why restating anything else makes the chip list unreviewable.
+Three of those land differently here:
 
-So the prompt carries only what the skill and the Queue row cannot:
-
-- **The item** and the model to run on ([Model selection](#model-selection)); a fresh worker cannot run `model-advisor` interactively.
-- **The dispatcher's worktree name**, which is how the worker addresses it to report its PR (`session-worker` skill §8).
-  A session cannot look up its own name, so the dispatcher has to state it and the worker resolves it through `ListAgents`.
-- **What the dispatcher measured, and when.** The row's asserted mechanism is a claim; saying it was re-verified saves the worker repeating the check, and saying *where the row is stale* saves it implementing a fixed defect.
-  **Say what you did not measure with the same care.** A prompt's claims read as settled where a row's read as claims, because the prompt says a session checked, and the worker then builds on them rather than testing them.
-  Q805's chip forwarded the row's "all three fail closed" as fact and drew an instruction from it, not to change what the checker decides; the worker's first measurement found one probe failing *open*, on the call immediately before `gh pr merge --squash`.
+- **The model** is picked because a fresh worker cannot run `model-advisor`, which prompts interactively ([Model selection](#model-selection)).
+- **An unmeasured claim in a prompt is the expensive kind.** Q805's chip forwarded the row's "all three fail closed" as fact and drew an instruction from it, not to change what the checker decides; the worker's first measurement found one probe failing *open*, on the call immediately before `gh pr merge --squash`.
   Mark an unverified claim as unverified, or leave it out.
-- **The trap worth naming** — the tempting wrong fix, the control the test needs, the decision the row leaves open.
-  A trap is a claim too, and the most load-bearing one in the prompt, since it tells the worker what *not* to look at.
-- **Contention** with work in flight, by file.
-  When several workers will touch one large doc, say so **and** say what the resulting `gh pr create` denial means: *read the other PR and override with the reading*, never *re-scope this change*.
-  A worker who shrinks a good change to get past the guard reports that as scoping, not as friction, so it never appears in a friction report afterwards and cannot be found retrospectively.
+- **Contention has a guard attached.** When several workers will touch one large doc, say so **and** say what the resulting `gh pr create` denial means: *read the other PR and override with the reading*, never *re-scope this change*.
+  A worker who shrinks a good change to get past the guard reports that as scoping rather than friction, so it never reaches a friction report and cannot be found retrospectively.
   It has to be in the prompt or it stays invisible.
   Measured across one batch: five overrides, each recorded with a reading, one of which caught a cross-PR contradiction nothing else would have.
-
-A prompt that fits in a few lines is one a maintainer can scan a whole wave of.
-If it is running long, the excess is usually contract that belongs in the skill, or task detail that belongs in the Queue row.
 
 > ```
 > /session-worker Q664 — Opus 5. Verified 2026-08-04: the reap wait at
@@ -574,12 +544,11 @@ It is the same command the checker would have run, and the rebase is the only de
 
 ## PR-watcher requirements
 
-The pr-sentinel background watcher (the primary self-heal mechanism above) is the reference implementation of these; the requirements are why it is shaped the way it is.
-If you build your own watcher, it must:
+`session-worker` states the requirement — a process that polls check state and mergeability, sleeps between polls, wakes on a transition, and reads only provider-controlled state.
+Two additions come from what broke here:
 
-- Gate "mergeable" on **both** all-checks-green **and** the `mergeable` field — not checks alone (a green PR can still be conflicting).
-- Re-emit on **state transitions** (failed → green, conflicting → mergeable), not once-and-forever, because PRs flip-flop as siblings merge.
-- Handle **docs-only PRs that trigger zero CI checks** — treat zero-checks + mergeable as ready (and keep a periodic backstop poll, since an event-only watcher can miss them).
+- **Handle docs-only PRs that trigger zero CI checks.** Treat zero-checks plus mergeable as ready, and keep a periodic backstop poll, since an event-only watcher misses them entirely.
+- **Re-emit on transitions**, not once-and-forever: PRs flip-flop as siblings merge.
 
 **Do not arm a watch during a known-dirty window.** [`pr-mergeability-watch.sh`](../../scripts/agent/pr-mergeability-watch.sh) polls before its first sleep, so a watch armed against a PR that is already `DIRTY` fires `conflict` and exits within one `gh` call, spending the watch on a state you already knew.
 Arm it after the heal reports `CLEAN`.
@@ -626,19 +595,11 @@ Some tasks simply cannot run autonomously under this rule (e.g. anything needing
   This is what made a stale "branch-guard blocks force-push" note expensive: it forced a `PR_SENTINEL_HEAL=merge` prefix onto every launch, for a restriction branch-guard's default `strict` policy does not actually impose.
 - **Bundling the STATUS.md Queue-row edit into a code commit.** Mixed into a code commit it makes every sibling merge conflict painfully; keep it an isolated commit so self-healing absorbs the trivial conflict.
   (Workers owning their own row is fine — the old "dispatcher owns the file" rule was a pre-self-healing workaround.)
-- **Running same-file tasks in parallel without sequencing.** Causes avoidable rebase churn; stream them instead.
 - **A watcher that trusts CI buckets alone.** It reported "mergeable" for conflicting PRs and went silent after flip-flops.
   Gate on mergeability and re-emit on transitions.
-- **Chasing the headless-CLI auto-start path.** It is blocked by the safety classifier and is the less-secure option.
-  Use chips.
-- **Spawning workers as sub-agents of the dispatcher.** An Agent/Task sub-agent has no worktree or branch, cannot self-heal its own PR, and dies with the dispatcher's turn.
-  Workers must be full, independent Claude Code sessions (chips).
-- **Burning a session in an active `gh pr checks --watch` loop.** It pins the main thread so you cannot iterate while CI runs.
-  Launch the pr-sentinel background watcher instead — one watcher wakes the session on CI failures **and** merge conflicts, and its `PreToolUse` hook denies the foreground `--watch` outright.
-  Reserve any active polling for the rare fallback where neither the plugin nor a background task is available.
+- **Burning a session in an active `gh pr checks --watch` loop.** It pins the main thread so you cannot iterate while CI runs, and pr-sentinel's `PreToolUse` hook denies the foreground `--watch` outright.
 - **Watching to merge instead of to green.** `PR_SENTINEL_WATCH_UNTIL=closed` looks like strictly more coverage, and it does close the post-`ready` gap inside the worker's own watcher.
   What it costs is the session list: a live background task makes a session read as busy, so every worker shows busy from first push until merge and hides its PR status for the whole review window, exactly when the maintainer is scanning for it.
   Split the watch at `ready` instead ([the post-`ready` gap](#the-post-ready-gap)).
-- **Inferring PR ownership from the branch name.** It matches the session name only for the branch the worktree was created on, so a worker's second PR or a borrowed worktree drops out of the map silently.
-  Have the worker announce every PR it opens ([Coordination channels](#coordination-channels)).
-- **Conflating auto-fix with auto-merge.** Delegate fixes; gate merges.
+
+`session-orchestrator`'s own anti-pattern list carries the rest — sub-agent workers, restating the contract, unsequenced same-file tasks, adjacent backlog rows, inferring PR ownership from a branch name, and conflating auto-fix with auto-merge.
