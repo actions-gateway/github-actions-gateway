@@ -3193,6 +3193,10 @@ If the check does not fire on real cases, demote this to an observation rather t
 <td><code>CLAUDE.md</code>/<code>AGENTS.md</code> is the agent entrypoint only. Human docs never link to it; the dependency direction is one-way (<code>CLAUDE.md</code> → <code>docs/</code>). Content humans need lives in <code>docs/</code> or <code>CONTRIBUTING.md</code>.</td>
 </tr>
 <tr>
+<td><strong>Name a globally-installed skill, never link it</strong></td>
+<td>A skill under <code>~/.claude/skills/</code> is outside every repo and its source is a private repo (<code>karlkfi/claude-skills</code>, measured 2026-08-16), so a link from <code>docs/</code> resolves for no reader and <code>check-doc-links.sh</code> cannot see that it is dead. Name it for agents and keep the page sufficient for a contributor without it: <a href="../maintaining-backlog/">maintaining-backlog.md</a> does this for the <code>backlog</code> skill and <a href="../testing/#diagnosing-failures-measure-before-asserting-a-root-cause">testing.md § Diagnosing failures</a> for <code>verify-claims</code>, each keeping the rules readable off the repo's own cases. A <strong>repo-local</strong> skill under <code>.claude/skills/</code> is in-tree and links normally (<a href="../../.claude/skills/dispatch-worker/SKILL.md"><code>dispatch-worker</code></a>).</td>
+</tr>
+<tr>
 <td><strong>Table of contents</strong></td>
 <td>Long docs (~400+ lines) carry a <code>## Table of Contents</code> after the intro listing h2s (plus h3 for operator docs). Anchors follow GitHub slug rules (duplicate headings get <code>-1</code>/<code>-2</code>); verify against the rendered page.</td>
 </tr>

@@ -3671,6 +3671,22 @@
 <td>S</td>
 <td>It read <code>release-1.5</code> as a stale PR branch. Rebasing is the one thing that must never happen there: it publishes everything merged since the tag. Recurs on every backport.</td>
 </tr>
+<tr>
+<td><a id="Q884"></a>Q884</td>
+<td><a href="../development/testing/#diagnosing-failures-measure-before-asserting-a-root-cause">Port seven diagnosis rules to <code>verify-claims</code> in <code>karlkfi/claude-skills</code></a></td>
+<td><code>docs</code> <code>debt</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>Absent from the skill and its timing reference: argument-index by callee name, unreset scan scope, <code>pgrep</code> self-match, a completion predicate on a working word, a stand-in harness call, the recovery-property proxy, one-way reconciliation.</td>
+</tr>
+<tr>
+<td><a id="Q885"></a>Q885</td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.githooks/pre-commit">A pathspec <code>git commit</code> bypasses the lint-backlog pre-commit backstop</a></td>
+<td><code>debt</code> <code>retro</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>Measured 2026-08-16: an over-cap row left unstaged commits clean via <code>git commit -- docs/STATUS.md</code> while the hook runs; <code>--staged</code> catches it once <code>git add</code>ed. CLAUDE.md prefers that pathspec form. Mechanism unverified.</td>
+</tr>
 </tbody>
 </table>
 <hr />

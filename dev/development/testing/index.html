@@ -4852,26 +4852,23 @@ Same principle as <a href="#a-bulk-mechanical-change-proves-itself-by-reconcilia
 </ul>
 <p>Before concluding a test failure is a code bug, check whether the problem is in the test expectations, the test setup, or the code itself — the intent of the test must match the implementation.</p>
 <h2 id="diagnosing-failures-measure-before-asserting-a-root-cause">Diagnosing failures: measure before asserting a root cause<a class="headerlink" href="#diagnosing-failures-measure-before-asserting-a-root-cause" title="Permanent link">&para;</a></h2>
-<p>A root-cause claim needs evidence measured from <em>this</em> failure, not a resemblance to a remembered one.
-These shortcuts recur, and each produces confident-but-wrong diagnoses:</p>
+<p>A root-cause claim needs evidence measured from <em>this</em> failure, not a resemblance to a remembered one.</p>
+<p>The rules in this section are stated in general form by the globally-installed <strong>verify-claims skill</strong>, which agents invoke before reporting a gate result, diagnosing a failure, or writing a test; it carries a timing-and-concurrency reference for the flake cases.
+What this section keeps is what each rule cost <em>here</em>: which run, which PR, which commit, and what the numbers were.
+Each case below is the evidence for its rule, so the rule is still readable off the case by a contributor who does not have the skill.</p>
+<p>These shortcuts recur, and each produces confident-but-wrong diagnoses:</p>
 <ul>
-<li><strong>Treating a reproduction you built as the mechanism.</strong> A scenario you construct that produces the failure's exact signature shows the symptom is <em>achievable</em> that way, never that it <em>happened</em> that way, and the closer the match the more convincing the wrong answer.
-  <a href="../../STATUS/#Q820">Q820</a>'s plan doc reproduced its signature line for line by racing a <code>rm -rf</code> against a live git in the same repository, then spent three rounds hunting a remover that exists nowhere in the suite or the fan-out around it.
+<li><strong>Treating a reproduction you built as the mechanism.</strong> <a href="../../STATUS/#Q820">Q820</a>'s plan doc reproduced its signature line for line by racing a <code>rm -rf</code> against a live git in the same repository, then spent three rounds hunting a remover that exists nowhere in the suite or the fan-out around it.
   The trees were intact at the moment of failure, so there was never a remover to find.
-  Promote a reproduction to a diagnosis only on a reading taken from the <em>failing</em> system that no rival mechanism could produce: there it was the state of the throwaway trees, which cost ten lines of <code>ERR</code> trap and refuted the family the first time it fired.
-  The same instinct helps when the question is narrower than a root cause.
-  To learn which command emits a message, break the operation deterministically rather than racing it: <code>chmod 500</code> on <code>.git/objects</code> fails every object write on demand, and settled in one run a discriminator whose racing predecessor had generalized from the wrong case.</li>
-<li><strong>Symptom-matching a prior issue.</strong> When a failure looks like a known issue — a flake row on the <a href="../../STATUS/">backlog</a>, a previously fixed bug, a memory of "this is always X" — that match is a <strong>hypothesis, not a diagnosis</strong>.
-  The same surface symptom (a scheduling timeout, an egress blip, a wedged run) can have a different cause each time.
-  Before acting on the remembered cause — and above all before spending a billable re-run, a fix PR, or a state-changing command on it — take a direct measurement from the failing system: read the actual events, describe the actual pod, pull the actual log line.
+  What refuted the whole family the first time it fired was a reading taken from the <em>failing</em> system: the state of the throwaway trees, ten lines of <code>ERR</code> trap.
+  When the question is narrower than a root cause, break the operation deterministically rather than racing it.
+  <code>chmod 500</code> on <code>.git/objects</code> fails every object write on demand, and settled in one run a discriminator whose racing predecessor had generalized from the wrong case.</li>
+<li><strong>Symptom-matching a prior issue.</strong> A match against a flake row on the <a href="../../STATUS/">backlog</a>, a previously fixed bug, or a memory of "this is always X" is a hypothesis: read the actual events, describe the actual pod, pull the actual log line before spending a billable re-run, a fix PR, or a state-changing command on the remembered cause.
   If the environment tears down evidence on failure, capturing diagnostics <em>before</em> teardown is part of the fix, not optional (filed from the v1.2.0 release retro, where gate failures had to be re-run just to observe them).</li>
-<li><strong>Trusting source inspection.</strong> Reading code — or a plan doc's ✅ investigation findings, which usually derive from source-reading — tells you what <em>should</em> happen, not what does.
-  Treat such findings as unverified until confirmed end-to-end: actually exec the thing.
-  Source-reading alone has produced wrong conclusions before (PR #59).</li>
+<li><strong>Trusting source inspection.</strong> A plan doc's ✅ investigation findings usually derive from source-reading, so treat them as unverified until confirmed end-to-end: actually exec the thing (PR #59).</li>
 <li><strong>Reading CI evidence after re-running the job.</strong> <code>gh run view &lt;id&gt; --log-failed</code> reports the <strong>latest attempt</strong>, so re-running a red job destroys the view of the failure you are diagnosing: it returns the new attempt's (empty) failure set, which looks exactly like "the diagnostic never ran".
-  Recover the original with <code>gh run view &lt;id&gt; --attempt N --log</code>, and — since an empty result is only evidence of absence once the command is known to have run — grep for a string you <em>know</em> that log contains before reading any emptiness as a finding.
-  Q648 was only findable this way: the attribution banner it turns on was present in attempt 1 and absent from the post-re-run view.
-  Capture the evidence <strong>before</strong> spending the re-run where you can.</li>
+  Recover the original with <code>gh run view &lt;id&gt; --attempt N --log</code>, then grep for a string you <em>know</em> that log contains before reading any emptiness as a finding.
+  Q648 was only findable this way: the attribution banner it turns on was present in attempt 1 and absent from the post-re-run view.</li>
 <li><strong>Waiting out a matrix to read a leg that already failed.</strong> <code>gh run view --job &lt;id&gt; --log-failed</code> refuses while the <em>run</em> is in progress ("logs will be available when it is complete"), so one slow leg withholds every finished leg's log, and pr-sentinel's captured excerpt reads <code>(no failed-step log available for run &lt;id&gt;)</code> for the same reason.
   <code>gh api "repos/&lt;owner&gt;/&lt;repo&gt;/actions/jobs/&lt;id&gt;/logs"</code> reads a completed job's log immediately, whatever its run is doing; get the ids from <code>gh run view &lt;run-id&gt; --json jobs --jq '.jobs[] | select(.conclusion=="failure") | .databaseId'</code>.
   Measured 2026-08-12 on run <code>31622300898</code>, job <code>94201728982</code>: <code>--log-failed</code> answered <code>run 31622300898 is still in progress; logs will be available when it is complete</code> while that job had read <code>completed failure</code> for minutes and <code>trivy (proxy, 1)</code> was still <code>in_progress</code>; <code>gh api</code> returned the job's 1,639-line log in the same minute, naming a syft download that exhausted its retry budget against a release-CDN <code>503</code>.
@@ -4883,13 +4880,13 @@ The same discipline applies to the plainer statements that carry a decision — 
 Each is a claim about state, and each has a cheap way of being wrong:</p>
 <ul>
 <li><strong>An exit code read through a pipe is the pipe's.</strong> <code>make check | tail -40</code> reports <code>tail</code>'s status, so a failing gate reads as <code>0</code>.
-  Redirect to a file and read <code>$?</code> from the command itself — then reconcile it against the output, because a gate that exits 0 while its own log carries a <code>FAIL</code> line is the other half of the same trap. This one has a mechanical check now (Q625): <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/agent/claude-piped-gate-hook.sh"><code>scripts/agent/claude-piped-gate-hook.sh</code></a> is a <code>PreToolUse</code> hook that denies a Bash call that pipes a registered gate into a filter, or reads <code>$PIPESTATUS</code> (which does not exist in zsh, the shell the Bash tool runs, and expands to empty there).
+  Redirect to a file and read <code>$?</code> from the command itself, then reconcile it against the output. This one has a mechanical check now (Q625): <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/agent/claude-piped-gate-hook.sh"><code>scripts/agent/claude-piped-gate-hook.sh</code></a> is a <code>PreToolUse</code> hook that denies a Bash call that pipes a registered gate into a filter, or reads <code>$PIPESTATUS</code> (which does not exist in zsh, the shell the Bash tool runs, and expands to empty there).
   It denies rather than asks because a deny's reason is shown to the model and an ask's to the user, so the fix lands where the command gets rewritten instead of being relayed by hand (Q697).
   Wanting the output rather than the status is legitimate and indistinguishable from the bug, so every verdict has a break-glass: re-run prefixed with <code>PIPED_GATE_OVERRIDE=&lt;reason&gt;</code>, and file a Queue row when the rule, not the call, is what is wrong.
   The gate list is <code>.claude/piped-gate-guard.json</code>, and what the hook cannot see is enumerated in the package comment of <a href="https://github.com/actions-gateway/github-actions-gateway/tree/main/devtools/agent/pipedgate"><code>devtools/agent/pipedgate</code></a>, which is where the decision actually lives.
   The same hook carries two warnings about repository state rather than exit status: a <code>git push</code> onto a base that moved into this branch's own files (Q665), and a <code>gh pr create</code> overlapping an open PR (Q668).
   Both are documented where their rules are, in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/CONTRIBUTING.md#pushing-to-a-pr-that-is-already-open">CONTRIBUTING.md</a>.</li>
-<li><strong>Backgrounded, <code>; echo "EXIT=$?"</code> reports the <code>echo</code>'s status, not the gate's.</strong> The redirect-and-echo idiom above is written for a foreground run, where the echoed line is the thing you read. Run with <code>run_in_background: true</code> and the completion notification carries the <em>chain's</em> status instead. A chain ending in <code>echo</code> always ends 0, so a gate that failed arrives as <code>completed (exit code 0)</code>: the most authoritative-looking signal in the session, and the only one that is wrong. Preserve the status explicitly, and still reconcile against the log: <code>make check &gt; tmp/check.log 2&gt;&amp;1; rc=$?; echo "EXIT=$rc"; exit $rc</code>.
+<li><strong>Backgrounded, <code>; echo "EXIT=$?"</code> reports the <code>echo</code>'s status, not the gate's.</strong> The redirect-and-echo idiom above is written for a foreground run, where the echoed line is the thing you read; run with <code>run_in_background: true</code> and the completion notification carries the <em>chain's</em> status instead. Preserve the status explicitly, and still reconcile against the log: <code>make check &gt; tmp/check.log 2&gt;&amp;1; rc=$?; echo "EXIT=$rc"; exit $rc</code>.
   Confirmed directly: <code>( false; echo "EXIT=$?" )</code> prints <code>EXIT=1</code> and exits 0; the <code>rc=</code> form prints <code>EXIT=1</code> and exits 1. Re-measured through the Bash tool on 2026-08-04, which is the path that matters: a backgrounded <code>false &gt; /dev/null 2&gt;&amp;1; echo "EXIT=$?"</code> wrote <code>EXIT=1</code> to its output file and notified <code>completed (exit code 0)</code>.
   The same hook as above covers this shape (Q681): it asks when a <strong>backgrounded</strong> call names a registered gate and ends in something that cannot carry the gate's failure out (an <code>echo</code>, a <code>||</code> fallback, a trailing <code>&amp;</code>), and stays silent for the <code>exit $rc</code> form, for the gate as the last statement, and for the identical command run in the <em>foreground</em>, where the echo is the thing you read.</li>
 <li><strong>A <code>pgrep -f</code> pattern that appears in your own command line matches your own shell.</strong> Probing a background gate with <code>pgrep -f "make check &gt; tmp/check.log"</code> answers "running" for as long as you keep asking, because the Bash tool's invocation carries the pattern as text and is itself a match.
@@ -4897,111 +4894,76 @@ Each is a claim about state, and each has a cheap way of being wrong:</p>
   A background run's verdict comes from its completion notification and its output file, never from a process probe.
   Read the task output for the <code>EXIT=</code> line the <code>rc=</code> idiom above preserves.
   When a probe genuinely needs <code>pgrep</code>, break the self-match with a bracket, <code>pgrep -f "pr-sentinel-watc[h]"</code>, and confirm it against a case whose answer is already known.</li>
-<li><strong>A tool that exits 0 having printed nothing may have checked nothing.</strong> <code>gh attestation verify</code> writes its summary only to a TTY; captured or redirected it is silent, and silence is indistinguishable from a no-op.
-  When a verification's whole value is that it ran, make it emit something assertable (<code>--format json</code>, then read the predicate) rather than trusting the status alone.</li>
-<li><strong>A state observed once is not a steady state.</strong> Pods wedged now may clear in ten minutes; a set that looks static may be churning underneath a stable count.
-  Before calling a condition permanent, take a second reading far enough apart to tell the difference, and compare <em>identities</em> rather than counts.</li>
-<li><strong>A count grouped by symptom is not a measurement of cause.</strong> A tool's ranking groups records by whatever its normalizer could see, which is seldom what shares a mechanism: workspace-guard's friction report folds <code>f=$(ls -t …)</code>, <code>for f in &lt;glob&gt;</code>, and a literal <code>f=/path</code> into a single <code>$f</code> row, so one count of 31 supported four incompatible explanations — the pattern actually being claimed was 4 of them, none in the previous seven days.
-  Re-derive the aggregate along the axis the claim needs (time, construct, actor) before naming a cause; and when the claim is causal, <strong>exercise the system that would produce the effect</strong> rather than counting records that correlate with it.
-  Nineteen prompts whose command text contained a scratchpad path read as a guard defect until the guard was fed a payload directly, which showed it already exempts the session's own scratchpad and every one of the 19 was a correctly-flagged cross-session access.</li>
-<li><strong>A count or a superlative is a claim, not a recollection.</strong> "Six of them", "the only one without a test", "none of the workflows" — each asserts a <em>population</em> and a <em>width of scan</em>, and both go stale the moment the tree moves.
-  A scan run earlier in the session for another purpose does not transfer: re-derive the number as you write the sentence, and say what population it is true of.
-  The <a href="../../plan/markdown-gates-parser/">markdown-gates plan</a> first called <code>check-doc-links.sh</code> the only script here with no <code>-test.sh</code> companion, from memory of an earlier sweep; re-running it found six of the fourteen scripts in <code>scripts/docs/</code> untested, and the claim shipped rescoped to the four gates that plan covers, where it is exactly true.
+<li><strong>A tool that exits 0 having printed nothing may have checked nothing.</strong> <code>gh attestation verify</code> writes its summary only to a TTY; captured or redirected it is silent, so make it emit something assertable (<code>--format json</code>, then read the predicate) rather than trusting the status.</li>
+<li><strong>A state observed once is not a steady state.</strong> Pods wedged now may clear in ten minutes, and a set that looks static may be churning underneath a stable count, so compare <em>identities</em> across two readings rather than counts.</li>
+<li><strong>A count grouped by symptom is not a measurement of cause.</strong> workspace-guard's friction report folds <code>f=$(ls -t …)</code>, <code>for f in &lt;glob&gt;</code>, and a literal <code>f=/path</code> into a single <code>$f</code> row, so one count of 31 supported four incompatible explanations — the pattern actually being claimed was 4 of them, none in the previous seven days.
+  Exercising the system beat counting its records: nineteen prompts whose command text contained a scratchpad path read as a guard defect until the guard was fed a payload directly, which showed it already exempts the session's own scratchpad and every one of the 19 was a correctly-flagged cross-session access.</li>
+<li><strong>A count or a superlative is a claim, not a recollection.</strong> The <a href="../../plan/markdown-gates-parser/">markdown-gates plan</a> first called <code>check-doc-links.sh</code> the only script here with no <code>-test.sh</code> companion, from memory of an earlier sweep; re-running it found six of the fourteen scripts in <code>scripts/docs/</code> untested, and the claim shipped rescoped to the four gates that plan covers, where it is exactly true.
   Re-derived while writing this line: seven of fourteen, because <code>gen-api-reference.sh</code> has landed since.
   The number moved in a day.</li>
-<li><strong>An instrument's total is bounded by what it can observe, and an event it never saw leaves no gap.</strong> Establish the blind spots before quoting the number, because nothing in the output will.
-  The guard friction reports rank PreToolUse decisions, so foreground-guard's 200 prompts — quoted upstream as the largest single source of friction here — is a <strong>floor</strong>: the hook returns ahead of all analysis when the payload carries <code>run_in_background: true</code> (<code>karlkfi/claude-foreground-guard#15</code>), so every backgrounded poll is absent by construction. pr-sentinel scored near zero for a sharper reason: its defect lives in a watcher script that no PreToolUse analyzer observes at all.
-  Quote a total with the shape it cannot see named beside it.</li>
-<li><strong>A paginated API answers with one page, and a full-looking count is the tell.</strong> <code>gh</code>'s <code>--json</code> reads stop at the API's default page size and still exit 0, so a query whose answer is a <em>list</em> quietly becomes a query about its first hundred entries.
-  Q875 checked file overlap against an open PR with <code>gh pr view &lt;n&gt; --json files</code>, got exactly 100 paths, grepped them for its own two files and found neither; <code>gh api --paginate .../files</code> returned 228, with both present.
-  The empty grep was not a failed search, it was a correct search of the wrong population, which is why it reads as a clean negative rather than as an error.
-  <strong>A count landing exactly on a round number (100, 30, 1000) is a truncation until shown otherwise</strong>, and <code>--paginate</code>, or a <code>totalCount</code> field read beside the list, is what shows it.</li>
+<li><strong>An instrument's total is bounded by what it can observe, and an event it never saw leaves no gap.</strong> The guard friction reports rank PreToolUse decisions, so foreground-guard's 200 prompts — quoted upstream as the largest single source of friction here — is a <strong>floor</strong>: the hook returns ahead of all analysis when the payload carries <code>run_in_background: true</code> (<code>karlkfi/claude-foreground-guard#15</code>), so every backgrounded poll is absent by construction. pr-sentinel scored near zero for a sharper reason: its defect lives in a watcher script that no PreToolUse analyzer observes at all.</li>
+<li><strong>A paginated API answers with one page, and a full-looking count is the tell.</strong> Q875 checked file overlap against an open PR with <code>gh pr view &lt;n&gt; --json files</code>, got exactly 100 paths, grepped them for its own two files and found neither; <code>gh api --paginate .../files</code> returned 228, with both present.
+  The empty grep was not a failed search, it was a correct search of the wrong population.
+  <code>--paginate</code>, or a <code>totalCount</code> field read beside the list, is what shows a round number to be a truncation.</li>
 <li><strong><code>git rev-parse --show-toplevel</code> names the innermost repository, not yours.</strong> Measuring a third-party project the way <a href="../../plan/competitive-analysis-2026-08/#method-so-it-can-be-re-checked">the competitive analysis</a> does puts a foreign clone under <code>tmp/</code>, and from inside it every repo-relative idiom re-anchors.
   <code>--show-toplevel</code> then resolves to that clone, so <code>cd "$(git rev-parse --show-toplevel)"</code>, the reset form workspace-guard whitelists precisely because it is normally reliable, walks deeper instead of back out.
   Q875 lost two commands to this after a bare <code>cd tmp/arc</code> had already drifted the shell, and the second failure looked like a missing directory rather than a wrong repository.
   Isolate the visit in a subshell so there is nothing left to re-anchor, and when a reset is genuinely needed, name the session's worktree path literally.</li>
 <li>
-<p><strong>A sound instrument still answers only its own question, which is usually narrower than the claim.</strong> The bullets above are corrupted or absent signals; this one is a probe working perfectly and being read for more than it measures.
-  Q710 shipped a wrong sentence twice this way.
+<p><strong>A sound instrument still answers only its own question, which is usually narrower than the claim.</strong> Q710 shipped a wrong sentence twice this way.
   A token-multiset reconciliation over a prose edit came back clean and was reported as "no qualifier was lost", which was true, and as "the split preserved the meaning", which it cannot see, because the defect was a pronoun the edit <em>added</em>.
   Then a scan for damaged paragraph labels reported 22 sites by finding every label with an unlabelled paragraph after it, never asking which of those <em>this change</em> produced; the answer was 8, and two structural edits had already been made on the 22.
-  <strong>A claim about what a change did needs a before-and-after measurement, not a scan of the after.</strong> Run the probe against the base tree too, and diff the two.
-  The discriminator is to <strong>ask what the signal would read if the alternative were true</strong>: when the answer is "the same", the reading cannot settle the question however sound the instrument is.
   Two instances from 2026-08-12, blunter than Q710's and both in tooling used to check tooling.
   A <code>gh pr view &lt;n&gt; --json state</code> read returned <code>MERGED</code> and was taken as merged to <code>main</code>; the field is true and carries no base, and <code>baseRefName</code> was already on the object fetched (Q805 retro).
   A <code>git merge-tree --write-tree</code> probe exited 0 for a branch the merge queue then rejected, because a local clone has this repo's merge drivers installed and GitHub runs none; the driver announced itself in the very output being quoted as a clean merge (Q828).
-  Nothing was absent in either case, so "check more" would not have helped.
-  Note also that a <strong>hedge on the conclusion does not rescue a measurement that answered a different question</strong>, it only makes the wrong answer look appropriately humble: the Q828 reading was hedged carefully, on the inference drawn <em>from</em> the probe, while the error sat upstream in the probe itself.</p>
+  Nothing was absent in either case, so "check more" would not have helped, and the Q828 reading was hedged carefully on the inference drawn <em>from</em> the probe while the error sat upstream in the probe itself.</p>
 </li>
 <li>
-<p><strong>A gate that fails on your branch is not yours until it fails on the base too.</strong> The bullet above asks for a before-and-after when you are claiming what a change <em>did</em>; this is the same move aimed at the more common question, <em>is this failure even mine</em>.
-  A red gate on a working branch reads as caused by that branch, because that is the only thing you changed, and a plausible mechanism is always available: a test you touched, a list you widened, the runs you had going in parallel.
-  Check out the base, run the same gate, and read it before naming a cause.
-  Q166 spent two wrong hypotheses on this.
+<p><strong>A gate that fails on your branch is not yours until it fails on the base too.</strong> Q166 spent two wrong hypotheses on this.
   A red envtest suite was blamed first on the session's own concurrent test runs, then on a cluster-wide List the branch had added, which was narrowed on that theory for no improvement; <code>origin/main</code> alone then measured 324.5s against a 5m timeout with none of the branch's code, and the failing test's name had moved between runs because what was actually failing was the suite's wall clock (Q741).
-  The tell is a failing test whose identity changes run to run, or one in a file the diff never touches: both say the branch is a bystander.</p>
+  When a gate does fail on the base, the fix is not yours to carry either: it gets its own PR, searched for before it is written (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/CONTRIBUTING.md#when-main-is-broken">CONTRIBUTING.md § When <code>main</code> is broken</a>).</p>
 </li>
 <li>
-<p><strong>A derived gate's green is bounded by what it can still resolve, and a derivation that shrinks says nothing.</strong> The bullet above asks whether a red gate is yours; this is the opposite failure, a gate that stays green because it quietly stopped looking.
-  The blind spots named above are named once, when a measurement is reported.
-  A gate runs forever, and its coverage can regress long after it was written: a rename introduces a second function of the same name, the resolver can no longer place a call, and a value it used to derive stops being demanded.
-  Nothing turns red, because the check that would have fired is the one that went missing.
-  Under-derivation is not a missing refusal, it is a refusal that will never be attempted.
-  <strong>So a gate that derives its own inventory has to fail on an input it cannot place</strong>, as a finding rather than a logged note.
-  Two scanners built in the 1.5 cycle each grew one independently: <code>metrictiers</code>' <code>values-derivation</code> (Q851) and <code>reasontiers</code>' <code>resolution</code> (Q850).
+<p><strong>A derived gate's green is bounded by what it can still resolve, and a derivation that shrinks says nothing.</strong> A rename introduces a second function of the same name, the resolver can no longer place a call, and a value it used to derive stops being demanded; nothing turns red, because the check that would have fired is the one that went missing.
+  Two scanners built in the 1.5 cycle each grew a fail-on-unplaceable rule independently: <code>metrictiers</code>' <code>values-derivation</code> (Q851) and <code>reasontiers</code>' <code>resolution</code> (Q850).
   Converging twice in one cycle is the signal that a derived inventory needs this by construction, not as an afterthought.
-  The tier now says it for you: a breach of the <a href="#the-envtest-suite-budget">envtest suite budget</a> reports that the <em>suite</em> ran out of time and names the panic's test as a bystander, rather than leaving the reader to notice that the name moved.
-  When it does fail on the base, the fix is not yours to carry either: it gets its own PR, searched for before it is written (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/CONTRIBUTING.md#when-main-is-broken">CONTRIBUTING.md § When <code>main</code> is broken</a>).</p>
+  The tier now says it for you: a breach of the <a href="#the-envtest-suite-budget">envtest suite budget</a> reports that the <em>suite</em> ran out of time and names the panic's test as a bystander, rather than leaving the reader to notice that the name moved.</p>
 </li>
-<li><strong>A cause you can watch happening is still only a hypothesis, and a real one does not crowd out a second.</strong> The bullet above asks whether a failure is yours at all; this one asks whether the cause you found is the whole of it, and it is hardest exactly when the first cause is genuine. #1432's <code>--assess</code> reported "no human has enqueued this PR" for a PR a human demonstrably had, during a GitHub timeline degradation that was real, concurrent, and sufficient to explain it, so the investigation closed there and the row was filed against it.
+<li><strong>A cause you can watch happening is still only a hypothesis, and a real one does not crowd out a second.</strong> #1432's <code>--assess</code> reported "no human has enqueued this PR" for a PR a human demonstrably had, during a GitHub timeline degradation that was real, concurrent, and sufficient to explain it, so the investigation closed there and the row was filed against it.
   Measured later: <code>gh api --paginate</code> runs its <code>--jq</code> per page and prints one count per page (a 290-event timeline answers <code>100 100 90</code>), which <code>((n &gt; 0))</code> reads as an arithmetic syntax error and reports as that same sentence — on a healthy network, for any PR past 100 timeline events (Q805).
-  Two mechanisms, one symptom, and the outage was the one you could see.
-  A cause that arrives alongside the symptom rather than being derived from it has not been tested against the alternatives: ask what else produces this exact output before closing.</li>
+  Two mechanisms, one symptom, and the outage was the one you could see.</li>
 <li><strong>A check sequenced before a state-changing command does not gate it.</strong> <code>scripts/docs/lint-backlog.sh &gt; tmp/lint.log; git add docs/STATUS.md &amp;&amp; git commit</code> runs the commit whatever the linter said, because <code>;</code> sequences rather than conditions, and the <code>&amp;&amp;</code> binds the commit to <code>git add</code> instead.
-  This is the sibling of the pipe traps above: there the status is misread, here it is read correctly and then ignored.
-  Bind the mutation to the check that authorizes it, <code>scripts/docs/lint-backlog.sh &amp;&amp; git add docs/STATUS.md &amp;&amp; git commit</code>, or branch on <code>$?</code> explicitly.
+  Bind the mutation to the check that authorizes it, <code>scripts/docs/lint-backlog.sh &amp;&amp; git add docs/STATUS.md &amp;&amp; git commit</code>.
   The pre-commit hook backstops this particular file, and a backstop is not a reason to write the chain so that it depends on one.</li>
 <li><strong>A completion predicate must key on what ends the run, not on a string that appears in it.</strong> A <code>Monitor</code> armed on <code>make check</code> for <code>check-dep-advisory</code>, the advisory that runs last, fired while the gate was still inside <code>scripts-test</code>, because <code>ci/check-dep-advisory-test</code> is a suite name that phase prints as it works.
   The report went out as "run complete" with <code>build-tags-check</code>, <code>lint</code> and <code>cover-check</code> not yet started (measured 2026-08-12).
   The trap is the run's own vocabulary: a marker chosen to mean "finished" is usually also a word the run says while working, and the false fire looks exactly like the real one.
   Grep the marker against a full log of an earlier run before arming a watcher on it, and prefer the process exiting, since a background task's completion notification cannot fire early.</li>
-<li><strong>Green checks say the run passed, never that your change is gated.</strong> The two come apart exactly when a gate is new, which is when nobody thinks to look.
-  <code>comparison-stamps-check</code> shipped into <code>CHECK_FAST_GATES</code> and into no workflow, so it ran under a local <code>make check</code> and never on a PR: <code>unit-test.yml</code> path-ignores docs, and <code>doc-links.yml</code> names each docs gate as its own job rather than running <code>make check</code>.
+<li><strong>Green checks say the run passed, never that your change is gated.</strong> <code>comparison-stamps-check</code> shipped into <code>CHECK_FAST_GATES</code> and into no workflow, so it ran under a local <code>make check</code> and never on a PR: <code>unit-test.yml</code> path-ignores docs, and <code>doc-links.yml</code> names each docs gate as its own job rather than running <code>make check</code>.
   Ten green checks on the head SHA said nothing about it, and <code>gate-lists-check</code> stayed green throughout, because it reconciled the Makefile, the tree and this file, never <code>.github/workflows/</code>.
   It reads the workflows now, and finding four more unwired gates when it first did is the measure of how quietly this accumulates (Q831) — but the reconciler only knows the routes it was taught, so verify a new gate by naming its <strong>job</strong> in the run's job list (<code>gh run view &lt;id&gt; --json jobs</code>) rather than by the workflow's conclusion.</li>
-<li><strong>A local gate that disagrees with CI indicts your toolchain before the tree.</strong> CI checks out fresh and builds its tools from the pin; your <code>.build/</code> holds whatever it held last time.
-  Each tool rule in the Makefile names its pin file as a prerequisite (Q842), so a version bump now forces the rebuild, but that covers the pin moving and nothing else: a binary built by hand, or one whose rule has no pin file to depend on, still outlives its source.
+<li><strong>A local gate that disagrees with CI indicts your toolchain before the tree.</strong> Each tool rule in the Makefile names its pin file as a prerequisite (Q842), so a version bump now forces the rebuild, but that covers the pin moving and nothing else: a binary built by hand, or one whose rule has no pin file to depend on, still outlives its source.
   Measured 2026-08-14: an <code>.build/mdreflow</code> from 2026-08-09 survived #1462's v0.1.7 bump and reported four files as needing reflow against a tree CI read as clean.
-  Nothing about the run looked wrong.
-  It took no flag it did not know, printed plausible output, and named real files, which is what let the verdict reach three merged PR descriptions and the opening instruction of a dispatched worker session before a CI job passing on the same commit forced the comparison.
-  A repeated claim gains authority without gaining evidence, so the second and third uses are the expensive ones.
-  When the same target answers differently in the two places, rebuild the tool and re-run before reporting anything about the repository.</li>
+  The verdict reached three merged PR descriptions and the opening instruction of a dispatched worker session before a CI job passing on the same commit forced the comparison.</li>
 <li>
 <p><strong>A completeness claim inherits the blind spots of the inventory behind it.</strong> "Every capability reaches both acquisition tiers" was read off <code>features.md</code>'s tier badges and the parity table in <a href="../../plan/v2-ga/">v2-ga.md</a>, on 2026-08-13.
   Both were accurate.
   Both are hand-authored, so neither can show a gap nobody thought to record, which is the blind spot <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/docs/STATUS.md">Q776</a>'s own row describes and which was cited in the same document that leaned on the badges.
-  Q844 was sitting in it: restart-safe disruption recovery is classic-only, and the marketing surface claimed it for both tiers with no badge at all.
-  A derived inventory can answer "nothing is missing"; a curated one answers "nothing that someone recorded is missing", and those diverge exactly where it matters.
-  Say which kind you read before the answer carries a decision.</p>
+  Q844 was sitting in it: restart-safe disruption recovery is classic-only, and the marketing surface claimed it for both tiers with no badge at all.</p>
 </li>
 <li>
-<p><strong>An explanation offered to the user is a claim, and this repo has usually already written the answer down.</strong> Every rule above is about command output — an exit code, an empty grep, a backgrounded echo.
-  The claims that went wrong across the 1.5 release cycle were a different shape: prose explaining <em>why</em> the system behaved as it did, asserted from reasoning rather than read from anywhere.
-  Four in one session, and three were caught by the user asking a follow-up rather than by any check.
+<p><strong>An explanation offered to the user is a claim, and this repo has usually already written the answer down.</strong> Four went wrong across the 1.5 release cycle in one session, and three were caught by the user asking a follow-up rather than by any check.
   A sentinel event was called a defect when it was <a href="../../operations/release/#run-it-detached-the-sentinel-reports-it-back">Q630's reconciliation working as designed</a>, documented in the previous release's plan doc.
   A tier-parity claim was said to rest on a hand-verified walk when <code>E2E_Migration_V1ToV2</code> gates the migration end to end, including reconcile-to-Ready.
   A <code>Throughput: Active</code> result was written up as unexpected in both the release notes and a plan doc, when <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/docs/STATUS.md">Q773</a> had said since 2026-08-09 that it is the norm and the runbook is stale.
   Each was plausible, none was checked, and each reached a document before it reached a doubt.
-  Before explaining a behaviour, grep for it: the Queue, the plan doc of the release that shipped it, and the runbook are where this project keeps answers, and an explanation that contradicts one of them is the finding.</p>
+  The Queue, the plan doc of the release that shipped it, and the runbook are where this project keeps its answers.</p>
 </li>
 </ul>
 <p>The failure mode these share is reporting a conclusion from a signal that does not carry it.
 The fix is the same each time: name the signal the claim actually depends on, confirm it could have shown you the opposite, and read that one.</p>
 <h3 id="the-probe-is-not-the-gate">The probe is not the gate<a class="headerlink" href="#the-probe-is-not-the-gate" title="Permanent link">&para;</a></h3>
-<p>The rules above are about reading a signal correctly.
-This one is about reading the right instrument.
-A hand-rolled probe standing in for a gate answers a slightly different question, and its answer looks exactly like the gate's.</p>
-<p>Five instances measured across 2026-08-11 and 2026-08-12, in one session:</p>
+<p>Five instances measured across 2026-08-11 and 2026-08-12, in one session, each a probe exiting 0 with a plausible value and nothing in the result announcing that it answered a different question:</p>
 <ul>
 <li><strong>A hand-rolled count is not the gate's count.</strong> <code>grep -o '—' file | wc -l</code> returned 81 where <code>make em-dash-check</code> reported 69, because the gate counts prose and excludes code spans, headings and link text.
   The raw number happened to be higher; had it come in under the ceiling, a clean result would have been read off an instrument measuring something else.</li>
@@ -5015,13 +4977,9 @@ A hand-rolled probe standing in for a gate answers a slightly different question
 <li><strong>An anchored search for a check name is not the check list.</strong> <code>gh pr checks</code> filtered on <code>^integration</code> and <code>^e2e</code> reported those gates absent when they were present as <code>integration-test</code> and <code>e2e / e2e</code>.
   Concluding they had been skipped would have forced a needless close-and-reopen of the PR.</li>
 </ul>
-<p>The shape they share: the probe exits 0 with a plausible value, and nothing in the result announces that it answered a different question.
-When a probe's answer is about to decide something, run the gate itself.
-When the gate is too slow for the loop, keep the probe but give it a case whose answer you already know, and disbelieve it when the two disagree.</p>
 <h3 id="a-negative-result-implicates-the-probes-identifier-first">A negative result implicates the probe's identifier first<a class="headerlink" href="#a-negative-result-implicates-the-probes-identifier-first" title="Permanent link">&para;</a></h3>
 <p>The section above is about a probe that answers a different question.
-This one is about a probe that asks after a name which does not exist, where the answer is indistinguishable from a true absence: no match, no output, a status that reads as "not there".
-The command ran and ran correctly, so "empty output is only evidence once the command is known to have run" passes and tells you nothing.</p>
+This one is about a probe that asks after a name which does not exist, where the command ran and ran correctly, so "empty output is only evidence once the command is known to have run" passes and tells you nothing.</p>
 <p>Three instances measured on 2026-08-14, in one session:</p>
 <ul>
 <li><strong>A make target that matches no rule reports <code>Nothing to be done</code>.</strong> <code>make .build/mdreflow</code> was used to demonstrate that a stale tool binary never rebuilds, but the tool rules name their targets by absolute path (<code>$(REPO_ROOT)/.build/…</code>), so the relative form matched no rule at all.
@@ -5030,13 +4988,10 @@ The command ran and ran correctly, so "empty output is only evidence once the co
 <li><strong>A <code>grep</code> alternation that does not survive quoting matches nothing.</strong> An escaped-quote pattern over two row IDs returned no lines, which briefly read as a Queue row lost in a merge.
   Re-run against a file, every row was present.</li>
 </ul>
-<p>What the three share is that each was about to support a <strong>negative</strong> claim, the direction with no natural contradiction: a wrong positive gets argued with by the thing it names, while a wrong negative simply agrees with whatever was already suspected.
-So before a negative decides anything, run the same probe against a value known to be present.
-<code>make --dry-run tools</code> fired nine rules where the relative target fired none, and <code>git config --get-regexp '^merge\.'</code> listed five installed drivers where the guessed key listed nothing.</p>
+<p>The positive control that would have caught each: <code>make --dry-run tools</code> fired nine rules where the relative target fired none, and <code>git config --get-regexp '^merge\.'</code> listed five installed drivers where the guessed key listed nothing.</p>
 <h3 id="a-correct-check-can-pass-without-looking-at-what-was-wrong">A correct check can pass without looking at what was wrong<a class="headerlink" href="#a-correct-check-can-pass-without-looking-at-what-was-wrong" title="Permanent link">&para;</a></h3>
 <p>The section above is about running the wrong instrument.
-This one is about running the right one and still learning nothing: the check is sound, its answer is correct, and what it validates sits <em>adjacent</em> to what actually broke.
-Nothing in a pass announces the gap, because the pass is not a mistake.</p>
+This one is about running the right one and still learning nothing: the check is sound, its answer is correct, and what it validates sits <em>adjacent</em> to what actually broke.</p>
 <p><strong>A gate built for exactly this staleness missed an instance of it.</strong> <code>check-plan-index.sh</code>'s third invariant (Q800) requires a <code>QNNN</code> in a plan's Status cell to be a link while its Queue row lives and bare once the row is gone, so a closing row cannot leave a cell claiming live work.
 The <code>release-1.3.md</code> cell read <code>❌ Open — one gate left from the pre-release API review, Q484</code>.
 <code>Q484</code> is bare and its row was gone, so the invariant held and <code>make plan-index-check</code> passed, on <code>main</code>, every day for the nine days after <code>v1.3.0</code> shipped as a final release (Q802).
@@ -5046,24 +5001,15 @@ The fixtures that pin it replay the real cell and are green with the new rule re
 <p><strong>The same shape at the tool level: a refusal whose stated reason is not the one it has.</strong> <code>pr-requeue-eligible.sh --confirm</code> fails closed on a verdict record it cannot parse, which is right.
 Against a record written before #1431 changed the format it reports <code>the recorded assessment was ''</code> (Q828), which describes a corrupt or missing file.
 The actual condition is a version skew between the assess and the confirm, and it sends the reader to repair the wrong thing.</p>
-<p>So when you build or trust a check:</p>
-<ul>
-<li><strong>Ask what it would still pass on</strong>, then check whether the thing you care about is in that set.
-  A gate named for a class covers one mechanism inside that class, and its name is what makes the rest of the class feel guarded.</li>
-<li><strong>Say in the script what it does not read.</strong> <code>check-plan-index.sh</code> already scopes itself to "Column 3 only" and says why, which is the right instinct one level too high: within that column it validates IDs, not the sentences containing them.</li>
-<li><strong>A fail-closed refusal must name the condition it actually detected</strong>, not the symptom the parse produced.
-  "Unrecognised record format" routes the reader at a migration; "was ''" routes them at a corrupt file they do not have.</li>
-</ul>
+<p>The repo-local form of "say in the check what it does not read": <code>check-plan-index.sh</code> already scopes itself to "Column 3 only" and says why, which is the right instinct one level too high, since within that column it validates IDs and not the sentences containing them.</p>
 <h3 id="check-for-a-committed-capture-before-booking-a-live-measurement">Check for a committed capture before booking a live measurement<a class="headerlink" href="#check-for-a-committed-capture-before-booking-a-live-measurement" title="Permanent link">&para;</a></h3>
-<p>"Measure it" does not always mean "run it".
-Before scheduling a Tier C run, a dogfood dispatch, or anything else that costs a credential and a wall-clock hour, check whether the repo already holds a <strong>recorded observation</strong> of the same interface.
+<p>Before scheduling a Tier C run, a dogfood dispatch, or anything else that costs a credential and a wall-clock hour, check whether the repo already holds a <strong>recorded observation</strong> of the same interface.
 <code>cmd/probe</code> exists to capture exactly that, and <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/testdata/README.md"><code>testdata/README.md</code></a> documents what each capture contains.</p>
 <p>Q495 is the worked example.
 Its backlog row read "confirm, then fix", and both it and the <a href="../../plan/archive/q459-drained-worker-recovery/">Q459 plan</a> budgeted a Tier C run that would evict a real job and watch for the skip.
 The answer was already committed: <code>testdata/job_payload.json</code> is a redacted capture of a live <code>acquirejob</code> response, and parsing it shows in seconds that the run identity lives in <code>contextData.github</code> and that none of the fields the AGC was reading exist at all.
 The measurement was free; only nobody had looked.</p>
-<p>The corollary is the reason it stayed unlooked-at for so long: <strong>a committed capture with no test asserting against it is decoration.</strong> It cannot detect the drift it was captured to pin down, and it ages into a file everyone assumes someone else is checking.
-When you commit a capture, commit the test that reads it in the same change — and when a capture already exists for an interface you are changing, assert against it rather than a payload you wrote yourself.</p>
+<p>The corollary is the reason it stayed unlooked-at for so long: <strong>a committed capture with no test asserting against it is decoration.</strong> When you commit a capture, commit the test that reads it in the same change, and when a capture already exists for an interface you are changing, assert against it rather than a payload you wrote yourself.</p>
 <p><strong>Live observations are filed by when they were taken, not by what they answer.</strong> <code>cmd/probe</code> and <code>testdata/</code> are the two shelves anyone would think to check, and they are not the only ones a live answer lands on.
 A probe's <em>findings</em> are written up in the plan doc that commissioned it, which is archived the moment that plan closes, and the durable residue of a live run is often one corrected constant in a fake.
 Search all four shelves before booking the run:</p>
@@ -5108,40 +5054,21 @@ Q822 and Q823 both name <code>provisioner</code> timing out under concurrent loa
 <p>That names the test that was still running when the alarm fired, and the question it answers is the whole diagnosis: <strong>does that test exercise what this change touched?</strong> If it does, the row is not yours to reach for, however exactly the symptom matches.
 Measured 2026-08-14 closing Q811: the panic named a pre-existing claim-retry test, whose fixture drove the very arm the change had just added a GitHub call to.
 The hang was that new call re-asking an unroutable fake for its whole retry window, not the load.</p>
-<p>Two corollaries:</p>
-<ul>
-<li><strong>Time the package alone before believing "under load".</strong> Contention is a claim about the <em>other</em> work on the host, so it predicts the package is fast by itself.
-  240 s under the gate and 1.6 s standalone is the load story; 240 s both ways is not.</li>
-<li><strong>A pre-existing test can hang on new code.</strong> The test being older than the change is not evidence; what matters is whether its fixture reaches the new path.</li>
-</ul>
+<p>Two corollaries, with the repo's numbers: <strong>time the package alone before believing "under load"</strong>, where 240 s under the gate and 1.6 s standalone is the load story and 240 s both ways is not; and <strong>a pre-existing test can hang on new code</strong>, so what matters is whether its fixture reaches the new path, not that the test predates the change.</p>
 <h3 id="a-flake-that-passed-on-rerun-has-two-logs--diff-them">A flake that passed on rerun has two logs — diff them<a class="headerlink" href="#a-flake-that-passed-on-rerun-has-two-logs--diff-them" title="Permanent link">&para;</a></h3>
-<p>A rerun that passes is not the flake's dismissal; it is <strong>half the evidence</strong>.
-GitHub keeps each attempt separately, so one run ID yields both a failing and a passing log over the same test on the same commit:</p>
+<p>GitHub keeps each attempt separately, so one run ID yields both a failing and a passing log over the same test on the same commit:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a>gh<span class="w"> </span>run<span class="w"> </span>view<span class="w"> </span>&lt;run-id&gt;<span class="w"> </span>--attempt<span class="w"> </span><span class="m">1</span><span class="w"> </span>--job<span class="w"> </span>&lt;job-id&gt;<span class="w"> </span>--log
 </code></pre></div>
 <p>Without <code>--attempt</code>, <code>gh</code> serves the <em>latest</em> attempt — the one that passed — which is why the failing log is easy to miss entirely.</p>
-<p>Diff the two across the failing test's window instead of reading the failing one alone.
-What the failing side contains <strong>and the passing side does not</strong> is the defect, and it is usually one line.</p>
 <p>Q559 is the worked example.
 Its row read "a closed capacity gate never rejected the delivery" — a timeout, which reads as a slow wait.
 The failing attempt carried an <code>AcquireJob</code> line in the test's own namespace at the instant of the enqueue, plus a minted job Secret at teardown; the 17.00s passing attempt carried neither.
 So the job had been <strong>admitted</strong>, not slowly rejected.
 That reclassifies the fix from "raise the timeout" to "synchronize on the right signal" before any code is read — and rules the timeout out entirely, since on that tier nothing redelivers.</p>
-<p>The general form: <strong>a flake's two attempts are a controlled experiment CI already ran for you</strong> — same commit, same suite, one bit different.
-Diff them before forming a hypothesis, not after one fails to hold up.</p>
 <h3 id="an-assertion-against-live-state-must-keep-its-subjects-output">An assertion against live state must keep its subject's output<a class="headerlink" href="#an-assertion-against-live-state-must-keep-its-subjects-output" title="Permanent link">&para;</a></h3>
 <p>The section above assumes the failing log says something.
-An assertion that runs its subject with <code>&gt;/dev/null 2&gt;&amp;1</code> and prints a fixed message guarantees it does not — and a transient failure never comes back to be re-read.</p>
-<p>Distinguish the two kinds of assertion a script test makes:</p>
-<ul>
-<li><strong>Against a fixture</strong> — the inputs are constructed, so the failure can only be the condition asserted.
-  A fixed message is fine.</li>
-<li><strong>Against live, mutable state</strong> (the tracked tree, the real workflows, the workspace) — the failure need not be the condition asserted.
-  It can be a missing directory, an unreadable file, a mid-run abort, or something transient.
-  Capture the subject's output and exit code, and print both on failure.</li>
-</ul>
-<p>The remedy <code>run &lt;script&gt; yourself for the report</code> is not one.
-In CI there is nobody at that shell, and if the cause was transient the re-run is green and the evidence is gone for good.</p>
+An assertion that runs its subject with <code>&gt;/dev/null 2&gt;&amp;1</code> and prints a fixed message guarantees it does not.
+The live-state kind is the one that needs the subject's output and exit code captured: against a constructed fixture the failure can only be the condition asserted, while against the tracked tree, the real workflows, or the workspace it can be a missing directory, an unreadable file, a mid-run abort, or something transient.</p>
 <p>Q596 is the worked example, and it cost a full session.
 <code>check-v2-api-sync-test</code>'s <code>tree-in-sync</code> — the one assertion reading the live <code>api/</code> tree — ran the gate as <code>&gt;/dev/null 2&gt;&amp;1</code> and printed <code>packages diverge</code> for <em>any</em> non-zero exit.
 Replaying it against stubs exiting 1 (real drift), 2 (missing directory) and 3 (mid-run abort) produced three identical, evidence-free lines.
@@ -5153,12 +5080,10 @@ Nine jobs resolve theirs at run time — seven in <code>unit-test.yml</code>, <c
 <strong>"It passed in CI" is a statement about one runner image, not about where the test runs next.</strong></p>
 <p>So a test that depends on the environment — the uid it runs as, a tool on <code>PATH</code>, whether mode bits bite — must <strong>attempt the operation and branch on the result</strong>:</p>
 <ul>
-<li><strong>Probe the capability, never a proxy for it.</strong> <code>os.Geteuid()</code>, <code>id -u</code> and <code>runtime.GOOS</code> are proxies, and they are wrong in both directions: a uid-0 container with <code>drop: ALL</code> <em>cannot</em> read a mode-000 file, and a non-root process holding <code>CAP_DAC_OVERRIDE</code> can.
-  Reading the uid answers a different question than the one asserted.</li>
-<li><strong>Skip on the probe, and say what it observed.</strong> A silent skip and a passing test look identical in the log, which is how a gate rots into a no-op.</li>
+<li><strong>Probe the capability, never a proxy for it.</strong> <code>os.Geteuid()</code>, <code>id -u</code> and <code>runtime.GOOS</code> are wrong in both directions here: a uid-0 container with <code>drop: ALL</code> <em>cannot</em> read a mode-000 file, and a non-root process holding <code>CAP_DAC_OVERRIDE</code> can.</li>
+<li><strong>Skip on the probe, and say what it observed.</strong></li>
 <li><strong>When the capability is a job prerequisite rather than a test variable, provision it instead</strong> — install it in the workflow so the verdict is identical on both runner types.</li>
 </ul>
-<p>The reviewer's tell: a test that names an environment fact in a comment or skip message but never reads it.</p>
 <p>Both remedies are in the record.
 <strong>Q482</strong> is the provision case: the <code>shellcheck</code> job runs <code>make scripts-test</code>, whose <code>scripts/go/go-vet-tags-test.sh</code> shells out to a real <code>go</code>.
 <code>ubuntu-latest</code> preinstalls one; the dogfood runner image omits it by design.
@@ -5170,34 +5095,21 @@ It covers both languages and every tier those nine jobs carry: Go unit tests, th
 <code>TestBuildTrustPool_PreservesSystemRoots</code> (<code>cmd/agc/internal/transport/trustpool_test.go</code>) and the <code>python3</code> guards in <code>scripts/docs/*-hook-test.sh</code> are the models in each.
 For the mode-bits case in Go, <code>writeUnreadable</code> (<code>cmd/worker/worker_test.go</code>) is the direct port of Q596's shell probe: it <code>chmod 000</code>s the fixture, reads it back, and skips only when that read succeeds (Q641).</p>
 <h3 id="proving-a-flake-fix-invert-it">Proving a flake fix: invert it<a class="headerlink" href="#proving-a-flake-fix-invert-it" title="Permanent link">&para;</a></h3>
-<p>Repeated passes do not validate a flake fix.
-A green <code>-count=20</code> is equally consistent with <em>"the race is closed"</em> and <em>"the race didn't fire this time"</em> — and on an unloaded dev machine the second is the more likely of the two, because the timing that produces the flake on a loaded CI runner often can't be reproduced locally at all.
-Passing-after is necessary evidence, not sufficient evidence.</p>
-<p>The same holds at the other end of the job: repeated runs rarely <em>reproduce</em> one either, so <code>-count</code> is the wrong opening move.
+<p>Repeated runs rarely <em>reproduce</em> a flake, so <code>-count</code> is the wrong opening move at either end of the job.
 Name the interleaving the failure needs, then <a href="#synchronize-on-the-signal-you-assert-on">widen the window and drive it</a>.
 Q685 spent 200 clean repetitions on a test CI had just failed, and reproduced it 4 times in 60 as soon as the stop was taken at maximum pressure rather than on the test's own ticker.</p>
-<p>Run the <strong>negative control</strong> before concluding: invert the fix — restore the old value, remove the pin, revert the ordering — and confirm the suite <em>fails</em>.
-A fix you cannot make fail on demand has not been shown to be load-bearing, and shipping it closes the backlog row while leaving the flake live.
-When the inverted form refuses to fail either, that is itself the finding: the diagnosis is wrong, or the mechanism isn't the one you think it is.</p>
-<p>Q378 is the worked example.
+<p>Q378 is the worked example of the negative control.
 Pinning <code>BaselineRecheckInterval</code> in the reaper tests passed 10× under <code>-race</code>, which on its own proved nothing; setting the pin to 1s instead — and watching the suite fail — is what established that the pin was the thing closing the race.</p>
 <p>The same control applies to any <strong>regression test for a bug fix</strong>, where it is cheaper still: run the new test against the unfixed code and confirm it fails <em>with the symptom you diagnosed</em>, not merely that it fails.
 Q495's ground-truth test, run against the old parser, returned owner <code>""</code>, repo <code>""</code>, run <code>0</code> — the exact shape observed on the real worker pod, which is what made it a guard rather than a restatement of the fix.</p>
 <p>The <a href="../technical-debt/#distinguish-a-fixable-defect-from-an-external-structural-ceiling">structural-ceiling triage</a> is the same principle at a larger scale: when fixes stop converging, isolate and <em>measure</em> the external actor instead of asserting the next on-our-side cause.</p>
 <h3 id="a-long--count-run-exhausts-the-hosts-ephemeral-ports-and-it-looks-like-a-flake">A long <code>-count</code> run exhausts the host's ephemeral ports, and it looks like a flake<a class="headerlink" href="#a-long--count-run-exhausts-the-hosts-ephemeral-ports-and-it-looks-like-a-flake" title="Permanent link">&para;</a></h3>
-<p>Stress-running is the first move when chasing a flake, so this trap is reached early and misreads as a second bug.
-Every iteration of an <code>httptest</code>-backed suite stands up a fresh listener and its clients churn connections; past roughly 200 iterations in <strong>one process</strong> the host runs out of ephemeral ports and dials start failing with:</p>
+<p>Every iteration of an <code>httptest</code>-backed suite stands up a fresh listener and its clients churn connections; past roughly 200 iterations in <strong>one process</strong> the host runs out of ephemeral ports and dials start failing with:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a>dial tcp 127.0.0.1:61609: connect: can&#39;t assign requested address
 </code></pre></div>
 <p>The failure the test <em>reports</em> is nowhere near that line.
 The connection error lands on some background poll, and what you see is an unrelated <code>Eventually</code> giving up ("Condition never satisfied") on an assertion that has nothing to do with the race you are hunting.</p>
-<p>Two things tell it apart from a real flake:</p>
-<ul>
-<li><strong><code>grep</code> the run for <code>can't assign requested address</code></strong> before reading the <code>--- FAIL</code>.
-  Its presence means the run is measuring the host, not the code.</li>
-<li><strong>Run the identical loop against the unmodified tree.</strong> If the baseline fails at the same rate with the same cause, it is environmental.
-  This is worth the minutes: it is the difference between a second bug and a saturated laptop.</li>
-</ul>
+<p>Two things tell it apart from a real flake: <strong><code>grep</code> the run for <code>can't assign requested address</code></strong> before reading the <code>--- FAIL</code>, and <strong>run the identical loop against the unmodified tree</strong>.</p>
 <p>Avoid it by pacing — many short runs (<code>for i in $(seq 1 20); do … -count=5; done</code>) rather than one long <code>-count=200</code>, so sockets drain between processes.
 Measured on the <code>brokertest</code>-backed <code>cmd/agc/internal/listener</code> suite (macOS), where <code>Server.HTTPClient()</code> hands out <code>http.DefaultClient</code>; the mechanism is not specific to that double, so treat any long single-process <code>-count</code> over an <code>httptest</code> suite as suspect.
 Q490 hit it twice while deflaking the Q260 fan-out gate and burned a full baseline comparison to rule it out.</p>
@@ -5205,89 +5117,64 @@ Q490 hit it twice while deflaking the Q260 fan-out gate and burned a full baseli
 <p>The other stress-run look-alike.
 <code>runnercore.NewMetrics</code> registers with the global controller-runtime registry, which panics on duplicate registration, so a test binary builds it once and every test — and every <code>-count</code> repetition — shares the instance.
 A test asserting a counter's <strong>absolute</strong> value passes at <code>-count=1</code> and fails deterministically from the second repetition on, because the previous run already incremented the same series.
-Reached exactly when stress-running a flake, and it reads like one, but the tell is the inverse of a real flake's: it reproduces at any load and any <code>GOMAXPROCS</code>, always at repetition ≥ 2, with <code>actual = expected × count</code>.
+The tell is the inverse of a real flake's: it reproduces at any load and any <code>GOMAXPROCS</code>, always at repetition ≥ 2, with <code>actual = expected × count</code>.
 Prefer building the metrics the exercised path records into as a fresh, <strong>unregistered</strong> <code>&amp;runnercore.Metrics{…}</code> per test, so no series is shared in the first place — <code>newTestMetrics</code> (<code>cmd/agc/internal/provisioner/provisioner_test.go</code>) and <code>rerunLoopMetrics</code> (<code>eviction_internal_test.go</code>) are the models, and <code>p.Metrics</code> field accesses are nil-guarded for exactly this.
 Populate only the fields the path touches; a nil field panics loudly rather than flaking.
 When a test genuinely needs the registered global, assert the delta around the action (read the counter before, compare after) rather than an absolute.
 Either way, stress with many <code>-count=1</code> processes — which the port trap above already requires.</p>
 <h3 id="a-negative-assertion-must-be-able-to-fail-for-only-one-reason">A negative assertion must be able to fail for only one reason<a class="headerlink" href="#a-negative-assertion-must-be-able-to-fail-for-only-one-reason" title="Permanent link">&para;</a></h3>
-<p>A test that asserts something <em>did not happen</em> passes when the mechanism is absent — and also when the mechanism is present but misdirected, misconfigured, or erroring out before it gets anywhere.
-Those are indistinguishable from the assertion's point of view, so a green negative test is much weaker evidence than a green positive one, and it stays green while the thing it guards rots.</p>
 <p><strong>Q504 is the worked example, and it cost a release-blocking bug most of a year.</strong> Every spec on the <code>rerun-failed-jobs</code> path asserted an <em>absence</em>: the drain specs and the pre-Q497 preemption spec all checked that no re-run fired.
 Meanwhile the AGC never assigned <code>Provisioner.GitHubAPIURL</code>, so the call silently defaulted to <code>api.github.com</code> regardless of <code>GITHUB_API_BASE_URL</code> — eviction recovery could not work on GHES at all.
 Every one of those specs kept passing, because a re-run posted to the wrong host is exactly as absent, from <code>fakegithub</code>'s counter, as a re-run never attempted.
 The first spec to assert a <strong>successful</strong> re-run (<code>E2E_AGC_PreemptedWorkerIsRecovered</code>, Q497) found it on its first CI run.</p>
 <p>So when you write a negative assertion:</p>
 <ul>
-<li><strong>Pair it with a positive one somewhere in the suite.</strong> If nothing in the repo asserts the mechanism <em>works</em>, "it didn't fire" is unfalsifiable.
-  This is the cheap fix and usually the right one.</li>
+<li><strong>Pair it with a positive one somewhere in the suite.</strong> This is the cheap fix and usually the right one.</li>
 <li><strong>Guard the observability first, in the same spec.</strong> Assert that a firing would have been visible before asserting it did not fire — the preemption and drain specs check <code>GITHUB_API_BASE_URL</code> addresses fakegithub and pin a payload carrying a complete run identity, precisely so an absent re-run cannot be an absent <em>instrument</em>.
   That guard is what keeps the test honest; note it still could not catch Q504, because it validated the AGC's env var rather than where the call actually went.</li>
 <li><strong>Prefer asserting the specific wrong thing did not happen</strong> over asserting nothing happened.
-  <code>seq</code> must not contain <code>Failed/Evicted</code> is a claim about a mechanism; "the counter stayed 0" is a claim about the whole world, and the world has many ways to be quiet.</li>
-<li><strong>A poll or sampler cannot establish "X never happens."</strong> A negative claim about an API-object transition needs watch/informer-level evidence: Q502 designed against "a drained Pending worker publishes no terminal phase," measured by a 200 ms phase sampler — but a real kubelet publishes a <em>transient</em> <code>Failed</code>-with-<code>deletionTimestamp</code> that samplers miss and the production informer sees, and the mark-only rule built on that measurement re-ran a job that never ran.
-  A sampler bounds how often X was <em>observed</em>, never whether X <em>happened</em>.</li>
+  <code>seq</code> must not contain <code>Failed/Evicted</code> is a claim about a mechanism; "the counter stayed 0" is a claim about the whole world.</li>
+<li><strong>A poll or sampler cannot establish "X never happens."</strong> A negative claim about an API-object transition needs watch/informer-level evidence: Q502 designed against "a drained Pending worker publishes no terminal phase," measured by a 200 ms phase sampler — but a real kubelet publishes a <em>transient</em> <code>Failed</code>-with-<code>deletionTimestamp</code> that samplers miss and the production informer sees, and the mark-only rule built on that measurement re-ran a job that never ran.</li>
 </ul>
-<p>This is the negative-control idea above, aimed at the test's <em>premise</em> rather than its fix: ask what else would produce this same green, and close off the answers.</p>
-<p><strong>A positive assertion can be vacuous too — make the double testify.</strong> The rule above is about "X did not happen"; the mirror case is "X happened" satisfied by state that predated the test.
-It bites hardest where the whole chain is fast: <code>E2E_AGC_ScaleSetAcquisition</code> drives an in-cluster stub whose long polls wake on enqueue, so its JobAvailable→acquire spec completes in ~34 ms — enqueue, claim, provision, assert.
+<p><strong>A positive assertion can be vacuous too — make the double testify.</strong> It bites hardest where the whole chain is fast: <code>E2E_AGC_ScaleSetAcquisition</code> drives an in-cluster stub whose long polls wake on enqueue, so its JobAvailable→acquire spec completes in ~34 ms — enqueue, claim, provision, assert.
 At that resolution a real pass and one satisfied by a leftover pod or an earlier spec's claim count are indistinguishable from the spec's own timings, and the first green run looked exactly like the vacuous one would have.</p>
 <p>The fix is not a sleep or a tighter matcher; it is to assert against the <em>server's</em> record of what it was asked to do.
 That spec attaches fakegithub's ordered call log — <code>create-session</code>, <code>poll cap=10</code>, <code>acquirejobs auth=queue ids=[…]</code>, <code>generatejitconfig</code> — as a report entry.
 It is diagnostics, not a gate (the assertions remain the gate), but it is what distinguishes "the AGC did this" from "this was already true."
 Reach for it when a spec's subject is a <em>sequence of calls</em> rather than a final state: the in-repo doubles all keep an ordered log (<code>Calls()</code> on the scale-set stub, <code>/control/reruns</code> and <code>/control/scaleset/state</code> on fakegithub) precisely so a spec can assert on what the server saw instead of inferring it from the client's logs.</p>
 <h3 id="an-aggregate-counter-cannot-count-distinct-participants">An aggregate counter cannot count distinct participants<a class="headerlink" href="#an-aggregate-counter-cannot-count-distinct-participants" title="Permanent link">&para;</a></h3>
-<p>A threshold on a shared counter — <code>deduped &gt;= n-1</code>, <code>retries &gt;= 3</code>, <code>errors &gt;= workers</code> — reads like a claim about <em>how many actors</em> did the thing.
-It is not.
-It is a claim about <em>how many times</em> the thing happened, and one actor in a loop satisfies it alone.
-The two are indistinguishable in the metric, and the looping actor is usually the fast path, so the threshold clears early and the test goes green well before the shape it names has occurred.</p>
 <p>Q260's fan-out regression asserted that a job's duplicate deliveries were deduplicated, via <code>JobsDuplicateDeliveryTotal &gt;= maxListeners-1</code> on one registry shared by all five sessions.
 A deduped loser sets no <code>RecycleAgent</code>, so it returns straight to the poll loop and is deduped again within microseconds.
 Measured (Q601): the counter had overshot to 6–24 by the time the assertion first sampled it, and a two-session pool — where only one sibling can ever lose — still cleared the five-session threshold, once from a <em>single</em> session.
 The claim registry's actual job, spreading the dedup across distinct siblings, was never under test.</p>
-<p>Give each actor its own counter and count the actors that moved.
-Each session's <code>Config</code> now carries its own <code>newTestMetrics()</code> registry, keyed by the Multiplexer's monotonic goroutine index, so a non-zero counter names one session and the assertion is <code>maxListeners-1</code> <em>distinct</em> registries non-zero.</p>
-<p>Then close the sequential loophole.
-N distinct identities can also be N actors one after another, so pin the population as well: the test asserts exactly <code>maxListeners</code> sessions were ever created and all are still alive, which leaves the deduped identities no reading but concurrent siblings.</p>
+<p>Each session's <code>Config</code> now carries its own <code>newTestMetrics()</code> registry, keyed by the Multiplexer's monotonic goroutine index, so a non-zero counter names one session and the assertion is <code>maxListeners-1</code> <em>distinct</em> registries non-zero.</p>
+<p>Then close the sequential loophole: N distinct identities can also be N actors one after another, so the test also asserts exactly <code>maxListeners</code> sessions were ever created and all are still alive, which leaves the deduped identities no reading but concurrent siblings.</p>
 <p>The negative control is the check that settles it — shrink the population below the threshold and require red.
 A pool of two cannot produce four deduped siblings; an assertion that still passes there is counting something else.</p>
 <h3 id="a-bulk-mechanical-change-proves-itself-by-reconciliation-not-by-an-empty-leftover-query">A bulk mechanical change proves itself by reconciliation, not by an empty leftover query<a class="headerlink" href="#a-bulk-mechanical-change-proves-itself-by-reconciliation-not-by-an-empty-leftover-query" title="Permanent link">&para;</a></h3>
-<p>A repo-wide rename or rewrite — moving a directory, renaming a symbol, re-pointing every reference to a path — is finished when <em>every</em> site changed.
-The natural check is to grep for the old form and see nothing.
-<strong>That check cannot distinguish "no sites remain" from "my query never matched the sites."</strong> Both print nothing, and a rewrite and its verification query are usually written minutes apart from the same wrong mental model, so they fail together.</p>
 <p>Q571 moved 99 scripts and rewrote their references.
 The rewrite's regex carried a lookbehind that excluded a preceding <code>/</code>, so every <code>"$REPO_ROOT/scripts/foo.sh"</code> was silently skipped — 62 files.
 The leftover grep returned empty and read as done; the misses surfaced by accident while reading an unrelated file.</p>
 <p>Reconciliation is one-directional: it proves nothing was <em>removed</em>, and is blind to anything the change <em>added</em>.
 That is enough for a mechanical rename, whose whole content is removals and replacements, and not enough for a prose edit, where an invented connective word can change what a sentence refers to while every count stays put (Q710).</p>
-<p>Two checks, both cheap, and the first is the one that actually catches this:</p>
+<p>Three checks, and the first is the one that actually catches this:</p>
 <ul>
-<li><strong>A positive control.</strong> Before trusting the sweep, name one site you <em>know</em> must change and assert it did.
-  One <code>grep</code> for a known-affected line is enough.
-  A query that cannot match its own known case is broken, and this is the only check that says so.</li>
-<li><strong>Reconcile counts.</strong> Count occurrences of the old form before, count the new form after, and require them to agree.
-  <code>762 rewritten</code> means nothing on its own; <code>762 rewritten, 762 found beforehand</code> is the claim worth making.
-  A shortfall names how many sites the sweep missed even when you cannot yet say which.</li>
-<li><strong>Take the baseline with a query that spans every shape.</strong> Reconciliation compares two numbers, so if both come from the same too-narrow query they agree and the sweep is still half-done — the check reports success at exactly the moment it is blind.
-  Splitting the <code>infra</code> Queue label counted rows by reading the Labels cell as the fourth <code>|</code>-field: right for the Queue and Deferred tables, wrong for the Progress table, where it is the third.
-  The baseline read 59 rows against a true 69, and a work-list built from it would have left ten rows untouched and reconciled cleanly at 59/59.
-  Enumerate the shapes the change spans — tables, file types, call forms — and confirm the baseline query finds each one before trusting its number.</li>
+<li><strong>A positive control.</strong> Name one site you <em>know</em> must change and assert it did; one <code>grep</code> for a known-affected line is enough.</li>
+<li><strong>Reconcile counts.</strong> <code>762 rewritten</code> means nothing on its own; <code>762 rewritten, 762 found beforehand</code> is the claim worth making, and a shortfall names how many sites the sweep missed even when you cannot yet say which.</li>
+<li><strong>Take the baseline with a query that spans every shape.</strong> Splitting the <code>infra</code> Queue label counted rows by reading the Labels cell as the fourth <code>|</code>-field: right for the Queue and Deferred tables, wrong for the Progress table, where it is the third.
+  The baseline read 59 rows against a true 69, and a work-list built from it would have left ten rows untouched and reconciled cleanly at 59/59.</li>
 </ul>
 <p>Then run the leftover query — as a third check, not the only one.
 The same applies to the tool doing the work: prefer a script that <em>reports what it changed</em> per file over one that edits silently, so the count is available without a second pass.</p>
 <h3 id="a-throwaway-probe-needs-a-positive-control-before-its-silence-means-anything">A throwaway probe needs a positive control before its silence means anything<a class="headerlink" href="#a-throwaway-probe-needs-a-positive-control-before-its-silence-means-anything" title="Permanent link">&para;</a></h3>
-<p>The rule above puts a positive control on the <em>query</em>.
-It belongs on the <em>harness</em> too, and for a sharper reason: an ad-hoc probe written to answer "does this still fire?" usually reports a finding when it fires and nothing when it does not — so a broken harness and a clean result are the same output.
-The probe is code you wrote minutes ago and have never seen work.</p>
+<p>The rule above puts a positive control on the <em>query</em>; it belongs on the <em>harness</em> too, where a broken harness and a clean result are the same output.</p>
 <p>Q616 registered two script paths in the foreground-guard slow-command registry as bare patterns, which made every command that merely <em>named</em> those files ask for a two-hour timeout.
 Verifying the fix meant driving the hook with hand-built payloads.
 All twelve cases came back "no match", including the five that had to match — and the harness was the problem: the payload was missing a field the hook needs, so it exited before reaching any decision.
 Nothing distinguished that from a fix that worked.</p>
 <ul>
-<li><strong>Include one case you know must fire</strong>, ideally one that predates your change — here, a pattern that had been in the registry for months.
-  If the control does not fire, you have learned about your harness, not about the subject.</li>
-<li><strong>Print the raw output once</strong>, not just your pass/fail verdict.
-  Empty output where a decision was expected names the failure immediately; a verdict derived from it hides the failure as a pass.</li>
+<li><strong>Include one case you know must fire</strong>, ideally one that predates your change — here, a pattern that had been in the registry for months.</li>
+<li><strong>Print the raw output once</strong>, not just your pass/fail verdict.</li>
 <li><strong>When the harness cannot be made to work, verify the layer you actually changed.</strong> The hook applies each pattern as <code>re.search(pattern, command)</code>; asserting that step directly is honest and sufficient, as long as you say which layer the evidence covers — and then confirm end-to-end in the smallest possible way (re-running the exact command that had been denied).</li>
 </ul>
 <p><code>scripts/agent/foreground-guard-patterns-test.sh</code> is the durable form of that probe, controls included.</p>
@@ -5346,42 +5233,23 @@ What works is a gate on the code path itself, so the change that could invalidat
 When a credential-gated spec is the only thing asserting an invariant, find the code change that could break it and make <em>that</em> the tripwire.
 The gate cannot run the spec; it can make sure nobody changes the code without being handed the spec to read.</p>
 <h3 id="verify-a-causation-claim-by-deleting-the-mechanism">Verify a causation claim by deleting the mechanism<a class="headerlink" href="#verify-a-causation-claim-by-deleting-the-mechanism" title="Permanent link">&para;</a></h3>
-<p>The rules above are read-and-reason checks — ask what else could produce this green.
-This one is mechanical, and it is the only way to <em>settle</em> the question: <strong>delete the mechanism, re-run the test, and require it to go red for the reason you expect.</strong> Restore it, confirm green.
-A test that stays green without the code it claims to exercise is measuring something else, and no amount of reading the test will tell you that.</p>
-<p>Reach for it whenever a test's subject is "this code caused that outcome" — a new regression test, a fix whose test you wrote alongside it, a spec whose green arrived on the first try.
-It costs one edit and one run.</p>
+<p>The repo's four instances, each showing a different way the check itself goes wrong:</p>
 <ul>
-<li><strong>Delete the mechanism, not the assertion.</strong> Comment out the call, drop the retry loop, return early from the reconcile branch.
-  Removing the <em>assertion</em> proves nothing.</li>
-<li><strong>Delete one mechanism, not the branch around it.</strong> A deletion coarse enough to redden every assertion has measured only that the code path is reached.
-  Q624 first stubbed a whole word-classification branch to <code>true</code> and took 22 of 22 red, which discriminated nothing; flipping the single condition that made command position load-bearing took exactly one assertion red, which is the answer.</li>
-<li><strong>Read the failure, not just the colour.</strong> Red for the wrong reason (a compile error, a fixture that no longer builds, an unrelated timeout) is not evidence.
-  The test must fail on the assertion that names the behaviour.</li>
-<li><strong>A green after the deletion can mean the assertion cannot see the defect class</strong>, not that the mechanism is unnecessary, and the two look identical.
-  Ask what an assertion actually observes before believing it: one that compares a <em>set</em> of keys is blind to ordering, spacing, formatting and everything else the surrounding bytes carry.
-  Q799 deleted the mechanism that holds a roadmap bullet's blank lines outside the merged record, a defect already reproduced by hand, and the suite stayed green, because every assertion compared the surviving bullet IDs and none compared the rendered page.
+<li><strong>Delete one mechanism, not the branch around it.</strong> Q624 first stubbed a whole word-classification branch to <code>true</code> and took 22 of 22 red, which discriminated nothing; flipping the single condition that made command position load-bearing took exactly one assertion red, which is the answer.</li>
+<li><strong>A green after the deletion can mean the assertion cannot see the defect class.</strong> Q799 deleted the mechanism that holds a roadmap bullet's blank lines outside the merged record, a defect already reproduced by hand, and the suite stayed green, because every assertion compared the surviving bullet IDs and none compared the rendered page.
   Two byte-exact whole-file comparisons made the same deletion red.
-  The fix is generally to assert on the artifact the defect damages, not on a projection of it.</li>
-<li><strong>Round-trip it.</strong> Restore the mechanism and confirm green in the same sitting, so the check cannot end with a half-reverted tree.</li>
+  An assertion that compares a <em>set</em> of keys is blind to ordering, spacing, formatting and everything else the surrounding bytes carry, so assert on the artifact the defect damages, not on a projection of it.</li>
 <li><strong>Assert that the deletion applied</strong>, when a script drives it rather than your hands.
-  A mutation that matched nothing leaves the mechanism intact, so the test passes and reads as "this assertion does not bite", which is the exact conclusion the check exists to rule out, reached backwards.
-  Diff the file against its backup and fail the check when they match.
   Q690 mutated by <code>perl -i -pe 's{\Q…\E}{…}'</code> and three of four patterns silently matched nothing: <code>\Q</code> quotes regex metacharacters but does <strong>not</strong> stop interpolation, so a pattern containing <code>$json</code> or <code>$baseline</code> had those spliced out as undefined Perl variables before matching.
   Anchor a scripted mutation on a line number, or escape every <code>$</code>; either way the did-it-apply assertion is what tells you which happened.</li>
 </ul>
 <p><strong>A green after deletion can mean a redundant guard is standing in, not that the mechanism is dead.</strong> Q624's suite passed in full with command position deleted, because an <code>already_throttled</code> short-circuit upstream rescued every case that would have exercised it.
-The mechanism was load-bearing in production and unasserted by the suite — so the answer is a case pitched into the gap the redundant guard does not cover (there, a wrapper the short-circuit does not recognise), not a conclusion that the code is unnecessary.
-Ask which <em>other</em> code is keeping the test green before deleting anything else.</p>
+The mechanism was load-bearing in production and unasserted by the suite — so the answer is a case pitched into the gap the redundant guard does not cover (there, a wrapper the short-circuit does not recognise), not a conclusion that the code is unnecessary.</p>
 <p>Q506 needed two rounds of this before a spec's green meant what it claimed.
 Q551's re-offer test is the routine case: disabling the one call the fix added turned it red on "the re-offer must provision the job once the conflict clears" — exactly the sentence the test exists to assert — and it went green again on restore.</p>
-<p><strong>A threshold assertion needs a fixture sized to the threshold.</strong> The common way to fail the check above is a fixture so far from the boundary that it passes either way.
-A test for "badge markup is not counted against the 45-word cap" was first written with a ten-word bullet: green with the stripping, green without it, and pinning nothing.
-Sized to 38 body words — 45 counted with the spans stripped, 47 without — deleting the <code>gsub</code> turned it red, which is what made it a test.
-Whenever the behaviour under test is a limit, a cap, a timeout, or a retry count, put the fixture <em>at</em> the edge and confirm one step past it fails.</p>
-<p><strong>The mirror, for a gate: inject the defect it is supposed to catch.</strong> "This gate would catch that" is the same causation claim pointed at a green, and reading the matcher only <em>predicts</em> the answer — a regex is exactly the kind of thing that looks like it covers a case it does not.
-Injecting measures it: break one real input the way the gate should notice, require red, restore.
-Pair the injection with a <strong>control that must fail</strong>, for the <a href="#a-throwaway-probe-needs-a-positive-control-before-its-silence-means-anything">reason a throwaway probe needs one</a> — an injection that produces no red proves the gate blind only if a near-identical one does produce red; otherwise you have measured your own harness.</p>
+<p><strong>A threshold assertion needs a fixture sized to the threshold.</strong> A test for "badge markup is not counted against the 45-word cap" was first written with a ten-word bullet: green with the stripping, green without it, and pinning nothing.
+Sized to 38 body words — 45 counted with the spans stripped, 47 without — deleting the <code>gsub</code> turned it red, which is what made it a test.</p>
+<p><strong>The mirror, for a gate: inject the defect it is supposed to catch.</strong> Pair the injection with a <strong>control that must fail</strong>, for the <a href="#a-throwaway-probe-needs-a-positive-control-before-its-silence-means-anything">reason a throwaway probe needs one</a> — an injection that produces no red proves the gate blind only if a near-identical one does produce red; otherwise you have measured your own harness.</p>
 <p>Q612's blind spot was settled that way in a single pass.
 Repointing the README's live license badge at <code>THIS-FILE-DOES-NOT-EXIST.md</code> left <code>check-doc-links</code> green — <code>ok (242 files, 5134 links checked)</code>, exit 0 — while the identical target written as a plain link failed it on the same file.
 That is the whole finding: the collection regex matches the inner image first, so a badge-wrapped link's outer destination is never checked, and a total of 5,134 checked links says nothing about the shape the gate cannot see.</p>
@@ -5419,9 +5287,7 @@ The fix inverted the pinned behavior (the condition now latches), and the test's
 </ul>
 <p>This is the negative-assertion rule's sibling one level up: there, a green test couldn't distinguish absence from misdirection; here, a green test pinned the wrong thing on purpose, because the mechanism and the property had been conflated at design time.</p>
 <h3 id="generate-a-fixture-with-the-producers-own-code-never-by-hand">Generate a fixture with the producer's own code, never by hand<a class="headerlink" href="#generate-a-fixture-with-the-producers-own-code-never-by-hand" title="Permanent link">&para;</a></h3>
-<p>A hand-written fixture encodes what its author believed the producer emits.
-When that belief is wrong the fixture is wrong in exactly the same way as the parser written beside it, so the test passes and the pair is wrong together — the same closed loop as <a href="#adjusting-a-fake-to-make-a-test-pass-is-a-finding-about-the-real-interface">adjusting a fake to make a test pass</a>, one layer earlier.
-Prefer, in order: a capture committed under <code>testdata/</code>, output generated by calling the real producer, then hand-authored.</p>
+<p>Prefer, in order: a capture committed under <code>testdata/</code>, output generated by calling the real producer, then hand-authored — the same closed loop as <a href="#adjusting-a-fake-to-make-a-test-pass-is-a-finding-about-the-real-interface">adjusting a fake to make a test pass</a>, one layer earlier.</p>
 <p>Q608 is the case.
 A JUnit parser needed a fixture with a failing spec, and no real report had one.
 Generating it by calling Ginkgo's own <code>reporters.GenerateJUnitReport</code> — a throwaway program, deleted after — showed that Go's <code>encoding/xml</code> escapes a quote as the numeric <code>&amp;#34;</code>, not the named <code>&amp;quot;</code>.
@@ -5434,13 +5300,8 @@ It omits the field instead, since proto3 drops an integer holding its default (t
 The max landed in <code>min</code>, and the gate refused to start against a correctly configured cluster, reporting the <code>e2e</code> pool as having no autoscale ceiling.
 Nine assertions covered the arithmetic downstream of that read and all nine passed, because the fixture and the parser were wrong in the same direction.
 What let it reach a release is that the preflight merged three days after the last dogfood run, so until <code>v1.5.0-rc.1</code> needed validating, the fake was the only thing it had ever run against.</p>
-<p>The tell that you are in this situation: you are about to write, from memory, a fixture in a format some <em>other</em> program defines.
-Escaping, quoting, numeric precision, field order, and null-vs-absent are where memory is unreliable, and all five are silent.</p>
 <h3 id="adjusting-a-fake-to-make-a-test-pass-is-a-finding-about-the-real-interface">Adjusting a fake to make a test pass is a finding about the real interface<a class="headerlink" href="#adjusting-a-fake-to-make-a-test-pass-is-a-finding-about-the-real-interface" title="Permanent link">&para;</a></h3>
-<p>When a test fails because the stub does not send some field, there are two repairs, and they look identical from the test's point of view: teach the stub to send it, or find out what the real service sends.
-The first is one line and always works.
-Reach for it without asking the second question and the suite stops describing the system and starts describing itself — every test agrees with the fake, the fake agrees with the code, and nothing in the loop has consulted the wire.</p>
-<p>Q495 is that failure, and it is visible in this page's own example above.
+<p>Q495 is the worked example, and it is visible in this page's own example above.
 The drain specs pin "a payload carrying a complete run identity" as an observability guard — correctly, in principle.
 But that identity was pinned as <code>system.github.*</code> job variables, a shape a real <code>acquirejob</code> response has never carried, because the AGC read those variables and the fakes were taught to supply them.
 Q421's session recorded the symptom verbatim — "the default fakegithub response carries no run identity, and <code>handleEviction</code> returns early without one" — and injected the identity to get its spec green.
@@ -5448,13 +5309,10 @@ That sentence was the whole defect, written down and read as a test-setup detail
 Classic-tier eviction recovery could not fire against real GitHub for as long as the parsing stood, and every tier of the suite was green throughout.</p>
 <p>So when you find yourself adding a field to a stub so a test will pass:</p>
 <ul>
-<li><strong>Ask what the real service sends</strong>, and get the answer from a capture or a live call, not from the code under test — the code is what you are trying to check.</li>
 <li><strong>Prefer the real shape in the fake.</strong> A stub that emits what GitHub emits makes the whole suite above it load-bearing; one shaped to match the parser makes it a mirror.</li>
 <li><strong>If the fake genuinely has to differ, say why in the fake</strong>, so the next person meets a documented divergence rather than an assumption.</li>
 </ul>
-<p><strong>The omission case is worse than the wrong-shape case, because no test fails to announce it.</strong> Above, a stub sends the wrong field and something goes red first.
-When a stub does not model a piece of state <em>at all</em>, every tier is green over a whole bug class and nothing ever points at the gap.
-Q550: the scale-set stub's <code>generatejitconfig</code> returned a JIT config without recording that it had registered a runner — which is the one durable effect that call has at GitHub.
+<p><strong>The omission case is worse than the wrong-shape case, because no test fails to announce it.</strong> Q550: the scale-set stub's <code>generatejitconfig</code> returned a JIT config without recording that it had registered a runner — which is the one durable effect that call has at GitHub.
 So a leaked registration was not merely untested, it was <strong>unrepresentable</strong>: no unit, integration, or e2e assertion could have named the state the bug was about, and the suite stayed green through a defect that wedged a release gate.</p>
 <p>The tell is in the bug report.
 When a defect filed from production describes state your suite cannot express — "22 stale runner records", a row in a table no fake has, a resource that outlives the object that made it — the fake is the first thing to fix, before the code:</p>
@@ -5463,9 +5321,7 @@ When a defect filed from production describes state your suite cannot express �
 <li><strong>Model the effect, not just the response.</strong> <code>generatejitconfig</code> returning a blob is the response; creating a record that holds a name until something deletes it is the effect, and the effect is where this class of bug lives.</li>
 <li><strong>Expect the faithful fake to reshape the diagnosis.</strong> Q550's Queue row named a mechanism that turned out to be already fixed; only a stub that registered on mint could show which of the two candidate mechanisms actually accumulated records.</li>
 </ul>
-<p><strong>The third variant is the interface growing a call the fake answers anyway.</strong> A fake that replies to every path alike is modelling an interface with one call.
-Add a second (a read before the write, a status check before an action) and that same fake answers it, in the shape it was written for, and nothing goes red: the new call is counted as the old one, and its body is whatever the caller makes of an answer that was never meant for it.</p>
-<p>Measured on Q811, which put a run GET ahead of <code>rerun-failed-jobs</code> on one recovery arm.
+<p><strong>The third variant is the interface growing a call the fake answers anyway.</strong> Measured on Q811, which put a run GET ahead of <code>rerun-failed-jobs</code> on one recovery arm.
 Two shared unit fakes answered <code>201</code> with an empty body for every path, so the GET inflated the <code>rerunCount</code> that every "re-run exactly once" assertion reads, and its undecodable body sent the recovery back to re-ask for the whole 15-minute re-run window.
 The package went from 1.6 s to a <code>cover-check</code> timeout at the 2-minute budget.</p>
 <ul>
@@ -5476,46 +5332,34 @@ The package went from 1.6 s to a <code>cover-check</code> timeout at the 2-minut
 <li><strong>Add the arm in the same change as the call</strong>, before running anything: what surfaces otherwise is a hang or an off-by-one, neither of which points at the fake.</li>
 </ul>
 <h3 id="synchronize-on-the-signal-you-assert-on">Synchronize on the signal you assert on<a class="headerlink" href="#synchronize-on-the-signal-you-assert-on" title="Permanent link">&para;</a></h3>
-<p>"<a href="#avoiding-shared-stub-flakes-in-the-agc-suite">Wait on the condition, not the clock</a>" has a sharper form: wait on <strong>the same signal you are about to assert on</strong>.
-Two observable effects of one operation almost never land together, and a test that blocks on the earlier one and then reads the later one races the gap between them — a real race, not a slow machine, so no amount of extra timeout closes it.</p>
+<p>"<a href="#avoiding-shared-stub-flakes-in-the-agc-suite">Wait on the condition, not the clock</a>" has a sharper form: wait on <strong>the same signal you are about to assert on</strong>.</p>
 <p>A stub is the usual trap, because it is the most convenient thing to wait on and it typically fires <em>first</em>.
 In Q350 the scale-set listener's <code>recordingProvisioner</code> recorded a job at <code>Provision</code> <strong>entry</strong>, while the listener counted <code>IncJobProvisioned</code> only after <code>Provision</code> <strong>returned</strong>; three tests blocked on the stub's count and then asserted the metric, which was still one behind whenever the poll loop was descheduled in between.
 Waiting on the metric fixed all three — and is safe in the other direction, since the metric strictly follows the stub, so the stub-side assertions still hold.</p>
-<p>Reach for the ordering deliberately: identify which effect the code emits <strong>last</strong>, synchronize on that, and let the earlier ones be implied.</p>
 <p>The gap can also sit <strong>inside a single stub handler</strong>, which is harder to see because one HTTP call looks atomic from the test.
 <code>brokertest</code>'s <code>handleCompleteJob</code> incremented <code>CompleteJobCalls</code> on entry and committed the fan-out accounting several statements later; <code>TestAGC_Q260_FanoutCompletionReconciles</code> waited for the count to reach N and then fired <code>ExpireUnstartedDeliveries</code>, which could beat the Nth handler to the accounting lock and cancel a job whose deliveries had all in fact completed (Q490).
-Two rules come out of it:</p>
-<ul>
-<li><strong>Writing a stub: publish the observable counter last</strong>, after every piece of state the handler records, so waiting on the counter is a valid happens-before gate for everything it wrote.
-  A counter incremented on entry gates nothing.</li>
-<li><strong>Writing the test: wait on the state, not the call count.</strong> A count says a call was <em>served</em>, not that it <em>resolved</em> anything — a request whose body never arrives (cancelled client context) is still served and still counted.
-  Q490's test now waits on <code>DeliveryResults</code>, the accounting it actually asserts about.</li>
-</ul>
+Two rules come out of it: <strong>publish the observable counter last</strong> when writing a stub, and <strong>wait on the state, not the call count</strong> when writing the test.
+Q490's test now waits on <code>DeliveryResults</code>, the accounting it actually asserts about.</p>
 <p><strong>Publishing the counter last is not enough when the effect you assert on is deliberately deferred to a later cycle.</strong> The scale-set listener honours the rule — <code>abandonDeferredBefore</code> calls <code>settle</code> before it increments the abandoned counter — but <code>settle</code> only marks the job concluded <em>in memory</em>, and the wire delete that actually releases the message is issued by the next <code>flushDeletes</code> cycle, by design ("runs per cycle rather than only at settle time").
 <code>TestListener_AbandonedJobDoesNotSurviveARestart</code> waited on the counter and then stopped the listener, so a stop landing before that cycle left the message unreleased and the restart replayed it — the very thing the test asserts must not happen (Q602).
-When the code splits an operation across cycles on purpose, the counter marks the <em>decision</em>, not the <em>effect</em>: wait on the effect, here the stub's own <code>delete-message</code> call.</p>
+The counter marks the <em>decision</em>, not the <em>effect</em>: wait on the effect, here the stub's own <code>delete-message</code> call.</p>
 <p><strong>And the signal can come from a component that is not the system under test at all.</strong> Q602's counter was at least the listener's own.
 <code>TestListener_RestartDoesNotReprovisionAConcludedJob</code> waited on <code>AssignedJobCount == 0</code>, the <em>stub's</em> record that the job ended, before taking the listener away.
 But <code>recordingProvisioner.provision</code> is what calls <code>CompleteAssignedJob</code>, so that count drops while the listener is still inside <code>handleMessage</code> for the assignment, and the <code>JobCompleted</code> it appends is a queue message the listener only reads a poll later.
 The wait was satisfied by the test's own provisioner, a round trip before the listener knew anything, and a stop landing in that gap left an assignment the listener still believed was owed a worker, which the restart duly re-provisioned (Q685).
 Correlated over 60 runs taken at maximum stop pressure: of the 4 that stopped before any delete, every one replayed; of the 56 that issued it, none did.
-So ask <strong>which component has to observe the state</strong> for the assertion to mean what it claims, and wait on something that component emits, here <code>deleteAttempts &gt; 0</code> again.
+The component that has to observe the state is what the wait belongs on, here <code>deleteAttempts &gt; 0</code> again.
 (Those 60 runs measured a production defect as well as a test one: the window the test was landing in was real, and closing it is Q689.
 The wait still belongs here, because a test that races the bug it asserts against is measuring the bug rather than the invariant.)</p>
 <p>To prove a window like this rather than guess at it, widen it: drop a <code>time.Sleep</code> between the two effects and confirm the test fails every time.
 Q490's probe took the flake from unreproducible in 200 local runs to 5 failures out of 5, and re-running it against the fix — still 8/8 green with the sleep in place — is the <a href="#proving-a-flake-fix-invert-it">negative control</a> that shows the ordering, not luck, is what closed it.</p>
 <h4 id="the-two-effects-can-belong-to-two-different-participants">The two effects can belong to two different participants<a class="headerlink" href="#the-two-effects-can-belong-to-two-different-participants" title="Permanent link">&para;</a></h4>
-<p>The gap need not be two effects of one operation.
-It can be one effect each from two <em>participants</em>, where the test waits on the one that is cheap to reach and asserts on the one that is not.
-Q600's <code>TestMultiplexer_DuplicateJobDeliveryProvisionsOnce</code> waited for the duplicate-delivery metric to reach <code>maxListeners-1</code> and then read the peak provisioner count.
+<p>Q600's <code>TestMultiplexer_DuplicateJobDeliveryProvisionsOnce</code> waited for the duplicate-delivery metric to reach <code>maxListeners-1</code> and then read the peak provisioner count.
 Only the <strong>losing</strong> siblings increment that metric, and a loser's work ends at the claim gate; the <strong>winner</strong> still has the claim registry, <code>SpawnReplacement</code>, and <code>StartRenewLoop</code> to clear before it enters the handler the count comes from.
 The losers can therefore satisfy the wait entirely on their own progress, and the assertion reads <code>0</code> — which is exactly the shape CI reported.</p>
-<p>So when picking the signal, ask <strong>who produces it</strong>, not just when.
-A counter fed by the actors you are <em>not</em> asserting about gates nothing about the one you are.
-The fix is the same as everywhere else in this section: wait on <code>handlerMax &gt;= 1</code>, the counter the invariant itself reads.</p>
+<p>The fix is the same as everywhere else in this section: wait on <code>handlerMax &gt;= 1</code>, the counter the invariant itself reads.</p>
 <h4 id="the-two-effects-can-be-one-object-read-through-two-clients">The two effects can be one object read through two clients<a class="headerlink" href="#the-two-effects-can-be-one-object-read-through-two-clients" title="Permanent link">&para;</a></h4>
-<p>There need not be a stub involved at all.
-A controller-runtime manager serves reads from its informer cache while an envtest suite's <code>k8sClient</code> reads the apiserver directly, so one status condition has <strong>two observers that never update together</strong>: the apiserver first, the cache a watch-delivery later.
+<p>A controller-runtime manager serves reads from its informer cache while an envtest suite's <code>k8sClient</code> reads the apiserver directly, so one status condition has <strong>two observers that never update together</strong>: the apiserver first, the cache a watch-delivery later.
 A test that waits on <code>k8sClient</code> and then does something the <em>controller</em> must judge has synchronized on the earlier of the two.</p>
 <p>Q559 is the worked example.
 <code>TestV2_RunnerSet_CapacityGate_FixedClusterSkipsAcquire</code> waited for <code>WorkerCapacityDeclined</code> through <code>k8sClient</code>, then enqueued one job and asserted it was rejected with <code>reason=capacity</code>.
@@ -5525,46 +5369,33 @@ The classic tier delivers a job once, so nothing redelivers and no larger timeou
 It reads as ~10 µs if you sample it right after a wait that polls every 100 ms — the poll interval, not the gap, is what hides it.
 That width is too narrow to lose the race on an idle machine, and the flake was never reproduced at native timing; what the measurement establishes is that the window exists and that the old wait did not cover it.
 Removing the barrier entirely reproduced the CI symptom exactly, which is what tied the two together.</p>
-<p>Two rules follow:</p>
-<ul>
-<li><strong>Wait on the client the code under test reads</strong>, not the one that is convenient.
-  Where an object has both, the cached one is the later observer.</li>
-<li><strong>A one-shot stimulus needs the stronger barrier.</strong> The same file's scale-set test may wait on <code>k8sClient</code>: it asserts a per-poll advertisement that re-reads on every poll, so a stale read self-corrects.
-  A single delivered job has no such recovery — which is why <code>waitForCapacityDeclined</code> takes its reader as an explicit parameter, making the choice visible at each call site.</li>
-</ul>
+<p>Two rules follow: <strong>wait on the client the code under test reads</strong>, since where an object has both the cached one is the later observer; and <strong>a one-shot stimulus needs the stronger barrier</strong>.
+The same file's scale-set test may wait on <code>k8sClient</code> because it asserts a per-poll advertisement that re-reads on every poll, so a stale read self-corrects; a single delivered job has no such recovery, which is why <code>waitForCapacityDeclined</code> takes its reader as an explicit parameter, making the choice visible at each call site.</p>
 <h3 id="pin-the-process-when-the-signal-comes-out-of-its-memory">Pin the process when the signal comes out of its memory<a class="headerlink" href="#pin-the-process-when-the-signal-comes-out-of-its-memory" title="Permanent link">&para;</a></h3>
-<p>Synchronizing on the right signal is not enough when the controller produces that signal from state it holds <strong>in memory</strong>, downstream of something durable it has already written.
-The outcome then depends on one process surviving a window, and a process replaced inside that window forecloses the outcome permanently — so the wait expires on a decision already made, no timeout reaches it, and the failure reads as exactly the defect the test was written to catch.</p>
+<p>Synchronizing on the right signal is not enough when the controller produces that signal from state it holds <strong>in memory</strong>, downstream of something durable it has already written.</p>
 <p>Q549 is the worked case.
 <code>RecoverEvictedScaleSetWorkers</code> claims a disrupted scale-set worker by stamping <code>actions-gateway.com/eviction-handled-at</code> on the pod, and only then hands off to <code>handleEviction</code>, which waits out <code>evictionRetryDelay</code> on a goroutine before calling GitHub.
 The claim is durable and at-most-once — every later scan skips an annotated pod, deliberately, because the deletion arm's evidence <em>is</em> the pod and the deletion removes it.
 The re-run is neither durable nor replayable.
 On run 30658951388 the GMC rolled the tenant's AGC Deployment mid-window: the outgoing pod won the claim at 20:00:19Z, the incoming pod's only claim attempt lost the optimistic lock a second later and skipped, and the e2e re-run wait spent its 90 s on an outcome already decided.
 What rules out the alternative reading — a re-run attempted and refused — is the absence of any <code>EvictionRerunFailed</code> event, which <code>rerunUntilAccepted</code> records on every terminal failure.</p>
-<p>So: <strong>name the process the assertion depends on, pin its identity before the window, and re-read that pin before believing a negative.</strong> <code>agcPodIdentity</code> (the AGC Deployment's sorted pod UIDs) is the pin the scale-set recovery spec uses.
-An unchanged pin turns "no re-run" into a real failure worth reporting; a changed one says the attempt measured nothing, and the spec re-stages rather than asserting on it.</p>
+<p><code>agcPodIdentity</code> (the AGC Deployment's sorted pod UIDs) is the pin the scale-set recovery spec uses: an unchanged pin turns "no re-run" into a real failure worth reporting, and a changed one says the attempt measured nothing, so the spec re-stages rather than asserting on it.</p>
 <h3 id="script-tests-neutralize-the-clock-never-measure-it">Script tests: neutralize the clock, never measure it<a class="headerlink" href="#script-tests-neutralize-the-clock-never-measure-it" title="Permanent link">&para;</a></h3>
-<p>The rules above are written for the Go tiers, but the <code>scripts/</code> tier needs its own statement of them, because it is the <strong>most load-contended tier in the repo</strong> and the one most likely to be written with a real-clock assertion.
-<code>make scripts-test</code> runs every <code>scripts/</code> suite concurrently through <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/ci/run-parallel.sh"><code>scripts/ci/run-parallel.sh</code></a> (<code>make list-script-tests</code> names them), inside a <code>make check</code> that is already saturating the machine with the Go tests.
-A bound on real elapsed seconds is least reliable exactly where it is cheapest to write.</p>
+<p>The <code>scripts/</code> tier is the <strong>most load-contended in the repo</strong>: <code>make scripts-test</code> runs every <code>scripts/</code> suite concurrently through <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/ci/run-parallel.sh"><code>scripts/ci/run-parallel.sh</code></a> (<code>make list-script-tests</code> names them), inside a <code>make check</code> that is already saturating the machine with the Go tests.</p>
 <p><strong>So a script test must never assert on wall-clock time it actually spent.</strong> Stub <code>sleep</code> — it is a plain command, so a shell function shadows it — and assert on what the stub recorded.
 Two established shapes, both in-tree:</p>
 <ul>
 <li><strong>Count the sleeps</strong> when the property is "the loop paced itself rather than spinning".
-  <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/dogfood/workers-test.sh"><code>scripts/dogfood/workers-test.sh</code></a> does this: <code>sleep() { echo x &gt;&gt;"${STUB_DIR}/sleeps"; }</code>, and the assertions read the count.
-  No notion of elapsed time is needed at all.</li>
-<li><strong>Shadow the clock as well</strong> when the assertion is genuinely about a <em>budget</em> — "this retry stopped inside its timeout".
-  Have the stubbed <code>sleep</code> advance a counter and have the script read that counter instead of the real clock.
-  Elapsed time becomes the script's own accounting of the budget it spent: independent of load, and <strong>exact</strong>, so the bound can be the real budget rather than a slack value padded for jitter.
+  <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/dogfood/workers-test.sh"><code>scripts/dogfood/workers-test.sh</code></a> does this: <code>sleep() { echo x &gt;&gt;"${STUB_DIR}/sleeps"; }</code>, and the assertions read the count.</li>
+<li><strong>Shadow the clock as well</strong> when the assertion is genuinely about a <em>budget</em>.
   <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/e2e/validate-cluster-test.sh"><code>scripts/e2e/validate-cluster-test.sh</code></a> does this against <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/e2e/validate-cluster.sh"><code>validate-cluster.sh</code></a>'s <code>retry_until</code>.</li>
 </ul>
 <p>The second shape needs a seam in the script under test: <strong>read the clock through a named function</strong> (<code>now_seconds</code>), never an inline <code>date +%s</code>, so a test can substitute it.
-This is the same constraint as the <code>BASH_SOURCE</code> guard and the "keep new parsing in a named function" rule above — an inline call in the middle of a code path is untestable by construction.</p>
+This is the same constraint as the <code>BASH_SOURCE</code> guard and the "keep new parsing in a named function" rule above.</p>
 <p>Q471 is the worked example, and it shows the cost of getting this wrong is not just a flake: <code>validate-cluster-test.sh</code> bounded real seconds (<code>date +%s</code>, max 1–5 s) around sleep-based retries, so it passed standalone and failed under a loaded <code>make check</code> — a flake that only ever fires where it is hardest to reproduce.
 Converting it to a fake clock also took the suite from ~4 s of real sleeping to under 0.5 s, because a test that stubs <code>sleep</code> does not wait for anything.</p>
 <h4 id="the-clock-is-as-often-a-deadline-around-a-process-as-a-sleep-inside-one">The clock is as often a deadline around a process as a <code>sleep</code> inside one<a class="headerlink" href="#the-clock-is-as-often-a-deadline-around-a-process-as-a-sleep-inside-one" title="Permanent link">&para;</a></h4>
-<p>The margin can look absurd and still be a race.
-<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/e2e/progress-watch-test.sh"><code>progress-watch-test.sh</code></a> asserted that <code>TEST_PROGRESS_INTERVAL=0</code> turns the watcher off by launching it, arming a 10 s <code>kill -9</code>, and reading <code>wait</code>'s status.
+<p><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/e2e/progress-watch-test.sh"><code>progress-watch-test.sh</code></a> asserted that <code>TEST_PROGRESS_INTERVAL=0</code> turns the watcher off by launching it, arming a 10 s <code>kill -9</code>, and reading <code>wait</code>'s status.
 The watcher exits in milliseconds, so the deadline had a ~2000× margin on an idle machine — and none at all on a busy one, because what it bounds is the scheduler, not the guard.
 Measured over 1,760 launches while four concurrent 41-way <code>make scripts-test</code> runs saturated an 18-core machine: p50 28 ms, p90 172 ms, p99 469 ms, and <strong>8 launches (0.45%) still alive at the deadline</strong>, each in state <code>S</code> with the shell not yet through startup (Q642).
 The suite reports that as <code>exit 137</code> — its own SIGKILL, indistinguishable from the hang the deadline exists to catch.</p>
@@ -5575,11 +5406,10 @@ The kill still surfaces as a non-zero exit, which keeps a genuine hang from pass
 <p>Prove it by widening the window, exactly as <a href="#synchronize-on-the-signal-you-assert-on">Q490</a> does: a <code>/bin/sleep 12</code> injected into <code>main</code> reproduces the reported <code>exit 137</code> on the old assertion every time, and the rewritten one passes against that same delay.
 <code>/bin/sleep</code>, not <code>sleep</code>, so the injected delay bypasses the stub on <code>PATH</code>.</p>
 <h4 id="two-clocks-in-one-assertion">Two clocks in one assertion<a class="headerlink" href="#two-clocks-in-one-assertion" title="Permanent link">&para;</a></h4>
-<p>A test that waits on one clock and asserts about another has a bug that no amount of margin closes, because the two can move apart by any amount.
-<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/dogfood/release-sentinel-test.sh"><code>release-sentinel-test.sh</code></a> held the watcher to a 60 s budget (<code>RELEASE_SENTINEL_TIMEOUT</code>) and then observed it through a 3 s window (<code>sleep 3</code>, then <code>kill -0</code>).
+<p><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/dogfood/release-sentinel-test.sh"><code>release-sentinel-test.sh</code></a> held the watcher to a 60 s budget (<code>RELEASE_SENTINEL_TIMEOUT</code>) and then observed it through a 3 s window (<code>sleep 3</code>, then <code>kill -0</code>).
 The budget is spent against <code>date +%s</code>, which is wall clock and can step; the window is spent against <code>sleep</code>, which is a timer and cannot.
 Any forward step of the wall clock between the two retires the whole budget inside the window, and the watcher reports <code>timeout</code> before the test ever looks (Q690).</p>
-<p>The 20× margin is what makes this hard to read as a race, so <strong>the margin is the tell, not the reassurance</strong>: a budget that cannot plausibly elapse, elapsing anyway, means the assertion is not measuring the quantity it names.</p>
+<p>The 20× margin is what makes this hard to read as a race, so <strong>the margin is the tell, not the reassurance</strong>.</p>
 <p>Contention alone does not explain this one, and it is worth separating the two causes.
 Measured 2026-08-05 on an 18-core machine: 240 suite runs under concurrent full <code>make scripts-test</code> fan-outs (56 suites each) and repeated <code>make check</code> (load average 31 to 59) produced no failure; 102 timed windows stretched to 4 s at worst, never past 5; and 4,000 <code>date +%s</code> calls under the same load returned a sane value every time.
 A clock that runs ahead of the timer reproduces the reported failure verbatim, down to the assertion name and the <code>EVENT: timeout</code> payload.
@@ -5594,17 +5424,14 @@ The watcher reads time through <code>date</code> and paces itself through <code>
 <ul>
 <li><strong>"Still asleep" becomes a count of the subject's own polls</strong>, not a span of seconds.
   The stub caps the loop and kills at the cap, so both outcomes terminate through the subject's control flow and neither end needs a deadline.</li>
-<li><strong>A transition lands on a poll.</strong> The stub runs a per-case hook, so the event is appended strictly after the watcher captured its baseline and strictly before its next read.
-  That is synchronization, where the <code>sleep 3</code> it replaced was a guess.</li>
+<li><strong>A transition lands on a poll.</strong> The stub runs a per-case hook, so the event is appended strictly after the watcher captured its baseline and strictly before its next read, where the <code>sleep 3</code> it replaced was a guess.</li>
 <li><strong>The budget becomes exact.</strong> Two polls of a 2 s budget retire it, every run, on any machine.</li>
 </ul>
-<p><strong>A frozen clock needs a positive control, or the freeze hides the assertions it was meant to protect.</strong> With time stopped, every "stays asleep" case passes whatever the subject does, including doing nothing.
-One case therefore has to spend the budget and reach the timeout; it is what proves the stub is wired to the thing the other cases depend on.
-The same reasoning applies to the stubs themselves: each new assertion here was checked by deleting the mechanism it names from <code>release-sentinel.sh</code> and requiring it to go red, and the mutations were first written as text patterns that <code>perl</code> silently emptied by interpolating <code>$json</code>, so the harness also asserts that the mutation changed the file at all.</p>
+<p><strong>A frozen clock needs a positive control, or the freeze hides the assertions it was meant to protect.</strong> The same reasoning applies to the stubs themselves: each new assertion here was checked by deleting the mechanism it names from <code>release-sentinel.sh</code> and requiring it to go red, and the mutations were first written as text patterns that <code>perl</code> silently emptied by interpolating <code>$json</code>, so the harness also asserts that the mutation changed the file at all.</p>
 <p>Removing the real seconds took the suite from 11.4 s to 3.6 s, which is the same secondary effect Q471 reported: a test that stubs <code>sleep</code> does not wait for anything.</p>
 <h4 id="a-backstop-shorter-than-the-subjects-own-budget-is-not-a-backstop">A backstop shorter than the subject's own budget is not a backstop<a class="headerlink" href="#a-backstop-shorter-than-the-subjects-own-budget-is-not-a-backstop" title="Permanent link">&para;</a></h4>
 <p>Sometimes the wait genuinely is on the signal and only the fallback is a guess.
-That fallback is still an assertion, and the question it has to answer is: <strong>if this fires, has the subject done anything wrong?</strong> When the number is smaller than what the subject is configured to spend, the answer is no, and the test reports a verdict it has no grounds for.</p>
+That fallback is still an assertion, and the question it has to answer is: <strong>if this fires, has the subject done anything wrong?</strong></p>
 <p><code>cmd/probe/abandoned_test.go</code> waited on the verdict channel, which is the right signal, behind a flat <code>time.After(20 * time.Second)</code>, at ten sites.
 Seven of them ran the probe with <code>PROBE_ABANDONED_WINDOW=30s</code>, and the probe's <code>observe()</code> loop is entitled to run to <code>t0 + window</code> before returning <code>NO-SIGNAL</code>.
 So the assertion expired ten seconds <em>inside</em> the window the same test had just configured, and <code>TestAbandonedProbe_Redispatched</code> duly failed on #1357 at 20.24 s under <code>-race</code>, green on rerun (Q761).
@@ -5622,33 +5449,18 @@ Ten seconds is inside the measured startup distribution, not outside it: Q642 pu
 Where a blocking primitive exists, use it: the record-launch suite <code>wait</code>s on the wrapper, which waits on the run, so the run's own exit ends the wait with no clock in it at all.
 Where none does, keep polling the signal, add the <em>other</em> real outcome as its own exit (the wrapper dying without writing a record is a failure you can observe rather than infer), and push the cap far enough out that reaching it means broken rather than busy.</p>
 <h4 id="a-throwaway-load-harness-is-a-measuring-instrument-so-calibrate-it">A throwaway load harness is a measuring instrument, so calibrate it<a class="headerlink" href="#a-throwaway-load-harness-is-a-measuring-instrument-so-calibrate-it" title="Permanent link">&para;</a></h4>
-<p>Reproducing a load-sensitive flake means writing a scratch harness that generates load and samples the suite.
-It is throwaway code, which is exactly why it gets written without the checks the suite itself would get, and every failure mode below produces a <strong>confident, wrong verdict</strong>:</p>
+<p>Four failure modes, each measured here, and each producing a <strong>confident, wrong verdict</strong>:</p>
 <ul>
 <li><strong>The load never started.</strong> Q690's first harness backgrounded its generators with <code>setsid</code>, which does not exist on macOS.
-  All three generators died instantly, 40 samples passed against an idle machine, and the run looked like strong evidence of no flake.
-  A load harness must <strong>assert its own load is running</strong> before it draws any conclusion from a green sample, and print the figure it measured, exactly as <a href="#a-bulk-mechanical-change-proves-itself-by-reconciliation-not-by-an-empty-leftover-query">an empty search result is only evidence once the command is known to have run</a>.</li>
-<li>
-<p><strong>The harness killed the thing it was measuring.</strong> That same harness cleaned up with <code>pkill -f 'make scripts-test'</code>, which matched the <code>make check</code> running for verification in the same worktree.
+  All three generators died instantly, 40 samples passed against an idle machine, and the run looked like strong evidence of no flake.</li>
+<li><strong>The harness killed the thing it was measuring.</strong> That same harness cleaned up with <code>pkill -f 'make scripts-test'</code>, which matched the <code>make check</code> running for verification in the same worktree.
   The gate died mid-run and reported a non-zero exit, and a sampled suite that had printed <code>all assertions passed</code> was recorded as a failure because <code>wait</code> returned non-zero.
-  Both read as genuine red.
-  <strong>Scope a harness's cleanup to its own processes</strong>, with a stop file the loops poll or a marker in the command line that the pattern anchors on, and never <code>pkill</code> a pattern that a real gate's own command line matches.</p>
-</li>
-<li>
-<p><strong>The harness's own verdict was wrong.</strong> Both failure modes above are about the load; this one is about the oracle, and it is the worse kind because the samples are real and only the classification is broken.
-  Q703's race probe reported 50 failures in 50 attempts, which read as a spectacular reproduction until the log showed every one was the probe passing <code>-exist-file /dev/null</code> to the checker, so every link in the file was dead.
-  The rule is the same one that applies to any probe about to justify a decision: <strong>include a case whose answer you already know, and disbelieve the harness when they disagree.</strong> A 100% failure rate is as suspect as a 0% one.</p>
-</li>
-<li>
-<p><strong>The subject changed under the harness.</strong> The first three are about the load, the oracle, and the cleanup; this one is about the thing being measured, and it is the easiest to walk into because the harness runs for minutes while you keep working.
-  Q703's loop reported a hit on run 8 that was its own session's in-flight edit: a <code>trace()</code> call had been temporarily made unconditional to check that an assertion went red without it, and the loop caught that tree.
+  <strong>Scope a harness's cleanup to its own processes</strong>, with a stop file the loops poll or a marker in the command line that the pattern anchors on, and never <code>pkill</code> a pattern that a real gate's own command line matches.</li>
+<li><strong>The harness's own verdict was wrong.</strong> Q703's race probe reported 50 failures in 50 attempts, which read as a spectacular reproduction until the log showed every one was the probe passing <code>-exist-file /dev/null</code> to the checker, so every link in the file was dead.</li>
+<li><strong>The subject changed under the harness.</strong> Q703's loop reported a hit on run 8 that was its own session's in-flight edit: a <code>trace()</code> call had been temporarily made unconditional to check that an assertion went red without it, and the loop caught that tree.
   It reads as a reproduction, and it is the flake's own signature, so nothing about the log says otherwise.
-  <strong>Freeze the tree for a load run's duration, and discard every round that overlapped an edit to the subject</strong>, including doc and comment edits, since the gates read those too.
-  Land the code first, then measure; the doc and backlog work that fills the wait is exactly the work a running gate does not decide (<a href="../parallel-dispatch/#run-the-local-gate-in-the-background-not-on-the-critical-path">run the local gate in the background</a>), so do that against a tree the harness is not sampling.</p>
-</li>
+  Land the code first, then measure; the doc and backlog work that fills the wait is exactly the work a running gate does not decide (<a href="../parallel-dispatch/#run-the-local-gate-in-the-background-not-on-the-critical-path">run the local gate in the background</a>), so do that against a tree the harness is not sampling.</li>
 </ul>
-<p>The general rule is the one this whole section is about, turned on the instrument: a measurement you cannot show ran is not a measurement.
-Reconcile the harness's status against its output before believing either, and reconcile its verdict against a case you can check by hand.</p>
 <h3 id="testing-a-main-shaped-script-the-entry-point-seam-and-the-errexit-trap">Testing a <code>main</code>-shaped script: the entry-point seam, and the errexit trap<a class="headerlink" href="#testing-a-main-shaped-script-the-entry-point-seam-and-the-errexit-trap" title="Permanent link">&para;</a></h3>
 <p>A script whose logic lives in <code>main()</code> needs a seam before it can be sourced at all.
 The dogfood scripts use an env guard on the last line — <code>[[ -n "${START_LIB_ONLY:-}" ]] || main "$@"</code> in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/dogfood/start.sh"><code>start.sh</code></a>, and the same shape in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/dogfood/e2e-start.sh"><code>e2e-start.sh</code></a>, <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/dogfood/e2e-stop.sh"><code>e2e-stop.sh</code></a>, <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/dogfood/delete.sh"><code>delete.sh</code></a> and <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/dogfood/validate-release.sh"><code>validate-release.sh</code></a> — so a test sources the file for its functions without running it.
