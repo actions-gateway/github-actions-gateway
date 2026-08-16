@@ -1146,6 +1146,14 @@ The rules above govern *why* something failed.
 The same discipline applies to the plainer statements that carry a decision — "the gate is green", "the pods are stuck", "the drain is converging".
 Each is a claim about state, and each has a cheap way of being wrong:
 
+- **A notification is a claim about the moment it fired, not about now.** pr-sentinel reports `ready` when it observes a PR clean, and the watcher then exits.
+  Reading that event later and repeating it says what was true when it was written.
+  Six PRs were reported "green, waiting on your merge review" in one session; four had already merged by the time the sentence was read, and one of those had merged before it was written.
+  The fix is not to distrust the watcher, which was right each time, but to re-read the state at the moment of reporting: `gh pr view <n> --json state,mergeStateStatus,headRefOid` and confirm the head matches local `HEAD`, so the verdict and the commit it describes are the same one.
+- **When a metric anomaly survives every internal test, check the changelog of whatever produced the numbers.** A six-week regime change in `input_tokens` was chased through the dispatcher, the model, the repo's own context size, and the commit log, then written off as unanswerable because the transcripts carrying a client version began after it ended.
+  It was answerable in one query: the Claude Code changelog names the regression, the quantity, and the date ([the worked case](../../claude-usage/README.md#a-worked-anomaly-the-fresh-input-regime-change)).
+  The tool that generates a measurement is a dependency like any other, and its release notes are evidence.
+  "Not answerable from this dataset" is a statement about the instrument and does not license "not answerable".
 - **An exit code read through a pipe is the pipe's.** `make check | tail -40` reports `tail`'s status, so a failing gate reads as `0`.
   Redirect to a file and read `$?` from the command itself, then reconcile it against the output. This one has a mechanical check now (Q625): [`scripts/agent/claude-piped-gate-hook.sh`](../../scripts/agent/claude-piped-gate-hook.sh) is a `PreToolUse` hook that denies a Bash call that pipes a registered gate into a filter, or reads `$PIPESTATUS` (which does not exist in zsh, the shell the Bash tool runs, and expands to empty there).
   It denies rather than asks because a deny's reason is shown to the model and an ask's to the user, so the fix lands where the command gets rewritten instead of being relayed by hand (Q697).
@@ -1398,6 +1406,11 @@ Q482 established this for the Go toolchain only.
 It covers both languages and every tier those nine jobs carry: Go unit tests, the `scripts/` shell suites under `make scripts-test`, integration, and e2e.
 `TestBuildTrustPool_PreservesSystemRoots` (`cmd/agc/internal/transport/trustpool_test.go`) and the `python3` guards in `scripts/docs/*-hook-test.sh` are the models in each.
 For the mode-bits case in Go, `writeUnreadable` (`cmd/worker/worker_test.go`) is the direct port of Q596's shell probe: it `chmod 000`s the fixture, reads it back, and skips only when that read succeeds (Q641).
+
+**Directory iteration order is an environment assumption too, and it cannot be arranged around.** `glob.glob` and `os.scandir` return whatever order the filesystem gives: measured on one path here it was creation order, and on another, alphabetical.
+So a test that needs a specific walk order cannot get it by naming its fixtures.
+A `claude-usage` test for "a replayed record is credited to the earliest session" was written that way, passed, and then still passed with the mechanism deleted, because the ordering it relied on happened to be the correct one on that filesystem.
+Pin the order explicitly — patch the iteration to hand the items over in the order that breaks the code — or the test asserts nothing on half the machines that run it.
 
 ### Proving a flake fix: invert it
 
