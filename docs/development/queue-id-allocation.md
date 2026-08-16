@@ -122,7 +122,7 @@ The same `make merge-driver` installs a [sibling for `docs/plan/README.md`](main
 
 **One file per item** (`docs/queue/Q423.md`).
 The permanent answer to row conflicts, since adds and removes become file creates and deletes, which cannot conflict.
-Held in reserve: it rewrites `lint-backlog.sh`, this process, the shared backlog skill, and costs the single-file read of the prioritized queue.
+Held in reserve: it rewrites `lint-backlog.sh`, this process, the shared `session-backlog` skill, and costs the single-file read of the prioritized queue.
 
 **Dispatcher-owned row removal.** Rejected.
 It only works when a dispatcher session exists, and items are also spawned by ID directly or as "start the next one", which have no serialization point.

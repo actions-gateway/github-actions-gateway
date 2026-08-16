@@ -104,7 +104,7 @@ Each rung costs more to maintain and buys a stronger guarantee.
 |---|---|---|---|
 | **Rule** | A paragraph in the `docs/development/` page that owns the action | The next session reads it before acting, because it sits where the action is documented | The failure is a judgement call a reader makes correctly once warned |
 | **Gate** | A check in `make check` or a CI workflow | The failure cannot merge | The failure has a mechanical signature and the check is cheap |
-| **Prompt line** | A line in the [`dispatch-worker`](../../.claude/skills/dispatch-worker/SKILL.md) contract, or in the chip prompt itself | A worker that never opens the doc still complies | The failure recurs across dispatched sessions and the rule alone has not stopped it |
+| **Prompt line** | A line in the `session-worker` contract ([parallel-dispatch.md](parallel-dispatch.md#the-worker-contract-self-healing)), or in the chip prompt itself | A worker that never opens the doc still complies | The failure recurs across dispatched sessions and the rule alone has not stopped it |
 
 Do not skip to a gate.
 A gate that cannot first be stated as a rule is one whose failure mode is not yet understood, and it will fire on the wrong condition.

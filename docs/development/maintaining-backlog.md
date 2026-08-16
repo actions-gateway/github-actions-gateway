@@ -3,7 +3,10 @@
 `docs/STATUS.md` is the single source of truth for project progress and priorities.
 It is high-contention — almost every session edits it — so keeping churn low matters as much as keeping it accurate.
 
-The format and process come from the globally-installed **backlog skill** (agents: invoke the `backlog` skill for the full playbook: grooming checklist, staleness signals, parallel dispatch, migration).
+The format and process come from the globally-installed **`session-backlog` skill** (agents: invoke it for the full playbook: grooming checklist, staleness signals, parallel dispatch, migration).
+**This page is authoritative wherever the two overlap.** The skill is written to be portable across repos, so it states the general rule; this page states what is true here — the character caps, the ID allocator, the merge driver, the Progress table, the release scope ledger, and every measurement taken in this repo.
+Read a difference as this repo being more specific, not as the skill being wrong.
+
 The repo vendors the skill's tooling so the rules hold for every contributor, with or without the skill:
 
 - [`scripts/docs/lint-backlog.sh`](../../scripts/docs/lint-backlog.sh) — enforces every format rule below.
