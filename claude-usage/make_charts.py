@@ -746,7 +746,10 @@ def chart_token_anatomy():
     ax.xaxis.set_major_formatter(mdates.DateFormatter("%b %-d"))
     ax.xaxis.set_major_locator(mdates.DayLocator(interval=2))
     plt.setp(ax.get_xticklabels(), rotation=45, ha="right", fontsize=8.5)
-    ax.legend(frameon=False, fontsize=10, loc="lower right", ncol=2)
+    # Upper left: the series are ordered by magnitude and never cross, so the band
+    # above the cache-read line early in the timeline is the one region no series
+    # enters. Lower right sat on the input line and its shading.
+    ax.legend(frameon=False, fontsize=10, loc="upper left", ncol=2)
     for s in ("top", "right"):
         ax.spines[s].set_visible(False)
     ax.grid(alpha=0.22, which="both")
