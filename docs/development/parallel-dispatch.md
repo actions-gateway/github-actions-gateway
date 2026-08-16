@@ -55,7 +55,7 @@ Two practical notes:
 ## Roles
 
 **Dispatcher** (one session — typically the one you are in):
-- Selects the batch, decides priority and ordering, groups by file contention.
+- Selects the batch, decides ordering, groups by file contention ([what that actually optimizes for](#what-selection-actually-optimizes-for), which is not the Queue's priority order).
 - Spawns one worker session per task.
 - Watches each PR, verifies its **scope** (checks-green is necessary, not sufficient), hands it to the maintainer, and advances the next task.
 - Owns **assignment**, merge ordering, and scope review (see [the dispatcher owns assignment](#the-dispatcher-owns-assignment-not-coordination-files)).
@@ -269,7 +269,7 @@ Record the per-task model choice in the `tmp/` tracker alongside task → chip �
 
 ## The dispatcher loop
 
-For each task, in priority order and respecting the concurrency cap:
+For each task, respecting the concurrency cap and the selection trade-off below:
 
 1. Spawn the worker chip with a self-contained prompt.
 2. When its PR reaches **green + mergeable**, first **confirm the code-exercising gates actually ran** — green/`CLEAN` is not enough if a path-gated workflow was skipped (a PR opened docs-only then given code can show all-green while build / lint / integration / security-scan never tested it; `gh pr checks <n>` + `gh run list --commit <sha>`, and close→reopen to force them — see [testing.md § Path-gated workflows](testing.md#path-gated-workflows-verify-the-heavy-gates-actually-ran)).
@@ -284,6 +284,44 @@ For each task, in priority order and respecting the concurrency cap:
 
 Keep a small written tracker (a scratch file in the gitignored `tmp/`) of task → chip → PR → state, plus the decisions made.
 It is cheap and makes the run auditable and resumable.
+
+## What selection actually optimizes for
+
+**Selection is not the Queue's priority order, and pretending otherwise hides a real trade-off.** Three rules in this playbook each bias the batch away from "take the top rows", and together they dominate:
+
+- **Parallelizability.** Items must be independent and one-PR-sized, so a task entangled with three others is passed over however high it sits.
+- **Non-adjacency.** [Never hand one batch two adjacent Queue rows](#the-dispatcher-owns-assignment-not-coordination-files), because their row deletions cannot merge clean.
+  Priority order is exactly the order that makes rows adjacent.
+- **Size.** Dispatch is [for roughly S–M items](#when-to-use-it).
+  Larger work is not dispatched at all, so it never competes for a slot.
+
+The size bias is the largest and the most measurable.
+Across the surviving transcript window, rows worked by dispatched sessions were 79% `S` and 20% `M`; rows worked by hand were 57% `S` and 41% `M`.
+That single bias is enough to explain why a dispatched session costs about 0.61× a manual one: it runs 0.77× the turns at 0.79× the tokens per turn, and a smaller task produces both, since fewer files to touch means fewer turns and less new context cached per turn.
+Measured from the session transcripts over 2026-07-26 to 08-16.
+
+Two caveats on those figures: a brief can name more than one Q-ID, and a manual session only enters the comparison when its opening names a row, which excludes exploratory work that never had one.
+Both push the same way, so the gap is a floor rather than a point estimate.
+
+**None of this is a defect.** The constraints are real, and the historical fallback when priority genuinely mattered was to dispatch by hand from the Queue.
+It is a limitation to know about when reading a run: a cleared batch is evidence about what parallelizes, not about what mattered most.
+
+### Intent: teach the dispatcher to prioritize
+
+The goal is to dispatch more, and to have the dispatcher weigh Queue priority itself rather than having a human override it by hand-picking rows.
+That is not solved, and this section records the shape of the problem rather than a design.
+
+What makes it hard is that priority here is **release-thematic**, and the theme changes:
+
+- Bug fixes ahead of features when a patch release is next; features ahead of fixes when a minor is.
+- Retro and cleanup items when the aim is to clear work that does not affect users.
+- A meta-milestone that cuts across all of those, where the release is defined by a theme rather than a version: v1/v2 parity, classic/scale-set parity, ARC parity for 1.6.
+
+A dispatcher cannot read that off the Queue, because the Queue records priority *within* the current theme and never the theme itself.
+Learning it from session history is the obvious direction, and the obvious gap is that history shows the choices without the use case behind them: the same row can be top of the batch in one release and skipped in the next.
+So the missing input is a statement of what the next release is *for*, in a form the dispatcher can weigh rows against.
+
+Until that exists, priority stays a human input: state the theme in the `/goal` prompt's batch scope, or hand-pick the rows.
 
 ## The merge model
 
