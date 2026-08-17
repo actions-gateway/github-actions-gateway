@@ -50,6 +50,11 @@ Recorded here because the plan is unreadable without them.
    `queue.py claims` covers rule 12, and rule 10 is dropped on the measurement below.
 6. **No `docs/milestones/` directory.** The milestone/design split already exists as the `milestone` label and as the index's topical sections; a third classification by directory would cost re-homing across 157 plans, re-base every moved file's outbound links, and fork `no-plan-refs-check`, `plan-index-check`, the plan-index merge driver, `.gitattributes` and the path filters, all of which key on `docs/plan/`.
 7. **#1587 merges first**; this work branches from `main` after it lands.
+8. **One PR per phase, except phase 6, which is atomic.** Settled 2026-08-17, superseding decision 7's single cutover on the evidence the split produced.
+   Phases 1, 2 and 3 each surfaced defects a red gate pointed straight at — the MkDocs nav failure, `mdreflow` folding the store README, the untested block-list label form, the truncated blocker clause, a duplicate search silently swallowed by its own `|| true`, the Progress dependency, the merge-driver fixture — and each was attributable because one red signal had one cause.
+   Phases 4 and 5 land separately because each is verifiable alone: `doc-links` proves the anchor rewrite, and the render touches only the site.
+   Phase 6 cannot be split: deleting the table, retiring the gates that take it as their subject, and grooming have to be one commit, or `main` holds either a live ungated table or gates pointing at a file that is gone.
+   The cost accepted is the interim double-write, paid three times so far (Q890, Q891, and #1596's rebase), which ends when phase 6 lands.
 
 ## What each rule becomes
 
@@ -115,8 +120,8 @@ Delete `docs/STATUS.md`, then groom.** Remove or rewrite items the work obsolete
 ## Risks
 
 - **Review size.** Roughly 176 new files, 218 rewritten references and 53 consumer changes in one PR.
-  This is the accepted cost of decision 7's atomic switch; if it proves unreviewable the fallback is phases 1 and 2 as their own PR behind a drift check.
-  That is what happened, and `queue-drift-check` is the check: phase 1 landed as its own PR and phase 2 as the next, so the fallback's condition had to be met rather than assumed.
+  Decision 7 accepted that; the fallback it named — phases as their own PRs behind a drift check — is what actually happened, and decision 8 makes it the rule.
+  `queue-drift-check` is that check, so the fallback's condition was met rather than assumed.
 - **Rank assignment must preserve priority exactly.** The table's order is the priority; a migration that scrambles it loses information no gate can recover.
   Reconcile the rendered order against the pre-migration table, not just the item count.
 - **`Q248` carries an anchor inside the Progress table**, so it is an item ID on a plan row.
