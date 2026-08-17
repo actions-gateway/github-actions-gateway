@@ -1,9 +1,8 @@
 # Q889: Migrate the backlog to the per-item store
 
-**Status:** Phases 1 and 2 merged (#1595, #1596); phase 3 is open on #1598.
-The store is live at `docs/queue/` alongside the table, held to it by `queue-drift-check`.
-Six consumers are switched; the rest wait on phase 4's anchors or on phase 6's deletion, classified under Phase 3 below.
-Phases 4 to 6 not started.
+**Status:** Phases 1, 2 and 3 merged (#1595, #1596, #1598); phase 4 is open on #1600.
+The store is live at `docs/queue/` alongside the table, held to it by `queue-drift-check`, and every reference that can point at an item now does.
+Phases 5 and 6 not started.
 
 Replace the single `docs/STATUS.md` Queue table with the `session-backlog` skill's per-item store under `docs/queue/`, adopt its Python tooling, and groom the backlog to remove what the move obsoletes.
 
@@ -106,9 +105,10 @@ Re-counted at the start of the work: **61 files outside `docs/` reference `STATU
 The 53 above counted tools rather than files; whichever unit, re-derive it rather than quoting it.
 
 **4.
-Anchors and docs.** Rewrite 218 `STATUS.md#QNNN` references across 50 docs to the item pages.
-This is a bulk mechanical change, so it proves itself by reconciliation, never by an empty leftover grep: assert a known-affected site changed, and reconcile before/after counts.
-Then rewrite `maintaining-backlog.md`, `parallel-dispatch.md`, `CLAUDE.md` and the doc-update matrix.
+Anchors and docs.** ✅ 158 `STATUS.md#QNNN` references across 47 files now point at item pages, on top of the 52 the plan index took in phase 3, for 211 store links tree-wide.
+Reconciled by count and by `doc-links` rather than by an empty leftover grep, which is what surfaced the classes below.
+Thirteen references stay: seven name `Q248` and one names `#progress`, both Progress rather than items, so phase 6 owns them; five are prose placeholders that must never be substituted.
+The prose half came to one wrong paragraph in `maintaining-backlog.md` and two lines in `CLAUDE.md`; `parallel-dispatch.md` needed nothing, and `doc-update-matrix.md` referenced the table nowhere at all.
 
 **5.
 The website.** Render `/dev/queue/` into the MkDocs theme as a build step, gitignore the generated path, and gate that a committed index never reappears.
