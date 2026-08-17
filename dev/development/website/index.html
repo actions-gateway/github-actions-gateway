@@ -2825,6 +2825,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="The two link gates">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#the-backlog-renders-at-build-time" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The backlog renders at build time
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -3658,6 +3675,19 @@ The deploy job builds a tag's own docs, and a release cut before this gate exist
 The same block raises <code>nav.omitted_files</code> for the nav-coverage gate (<a href="#what-belongs-in-nav">§ What belongs in <code>nav</code></a>); <code>absolute_links</code> and <code>nav.not_found</code> keep their defaults deliberately, the latter because it already defaults to <code>warn</code>.</p>
 <p>Neither gate covers a link to a page the build's own scope excludes — MkDocs clamps that one below warning level whatever <code>validation</code> says.
 That is <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/hooks/source_links.py"><code>hooks/source_links.py</code></a>'s job instead; see <a href="#unpublished-is-per-build-not-per-path-q561">§ Unpublished is per build, not per path</a>.</p>
+<h3 id="the-backlog-renders-at-build-time">The backlog renders at build time<a class="headerlink" href="#the-backlog-renders-at-build-time" title="Permanent link">&para;</a></h3>
+<p><code>/dev/queue/</code> is the item store's <code>README.md</code> with the ordered backlog appended by <code>hooks/queue_page.py</code>, which shells out to <code>queue.py render</code> and inserts its table.</p>
+<p>Nothing is generated into the tree, which is the point.
+An earlier sketch wrote <code>docs/queue/index.md</code> at build time and needed a <code>.gitignore</code> entry plus a gate to stop a stale committed copy reappearing; appending to a page MkDocs already serves needs neither, because there is no artifact to commit.
+On github.com the same README renders as the conventions alone, which is the right reading there: a reader browsing the source does not want 177 rows.</p>
+<p><strong>The table comes from <code>queue.py render</code>, not from a second renderer</strong>, so the page and the CLI cannot disagree about order, truncation or status.</p>
+<p>Two things this wiring depends on, both of which fail quietly:</p>
+<ul>
+<li><strong><code>queue_page.py</code> must precede <code>source_links.py</code> in <code>mkdocs.yml</code>.</strong> Hooks run in listed order and both use <code>on_page_markdown</code>; an item's <code>target</code> routinely points outside <code>docs/</code> (a Go file, a workflow), which is exactly what <code>source_links</code> absolutizes.
+  Appended after it, those links reach the build unrewritten: 56 <code>--strict</code> warnings, all of them the same shape.</li>
+<li><strong>The guard counts item rows, not bytes.</strong> <code>render</code> against an absent or empty store exits 0 and prints the two header lines, so a non-empty-output check reads 67 characters of table furniture as a healthy render.
+  Measured: pointing the hook at a missing directory built green until the guard counted rows, which is the empty backlog publishing as a current one.</li>
+</ul>
 <h2 id="publication-scope">Publication scope<a class="headerlink" href="#publication-scope" title="Permanent link">&para;</a></h2>
 <p>Scope is <strong>per version</strong>, not per site (Q558):</p>
 <table>
@@ -3674,7 +3704,7 @@ That is <a href="https://github.com/actions-gateway/github-actions-gateway/blob/
 </tr>
 <tr>
 <td><code>dev</code></td>
-<td>The above <strong>plus</strong> the repo-internal docs: <code>docs/STATUS.md</code> (the <a href="#the-backlog-page">backlog</a>), <code>docs/plan/</code>, <code>docs/development/</code> (this file included), <code>docs/assets/</code>'s READMEs</td>
+<td>The above <strong>plus</strong> the repo-internal docs: <code>docs/STATUS.md</code> (the <a href="#the-backlog-page">backlog</a>), <code>docs/queue/</code> (the <a href="#the-backlog-renders-at-build-time">item store</a>), <code>docs/plan/</code>, <code>docs/development/</code> (this file included), <code>docs/assets/</code>'s READMEs</td>
 </tr>
 <tr>
 <td><em>no version</em></td>

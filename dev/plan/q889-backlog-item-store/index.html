@@ -2686,9 +2686,9 @@
 
 
 <h1 id="q889-migrate-the-backlog-to-the-per-item-store">Q889: Migrate the backlog to the per-item store<a class="headerlink" href="#q889-migrate-the-backlog-to-the-per-item-store" title="Permanent link">&para;</a></h1>
-<p><strong>Status:</strong> Phases 1, 2 and 3 merged (#1595, #1596, #1598); phase 4 is open on #1600.
+<p><strong>Status:</strong> Phases 1 to 4 merged (#1595, #1596, #1598, #1600); phase 5 is open.
 The store is live at <code>docs/queue/</code> alongside the table, held to it by <code>queue-drift-check</code>, and every reference that can point at an item now does.
-Phases 5 and 6 not started.</p>
+Phase 6, the atomic cutover, is the last.</p>
 <p>Replace the single <code>docs/STATUS.md</code> Queue table with the <code>session-backlog</code> skill's per-item store under <code>docs/queue/</code>, adopt its Python tooling, and groom the backlog to remove what the move obsoletes.</p>
 <p>Supersedes the attempt on <a href="https://github.com/actions-gateway/github-actions-gateway/pull/1534">#1534</a> (draft, +4150/−1 across 186 files, stale).
 That branch carries a Go <code>queuestore</code> implementation and its own row Q869, neither of which reached <code>main</code>; closing it discards both.</p>
@@ -2835,8 +2835,10 @@ Reconciled by count and by <code>doc-links</code> rather than by an empty leftov
 Thirteen references stay: seven name <code>Q248</code> and one names <code>#progress</code>, both Progress rather than items, so phase 6 owns them; five are prose placeholders that must never be substituted.
 The prose half came to one wrong paragraph in <code>maintaining-backlog.md</code> and two lines in <code>CLAUDE.md</code>; <code>parallel-dispatch.md</code> needed nothing, and <code>doc-update-matrix.md</code> referenced the table nowhere at all.</p>
 <p><strong>5.
-The website.</strong> Render <code>/dev/queue/</code> into the MkDocs theme as a build step, gitignore the generated path, and gate that a committed index never reappears.
-Do not add a second Pages deploy: the repo has one site on a custom domain, and a second job publishing its own artifact replaces the first.</p>
+The website.</strong> ✅ <code>/dev/queue/</code> is the store's README with the ordered backlog appended by <code>hooks/queue_page.py</code>, which inserts <code>queue.py render</code>'s own table.
+<strong>The gitignore entry and the committed-index gate this phase planned are both unnecessary</strong>, because appending to a page MkDocs already serves generates no file: there is no artifact to ignore and none to gate.
+No second Pages deploy, as planned.
+Two dependencies that fail quietly are recorded in <a href="../../development/website/#the-backlog-renders-at-build-time">website.md</a>: the hook must precede <code>source_links.py</code>, and its guard counts item rows rather than bytes.</p>
 <p><strong>6.
 Delete <code>docs/STATUS.md</code>, then groom.</strong> Remove or rewrite items the work obsoletes, including anything asserting the table's mechanics.</p>
 <h2 id="risks">Risks<a class="headerlink" href="#risks" title="Permanent link">&para;</a></h2>
