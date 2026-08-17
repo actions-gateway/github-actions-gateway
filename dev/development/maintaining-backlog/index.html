@@ -2556,10 +2556,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#the-shared-process-in-brief" class="md-nav__link">
+  <a href="#where-the-format-differs-from-the-skill" class="md-nav__link">
     <span class="md-ellipsis">
       
-        The shared process, in brief
+        Where the format differs from the skill
       
     </span>
   </a>
@@ -2645,10 +2645,11 @@
 <h1 id="agent-reference-maintaining-the-backlog">Agent reference: Maintaining the backlog<a class="headerlink" href="#agent-reference-maintaining-the-backlog" title="Permanent link">&para;</a></h1>
 <p><code>docs/STATUS.md</code> is the single source of truth for project progress and priorities.
 It is high-contention — almost every session edits it — so keeping churn low matters as much as keeping it accurate.</p>
-<p>The format and process come from the globally-installed <strong><code>session-backlog</code> skill</strong> (agents: invoke it for the full playbook: grooming checklist, staleness signals, parallel dispatch, migration).
-<strong>This page is authoritative wherever the two overlap.</strong> The skill is written to be portable across repos, so it states the general rule; this page states what is true here — the character caps, the ID allocator, the merge driver, the Progress table, the release scope ledger, and every measurement taken in this repo.
-Read a difference as this repo being more specific, not as the skill being wrong.</p>
-<p>The repo vendors the skill's tooling so the rules hold for every contributor, with or without the skill:</p>
+<p>The format and process come from the globally-installed <strong><a href="../skills/#session-backlog"><code>session-backlog</code></a> skill</strong>, which agents invoke for the full playbook: the format, adding, picking, deferring, completing, the grooming checklist, staleness signals, and migration.
+<strong>This page does not restate any of that.</strong> It states what is true <em>here</em> — the character caps, the ID allocator, the merge driver, the Progress table, the release scope ledger, the flake-watch lifecycle, and every measurement taken in this repo.
+<strong>Where the two overlap, this page wins</strong>; read a difference as this repo being more specific, not as the skill being wrong.</p>
+<p>A contributor reading this page alone therefore gets the deltas rather than the process.
+What holds the rules for them is the tooling below, which is in-tree and runs in <code>make check</code> and the pre-commit hook whether or not the skill is installed:</p>
 <ul>
 <li><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/docs/lint-backlog.sh"><code>scripts/docs/lint-backlog.sh</code></a> — enforces every format rule below.
   It selects the file and maps the environment interface onto flags; the rules themselves are <a href="https://github.com/actions-gateway/github-actions-gateway/tree/main/devtools/docs/backloglint"><code>devtools/docs/backloglint</code></a>, whose package comment is the canonical rule list.
@@ -2672,45 +2673,32 @@ Read a difference as this repo being more specific, not as the skill being wrong
   Read-only.
   The replay reads each diff line's cells through the shared Markdown parse layer, so an escaped pipe in a cell cannot shift a row's fields (Q614).</li>
 </ul>
-<h2 id="the-shared-process-in-brief">The shared process, in brief<a class="headerlink" href="#the-shared-process-in-brief" title="Permanent link">&para;</a></h2>
+<h2 id="where-the-format-differs-from-the-skill">Where the format differs from the skill<a class="headerlink" href="#where-the-format-differs-from-the-skill" title="Permanent link">&para;</a></h2>
 <ul>
-<li><strong>Position is priority.</strong> The Queue is read top-to-bottom; pick from the top.
-  Decide a new item's priority <em>before</em> inserting it and place the row where it belongs — never append by default.
-  Rank by severity/blast radius, then leverage (what it unblocks), ready over blocked; size only as a tiebreaker.</li>
-<li><strong>Two Queue states only: 🔲 ready and 🚫 blocked.</strong> Done rows are <strong>deleted</strong> (git is the archive), "started" is signaled by the open PR (run <code>gh pr list</code> before picking; skip rows an open PR covers), and parked rows live in the Deferred table.</li>
-<li><strong>Verify 🚫 blockers before treating a row as blocked</strong> — a prior session may have shipped the dependency without flipping the row; grep for its deliverables.
-  Cross-item blockers are machine-readable: a 🚫 row's Notes start with <code>Blocked by [QN](#QN)</code>, and <code>make queue-unblock ID=QN</code> lists every dependent when the blocker lands.</li>
-<li><strong>Verify the defect a row asserts before implementing it.</strong> A row's Notes are written at filing time from an observation that was never re-checked, so grep for the claimed defect the same way you grep for a blocker's deliverables — a prior session may have closed it without flipping the row, and Notes carry no observed-vs-suspected marker.
-  Q506's row named a <code>noproxy</code> GHES gap that Q322 had already fixed; taking the row at its word would have "fixed" a non-bug and missed the real one next to it.
-  An audit row inheriting an unverified premise is the sharpest case, but the rule is general.</li>
-<li><strong>Search before you file</strong> — <code>make queue-id</code> does it for you, and reading its candidates is the part that is on you.
-  Nothing else catches a semantic duplicate: two rows describing one problem in different words pass every lint, and both get worked.
-  <a href="#search-before-you-file">Details and calibration below</a>.</li>
-<li><strong>Allocate IDs with <code>make queue-id TITLE="…"</code></strong>, which claims a <code>refs/queue-ids/QN</code> ref on the remote.
-  There is no counter line in the file: a shared mutable counter handed concurrent sessions the same ID and conflicted on the same line by construction, forcing a renumber (<a href="../queue-id-allocation/#why-the-counter-had-to-go">Q382</a>).
-  IDs are sparse, stable, never reused or renumbered, and never get sub-IDs (<code>5a</code>) — a trackable child gets its own top-level ID.
-  The <code>Q</code> prefix keeps <code>Q44</code> from auto-linking to PR/issue #44; use the bare ID in commits and PRs.</li>
-<li><strong>Notes are present tense, ≤ 250 characters (hard cap, counted as the cell is written — an em dash costs one, an escaped <code>\|</code> costs two); past 200 characters the row must link a doc</strong> from its Item or Notes cell — a <code>#QN</code> sibling anchor doesn't count, since sibling rows are capped too.
-  No merged-PR lists or "SHIPPED" narration — history lives in <code>git log</code> and the plan doc.
-  The same caps apply to Deferred trigger cells.
-  Write for a skimmer: cut detail and link a doc rather than compressing into fragments.</li>
-<li><strong>A literal pipe in any cell is written <code>\|</code>, code spans included.</strong> GFM reads a raw <code>|</code> as a column separator wherever it appears, so it splits the row into more cells than the header declares and everything past the header's last column is dropped from the rendered table, on github.com and on the site both.
-  Nothing about the source line looks wrong, which is why it needs a gate: <code>lint-backlog</code> rule 13 compares each row's own width against its table header.
+<li><strong>There is no <code>**Next ID:**</code> counter line.</strong> IDs are claimed instead, with <code>make queue-id TITLE="…"</code>, which takes a <code>refs/queue-ids/QN</code> ref on the remote.
+  A shared mutable counter handed concurrent sessions the same ID and conflicted on the same line by construction, forcing a renumber (<a href="../queue-id-allocation/#why-the-counter-had-to-go">Q382</a>).
+  Allocation also runs <a href="#search-before-you-file">the duplicate search</a>, which is the part of "search before you file" a mechanism can carry; reading the candidates it prints is the part that is on you.</li>
+<li><strong>The Notes cap is hard, and counted as the cell is written</strong>: ≤ 250 characters, where an em dash costs one and an escaped <code>\|</code> costs two.
+  Past 200 characters the row must link a doc from its Item or Notes cell — a <code>#QN</code> sibling anchor doesn't count, since sibling rows are capped too.
+  The same caps apply to Deferred trigger cells.</li>
+<li><strong>A literal pipe is written <code>\|</code>, code spans included, and <code>lint-backlog</code> rule 13 gates it</strong> by comparing each row's own width against its table header.
   Measured 2026-08-14: Q866's Notes rendered as far as its opening backtick, losing the remaining two thirds, and the truncation also hid an over-cap cell from rule 4.
   <strong>Budget for that second half: escaping the pipe is not a one-character fix.</strong> Every rule downstream had been reading the stub before the pipe, so the cell they measure changes the moment it renders whole, and one of them can newly fail on a row nobody edited.
   Q866's Notes went from a measured 100 characters to 269 against the 250 cap, and had to be trimmed in the same edit.</li>
 <li><strong>A row never cites a count of the backlog.</strong> "42 Queue rows", "60 parked" and friends go stale on the next filing — the file they measure is the one thing guaranteed to change under them, often the same day.
   State the <em>shape</em> instead ("the Queue is read top-down; the parked rows are only grepped on a trigger"), and put any dated figure in the linked plan doc, where a point-in-time measurement belongs.
   Q569's row was corrected twice in one session — 36 → 42 → 44 — before the count came out entirely.</li>
-<li><strong>Deferred rows carry a concrete revive trigger</strong>, tagged by source: <code>**Demand:**</code> (an outside ask) · <code>**Event:**</code> (an observable outside-our-control condition) · <code>**Decision:**</code> (our own call — grep <code>**Decision:**</code> for what we could move on unilaterally).
-  When the trigger fires, move the row back into the Queue at the position it then deserves.
-  A non-commitment belongs in <a href="../../design/appendix-g-future-enhancements/">appendix-g</a>, not Deferred.</li>
-<li><strong><code>docs/STATUS.md</code> edits are isolated commits</strong> — never mixed with code or plan-doc changes, even when completing an item mid-feature (<a href="#isolated-commits-and-what-actually-enforces-them">enforced</a>).
-  Use <code>docs(status):</code> subjects, and name the removal reason with a fixed verb — <code>complete QN</code>, <code>prune QN</code>, <code>merge QN into QM</code>, <code>defer QN</code> — so metrics can tell throughput from garbage collection.
-  Batch bulk additions (one audit's discoveries) into one commit; keep reshuffles separate from additions.
+<li><strong>A non-commitment belongs in <a href="../../design/appendix-g-future-enhancements/">appendix-g</a></strong>, never parked in Deferred.
+  Deferred triggers are tagged by source here: <code>**Demand:**</code> (an outside ask) · <code>**Event:**</code> (an observable outside-our-control condition) · <code>**Decision:**</code> (our own call — grep <code>**Decision:**</code> for what we could move on unilaterally).</li>
+<li><strong><code>make queue-unblock ID=QN</code> lists every dependent</strong> when a blocker lands, which is what makes the skill's <code>Blocked by [QN](#QN)</code> convention worth writing exactly.</li>
+<li><strong>A row's asserted defect gets re-checked before it is implemented, not only when it is groomed.</strong> Q506's row named a <code>noproxy</code> GHES gap that Q322 had already fixed; taking the row at its word would have "fixed" a non-bug and missed the real one next to it.
+  An audit row inheriting an unverified premise is the sharpest case, but the rule is general — <a href="#a-rows-asserted-defect-is-a-claim-not-a-finding">what a row can be wrong about, and what each mistake cost</a>.</li>
+<li><strong>Backlog commits are isolated here by two enforcing gates, not by convention</strong> (<a href="#isolated-commits-and-what-actually-enforces-them">which, and why neither subsumes the other</a>).
   When a rebase or merge conflicts on this file, resolve it via the <a href="#resolving-a-statusmd-only-conflict-verify-cheap-push-now">fast path</a> below.</li>
-<li><strong>M/L items get a plan doc</strong> under <code>docs/plan/</code>, linked from the Item cell.</li>
 </ul>
+<p><strong>The layout is the single table</strong>, which is the one the skill's tooling and every gate here enforce.
+The skill also describes a per-item store as a destination; no cutover has landed on <code>main</code>, so this page and <code>lint-backlog</code> both describe the table.
+A page that starts describing the store before a cutover has landed on <code>main</code> is <a href="../parallel-dispatch/#coordination-channels">acting on a decision it cannot confirm</a>.</p>
 <h2 id="isolated-commits-and-what-actually-enforces-them">Isolated commits, and what actually enforces them<a class="headerlink" href="#isolated-commits-and-what-actually-enforces-them" title="Permanent link">&para;</a></h2>
 <p><strong>The rule: a commit that touches <code>docs/STATUS.md</code> touches nothing else.</strong> Not "no code" — nothing.
 A plan doc, a roadmap bullet and the row deletion they belong to are three commits, in whatever order.
@@ -3339,6 +3327,8 @@ This is what a retirement needs — Q592 was filed wearing <code>infra</code> fr
 Introduce a release label only once that release is <em>concretely scoped</em> — a plan doc defining its Definition of Done exists — at which point the label answers a real yes/no question ("does this block that tag?").
 Post-release estimates are guesses that move (churn without signal), position already encodes priority, and an undefined version anchors nothing.
 The right pattern is the one <code>1.0-gate</code> followed: scope the release in a plan doc first, then add the label.</p>
+<p><strong>What that release may contain is a SemVer question, not a priority one.</strong> A patch is bugfix-only, so labelling a <code>feature</code> row for one is wrong however badly the release wants it, and the way out is a backport branch rather than a relabel: <a href="../../operations/release/#patch-releases-and-backports">release.md § Patch releases and backports</a> is the rule and the mechanism both.
+Check it before adding a label, because the label is a public promise as much as an internal one (below).</p>
 <p><strong>The corollary: once a release <em>is</em> scoped, only what blocks the tag gets a label.</strong> An item that is planned for the release but does not gate it belongs in that release's scope ledger (below), never in a second, softer label class.
 A soft <code>1.4-plan</code> label would be a guess nothing enforces — it goes stale silently, needs relabeling on every slip, and blurs the <code>-gate</code> label's one crisp meaning, <em>the tag waits for this</em>.
 The ledger can carry "planned" honestly because its lifecycle matches the release's: written when the release is scoped, archived when the tag is cut.</p>
