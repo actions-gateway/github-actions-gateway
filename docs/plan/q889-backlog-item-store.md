@@ -120,6 +120,20 @@ Delete `docs/STATUS.md`, then groom.** Remove or rewrite items the work obsolete
   Every freshness read must move to `docs/queue`.
 - **Two linters, one silent wrong-tool error.** `queue.py lint` pointed at a directory holding a table finds no `Q*.md` and reports `0 item(s) OK` at exit 0.
 
+## Working rules for the remaining phases
+
+Both came out of phase 1 and both cost something before they were written down.
+
+**Check what the local version guarded before adopting an external port.** Every adoption so far has been better than the copy it replaced in every measurable way and has still dropped something the local one covered.
+The mergeability watch's upstream suite never exercised `BLOCKED`, where ours did in three cases; the re-enqueue gate stopped recording a verdict for a probe that could not run, where ours wrote `UNMEASURABLE`.
+Neither is visible from reading the port, only from diffing its guarantees against the local one's, so the check is: enumerate what the thing being replaced asserted, then find each assertion in the replacement or account for its absence.
+`queue.py` and the rules checker are both still to adopt.
+
+**A reading of an upstream file ages, so re-read it before acting.** The skills audit that opened this work was correct when taken and obsolete thirty-five minutes later, when an upstream merge retired a section the audit had deliberately kept.
+Nothing signalled it, because a reading is not a measurement that can be re-run against a system; it is a snapshot of someone else's repository.
+So state when a read was taken whenever reporting one, and re-read before acting on it rather than trusting the earlier pass.
+Five phases of this plan rest on reading files this repo does not own.
+
 ## Verification
 
 - Round-trip equality: the store renders to the pre-migration table.
