@@ -187,6 +187,7 @@ SCRIPTS_TESTS := agent/claude-go-throttle-hook-test agent/local-throttle-test \
                  docs/git-merge-status-test \
                  docs/lint-backlog-test \
                  docs/check-queue-rules-test docs/check-queue-drift-test \
+                 docs/queue-unblock-test \
                  docs/queue-test docs/rank-vectors-test \
                  docs/release-gates-hook-test docs/release-version-hook-test \
                  docs/source-links-hook-test \
