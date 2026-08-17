@@ -91,8 +91,9 @@ The store does not exist yet, so `queue.py lint` reports `0 item(s) OK`.
 Read the count, not the exit code: an empty run is a clean bill of health for a store it never read.
 
 **2.
-Build the store.** `queue.py migrate docs/STATUS.md` into `docs/queue/`, with flake-watch and Deferred handling per decision 4.
-Verify by round-trip: render the store back to a table and diff against the pre-migration table, plus a count reconciliation against 176.
+Build the store.** ✅ `queue.py migrate docs/STATUS.md` into `docs/queue/`, with flake-watch and Deferred handling per decision 4.
+Verified by round-trip against the pre-migration table, ID sets and order both.
+The titles were the work; the migration was one command.
 
 **3.
 Switch the 53 consumers.** Retire, repoint or rewrite each: `lint-backlog.sh`/`backloglint`, `check-status-isolation.sh`, `find-duplicate-rows.sh`, `git-merge-status.sh`, `next-task.sh`, `backlog-metrics.sh`/`backlogmetrics`, `queue-unblock.sh`, `alloc-queue-id.sh`, plus `roadmapcheck` and `check-plan-index.sh` which read Queue membership, plus `STATUS_GATES`/`gate-lists-check`, the pre-commit hook, `.gitattributes`, `status-lint.yml`, the path filters, and piped-gate's `docs/STATUS.md` overlap exemption.
@@ -113,50 +114,75 @@ Delete `docs/STATUS.md`, then groom.** Remove or rewrite items the work obsolete
 
 - **Review size.** Roughly 176 new files, 218 rewritten references and 53 consumer changes in one PR.
   This is the accepted cost of decision 7's atomic switch; if it proves unreviewable the fallback is phases 1 and 2 as their own PR behind a drift check.
+  That is what happened, and `queue-drift-check` is the check: phase 1 landed as its own PR and phase 2 as the next, so the fallback's condition had to be met rather than assumed.
 - **Rank assignment must preserve priority exactly.** The table's order is the priority; a migration that scrambles it loses information no gate can recover.
   Reconcile the rendered order against the pre-migration table, not just the item count.
 - **`Q248` carries an anchor inside the Progress table**, so it is an item ID on a plan row.
-  It needs a decision rather than a mechanical move.
+  Migration left it there, correctly: it is the one ID the store does not hold.
+  It settles in phase 3 with the rest of Progress, when that table moves to `docs/plan/README.md`.
 - **The freshness check inverts.** `git log -1 -- docs/STATUS.md` keeps answering after the file is deleted, reporting the date of the commit that removed it, which reads as fresh.
   Every freshness read must move to `docs/queue`.
 - **Two linters, one silent wrong-tool error.** `queue.py lint` pointed at a directory holding a table finds no `Q*.md` and reports `0 item(s) OK` at exit 0.
 
-## Phase 2, measured but not landed
+## Phase 2, landed 2026-08-17
 
-`queue.py migrate` was run against the live table on 2026-08-17 and reconciled, then the output was discarded rather than committed.
-It is one command to regenerate, and committing it would have shipped a tree whose own gate fails: rule 11 reads the label vocabulary from `docs/queue/README.md`, which does not exist yet, so the checker exits 2 rather than passing.
+The store is `docs/queue/`, 173 items and a README carrying the vocabulary rule 11 reads.
+`queue.py lint` reports 173 OK, and `check-queue-rules.sh` reports 173 items with 0 at the merge base.
 
-What the run established, so phase 2 starts from a measurement rather than a hope:
+What the reconciliation established, which is the check worth running because the table's order *is* the priority and a count cannot see it scrambled:
 
 - **173 items written, and the ID sets reconcile in both directions** against the 174 anchors in the table.
 - **The one difference is `Q248`**, which the migration correctly left behind: it is an item ID on a *Progress* row rather than a Queue row, which is the edge case this plan already flagged as needing a decision instead of a mechanical move.
 - **Order is preserved end to end.** The Queue's 106 rows are the store's first 106 in order, and the remaining 67 match Deferred plus Flake watch in order.
-  That is the check worth running, because the table's order *is* the priority and a count cannot see it scrambled.
 
-Three probes were written before one measured the right thing, which is worth recording because the first two both looked plausible.
+Four probes were written before one measured the right thing, which is worth recording because the first three all looked plausible.
 Comparing `render --all` against the Queue section interleaves deferred items by rank; matching `\bQ\d+\b` over the rendered table catches IDs quoted inside Notes text, so `Q811` cited in `Q871`'s note read as a reordering.
 Only reading the first column answers the question asked.
+The fourth read the wrong first column and returned nothing, which a set comparison scores as agreement: the run was saved by a known-answer control asserting the probe could distinguish a deliberately scrambled order from the real one, which fired on an empty list before the comparison could pass vacuously.
 
 **The re-run on 2026-08-17 found the real phase-2 cost, and it is not the migration.** The flake-watch handling needed no work at all: all 29 rows arrive as `status: deferred` carrying `flake`, which is decision 4 satisfied by `migrate` itself.
-What does need work is the title cap.
+What did need work is the title cap.
 
-**61 of the 173 items have titles over the store's 72-character cap**, the longest at 130.
+**62 of the 173 items had titles over the store's 72-character cap**, the longest at 130.
 `queue.py lint` fails on every one, so the store cannot land until they are rewritten.
 This is not a migration defect: the single table capped the *Notes* cell at 250 characters and never capped the Item cell at all, so adopting the store imposes a constraint this backlog has never been held to.
 The cap is deliberate upstream, because a title renders whole in every index row, in `next`'s kickoff prompt, and in any session named after the item, so it is the one field with nowhere to overflow.
 
-**Settled 2026-08-17: rewrite all 61 by hand.** The cap stays, because the reasons for it are this repo's reasons too, and the alternatives both cost more than they save: raising it means either patching the vendored `queue.py`, forking the file phase 1 spent its whole length un-forking, or duplicating the check locally; and an allowlist of 61 IDs is how a cap stops meaning anything.
+**Settled 2026-08-17: rewrite all 62 by hand**, which is what landed.
+The cap stays, because the reasons for it are this repo's reasons too, and the alternatives both cost more than they save: raising it means either patching the vendored `queue.py`, forking the file phase 1 spent its whole length un-forking, or duplicating the check locally; and an allowlist of 62 IDs is how a cap stops meaning anything.
+
+The count moved from 61 to 62 between the measurement and the work, and the difference is not a miscount: the first reading was taken after `Q490` had already been fixed by hand in the store that was then discarded, so it reported what remained rather than what the table held.
+A number carried across a discarded artifact is a number about the artifact.
 
 Rewriting them is judgement rather than truncation, and the two obvious mechanical answers are both wrong: cutting at 72 characters severs titles mid-identifier, and moving the tail into the body leaves a title that no longer says what the item is.
-A representative case fixed by hand shows the shape, `Q490` going from a spec name plus its symptom to "A fan-out completion spec cancels a job every delivery completed" at 64 characters, with the spec name moved into the body where it costs nothing.
+`Q490` shows the shape, going from a spec name plus its symptom to "A fan-out completion spec cancels a job every delivery completed" at 64 characters, with the spec name moved into the body where it costs nothing.
+Where a test identifier was the item's only handle it stayed: `Q549` keeps `E2E_AGC_ScaleSetDrainedWorkerClaimAndRerunLandUnderChartRBAC` at exactly the cap, and `Q809`, which is that spec's mode B, reads as prose and leans on the plan doc both rows link.
+Twenty-one of the 62 are flake-watch rows, where the identifier also appears in the trigger, so dropping it from the title loses nothing.
 
-The round-trip is what surfaced this, which is the outcome the skill predicts for running one against a live table.
-Two smaller things came with it: `v2.0.0` is not a label, though a regex over the `**Labels:**` line reads it as one because it is backticked link text inside `2.0-gate`'s parenthetical, and the derived vocabulary is 18 labels rather than 19.
+The round-trip is what surfaced all of this, which is the outcome the skill predicts for running one against a live table.
+Two smaller things came with it: `v2.0.0` is not a label, though a regex over the `**Labels:**` line reads it as one because it is backticked link text inside `2.0-gate`'s parenthetical, and the derived vocabulary is 18 rather than 19.
+Of those 18, thirteen are actually in use across 338 assignments; the store's README declares those plus `2.0-gate` and retires the shipped 1.0 through 1.5 gates, since no open item can carry one.
 
-So phase 2 is two pieces of work, and the titles are the larger: rewrite the 61, then migrate.
-Doing it the other way round means editing item files the migration is about to overwrite.
+**The store's own shape was the untested case.** `migrate` writes labels as a YAML block list, and every fixture in `check-queue-rules-test.sh` filed the inline form, so rule 11's coverage never touched the shape it will run against for the rest of the repo's life.
+The checker parses both, so nothing was broken; what was missing was any assertion holding it to that.
+Found by a probe of my own that read the store with an inline-only parser and reported every label unused, a result only visible because the reconciliation printed both directions rather than the empty one.
+A one-sided read would have said "no undeclared labels" and been believed.
 
-Still owed before the store can land: the flake-watch items need their status checked against the `deferred` decision, `docs/queue/README.md` needs the label vocabulary, and `docs/queue/**` joins both path lists in `status-lint.yml`, where a comment already says so.
+**The store meets this repo's own prose gates, and one of them nearly disabled rule 11.** Migrated bodies arrive as single-line paragraphs, which `md-reflow-check` rejects across 152 files.
+Reflowing them is safe: `read_item` joins every non-empty body line with a space, so the reconstructed note is identical either way, which was verified by rendering the whole store before and after and diffing rather than by reading the function.
+What was not safe was the README: `mdreflow` folded its four `**Status:**`/`**Size:**`/`**Labels:**`/`**New IDs:**` lines into one paragraph, and rule 11 anchors the vocabulary to a line *starting* `**Labels:**`.
+`STATUS.md` survives the same treatment because its equivalent block carries trailing two-space hard breaks; the new page now does too, and says why.
+The checker exiting 2 is the only reason this was seen at all.
+Had an unreadable vocabulary been treated as nothing to check, rule 11 would have passed green while enforcing nothing, for as long as the store exists.
+
+**173 new pages is a website change, and `make check` cannot see one.** Both site scopes build with `mkdocs build --strict`, and `validation.nav.omitted_files` fails on a published page in no nav section, so the store reddened `build` and `release-links` on a branch whose local gate was green.
+`/queue/` now sits where `/STATUS.md` and `/plan/` sit: excluded from the stable versions, published on `dev` and declared in `not_in_nav`.
+Measured on the local oracle rather than the exit code, since the same green would follow from excluding it everywhere: stable builds 0 queue pages, `dev` builds 176, and `/dev/queue/` serves the store's README until phase 5 replaces it with a rendered index.
+
+**The interim window needed a gate, so phase 2 also ships `queue-drift-check`.** With the table still authoritative and the store already committed, an edit to either side alone is silent, and the silence favours the wrong reading: a groomed table leaves a store that still looks current.
+The check re-runs `migrate` into a throwaway store and compares the *loaded* items, so the thing being compared is `queue.py`'s own reading of the table rather than a second parser free to drift from it.
+Rank values are excluded and only the order they produce is compared, because a re-rank inside the store is the one operation the store exists to allow and a stricter check would fire on it.
+It retires itself: once `docs/STATUS.md` is deleted in phase 6 it passes and says the two can no longer disagree, so nothing has to remember to remove it.
 
 ## Working rules for the remaining phases
 

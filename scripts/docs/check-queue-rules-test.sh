@@ -148,6 +148,28 @@ PY
 git -C "$R" commit -qam "declare the label"
 expect 0 "$R" "rule 11: declaring the label clears it"
 
+# The block-list form is the one `queue.py migrate` actually writes, so a
+# suite that only ever files inline labels never exercises the real store's
+# shape. Both arms, because a parser returning nothing passes rule 11 for the
+# same reason a correct one does.
+R="$TMP/r11block"; newrepo "$R"
+item "$R" Q1 "ci"
+seal "$R"
+{
+    printf -- '---\nid: Q2\nrank: a1\nlabels:\n    - ci\n    - documentation\n'
+    printf -- 'status: ready\nsize: S\n---\n\n# Title for Q2\n\nA note.\n'
+} > "$R/docs/queue/Q2.md"
+git -C "$R" add -A && git -C "$R" commit -qm "file a block-list item"
+expect 1 "$R" "rule 11: an undeclared label in block form fails" "rule 11: Q2"
+
+python3 - "$R" <<'PY'
+import pathlib, sys
+p = pathlib.Path(sys.argv[1]) / "docs/queue/Q2.md"
+p.write_text(p.read_text().replace("    - documentation\n", "    - docs\n"))
+PY
+git -C "$R" commit -qam "use a declared label"
+expect 0 "$R" "rule 11 control: block-form labels that are declared pass"
+
 # --- reads that could not be taken are not verdicts ------------------------
 
 R="$TMP/novocab"; newrepo "$R"

@@ -26,7 +26,12 @@ copyright: Licensed under the Apache License 2.0.
 # equivalent and would publish as literal text, and their links already point at
 # the versioned site. The dev override in pages.yml carries this entry too.
 # See website.md § Publication scope.
-exclude_docs: !ENV [MKDOCS_EXCLUDE_DOCS, "/README.md\n/STATUS.md\n/plan/\n/development/\n/postmortems/\n/releases/\n/assets/README.md\n/assets/fonts/README.md\n"]
+#
+# /queue/ is the per-item backlog store (Q889). It sits with /STATUS.md and
+# /plan/ here: repo-internal, published on `dev` only. Phase 5 replaces the raw
+# item pages with a rendered /dev/queue/ index; until then the store's own
+# README.md is what that path serves.
+exclude_docs: !ENV [MKDOCS_EXCLUDE_DOCS, "/README.md\n/STATUS.md\n/plan/\n/queue/\n/development/\n/postmortems/\n/releases/\n/assets/README.md\n/assets/fonts/README.md\n"]
 
 # Published but deliberately absent from the nav, which stays the operator-facing
 # table of contents on every version: the repo-internal tree the `dev` version
@@ -47,6 +52,7 @@ not_in_nav: |
   /README.md
   /STATUS.md
   /plan/
+  /queue/
   /development/
   /postmortems/
   /assets/README.md
