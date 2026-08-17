@@ -3039,6 +3039,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#a-claim-resting-on-no-evidence-is-the-one-nothing-prompts-you-to-check" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        A claim resting on no evidence is the one nothing prompts you to check
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#a-negative-result-implicates-the-probes-identifier-first" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -4985,6 +4996,20 @@ The fix is the same each time: name the signal the claim actually depends on, co
 <li><strong>An anchored search for a check name is not the check list.</strong> <code>gh pr checks</code> filtered on <code>^integration</code> and <code>^e2e</code> reported those gates absent when they were present as <code>integration-test</code> and <code>e2e / e2e</code>.
   Concluding they had been skipped would have forced a needless close-and-reopen of the PR.</li>
 </ul>
+<h3 id="a-claim-resting-on-no-evidence-is-the-one-nothing-prompts-you-to-check">A claim resting on no evidence is the one nothing prompts you to check<a class="headerlink" href="#a-claim-resting-on-no-evidence-is-the-one-nothing-prompts-you-to-check" title="Permanent link">&para;</a></h3>
+<p>Every rule above fires on evidence being handled: a status about to be reported, a probe about to justify a decision, a count about to be cited.
+An assertion with nothing behind it trips none of them, because it reads as background rather than as a claim.
+Two shapes produced that here on 2026-08-16, both cheap to check and neither checked until someone asked.</p>
+<p><strong>Provenance, read off resemblance.</strong> A cut of the agent process playbooks rested on the sentence "the tooling is vendored", meaning copied in from the globally-installed skills, and shipped it to three doc sites and a PR body as the justification for keeping prose thin: the gates hold the rules even where the docs no longer do.
+The direction was backwards.
+<code>lint-backlog.sh</code> over <code>backloglint</code> (Go, 13 rules, a GFM AST) has no counterpart in the skill, which ships bash over a smaller set; the ID allocator is the one the skill cites as <em>its</em> proof point at 460+ live claims here; the four merge drivers and <code>check-status-isolation.sh</code> exist only here.
+One <code>git log</code> per side answers it, and none was run, because nothing in the sentence looked like a measurement.
+The claim survived into a merged PR and was corrected only after the maintainer asked whether it was true.</p>
+<p><strong>A reading that aged.</strong> The same session audited two repo docs against three installed skills and reported the divergences.
+The audit was correct when taken and obsolete 35 minutes later, when an upstream merge retired a section the audit had deliberately <em>kept</em>.
+Nothing signalled the decay: a reading of a file in a repository this one does not own is a snapshot, not a measurement that can be re-run against a system, so re-reading is the only check there is.
+State when a read was taken whenever reporting one, and re-read before acting on it.</p>
+<p>Both were filed upstream as <a href="https://github.com/karlkfi/claude-skills/issues/131">claude-skills#131</a>, and <code>verify-claims</code> now triggers on a claim about where code came from and on a reading taken earlier.</p>
 <h3 id="a-negative-result-implicates-the-probes-identifier-first">A negative result implicates the probe's identifier first<a class="headerlink" href="#a-negative-result-implicates-the-probes-identifier-first" title="Permanent link">&para;</a></h3>
 <p>The section above is about a probe that answers a different question.
 This one is about a probe that asks after a name which does not exist, where the command ran and ran correctly, so "empty output is only evidence once the command is known to have run" passes and tells you nothing.</p>
