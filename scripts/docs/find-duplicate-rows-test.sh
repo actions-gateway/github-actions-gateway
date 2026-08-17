@@ -40,28 +40,36 @@ cleanup() {
 }
 trap cleanup EXIT
 
-# backlog ROW... — write a STATUS.md fixture with the given Queue rows. Each ROW
-# is "ID|Item cell|labels"; the surrounding shape (Progress table above, Deferred
-# and Flake watch below) matches the real file so section scoping is exercised.
+# backlog ROW... — write an item-store fixture with the given items. Each ROW
+# is "ID|Item cell|labels", unchanged from when this fixture wrote a STATUS.md
+# table: only the shape it lands in changed, so every expectation below is
+# still asserting the same thing about the same titles.
+#
+# A parked item and a flake-watch item come along every time, because the two
+# are one `status: deferred` in the store and only the `flake` label separates
+# them — the section a hit reports is derived from that, not read.
 backlog() {
-	local row id item labels
-	{
-		printf '# Project Status\n\n## Progress\n\n| Item | Labels | Status |\n|---|---|---|\n'
-		# A Progress anchor is a plan, not an item (Q509). Its shape differs —
-		# no visible ID after the anchor — and the matcher must skip it.
-		printf '| <a id="Q248"></a>[GMC CRD manifest drift plan](plan/p.md) | %s | ✅ |\n' "${bt}infra${bt}"
-		printf '\n## Queue\n\n| ID | Item | Labels | St | Sz | Notes |\n|---|---|---|---|---|---|\n'
-		for row in "$@"; do
-			IFS='|' read -r id item labels <<<"$row"
-			printf '| <a id="%s"></a>%s | %s | %s | 🔲 | S | notes |\n' \
-				"$id" "$id" "$item" "${bt}${labels}${bt}"
-		done
-		printf '\n## Deferred\n\n| ID | Item | Labels | Sz | Trigger to revive |\n|---|---|---|---|---|\n'
-		printf '| <a id="Q501"></a>Q501 | [%s](plan/q501-cancel-relay.md) | %s | S | **Event:** next live run |\n' \
-			"A cancelled run's worker pod keeps running to completion" "${bt}bug${bt}"
-		printf '\n### Flake watch\n\n| ID | Item | Labels | Sz | Trigger to revive |\n|---|---|---|---|---|\n'
-		printf '| <a id="Q549"></a>Q549 | [Provisioner eviction tests flake under parallel load](../cmd/agc/p_test.go) | %s | S | **Event:** recurs on main |\n' "${bt}flake${bt}"
-	} >"$WORK/STATUS.md"
+	local row id item labels title target
+	rm -rf "$WORK/queue"
+	mkdir -p "$WORK/queue"
+	item_file() {  # item_file ID "[Title](target)" LABELS STATUS
+		local iid=$1 cell=$2 lbls=$3 st=$4
+		title=${cell#*[}
+		title=${title%%]*}
+		target=${cell#*](}
+		target=${target%)*}
+		{
+			printf -- '---\nid: %s\nrank: a%s\nlabels:\n    - %s\nstatus: %s\nsize: S\n' \
+				"$iid" "${iid#Q}" "$lbls" "$st"
+			printf -- 'target: %s\n---\n\n# %s\n\nnotes\n' "$target" "$title"
+		} >"$WORK/queue/$iid.md"
+	}
+	for row in "$@"; do
+		IFS='|' read -r id item labels <<<"$row"
+		item_file "$id" "$item" "$labels" ready
+	done
+	item_file Q501 "[A cancelled run's worker pod keeps running to completion](../plan/q501-cancel-relay.md)" bug deferred
+	item_file Q549 "[Provisioner eviction tests flake under parallel load](../../cmd/agc/p_test.go)" flake deferred
 }
 
 # expect NAME WANT_ID -- ARGS... — run the search over the fixture and assert
@@ -69,7 +77,7 @@ backlog() {
 expect() {
 	local name="$1" want="$2" got=0
 	shift 3 # name, want, the literal --
-	"$SEARCH" --file "$WORK/STATUS.md" "$@" >"$WORK/out" 2>&1 || got=$?
+	"$SEARCH" --store "$WORK/queue" "$@" >"$WORK/out" 2>&1 || got=$?
 
 	if ((got != 0)); then
 		printf 'FAIL %s: the search must never fail a filing, got exit %s\n' "$name" "$got"
@@ -155,16 +163,24 @@ backlog 'Q595|[Unrelated row](operations/troubleshooting.md)|bug'
 expect 'Flake watch rows are searched too' Q549 -- \
 	'Provisioner eviction tests flake under parallel load'
 
-# A Progress anchor names a plan, not an item; matching it would offer a
-# candidate that cannot be a duplicate of anything.
-backlog 'Q595|[Unrelated row](operations/troubleshooting.md)|bug'
-expect 'Progress-table anchors are never candidates' '' -- \
-	'GMC CRD manifest drift plan'
+# Q509's case — a Progress anchor naming a plan rather than an item — has no
+# equivalent here and is deliberately gone rather than ported. It existed
+# because plan rows and item rows shared one file and only their shape told
+# them apart; the store holds Q*.md items and nothing else, so the matcher has
+# no foreign anchor to skip. What replaces it is the check that a non-item file
+# in the directory is not read as one.
+# The title has to be one the matcher would otherwise flag, or the case passes
+# for the wrong reason: a two-word heading scores below MIN_SHARED whether it is
+# indexed or not, so it would stay silent even with the store fully unguarded.
+printf '# GMC CRD manifest drifts from the AGC types it embeds\n\nJust a page.\n' \
+	>"$WORK/queue/README.md"
+expect 'a non-item file in the store is never a candidate' '' -- \
+	'GMC CRD manifest drifts from the AGC types it embeds'
 
 # --- robustness: it must never be the thing that stops a filing -------------
 
-expect 'a missing STATUS.md is silent, not an error' '' -- \
-	--file "$WORK/absent.md" 'anything at all'
+expect 'a missing store is silent, not an error' '' -- \
+	--store "$WORK/absent" 'anything at all'
 
 run_status() {
 	local got=0
@@ -181,7 +197,7 @@ run_status() {
 backlog "Q440|[GMC CRD manifest drifts from the AGC types it embeds]($crd_link)|infra" \
 	"Q456|[The GMC CRD manifests are stale and no gate notices]($crd_link)|tests" \
 	'Q650|[Em-dash density in the design and operations docs](development/documentation-standards.md)|docs'
-got="$(run_status "$SEARCH" --file "$WORK/STATUS.md" --audit)"
+got="$(run_status "$SEARCH" --store "$WORK/queue" --audit)"
 # 5 rows (3 Queue + Deferred + Flake watch) -> 10 pairs, of which only the
 # planted Q440/Q456 duplicate may flag.
 if [[ "$got" == 0 ]] &&
@@ -195,7 +211,7 @@ else
 	fails=$((fails + 1))
 fi
 
-got="$(run_status "$SEARCH" --file "$WORK/STATUS.md")"
+got="$(run_status "$SEARCH" --store "$WORK/queue")"
 if [[ "$got" == 1 ]] && grep -q 'wants the title' "$WORK/out"; then
 	printf 'ok   %s\n' 'no title is a usage error, not a silent pass'
 else

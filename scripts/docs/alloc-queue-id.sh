@@ -99,16 +99,25 @@ highest_claimed() {
 # Highest ID appearing in the backlog file. This is a transition floor only:
 # done rows are deleted, so the file's max can regress below an ID that was
 # already used. The ref namespace is the durable high-water mark.
-highest_in_file() {
-	local file=$1
-	[[ -f "$file" ]] || {
+highest_in_store() {
+	local store=$1 f base max=0 n
+	[[ -d "$store" ]] || {
 		printf '0\n'
 		return
 	}
-	# `|| true`: grep exits 1 on no match, which pipefail would turn into a
-	# function failure for a legitimately ID-free file.
-	{ grep -o 'id="Q[0-9]*"' "$file" 2>/dev/null || true; } |
-		awk '{ gsub(/[^0-9]/, ""); if ($0 + 0 > max) max = $0 + 0 } END { print max + 0 }'
+	# The ID is the filename now, not an anchor inside a shared table (Q889).
+	# An empty store is a legitimate floor of 0, the same case a table with no
+	# rows was, so nullglob rather than a failed glob reaching the loop.
+	shopt -s nullglob
+	for f in "$store"/Q*.md; do
+		base=${f##*/}
+		n=${base%.md}
+		n=${n#Q}
+		[[ "$n" =~ ^[0-9]+$ ]] || continue
+		((n > max)) && max=$n
+	done
+	shopt -u nullglob
+	printf '%s\n' "$max"
 }
 
 # Claim one ID. Returns 0 on success, 1 when the name is already taken, and
@@ -126,15 +135,19 @@ claim() {
 # Advisory near-duplicate search for one title. Never fails the allocation: a
 # broken matcher must not stop a row being filed.
 search_duplicates() {
-	local title=$1 file=$2 target=$3 script
+	local title=$1 target=$2 script
 	script="$(dirname "$0")/find-duplicate-rows.sh"
 	[[ -x "$script" ]] || return 0
-	"$script" --file "$file" ${target:+--target "$target"} "$title" >&2 || true
+	# No source argument: the matcher defaults to docs/queue/ and resolves it
+	# from the repo root (Q889). Passing the old --file here would die into the
+	# `|| true` below, which is the failure this call is least able to show —
+	# the allocation still succeeds and the search just stops happening.
+	"$script" ${target:+--target "$target"} "$title" >&2 || true
 }
 
 main() {
-	local file target='' titles=()
-	file="$(git rev-parse --show-toplevel)/docs/STATUS.md"
+	local store target='' titles=()
+	store="$(git rev-parse --show-toplevel)/docs/queue"
 
 	while (($# > 0)); do
 		case "$1" in
@@ -163,12 +176,12 @@ main() {
 
 	local title
 	for title in ${titles[@]+"${titles[@]}"}; do
-		search_duplicates "$title" "$file" "$target"
+		search_duplicates "$title" "$target"
 	done
 
 	local count=${#titles[@]} floor claimed_max file_max
 	claimed_max=$(highest_claimed)
-	file_max=$(highest_in_file "$file")
+	file_max=$(highest_in_store "$store")
 	floor=$((claimed_max > file_max ? claimed_max : file_max))
 
 	local slug sha candidate=$((floor + 1)) issued=0 attempts=0

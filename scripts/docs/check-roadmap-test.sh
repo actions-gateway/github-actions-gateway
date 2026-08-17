@@ -18,29 +18,40 @@ trap 'rm -rf "$WORKDIR"' EXIT
 
 fails=0
 
-# status QUEUE_IDS DEFERRED_IDS — write a STATUS.md holding the given
-# space-separated IDs in each table. Echoes the file path.
+# status QUEUE_IDS DEFERRED_IDS — write an item store holding the given
+# space-separated IDs, ready and deferred respectively. Echoes the directory.
 #
-# An entry may carry labels as `ID:label,label` (`Q1:1.5-gate`), which the
-# fixture renders backticked the way the real table does — rules 7 and 8 read
-# the backticks. A bare ID gets the neutral `infra` label.
+# An entry may carry labels as `ID:label,label` (`Q1:1.5-gate`). A bare ID gets
+# the neutral `infra` label. The arguments are unchanged from when this wrote a
+# STATUS.md with two tables, so every case below still asserts the same thing
+# about the same IDs; only the container moved (Q889).
 status() {
-    local queue="$1" deferred="$2" file="$WORKDIR/STATUS.md" entry
+    local queue="$1" deferred="$2" dir="$WORKDIR/queue" entry
+    rm -rf "$dir"
+    mkdir -p "$dir"
+    for entry in $queue; do
+        status_item "$dir" "$entry" ready
+    done
+    for entry in $deferred; do
+        status_item "$dir" "$entry" deferred
+    done
+    printf '%s\n' "$dir"
+}
+
+# status_item DIR ENTRY STATUS — write one item file. Labels are a YAML block
+# list, the form `queue.py migrate` writes and the one the real store holds.
+status_item() {
+    local dir="$1" entry="$2" st="$3" id labels label
+    id="${entry%%:*}"
+    labels="infra"
+    [[ "$entry" == *:* ]] && labels="${entry#*:}"
     {
-        printf '# Project Status\n\n## Queue\n\n'
-        printf '| ID | Item | Labels | St | Sz | Notes |\n|---|---|---|---|---|---|\n'
-        for entry in $queue; do
-            printf '| <a id="%s"></a>%s | Thing | %s | 🔲 | S | note |\n' \
-                "${entry%%:*}" "${entry%%:*}" "$(status_labels "$entry")"
+        printf -- '---\nid: %s\nrank: a%s\nlabels:\n' "$id" "${id#Q}"
+        for label in ${labels//,/ }; do
+            printf -- '    - %s\n' "$label"
         done
-        printf '\n## Deferred\n\n'
-        printf '| ID | Item | Labels | Sz | Trigger to revive |\n|---|---|---|---|---|\n'
-        for entry in $deferred; do
-            printf '| <a id="%s"></a>%s | Thing | %s | S | **Demand:** someone asks. |\n' \
-                "${entry%%:*}" "${entry%%:*}" "$(status_labels "$entry")"
-        done
-    } >"$file"
-    printf '%s\n' "$file"
+        printf -- 'status: %s\nsize: S\n---\n\n# Thing\n\nnote\n' "$st"
+    } >"$dir/$id.md"
 }
 
 # status_labels ENTRY — render an `ID:a,b` entry's labels as `` `a` `b` ``.
@@ -130,7 +141,7 @@ expect "clean: other sections ungated" 0 \
 # The drift this gate exists for: the row was deleted because the work shipped.
 expect "dangling ID (row deleted)" 1 \
     "$(roadmap "$NEAR" -- "$EXPL")" "$(status "" "Q2")" \
-    'no longer exists in STATUS.md'
+    'no longer exists in the backlog'
 
 # A bullet nobody annotated cannot be checked at all.
 expect "missing annotation" 1 \
@@ -440,17 +451,19 @@ expect "a deleted row contributes no gate" 1 \
     "$(roadmap '- **Near thing.** <!-- q:Q1,Q3 --> [d](plan/t.md)' -- "$EXPL")" \
     "$(status "Q1" "Q2")" 'names Q3'
 
-# The label column moving would leave rules 7 and 8 reading nothing while every
-# other rule still passed. That is the silent-pass shape, so it is rc 2.
+# The labels field disappearing would leave rules 7 and 8 reading nothing while
+# every other rule still passed. That is the silent-pass shape, so it is rc 2.
+# The table's version of this was a moved column; an item store's is a field
+# that stopped being written, which is the same loss through a different door.
+mkdir -p "$WORKDIR/no-labels"
 {
-    printf '# Project Status\n\n## Queue\n\n'
-    printf '| ID | Item | St | Sz | Notes |\n|---|---|---|---|---|\n'
-    printf '| <a id="Q1"></a>Q1 | Thing | 🔲 | S | note |\n'
-    printf '\n## Deferred\n\n| ID | Item | Sz | Trigger to revive |\n|---|---|---|---|\n'
-    printf '| <a id="Q2"></a>Q2 | Thing | S | **Demand:** someone asks. |\n'
-} >"$WORKDIR/no-labels.md"
-expect "STATUS.md lost its Labels column" 2 \
-    "$(roadmap "$NEAR" -- "$EXPL")" "$WORKDIR/no-labels.md" 'no "Labels" column'
+    printf -- '---\nid: Q1\nrank: a1\nstatus: ready\nsize: S\n---\n\n# Thing\n\nnote\n'
+} >"$WORKDIR/no-labels/Q1.md"
+{
+    printf -- '---\nid: Q2\nrank: a2\nstatus: deferred\nsize: S\n---\n\n# Thing\n\nnote\n'
+} >"$WORKDIR/no-labels/Q2.md"
+expect "the backlog lost its labels field" 2 \
+    "$(roadmap "$NEAR" -- "$EXPL")" "$WORKDIR/no-labels" 'none carried labels'
 
 # --- rules 9-11: the marketing badges ----------------------------------------
 #

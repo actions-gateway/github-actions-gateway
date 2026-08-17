@@ -62,6 +62,13 @@ source "$SCRIPT_DIR/../lib/common.sh"
 
 repo_root="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
 readme="$repo_root/docs/plan/README.md"
+store="$repo_root/docs/queue"
+# Invariant 1 still reads the table, and invariant 3 no longer does (Q889).
+# The split is not laziness: a plan is "referenced" when a backlog row OR a
+# Progress row names it, and Progress has no counterpart in the store — it is
+# deleted rather than migrated, so 21 active plans whose only reference is a
+# Progress row would read as unreferenced the moment this looked at items
+# alone. Invariant 1 moves when Progress does.
 status="$repo_root/docs/STATUS.md"
 plan_dir="$repo_root/docs/plan"
 
@@ -183,19 +190,19 @@ if (( ${#dangling_active[@]} + ${#dangling_archive[@]} > 0 )); then
 fi
 
 # Invariant 3: a Status cell links a QNNN iff that row is still in STATUS.md.
-# One awk pass over both files — STATUS.md first for the anchor set, then the
-# active part of README. Escaped pipes are protected before the column split:
-# a `\|` inside a cell shifts every column after it, which is the defect the
-# backlog lint carried until Q625.
+# One awk pass over both files — the live-ID list first, then the active part of
+# README. Escaped pipes are protected before the column split: a `\|` inside a
+# cell shifts every column after it, which is the defect the backlog lint
+# carried until Q625.
+#
+# The live set is the store's filenames (Q889). It is written to a file rather
+# than passed with -v because awk's two-file FNR == NR idiom is what the second
+# pass already uses, and an ID list is exactly one ID per line.
+ids_file="$(mktemp)"
+trap 'rm -f "$ids_file"' EXIT
+find "$store" -maxdepth 1 -name 'Q*.md' -exec basename {} .md \; | sort > "$ids_file"
 mapfile -t cell_findings < <(awk '
-    FNR == NR {
-        s = $0
-        while (match(s, "<a id=\"Q[0-9]+\"></a>")) {
-            anchor[substr(s, RSTART + 7, RLENGTH - 13)] = 1
-            s = substr(s, RSTART + RLENGTH)
-        }
-        next
-    }
+    FNR == NR { anchor[$0] = 1; next }
     /^## Archive/ { archived = 1 }
     archived { next }
     /^\| \[/ {
@@ -207,13 +214,14 @@ mapfile -t cell_findings < <(awk '
         }
         cell = col[4]
         # Linked IDs first, removing each match so the bare scan cannot see it.
-        while (match(cell, "\\[Q[0-9]+\\]\\(\\.\\./STATUS\\.md#Q[0-9]+\\)")) {
+        while (match(cell, "\\[Q[0-9]+\\]\\(\\.\\./queue/Q[0-9]+\\.md\\)")) {
             split(substr(cell, RSTART, RLENGTH), part, "]")
             label = substr(part[1], 2)
-            target = substr(part[2], index(part[2], "#") + 1)
-            sub(/\)$/, "", target)
+            target = substr(part[2], index(part[2], "/") + 1)
+            sub(/^queue\//, "", target)
+            sub(/\.md\)$/, "", target)
             if (label != target) {
-                print "mismatch\t" FNR "\t" label " -> #" target
+                print "mismatch\t" FNR "\t" label " -> " target
             } else if (!(label in anchor)) {
                 print "dangling\t" FNR "\t" label
             }
@@ -227,7 +235,7 @@ mapfile -t cell_findings < <(awk '
             cell = substr(cell, RSTART + RLENGTH)
         }
     }
-' "$status" "$readme")
+' "$ids_file" "$readme")
 
 shape=() dangling=() unlinked=() mismatch=()
 for f in "${cell_findings[@]}"; do
@@ -268,7 +276,7 @@ if (( ${#unlinked[@]} > 0 )); then
     errors=1
     {
         printf 'check-plan-index: %d Status cell(s) name a live Queue row without linking it.\n' "${#unlinked[@]}"
-        printf 'A bare ID is the closed form and nothing notices when it goes stale. Write [QNNN](../STATUS.md#QNNN)\n'
+        printf 'A bare ID is the closed form and nothing notices when it goes stale. Write [QNNN](../queue/QNNN.md)\n'
         printf 'so closing the row breaks the anchor and forces the cell to be re-read.\n'
         for c in "${unlinked[@]}"; do
             IFS=$'\t' read -r l i <<<"$c"

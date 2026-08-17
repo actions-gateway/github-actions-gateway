@@ -70,6 +70,16 @@ new_repo() {
             printf '| <a id="%s"></a>%s | Thing | `docs` | S | **Demand:** someone asks. |\n' "$id" "$id"
         done
     } >"$WORK/docs/STATUS.md"
+    # Invariant 3 reads the live IDs from the store, invariant 1 still reads the
+    # table for its Progress row (Q889). Both fixtures, because the checker
+    # genuinely reads both.
+    mkdir -p "$WORK/docs/queue"
+    for id in $queue $deferred; do
+        {
+            printf -- '---\nid: %s\nrank: a1\nlabels:\n    - docs\n' "$id"
+            printf -- 'status: ready\nsize: S\n---\n\n# Thing\n\nnote\n'
+        } >"$WORK/docs/queue/$id.md"
+    done
 }
 
 # index ACTIVE_ROW [ARCHIVE_ROW] — write docs/plan/README.md with the given raw
@@ -121,12 +131,12 @@ index '| [alpha.md](alpha.md) | Alpha scope | ⚠️ Open. Q10 remains, then the
 expect 'a live Deferred row named bare in a Status cell is rejected' 1 'names Q10'
 
 new_repo 'Q10' ''
-index '| [alpha.md](alpha.md) | Alpha scope | ⚠️ Open, gated on [Q99](../STATUS.md#Q99) |'
+index '| [alpha.md](alpha.md) | Alpha scope | ⚠️ Open, gated on [Q99](../queue/Q99.md) |'
 expect 'a Status cell linking a row that no longer exists is rejected' 1 'links Q99'
 
 new_repo 'Q10 Q20' ''
-index '| [alpha.md](alpha.md) | Alpha scope | ⚠️ Open, gated on [Q10](../STATUS.md#Q20) |'
-expect 'a Status cell link labelling one row and targeting another is rejected' 1 'links Q10 -> #Q20'
+index '| [alpha.md](alpha.md) | Alpha scope | ⚠️ Open, gated on [Q10](../queue/Q20.md) |'
+expect 'a Status cell link labelling one row and targeting another is rejected' 1 'links Q10 -> Q20'
 
 new_repo 'Q10' ''
 index '| [alpha.md](alpha.md) | Alpha scope with no status cell |'
@@ -147,7 +157,7 @@ index '| [alpha.md](alpha.md) | Alpha scope | ✅ Done — shipped as Q99, measu
 expect 'a closed row named bare in a Status cell is accepted' 0
 
 new_repo 'Q10' ''
-index '| [alpha.md](alpha.md) | Alpha scope | ⚠️ Open, gated on [Q10](../STATUS.md#Q10) |'
+index '| [alpha.md](alpha.md) | Alpha scope | ⚠️ Open, gated on [Q10](../queue/Q10.md) |'
 expect 'a live row linked from a Status cell is accepted' 0
 
 new_repo 'Q10' ''
@@ -160,7 +170,7 @@ index '| [alpha.md](alpha.md) | Alpha scope | ✅ Done |' \
 expect 'a live row named bare in an Archive row is accepted' 0
 
 new_repo 'Q10' ''
-index '| [alpha.md](alpha.md) | Alpha scope | ⚠️ Q99 landed 2026-01-01; [Q10](../STATUS.md#Q10) remains |'
+index '| [alpha.md](alpha.md) | Alpha scope | ⚠️ Q99 landed 2026-01-01; [Q10](../queue/Q10.md) remains |'
 expect 'a cell mixing a landed bare ID and a live linked one is accepted' 0
 
 # --- invariant 4: a shipped release must not read as open (Q812) ------------

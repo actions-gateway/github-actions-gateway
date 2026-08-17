@@ -1,8 +1,9 @@
 # Q889: Migrate the backlog to the per-item store
 
-**Status:** Phase 1 in progress.
-Both agent scripts adopted (Q694, Q814 and Q828 closed); `queue.py` and the rules checker remain.
-Phases 2 to 6 not started.
+**Status:** Phases 1 and 2 merged (#1595, #1596); phase 3 is open on #1598.
+The store is live at `docs/queue/` alongside the table, held to it by `queue-drift-check`.
+Six consumers are switched; the rest wait on phase 4's anchors or on phase 6's deletion, classified under Phase 3 below.
+Phases 4 to 6 not started.
 
 Replace the single `docs/STATUS.md` Queue table with the `session-backlog` skill's per-item store under `docs/queue/`, adopt its Python tooling, and groom the backlog to remove what the move obsoletes.
 
@@ -50,6 +51,11 @@ Recorded here because the plan is unreadable without them.
    `queue.py claims` covers rule 12, and rule 10 is dropped on the measurement below.
 6. **No `docs/milestones/` directory.** The milestone/design split already exists as the `milestone` label and as the index's topical sections; a third classification by directory would cost re-homing across 157 plans, re-base every moved file's outbound links, and fork `no-plan-refs-check`, `plan-index-check`, the plan-index merge driver, `.gitattributes` and the path filters, all of which key on `docs/plan/`.
 7. **#1587 merges first**; this work branches from `main` after it lands.
+8. **One PR per phase, except phase 6, which is atomic.** Settled 2026-08-17, superseding decision 7's single cutover on the evidence the split produced.
+   Phases 1, 2 and 3 each surfaced defects a red gate pointed straight at — the MkDocs nav failure, `mdreflow` folding the store README, the untested block-list label form, the truncated blocker clause, a duplicate search silently swallowed by its own `|| true`, the Progress dependency, the merge-driver fixture — and each was attributable because one red signal had one cause.
+   Phases 4 and 5 land separately because each is verifiable alone: `doc-links` proves the anchor rewrite, and the render touches only the site.
+   Phase 6 cannot be split: deleting the table, retiring the gates that take it as their subject, and grooming have to be one commit, or `main` holds either a live ungated table or gates pointing at a file that is gone.
+   The cost accepted is the interim double-write, paid three times so far (Q890, Q891, and #1596's rebase), which ends when phase 6 lands.
 
 ## What each rule becomes
 
@@ -79,8 +85,7 @@ A probe that cannot reproduce a defect the repo has already met twice is measuri
 
 ## Phases
 
-Each phase is separately verifiable.
-They land as one PR unless the maintainer splits it.
+Each phase is separately verifiable, and each lands as its own PR except phase 6, which is atomic (decision 8).
 
 **1.
 Tooling, changing nothing.** Vendor `queue.py`; adopt `pr-requeue-eligible.py` and `pr-mergeability-watch.py`; write the repo-local checker for rules 8, 9 and 11.
@@ -97,6 +102,8 @@ The titles were the work; the migration was one command.
 
 **3.
 Switch the 53 consumers.** Retire, repoint or rewrite each: `lint-backlog.sh`/`backloglint`, `check-status-isolation.sh`, `find-duplicate-rows.sh`, `git-merge-status.sh`, `next-task.sh`, `backlog-metrics.sh`/`backlogmetrics`, `queue-unblock.sh`, `alloc-queue-id.sh`, plus `roadmapcheck` and `check-plan-index.sh` which read Queue membership, plus `STATUS_GATES`/`gate-lists-check`, the pre-commit hook, `.gitattributes`, `status-lint.yml`, the path filters, and piped-gate's `docs/STATUS.md` overlap exemption.
+Re-counted at the start of the work: **61 files outside `docs/` reference `STATUS.md`**, 40 under `scripts/`, 10 under `devtools/` and 11 of wiring.
+The 53 above counted tools rather than files; whichever unit, re-derive it rather than quoting it.
 
 **4.
 Anchors and docs.** Rewrite 218 `STATUS.md#QNNN` references across 50 docs to the item pages.
@@ -113,8 +120,8 @@ Delete `docs/STATUS.md`, then groom.** Remove or rewrite items the work obsolete
 ## Risks
 
 - **Review size.** Roughly 176 new files, 218 rewritten references and 53 consumer changes in one PR.
-  This is the accepted cost of decision 7's atomic switch; if it proves unreviewable the fallback is phases 1 and 2 as their own PR behind a drift check.
-  That is what happened, and `queue-drift-check` is the check: phase 1 landed as its own PR and phase 2 as the next, so the fallback's condition had to be met rather than assumed.
+  Decision 7 accepted that; the fallback it named — phases as their own PRs behind a drift check — is what actually happened, and decision 8 makes it the rule.
+  `queue-drift-check` is that check, so the fallback's condition was met rather than assumed.
 - **Rank assignment must preserve priority exactly.** The table's order is the priority; a migration that scrambles it loses information no gate can recover.
   Reconcile the rendered order against the pre-migration table, not just the item count.
 - **`Q248` carries an anchor inside the Progress table**, so it is an item ID on a plan row.
@@ -183,6 +190,61 @@ Measured on the local oracle rather than the exit code, since the same green wou
 The check re-runs `migrate` into a throwaway store and compares the *loaded* items, so the thing being compared is `queue.py`'s own reading of the table rather than a second parser free to drift from it.
 Rank values are excluded and only the order they produce is compared, because a re-rank inside the store is the one operation the store exists to allow and a stricter check would fire on it.
 It retires itself: once `docs/STATUS.md` is deleted in phase 6 it passes and says the two can no longer disagree, so nothing has to remember to remove it.
+
+## Phase 3, in progress
+
+**Phase 2's gate is what lets this go incrementally.** `queue-drift-check` holds the table and the store to the same items, fields and order, so for as long as it is green the two are interchangeable and a consumer reading either returns the same answer.
+That removes the reason phase 3 had to be atomic: consumers switch a group at a time, and no window exists where the backlog says two different things.
+
+**Repointing a consumer is not a path swap, because the link format changed too.** `rebase_link` rewrites a table's `#QNNN` anchor to `QNNN.md`, so any consumer that parses links, or takes a span up to the next period, reads something different at the new path.
+Measured on `queue-unblock.sh`: its blocker clause ran `Blocked by` up to the next period, which in the store stops inside the first link's `.md` — the first blocker still matches and every later one in a list disappears, with no error.
+A two-blocker line finds `Q1` and misses `Q2`.
+That is the shape to look for in the remaining consumers, and it is invisible to a test that only exercises one blocker, which is why the rewrite came with the script's first suite.
+
+**The table's own gates stay until the table dies.** `lint-backlog.sh`, `check-status-isolation.sh` and `git-merge-status.sh` take `docs/STATUS.md` as their subject rather than as a source, and the table is live through phase 5 and still obliged to match the store.
+Retiring them in phase 3 would leave it ungated while the drift gate keeps depending on it.
+They belong in phase 6, with the deletion.
+
+**Phase 3's movable set is much smaller than 61, and the rest is not deferral but dependency.** Of the 61 files, 43 hold a live reference and 18 mention the table only in prose.
+Sorting the 43 by what actually blocks them:
+
+- **Movable now, and done**: `next-task.sh`, `queue-unblock.sh`, `find-duplicate-rows.sh`, `alloc-queue-id.sh` (both its duplicate search and its ID floor), and `roadmapcheck`.
+  Each reads the backlog to answer a question, so the drift gate makes the switch verifiable by output.
+- **Blocked on phase 4**, because they assert a *link format* rather than a path: `check-plan-index.sh` and its suite, `git-merge-plan-index-test.sh`, the two hook suites.
+  Invariant 3 requires a plan's Status cell to link `../STATUS.md#QNNN`, which is exactly the anchor phase 4 rewrites; moving it earlier would mean a transitional rule accepting both forms that someone then has to remember to tighten.
+- **Must outlive the table, so phase 6**: `lint-backlog.sh`, `check-status-isolation.sh`, `git-merge-status.sh`, `backloglint`, the pre-commit hook, and the `status-lint.yml` steps that run them.
+  These take `docs/STATUS.md` as their subject, and it is live and drift-gated through phase 5.
+- **Incidental**: path-filter lists, `gate-list.sh`, the release tooling and the `semverfloor` tests name the file without reading a backlog from it.
+
+**`.gitattributes` and piped-gate need no change, and that is a decision rather than an omission.** The merge driver and the overlap discount both exist because one table is contended by construction.
+A store has no equivalent: two sessions touching different items touch different files, and two touching the *same* item have a real conflict that must not be discounted or auto-resolved by row ID.
+So `docs/queue/**` deliberately gets neither, and the `docs/STATUS.md` entries retire with the table.
+Written down because the helpful-looking move is to add the store to both lists, which would rebuild the problem the store exists to remove.
+
+**Phase 4's anchors are four classes, not one, and only the largest is mechanical.** Re-measured 2026-08-17, 233 references to `STATUS.md#…` across the tree where the baseline recorded 218:
+
+| Count | Class | Treatment |
+|---|---|---|
+| 217 | `#Q<digits>` item anchors, 50 files | substitution, but see the depth below |
+| 5 | `#QNNN` prose placeholders, 3 files | must **not** be rewritten: they document the format |
+| 11 | section anchors `#deferred`, `#queue`, `#flake-watch`, `#progress` | each needs a destination decided, not substituted |
+
+The baseline counted the first class only, so the work was understated by the sixteen references that need judgement.
+Both of the others are silent under a naive substitution: a pattern written `#Q[0-9]*` matches the literal `#QNNN` with zero digits and rewrites it to `queue/Q.md`, and a pattern written `#Q[0-9]+` skips every section anchor and leaves it pointing at a file phase 6 deletes.
+That is how the classes were found at all: `grep -o 'STATUS\.md#Q[0-9]*'` counted 53 in `docs/plan/README.md` where a `\d+` pattern counted 52, and the one-reference gap was `#deferred`.
+
+**`check-plan-index.sh` reads both sources now, and that is the shape rather than a halfway house.** Its invariant 3 had to move with the 52 anchors in `docs/plan/README.md`, since the cells it reads are the ones that changed.
+Its invariant 1 could not: a plan counts as referenced when a backlog row *or* a Progress row names it, and decision 3 deletes Progress rather than migrating it, so 21 active plans whose only reference is a Progress row read as unreferenced the moment invariant 1 looks at items alone.
+Measured, not assumed — every one of a five-plan sample appears in the Progress table.
+So invariant 1 keeps reading the table and moves when Progress does, in the phase that decides where Progress lands.
+The gate's summary line is identical across the switch.
+
+**Depth is the second trap.** 192 of the item anchors sit one directory under `docs/` and take `../queue/`, but 25 sit two deep (`docs/plan/archive/`) and take `../../queue/`.
+A single substitution applied tree-wide gets those 25 wrong, and `check-doc-links` is what would catch it — so the rewrite is per-file with the prefix derived from the file's own depth, and the gate is the reconciliation rather than a leftover grep.
+
+**`backlog-metrics.sh` is a phase-6 decision, not a phase-3 one.** `queue.py metrics` replays the store's git history, and the store has 3 commits against `docs/STATUS.md`'s 1155.
+Switching it now would report flow metrics over nothing while looking like a working tool.
+Deleting the table ends that series whatever happens, so what phase 6 has to decide is whether the old series is frozen into a doc, bridged, or simply allowed to restart.
 
 ## Working rules for the remaining phases
 

@@ -27,7 +27,8 @@ What holds the rules for them is the tooling below, which is in-tree and runs in
   Its siblings [`git-merge-plan-index.sh`](../../scripts/docs/git-merge-plan-index.sh) and [`git-merge-roadmap.sh`](../../scripts/docs/git-merge-roadmap.sh) do the same for [`docs/plan/README.md`](../plan/README.md), keyed on the plan path, and for [`docs/roadmap.md`](../roadmap.md), keyed on each bullet's backlog annotation.
   One `make merge-driver` per clone installs all three; a no-op until then.
   [Details below](#the-merge-driver-resolve-queue-rows-by-id-not-by-line-position).
-- [`scripts/docs/next-task.sh`](../../scripts/docs/next-task.sh) — prints a kickoff prompt (or `--title`) for the top ready 🔲 Queue row, for starting a fresh session on the next task.
+- [`scripts/docs/next-task.sh`](../../scripts/docs/next-task.sh) — prints a kickoff prompt (or `--title`) for the top ready item, for starting a fresh session on the next task.
+  A thin forward to `queue.py next` since Q889; it reads `docs/queue/` and takes no file path.
 - [`scripts/docs/backlog-metrics.sh`](../../scripts/docs/backlog-metrics.sh) — replays the file's git history into flow metrics (throughput, cycle time, prune ratio, aging WIP).
   Read-only.
   The replay reads each diff line's cells through the shared Markdown parse layer, so an escaped pipe in a cell cannot shift a row's fields (Q614).
