@@ -28,9 +28,9 @@ copyright: Licensed under the Apache License 2.0.
 # See website.md § Publication scope.
 #
 # /queue/ is the per-item backlog store (Q889). It sits with /STATUS.md and
-# /plan/ here: repo-internal, published on `dev` only. Phase 5 replaces the raw
-# item pages with a rendered /dev/queue/ index; until then the store's own
-# README.md is what that path serves.
+# /plan/ here: repo-internal, published on `dev` only. `/dev/queue/` is the
+# store's README with the ordered backlog appended at build time by
+# hooks/queue_page.py, so there is no generated page in the tree.
 exclude_docs: !ENV [MKDOCS_EXCLUDE_DOCS, "/README.md\n/STATUS.md\n/plan/\n/queue/\n/development/\n/postmortems/\n/releases/\n/assets/README.md\n/assets/fonts/README.md\n"]
 
 # Published but deliberately absent from the nav, which stays the operator-facing
@@ -147,9 +147,16 @@ extra:
 #
 # backlog_link.py derives whether this build carries docs/STATUS.md, so the
 # version banner links the backlog only where the page exists (Q558).
+#
+# queue_page.py renders the backlog into /dev/queue/ and MUST precede
+# source_links.py: hooks run in this order, both use on_page_markdown, and an
+# item's `target` routinely points outside docs/ (a Go file, a workflow), which
+# is precisely what source_links absolutizes. Appended after it, those links
+# reach the build unrewritten and fail --strict.
 hooks:
   - hooks/release_version.py
   - hooks/release_gates.py
+  - hooks/queue_page.py
   - hooks/source_links.py
   - hooks/backlog_link.py
 

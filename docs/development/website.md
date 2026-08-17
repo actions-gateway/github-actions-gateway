@@ -586,6 +586,23 @@ The same block raises `nav.omitted_files` for the nav-coverage gate ([§ What be
 Neither gate covers a link to a page the build's own scope excludes — MkDocs clamps that one below warning level whatever `validation` says.
 That is [`hooks/source_links.py`](../../hooks/source_links.py)'s job instead; see [§ Unpublished is per build, not per path](#unpublished-is-per-build-not-per-path-q561).
 
+### The backlog renders at build time
+
+`/dev/queue/` is the item store's `README.md` with the ordered backlog appended by `hooks/queue_page.py`, which shells out to `queue.py render` and inserts its table.
+
+Nothing is generated into the tree, which is the point.
+An earlier sketch wrote `docs/queue/index.md` at build time and needed a `.gitignore` entry plus a gate to stop a stale committed copy reappearing; appending to a page MkDocs already serves needs neither, because there is no artifact to commit.
+On github.com the same README renders as the conventions alone, which is the right reading there: a reader browsing the source does not want 177 rows.
+
+**The table comes from `queue.py render`, not from a second renderer**, so the page and the CLI cannot disagree about order, truncation or status.
+
+Two things this wiring depends on, both of which fail quietly:
+
+- **`queue_page.py` must precede `source_links.py` in `mkdocs.yml`.** Hooks run in listed order and both use `on_page_markdown`; an item's `target` routinely points outside `docs/` (a Go file, a workflow), which is exactly what `source_links` absolutizes.
+  Appended after it, those links reach the build unrewritten: 56 `--strict` warnings, all of them the same shape.
+- **The guard counts item rows, not bytes.** `render` against an absent or empty store exits 0 and prints the two header lines, so a non-empty-output check reads 67 characters of table furniture as a healthy render.
+  Measured: pointing the hook at a missing directory built green until the guard counted rows, which is the empty backlog publishing as a current one.
+
 ## Publication scope
 
 Scope is **per version**, not per site (Q558):
@@ -593,7 +610,7 @@ Scope is **per version**, not per site (Q558):
 | Version | Publishes |
 |---|---|
 | `stable` and every numbered release | Operator docs only: `docs/design/`, `docs/operations/`, `docs/index.md`, `why-gag.md`, `features.md`, `roadmap.md` |
-| `dev` | The above **plus** the repo-internal docs: `docs/STATUS.md` (the [backlog](#the-backlog-page)), `docs/plan/`, `docs/development/` (this file included), `docs/assets/`'s READMEs |
+| `dev` | The above **plus** the repo-internal docs: `docs/STATUS.md` (the [backlog](#the-backlog-page)), `docs/queue/` (the [item store](#the-backlog-renders-at-build-time)), `docs/plan/`, `docs/development/` (this file included), `docs/assets/`'s READMEs |
 | *no version* | `docs/releases/` — see the trap below |
 
 A release is a frozen build, so a backlog published in one would be a snapshot stale from tag day.

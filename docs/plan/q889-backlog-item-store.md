@@ -1,8 +1,8 @@
 # Q889: Migrate the backlog to the per-item store
 
-**Status:** Phases 1, 2 and 3 merged (#1595, #1596, #1598); phase 4 is open on #1600.
+**Status:** Phases 1 to 4 merged (#1595, #1596, #1598, #1600); phase 5 is open.
 The store is live at `docs/queue/` alongside the table, held to it by `queue-drift-check`, and every reference that can point at an item now does.
-Phases 5 and 6 not started.
+Phase 6, the atomic cutover, is the last.
 
 Replace the single `docs/STATUS.md` Queue table with the `session-backlog` skill's per-item store under `docs/queue/`, adopt its Python tooling, and groom the backlog to remove what the move obsoletes.
 
@@ -111,8 +111,10 @@ Thirteen references stay: seven name `Q248` and one names `#progress`, both Prog
 The prose half came to one wrong paragraph in `maintaining-backlog.md` and two lines in `CLAUDE.md`; `parallel-dispatch.md` needed nothing, and `doc-update-matrix.md` referenced the table nowhere at all.
 
 **5.
-The website.** Render `/dev/queue/` into the MkDocs theme as a build step, gitignore the generated path, and gate that a committed index never reappears.
-Do not add a second Pages deploy: the repo has one site on a custom domain, and a second job publishing its own artifact replaces the first.
+The website.** ✅ `/dev/queue/` is the store's README with the ordered backlog appended by `hooks/queue_page.py`, which inserts `queue.py render`'s own table.
+**The gitignore entry and the committed-index gate this phase planned are both unnecessary**, because appending to a page MkDocs already serves generates no file: there is no artifact to ignore and none to gate.
+No second Pages deploy, as planned.
+Two dependencies that fail quietly are recorded in [website.md](../development/website.md#the-backlog-renders-at-build-time): the hook must precede `source_links.py`, and its guard counts item rows rather than bytes.
 
 **6.
 Delete `docs/STATUS.md`, then groom.** Remove or rewrite items the work obsoletes, including anything asserting the table's mechanics.
