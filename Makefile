@@ -190,7 +190,7 @@ script-docs-check: ## Fail when a script under scripts/ has no scripts/README.md
 # backlog-table-only change cannot fail it. Revisit at the cutover.
 .PHONY: queue-rules-check
 queue-rules-check: ## Fail when a backlog store change breaks rules 8, 9 or 11
-	python3 scripts/docs/check-queue-rules.py
+	scripts/docs/check-queue-rules.sh
 
 # Comparison-table stamp gate (Q801). why-gag.md renders competitor claims as
 # green checks and red X's, and eleven of them shipped with no ARC version and no

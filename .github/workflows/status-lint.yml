@@ -133,7 +133,11 @@ jobs:
         # Rules 8, 9 and 11 (Q889): a flake item may not vanish, a plan's
         # last item obliges its index row, the label vocabulary is closed.
         # Reports 0 checked until docs/queue/ exists.
-        run: make queue-rules-check
+        #
+        # Runs the script rather than `make queue-rules-check`, like every
+        # other step in this job: the make target failed here with 'No rule to
+        # make target' on a tree that demonstrably carries it.
+        run: scripts/docs/check-queue-rules.sh
 
       - name: require every gating job to have succeeded or skipped
         env:
