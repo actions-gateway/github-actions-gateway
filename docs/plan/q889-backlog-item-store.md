@@ -114,6 +114,7 @@ Delete `docs/STATUS.md`, then groom.** Remove or rewrite items the work obsolete
 
 - **Review size.** Roughly 176 new files, 218 rewritten references and 53 consumer changes in one PR.
   This is the accepted cost of decision 7's atomic switch; if it proves unreviewable the fallback is phases 1 and 2 as their own PR behind a drift check.
+  That is what happened, and `queue-drift-check` is the check: phase 1 landed as its own PR and phase 2 as the next, so the fallback's condition had to be met rather than assumed.
 - **Rank assignment must preserve priority exactly.** The table's order is the priority; a migration that scrambles it loses information no gate can recover.
   Reconcile the rendered order against the pre-migration table, not just the item count.
 - **`Q248` carries an anchor inside the Progress table**, so it is an item ID on a plan row.
@@ -173,6 +174,11 @@ What was not safe was the README: `mdreflow` folded its four `**Status:**`/`**Si
 `STATUS.md` survives the same treatment because its equivalent block carries trailing two-space hard breaks; the new page now does too, and says why.
 The checker exiting 2 is the only reason this was seen at all.
 Had an unreadable vocabulary been treated as nothing to check, rule 11 would have passed green while enforcing nothing, for as long as the store exists.
+
+**The interim window needed a gate, so phase 2 also ships `queue-drift-check`.** With the table still authoritative and the store already committed, an edit to either side alone is silent, and the silence favours the wrong reading: a groomed table leaves a store that still looks current.
+The check re-runs `migrate` into a throwaway store and compares the *loaded* items, so the thing being compared is `queue.py`'s own reading of the table rather than a second parser free to drift from it.
+Rank values are excluded and only the order they produce is compared, because a re-rank inside the store is the one operation the store exists to allow and a stricter check would fire on it.
+It retires itself: once `docs/STATUS.md` is deleted in phase 6 it passes and says the two can no longer disagree, so nothing has to remember to remove it.
 
 ## Working rules for the remaining phases
 
