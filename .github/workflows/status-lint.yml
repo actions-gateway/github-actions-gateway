@@ -118,6 +118,19 @@ jobs:
       - name: check roadmap against the backlog
         run: scripts/docs/check-roadmap.sh
 
+      - name: check the backlog store rules
+        # Rules 8, 9 and 11 (Q889): a flake item may not vanish, a plan's
+        # last item obliges its index row, the label vocabulary is closed.
+        # Reports 0 checked until docs/queue/ exists.
+        #
+        # Runs the script, like every other step in this job. It has to live in
+        # THIS job rather than status-lint-gate: that one is the aggregate
+        # required-status job and has no actions/checkout, so a step there sees
+        # no repository at all. Placed there first, it failed twice for one
+        # cause wearing two faces, 'No rule to make target' for the make form
+        # and exit 127 for the script.
+        run: scripts/docs/check-queue-rules.sh
+
   # Aggregate required-status gate. Mark THIS job's check context
   # (`status-lint-gate`) required in the branch ruleset — never the path-gated
   # lint-status job, because a path-skip leaves it Pending and blocks the merge
@@ -129,16 +142,6 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 2
     steps:
-      - name: check the backlog store rules
-        # Rules 8, 9 and 11 (Q889): a flake item may not vanish, a plan's
-        # last item obliges its index row, the label vocabulary is closed.
-        # Reports 0 checked until docs/queue/ exists.
-        #
-        # Runs the script rather than `make queue-rules-check`, like every
-        # other step in this job: the make target failed here with 'No rule to
-        # make target' on a tree that demonstrably carries it.
-        run: scripts/docs/check-queue-rules.sh
-
       - name: require every gating job to have succeeded or skipped
         env:
           RESULTS: ${{ join(needs.*.result, ' ') }}
