@@ -3,14 +3,11 @@
 vendor/** linguist-vendored
 tools/vendor/** linguist-vendored
 
-# Route the backlog through the custom merge driver, which resolves Queue-table
-# conflicts by row ID instead of by line position (adjacent adds and deletes are
-# what a plain three-way merge cannot absorb, and the process concentrates them
-# at the top of the table). Git deliberately does not let a tracked file define
-# the driver's command, so the `merge.backlog.driver` config is per-clone and
-# opt-in: `make merge-driver`. Without it, git falls back to its built-in
-# three-way merge and this line is a no-op.
-docs/STATUS.md merge=backlog
+# The backlog is deliberately absent. One table made every branch edit the same
+# file, which is what the driver existed to absorb; one file per item under
+# docs/queue/ means two sessions touching different items touch different files,
+# and two touching the same item have a real conflict that must not be resolved
+# by row ID behind anyone's back (Q889).
 
 # Same treatment for the script registry, keyed on the script path in column 1.
 # check-script-docs.sh requires a row for every gated script, so a PR adding one

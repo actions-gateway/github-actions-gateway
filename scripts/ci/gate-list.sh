@@ -30,7 +30,7 @@
 #      CHECK_FAST_GATES and nothing else. This is what keeps `--list` complete:
 #      a gate wired straight into the recipe would run without being listed.
 #   3. No target is declared .PHONY twice — the bulk block cannot come back.
-#   4. STATUS_GATES is a subset of CHECK_FAST_GATES, the claim its comment makes.
+#   4. QUEUE_GATES is a subset of CHECK_FAST_GATES, the claim its comment makes.
 #   5. testing.md cites `make list-gates` and `make list-script-tests`. This keeps
 #      the doc's correct references alive; it cannot detect a transcribed list
 #      added *beside* the pointer, which stays a review concern.
@@ -38,14 +38,14 @@
 #      set, modulo NON_SUITE_TESTS below. A suite on disk but not in the variable
 #      never runs — a disarmed gate that reports green — and one in the variable
 #      but not on disk fails the fan-out on a missing file.
-#   7. STATUS_GATES is complete, not only a subset: no fast gate outside it
-#      selects docs/STATUS.md. Rule 4 alone let em-dash-check and
+#   7. QUEUE_GATES is complete, not only a subset: no fast gate outside it
+#      selects a backlog item. Rule 4 alone let em-dash-check and
 #      page-density-check scan the file from the day each was written while the
-#      list called itself complete, so `make status-gates` reported a green
+#      list called itself complete, so `make queue-gates` reported a green
 #      `make check` would not (Q749). The derivation is the pathspec git is
 #      handed, the same question the gate itself asks. A gate that runs no
 #      scripts/ file has no derivable file set and declares instead, with a
-#      `# status-scope: none` comment directly above its .PHONY.
+#      `# queue-scope: none` comment directly above its .PHONY.
 #   8. Every gate also runs in CI. A gate can join CHECK_FAST_GATES and be run
 #      by no workflow, and rules 1-7 all stay green: `make check` enforces it
 #      locally while every PR merges without it. comparison-stamps-check
@@ -56,14 +56,14 @@
 #      every scripts/ file its recipe runs is run by CI some other way: through
 #      another make target a workflow invokes (manifest-validate runs the three
 #      chart-*-check scripts) or invoked directly (status-lint runs
-#      lint-backlog.sh without make). A gate that is deliberately local-only
+#      check-queue-rules.sh without make). A gate that is deliberately local-only
 #      declares `# ci-scope: none` with its reason directly above its .PHONY,
 #      the same shape rule 7 uses.
 #
 # Usage:
 #   gate-list.sh --list        --fast '<names>' --heavy '<names>'
 #   gate-list.sh --list-suites --suites '<paths>'
-#   gate-list.sh --check --fast '<names>' --heavy '<names>' --status '<names>' \
+#   gate-list.sh --check --fast '<names>' --heavy '<names>' --queue '<names>' \
 #                        --suites '<paths>'
 # Options (for the test suite; all default to the real files):
 #   --makefile PATH    the Makefile to parse
@@ -79,12 +79,23 @@ cd "$REPO_ROOT"
 MAKEFILE="Makefile"
 DOC="docs/development/testing.md"
 SCRIPTS_DIR="scripts"
-STATUS_FILE="docs/STATUS.md"
+# A backlog edit is an edit to one item file. Which item does not matter --
+# the question rule 7 asks is whether a gate's pathspec reaches into the store
+# -- so the first tracked item stands for all of them, and the answer stays
+# correct as items are filed and closed. Resolved once, here, rather than per
+# pathspec: `git ls-files` over the whole store is the expensive half.
+# The glob is a variable, not a literal on the `git ls-files` line, and that is
+# load-bearing: selection_pathspecs below scans a gate's scripts for the literal
+# pathspecs they hand git, and this script IS the script gate-lists-check runs.
+# A literal here would report this gate as one a backlog edit can fail, which it
+# cannot -- it reads one filename to answer rule 7 and checks nothing in it.
+QUEUE_GLOB='docs/queue/Q*.md'
+QUEUE_FILE="$(git ls-files -- "$QUEUE_GLOB" | sort | head -1)"
 WORKFLOWS_DIR=".github/workflows"
 MODE=""
 FAST=""
 HEAVY=""
-STATUS=""
+QUEUE=""
 SUITES=""
 
 # scripts/**/*-test.sh files that are deliberately not `make scripts-test`
@@ -109,8 +120,8 @@ while (($# > 0)); do
 		HEAVY="$2"
 		shift
 		;;
-	--status)
-		STATUS="$2"
+	--queue)
+		QUEUE="$2"
 		shift
 		;;
 	--suites)
@@ -267,17 +278,18 @@ selection_pathspecs() {
 	' "$1"
 }
 
-# Whether a pathspec selects the backlog file. Command substitution rather than a
+# Whether a pathspec selects a backlog item. Command substitution rather than a
 # pipe into `grep -q`: grep exits on the first match, and the SIGPIPE that sends
 # upstream becomes a 141 under pipefail that reads as "not selected".
-selects_status_file() {
+selects_queue_file() {
 	local listed
+	[[ -n "$QUEUE_FILE" ]] || return 1
 	listed="$(git ls-files -- "$1")" || return 1
-	grep -qx -- "$STATUS_FILE" <<<"$listed"
+	grep -qx -- "$QUEUE_FILE" <<<"$listed"
 }
 
 # Whether the comment block directly above a target's .PHONY declares it out of
-# KEY's scope (`status-scope` for rule 7, `ci-scope` for rule 8). Adjacency is
+# KEY's scope (`queue-scope` for rule 7, `ci-scope` for rule 8). Adjacency is
 # the point: the reason belongs at the declaration.
 scope_none() {
 	joined_makefile | awk -v target="$1" -v key="$2" '
@@ -408,10 +420,10 @@ if [[ -n "$dupes" ]]; then
 	fail "targets declared .PHONY more than once (declare each once, beside its rule): $(tr '\n' ' ' <<<"$dupes")"
 fi
 
-# 4. STATUS_GATES is the strict subset its comment claims.
-for gate in $STATUS; do
+# 4. QUEUE_GATES is the strict subset its comment claims.
+for gate in $QUEUE; do
 	if ! grep -qw -- "$gate" <<<"$FAST"; then
-		fail "STATUS_GATES member '$gate' is not in CHECK_FAST_GATES, so \`make status-gates\` is a second opinion rather than a subset"
+		fail "QUEUE_GATES member '$gate' is not in CHECK_FAST_GATES, so \`make queue-gates\` is a second opinion rather than a subset"
 	fi
 done
 
@@ -442,11 +454,11 @@ if [[ -n "$missing" ]]; then
 	fail "these SCRIPTS_TESTS entries have no $SCRIPTS_DIR/<name>.sh on disk: $(tr '\n' ' ' <<<"$missing")"
 fi
 
-# 7. The other direction on STATUS_GATES: a fast gate left out of it must be one
-# a $STATUS_FILE-only change cannot fail. Rule 4 could only see the members.
-status_names="$(tr ' ' '\n' <<<"$STATUS" | grep -v '^$' || true)"
+# 7. The other direction on QUEUE_GATES: a fast gate left out of it must be one
+# a backlog-only change cannot fail. Rule 4 could only see the members.
+queue_names="$(tr ' ' '\n' <<<"$QUEUE" | grep -v '^$' || true)"
 for gate in $FAST; do
-	if grep -qx -- "$gate" <<<"$status_names"; then
+	if grep -qx -- "$gate" <<<"$queue_names"; then
 		continue
 	fi
 	scanned=0
@@ -457,16 +469,16 @@ for gate in $FAST; do
 		while IFS= read -r spec; do
 			[[ -n "$spec" ]] || continue
 			((flagged == 0)) || continue
-			if selects_status_file "$spec"; then
+			if selects_queue_file "$spec"; then
 				flagged=1
-				fail "gate '$gate' selects $STATUS_FILE (pathspec '$spec' in $script) but STATUS_GATES omits it, so \`make status-gates\` reports a green \`make check\` would not
-       add it to STATUS_GATES, or narrow the pathspec"
+				fail "gate '$gate' selects $QUEUE_FILE (pathspec '$spec' in $script) but QUEUE_GATES omits it, so \`make queue-gates\` reports a green \`make check\` would not
+       add it to QUEUE_GATES, or narrow the pathspec"
 			fi
 		done < <(selection_pathspecs "$script")
 	done < <(gate_scripts "$gate")
-	if ((scanned == 0)) && ! scope_none "$gate" status-scope; then
-		fail "gate '$gate' runs no $SCRIPTS_DIR/ file, so whether a $STATUS_FILE-only change can fail it is not derivable
-       add it to STATUS_GATES, or declare \`# status-scope: none\` with the reason directly above its .PHONY"
+	if ((scanned == 0)) && ! scope_none "$gate" queue-scope; then
+		fail "gate '$gate' runs no $SCRIPTS_DIR/ file, so whether a backlog-only change can fail it is not derivable
+       add it to QUEUE_GATES, or declare \`# queue-scope: none\` with the reason directly above its .PHONY"
 	fi
 done
 

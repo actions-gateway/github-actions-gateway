@@ -109,12 +109,12 @@ list-gates: ## List every gate `make check` runs, in order, with what each one c
 # testing.md still points at the list targets rather than re-transcribing them.
 .PHONY: gate-lists-check
 gate-lists-check: ## Fail when `make check`'s gate and suite lists disagree with their derived consumers
-	scripts/ci/gate-list.sh --check --fast '$(CHECK_FAST_GATES)' --heavy '$(CHECK_HEAVY_GATES)' --status '$(STATUS_GATES)' --suites '$(SCRIPTS_TESTS)'
+	scripts/ci/gate-list.sh --check --fast '$(CHECK_FAST_GATES)' --heavy '$(CHECK_HEAVY_GATES)' --queue '$(QUEUE_GATES)' --suites '$(SCRIPTS_TESTS)'
 
 
-.PHONY: status-gates
-status-gates: ## Every gate a docs/STATUS.md-only change can fail — the seconds-long verify for a backlog edit
-	scripts/ci/run-parallel.sh $(foreach gate,$(STATUS_GATES),"$(gate):$(MAKE) $(gate)")
+.PHONY: queue-gates
+queue-gates: ## Every gate a docs/queue/-only change can fail — the seconds-long verify for a backlog edit
+	scripts/ci/run-parallel.sh $(foreach gate,$(QUEUE_GATES),"$(gate):$(MAKE) $(gate)")
 
 .PHONY: docs-gates
 docs-gates: ## Every gate a prose change can fail — run it when the prose is written, not after the code gate
@@ -186,21 +186,9 @@ script-docs-check: ## Fail when a script under scripts/ has no scripts/README.md
 # flake item may not vanish, deleting a plan's last item obliges its index row,
 # and the label vocabulary is closed. Rule 10 was dropped on measurement and
 # rule 12 is `queue.py claims` (Q889).
-# status-scope: none — reads docs/queue/, never docs/STATUS.md, so a
-# backlog-table-only change cannot fail it. Revisit at the cutover.
 .PHONY: queue-rules-check
 queue-rules-check: ## Fail when a backlog store change breaks rules 8, 9 or 11
 	scripts/docs/check-queue-rules.sh
-
-# Phase 2 of Q889 leaves the backlog written down twice: docs/STATUS.md is what
-# every consumer still reads, docs/queue/ is what phase 3 switches them to. This
-# fails the moment an edit lands on one side only, which is otherwise silent.
-# Retires itself: it passes and says so once the table is gone.
-# status-scope: both — it exists to compare docs/STATUS.md against the store,
-# so it must run on a change to either.
-.PHONY: queue-drift-check
-queue-drift-check: ## Fail when docs/STATUS.md and docs/queue/ disagree
-	scripts/docs/check-queue-drift.sh
 
 # Comparison-table stamp gate (Q801). why-gag.md renders competitor claims as
 # green checks and red X's, and eleven of them shipped with no ARC version and no
@@ -353,11 +341,11 @@ claude-usage-test: ## Byte-compile claude-usage/ and run its Python unit tests (
 .PHONY: hooks
 hooks: ## Install the tracked git hooks (sets core.hooksPath to .githooks)
 	git config core.hooksPath .githooks
-	@echo "git hooks installed: core.hooksPath -> .githooks (fast gofmt + STATUS.md gate on commit)"
+	@echo "git hooks installed: core.hooksPath -> .githooks (fast gofmt gate on commit)"
 
-# Install the three Markdown merge drivers for this clone: docs/STATUS.md by
-# backlog row ID, docs/plan/README.md by plan path, docs/roadmap.md by each
-# bullet's backlog annotation. .gitattributes already routes all three files, but
+# Install the Markdown merge drivers for this clone: docs/plan/README.md by
+# plan path, docs/roadmap.md by each bullet's backlog annotation, and
+# scripts/README.md by script path. .gitattributes already routes all three files, but
 # git refuses to let a tracked file define a driver's command
 # (that would be remote code execution on clone), so the config half is per-clone
 # and opt-in. Until it is installed the attributes name undefined drivers and git
@@ -366,7 +354,6 @@ hooks: ## Install the tracked git hooks (sets core.hooksPath to .githooks)
 # shared with every linked worktree.
 .PHONY: merge-driver
 merge-driver: ## Install the repo's merge drivers (registry conflicts resolve by row key, not line position)
-	scripts/docs/git-merge-status.sh --install
 	scripts/docs/git-merge-plan-index.sh --install
 	scripts/docs/git-merge-roadmap.sh --install
 	scripts/docs/git-merge-script-index.sh --install
@@ -551,19 +538,7 @@ mem-profile: ## Isolate AGC-only per-session memory (Q181): 1,000 parked session
 lint: $(GOLANGCI_LINT) ## Run gofmt (all modules) + golangci-lint, change-scoped locally to modules affected vs origin/main (LINT_ALL=1 or CI = full sweep; includes govet)
 	GOLANGCI_LINT=$(GOLANGCI_LINT) scripts/go/go-lint.sh
 
-.PHONY: lint-backlog
-lint-backlog: ## Enforce backlog format rules on docs/STATUS.md (vendored from the session-backlog skill)
-	scripts/docs/lint-backlog.sh
-
-# The pre-commit hook refuses to *stage* docs/STATUS.md next to another file,
-# but it reads the index rather than the commit that index produces, so an
-# --amend onto a code commit slips past it. This reads the commits the branch
-# adds (Q652).
-.PHONY: status-isolation-check
-status-isolation-check: ## Fail when a commit on this branch mixes docs/STATUS.md with any other file
-	scripts/docs/check-status-isolation.sh
-
-# IDs come from a ref claim, not from a counter line in STATUS.md: a shared
+# IDs come from a ref claim, not from a counter line in the backlog: a shared
 # mutable counter conflicted by construction whenever two sessions filed a row
 # (Q382). Every path through this target claims — PEEK=1 reported the next free
 # ID and reserved nothing, which is that same counter behind a flag (Q656).
@@ -587,19 +562,18 @@ queue-id: ## Search the backlog for near-duplicates, then allocate a Q-ID (make 
 
 # The public roadmap and the backlog drift apart silently — a 2026-07-25 audit
 # found six of seven "near-term" items already shipped. Because done Queue rows
-# are deleted, a roadmap bullet naming a Q-ID that STATUS.md no longer has is an
+# are deleted, a roadmap bullet naming a Q-ID the store no longer holds is an
 # exact signal the work shipped. Rationale + the annotation format are in the
 # script header.
 .PHONY: roadmap-check
 roadmap-check: ## Fail when docs/roadmap.md names backlog rows that shipped or moved tables
 	scripts/docs/check-roadmap.sh
 
-# Catches the "closed plan never archived" drift that makes docs/plan/README.md
-# read as stale, and the narrower case where the plan stays but its Status cell
-# still names rows that closed (Q800). Rationale + the ⓘ exemption live in the
-# script header.
+# Catches a plan claiming open work no backlog item carries, and the narrower
+# case where the plan stays but its Status cell still names items that closed
+# (Q800). Rationale + the ⓘ exemption live in the script header.
 .PHONY: plan-index-check
-plan-index-check: ## Assert active plans in docs/plan/README.md are still STATUS-referenced (else archive them)
+plan-index-check: ## Assert every open-marked plan in docs/plan/README.md is backed by a live item
 	scripts/docs/check-plan-index.sh
 
 # Keeps plan archival a docs-only operation: code that path-links a plan would
@@ -1054,11 +1028,6 @@ ginkgo: $(GINKGO) ## Build ginkgo into .build/
 md-reflow: $(MDREFLOW) ## Reflow tracked Markdown prose to one sentence per line
 	$(MDREFLOW) .
 
-# status-scope: none — .mdreflow.yaml excludes docs/STATUS.md (table-shaped, and
-# reflow would fight its merge driver), so a backlog edit cannot fail this gate
-# and STATUS_GATES leaves it out. The declaration is what gate-lists-check reads:
-# this recipe runs a Go tool rather than a scripts/ file, so its file set is not
-# derivable from a git pathspec.
 .PHONY: md-reflow-check
 md-reflow-check: $(MDREFLOW) ## Report Markdown that is not sentence-per-line; writes nothing
 	$(MDREFLOW) --check .

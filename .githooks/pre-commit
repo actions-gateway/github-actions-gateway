@@ -33,14 +33,7 @@ if [[ -n "$staged_go" ]]; then
     fi
 fi
 
-# 2. lint-backlog — when docs/STATUS.md is staged, validate its format (the
-#    Next ID counter, 250-char caps, Deferred triggers; see
-#    scripts/docs/lint-backlog.sh) and require the backlog edit to be the only
-#    staged file (isolated commits keep rebase conflicts on one file). No-op
-#    when STATUS.md is not staged.
-"$REPO_ROOT/scripts/docs/lint-backlog.sh" --staged
-
-# 3. em-dash density — when Markdown is staged, hold each file to its baseline
+# 2. em-dash density — when Markdown is staged, hold each file to its baseline
 #    ceiling. Same checker `make em-dash-check` and the CI `em-dash` job run,
 #    so the verdict here is the verdict there. 410 ms warm on this tree, and
 #    skipped outright when no .md is staged, which is most commits.

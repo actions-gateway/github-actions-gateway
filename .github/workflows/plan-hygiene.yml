@@ -15,7 +15,7 @@ on:
     branches: [main]
     paths:
       - 'docs/plan/README.md'
-      - 'docs/STATUS.md'
+      - 'docs/queue/**'
       - '**.go'
       - 'scripts/docs/check-plan-index.sh'
       - 'scripts/docs/check-no-plan-refs-in-code.sh'
@@ -51,7 +51,7 @@ jobs:
           filters: |
             plan:
               - 'docs/plan/README.md'
-              - 'docs/STATUS.md'
+              - 'docs/queue/**'
               - '**.go'
               - 'scripts/docs/check-plan-index.sh'
               - 'scripts/docs/check-no-plan-refs-in-code.sh'
