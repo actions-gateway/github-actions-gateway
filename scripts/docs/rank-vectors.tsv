@@ -1,0 +1,75 @@
+# rank-vectors.tsv — shared test vectors for the magnitude-head rank scheme.
+#
+# Two implementations carry this algebra: queue.py beside this file, and the Go
+# queuestore in karlkfi/github-actions-gateway. Both suites run these vectors,
+# so a change to one that the scheme does not sanction fails on the other side
+# too.
+#
+# Every expected key here was derived from the scheme's rules — a head letter
+# fixing the integer part's length, base-36 digits, plain string comparison as
+# the order — rather than by running either implementation. Vectors read off a
+# run would only prove that run agrees with itself, which is the drift this
+# file exists to catch.
+#
+# Tab-separated columns: lo, hi, want, note.
+#   lo, hi  the neighbours the new key goes between; "-" means open-ended
+#   want    the key the scheme requires, or "!" when the call must fail
+#   note    what the case is for
+#
+# A runner must also check that the result orders strictly between lo and hi,
+# which catches a wrong expectation here as well as a wrong implementation.
+#
+# The cases sit where the two could drift rather than where they agree easily:
+# magnitude-head boundaries, a magnitude exhausted between adjacent keys, and
+# both ends of the space.
+
+# --- open ends -------------------------------------------------------------
+-	-	a0	both ends open: the first item in an empty store
+a0	-	a1	tail insert steps the integer part, costing no length
+-	a1	a0	head insert steps down, costing no length
+-	a0i	a0	hi carries a fraction, so its own integer part already sits below it
+
+# --- magnitude-head boundaries ---------------------------------------------
+Zz	-	a0	upward across the descending magnitudes into 'a'
+-	Z0	Yzz	downward out of 'Z': the integer part widens by a digit
+az	-	b00	upward out of 'a': the integer part widens by a digit
+-	b00	az	downward into 'a': the integer part narrows by a digit
+Yzz	-	Z0	upward into 'Z': the integer part narrows by a digit
+
+# --- a magnitude exhausted between adjacent keys ---------------------------
+a1	a2	a1i	no integer left between the two, so the room is fractional
+a1	a1i	a19	a second insert into the gap the exhausted case opened
+a1i	a2	a1r	lo already carries a fraction, hi is the next integer
+Zz	a0	Zzi	exhausted exactly at the boundary between the two head runs
+az	b00	azi	exhausted where the magnitude widens
+Yzz	Z0	Yzzi	exhausted where the magnitude narrows
+a1	a5	a2	room in the integer part: the control for the exhausted cases
+Zy	a0	Zz	room in the integer part across the head boundary
+
+# --- fraction midpoints ----------------------------------------------------
+a11	a12x	a12	leading digits adjacent and hi has more to say, so hi's own leading digit fits
+a1y	a1z	a1yi	leading digits adjacent and hi is one digit, so the room is below it
+a111	a112	a111i	a shared fractional prefix constrains nothing and is descended through
+a11	a111	a110i	an unwritten fractional digit denotes the lowest digit, not nothing
+
+# --- the bottom of the space -----------------------------------------------
+-	A000000000000000000000000001	A000000000000000000000000000i	hi sits on the reserved bottom integer, so the room is inside hi's fraction
+-	A0000000000000000000000000011	A000000000000000000000000001	same, where hi's fraction has more than one digit
+-	A00000000000000000000000001	A00000000000000000000000000i	the integer below hi is the reserved bottom, so the room is fractional above it
+-	A00000000000000000000000000i	A000000000000000000000000009	the reserved bottom keeps serving as runway for the next head insert
+A000000000000000000000000001	-	A00000000000000000000000001	lo at the bottom with hi open still steps the integer part
+
+# --- the top of the space --------------------------------------------------
+zzzzzzzzzzzzzzzzzzzzzzzzzzz	-	zzzzzzzzzzzzzzzzzzzzzzzzzzzi	the top magnitude is exhausted, so a tail insert becomes fractional
+-	zzzzzzzzzzzzzzzzzzzzzzzzzzz	zzzzzzzzzzzzzzzzzzzzzzzzzzy	a head insert below the top integer is an ordinary decrement
+zzzzzzzzzzzzzzzzzzzzzzzzzzz	zzzzzzzzzzzzzzzzzzzzzzzzzzzi	zzzzzzzzzzzzzzzzzzzzzzzzzzz9	fractional room survives past the exhausted top magnitude
+
+# --- refusals --------------------------------------------------------------
+a2	a1	!	lo above hi
+a1	a1	!	lo equal to hi
+a10	-	!	a fraction ending in the lowest digit denotes the key without it
+0a	-	!	no magnitude head
+a	-	!	shorter than the two characters head 'a' requires
+zz	-	!	shorter than the twenty-seven characters head 'z' requires
+a1!	-	!	a character outside base-36 after the integer part
+-	A00000000000000000000000000	!	the reserved bottom of the space is not a usable key
