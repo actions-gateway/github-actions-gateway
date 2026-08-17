@@ -1247,6 +1247,25 @@ Five instances measured across 2026-08-11 and 2026-08-12, in one session, each a
 - **An anchored search for a check name is not the check list.** `gh pr checks` filtered on `^integration` and `^e2e` reported those gates absent when they were present as `integration-test` and `e2e / e2e`.
   Concluding they had been skipped would have forced a needless close-and-reopen of the PR.
 
+### A claim resting on no evidence is the one nothing prompts you to check
+
+Every rule above fires on evidence being handled: a status about to be reported, a probe about to justify a decision, a count about to be cited.
+An assertion with nothing behind it trips none of them, because it reads as background rather than as a claim.
+Two shapes produced that here on 2026-08-16, both cheap to check and neither checked until someone asked.
+
+**Provenance, read off resemblance.** A cut of the agent process playbooks rested on the sentence "the tooling is vendored", meaning copied in from the globally-installed skills, and shipped it to three doc sites and a PR body as the justification for keeping prose thin: the gates hold the rules even where the docs no longer do.
+The direction was backwards.
+`lint-backlog.sh` over `backloglint` (Go, 13 rules, a GFM AST) has no counterpart in the skill, which ships bash over a smaller set; the ID allocator is the one the skill cites as *its* proof point at 460+ live claims here; the four merge drivers and `check-status-isolation.sh` exist only here.
+One `git log` per side answers it, and none was run, because nothing in the sentence looked like a measurement.
+The claim survived into a merged PR and was corrected only after the maintainer asked whether it was true.
+
+**A reading that aged.** The same session audited two repo docs against three installed skills and reported the divergences.
+The audit was correct when taken and obsolete 35 minutes later, when an upstream merge retired a section the audit had deliberately *kept*.
+Nothing signalled the decay: a reading of a file in a repository this one does not own is a snapshot, not a measurement that can be re-run against a system, so re-reading is the only check there is.
+State when a read was taken whenever reporting one, and re-read before acting on it.
+
+Both were filed upstream as [claude-skills#131](https://github.com/karlkfi/claude-skills/issues/131), and `verify-claims` now triggers on a claim about where code came from and on a reading taken earlier.
+
 ### A negative result implicates the probe's identifier first
 
 The section above is about a probe that answers a different question.
