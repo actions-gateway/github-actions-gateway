@@ -137,6 +137,20 @@ Three probes were written before one measured the right thing, which is worth re
 Comparing `render --all` against the Queue section interleaves deferred items by rank; matching `\bQ\d+\b` over the rendered table catches IDs quoted inside Notes text, so `Q811` cited in `Q871`'s note read as a reordering.
 Only reading the first column answers the question asked.
 
+**The re-run on 2026-08-17 found the real phase-2 cost, and it is not the migration.** The flake-watch handling needed no work at all: all 29 rows arrive as `status: deferred` carrying `flake`, which is decision 4 satisfied by `migrate` itself.
+What does need work is the title cap.
+
+**61 of the 173 items have titles over the store's 72-character cap**, the longest at 130.
+`queue.py lint` fails on every one, so the store cannot land until they are rewritten.
+This is not a migration defect: the single table capped the *Notes* cell at 250 characters and never capped the Item cell at all, so adopting the store imposes a constraint this backlog has never been held to.
+The cap is deliberate upstream, because a title renders whole in every index row, in `next`'s kickoff prompt, and in any session named after the item, so it is the one field with nowhere to overflow.
+
+Rewriting them is judgement rather than truncation, and the two obvious mechanical answers are both wrong: cutting at 72 characters severs titles mid-identifier, and moving the tail into the body leaves a title that no longer says what the item is.
+A representative case fixed by hand shows the shape, `Q490` going from a spec name plus its symptom to "A fan-out completion spec cancels a job every delivery completed" at 64 characters, with the spec name moved into the body where it costs nothing.
+
+The round-trip is what surfaced this, which is the outcome the skill predicts for running one against a live table.
+Two smaller things came with it: `v2.0.0` is not a label, though a regex over the `**Labels:**` line reads it as one because it is backticked link text inside `2.0-gate`'s parenthetical, and the derived vocabulary is 18 labels rather than 19.
+
 Still owed before the store can land: the flake-watch items need their status checked against the `deferred` decision, `docs/queue/README.md` needs the label vocabulary, and `docs/queue/**` joins both path lists in `status-lint.yml`, where a comment already says so.
 
 ## Working rules for the remaining phases
