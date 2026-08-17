@@ -17,7 +17,7 @@
 # `new in X.Y` chip is behind, and the checker reports that it skipped.
 #
 # Usage:
-#   check-roadmap.sh [path/to/roadmap.md] [path/to/STATUS.md] [path/to/features.md]
+#   check-roadmap.sh [path/to/roadmap.md] [path/to/queue/] [path/to/features.md]
 #   GAG_RELEASE_TAG=v9.9.9 check-roadmap.sh
 #
 # Exits 1 on any finding, and 2 when either page's format drifted far enough
@@ -36,7 +36,8 @@ DEVTOOLS_DIR="$SCRIPT_DIR/../../devtools"
 
 repo_root="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
 ROADMAP="${1:-$repo_root/docs/roadmap.md}"
-STATUS="${2:-$repo_root/docs/STATUS.md}"
+# The backlog is a directory of item files since Q889, not one table.
+STORE="${2:-$repo_root/docs/queue}"
 FEATURES="${3:-$repo_root/docs/features.md}"
 
 # The remaining marketing surfaces, checked for badges only. They are resolved
@@ -61,4 +62,4 @@ bin="$SCRIPT_DIR/../../.build/roadmapcheck"
 mkdir -p "$(dirname "$bin")"
 (cd "$DEVTOOLS_DIR" && GOWORK=off go build -o "$bin" ./docs/roadmapcheck)
 
-"$bin" "${release_args[@]}" "$ROADMAP" "$STATUS" "$FEATURES" "${badge_pages[@]+"${badge_pages[@]}"}"
+"$bin" "${release_args[@]}" "$ROADMAP" "$STORE" "$FEATURES" "${badge_pages[@]+"${badge_pages[@]}"}"

@@ -2,14 +2,14 @@
 // and keeps the feature index from regrowing into prose. It is the checker
 // behind scripts/docs/check-roadmap.sh, which selects the files (Q614).
 //
-// docs/roadmap.md is adopter-facing narrative; docs/STATUS.md is the terse
-// internal backlog. Neither can be generated from the other, so they drift: a
-// 2026-07-25 audit found six of seven "In progress / near-term" roadmap items
+// docs/roadmap.md is adopter-facing narrative; docs/queue/ is the terse
+// internal backlog, one file per item. Neither can be generated from the
+// other, so they drift: a 2026-07-25 audit found six of seven "In progress / near-term" roadmap items
 // had already shipped, some of them release-frozen into published docs.
 //
-// The signal that makes this mechanical: this repo deletes a Queue row when its
+// The signal that makes this mechanical: this repo deletes an item when its
 // work ships (git is the archive). So a roadmap bullet naming a Q-ID that no
-// longer exists in STATUS.md is an exact, zero-false-negative indicator that
+// longer exists in the backlog is an exact, zero-false-negative indicator that
 // the item shipped and the bullet belongs under "Available now". Each
 // forward-looking bullet therefore carries an invisible annotation naming the
 // backlog rows behind it:
@@ -24,13 +24,13 @@
 //
 //  1. Every top-level bullet under "In progress / near-term" and under
 //     "Exploring / longer-term" carries a `<!-- q:QN[,QM…] -->` annotation.
-//  2. Every annotated ID resolves to a row in STATUS.md. A dangling ID means
-//     the work shipped — move the bullet to "Available now", or drop just that
+//  2. Every annotated ID resolves to an item in the backlog. A dangling ID
+//     means the work shipped — move the bullet to "Available now", or drop just that
 //     ID when only part of a multi-item bullet shipped.
-//  3. A near-term bullet names at least one row that is in the Queue (an
-//     all-Deferred bullet was parked and belongs under "Exploring").
-//  4. An exploring bullet names at least one row that is in Deferred (an ID
-//     that moved into the Queue is active work and belongs under "In progress /
+//  3. A near-term bullet names at least one item that is not deferred (an
+//     all-deferred bullet was parked and belongs under "Exploring").
+//  4. An exploring bullet names at least one deferred item (an ID that went
+//     back to ready is active work and belongs under "In progress /
 //     near-term").
 //  5. Every top-level bullet in docs/features.md carries a Markdown link and
 //     stays under maxFeatureWords. A capability with no doc to link is a
@@ -50,7 +50,7 @@
 //     what a reader sees as a bullet is then measured over both.
 //
 // Rules 7 and 8 reconcile the one promise this page makes with a date attached.
-// A release gate lives in STATUS.md as an `X.Y-gate` label, meaning the row
+// A release gate lives on an item as an `X.Y-gate` label, meaning the item
 // blocks that tag; the roadmap is where an adopter reads it.
 //
 // Rule 7 is the load-bearing half, and it reads nothing but the `<!-- q:QN -->`
@@ -91,7 +91,7 @@
 // Usage:
 //
 //	roadmapcheck [-release X.Y] [-max-chip-age N] \
-//	    <roadmap.md> <STATUS.md> <features.md> [page.md…]
+//	    <roadmap.md> <queue-dir> <features.md> [page.md…]
 //
 // Trailing pages are scanned for badges only — the other marketing surfaces,
 // which carry no roadmap bullets and no capability index. -release is the
@@ -108,6 +108,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"regexp"
 	"sort"
 	"strings"
@@ -118,9 +119,6 @@ import (
 const (
 	nearTermHeading  = "In progress / near-term"
 	exploringHeading = "Exploring / longer-term"
-
-	// The STATUS.md column carrying the `X.Y-gate` labels rules 7 and 8 read.
-	labelsColumn = "Labels"
 
 	// Generous enough that a capability plus one qualifying clause fits; the
 	// longest bullet at extraction was 31 words. Tight enough that the 126-word
@@ -142,7 +140,7 @@ const (
 // config is one invocation: which pages to read and what "the current release"
 // means for this run.
 type config struct {
-	roadmap, status, features string
+	roadmap, store, features string
 	// badgeOnly names the marketing surfaces carrying no roadmap bullets and no
 	// capability index, so only rules 9-11 apply to them.
 	badgeOnly  []string
@@ -157,10 +155,10 @@ func main() {
 	flag.Parse()
 	args := flag.Args()
 	if len(args) < 3 {
-		fmt.Fprintln(os.Stderr, "usage: roadmapcheck [-release X.Y] [-max-chip-age N] <roadmap.md> <STATUS.md> <features.md> [page.md…]")
+		fmt.Fprintln(os.Stderr, "usage: roadmapcheck [-release X.Y] [-max-chip-age N] <roadmap.md> <queue-dir> <features.md> [page.md…]")
 		os.Exit(2)
 	}
-	cfg.roadmap, cfg.status, cfg.features, cfg.badgeOnly = args[0], args[1], args[2], args[3:]
+	cfg.roadmap, cfg.store, cfg.features, cfg.badgeOnly = args[0], args[1], args[2], args[3:]
 	out := bufio.NewWriter(os.Stderr)
 	code := run(cfg, out, os.Stdout)
 	_ = out.Flush()
@@ -168,9 +166,11 @@ func main() {
 }
 
 func run(cfg config, findings, summary io.Writer) int {
-	roadmapPath, statusPath, featuresPath := cfg.roadmap, cfg.status, cfg.features
+	roadmapPath, storePath, featuresPath := cfg.roadmap, cfg.store, cfg.features
 	docs := map[string]*markdown.Document{}
-	paths := append([]string{roadmapPath, statusPath, featuresPath}, cfg.badgeOnly...)
+	// The backlog is a directory of item files (Q889), so it is read by
+	// storeRows below rather than parsed as one Markdown page here.
+	paths := append([]string{roadmapPath, featuresPath}, cfg.badgeOnly...)
 	for _, p := range paths {
 		src, err := os.ReadFile(p)
 		if err != nil {
@@ -180,14 +180,17 @@ func run(cfg config, findings, summary io.Writer) int {
 		docs[p] = markdown.Parse(src)
 	}
 
-	queue, queueLabelled := statusRows(docs[statusPath], "Queue")
-	deferred, deferredLabelled := statusRows(docs[statusPath], "Deferred")
-	if len(queue) == 0 && len(deferred) == 0 {
-		_, _ = fmt.Fprintf(findings, "check-roadmap: parsed no Q-IDs from %s — the table format changed?\n", statusPath)
+	queue, deferred, labelled, err := storeRows(storePath)
+	if err != nil {
+		_, _ = fmt.Fprintf(findings, "check-roadmap: reading %s: %v\n", storePath, err)
 		return 2
 	}
-	if !queueLabelled && !deferredLabelled {
-		_, _ = fmt.Fprintf(findings, "check-roadmap: found rows but no %q column in %s — the table format changed?\n", labelsColumn, statusPath)
+	if len(queue) == 0 && len(deferred) == 0 {
+		_, _ = fmt.Fprintf(findings, "check-roadmap: parsed no Q-IDs from %s — the item format changed?\n", storePath)
+		return 2
+	}
+	if !labelled {
+		_, _ = fmt.Fprintf(findings, "check-roadmap: found items but none carried labels in %s — the item format changed?\n", storePath)
 		return 2
 	}
 
@@ -204,7 +207,7 @@ func run(cfg config, findings, summary io.Writer) int {
 	for _, b := range bullets {
 		c.checkRoadmapBullet(roadmapName, b, bound)
 	}
-	c.checkGateCoverage(base(statusPath), roadmapName, bound)
+	c.checkGateCoverage(roadmapName, bound)
 
 	features := featureBullets(docs[featuresPath])
 	if len(features) == 0 {
@@ -232,9 +235,6 @@ func run(cfg config, findings, summary io.Writer) int {
 		_, _ = fmt.Fprintf(summary, "check-roadmap: no current release given, so `new in X.Y` chips are unchecked (rule 9)\n")
 	}
 	for _, p := range paths {
-		if p == statusPath {
-			continue
-		}
 		if ok {
 			c.checkBadges(base(p), docs[p], &current, cfg.maxChipAge)
 			continue
@@ -246,7 +246,7 @@ func run(cfg config, findings, summary io.Writer) int {
 		_, _ = fmt.Fprintln(findings, "check-roadmap: roadmap and backlog disagree, or the feature index drifted (see above). Reconcile per docs/development/doc-update-matrix.md.")
 		return 1
 	}
-	_, _ = fmt.Fprintf(summary, "check-roadmap: ok (%d forward-looking bullet(s) backed by live STATUS.md rows; %d feature(s) linked)\n",
+	_, _ = fmt.Fprintf(summary, "check-roadmap: ok (%d forward-looking bullet(s) backed by live backlog items; %d feature(s) linked)\n",
 		len(bullets), len(features))
 	return 0
 }
@@ -307,7 +307,7 @@ func (c *checker) checkRoadmapBullet(file string, b bullet, bound map[string]boo
 			continue
 		case !live:
 			c.report(file, b.line, fmt.Sprintf(
-				"%q names %s, which no longer exists in STATUS.md — the row was deleted, so the work shipped. Move this bullet to docs/features.md, or drop %s if only part of it shipped.",
+				"%q names %s, which no longer exists in the backlog — the item was deleted, so the work shipped. Move this bullet to docs/features.md, or drop %s if only part of it shipped.",
 				b.label, id, id))
 			continue
 		case queued:
@@ -356,7 +356,7 @@ func (c *checker) checkHandTypedRelease(file string, b bullet, gates []string) {
 // and dogfood work a release also waits on; "an adopter would upgrade for
 // this" does not. Requiring a bullet for both put our own release harness on
 // the page people read to evaluate the product.
-func (c *checker) checkGateCoverage(statusFile, roadmapFile string, bound map[string]bool) {
+func (c *checker) checkGateCoverage(roadmapFile string, bound map[string]bool) {
 	var uncovered []struct {
 		id  string
 		row statusRow
@@ -373,15 +373,18 @@ func (c *checker) checkGateCoverage(statusFile, roadmapFile string, bound map[st
 		}
 	}
 	// Map iteration is unordered; findings are read as a list, so sort them.
-	sort.Slice(uncovered, func(i, j int) bool { return uncovered[i].row.line < uncovered[j].row.line })
+	// By ID rather than by position: an item store has no shared ordering to
+	// sort by, and a stable order is what keeps a rerun's output diffable.
+	sort.Slice(uncovered, func(i, j int) bool { return uncovered[i].id < uncovered[j].id })
 	for _, u := range uncovered {
-		c.report(statusFile, u.row.line, fmt.Sprintf(
+		// Reported against the item's own file, which is where the edit goes.
+		c.report(u.row.file, 1, fmt.Sprintf(
 			"%s is labelled %s and carries `feature` or `security`, but no %s bullet names it, so the release it blocks is committed nowhere an adopter reads. Add a bullet carrying <!-- q:%s -->, drop the label if it no longer blocks the tag, or drop `feature`/`security` if the work is release process rather than something to upgrade for.",
 			u.id, gateLabels(u.row.gates), roadmapFile, u.id))
 	}
 }
 
-// gateLabels renders a row's gates the way STATUS.md writes them, for a
+// gateLabels renders an item's gates the way its labels write them, for a
 // finding that has to be actionable without opening the file.
 func gateLabels(gates []string) string {
 	out := make([]string, 0, len(gates))
@@ -410,51 +413,95 @@ type statusRow struct {
 	// adopterFacing is whether the row carries `feature` or `security`, which
 	// is what decides whether a gate label also obliges a roadmap bullet.
 	adopterFacing bool
-	line          int
+	// file is the item's filename in the store, which is where an item lives
+	// now that a row no longer has a line number in a shared table.
+	file string
 }
 
-// statusRows returns the rows of one STATUS.md table by Q-ID. A backlog row's
-// ID cell is `<a id="QN"></a>QN`, which renders as the bare ID; a
-// Progress-table cell carries a plan link instead, so it never matches.
+// storeRows reads the backlog store into the two sets the roadmap rules
+// distinguish: live items, and parked ones (Q889). It replaces two reads of
+// the STATUS.md tables that the sections used to separate.
 //
-// labelled reports whether the label column was found, which is what separates
-// "no row is gated" from "the column moved and rules 7-8 now check nothing".
-func statusRows(doc *markdown.Document, heading string) (rows map[string]statusRow, labelled bool) {
-	start, end, _ := doc.SectionRange(2, heading)
-	rows = map[string]statusRow{}
-	for _, table := range doc.Tables() {
-		labels := columnIndex(table.Header, labelsColumn)
-		for _, row := range table.Rows {
-			if row.Line < start || row.Line > end || len(row.Text) == 0 {
-				continue
-			}
-			if !qIDRE.MatchString(row.Text[0]) {
-				continue
-			}
-			if labels < 0 || labels >= len(row.Cells) {
-				rows[row.Text[0]] = statusRow{line: row.Line}
-				continue
-			}
+// Labels are re-rendered into the backticked cell the table wrote, so
+// gateVersions and adopterFacingLabelRE go on reading exactly what they read
+// before. The label vocabulary is the calibrated part of rules 7 and 8; the
+// container it arrives in is not.
+//
+// labelled reports whether any item carried labels at all, which is what
+// separates "nothing is gated" from "the field moved and rules 7-8 now check
+// nothing" — the same distinction the missing-column check drew.
+func storeRows(dir string) (queue, deferred map[string]statusRow, labelled bool, err error) {
+	queue, deferred = map[string]statusRow{}, map[string]statusRow{}
+	items, err := filepath.Glob(filepath.Join(dir, "Q*.md"))
+	if err != nil {
+		return nil, nil, false, err
+	}
+	for _, path := range items {
+		src, err := os.ReadFile(path)
+		if err != nil {
+			return nil, nil, false, err
+		}
+		id, status, labels := parseItem(string(src))
+		if id == "" {
+			continue
+		}
+		if len(labels) > 0 {
 			labelled = true
-			rows[row.Text[0]] = statusRow{
-				gates:         gateVersions(row.Cells[labels]),
-				adopterFacing: adopterFacingLabelRE.MatchString(row.Cells[labels]),
-				line:          row.Line,
-			}
+		}
+		cell := "`" + strings.Join(labels, "` `") + "`"
+		row := statusRow{
+			gates:         gateVersions(cell),
+			adopterFacing: adopterFacingLabelRE.MatchString(cell),
+			file:          filepath.Base(path),
+		}
+		if status == "deferred" {
+			deferred[id] = row
+		} else {
+			queue[id] = row
 		}
 	}
-	return rows, labelled
+	return queue, deferred, labelled, nil
 }
 
-// columnIndex finds a table column by its header text, reporting -1 when the
-// table has no such column.
-func columnIndex(header markdown.Row, name string) int {
-	for i, cell := range header.Text {
-		if strings.EqualFold(strings.TrimSpace(cell), name) {
-			return i
+// parseItem pulls the three fields the roadmap rules need out of an item's
+// YAML frontmatter. Labels are written as a block list by `queue.py migrate`
+// and as an inline list by hand, so both are read: a reader covering only the
+// form the tool writes passes every generated item and silently drops a
+// hand-edited one.
+func parseItem(src string) (id, status string, labels []string) {
+	lines := strings.Split(src, "\n")
+	if len(lines) == 0 || strings.TrimSpace(lines[0]) != "---" {
+		return "", "", nil
+	}
+	inLabels := false
+	for _, line := range lines[1:] {
+		if strings.TrimSpace(line) == "---" {
+			break
+		}
+		switch {
+		case strings.HasPrefix(line, "id:"):
+			id = strings.TrimSpace(strings.TrimPrefix(line, "id:"))
+			inLabels = false
+		case strings.HasPrefix(line, "status:"):
+			status = strings.TrimSpace(strings.TrimPrefix(line, "status:"))
+			inLabels = false
+		case strings.HasPrefix(line, "labels:"):
+			rest := strings.TrimSpace(strings.TrimPrefix(line, "labels:"))
+			inLabels = rest == ""
+			if rest = strings.Trim(rest, "[]"); rest != "" {
+				for _, l := range strings.Split(rest, ",") {
+					if l = strings.TrimSpace(l); l != "" {
+						labels = append(labels, l)
+					}
+				}
+			}
+		case inLabels && strings.HasPrefix(strings.TrimSpace(line), "- "):
+			labels = append(labels, strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(line), "- ")))
+		default:
+			inLabels = false
 		}
 	}
-	return -1
+	return id, status, labels
 }
 
 // gateVersions extracts the release gates a label cell declares, as `major.minor`.
