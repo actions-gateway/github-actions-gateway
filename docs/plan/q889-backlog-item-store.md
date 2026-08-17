@@ -121,6 +121,24 @@ Delete `docs/STATUS.md`, then groom.** Remove or rewrite items the work obsolete
   Every freshness read must move to `docs/queue`.
 - **Two linters, one silent wrong-tool error.** `queue.py lint` pointed at a directory holding a table finds no `Q*.md` and reports `0 item(s) OK` at exit 0.
 
+## Phase 2, measured but not landed
+
+`queue.py migrate` was run against the live table on 2026-08-17 and reconciled, then the output was discarded rather than committed.
+It is one command to regenerate, and committing it would have shipped a tree whose own gate fails: rule 11 reads the label vocabulary from `docs/queue/README.md`, which does not exist yet, so the checker exits 2 rather than passing.
+
+What the run established, so phase 2 starts from a measurement rather than a hope:
+
+- **173 items written, and the ID sets reconcile in both directions** against the 174 anchors in the table.
+- **The one difference is `Q248`**, which the migration correctly left behind: it is an item ID on a *Progress* row rather than a Queue row, which is the edge case this plan already flagged as needing a decision instead of a mechanical move.
+- **Order is preserved end to end.** The Queue's 106 rows are the store's first 106 in order, and the remaining 67 match Deferred plus Flake watch in order.
+  That is the check worth running, because the table's order *is* the priority and a count cannot see it scrambled.
+
+Three probes were written before one measured the right thing, which is worth recording because the first two both looked plausible.
+Comparing `render --all` against the Queue section interleaves deferred items by rank; matching `\bQ\d+\b` over the rendered table catches IDs quoted inside Notes text, so `Q811` cited in `Q871`'s note read as a reordering.
+Only reading the first column answers the question asked.
+
+Still owed before the store can land: the flake-watch items need their status checked against the `deferred` decision, `docs/queue/README.md` needs the label vocabulary, and `docs/queue/**` joins both path lists in `status-lint.yml`, where a comment already says so.
+
 ## Working rules for the remaining phases
 
 Both came out of phase 1 and both cost something before they were written down.
