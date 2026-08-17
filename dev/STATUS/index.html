@@ -3096,6 +3096,22 @@
 <td>Phase 1 vendored <code>queue.py</code>, its rank vectors and two agent scripts byte-identical so an upstream fix lands as a clean overwrite; nothing holds them there. The fork drifting both ways was the defect, unseen until asked. Needs a fetch or a digest.</td>
 </tr>
 <tr>
+<td><a id="Q892"></a>Q892</td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/docs/git-merge-plan-index-test.sh">A suite that copies a gate into a fixture is invisible to grep</a></td>
+<td><code>ci</code> <code>tests</code> <code>debt</code> <code>retro</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>A suite that copies a gate into a fixture inherits that gate's inputs, so adding one breaks it with no textual reference to grep. <code>check-plan-index</code> gained a second source and only <code>make check</code> noticed. Name the consumers, or detect the copy.</td>
+</tr>
+<tr>
+<td><a id="Q893"></a>Q893</td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/docs/check-plan-index.sh">Nothing gates a plan doc's Status header against the repo</a></td>
+<td><code>docs</code> <code>ci</code> <code>debt</code> <code>retro</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>Twice in one session a plan's Status line claimed a shipped phase: <code>Phase 1 in progress</code> after two merged, <code>4 to 6 not started</code> with 4 in review. Caught by reading, not a gate. A plan naming merged PRs while claiming a phase is open is gateable.</td>
+</tr>
+<tr>
 <td><a id="Q846"></a>Q846</td>
 <td><a href="../development/technical-debt/">A tooling issue is deduped at filing time, after the recommendation</a></td>
 <td><code>docs</code> <code>debt</code> <code>retro</code></td>
