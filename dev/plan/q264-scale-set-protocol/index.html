@@ -2612,13 +2612,13 @@
 <p><strong>Status:</strong> RESIDUAL ONLY.
 The scale-set migration (Option E) is fully shipped — phases <strong>P0–P5 landed</strong>, ScaleSet is the <strong>default</strong> acquisition protocol since v1.1.0, and Classic is <strong>deprecated</strong>.
 The full P0–P5 record — protocol reverse-engineering, the Investigation E/E2 live probes, the U6–U8 decisions of record, and the P1–P5 execution narrative — lives in the archived phase narrative: <a href="../archive/q264-scale-set-protocol-phases/">q264-scale-set-protocol-phases.md</a>.</p>
-<p>This doc now tracks only the <strong>open residual</strong> (<a href="../../STATUS/#Q264">Q264</a>): the terminal PR that removes the classic acquisition machinery and the transitional API fields.
+<p>This doc now tracks only the <strong>open residual</strong> (<a href="../../queue/Q264/">Q264</a>): the terminal PR that removes the classic acquisition machinery and the transitional API fields.
 It is the last step of Option E's retirement ladder — one isolated PR, gated on two independent conditions.</p>
 <h2 id="the-gate-both-must-hold">The gate (both must hold)<a class="headerlink" href="#the-gate-both-must-hold" title="Permanent link">&para;</a></h2>
 <ol>
 <li><strong>The one-minor classic deprecation window from v1.1.0 elapses</strong> (i.e. v1.2.0 ships).
    ScaleSet became the default and Classic was deprecated in v1.1.0's release notes, which starts the window.</li>
-<li><strong>v1alpha1 tenants have migrated off</strong> via <code>gag-migrate</code> (<a href="../../STATUS/#Q273">Q273</a>).
+<li><strong>v1alpha1 tenants have migrated off</strong> via <code>gag-migrate</code> (<a href="../../queue/Q273/">Q273</a>).
    Classic is v1alpha1's <em>only</em> acquisition path, so removing it necessarily ends v1alpha1's ability to acquire jobs — the classic deprecation window <strong>is</strong> the v1alpha1 migration window.</li>
 </ol>
 <p>The removal was originally expected to ride the Q74 v2beta1 graduation hop (that hop is where the transitional fields were to be stripped). v2beta1 has since graduated <strong>without</strong> carrying the removal, so it is no longer bundled — it is now the terminal step, gated on the two conditions above.

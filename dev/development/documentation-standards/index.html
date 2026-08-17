@@ -3030,7 +3030,7 @@ Table cells, blockquotes and list items are prose and are counted.</p>
 <p><strong>The baseline.</strong> With those exclusions the tree measured 9,993 em-dashes in 584,490 prose words on 2026-08-04, 17.1 per 1,000, with 231 of 249 files above the rule.
 A gate set at 3 would land red on everything and be switched off, so <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/docs/em-dash-baseline.txt"><code>scripts/docs/em-dash-baseline.txt</code></a> freezes each of those files at its current count as a ceiling.
 A listed file may not gain em-dashes; a file with no entry, including every new doc, is held to the rule itself.</p>
-<p><a href="../../STATUS/#Q650">Q650</a> is the cleanup.
+<p><a href="../../queue/Q650/">Q650</a> is the cleanup.
 As it lands, <code>make em-dash-baseline</code> re-records the ceilings and the diff is the measure of what it cleared; an entry disappears once its file reaches the rule, and an empty baseline means the ratchet is done.
 <code>make em-dash-report</code> prints every file's density, worst first, which is the worklist.</p>
 <h2 id="an-upstream-behavior-claim-cites-a-measurement">An upstream-behavior claim cites a measurement<a class="headerlink" href="#an-upstream-behavior-claim-cites-a-measurement" title="Permanent link">&para;</a></h2>
@@ -3208,7 +3208,7 @@ If the check does not fire on real cases, demote this to an observation rather t
 </tr>
 <tr>
 <td><strong>Anchor a cross-file section reference</strong></td>
-<td>Cite another file's section with an anchor, never as prose beside a bare file link. Write <code>[testing.md § A negative assertion must be able to fail for only one reason](testing.md#a-negative-assertion-must-be-able-to-fail-for-only-one-reason)</code>, not <code>[testing.md](testing.md) § A negative assertion...</code>. Both render alike and only the first is checked, for the reason the row above gives, so the prose form is verbatim the day it is written and silently wrong after any rename. Measured 2026-08-05: 11 such references in the tree against 1,051 anchored links; <a href="../../STATUS/#Q686">Q686</a> gates it.</td>
+<td>Cite another file's section with an anchor, never as prose beside a bare file link. Write <code>[testing.md § A negative assertion must be able to fail for only one reason](testing.md#a-negative-assertion-must-be-able-to-fail-for-only-one-reason)</code>, not <code>[testing.md](testing.md) § A negative assertion...</code>. Both render alike and only the first is checked, for the reason the row above gives, so the prose form is verbatim the day it is written and silently wrong after any rename. Measured 2026-08-05: 11 such references in the tree against 1,051 anchored links; <a href="../../queue/Q686/">Q686</a> gates it.</td>
 </tr>
 <tr>
 <td><strong>No links to <code>CLAUDE.md</code></strong></td>
@@ -3357,7 +3357,7 @@ What exists today, and what's proposed:</p>
 <tr>
 <td><code>make em-dash-check</code>: em-dash density, code and titles excluded (Q654)</td>
 <td>1</td>
-<td>Wired (<code>make check</code>). Ratchets against a per-file baseline while <a href="../../STATUS/#Q650">Q650</a> clears the debt; see <a href="#enforcing-the-em-dash-rule">Enforcing the em-dash rule</a>.</td>
+<td>Wired (<code>make check</code>). Ratchets against a per-file baseline while <a href="../../queue/Q650/">Q650</a> clears the debt; see <a href="#enforcing-the-em-dash-rule">Enforcing the em-dash rule</a>.</td>
 </tr>
 <tr>
 <td>Periodic docs-vs-code drift audit</td>

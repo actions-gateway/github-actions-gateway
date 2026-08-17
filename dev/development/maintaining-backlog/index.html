@@ -2681,7 +2681,9 @@ What holds the rules for them is the tooling below, which is in-tree and runs in
   Allocation also runs <a href="#search-before-you-file">the duplicate search</a>, which is the part of "search before you file" a mechanism can carry; reading the candidates it prints is the part that is on you.</li>
 <li><strong>The Notes cap is hard, and counted as the cell is written</strong>: ≤ 250 characters, where an em dash costs one and an escaped <code>\|</code> costs two.
   Past 200 characters the row must link a doc from its Item or Notes cell — a <code>#QN</code> sibling anchor doesn't count, since sibling rows are capped too.
-  The same caps apply to Deferred trigger cells.</li>
+  The same caps apply to Deferred trigger cells.
+  <strong>The store adds a cap the table never had</strong>: an item title is at most 72 characters, because it renders whole in every index row and in <code>queue.py next</code>'s kickoff prompt.
+  Adopting it cost 62 rewritten titles.</li>
 <li><strong>A literal pipe is written <code>\|</code>, code spans included, and <code>lint-backlog</code> rule 13 gates it</strong> by comparing each row's own width against its table header.
   Measured 2026-08-14: Q866's Notes rendered as far as its opening backtick, losing the remaining two thirds, and the truncation also hid an over-cap cell from rule 4.
   <strong>Budget for that second half: escaping the pipe is not a one-character fix.</strong> Every rule downstream had been reading the stub before the pipe, so the cell they measure changes the moment it renders whole, and one of them can newly fail on a row nobody edited.
@@ -2697,9 +2699,12 @@ What holds the rules for them is the tooling below, which is in-tree and runs in
 <li><strong>Backlog commits are isolated here by two enforcing gates, not by convention</strong> (<a href="#isolated-commits-and-what-actually-enforces-them">which, and why neither subsumes the other</a>).
   When a rebase or merge conflicts on this file, resolve it via the <a href="#resolving-a-statusmd-only-conflict-verify-cheap-push-now">fast path</a> below.</li>
 </ul>
-<p><strong>The layout is the single table</strong>, which is the one the skill's tooling and every gate here enforce.
-The skill also describes a per-item store as a destination; no cutover has landed on <code>main</code>, so this page and <code>lint-backlog</code> both describe the table.
-A page that starts describing the store before a cutover has landed on <code>main</code> is <a href="../parallel-dispatch/#coordination-channels">acting on a decision it cannot confirm</a>.</p>
+<p><strong>The layout is both, and every backlog edit lands twice.</strong> The per-item store shipped to <code>main</code> in Q889 phase 2 and lives at <a href="../../queue/"><code>docs/queue/</code></a>, one file per item, with priority carried by a <code>rank</code> key instead of a line position.
+<code>docs/STATUS.md</code> is still here and still the source every gate below reads, so the two are held to each other by <code>make queue-drift-check</code>, which fails the moment they stop agreeing on any item, field or order.</p>
+<p>So filing, closing or re-ranking an item means the same edit in both places: the table row, and <code>docs/queue/QNNN.md</code>.
+The gate names exactly what is missing rather than reporting a mismatch, and <code>python3 scripts/docs/queue.py --store docs/queue migrate docs/STATUS.md</code> regenerates the store wholesale if that is easier than hand-editing.
+This is the interim cost of not cutting over in one 400-file commit, and it ends when phase 6 deletes the table (<a href="../../plan/q889-backlog-item-store/">the plan</a>).</p>
+<p>Until then this page keeps describing the table's mechanics (the merge driver, the escaped pipe, the isolated commit) because they are live, and a page that stops describing a mechanism still in use is wrong in the more expensive direction.</p>
 <h2 id="isolated-commits-and-what-actually-enforces-them">Isolated commits, and what actually enforces them<a class="headerlink" href="#isolated-commits-and-what-actually-enforces-them" title="Permanent link">&para;</a></h2>
 <p><strong>The rule: a commit that touches <code>docs/STATUS.md</code> touches nothing else.</strong> Not "no code" — nothing.
 A plan doc, a roadmap bullet and the row deletion they belong to are three commits, in whatever order.
@@ -2781,7 +2786,7 @@ The four steps above never run, because nothing looks deleted, and <code>make qu
 The line is the evidence, not the wording.
 When the measurement leaves the row's own observations describing a <em>different</em> defect, that row is finished: retire it with the refutation recorded, and let the new defect take a new ID.</p>
 <h1 id="1441-is-the-instance">1441 is the instance.<a class="headerlink" href="#1441-is-the-instance" title="Permanent link">&para;</a></h1>
-<p>Q809 was filed on three <code>e2e-calico</code> failures read as NetworkPolicy enforcement negatives; diagnosis attributed all three to one scale-set drain-recovery spec, which is <a href="../../STATUS/#Q549">Q549</a>'s mode B. The diagnosis was right and the retitle in place cost three things anyway:</p>
+<p>Q809 was filed on three <code>e2e-calico</code> failures read as NetworkPolicy enforcement negatives; diagnosis attributed all three to one scale-set drain-recovery spec, which is <a href="../../queue/Q549/">Q549</a>'s mode B. The diagnosis was right and the retitle in place cost three things anyway:</p>
 <ul>
 <li><strong>Every citation of Q809 re-pointed silently.</strong> A repurpose leaves the anchor alive, so <code>make doc-links</code> and rule 5 see nothing: they catch a dead anchor, never a live one that has changed meaning.
   Seven files cited Q809 in its original sense at the moment it changed meaning, and three of them still asserted the refuted failures two days later, in a workflow comment, a spec comment and <code>testing.md</code>.
@@ -2825,7 +2830,7 @@ Raising "these N failures look like one shared cause" in a message to the mainta
 A message to a human is a filing with the safety rail removed.</p>
 <p>It fired twice on 2026-08-12, in both directions.
 A worker raised the "X-test fails under <code>make check</code>, passes standalone" family as an unfiled class; a dispatcher relayed it, citing Q596's 2418 runs and Q703's 240 as evidence that no class row existed.
-<a href="../../STATUS/#Q738">Q738</a> already said "measured across this family" and already named those two rows, so the maintainer was asked to decide something on the premise that it was unfiled.
+<a href="../../queue/Q738/">Q738</a> already said "measured across this family" and already named those two rows, so the maintainer was asked to decide something on the premise that it was unfiled.
 The observation was real and the escalation still cost a wrong premise, which is the same shape as the three duplicate filings above: right finding, no matcher in the path.</p>
 <p>Before escalating, run the search you would run before filing, and say what it returned.
 The cheap version is to pass the title you would have used to <code>make queue-id</code>, which prints its candidates to stderr and claims an ID you can throw away.
@@ -3172,10 +3177,10 @@ Annotate the row's Notes with "<strong>Top of queue per flakes-first rule</stron
 <p>Exceptions: a flake rooted in an outside service that hasn't recurred (file, don't bump); a flake whose fix is blocked on infrastructure that doesn't exist yet (file, mark 🚫, don't bump).</p>
 <p><strong>Sweep the idiom, not just the instance.</strong> When the cause is an idiom rather than a one-off, the same idiom is usually elsewhere in the file or package, and nothing else will go looking.
 Sweep it in the fixing PR and state what the sweep found, "nothing" included: a stated empty sweep is evidence, while an unstated one is indistinguishable from not having looked.
-Q602 taught one scale-set listener test to wait on a listener-produced signal and left a comment explaining why; four days later <a href="../../STATUS/#Q685">Q685</a> was the same defect in a sibling test in the same file, and the sweep it finally prompted found a third case.
+Q602 taught one scale-set listener test to wait on a listener-produced signal and left a comment explaining why; four days later <a href="../../queue/Q685/">Q685</a> was the same defect in a sibling test in the same file, and the sweep it finally prompted found a third case.
 That one never flaked: its positive assertion held whether or not the listener ever observed the completion, so waiting for CI would never have surfaced it.</p>
 <p><strong>A campaign that pins a flake often measures a production defect too, and a flake filed later often turns out to be one already on the Queue.</strong> Either way the pair gets cross-linked the moment it is recognised, with <a href="#two-rows-on-one-defect-cross-link-them-and-say-which-owns-the-measurement">one row owning the measurement</a>.</p>
-<p><strong>Once the mitigation ships, move the row to <a href="../../STATUS/#flake-watch">Flake watch</a></strong> — a Deferred subsection whose revive mechanic differs from the rest of the table: the trigger is always <code>**Event:** recurs on main after the fix</code>, and on recurrence the row returns to the <strong>top</strong> of the Queue, escalated (the first mitigation didn't hold).
+<p><strong>Once the mitigation ships, move the row to <a href="../../queue/">flake watch</a></strong> — a Deferred subsection whose revive mechanic differs from the rest of the table: the trigger is always <code>**Event:** recurs on main after the fix</code>, and on recurrence the row returns to the <strong>top</strong> of the Queue, escalated (the first mitigation didn't hold).
 Keeping the row (rather than closing it) preserves the memory that a fix was already attempted, so a second occurrence reads as a recurrence, not a fresh find.
 The lifecycle:</p>
 <ul>
@@ -3185,7 +3190,7 @@ The lifecycle:</p>
 <li><strong>Soaked or obsolete</strong> → retire to the ledger (below).</li>
 </ul>
 <p>A sighting on a <strong>PR branch</strong> does not meet the trigger, so the row stays in Flake watch — but it is still evidence the mitigation is incomplete: record it (on the row, or in the doc the row links) and count the soak from that date rather than from the fix.
-Record <em>which mode</em> failed, too, where the row's fix addressed a specific one: <a href="../../STATUS/#Q549">Q549</a>'s second sighting was a mode its fix never covered, and a row naming only the fixed mode would have sent the next session to re-diagnose the wrong thing.</p>
+Record <em>which mode</em> failed, too, where the row's fix addressed a specific one: <a href="../../queue/Q549/">Q549</a>'s second sighting was a mode its fix never covered, and a row naming only the fixed mode would have sent the next session to re-diagnose the wrong thing.</p>
 <p>This is the one place the general "done rows are deleted" rule does <strong>not</strong> apply, which makes it easy to miss when a flake fix otherwise looks like a routine change.
 <code>scripts/docs/lint-backlog.sh</code> enforces it (rule 8): a <code>flake</code>-labelled Queue row that disappears entirely — measured against the <a href="#a-moved-row-defeats-conflict-detection">merge base</a> with <code>origin/main</code>, or the pre-commit state under <code>--staged</code> — fails the lint, naming the row and pointing here.
 Retiring a row per the ledger rules below is the deliberate exception: <code>BACKLOG_ALLOW_FLAKE_DELETE="Q123"</code> lets specific IDs through.</p>
@@ -3249,7 +3254,7 @@ This keeps the table honest — <code>⚠️</code> reads as "active work remain
 It fires only on that deletion, never on a steady-state scan — plenty of open rows merely <em>cite</em> a completed plan as evidence, and treating those as active work would make the rule cry wolf.
 For the rare case where the vanished row was such a citation and real work genuinely remains elsewhere, <code>BACKLOG_ALLOW_PROGRESS_STALE="plan/NAME.md"</code> admits it.</p>
 <p>When you flip a plan to <code>✅</code>, add (or update) a <strong>Status</strong> banner at the top of its plan doc naming the Deferred IDs carrying its residuals (e.g.
-"Status: Complete — residuals deferred as <a href="../../STATUS/#Q11">Q11</a>").
+"Status: Complete — residuals deferred as <a href="../../queue/Q11/">Q11</a>").
 The plan doc is <strong>not</strong> archived in this case — its <code>✅</code> Progress row still references it.</p>
 <h3 id="what-parking-a-row-obliges-elsewhere">What parking a row obliges elsewhere<a class="headerlink" href="#what-parking-a-row-obliges-elsewhere" title="Permanent link">&para;</a></h3>
 <p>Deleting a row has a documented cascade — the Progress flip, plan archival, the roadmap graduation.
@@ -3285,7 +3290,7 @@ The plan doc is <strong>not</strong> archived in this case — its <code>✅</co
 </tbody>
 </table>
 <p>Only the first two were written down before.
-A 2026-07-30 groom that deferred <a href="../../STATUS/#Q273">Q273</a> found the other three the expensive way — two by opening a red PR, the third by re-reading the page.</p>
+A 2026-07-30 groom that deferred <a href="../../queue/Q273/">Q273</a> found the other three the expensive way — two by opening a red PR, the third by re-reading the page.</p>
 <h2 id="a-label-earns-its-place-by-discriminating">A label earns its place by discriminating<a class="headerlink" href="#a-label-earns-its-place-by-discriminating" title="Permanent link">&para;</a></h2>
 <p>A label that lands on most rows costs a column and answers nothing.
 <code>infra</code> reached 69 of 160 table rows before it was retired — it had become "engineering work that isn't docs, tests, or security", covering controller bugs, API graduation, GPU support, and CI gates alike.

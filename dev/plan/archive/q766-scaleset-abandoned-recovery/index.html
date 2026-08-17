@@ -2681,7 +2681,7 @@
 The two prior ports of the same shape are Q417 (eviction recovery) and Q443 (the capacity ladder).</p>
 <h2 id="why-it-matters-now">Why it matters now<a class="headerlink" href="#why-it-matters-now" title="Permanent link">&para;</a></h2>
 <p><code>v2beta1</code> is ScaleSet-only and ScaleSet is the default <code>acquisitionProtocol</code>, so no v2 tenant has either recovery today.
-<a href="../../../STATUS/#Q264">Q264</a> deletes the classic machinery at <code>v2.0.0</code>, which would turn the gap into the silent capability deletion <a href="../../../design/04-operational-flows/">04-operational-flows.md</a> names, which is the outcome Q417 and Q443 were ported to avoid.</p>
+<a href="../../../queue/Q264/">Q264</a> deletes the classic machinery at <code>v2.0.0</code>, which would turn the gap into the silent capability deletion <a href="../../../design/04-operational-flows/">04-operational-flows.md</a> names, which is the outcome Q417 and Q443 were ported to avoid.</p>
 <h2 id="what-the-classic-tier-actually-does">What the classic tier actually does<a class="headerlink" href="#what-the-classic-tier-actually-does" title="Permanent link">&para;</a></h2>
 <p>Measured from source 2026-08-09.</p>
 <p><code>provision()</code> holds a goroutine for the life of the job.

@@ -2658,7 +2658,7 @@ That is the precondition <a href="../../release-1.5/#scope-reopened-2026-08-14-w
 Both get a ledger row naming the tier, and a gate that fails a missing row, a bad tier value, and a single-tier row the source refutes.</p>
 <p><strong>Out.</strong> The GMC and proxy binaries: neither acquires jobs, so neither has a tier.
 That is the exclusion the metric ledger already states.
-Label values were Q851, a separate row, since shipped as <a href="../../../operations/observability-metrics/#label-value-reach">Label-value reach</a>; prose surfaces are <a href="../../../STATUS/#Q848">Q848</a>.</p>
+Label values were Q851, a separate row, since shipped as <a href="../../../operations/observability-metrics/#label-value-reach">Label-value reach</a>; prose surfaces are <a href="../../../queue/Q848/">Q848</a>.</p>
 <h2 id="2-decisions">2. Decisions<a class="headerlink" href="#2-decisions" title="Permanent link">&para;</a></h2>
 <p><strong>A second tool, not a rename.</strong> The metric gate ships as <code>make metric-tiers-check</code>, and <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/docs/releases/v1.5.0.md"><code>docs/releases/v1.5.0.md</code></a> records it under that name.
 A shipped release note is a historical record, so renaming <code>metrictiers</code> would either falsify it or leave the two out of step.

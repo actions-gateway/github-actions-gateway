@@ -3078,7 +3078,7 @@
 <p>On-demand GKE cluster for dogfooding GAG's own CI.
 The cluster costs $0 at rest (zero nodes), roughly $0.07/hr when idling with the system node only, and adds ≈$0.04/hr per spot worker node while jobs are running.</p>
 <blockquote>
-<p><strong>Status: Complete (2026-07-07).</strong> The dogfood plan's deliverables have all landed and are live-validated: turn-up (2026-07-01), per-job-green, and concurrent-matrix-green on the ScaleSet default (Q224 closed via <a href="../../STATUS/#Q264">Q264</a> P4, #545), plus the v2beta1 dogfood path (Q231, #573).
+<p><strong>Status: Complete (2026-07-07).</strong> The dogfood plan's deliverables have all landed and are live-validated: turn-up (2026-07-01), per-job-green, and concurrent-matrix-green on the ScaleSet default (Q224 closed via <a href="../../queue/Q264/">Q264</a> P4, #545), plus the v2beta1 dogfood path (Q231, #573).
 The turn-up findings that gated it are all resolved — session recovery (Q247: renew by RunnerRequestID, bounded RenewJob, job-scoped renewal token, and Q254 worker teardown on definitive lock loss), release-asset diagnosis (Q246), agent-recycle under burst (Q259), and the dup-acquisition wedge (Q260).
 No open Queue rows remain.
 This doc stays in place as the living operational runbook — the sections below are the turn-up/start/stop/teardown reference, not open work.
@@ -3809,7 +3809,7 @@ One real gap was found and fixed on the way; everything else worked unchanged.</
 <p><strong>One artifact to expect on a from-zero run:</strong> the preflight (<code>validate-cluster.sh</code>) reported <code>metrics-server: metrics.k8s.io API is not Available</code>.
 That is a race, not a real gap — GKE's metrics-server addon is still starting while <code>setup.sh</code> reaches preflight, and it was measured <code>Available</code> about two minutes into the cluster's life.
 The check is a WARN, so the bootstrap proceeded correctly, but it is a false negative and a run with <code>VALIDATE_STRICT=1</code> would have failed the from-zero path on it.</p>
-<p>The preflight now retries that check within a bounded budget instead of looking once (<a href="../../STATUS/#Q397">Q397</a>): 150 s for a registered-but-not-yet-<code>Available</code> <code>metrics.k8s.io</code> APIService, and a 15 s grace for the APIService to appear at all before it concludes metrics-server is absent (so a cluster genuinely without it still warns promptly).
+<p>The preflight now retries that check within a bounded budget instead of looking once (<a href="../../queue/Q397/">Q397</a>): 150 s for a registered-but-not-yet-<code>Available</code> <code>metrics.k8s.io</code> APIService, and a 15 s grace for the APIService to appear at all before it concludes metrics-server is absent (so a cluster genuinely without it still warns promptly).
 The retry is unit-tested against faked probes in <code>scripts/e2e/validate-cluster-test.sh</code>; the from-zero timing itself is only observable on a real recreate, so <strong>the next dogfood recreate is where this gets confirmed</strong> — expect a <code>[WAIT]</code> line followed by <code>PASS</code>, not a WARN.</p>
 <p>To go further and remove the project itself (irreversible, and it takes the GCP-side App wiring with it):</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-30-1" name="__codelineno-30-1" href="#__codelineno-30-1"></a>gcloud<span class="w"> </span>projects<span class="w"> </span>delete<span class="w"> </span><span class="s2">"</span><span class="nv">$PROJECT</span><span class="s2">"</span>

@@ -2790,7 +2790,7 @@ Of the 25 most-reacted open ARC issues, <strong>zero</strong> concern quota safe
 <p><strong>The exception, and the one place the seat is structurally defensible:</strong> gang scheduling.
 A multi-node job needs N co-scheduled pods in one topology domain, and the scale-set protocol advertises capacity as a single integer.
 A gang requirement is a placement predicate, not a count, so the <code>SetMaxRunners</code> workaround does not exist for it.
-That is why <a href="../../STATUS/#Q718">Q718</a> matters beyond GPUs.</p>
+That is why <a href="../../queue/Q718/">Q718</a> matters beyond GPUs.</p>
 <h2 id="what-buyers-actually-evaluate-on">What buyers actually evaluate on<a class="headerlink" href="#what-buyers-actually-evaluate-on" title="Permanent link">&para;</a></h2>
 <p>A 31-criterion framework came out of the research.
 The subset worth keeping is the part <strong>no existing comparison in this space covers</strong>, because that is both the opening and the checklist for future positioning work:</p>
@@ -2840,7 +2840,7 @@ All were generated as moat candidates and killed on review:</p>
 <li><strong>A signed per-job isolation record</strong>: category-creating in theory, zero demand.</li>
 <li><strong>A time-boxed debug hold</strong>: regresses a security property that <code>CLAUDE.md</code> makes non-negotiable.</li>
 <li><strong>Brokering <code>container:</code>/<code>services:</code> step pods through the AGC</strong>: invents a bespoke protocol to reach parity with a capability ARC already ships.
-  Kept as <a href="../../STATUS/#Q727">Q727</a> framed as a <em>decision</em> rather than that design.</li>
+  Kept as <a href="../../queue/Q727/">Q727</a> framed as a <em>decision</em> rather than that design.</li>
 </ul>
 <h2 id="why-the-marketing-drifted-and-the-fix">Why the marketing drifted, and the fix<a class="headerlink" href="#why-the-marketing-drifted-and-the-fix" title="Permanent link">&para;</a></h2>
 <p>The comparison table's errors were not authoring mistakes.
@@ -3024,7 +3024,7 @@ This page is the distillation; those files are the working notes behind it.</p>
 <li>~~<code>go-to-market.md</code> §2 and the two-tier positioning~~ ✅ reconciled 2026-08-06. §2 is now three lanes with the location filter, §4 carries both tiers (site claims versus the thesis the strategy plays for), and §11 records that Q60's closure was a false record.</li>
 <li>~~<code>README.md</code> scannability pass~~ ✅ done 2026-08-06.
   It now leads with the measured numbers and an "Is this for you?" router, and both its problem and solution sections follow the validated messaging order rather than opening on priority tiers.
-  One finding fell out of it: <a href="../../STATUS/#Q728">Q728</a>, since <code>check-release-pins.sh</code> reads any bare <code>X.Y.Z</code> in a pin-bearing doc as a GAG release pin, so the README cannot name the ARC version its comparison was measured against.</li>
+  One finding fell out of it: <a href="../../queue/Q728/">Q728</a>, since <code>check-release-pins.sh</code> reads any bare <code>X.Y.Z</code> in a pin-bearing doc as a GAG release pin, so the README cannot name the ARC version its comparison was measured against.</li>
 <li>~~Caching and GPU umbrella goals~~ ✅ written 2026-08-07 as <a href="../caching-and-worker-storage/">caching-and-worker-storage</a> and <a href="../gpu-and-accelerated-ci/">gpu-and-accelerated-ci</a>.
   Each surfaced a collision the individual rows do not state: closing untrusted-PR egress removes the <code>actions/cache</code> path that works today, and GPU plus Kata do not compose on managed cloud (not for want of nested virtualization, which A2/A3/G2 have, but because the Kata passthrough path needs BIOS and host-driver control a node pool does not expose).
   Both corrected a published claim in passing.</li>

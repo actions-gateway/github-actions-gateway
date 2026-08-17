@@ -2669,7 +2669,7 @@
 Neither run failed — they interfered <em>invisibly</em>, and roughly 2.5 hours went into diagnosing symptoms that had no in-cluster cause.
 A third failure mode surfaced the same day: a run killed with <code>kill -9</code> skips its <code>AfterAll</code>, stranding a registered runner that then poisons the next run.</p>
 <p>This plan carried Q511, and absorbed the collision reported separately as Q500 — that row described the same incident and proposed the alternative fix rather than complementary work.
-The forbid half shipped 2026-07-31; the isolation half is parked as <a href="../../STATUS/#Q530">Q530</a>.</p>
+The forbid half shipped 2026-07-31; the isolation half is parked as <a href="../../queue/Q530/">Q530</a>.</p>
 <h2 id="what-was-observed">What was observed<a class="headerlink" href="#what-was-observed" title="Permanent link">&para;</a></h2>
 <table>
 <thead>
@@ -2710,14 +2710,14 @@ GitHub routes a job by the runner's <code>runs-on</code> label, and the fixture 
 Per-run names would leave both runs advertising the same label in the same repo, so either run's job could still land on either cluster's gateway — the collision would survive the fix that was supposed to remove it.
 Real isolation therefore needs the fixture workflows parameterized (<code>runs-on: ${{ inputs.label }}</code>), which is a change to a <strong>different repository</strong>, unverifiable from this one, and it still leaves <code>dispatchAndResolveRun</code>'s "the run that was not there before" racy under concurrency.</p>
 <p>Forbidding costs the ability to take two independent live measurements at once.
-That is a real cost given how many Queue rows want live runs, so isolation is deferred rather than declined — <a href="../../STATUS/#Q530">Q530</a> carries it, and this plan stays open for that half.</p>
+That is a real cost given how many Queue rows want live runs, so isolation is deferred rather than declined — <a href="../../queue/Q530/">Q530</a> carries it, and this plan stays open for that half.</p>
 <h2 id="scope">Scope<a class="headerlink" href="#scope" title="Permanent link">&para;</a></h2>
 <ol>
 <li>✅ Decide forbid-vs-isolate and record the rationale here.</li>
 <li>✅ Implement the chosen design — a <code>BeforeAll</code> preflight.</li>
 <li>✅ Add a cleanup target that deregisters stranded runners, for the <code>kill -9</code> path that skips <code>AfterAll</code>.
    This is needed regardless of the decision above.</li>
-<li>🔲 Isolate the runs, if the cost of the singleton rule proves too high (<a href="../../STATUS/#Q530">Q530</a>).</li>
+<li>🔲 Isolate the runs, if the cost of the singleton rule proves too high (<a href="../../queue/Q530/">Q530</a>).</li>
 </ol>
 <h2 id="what-shipped">What shipped<a class="headerlink" href="#what-shipped" title="Permanent link">&para;</a></h2>
 <p><code>preflightFixtureRepoIdle</code> runs in the live-GitHub suite's <code>BeforeAll</code>, ahead of the cluster-wide GMC env swap — the suite's first mutation of anything shared.

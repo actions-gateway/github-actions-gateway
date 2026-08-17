@@ -2928,7 +2928,7 @@ The instrument now watches both levels (verdicts <code>CONCLUDED-run-&lt;c&gt;</
 <li>Q676: the Q628 release path must not ship <code>result=abandoned</code> for the winner's own delivery as-is; pick and measure a remedy.
   Done: see <a href="#q676--the-remedy-measurements-2026-08-04">the remedy measurements</a>.
   The Q260 sibling case (<code>result=skipped</code> on deduped deliveries while the winner still runs) is <strong>not</strong> covered by this measurement.
-  Whether a sibling completion also concludes the whole run is exactly the semantics brokertest's fan-out accounting assumes it does not, and needs its own probe arm (<a href="../../STATUS/#Q682">Q682</a>).</li>
+  Whether a sibling completion also concludes the whole run is exactly the semantics brokertest's fan-out accounting assumes it does not, and needs its own probe arm (<a href="../../queue/Q682/">Q682</a>).</li>
 <li><code>broker/types.go</code> and <code>listener/job.go</code> comments updated to cite this measurement instead of the unmeasured ~15-minute-timeout rationale.</li>
 </ul>
 <h2 id="q676--the-remedy-measurements-2026-08-04">Q676 — the remedy measurements (2026-08-04)<a class="headerlink" href="#q676--the-remedy-measurements-2026-08-04" title="Permanent link">&para;</a></h2>

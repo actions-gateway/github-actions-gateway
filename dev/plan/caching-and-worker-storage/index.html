@@ -2745,19 +2745,19 @@ Do not read this table as three deployments.</p>
 <td><strong>Image pulls</strong></td>
 <td>Container images the node pulls to start a worker</td>
 <td>Upstream registries, over per-tenant egress</td>
-<td><a href="../../STATUS/#Q408">Q408</a>, <a href="../../STATUS/#Q539">Q539</a>, <a href="../../STATUS/#Q540">Q540</a></td>
+<td><a href="../../queue/Q408/">Q408</a>, <a href="../../queue/Q539/">Q539</a>, <a href="../../queue/Q540/">Q540</a></td>
 </tr>
 <tr>
 <td><strong>Job cache</strong></td>
 <td><code>actions/cache</code> entries: dependencies, toolchains, build outputs</td>
 <td><strong>GitHub's Azure-blob store, and it works</strong></td>
-<td><a href="../../STATUS/#Q215">Q215</a></td>
+<td><a href="../../queue/Q215/">Q215</a></td>
 </tr>
 <tr>
 <td><strong>Build layer cache</strong></td>
 <td>Docker layers produced by an image build inside a job</td>
 <td>Nowhere. Workers are storage-less</td>
-<td><a href="../../STATUS/#Q215">Q215</a></td>
+<td><a href="../../queue/Q215/">Q215</a></td>
 </tr>
 </tbody>
 </table>
@@ -2776,7 +2776,7 @@ Do not read this table as three deployments.</p>
 <td><strong>Shared job storage</strong></td>
 <td>A <code>ReadWriteMany</code> volume several jobs mount to pass files</td>
 <td>Unvalidated. Also what ARC's <code>containerMode: kubernetes</code> needs, so it is a migration blocker</td>
-<td><a href="../../STATUS/#Q719">Q719</a></td>
+<td><a href="../../queue/Q719/">Q719</a></td>
 </tr>
 </tbody>
 </table>
@@ -2785,7 +2785,7 @@ Do not read this table as three deployments.</p>
 A tenant's worker reaches the Actions cache data plane through its own proxy pool like any other GitHub endpoint.</p>
 <h3 id="one-backend-can-serve-several-classes">One backend can serve several classes<a class="headerlink" href="#one-backend-can-serve-several-classes" title="Permanent link">&para;</a></h3>
 <p>Distinct problems do not imply distinct deployments, and scoping them as three projects is how this becomes three times the work it needs to be.</p>
-<p>Dragonfly is the concrete case, and it is already the scheduled mirror candidate in <a href="../../STATUS/#Q539">Q539</a>.
+<p>Dragonfly is the concrete case, and it is already the scheduled mirror candidate in <a href="../../queue/Q539/">Q539</a>.
 It is a <strong>general file-distribution system</strong> whose registry-mirror use is one application, not its definition.
 Measured from the upstream docs on 2026-08-07:</p>
 <ul>
@@ -2805,14 +2805,14 @@ That property is load-bearing: it is most of why an untrusted job can be allowed
 <code>actions/cache</code> saves entries as well as restoring them, and a cache nothing writes to is empty.
 So the artifact cache <strong>cannot simply reuse the mirror role</strong>, however well the same software serves both.
 It needs either a second role with its own contract, or a writable variant whose isolation argument is made separately, and that argument is the hard part: a write path reachable by an untrusted fork pull request is a way to plant content that a later trusted job restores and executes.</p>
-<p>That is the sharpest version of the review <a href="../../STATUS/#Q215">Q215</a> is blocked on, and it is a contract question rather than a storage question.</p>
+<p>That is the sharpest version of the review <a href="../../queue/Q215/">Q215</a> is blocked on, and it is a contract question rather than a storage question.</p>
 <h3 id="the-accurate-gap">The accurate gap<a class="headerlink" href="#the-accurate-gap" title="Permanent link">&para;</a></h3>
 <p>The gap is <strong>a cache inside the cluster</strong>, not caching.
 What a local cache would buy is egress cost and restore latency, not capability.
 Stating it the current way concedes a loss that has not happened, and it hides the loss that has: no local cache means every restore is a round trip out of the cluster and back, which on-premises or on metered egress is the expensive path.</p>
 <h2 id="the-collision-with-the-security-goal">The collision with the security goal<a class="headerlink" href="#the-collision-with-the-security-goal" title="Permanent link">&para;</a></h2>
 <p><strong>This is the reason the two goals cannot be planned separately.</strong></p>
-<p><a href="../../STATUS/#Q408">Q408</a> Phase 1 closes untrusted-PR egress down to GitHub, the registry mirror, and DNS.
+<p><a href="../../queue/Q408/">Q408</a> Phase 1 closes untrusted-PR egress down to GitHub, the registry mirror, and DNS.
 The Actions cache data plane is a <strong>non-GitHub host</strong>, so closing that egress removes <code>actions/cache</code>.
 This is already the measured state of GAG's own self-hosted CI lane, where every <code>actions/cache</code> step is skipped because the hardened egress rule does not admit it (<a href="../../development/testing/#the-e2e-workflows-kindnet-and-calico">testing.md</a>, and <a href="../q408-untrusted-pr-egress/">q408 §3</a> has the measurement).</p>
 <p>The consequences run one way:</p>
@@ -2862,7 +2862,7 @@ ARC has none either, so this is not a reason to prefer ARC; GitLab Runner and th
 Do not repeat that <code>actions/cache</code> has no home.</p>
 <h2 id="deliverables">Deliverables<a class="headerlink" href="#deliverables" title="Permanent link">&para;</a></h2>
 <p>Shipped: per-tenant egress that admits the Actions cache data plane; the registry-mirror contract and the Athens pattern it derives from.</p>
-<p>Open, with rows: <a href="../../STATUS/#Q408">Q408</a> (mirror design and phases), <a href="../../STATUS/#Q539">Q539</a> (Dragonfly as the mirror backend), <a href="../../STATUS/#Q540">Q540</a> (composed node-layer and guest-layer stack), <a href="../../STATUS/#Q215">Q215</a> (job and build-layer cache, blocked on the isolation review this document reframes as the design), <a href="../../STATUS/#Q719">Q719</a> (RWX validation and the reference-architecture stance), <a href="../../STATUS/#Q268">Q268</a> (warm worker pool, the competing lever for the latency half of the same complaint).</p>
+<p>Open, with rows: <a href="../../queue/Q408/">Q408</a> (mirror design and phases), <a href="../../queue/Q539/">Q539</a> (Dragonfly as the mirror backend), <a href="../../queue/Q540/">Q540</a> (composed node-layer and guest-layer stack), <a href="../../queue/Q215/">Q215</a> (job and build-layer cache, blocked on the isolation review this document reframes as the design), <a href="../../queue/Q719/">Q719</a> (RWX validation and the reference-architecture stance), <a href="../../queue/Q268/">Q268</a> (warm worker pool, the competing lever for the latency half of the same complaint).</p>
 <p><strong>Scope note for Q539 and Q540.</strong> Both are currently written as image-only validations.
 Because the candidate backend is a general file distributor, both should also answer whether <em>one</em> deployment serves the artifact class as well, and at what cost to the §3.5 contract.
 Answering it there is nearly free while the deployment is already stood up, and expensive later.

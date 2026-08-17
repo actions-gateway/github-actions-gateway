@@ -3162,7 +3162,7 @@ Reaching the stable <code>v2</code> group involves two <em>different</em> kinds 
 <p>Each graduation hop is cheap but not free:</p>
 <ol>
 <li>Add the new version to each CRD; mark it the <strong>storage version</strong>.</li>
-<li><strong>Conversion webhook</strong> round-trips served versions — <a href="../../STATUS/#deferred">Q74</a> (<code>Hub</code>/<code>Convertible</code> scaffolding) lands at the first graduation, and is distinct from the M5 fan-out tool a conversion webhook cannot replace.</li>
+<li><strong>Conversion webhook</strong> round-trips served versions — Q74 (<code>Hub</code>/<code>Convertible</code> scaffolding) lands at the first graduation, and is distinct from the M5 fan-out tool a conversion webhook cannot replace.</li>
 <li><strong>Storage migration</strong> — rewrite stored objects to the new version, then drop the superseded served version.</li>
 </ol>
 <p><code>v1alpha1</code> is deprecated and removed on its own track once v2 adoption is sufficient — which is also when the Q147 dual-read window closes (M5, <a href="../../design/appendix-h-v2-api-decomposition/#h12-folding-in-the-grandfathered-label-value-alignment-q147">§H.12</a>).</p>

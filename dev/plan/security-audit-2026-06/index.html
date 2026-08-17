@@ -2731,7 +2731,7 @@ The first audit (2026-05) and its W/C/H/M/L workstreams live in <a href="../secu
 <blockquote>
 <p><strong>Status: Complete.</strong> Every High/Medium finding is resolved (Q121–Q130).
 The proxy destination-allowlist / SSRF revisit that this audit deferred shipped as Q242 (Appendix G §G.1), though as an <em>opt-in, platform-gated</em> control — the default posture is unchanged, so the finding's disposition below still reads "accepted by design" for a stock install.
-The remaining deferral is the worker trivy-leg flip (<a href="../../STATUS/#Q70">Q70</a>); the residual proxy hardening this audit argued for — a connection cap and per-connection audit trail — is now tracked as live Queue rows (<a href="../../STATUS/#Q564">Q564</a>, <a href="../../STATUS/#Q565">Q565</a>).
+The remaining deferral is the worker trivy-leg flip (<a href="../../queue/Q70/">Q70</a>); the residual proxy hardening this audit argued for — a connection cap and per-connection audit trail — is now tracked as live Queue rows (<a href="../../queue/Q564/">Q564</a>, <a href="../../queue/Q565/">Q565</a>).
 Info-level / accepted-by-design items are documented in place.
 No active work remains on this audit.</p>
 </blockquote>
@@ -2803,7 +2803,7 @@ The recurring theme in the new findings is <em>claim-vs-code mismatch</em>: docu
 <tr>
 <td>Proxy has no app-layer destination allowlist / connection cap</td>
 <td>Medium</td>
-<td>Still accepted by design <strong>in the default posture</strong> — security.md M-2. Q242 shipped Appendix G §G.1 as an <em>opt-in, platform-gated</em> allowlist (<code>actions_gateway_proxy_connect_denied_total</code> makes each denial an SSRF signal), so operators who want the app-layer gate now have it; left unconfigured the proxy is transport-only and the pod-egress NetworkPolicy remains the hard gate. This audit's metadata-service/SSRF framing is what carried that control. The connection-cap half remains open as <a href="../../STATUS/#Q565">Q565</a></td>
+<td>Still accepted by design <strong>in the default posture</strong> — security.md M-2. Q242 shipped Appendix G §G.1 as an <em>opt-in, platform-gated</em> allowlist (<code>actions_gateway_proxy_connect_denied_total</code> makes each denial an SSRF signal), so operators who want the app-layer gate now have it; left unconfigured the proxy is transport-only and the pod-egress NetworkPolicy remains the hard gate. This audit's metadata-service/SSRF framing is what carried that control. The connection-cap half remains open as <a href="../../queue/Q565/">Q565</a></td>
 </tr>
 <tr>
 <td>ResourceQuota is optional and tenant-controlled</td>
@@ -2818,7 +2818,7 @@ The recurring theme in the new findings is <em>claim-vs-code mismatch</em>: docu
 <tr>
 <td>Worker trivy leg report-only</td>
 <td>Info</td>
-<td>Known — <a href="../../STATUS/#Q70">Q70</a></td>
+<td>Known — <a href="../../queue/Q70/">Q70</a></td>
 </tr>
 <tr>
 <td>ServiceMonitor <code>insecureSkipVerify</code></td>

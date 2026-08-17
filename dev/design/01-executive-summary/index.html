@@ -3077,7 +3077,7 @@ Each pod's long-poll connection also generates sustained polling noise through n
    No cluster-admin involvement is required after initial GMC installation.</li>
 <li><strong>Replaceable managed defaults — good-enough by default, opt-out to specialist tools.</strong> For each managed concern, the platform provisions an opinionated default so a tenant onboards with zero tuning — but every such concern exposes an opt-out (a <code>managed…: false</code> toggle or a <code>…Ref</code> to operator-supplied material) that disables the default and lets an operator substitute a more capable tool.
    Today: <code>managedNetworkPolicy: false</code> → bring Cilium/Calico FQDN policies; <code>managedAutoscaling: false</code> (v2 <code>EgressProxy</code>) → bring KEDA/VPA/a custom HPA for the proxy pool.
-   Planned, behind triggers: an operator-supplied proxy TLS certificate → external PKI/Vault (<a href="../../STATUS/#deferred">Q174</a>).
+   Planned, behind triggers: an operator-supplied proxy TLS certificate → external PKI/Vault (<a href="../../queue/Q174/">Q174</a>).
    The opt-out shifts <em>ownership</em>, never a security invariant: a replacement must still satisfy the property the default guaranteed — e.g. <code>managedNetworkPolicy: false</code> still requires equivalent egress restriction.
    This keeps the common path simple and the advanced path unblocked, and pairs with <a href="../05-security/">secure-by-default</a>: the managed default is the safe one, the opt-out is explicit.
    Not every managed component gets an opt-out — safety invariants (PodDisruptionBudget, pod security context), architectural constraints (single-replica AGC, fixed proxy ports), and non-tenant-facing plumbing (Services, RBAC) stay managed.</li>

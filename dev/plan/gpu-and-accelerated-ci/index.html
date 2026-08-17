@@ -2729,7 +2729,7 @@ These are foundations, not placeholders:</p>
 </tbody>
 </table>
 <p>What is missing is not the plumbing.
-It is the conventions that make a GPU runner set feel native (<a href="../../STATUS/#Q216">Q216</a>) and the ability to express a job that needs more than one node at once (<a href="../../STATUS/#Q718">Q718</a>).</p>
+It is the conventions that make a GPU runner set feel native (<a href="../../queue/Q216/">Q216</a>) and the ability to express a job that needs more than one node at once (<a href="../../queue/Q718/">Q718</a>).</p>
 <h2 id="the-collision-with-the-security-goal">The collision with the security goal<a class="headerlink" href="#the-collision-with-the-security-goal" title="Permanent link">&para;</a></h2>
 <p><strong>On managed cloud GPU, isolation and the accelerator do not compose the way GAG's defaults assume</strong>, and no Queue row says so.</p>
 <p>Kata micro-VM workers are the shipped answer for giving a job root without a shared kernel, and they are the default in GAG's own end-to-end CI.
@@ -2755,7 +2755,7 @@ The strongest audience for GAG's security story and the strongest audience for i
 On-premises and reserved hardware is where both hold at once, which is also where the <a href="../../alternatives/#location-location-location">location filter</a> already removes most of the competition.
 That is a coherent story, but only if it is stated rather than discovered by an operator after they buy A3 nodes.</p>
 <h2 id="why-gang-scheduling-is-structurally-hard-and-why-that-matters">Why gang scheduling is structurally hard, and why that matters<a class="headerlink" href="#why-gang-scheduling-is-structurally-hard-and-why-that-matters" title="Permanent link">&para;</a></h2>
-<p><a href="../../STATUS/#Q718">Q718</a> is not a bigger version of Q216.
+<p><a href="../../queue/Q718/">Q718</a> is not a bigger version of Q216.
 A multi-node training or distributed-test job needs <strong>N pods co-scheduled in one topology domain</strong> (NVLink, InfiniBand).
 The runner-scale-set protocol advertises capacity to GitHub as <strong>a single integer</strong>.
 A gang requirement is a placement predicate, not a count, so there is no integer that expresses "four pods, same domain, or none".</p>
@@ -2797,7 +2797,7 @@ First-class GPU conventions and multi-node gang scheduling are on the roadmap an
 <p>Do not claim GPU Operator or Node Feature Discovery awareness, gang scheduling, topology-aware placement, or isolated GPU workers on cloud.</p>
 <h2 id="deliverables">Deliverables<a class="headerlink" href="#deliverables" title="Permanent link">&para;</a></h2>
 <p>Shipped: scale-to-zero workers, priority tiers with reserved floors, disruption re-run for preempted GPU jobs, GPU-safe right-sizing, per-tenant utilization metrics, mixed-shape capacity planning.</p>
-<p>Open, with rows: <a href="../../STATUS/#Q216">Q216</a> (first-class GPU conventions, GPU Operator and NFD awareness), <a href="../../STATUS/#Q718">Q718</a> (gang scheduling and topology-aware placement), <a href="../../STATUS/#Q407">Q407</a> (<code>ProvisioningRequest</code> capacity probe, which is how a gang would ask an autoscaler whether it can be placed before the claim).</p>
+<p>Open, with rows: <a href="../../queue/Q216/">Q216</a> (first-class GPU conventions, GPU Operator and NFD awareness), <a href="../../queue/Q718/">Q718</a> (gang scheduling and topology-aware placement), <a href="../../queue/Q407/">Q407</a> (<code>ProvisioningRequest</code> capacity probe, which is how a gang would ask an autoscaler whether it can be placed before the claim).</p>
 <p>Both open rows are <strong>demand-gated on purpose</strong>: they need a real GPU CI workload to design against, and Q216's own note says so.
 Designing them against an imagined one is how the wrong abstraction ships.</p>
 <h2 id="gaps-with-no-row-yet">Gaps with no row yet<a class="headerlink" href="#gaps-with-no-row-yet" title="Permanent link">&para;</a></h2>

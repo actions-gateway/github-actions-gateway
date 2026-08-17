@@ -2947,7 +2947,7 @@ The honest statement is not "ARC lacks feature X".
 It is "nobody has pushed this far enough yet, and here is how far we have got".</p>
 <p><strong>Leg 2: GAG is making it safe.</strong> Kata micro-VM workers give a job root without a shared kernel, already the default in GAG's own end-to-end suite.
 Per-tenant egress plus default-deny NetworkPolicy, reconciled rather than hand-built, close the network half, including the path Kata does not close (a micro-VM does not change the pod's network identity, so cloud metadata still answers from inside the guest).
-Still open and load-bearing: <a href="../../STATUS/#Q408">Q408</a>, <a href="../../STATUS/#Q539">Q539</a>, <a href="../../STATUS/#Q540">Q540</a>, <a href="../../STATUS/#Q716">Q716</a>, under the <a href="../secure-multi-tenant-oss-ci/">secure multi-tenant OSS CI</a> umbrella.</p>
+Still open and load-bearing: <a href="../../queue/Q408/">Q408</a>, <a href="../../queue/Q539/">Q539</a>, <a href="../../queue/Q540/">Q540</a>, <a href="../../queue/Q716/">Q716</a>, under the <a href="../secure-multi-tenant-oss-ci/">secure multi-tenant OSS CI</a> umbrella.</p>
 <p><strong>Leg 3: GAG keeps it operable.</strong> Quota-aware intake and automatic re-run are consequences of leg 2, not standalone features, and should be presented that way.
 Bin-packing tenants onto shared expensive nodes <em>requires</em> enforceable per-tenant quotas, and enforcing a quota is what strands jobs unless intake respects it before the claim.
 Sharing capacity <em>requires</em> eviction and preemption to be safe, and they are safe only if a disrupted job re-runs itself.
@@ -3003,7 +3003,7 @@ The messaging consequence:</p>
 </table>
 <p><strong>The pre-claim seat is the trap.</strong> ARC's listener already holds a Kubernetes clientset and <code>actions/scaleset</code> already exposes <code>SetMaxRunners</code>, so the seat is a permissions change away for anyone who wants it.
 Claim the <strong>signal</strong> (live quota headroom computed and put in the capacity header), never the seat.
-The one place it is structurally defensible is gang scheduling (<a href="../../STATUS/#Q718">Q718</a>): a multi-node job needs N co-scheduled pods in one topology domain, and the protocol advertises capacity as a single integer, so no <code>SetMaxRunners</code> workaround exists for a placement predicate.</p>
+The one place it is structurally defensible is gang scheduling (<a href="../../queue/Q718/">Q718</a>): a multi-node job needs N co-scheduled pods in one topology domain, and the protocol advertises capacity as a single integer, so no <code>SetMaxRunners</code> workaround exists for a placement predicate.</p>
 <h2 id="5-channels--where-to-reach-the-icp-ranked-by-fit">5. Channels — where to reach the ICP (ranked by fit)<a class="headerlink" href="#5-channels--where-to-reach-the-icp-ranked-by-fit" title="Permanent link">&para;</a></h2>
 <p><strong>High-intent / overt:</strong></p>
 <ol>

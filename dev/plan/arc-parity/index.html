@@ -2693,13 +2693,13 @@ The corrections shipped; the <em>forward</em> half, deciding which gaps GAG clos
 <tr>
 <td><strong><code>containerMode: kubernetes</code></strong></td>
 <td>Runs <code>container:</code> and <code>services:</code> steps as separate pods on a provisioned volume. GAG runs one worker pod per job, so that path is Docker-in-Docker under Kata rather than a non-privileged pod-per-step model</td>
-<td><a href="../../STATUS/#Q727">Q727</a></td>
+<td><a href="../../queue/Q727/">Q727</a></td>
 <td>after 1.5</td>
 </tr>
 <tr>
 <td><strong>GHES validated on a real appliance</strong></td>
 <td>GAG serves GitHub Enterprise Server (GHES) gateways and marks both of its GHES capabilities untested against real hardware, so an enterprise evaluator has no evidence either way</td>
-<td><a href="../../STATUS/#Q765">Q765</a></td>
+<td><a href="../../queue/Q765/">Q765</a></td>
 <td>unscheduled, needs an appliance</td>
 </tr>
 </tbody>
@@ -2712,7 +2712,7 @@ This row belongs in the comparison as a permanent concession, not on a backlog.<
 <p><strong>Install base and maturity.</strong> ARC is General Availability and widely deployed; GAG's v2 API has only just reached its first stability contract.
 That closes with adoption and time, not with a deliverable.</p>
 <h2 id="the-collision-the-individual-rows-do-not-state">The collision the individual rows do not state<a class="headerlink" href="#the-collision-the-individual-rows-do-not-state" title="Permanent link">&para;</a></h2>
-<p><strong>Q727 cannot start before <a href="../../STATUS/#Q719">Q719</a>.</strong> ARC's <code>containerMode: kubernetes</code> depends on a <code>ReadWriteMany</code> volume, and GAG's workers are storage-less by design with nothing validating an RWX volume mounted into one.
+<p><strong>Q727 cannot start before <a href="../../queue/Q719/">Q719</a>.</strong> ARC's <code>containerMode: kubernetes</code> depends on a <code>ReadWriteMany</code> volume, and GAG's workers are storage-less by design with nothing validating an RWX volume mounted into one.
 So the stance on persistent worker storage is undocumented rather than decided, and Q727 would be designing on top of an unvalidated substrate.</p>
 <p>Sequencing follows: Q719 validates RWX and writes the reference architecture, then Q727 designs the pod-per-step path against it.
 Attempting Q727 first means either building the storage validation inside it, which hides an M-sized piece of work inside an L-sized one, or guessing.</p>
@@ -2734,7 +2734,7 @@ That is deliberate: parity is about removing surprises for a migrating team, and
 <li><strong>Matching ARC's API shape.</strong> The v2 decomposition into <code>ActionsGateway</code>, <code>EgressProxy</code>, <code>RunnerSet</code>, and <code>RunnerTemplate</code> is the product, not an accident to be reconciled.
   The intentional v1 to v2 differences are recorded in <a href="../v2-api-gap-analysis/">v2-api-gap-analysis.md</a>.</li>
 <li><strong>Commercial support.</strong> See above.</li>
-<li><strong>In-cluster cache.</strong> It appears on the comparison table as something GAG lacks, but ARC lacks it too (<a href="../../STATUS/#Q215">Q215</a> tracks it against managed services and GitLab Runner, not ARC).</li>
+<li><strong>In-cluster cache.</strong> It appears on the comparison table as something GAG lacks, but ARC lacks it too (<a href="../../queue/Q215/">Q215</a> tracks it against managed services and GitLab Runner, not ARC).</li>
 </ul>
 <h2 id="what-the-site-may-claim-today">What the site may claim today<a class="headerlink" href="#what-the-site-may-claim-today" title="Permanent link">&para;</a></h2>
 <p>The comparison surfaces may say GAG is an ARC alternative for shared, multi-tenant clusters, and that a single-name <code>runs-on</code> carries over unchanged.</p>

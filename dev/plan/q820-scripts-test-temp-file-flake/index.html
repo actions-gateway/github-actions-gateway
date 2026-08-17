@@ -2987,7 +2987,7 @@ That is a self-inflicted transient rather than this flake, and the exit status t
    A second <code>objects=yes</code> on a Linux runner would carry the finding across to the ENOENT variant, which is the gap sighting 4 leaves open; an <code>objects=no</code> would mean the two errnos are two different faults and the family is back for one of them.</li>
 <li><strong>The errno and which object failed.</strong> Sighting 4 is EINVAL on a commit object; sightings 1 to 3 are ENOENT on a blob.
    Whether that splits by platform (macOS against <code>ubuntu-latest</code>) or varies within one is the cheapest question outstanding, and it decides whether this is one bug or two.</li>
-<li><strong>Whether a sibling suite failed in the same run.</strong> <a href="../../STATUS/#Q826">Q826</a> is a sibling flake in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/ci/git-merge-gate-lists-test.sh"><code>git-merge-gate-lists-test.sh</code></a> with a different signature, and <a href="../../STATUS/#Q822">Q822</a> tracks unrelated suites failing under concurrent load.
+<li><strong>Whether a sibling suite failed in the same run.</strong> <a href="../../queue/Q826/">Q826</a> is a sibling flake in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/ci/git-merge-gate-lists-test.sh"><code>git-merge-gate-lists-test.sh</code></a> with a different signature, and <a href="../../queue/Q822/">Q822</a> tracks unrelated suites failing under concurrent load.
    A shared window would reframe all three as one contention problem rather than three defects.</li>
 </ol>
 

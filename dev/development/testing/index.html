@@ -4869,7 +4869,7 @@ What this section keeps is what each rule cost <em>here</em>: which run, which P
 Each case below is the evidence for its rule, so the rule is still readable off the case by a contributor who does not have the skill.</p>
 <p>These shortcuts recur, and each produces confident-but-wrong diagnoses:</p>
 <ul>
-<li><strong>Treating a reproduction you built as the mechanism.</strong> <a href="../../STATUS/#Q820">Q820</a>'s plan doc reproduced its signature line for line by racing a <code>rm -rf</code> against a live git in the same repository, then spent three rounds hunting a remover that exists nowhere in the suite or the fan-out around it.
+<li><strong>Treating a reproduction you built as the mechanism.</strong> <a href="../../queue/Q820/">Q820</a>'s plan doc reproduced its signature line for line by racing a <code>rm -rf</code> against a live git in the same repository, then spent three rounds hunting a remover that exists nowhere in the suite or the fan-out around it.
   The trees were intact at the moment of failure, so there was never a remover to find.
   What refuted the whole family the first time it fired was a reading taken from the <em>failing</em> system: the state of the throwaway trees, ten lines of <code>ERR</code> trap.
   When the question is narrower than a root cause, break the operation deterministically rather than racing it.
@@ -5240,7 +5240,7 @@ Each was caught by comparing its output against values already documented elsewh
 <h3 id="a-scan-that-tracks-enclosing-scope-must-reset-it-or-the-tail-inherits-the-last-match">A scan that tracks enclosing scope must reset it, or the tail inherits the last match<a class="headerlink" href="#a-scan-that-tracks-enclosing-scope-must-reset-it-or-the-tail-inherits-the-last-match" title="Permanent link">&para;</a></h3>
 <p>The section above is about a scan that reads the wrong <em>argument</em>.
 This one is about a scan that reads the wrong <em>context</em>: an <code>awk</code> or <code>grep</code> pipeline that remembers which function, section, or block it is inside, and never clears that memory when the block ends.</p>
-<p><a href="../../STATUS/#Q820">Q820</a>'s instrumentation turned on which <code>git commit -qam</code> calls sit inside a function, because <code>set -o errtrace</code> is load-bearing only for those.
+<p><a href="../../queue/Q820/">Q820</a>'s instrumentation turned on which <code>git commit -qam</code> calls sit inside a function, because <code>set -o errtrace</code> is load-bearing only for those.
 The scan was:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-21-1" name="__codelineno-21-1" href="#__codelineno-21-1"></a><span class="sr">/^[a-z_]+\(\) \{/</span> <span class="p">{</span> <span class="nx">fn</span> <span class="o">=</span> <span class="o">$</span><span class="mi">1</span> <span class="p">}</span>
 <a id="__codelineno-21-2" name="__codelineno-21-2" href="#__codelineno-21-2"></a><span class="sr">/commit -qam/</span>     <span class="p">{</span> <span class="kr">print</span> <span class="nb">NR</span><span class="p">,</span> <span class="p">(</span><span class="nx">fn</span> <span class="o">?</span> <span class="nx">fn</span> <span class="o">:</span> <span class="s2">"TOP-LEVEL"</span><span class="p">)</span> <span class="p">}</span>

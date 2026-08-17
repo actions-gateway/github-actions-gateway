@@ -2853,9 +2853,9 @@ Omitting the image would let the AGC gap-fill the stock runner, producing a pod 
 It also makes the e2e overlays' <code>workerImage</code> patch mandatory rather than incidental, which is a second attachment between the shipped artifact and the exercised one.</p>
 <h2 id="later-demand-gated-not-v1">Later: demand-gated, not v1<a class="headerlink" href="#later-demand-gated-not-v1" title="Permanent link">&para;</a></h2>
 <ul>
-<li><code>gvisor</code>: only after <a href="../../../STATUS/#Q15">Q15</a> fires <em>and</em> the template gets e2e coverage.</li>
+<li><code>gvisor</code>: only after <a href="../../../queue/Q15/">Q15</a> fires <em>and</em> the template gets e2e coverage.</li>
 <li><code>sysbox</code>, rootless-BuildKit: same admission rule; BuildKit-rootless is the decision table's recommended build path but has no template-level CI coverage today.</li>
-<li>GPU: <a href="../../../STATUS/#Q216">Q216</a> already scopes RuntimeClass conventions.</li>
+<li>GPU: <a href="../../../queue/Q216/">Q216</a> already scopes RuntimeClass conventions.</li>
 </ul>
 <h2 id="acceptance-criteria">Acceptance criteria<a class="headerlink" href="#acceptance-criteria" title="Permanent link">&para;</a></h2>
 <ol>

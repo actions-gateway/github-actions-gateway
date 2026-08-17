@@ -3352,7 +3352,7 @@ Operator guidance: <a href="../../operations/tenant-onboarding/#step-2-create-th
 <h2 id="g12-warm-worker-pool-minidleworkers">G.12. Warm Worker Pool (<code>minIdleWorkers</code>)<a class="headerlink" href="#g12-warm-worker-pool-minidleworkers" title="Permanent link">&para;</a></h2>
 <blockquote>
 <p><strong>Not the same as node-/workspace-layer warmth.</strong> This is about holding <strong>pre-created worker pods</strong> so a job skips pod scheduling.
-It is <em>not</em> image warmth (a peer-to-peer mirror / pre-pull DaemonSet — see <a href="#g11-worker-scale-up-rate-limiting-anti-stampede">G.11</a> and the Q211 guide) and <em>not</em> build-/model-cache warmth (a cache volume mounted in the worker <code>podTemplate</code> — a raw PVC works today; a <em>managed</em> backend is <a href="../../STATUS/#Q215">Q215</a>).
+It is <em>not</em> image warmth (a peer-to-peer mirror / pre-pull DaemonSet — see <a href="#g11-worker-scale-up-rate-limiting-anti-stampede">G.11</a> and the Q211 guide) and <em>not</em> build-/model-cache warmth (a cache volume mounted in the worker <code>podTemplate</code> — a raw PVC works today; a <em>managed</em> backend is <a href="../../queue/Q215/">Q215</a>).
 Those cheaper layers should be exhausted first; this item is the residual.</p>
 </blockquote>
 <p><strong>Current behavior.</strong> Worker pods are created <strong>reactively</strong> the moment a job is acquired from the broker long-poll, with a just-in-time (JIT) runner config bound to that job, and released on completion (<a href="../02-architecture/">§2 architecture</a>).
@@ -3379,7 +3379,7 @@ So GAG is already "warm" at the layer ARC's <code>minRunners &gt; 0</code> exist
 </tr>
 <tr>
 <td>Build cache / <strong>model weights</strong> (the real GPU/ML startup cost)</td>
-<td>Cache volume in the <code>podTemplate</code> (raw PVC works today; managed backend = <a href="../../STATUS/#Q215">Q215</a>).</td>
+<td>Cache volume in the <code>podTemplate</code> (raw PVC works today; managed backend = <a href="../../queue/Q215/">Q215</a>).</td>
 </tr>
 <tr>
 <td><strong>Pod scheduling</strong></td>
@@ -3450,7 +3450,7 @@ If it does <strong>not</strong> conflict, the primary motivation for this item e
 Until that changes, Kata-isolated runners are still only suitable for <em>trusted</em> CI.</p>
 <p><strong>The durable answer</strong> that would let the variant carry untrusted / OSS-PR CI: an in-cluster pull-through registry mirror (so workers need no direct registry egress) plus a tight egress policy scoped to the mirror, GitHub, and DNS.
 Operator-facing context: <a href="../../operations/kata-dind-workloads/">kata-dind-workloads.md</a>.</p>
-<p><strong>Status: active — the Demand trigger fired 2026-07-31 (operator ask), moving <a href="../../STATUS/#Q408">Q408</a> into the Queue with a phased plan: <a href="../../plan/q408-untrusted-pr-egress/">q408-untrusted-pr-egress.md</a>.</strong> Published on the <a href="../../roadmap/#exploring--longer-term">public roadmap</a> as the named path to untrusted-PR CI.</p>
+<p><strong>Status: active — the Demand trigger fired 2026-07-31 (operator ask), moving <a href="../../queue/Q408/">Q408</a> into the Queue with a phased plan: <a href="../../plan/q408-untrusted-pr-egress/">q408-untrusted-pr-egress.md</a>.</strong> Published on the <a href="../../roadmap/#exploring--longer-term">public roadmap</a> as the named path to untrusted-PR CI.</p>
 <hr />
 <h2 id="g15-extract-the-batch-right-sizer-into-a-standalone--reusable-tool">G.15. Extract the Batch Right-Sizer into a Standalone / Reusable Tool<a class="headerlink" href="#g15-extract-the-batch-right-sizer-into-a-standalone--reusable-tool" title="Permanent link">&para;</a></h2>
 <p><strong>Current behavior.</strong> The worker right-sizing loop (Q359) ships <strong>inside</strong> the AGC: <code>cmd/agc/internal/usage/</code> samples per-job CPU/memory peaks from <code>metrics.k8s.io</code>, aggregates fixed-bucket peak histograms per RunnerSet × container, and the RunnerSet reconciler surfaces derived recommendations in <code>status.sizingRecommendation</code> and applies them at pod-build time under the opt-in <code>spec.sizing</code> profiles.

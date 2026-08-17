@@ -2726,7 +2726,7 @@ This doc holds the <em>evidence and rationale</em> for the Queue rows the audit 
 <p>Classification follows <a href="../../development/technical-debt/">technical-debt.md</a>.</p>
 <blockquote>
 <p><strong>Status: ✅ Done — filed 2026-07-20; every finding F1–F10 and the prevention gates shipped.</strong> The F1 Secret leak was fixed and merged the same day (Q373, #727); F2 (the probe rewrite) shipped as Q362, F3's share-and-gate split as Q374, F4's CIDR-rule consolidation as Q364, F5's broker-double consolidation as Q368, F7's CreateOrPatch collapse as Q366 (which spun the owner-reference-policy question out to Q394), F8's god-function decomposition as Q367, F9's error-taxonomy unification as Q369, F10's script-sprawl cleanup as Q370, the §Prevention gates (nolintlint + a ratcheted funlen) as Q371, and F6's foundation move as Q365 (which left the interleaved v1/v2 condition collectors to Q403, since shipped: the GMC's v1 collector passes now live in <code>metrics_v1.go</code>).
-<a href="../../STATUS/#Q372">Q372</a> (Deferred) carries the re-run trigger.</p>
+<a href="../../queue/Q372/">Q372</a> (Deferred) carries the re-run trigger.</p>
 <p>The ID range is not contiguous because concurrent branches allocated IDs while this audit was in flight: Q361 went to a CI-latency item (#722) and Q363 to a manifest-validate flake (#729), so this audit's F1 and F3 became Q373 and Q374.
 See <a href="#audit-cadence">§Audit cadence</a> — <code>Next ID</code> cannot stay correct under parallel work, so open PRs are the authority.</p>
 </blockquote>
@@ -2878,7 +2878,7 @@ It runs in <code>make check</code>.</p>
 <li><code>actionsgateway_controller.go</code> — <code>provisioningError</code>, <code>quotaCheck</code>, <code>footprintFromResources</code>, <code>evalProxyPoolQuota</code>, <code>quotaHeadroomViolations</code>, <code>resourceListEqual</code>, <code>quotaHardChangedPredicate</code>, <code>labelSafe</code>.</li>
 </ul>
 <p>Same pattern in AGC: the <code>listener</code> package is treated as classic-only, but <code>provisioner</code>, <code>runnerset_target.go</code>, <code>runner_shared.go</code>, and <code>main.go</code> all import it for <code>listener.Metrics</code>, <code>JobHandlerFunc</code>, <code>AdmitFunc</code>, <code>EventRecorder</code> — types with nothing to do with classic acquisition.</p>
-<p>Consequence: <strong>deleting v1 today is a multi-hundred-line refactor, not a <code>git rm</code>.</strong> Doing the moves <em>now</em>, while both versions are live, is mechanical and behavior-free, and directly de-risks the already-blocked <a href="../../STATUS/#Q273">Q273</a>.
+<p>Consequence: <strong>deleting v1 today is a multi-hundred-line refactor, not a <code>git rm</code>.</strong> Doing the moves <em>now</em>, while both versions are live, is mechanical and behavior-free, and directly de-risks the already-blocked <a href="../../queue/Q273/">Q273</a>.
 This is why the row sorts adjacent to Q273 rather than by its own severity.</p>
 <p><strong>Shipped in Q365.</strong> Re-measured at implementation time (2026-07-24, after Q360, Q364 and Q366 reshaped the GMC package), the cross-version foundation moved into eight <code>shared_*.go</code> files in <code>cmd/gmc/internal/controller</code> and the v1-only IP-range pass into <code>ipranges_v1.go</code>; <code>cert.go</code> and <code>metrics_cert.go</code> turned out to hold the same problem (the PKI primitives and mount layout) and were split the same way.
 The AGC half became a new leaf package, <code>cmd/agc/internal/runnercore</code>, holding <code>Metrics</code>, <code>EventRecorder</code>, <code>ConditionUpdater</code> and <code>AdmitFunc</code>.
@@ -3046,7 +3046,7 @@ Q367 removed it when the function shrank to 83 lines; <code>nolintlint</code> wi
 With Q367 clearing the two god <code>main</code>s, Q371 landed the gate at <code>lines: 200</code> — just above the worst legitimate survivor (<code>listener.Run</code>, 197 lines, measured 2026-07-23 after Q367 shrank the two <code>main</code>s to 178/191 and below) — set to ratchet down, the same "gates by not getting worse" pattern the coverage ratchet already uses, with no allowlist of shame.
 Q371 updated that metrics-table row to match.</p>
 <h3 id="audit-cadence">Audit cadence<a class="headerlink" href="#audit-cadence" title="Permanent link">&para;</a></h3>
-<p>Recurrence is tracked as <a href="../../STATUS/#Q372">Q372</a> in Deferred, triggered by the next minor release <strong>or</strong> ≥20% growth over the 41,011-line baseline — whichever first.
+<p>Recurrence is tracked as <a href="../../queue/Q372/">Q372</a> in Deferred, triggered by the next minor release <strong>or</strong> ≥20% growth over the 41,011-line baseline — whichever first.
 Growth is the honest proxy: this audit surfaced ~10 items across 41k lines, so drift scales with code added rather than calendar time.
 A time-based schedule would run the sweep when nothing had changed and miss a burst of growth between ticks.</p>
 <p>The sweep is cheap — this one was three parallel read-only agents plus verification, with no code touched — which argues for triggering it more readily than a heavyweight process would justify.</p>

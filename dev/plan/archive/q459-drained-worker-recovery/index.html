@@ -2985,7 +2985,7 @@ The 5m02s to conclusion is GitHub's own cancellation grace lapsing, not the runn
   Cancelling a runaway job does not reclaim its capacity.</li>
 <li><strong><a href="../../../design/04-operational-flows/">04-operational-flows.md</a> §4.2 step 7 overstates the Q385 relay.</strong> It lists "cancelled run" among the terminations the wrapper's SIGTERM relay reaches.
   The relay does reach the engine whenever the <em>pod</em> is terminated — but on the cancel path nothing terminates the pod, so the relay never runs.
-  <a href="../../../STATUS/#Q501">Q501</a> carries the gap; the doc is corrected as part of this change.</li>
+  <a href="../../../queue/Q501/">Q501</a> carries the gap; the doc is corrected as part of this change.</li>
 </ul>
 <h3 id="what-the-spec-needed-in-order-to-run-at-all">What the spec needed in order to run at all<a class="headerlink" href="#what-the-spec-needed-in-order-to-run-at-all" title="Permanent link">&para;</a></h3>
 <p>It was pending because it could not tell its own worker from the one the graceful-deletion spec leaves behind, and the run-id annotation that would have disambiguated them is the one Q495 found missing.
@@ -3037,7 +3037,7 @@ That is the right behaviour rather than a defect to design around: someone delet
 <li><strong>The classic half needs Q495's fix to be real on a live worker.</strong> Without a run ID, <code>handleEviction</code> returns early, so closing the gap on classic would buy an interface change and no recovery.
    Q495 has since been fixed — the identity is read from the payload's <code>github</code> context — but that fix has not yet been seen on a real worker pod at live-GitHub, so confirm the annotation before relying on the recovery it enables.
    The scale-set tier reads its identity from the pod annotations and is unaffected.</li>
-<li><strong>Do not fold in the cancel path.</strong> <a href="../../../STATUS/#Q501">Q501</a> is a separate defect with a separate fix.
+<li><strong>Do not fold in the cancel path.</strong> <a href="../../../queue/Q501/">Q501</a> is a separate defect with a separate fix.
    A cancelled run's worker is <em>not</em> deleted, so it never reaches this recovery path — but if Q501 is later fixed by having the AGC delete the worker on cancellation, that deletion becomes indistinguishable from a drain and must be excluded exactly as the reaper's are.</li>
 </ol>
 <h2 id="status">Status<a class="headerlink" href="#status" title="Permanent link">&para;</a></h2>
@@ -3075,7 +3075,7 @@ The limits above are now this spec's deliberate scope: a recovery scan running o
 <li>~~Un-pend <code>E2E_GitHub_CancelledRunLeavesNoDeletionMark</code> and run it.~~ Done — it no longer needed the annotation to become runnable (see above), and it passes.</li>
 <li>~~Take the decision.~~ Done — the decision table's first row, recorded above.</li>
 <li>~~Q502 — implement the close, per the four constraints above.~~ Done — see Status.</li>
-<li><strong><a href="../../../STATUS/#Q501">Q501</a></strong> — relay a run cancellation to the worker pod.
+<li><strong><a href="../../../queue/Q501/">Q501</a></strong> — relay a run cancellation to the worker pod.
    Found by this measurement, independent of the gap.
    Split into a trigger and an actuator by <a href="../../q501-cancel-relay/">q501-cancel-relay.md</a>: the actuator shipped (a worker whose job the gateway abandons is now deleted, stamped <code>deletion-reason: job_abandoned</code> exactly as the constraint above requires), the trigger is still open.</li>
 </ol>

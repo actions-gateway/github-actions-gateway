@@ -2702,7 +2702,7 @@
 <p>This plan starts <strong>after <code>v1.3.0</code> ships</strong>.
 It is deliberately unhurried: General Availability (GA) signs a permanent backward-compatibility contract on a five-kind API surface, and the contract cannot be walked back.</p>
 <blockquote>
-<p><strong>Status: parked — no active work, every phase carried by a Deferred trigger.</strong> Phases 1, 2 and 4 wait on <a href="../../STATUS/#Q413">Q413</a> (<strong>Event:</strong> <code>v1.3.0</code> ships, starting the Phase 1 soak); Phase 3's coupled removals wait on <a href="../../STATUS/#Q273">Q273</a> and <a href="../../STATUS/#Q264">Q264</a>; the Phase 2 alias decision is <a href="../../STATUS/#Q452">Q452</a>.
+<p><strong>Status: parked — no active work, every phase carried by a Deferred trigger.</strong> Phases 1, 2 and 4 wait on <a href="../../queue/Q413/">Q413</a> (<strong>Event:</strong> <code>v1.3.0</code> ships, starting the Phase 1 soak); Phase 3's coupled removals wait on <a href="../../queue/Q273/">Q273</a> and <a href="../../queue/Q264/">Q264</a>; the Phase 2 alias decision is <a href="../../queue/Q452/">Q452</a>.
 The <code>✅</code> on this plan's <a href="../../STATUS/#progress">Progress</a> row means <em>no open Queue row remains</em>, not that the graduation has happened — deferred residuals <a href="../../development/maintaining-backlog/#-means-an-open-queue-row-remains--deferred-residuals-dont-count">don't count</a>.
 The phase table below is the real state.</p>
 </blockquote>
@@ -2727,25 +2727,25 @@ The phase table below is the real state.</p>
 <td>1</td>
 <td>Beta soak: accumulate the evidence that <code>v2beta1</code>'s shape is right</td>
 <td>M</td>
-<td>❌ Open (<a href="../../STATUS/#Q413">Q413</a>)</td>
+<td>❌ Open (<a href="../../queue/Q413/">Q413</a>)</td>
 </tr>
 <tr>
 <td>2</td>
 <td>Add <code>v2</code> to each kind, mark it storage, extend conversion coverage</td>
 <td>M</td>
-<td>❌ Open (<a href="../../STATUS/#Q413">Q413</a>)</td>
+<td>❌ Open (<a href="../../queue/Q413/">Q413</a>)</td>
 </tr>
 <tr>
 <td>3</td>
 <td>Storage migration, then drop <code>v2alpha1</code>, <code>v1alpha1</code>, and classic</td>
 <td>M</td>
-<td>❌ Open (<a href="../../STATUS/#Q273">Q273</a>, <a href="../../STATUS/#Q264">Q264</a>); capability parity <strong>cleared</strong>: Q417/Q443/Q446 cleared the audit's three rows (2026-07-26), Q766 closed the abandoned-run asymmetry inside 1.4, and Q713 put the duration and latency series on both tiers (2026-08-11). See the <a href="#capability-parity-is-a-precondition-of-the-removal">parity table</a></td>
+<td>❌ Open (<a href="../../queue/Q273/">Q273</a>, <a href="../../queue/Q264/">Q264</a>); capability parity <strong>cleared</strong>: Q417/Q443/Q446 cleared the audit's three rows (2026-07-26), Q766 closed the abandoned-run asymmetry inside 1.4, and Q713 put the duration and latency series on both tiers (2026-08-11). See the <a href="#capability-parity-is-a-precondition-of-the-removal">parity table</a></td>
 </tr>
 <tr>
 <td>4</td>
 <td>Operator docs, migration guide, and the <code>v2.0.0</code> cut</td>
 <td>S</td>
-<td>❌ Open (<a href="../../STATUS/#Q413">Q413</a>)</td>
+<td>❌ Open (<a href="../../queue/Q413/">Q413</a>)</td>
 </tr>
 </tbody>
 </table>
@@ -2842,13 +2842,13 @@ Getting this wrong is the most likely way to break the hop.</p>
 <p><strong>One shape decision the hop must make: does <code>v2</code> define <code>CiliumFQDN</code>/<code>CalicoFQDN</code>?</strong> The two deprecated <code>EgressProxy.spec.egressPolicyMode</code> aliases cannot be removed at <code>v2.0.0</code> — they are members of the served beta version <code>v2beta1</code>, so their floor is <code>v3.0.0</code> (<a href="../../operations/v1alpha1-deprecation/#a-fourth-deprecation-on-a-different-clock-ciliumfqdn--calicofqdn">Q428</a>).
 That leaves a live choice for <code>v2</code>: omit them (a clean GA surface, but the hub moves to <code>v2</code> and a <code>v2beta1</code> object naming an alias then needs a lossless carrier, since the conversion deliberately rides the values across verbatim rather than collapsing them to <code>FQDN</code>) or carry them deprecated (trivially lossless, but GA is effectively frozen and would be born owning two aliases).
 Either way the removal release is unchanged.
-Decide it here, not at the tag: <a href="../../STATUS/#Q452">Q452</a>.</p>
+Decide it here, not at the tag: <a href="../../queue/Q452/">Q452</a>.</p>
 <h2 id="phase-3--the-coupled-removals">Phase 3 — the coupled removals<a class="headerlink" href="#phase-3--the-coupled-removals" title="Permanent link">&para;</a></h2>
 <p><code>v2.0.0</code> executes all three removals announced by <a href="../release-1.3/">release-1.3.md</a>:</p>
 <ul>
-<li><code>v1alpha1</code> (the <code>actions-gateway.github.com</code> group) — <a href="../../STATUS/#Q273">Q273</a></li>
+<li><code>v1alpha1</code> (the <code>actions-gateway.github.com</code> group) — <a href="../../queue/Q273/">Q273</a></li>
 <li><code>v2alpha1</code> — this plan</li>
-<li>classic acquisition machinery and the transitional <code>acquisitionProtocol</code> / <code>maxListeners</code> fields — <a href="../../STATUS/#Q264">Q264</a></li>
+<li>classic acquisition machinery and the transitional <code>acquisitionProtocol</code> / <code>maxListeners</code> fields — <a href="../../queue/Q264/">Q264</a></li>
 </ul>
 <p>They are one bundle because <code>v2beta1</code> is already ScaleSet-only: classic acquisition exists solely to serve <code>v1alpha1</code> and <code>v2alpha1</code> objects, so removing those versions removes classic's only consumer.
 Sequencing within the release still matters, since the Q147 dual-read window closes exactly when <code>v1alpha1</code> is removed.
@@ -2927,7 +2927,7 @@ Q683, Q691 and Q713 all arrived that way, and Q844 made four on 2026-08-14, foun
 Q851 took the same obligation inside the series, to the label values a <code>Both</code> row hides: the checker resolves the values each series emits out of the AGC source, and the <a href="../../operations/observability-metrics/#label-value-reach">Label-value reach</a> table records the seven that reach one tier only.
 The re-walk it required found two: <code>renew_job_errors_total</code> and <code>renew_job_teardowns_total</code> were classic-only by construction and on no list, and <code>eviction_recovery_evidence_lost_total</code> reached no operator doc at all.</p>
 <p>That gate covers metrics, not capabilities, so the manual step survives for anything with no series behind it: Q844 had one only because the recovery it ported reports through a counter that already spanned both tiers.
-Until <a href="../../STATUS/#Q774">Q774</a> gates scope statements mechanically, adding a row to the table above is still a manual step in the change that creates the asymmetry, and the <a href="../../development/doc-update-matrix/">doc-update matrix</a> is where that obligation is written down.</p>
+Until <a href="../../queue/Q774/">Q774</a> gates scope statements mechanically, adding a row to the table above is still a manual step in the change that creates the asymmetry, and the <a href="../../development/doc-update-matrix/">doc-update matrix</a> is where that obligation is written down.</p>
 <h2 id="phase-4--docs-and-the-cut">Phase 4 — docs and the cut<a class="headerlink" href="#phase-4--docs-and-the-cut" title="Permanent link">&para;</a></h2>
 <p>Operator-facing surface that must be current before the tag:</p>
 <ul>

@@ -2988,7 +2988,7 @@ The prose below carries the <em>why</em> of each; this table is the state.</p>
 <td>⤴ punted — <a href="#explicitly-out-of-scope">Explicitly out of scope</a></td>
 </tr>
 <tr>
-<td><a href="../../STATUS/#Q273">Q273</a>, <a href="../../STATUS/#Q264">Q264</a></td>
+<td><a href="../../queue/Q273/">Q273</a>, <a href="../../queue/Q264/">Q264</a></td>
 <td><code>v1alpha1</code> + <code>v2alpha1</code> + classic <strong>removal</strong></td>
 <td>rides</td>
 <td>⤴ punted to <code>v2.0.0</code> — <a href="#explicitly-out-of-scope">Explicitly out of scope</a></td>
@@ -3038,7 +3038,7 @@ Nothing already deployed changes behaviour, so it does not need to beat this tag
 <p><strong>Q600 gates, mechanically rather than on severity.</strong> <code>main</code>'s <code>unit-test</code> leg went red on <code>7fec2ff8</code> — <code>TestMultiplexer_DuplicateJobDeliveryProvisionsOnce</code> under <code>-race</code>, <code>expected 1, actual 0</code> — and pre-flight requires a green <code>main</code> to tag.
 It is a test-synchronization defect, not a product one: the test waited on the duplicate-delivery metric, which only the <em>losing</em> siblings increment, and then read the peak-provisioner count the <em>winner</em> produces several steps later.
 Diagnosed by reproducing the interleaving directly (a delay at the winner's handler entry took it from 0 failures in 400 local runs to 5 of 5), fixed by waiting on the counter the invariant reads, and confirmed still able to catch the Q260 regression by deleting the claim gate and requiring red.
-Filed to <a href="../../STATUS/#Q600">flake watch</a>; the weaker dedup predicate the measurement exposed was filed as Q601 and has since been fixed — per-session dedup registries, so the assertion counts distinct siblings rather than deliveries.</p>
+Filed to <a href="../../queue/Q600/">flake watch</a>; the weaker dedup predicate the measurement exposed was filed as Q601 and has since been fixed — per-session dedup registries, so the assertion counts distinct siblings rather than deliveries.</p>
 <p><strong>Q602 gates for the same mechanical reason, and is worth more than its fix.</strong> The next <code>main</code> run went red on a <em>different</em> <code>-race</code> test — <code>TestListener_AbandonedJobDoesNotSurviveARestart</code>, the Q583 fix's own — with <code>assert.Never</code> reporting that a restarted listener had provisioned a worker for a job the previous one gave up on.
 It reproduced locally at 1 in 40.</p>
 <p>The reason it matters is that <strong>the test was not wrong about the product.</strong> Its barrier was: <code>abandonDeferredBefore</code> calls <code>settle</code> and then increments the abandoned counter, so the counter is published last and looks like a valid gate.
@@ -3164,7 +3164,7 @@ This is the verdict the tag has been owed since it was cut, and it clears the le
 </tr>
 </tbody>
 </table>
-<p><strong>This pass is strictly stronger than rc.4's.</strong> rc.4 cleared <code>NodeShare</code>'s state assertion but reported <code>derived value NOT checked — no live worker pod was caught during the matrix</code>, leaving the pod-level envelope arithmetic unconfirmed (<a href="../../STATUS/#Q448">Q448</a>).
+<p><strong>This pass is strictly stronger than rc.4's.</strong> rc.4 cleared <code>NodeShare</code>'s state assertion but reported <code>derived value NOT checked — no live worker pod was caught during the matrix</code>, leaving the pod-level envelope arithmetic unconfirmed (<a href="../../queue/Q448/">Q448</a>).
 This run caught a live worker: <strong>1500m derived where the templates ask 2 and 3</strong>.
 The release's headline feature is now confirmed at the pod level on real GKE rather than inferred from a condition.
 <code>Throughput</code> at 158 samples additionally means this RC ran the repo's own CI on derived sizing — validated in use.</p>
@@ -3259,7 +3259,7 @@ It reported <code>Active</code> at 127 samples, because the sampler tracks every
 The consequence is stronger than a pass: <strong>this RC ran CI on derived sizing</strong>, so the release's headline feature is validated in use rather than merely configured.</p>
 <p><strong>What this run did NOT establish.</strong> <code>NodeShare</code> cleared its <em>state</em> assertion, but the leg reported <code>derived value NOT checked — no live worker pod was caught during the matrix</code>.
 The envelope arithmetic at pod level is therefore unconfirmed by this run.
-That is the same gap <a href="../../STATUS/#Q448">Q448</a> already tracks, and it is worth stating rather than reading the green as total: the profile is provably <code>Active</code> and provably actuating, and the per-worker share it derives is not independently checked here.</p>
+That is the same gap <a href="../../queue/Q448/">Q448</a> already tracks, and it is worth stating rather than reading the green as total: the profile is provably <code>Active</code> and provably actuating, and the per-worker share it derives is not independently checked here.</p>
 <p><strong>rc.4 is not <code>main</code>.</strong> The tag points at <code>084f00a5</code>; <code>main</code> has since taken the Q596, Q603, Q605 and docs changes.
 Nothing in that set is implicated in what the gate exercised, but a GA tag cut from a later commit carries code this validation did not cover — decide that explicitly at the cut rather than inheriting this pass.</p>
 <h3 id="q577-closed-the-behaviour-is-the-fail-safe-not-the-bug">Q577 closed: the behaviour is the fail-safe, not the bug<a class="headerlink" href="#q577-closed-the-behaviour-is-the-fail-safe-not-the-bug" title="Permanent link">&para;</a></h3>
@@ -3429,7 +3429,7 @@ Wire-identical either way, so it is a Go-API break for <code>api</code> module c
 </tr>
 <tr>
 <td><code>v1alpha1</code> + <code>v2alpha1</code> + classic <strong>removal</strong></td>
-<td><a href="../../STATUS/#Q273">Q273</a>, <a href="../../STATUS/#Q264">Q264</a></td>
+<td><a href="../../queue/Q273/">Q273</a>, <a href="../../queue/Q264/">Q264</a></td>
 <td>1.3 is the <em>notice</em>. Executing the removal in the same release it is announced would violate the one-release-ahead policy. These land at <code>v2.0.0</code>.</td>
 </tr>
 <tr>

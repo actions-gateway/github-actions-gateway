@@ -2868,7 +2868,7 @@ Any published latency figure needs a clean run with no <code>timeout-minutes</co
 <td><strong>Shipped 2026-07-26</strong>, ahead of Q417 and independently of it — the reap deadline came from a pod annotation, not a pod watch. Orphaned Running workers would otherwise have contaminated 3 and 5 by holding quota, which is exactly the idle-capacity signature those experiments measure.</td>
 </tr>
 <tr>
-<td><a href="../../STATUS/#Q418">Q418</a></td>
+<td><a href="../../queue/Q418/">Q418</a></td>
 <td>Deferred, event-gated on experiment 1 attributing the delay.</td>
 </tr>
 <tr>
@@ -2885,7 +2885,7 @@ The genuinely additive assertion is the retry budget (the Q106 sharded-reservati
 <ul>
 <li><strong>Venue:</strong> live-GitHub on kind, per the row.</li>
 <li><strong>Proves:</strong> the real eviction-to-conclusion latency, attributed to a mechanism.</li>
-<li><strong>Unlocks:</strong> a defensible number in place of the confounded one, and the <a href="../../STATUS/#Q418">Q418</a> trigger.</li>
+<li><strong>Unlocks:</strong> a defensible number in place of the confounded one, and the <a href="../../queue/Q418/">Q418</a> trigger.</li>
 <li><strong>Unblocked</strong> — Q417 shipped 2026-07-26, so the scale-set tier now detects evictions and fires the rerun this experiment measures.</li>
 </ul>
 <h3 id="result-measured-2026-07-29">Result, measured 2026-07-29<a class="headerlink" href="#result-measured-2026-07-29" title="Permanent link">&para;</a></h3>
@@ -3204,7 +3204,7 @@ So this measurement stands up a v2 object set — <code>ActionsGateway</code>, <
 <li><strong>The scale-set name is the RunnerSet's single <code>runnerLabels</code> entry</strong> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/controller/runnerset_scaleset.go">runnerset_scaleset.go</a>), and CEL enforces exactly one.
    So the fixture workflow's <code>runs-on</code> has to be that label, and it cannot be <code>e2e</code> without colliding with the classic tenant's runner group.</li>
 <li><strong>The fixture workflow takes <code>runs-on</code> as a <code>workflow_dispatch</code> input.</strong> <code>drain-probe.yml</code> in <code>actions-gateway/gateway-test</code> pinned <code>runs-on: e2e</code>; it now takes an input defaulting to <code>e2e</code>, so the classic measurement is unchanged and one fixture serves both tiers.
-   This is also the change <a href="../../STATUS/#Q530">Q530</a> names as its prerequisite for live-run isolation, so that row is partly unblocked.</li>
+   This is also the change <a href="../../queue/Q530/">Q530</a> names as its prerequisite for live-run isolation, so that row is partly unblocked.</li>
 <li><strong>The listener's bootstrap is asserted before anything is dispatched.</strong> A tenant that never registers its scale set would otherwise surface as "the job stayed queued for ten minutes" — indistinguishable from GitHub being slow, from a label mismatch, and from the runner group's public-repository rule.
    <code>Listener.Start</code> publishes <code>Degraded=False/SessionAuthorized</code> only after ensuring the scale set <em>and</em> opening the session, so that condition is checked first and its failure dumps every condition on the RunnerSet.</li>
 </ol>
@@ -3255,7 +3255,7 @@ A <strong>pod-level <code>ephemeral-storage</code> limit</strong> is enforced pe
 The graceful counterpart, where the runner reliably gets its own report out, is <a href="../archive/q459-drained-worker-recovery/">Q459</a>'s.</p>
 <p><strong>"Usually" is doing real work in that sentence, and this section originally read "always".</strong> It inferred from the 137 exit that no SIGTERM was relayed and nothing reached GitHub.
 The exit code does not carry that: a runner that reports and <em>then</em> overruns its grace is SIGKILLed too, and the 2026-08-03 scale-set pair exited 137 on both sides of a 9m38s/17s split.
-What the runner managed to say is now read from its own log and from GitHub's per-step records rather than inferred from the exit code — see <a href="../../STATUS/#Q657">Q657</a> and the scale-set result above.</p>
+What the runner managed to say is now read from its own log and from GitHub's per-step records rather than inferred from the exit code — see <a href="../../queue/Q657/">Q657</a> and the scale-set result above.</p>
 <p><strong>Sizing the cap needed a measurement of its own.</strong> The kubelet charges a pod only its writable layer, emptyDirs and logs — image layers are read-only and are not charged — and a pod built from the real runner image was measured at <strong>28KiB</strong> against the node's <code>stats/summary</code> endpoint.
 The e2e fixture jobs add nothing to that: neither checks out a repository.
 256Mi is therefore four orders of magnitude of headroom, which is what makes the deliberate overshoot the only thing that can cross it.</p>
@@ -3648,7 +3648,7 @@ It also means the rung is on a genuinely hot path — the quota read is cache-ba
   It is an upper bound on redelivery latency, not a measurement of it; the first decline landing 2s after dispatch is the tighter signal.</li>
 </ul>
 <p>Both gateways deregistered cleanly on teardown — the fixture repo listed zero runners afterwards — which also confirms the <code>real-ag-</code> prefix reasoning above against real registrations rather than against the naming code.</p>
-<h2 id="experiment-5-utilization-delta-q424-deferred">Experiment 5: utilization delta (<a href="../../STATUS/#Q424">Q424</a>, deferred)<a class="headerlink" href="#experiment-5-utilization-delta-q424-deferred" title="Permanent link">&para;</a></h2>
+<h2 id="experiment-5-utilization-delta-q424-deferred">Experiment 5: utilization delta (<a href="../../queue/Q424/">Q424</a>, deferred)<a class="headerlink" href="#experiment-5-utilization-delta-q424-deferred" title="Permanent link">&para;</a></h2>
 <p>Same workload on dogfood, tiers off versus tiers on, occupancy measured over a fixed window.</p>
 <ul>
 <li><strong>Proves:</strong> the packing-density thesis directly, and it is the one number the whole argument is missing.</li>
@@ -3662,10 +3662,10 @@ It also means the rung is on a genuinely hot path — the quota read is cache-ba
    Its residual is <a href="../archive/q459-drained-worker-recovery/">Q459</a>, which needs live-GitHub and so sequences with the other live-GitHub work below rather than ahead of it.</li>
 <li>~~Q422 (experiment 4)~~ — <strong>done 2026-07-31</strong>; see the <a href="#half-b-result-measured-2026-07-31">result</a>.
    Both halves are now covered, and it left no residual.</li>
-<li>Q396 (experiment 1), which then gates <a href="../../STATUS/#Q418">Q418</a>.
+<li>Q396 (experiment 1), which then gates <a href="../../queue/Q418/">Q418</a>.
    Fold <a href="../archive/q459-drained-worker-recovery/">Q459</a> in around here: both want a real GitHub run interrupted mid-job, and Q396 is already standing that up.</li>
 <li>~~Q423 (experiment 3)~~ — <strong>done 2026-07-29</strong>; see <a href="#result-measured-2026-07-29-preemption-is-not-eviction">Result</a>. ~~Its residual is Q497~~ — <strong>also done 2026-07-29</strong> (<a href="../archive/q497-preemption-recovery/">plan</a>): the <code>PreemptionByScheduler</code> marker resolved the discriminator question for the preemption slice without waiting on Q459's human-cancel one, exactly as predicted here.
-   Then revive <a href="../../STATUS/#Q424">Q424</a> (experiment 5).</li>
+   Then revive <a href="../../queue/Q424/">Q424</a> (experiment 5).</li>
 </ol>
 <h2 id="acceptance-criteria">Acceptance criteria<a class="headerlink" href="#acceptance-criteria" title="Permanent link">&para;</a></h2>
 <ul>

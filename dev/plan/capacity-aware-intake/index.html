@@ -2898,7 +2898,7 @@
 <h1 id="capacity-aware-job-intake">Capacity-Aware Job Intake<a class="headerlink" href="#capacity-aware-job-intake" title="Permanent link">&para;</a></h1>
 <blockquote>
 <p><strong>Status: ✅ Complete (2026-07-31).</strong> Every build item (0a–2d) and every measurement row (V1–V3) is done.
-The one residual is item 3 — the <code>ProvisioningRequest</code> probe — deferred as <a href="../../STATUS/#Q407">Q407</a> with its triggers in <a href="../../design/appendix-g-future-enhancements/#g16-provisioningrequest-pre-acquire-capacity-probe-check-capacity">Appendix G.16</a>; <a href="#9h-what-the-dogfood-re-run-measured-for-the-latch-q513">§9h</a> supplies the number its trigger (a) reads against (~1 probe claim per window).</p>
+The one residual is item 3 — the <code>ProvisioningRequest</code> probe — deferred as <a href="../../queue/Q407/">Q407</a> with its triggers in <a href="../../design/appendix-g-future-enhancements/#g16-provisioningrequest-pre-acquire-capacity-probe-check-capacity">Appendix G.16</a>; <a href="#9h-what-the-dogfood-re-run-measured-for-the-latch-q513">§9h</a> supplies the number its trigger (a) reads against (~1 probe claim per window).</p>
 </blockquote>
 <p>The admission ladder in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/provisioner/admission.go"><code>cmd/agc/internal/provisioner/admission.go</code></a> gates job acquisition on two rungs today: observed namespace-ResourceQuota headroom (#784) and the owner's declared worker ceiling (Q59).
 Neither rung knows whether the cluster can actually <em>place</em> the worker pod the job needs.
@@ -2988,7 +2988,7 @@ That principle, and why it makes the quota rung safe to gate on while the schedu
 <td>3</td>
 <td><code>Probe</code>/<code>Provision</code> modes: <code>ProvisioningRequest</code> <code>check-capacity</code></td>
 <td>L</td>
-<td>💤 Deferred (<a href="../../STATUS/#Q407">Q407</a>, <a href="../../design/appendix-g-future-enhancements/#g16-provisioningrequest-pre-acquire-capacity-probe-check-capacity">Appendix G.16</a>)</td>
+<td>💤 Deferred (<a href="../../queue/Q407/">Q407</a>, <a href="../../design/appendix-g-future-enhancements/#g16-provisioningrequest-pre-acquire-capacity-probe-check-capacity">Appendix G.16</a>)</td>
 </tr>
 </tbody>
 </table>
@@ -3631,7 +3631,7 @@ CI runs it beside the CA arm in <code>autoscaler-drift.yml</code>; <a href="http
 <li><strong>Timing.</strong> Karpenter's declination lands 1–2 s after pod creation (its batch idle window is 1 s — no CA-style 10 s scan to wait out), and nomination→new-node→pod-scheduled completed in ~4 s under kwok's fast stages.</li>
 </ul>
 <p><strong>Upstream finding, worked around in the recipe.</strong> The kwok chart at v1.14.0 renders <code>featureGates.staticCapacity</code> and <code>.capacityBuffer</code> into the <code>FEATURE_GATES</code> env var, but its own <code>values.yaml</code> omits both keys — the empty string panics the controller at startup (<code>invalid value of StaticCapacity</code>).
-The harness sets both to their defaults explicitly (<a href="../../STATUS/#Q531">Q531</a> tracks reporting it upstream).</p>
+The harness sets both to their defaults explicitly (<a href="../../queue/Q531/">Q531</a> tracks reporting it upstream).</p>
 <h2 id="9j-the-gap-is-operator-visible-in-shipped-docs-q714">9j. The gap is operator-visible in shipped docs (Q714)<a class="headerlink" href="#9j-the-gap-is-operator-visible-in-shipped-docs-q714" title="Permanent link">&para;</a></h2>
 <p>Q714's mechanism was a source read.
 It is now measured.
@@ -3675,7 +3675,7 @@ Closing Q714 changes what an operator watches, so it must update both.</p>
 <li>Predicting schedulability in-process from node allocatable.
   Rejected: it reimplements the scheduler's filter plugins and will drift (<a href="../../design/appendix-d-alternatives-considered/#d8-gating-intake-on-capacity-which-signals-are-safe-to-gate-on">D.8</a>).</li>
 <li>Pre-warmed placeholder/pause pods.
-  That trade (idle compute for correct optimism) is the warm-worker-pool item, <a href="../../design/appendix-g-future-enhancements/#g12-warm-worker-pool-minidleworkers">G.12</a>/<a href="../../STATUS/#Q268">Q268</a>.</li>
+  That trade (idle compute for correct optimism) is the warm-worker-pool item, <a href="../../design/appendix-g-future-enhancements/#g12-warm-worker-pool-minidleworkers">G.12</a>/<a href="../../queue/Q268/">Q268</a>.</li>
 <li>Cross-RunnerSet coordination on a shared pool (§4 residual).</li>
 <li>A pluggable autoscaler-provider interface, or coverage of every autoscaler.
   Two matchers cover both open-source event vocabularies across ~46 provider implementations, and fail-open covers the rest (§7).</li>

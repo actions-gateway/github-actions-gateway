@@ -2767,7 +2767,7 @@
 <p><strong>Status:</strong> ⓘ informational — strategy/review, read-only analysis.
 No code changed.
 Feeds the Q264 P5 cutover and the v1alpha1 removal-timeline decisions.
-Complete as a review: both follow-ups it filed are parked in Deferred, waiting on <a href="../v2-ga/">v2-ga.md</a> Phase 3 (<a href="../../STATUS/#Q273">Q273</a>, the v1 removal) and on upstream scale-set GA (<a href="../../STATUS/#Q272">Q272</a>).
+Complete as a review: both follow-ups it filed are parked in Deferred, waiting on <a href="../v2-ga/">v2-ga.md</a> Phase 3 (<a href="../../queue/Q273/">Q273</a>, the v1 removal) and on upstream scale-set GA (<a href="../../queue/Q272/">Q272</a>).
 <strong>Date:</strong> 2026-07-05.
 <strong>Author view:</strong> adversarial review of the hypothesis that v1 may be fundamentally limited by its protocol constraints — and that if so, we should sunset it faster and focus on v2/scale-set.
 The review deliberately tests that hypothesis rather than assuming it.</p>
@@ -2953,7 +2953,7 @@ The classic tier also paid for itself — the protocol knowledge, the egress/iso
 The retain-hedge existed to preserve a rollback fallback — but that fallback protects <strong>v1/classic users who do not exist</strong> (§6.3), so it buys almost nothing while muddying the "one protocol, strictly better than ARC" story that drives adoption.
 Against that: <strong>P4 proved the protocol works live</strong> (7/7), <strong>GAG owns its own client</strong> (not hostage to upstream's Preview cadence — "Preview" is a label on GitHub's <em>library</em>, while the <em>wire protocol</em> is what ARC runs in production at scale), and a cleaner beta surface is easier to commit to and support.
 <strong>Decision: v2beta1 stays ScaleSet-only.</strong> The residual risk — GitHub drifts the protocol post-graduation with no classic escape — is real but bounded (own-client + ARC-in-prod + a code fix is always shippable), and is managed with a <strong>technical</strong> guardrail rather than the retain-hedge: <strong>do not graduate v2beta1 until the clean-green dogfood re-run plus a short stability soak of the scale-set path</strong> — bet the beta on evidence, not one run.
-Consequence for the backlog: <a href="../../STATUS/#Q272">Q272</a> (scale-set upstream maturity) is <em>not</em> a graduation blocker — it lifts the Preview caveat and triggers the U6 vendor-vs-own revisit, but the beta cut gates on GAG's own soak, not on GitHub's GA timeline.</p>
+Consequence for the backlog: <a href="../../queue/Q272/">Q272</a> (scale-set upstream maturity) is <em>not</em> a graduation blocker — it lifts the Preview caveat and triggers the U6 vendor-vs-own revisit, but the beta cut gates on GAG's own soak, not on GitHub's GA timeline.</p>
 </blockquote>
 <h3 id="62-the-recommendation--v2-is-the-product-retire-v1-on-a-stability-schedule">6.2 The recommendation — v2 is the product; retire v1 on a stability schedule<a class="headerlink" href="#62-the-recommendation--v2-is-the-product-retire-v1-on-a-stability-schedule" title="Permanent link">&para;</a></h3>
 <p>An earlier draft of this memo recommended "hold both removals, keep classic as a safety valve, gate on an adoption signal."
@@ -2968,7 +2968,7 @@ Handled poorly the cost is not complaints (no one to complain) — it is the ado
    Gating on v2 reaching beta is honest — you should not force anyone onto an alpha — and is <em>not</em> catering to imaginary users.
    The <strong>discipline</strong> (announced, scheduled, documented, backed by a working <code>gag-migrate</code>) <em>is</em> the "safe bet, won't strand you" signal, far more than the length of the window.</li>
 <li><strong>Reinvest the freed effort into the migration mechanics as a showcase, not the v1 runtime.</strong> <code>gag-migrate</code>, the migration guide, the deprecation notice, the "what's preserved / what changes" doc — make these <em>exemplary</em>, because that is the artifact a prospective adopter actually inspects.
-   (This reframes the adoption-signal item <a href="../../STATUS/#Q273">Q273</a> from "instrument who's using it" to "polish the migration story" — a better use of effort when there is no one to measure.)</li>
+   (This reframes the adoption-signal item <a href="../../queue/Q273/">Q273</a> from "instrument who's using it" to "polish the migration story" — a better use of effort when there is no one to measure.)</li>
 <li><strong>Classic is terminal — no further investment.</strong> The eight re-routes were the last classic spend; the residual ceiling is structural (§4).
    This is the "structural ceiling → stop paying it down" disposition from <a href="../../development/technical-debt/">technical-debt.md</a>.</li>
 <li><strong>v2beta1 stays ScaleSet-only</strong> (§6.1), with a <em>technical</em> graduation guardrail (clean-green + a stability soak), not a user-migration one.</li>

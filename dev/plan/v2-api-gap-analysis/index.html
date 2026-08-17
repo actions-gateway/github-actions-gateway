@@ -2673,7 +2673,7 @@ One capability drop survives it:</p>
 <li><strong>Multi-label runner sets</strong> (Q726). ✅ Closed 2026-08-11.
   <code>v1alpha1</code> set <code>MinItems=1</code> with no ceiling; <code>v2beta1</code> CEL-enforced <code>size(self) == 1</code> because the single label doubled as the scale-set name.
   The rule is gone: every label is registered on the scale set and the <em>first</em> one names it.
-  Deliberate, and the field's godoc offers a migration path (stay on a <code>v2alpha1</code> Classic RunnerSet), but that path expires with <code>v2alpha1</code> at <code>v2.0.0</code> (<a href="../../STATUS/#Q264">Q264</a>), which is what makes it permanent.</li>
+  Deliberate, and the field's godoc offers a migration path (stay on a <code>v2alpha1</code> Classic RunnerSet), but that path expires with <code>v2alpha1</code> at <code>v2.0.0</code> (<a href="../../queue/Q264/">Q264</a>), which is what makes it permanent.</li>
 </ul>
 <p>A second one opened and closed inside the same release.
 Q683 and Q691 shipped in August wired only into the classic <code>provision()</code> path, and <code>v2beta1</code> is ScaleSet-only, so for a few days <code>v2</code> tenants had neither; Q766 ported both and 1.4 ships them on both tiers.
@@ -2684,7 +2684,7 @@ Goal: find v1 behavior not yet ported to v2, now that v2 is the recommended fron
 <p><strong>Method:</strong> field-by-field API comparison plus four parallel end-to-end code reads — GMC gateway reconcilers, proxy provisioning (v1 inline vs v2 <code>EgressProxy</code>), the full admission surface (webhooks + VAPs + CEL), and the AGC <code>RunnerGroup</code> vs <code>RunnerSet</code> controllers.
 Every finding below was verified against the code at the cited locations; the security-relevant ones were re-confirmed by hand.</p>
 <p><strong>Outcome:</strong> 8 genuine gaps found.
-The most severe — the missing <code>noProxyCIDRs</code> GitHub-bypass admission validation — was fixed same-day in <a href="https://github.com/actions-gateway/github-actions-gateway/pull/641">#641</a>, and its GHES-host residual (was Q322) is closed by the referrer-aware follow-up (both webhook sides thread the referring gateways' <code>gitHubURL</code> hosts); the other 7 are filed as <a href="../../STATUS/#queue">Q323–Q329</a>.
+The most severe — the missing <code>noProxyCIDRs</code> GitHub-bypass admission validation — was fixed same-day in <a href="https://github.com/actions-gateway/github-actions-gateway/pull/641">#641</a>, and its GHES-host residual (was Q322) is closed by the referrer-aware follow-up (both webhook sides thread the referring gateways' <code>gitHubURL</code> hosts); the other 7 are filed as Q323–Q329.
 Q319/Q321 were already on the Queue and are confirmed.
 Everything else is at parity, a v2 superset, or an intentional, documented design difference.</p>
 <h2 id="summary-of-gaps">Summary of gaps<a class="headerlink" href="#summary-of-gaps" title="Permanent link">&para;</a></h2>

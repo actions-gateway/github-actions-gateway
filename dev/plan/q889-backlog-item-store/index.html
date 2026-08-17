@@ -2686,10 +2686,9 @@
 
 
 <h1 id="q889-migrate-the-backlog-to-the-per-item-store">Q889: Migrate the backlog to the per-item store<a class="headerlink" href="#q889-migrate-the-backlog-to-the-per-item-store" title="Permanent link">&para;</a></h1>
-<p><strong>Status:</strong> Phases 1 and 2 merged (#1595, #1596); phase 3 is open on #1598.
-The store is live at <code>docs/queue/</code> alongside the table, held to it by <code>queue-drift-check</code>.
-Six consumers are switched; the rest wait on phase 4's anchors or on phase 6's deletion, classified under Phase 3 below.
-Phases 4 to 6 not started.</p>
+<p><strong>Status:</strong> Phases 1, 2 and 3 merged (#1595, #1596, #1598); phase 4 is open on #1600.
+The store is live at <code>docs/queue/</code> alongside the table, held to it by <code>queue-drift-check</code>, and every reference that can point at an item now does.
+Phases 5 and 6 not started.</p>
 <p>Replace the single <code>docs/STATUS.md</code> Queue table with the <code>session-backlog</code> skill's per-item store under <code>docs/queue/</code>, adopt its Python tooling, and groom the backlog to remove what the move obsoletes.</p>
 <p>Supersedes the attempt on <a href="https://github.com/actions-gateway/github-actions-gateway/pull/1534">#1534</a> (draft, +4150/−1 across 186 files, stale).
 That branch carries a Go <code>queuestore</code> implementation and its own row Q869, neither of which reached <code>main</code>; closing it discards both.</p>
@@ -2831,9 +2830,10 @@ Switch the 53 consumers.</strong> Retire, repoint or rewrite each: <code>lint-ba
 Re-counted at the start of the work: <strong>61 files outside <code>docs/</code> reference <code>STATUS.md</code></strong>, 40 under <code>scripts/</code>, 10 under <code>devtools/</code> and 11 of wiring.
 The 53 above counted tools rather than files; whichever unit, re-derive it rather than quoting it.</p>
 <p><strong>4.
-Anchors and docs.</strong> Rewrite 218 <code>STATUS.md#QNNN</code> references across 50 docs to the item pages.
-This is a bulk mechanical change, so it proves itself by reconciliation, never by an empty leftover grep: assert a known-affected site changed, and reconcile before/after counts.
-Then rewrite <code>maintaining-backlog.md</code>, <code>parallel-dispatch.md</code>, <code>CLAUDE.md</code> and the doc-update matrix.</p>
+Anchors and docs.</strong> ✅ 158 <code>STATUS.md#QNNN</code> references across 47 files now point at item pages, on top of the 52 the plan index took in phase 3, for 211 store links tree-wide.
+Reconciled by count and by <code>doc-links</code> rather than by an empty leftover grep, which is what surfaced the classes below.
+Thirteen references stay: seven name <code>Q248</code> and one names <code>#progress</code>, both Progress rather than items, so phase 6 owns them; five are prose placeholders that must never be substituted.
+The prose half came to one wrong paragraph in <code>maintaining-backlog.md</code> and two lines in <code>CLAUDE.md</code>; <code>parallel-dispatch.md</code> needed nothing, and <code>doc-update-matrix.md</code> referenced the table nowhere at all.</p>
 <p><strong>5.
 The website.</strong> Render <code>/dev/queue/</code> into the MkDocs theme as a build step, gitignore the generated path, and gate that a committed index never reappears.
 Do not add a second Pages deploy: the repo has one site on a custom domain, and a second job publishing its own artifact replaces the first.</p>

@@ -3217,7 +3217,7 @@ It shares <code>controller.ServesRunnerGroups</code> with <code>main.go</code>, 
 That is cosmetic in the protocol (GitHub keys session conflicts on the agent, not the owner string), but it means <code>brokertest.Server.ActiveSessionsForOwner</code> cannot separate a same-named RunnerGroup and RunnerSet, and its doc comment still claims the owner identifies a RunnerGroup.
 Filed as Q538; the test works around it by naming its RunnerSet distinctly.</p>
 <p>Q538 later measured the production client and refuted the "cosmetic" reading above: the listener sends that same string as <code>agent.name</code>, so for a RunnerSet it names no runner GitHub has registered.
-The fake's own name scoping and doc were fixed there; the wire-name divergence carried to <a href="../../../STATUS/#Q677">Q677</a>.</p>
+The fake's own name scoping and doc were fixed there; the wire-name divergence carried to <a href="../../../queue/Q677/">Q677</a>.</p>
 <h3 id="the-teardown-order-is-load-bearing-and-undocumented">The teardown order is load-bearing and undocumented<a class="headerlink" href="#the-teardown-order-is-load-bearing-and-undocumented" title="Permanent link">&para;</a></h3>
 <p>Deleting the tenant namespace directly left it in <code>Terminating</code> indefinitely on three finalizers (<code>actions-gateway.com/agentpool-cleanup</code>, <code>actions-gateway.github.com/agentpool-cleanup</code>, <code>actions-gateway.github.com/gmc-cleanup</code>).
 The reason is structural: the AGC Deployments live <em>inside</em> the tenant namespace, so namespace deletion removes the very controllers that must clear those finalizers.</p>
