@@ -50,7 +50,7 @@ CHECK_FAST_GATES := lint-backlog status-isolation-check roadmap-check \
                     actionlint uses-pinned-check chart-crds-check chart-rbac-check chart-webhook-check \
                     codegen-check api-reference-check scripts-test claude-usage-test \
                     doc-links release-pins-check em-dash-check page-density-check \
-                    script-docs-check queue-rules-check \
+                    script-docs-check queue-rules-check queue-drift-check \
                     semver-floor-sources-check template-library-check \
                     md-reflow-check comparison-stamps-check promql-check \
                     metric-tiers-check reason-tiers-check
@@ -83,6 +83,7 @@ CHECK_HEAVY_GATES := build-tags-check lint cover-check
 # complete set, so a `docs/STATUS.md` change that parked a row shipped a PR red
 # on roadmap-check.
 STATUS_GATES := lint-backlog status-isolation-check roadmap-check plan-index-check \
+                 queue-drift-check \
                  conflict-markers-check doc-links em-dash-check page-density-check
 
 # The gates a prose change can fail, for the same reason STATUS_GATES exists one
@@ -185,7 +186,7 @@ SCRIPTS_TESTS := agent/claude-go-throttle-hook-test agent/local-throttle-test \
                  docs/git-merge-plan-index-test docs/git-merge-roadmap-test \
                  docs/git-merge-status-test \
                  docs/lint-backlog-test \
-                 docs/check-queue-rules-test \
+                 docs/check-queue-rules-test docs/check-queue-drift-test \
                  docs/queue-test docs/rank-vectors-test \
                  docs/release-gates-hook-test docs/release-version-hook-test \
                  docs/source-links-hook-test \

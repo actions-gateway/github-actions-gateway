@@ -184,13 +184,23 @@ script-docs-check: ## Fail when a script under scripts/ has no scripts/README.md
 # The three backlog rules queue.py lint has no equivalent for, because each is a
 # function of what the branch changed rather than of what the store holds: a
 # flake item may not vanish, deleting a plan's last item obliges its index row,
-# and the label vocabulary is closed. Reports 0 checked until the store exists
-# (Q889); rule 10 was dropped on measurement and rule 12 is `queue.py claims`.
+# and the label vocabulary is closed. Rule 10 was dropped on measurement and
+# rule 12 is `queue.py claims` (Q889).
 # status-scope: none — reads docs/queue/, never docs/STATUS.md, so a
 # backlog-table-only change cannot fail it. Revisit at the cutover.
 .PHONY: queue-rules-check
 queue-rules-check: ## Fail when a backlog store change breaks rules 8, 9 or 11
 	scripts/docs/check-queue-rules.sh
+
+# Phase 2 of Q889 leaves the backlog written down twice: docs/STATUS.md is what
+# every consumer still reads, docs/queue/ is what phase 3 switches them to. This
+# fails the moment an edit lands on one side only, which is otherwise silent.
+# Retires itself: it passes and says so once the table is gone.
+# status-scope: both — it exists to compare docs/STATUS.md against the store,
+# so it must run on a change to either.
+.PHONY: queue-drift-check
+queue-drift-check: ## Fail when docs/STATUS.md and docs/queue/ disagree
+	scripts/docs/check-queue-drift.sh
 
 # Comparison-table stamp gate (Q801). why-gag.md renders competitor claims as
 # green checks and red X's, and eleven of them shipped with no ARC version and no

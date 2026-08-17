@@ -21,6 +21,7 @@ on:
       - 'scripts/docs/check-roadmap.sh'
       - 'scripts/docs/check-status-isolation.sh'
       - 'scripts/docs/check-queue-rules.py'
+      - 'scripts/docs/check-queue-drift.py'
       - 'docs/queue/**'
       # The backlog gate's rules live in devtools/docs/backloglint over the
       # shared parse layer (Q613), so a change there changes this gate's verdict.
@@ -65,6 +66,7 @@ jobs:
               - 'scripts/docs/check-roadmap.sh'
               - 'scripts/docs/check-status-isolation.sh'
               - 'scripts/docs/check-queue-rules.py'
+              - 'scripts/docs/check-queue-drift.py'
               - 'docs/queue/**'
               - 'devtools/**'
               - '.github/workflows/status-lint.yml'
@@ -128,6 +130,13 @@ jobs:
         # cause wearing two faces, 'No rule to make target' for the make form
         # and exit 127 for the script.
         run: scripts/docs/check-queue-rules.sh
+
+      - name: check the table and the store still agree
+        # Until phase 3 switches the consumers, the backlog is written down
+        # twice and an edit to one side alone is silent (Q889). This is the
+        # gate that makes it loud. It retires itself: once docs/STATUS.md is
+        # deleted it passes and says the two can no longer disagree.
+        run: scripts/docs/check-queue-drift.sh
 
   # Aggregate required-status gate. Mark THIS job's check context
   # (`status-lint-gate`) required in the branch ruleset — never the path-gated
