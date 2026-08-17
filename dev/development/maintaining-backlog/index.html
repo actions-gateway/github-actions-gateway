@@ -2668,7 +2668,8 @@ What holds the rules for them is the tooling below, which is in-tree and runs in
   Its siblings <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/docs/git-merge-plan-index.sh"><code>git-merge-plan-index.sh</code></a> and <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/docs/git-merge-roadmap.sh"><code>git-merge-roadmap.sh</code></a> do the same for <a href="../../plan/"><code>docs/plan/README.md</code></a>, keyed on the plan path, and for <a href="../../roadmap/"><code>docs/roadmap.md</code></a>, keyed on each bullet's backlog annotation.
   One <code>make merge-driver</code> per clone installs all three; a no-op until then.
   <a href="#the-merge-driver-resolve-queue-rows-by-id-not-by-line-position">Details below</a>.</li>
-<li><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/docs/next-task.sh"><code>scripts/docs/next-task.sh</code></a> — prints a kickoff prompt (or <code>--title</code>) for the top ready 🔲 Queue row, for starting a fresh session on the next task.</li>
+<li><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/docs/next-task.sh"><code>scripts/docs/next-task.sh</code></a> — prints a kickoff prompt (or <code>--title</code>) for the top ready item, for starting a fresh session on the next task.
+  A thin forward to <code>queue.py next</code> since Q889; it reads <code>docs/queue/</code> and takes no file path.</li>
 <li><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/docs/backlog-metrics.sh"><code>scripts/docs/backlog-metrics.sh</code></a> — replays the file's git history into flow metrics (throughput, cycle time, prune ratio, aging WIP).
   Read-only.
   The replay reads each diff line's cells through the shared Markdown parse layer, so an escaped pipe in a cell cannot shift a row's fields (Q614).</li>

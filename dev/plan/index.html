@@ -2668,7 +2668,7 @@
 For current status and priorities, see <a href="../STATUS/">docs/STATUS.md</a>.</p>
 <p>Each file is a self-contained plan with rationale, scope, and (where appropriate) a status table near the top.
 Authoritative state always lives in the individual file.</p>
-<p>Legend: ✅ done, ⚠️ partial / mixed (open <strong>Queue</strong> item remains), 💤 deferred (parked with a trigger, tracked in <a href="../STATUS/#deferred">STATUS.md Deferred</a>), ❌ open, ⓘ informational (forward-looking spec or design rationale, no progress to track).
+<p>Legend: ✅ done, ⚠️ partial / mixed (open <strong>Queue</strong> item remains), 💤 deferred (parked with a trigger, tracked in <a href="../queue/">deferred in the backlog</a>), ❌ open, ⓘ informational (forward-looking spec or design rationale, no progress to track).
 A plan with only deferred residuals is ✅, not ⚠️ — see <a href="../development/maintaining-backlog/#-means-an-open-queue-row-remains--deferred-residuals-dont-count">maintaining-backlog.md</a>.</p>
 <h2 id="implementation-roadmap">Implementation roadmap<a class="headerlink" href="#implementation-roadmap" title="Permanent link">&para;</a></h2>
 <p>The five-milestone delivery from <a href="../design/06-implementation-phases/">docs/design/06-implementation-phases.md</a>.</p>
@@ -2704,7 +2704,7 @@ A plan with only deferred residuals is ✅, not ⚠️ — see <a href="../devel
 <tr>
 <td><a href="milestone-5/">milestone-5.md</a></td>
 <td>Hardening + 1,000-session load testing + posture audit + packaging</td>
-<td>⚠️ Packaging (Q12) now live-validated end-to-end (Q219, §1.5 — found+fixed an egress-proxy registration bug); load harness (Q13), polaris + kube-bench (Q14) shipped. Only staging-cluster residuals remain: 1,000-session proxy-HPA-under-burst + gVisor isolation (<a href="../STATUS/#Q15">Q15</a>, deferred)</td>
+<td>⚠️ Packaging (Q12) now live-validated end-to-end (Q219, §1.5 — found+fixed an egress-proxy registration bug); load harness (Q13), polaris + kube-bench (Q14) shipped. Only staging-cluster residuals remain: 1,000-session proxy-HPA-under-burst + gVisor isolation (<a href="../queue/Q15/">Q15</a>, deferred)</td>
 </tr>
 <tr>
 <td><a href="release-1.0/">release-1.0.md</a></td>
@@ -2719,7 +2719,7 @@ A plan with only deferred residuals is ✅, not ⚠️ — see <a href="../devel
 <tr>
 <td><a href="release-1.4/">release-1.4.md</a></td>
 <td>The 1.4 release gate: why the minor was forced by merged work before anyone chose it, the three admitted items (Q166, Q554, Q691), and why the proxy-hardening cluster stays whole for 1.5</td>
-<td>✅ Scope complete. All three gate items shipped (Q166 in #1347, Q554 in #1344, Q691 in #1336), and the three blockers a 2026-08-09 audit found are all closed: the no-PEM credential row (#1362), <a href="../STATUS/#Q747">Q747</a>'s probe, whose enforcer was dead rather than its policy wrong (#1363), and the unreplaced <code>workerImage</code> failure mode that <a href="../STATUS/#Q714">Q714</a> contradicted (#1361). Awaiting the release-candidate dogfood validation in <a href="../operations/release/">release.md</a>, which needs the actual RC image and so is deliberately not a Queue row</td>
+<td>✅ Scope complete. All three gate items shipped (Q166 in #1347, Q554 in #1344, Q691 in #1336), and the three blockers a 2026-08-09 audit found are all closed: the no-PEM credential row (#1362), <a href="../queue/Q747/">Q747</a>'s probe, whose enforcer was dead rather than its policy wrong (#1363), and the unreplaced <code>workerImage</code> failure mode that <a href="../queue/Q714/">Q714</a> contradicted (#1361). Awaiting the release-candidate dogfood validation in <a href="../operations/release/">release.md</a>, which needs the actual RC image and so is deliberately not a Queue row</td>
 </tr>
 <tr>
 <td><a href="release-1.5/">release-1.5.md</a></td>
@@ -2729,7 +2729,7 @@ A plan with only deferred residuals is ✅, not ⚠️ — see <a href="../devel
 <tr>
 <td><a href="v2-ga/">v2-ga.md</a></td>
 <td>The last graduation rung (<code>v2beta1</code> → <code>v2</code>) and the <code>v2.0.0</code> release that executes the three coupled removals: soak criteria, the graduation hop, removal sequencing, docs</td>
-<td>💤 Parked — every phase is event-gated, so no Queue row remains: the soak and the hop start after <code>v1.3.0</code> ships (<a href="../STATUS/#Q413">Q413</a>), Phase 3's removals ride <a href="../STATUS/#Q273">Q273</a>/<a href="../STATUS/#Q264">Q264</a>, and the Phase 2 alias decision is <a href="../STATUS/#Q452">Q452</a></td>
+<td>💤 Parked — every phase is event-gated, so no Queue row remains: the soak and the hop start after <code>v1.3.0</code> ships (<a href="../queue/Q413/">Q413</a>), Phase 3's removals ride <a href="../queue/Q273/">Q273</a>/<a href="../queue/Q264/">Q264</a>, and the Phase 2 alias decision is <a href="../queue/Q452/">Q452</a></td>
 </tr>
 </tbody>
 </table>
@@ -2746,7 +2746,7 @@ A plan with only deferred residuals is ✅, not ⚠️ — see <a href="../devel
 <tr>
 <td><a href="security/">security.md</a></td>
 <td>OWASP-style code review with finding-level workstreams</td>
-<td>✅ Done — every workstream shipped; sole residual is the deferred live Ed25519 probe (M-11b, <a href="../STATUS/#Q11">Q11</a>). Phase 1 live <code>kind</code> validation covered by the M3/M4 live runs</td>
+<td>✅ Done — every workstream shipped; sole residual is the deferred live Ed25519 probe (M-11b, <a href="../queue/Q11/">Q11</a>). Phase 1 live <code>kind</code> validation covered by the M3/M4 live runs</td>
 </tr>
 <tr>
 <td><a href="security-audit-2026-06/">security-audit-2026-06.md</a></td>
@@ -2781,32 +2781,32 @@ A plan with only deferred residuals is ✅, not ⚠️ — see <a href="../devel
 <tr>
 <td><a href="secure-multi-tenant-oss-ci/">secure-multi-tenant-oss-ci.md</a></td>
 <td>The umbrella goal: a map, a threat model for the untrusted contributor, a definition of done, and the residual risk accepted. Delegates all design to q408 and does not restate it</td>
-<td>ⓘ Ongoing goal doc. Kernel isolation and the pod floor are shipped; the network, metadata, cache, and evidence layers are open (<a href="../STATUS/#Q408">Q408</a>, <a href="../STATUS/#Q716">Q716</a>)</td>
+<td>ⓘ Ongoing goal doc. Kernel isolation and the pod floor are shipped; the network, metadata, cache, and evidence layers are open (<a href="../queue/Q408/">Q408</a>, <a href="../queue/Q716/">Q716</a>)</td>
 </tr>
 <tr>
 <td><a href="caching-and-worker-storage/">caching-and-worker-storage.md</a></td>
 <td>The umbrella goal for the three caches routinely conflated as one (image pulls, <code>actions/cache</code>, build layers) plus RWX job storage: why closing untrusted-PR egress removes the cache that works today, why one backend can still serve several content classes, and why the read-only mirror contract cannot cover a writable job cache</td>
-<td>ⓘ Ongoing goal doc, nothing built. States that <code>actions/cache</code> already works and the roadmap said otherwise; reframes <a href="../STATUS/#Q215">Q215</a>'s isolation review as the design, and widens <a href="../STATUS/#Q539">Q539</a>/<a href="../STATUS/#Q540">Q540</a> to grade the contract per content class</td>
+<td>ⓘ Ongoing goal doc, nothing built. States that <code>actions/cache</code> already works and the roadmap said otherwise; reframes <a href="../queue/Q215/">Q215</a>'s isolation review as the design, and widens <a href="../queue/Q539/">Q539</a>/<a href="../queue/Q540/">Q540</a> to grade the contract per content class</td>
 </tr>
 <tr>
 <td><a href="gpu-and-accelerated-ci/">gpu-and-accelerated-ci.md</a></td>
 <td>The umbrella goal for accelerated CI: what already ships, why GPU and Kata do not compose on cloud machine families, and why gang scheduling is the one place the pre-claim gate is structurally defensible</td>
-<td>ⓘ Ongoing goal doc. Foundations shipped (scale-to-zero, priority floors, GPU-safe right-sizing); <a href="../STATUS/#Q216">Q216</a> and <a href="../STATUS/#Q718">Q718</a> are demand-gated on purpose</td>
+<td>ⓘ Ongoing goal doc. Foundations shipped (scale-to-zero, priority floors, GPU-safe right-sizing); <a href="../queue/Q216/">Q216</a> and <a href="../queue/Q718/">Q718</a> are demand-gated on purpose</td>
 </tr>
 <tr>
 <td><a href="release-ladder/">release-ladder.md</a></td>
 <td>The map between the individual release plans: how many releases stand between here and <code>v2.0.0</code>, what each carries, why 1.6 exists rather than folding into 1.5, and what is deliberately punted past 2.0 with the signal each waits on</td>
-<td>ⓘ Ongoing goal doc. Shape decided 2026-08-09: 1.5 → 1.6 → 2.0. Establishes that the roadmap's near-term section means "committed to a named release", applied 2026-08-09: seven items parked to Deferred, <a href="../STATUS/#Q719">Q719</a> and <a href="../STATUS/#Q727">Q727</a> gated to 1.6</td>
+<td>ⓘ Ongoing goal doc. Shape decided 2026-08-09: 1.5 → 1.6 → 2.0. Establishes that the roadmap's near-term section means "committed to a named release", applied 2026-08-09: seven items parked to Deferred, <a href="../queue/Q719/">Q719</a> and <a href="../queue/Q727/">Q727</a> gated to 1.6</td>
 </tr>
 <tr>
 <td><a href="arc-parity/">arc-parity.md</a></td>
 <td>The umbrella goal for the short list where a team on ARC cannot migrate without editing workflows or losing a capability: the measured gap inventory, what is deliberately never parity, and why <code>containerMode</code> waits on RWX storage</td>
-<td>ⓘ Ongoing goal doc. Q712 and Q726 both closed 2026-08-11; <a href="../STATUS/#Q727">Q727</a> is sequenced behind <a href="../STATUS/#Q719">Q719</a>, and <a href="../STATUS/#Q765">Q765</a> needs an appliance</td>
+<td>ⓘ Ongoing goal doc. Q712 and Q726 both closed 2026-08-11; <a href="../queue/Q727/">Q727</a> is sequenced behind <a href="../queue/Q719/">Q719</a>, and <a href="../queue/Q765/">Q765</a> needs an appliance</td>
 </tr>
 <tr>
 <td><a href="q408-untrusted-pr-egress/">q408-untrusted-pr-egress.md</a></td>
 <td>Untrusted-PR posture for Kata workers (G.14): in-cluster registry pull-through mirrors (the Athens pattern applied to images) + delete the e2e open-egress NetworkPolicy, so a Kata worker's reachable set is DNS + GitHub + mirror only</td>
-<td>❌ Open — Phase 0 measured 2026-08-03; Phase 1 (hosted-only gating of <code>get.helm.sh</code> + the Actions cache data plane) implemented, its live validation run next, then Phase 2 mirror manifests (<a href="../STATUS/#Q408">Q408</a>)</td>
+<td>❌ Open — Phase 0 measured 2026-08-03; Phase 1 (hosted-only gating of <code>get.helm.sh</code> + the Actions cache data plane) implemented, its live validation run next, then Phase 2 mirror manifests (<a href="../queue/Q408/">Q408</a>)</td>
 </tr>
 </tbody>
 </table>
@@ -2840,27 +2840,27 @@ The durable design rationale for what the unit/integration/e2e layers cover live
 <tr>
 <td><a href="eviction-oversubscription-validation/">eviction-oversubscription-validation.md</a></td>
 <td>Five experiments that turn the eviction-recovery and oversubscription claims into measurements: unconfounded eviction latency, the node-drain path, the oversubscription/preemption demo, the quota gate under contention, and the tiers-off/tiers-on utilization delta</td>
-<td>⚠️ Open — filed 2026-07-26 from the <a href="https://github.com/actions-gateway/github-actions-gateway/issues/819">#819</a> review. Experiment 4 ran in full — envtest half 2026-07-26 (both acquisition tiers), live-GitHub half 2026-07-31: GitHub redelivered the declined job and a sibling gateway ran it green on attempt 1, and redelivery turned out to be a ~7/s loop; experiment 2 (the node drain) ran 2026-07-27 — neither tier re-runs a drained worker, residual tracked as <a href="archive/q459-drained-worker-recovery/">Q459</a>; experiment 3 (preemption) ran 2026-07-29 — a <code>PriorityClass</code> preemption is a graceful delete, not a kubelet eviction, so it reached no recovery either; its residual Q497 shipped the same day (<a href="archive/q497-preemption-recovery/">plan</a>). experiment 1 (eviction latency) ran on both acquisition tiers — classic 2026-07-29 and re-measured 2026-08-03, scale-set 2026-08-03, all against the published v1.3.0 images: 9m36-9m45s eviction→conclusion, attributed to the job lock's TTL rather than anything tier-specific, with the Q503 retry loop measured absorbing GitHub's refusal window over 20 paced calls on each tier. Only experiment 5 remains (<a href="../STATUS/#Q424">Q424</a>, deferred)</td>
+<td>⚠️ Open — filed 2026-07-26 from the <a href="https://github.com/actions-gateway/github-actions-gateway/issues/819">#819</a> review. Experiment 4 ran in full — envtest half 2026-07-26 (both acquisition tiers), live-GitHub half 2026-07-31: GitHub redelivered the declined job and a sibling gateway ran it green on attempt 1, and redelivery turned out to be a ~7/s loop; experiment 2 (the node drain) ran 2026-07-27 — neither tier re-runs a drained worker, residual tracked as <a href="archive/q459-drained-worker-recovery/">Q459</a>; experiment 3 (preemption) ran 2026-07-29 — a <code>PriorityClass</code> preemption is a graceful delete, not a kubelet eviction, so it reached no recovery either; its residual Q497 shipped the same day (<a href="archive/q497-preemption-recovery/">plan</a>). experiment 1 (eviction latency) ran on both acquisition tiers — classic 2026-07-29 and re-measured 2026-08-03, scale-set 2026-08-03, all against the published v1.3.0 images: 9m36-9m45s eviction→conclusion, attributed to the job lock's TTL rather than anything tier-specific, with the Q503 retry loop measured absorbing GitHub's refusal window over 20 paced calls on each tier. Only experiment 5 remains (<a href="../queue/Q424/">Q424</a>, deferred)</td>
 </tr>
 <tr>
 <td><a href="q511-live-github-run-isolation/">q511-live-github-run-isolation.md</a></td>
 <td>Two live-GitHub e2e runs in flight at once collide on shared GitHub-side state (the same fixture repo, workflow, and runner name) without either failing, and a run killed with <code>kill -9</code> strands a registration that poisons the next one</td>
-<td>🚧 In progress — decided forbid-over-isolate 2026-07-31: the suite's <code>BeforeAll</code> preflight and <code>make e2e-github-cleanup</code> shipped. Open for the isolation half, deferred to <a href="../STATUS/#Q530">Q530</a> because it needs the fixture workflows in another repo parameterized</td>
+<td>🚧 In progress — decided forbid-over-isolate 2026-07-31: the suite's <code>BeforeAll</code> preflight and <code>make e2e-github-cleanup</code> shipped. Open for the isolation half, deferred to <a href="../queue/Q530/">Q530</a> because it needs the fixture workflows in another repo parameterized</td>
 </tr>
 <tr>
 <td><a href="q549-scaleset-rerun-flake/">q549-scaleset-rerun-flake.md</a></td>
 <td>The two failure modes behind one <code>E2E_AGC_ScaleSetDrainedWorkerClaimAndRerunLandUnderChartRBAC</code> timeout: the AGC being replaced inside the claim window, and an undisturbed window whose re-run still never fires</td>
-<td>⚠️ Both modes diagnosed — A mitigated by the UID pin + re-stage (PR #1120); B attributed 2026-08-12 after three occurrences, one on <code>main</code>: the disruption was detected and the <em>claim</em> lost, to the pod's own deletion or to a conflict from the kubelet's terminal-status write, neither of which is a role or discriminator defect. Fixed under <a href="../STATUS/#Q809">Q809</a>; the row stays in Flake watch for the soak (<a href="../STATUS/#Q549">Q549</a>)</td>
+<td>⚠️ Both modes diagnosed — A mitigated by the UID pin + re-stage (PR #1120); B attributed 2026-08-12 after three occurrences, one on <code>main</code>: the disruption was detected and the <em>claim</em> lost, to the pod's own deletion or to a conflict from the kubelet's terminal-status write, neither of which is a role or discriminator defect. Fixed under <a href="../queue/Q809/">Q809</a>; the row stays in Flake watch for the soak (<a href="../queue/Q549/">Q549</a>)</td>
 </tr>
 <tr>
 <td><a href="q300-gmc-kindnet-e2e-flake/">q300-gmc-kindnet-e2e-flake.md</a></td>
 <td>Systemic kindnet <code>e2e / e2e</code> leg flakiness: different unrelated specs fail run to run — the original CFS-throttling root cause (kind's 100m CPU limit on kindnetd starving its in-band kube-network-policies enforcer) is fixed and confirmed closed; one unexplained NetworkPolicy fail-open event (07-15) remains under watch</td>
-<td>❌ Open — throttle mechanism closed (0 throttled in every post-fix dump); failure dump upgraded (nfqueue/memory counters, full-window logs) to attribute the next occurrence (<a href="../STATUS/#Q300">Q300</a>)</td>
+<td>❌ Open — throttle mechanism closed (0 throttled in every post-fix dump); failure dump upgraded (nfqueue/memory counters, full-window logs) to attribute the next occurrence (<a href="../queue/Q300/">Q300</a>)</td>
 </tr>
 <tr>
 <td><a href="q820-scripts-test-temp-file-flake/">q820-scripts-test-temp-file-flake.md</a></td>
 <td><code>git-merge-plan-index-test</code> dies on a git temp-file error under the <code>make check</code> fan-out and passes on rerun: the exclusion record, so the next sighting starts from what is already ruled out rather than re-deriving it</td>
-<td>❌ Open — sighting 4 read every throwaway repo intact at the moment of failure, so the <code>rm -rf</code>-racing-a-live-git family that matched the signature is a look-alike, not the cause; no mechanism yet explains a temp-file creation that fails with the tree present (<a href="../STATUS/#Q820">Q820</a>)</td>
+<td>❌ Open — sighting 4 read every throwaway repo intact at the moment of failure, so the <code>rm -rf</code>-racing-a-live-git family that matched the signature is a look-alike, not the cause; no mechanism yet explains a temp-file creation that fails with the tree present (<a href="../queue/Q820/">Q820</a>)</td>
 </tr>
 </tbody>
 </table>
@@ -2916,7 +2916,7 @@ Each has inline ✓ markers per item.</p>
 <tr>
 <td><a href="gke-dogfood/">gke-dogfood.md</a></td>
 <td>On-demand GKE cluster for dogfooding GAG's own CI — GCP setup, GAG install, workflow variable toggle, start/stop/teardown runbook</td>
-<td>✅ Complete (2026-07-07) — turn-up + per-job-green + concurrent-matrix-green on the ScaleSet default (Q224 closed via <a href="../STATUS/#Q264">Q264</a> P4, #545); v2beta1 dogfood path live (Q231). Turn-up findings Q246/Q247/Q254/Q259/Q260 all resolved. Stays as the living operational runbook; chronological turn-up history split to <a href="archive/gke-dogfood-turnup-findings/">archive/gke-dogfood-turnup-findings.md</a> (Q336)</td>
+<td>✅ Complete (2026-07-07) — turn-up + per-job-green + concurrent-matrix-green on the ScaleSet default (Q224 closed via <a href="../queue/Q264/">Q264</a> P4, #545); v2beta1 dogfood path live (Q231). Turn-up findings Q246/Q247/Q254/Q259/Q260 all resolved. Stays as the living operational runbook; chronological turn-up history split to <a href="archive/gke-dogfood-turnup-findings/">archive/gke-dogfood-turnup-findings.md</a> (Q336)</td>
 </tr>
 <tr>
 <td><a href="dogfood-runner-rightsizing/">dogfood-runner-rightsizing.md</a></td>
@@ -2938,27 +2938,27 @@ Each has inline ✓ markers per item.</p>
 <tr>
 <td><a href="runner-sizing-profiles/">runner-sizing-profiles.md</a></td>
 <td>Worker right-sizing profiles: per-RunnerSet usage observability → recommendations in <code>RunnerSet.status</code> → opt-in auto-apply profiles (<code>Binpack</code>/<code>Throughput</code>/<code>NodeShare</code>); automates the manual dogfood right-sizing loop for every tenant, ARC has no equivalent</td>
-<td>✅ Complete (2026-07-28) — Phases 1–3 shipped 2026-07-21/22 and live-validated on dogfood over three sessions: recommendation + derivation + restart persistence, then all three <code>SizingDrift</code> states and <code>Binpack</code> actuating at Guaranteed QoS (<code>sampleCount</code> 36), then <code>Throughput</code> actuating Burstable off the same 36-sample history (2026-07-28, Q449). <code>NodeShare</code> is the one profile still envtest-only (<a href="../STATUS/#Q448">Q448</a>). Stays in place as the validation record; <a href="../STATUS/#Q416">Q416</a> still cites its Classic findings</td>
+<td>✅ Complete (2026-07-28) — Phases 1–3 shipped 2026-07-21/22 and live-validated on dogfood over three sessions: recommendation + derivation + restart persistence, then all three <code>SizingDrift</code> states and <code>Binpack</code> actuating at Guaranteed QoS (<code>sampleCount</code> 36), then <code>Throughput</code> actuating Burstable off the same 36-sample history (2026-07-28, Q449). <code>NodeShare</code> is the one profile still envtest-only (<a href="../queue/Q448/">Q448</a>). Stays in place as the validation record; <a href="../queue/Q416/">Q416</a> still cites its Classic findings</td>
 </tr>
 <tr>
 <td><a href="capacity-aware-intake/">capacity-aware-intake.md</a></td>
 <td>Close the placeability rung of the admission ladder: refuse to claim jobs whose worker pod cannot be scheduled, without suppressing the cluster-autoscaler trigger. Three cheapest-first signals (scheduler verdict for fixed-size clusters, autoscaler declination for elastic ones, <code>ProvisioningRequest</code> probe deferred), all off by default</td>
-<td>✅ Complete (2026-07-31) — filed 2026-07-25. Item 0a shipped 2026-07-26 (Q443): the quota rung reached the scale-set tier as <code>AdvertiseCapacity</code>, and its dogfood measurement (Q462, 2026-07-31) found it binding with a bias-low margin of 0–2 jobs. Phase 1 shipped 2026-07-27 (Q405), phase 2 the same day (Q406), and Q470 then split the mode enum's two axes — tenant policy on the set, cluster fact on the gateway; their dogfood measurement (Q469, 2026-07-31) found the gate removes no wasted claims on the ScaleSet tier, fixed by the §9g latch (Q512, 2026-07-30), and the <a href="capacity-aware-intake/#9h-what-the-dogfood-re-run-measured-for-the-latch-q513">§9h</a> re-measurement (Q513, 2026-07-31) confirmed the latch bounds waste to ~1 probe claim per window with no sawtooth. The Karpenter drift arm landed 2026-07-31 (Q479). Phase 3 is deferred (<a href="../STATUS/#Q407">Q407</a>); rationale in <a href="../design/appendix-d-alternatives-considered/#d8-gating-intake-on-capacity-which-signals-are-safe-to-gate-on">D.8</a>/<a href="../design/appendix-g-future-enhancements/#g16-provisioningrequest-pre-acquire-capacity-probe-check-capacity">G.16</a></td>
+<td>✅ Complete (2026-07-31) — filed 2026-07-25. Item 0a shipped 2026-07-26 (Q443): the quota rung reached the scale-set tier as <code>AdvertiseCapacity</code>, and its dogfood measurement (Q462, 2026-07-31) found it binding with a bias-low margin of 0–2 jobs. Phase 1 shipped 2026-07-27 (Q405), phase 2 the same day (Q406), and Q470 then split the mode enum's two axes — tenant policy on the set, cluster fact on the gateway; their dogfood measurement (Q469, 2026-07-31) found the gate removes no wasted claims on the ScaleSet tier, fixed by the §9g latch (Q512, 2026-07-30), and the <a href="capacity-aware-intake/#9h-what-the-dogfood-re-run-measured-for-the-latch-q513">§9h</a> re-measurement (Q513, 2026-07-31) confirmed the latch bounds waste to ~1 probe claim per window with no sawtooth. The Karpenter drift arm landed 2026-07-31 (Q479). Phase 3 is deferred (<a href="../queue/Q407/">Q407</a>); rationale in <a href="../design/appendix-d-alternatives-considered/#d8-gating-intake-on-capacity-which-signals-are-safe-to-gate-on">D.8</a>/<a href="../design/appendix-g-future-enhancements/#g16-provisioningrequest-pre-acquire-capacity-probe-check-capacity">G.16</a></td>
 </tr>
 <tr>
 <td><a href="scaleset-eviction-recovery/">scaleset-eviction-recovery.md</a></td>
 <td>Port eviction recovery to the scale-set tier (it existed only on classic, which is scheduled for removal at <code>v2.0.0</code>), then decide via probe whether the AGC can release an evicted job's lock early instead of waiting out GitHub's timeout</td>
-<td>🚧 In progress — filed 2026-07-25 from the <a href="https://github.com/actions-gateway/github-actions-gateway/issues/811">#811</a> feasibility review. Phase 2 (the port) shipped 2026-07-26 (Q417); Phase 1's baseline benchmark (Q396) and Phase 3's fast release (<a href="../STATUS/#Q418">Q418</a>) remain</td>
+<td>🚧 In progress — filed 2026-07-25 from the <a href="https://github.com/actions-gateway/github-actions-gateway/issues/811">#811</a> feasibility review. Phase 2 (the port) shipped 2026-07-26 (Q417); Phase 1's baseline benchmark (Q396) and Phase 3's fast release (<a href="../queue/Q418/">Q418</a>) remain</td>
 </tr>
 <tr>
 <td><a href="q501-cancel-relay/">q501-cancel-relay.md</a></td>
 <td>Relaying a run cancelled at GitHub to the worker pod, which the Q459 measurement found nothing does — split into the trigger (how the AGC learns) and the actuator (what it then does)</td>
-<td>⚠️ Partial — filed 2026-07-31. Reading the code for the fix found the actuator missing too: the classic tier cancelled a job's context on a definitively lost lock and never deleted the pod, so every Q254 teardown orphaned a worker until <code>maxWorkerLifetime</code> (12h). That half shipped as <a href="../STATUS/#Q501">Q501</a>. Phase 0 answered 2026-08-01 off a capture already in the repo — Q468 recorded a live cancelled run queueing a <code>JobCompleted</code> in ~0.2 s, which on ScaleSet stamps the worker and hands it to the reaper's five-minute grace, so the unbounded defect is classic-only and candidate B is not worth building. One measurement remains: whether <code>renewjob</code> reports the loss, which <code>E2E_GitHub_CancelledRunLeavesNoDeletionMark</code> is now instrumented to read on its next live run</td>
+<td>⚠️ Partial — filed 2026-07-31. Reading the code for the fix found the actuator missing too: the classic tier cancelled a job's context on a definitively lost lock and never deleted the pod, so every Q254 teardown orphaned a worker until <code>maxWorkerLifetime</code> (12h). That half shipped as <a href="../queue/Q501/">Q501</a>. Phase 0 answered 2026-08-01 off a capture already in the repo — Q468 recorded a live cancelled run queueing a <code>JobCompleted</code> in ~0.2 s, which on ScaleSet stamps the worker and hands it to the reaper's five-minute grace, so the unbounded defect is classic-only and candidate B is not worth building. One measurement remains: whether <code>renewjob</code> reports the loss, which <code>E2E_GitHub_CancelledRunLeavesNoDeletionMark</code> is now instrumented to read on its next live run</td>
 </tr>
 <tr>
 <td><a href="docs/">docs.md</a></td>
 <td>Documentation roadmap across phases</td>
-<td>⚠️ Open — all Phase 1/2/3 items shipped except the Grafana dashboards half of 3.2; the alert rules, SLO recording rules and runbook links landed as <code>observability-alerting.md</code>, leaving dashboards as <a href="../STATUS/#Q568">Q568</a></td>
+<td>⚠️ Open — all Phase 1/2/3 items shipped except the Grafana dashboards half of 3.2; the alert rules, SLO recording rules and runbook links landed as <code>observability-alerting.md</code>, leaving dashboards as <a href="../queue/Q568/">Q568</a></td>
 </tr>
 <tr>
 <td><a href="docs-six-layer-audit/">docs-six-layer-audit.md</a></td>
@@ -2983,17 +2983,17 @@ Each has inline ✓ markers per item.</p>
 <tr>
 <td><a href="v1-classic-sunset-review/">v1-classic-sunset-review.md</a></td>
 <td>Two-axis (v1alpha1 API vs classic protocol) strategic review of the "sunset v1 faster" hypothesis: per-workload viability, scaling/perf, structural-ceiling verdict, and a sequenced sunset-timeline recommendation</td>
-<td>ⓘ Review — revised 2026-07-05 (§6.2): v2/scale-set is the product, classic is terminal, and the earlier "hold both removals" hedge is dropped — removal is committed to <code>v2.0.0</code> gated on v2 <em>stability</em>, not adopters. Follow-ups filed as <a href="../STATUS/#Q272">Q272</a>/<a href="../STATUS/#Q273">Q273</a> — both now parked in Deferred, behind upstream scale-set GA and <a href="v2-ga/">v2-ga.md</a> Phase 3 respectively; sequencing lives in <a href="v2-ga/">v2-ga.md</a></td>
+<td>ⓘ Review — revised 2026-07-05 (§6.2): v2/scale-set is the product, classic is terminal, and the earlier "hold both removals" hedge is dropped — removal is committed to <code>v2.0.0</code> gated on v2 <em>stability</em>, not adopters. Follow-ups filed as <a href="../queue/Q272/">Q272</a>/<a href="../queue/Q273/">Q273</a> — both now parked in Deferred, behind upstream scale-set GA and <a href="v2-ga/">v2-ga.md</a> Phase 3 respectively; sequencing lives in <a href="v2-ga/">v2-ga.md</a></td>
 </tr>
 <tr>
 <td><a href="v2-api/">v2-api.md</a></td>
 <td>v2 API decomposition sequencing: split the monolithic <code>v1alpha1</code> <code>ActionsGateway</code>/<code>RunnerGroup</code> into the decomposed <code>v2alpha1</code> (<code>actions-gateway.com</code>) API across independently shippable milestones M1–M5 (large reusable pod templates, multiple gateways per namespace, optional/shared egress proxy)</td>
-<td>✅ Done: M1–M5 shipped, plus M4 cross-namespace sharing (Q166); deferred residual only (<a href="../STATUS/#Q174">Q174</a>)</td>
+<td>✅ Done: M1–M5 shipped, plus M4 cross-namespace sharing (Q166); deferred residual only (<a href="../queue/Q174/">Q174</a>)</td>
 </tr>
 <tr>
 <td><a href="v2beta1/">v2beta1.md</a></td>
 <td>v2alpha1→v2beta1 graduation plan: what must land before the first stability contract, in what order, with the credential shape correct before the freeze</td>
-<td>✅ Done — graduation shipped (Q74); SPIFFE/SPIRE signer deferred (<a href="../STATUS/#Q214">Q214</a>)</td>
+<td>✅ Done — graduation shipped (Q74); SPIFFE/SPIRE signer deferred (<a href="../queue/Q214/">Q214</a>)</td>
 </tr>
 <tr>
 <td><a href="v2-api-gap-analysis/">v2-api-gap-analysis.md</a></td>
@@ -3003,22 +3003,22 @@ Each has inline ✓ markers per item.</p>
 <tr>
 <td><a href="q264-scale-set-protocol/">q264-scale-set-protocol.md</a></td>
 <td>The open residual of the scale-set migration: the terminal PR that removes the deprecated classic acquisition machinery + transitional API fields (the shipped P0–P5 narrative is archived — see <a href="archive/q264-scale-set-protocol-phases/">archive/q264-scale-set-protocol-phases.md</a>)</td>
-<td>❌ Open — the one-minor-deprecation-window framing is superseded: <a href="../STATUS/#Q264">Q264</a> is now event-gated on <a href="v2-ga/">v2-ga.md</a> Phase 3, stripping classic in the same <code>v2.0.0</code> bundle as <code>v1alpha1</code> and <code>v2alpha1</code> rather than on its own schedule</td>
+<td>❌ Open — the one-minor-deprecation-window framing is superseded: <a href="../queue/Q264/">Q264</a> is now event-gated on <a href="v2-ga/">v2-ga.md</a> Phase 3, stripping classic in the same <code>v2.0.0</code> bundle as <code>v1alpha1</code> and <code>v2alpha1</code> rather than on its own schedule</td>
 </tr>
 <tr>
 <td><a href="q273-v2-front-door/">q273-v2-front-door.md</a></td>
-<td>Route the front door (README, onboarding, positioning) to the v2 API, add deprecate-v1 banners, and make the <code>gag-migrate</code> v1→v2 story exemplary — the do-now slice of the sunset review §6.2 (<a href="../STATUS/#Q273">Q273</a>)</td>
-<td>⚠️ Front-door slice done — v2-first onboarding, the v1 deprecation banners, and the <code>gag-migrate</code> polish all shipped. The residual full v1 removal (<a href="../STATUS/#Q273">Q273</a>) is no longer gated on v2beta1 (Q74 shipped); it is parked in Deferred and lands in the <code>v2.0.0</code> bundle — <a href="v2-ga/">v2-ga.md</a> Phase 3</td>
+<td>Route the front door (README, onboarding, positioning) to the v2 API, add deprecate-v1 banners, and make the <code>gag-migrate</code> v1→v2 story exemplary — the do-now slice of the sunset review §6.2 (<a href="../queue/Q273/">Q273</a>)</td>
+<td>⚠️ Front-door slice done — v2-first onboarding, the v1 deprecation banners, and the <code>gag-migrate</code> polish all shipped. The residual full v1 removal (<a href="../queue/Q273/">Q273</a>) is no longer gated on v2beta1 (Q74 shipped); it is parked in Deferred and lands in the <code>v2.0.0</code> bundle — <a href="v2-ga/">v2-ga.md</a> Phase 3</td>
 </tr>
 <tr>
 <td><a href="q224-fanout-dispatch-lever-spike/">q224-fanout-dispatch-lever-spike.md</a></td>
 <td>ⓘ AGC-side lever spike: can two proposed AGC-side levers beat GitHub's server-side fan-out distinct-delivery starvation without the Option E scale-set rewrite? Tested against the mechanism + live evidence</td>
-<td>ⓘ Spike — no code changed; verdict: no reliable AGC-side lever, Option E (<a href="../STATUS/#Q264">Q264</a>) is the only structural fix. Referenced by <a href="../STATUS/#Q268">Q268</a></td>
+<td>ⓘ Spike — no code changed; verdict: no reliable AGC-side lever, Option E (<a href="../queue/Q264/">Q264</a>) is the only structural fix. Referenced by <a href="../queue/Q268/">Q268</a></td>
 </tr>
 <tr>
 <td><a href="structural-debt-audit-2026-07/">structural-debt-audit-2026-07.md</a></td>
 <td>Codebase-wide structural debt audit (2026-07-20): god functions, oversized files, version-boundary duplication, test-double sprawl, script sprawl — with the evidence behind each Queue row, a scored linter-vs-audit prevention analysis, plus deliberate non-findings and unverified leads</td>
-<td>✅ Done — filed 2026-07-20; the F1 Secret leak shipped same-day (Q373, #727), F2's probe rewrite as Q362, F3's share-and-gate split as Q374, F4's CIDR-rule consolidation as Q364, F5's broker-double consolidation as Q368, F7's CreateOrPatch collapse as Q366 (ownerRef-policy question spun out to Q394), F8's god-function decomposition as Q367, F9's error-taxonomy unification as Q369, F10's script-sprawl cleanup as Q370, the §Prevention gate (nolintlint + a ratcheted funlen) as Q371, and F6's foundation move as Q365 (condition-collector residual spun out to Q403, since shipped as <code>metrics_v1.go</code>); re-run trigger deferred as <a href="../STATUS/#Q372">Q372</a></td>
+<td>✅ Done — filed 2026-07-20; the F1 Secret leak shipped same-day (Q373, #727), F2's probe rewrite as Q362, F3's share-and-gate split as Q374, F4's CIDR-rule consolidation as Q364, F5's broker-double consolidation as Q368, F7's CreateOrPatch collapse as Q366 (ownerRef-policy question spun out to Q394), F8's god-function decomposition as Q367, F9's error-taxonomy unification as Q369, F10's script-sprawl cleanup as Q370, the §Prevention gate (nolintlint + a ratcheted funlen) as Q371, and F6's foundation move as Q365 (condition-collector residual spun out to Q403, since shipped as <code>metrics_v1.go</code>); re-run trigger deferred as <a href="../queue/Q372/">Q372</a></td>
 </tr>
 <tr>
 <td><a href="markdown-gates-parser/">markdown-gates-parser.md</a></td>
@@ -3028,7 +3028,7 @@ Each has inline ✓ markers per item.</p>
 <tr>
 <td><a href="q889-backlog-item-store/">q889-backlog-item-store.md</a></td>
 <td>Replace the single <code>docs/STATUS.md</code> Queue table with the <code>session-backlog</code> skill's per-item store under <code>docs/queue/</code>, adopt its Python tooling, and port the lint rules the store has no equivalent for</td>
-<td>🚧 In progress, filed 2026-08-16, superseding the stale <a href="https://github.com/actions-gateway/github-actions-gateway/pull/1534">#1534</a> attempt and its unlanded Go <code>queuestore</code>. Six phases: tooling, the store, the 53 machine consumers, 218 anchor references, the <code>/dev/queue/</code> render, then delete the table and groom. <a href="../STATUS/#Q889">Q889</a></td>
+<td>🚧 In progress, filed 2026-08-16, superseding the stale <a href="https://github.com/actions-gateway/github-actions-gateway/pull/1534">#1534</a> attempt and its unlanded Go <code>queuestore</code>. Six phases: tooling, the store, the 53 machine consumers, 218 anchor references, the <code>/dev/queue/</code> render, then delete the table and groom. <a href="../queue/Q889/">Q889</a></td>
 </tr>
 <tr>
 <td><a href="website/">website.md</a></td>
@@ -3038,17 +3038,17 @@ Each has inline ✓ markers per item.</p>
 <tr>
 <td><a href="q645-abandoned-completion/">q645-abandoned-completion.md</a></td>
 <td>Investigation H (Q645/Q676): what the run service does with a completion for an acquired-but-never-run assignment, which decides the Q628 release path's shape</td>
-<td>✅ Done 2026-08-04 — five live runs: <code>abandoned</code> and <code>canceled</code> conclude the run <strong><code>success</code></strong> in one second (false green, job orphaned <code>in_progress</code>), <code>failed</code> is refused 401, and told-nothing gets an honest run+job <code>cancelled</code> at ~15 min. Remedies shipped: the listener reports nothing for its own unrun delivery, and the provisioner force-cancels the run (measured 2026-08-05, run+job <code>cancelled</code> in ~1 s, Q683). Follow-up: <a href="../STATUS/#Q682">Q682</a></td>
+<td>✅ Done 2026-08-04 — five live runs: <code>abandoned</code> and <code>canceled</code> conclude the run <strong><code>success</code></strong> in one second (false green, job orphaned <code>in_progress</code>), <code>failed</code> is refused 401, and told-nothing gets an honest run+job <code>cancelled</code> at ~15 min. Remedies shipped: the listener reports nothing for its own unrun delivery, and the provisioner force-cancels the run (measured 2026-08-05, run+job <code>cancelled</code> in ~1 s, Q683). Follow-up: <a href="../queue/Q682/">Q682</a></td>
 </tr>
 <tr>
 <td><a href="docs-page-boundaries/">docs-page-boundaries.md</a></td>
 <td>Redraw the boundary between <code>index.md</code>, <code>why-gag.md</code>, <code>roadmap.md</code>, and <code>STATUS.md</code> on reader job rather than on time or audience tier — the roadmap was holding a third, unlinked copy of the feature list</td>
-<td>⚠️ Phase 1 done (2026-08-01) — <code>features.md</code> extracted as a link-disciplined capability index (9 of 16 old roadmap bullets had zero links; the longest was 126 words), the roadmap shrank to forward-looking only, and <code>check-roadmap.sh</code> rule 5 now gates the link discipline. Phase 2, splitting the parked register (Deferred + Flake watch) off <code>STATUS.md</code>, is <a href="../STATUS/#Q569">Q569</a></td>
+<td>⚠️ Phase 1 done (2026-08-01) — <code>features.md</code> extracted as a link-disciplined capability index (9 of 16 old roadmap bullets had zero links; the longest was 126 words), the roadmap shrank to forward-looking only, and <code>check-roadmap.sh</code> rule 5 now gates the link discipline. Phase 2, splitting the parked register (Deferred + Flake watch) off <code>STATUS.md</code>, is <a href="../queue/Q569/">Q569</a></td>
 </tr>
 <tr>
 <td><a href="q710-overlong-paragraphs/">q710-overlong-paragraphs.md</a></td>
 <td>Split the docset's multi-idea paragraphs without losing a qualifier, phased worst-first, plus the parse-layer measurement a blank-line heuristic gets wrong, and the token reconciliation that proves nothing was dropped</td>
-<td>⚠️ Phase 1 done (2026-08-06): three top-level prose paragraphs ≥140 words are left in design chapters <code>01</code>–<code>08</code>, deliberately, taking the corpus from 154 to 127. Phases 2–5 (long list items, <code>appendix-h</code>, <code>docs/operations/</code>, admonition blocks) are <a href="../STATUS/#Q710">Q710</a></td>
+<td>⚠️ Phase 1 done (2026-08-06): three top-level prose paragraphs ≥140 words are left in design chapters <code>01</code>–<code>08</code>, deliberately, taking the corpus from 154 to 127. Phases 2–5 (long list items, <code>appendix-h</code>, <code>docs/operations/</code>, admonition blocks) are <a href="../queue/Q710/">Q710</a></td>
 </tr>
 </tbody>
 </table>
@@ -3093,7 +3093,7 @@ The doc remains available — the rationale is often more valuable than the diff
 <tr>
 <td><a href="archive/q459-drained-worker-recovery/">archive/q459-drained-worker-recovery.md</a></td>
 <td>Whether the drained-worker recovery gap Q421 measured should be closed or accepted: does the SIGTERM relay's report leave the run re-runnable, and is a deliberate cancellation distinguishable from a disruption at the pod</td>
-<td>2026-07-29 — decision taken: close, gated on <code>deletionTimestamp</code>, and Q502 shipped it on both tiers. Both questions measured at live-GitHub on two runs each: the SIGTERM relay's report leaves the run re-runnable (concludes <code>failure</code> in 15–26s, <code>rerun-failed-jobs</code> returns 201), and a human-cancelled run's worker publishes the same phase and empty reason <em>without</em> a deletion mark, so the mark separates a disruption from both a cancel and a genuine failure. Q519 later caught the predicate comparing the raw mark, which read every real drain as a cleanup delete; ordering the deletion <em>request</em> against the termination record fixed it. The last owed item, the live-GitHub confirmation of the Q495 run-identity annotations on a real worker, closed 2026-08-03 (Q544). The measurement also found that a cancel never reaches the worker (<a href="../STATUS/#Q501">Q501</a>)</td>
+<td>2026-07-29 — decision taken: close, gated on <code>deletionTimestamp</code>, and Q502 shipped it on both tiers. Both questions measured at live-GitHub on two runs each: the SIGTERM relay's report leaves the run re-runnable (concludes <code>failure</code> in 15–26s, <code>rerun-failed-jobs</code> returns 201), and a human-cancelled run's worker publishes the same phase and empty reason <em>without</em> a deletion mark, so the mark separates a disruption from both a cancel and a genuine failure. Q519 later caught the predicate comparing the raw mark, which read every real drain as a cleanup delete; ordering the deletion <em>request</em> against the termination record fixed it. The last owed item, the live-GitHub confirmation of the Q495 run-identity annotations on a real worker, closed 2026-08-03 (Q544). The measurement also found that a cancel never reaches the worker (<a href="../queue/Q501/">Q501</a>)</td>
 </tr>
 <tr>
 <td><a href="archive/q583-restart-replay/">archive/q583-restart-replay.md</a></td>
@@ -3228,7 +3228,7 @@ The doc remains available — the rationale is often more valuable than the diff
 <tr>
 <td><a href="archive/q365-shared-foundation-out-of-v1-files/">archive/q365-shared-foundation-out-of-v1-files.md</a></td>
 <td>Audit finding F6: relocate the cross-version GMC foundation out of the v1-named <code>builder.go</code>/<code>actionsgateway_controller.go</code>/<code>cert.go</code>/<code>metrics_cert.go</code>, and the AGC's version-neutral <code>Metrics</code>/<code>AdmitFunc</code>/sink contracts out of the classic-only <code>listener</code> package — the measured version-neutral vs v1-specific classification, and why <code>JobHandlerFunc</code> did not move</td>
-<td>2026-07-25 — Q365; eight <code>shared_*.go</code> files plus <code>ipranges_v1.go</code> in the GMC package, a new <code>cmd/agc/internal/runnercore</code> leaf package in the AGC. Proven behaviour-free by an AST diff of every top-level declaration before and after. Turns the v1 removal (<a href="../STATUS/#Q273">Q273</a>) and the classic removal (<a href="../STATUS/#Q264">Q264</a>) into file deletions</td>
+<td>2026-07-25 — Q365; eight <code>shared_*.go</code> files plus <code>ipranges_v1.go</code> in the GMC package, a new <code>cmd/agc/internal/runnercore</code> leaf package in the AGC. Proven behaviour-free by an AST diff of every top-level declaration before and after. Turns the v1 removal (<a href="../queue/Q273/">Q273</a>) and the classic removal (<a href="../queue/Q264/">Q264</a>) into file deletions</td>
 </tr>
 <tr>
 <td><a href="archive/versioned-docs/">archive/versioned-docs.md</a></td>
@@ -3248,7 +3248,7 @@ The doc remains available — the rationale is often more valuable than the diff
 <tr>
 <td><a href="archive/unit-tests-speed/">archive/unit-tests-speed.md</a></td>
 <td>Unit-test latency: four targeted cuts (fake-clock steps, injectable restart delay, shared RSA test keys, <code>t.Parallel()</code>) + the 2026-07-20 CI re-baseline that made <code>go test</code> a single multi-module invocation</td>
-<td>2026-07-20 — Q17; items 1–4 shipped in <code>c4660ea</code> (2026-05-23); the revival PR collapsed <code>scripts/go/go-test.sh</code>'s per-module-serial loop into one workspace-wide <code>go test</code> (CI <code>-race</code> gate 189s → 163s measured). Remaining CI-latency levers (lint critical path, coverage loop) parked as <a href="../STATUS/#Q361">Q361</a></td>
+<td>2026-07-20 — Q17; items 1–4 shipped in <code>c4660ea</code> (2026-05-23); the revival PR collapsed <code>scripts/go/go-test.sh</code>'s per-module-serial loop into one workspace-wide <code>go test</code> (CI <code>-race</code> gate 189s → 163s measured). Remaining CI-latency levers (lint critical path, coverage loop) parked as <a href="../queue/Q361/">Q361</a></td>
 </tr>
 <tr>
 <td><a href="archive/q264-scale-set-protocol-phases/">archive/q264-scale-set-protocol-phases.md</a></td>
@@ -3566,7 +3566,7 @@ The doc remains available — the rationale is often more valuable than the diff
 </ul>
 <p>When writing a plan's Status cell:</p>
 <ul>
-<li>Link a Queue row that is still open as <code>[QNNN](../STATUS.md#QNNN)</code>, and write a closed one bare.
+<li>Link a backlog item that is still open as <code>[QNNN](../queue/QNNN.md)</code>, and write a closed one bare.
   Bare is the closed form, so the link is what makes the claim expire with the row: closing it kills the anchor, and <code>make plan-index-check</code> then reports the cell that summarizes work which has finished.
   The rollup only changes when a plan's last row closes, and the worker closing that row cannot tell it was the last one, which is how three cells went stale across 1.4 and 1.5 (Q800).</li>
 <li>Column 3 only.

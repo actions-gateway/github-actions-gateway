@@ -2633,6 +2633,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#phase-3-in-progress" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 3, in progress
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#working-rules-for-the-remaining-phases" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2675,9 +2686,10 @@
 
 
 <h1 id="q889-migrate-the-backlog-to-the-per-item-store">Q889: Migrate the backlog to the per-item store<a class="headerlink" href="#q889-migrate-the-backlog-to-the-per-item-store" title="Permanent link">&para;</a></h1>
-<p><strong>Status:</strong> Phase 1 in progress.
-Both agent scripts adopted (Q694, Q814 and Q828 closed); <code>queue.py</code> and the rules checker remain.
-Phases 2 to 6 not started.</p>
+<p><strong>Status:</strong> Phases 1 and 2 merged (#1595, #1596); phase 3 is open on #1598.
+The store is live at <code>docs/queue/</code> alongside the table, held to it by <code>queue-drift-check</code>.
+Six consumers are switched; the rest wait on phase 4's anchors or on phase 6's deletion, classified under Phase 3 below.
+Phases 4 to 6 not started.</p>
 <p>Replace the single <code>docs/STATUS.md</code> Queue table with the <code>session-backlog</code> skill's per-item store under <code>docs/queue/</code>, adopt its Python tooling, and groom the backlog to remove what the move obsoletes.</p>
 <p>Supersedes the attempt on <a href="https://github.com/actions-gateway/github-actions-gateway/pull/1534">#1534</a> (draft, +4150/−1 across 186 files, stale).
 That branch carries a Go <code>queuestore</code> implementation and its own row Q869, neither of which reached <code>main</code>; closing it discards both.</p>
@@ -2738,6 +2750,11 @@ Recorded here because the plan is unreadable without them.</p>
    <code>queue.py claims</code> covers rule 12, and rule 10 is dropped on the measurement below.</li>
 <li><strong>No <code>docs/milestones/</code> directory.</strong> The milestone/design split already exists as the <code>milestone</code> label and as the index's topical sections; a third classification by directory would cost re-homing across 157 plans, re-base every moved file's outbound links, and fork <code>no-plan-refs-check</code>, <code>plan-index-check</code>, the plan-index merge driver, <code>.gitattributes</code> and the path filters, all of which key on <code>docs/plan/</code>.</li>
 <li><strong>#1587 merges first</strong>; this work branches from <code>main</code> after it lands.</li>
+<li><strong>One PR per phase, except phase 6, which is atomic.</strong> Settled 2026-08-17, superseding decision 7's single cutover on the evidence the split produced.
+   Phases 1, 2 and 3 each surfaced defects a red gate pointed straight at — the MkDocs nav failure, <code>mdreflow</code> folding the store README, the untested block-list label form, the truncated blocker clause, a duplicate search silently swallowed by its own <code>|| true</code>, the Progress dependency, the merge-driver fixture — and each was attributable because one red signal had one cause.
+   Phases 4 and 5 land separately because each is verifiable alone: <code>doc-links</code> proves the anchor rewrite, and the render touches only the site.
+   Phase 6 cannot be split: deleting the table, retiring the gates that take it as their subject, and grooming have to be one commit, or <code>main</code> holds either a live ungated table or gates pointing at a file that is gone.
+   The cost accepted is the interim double-write, paid three times so far (Q890, Q891, and #1596's rebase), which ends when phase 6 lands.</li>
 </ol>
 <h2 id="what-each-rule-becomes">What each rule becomes<a class="headerlink" href="#what-each-rule-becomes" title="Permanent link">&para;</a></h2>
 <p>The point of porting rather than accepting the loss is that each guards a loss the store does not otherwise prevent.
@@ -2797,8 +2814,7 @@ That residual belongs to the reconciliation habit <a href="../../development/mai
 Reproducing the documented silent case needed twenty rows and a relocation from position 18 to the top.
 A probe that cannot reproduce a defect the repo has already met twice is measuring itself.</p>
 <h2 id="phases">Phases<a class="headerlink" href="#phases" title="Permanent link">&para;</a></h2>
-<p>Each phase is separately verifiable.
-They land as one PR unless the maintainer splits it.</p>
+<p>Each phase is separately verifiable, and each lands as its own PR except phase 6, which is atomic (decision 8).</p>
 <p><strong>1.
 Tooling, changing nothing.</strong> Vendor <code>queue.py</code>; adopt <code>pr-requeue-eligible.py</code> and <code>pr-mergeability-watch.py</code>; write the repo-local checker for rules 8, 9 and 11.
 Wire the gates.
@@ -2811,7 +2827,9 @@ Build the store.</strong> ✅ <code>queue.py migrate docs/STATUS.md</code> into 
 Verified by round-trip against the pre-migration table, ID sets and order both.
 The titles were the work; the migration was one command.</p>
 <p><strong>3.
-Switch the 53 consumers.</strong> Retire, repoint or rewrite each: <code>lint-backlog.sh</code>/<code>backloglint</code>, <code>check-status-isolation.sh</code>, <code>find-duplicate-rows.sh</code>, <code>git-merge-status.sh</code>, <code>next-task.sh</code>, <code>backlog-metrics.sh</code>/<code>backlogmetrics</code>, <code>queue-unblock.sh</code>, <code>alloc-queue-id.sh</code>, plus <code>roadmapcheck</code> and <code>check-plan-index.sh</code> which read Queue membership, plus <code>STATUS_GATES</code>/<code>gate-lists-check</code>, the pre-commit hook, <code>.gitattributes</code>, <code>status-lint.yml</code>, the path filters, and piped-gate's <code>docs/STATUS.md</code> overlap exemption.</p>
+Switch the 53 consumers.</strong> Retire, repoint or rewrite each: <code>lint-backlog.sh</code>/<code>backloglint</code>, <code>check-status-isolation.sh</code>, <code>find-duplicate-rows.sh</code>, <code>git-merge-status.sh</code>, <code>next-task.sh</code>, <code>backlog-metrics.sh</code>/<code>backlogmetrics</code>, <code>queue-unblock.sh</code>, <code>alloc-queue-id.sh</code>, plus <code>roadmapcheck</code> and <code>check-plan-index.sh</code> which read Queue membership, plus <code>STATUS_GATES</code>/<code>gate-lists-check</code>, the pre-commit hook, <code>.gitattributes</code>, <code>status-lint.yml</code>, the path filters, and piped-gate's <code>docs/STATUS.md</code> overlap exemption.
+Re-counted at the start of the work: <strong>61 files outside <code>docs/</code> reference <code>STATUS.md</code></strong>, 40 under <code>scripts/</code>, 10 under <code>devtools/</code> and 11 of wiring.
+The 53 above counted tools rather than files; whichever unit, re-derive it rather than quoting it.</p>
 <p><strong>4.
 Anchors and docs.</strong> Rewrite 218 <code>STATUS.md#QNNN</code> references across 50 docs to the item pages.
 This is a bulk mechanical change, so it proves itself by reconciliation, never by an empty leftover grep: assert a known-affected site changed, and reconcile before/after counts.
@@ -2824,8 +2842,8 @@ Delete <code>docs/STATUS.md</code>, then groom.</strong> Remove or rewrite items
 <h2 id="risks">Risks<a class="headerlink" href="#risks" title="Permanent link">&para;</a></h2>
 <ul>
 <li><strong>Review size.</strong> Roughly 176 new files, 218 rewritten references and 53 consumer changes in one PR.
-  This is the accepted cost of decision 7's atomic switch; if it proves unreviewable the fallback is phases 1 and 2 as their own PR behind a drift check.
-  That is what happened, and <code>queue-drift-check</code> is the check: phase 1 landed as its own PR and phase 2 as the next, so the fallback's condition had to be met rather than assumed.</li>
+  Decision 7 accepted that; the fallback it named — phases as their own PRs behind a drift check — is what actually happened, and decision 8 makes it the rule.
+  <code>queue-drift-check</code> is that check, so the fallback's condition was met rather than assumed.</li>
 <li><strong>Rank assignment must preserve priority exactly.</strong> The table's order is the priority; a migration that scrambles it loses information no gate can recover.
   Reconcile the rendered order against the pre-migration table, not just the item count.</li>
 <li><strong><code>Q248</code> carries an anchor inside the Progress table</strong>, so it is an item ID on a plan row.
@@ -2882,6 +2900,71 @@ Measured on the local oracle rather than the exit code, since the same green wou
 The check re-runs <code>migrate</code> into a throwaway store and compares the <em>loaded</em> items, so the thing being compared is <code>queue.py</code>'s own reading of the table rather than a second parser free to drift from it.
 Rank values are excluded and only the order they produce is compared, because a re-rank inside the store is the one operation the store exists to allow and a stricter check would fire on it.
 It retires itself: once <code>docs/STATUS.md</code> is deleted in phase 6 it passes and says the two can no longer disagree, so nothing has to remember to remove it.</p>
+<h2 id="phase-3-in-progress">Phase 3, in progress<a class="headerlink" href="#phase-3-in-progress" title="Permanent link">&para;</a></h2>
+<p><strong>Phase 2's gate is what lets this go incrementally.</strong> <code>queue-drift-check</code> holds the table and the store to the same items, fields and order, so for as long as it is green the two are interchangeable and a consumer reading either returns the same answer.
+That removes the reason phase 3 had to be atomic: consumers switch a group at a time, and no window exists where the backlog says two different things.</p>
+<p><strong>Repointing a consumer is not a path swap, because the link format changed too.</strong> <code>rebase_link</code> rewrites a table's <code>#QNNN</code> anchor to <code>QNNN.md</code>, so any consumer that parses links, or takes a span up to the next period, reads something different at the new path.
+Measured on <code>queue-unblock.sh</code>: its blocker clause ran <code>Blocked by</code> up to the next period, which in the store stops inside the first link's <code>.md</code> — the first blocker still matches and every later one in a list disappears, with no error.
+A two-blocker line finds <code>Q1</code> and misses <code>Q2</code>.
+That is the shape to look for in the remaining consumers, and it is invisible to a test that only exercises one blocker, which is why the rewrite came with the script's first suite.</p>
+<p><strong>The table's own gates stay until the table dies.</strong> <code>lint-backlog.sh</code>, <code>check-status-isolation.sh</code> and <code>git-merge-status.sh</code> take <code>docs/STATUS.md</code> as their subject rather than as a source, and the table is live through phase 5 and still obliged to match the store.
+Retiring them in phase 3 would leave it ungated while the drift gate keeps depending on it.
+They belong in phase 6, with the deletion.</p>
+<p><strong>Phase 3's movable set is much smaller than 61, and the rest is not deferral but dependency.</strong> Of the 61 files, 43 hold a live reference and 18 mention the table only in prose.
+Sorting the 43 by what actually blocks them:</p>
+<ul>
+<li><strong>Movable now, and done</strong>: <code>next-task.sh</code>, <code>queue-unblock.sh</code>, <code>find-duplicate-rows.sh</code>, <code>alloc-queue-id.sh</code> (both its duplicate search and its ID floor), and <code>roadmapcheck</code>.
+  Each reads the backlog to answer a question, so the drift gate makes the switch verifiable by output.</li>
+<li><strong>Blocked on phase 4</strong>, because they assert a <em>link format</em> rather than a path: <code>check-plan-index.sh</code> and its suite, <code>git-merge-plan-index-test.sh</code>, the two hook suites.
+  Invariant 3 requires a plan's Status cell to link <code>../STATUS.md#QNNN</code>, which is exactly the anchor phase 4 rewrites; moving it earlier would mean a transitional rule accepting both forms that someone then has to remember to tighten.</li>
+<li><strong>Must outlive the table, so phase 6</strong>: <code>lint-backlog.sh</code>, <code>check-status-isolation.sh</code>, <code>git-merge-status.sh</code>, <code>backloglint</code>, the pre-commit hook, and the <code>status-lint.yml</code> steps that run them.
+  These take <code>docs/STATUS.md</code> as their subject, and it is live and drift-gated through phase 5.</li>
+<li><strong>Incidental</strong>: path-filter lists, <code>gate-list.sh</code>, the release tooling and the <code>semverfloor</code> tests name the file without reading a backlog from it.</li>
+</ul>
+<p><strong><code>.gitattributes</code> and piped-gate need no change, and that is a decision rather than an omission.</strong> The merge driver and the overlap discount both exist because one table is contended by construction.
+A store has no equivalent: two sessions touching different items touch different files, and two touching the <em>same</em> item have a real conflict that must not be discounted or auto-resolved by row ID.
+So <code>docs/queue/**</code> deliberately gets neither, and the <code>docs/STATUS.md</code> entries retire with the table.
+Written down because the helpful-looking move is to add the store to both lists, which would rebuild the problem the store exists to remove.</p>
+<p><strong>Phase 4's anchors are four classes, not one, and only the largest is mechanical.</strong> Re-measured 2026-08-17, 233 references to <code>STATUS.md#…</code> across the tree where the baseline recorded 218:</p>
+<table>
+<thead>
+<tr>
+<th>Count</th>
+<th>Class</th>
+<th>Treatment</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>217</td>
+<td><code>#Q&lt;digits&gt;</code> item anchors, 50 files</td>
+<td>substitution, but see the depth below</td>
+</tr>
+<tr>
+<td>5</td>
+<td><code>#QNNN</code> prose placeholders, 3 files</td>
+<td>must <strong>not</strong> be rewritten: they document the format</td>
+</tr>
+<tr>
+<td>11</td>
+<td>section anchors <code>#deferred</code>, <code>#queue</code>, <code>#flake-watch</code>, <code>#progress</code></td>
+<td>each needs a destination decided, not substituted</td>
+</tr>
+</tbody>
+</table>
+<p>The baseline counted the first class only, so the work was understated by the sixteen references that need judgement.
+Both of the others are silent under a naive substitution: a pattern written <code>#Q[0-9]*</code> matches the literal <code>#QNNN</code> with zero digits and rewrites it to <code>queue/Q.md</code>, and a pattern written <code>#Q[0-9]+</code> skips every section anchor and leaves it pointing at a file phase 6 deletes.
+That is how the classes were found at all: <code>grep -o 'STATUS\.md#Q[0-9]*'</code> counted 53 in <code>docs/plan/README.md</code> where a <code>\d+</code> pattern counted 52, and the one-reference gap was <code>#deferred</code>.</p>
+<p><strong><code>check-plan-index.sh</code> reads both sources now, and that is the shape rather than a halfway house.</strong> Its invariant 3 had to move with the 52 anchors in <code>docs/plan/README.md</code>, since the cells it reads are the ones that changed.
+Its invariant 1 could not: a plan counts as referenced when a backlog row <em>or</em> a Progress row names it, and decision 3 deletes Progress rather than migrating it, so 21 active plans whose only reference is a Progress row read as unreferenced the moment invariant 1 looks at items alone.
+Measured, not assumed — every one of a five-plan sample appears in the Progress table.
+So invariant 1 keeps reading the table and moves when Progress does, in the phase that decides where Progress lands.
+The gate's summary line is identical across the switch.</p>
+<p><strong>Depth is the second trap.</strong> 192 of the item anchors sit one directory under <code>docs/</code> and take <code>../queue/</code>, but 25 sit two deep (<code>docs/plan/archive/</code>) and take <code>../../queue/</code>.
+A single substitution applied tree-wide gets those 25 wrong, and <code>check-doc-links</code> is what would catch it — so the rewrite is per-file with the prefix derived from the file's own depth, and the gate is the reconciliation rather than a leftover grep.</p>
+<p><strong><code>backlog-metrics.sh</code> is a phase-6 decision, not a phase-3 one.</strong> <code>queue.py metrics</code> replays the store's git history, and the store has 3 commits against <code>docs/STATUS.md</code>'s 1155.
+Switching it now would report flow metrics over nothing while looking like a working tool.
+Deleting the table ends that series whatever happens, so what phase 6 has to decide is whether the old series is frozen into a doc, bridged, or simply allowed to restart.</p>
 <h2 id="working-rules-for-the-remaining-phases">Working rules for the remaining phases<a class="headerlink" href="#working-rules-for-the-remaining-phases" title="Permanent link">&para;</a></h2>
 <p>Both came out of phase 1 and both cost something before they were written down.</p>
 <p><strong>Check what the local version guarded before adopting an external port.</strong> Every adoption so far has been better than the copy it replaced in every measurable way and has still dropped something the local one covered.
