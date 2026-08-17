@@ -1,8 +1,9 @@
 # Q889: Migrate the backlog to the per-item store
 
-**Status:** Phase 1 in progress.
-Both agent scripts adopted (Q694, Q814 and Q828 closed); `queue.py` and the rules checker remain.
-Phases 2 to 6 not started.
+**Status:** Phases 1 and 2 merged (#1595, #1596); phase 3 is open on #1598.
+The store is live at `docs/queue/` alongside the table, held to it by `queue-drift-check`.
+Six consumers are switched; the rest wait on phase 4's anchors or on phase 6's deletion, classified under Phase 3 below.
+Phases 4 to 6 not started.
 
 Replace the single `docs/STATUS.md` Queue table with the `session-backlog` skill's per-item store under `docs/queue/`, adopt its Python tooling, and groom the backlog to remove what the move obsoletes.
 
@@ -84,8 +85,7 @@ A probe that cannot reproduce a defect the repo has already met twice is measuri
 
 ## Phases
 
-Each phase is separately verifiable.
-They land as one PR unless the maintainer splits it.
+Each phase is separately verifiable, and each lands as its own PR except phase 6, which is atomic (decision 8).
 
 **1.
 Tooling, changing nothing.** Vendor `queue.py`; adopt `pr-requeue-eligible.py` and `pr-mergeability-watch.py`; write the repo-local checker for rules 8, 9 and 11.
