@@ -23,8 +23,8 @@ Measured against ARC `gha-runner-scale-set` 0.14.2 (released 2026-05-22) and the
 
 | Gap | Why it blocks a migration | Row | Release |
 |---|---|---|---|
-| **`containerMode: kubernetes`** | Runs `container:` and `services:` steps as separate pods on a provisioned volume. GAG runs one worker pod per job, so that path is Docker-in-Docker under Kata rather than a non-privileged pod-per-step model | [Q727](../STATUS.md#Q727) | after 1.5 |
-| **GHES validated on a real appliance** | GAG serves GitHub Enterprise Server (GHES) gateways and marks both of its GHES capabilities untested against real hardware, so an enterprise evaluator has no evidence either way | [Q765](../STATUS.md#Q765) | unscheduled, needs an appliance |
+| **`containerMode: kubernetes`** | Runs `container:` and `services:` steps as separate pods on a provisioned volume. GAG runs one worker pod per job, so that path is Docker-in-Docker under Kata rather than a non-privileged pod-per-step model | [Q727](../queue/Q727.md) | after 1.5 |
+| **GHES validated on a real appliance** | GAG serves GitHub Enterprise Server (GHES) gateways and marks both of its GHES capabilities untested against real hardware, so an enterprise evaluator has no evidence either way | [Q765](../queue/Q765.md) | unscheduled, needs an appliance |
 
 ## What is deliberately not parity
 
@@ -38,7 +38,7 @@ That closes with adoption and time, not with a deliverable.
 
 ## The collision the individual rows do not state
 
-**Q727 cannot start before [Q719](../STATUS.md#Q719).** ARC's `containerMode: kubernetes` depends on a `ReadWriteMany` volume, and GAG's workers are storage-less by design with nothing validating an RWX volume mounted into one.
+**Q727 cannot start before [Q719](../queue/Q719.md).** ARC's `containerMode: kubernetes` depends on a `ReadWriteMany` volume, and GAG's workers are storage-less by design with nothing validating an RWX volume mounted into one.
 So the stance on persistent worker storage is undocumented rather than decided, and Q727 would be designing on top of an unvalidated substrate.
 
 Sequencing follows: Q719 validates RWX and writes the reference architecture, then Q727 designs the pod-per-step path against it.
@@ -65,7 +65,7 @@ That is deliberate: parity is about removing surprises for a migrating team, and
 - **Matching ARC's API shape.** The v2 decomposition into `ActionsGateway`, `EgressProxy`, `RunnerSet`, and `RunnerTemplate` is the product, not an accident to be reconciled.
   The intentional v1 to v2 differences are recorded in [v2-api-gap-analysis.md](v2-api-gap-analysis.md).
 - **Commercial support.** See above.
-- **In-cluster cache.** It appears on the comparison table as something GAG lacks, but ARC lacks it too ([Q215](../STATUS.md#Q215) tracks it against managed services and GitLab Runner, not ARC).
+- **In-cluster cache.** It appears on the comparison table as something GAG lacks, but ARC lacks it too ([Q215](../queue/Q215.md) tracks it against managed services and GitLab Runner, not ARC).
 
 ## What the site may claim today
 

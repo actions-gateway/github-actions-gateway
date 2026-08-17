@@ -24,15 +24,15 @@ Do not read this table as three deployments.
 
 | | What it holds | Where it lives today | Row |
 |---|---|---|---|
-| **Image pulls** | Container images the node pulls to start a worker | Upstream registries, over per-tenant egress | [Q408](../STATUS.md#Q408), [Q539](../STATUS.md#Q539), [Q540](../STATUS.md#Q540) |
-| **Job cache** | `actions/cache` entries: dependencies, toolchains, build outputs | **GitHub's Azure-blob store, and it works** | [Q215](../STATUS.md#Q215) |
-| **Build layer cache** | Docker layers produced by an image build inside a job | Nowhere. Workers are storage-less | [Q215](../STATUS.md#Q215) |
+| **Image pulls** | Container images the node pulls to start a worker | Upstream registries, over per-tenant egress | [Q408](../queue/Q408.md), [Q539](../queue/Q539.md), [Q540](../queue/Q540.md) |
+| **Job cache** | `actions/cache` entries: dependencies, toolchains, build outputs | **GitHub's Azure-blob store, and it works** | [Q215](../queue/Q215.md) |
+| **Build layer cache** | Docker layers produced by an image build inside a job | Nowhere. Workers are storage-less | [Q215](../queue/Q215.md) |
 
 Alongside them, and not a cache at all:
 
 | | What it is | State | Row |
 |---|---|---|---|
-| **Shared job storage** | A `ReadWriteMany` volume several jobs mount to pass files | Unvalidated. Also what ARC's `containerMode: kubernetes` needs, so it is a migration blocker | [Q719](../STATUS.md#Q719) |
+| **Shared job storage** | A `ReadWriteMany` volume several jobs mount to pass files | Unvalidated. Also what ARC's `containerMode: kubernetes` needs, so it is a migration blocker | [Q719](../queue/Q719.md) |
 
 ### `actions/cache` works today, and the roadmap says otherwise
 
@@ -43,7 +43,7 @@ A tenant's worker reaches the Actions cache data plane through its own proxy poo
 
 Distinct problems do not imply distinct deployments, and scoping them as three projects is how this becomes three times the work it needs to be.
 
-Dragonfly is the concrete case, and it is already the scheduled mirror candidate in [Q539](../STATUS.md#Q539).
+Dragonfly is the concrete case, and it is already the scheduled mirror candidate in [Q539](../queue/Q539.md).
 It is a **general file-distribution system** whose registry-mirror use is one application, not its definition.
 Measured from the upstream docs on 2026-08-07:
 
@@ -68,7 +68,7 @@ A job cache is read-write by definition.
 So the artifact cache **cannot simply reuse the mirror role**, however well the same software serves both.
 It needs either a second role with its own contract, or a writable variant whose isolation argument is made separately, and that argument is the hard part: a write path reachable by an untrusted fork pull request is a way to plant content that a later trusted job restores and executes.
 
-That is the sharpest version of the review [Q215](../STATUS.md#Q215) is blocked on, and it is a contract question rather than a storage question.
+That is the sharpest version of the review [Q215](../queue/Q215.md) is blocked on, and it is a contract question rather than a storage question.
 
 ### The accurate gap
 
@@ -80,7 +80,7 @@ Stating it the current way concedes a loss that has not happened, and it hides t
 
 **This is the reason the two goals cannot be planned separately.**
 
-[Q408](../STATUS.md#Q408) Phase 1 closes untrusted-PR egress down to GitHub, the registry mirror, and DNS.
+[Q408](../queue/Q408.md) Phase 1 closes untrusted-PR egress down to GitHub, the registry mirror, and DNS.
 The Actions cache data plane is a **non-GitHub host**, so closing that egress removes `actions/cache`.
 This is already the measured state of GAG's own self-hosted CI lane, where every `actions/cache` step is skipped because the hardened egress rule does not admit it ([testing.md](../development/testing.md#the-e2e-workflows-kindnet-and-calico), and [q408 §3](q408-untrusted-pr-egress.md) has the measurement).
 
@@ -137,7 +137,7 @@ Do not repeat that `actions/cache` has no home.
 
 Shipped: per-tenant egress that admits the Actions cache data plane; the registry-mirror contract and the Athens pattern it derives from.
 
-Open, with rows: [Q408](../STATUS.md#Q408) (mirror design and phases), [Q539](../STATUS.md#Q539) (Dragonfly as the mirror backend), [Q540](../STATUS.md#Q540) (composed node-layer and guest-layer stack), [Q215](../STATUS.md#Q215) (job and build-layer cache, blocked on the isolation review this document reframes as the design), [Q719](../STATUS.md#Q719) (RWX validation and the reference-architecture stance), [Q268](../STATUS.md#Q268) (warm worker pool, the competing lever for the latency half of the same complaint).
+Open, with rows: [Q408](../queue/Q408.md) (mirror design and phases), [Q539](../queue/Q539.md) (Dragonfly as the mirror backend), [Q540](../queue/Q540.md) (composed node-layer and guest-layer stack), [Q215](../queue/Q215.md) (job and build-layer cache, blocked on the isolation review this document reframes as the design), [Q719](../queue/Q719.md) (RWX validation and the reference-architecture stance), [Q268](../queue/Q268.md) (warm worker pool, the competing lever for the latency half of the same complaint).
 
 **Scope note for Q539 and Q540.** Both are currently written as image-only validations.
 Because the candidate backend is a general file distributor, both should also answer whether *one* deployment serves the artifact class as well, and at what cost to the §3.5 contract.

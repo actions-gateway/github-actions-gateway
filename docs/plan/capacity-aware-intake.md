@@ -1,7 +1,7 @@
 # Capacity-Aware Job Intake
 
 > **Status: ✅ Complete (2026-07-31).** Every build item (0a–2d) and every measurement row (V1–V3) is done.
-> The one residual is item 3 — the `ProvisioningRequest` probe — deferred as [Q407](../STATUS.md#Q407) with its triggers in [Appendix G.16](../design/appendix-g-future-enhancements.md#g16-provisioningrequest-pre-acquire-capacity-probe-check-capacity); [§9h](#9h-what-the-dogfood-re-run-measured-for-the-latch-q513) supplies the number its trigger (a) reads against (~1 probe claim per window).
+> The one residual is item 3 — the `ProvisioningRequest` probe — deferred as [Q407](../queue/Q407.md) with its triggers in [Appendix G.16](../design/appendix-g-future-enhancements.md#g16-provisioningrequest-pre-acquire-capacity-probe-check-capacity); [§9h](#9h-what-the-dogfood-re-run-measured-for-the-latch-q513) supplies the number its trigger (a) reads against (~1 probe claim per window).
 
 The admission ladder in [`cmd/agc/internal/provisioner/admission.go`](../../cmd/agc/internal/provisioner/admission.go) gates job acquisition on two rungs today: observed namespace-ResourceQuota headroom (#784) and the owner's declared worker ceiling (Q59).
 Neither rung knows whether the cluster can actually *place* the worker pod the job needs.
@@ -27,7 +27,7 @@ That principle, and why it makes the quota rung safe to gate on while the schedu
 | V1 | Measure item 0a's effect — the scale-set quota rung — on dogfood | M | ✅ Measured ([§9f](#9f-what-the-dogfood-run-measured-for-the-quota-rung-q462), Q462, 2026-07-31) — rung binds; bias-low margin 0–2 jobs, never inverted |
 | V2 | Measure items 1 and 2's effect — both capacity-gate signals — on dogfood | M | ✅ Measured ([§9e](#9e-what-the-dogfood-run-measured-q469), Q469, 2026-07-31) — **no reduction on the ScaleSet tier**; fixed by item 2d, re-run measured ([§9h](#9h-what-the-dogfood-re-run-measured-for-the-latch-q513), Q513) |
 | V3 | Extend item 2b's live-autoscaler drift gate to Karpenter | M | ✅ Done ([§9i](#9i-the-karpenter-arm-of-the-drift-gate-and-what-it-measured-q479), Q479, 2026-07-31) — vocabulary/attribution hold; recorder-generation premise corrected |
-| 3 | `Probe`/`Provision` modes: `ProvisioningRequest` `check-capacity` | L | 💤 Deferred ([Q407](../STATUS.md#Q407), [Appendix G.16](../design/appendix-g-future-enhancements.md#g16-provisioningrequest-pre-acquire-capacity-probe-check-capacity)) |
+| 3 | `Probe`/`Provision` modes: `ProvisioningRequest` `check-capacity` | L | 💤 Deferred ([Q407](../queue/Q407.md), [Appendix G.16](../design/appendix-g-future-enhancements.md#g16-provisioningrequest-pre-acquire-capacity-probe-check-capacity)) |
 
 A numbered row means code shipped; a `V` row means that code's effect was measured where it runs.
 **All V rows have run — item 3's deferral is the plan's only residual.** A ✅ on 0a, 1 or 2 records an envtest proof of the *mechanism*, never a measurement of what it removes.
@@ -700,7 +700,7 @@ CI runs it beside the CA arm in `autoscaler-drift.yml`; [`updatecli.d/karpenter.
 * **Timing.** Karpenter's declination lands 1–2 s after pod creation (its batch idle window is 1 s — no CA-style 10 s scan to wait out), and nomination→new-node→pod-scheduled completed in ~4 s under kwok's fast stages.
 
 **Upstream finding, worked around in the recipe.** The kwok chart at v1.14.0 renders `featureGates.staticCapacity` and `.capacityBuffer` into the `FEATURE_GATES` env var, but its own `values.yaml` omits both keys — the empty string panics the controller at startup (`invalid value of StaticCapacity`).
-The harness sets both to their defaults explicitly ([Q531](../STATUS.md#Q531) tracks reporting it upstream).
+The harness sets both to their defaults explicitly ([Q531](../queue/Q531.md) tracks reporting it upstream).
 
 ## 9j. The gap is operator-visible in shipped docs (Q714)
 
@@ -731,7 +731,7 @@ Closing Q714 changes what an operator watches, so it must update both.
 * Predicting schedulability in-process from node allocatable.
   Rejected: it reimplements the scheduler's filter plugins and will drift ([D.8](../design/appendix-d-alternatives-considered.md#d8-gating-intake-on-capacity-which-signals-are-safe-to-gate-on)).
 * Pre-warmed placeholder/pause pods.
-  That trade (idle compute for correct optimism) is the warm-worker-pool item, [G.12](../design/appendix-g-future-enhancements.md#g12-warm-worker-pool-minidleworkers)/[Q268](../STATUS.md#Q268).
+  That trade (idle compute for correct optimism) is the warm-worker-pool item, [G.12](../design/appendix-g-future-enhancements.md#g12-warm-worker-pool-minidleworkers)/[Q268](../queue/Q268.md).
 * Cross-RunnerSet coordination on a shared pool (§4 residual).
 * A pluggable autoscaler-provider interface, or coverage of every autoscaler.
   Two matchers cover both open-source event vocabularies across ~46 provider implementations, and fail-open covers the rest (§7).

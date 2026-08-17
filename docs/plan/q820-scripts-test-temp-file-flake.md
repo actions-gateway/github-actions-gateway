@@ -213,5 +213,5 @@ That is a self-inflicted transient rather than this flake, and the exit status t
    A second `objects=yes` on a Linux runner would carry the finding across to the ENOENT variant, which is the gap sighting 4 leaves open; an `objects=no` would mean the two errnos are two different faults and the family is back for one of them.
 4. **The errno and which object failed.** Sighting 4 is EINVAL on a commit object; sightings 1 to 3 are ENOENT on a blob.
    Whether that splits by platform (macOS against `ubuntu-latest`) or varies within one is the cheapest question outstanding, and it decides whether this is one bug or two.
-5. **Whether a sibling suite failed in the same run.** [Q826](../STATUS.md#Q826) is a sibling flake in [`git-merge-gate-lists-test.sh`](../../scripts/ci/git-merge-gate-lists-test.sh) with a different signature, and [Q822](../STATUS.md#Q822) tracks unrelated suites failing under concurrent load.
+5. **Whether a sibling suite failed in the same run.** [Q826](../queue/Q826.md) is a sibling flake in [`git-merge-gate-lists-test.sh`](../../scripts/ci/git-merge-gate-lists-test.sh) with a different signature, and [Q822](../queue/Q822.md) tracks unrelated suites failing under concurrent load.
    A shared window would reframe all three as one contention problem rather than three defects.

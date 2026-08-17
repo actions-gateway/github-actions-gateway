@@ -3,7 +3,7 @@
 **Status:** ⓘ informational — strategy/review, read-only analysis.
 No code changed.
 Feeds the Q264 P5 cutover and the v1alpha1 removal-timeline decisions.
-Complete as a review: both follow-ups it filed are parked in Deferred, waiting on [v2-ga.md](v2-ga.md) Phase 3 ([Q273](../STATUS.md#Q273), the v1 removal) and on upstream scale-set GA ([Q272](../STATUS.md#Q272)).
+Complete as a review: both follow-ups it filed are parked in Deferred, waiting on [v2-ga.md](v2-ga.md) Phase 3 ([Q273](../queue/Q273.md), the v1 removal) and on upstream scale-set GA ([Q272](../queue/Q272.md)).
 **Date:** 2026-07-05.
 **Author view:** adversarial review of the hypothesis that v1 may be fundamentally limited by its protocol constraints — and that if so, we should sunset it faster and focus on v2/scale-set.
 The review deliberately tests that hypothesis rather than assuming it.
@@ -162,7 +162,7 @@ The classic tier also paid for itself — the protocol knowledge, the egress/iso
 > The retain-hedge existed to preserve a rollback fallback — but that fallback protects **v1/classic users who do not exist** (§6.3), so it buys almost nothing while muddying the "one protocol, strictly better than ARC" story that drives adoption.
 > Against that: **P4 proved the protocol works live** (7/7), **GAG owns its own client** (not hostage to upstream's Preview cadence — "Preview" is a label on GitHub's *library*, while the *wire protocol* is what ARC runs in production at scale), and a cleaner beta surface is easier to commit to and support.
 > **Decision: v2beta1 stays ScaleSet-only.** The residual risk — GitHub drifts the protocol post-graduation with no classic escape — is real but bounded (own-client + ARC-in-prod + a code fix is always shippable), and is managed with a **technical** guardrail rather than the retain-hedge: **do not graduate v2beta1 until the clean-green dogfood re-run plus a short stability soak of the scale-set path** — bet the beta on evidence, not one run.
-> Consequence for the backlog: [Q272](../STATUS.md#Q272) (scale-set upstream maturity) is *not* a graduation blocker — it lifts the Preview caveat and triggers the U6 vendor-vs-own revisit, but the beta cut gates on GAG's own soak, not on GitHub's GA timeline.
+> Consequence for the backlog: [Q272](../queue/Q272.md) (scale-set upstream maturity) is *not* a graduation blocker — it lifts the Preview caveat and triggers the U6 vendor-vs-own revisit, but the beta cut gates on GAG's own soak, not on GitHub's GA timeline.
 
 ### 6.2 The recommendation — v2 is the product; retire v1 on a stability schedule
 
@@ -178,7 +178,7 @@ Handled poorly the cost is not complaints (no one to complain) — it is the ado
    Gating on v2 reaching beta is honest — you should not force anyone onto an alpha — and is *not* catering to imaginary users.
    The **discipline** (announced, scheduled, documented, backed by a working `gag-migrate`) *is* the "safe bet, won't strand you" signal, far more than the length of the window.
 3. **Reinvest the freed effort into the migration mechanics as a showcase, not the v1 runtime.** `gag-migrate`, the migration guide, the deprecation notice, the "what's preserved / what changes" doc — make these *exemplary*, because that is the artifact a prospective adopter actually inspects.
-   (This reframes the adoption-signal item [Q273](../STATUS.md#Q273) from "instrument who's using it" to "polish the migration story" — a better use of effort when there is no one to measure.)
+   (This reframes the adoption-signal item [Q273](../queue/Q273.md) from "instrument who's using it" to "polish the migration story" — a better use of effort when there is no one to measure.)
 4. **Classic is terminal — no further investment.** The eight re-routes were the last classic spend; the residual ceiling is structural (§4).
    This is the "structural ceiling → stop paying it down" disposition from [technical-debt.md](../development/technical-debt.md).
 5. **v2beta1 stays ScaleSet-only** (§6.1), with a *technical* graduation guardrail (clean-green + a stability soak), not a user-migration one.

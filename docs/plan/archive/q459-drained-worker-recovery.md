@@ -189,7 +189,7 @@ Two consequences, both real:
   Cancelling a runaway job does not reclaim its capacity.
 - **[04-operational-flows.md](../../design/04-operational-flows.md) §4.2 step 7 overstates the Q385 relay.** It lists "cancelled run" among the terminations the wrapper's SIGTERM relay reaches.
   The relay does reach the engine whenever the *pod* is terminated — but on the cancel path nothing terminates the pod, so the relay never runs.
-  [Q501](../../STATUS.md#Q501) carries the gap; the doc is corrected as part of this change.
+  [Q501](../../queue/Q501.md) carries the gap; the doc is corrected as part of this change.
 
 ### What the spec needed in order to run at all
 
@@ -255,7 +255,7 @@ Recorded here because each was established while measuring, not while coding, an
 3. **The classic half needs Q495's fix to be real on a live worker.** Without a run ID, `handleEviction` returns early, so closing the gap on classic would buy an interface change and no recovery.
    Q495 has since been fixed — the identity is read from the payload's `github` context — but that fix has not yet been seen on a real worker pod at live-GitHub, so confirm the annotation before relying on the recovery it enables.
    The scale-set tier reads its identity from the pod annotations and is unaffected.
-4. **Do not fold in the cancel path.** [Q501](../../STATUS.md#Q501) is a separate defect with a separate fix.
+4. **Do not fold in the cancel path.** [Q501](../../queue/Q501.md) is a separate defect with a separate fix.
    A cancelled run's worker is *not* deleted, so it never reaches this recovery path — but if Q501 is later fixed by having the AGC delete the worker on cancellation, that deletion becomes indistinguishable from a drain and must be excluded exactly as the reaper's are.
 
 ## Status
@@ -298,7 +298,7 @@ The remaining work was carried by these Queue rows:
 2. ~~Un-pend `E2E_GitHub_CancelledRunLeavesNoDeletionMark` and run it.~~ Done — it no longer needed the annotation to become runnable (see above), and it passes.
 3. ~~Take the decision.~~ Done — the decision table's first row, recorded above.
 4. ~~Q502 — implement the close, per the four constraints above.~~ Done — see Status.
-5. **[Q501](../../STATUS.md#Q501)** — relay a run cancellation to the worker pod.
+5. **[Q501](../../queue/Q501.md)** — relay a run cancellation to the worker pod.
    Found by this measurement, independent of the gap.
    Split into a trigger and an actuator by [q501-cancel-relay.md](../q501-cancel-relay.md): the actuator shipped (a worker whose job the gateway abandons is now deleted, stamped `deletion-reason: job_abandoned` exactly as the constraint above requires), the trigger is still open.
 

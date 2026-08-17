@@ -55,12 +55,12 @@ Q683's cancelled ending accepts `rerun-failed-jobs`, measured, so operators re-r
 > The proxy cluster in particular is demand-gated, as the paragraph below says in its own words, so it is parked rather than scheduled.
 > The ladder is [release-ladder.md](release-ladder.md), and the reshape it called for landed on 2026-08-09: all four rows are in Deferred, each with the demand that revives it.
 
-**The proxy hardening cluster stays together**: [Q564](../STATUS.md#Q564) audit logging, [Q565](../STATUS.md#Q565) per-tenant rate limiting, [Q566](../STATUS.md#Q566) TLS on the in-cluster hop, and [Q567](../STATUS.md#Q567) per-group dedicated pools.
+**The proxy hardening cluster stays together**: [Q564](../queue/Q564.md) audit logging, [Q565](../queue/Q565.md) per-tenant rate limiting, [Q566](../queue/Q566.md) TLS on the in-cluster hop, and [Q567](../queue/Q567.md) per-group dedicated pools.
 Four related items from [appendix G](../design/appendix-g-future-enhancements.md), the deliberately non-committal shelf, and **none has demand recorded against it**.
 Q566 is a real gap (the CONNECT target host:port is cleartext on the in-cluster hop) and Q567 is L and wants a plan doc before code.
 Splitting them across two releases spends their coherence for nothing; together they are a release theme.
 
-**[Q555](../STATUS.md#Q555), opt-in flaky-job retry,** has an unbuilt prerequisite.
+**[Q555](../queue/Q555.md), opt-in flaky-job retry,** has an unbuilt prerequisite.
 Detection needs a real job outcome, which only the unread exit code carries.
 
 ## Why the scope stops here

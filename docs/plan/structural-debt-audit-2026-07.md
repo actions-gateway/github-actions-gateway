@@ -7,7 +7,7 @@ This doc holds the *evidence and rationale* for the Queue rows the audit produce
 Classification follows [technical-debt.md](../development/technical-debt.md).
 
 > **Status: ✅ Done — filed 2026-07-20; every finding F1–F10 and the prevention gates shipped.** The F1 Secret leak was fixed and merged the same day (Q373, #727); F2 (the probe rewrite) shipped as Q362, F3's share-and-gate split as Q374, F4's CIDR-rule consolidation as Q364, F5's broker-double consolidation as Q368, F7's CreateOrPatch collapse as Q366 (which spun the owner-reference-policy question out to Q394), F8's god-function decomposition as Q367, F9's error-taxonomy unification as Q369, F10's script-sprawl cleanup as Q370, the §Prevention gates (nolintlint + a ratcheted funlen) as Q371, and F6's foundation move as Q365 (which left the interleaved v1/v2 condition collectors to Q403, since shipped: the GMC's v1 collector passes now live in `metrics_v1.go`).
-> [Q372](../STATUS.md#Q372) (Deferred) carries the re-run trigger.
+> [Q372](../queue/Q372.md) (Deferred) carries the re-run trigger.
 >
 > The ID range is not contiguous because concurrent branches allocated IDs while this audit was in flight: Q361 went to a CI-latency item (#722) and Q363 to a manifest-validate flake (#729), so this audit's F1 and F3 became Q373 and Q374.
 > See [§Audit cadence](#audit-cadence) — `Next ID` cannot stay correct under parallel work, so open PRs are the authority.
@@ -157,7 +157,7 @@ Most cross-version foundation sits in files named for v1 that v2 imports:
 
 Same pattern in AGC: the `listener` package is treated as classic-only, but `provisioner`, `runnerset_target.go`, `runner_shared.go`, and `main.go` all import it for `listener.Metrics`, `JobHandlerFunc`, `AdmitFunc`, `EventRecorder` — types with nothing to do with classic acquisition.
 
-Consequence: **deleting v1 today is a multi-hundred-line refactor, not a `git rm`.** Doing the moves *now*, while both versions are live, is mechanical and behavior-free, and directly de-risks the already-blocked [Q273](../STATUS.md#Q273).
+Consequence: **deleting v1 today is a multi-hundred-line refactor, not a `git rm`.** Doing the moves *now*, while both versions are live, is mechanical and behavior-free, and directly de-risks the already-blocked [Q273](../queue/Q273.md).
 This is why the row sorts adjacent to Q273 rather than by its own severity.
 
 **Shipped in Q365.** Re-measured at implementation time (2026-07-24, after Q360, Q364 and Q366 reshaped the GMC package), the cross-version foundation moved into eight `shared_*.go` files in `cmd/gmc/internal/controller` and the v1-only IP-range pass into `ipranges_v1.go`; `cert.go` and `metrics_cert.go` turned out to hold the same problem (the PKI primitives and mount layout) and were split the same way.
@@ -296,7 +296,7 @@ Q371 updated that metrics-table row to match.
 
 ### Audit cadence
 
-Recurrence is tracked as [Q372](../STATUS.md#Q372) in Deferred, triggered by the next minor release **or** ≥20% growth over the 41,011-line baseline — whichever first.
+Recurrence is tracked as [Q372](../queue/Q372.md) in Deferred, triggered by the next minor release **or** ≥20% growth over the 41,011-line baseline — whichever first.
 Growth is the honest proxy: this audit surfaced ~10 items across 41k lines, so drift scales with code added rather than calendar time.
 A time-based schedule would run the sweep when nothing had changed and miss a burst of growth between ticks.
 

@@ -9,7 +9,7 @@ One capability drop survives it:
 - **Multi-label runner sets** (Q726). ✅ Closed 2026-08-11.
   `v1alpha1` set `MinItems=1` with no ceiling; `v2beta1` CEL-enforced `size(self) == 1` because the single label doubled as the scale-set name.
   The rule is gone: every label is registered on the scale set and the *first* one names it.
-  Deliberate, and the field's godoc offers a migration path (stay on a `v2alpha1` Classic RunnerSet), but that path expires with `v2alpha1` at `v2.0.0` ([Q264](../STATUS.md#Q264)), which is what makes it permanent.
+  Deliberate, and the field's godoc offers a migration path (stay on a `v2alpha1` Classic RunnerSet), but that path expires with `v2alpha1` at `v2.0.0` ([Q264](../queue/Q264.md)), which is what makes it permanent.
 
 A second one opened and closed inside the same release.
 Q683 and Q691 shipped in August wired only into the classic `provision()` path, and `v2beta1` is ScaleSet-only, so for a few days `v2` tenants had neither; Q766 ported both and 1.4 ships them on both tiers.
@@ -23,7 +23,7 @@ Goal: find v1 behavior not yet ported to v2, now that v2 is the recommended fron
 Every finding below was verified against the code at the cited locations; the security-relevant ones were re-confirmed by hand.
 
 **Outcome:** 8 genuine gaps found.
-The most severe — the missing `noProxyCIDRs` GitHub-bypass admission validation — was fixed same-day in [#641](https://github.com/actions-gateway/github-actions-gateway/pull/641), and its GHES-host residual (was Q322) is closed by the referrer-aware follow-up (both webhook sides thread the referring gateways' `gitHubURL` hosts); the other 7 are filed as [Q323–Q329](../STATUS.md#queue).
+The most severe — the missing `noProxyCIDRs` GitHub-bypass admission validation — was fixed same-day in [#641](https://github.com/actions-gateway/github-actions-gateway/pull/641), and its GHES-host residual (was Q322) is closed by the referrer-aware follow-up (both webhook sides thread the referring gateways' `gitHubURL` hosts); the other 7 are filed as Q323–Q329.
 Q319/Q321 were already on the Queue and are confirmed.
 Everything else is at parity, a v2 superset, or an intentional, documented design difference.
 

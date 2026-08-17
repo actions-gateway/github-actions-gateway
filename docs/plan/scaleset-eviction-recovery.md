@@ -21,7 +21,7 @@ The 1.3 headline feature increases exposure to a gap that only the deprecated ti
 |---|---|
 | 1 — measure the real baseline | ❌ Open, tracked by Q396. Gates Phase 3 only. |
 | 2 — port eviction recovery to scale-set | ✅ **Shipped 2026-07-26** (Q417). See [Phase 2 as built](#phase-2-as-built). |
-| 3 — fast release | ❌ Open, tracked by [Q418](../STATUS.md#Q418), still gated on Phase 1. |
+| 3 — fast release | ❌ Open, tracked by [Q418](../queue/Q418.md), still gated on Phase 1. |
 
 Phase 2 did not wait on Phase 1, as planned: it closes a functional regression rather than an optimization gap, so it was correct to land regardless of what the baseline measurement says.
 

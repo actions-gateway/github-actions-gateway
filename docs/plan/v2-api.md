@@ -209,7 +209,7 @@ We graduate **through beta**, not `alpha → GA` directly: GA's contract is perm
 Each graduation hop is cheap but not free:
 
 1. Add the new version to each CRD; mark it the **storage version**.
-2. **Conversion webhook** round-trips served versions — [Q74](../STATUS.md#deferred) (`Hub`/`Convertible` scaffolding) lands at the first graduation, and is distinct from the M5 fan-out tool a conversion webhook cannot replace.
+2. **Conversion webhook** round-trips served versions — Q74 (`Hub`/`Convertible` scaffolding) lands at the first graduation, and is distinct from the M5 fan-out tool a conversion webhook cannot replace.
 3. **Storage migration** — rewrite stored objects to the new version, then drop the superseded served version.
 
 `v1alpha1` is deprecated and removed on its own track once v2 adoption is sufficient — which is also when the Q147 dual-read window closes (M5, [§H.12](../design/appendix-h-v2-api-decomposition.md#h12-folding-in-the-grandfathered-label-value-alignment-q147)).

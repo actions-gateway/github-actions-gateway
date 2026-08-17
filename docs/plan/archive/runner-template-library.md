@@ -93,9 +93,9 @@ It also makes the e2e overlays' `workerImage` patch mandatory rather than incide
 
 ## Later: demand-gated, not v1
 
-- `gvisor`: only after [Q15](../../STATUS.md#Q15) fires *and* the template gets e2e coverage.
+- `gvisor`: only after [Q15](../../queue/Q15.md) fires *and* the template gets e2e coverage.
 - `sysbox`, rootless-BuildKit: same admission rule; BuildKit-rootless is the decision table's recommended build path but has no template-level CI coverage today.
-- GPU: [Q216](../../STATUS.md#Q216) already scopes RuntimeClass conventions.
+- GPU: [Q216](../../queue/Q216.md) already scopes RuntimeClass conventions.
 
 ## Acceptance criteria
 

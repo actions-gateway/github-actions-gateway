@@ -140,10 +140,10 @@ It found two things the one-time walk had not, which is the argument for the gat
   It was described in the design docs and the troubleshooting runbook, and the metrics reference an operator actually reads never gained a row.
 
 Neither is a capability gap, so the parity result above stands: **the tier axis is closed on the full metric inventory, not only on the tracked one.** The gate covers metrics rather than capabilities, so a capability with no series behind it still joins the parity table by hand.
-That residual is recorded in [v2-ga.md](v2-ga.md#what-this-audit-checked-and-found-already-covered) and belongs to [Q774](../STATUS.md#Q774).
+That residual is recorded in [v2-ga.md](v2-ga.md#what-this-audit-checked-and-found-already-covered) and belongs to [Q774](../queue/Q774.md).
 
 The v1 to v2 axis gets no equivalent row, and that is a decision rather than an omission.
-`cmd/agc/api/v1alpha1/conditions_parity_test.go` already pins the listener vocabulary across all three packages by value (Q309), and new drift can only come from someone adding to `v1alpha1`, which is frozen and comes out in the `v2.0.0` bundle ([Q264](../STATUS.md#Q264)).
+`cmd/agc/api/v1alpha1/conditions_parity_test.go` already pins the listener vocabulary across all three packages by value (Q309), and new drift can only come from someone adding to `v1alpha1`, which is frozen and comes out in the `v2.0.0` bundle ([Q264](../queue/Q264.md)).
 
 ### Differences that survive parity, and should
 
@@ -183,7 +183,7 @@ The surface stopped moving before the review: Q844 landed controller code on 202
 ### Two that were decisions rather than ticks
 
 **The `runnerGroup` name collides, and keeps the name.** It shares a word with the deprecated `v1alpha1` `RunnerGroup` CR, which is a different concept, and the field's godoc says so in its first sentence.
-Two things settle it: GitHub's own term is "runner group" and ARC's `gha-runner-scale-set` chart already exposes `runnerGroup` for exactly this, so an operator migrating from ARC meets the name they expect; and the colliding CR comes out in the `v2.0.0` bundle ([Q264](../STATUS.md#Q264)), so the ambiguity is time-boxed.
+Two things settle it: GitHub's own term is "runner group" and ARC's `gha-runner-scale-set` chart already exposes `runnerGroup` for exactly this, so an operator migrating from ARC meets the name they expect; and the colliding CR comes out in the `v2.0.0` bundle ([Q264](../queue/Q264.md)), so the ambiguity is time-boxed.
 `githubRunnerGroup` would trade ecosystem familiarity for a collision that resolves itself.
 
 **The default is the wide group, and that is accepted rather than clean.** Unset inherits the gateway's default and then GitHub's own default group, which typically admits the whole organization, so the default is the less isolated value.

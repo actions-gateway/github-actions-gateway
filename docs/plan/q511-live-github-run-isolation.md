@@ -5,7 +5,7 @@ Neither run failed — they interfered *invisibly*, and roughly 2.5 hours went i
 A third failure mode surfaced the same day: a run killed with `kill -9` skips its `AfterAll`, stranding a registered runner that then poisons the next run.
 
 This plan carried Q511, and absorbed the collision reported separately as Q500 — that row described the same incident and proposed the alternative fix rather than complementary work.
-The forbid half shipped 2026-07-31; the isolation half is parked as [Q530](../STATUS.md#Q530).
+The forbid half shipped 2026-07-31; the isolation half is parked as [Q530](../queue/Q530.md).
 
 ## What was observed
 
@@ -40,7 +40,7 @@ Per-run names would leave both runs advertising the same label in the same repo,
 Real isolation therefore needs the fixture workflows parameterized (`runs-on: ${{ inputs.label }}`), which is a change to a **different repository**, unverifiable from this one, and it still leaves `dispatchAndResolveRun`'s "the run that was not there before" racy under concurrency.
 
 Forbidding costs the ability to take two independent live measurements at once.
-That is a real cost given how many Queue rows want live runs, so isolation is deferred rather than declined — [Q530](../STATUS.md#Q530) carries it, and this plan stays open for that half.
+That is a real cost given how many Queue rows want live runs, so isolation is deferred rather than declined — [Q530](../queue/Q530.md) carries it, and this plan stays open for that half.
 
 ## Scope
 
@@ -48,7 +48,7 @@ That is a real cost given how many Queue rows want live runs, so isolation is de
 2. ✅ Implement the chosen design — a `BeforeAll` preflight.
 3. ✅ Add a cleanup target that deregisters stranded runners, for the `kill -9` path that skips `AfterAll`.
    This is needed regardless of the decision above.
-4. 🔲 Isolate the runs, if the cost of the singleton rule proves too high ([Q530](../STATUS.md#Q530)).
+4. 🔲 Isolate the runs, if the cost of the singleton rule proves too high ([Q530](../queue/Q530.md)).
 
 ## What shipped
 

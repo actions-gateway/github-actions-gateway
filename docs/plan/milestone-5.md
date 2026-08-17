@@ -32,7 +32,7 @@ Several of the M5 "hardening" sub-items overlap with workstreams in [security.md
 Last refreshed 2026-06-28.
 The "security" half of M5 landed inside [security.md](security.md) workstreams W2/W7/W8 — the GMC already stamps PSA labels, provisions per-tenant ResourceQuotas, and ships hardened pod specs for AGC + proxy.
 Packaging is now **live-validated** end-to-end (Q219, §1.5); load-testing (Q13) and the posture audit (Q14) already landed.
-The only remaining M5 items are intentionally deferred to a staging cluster: the 1,000-session proxy-HPA-under-burst run and gVisor isolation validation ([Q15](../STATUS.md#Q15)).
+The only remaining M5 items are intentionally deferred to a staging cluster: the 1,000-session proxy-HPA-under-burst run and gVisor isolation validation ([Q15](../queue/Q15.md)).
 
 | Sub-item | Status | Notes |
 |---|---|---|

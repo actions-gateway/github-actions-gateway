@@ -6,7 +6,7 @@ The first audit (2026-05) and its W/C/H/M/L workstreams live in [security.md](se
 
 > **Status: Complete.** Every High/Medium finding is resolved (Q121–Q130).
 > The proxy destination-allowlist / SSRF revisit that this audit deferred shipped as Q242 (Appendix G §G.1), though as an *opt-in, platform-gated* control — the default posture is unchanged, so the finding's disposition below still reads "accepted by design" for a stock install.
-> The remaining deferral is the worker trivy-leg flip ([Q70](../STATUS.md#Q70)); the residual proxy hardening this audit argued for — a connection cap and per-connection audit trail — is now tracked as live Queue rows ([Q564](../STATUS.md#Q564), [Q565](../STATUS.md#Q565)).
+> The remaining deferral is the worker trivy-leg flip ([Q70](../queue/Q70.md)); the residual proxy hardening this audit argued for — a connection cap and per-connection audit trail — is now tracked as live Queue rows ([Q564](../queue/Q564.md), [Q565](../queue/Q565.md)).
 > Info-level / accepted-by-design items are documented in place.
 > No active work remains on this audit.
 
@@ -34,10 +34,10 @@ The recurring theme in the new findings is *claim-vs-code mismatch*: documented 
 | Vendored deps never integrity-checked against go.sum in CI | Medium | **New → Q126** |
 | 8 smaller hardening items (see below) | Low | **Resolved (Q127):** all eight addressed (item 5's cosign leg landed earlier via Q126); the single optional sub-item of #8 (non-HTTPS `GITHUB_API_BASE_URL` guard) is carved out to its own Queue item. See [Q127 batch detail](#q127-hardening-batch-items). |
 | DNS egress allows port 53 to any destination | Medium | **Fixed (Q105)** — port-53 egress confined to cluster DNS (`k8s-app: kube-dns` in `kube-system`) across all three per-tenant NetworkPolicies |
-| Proxy has no app-layer destination allowlist / connection cap | Medium | Still accepted by design **in the default posture** — security.md M-2. Q242 shipped Appendix G §G.1 as an *opt-in, platform-gated* allowlist (`actions_gateway_proxy_connect_denied_total` makes each denial an SSRF signal), so operators who want the app-layer gate now have it; left unconfigured the proxy is transport-only and the pod-egress NetworkPolicy remains the hard gate. This audit's metadata-service/SSRF framing is what carried that control. The connection-cap half remains open as [Q565](../STATUS.md#Q565) |
+| Proxy has no app-layer destination allowlist / connection cap | Medium | Still accepted by design **in the default posture** — security.md M-2. Q242 shipped Appendix G §G.1 as an *opt-in, platform-gated* allowlist (`actions_gateway_proxy_connect_denied_total` makes each denial an SSRF signal), so operators who want the app-layer gate now have it; left unconfigured the proxy is transport-only and the pod-egress NetworkPolicy remains the hard gate. This audit's metadata-service/SSRF framing is what carried that control. The connection-cap half remains open as [Q565](../queue/Q565.md) |
 | ResourceQuota is optional and tenant-controlled | Medium | **Resolved (Q130, 2026-06-14):** the tenant-authored `spec.namespaceQuota` was removed; the `ResourceQuota` is now platform-owned (the platform admin must provision it on the namespace), so it is no longer tenant-controlled. The remaining per-cluster proxy HPA-max concern was resolved (Q82) by a non-blocking `ProxyQuotaPressure` status condition that correlates the proxy pool's configured `maxReplicas` footprint against the platform-owned quota — see [05-security.md](../design/05-security.md). |
 | No SLSA provenance attestation | Info | Known — Q103 |
-| Worker trivy leg report-only | Info | Known — [Q70](../STATUS.md#Q70) |
+| Worker trivy leg report-only | Info | Known — [Q70](../queue/Q70.md) |
 | ServiceMonitor `insecureSkipVerify` | Low | Known — Q104 |
 | Library agent-key-type default Ed25519 | Low | Known — Q109 |
 | Docs claim CRD CEL rejects reserved podTemplate fields; no such rules (runtime overwrite layer does exist and holds) | Info | Docs-honesty — fold into Q99 |

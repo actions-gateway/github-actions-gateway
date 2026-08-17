@@ -123,7 +123,7 @@ Secondary observations, recorded because a stub would have answered otherwise:
 - Q676: the Q628 release path must not ship `result=abandoned` for the winner's own delivery as-is; pick and measure a remedy.
   Done: see [the remedy measurements](#q676--the-remedy-measurements-2026-08-04).
   The Q260 sibling case (`result=skipped` on deduped deliveries while the winner still runs) is **not** covered by this measurement.
-  Whether a sibling completion also concludes the whole run is exactly the semantics brokertest's fan-out accounting assumes it does not, and needs its own probe arm ([Q682](../STATUS.md#Q682)).
+  Whether a sibling completion also concludes the whole run is exactly the semantics brokertest's fan-out accounting assumes it does not, and needs its own probe arm ([Q682](../queue/Q682.md)).
 - `broker/types.go` and `listener/job.go` comments updated to cite this measurement instead of the unmeasured ~15-minute-timeout rationale.
 
 ## Q676 — the remedy measurements (2026-08-04)

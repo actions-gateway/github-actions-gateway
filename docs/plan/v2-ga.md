@@ -5,7 +5,7 @@ The last rung of the graduation ladder defined in [v2-api.md § API maturity & g
 This plan starts **after `v1.3.0` ships**.
 It is deliberately unhurried: General Availability (GA) signs a permanent backward-compatibility contract on a five-kind API surface, and the contract cannot be walked back.
 
-> **Status: parked — no active work, every phase carried by a Deferred trigger.** Phases 1, 2 and 4 wait on [Q413](../STATUS.md#Q413) (**Event:** `v1.3.0` ships, starting the Phase 1 soak); Phase 3's coupled removals wait on [Q273](../STATUS.md#Q273) and [Q264](../STATUS.md#Q264); the Phase 2 alias decision is [Q452](../STATUS.md#Q452).
+> **Status: parked — no active work, every phase carried by a Deferred trigger.** Phases 1, 2 and 4 wait on [Q413](../queue/Q413.md) (**Event:** `v1.3.0` ships, starting the Phase 1 soak); Phase 3's coupled removals wait on [Q273](../queue/Q273.md) and [Q264](../queue/Q264.md); the Phase 2 alias decision is [Q452](../queue/Q452.md).
 > The `✅` on this plan's [Progress](../STATUS.md#progress) row means *no open Queue row remains*, not that the graduation has happened — deferred residuals [don't count](../development/maintaining-backlog.md#-means-an-open-queue-row-remains--deferred-residuals-dont-count).
 > The phase table below is the real state.
 
@@ -14,10 +14,10 @@ It is deliberately unhurried: General Availability (GA) signs a permanent backwa
 | Phase | Scope | Sz | Status |
 |---|---|---|---|
 | 0 | Soak criteria + Definition of Done audit recorded (this change) | S | ✅ Done — this change |
-| 1 | Beta soak: accumulate the evidence that `v2beta1`'s shape is right | M | ❌ Open ([Q413](../STATUS.md#Q413)) |
-| 2 | Add `v2` to each kind, mark it storage, extend conversion coverage | M | ❌ Open ([Q413](../STATUS.md#Q413)) |
-| 3 | Storage migration, then drop `v2alpha1`, `v1alpha1`, and classic | M | ❌ Open ([Q273](../STATUS.md#Q273), [Q264](../STATUS.md#Q264)); capability parity **cleared**: Q417/Q443/Q446 cleared the audit's three rows (2026-07-26), Q766 closed the abandoned-run asymmetry inside 1.4, and Q713 put the duration and latency series on both tiers (2026-08-11). See the [parity table](#capability-parity-is-a-precondition-of-the-removal) |
-| 4 | Operator docs, migration guide, and the `v2.0.0` cut | S | ❌ Open ([Q413](../STATUS.md#Q413)) |
+| 1 | Beta soak: accumulate the evidence that `v2beta1`'s shape is right | M | ❌ Open ([Q413](../queue/Q413.md)) |
+| 2 | Add `v2` to each kind, mark it storage, extend conversion coverage | M | ❌ Open ([Q413](../queue/Q413.md)) |
+| 3 | Storage migration, then drop `v2alpha1`, `v1alpha1`, and classic | M | ❌ Open ([Q273](../queue/Q273.md), [Q264](../queue/Q264.md)); capability parity **cleared**: Q417/Q443/Q446 cleared the audit's three rows (2026-07-26), Q766 closed the abandoned-run asymmetry inside 1.4, and Q713 put the duration and latency series on both tiers (2026-08-11). See the [parity table](#capability-parity-is-a-precondition-of-the-removal) |
+| 4 | Operator docs, migration guide, and the `v2.0.0` cut | S | ❌ Open ([Q413](../queue/Q413.md)) |
 
 ## Why this is gated on a soak, not a date
 
@@ -75,15 +75,15 @@ Getting this wrong is the most likely way to break the hop.
 **One shape decision the hop must make: does `v2` define `CiliumFQDN`/`CalicoFQDN`?** The two deprecated `EgressProxy.spec.egressPolicyMode` aliases cannot be removed at `v2.0.0` — they are members of the served beta version `v2beta1`, so their floor is `v3.0.0` ([Q428](../operations/v1alpha1-deprecation.md#a-fourth-deprecation-on-a-different-clock-ciliumfqdn--calicofqdn)).
 That leaves a live choice for `v2`: omit them (a clean GA surface, but the hub moves to `v2` and a `v2beta1` object naming an alias then needs a lossless carrier, since the conversion deliberately rides the values across verbatim rather than collapsing them to `FQDN`) or carry them deprecated (trivially lossless, but GA is effectively frozen and would be born owning two aliases).
 Either way the removal release is unchanged.
-Decide it here, not at the tag: [Q452](../STATUS.md#Q452).
+Decide it here, not at the tag: [Q452](../queue/Q452.md).
 
 ## Phase 3 — the coupled removals
 
 `v2.0.0` executes all three removals announced by [release-1.3.md](release-1.3.md):
 
-- `v1alpha1` (the `actions-gateway.github.com` group) — [Q273](../STATUS.md#Q273)
+- `v1alpha1` (the `actions-gateway.github.com` group) — [Q273](../queue/Q273.md)
 - `v2alpha1` — this plan
-- classic acquisition machinery and the transitional `acquisitionProtocol` / `maxListeners` fields — [Q264](../STATUS.md#Q264)
+- classic acquisition machinery and the transitional `acquisitionProtocol` / `maxListeners` fields — [Q264](../queue/Q264.md)
 
 They are one bundle because `v2beta1` is already ScaleSet-only: classic acquisition exists solely to serve `v1alpha1` and `v2alpha1` objects, so removing those versions removes classic's only consumer.
 Sequencing within the release still matters, since the Q147 dual-read window closes exactly when `v1alpha1` is removed.
@@ -146,7 +146,7 @@ Q851 took the same obligation inside the series, to the label values a `Both` ro
 The re-walk it required found two: `renew_job_errors_total` and `renew_job_teardowns_total` were classic-only by construction and on no list, and `eviction_recovery_evidence_lost_total` reached no operator doc at all.
 
 That gate covers metrics, not capabilities, so the manual step survives for anything with no series behind it: Q844 had one only because the recovery it ported reports through a counter that already spanned both tiers.
-Until [Q774](../STATUS.md#Q774) gates scope statements mechanically, adding a row to the table above is still a manual step in the change that creates the asymmetry, and the [doc-update matrix](../development/doc-update-matrix.md) is where that obligation is written down.
+Until [Q774](../queue/Q774.md) gates scope statements mechanically, adding a row to the table above is still a manual step in the change that creates the asymmetry, and the [doc-update matrix](../development/doc-update-matrix.md) is where that obligation is written down.
 
 ## Phase 4 — docs and the cut
 

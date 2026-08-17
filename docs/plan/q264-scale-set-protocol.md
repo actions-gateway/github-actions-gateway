@@ -4,14 +4,14 @@
 The scale-set migration (Option E) is fully shipped — phases **P0–P5 landed**, ScaleSet is the **default** acquisition protocol since v1.1.0, and Classic is **deprecated**.
 The full P0–P5 record — protocol reverse-engineering, the Investigation E/E2 live probes, the U6–U8 decisions of record, and the P1–P5 execution narrative — lives in the archived phase narrative: [q264-scale-set-protocol-phases.md](archive/q264-scale-set-protocol-phases.md).
 
-This doc now tracks only the **open residual** ([Q264](../STATUS.md#Q264)): the terminal PR that removes the classic acquisition machinery and the transitional API fields.
+This doc now tracks only the **open residual** ([Q264](../queue/Q264.md)): the terminal PR that removes the classic acquisition machinery and the transitional API fields.
 It is the last step of Option E's retirement ladder — one isolated PR, gated on two independent conditions.
 
 ## The gate (both must hold)
 
 1. **The one-minor classic deprecation window from v1.1.0 elapses** (i.e. v1.2.0 ships).
    ScaleSet became the default and Classic was deprecated in v1.1.0's release notes, which starts the window.
-2. **v1alpha1 tenants have migrated off** via `gag-migrate` ([Q273](../STATUS.md#Q273)).
+2. **v1alpha1 tenants have migrated off** via `gag-migrate` ([Q273](../queue/Q273.md)).
    Classic is v1alpha1's *only* acquisition path, so removing it necessarily ends v1alpha1's ability to acquire jobs — the classic deprecation window **is** the v1alpha1 migration window.
 
 The removal was originally expected to ride the Q74 v2beta1 graduation hop (that hop is where the transitional fields were to be stripped). v2beta1 has since graduated **without** carrying the removal, so it is no longer bundled — it is now the terminal step, gated on the two conditions above.

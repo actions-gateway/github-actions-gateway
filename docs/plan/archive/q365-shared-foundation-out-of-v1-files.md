@@ -4,7 +4,7 @@
 
 ## Goal
 
-Relocate the version-neutral code that today lives inside v1-named files into version-neutral homes, so the later v1 removal ([Q273](../../STATUS.md#Q273)) and the classic-machinery removal ([Q264](../../STATUS.md#Q264)) become file deletions rather than extract-then-delete refactors.
+Relocate the version-neutral code that today lives inside v1-named files into version-neutral homes, so the later v1 removal ([Q273](../../queue/Q273.md)) and the classic-machinery removal ([Q264](../../queue/Q264.md)) become file deletions rather than extract-then-delete refactors.
 
 Strictly behaviour-preserving: same emitted objects, same metric names and labels, same admission behaviour.
 This is a move, not a redesign.
