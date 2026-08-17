@@ -294,9 +294,9 @@ That is not hypothetical: a dispatcher's post-hoc read once contradicted a worke
 
 [`pr-requeue-eligible.sh --assess`](../../scripts/agent/pr-requeue-eligible.sh) runs before the rebase and appends what it measured to `tmp/requeue/<pr>.verdict`: the two commit OIDs it merged, and the paths that conflicted.
 
-**On an ordinary `DIRTY` wake it captures nothing, so take the measurement by hand first.** The eligibility checks run before the probe, and the first of them is whether a human has ever enqueued the PR.
-A worker healing its own not-yet-enqueued PR is the common case and fails that check, so `--assess` refuses and records a verdict carrying no OIDs and no conflict set — the measurement the capture exists to preserve, lost on exactly the wake that prompted it (Q814, hit independently by two workers on 2026-08-12).
-Until the ordering changes, run the driverless-clone `merge-tree` below yourself **before** rebasing.
+**It captures on an ordinary `DIRTY` wake too, which it did not always do.** The eligibility checks used to run ahead of the probe, and the first of them is whether a human has ever enqueued the PR.
+A worker healing its own not-yet-enqueued PR is the common case and fails that check, so `--assess` refused and recorded a verdict carrying no OIDs and no conflict set: the measurement the capture exists to preserve, lost on exactly the wake that prompted it (Q814, hit independently by two workers on 2026-08-12).
+The local probe now runs first and the paginated timeline read stays behind the checks, so the cheapest-first intent survives and the record carries the OIDs either way.
 
 ### Probing a merge without the driver
 
@@ -314,9 +314,9 @@ Until the ordering changes, run the driverless-clone `merge-tree` below yourself
   git --git-dir=/tmp/nodrv merge-tree --write-tree <base_oid> <head_oid>
   ```
 
-  [`pr-requeue-eligible.sh`](../../scripts/agent/pr-requeue-eligible.sh) uses the `driver=false` form, and its comment claims to measure "what the merge queue will see".
-  It does not; it measures which driver-owned files both sides touched, a superset.
-  That is conservative for its own `ELIGIBLE` rule, which discounts those paths anyway, so it cannot manufacture a false `ELIGIBLE` — but read as "does this branch need a heal" it is a false positive every time a branch and `main` both touch `docs/STATUS.md`.
+  [`pr-requeue-eligible`](../../scripts/agent/pr-requeue-eligible.py) used the `driver=false` form under a comment claiming to measure "what the merge queue will see".
+  It did not; it measured which driver-owned files both sides touched, a superset, which is conservative for its own `ELIGIBLE` rule but a false positive every time a branch and `main` both touch `docs/STATUS.md` if read as "does this branch need a heal".
+  It now derives the owned paths and the driver names from `.gitattributes` instead of the two hand-kept arrays it carried, so a stale list can no longer under-report, which is the direction that would let an unattended enqueue through.
 
   Two further traps made the `-c` form look like it was working, both measured 2026-08-12 and both silent.
   **A misspelled driver name fails open**: git ignores the unknown config key, runs the real driver anyway, and exits 0, so a probe written against a guessed name (`merge.status` for `docs/STATUS.md`, whose driver is `backlog`) produces byte-identical output to no probe at all.
@@ -339,7 +339,9 @@ Until the ordering changes, run the driverless-clone `merge-tree` below yourself
   The OIDs make the probe re-runnable: `git merge-tree --write-tree <base_oid> <head_oid>` re-derives the same conflict set from the objects at any later time, so a disagreement is settled by re-running it rather than argued from memory.
   That command is printed as well as recorded, which is what puts it in the session transcript the worker reports from.
 
-- **Refusals are recorded too**, so an absent record means the assessment never ran rather than ran-and-refused.
+- **A `WAKE` refusal is recorded, a probe that could not run is not.** So an absent record means either that the assessment never ran or that it ran and could not measure, and the file cannot tell you which.
+  `--confirm` fails closed either way, since no record is not `ELIGIBLE`; what is lost is diagnostic, on exactly the after-the-fact question the record exists for.
+  The shell predecessor wrote a third verdict, `UNMEASURABLE`, for this; the Python treats a probe that could not run as never a verdict, which is defensible and is filed upstream as [claude-skills#129](https://github.com/karlkfi/claude-skills/issues/129) rather than patched here, because an unmodified vendor is what keeps the next fix a clean overwrite.
   Records accumulate and the last one governs, which keeps a refusal that short-circuited before probing from erasing the measurement an earlier one took.
 
 - **It is not a registry.** `tmp/` is gitignored and session-local; nothing reconciles it and no gate reads it.

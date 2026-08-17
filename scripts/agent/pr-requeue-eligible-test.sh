@@ -1,473 +1,378 @@
 #!/usr/bin/env bash
 #
-# Unit tests for scripts/agent/pr-requeue-eligible.sh (Q692).
+# Unit tests for scripts/agent/pr-requeue-eligible.py.
 #
-# This gate decides whether a session may merge something unattended, so the
-# assertions that matter are the refusals: a PR no human ever enqueued, one a
-# bot enqueued, one already in the queue, and — the case the maintainer chose
-# the policy around — a rebase that resolves a conflict outside the files the
-# merge drivers own. Each is built as a real defect and required to come back
-# WAKE, because a checker that silently returns ELIGIBLE looks exactly like one
-# that is working.
+# The GitHub reads are stubbed by returning *raw JSON*, the same shape gh
+# prints, and the script parses it in-process. That is the point, and it is what
+# closed Q694: a stub returning post-filter text left the parsing untested, so a
+# malformed read reached production instead of the suite.
 #
-# The conflicts are real: each case builds a throwaway git repo and diverges two
-# branches, so `merge-tree` does the same work it does in anger. `gh` is stubbed
-# (it answers with what the real command prints after its own --jq), which means
-# these assertions do not cover the jq expressions themselves — that half is
-# exercised by running the script against a live PR.
-# Runs under `make check` (via `make scripts-test`) and the CI shellcheck job.
+# The merge probe is not stubbed at all. It runs `git merge-tree` against real
+# commits in a real temporary repository, so a conflict here is one git actually
+# found.
+#
+# Q834 is covered by the fixture rather than by a named case: the repo is parked
+# on `main` while the assessed head is `feature`, so an implementation reading
+# the caller's HEAD would measure a clean merge and report no conflict. The
+# control below asserts that parked checkout really does merge clean, without
+# which the coverage would hold only by accident.
 set -euo pipefail
 shopt -s inherit_errexit
 
-REPO_ROOT="$(git rev-parse --show-toplevel)"
-CHECKER="$REPO_ROOT/scripts/agent/pr-requeue-eligible.sh"
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+S="$HERE/pr-requeue-eligible.py"
 
-FIXTURE_DIR="$REPO_ROOT/tmp/pr-requeue-test.$$"
-mkdir -p "$FIXTURE_DIR/bin"
-trap 'rm -rf "$FIXTURE_DIR"' EXIT INT TERM
+if python3 - "$S" <<'PY'
+import importlib.util
+import json
+import subprocess
+import sys
+import tempfile
+from pathlib import Path
 
-# A `gh` stub that answers from the environment. Each branch prints exactly what
-# the real invocation prints after gh's own --jq has run, including the node id
-# the queue query selects so that a read which happened is distinguishable from
-# one that did not.
-#
-# Two failure knobs, because the checker has to tell them apart from a measured
-# answer and from each other: GH_FAIL names a read that exits non-zero with
-# nothing on stdout (a transport failure), GH_SILENT one that exits 0 with
-# nothing on stdout (the 2026-08-11 shape, an empty read reported as success).
-cat >"$FIXTURE_DIR/bin/gh" <<'STUB'
-#!/usr/bin/env bash
-set -euo pipefail
-read_kind=""
-case "$1 ${2-}" in
-"pr view") read_kind=view ;;
-"api graphql") read_kind=graphql ;;
-"api "*) read_kind=timeline ;;
-*)
-	printf 'gh stub: unhandled: %s\n' "$*" >&2
-	exit 1
-	;;
-esac
-if [[ "${GH_FAIL:-}" == "$read_kind" ]]; then
-	printf 'gh stub: simulated transport failure\n' >&2
-	exit 1
-fi
-if [[ "${GH_SILENT:-}" == "$read_kind" ]]; then
-	exit 0
-fi
-# GH_HEAD_OID defaults through `-` rather than `:-`, so a case can answer with an
-# empty head — the shape a dropped field arrives in — as well as a wrong one. Its
-# default is the checkout's HEAD, which is what a PR's head is in the worker's
-# own worktree, so the cases that are not about the head are unaffected.
-case "$read_kind" in
-view) printf '%s\t%s\t%s\t%s\n' "${GH_STATE:-OPEN}" "${GH_DRAFT:-false}" "${GH_BASE:-main}" \
-	"${GH_HEAD_OID-$(git rev-parse HEAD)}" ;;
-graphql) printf '%s %s\n' "${GH_NODE_ID:-PR_kwTEST}" "${GH_QUEUE_ENTRY:-none}" ;;
-timeline) printf '%s\n' "${GH_ENQUEUE_COUNT:-0}" ;;
-esac
-STUB
-chmod +x "$FIXTURE_DIR/bin/gh"
-export PATH="$FIXTURE_DIR/bin:$PATH"
+spec = importlib.util.spec_from_file_location("r", sys.argv[1])
+r = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(r)
 
-fails=0
-LAST_OUT=""
+fails = []
 
-# new_repo NAME CONFLICT_KIND — a throwaway repo whose HEAD and origin/main have
-# diverged. CONFLICT_KIND picks which file both sides edited: status (a
-# driver-owned file), code (not), both, none, or driver (a driver-owned file
-# with a live merge driver installed for it).
-new_repo() {
-	local name="$1" kind="$2"
-	local dir="$FIXTURE_DIR/$name"
-	mkdir -p "$dir/docs/plan" "$dir/scripts"
-	(
-		cd "$dir"
-		git init -q -b main
-		git config user.email t@example.com
-		git config user.name Test
-		printf 'row one\n' >docs/STATUS.md
-		printf 'plan one\n' >docs/plan/README.md
-		printf 'echo one\n' >scripts/thing.sh
-		printf 'script one\n' >scripts/README.md
-		if [[ "$kind" == driver ]]; then
-			# A live merge driver for scripts/README.md, resolving to "theirs"
-			# and exiting clean. It stands in for the repo's own scriptindex
-			# driver: installed in this clone, never run by GitHub. The probe
-			# must switch it off, or the conflict disappears from what it
-			# measures and the record under-reports.
-			printf 'scripts/README.md merge=scriptindex\n' >.gitattributes
-			git config merge.scriptindex.name 'test stand-in'
-			git config merge.scriptindex.driver 'cp %B %A'
-		fi
-		git add -A && git commit -qm base
 
-		git checkout -qb feature
-		case "$kind" in
-		status | both) printf 'row one changed by the branch\n' >docs/STATUS.md ;;
-		esac
-		case "$kind" in
-		code | both) printf 'echo changed by the branch\n' >scripts/thing.sh ;;
-		esac
-		case "$kind" in
-		driver)
-			printf 'row one changed by the branch\n' >scripts/README.md
-			;;
-		esac
-		printf 'unrelated\n' >feature-only.txt
-		git add -A && git commit -qm feature
+def check(name, got, want):
+    if got == want:
+        print(f"ok   {name}")
+    else:
+        fails.append(f"{name}: got {got!r} want {want!r}")
 
-		# origin/main advances with its own edit to the same lines.
-		git checkout -q main
-		case "$kind" in
-		status | both) printf 'row one changed by main\n' >docs/STATUS.md ;;
-		esac
-		case "$kind" in
-		code | both) printf 'echo changed by main\n' >scripts/thing.sh ;;
-		esac
-		case "$kind" in
-		driver) printf 'script one changed by main\n' >scripts/README.md ;;
-		esac
-		printf 'main only\n' >main-only.txt
-		git add -A && git commit -qm main-advance
 
-		# A local "origin" so `git fetch origin main` resolves without a network.
-		git remote add origin "$dir"
-		git fetch -q origin main
-		git checkout -q feature
-	)
-	printf '%s' "$dir"
-}
+def ok(name):
+    print(f"ok   {name}")
 
-# expect NAME WANT_RC DIR ARGS... — run the checker inside DIR.
-expect() {
-	local name="$1" want_rc="$2" dir="$3" got_rc=0
-	shift 3
-	LAST_OUT="$(cd "$dir" && "$CHECKER" --repo o/r --state-dir "$dir/state" "$@" 2>&1)" || got_rc=$?
-	if [[ "$got_rc" == "$want_rc" ]]; then
-		printf 'ok   %-26s rc=%s\n' "$name" "$got_rc"
-	else
-		printf 'FAIL %-26s want rc=%s got rc=%s\n%s\n' "$name" "$want_rc" "$got_rc" "$LAST_OUT" >&2
-		fails=$((fails + 1))
-	fi
-}
 
-assert_output() {
-	if grep -qF -- "$2" <<<"$LAST_OUT"; then
-		printf 'ok   %-26s output names %s\n' "$1" "$2"
-	else
-		printf 'FAIL %-26s output does not name %s\n%s\n' "$1" "$2" "$LAST_OUT" >&2
-		fails=$((fails + 1))
-	fi
-}
+# --- a real repository, so the merge probe measures a real merge -----------
 
-assert_eq() {
-	if [[ "$2" == "$3" ]]; then
-		printf 'ok   %-26s %s\n' "$1" "$2"
-	else
-		printf 'FAIL %-26s want %s got %s\n' "$1" "$3" "$2" >&2
-		fails=$((fails + 1))
-	fi
-}
+def git(args, cwd):
+    p = subprocess.run(["git"] + args, cwd=cwd, capture_output=True, text=True)
+    return p.returncode, p.stdout, p.stderr
 
-# field DIR KEY — the last value recorded for KEY in PR 42's verdict file. Last
-# rather than first: the file accumulates one record per assessment.
-field() {
-	awk -v k="$2" '$1 == k { v = $2 } END { print v }' "$1/state/42.verdict"
-}
 
-export GH_ENQUEUE_COUNT=1 GH_QUEUE_ENTRY=none GH_STATE=OPEN GH_DRAFT=false GH_BASE=main
-export GH_FAIL="" GH_SILENT="" GH_NODE_ID=PR_kwTEST
+def build_repo(tmp, conflict_paths):
+    """base and head that genuinely conflict on each named path."""
+    repo = Path(tmp) / "repo"
+    repo.mkdir()
+    git(["init", "-q", "-b", "main"], repo)
+    git(["config", "user.email", "t@example.com"], repo)
+    git(["config", "user.name", "T"], repo)
+    for p in conflict_paths:
+        f = repo / p
+        f.parent.mkdir(parents=True, exist_ok=True)
+        f.write_text("base\n")
+    git(["add", "-A"], repo)
+    git(["commit", "-qm", "base"], repo)
+    root = git(["rev-parse", "HEAD"], repo)[1].strip()
 
-# The healthy case first: without it every refusal below proves nothing.
-STATUS_REPO="$(new_repo status-conflict status)"
-expect eligible-status-only 0 "$STATUS_REPO" --assess 42
-assert_output eligible-status-only 'docs/STATUS.md'
+    git(["checkout", "-q", "-b", "feature"], repo)
+    for p in conflict_paths:
+        (repo / p).write_text("theirs\n")
+    git(["add", "-A"], repo)
+    git(["commit", "-qm", "feature"], repo)
+    head = git(["rev-parse", "HEAD"], repo)[1].strip()
 
-CLEAN_REPO="$(new_repo no-conflict none)"
-expect eligible-no-conflict 0 "$CLEAN_REPO" --assess 42
-assert_output eligible-no-conflict 'no conflicts at all'
+    git(["checkout", "-q", "main"], repo)
+    for p in conflict_paths:
+        (repo / p).write_text("ours\n")
+    git(["add", "-A"], repo)
+    git(["commit", "-qm", "main moves"], repo)
+    base = git(["rev-parse", "HEAD"], repo)[1].strip()
+    # assess() resolves the base as origin/<branch>, which is what production
+    # does; the fixture has to carry that ref rather than the script relaxing.
+    git(["update-ref", "refs/remotes/origin/main", base], repo)
+    return repo, root, base, head
 
-# The policy guard: a conflict in code is the maintainer's to read, because the
-# rebase changes what they approved. Both the code-only and the mixed case must
-# refuse — the mixed one is the trap, since a driver-owned file is present too.
-CODE_REPO="$(new_repo code-conflict code)"
-expect refuse-code-conflict 1 "$CODE_REPO" --assess 42
-assert_output refuse-code-conflict 'scripts/thing.sh'
 
-BOTH_REPO="$(new_repo both-conflict both)"
-expect refuse-mixed-conflict 1 "$BOTH_REPO" --assess 42
-assert_output refuse-mixed-conflict 'scripts/thing.sh'
+# --- a gh stub that answers with raw JSON ----------------------------------
 
-# Never a first enqueue: with no human enqueue on record there is nothing to
-# restore, and enqueueing would be an agent deciding to merge. On its own repo,
-# because a refusal is recorded now and would otherwise land on the ELIGIBLE
-# record the confirm cases below read.
-NEVER_REPO="$(new_repo never-enqueued status)"
-GH_ENQUEUE_COUNT=0 expect refuse-never-enqueued 1 "$NEVER_REPO" --assess 42
-assert_output refuse-never-enqueued 'no human has enqueued'
+class FakeGh(r.Gh):
+    def __init__(self, pr=1, state="OPEN", draft=False, base="main", head=None,
+                 queued=False, enqueued_by="User", pages=1, fail=None):
+        self.calls = []
+        self._cfg = dict(state=state, draft=draft, base=base, head=head,
+                         queued=queued, enqueued_by=enqueued_by, pages=pages,
+                         fail=fail)
+        super().__init__(pr, repo="o/n", run=self._run)
 
-# A refusal taken before the probe still leaves a record, so a later reader can
-# tell "assessed and refused" from "never assessed" — and the OIDs it could not
-# measure read as `-` rather than as a stale pair.
-assert_eq refuse-records-verdict "$(field "$NEVER_REPO" verdict)" WAKE
-assert_eq refuse-records-no-oid "$(field "$NEVER_REPO" base_oid)" -
+    def _run(self, cmd):
+        joined = " ".join(cmd)
+        c = self._cfg
+        if "pr" in cmd and "view" in cmd:
+            kind = "view"
+        elif "graphql" in joined:
+            kind = "graphql"
+        elif "timeline" in joined:
+            kind = "timeline"
+        else:
+            kind = "repo"
+        self.calls.append(kind)
+        if c["fail"] == kind:
+            return 1, "", "simulated transport failure"
+        if kind == "view":
+            return 0, json.dumps({"state": c["state"], "isDraft": c["draft"],
+                                  "baseRefName": c["base"],
+                                  "headRefOid": c["head"]}), ""
+        if kind == "graphql":
+            entry = {"state": "QUEUED"} if c["queued"] else None
+            return 0, json.dumps({"data": {"repository": {"pullRequest": {
+                "id": "PR_kwTEST", "mergeQueueEntry": entry}}}}), ""
+        if kind == "timeline":
+            # One page of noise, then the enqueue on the LAST page — a reader
+            # that stops after page one reports "nobody enqueued it".
+            noise = [{"event": "committed"}] * 2
+            hit = [{"event": "added_to_merge_queue",
+                    "actor": {"type": c["enqueued_by"]}}]
+            pages = [noise] * (c["pages"] - 1) + [hit]
+            return 0, json.dumps(pages), ""
+        return 0, json.dumps({"nameWithOwner": "o/n"}), ""
 
-# Already queued: re-enqueueing would double-add.
-QUEUED_REPO="$(new_repo already-queued status)"
-GH_QUEUE_ENTRY=QUEUED expect refuse-already-queued 1 "$QUEUED_REPO" --assess 42
-assert_output refuse-already-queued 'already in the merge queue'
 
-CLOSED_REPO="$(new_repo not-open status)"
-GH_STATE=MERGED expect refuse-not-open 1 "$CLOSED_REPO" --assess 42
-DRAFT_REPO="$(new_repo draft status)"
-GH_DRAFT=true expect refuse-draft 1 "$DRAFT_REPO" --assess 42
+# --- .gitattributes drives ownership --------------------------------------
 
-# A read that did not happen is not a measured answer (Q805). Each of these
-# three reads leaves an empty string behind, and every check downstream of one
-# reads emptiness as a finding: no state as "not OPEN", no queue entry as "not
-# queued", no timeline as "nobody enqueued it". Exit 2, not 1: a WAKE records a
-# reason, and a reason no read supports is the history the rebase then makes
-# unfalsifiable. Both shapes are covered per read, since a transport failure and
-# an empty success arrive as different statuses and the same output.
-#
-# On their own repo, because an unmeasurable assessment is recorded like a
-# refusal and would otherwise land on the ELIGIBLE record the confirm cases
-# below read.
-UNREADABLE_REPO="$(new_repo unreadable status)"
-for failing in view graphql timeline; do
-	GH_FAIL="$failing" expect "unmeasurable-fail-$failing" 2 "$UNREADABLE_REPO" --assess 42
-	assert_output "unmeasurable-fail-$failing" 'refusing to guess'
-	GH_SILENT="$failing" expect "unmeasurable-empty-$failing" 2 "$UNREADABLE_REPO" --assess 42
-	assert_output "unmeasurable-empty-$failing" 'refusing to guess'
-done
+with tempfile.TemporaryDirectory() as tmp:
+    ga = Path(tmp) / ".gitattributes"
+    ga.write_text(
+        "# a comment\n"
+        "docs/STATUS.md merge=backlog\n"
+        "docs/plan/README.md   merge=planindex\n"
+        "*.png binary\n"
+        "docs/roadmap.md merge=roadmap\n")
+    owned, names = r.driver_config(ga)
+    check("gitattributes: owned paths derived", owned,
+          ["docs/STATUS.md", "docs/plan/README.md", "docs/roadmap.md"])
+    check("gitattributes: driver names derived", names,
+          ["backlog", "planindex", "roadmap"])
+    check("gitattributes: a non-merge attribute is ignored",
+          "*.png" in owned, False)
+    check("gitattributes: a missing file yields nothing",
+          r.driver_config(Path(tmp) / "nope"), ([], []))
 
-# Recorded, so that a later reader can tell a read that could not be taken from
-# an assessment that never ran (Q810). The first read is the one that fails
-# before the base is even known, so the record carries `-` for it rather than
-# failing on an unset variable.
-assert_eq unmeasurable-records-verdict "$(field "$UNREADABLE_REPO" verdict)" UNMEASURABLE
-GH_FAIL=view expect unmeasurable-before-base 2 "$UNREADABLE_REPO" --assess 42
-assert_eq unmeasurable-records-no-base "$(field "$UNREADABLE_REPO" base)" -
+# --- the probe: driver-owned vs not ---------------------------------------
 
-# gh's --jq prints nothing for a JSON null, so "not queued" and "never read"
-# are the same empty answer at that layer and the query selects the PR's node id
-# to tell them apart. An answer without one is a read that did not land, however
-# gh exited.
-GH_NODE_ID=- expect unmeasurable-queue-no-id 2 "$UNREADABLE_REPO" --assess 42
-assert_output unmeasurable-queue-no-id 'refusing to guess'
+with tempfile.TemporaryDirectory() as tmp:
+    repo, _, base, head = build_repo(tmp, ["docs/STATUS.md"])
+    ga = repo / ".gitattributes"
+    ga.write_text("docs/STATUS.md merge=backlog\n")
 
-# `--confirm` re-reads both live probes before enqueueing, so it needs the same
-# refusal: this is the path that runs `gh pr merge` on a 0.
-GH_FAIL=graphql expect unmeasurable-confirm 2 "$STATUS_REPO" --confirm 42
-assert_output unmeasurable-confirm 'refusing to guess'
+    def rgit(args, cwd=None):
+        return git(args, repo)
 
-# `gh api --paginate` runs its --jq per page and prints one count per page, so
-# past 100 timeline events the count arrives multi-line. Read as one number that
-# is an arithmetic syntax error, and it surfaced as "no human enqueued this PR"
-# with nothing wrong at all. The pages are summed: a human enqueue on page two
-# still counts, and pages that are all zero still refuse.
-PAGED_REPO="$(new_repo paged-timeline status)"
-GH_ENQUEUE_COUNT=$'0\n1\n0' expect paged-timeline-sums 0 "$PAGED_REPO" --assess 42
-PAGED_ZERO_REPO="$(new_repo paged-timeline-zero status)"
-GH_ENQUEUE_COUNT=$'0\n0\n0' expect paged-timeline-zero 1 "$PAGED_ZERO_REPO" --assess 42
-assert_output paged-timeline-zero 'no human has enqueued'
+    # Q834's control. The fixture is parked on `main`, so an implementation
+    # reading the caller's HEAD instead of the PR's would measure this clean
+    # merge and report no conflict. Asserting the checkout really is clean is
+    # what stops the case below passing for the wrong reason.
+    parked = git(["rev-parse", "--abbrev-ref", "HEAD"], repo)[1].strip()
+    check("Q834 control: the fixture is parked off the PR's head",
+          parked, "main")
+    check("Q834 control: and that parked checkout merges clean",
+          r.conflicting_paths(base, parked, ["backlog"], rgit), [])
 
-# A non-numeric answer is not a count. gh prints its errors on stderr, but a
-# body that parses as text rather than a number has to refuse rather than be
-# coerced to 0 by the arithmetic.
-GH_ENQUEUE_COUNT='unexpected end of JSON input' \
-	expect unmeasurable-timeline-garbage 2 "$UNREADABLE_REPO" --assess 42
-assert_output unmeasurable-timeline-garbage 'refusing to guess'
+    paths = r.conflicting_paths(base, head, ["backlog"], rgit)
+    check("probe: finds the real conflict", paths, ["docs/STATUS.md"])
 
-# --confirm fails closed. A session that lost its assessment must wake a human
-# rather than fall back to enqueueing.
-FRESH_REPO="$(new_repo confirm-fresh none)"
-expect refuse-confirm-unassessed 1 "$FRESH_REPO" --confirm 42
-assert_output refuse-confirm-unassessed 'no recorded assessment'
+    gh = FakeGh(head=head, enqueued_by="User")
+    rec = Path(tmp) / "v" / "1.verdict"
+    out = r.assess(1, gh, rec, ga, rgit)
+    check("driver-owned conflict is ELIGIBLE", "ELIGIBLE" in out, True)
+    check("the verdict carries a re-runnable measurement",
+          f"merge-tree --write-tree {base} {head}" in out, True)
 
-expect confirm-after-eligible 0 "$STATUS_REPO" --confirm 42
+with tempfile.TemporaryDirectory() as tmp:
+    repo, _, base, head = build_repo(tmp, ["docs/STATUS.md", "cmd/main.go"])
+    ga = repo / ".gitattributes"
+    ga.write_text("docs/STATUS.md merge=backlog\n")
 
-# A recorded refusal must not be readable as consent.
-expect confirm-after-wake 1 "$CODE_REPO" --confirm 42
-assert_output confirm-after-wake "was 'WAKE'"
+    def rgit(args, cwd=None):
+        return git(args, repo)
 
-# The base moving under the assessment invalidates it: the conflict set was
-# measured against a different branch.
-GH_BASE=release expect refuse-confirm-base-moved 1 "$STATUS_REPO" --confirm 42
-assert_output refuse-confirm-base-moved 'base changed'
+    gh = FakeGh(head=head)
+    rec = Path(tmp) / "v" / "1.verdict"
+    try:
+        r.assess(1, gh, rec, ga, rgit)
+        fails.append("a code conflict was not refused")
+    except r.Wake as w:
+        check("a conflict outside driver-owned files wakes",
+              "cmd/main.go" in w.reason, True)
+        check("the wake still carries the measurement",
+              "merge-tree --write-tree" in w.measured, True)
 
-# The records accumulate and the LAST one governs (Q810). Overwriting instead
-# would let a refusal that never probed erase the measurement the eviction rests
-# on; reading anything but the last would let a stale ELIGIBLE authorise an
-# enqueue the current state refuses.
-LAST_REPO="$(new_repo last-record-wins status)"
-expect last-record-first-assess 0 "$LAST_REPO" --assess 42
-GH_QUEUE_ENTRY='{"state":"QUEUED"}' expect last-record-second-assess 1 "$LAST_REPO" --assess 42
-assert_eq last-record-kept-both \
-	"$(grep -c '^verdict ' "$LAST_REPO/state/42.verdict")" 2
-expect last-record-confirm-refuses 1 "$LAST_REPO" --confirm 42
-assert_output last-record-confirm-refuses "was 'WAKE'"
+# --- Q814: the probe runs before the eligibility checks -------------------
+# The ordinary dirty wake is a session healing its own not-yet-enqueued PR. It
+# fails human_enqueued, and that is exactly the wake whose record used to carry
+# no OIDs and no conflict set.
 
-# An installed merge driver must not resolve a conflict out of the record. A
-# driver left live is the one error that cannot be caught afterwards: it removes
-# a path, and a short conflict set reads exactly like a complete one. Found on
-# #1431's second heal, where the probe disabled 2 of the 5 drivers
-# .gitattributes declares and `scripts/README.md` vanished from a set GitHub
-# reported as real — the same rebase later hit a keyed collision in that file,
-# so the conflict was genuine rather than an artefact.
-#
-# This asserts the path is reported, not that the report equals GitHub's merge:
-# the failing-command form over-reports for a touched driver-owned path
-# (parallel-dispatch.md#conflict-policy), which the discount absorbs.
-DRIVER_REPO="$(new_repo live-driver driver)"
-expect driver-live-assess 0 "$DRIVER_REPO" --assess 42
-assert_output driver-live-assess 'conflicts: scripts/README.md'
-assert_eq driver-live-recorded "$(field "$DRIVER_REPO" conflict)" scripts/README.md
+with tempfile.TemporaryDirectory() as tmp:
+    repo, _, base, head = build_repo(tmp, ["docs/STATUS.md"])
+    ga = repo / ".gitattributes"
+    ga.write_text("docs/STATUS.md merge=backlog\n")
 
-# Control: the driver really is live in that repo, so the assertion above is
-# measuring the probe's suppression of it rather than a driver that never ran.
-driver_resolved="$(cd "$DRIVER_REPO" &&
-	git merge-tree --write-tree origin/main HEAD |
-	grep -c '^CONFLICT' || true)"
-assert_eq driver-live-control "$driver_resolved" 0
+    def rgit(args, cwd=None):
+        return git(args, repo)
 
-# The point of the whole record (Q810): once the branch heals, the conflict is
-# unreconstructable from the refs — but the two OIDs the assessment recorded
-# still re-derive it. Without this the eviction's cause dies with the rebase,
-# and a dispatcher's later read cannot be reconciled with the worker's.
-HEAL_REPO="$(new_repo heal-erases-conflict status)"
-expect heal-assess 0 "$HEAL_REPO" --assess 42
-assert_output heal-assess 'measured: git merge-tree --write-tree'
-heal_base_oid="$(field "$HEAL_REPO" base_oid)"
-heal_head_oid="$(field "$HEAL_REPO" head_oid)"
-assert_eq heal-records-conflict "$(field "$HEAL_REPO" conflict)" docs/STATUS.md
+    gh = FakeGh(head=head, enqueued_by="Bot")   # nobody human enqueued it
+    rec = Path(tmp) / "v" / "1.verdict"
+    try:
+        r.assess(1, gh, rec, ga, rgit)
+        fails.append("a bot-only enqueue was not refused")
+    except r.Wake:
+        pass
+    body = rec.read_text()
+    check("Q814: an ineligible assess still records the base OID",
+          f"base_oid {base}" in body, True)
+    check("Q814: and the head OID", f"head_oid {head}" in body, True)
+    check("Q814: and the conflict set",
+          "conflict docs/STATUS.md" in body, True)
 
-(
-	cd "$HEAL_REPO"
-	printf 'row one reconciled by the rebase\n' >docs/STATUS.md
-	git add docs/STATUS.md
-	git commit -qm heal
-	git rebase -q origin/main >/dev/null 2>&1 || {
-		printf 'row one reconciled by the rebase\n' >docs/STATUS.md
-		git add docs/STATUS.md
-		GIT_EDITOR=true git rebase --continue >/dev/null 2>&1
-	}
-)
+# --- Q828: an unrecognised record is skew, not corruption ------------------
 
-post_heal="$(cd "$HEAL_REPO" && git merge-tree --write-tree origin/main HEAD | grep -c '^CONFLICT' || true)"
-assert_eq heal-hides-conflict "$post_heal" 0
+with tempfile.TemporaryDirectory() as tmp:
+    rec = Path(tmp) / "1.verdict"
+    rec.write_text("ELIGIBLE main\n")          # the pre-versioning shape
+    try:
+        r.read_last_record(rec)
+        fails.append("an old-format record was accepted")
+    except r.Wake as w:
+        check("Q828: an old record is reported as format skew",
+              "predates version" in w.reason or "format version" in w.reason,
+              True)
+        check("Q828: and never as an empty verdict",
+              "'', not ELIGIBLE" not in w.reason, True)
 
-# merge-tree exits 1 on a conflict, which is the expected answer here, so the
-# pipeline's status is not the assertion — its output is.
-replayed="$(cd "$HEAL_REPO" &&
-	git merge-tree --write-tree "$heal_base_oid" "$heal_head_oid" |
-	awk '/^CONFLICT/ && match($0, / in .+$/) { print substr($0, RSTART + 4) }')" || true
-assert_eq heal-replay-reconstructs "$replayed" docs/STATUS.md
+    rec.write_text("version 99\nverdict ELIGIBLE\nbase main\n")
+    try:
+        r.read_last_record(rec)
+        fails.append("a future-version record was accepted")
+    except r.Wake as w:
+        check("Q828: a newer record names both versions",
+              "99" in w.reason and str(r.RECORD_VERSION) in w.reason, True)
 
-# The probe's head is the PR's, not the checkout's (Q834). Read as local `git
-# rev-parse HEAD` the verdict was about whatever the caller happened to have
-# checked out: measured 2026-08-12, `--assess 1438` then `--assess 1447` from one
-# worktree gave byte-identical output. The dangerous direction is asserted here —
-# a checkout that merges clean reporting ELIGIBLE for a PR whose own head
-# conflicts in code, which is an unattended enqueue of a change a human was
-# supposed to read.
-PR_HEAD_REPO="$(new_repo pr-head-vs-checkout code)"
-pr_head_oid="$(cd "$PR_HEAD_REPO" && git rev-parse feature)"
-(cd "$PR_HEAD_REPO" && git checkout -q main)
-GH_HEAD_OID="$pr_head_oid" expect pr-head-refuses-code 1 "$PR_HEAD_REPO" --assess 42
-assert_output pr-head-refuses-code 'scripts/thing.sh'
-assert_eq pr-head-recorded "$(field "$PR_HEAD_REPO" head_oid)" "$pr_head_oid"
+    rec.write_text("")
+    try:
+        r.read_last_record(rec)
+        fails.append("an empty record was accepted")
+    except r.Wake:
+        ok("Q828: an empty record wakes rather than parsing to nothing")
 
-# Control: the checkout really does merge clean, so the refusal above measures
-# the PR's head rather than a checkout that would have conflicted anyway.
-checkout_conflicts="$(cd "$PR_HEAD_REPO" &&
-	git merge-tree --write-tree origin/main HEAD | grep -c '^CONFLICT' || true)"
-assert_eq pr-head-checkout-is-clean "$checkout_conflicts" 0
+# --- a read that never happened is never a verdict ------------------------
 
-# A head this clone does not hold is a probe that cannot run, not a reason to
-# fall back to the checkout. The fixture's origin is a local path with no
-# refs/pull, so the fetch finds nothing and the refusal names the head.
-GH_HEAD_OID=0123456789abcdef0123456789abcdef01234567 \
-	expect unmeasurable-absent-head 2 "$PR_HEAD_REPO" --assess 42
-assert_output unmeasurable-absent-head 'is not in this clone'
+with tempfile.TemporaryDirectory() as tmp:
+    repo, _, base, head = build_repo(tmp, ["docs/STATUS.md"])
+    ga = repo / ".gitattributes"
+    ga.write_text("docs/STATUS.md merge=backlog\n")
 
-# A dropped or malformed head is the read failing, and the refusal says so rather
-# than blaming the probe downstream of it.
-GH_HEAD_OID='' expect unmeasurable-empty-head 2 "$PR_HEAD_REPO" --assess 42
-assert_output unmeasurable-empty-head "PR 42's state"
-GH_HEAD_OID=null expect unmeasurable-garbage-head 2 "$PR_HEAD_REPO" --assess 42
-assert_output unmeasurable-garbage-head "PR 42's head commit"
+    def rgit(args, cwd=None):
+        return git(args, repo)
 
-# A probe that cannot run must not read as "found no conflicts". Pointing the
-# base at a ref that does not resolve is the cheapest way to break it, and the
-# answer has to be exit 2 rather than a clean ELIGIBLE.
-GH_BASE=nonexistent-branch expect refuse-unmeasurable 2 "$STATUS_REPO" --assess 42
+    for kind, what in (("view", "the PR state read"),
+                       ("graphql", "the queue read"),
+                       ("timeline", "the timeline read")):
+        gh = FakeGh(head=head, fail=kind)
+        rec = Path(tmp) / "v" / "1.verdict"
+        try:
+            r.assess(1, gh, rec, ga, rgit)
+            fails.append(f"{what} failed and still produced a verdict")
+        except r.Unmeasurable:
+            ok(f"a failed {what} exits unmeasurable, not a verdict")
+        except r.Wake:
+            fails.append(f"{what} failed and was reported as a refusal")
 
-# Usage errors are exit 2, so a malformed call cannot read as a refusal.
-expect usage-no-mode 2 "$STATUS_REPO" 42
-expect usage-bad-pr 2 "$STATUS_REPO" --assess not-a-number
-expect usage-unknown-arg 2 "$STATUS_REPO" --assess 42 --bogus
+    # A merge probe that did not run must not read as a clean merge.
+    def broken_git(args, cwd=None):
+        if "merge-tree" in args:
+            return 128, "", "fatal: not a tree object"
+        return git(args, repo)
 
-# DRIVER_OWNED is what the whole policy turns on, and it is a hand-maintained
-# list whose only guard was a comment saying to keep it in step with
-# .gitattributes. Reconciled here in BOTH directions: a path that gains a
-# `merge=` attribute and not an entry silently narrows the discount, and an
-# entry with no attribute silently widens it — which is a session merging
-# something the maintainer did not sign off on. Q799 added the third driver and
-# this list did not notice; piped-gate's overlap_ignore caught its own half only
-# because TestShippedRegistryCarriesRepoStateSettings does exactly this.
-attributed="$(awk '
-	/^[ \t]*#/ { next }
-	/merge=/ { print $1 }
-' "$REPO_ROOT/.gitattributes" | sort)"
-listed="$(awk '
-	/^DRIVER_OWNED=\(/ { inside = 1; next }
-	inside && /^\)/ { exit }
-	inside { gsub(/[ \t]/, ""); if ($0 != "") print }
-' "$CHECKER" | sort)"
-# DRIVER_NAMES is the same list one column over, and it failed the same way:
-# `conflicting_paths` disabled two of the five declared drivers, so in a clone
-# that ran `make merge-driver` the other three quietly resolved their files
-# inside the probe and dropped them from the measured conflict set. The verdict
-# survived that (every such path is discounted as driver-owned anyway) but the
-# recorded set did not, and a conflict set that under-reports is worse than none
-# because it reads as a measurement. Reconciled in both directions for the same
-# reason the paths are.
-named="$(awk '
-	/^[ \t]*#/ { next }
-	match($0, /merge=[A-Za-z0-9_-]+/) {
-		print substr($0, RSTART + 6, RLENGTH - 6)
-	}
-' "$REPO_ROOT/.gitattributes" | sort -u)"
-disabled="$(awk '
-	/^DRIVER_NAMES=\(/ { inside = 1; next }
-	inside && /^\)/ { exit }
-	inside { gsub(/[ \t]/, ""); if ($0 != "") print }
-' "$CHECKER" | sort)"
-if [[ -z "$named" ]]; then
-	printf 'FAIL %-26s .gitattributes declares no merge drivers\n' driver-names-source >&2
-	fails=$((fails + 1))
-elif [[ "$named" == "$disabled" ]]; then
-	printf 'ok   %-26s matches .gitattributes (%s)\n' driver-names-reconciled "$(tr '\n' ' ' <<<"$disabled")"
+    try:
+        r.conflicting_paths(base, head, ["backlog"], broken_git)
+        fails.append("a probe that never ran reported a clean merge")
+    except r.Unmeasurable:
+        ok("a merge probe that did not run is unmeasurable, not clean")
+
+# --- the queue read distinguishes 'not queued' from 'never read' ----------
+
+with tempfile.TemporaryDirectory() as tmp:
+    gh = FakeGh(head="0" * 40)
+    check("not queued reads as false", gh.in_queue(), False)
+    gh = FakeGh(head="0" * 40, queued=True)
+    check("a live queue entry reads as true", gh.in_queue(), True)
+
+    class NoId(FakeGh):
+        def _run(self, cmd):
+            if "graphql" in " ".join(cmd):
+                return 0, json.dumps({"data": {"repository": {
+                    "pullRequest": {"mergeQueueEntry": None}}}}), ""
+            return super()._run(cmd)
+
+    try:
+        NoId(head="0" * 40).in_queue()
+        fails.append("an answer with no PR id was read as 'not queued'")
+    except r.Unmeasurable:
+        ok("an answer carrying no PR id is unmeasurable, not 'not queued'")
+
+# --- the timeline is read to the last page --------------------------------
+
+check("a bot enqueue does not count",
+      FakeGh(head="0" * 40, enqueued_by="Bot").human_enqueued(), False)
+check("a human enqueue counts",
+      FakeGh(head="0" * 40, enqueued_by="User").human_enqueued(), True)
+check("an enqueue on the last of several pages is still found",
+      FakeGh(head="0" * 40, enqueued_by="User", pages=4).human_enqueued(), True)
+
+# --- confirm fails closed -------------------------------------------------
+
+with tempfile.TemporaryDirectory() as tmp:
+    rec = Path(tmp) / "1.verdict"
+    gh = FakeGh(head="0" * 40, enqueued_by="User")
+    try:
+        r.confirm(1, gh, rec)
+        fails.append("confirm passed with no record at all")
+    except r.Wake:
+        ok("confirm with no record wakes")
+
+    r.write_record(rec, "WAKE", "something", "main", "a" * 40, "b" * 40, [])
+    try:
+        r.confirm(1, gh, rec)
+        fails.append("confirm passed on a recorded WAKE")
+    except r.Wake:
+        ok("confirm on a recorded WAKE wakes")
+
+    r.write_record(rec, "ELIGIBLE", "clean", "main", "a" * 40, "b" * 40, [])
+    out = r.confirm(1, gh, rec)
+    check("confirm passes on the last record, not the first",
+          "ELIGIBLE" in out, True)
+    check("confirm replays the assessment's measurement",
+          "a" * 40 in out and "b" * 40 in out, True)
+
+    # The base moving is what invalidates an assessment taken before a rebase.
+    moved = FakeGh(head="0" * 40, base="release-1.5", enqueued_by="User")
+    try:
+        r.confirm(1, moved, rec)
+        fails.append("confirm ignored a changed base")
+    except r.Wake as w:
+        check("confirm refuses when the base moved",
+              "base changed" in w.reason, True)
+
+    # Already queued means there is nothing to restore.
+    queued = FakeGh(head="0" * 40, enqueued_by="User", queued=True)
+    try:
+        r.confirm(1, queued, rec)
+        fails.append("confirm re-enqueued a PR already in the queue")
+    except r.Wake:
+        ok("confirm refuses a PR already in the queue")
+
+for f in fails:
+    print(f"FAIL {f}")
+sys.exit(1 if fails else 0)
+PY
+then
+    printf '\npr-requeue-eligible-test: ok\n'
 else
-	printf 'FAIL %-26s DRIVER_NAMES and .gitattributes disagree\n  .gitattributes: %s\n  DRIVER_NAMES:   %s\n' \
-		driver-names-reconciled "$(tr '\n' ' ' <<<"$named")" "$(tr '\n' ' ' <<<"$disabled")" >&2
-	fails=$((fails + 1))
+    printf '\npr-requeue-eligible-test: FAILED\n'
+    exit 1
 fi
-
-if [[ -z "$attributed" ]]; then
-	printf 'FAIL %-26s .gitattributes lists no merge-driver-owned paths\n' driver-owned-source >&2
-	fails=$((fails + 1))
-elif [[ "$attributed" == "$listed" ]]; then
-	printf 'ok   %-26s matches .gitattributes (%s)\n' driver-owned-reconciled "$(tr '\n' ' ' <<<"$listed")"
-else
-	printf 'FAIL %-26s DRIVER_OWNED and .gitattributes disagree\n  .gitattributes: %s\n  DRIVER_OWNED:   %s\n' \
-		driver-owned-reconciled "$(tr '\n' ' ' <<<"$attributed")" "$(tr '\n' ' ' <<<"$listed")" >&2
-	fails=$((fails + 1))
-fi
-
-if ((fails > 0)); then
-	printf '\n%d pr-requeue-eligible assertion(s) failed\n' "$fails" >&2
-	exit 1
-fi
-printf '\npr-requeue-eligible-test: all assertions passed\n'
