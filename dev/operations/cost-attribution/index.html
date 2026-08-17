@@ -2918,29 +2918,29 @@ Aggregating allocation by a unique-per-job key explodes the result set the same 
 The exact filter syntax has evolved across releases — treat the queries below as the shape to adapt, and check your version's API docs for the precise parameter names.</p>
 <p><strong>Per-tenant total</strong> (the headline number — one row per tenant namespace):</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="c1"># Last 7 days, one cost row per namespace = one row per tenant.</span>
-<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>curl<span class="w"> </span>-G<span class="w"> </span><span class="s1">&#39;http://opencost:9003/allocation/compute&#39;</span><span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="w">  </span>--data-urlencode<span class="w"> </span><span class="s1">&#39;window=7d&#39;</span><span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="w">  </span>--data-urlencode<span class="w"> </span><span class="s1">&#39;aggregate=namespace&#39;</span>
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>curl<span class="w"> </span>-G<span class="w"> </span><span class="s1">'http://opencost:9003/allocation/compute'</span><span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="w">  </span>--data-urlencode<span class="w"> </span><span class="s1">'window=7d'</span><span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="w">  </span>--data-urlencode<span class="w"> </span><span class="s1">'aggregate=namespace'</span>
 </code></pre></div>
 <p><strong>One tenant, split into worker / proxy / controller:</strong></p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="c1"># Scope to one tenant namespace, then break it down by component label.</span>
-<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>curl<span class="w"> </span>-G<span class="w"> </span><span class="s1">&#39;http://opencost:9003/allocation/compute&#39;</span><span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="w">  </span>--data-urlencode<span class="w"> </span><span class="s1">&#39;window=7d&#39;</span><span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="w">  </span>--data-urlencode<span class="w"> </span><span class="s1">&#39;filter=namespace:&quot;team-a&quot;&#39;</span><span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="w">  </span>--data-urlencode<span class="w"> </span><span class="s1">&#39;aggregate=label:app.kubernetes.io/component&#39;</span>
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>curl<span class="w"> </span>-G<span class="w"> </span><span class="s1">'http://opencost:9003/allocation/compute'</span><span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="w">  </span>--data-urlencode<span class="w"> </span><span class="s1">'window=7d'</span><span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="w">  </span>--data-urlencode<span class="w"> </span><span class="s1">'filter=namespace:"team-a"'</span><span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="w">  </span>--data-urlencode<span class="w"> </span><span class="s1">'aggregate=label:app.kubernetes.io/component'</span>
 </code></pre></div>
 <p>This returns three rows — <code>runner</code>, <code>proxy</code>, <code>controller</code> — letting you confirm that worker pods dominate and see the fixed proxy + AGC floor explicitly.</p>
 <p><strong>One tenant, worker cost by runner shape:</strong></p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>curl<span class="w"> </span>-G<span class="w"> </span><span class="s1">&#39;http://opencost:9003/allocation/compute&#39;</span><span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="w">  </span>--data-urlencode<span class="w"> </span><span class="s1">&#39;window=30d&#39;</span><span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="w">  </span>--data-urlencode<span class="w"> </span><span class="s1">&#39;filter=namespace:&quot;team-a&quot; + label[app_kubernetes_io_component]:&quot;runner&quot;&#39;</span><span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="w">  </span>--data-urlencode<span class="w"> </span><span class="s1">&#39;aggregate=label:app.kubernetes.io/instance&#39;</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>curl<span class="w"> </span>-G<span class="w"> </span><span class="s1">'http://opencost:9003/allocation/compute'</span><span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="w">  </span>--data-urlencode<span class="w"> </span><span class="s1">'window=30d'</span><span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="w">  </span>--data-urlencode<span class="w"> </span><span class="s1">'filter=namespace:"team-a" + label[app_kubernetes_io_component]:"runner"'</span><span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="w">  </span>--data-urlencode<span class="w"> </span><span class="s1">'aggregate=label:app.kubernetes.io/instance'</span>
 </code></pre></div>
 <p><strong>Whole-fleet GAG spend</strong> (every tenant, every component):</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>curl<span class="w"> </span>-G<span class="w"> </span><span class="s1">&#39;http://opencost:9003/allocation/compute&#39;</span><span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="w">  </span>--data-urlencode<span class="w"> </span><span class="s1">&#39;window=30d&#39;</span><span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="w">  </span>--data-urlencode<span class="w"> </span><span class="s1">&#39;filter=label[app_kubernetes_io_part_of]:&quot;actions-gateway&quot;&#39;</span><span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="w">  </span>--data-urlencode<span class="w"> </span><span class="s1">&#39;aggregate=namespace&#39;</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>curl<span class="w"> </span>-G<span class="w"> </span><span class="s1">'http://opencost:9003/allocation/compute'</span><span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="w">  </span>--data-urlencode<span class="w"> </span><span class="s1">'window=30d'</span><span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="w">  </span>--data-urlencode<span class="w"> </span><span class="s1">'filter=label[app_kubernetes_io_part_of]:"actions-gateway"'</span><span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="w">  </span>--data-urlencode<span class="w"> </span><span class="s1">'aggregate=namespace'</span>
 </code></pre></div>
 <blockquote>
 <p>OpenCost flattens label keys to a Prometheus-safe form in some filter contexts — <code>app.kubernetes.io/component</code> becomes <code>app_kubernetes_io_component</code>.
@@ -2951,22 +2951,22 @@ Use the dotted form for <code>aggregate=label:…</code> and the underscored for
 <p>Kubecost's <a href="https://docs.kubecost.com/apis/apis-overview/api-allocation">Allocation API</a> takes the same shape.
 From the Kubecost UI, the equivalent is the <strong>Allocations</strong> report with <em>Aggregate by → Namespace</em> (or <em>→ Label</em> for the component split).</p>
 <p><strong>Per-tenant total:</strong></p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>curl<span class="w"> </span>-G<span class="w"> </span><span class="s1">&#39;http://kubecost:9090/model/allocation&#39;</span><span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="w">  </span>--data-urlencode<span class="w"> </span><span class="s1">&#39;window=7d&#39;</span><span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="w">  </span>--data-urlencode<span class="w"> </span><span class="s1">&#39;aggregate=namespace&#39;</span><span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="w">  </span>--data-urlencode<span class="w"> </span><span class="s1">&#39;accumulate=true&#39;</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>curl<span class="w"> </span>-G<span class="w"> </span><span class="s1">'http://kubecost:9090/model/allocation'</span><span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="w">  </span>--data-urlencode<span class="w"> </span><span class="s1">'window=7d'</span><span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="w">  </span>--data-urlencode<span class="w"> </span><span class="s1">'aggregate=namespace'</span><span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="w">  </span>--data-urlencode<span class="w"> </span><span class="s1">'accumulate=true'</span>
 </code></pre></div>
 <p><strong>One tenant, split by component:</strong></p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>curl<span class="w"> </span>-G<span class="w"> </span><span class="s1">&#39;http://kubecost:9090/model/allocation&#39;</span><span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="w">  </span>--data-urlencode<span class="w"> </span><span class="s1">&#39;window=7d&#39;</span><span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="w">  </span>--data-urlencode<span class="w"> </span><span class="s1">&#39;filterNamespaces=team-a&#39;</span><span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="w">  </span>--data-urlencode<span class="w"> </span><span class="s1">&#39;aggregate=label:app.kubernetes.io/component&#39;</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>curl<span class="w"> </span>-G<span class="w"> </span><span class="s1">'http://kubecost:9090/model/allocation'</span><span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="w">  </span>--data-urlencode<span class="w"> </span><span class="s1">'window=7d'</span><span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="w">  </span>--data-urlencode<span class="w"> </span><span class="s1">'filterNamespaces=team-a'</span><span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="w">  </span>--data-urlencode<span class="w"> </span><span class="s1">'aggregate=label:app.kubernetes.io/component'</span>
 </code></pre></div>
 <p><strong>Whole-fleet GAG spend by tenant:</strong></p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>curl<span class="w"> </span>-G<span class="w"> </span><span class="s1">&#39;http://kubecost:9090/model/allocation&#39;</span><span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="w">  </span>--data-urlencode<span class="w"> </span><span class="s1">&#39;window=30d&#39;</span><span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="w">  </span>--data-urlencode<span class="w"> </span><span class="s1">&#39;filterLabels=app.kubernetes.io/part-of:actions-gateway&#39;</span><span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="w">  </span>--data-urlencode<span class="w"> </span><span class="s1">&#39;aggregate=namespace&#39;</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>curl<span class="w"> </span>-G<span class="w"> </span><span class="s1">'http://kubecost:9090/model/allocation'</span><span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="w">  </span>--data-urlencode<span class="w"> </span><span class="s1">'window=30d'</span><span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="w">  </span>--data-urlencode<span class="w"> </span><span class="s1">'filterLabels=app.kubernetes.io/part-of:actions-gateway'</span><span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="w">  </span>--data-urlencode<span class="w"> </span><span class="s1">'aggregate=namespace'</span>
 </code></pre></div>
 <p>For automated chargeback, Kubecost also serves these as scheduled CSV/JSON exports and as a <a href="https://docs.kubecost.com/">SQL/cloud-cost integration</a> — wire the per-namespace allocation into the same export you use for the rest of the cluster.</p>
 <hr />

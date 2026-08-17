@@ -2726,14 +2726,14 @@ So:</p>
 <a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="c1">// forward worker CONNECT traffic to (e.g. proxy.golang.org). Host-suffix entries</span>
 <a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="c1">// REQUIRE an FQDN egressPolicyMode, since the pod-egress layer expresses them as</span>
 <a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="c1">// toFQDNs rules. +optional +kubebuilder:validation:MaxItems=64</span>
-<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="nx">DestinationFQDNs</span><span class="w"> </span><span class="p">[]</span><span class="kt">string</span><span class="w"> </span><span class="s">`json:&quot;destinationFQDNs,omitempty&quot;`</span>
+<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="nx">DestinationFQDNs</span><span class="w"> </span><span class="p">[]</span><span class="kt">string</span><span class="w"> </span><span class="s">`json:"destinationFQDNs,omitempty"`</span>
 <a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>
 <a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="c1">// DestinationCIDRs lists EXTRA, non-GitHub IP ranges this proxy may forward to</span>
 <a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a><span class="c1">// (e.g. an internal 10.x subnet with no DNS, or a cloud private-API CIDR like</span>
 <a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a><span class="c1">// 199.36.153.8/30). CIDR entries work in ANY egressPolicyMode — they become</span>
 <a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a><span class="c1">// ipBlock egress peers (CIDR mode) or toCIDR peers (FQDN mode). +optional</span>
 <a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a><span class="c1">// +kubebuilder:validation:MaxItems=64</span>
-<a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a><span class="nx">DestinationCIDRs</span><span class="w"> </span><span class="p">[]</span><span class="kt">string</span><span class="w"> </span><span class="s">`json:&quot;destinationCIDRs,omitempty&quot;`</span>
+<a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a><span class="nx">DestinationCIDRs</span><span class="w"> </span><span class="p">[]</span><span class="kt">string</span><span class="w"> </span><span class="s">`json:"destinationCIDRs,omitempty"`</span>
 </code></pre></div>
 <p>Both default empty (GitHub-only — today's behavior).
 GitHub is always allowed; the lists only add.</p>

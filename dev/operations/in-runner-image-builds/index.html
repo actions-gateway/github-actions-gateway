@@ -3030,7 +3030,7 @@ Under a concurrent matrix the pool strands (the same failure class as a pod stuc
 <p><strong>Opt-out for sidecars you know exit cleanly.</strong> If a sidecar genuinely terminates on its own when the job ends (so it never blocks reaping), silence all three outlets for it by naming it in the template's annotation — a comma-separated list, not a blanket boolean, so a newly added, unacknowledged sidecar still warns:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="nt">metadata</span><span class="p">:</span>
 <a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="w">  </span><span class="nt">annotations</span><span class="p">:</span>
-<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="w">    </span><span class="nt">actions-gateway.com/self-exiting-sidecars</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;metrics-agent,log-shipper&quot;</span>
+<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="w">    </span><span class="nt">actions-gateway.com/self-exiting-sidecars</span><span class="p">:</span><span class="w"> </span><span class="s">"metrics-agent,log-shipper"</span>
 </code></pre></div>
 <p>Prefer converting to a native sidecar over acknowledging: the acknowledgment asserts an exit behaviour you must keep true, whereas a native sidecar makes Kubernetes enforce clean teardown for you.</p>
 <h2 id="decision-table">Decision table<a class="headerlink" href="#decision-table" title="Permanent link">&para;</a></h2>

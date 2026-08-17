@@ -2705,8 +2705,8 @@ The v2 admission webhook rejects a privileged container on that kind by design �
 A DinD tenant's worker pod is privileged by construction (the <code>dockerd</code> sidecar), so the two rules collide.</p>
 <p>Measured directly by running <code>FanOut</code> over a v1 DinD tenant shape and feeding the emitted template to the real <code>RunnerTemplateCustomValidator</code>:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>templates=1 sets=1 warnings=[]
-<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>RunnerTemplate &quot;rt-c44dc9368ef1&quot; ValidateCreate err =
-<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>  podTemplate.spec.initContainers[&quot;dind&quot;]: privileged containers are not permitted in a
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>RunnerTemplate "rt-c44dc9368ef1" ValidateCreate err =
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>  podTemplate.spec.initContainers["dind"]: privileged containers are not permitted in a
 <a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>  namespaced RunnerTemplate; use a platform-owned ClusterRunnerTemplate for privileged
 <a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>  (DinD/sysbox) worker shapes
 </code></pre></div>
@@ -2733,8 +2733,8 @@ Fixed by seeding from the first input profile instead — every genuine multi-ga
 <p>Fixing finding 2 exposed the next one.
 <code>namespace-security-profile-guard</code> compares the incoming <code>security-profile</code> label against the current one, and an <strong>absent</strong> label reads as <code>baseline</code>.
 A tenant coming from v1 has never carried the v2 label, so relocating <code>privileged</code> always presents as <code>baseline</code> → <code>privileged</code> — a downgrade — and is denied:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>namespaces &quot;tenant-migrate-dind&quot; is forbidden: ValidatingAdmissionPolicy
-<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>&#39;gmc-namespace-security-profile-guard&#39; denied request: security profile downgrade from
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>namespaces "tenant-migrate-dind" is forbidden: ValidatingAdmissionPolicy
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>'gmc-namespace-security-profile-guard' denied request: security profile downgrade from
 <a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>baseline to privileged is not permitted without the
 <a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>actions-gateway.com/allow-profile-downgrade=allowed annotation
 </code></pre></div>

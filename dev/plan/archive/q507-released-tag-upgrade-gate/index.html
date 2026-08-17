@@ -2669,8 +2669,8 @@ Those are different questions whenever a change interacts with what Helm does <e
 <h2 id="what-it-let-through">What it let through<a class="headerlink" href="#what-it-let-through" title="Permanent link">&para;</a></h2>
 <p>Q492 moved the PriorityClass guard's <code>paramKind</code> to a CRD and shipped that CRD in the chart-root <code>crds/</code> dir — the only placement Helm installs early enough for a CR in the same release.
 Helm installs <code>crds/</code> on <code>helm install</code> <strong>only, never on upgrade</strong>, so <strong>every</strong> existing release failed to upgrade:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>Error: UPGRADE FAILED: resource mapping not found for name: &quot;gmc-priorityclass-allowlist&quot;
-<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>no matches for kind &quot;PriorityClassAllowlist&quot; in version &quot;actions-gateway.com/v2beta1&quot;
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>Error: UPGRADE FAILED: resource mapping not found for name: "gmc-priorityclass-allowlist"
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>no matches for kind "PriorityClassAllowlist" in version "actions-gateway.com/v2beta1"
 <a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>ensure CRDs are installed first
 </code></pre></div>
 <p><code>make check</code> was green, every path-gated heavy gate ran and passed, and the PR was marked review-ready with a description asserting that installs which never set <code>priorityClassAllowlist.configMapName</code> needed no action.

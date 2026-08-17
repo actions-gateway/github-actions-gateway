@@ -2643,7 +2643,7 @@
 
 <h1 id="agent-reference-allocating-backlog-q-ids">Agent reference: Allocating backlog Q-IDs<a class="headerlink" href="#agent-reference-allocating-backlog-q-ids" title="Permanent link">&para;</a></h1>
 <p>Backlog IDs are allocated by claiming a git ref on the remote, not by a counter line in <a href="../../STATUS/"><code>docs/STATUS.md</code></a>.</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>make<span class="w"> </span>queue-id<span class="w"> </span><span class="nv">TITLE</span><span class="o">=</span><span class="s1">&#39;GMC CRD manifest drifts from the AGC types it embeds&#39;</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>make<span class="w"> </span>queue-id<span class="w"> </span><span class="nv">TITLE</span><span class="o">=</span><span class="s1">'GMC CRD manifest drifts from the AGC types it embeds'</span>
 </code></pre></div>
 <p>That searches the backlog for near-duplicates of the title, prints any candidates to stderr, then claims and prints one ID (<code>Q423</code>).
 <code>TARGET=&lt;link&gt;</code> sharpens the search when the Item cell's link is already decided.
@@ -2659,7 +2659,7 @@ Why the search keys on what it does, and what it costs in false positives: <a hr
 <p>Creating a ref that already exists fails server-side, atomically.
 That makes a ref name a compare-and-swap register, so two sessions asking for an ID at the same instant get different ones without any lock, lease, or coordination.</p>
 <p>The mechanism is a single API call:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>gh<span class="w"> </span>api<span class="w"> </span>-X<span class="w"> </span>POST<span class="w"> </span><span class="s2">&quot;repos/</span><span class="nv">$REPO</span><span class="s2">/git/refs&quot;</span><span class="w"> </span>-f<span class="w"> </span><span class="nv">ref</span><span class="o">=</span>refs/queue-ids/Q423<span class="w"> </span>-f<span class="w"> </span><span class="nv">sha</span><span class="o">=</span><span class="s2">&quot;</span><span class="nv">$SENTINEL</span><span class="s2">&quot;</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>gh<span class="w"> </span>api<span class="w"> </span>-X<span class="w"> </span>POST<span class="w"> </span><span class="s2">"repos/</span><span class="nv">$REPO</span><span class="s2">/git/refs"</span><span class="w"> </span>-f<span class="w"> </span><span class="nv">ref</span><span class="o">=</span>refs/queue-ids/Q423<span class="w"> </span>-f<span class="w"> </span><span class="nv">sha</span><span class="o">=</span><span class="s2">"</span><span class="nv">$SENTINEL</span><span class="s2">"</span>
 </code></pre></div>
 <p><code>201</code> means you won.
 <code>422 Reference already exists</code> means someone beat you, so advance and retry.</p>
@@ -2785,7 +2785,7 @@ It only works when a dispatcher session exists, and items are also spawned by ID
   Every claim shares one sentinel object, so this failure mode is the default, not an edge case.</li>
 </ul>
 <p>To see what has been allocated:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>git<span class="w"> </span>ls-remote<span class="w"> </span>origin<span class="w"> </span><span class="s1">&#39;refs/queue-ids/*&#39;</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>git<span class="w"> </span>ls-remote<span class="w"> </span>origin<span class="w"> </span><span class="s1">'refs/queue-ids/*'</span>
 </code></pre></div>
 
 

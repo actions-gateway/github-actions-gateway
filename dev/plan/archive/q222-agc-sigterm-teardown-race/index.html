@@ -2718,11 +2718,11 @@ See <a href="#findings">Findings</a> for what was measured and <a href="#what-wa
 The PR's diff deletes a stale per-module golangci-lint config and reflows a comment — <strong>no runtime code</strong>, so the branch is behaviourally identical to <code>main</code> at <code>72fc519</code>.
 Treat this as a <code>main</code> recurrence for the purposes of the <a href="../../../development/maintaining-backlog/#flake-fixes-go-first">Flake watch</a> revive trigger.</p>
 <p>The failure dump (both assertions, ~60s apart):</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>sigterm_test.go:132: SIGTERM teardown timeout: session &quot;session-58&quot; not deleted after 60s;
-<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>  still-active for owner &quot;sigterm-rg&quot;=[session-58 session-60];
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>sigterm_test.go:132: SIGTERM teardown timeout: session "session-58" not deleted after 60s;
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>  still-active for owner "sigterm-rg"=[session-58 session-60];
 <a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>  global ActiveSessionCount=11; all registered=[session-58 session-60 session-14 ...]
-<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>sigterm_test.go:132: SIGTERM teardown timeout: session &quot;session-60&quot; not deleted after 60s;
-<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>  still-active for owner &quot;sigterm-rg&quot;=[session-58 session-60]; global ActiveSessionCount=11
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>sigterm_test.go:132: SIGTERM teardown timeout: session "session-60" not deleted after 60s;
+<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>  still-active for owner "sigterm-rg"=[session-58 session-60]; global ActiveSessionCount=11
 </code></pre></div>
 <p>Total test wall time 120.29s — i.e. <strong>both</strong> per-session waits burned their full 60s ceiling.</p>
 <h2 id="findings">Findings<a class="headerlink" href="#findings" title="Permanent link">&para;</a></h2>

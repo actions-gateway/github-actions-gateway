@@ -3065,7 +3065,7 @@ The DoD row stays ⚠️ Unverified until a real DinD job completes on the migra
 </table>
 <p><strong>The job is confirmed to have run on the migrated tenant's scale-set path</strong>, not inferred from the green tick.
 The migrated AGC logged it at <code>provisioner.go:646</code>:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>&quot;scale-set worker pod created&quot; owner=dfmigrate-gag-migrate-v1-18c32e1
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>"scale-set worker pod created" owner=dfmigrate-gag-migrate-v1-18c32e1
 <a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>  podName=runner-dfmigrate-gag-migrate-v1-18c32e1-8b9a78b-9e56291d-225d-5
 <a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>  jobID=9e56291d-225d-52b2-9e97-219aa94380ce
 </code></pre></div>
@@ -3088,7 +3088,7 @@ The remaining session runs the full ordered sequence — baseline → migrate �
 <p>A proxied tenant's AGC gets a generated <code>NO_PROXY</code> that defaults to <code>svc.cluster.local,localhost,127.0.0.1,10.96.0.0/12</code> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/controller/shared_agc_deployment.go">shared_agc_deployment.go:50</a>).
 That last entry is the <strong>kind/kubeadm</strong> Service CIDR.
 This cluster's is <code>34.118.224.0/20</code>, so the AGC dialled the API server <em>through the egress proxy</em>, could not verify the proxy's CA, and <code>CrashLoopBackOff</code>ed at startup:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>detect actions-gateway.com/v2alpha1 RunnerSet CRD: … Get &quot;https://34.118.224.1:443/api&quot;:
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>detect actions-gateway.com/v2alpha1 RunnerSet CRD: … Get "https://34.118.224.1:443/api":
 <a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>proxyconnect tcp: tls: failed to verify certificate: x509: certificate signed by unknown authority
 </code></pre></div>
 <p>Adding the real Service CIDR to <code>noProxyCIDRs</code> fixed it immediately — root cause confirmed by measurement, not inferred.</p>
@@ -3124,15 +3124,15 @@ That run also found the symmetric case this fix left open — <a href="#defect-a
 <h3 id="defect-a-truncated-worker-pod-name-can-be-invalid-and-then-no-job-ever-runs-q467">Defect: a truncated worker pod name can be invalid, and then no job ever runs (Q467)<a class="headerlink" href="#defect-a-truncated-worker-pod-name-can-be-invalid-and-then-no-job-ever-runs-q467" title="Permanent link">&para;</a></h3>
 <p>The most serious find of the exercise, and the one that made the first baseline job fail.
 The provisioner derives the worker pod name and truncates it to the 63-char DNS label limit <strong>without trimming a trailing hyphen</strong> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/provisioner/provisioner.go">provisioner.go:391</a>):</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="nx">podName</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">fmt</span><span class="p">.</span><span class="nx">Sprintf</span><span class="p">(</span><span class="s">&quot;runner-%s-%s&quot;</span><span class="p">,</span><span class="w"> </span><span class="nx">safeName</span><span class="p">(</span><span class="nx">key</span><span class="p">.</span><span class="nx">Name</span><span class="p">),</span><span class="w"> </span><span class="nx">safePlanID</span><span class="p">)</span>
-<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="k">if</span><span class="w"> </span><span class="nb">len</span><span class="p">(</span><span class="nx">podName</span><span class="p">)</span><span class="w"> </span><span class="p">&gt;</span><span class="w"> </span><span class="mi">63</span><span class="w"> </span><span class="p">{</span>
-<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="w">    </span><span class="nx">podName</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="nx">podName</span><span class="p">[:</span><span class="mi">63</span><span class="p">]</span><span class="w">   </span><span class="c1">// may land on &#39;-&#39;</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="nx">podName</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">fmt</span><span class="p">.</span><span class="nx">Sprintf</span><span class="p">(</span><span class="s">"runner-%s-%s"</span><span class="p">,</span><span class="w"> </span><span class="nx">safeName</span><span class="p">(</span><span class="nx">key</span><span class="p">.</span><span class="nx">Name</span><span class="p">),</span><span class="w"> </span><span class="nx">safePlanID</span><span class="p">)</span>
+<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="k">if</span><span class="w"> </span><span class="nb">len</span><span class="p">(</span><span class="nx">podName</span><span class="p">)</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="mi">63</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="w">    </span><span class="nx">podName</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nx">podName</span><span class="p">[:</span><span class="mi">63</span><span class="p">]</span><span class="w">   </span><span class="c1">// may land on '-'</span>
 <a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="p">}</span>
 </code></pre></div>
 <p>The plan ID is a UUID, whose hyphens sit at indices 8, 13, 18 and 23.
 If the cut lands on one, the apiserver rejects <strong>every</strong> worker pod:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>provisioner: create Pod runner-dogfood-migrate-gag-migrate-v1-18c32e1-d4766d0-a20852f8-:
-<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>  metadata.name: Invalid value: &quot;…-&quot;: a lowercase RFC 1123 subdomain must … end with
+<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>  metadata.name: Invalid value: "…-": a lowercase RFC 1123 subdomain must … end with
 <a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>  an alphanumeric character
 </code></pre></div>
 <p>Three things make this worse than a naming nit:</p>

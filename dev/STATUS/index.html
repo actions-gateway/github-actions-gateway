@@ -2833,7 +2833,7 @@
 </tr>
 <tr>
 <td><a id="Q871"></a>Q871</td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/test/fakegithub/main.go">Fail a PR when the AGC calls a GitHub endpoint the e2e fake does not serve</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/test/fakegithub/main.go">Fail a PR when the AGC calls an endpoint the e2e fake does not serve</a></td>
 <td><code>ci</code> <code>tests</code> <code>debt</code> <code>retro</code></td>
 <td>🔲</td>
 <td>S</td>
@@ -2849,7 +2849,7 @@
 </tr>
 <tr>
 <td><a id="Q873"></a>Q873</td>
-<td><a href="../development/testing/#the-e2e-workflows-kindnet-and-calico">Record that merge-group-only e2e was priced against flakes, not deterministic breaks</a></td>
+<td><a href="../development/testing/#the-e2e-workflows-kindnet-and-calico">Merge-group-only e2e was priced against flakes, not deterministic breaks</a></td>
 <td><code>docs</code> <code>ci</code> <code>retro</code></td>
 <td>🔲</td>
 <td>S</td>
@@ -2857,7 +2857,7 @@
 </tr>
 <tr>
 <td><a id="Q862"></a>Q862</td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/devtools/agent/pipedgate/repostate.go">The PR-overlap check intersects file paths, so disjoint hunks in one file read as overlap</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/devtools/agent/pipedgate/repostate.go">The PR-overlap check intersects paths, so disjoint hunks read as overlap</a></td>
 <td><code>ci</code> <code>debt</code> <code>retro</code></td>
 <td>🔲</td>
 <td>S</td>
@@ -2865,7 +2865,7 @@
 </tr>
 <tr>
 <td><a id="Q867"></a>Q867</td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/devtools/docs/metrictiers/values.go">Refute a single-tier series claim with the label-value origins the derivation already has</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/devtools/docs/metrictiers/values.go">Refute a single-tier series claim from the derivation's value origins</a></td>
 <td><code>ci</code> <code>docs</code></td>
 <td>🔲</td>
 <td>S</td>
@@ -2873,7 +2873,7 @@
 </tr>
 <tr>
 <td><a id="Q863"></a>Q863</td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/Dockerfile">A <code>docker buildx</code> base-image pull has no retry, so one registry 403 fails an image build</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/Dockerfile">A <code>docker buildx</code> base-image pull has no retry, so one 403 fails a build</a></td>
 <td><code>flake</code> <code>ci</code></td>
 <td>🔲</td>
 <td>S</td>
@@ -2881,7 +2881,7 @@
 </tr>
 <tr>
 <td><a id="Q859"></a>Q859</td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/agent/claude-piped-gate-hook.sh">piped-gate's overlap probe judges the hook script's checkout, not the session's worktree</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/agent/claude-piped-gate-hook.sh">piped-gate's overlap probe judges the hook's checkout, not the session's</a></td>
 <td><code>ci</code> <code>debt</code> <code>bug</code> <code>retro</code></td>
 <td>🔲</td>
 <td>S</td>
@@ -2889,7 +2889,7 @@
 </tr>
 <tr>
 <td><a id="Q820"></a>Q820</td>
-<td><a href="../plan/q820-scripts-test-temp-file-flake/"><code>git-merge-plan-index-test</code> dies on a temp-file error under the parallel scripts-test runner</a></td>
+<td><a href="../plan/q820-scripts-test-temp-file-flake/"><code>git-merge-plan-index-test</code> dies on a temp-file error under the fan-out</a></td>
 <td><code>flake</code> <code>ci</code></td>
 <td>🔲</td>
 <td>S</td>
@@ -2921,7 +2921,7 @@
 </tr>
 <tr>
 <td><a id="Q837"></a>Q837</td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/ci/run-parallel.sh">A <code>run-parallel</code> exit 143 means the gate was terminated, not that it failed</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/ci/run-parallel.sh">A <code>run-parallel</code> exit 143 means the gate was killed, not that it failed</a></td>
 <td><code>docs</code> <code>ci</code> <code>retro</code></td>
 <td>🔲</td>
 <td>S</td>
@@ -2929,7 +2929,7 @@
 </tr>
 <tr>
 <td><a id="Q825"></a>Q825</td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/agent/claude-piped-gate-hook-test.sh">Two mechanisms flake the no-toolchain case: pipeline status, and a shared binary rebuilt under it</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/agent/claude-piped-gate-hook-test.sh">The no-toolchain case flakes twice over: pipeline status, and a rebuild</a></td>
 <td><code>flake</code> <code>tests</code> <code>bug</code></td>
 <td>🔲</td>
 <td>S</td>
@@ -2937,7 +2937,7 @@
 </tr>
 <tr>
 <td><a id="Q823"></a>Q823</td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/go/coverage.sh"><code>agc/internal/controller</code>'s runtime swings 5x against a fixed 2m coverage budget</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/go/coverage.sh"><code>agc/internal/controller</code> swings 5x against a fixed 2m coverage budget</a></td>
 <td><code>flake</code> <code>ci</code> <code>tests</code></td>
 <td>🔲</td>
 <td>S</td>
@@ -2953,7 +2953,7 @@
 </tr>
 <tr>
 <td><a id="Q826"></a>Q826</td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/ci/git-merge-gate-lists-test.sh"><code>git-merge-gate-lists-test</code>'s real-rebase case fails under the <code>make check</code> fan-out, passes standalone</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/ci/git-merge-gate-lists-test.sh"><code>git-merge-gate-lists-test</code>'s real-rebase case fails under the fan-out</a></td>
 <td><code>flake</code> <code>ci</code> <code>tests</code></td>
 <td>🔲</td>
 <td>S</td>
@@ -2969,7 +2969,7 @@
 </tr>
 <tr>
 <td><a id="Q857"></a>Q857</td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/Makefile">A <code>COSIGN_VERSION</code> bump never re-downloads cosign, so <code>verify-release</code> runs the old verifier</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/Makefile">A <code>COSIGN_VERSION</code> bump never re-downloads, so the old verifier stays</a></td>
 <td><code>ci</code> <code>debt</code> <code>bug</code></td>
 <td>🔲</td>
 <td>S</td>
@@ -2977,7 +2977,7 @@
 </tr>
 <tr>
 <td><a id="Q866"></a>Q866</td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/devtools/docs/metrictiers/main.go"><code>metrictiers</code> reads its ledger table with a hand-rolled scan, not the shared parser</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/devtools/docs/metrictiers/main.go"><code>metrictiers</code> reads its ledger with a hand-rolled scan, not the parser</a></td>
 <td><code>ci</code> <code>debt</code></td>
 <td>🔲</td>
 <td>S</td>
@@ -3009,7 +3009,7 @@
 </tr>
 <tr>
 <td><a id="Q838"></a>Q838</td>
-<td><a href="../operations/resourcequota-sizing/">The worker quota-footprint arithmetic is shipped as a sizing guide, never claimed as matching Kubernetes' own evaluator</a></td>
+<td><a href="../operations/resourcequota-sizing/">Nothing claims the worker quota-footprint arithmetic matches Kubernetes</a></td>
 <td><code>docs</code></td>
 <td>🔲</td>
 <td>S</td>
@@ -3073,7 +3073,7 @@
 </tr>
 <tr>
 <td><a id="Q540"></a>Q540</td>
-<td><a href="../plan/q408-untrusted-pr-egress/#6-follow-on-validations-q539-q540">Milestone: Kata + Dragonfly (node layer) + pull-through cache (guest layer)</a></td>
+<td><a href="../plan/q408-untrusted-pr-egress/#6-follow-on-validations-q539-q540">Milestone: Kata + Dragonfly at the node, pull-through cache in-guest</a></td>
 <td><code>security</code></td>
 <td>🚫</td>
 <td>M</td>
@@ -3097,7 +3097,7 @@
 </tr>
 <tr>
 <td><a id="Q846"></a>Q846</td>
-<td><a href="../development/technical-debt/">A tooling issue is deduped at filing time, after the recommendation is already made</a></td>
+<td><a href="../development/technical-debt/">A tooling issue is deduped at filing time, after the recommendation</a></td>
 <td><code>docs</code> <code>debt</code> <code>retro</code></td>
 <td>🔲</td>
 <td>S</td>
@@ -3121,7 +3121,7 @@
 </tr>
 <tr>
 <td><a id="Q743"></a>Q743</td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/doc-links.yml"><code>doc-links.yml</code> has no <code>merge_group</code>, so five docs gates skip queue validation</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/doc-links.yml"><code>doc-links.yml</code> has no <code>merge_group</code>, so five gates skip the queue</a></td>
 <td><code>ci</code> <code>retro</code></td>
 <td>🔲</td>
 <td>S</td>
@@ -3129,7 +3129,7 @@
 </tr>
 <tr>
 <td><a id="Q819"></a>Q819</td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/ci/run-parallel.sh"><code>run-parallel.sh</code> labels gate output but never times it, so a slow gate hides</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/ci/run-parallel.sh"><code>run-parallel.sh</code> never times a gate, so a slow one hides in the output</a></td>
 <td><code>ci</code> <code>debt</code> <code>retro</code></td>
 <td>🔲</td>
 <td>S</td>
@@ -3137,7 +3137,7 @@
 </tr>
 <tr>
 <td><a id="Q843"></a>Q843</td>
-<td><a href="../roadmap/">The roadmap near-term entry rule and its gate disagree on what belongs there</a></td>
+<td><a href="../roadmap/">The roadmap near-term rule and its gate disagree on what belongs there</a></td>
 <td><code>docs</code> <code>ci</code></td>
 <td>🔲</td>
 <td>S</td>
@@ -3145,7 +3145,7 @@
 </tr>
 <tr>
 <td><a id="Q832"></a>Q832</td>
-<td><a href="../roadmap/">Roadmap bullets lose sentence-per-line coverage, because mdreflow declines every <code>q:</code> marker</a></td>
+<td><a href="../roadmap/">Roadmap bullets lose sentence-per-line: mdreflow declines every <code>q:</code></a></td>
 <td><code>ci</code> <code>docs</code> <code>retro</code></td>
 <td>🔲</td>
 <td>S</td>
@@ -3153,7 +3153,7 @@
 </tr>
 <tr>
 <td><a id="Q835"></a>Q835</td>
-<td><a href="../development/documentation-standards/#what-stays-hard-wrapped-and-why-it-stays-that-way"><code>documentation-standards</code> names one mdreflow guard, but emphasis opening a sentence blocks the break too</a></td>
+<td><a href="../development/documentation-standards/#what-stays-hard-wrapped-and-why-it-stays-that-way"><code>documentation-standards</code> names one mdreflow guard where there are three</a></td>
 <td><code>docs</code></td>
 <td>🔲</td>
 <td>S</td>
@@ -3161,7 +3161,7 @@
 </tr>
 <tr>
 <td><a id="Q813"></a>Q813</td>
-<td><a href="../operations/in-runner-image-builds/#approach-5--kata-containers-micro-vm-dind-no-privileged-container">Approach 5's GCP nested-virt family list contradicts the API-measured one</a></td>
+<td><a href="../operations/in-runner-image-builds/#approach-5--kata-containers-micro-vm-dind-no-privileged-container">Approach 5's GCP nested-virt families contradict the API-measured list</a></td>
 <td><code>docs</code></td>
 <td>🔲</td>
 <td>S</td>
@@ -3169,7 +3169,7 @@
 </tr>
 <tr>
 <td><a id="Q757"></a>Q757</td>
-<td><a href="../design/appendix-d-alternatives-considered/#d5-kueue-and-kubernetes-job-queue--quota-managers">D.5 attributes a cluster-admin install requirement to Kueue that Kueue does not document</a></td>
+<td><a href="../design/appendix-d-alternatives-considered/#d5-kueue-and-kubernetes-job-queue--quota-managers">D.5 attributes a cluster-admin requirement Kueue does not document</a></td>
 <td><code>docs</code></td>
 <td>🔲</td>
 <td>S</td>
@@ -3177,7 +3177,7 @@
 </tr>
 <tr>
 <td><a id="Q759"></a>Q759</td>
-<td><a href="../design/appendix-d-alternatives-considered/#d8-gating-intake-on-capacity-which-signals-are-safe-to-gate-on">D.8's capacity-signal gating principle reaches no surface outside Appendix D</a></td>
+<td><a href="../design/appendix-d-alternatives-considered/#d8-gating-intake-on-capacity-which-signals-are-safe-to-gate-on">D.8's capacity-signal principle reaches no surface outside Appendix D</a></td>
 <td><code>docs</code></td>
 <td>🔲</td>
 <td>S</td>
@@ -3193,7 +3193,7 @@
 </tr>
 <tr>
 <td><a id="Q637"></a>Q637</td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/dogfood/validate-release.sh">The release gate asserts nothing about the capacity gate or the namespace-quota rung</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/dogfood/validate-release.sh">The release gate asserts nothing about capacity or the quota rung</a></td>
 <td><code>dogfood</code> <code>tests</code></td>
 <td>🔲</td>
 <td>M</td>
@@ -3225,7 +3225,7 @@
 </tr>
 <tr>
 <td><a id="Q739"></a>Q739</td>
-<td><a href="../development/testing/#the-launch-record">Nothing makes <code>record-launch.sh</code> fire, so the handle it writes is optional</a></td>
+<td><a href="../development/testing/#the-launch-record">Nothing makes <code>record-launch.sh</code> fire, so its handle is optional</a></td>
 <td><code>debt</code> <code>retro</code></td>
 <td>🔲</td>
 <td>S</td>
@@ -3233,7 +3233,7 @@
 </tr>
 <tr>
 <td><a id="Q817"></a>Q817</td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/CONTRIBUTING.md#pushing-to-a-pr-that-is-already-open">Docs teach bare two-dot <code>git diff origin/main</code> for verifying a branch's own scope</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/CONTRIBUTING.md#pushing-to-a-pr-that-is-already-open">Docs teach bare two-dot <code>git diff origin/main</code> for a branch's own scope</a></td>
 <td><code>docs</code> <code>retro</code></td>
 <td>🔲</td>
 <td>S</td>
@@ -3241,7 +3241,7 @@
 </tr>
 <tr>
 <td><a id="Q841"></a>Q841</td>
-<td><a href="../development/testing/#the-make-check-pre-review-gate">A doc-gate run is void the moment you edit again, and nothing says finish first</a></td>
+<td><a href="../development/testing/#the-make-check-pre-review-gate">A doc-gate run is void the moment you edit again, and nothing says so</a></td>
 <td><code>docs</code> <code>retro</code></td>
 <td>🔲</td>
 <td>S</td>
@@ -3249,7 +3249,7 @@
 </tr>
 <tr>
 <td><a id="Q693"></a>Q693</td>
-<td><a href="../development/maintaining-backlog/#search-before-you-file"><code>find-duplicate-rows</code> cannot see a limitation already documented in <code>docs/</code> prose</a></td>
+<td><a href="../development/maintaining-backlog/#search-before-you-file"><code>find-duplicate-rows</code> cannot see a limitation documented in prose</a></td>
 <td><code>docs</code> <code>debt</code> <code>retro</code></td>
 <td>🔲</td>
 <td>S</td>
@@ -3281,7 +3281,7 @@
 </tr>
 <tr>
 <td><a id="Q698"></a>Q698</td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/provisioner/deletion_inventory_test.go">The delete-path inventory misses a <code>Delete</code> whose context arg is named unconventionally</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/provisioner/deletion_inventory_test.go">The delete-path inventory misses a <code>Delete</code> with an odd context arg</a></td>
 <td><code>tests</code> <code>debt</code> <code>retro</code></td>
 <td>🔲</td>
 <td>S</td>
@@ -3297,7 +3297,7 @@
 </tr>
 <tr>
 <td><a id="Q793"></a>Q793</td>
-<td><a href="../plan/archive/q726-multi-label-runner-sets/#drift-detected-never-patched">Measure whether a scale-set labels <code>PATCH</code> is honoured, and reconcile in place if it is</a></td>
+<td><a href="../plan/archive/q726-multi-label-runner-sets/#drift-detected-never-patched">Measure whether a scale-set labels <code>PATCH</code> is honoured, then reconcile</a></td>
 <td><code>feature</code> <code>tests</code></td>
 <td>🔲</td>
 <td>M</td>
@@ -3321,7 +3321,7 @@
 </tr>
 <tr>
 <td><a id="Q795"></a>Q795</td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/listener/session.go">Nothing clears a session-sourced <code>RunnerVersionTooOld</code> after the version is fixed</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/listener/session.go">Nothing clears a session-sourced <code>RunnerVersionTooOld</code> once fixed</a></td>
 <td><code>bug</code> <code>debt</code></td>
 <td>🔲</td>
 <td>S</td>
@@ -3337,7 +3337,7 @@
 </tr>
 <tr>
 <td><a id="Q719"></a>Q719</td>
-<td><a href="../operations/">Validate RWX persistent storage for worker jobs, and put it in the reference architecture</a></td>
+<td><a href="../operations/">Validate RWX worker storage, and put it in the reference architecture</a></td>
 <td><code>docs</code> <code>tests</code> <code>1.6-gate</code></td>
 <td>🔲</td>
 <td>M</td>
@@ -3361,7 +3361,7 @@
 </tr>
 <tr>
 <td><a id="Q721"></a>Q721</td>
-<td><a href="../operations/troubleshooting/">Surface advertised capacity and its withheld breakdown in <code>RunnerSet</code> status</a></td>
+<td><a href="../operations/troubleshooting/">Surface advertised capacity and withheld reasons in <code>RunnerSet</code> status</a></td>
 <td><code>feature</code> <code>docs</code></td>
 <td>🔲</td>
 <td>S</td>
@@ -3409,7 +3409,7 @@
 </tr>
 <tr>
 <td><a id="Q657"></a>Q657</td>
-<td><a href="../plan/eviction-oversubscription-validation/#the-17s-outlier-is-unattributable-q657-2026-08-03">Repeat the eviction measurement now that the spec proves which worker it disrupted</a></td>
+<td><a href="../plan/eviction-oversubscription-validation/#the-17s-outlier-is-unattributable-q657-2026-08-03">Repeat the eviction measurement now the spec attributes the disruption</a></td>
 <td><code>tests</code></td>
 <td>🔲</td>
 <td>S</td>
@@ -3577,7 +3577,7 @@
 </tr>
 <tr>
 <td><a id="Q734"></a>Q734</td>
-<td><a href="../development/website/#interface-rules-the-custom-layer-must-satisfy">Slate's body text sits below the APCA body floor, capping every muted token under it</a></td>
+<td><a href="../development/website/#interface-rules-the-custom-layer-must-satisfy">Slate body text sits below the APCA floor, capping every muted token</a></td>
 <td><code>docs</code></td>
 <td>🔲</td>
 <td>M</td>
@@ -3585,7 +3585,7 @@
 </tr>
 <tr>
 <td><a id="Q744"></a>Q744</td>
-<td><a href="../development/testing/#the-status-you-report-is-a-claim-too">A cumulative per-file ceiling admits a jointly-red merge from two green PRs</a></td>
+<td><a href="../development/testing/#the-status-you-report-is-a-claim-too">A cumulative per-file ceiling admits a jointly-red merge of two PRs</a></td>
 <td><code>ci</code> <code>retro</code></td>
 <td>🔲</td>
 <td>S</td>
@@ -3593,7 +3593,7 @@
 </tr>
 <tr>
 <td><a id="Q745"></a>Q745</td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.claude/piped-gate-guard.json">piped-gate lets a backgrounded gate report a trailing command's exit status</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.claude/piped-gate-guard.json">piped-gate lets a backgrounded gate report a trailing command's status</a></td>
 <td><code>debt</code> <code>retro</code></td>
 <td>🔲</td>
 <td>S</td>
@@ -3712,7 +3712,7 @@
 </tr>
 <tr>
 <td><a id="Q397"></a>Q397</td>
-<td><a href="../plan/gke-dogfood/#recreate-is-proven-end-to-end-q380"><code>validate-cluster.sh</code> metrics-server retry — confirm on a from-zero bootstrap</a></td>
+<td><a href="../plan/gke-dogfood/#recreate-is-proven-end-to-end-q380"><code>validate-cluster.sh</code> metrics-server retry, on a from-zero bootstrap</a></td>
 <td><code>dogfood</code></td>
 <td>S</td>
 <td><strong>Event:</strong> the next dogfood recreate bootstraps from zero. The bounded retry ships and is unit-tested against faked probes; confirm the preflight prints <code>[WAIT]</code> then <code>PASS</code> inside the addon's ~2 min window, not WARN.</td>
@@ -3929,7 +3929,7 @@
 </tr>
 <tr>
 <td><a id="Q765"></a>Q765</td>
-<td><a href="../plan/arc-parity/#where-arc-is-actually-ahead">Validate a GHES gateway against a real GitHub Enterprise Server appliance</a></td>
+<td><a href="../plan/arc-parity/#where-arc-is-actually-ahead">Validate a GHES gateway against a real appliance</a></td>
 <td><code>tests</code> <code>docs</code></td>
 <td>M</td>
 <td><strong>Event:</strong> a real GHES appliance becomes reachable. Both capabilities ship untested against hardware: the <code>gitHubURL</code> path and <code>spec.githubCABundleRef</code>. One run, or a documented decline, closes it.</td>
@@ -3979,42 +3979,42 @@
 <tbody>
 <tr>
 <td><a id="Q806"></a>Q806</td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/security-scan.yml">A transient syft download fails the SBOM step in the security scan and the release publish</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/security-scan.yml">A transient syft download fails the SBOM step in scan and publish</a></td>
 <td><code>flake</code> <code>ci</code></td>
 <td>S</td>
 <td><strong>Event:</strong> an SBOM step fails on <code>main</code> fetching syft after the fix. Both workflows pull the pinned tarball via <code>download-verified.sh</code> (digest-gated, jittered backoff since <a href="#Q829">Q829</a>), so the budget ran out, not one denial. → top of Queue.</td>
 </tr>
 <tr>
 <td><a id="Q829"></a>Q829</td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/fetch/download-verified.sh">A pinned-binary download outlives <code>download-verified.sh</code>'s retry budget and fails the CI install step</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/fetch/download-verified.sh">A pinned download outlives <code>download-verified.sh</code>'s retry budget</a></td>
 <td><code>flake</code> <code>ci</code></td>
 <td>S</td>
 <td><strong>Event:</strong> any <code>download-verified.sh</code> step fails on <code>main</code> after the fix. The schedule is the sibling's (5 retries, 5 s doubling to 60 s, jittered, 135-202 s), so a failure means the denial outlasted ~3 min, not 10 s. → top of Queue, escalated.</td>
 </tr>
 <tr>
 <td><a id="Q803"></a>Q803</td>
-<td><a href="../development/testing/#coverage-measurement-and-the-ratchet"><code>cmd/proxy</code> coverage is nondeterministic, and its floor has no headroom to absorb it</a></td>
+<td><a href="../development/testing/#coverage-measurement-and-the-ratchet"><code>cmd/proxy</code> coverage is nondeterministic and its floor has no headroom</a></td>
 <td><code>flake</code> <code>ci</code> <code>tests</code></td>
 <td>S</td>
 <td><strong>Event:</strong> <code>cmd/proxy</code> fails <code>cover-check</code> on <code>main</code> after the fix. Tolerance is now max(0.5pp, 3 statements) = 0.86pp here, against a floor of 79.3 that runs actually reach, so a breach costs 3 statements, not Q803's 2. → top of Queue, escalated.</td>
 </tr>
 <tr>
 <td><a id="Q797"></a>Q797</td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/controller/integration/provisioning_test.go">Three GMC tenant-provisioning integration tests time out together under the full two-module race run</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/controller/integration/provisioning_test.go">Three GMC provisioning integration tests time out under the race run</a></td>
 <td><code>flake</code> <code>tests</code></td>
 <td>S</td>
 <td><strong>Event:</strong> any of the three fails on <code>main</code>. First sighting 2026-08-11 (Q726 branch): all three timed out at 15s under <code>make test-integration</code>, then passed in isolation and on a package re-run. No mitigation shipped; a second sighting is the signal.</td>
 </tr>
 <tr>
 <td><a id="Q747"></a>Q747</td>
-<td><a href="../plan/q300-gmc-kindnet-e2e-flake/#2026-08-08-q747-the-enforcer-was-not-starved-it-was-absent">e2e cross-tenant NetworkPolicy probe intermittently connects instead of being blocked</a></td>
+<td><a href="../plan/q300-gmc-kindnet-e2e-flake/#2026-08-08-q747-the-enforcer-was-not-starved-it-was-absent">The e2e cross-tenant NetworkPolicy probe connects instead of blocking</a></td>
 <td><code>flake</code> <code>tests</code> <code>security</code></td>
 <td>S</td>
 <td><strong>Event:</strong> it fails on <code>main</code> with the CNI enforcer fingerprint <em>unchanged</em> across the probe, which the failure message states outright: a real isolation regression, not Q747's dead-enforcer lane artifact. → top of Queue, escalated.</td>
 </tr>
 <tr>
 <td><a id="Q703"></a>Q703</td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/agent/claude-go-throttle-hook-test.sh"><code>claude-go-throttle-hook-test</code> reads an empty hook decision under <code>make check</code>, passes standalone</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/agent/claude-go-throttle-hook-test.sh"><code>claude-go-throttle-hook-test</code> reads an empty decision under the fan-out</a></td>
 <td><code>flake</code> <code>ci</code></td>
 <td>S</td>
 <td><strong>Event:</strong> it fails on <code>main</code> again. The message names the silent path (<a href="../development/testing/#resource-auto-throttle-on-gui-dev-machines">trace</a>); refile on that, not the shared empty decision. Its probe fail-open is closed. → top of Queue.</td>
@@ -4035,105 +4035,105 @@
 </tr>
 <tr>
 <td><a id="Q752"></a>Q752</td>
-<td><a href="../development/testing/#a-backstop-shorter-than-the-subjects-own-budget-is-not-a-backstop"><code>record-launch-test</code>'s 10s launch bound fails under the <code>make check</code> fan-out, passes standalone</a></td>
+<td><a href="../development/testing/#a-backstop-shorter-than-the-subjects-own-budget-is-not-a-backstop"><code>record-launch-test</code>'s 10s launch bound fails under the fan-out</a></td>
 <td><code>flake</code> <code>tests</code></td>
 <td>S</td>
 <td><strong>Event:</strong> the tree case fails on <code>main</code> after the fix (the stop wait is now <code>wait</code> on the wrapper, no clock). Trigger unreproduced: 0/40 under load; a serial <code>make check</code> sample was discarded as tainted. → top of Queue, escalated.</td>
 </tr>
 <tr>
 <td><a id="Q789"></a>Q789</td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/docs/alloc-queue-id-test.sh"><code>alloc-queue-id-test</code>'s <code>gh</code> stub reads a git ref-lock collision as a broken fixture</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/docs/alloc-queue-id-test.sh"><code>alloc-queue-id-test</code>'s <code>gh</code> stub reads a ref-lock collision as broken</a></td>
 <td><code>flake</code> <code>tests</code></td>
 <td>S</td>
 <td><strong>Event:</strong> the fleet fails <code>every concurrent allocator exits 0</code> on <code>main</code> after the fix (the stub maps <code>cannot lock ref</code> to the 422 the atomic API answers). Reproduced 2/20 then 1/20 under a 1,748 fork/s storm. → top of Queue, escalated.</td>
 </tr>
 <tr>
 <td><a id="Q690"></a>Q690</td>
-<td><a href="../development/testing/#two-clocks-in-one-assertion"><code>release-sentinel-test</code>'s live-run case fails under <code>make check</code>, passes standalone</a></td>
+<td><a href="../development/testing/#two-clocks-in-one-assertion"><code>release-sentinel-test</code>'s live-run case fails under the fan-out</a></td>
 <td><code>flake</code> <code>tests</code></td>
 <td>S</td>
 <td><strong>Event:</strong> the live-run cases fail on <code>main</code> after the Q690 fix (they count the watcher's own polls against a stubbed <code>sleep</code>/<code>date</code>; no real seconds bound them). Reproduced: a wall clock outrunning the timer, not load. → top of Queue, escalated.</td>
 </tr>
 <tr>
 <td><a id="Q685"></a>Q685</td>
-<td><a href="../development/testing/#synchronize-on-the-signal-you-assert-on"><code>TestListener_RestartDoesNotReprovisionAConcludedJob</code> re-provisioned a concluded job</a></td>
+<td><a href="../development/testing/#synchronize-on-the-signal-you-assert-on"><code>TestListener_RestartDoesNotReprovisionAConcludedJob</code> saw a re-provision</a></td>
 <td><code>flake</code> <code>tests</code> <code>ci</code></td>
 <td>S</td>
 <td><strong>Event:</strong> it fails <code>Condition satisfied</code> on <code>main</code> after the Q685 fix. The production window it raced is closed by Q689 (<a href="../design/02-architecture/">architecture</a>), so its <code>deleteAttempts &gt; 0</code> wait no longer carries it. → top of Queue, escalated.</td>
 </tr>
 <tr>
 <td><a id="Q664"></a>Q664</td>
-<td><a href="../design/02-architecture/"><code>E2E_AGC_StuckPendingPodReaped</code> times out with the stuck-Pending workers never reaped</a></td>
+<td><a href="../design/02-architecture/"><code>E2E_AGC_StuckPendingPodReaped</code> times out, the workers never reaped</a></td>
 <td><code>flake</code> <code>tests</code> <code>ci</code></td>
 <td>S</td>
 <td><strong>Event:</strong> it times out on <code>main</code> after the Q664 fix (the reconcilers cap work-queue retry at 30s, so a reconcile error cannot strand the reap deadline <code>RequeueAfter</code> carries). Not reproduced locally in 4 runs. → top of Queue, escalated.</td>
 </tr>
 <tr>
 <td><a id="Q648"></a>Q648</td>
-<td><a href="../development/testing/#runnergithub-egress-attribution-q352">The runner→GitHub egress probe scores an HTTP 403 as reachable, so a refused runner reads as a real failure</a></td>
+<td><a href="../development/testing/#runnergithub-egress-attribution-q352">The runner→GitHub egress probe scores an HTTP 403 as reachable</a></td>
 <td><code>flake</code> <code>tests</code> <code>ci</code></td>
 <td>S</td>
 <td><strong>Event:</strong> a <code>real-github-egress</code> spec fails on <code>main</code> after the Q648 fix and the banner misattributes it — <code>BLOCKED</code> on a spec still red across re-runs, or <code>REACHABLE</code>/<code>INCONCLUSIVE</code> on one that re-runs green. → top of Queue, escalated.</td>
 </tr>
 <tr>
 <td><a id="Q642"></a>Q642</td>
-<td><a href="../development/testing/#the-clock-is-as-often-a-deadline-around-a-process-as-a-sleep-inside-one"><code>progress-watch-test</code>'s <code>interval 0</code> case fails under <code>make check</code>, passes standalone</a></td>
+<td><a href="../development/testing/#the-clock-is-as-often-a-deadline-around-a-process-as-a-sleep-inside-one"><code>progress-watch-test</code>'s <code>interval 0</code> case fails under the fan-out</a></td>
 <td><code>flake</code> <code>tests</code></td>
 <td>S</td>
 <td><strong>Event:</strong> the <code>interval 0</code> case fails on <code>main</code> after the Q642 fix (it asserts on ticks a stubbed <code>sleep</code> records; no deadline bounds the watcher). Reproduced: 8/1760 launches alive at the old 10 s deadline. → top of Queue, escalated.</td>
 </tr>
 <tr>
 <td><a id="Q596"></a>Q596</td>
-<td><a href="../development/testing/#the-v2-api-sync-gate"><code>check-v2-api-sync-test</code>'s <code>tree-in-sync</code> fails under <code>make check</code>, passes standalone</a></td>
+<td><a href="../development/testing/#the-v2-api-sync-gate"><code>check-v2-api-sync-test</code>'s <code>tree-in-sync</code> fails under the fan-out</a></td>
 <td><code>flake</code> <code>ci</code></td>
 <td>S</td>
 <td><strong>Event:</strong> <code>tree-in-sync</code> fails on <code>main</code> after the Q596 fix. Trigger unreproduced (2418 runs under load); what shipped is evidence — a failed read reads as trouble, not drift, and the assertion prints the gate rc and output. → top of Queue.</td>
 </tr>
 <tr>
 <td><a id="Q604"></a>Q604</td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scaleset/scalesetstub/stub.go"><code>stallJob</code> installs its runner-name conflict after the job is already pollable</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scaleset/scalesetstub/stub.go"><code>stallJob</code> installs its runner-name conflict after the job is pollable</a></td>
 <td><code>flake</code> <code>tests</code></td>
 <td>S</td>
 <td><strong>Event:</strong> a <code>stallJob</code> caller fails <code>must be held for a re-offer</code> on <code>main</code> after the Q604 fix (<code>EnqueueStalledJob</code> registers the conflict in the same locked section that makes the job pollable). → top of Queue, escalated.</td>
 </tr>
 <tr>
 <td><a id="Q602"></a>Q602</td>
-<td><a href="../development/testing/#synchronize-on-the-signal-you-assert-on"><code>TestListener_AbandonedJobDoesNotSurviveARestart</code> stops the listener before the abandon's message delete is issued</a></td>
+<td><a href="../development/testing/#synchronize-on-the-signal-you-assert-on"><code>TestListener_AbandonedJobDoesNotSurviveARestart</code> stops before delete</a></td>
 <td><code>flake</code> <code>tests</code></td>
 <td>S</td>
 <td><strong>Event:</strong> it fails <code>Condition satisfied</code> on <code>main</code> after the Q602 fix (the test now waits for <code>deleteAttempts &gt; 0</code>, the delete the invariant rests on, not only the abandoned counter, which rises at in-memory settle). → top of Queue, escalated.</td>
 </tr>
 <tr>
 <td><a id="Q600"></a>Q600</td>
-<td><a href="../development/testing/#synchronize-on-the-signal-you-assert-on"><code>TestMultiplexer_DuplicateJobDeliveryProvisionsOnce</code> reads its peak-provisioner count before the winner reaches the handler</a></td>
+<td><a href="../development/testing/#synchronize-on-the-signal-you-assert-on"><code>TestMultiplexer_DuplicateJobDeliveryProvisionsOnce</code> reads too early</a></td>
 <td><code>flake</code> <code>tests</code></td>
 <td>S</td>
 <td><strong>Event:</strong> it fails <code>expected 1, actual 0</code> on <code>main</code> after the Q600 fix (the test now waits on <code>handlerMax &gt;= 1</code>, the counter the invariant reads, not only on the losers' dedup metric). → top of Queue, escalated.</td>
 </tr>
 <tr>
 <td><a id="Q809"></a>Q809</td>
-<td><a href="../plan/q549-scaleset-rerun-flake/#mode-b-attributed-2026-08-12-the-claim-was-made-and-lost"><code>E2E_AGC_ScaleSetDrainedWorkerClaimAndRerunLandUnderChartRBAC</code>: a drained worker's recovery is detected and then lost at the claim</a></td>
+<td><a href="../plan/q549-scaleset-rerun-flake/#mode-b-attributed-2026-08-12-the-claim-was-made-and-lost">A drained worker's recovery is detected, then lost at the claim</a></td>
 <td><code>flake</code> <code>tests</code></td>
 <td>M</td>
 <td><strong>Event:</strong> the re-run wait fails on <code>main</code> after the claim fix. <a href="#Q549">Q549</a> mode B; this row owns the 2026-08-12 measurement: the pod outran the claim (<code>NotFound</code>), or the kubelet's status write took the lock. → top of Queue, escalated.</td>
 </tr>
 <tr>
 <td><a id="Q549"></a>Q549</td>
-<td><a href="../plan/q549-scaleset-rerun-flake/"><code>E2E_AGC_ScaleSetDrainedWorkerClaimAndRerunLandUnderChartRBAC</code> times out waiting for the disrupted run's re-run</a></td>
+<td><a href="../plan/q549-scaleset-rerun-flake/"><code>E2E_AGC_ScaleSetDrainedWorkerClaimAndRerunLandUnderChartRBAC</code> times out</a></td>
 <td><code>flake</code> <code>tests</code></td>
 <td>S</td>
 <td><strong>Event:</strong> the re-run wait fails on <code>main</code> in a shape neither mode covers (<a href="../plan/q549-scaleset-rerun-flake/">triage</a>). A, AGC replaced mid-window, pinned; B, the claim lost, measured and fixed under <a href="#Q809">Q809</a>. → top of Queue, escalated.</td>
 </tr>
 <tr>
 <td><a id="Q570"></a>Q570</td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/test/e2e/migration_v1_to_v2_test.go"><code>E2E_Migration_MigratedTenantReconcilesIntoAWorkingControlPlane</code> times out when the v1 proxy pool takes both workers</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/test/e2e/migration_v1_to_v2_test.go">Migration e2e times out when the v1 proxy pool takes both workers</a></td>
 <td><code>flake</code> <code>tests</code></td>
 <td>S</td>
 <td><strong>Event:</strong> the migrated proxy-pool wait times out on <code>main</code> after the Q570 fix (the tenant pins its inline pool with <code>WithProxyReplicas(1, 1)</code>, so its HPA cannot take the worker the migrated pool needs). → top of Queue, escalated.</td>
 </tr>
 <tr>
 <td><a id="Q559"></a>Q559</td>
-<td><a href="../development/testing/#the-two-effects-can-be-one-object-read-through-two-clients"><code>TestV2_RunnerSet_CapacityGate_FixedClusterSkipsAcquire</code> acquires the job it must refuse</a></td>
+<td><a href="../development/testing/#the-two-effects-can-be-one-object-read-through-two-clients"><code>TestV2_RunnerSet_CapacityGate_FixedClusterSkipsAcquire</code> acquires anyway</a></td>
 <td><code>flake</code> <code>tests</code></td>
 <td>S</td>
 <td><strong>Event:</strong> it fails <code>reason=capacity</code> on <code>main</code> after the Q559 fix (the wait reads the condition through the reconciler's own cached client — the observer the admission rung reads — not the apiserver). → top of Queue, escalated.</td>
@@ -4161,7 +4161,7 @@
 </tr>
 <tr>
 <td><a id="Q490"></a>Q490</td>
-<td><a href="../development/testing/#synchronize-on-the-signal-you-assert-on"><code>TestAGC_Q260_FanoutCompletionReconciles</code> cancels a job every delivery completed</a></td>
+<td><a href="../development/testing/#synchronize-on-the-signal-you-assert-on">A fan-out completion spec cancels a job every delivery completed</a></td>
 <td><code>tests</code> <code>flake</code></td>
 <td>S</td>
 <td><strong>Event:</strong> it fails <code>cancelled</code> vs <code>completed</code> on <code>main</code> after the Q490 fix (the stub publishes <code>CompleteJobCalls</code> only after committing the accounting, and the test waits on <code>DeliveryResults</code>). → top of Queue, escalated.</td>

@@ -2871,7 +2871,7 @@ Closing the gap needs no new watch, annotation or pod bookkeeping — it needs t
 <p><strong><code>rerun-failed-jobs</code> has a one-month retention window</strong> — measured 2026-07-28, while attempting to answer the re-runnability question cheaply against an already-cancelled historical run rather than a freshly interrupted one:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>POST /repos/actions-gateway/gateway-test/actions/runs/27386814795/rerun-failed-jobs
 <a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>HTTP/2.0 403 Forbidden
-<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>{&quot;message&quot;:&quot;Unable to retry this workflow run because it was created over a month ago&quot;}
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>{"message":"Unable to retry this workflow run because it was created over a month ago"}
 </code></pre></div>
 <p>Two things follow.
 The shortcut does not work — every cancelled run in the fixture repo predates the window, and the 403 is about the run's <em>age</em>, not about its <code>cancelled</code> conclusion, so it says nothing about the question Q459 asks.
@@ -3007,7 +3007,7 @@ A lingering worker from an earlier spec is no longer ambiguous, so no waiting fo
 </ul>
 <p>Earlier attempts were blocked before even reaching it, by the PriorityClass VAP param-resolution failure that <a href="../q444-vap-param-resolution/">q444-vap-param-resolution.md</a> investigates and Q492 has since fixed, by moving the guard's <code>paramKind</code> off a core type.</p>
 <p>The e2e cluster's kube-apiserver entered that broken state between the run that produced the result above and the next one, and every run since fails in <code>BeforeAll</code> with the RunnerGroup create denied:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>ValidatingAdmissionPolicy &#39;gmc-priorityclass-allowlist-guard&#39; … denied request:
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>ValidatingAdmissionPolicy 'gmc-priorityclass-allowlist-guard' … denied request:
 <a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>failed to configure binding: no params found for policy binding with `Deny` parameterNotFoundAction
 </code></pre></div>
 <p>with <code>gmc-priorityclass-allowlist</code> present in <code>gmc-system</code> and the binding pointing exactly at it — the shape <a href="../q444-vap-param-resolution/">q444-vap-param-resolution.md</a> § Established by measurement records as findings 1 and 2.

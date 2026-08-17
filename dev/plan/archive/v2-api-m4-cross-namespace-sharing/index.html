@@ -2760,8 +2760,8 @@ It is the mechanism §H.9 already mandates, carrying the grant decision alongsid
 A <code>Namespace</code> field on it would make all four cross-namespace at once, a security regression on three references that have no consent handshake behind them.</p>
 <p>So the proxy references get their own type:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="kd">type</span><span class="w"> </span><span class="nx">ProxyObjectRef</span><span class="w"> </span><span class="kd">struct</span><span class="w"> </span><span class="p">{</span>
-<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="w">    </span><span class="nx">Name</span><span class="w">      </span><span class="kt">string</span><span class="w"> </span><span class="s">`json:&quot;name&quot;`</span>
-<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="w">    </span><span class="nx">Namespace</span><span class="w"> </span><span class="kt">string</span><span class="w"> </span><span class="s">`json:&quot;namespace,omitempty&quot;`</span><span class="w"> </span><span class="c1">// +optional; empty ⇒ same namespace</span>
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="w">    </span><span class="nx">Name</span><span class="w">      </span><span class="kt">string</span><span class="w"> </span><span class="s">`json:"name"`</span>
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="w">    </span><span class="nx">Namespace</span><span class="w"> </span><span class="kt">string</span><span class="w"> </span><span class="s">`json:"namespace,omitempty"`</span><span class="w"> </span><span class="c1">// +optional; empty ⇒ same namespace</span>
 <a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="p">}</span>
 </code></pre></div>
 <p>used by <code>RunnerSetSpec.ProxyRef</code> and <code>ActionsGatewaySpec.DefaultProxyRef</code>.</p>

@@ -2776,7 +2776,7 @@ Sourced <code>lib/</code> files are exempt and must not declare it: they run und
 The shopt still stops the builder at its first failure, which makes this the worst of the three states: a value truncated <em>and</em> a clean exit.
 Split the declaration from the assignment, which is the one form that reports:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nb">local</span><span class="w"> </span>repo
-<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="nv">repo</span><span class="o">=</span><span class="s2">&quot;</span><span class="k">$(</span>build<span class="k">)</span><span class="s2">&quot;</span>
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="nv">repo</span><span class="o">=</span><span class="s2">"</span><span class="k">$(</span>build<span class="k">)</span><span class="s2">"</span>
 </code></pre></div>
 <p>shellcheck's SC2155 already rejects the combined form, and <code>make shellcheck</code> runs in the same <code>make check</code>, so this half of the class is closed by a gate that predates the rule.
 The prologue gate deliberately leaves it alone rather than half-duplicating it.</p>
@@ -2834,7 +2834,7 @@ Keep the <code>exit</code> if the script needs a meaningful status, and disable 
 <div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="c1"># shellcheck disable=SC2329 # invoked by `trap cleanup EXIT`; shellcheck 0.11 misses</span>
 <a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="c1"># that whenever the script ends in an explicit `exit`.</span>
 <a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>cleanup<span class="o">()</span><span class="w"> </span><span class="o">{</span>
-<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="w">    </span>rm<span class="w"> </span>-rf<span class="w"> </span><span class="s2">&quot;</span><span class="si">${</span><span class="nv">work_dir</span><span class="si">}</span><span class="s2">&quot;</span>
+<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="w">    </span>rm<span class="w"> </span>-rf<span class="w"> </span><span class="s2">"</span><span class="si">${</span><span class="nv">work_dir</span><span class="si">}</span><span class="s2">"</span>
 <a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="o">}</span>
 <a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="nb">trap</span><span class="w"> </span>cleanup<span class="w"> </span>EXIT
 </code></pre></div>

@@ -3198,7 +3198,7 @@ Model after the existing <code>cmd/gmc/.dockerignore</code>.</p>
 <a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a>!**/go.mod
 <a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a>!**/go.sum
 <a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a>
-<a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a># Re-include build-time inputs that aren&#39;t .go (e.g. embedded assets).
+<a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a># Re-include build-time inputs that aren't .go (e.g. embedded assets).
 <a id="__codelineno-0-17" name="__codelineno-0-17" href="#__codelineno-0-17"></a># Add specific entries here if/when introduced; do not blanket-include
 <a id="__codelineno-0-18" name="__codelineno-0-18" href="#__codelineno-0-18"></a># directories.
 </code></pre></div>
@@ -3335,7 +3335,7 @@ Dependabot keeps these up to date automatically.</p>
 <h3 id="approach-shipped_2">Approach (shipped)<a class="headerlink" href="#approach-shipped_2" title="Permanent link">&para;</a></h3>
 <p>A <code>changes</code> job runs <code>dorny/paths-filter</code> before <code>e2e</code> and emits a boolean output <code>e2e</code> indicating whether any e2e-relevant file changed.
 The <code>e2e</code> job has <code>needs: [changes]</code> and an <code>if:</code> condition:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>if: needs.changes.outputs.e2e == &#39;true&#39; || github.event_name == &#39;push&#39;
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>if: needs.changes.outputs.e2e == 'true' || github.event_name == 'push'
 </code></pre></div>
 <p>Pushes to <code>main</code> always run.
 PRs that touch only CI configs for other suites, <code>.claude/</code>, etc. skip both bake and the full test run entirely.</p>

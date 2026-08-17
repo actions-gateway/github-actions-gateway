@@ -3062,7 +3062,7 @@ Mapping tenants → egress IPs is a direct fit because the policy selects pods b
 <a id="__codelineno-1-13" name="__codelineno-1-13" href="#__codelineno-1-13"></a><span class="w">  </span><span class="nt">egressGateway</span><span class="p">:</span>
 <a id="__codelineno-1-14" name="__codelineno-1-14" href="#__codelineno-1-14"></a><span class="w">    </span><span class="nt">nodeSelector</span><span class="p">:</span>
 <a id="__codelineno-1-15" name="__codelineno-1-15" href="#__codelineno-1-15"></a><span class="w">      </span><span class="nt">matchLabels</span><span class="p">:</span>
-<a id="__codelineno-1-16" name="__codelineno-1-16" href="#__codelineno-1-16"></a><span class="w">        </span><span class="nt">egress-gateway</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;true&quot;</span>
+<a id="__codelineno-1-16" name="__codelineno-1-16" href="#__codelineno-1-16"></a><span class="w">        </span><span class="nt">egress-gateway</span><span class="p">:</span><span class="w"> </span><span class="s">"true"</span>
 <a id="__codelineno-1-17" name="__codelineno-1-17" href="#__codelineno-1-17"></a><span class="w">    </span><span class="nt">egressIP</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">203.0.113.10</span><span class="w">        </span><span class="c1"># distinct, stable per-tenant source IP</span>
 </code></pre></div>
 <p>Selecting only <code>app: actions-gateway-proxy</code> (not all namespace pods) keeps the egress IP bound to the choke point; worker/AGC pods already reach GitHub only <em>through</em> the proxy, so their external identity follows the proxy's.</p>

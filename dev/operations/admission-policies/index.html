@@ -3179,7 +3179,7 @@ Two complementary kinds, for both engines:</p>
 <p>Start with <code>validationFailureAction: Audit</code> (Kyverno) or <code>enforcementAction: dryrun</code> (Gatekeeper) — both samples ship in that mode — and promote to enforce once you confirm no false positives against your real workloads.</p>
 <h3 id="apply-the-exceptions">Apply the exceptions<a class="headerlink" href="#apply-the-exceptions" title="Permanent link">&para;</a></h3>
 <p>If you already run a strict cluster baseline (e.g. the Kyverno <code>require-ro-rootfs</code> / <code>disallow-capabilities-strict</code> policies, or a Gatekeeper PodSecurityPolicy (PSP)-style constraint), apply the matching exception so GAG pods are not caught:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="c1"># Kyverno PolicyException — requires Kyverno&#39;s PolicyExceptions feature enabled.</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="c1"># Kyverno PolicyException — requires Kyverno's PolicyExceptions feature enabled.</span>
 <a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>kubectl<span class="w"> </span>apply<span class="w"> </span>-f<span class="w"> </span>docs/operations/examples/policies/kyverno/policyexception-gag.yaml
 <a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>
 <a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="c1"># Gatekeeper — exclude GAG namespaces from your strict Constraints.</span>

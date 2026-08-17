@@ -2984,7 +2984,7 @@ Kubernetes composes it from four parts, and two of them are easy to miss on exac
 </table>
 <p>Verified on Kubernetes v1.36.1 by applying one pod at a time into a quota'd namespace and reading the <code>.status.used</code> delta.
 Reproduce it on any cluster:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>kubectl<span class="w"> </span>get<span class="w"> </span>resourcequota<span class="w"> </span>&lt;QUOTA_NAME&gt;<span class="w"> </span>-n<span class="w"> </span>&lt;NAMESPACE&gt;<span class="w"> </span>-o<span class="w"> </span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">&#39;{.status.used}&#39;</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>kubectl<span class="w"> </span>get<span class="w"> </span>resourcequota<span class="w"> </span>&lt;QUOTA_NAME&gt;<span class="w"> </span>-n<span class="w"> </span>&lt;NAMESPACE&gt;<span class="w"> </span>-o<span class="w"> </span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">'{.status.used}'</span>
 </code></pre></div>
 <p>The practical consequence: <strong>a DinD or Kata worker costs materially more quota than its runner container's <code>requests</code> suggest.</strong> For the reference shapes in <code>deploy/dogfood-e2e/overlays/</code>, the sidecar is 25% of the privileged-DinD pod's CPU request and 75% of its memory request.</p>
 <h2 id="step-1--the-footprint-of-one-worker-pod">Step 1 — the footprint of one worker pod<a class="headerlink" href="#step-1--the-footprint-of-one-worker-pod" title="Permanent link">&para;</a></h2>
@@ -3126,7 +3126,7 @@ Diagnose a suspected one on the PVC, not the pod:</p>
 <h2 id="only-constrain-keys-every-pod-declares">Only constrain keys every pod declares<a class="headerlink" href="#only-constrain-keys-every-pod-declares" title="Permanent link">&para;</a></h2>
 <p>A <code>ResourceQuota</code> that constrains a compute key makes that declaration <strong>mandatory</strong> for every pod in the namespace.
 Kubernetes rejects the pod outright:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>pods &quot;runner-abc123&quot; is forbidden: failed quota: tenant-quota: must specify limits.cpu for: runner
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>pods "runner-abc123" is forbidden: failed quota: tenant-quota: must specify limits.cpu for: runner
 </code></pre></div>
 <p>This is the single most common self-inflicted failure, because the measured DinD worker shapes deliberately set <strong>no CPU limit</strong> — CPU is compressible, and throttling a DinD daemon slows every container inside it.
 Constraining <code>limits.cpu</code> on such a namespace rejects 100% of worker pods.</p>
@@ -3196,7 +3196,7 @@ Constraining <code>limits.cpu</code> on such a namespace rejects 100% of worker 
 <li><strong>Bound the derived values</strong> with <code>sizing.minRequests</code> / <code>sizing.maxRequests</code> if you want a quota number that cannot be invalidated by a shift in measured usage.</li>
 </ul>
 <p>Check what a set is actually doing:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>kubectl<span class="w"> </span>get<span class="w"> </span>runnerset<span class="w"> </span>&lt;NAME&gt;<span class="w"> </span>-n<span class="w"> </span>&lt;NAMESPACE&gt;<span class="w"> </span>-o<span class="w"> </span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">&#39;{.status.sizingProfileState}&#39;</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>kubectl<span class="w"> </span>get<span class="w"> </span>runnerset<span class="w"> </span>&lt;NAME&gt;<span class="w"> </span>-n<span class="w"> </span>&lt;NAMESPACE&gt;<span class="w"> </span>-o<span class="w"> </span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">'{.status.sizingProfileState}'</span>
 </code></pre></div>
 <p><code>Active</code> means derived values are in effect; <code>AwaitingSamples</code> means the template's static values are.</p>
 <h2 id="worked-example--a-dind-tenant-at-12-concurrent-jobs">Worked example — a DinD tenant at 12 concurrent jobs<a class="headerlink" href="#worked-example--a-dind-tenant-at-12-concurrent-jobs" title="Permanent link">&para;</a></h2>
@@ -3358,22 +3358,22 @@ Swapping in <code>deploy/dogfood-e2e/overlays/kata/</code>'s worker adds one 100
 <a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a><span class="w">  </span><span class="nt">namespace</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">dind-team</span>
 <a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a><span class="nt">spec</span><span class="p">:</span>
 <a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a><span class="w">  </span><span class="nt">hard</span><span class="p">:</span>
-<a id="__codelineno-6-8" name="__codelineno-6-8" href="#__codelineno-6-8"></a><span class="w">    </span><span class="nt">pods</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;25&quot;</span>
-<a id="__codelineno-6-9" name="__codelineno-6-9" href="#__codelineno-6-9"></a><span class="w">    </span><span class="nt">requests.cpu</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;50&quot;</span>
-<a id="__codelineno-6-10" name="__codelineno-6-10" href="#__codelineno-6-10"></a><span class="w">    </span><span class="nt">requests.memory</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;52Gi&quot;</span>
+<a id="__codelineno-6-8" name="__codelineno-6-8" href="#__codelineno-6-8"></a><span class="w">    </span><span class="nt">pods</span><span class="p">:</span><span class="w"> </span><span class="s">"25"</span>
+<a id="__codelineno-6-9" name="__codelineno-6-9" href="#__codelineno-6-9"></a><span class="w">    </span><span class="nt">requests.cpu</span><span class="p">:</span><span class="w"> </span><span class="s">"50"</span>
+<a id="__codelineno-6-10" name="__codelineno-6-10" href="#__codelineno-6-10"></a><span class="w">    </span><span class="nt">requests.memory</span><span class="p">:</span><span class="w"> </span><span class="s">"52Gi"</span>
 <a id="__codelineno-6-11" name="__codelineno-6-11" href="#__codelineno-6-11"></a><span class="w">    </span><span class="c1"># limits.cpu is intentionally NOT constrained: the DinD runner and sidecar</span>
 <a id="__codelineno-6-12" name="__codelineno-6-12" href="#__codelineno-6-12"></a><span class="w">    </span><span class="c1"># declare no CPU limit, and constraining it would reject every worker pod</span>
-<a id="__codelineno-6-13" name="__codelineno-6-13" href="#__codelineno-6-13"></a><span class="w">    </span><span class="c1"># with &quot;must specify limits.cpu for: runner&quot;.</span>
-<a id="__codelineno-6-14" name="__codelineno-6-14" href="#__codelineno-6-14"></a><span class="w">    </span><span class="nt">limits.memory</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;90Gi&quot;</span>
+<a id="__codelineno-6-13" name="__codelineno-6-13" href="#__codelineno-6-13"></a><span class="w">    </span><span class="c1"># with "must specify limits.cpu for: runner".</span>
+<a id="__codelineno-6-14" name="__codelineno-6-14" href="#__codelineno-6-14"></a><span class="w">    </span><span class="nt">limits.memory</span><span class="p">:</span><span class="w"> </span><span class="s">"90Gi"</span>
 </code></pre></div>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>kubectl<span class="w"> </span>apply<span class="w"> </span>-f<span class="w"> </span>dind-team-quota.yaml
 </code></pre></div>
 <p>Apply it with an administrator identity — the quota is platform-owned, and the tenant's gateway has no write access to it.</p>
 <p><strong>Verify</strong> the tenant fits before jobs arrive.
 Both controllers publish advisory conditions when the remaining headroom cannot cover the configured ceilings:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>kubectl<span class="w"> </span>get<span class="w"> </span>actionsgateway<span class="w"> </span>&lt;NAME&gt;<span class="w"> </span>-n<span class="w"> </span>&lt;NAMESPACE&gt;<span class="w"> </span>-o<span class="w"> </span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">&#39;{range .status.conditions[?(@.type==&quot;ProxyQuotaPressure&quot;)]}{.status}{&quot; &quot;}{.message}{&quot;\n&quot;}{end}&#39;</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>kubectl<span class="w"> </span>get<span class="w"> </span>actionsgateway<span class="w"> </span>&lt;NAME&gt;<span class="w"> </span>-n<span class="w"> </span>&lt;NAMESPACE&gt;<span class="w"> </span>-o<span class="w"> </span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">'{range .status.conditions[?(@.type=="ProxyQuotaPressure")]}{.status}{" "}{.message}{"\n"}{end}'</span>
 </code></pre></div>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>kubectl<span class="w"> </span>get<span class="w"> </span>runnerset<span class="w"> </span>&lt;NAME&gt;<span class="w"> </span>-n<span class="w"> </span>&lt;NAMESPACE&gt;<span class="w"> </span>-o<span class="w"> </span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">&#39;{range .status.conditions[?(@.type==&quot;WorkerQuotaPressure&quot;)]}{.status}{&quot; &quot;}{.message}{&quot;\n&quot;}{end}&#39;</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>kubectl<span class="w"> </span>get<span class="w"> </span>runnerset<span class="w"> </span>&lt;NAME&gt;<span class="w"> </span>-n<span class="w"> </span>&lt;NAMESPACE&gt;<span class="w"> </span>-o<span class="w"> </span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">'{range .status.conditions[?(@.type=="WorkerQuotaPressure")]}{.status}{" "}{.message}{"\n"}{end}'</span>
 </code></pre></div>
 <p><code>False</code> on both means the quota admits scaling to <code>maxReplicas</code> and <code>maxWorkers</code>.</p>
 <h2 id="what-the-gateways-own-quota-conditions-count">What the gateway's own quota conditions count<a class="headerlink" href="#what-the-gateways-own-quota-conditions-count" title="Permanent link">&para;</a></h2>

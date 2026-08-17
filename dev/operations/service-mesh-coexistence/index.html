@@ -3292,9 +3292,9 @@ Both were found during live validation (Q220); miss either and the tenant never 
 <p>The GMC stamps <code>pod-security.kubernetes.io/enforce=baseline</code> on every tenant namespace.
 A mesh's <strong>classic</strong> sidecar injection adds an init container (<code>istio-init</code>, <code>linkerd-init</code>) that requests the <code>NET_ADMIN</code> + <code>NET_RAW</code> capabilities to program the iptables redirect.
 <code>baseline</code> forbids those capabilities, so the apiserver <strong>rejects the AGC, proxy, and worker pods at creation</strong> — the Deployments sit at zero replicas with <code>FailedCreate</code> events and no pod (hence no sidecar, and none of Problem 1's stranding) ever exists:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>Error creating: pods &quot;actions-gateway-controller-…&quot; is forbidden: violates PodSecurity
-<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>&quot;baseline:latest&quot;: non-default capabilities (container &quot;istio-init&quot; must not include
-<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>&quot;NET_ADMIN&quot;, &quot;NET_RAW&quot; in securityContext.capabilities.add)
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>Error creating: pods "actions-gateway-controller-…" is forbidden: violates PodSecurity
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>"baseline:latest": non-default capabilities (container "istio-init" must not include
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>"NET_ADMIN", "NET_RAW" in securityContext.capabilities.add)
 </code></pre></div>
 <p>The fix is the mesh's <strong>CNI plugin</strong>, which programs the redirect at the node level so no privileged init container is injected (a capability-free <code>istio-validation</code> / <code>linkerd-network-validator</code> init runs instead, which <code>baseline</code> allows):</p>
 <table>
@@ -3463,8 +3463,8 @@ The full working sequence:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="c1"># Reference only — GAG drops these from the worker podTemplate.</span>
 <a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="nt">metadata</span><span class="p">:</span>
 <a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="w">  </span><span class="nt">annotations</span><span class="p">:</span>
-<a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="w">    </span><span class="nt">traffic.sidecar.istio.io/excludeOutboundPorts</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;8080&quot;</span><span class="w">        </span><span class="c1"># GAG proxy CONNECT port</span>
-<a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a><span class="w">    </span><span class="nt">traffic.sidecar.istio.io/excludeOutboundIPRanges</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;10.96.0.0/12&quot;</span><span class="w">  </span><span class="c1"># your cluster service CIDR</span>
+<a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="w">    </span><span class="nt">traffic.sidecar.istio.io/excludeOutboundPorts</span><span class="p">:</span><span class="w"> </span><span class="s">"8080"</span><span class="w">        </span><span class="c1"># GAG proxy CONNECT port</span>
+<a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a><span class="w">    </span><span class="nt">traffic.sidecar.istio.io/excludeOutboundIPRanges</span><span class="p">:</span><span class="w"> </span><span class="s">"10.96.0.0/12"</span><span class="w">  </span><span class="c1"># your cluster service CIDR</span>
 </code></pre></div>
 <p>Because the annotation cannot reach the worker pod, set the equivalent default on the injection template for this revision via the <code>istio-sidecar-injector</code> <code>ConfigMap</code> (<code>values.global.proxy.excludeOutboundPorts</code> / <code>excludeIPRanges</code>), scoped to the revision that meshes the GAG namespace.
    Confirm your cluster service CIDR first:</p>
@@ -3506,7 +3506,7 @@ Because every GitHub-bound request tunnels through that proxy leg, this is what 
 (Plain in-cluster HTTP to a <em>same-cluster</em> endpoint is unaffected — Linkerd proxies it fine.)
 The same knobs Istio needs (native sidecars; PSA + NP prerequisites) all apply, plus you must stop Linkerd from capturing the proxy egress port:</p>
 </blockquote>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="c1"># Namespace-level default applied to injected pods. Skip Linkerd&#39;s outbound capture of the</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="c1"># Namespace-level default applied to injected pods. Skip Linkerd's outbound capture of the</span>
 <a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="c1"># per-tenant proxy CONNECT port (8080) — every GitHub-bound request tunnels through it.</span>
 <a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a>kubectl<span class="w"> </span>annotate<span class="w"> </span>namespace<span class="w"> </span>&lt;tenant-ns&gt;<span class="w"> </span>config.linkerd.io/skip-outbound-ports<span class="o">=</span><span class="m">8080</span>
 </code></pre></div>
@@ -3547,10 +3547,10 @@ If you use Cilium for egress control, prefer expressing the GitHub allowlist as 
 What "correct" looks like depends on whether you opted out or stayed in-mesh:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="c1"># Regular containers:</span>
 <a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a>kubectl<span class="w"> </span>get<span class="w"> </span>pod<span class="w"> </span>-n<span class="w"> </span>&lt;tenant-ns&gt;<span class="w"> </span>&lt;worker-pod&gt;<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a><span class="w">  </span>-o<span class="w"> </span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">&#39;{.spec.containers[*].name}{&quot;\n&quot;}&#39;</span>
+<a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a><span class="w">  </span>-o<span class="w"> </span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">'{.spec.containers[*].name}{"\n"}'</span>
 <a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a><span class="c1"># Native-sidecar init containers (restartPolicy: Always):</span>
 <a id="__codelineno-10-5" name="__codelineno-10-5" href="#__codelineno-10-5"></a>kubectl<span class="w"> </span>get<span class="w"> </span>pod<span class="w"> </span>-n<span class="w"> </span>&lt;tenant-ns&gt;<span class="w"> </span>&lt;worker-pod&gt;<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-10-6" name="__codelineno-10-6" href="#__codelineno-10-6"></a><span class="w">  </span>-o<span class="w"> </span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">&#39;{range .spec.initContainers[*]}{.name}({.restartPolicy}) {end}{&quot;\n&quot;}&#39;</span>
+<a id="__codelineno-10-6" name="__codelineno-10-6" href="#__codelineno-10-6"></a><span class="w">  </span>-o<span class="w"> </span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">'{range .spec.initContainers[*]}{.name}({.restartPolicy}) {end}{"\n"}'</span>
 </code></pre></div>
 <ul>
 <li><strong>Opted out</strong> (<a href="#the-one-label-answer">Fix A</a>): just the runner container, no proxy anywhere.

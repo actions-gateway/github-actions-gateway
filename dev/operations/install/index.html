@@ -3200,7 +3200,7 @@ Two consequences for an operator:</p>
 <p>Optionally verify the asset's keyless signature first (no key material — the same Fulcio/Rekor identity that signs the images and charts).
   Download the manifest and its <code>.cosign.bundle</code> from the same release, then:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>cosign<span class="w"> </span>verify-blob<span class="w"> </span>--bundle<span class="w"> </span>actions-gateway-crds-v2.yaml.cosign.bundle<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="w">  </span>--certificate-identity-regexp<span class="w"> </span><span class="s1">&#39;^https://github.com/actions-gateway/github-actions-gateway/\.github/workflows/publish\.yml@refs/tags/v.*$&#39;</span><span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="w">  </span>--certificate-identity-regexp<span class="w"> </span><span class="s1">'^https://github.com/actions-gateway/github-actions-gateway/\.github/workflows/publish\.yml@refs/tags/v.*$'</span><span class="w"> </span><span class="se">\</span>
 <a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="w">  </span>--certificate-oidc-issuer<span class="w"> </span>https://token.actions.githubusercontent.com<span class="w"> </span><span class="se">\</span>
 <a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a><span class="w">  </span>actions-gateway-crds-v2.yaml
 </code></pre></div>
@@ -3340,15 +3340,15 @@ Migrating an existing release off the ConfigMap: <a href="../upgrade/#prioritycl
 <a id="__codelineno-10-17" name="__codelineno-10-17" href="#__codelineno-10-17"></a><span class="w">  </span>crd/runnergroups.actions-gateway.github.com
 <a id="__codelineno-10-18" name="__codelineno-10-18" href="#__codelineno-10-18"></a>
 <a id="__codelineno-10-19" name="__codelineno-10-19" href="#__codelineno-10-19"></a><span class="c1"># 4. The validating webhook and the admission policies are present.</span>
-<a id="__codelineno-10-20" name="__codelineno-10-20" href="#__codelineno-10-20"></a><span class="c1"># (Resource names carry the chart namePrefix, default &quot;gmc-&quot;.)</span>
+<a id="__codelineno-10-20" name="__codelineno-10-20" href="#__codelineno-10-20"></a><span class="c1"># (Resource names carry the chart namePrefix, default "gmc-".)</span>
 <a id="__codelineno-10-21" name="__codelineno-10-21" href="#__codelineno-10-21"></a>kubectl<span class="w"> </span>get<span class="w"> </span>validatingwebhookconfiguration<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>actions-gateway
 <a id="__codelineno-10-22" name="__codelineno-10-22" href="#__codelineno-10-22"></a>kubectl<span class="w"> </span>get<span class="w"> </span>validatingadmissionpolicy<span class="w"> </span>gmc-namespace-psa-guard<span class="w"> </span>gmc-tenant-resource-guard<span class="w"> </span><span class="se">\</span>
 <a id="__codelineno-10-23" name="__codelineno-10-23" href="#__codelineno-10-23"></a><span class="w">  </span>gmc-priorityclass-allowlist-guard
 <a id="__codelineno-10-24" name="__codelineno-10-24" href="#__codelineno-10-24"></a>
 <a id="__codelineno-10-25" name="__codelineno-10-25" href="#__codelineno-10-25"></a><span class="c1"># 5. No errors in the GMC manager logs.</span>
 <a id="__codelineno-10-26" name="__codelineno-10-26" href="#__codelineno-10-26"></a>kubectl<span class="w"> </span>logs<span class="w"> </span>-n<span class="w"> </span>gmc-system<span class="w"> </span>deploy/gmc-controller-manager<span class="w"> </span>--tail<span class="o">=</span><span class="m">30</span>
-<a id="__codelineno-10-27" name="__codelineno-10-27" href="#__codelineno-10-27"></a><span class="c1"># Look for: &quot;Starting workers&quot; / &quot;successfully acquired lease&quot;; no repeated</span>
-<a id="__codelineno-10-28" name="__codelineno-10-28" href="#__codelineno-10-28"></a><span class="c1"># &quot;AGC_IMAGE/PROXY_IMAGE/WRAPPER_IMAGE must be pinned by digest&quot;.</span>
+<a id="__codelineno-10-27" name="__codelineno-10-27" href="#__codelineno-10-27"></a><span class="c1"># Look for: "Starting workers" / "successfully acquired lease"; no repeated</span>
+<a id="__codelineno-10-28" name="__codelineno-10-28" href="#__codelineno-10-28"></a><span class="c1"># "AGC_IMAGE/PROXY_IMAGE/WRAPPER_IMAGE must be pinned by digest".</span>
 </code></pre></div>
 <p>A forgotten <code>agc</code>/<code>proxy</code>/<code>wrapper</code> digest now fails the <strong>render</strong> with a clear per-image message (see <a href="#pin-images-by-digest">Pin images by digest</a>), so a digest slip is caught before install rather than as a GMC <code>CrashLoopBackOff</code>.
 The GMC's startup pin check (message above) remains a second layer for non-chart deployments.

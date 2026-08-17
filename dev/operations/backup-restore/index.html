@@ -3181,7 +3181,7 @@ The finalizer exists precisely to avoid orphaning the cluster-scoped <code>Clust
 <li>Only <strong>force-remove the finalizer as a last resort</strong> when the GMC is permanently gone, and understand the trade-off: it leaves the cluster-scoped <code>ClusterRoleBinding</code> (<code>agc-clusterrunnertemplate-reader.&lt;namespace&gt;.&lt;name&gt;</code>) orphaned, which you must then delete by hand.
    <div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="c1"># Last resort only — orphans the cluster-scoped ClusterRoleBinding.</span>
 <a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>kubectl<span class="w"> </span>patch<span class="w"> </span>actionsgateway<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>&lt;name&gt;<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="w">  </span>--type<span class="o">=</span>json<span class="w"> </span>-p<span class="w"> </span><span class="s1">&#39;[{&quot;op&quot;:&quot;remove&quot;,&quot;path&quot;:&quot;/metadata/finalizers&quot;}]&#39;</span>
+<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="w">  </span>--type<span class="o">=</span>json<span class="w"> </span>-p<span class="w"> </span><span class="s1">'[{"op":"remove","path":"/metadata/finalizers"}]'</span>
 <a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a>kubectl<span class="w"> </span>delete<span class="w"> </span>clusterrolebinding<span class="w"> </span>agc-clusterrunnertemplate-reader.&lt;namespace&gt;.&lt;name&gt;
 </code></pre></div></li>
 </ol>
@@ -3197,7 +3197,7 @@ The finalizer exists precisely to avoid orphaning the cluster-scoped <code>Clust
 </code></pre></div></li>
 <li>The CR reports healthy:
    <div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>kubectl<span class="w"> </span>get<span class="w"> </span>actionsgateway<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>&lt;name&gt;<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="w">  </span>-o<span class="w"> </span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">&#39;{.status.conditions[?(@.type==&quot;Ready&quot;)].status}{&quot;\n&quot;}&#39;</span>
+<a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="w">  </span>-o<span class="w"> </span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">'{.status.conditions[?(@.type=="Ready")].status}{"\n"}'</span>
 </code></pre></div>
    Expect <code>True</code>.
    If <code>CredentialUnavailable</code> or <code>ProxyNotFound</code>, the credential Secret or <code>EgressProxy</code> is still missing — recheck the relevant scenario step.</li>

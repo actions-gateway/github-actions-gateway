@@ -3271,7 +3271,7 @@ It must never block readers during a refresh.</p>
 <a id="__codelineno-4-12" name="__codelineno-4-12" href="#__codelineno-4-12"></a><span class="kd">func</span><span class="w"> </span><span class="p">(</span><span class="nx">m</span><span class="w"> </span><span class="o">*</span><span class="nx">Manager</span><span class="p">)</span><span class="w"> </span><span class="nx">Token</span><span class="p">(</span><span class="nx">ctx</span><span class="w"> </span><span class="nx">context</span><span class="p">.</span><span class="nx">Context</span><span class="p">)</span><span class="w"> </span><span class="p">(</span><span class="kt">string</span><span class="p">,</span><span class="w"> </span><span class="kt">error</span><span class="p">)</span>
 <a id="__codelineno-4-13" name="__codelineno-4-13" href="#__codelineno-4-13"></a>
 <a id="__codelineno-4-14" name="__codelineno-4-14" href="#__codelineno-4-14"></a><span class="c1">// Start begins the background refresh loop. Refresh fires at T-5 minutes before</span>
-<a id="__codelineno-4-15" name="__codelineno-4-15" href="#__codelineno-4-15"></a><span class="c1">// the current token&#39;s ExpiresAt. The loop exits when ctx is cancelled.</span>
+<a id="__codelineno-4-15" name="__codelineno-4-15" href="#__codelineno-4-15"></a><span class="c1">// the current token's ExpiresAt. The loop exits when ctx is cancelled.</span>
 <a id="__codelineno-4-16" name="__codelineno-4-16" href="#__codelineno-4-16"></a><span class="c1">// Must be called once before Token() is used by session goroutines.</span>
 <a id="__codelineno-4-17" name="__codelineno-4-17" href="#__codelineno-4-17"></a><span class="kd">func</span><span class="w"> </span><span class="p">(</span><span class="nx">m</span><span class="w"> </span><span class="o">*</span><span class="nx">Manager</span><span class="p">)</span><span class="w"> </span><span class="nx">Start</span><span class="p">(</span><span class="nx">ctx</span><span class="w"> </span><span class="nx">context</span><span class="p">.</span><span class="nx">Context</span><span class="p">)</span>
 </code></pre></div>
@@ -3340,18 +3340,18 @@ This is Investigation Task A for Milestone 2 (§4.A below).</p>
 <a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a><span class="w">  </span><span class="nt">labels</span><span class="p">:</span>
 <a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a><span class="w">    </span><span class="nt">app.kubernetes.io/managed-by</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">actions-gateway-agc</span>
 <a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a><span class="w">    </span><span class="nt">actions-gateway/runner-group</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-runnergroup</span>
-<a id="__codelineno-5-9" name="__codelineno-5-9" href="#__codelineno-5-9"></a><span class="w">    </span><span class="nt">actions-gateway/agent-index</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;0&quot;</span>
+<a id="__codelineno-5-9" name="__codelineno-5-9" href="#__codelineno-5-9"></a><span class="w">    </span><span class="nt">actions-gateway/agent-index</span><span class="p">:</span><span class="w"> </span><span class="s">"0"</span>
 <a id="__codelineno-5-10" name="__codelineno-5-10" href="#__codelineno-5-10"></a><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Opaque</span>
 <a id="__codelineno-5-11" name="__codelineno-5-11" href="#__codelineno-5-11"></a><span class="nt">stringData</span><span class="p">:</span>
-<a id="__codelineno-5-12" name="__codelineno-5-12" href="#__codelineno-5-12"></a><span class="w">  </span><span class="nt">agentId</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;12345&quot;</span><span class="w">          </span><span class="c1"># numeric agent ID from GitHub</span>
-<a id="__codelineno-5-13" name="__codelineno-5-13" href="#__codelineno-5-13"></a><span class="w">  </span><span class="nt">clientId</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;...&quot;</span><span class="w">           </span><span class="c1"># OAuth2 client ID for runner OAuth flow</span>
-<a id="__codelineno-5-14" name="__codelineno-5-14" href="#__codelineno-5-14"></a><span class="w">  </span><span class="nt">authorizationUrl</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;...&quot;</span><span class="w">   </span><span class="c1"># OAuth2 token endpoint</span>
+<a id="__codelineno-5-12" name="__codelineno-5-12" href="#__codelineno-5-12"></a><span class="w">  </span><span class="nt">agentId</span><span class="p">:</span><span class="w"> </span><span class="s">"12345"</span><span class="w">          </span><span class="c1"># numeric agent ID from GitHub</span>
+<a id="__codelineno-5-13" name="__codelineno-5-13" href="#__codelineno-5-13"></a><span class="w">  </span><span class="nt">clientId</span><span class="p">:</span><span class="w"> </span><span class="s">"..."</span><span class="w">           </span><span class="c1"># OAuth2 client ID for runner OAuth flow</span>
+<a id="__codelineno-5-14" name="__codelineno-5-14" href="#__codelineno-5-14"></a><span class="w">  </span><span class="nt">authorizationUrl</span><span class="p">:</span><span class="w"> </span><span class="s">"..."</span><span class="w">   </span><span class="c1"># OAuth2 token endpoint</span>
 <a id="__codelineno-5-15" name="__codelineno-5-15" href="#__codelineno-5-15"></a><span class="w">  </span><span class="nt">privateKeyPEM</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">|</span><span class="w">          </span><span class="c1"># RSA private key generated locally during registration</span>
 <a id="__codelineno-5-16" name="__codelineno-5-16" href="#__codelineno-5-16"></a><span class="w">    </span><span class="no">-----BEGIN RSA PRIVATE KEY-----</span>
 <a id="__codelineno-5-17" name="__codelineno-5-17" href="#__codelineno-5-17"></a><span class="w">    </span><span class="no">...</span>
 <a id="__codelineno-5-18" name="__codelineno-5-18" href="#__codelineno-5-18"></a><span class="w">    </span><span class="no">-----END RSA PRIVATE KEY-----</span>
-<a id="__codelineno-5-19" name="__codelineno-5-19" href="#__codelineno-5-19"></a><span class="w">  </span><span class="nt">runnerVersion</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;2.327.1&quot;</span><span class="w">  </span><span class="c1"># version string used at session creation</span>
-<a id="__codelineno-5-20" name="__codelineno-5-20" href="#__codelineno-5-20"></a><span class="w">  </span><span class="nt">brokerURL</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;...&quot;</span><span class="w">          </span><span class="c1"># broker_url from CreateSession (static per agent)</span>
+<a id="__codelineno-5-19" name="__codelineno-5-19" href="#__codelineno-5-19"></a><span class="w">  </span><span class="nt">runnerVersion</span><span class="p">:</span><span class="w"> </span><span class="s">"2.327.1"</span><span class="w">  </span><span class="c1"># version string used at session creation</span>
+<a id="__codelineno-5-20" name="__codelineno-5-20" href="#__codelineno-5-20"></a><span class="w">  </span><span class="nt">brokerURL</span><span class="p">:</span><span class="w"> </span><span class="s">"..."</span><span class="w">          </span><span class="c1"># broker_url from CreateSession (static per agent)</span>
 </code></pre></div>
 <h4 id="323-pool-exported-surface">3.2.3 Pool exported surface<a class="headerlink" href="#323-pool-exported-surface" title="Permanent link">&para;</a></h4>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="c1">// Agent holds the credentials for one pre-registered runner agent.</span>
@@ -3492,7 +3492,7 @@ It owns the set of running listener goroutines and enforces the <code>maxListene
 <div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="c1">// Multiplexer manages the adaptive pool of listener goroutines for one RunnerGroup.</span>
 <a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="kd">type</span><span class="w"> </span><span class="nx">Multiplexer</span><span class="w"> </span><span class="kd">struct</span><span class="w"> </span><span class="p">{</span>
 <a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="w">    </span><span class="nx">mu</span><span class="w">          </span><span class="nx">sync</span><span class="p">.</span><span class="nx">Mutex</span>
-<a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a><span class="w">    </span><span class="nx">active</span><span class="w">      </span><span class="kd">map</span><span class="p">[</span><span class="kt">int</span><span class="p">]</span><span class="o">*</span><span class="nx">listenerState</span><span class="w">  </span><span class="c1">// goroutine index → state</span>
+<a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a><span class="w">    </span><span class="nx">active</span><span class="w">      </span><span class="kt">map</span><span class="p">[</span><span class="kt">int</span><span class="p">]</span><span class="o">*</span><span class="nx">listenerState</span><span class="w">  </span><span class="c1">// goroutine index → state</span>
 <a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a><span class="w">    </span><span class="nx">maxListeners</span><span class="w"> </span><span class="kt">int32</span>
 <a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a><span class="w">    </span><span class="c1">// ... deps injected at construction</span>
 <a id="__codelineno-8-7" name="__codelineno-8-7" href="#__codelineno-8-7"></a><span class="p">}</span>
@@ -4021,7 +4021,7 @@ Verify:</p>
 <p>Obtain a short-lived registration token:
    <div class="highlight"><pre><span></span><code><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a>POST https://api.github.com/orgs/{org}/actions/runners/registration-token
 <a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a>Authorization: Bearer {installationAccessToken}
-<a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a>→ {&quot;token&quot;: &quot;...&quot;, &quot;expires_at&quot;: &quot;...&quot;}
+<a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a>→ {"token": "...", "expires_at": "..."}
 </code></pre></div></p>
 </li>
 <li>
@@ -4030,21 +4030,21 @@ Verify:</p>
 <a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a>Authorization: RemoteAuth {registrationToken}
 <a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a>Content-Type: application/json
 <a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a>{
-<a id="__codelineno-11-5" name="__codelineno-11-5" href="#__codelineno-11-5"></a>  &quot;url&quot;: &quot;{orgURL}&quot;,
-<a id="__codelineno-11-6" name="__codelineno-11-6" href="#__codelineno-11-6"></a>  &quot;group_id&quot;: {groupID},
-<a id="__codelineno-11-7" name="__codelineno-11-7" href="#__codelineno-11-7"></a>  &quot;name&quot;: &quot;{name}&quot;,
-<a id="__codelineno-11-8" name="__codelineno-11-8" href="#__codelineno-11-8"></a>  &quot;version&quot;: &quot;{version}&quot;,
-<a id="__codelineno-11-9" name="__codelineno-11-9" href="#__codelineno-11-9"></a>  &quot;updates_disabled&quot;: false,
-<a id="__codelineno-11-10" name="__codelineno-11-10" href="#__codelineno-11-10"></a>  &quot;ephemeral&quot;: false,
-<a id="__codelineno-11-11" name="__codelineno-11-11" href="#__codelineno-11-11"></a>  &quot;labels&quot;: [],
-<a id="__codelineno-11-12" name="__codelineno-11-12" href="#__codelineno-11-12"></a>  &quot;public_key&quot;: &quot;{base64(DER(SubjectPublicKeyInfo))}&quot;
+<a id="__codelineno-11-5" name="__codelineno-11-5" href="#__codelineno-11-5"></a>  "url": "{orgURL}",
+<a id="__codelineno-11-6" name="__codelineno-11-6" href="#__codelineno-11-6"></a>  "group_id": {groupID},
+<a id="__codelineno-11-7" name="__codelineno-11-7" href="#__codelineno-11-7"></a>  "name": "{name}",
+<a id="__codelineno-11-8" name="__codelineno-11-8" href="#__codelineno-11-8"></a>  "version": "{version}",
+<a id="__codelineno-11-9" name="__codelineno-11-9" href="#__codelineno-11-9"></a>  "updates_disabled": false,
+<a id="__codelineno-11-10" name="__codelineno-11-10" href="#__codelineno-11-10"></a>  "ephemeral": false,
+<a id="__codelineno-11-11" name="__codelineno-11-11" href="#__codelineno-11-11"></a>  "labels": [],
+<a id="__codelineno-11-12" name="__codelineno-11-12" href="#__codelineno-11-12"></a>  "public_key": "{base64(DER(SubjectPublicKeyInfo))}"
 <a id="__codelineno-11-13" name="__codelineno-11-13" href="#__codelineno-11-13"></a>}
 <a id="__codelineno-11-14" name="__codelineno-11-14" href="#__codelineno-11-14"></a>→ {
-<a id="__codelineno-11-15" name="__codelineno-11-15" href="#__codelineno-11-15"></a>  &quot;id&quot;: 12345,
-<a id="__codelineno-11-16" name="__codelineno-11-16" href="#__codelineno-11-16"></a>  &quot;authorization&quot;: {
-<a id="__codelineno-11-17" name="__codelineno-11-17" href="#__codelineno-11-17"></a>    &quot;authorization_url&quot;: &quot;...&quot;,
-<a id="__codelineno-11-18" name="__codelineno-11-18" href="#__codelineno-11-18"></a>    &quot;server_url&quot;: &quot;...&quot;,
-<a id="__codelineno-11-19" name="__codelineno-11-19" href="#__codelineno-11-19"></a>    &quot;client_id&quot;: &quot;...&quot;
+<a id="__codelineno-11-15" name="__codelineno-11-15" href="#__codelineno-11-15"></a>  "id": 12345,
+<a id="__codelineno-11-16" name="__codelineno-11-16" href="#__codelineno-11-16"></a>  "authorization": {
+<a id="__codelineno-11-17" name="__codelineno-11-17" href="#__codelineno-11-17"></a>    "authorization_url": "...",
+<a id="__codelineno-11-18" name="__codelineno-11-18" href="#__codelineno-11-18"></a>    "server_url": "...",
+<a id="__codelineno-11-19" name="__codelineno-11-19" href="#__codelineno-11-19"></a>    "client_id": "..."
 <a id="__codelineno-11-20" name="__codelineno-11-20" href="#__codelineno-11-20"></a>  }
 <a id="__codelineno-11-21" name="__codelineno-11-21" href="#__codelineno-11-21"></a>}
 </code></pre></div>

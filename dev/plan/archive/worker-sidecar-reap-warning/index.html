@@ -2725,7 +2725,7 @@ Reused by the webhook and the reconciler so the verdict is identical everywhere.
 <p><strong>Opt-out = the training lever.</strong> A per-template annotation naming the sidecars the operator asserts exit cleanly:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nt">metadata</span><span class="p">:</span>
 <a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="w">  </span><span class="nt">annotations</span><span class="p">:</span>
-<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="w">    </span><span class="nt">actions-gateway.com/self-exiting-sidecars</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;metrics-agent,log-shipper&quot;</span>
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="w">    </span><span class="nt">actions-gateway.com/self-exiting-sidecars</span><span class="p">:</span><span class="w"> </span><span class="s">"metrics-agent,log-shipper"</span>
 </code></pre></div>
 <ul>
 <li><strong>Name-list, not a boolean</strong> — a <em>newly added</em> unacknowledged sidecar still warns; a blanket <code>true</code> would let the next footgun through silently.</li>

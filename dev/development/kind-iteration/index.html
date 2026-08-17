@@ -2877,7 +2877,7 @@ The design survived because its reasoning was independent, not because the premi
 <strong>Pushing to <code>127.0.0.1:5000/foo:e2e-abc123</code> a second time does not refresh what kubelet runs.</strong></p>
 <p>Two options:
 - Push to a unique tag per iteration (<code>-v2</code>, <code>-v3</code>, or a content hash) and update the deployment image:
-  <div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>docker<span class="w"> </span>buildx<span class="w"> </span>bake<span class="w"> </span>--file<span class="w"> </span>docker-bake.hcl<span class="w"> </span>--set<span class="w"> </span><span class="s2">&quot;agc.tags=127.0.0.1:5000/agc:e2e-d667096-v2&quot;</span><span class="w"> </span>agc
+  <div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>docker<span class="w"> </span>buildx<span class="w"> </span>bake<span class="w"> </span>--file<span class="w"> </span>docker-bake.hcl<span class="w"> </span>--set<span class="w"> </span><span class="s2">"agc.tags=127.0.0.1:5000/agc:e2e-d667096-v2"</span><span class="w"> </span>agc
 <a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>kubectl<span class="w"> </span><span class="nb">set</span><span class="w"> </span>env<span class="w"> </span>-n<span class="w"> </span>gmc-system<span class="w"> </span>deployment/gmc-controller-manager<span class="w"> </span><span class="nv">AGC_IMAGE</span><span class="o">=</span><span class="m">127</span>.0.0.1:5000/agc:e2e-d667096-v2
 </code></pre></div>
 - Or set <code>imagePullPolicy: Always</code> on the deployment template (only viable for components where you control the spec).</p>
@@ -2885,7 +2885,7 @@ The design survived because its reasoning was independent, not because the premi
 <p>The GMC requires <code>AGC_IMAGE</code> and <code>PROXY_IMAGE</code> to be pinned by <code>@sha256:</code> digest, so a floating tag like <code>127.0.0.1:5000/agc:e2e-d667096-v2</code> makes it exit at startup with a "not digest-pinned" error.
 For local iteration, start the GMC with <code>--allow-floating-image-tags=true</code> (the e2e suite patches this flag in automatically):</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>kubectl<span class="w"> </span>patch<span class="w"> </span>deployment<span class="w"> </span>-n<span class="w"> </span>gmc-system<span class="w"> </span>gmc-controller-manager<span class="w"> </span>--type<span class="o">=</span>json<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="w">  </span>-p<span class="o">=</span><span class="s1">&#39;[{&quot;op&quot;:&quot;add&quot;,&quot;path&quot;:&quot;/spec/template/spec/containers/0/args/-&quot;,&quot;value&quot;:&quot;--allow-floating-image-tags=true&quot;}]&#39;</span>
+<a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="w">  </span>-p<span class="o">=</span><span class="s1">'[{"op":"add","path":"/spec/template/spec/containers/0/args/-","value":"--allow-floating-image-tags=true"}]'</span>
 </code></pre></div>
 <h3 id="kubectl-rollout-restart-is-sometimes-a-no-op"><code>kubectl rollout restart</code> is sometimes a no-op<a class="headerlink" href="#kubectl-rollout-restart-is-sometimes-a-no-op" title="Permanent link">&para;</a></h3>
 <p>If the deployment spec hash hasn't changed, no new pod gets created.
@@ -2898,12 +2898,12 @@ On a GMC older than the Q552 fix, a GMC-managed Deployment (the tenant AGC, the 
 <p>The AGC, GMC, and proxy images are distroless — no shell, no <code>nc</code>, no <code>curl</code>.
 For connectivity checks from a pod that <em>should</em> be allowed by NetworkPolicy, spawn a temporary debugger with the same labels as the real pod:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>kubectl<span class="w"> </span>run<span class="w"> </span>dbg<span class="w"> </span>--image<span class="o">=</span>alpine<span class="w"> </span>--restart<span class="o">=</span>Never<span class="w"> </span>--rm<span class="w"> </span>-i<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="w">  </span>--labels<span class="o">=</span><span class="s1">&#39;actions-gateway/component=workload,app=actions-gateway-controller&#39;</span><span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="w">  </span>--command<span class="w"> </span>--<span class="w"> </span>sh<span class="w"> </span>-c<span class="w"> </span><span class="s1">&#39;</span>
+<a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="w">  </span>--labels<span class="o">=</span><span class="s1">'actions-gateway/component=workload,app=actions-gateway-controller'</span><span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="w">  </span>--command<span class="w"> </span>--<span class="w"> </span>sh<span class="w"> </span>-c<span class="w"> </span><span class="s1">'</span>
 <a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a><span class="s1">    apk add --no-cache curl bind-tools &gt;/dev/null 2&gt;&amp;1</span>
 <a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a><span class="s1">    nc -zv -w 5 actions-gateway-proxy 8080</span>
 <a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a><span class="s1">    curl -sv --max-time 10 --proxy-insecure --proxy https://actions-gateway-proxy:8080 https://api.github.com/zen</span>
-<a id="__codelineno-8-7" name="__codelineno-8-7" href="#__codelineno-8-7"></a><span class="s1">  &#39;</span>
+<a id="__codelineno-8-7" name="__codelineno-8-7" href="#__codelineno-8-7"></a><span class="s1">  '</span>
 </code></pre></div>
 <p>NetworkPolicy enforces on labels, so the test only validates the path if the labels match the real pod's.
 Ephemeral containers (<code>kubectl debug --image=...</code>) don't work on the kind versions this project pins (<code>failed to call webhook</code> / <code>no kind "EphemeralContainers" is registered</code>).</p>
@@ -2976,8 +2976,8 @@ To iterate on a single component:</p>
 <h3 id="re-running-the-suite-over-skipped-teardown-state">Re-running the suite over skipped-teardown state<a class="headerlink" href="#re-running-the-suite-over-skipped-teardown-state" title="Permanent link">&para;</a></h3>
 <p>Part of what a skipped teardown leaves behind is a GMC Deployment whose <code>.args</code> are owned by the <code>kubectl-patch</code> field manager: the suite appends <code>--allow-agc-extra-env=true</code> with <code>kubectl patch --type=json</code>, and <code>args</code> is an atomic list, so that patch claims all of it.
 Helm 4 applies server-side, so the next run's <code>helm upgrade</code> fails instead of overwriting:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a>Apply failed with 1 conflict: conflict with &quot;kubectl-patch&quot; using apps/v1:
-<a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a>.spec.template.spec.containers[name=&quot;manager&quot;].args
+<div class="highlight"><pre><span></span><code><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a>Apply failed with 1 conflict: conflict with "kubectl-patch" using apps/v1:
+<a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a>.spec.template.spec.containers[name="manager"].args
 </code></pre></div>
 <p><code>setupGMC</code> deletes the leftover Deployment before <code>make deploy</code> for exactly this reason (Q590), and Helm recreates it chart-owned.
 Nothing else the skipped teardown left is touched, so the fakegithub, cert-manager, and tenant-namespace state of a failed run stays inspectable right up until you start the next run.</p>
@@ -3000,17 +3000,17 @@ Useful one-shots:</p>
 <a id="__codelineno-16-12" name="__codelineno-16-12" href="#__codelineno-16-12"></a><span class="c1"># Fakegithub control API (sessions, enqueued jobs, rerun calls)</span>
 <a id="__codelineno-16-13" name="__codelineno-16-13" href="#__codelineno-16-13"></a>kubectl<span class="w"> </span>port-forward<span class="w"> </span>-n<span class="w"> </span>e2e-infra<span class="w"> </span>svc/fakegithub<span class="w"> </span><span class="m">9090</span>:9090<span class="w"> </span><span class="p">&amp;</span>
 <a id="__codelineno-16-14" name="__codelineno-16-14" href="#__codelineno-16-14"></a>curl<span class="w"> </span>-s<span class="w"> </span>http://localhost:9090/control/sessions
-<a id="__codelineno-16-15" name="__codelineno-16-15" href="#__codelineno-16-15"></a><span class="c1"># Optional ?owner=&lt;prefix&gt; filters to one RunnerGroup&#39;s sessions (ownerName is &quot;&lt;group&gt;-&lt;index&gt;&quot;)</span>
-<a id="__codelineno-16-16" name="__codelineno-16-16" href="#__codelineno-16-16"></a>curl<span class="w"> </span>-s<span class="w"> </span><span class="s1">&#39;http://localhost:9090/control/sessions?owner=my-ag-&#39;</span>
+<a id="__codelineno-16-15" name="__codelineno-16-15" href="#__codelineno-16-15"></a><span class="c1"># Optional ?owner=&lt;prefix&gt; filters to one RunnerGroup's sessions (ownerName is "&lt;group&gt;-&lt;index&gt;")</span>
+<a id="__codelineno-16-16" name="__codelineno-16-16" href="#__codelineno-16-16"></a>curl<span class="w"> </span>-s<span class="w"> </span><span class="s1">'http://localhost:9090/control/sessions?owner=my-ag-'</span>
 <a id="__codelineno-16-17" name="__codelineno-16-17" href="#__codelineno-16-17"></a><span class="c1"># Single-use JIT runner simulation (Q114): a job acquisition consumes the</span>
-<a id="__codelineno-16-18" name="__codelineno-16-18" href="#__codelineno-16-18"></a><span class="c1"># delivering session&#39;s runner record; scope with owner= to avoid affecting</span>
+<a id="__codelineno-16-18" name="__codelineno-16-18" href="#__codelineno-16-18"></a><span class="c1"># delivering session's runner record; scope with owner= to avoid affecting</span>
 <a id="__codelineno-16-19" name="__codelineno-16-19" href="#__codelineno-16-19"></a><span class="c1"># other suites on the shared instance</span>
-<a id="__codelineno-16-20" name="__codelineno-16-20" href="#__codelineno-16-20"></a>curl<span class="w"> </span>-s<span class="w"> </span>-X<span class="w"> </span>POST<span class="w"> </span><span class="s1">&#39;http://localhost:9090/control/singleuse?enabled=true&amp;owner=my-ag-&#39;</span>
+<a id="__codelineno-16-20" name="__codelineno-16-20" href="#__codelineno-16-20"></a>curl<span class="w"> </span>-s<span class="w"> </span>-X<span class="w"> </span>POST<span class="w"> </span><span class="s1">'http://localhost:9090/control/singleuse?enabled=true&amp;owner=my-ag-'</span>
 <a id="__codelineno-16-21" name="__codelineno-16-21" href="#__codelineno-16-21"></a><span class="c1"># Eviction auto-retry calls the AGC has made (the rerun-failed-jobs POST is the</span>
 <a id="__codelineno-16-22" name="__codelineno-16-22" href="#__codelineno-16-22"></a><span class="c1"># only externally visible sign that eviction recovery fired). Filter by run so</span>
-<a id="__codelineno-16-23" name="__codelineno-16-23" href="#__codelineno-16-23"></a><span class="c1"># the count is one spec&#39;s own rather than the whole process&#39;s.</span>
+<a id="__codelineno-16-23" name="__codelineno-16-23" href="#__codelineno-16-23"></a><span class="c1"># the count is one spec's own rather than the whole process's.</span>
 <a id="__codelineno-16-24" name="__codelineno-16-24" href="#__codelineno-16-24"></a>curl<span class="w"> </span>-s<span class="w"> </span>http://localhost:9090/control/reruns
-<a id="__codelineno-16-25" name="__codelineno-16-25" href="#__codelineno-16-25"></a>curl<span class="w"> </span>-s<span class="w"> </span><span class="s1">&#39;http://localhost:9090/control/reruns?run=%2Fruns%2F12345%2F&#39;</span>
+<a id="__codelineno-16-25" name="__codelineno-16-25" href="#__codelineno-16-25"></a>curl<span class="w"> </span>-s<span class="w"> </span><span class="s1">'http://localhost:9090/control/reruns?run=%2Fruns%2F12345%2F'</span>
 </code></pre></div>
 <p>For the runner side, <code>gh run list --repo &lt;org&gt;/&lt;repo&gt;</code> and <code>gh run view &lt;id&gt; --json status,conclusion</code> give the GitHub-side view that <code>kubectl</code> can't.</p>
 <h2 id="cleanup">Cleanup<a class="headerlink" href="#cleanup" title="Permanent link">&para;</a></h2>

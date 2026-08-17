@@ -2725,7 +2725,7 @@ And the absence of a <code>rm</code> error from the sightings' output, previousl
 Sighting 4 shares the first line and the exit status but differs below that, as its own section sets out:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>[git-merge-plan-index-test] error: unable to create temporary file: No such file or directory
 <a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>[git-merge-plan-index-test] error: docs/plan/README.md: failed to insert into database
-<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>[git-merge-plan-index-test] error: unable to index file &#39;docs/plan/README.md&#39;
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>[git-merge-plan-index-test] error: unable to index file 'docs/plan/README.md'
 <a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>[git-merge-plan-index-test] fatal: updating files failed
 <a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>[run-parallel] FAILED: git-merge-plan-index-test (exit 128)
 </code></pre></div>
@@ -2772,13 +2772,13 @@ Sighting 3's job ran on GitHub-hosted <code>ubuntu-latest</code> (<code>runner_g
 <code>unit-test-gate</code> also reported failure because it aggregates the gating jobs' results.
 One root cause, two red checks, and neither check name points at the suite.
 Read the step conclusions:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>gh<span class="w"> </span>api<span class="w"> </span>repos/actions-gateway/github-actions-gateway/actions/jobs/95012397955<span class="w"> </span>--jq<span class="w"> </span><span class="s1">&#39;.steps[] | &quot;\(.number) \(.conclusion) \(.name)&quot;&#39;</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>gh<span class="w"> </span>api<span class="w"> </span>repos/actions-gateway/github-actions-gateway/actions/jobs/95012397955<span class="w"> </span>--jq<span class="w"> </span><span class="s1">'.steps[] | "\(.number) \(.conclusion) \(.name)"'</span>
 </code></pre></div>
 <h2 id="sighting-4-nothing-was-removed">Sighting 4: nothing was removed<a class="headerlink" href="#sighting-4-nothing-was-removed" title="Permanent link">&para;</a></h2>
 <p>The <code>ERR</code> trap's tree reading landed on its first run after being added, under <code>make check</code> on an 18-core machine:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>error: unable to create temporary file: Invalid argument
 <a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>fatal: failed to write commit object
-<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>git-merge-plan-index-test.sh:158: FAILED (rc=128): git -C &quot;$repo&quot; &quot;${GIT_ID[@]}&quot; commit -qam theirs --allow-empty
+<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>git-merge-plan-index-test.sh:158: FAILED (rc=128): git -C "$repo" "${GIT_ID[@]}" commit -qam theirs --allow-empty
 <a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>Q820: WORKDIR=/var/folders/cs/.../T/tmp.pzy5nrmARw present=yes
 <a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>Q820:   /var/folders/cs/.../T/tmp.pzy5nrmARw/resolved-21074 .git=yes objects=yes
 <a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a>Q820:   /var/folders/cs/.../T/tmp.pzy5nrmARw/resolved-23703 .git=yes objects=yes
@@ -2878,7 +2878,7 @@ Everything below still holds on its own terms; none of it is evidence about this
 Racing <code>rm -rf "$repo/.git"</code> against a <code>git add -A</code> over 1,500 files, at delays stepped between 10 ms and 55 ms, hit it on 2 of 60 attempts:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>error: unable to create temporary file: No such file or directory
 <a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>error: docs/plan/f0.md: failed to insert into database
-<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>error: unable to index file &#39;docs/plan/f0.md&#39;
+<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>error: unable to index file 'docs/plan/f0.md'
 </code></pre></div>
 <p>The window is narrow, which fits a flake seen three times in four days rather than one seen every run.</p>
 <p>Two qualifications matter for the next occurrence.</p>

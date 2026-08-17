@@ -2935,7 +2935,7 @@ The subsection stands as the documented ARC-era flow (and possibly the <code>pip
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>POST /_apis/runtime/runnerscalesets/{id}/acquirejobs?api-version=6.0-preview
 <a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>Authorization: Bearer &lt;messageQueueAccessToken&gt;     ← queue token, not admin JWT
 <a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>Body:     [10234, 10235, 10241]                     ← runnerRequestIds from JobAvailable
-<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>Response: {&quot;count&quot;: 2, &quot;value&quot;: [10234, 10241]}     ← the subset actually acquired
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>Response: {"count": 2, "value": [10234, 10241]}     ← the subset actually acquired
 </code></pre></div>
 <p>One listener claims an arbitrary <strong>batch</strong> in one transactional call; the response is the authoritative list of wins.
 <code>JobAssigned</code> messages then confirm each assignment.

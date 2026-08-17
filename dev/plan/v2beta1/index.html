@@ -2840,7 +2840,7 @@ This reverses the <a href="../../design/appendix-h-v2-api-decomposition/#h15-oth
 <a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="w">      </span><span class="nt">signer</span><span class="p">:</span>
 <a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a><span class="w">        </span><span class="nt">provider</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">vault</span><span class="w">                         </span><span class="c1"># vault | gcpkms | awskms | azurekeyvault</span>
 <a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a><span class="w">        </span><span class="nt">keyRef</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">transit/keys/github-app</span>
-<a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a><span class="w">      </span><span class="c1"># the pod&#39;s cloud/Vault identity binding is on the GMC-stamped ServiceAccount, not inline</span>
+<a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a><span class="w">      </span><span class="c1"># the pod's cloud/Vault identity binding is on the GMC-stamped ServiceAccount, not inline</span>
 </code></pre></div>
 <p><code>privateKeyRef</code> is meaningless under workload identity; <code>signer.{provider,keyRef}</code> is meaningless under GitHub App.
 Rotation (you rotate the Secret vs. the anchor rotates), RBAC (mount a Secret vs. bind an annotated ServiceAccount), validation (parse a PEM vs. resolve a key + verify the identity binding), and failure modes (<code>SecretNotFound</code> vs. <code>SignerUnreachable</code>) all differ.

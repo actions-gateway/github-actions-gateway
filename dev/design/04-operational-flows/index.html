@@ -3252,8 +3252,8 @@ All three were classic-only, which the <code>v2.0.0</code> removal of classic ac
     The completed pod is retained for <code>completedPodTTL</code> (default 5m) and then deleted by the RunnerGroup reconciler's worker-pod reaper; <code>completedPodTTL: 0s</code> deletes it immediately on completion.
     Both the pod and the Secret also carry a controller <code>OwnerReference</code> to the RunnerGroup, so RunnerGroup or tenant deletion cascade-deletes anything still present.</p>
 <div class="highlight"><pre><span></span><code>On the **ScaleSet** protocol the same invariant holds — a credential-bearing per-job Secret never outlives its job — but the reclaim point differs, because the AGC does not wait on the worker there.
-The provisioner is fire-and-forget: any exit that fails *before* the worker pod exists deletes the Secret it just staged (a replay whose Secret an earlier delivery staged leaves it alone — that delivery&#39;s pod may be mounting it), and in steady state the Secret is deleted when the scale-set listener sees the job&#39;s terminal `JobCompleted` on its queue.
-Because the queue replays messages the listener has not deleted to a re-created session, an AGC that crashes between a job&#39;s completion and its Secret delete reclaims it on restart.
+The provisioner is fire-and-forget: any exit that fails *before* the worker pod exists deletes the Secret it just staged (a replay whose Secret an earlier delivery staged leaves it alone — that delivery's pod may be mounting it), and in steady state the Secret is deleted when the scale-set listener sees the job's terminal `JobCompleted` on its queue.
+Because the queue replays messages the listener has not deleted to a re-created session, an AGC that crashes between a job's completion and its Secret delete reclaims it on restart.
 That property survives the Q583 delete-ack precisely because the delete waits on the reclaim: a completion whose Secret delete failed is not treated as concluded, so its message stays in the queue and the next session retries it.
 A reclaim that fails outright is logged and falls back to the `OwnerReference` cascade-GC.
 </code></pre></div>
@@ -3674,8 +3674,8 @@ And one residual is inherent, the same one preemption and drain recovery carry o
 <a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>    │                        ├─ create pod ─────────&gt;├─ schedule ────────&gt;│
 <a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>    │                        │  (fire-and-forget)    │                    │ Running:
 <a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>    │                        │                       │                    │ registered,
-<a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>    │                        │                       │                    │ &quot;Listening
-<a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>    │  assignment lapses /   │                       │                    │  for Jobs&quot;
+<a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>    │                        │                       │                    │ "Listening
+<a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>    │  assignment lapses /   │                       │                    │  for Jobs"
 <a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>    │  cancelled / completed │                       │                    │
 <a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>    │  elsewhere             │                       │                    │
 <a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a>    ├─ JobCompleted ────────&gt;│                       │                    │
@@ -3686,7 +3686,7 @@ And one residual is inherent, the same one preemption and drain recovery carry o
 <a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a>    │                        ├─ delete pod ─────────&gt;├───────────────────&gt;✗
 <a id="__codelineno-0-17" name="__codelineno-0-17" href="#__codelineno-0-17"></a>    │                        │
 <a id="__codelineno-0-18" name="__codelineno-0-18" href="#__codelineno-0-18"></a>    │                        └─ Warning WorkerPodOrphanedRunning
-<a id="__codelineno-0-19" name="__codelineno-0-19" href="#__codelineno-0-19"></a>    │                           worker_pods_reaped_total{reason=&quot;orphaned_running&quot;}++
+<a id="__codelineno-0-19" name="__codelineno-0-19" href="#__codelineno-0-19"></a>    │                           worker_pods_reaped_total{reason="orphaned_running"}++
 </code></pre></div>
 <p>The ScaleSet tier provisions fire-and-forget — the runner pulls its own job through its own broker session, so no AGC goroutine owns the pod the way the classic path's <code>provision()</code> does.
 A worker that registers but never receives its job therefore waits at <code>Listening for Jobs</code> indefinitely, and because the reaper counts <code>Running</code> as active with no deadline, it held a concurrency slot and a node until an operator deleted it by hand (Q420; observed on the dogfood cluster, where eight such pods occupied ten of twelve quota slots and all six worker nodes with zero jobs outstanding).</p>

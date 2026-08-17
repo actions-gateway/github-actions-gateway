@@ -3975,12 +3975,12 @@ One spelling across the tiers, but two filters underneath:</p>
 <p>Both filters are regexes, so <code>RUN='TestMerge_'</code> selects a family and <code>RUN='provisions a worker pod'</code> selects one spec by its description.
 On <code>make e2e</code>, <code>RUN</code> composes with <a href="#end-to-end-tests"><code>SUITE</code></a>: <code>SUITE</code> picks a labelled subset, <code>RUN</code> picks specs inside it.</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>make<span class="w"> </span><span class="nb">test</span><span class="w"> </span><span class="nv">RUN</span><span class="o">=</span>TestSessionMux
-<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>make<span class="w"> </span>e2e<span class="w"> </span><span class="nv">SUITE</span><span class="o">=</span>single-node<span class="w"> </span><span class="nv">RUN</span><span class="o">=</span><span class="s1">&#39;E2E_GMC_ProxyServiceCreated&#39;</span>
+<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>make<span class="w"> </span>e2e<span class="w"> </span><span class="nv">SUITE</span><span class="o">=</span>single-node<span class="w"> </span><span class="nv">RUN</span><span class="o">=</span><span class="s1">'E2E_GMC_ProxyServiceCreated'</span>
 </code></pre></div>
 <p><strong>A filter that matches nothing is a failure, not a pass.</strong> Left alone, both tools report success on a miss: <code>go test -run</code> prints <code>[no tests to run]</code> and exits 0, and ginkgo exits 0 having run 0 specs.
 A mistyped name then reads exactly like the test passing, which is the knob's whole purpose inverted (Q680).
 <code>make test</code> therefore fails when no test ran in <strong>any</strong> module, and <code>make e2e</code> passes <code>--fail-on-empty</code>, which also catches a <code>SUITE</code> that selects nothing:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>==&gt; RUN=&#39;TestNoSuchThingAnywhere&#39; matched no tests in any module — nothing ran
+<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>==&gt; RUN='TestNoSuchThingAnywhere' matched no tests in any module — nothing ran
 <a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>FAIL! - Detected no specs ran and --fail-on-empty is set
 </code></pre></div>
 <p><code>RUN=</code> also forces <code>-v -count=1</code> on the Go tiers: a targeted run wants the test's own output, and a cached <code>PASS</code> prints none.</p>
@@ -4703,7 +4703,7 @@ Pick the timeout from the tier's real cost (see <a href="#cost--cadence-rough-ep
   Redirecting to a log and then peeking at it is the natural way to run a slow gate in the background, which is exactly why this one bites.</li>
 </ul>
 <p>The fix for the sequenced form is to record the real status <em>into</em> the artifact and read it back, rather than trusting the notification:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a>make<span class="w"> </span>check<span class="w"> </span>&gt;<span class="w"> </span>check.log<span class="w"> </span><span class="m">2</span>&gt;<span class="p">&amp;</span><span class="m">1</span><span class="p">;</span><span class="w"> </span><span class="nb">echo</span><span class="w"> </span><span class="s2">&quot;CHECK_EXIT=</span><span class="nv">$?</span><span class="s2">&quot;</span><span class="w"> </span>&gt;&gt;<span class="w"> </span>check.log
+<div class="highlight"><pre><span></span><code><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a>make<span class="w"> </span>check<span class="w"> </span>&gt;<span class="w"> </span>check.log<span class="w"> </span><span class="m">2</span>&gt;<span class="p">&amp;</span><span class="m">1</span><span class="p">;</span><span class="w"> </span><span class="nb">echo</span><span class="w"> </span><span class="s2">"CHECK_EXIT=</span><span class="nv">$?</span><span class="s2">"</span><span class="w"> </span>&gt;&gt;<span class="w"> </span>check.log
 </code></pre></div>
 <p>Then confirm with <code>grep -n CHECK_EXIT check.log</code> alongside the <code>ok</code> / <code>FAIL</code> lines.
 Either way the rule is the same: confirm a pass by reading the output, never from the reported exit code alone.</p>
@@ -4774,7 +4774,7 @@ The launch record exists to keep a compute-heavy run killable after a compaction
 <strong>Ad-hoc commands are not pinned</strong> — they run in whatever login shell the contributor has: zsh on macOS (the default since Catalina), bash on most Linux distributions and CI images.
 Check yours with <code>echo $0</code> rather than assuming.</p>
 <p>That matters because the shells disagree on <strong>word-splitting of unquoted parameter expansions</strong> — bash and <code>sh</code> split, zsh does not:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="nv">FLAGS</span><span class="o">=</span><span class="s1">&#39;-run TestFoo -count 1&#39;</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="nv">FLAGS</span><span class="o">=</span><span class="s1">'-run TestFoo -count 1'</span>
 <a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a>go<span class="w"> </span><span class="nb">test</span><span class="w"> </span><span class="nv">$FLAGS</span><span class="w"> </span>./...<span class="w">   </span><span class="c1"># bash/sh: four arguments.  zsh: ONE argument, the whole string.</span>
 </code></pre></div>
 <p>Under zsh that <code>go test</code> receives a single literal argument <code>-run TestFoo -count 1</code> and fails to parse it — a confusing "unknown flag" or "no such file" from a snippet a bash reader would call correct.
@@ -4824,12 +4824,12 @@ Sourcing is the natural way to probe a single helper without running a whole gat
 <p>The declarations that diverge quietly are the ones a rewrite reaches for: <code>local -A</code>, <code>[[ -v arr[key] ]]</code>, and array subscripts generally.
 Measured while rewriting <code>select_present_files</code> (#1434): a version that dedupes correctly under bash silently stopped deduping when probed this way, and the probe reported a pass.</p>
 <p>Run the probe under bash, so the shell matches the shebang:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a>cat<span class="w"> </span>&gt;<span class="w"> </span>tmp/probe.bash<span class="w"> </span><span class="s">&lt;&lt;&#39;PROBE&#39;</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a>cat<span class="w"> </span>&gt;<span class="w"> </span>tmp/probe.bash<span class="w"> </span><span class="s">&lt;&lt;'PROBE'</span>
 <a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a><span class="s">#!/usr/bin/env bash</span>
 <a id="__codelineno-15-3" name="__codelineno-15-3" href="#__codelineno-15-3"></a><span class="s">set -euo pipefail</span>
 <a id="__codelineno-15-4" name="__codelineno-15-4" href="#__codelineno-15-4"></a><span class="s">shopt -s inherit_errexit</span>
 <a id="__codelineno-15-5" name="__codelineno-15-5" href="#__codelineno-15-5"></a><span class="s">source scripts/lib/common.sh</span>
-<a id="__codelineno-15-6" name="__codelineno-15-6" href="#__codelineno-15-6"></a><span class="s">echo &quot;shell: $BASH_VERSION&quot;</span>
+<a id="__codelineno-15-6" name="__codelineno-15-6" href="#__codelineno-15-6"></a><span class="s">echo "shell: $BASH_VERSION"</span>
 <a id="__codelineno-15-7" name="__codelineno-15-7" href="#__codelineno-15-7"></a><span class="s"># exercise the helper here</span>
 <a id="__codelineno-15-8" name="__codelineno-15-8" href="#__codelineno-15-8"></a><span class="s">PROBE</span>
 <a id="__codelineno-15-9" name="__codelineno-15-9" href="#__codelineno-15-9"></a>bash<span class="w"> </span>tmp/probe.bash
@@ -5088,7 +5088,7 @@ Under <code>-v</code> (<code>V=1 make test</code>, <code>V=1 make cover-check</c
 <p>A Queue row describing a flake is a ready-made explanation for the next failure that looks like it, and a package that blows its <code>cover-check</code> budget looks like every other package that blows its <code>cover-check</code> budget.
 Q822 and Q823 both name <code>provisioner</code> timing out under concurrent load and passing on rerun, so a genuine regression that hangs one test in that package arrives pre-explained.</p>
 <p>The dump is the discriminator, and Go prints it for free:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a>grep<span class="w"> </span>-n<span class="w"> </span><span class="s2">&quot;running tests:&quot;</span><span class="w"> </span>-A<span class="w"> </span><span class="m">4</span><span class="w"> </span>tmp/check.log
+<div class="highlight"><pre><span></span><code><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a>grep<span class="w"> </span>-n<span class="w"> </span><span class="s2">"running tests:"</span><span class="w"> </span>-A<span class="w"> </span><span class="m">4</span><span class="w"> </span>tmp/check.log
 </code></pre></div>
 <p>That names the test that was still running when the alarm fired, and the question it answers is the whole diagnosis: <strong>does that test exercise what this change touched?</strong> If it does, the row is not yours to reach for, however exactly the symptom matches.
 Measured 2026-08-14 closing Q811: the panic named a pre-existing claim-retry test, whose fixture drove the very arm the change had just added a GitHub call to.
@@ -5148,7 +5148,7 @@ Q495's ground-truth test, run against the old parser, returned owner <code>""</c
 <p>The <a href="../technical-debt/#distinguish-a-fixable-defect-from-an-external-structural-ceiling">structural-ceiling triage</a> is the same principle at a larger scale: when fixes stop converging, isolate and <em>measure</em> the external actor instead of asserting the next on-our-side cause.</p>
 <h3 id="a-long--count-run-exhausts-the-hosts-ephemeral-ports-and-it-looks-like-a-flake">A long <code>-count</code> run exhausts the host's ephemeral ports, and it looks like a flake<a class="headerlink" href="#a-long--count-run-exhausts-the-hosts-ephemeral-ports-and-it-looks-like-a-flake" title="Permanent link">&para;</a></h3>
 <p>Every iteration of an <code>httptest</code>-backed suite stands up a fresh listener and its clients churn connections; past roughly 200 iterations in <strong>one process</strong> the host runs out of ephemeral ports and dials start failing with:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a>dial tcp 127.0.0.1:61609: connect: can&#39;t assign requested address
+<div class="highlight"><pre><span></span><code><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a>dial tcp 127.0.0.1:61609: connect: can't assign requested address
 </code></pre></div>
 <p>The failure the test <em>reports</em> is nowhere near that line.
 The connection error lands on some background poll, and what you see is an unrelated <code>Eventually</code> giving up ("Condition never satisfied") on an assertion that has nothing to do with the race you are hunting.</p>
@@ -5243,7 +5243,7 @@ This one is about a scan that reads the wrong <em>context</em>: an <code>awk</co
 <p><a href="../../STATUS/#Q820">Q820</a>'s instrumentation turned on which <code>git commit -qam</code> calls sit inside a function, because <code>set -o errtrace</code> is load-bearing only for those.
 The scan was:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-21-1" name="__codelineno-21-1" href="#__codelineno-21-1"></a><span class="sr">/^[a-z_]+\(\) \{/</span> <span class="p">{</span> <span class="nx">fn</span> <span class="o">=</span> <span class="o">$</span><span class="mi">1</span> <span class="p">}</span>
-<a id="__codelineno-21-2" name="__codelineno-21-2" href="#__codelineno-21-2"></a><span class="sr">/commit -qam/</span>     <span class="p">{</span> <span class="kr">print</span> <span class="nb">NR</span><span class="p">,</span> <span class="p">(</span><span class="nx">fn</span> <span class="o">?</span> <span class="nx">fn</span> <span class="o">:</span> <span class="s2">&quot;TOP-LEVEL&quot;</span><span class="p">)</span> <span class="p">}</span>
+<a id="__codelineno-21-2" name="__codelineno-21-2" href="#__codelineno-21-2"></a><span class="sr">/commit -qam/</span>     <span class="p">{</span> <span class="kr">print</span> <span class="nb">NR</span><span class="p">,</span> <span class="p">(</span><span class="nx">fn</span> <span class="o">?</span> <span class="nx">fn</span> <span class="o">:</span> <span class="s2">"TOP-LEVEL"</span><span class="p">)</span> <span class="p">}</span>
 </code></pre></div>
 <p>Nothing resets <code>fn</code> at the closing brace, so every top-level call after the first function definition inherits that function's name.
 It reported all 14 calls across two suites as function-scoped.
@@ -5629,7 +5629,7 @@ Whether a change broke one module or both is usually the first thing triage need
 The required check is still the single <code>integration-test-gate</code>, which passes only when every matrix entry succeeded or skipped.</p>
 <p><code>RUN=</code> narrows a module's run to matching test names.
 It is passed straight to <code>go test -run</code>, so the full regexp syntax works:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-25-1" name="__codelineno-25-1" href="#__codelineno-25-1"></a>make<span class="w"> </span>-C<span class="w"> </span>cmd/gmc<span class="w"> </span>test-integration<span class="w"> </span><span class="nv">RUN</span><span class="o">=</span><span class="s1">&#39;TestCRD_ActionsGateway_LogLevel_DefaultsToInfo&#39;</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-25-1" name="__codelineno-25-1" href="#__codelineno-25-1"></a>make<span class="w"> </span>-C<span class="w"> </span>cmd/gmc<span class="w"> </span>test-integration<span class="w"> </span><span class="nv">RUN</span><span class="o">=</span><span class="s1">'TestCRD_ActionsGateway_LogLevel_DefaultsToInfo'</span>
 </code></pre></div>
 <p>The target adds <code>-v -count=1</code> alongside <code>-run</code>: a targeted run wants the test's output, and a cached <code>PASS</code> prints none.
 A name that matches nothing reports <code>no tests to run</code> and <strong>passes</strong>.
@@ -5848,7 +5848,7 @@ It also covers pointing AGC at fakegithub vs. real GitHub via the <code>AGC_EXTR
 It still compiles the suite under the <code>e2e</code> tag and still applies <code>--focus</code>, <code>--label-filter</code>, <code>--fail-on-empty</code> and the rest, so anything whose answer is "which specs does this select, and what does the suite do about it" is a seconds-long question rather than a tier:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-30-1" name="__codelineno-30-1" href="#__codelineno-30-1"></a>make<span class="w"> </span>ginkgo
 <a id="__codelineno-30-2" name="__codelineno-30-2" href="#__codelineno-30-2"></a><span class="o">(</span><span class="nb">cd</span><span class="w"> </span>cmd/gmc<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span>../../.build/ginkgo<span class="w"> </span>run<span class="w"> </span>--tags<span class="w"> </span>e2e<span class="w"> </span>--dry-run<span class="w"> </span>--fail-on-empty<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-30-3" name="__codelineno-30-3" href="#__codelineno-30-3"></a><span class="w">    </span>--focus<span class="w"> </span><span class="s1">&#39;E2E_GMC_ProxyServiceCreated&#39;</span><span class="w"> </span>./test/e2e/...<span class="o">)</span>
+<a id="__codelineno-30-3" name="__codelineno-30-3" href="#__codelineno-30-3"></a><span class="w">    </span>--focus<span class="w"> </span><span class="s1">'E2E_GMC_ProxyServiceCreated'</span><span class="w"> </span>./test/e2e/...<span class="o">)</span>
 </code></pre></div>
 <p>Measured 2026-08-08 while wiring <code>RUN=</code> onto <code>make e2e</code> (Q679): a real spec name gave <code>Ran 1 of 74 Specs</code> / <code>SUCCESS!</code> and exit 0, a nonsense one gave <code>Ran 0 of 74 Specs</code> / <code>FAIL! - Detected no specs ran and --fail-on-empty is set</code> and exit 1, in 13 seconds total.
 That settled both directions of a filter's behaviour against the actual suite, ahead of CI, with no cluster standing.</p>
@@ -6293,8 +6293,8 @@ The watcher's <code>ready</code> event already means checks concluded, so it is 
 <p><strong>A skipped job does not mean its steps did not run — resolve the step's owning job, not its file.</strong> <code>gh pr checks</code> reports <em>job</em> names, and a <code>make</code> target's home is a job, not a workflow file: grepping <code>unit-test.yml</code> for <code>scripts-test</code> finds it, but that step lives in the same file's <strong><code>shellcheck</code></strong> job, so a skipped <code>unit-test</code> says nothing about whether the scripts tests ran.
 Reading the workflow source to answer "did my test run?" gives the wrong answer in exactly the case you are checking.
 Resolve it from the run:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-39-1" name="__codelineno-39-1" href="#__codelineno-39-1"></a>gh<span class="w"> </span>run<span class="w"> </span>view<span class="w"> </span>&lt;run-id&gt;<span class="w"> </span>--json<span class="w"> </span><span class="nb">jobs</span><span class="w"> </span>--jq<span class="w"> </span><span class="s1">&#39;.jobs[] | [.name, .conclusion] | @tsv&#39;</span><span class="w">   </span><span class="c1"># which jobs, which verdict</span>
-<a id="__codelineno-39-2" name="__codelineno-39-2" href="#__codelineno-39-2"></a>gh<span class="w"> </span>run<span class="w"> </span>view<span class="w"> </span>&lt;run-id&gt;<span class="w"> </span>--log<span class="w"> </span>--job<span class="w"> </span>&lt;job-id&gt;<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span><span class="s1">&#39;&lt;an assertion you expect&gt;&#39;</span><span class="w">    </span><span class="c1"># did it actually execute</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-39-1" name="__codelineno-39-1" href="#__codelineno-39-1"></a>gh<span class="w"> </span>run<span class="w"> </span>view<span class="w"> </span>&lt;run-id&gt;<span class="w"> </span>--json<span class="w"> </span><span class="nb">jobs</span><span class="w"> </span>--jq<span class="w"> </span><span class="s1">'.jobs[] | [.name, .conclusion] | @tsv'</span><span class="w">   </span><span class="c1"># which jobs, which verdict</span>
+<a id="__codelineno-39-2" name="__codelineno-39-2" href="#__codelineno-39-2"></a>gh<span class="w"> </span>run<span class="w"> </span>view<span class="w"> </span>&lt;run-id&gt;<span class="w"> </span>--log<span class="w"> </span>--job<span class="w"> </span>&lt;job-id&gt;<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span><span class="s1">'&lt;an assertion you expect&gt;'</span><span class="w">    </span><span class="c1"># did it actually execute</span>
 </code></pre></div>
 <p>The grepped log line is the proof the assertion ran; the job's conclusion only proves nothing in it failed — and a job that ran nothing also fails nothing.</p>
 <p><strong>Absence of checks is not green (Q383).</strong> There are two distinct ways a PR ends up under-tested, and they need different fixes:</p>

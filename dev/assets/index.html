@@ -2702,19 +2702,19 @@ Run from <code>docs/assets/</code>:</p>
 <a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a>resvg<span class="w"> </span>-w<span class="w"> </span><span class="m">512</span><span class="w"> </span>-h<span class="w"> </span><span class="m">512</span><span class="w"> </span>icon-tile.svg<span class="w"> </span>icon-512.png
 <a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a>
 <a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a><span class="c1"># Pack favicon.ico (PNG-in-ICO; supported by all modern browsers)</span>
-<a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a>python3<span class="w"> </span>-<span class="w"> </span><span class="s">&lt;&lt;&#39;PY&#39;</span>
+<a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a>python3<span class="w"> </span>-<span class="w"> </span><span class="s">&lt;&lt;'PY'</span>
 <a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a><span class="s">import struct</span>
 <a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a><span class="s">sizes = [16, 32, 48]</span>
-<a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a><span class="s">pngs = [(s, open(f&quot;favicon-{s}.png&quot;, &quot;rb&quot;).read()) for s in sizes]</span>
-<a id="__codelineno-1-13" name="__codelineno-1-13" href="#__codelineno-1-13"></a><span class="s">n = len(pngs); header = struct.pack(&quot;&lt;HHH&quot;, 0, 1, n)</span>
-<a id="__codelineno-1-14" name="__codelineno-1-14" href="#__codelineno-1-14"></a><span class="s">entries, off = b&quot;&quot;, 6 + 16 * n</span>
+<a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a><span class="s">pngs = [(s, open(f"favicon-{s}.png", "rb").read()) for s in sizes]</span>
+<a id="__codelineno-1-13" name="__codelineno-1-13" href="#__codelineno-1-13"></a><span class="s">n = len(pngs); header = struct.pack("&lt;HHH", 0, 1, n)</span>
+<a id="__codelineno-1-14" name="__codelineno-1-14" href="#__codelineno-1-14"></a><span class="s">entries, off = b"", 6 + 16 * n</span>
 <a id="__codelineno-1-15" name="__codelineno-1-15" href="#__codelineno-1-15"></a><span class="s">for s, d in pngs:</span>
 <a id="__codelineno-1-16" name="__codelineno-1-16" href="#__codelineno-1-16"></a><span class="s">    w = h = (0 if s &gt;= 256 else s)</span>
-<a id="__codelineno-1-17" name="__codelineno-1-17" href="#__codelineno-1-17"></a><span class="s">    entries += struct.pack(&quot;&lt;BBBBHHII&quot;, w, h, 0, 0, 1, 32, len(d), off); off += len(d)</span>
-<a id="__codelineno-1-18" name="__codelineno-1-18" href="#__codelineno-1-18"></a><span class="s">with open(&quot;favicon.ico&quot;, &quot;wb&quot;) as f:</span>
+<a id="__codelineno-1-17" name="__codelineno-1-17" href="#__codelineno-1-17"></a><span class="s">    entries += struct.pack("&lt;BBBBHHII", w, h, 0, 0, 1, 32, len(d), off); off += len(d)</span>
+<a id="__codelineno-1-18" name="__codelineno-1-18" href="#__codelineno-1-18"></a><span class="s">with open("favicon.ico", "wb") as f:</span>
 <a id="__codelineno-1-19" name="__codelineno-1-19" href="#__codelineno-1-19"></a><span class="s">    f.write(header); f.write(entries)</span>
 <a id="__codelineno-1-20" name="__codelineno-1-20" href="#__codelineno-1-20"></a><span class="s">    for _, d in pngs: f.write(d)</span>
-<a id="__codelineno-1-21" name="__codelineno-1-21" href="#__codelineno-1-21"></a><span class="s">print(&quot;packed favicon.ico&quot;)</span>
+<a id="__codelineno-1-21" name="__codelineno-1-21" href="#__codelineno-1-21"></a><span class="s">print("packed favicon.ico")</span>
 <a id="__codelineno-1-22" name="__codelineno-1-22" href="#__codelineno-1-22"></a><span class="s">PY</span>
 </code></pre></div>
 <p>Verify: <code>file favicon.ico</code> should report three icons (16/32/48).</p>
@@ -2733,7 +2733,7 @@ Re-upload <code>social-preview.png</code> whenever it changes.</p>
 The SVG declares its 1280×640 size, so no <code>-w/-h</code> is needed.
 It uses CSS system-font stacks (<code>-apple-system</code>, …) which are <strong>not</strong> real font names, so pass concrete installed families or the metrics shift.
 Run from <code>docs/assets/</code>:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>resvg<span class="w"> </span>--sans-serif-family<span class="w"> </span><span class="s2">&quot;Helvetica Neue&quot;</span><span class="w"> </span>--monospace-family<span class="w"> </span><span class="s2">&quot;Menlo&quot;</span><span class="w"> </span><span class="se">\</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>resvg<span class="w"> </span>--sans-serif-family<span class="w"> </span><span class="s2">"Helvetica Neue"</span><span class="w"> </span>--monospace-family<span class="w"> </span><span class="s2">"Menlo"</span><span class="w"> </span><span class="se">\</span>
 <a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="w">  </span>social-preview.svg<span class="w"> </span>social-preview.png
 </code></pre></div>
 <p>Verify the result has no clipped text and a crisp logomark.</p>
@@ -2811,9 +2811,9 @@ Run from <code>docs/assets/</code>:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>python3<span class="w"> </span>generate-demo-cast.py<span class="w">            </span><span class="c1"># writes demo-local-kind.cast</span>
 <a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>
 <a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="c1"># Render the cast → self-contained animated SVG via svg-term-cli in a container</span>
-<a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a>docker<span class="w"> </span>run<span class="w"> </span>--rm<span class="w"> </span>-v<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$PWD</span><span class="s2">:/data&quot;</span><span class="w"> </span>-w<span class="w"> </span>/data<span class="w"> </span>node:20-alpine<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a><span class="w">  </span>sh<span class="w"> </span>-c<span class="w"> </span><span class="s2">&quot;npx --yes svg-term-cli@2.1.1 --in demo-local-kind.cast \</span>
-<a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a><span class="s2">           --out demo-local-kind.svg --window --width 100 --height 24&quot;</span>
+<a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a>docker<span class="w"> </span>run<span class="w"> </span>--rm<span class="w"> </span>-v<span class="w"> </span><span class="s2">"</span><span class="nv">$PWD</span><span class="s2">:/data"</span><span class="w"> </span>-w<span class="w"> </span>/data<span class="w"> </span>node:20-alpine<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a><span class="w">  </span>sh<span class="w"> </span>-c<span class="w"> </span><span class="s2">"npx --yes svg-term-cli@2.1.1 --in demo-local-kind.cast \</span>
+<a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a><span class="s2">           --out demo-local-kind.svg --window --width 100 --height 24"</span>
 </code></pre></div>
 <p>Commands are revealed whole (not typed char-by-char) on purpose: a typing animation multiplies the SVG's text nodes ~one-per-character and bloats the asset several-fold for little gain on a docs page.</p>
 

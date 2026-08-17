@@ -2787,7 +2787,7 @@ Shipping it inside the current PR would obscure the review of the security work.
 <a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a><span class="c1">// pods so they match the workload NetworkPolicy) is a correctness</span>
 <a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a><span class="c1">// requirement, not a style preference. Changing it in only one place</span>
 <a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a><span class="c1">// silently breaks the NetworkPolicy selector match.</span>
-<a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a><span class="kd">const</span><span class="w"> </span><span class="nx">ControllerName</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s">&quot;actions-gateway-controller&quot;</span>
+<a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a><span class="kd">const</span><span class="w"> </span><span class="nx">ControllerName</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">"actions-gateway-controller"</span>
 </code></pre></div>
 <p>The package needs to be importable by both <code>cmd/gmc/...</code> and <code>cmd/agc/...</code>.
 The root module (<code>github.com/actions-gateway/github-actions-gateway</code>) is already shared by both — putting it there (e.g.

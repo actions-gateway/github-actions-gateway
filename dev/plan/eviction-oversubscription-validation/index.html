@@ -2935,7 +2935,7 @@ With no <code>timeout-minutes</code> in play, the only mechanism left that can e
 <p><strong>The headline finding is not the latency.
 It is that classic-tier eviction recovery never actually recovers the job.</strong> The AGC waits <code>evictionRetryDelay</code> (default 5s) after seeing the eviction and then calls <code>rerun-failed-jobs</code> — which, per the line above, lands ~9.5 minutes <em>before</em> GitHub concludes the run.
 GitHub refuses it:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>rerun API returned 403: {&quot;message&quot;:&quot;This workflow is already running&quot;, ...}
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>rerun API returned 403: {"message":"This workflow is already running", ...}
 </code></pre></div>
 <p>So on the then-shipped default the sequence was: budget slot reserved, <code>actions_gateway_eviction_retries_total</code> incremented, re-run refused, job left failed.
 The metric an operator would watch said recovery happened; nothing was recovered.
@@ -3261,10 +3261,10 @@ The e2e fixture jobs add nothing to that: neither checks out a repository.
 256Mi is therefore four orders of magnitude of headroom, which is what makes the deliberate overshoot the only thing that can cross it.</p>
 <p><strong>Q495 was confirmed here, by direct observation rather than inference — and has since been fixed</strong> (<a href="https://github.com/actions-gateway/github-actions-gateway/pull/967">#967</a>).
 A worker pod provisioned for a real GitHub job on the classic tier carried <code>actions-gateway.com/job-name</code> and <strong>neither</strong> <code>run-id</code> <strong>nor</strong> <code>repository</code>:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>annotations: {&quot;actions-gateway.com/job-name&quot;:&quot;hold&quot;,
-<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>              &quot;cluster-autoscaler.kubernetes.io/safe-to-evict&quot;:&quot;false&quot;,
-<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>              &quot;descheduler.alpha.kubernetes.io/prefer-no-eviction&quot;:&quot;true&quot;,
-<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>              &quot;karpenter.sh/do-not-disrupt&quot;:&quot;true&quot;}
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>annotations: {"actions-gateway.com/job-name":"hold",
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>              "cluster-autoscaler.kubernetes.io/safe-to-evict":"false",
+<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>              "descheduler.alpha.kubernetes.io/prefer-no-eviction":"true",
+<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>              "karpenter.sh/do-not-disrupt":"true"}
 </code></pre></div>
 <p><code>jobMetaFrom()</code> and <code>repoInfo()</code> read the same two payload fields, so an absent annotation means <code>runID</code> is <code>"0"</code> and <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/provisioner/eviction.go"><code>handleEviction</code></a> returns at its first line.
 Note also that <code>system.github.job</code> <em>did</em> arrive: the acquisition payload's <code>variables</code> map is populated, and it is specifically the run-identity keys that were missing — which narrowed Q495 from "the payload is empty" to "these keys are not where we read them".
