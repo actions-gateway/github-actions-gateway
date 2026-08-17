@@ -10,11 +10,23 @@ It records what each skill is for and where this repo invokes it, so another pag
 **It deliberately does not restate what a skill says.** A skill is written to be portable across repos; the repo-specific half already lives in the page that invokes it, and duplicating the general half here would leave two copies to correct.
 Every entry below is a pointer plus the local usage, and nothing more.
 
-## A contributor without the skills loses nothing
+## What a contributor without the skills actually loses
 
-Skills change how an *agent* works, never what a contributor must do.
-Every rule that matters is written in this tree in full: an entry below is the map, not the territory.
-If a page ever reads as though the skill is required to follow it, that page has a defect, so file it.
+Two classes, and they answer differently.
+
+**Working-method skills cost a contributor nothing**: `deslop`, `verify-claims`, `rendered-page-review`, `tech-docs-layers`, `github-issue-filer`, `session-retro`.
+They change how an *agent* works, never what a contributor must do, and the page that invokes each one carries this repo's half in full.
+If one of those pages ever reads as though the skill is required to follow it, that page has a defect, so file it.
+
+**The three process skills are different: they own the process, and this tree keeps only its deltas.** [`session-backlog`](#session-backlog), [`session-orchestrator`](#session-orchestrator) and [`session-worker`](#session-worker) carry the portable backlog format and the dispatch contract, and [maintaining-backlog.md](maintaining-backlog.md) and [parallel-dispatch.md](parallel-dispatch.md) deliberately do not restate them.
+A contributor reading those two pages gets what is true *here*: the caps, the allocator, the gate, the merge queue, the tooling, the measurements.
+What they do not get is the process those deltas modify.
+
+What holds the rules for that reader is that the **tooling is in-tree and gate-enforced, where the prose is not**: `lint-backlog.sh`, the ID allocator, the merge drivers, `check-status-isolation.sh` and the dispatch hooks all run in `make check` and the pre-commit hook whether or not any skill is installed.
+Those five were written here rather than copied in, and the skill has no counterpart for most of them, so "vendored" would read the dependency backwards.
+A contributor cannot violate a rule that matters without a gate saying so.
+That is the trade this repo took, and the reader it accepts losing is the drive-by contributor who would groom the backlog or run a dispatch by hand, which nobody outside the maintainer does.
+Restoring the prose is what would have to change if that stops being true.
 
 ## Three sources, and only one of them is linkable
 
@@ -54,7 +66,7 @@ Everything under `docs/` publishes to [actions-gateway.com](https://actions-gate
 ### `session-backlog`
 
 The format and grooming process for the Queue in [docs/STATUS.md](../STATUS.md).
-[maintaining-backlog.md](maintaining-backlog.md) is authoritative wherever the two overlap, and the repo vendors the skill's tooling (`lint-backlog.sh`, the ID allocator, the merge driver) so the rules hold with or without it.
+[maintaining-backlog.md](maintaining-backlog.md) is authoritative wherever the two overlap, and this repo's own tooling (`lint-backlog.sh` over the `backloglint` rules, the ID allocator, the merge drivers) enforces the format with or without the skill installed.
 
 ### `session-orchestrator`
 
