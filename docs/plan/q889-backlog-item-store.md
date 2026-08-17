@@ -44,7 +44,8 @@ Recorded here because the plan is unreadable without them.
    What is unique to Progress is the `⚠️ = at least one open Queue row remains` semantic that `lint-backlog` rule 9 guards; that moves to `plan-index-check`.
 4. **Flake watch rows become items.** Recommended `status: deferred` with a `flake` label, keeping the `**Event:** recurs on main after the fix` trigger convention.
    Deferred is the skill's parked-awaiting-a-trigger state, where blocked means waiting on a dependency and would put every flake row in the blocked set a groom reads each pass.
-   *(Maintainer said blocked; deferred is this plan's counter-proposal and needs a yes before phase 2.)*
+   Settled 2026-08-17: `deferred`, so phase 2 is unblocked.
+   The trigger convention is what carries the flake lifecycle, and a `flake` row parked awaiting a recurrence is not waiting on a dependency; putting them in `blocked` would have added every one of them to the set a groom reads each pass, for rows whose whole point is that nothing is expected to happen.
 5. **Rules 8, 9 and 11 are ported to a repo-local checker**, since `queue.py lint` has no equivalent.
    `queue.py claims` covers rule 12, and rule 10 is dropped on the measurement below.
 6. **No `docs/milestones/` directory.** The milestone/design split already exists as the `milestone` label and as the index's topical sections; a third classification by directory would cost re-homing across 157 plans, re-base every moved file's outbound links, and fork `no-plan-refs-check`, `plan-index-check`, the plan-index merge driver, `.gitattributes` and the path filters, all of which key on `docs/plan/`.
