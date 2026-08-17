@@ -175,6 +175,10 @@ What was not safe was the README: `mdreflow` folded its four `**Status:**`/`**Si
 The checker exiting 2 is the only reason this was seen at all.
 Had an unreadable vocabulary been treated as nothing to check, rule 11 would have passed green while enforcing nothing, for as long as the store exists.
 
+**173 new pages is a website change, and `make check` cannot see one.** Both site scopes build with `mkdocs build --strict`, and `validation.nav.omitted_files` fails on a published page in no nav section, so the store reddened `build` and `release-links` on a branch whose local gate was green.
+`/queue/` now sits where `/STATUS.md` and `/plan/` sit: excluded from the stable versions, published on `dev` and declared in `not_in_nav`.
+Measured on the local oracle rather than the exit code, since the same green would follow from excluding it everywhere: stable builds 0 queue pages, `dev` builds 176, and `/dev/queue/` serves the store's README until phase 5 replaces it with a rendered index.
+
 **The interim window needed a gate, so phase 2 also ships `queue-drift-check`.** With the table still authoritative and the store already committed, an edit to either side alone is silent, and the silence favours the wrong reading: a groomed table leaves a store that still looks current.
 The check re-runs `migrate` into a throwaway store and compares the *loaded* items, so the thing being compared is `queue.py`'s own reading of the table rather than a second parser free to drift from it.
 Rank values are excluded and only the order they produce is compared, because a re-rank inside the store is the one operation the store exists to allow and a stricter check would fire on it.
