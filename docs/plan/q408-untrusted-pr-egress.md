@@ -223,10 +223,10 @@ Each phase is a separate PR; 1, 3 and 4 need live dogfood sessions (prod-guarded
 
 Decision 2026-07-31: both alternates get validated, sequenced **after** this plan's Phase 4 proves the reference posture — the contract must be validated on the simple implementation before variants are graded against it.
 
-- **[Q539](../STATUS.md#Q539) — Kata + Dragonfly as the mirror backend.** Substitute a Dragonfly deployment for the Distribution instances behind the same wiring and the same tight NetworkPolicy, and prove it meets the §3.5 contract: workers reach only a seed-peer ClusterIP Service (the `hostNetwork` dfdaemon is not policy-selectable), back-to-source is restricted to the Phase-0 upstream allowlist, non-GET registry operations are refused, and workers never participate in the P2P mesh.
+- **[Q539](../queue/Q539.md) — Kata + Dragonfly as the mirror backend.** Substitute a Dragonfly deployment for the Distribution instances behind the same wiring and the same tight NetworkPolicy, and prove it meets the §3.5 contract: workers reach only a seed-peer ClusterIP Service (the `hostNetwork` dfdaemon is not policy-selectable), back-to-source is restricted to the Phase-0 upstream allowlist, non-GET registry operations are refused, and workers never participate in the P2P mesh.
   Same Phase-4 validation battery, plus negatives for the contract points.
   Needs its own plan doc when picked up.
-- **[Q540](../STATUS.md#Q540) — the composed stack as a milestone: Kata + Dragonfly (node layer) + pull-through cache (guest layer).** The two operate at different layers (§5), so this validates the composition an image-heavy fleet would actually run: Dragonfly accelerating node-level pod-image distribution via containerd mirror config, the in-guest mirror serving untrusted job pulls, each with its own policy scope — and confirms neither weakens the other's posture (in particular that the node-layer P2P mesh stays unreachable from worker pods).
+- **[Q540](../queue/Q540.md) — the composed stack as a milestone: Kata + Dragonfly (node layer) + pull-through cache (guest layer).** The two operate at different layers (§5), so this validates the composition an image-heavy fleet would actually run: Dragonfly accelerating node-level pod-image distribution via containerd mirror config, the in-guest mirror serving untrusted job pulls, each with its own policy scope — and confirms neither weakens the other's posture (in particular that the node-layer P2P mesh stays unreachable from worker pods).
 
 ## 7. Success criteria
 

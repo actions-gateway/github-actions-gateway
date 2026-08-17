@@ -1,7 +1,7 @@
 # Worker Right-Sizing Profiles (Recommendations First)
 
 > **Status: ✅ Complete — Phases 1–3 shipped 2026-07-21/22 and live-validated across three dogfood sessions (two on 2026-07-25, one on 2026-07-28).
-> Residuals: [Q416](../STATUS.md#Q416) and, for the one profile still short of a live run, [Q448](../STATUS.md#Q448).** Usage observability, the status recommendation and its derivation, restart persistence, and the below-confidence fallback were confirmed in the first dogfood session.
+> Residuals: [Q416](../queue/Q416.md) and, for the one profile still short of a live run, [Q448](../queue/Q448.md).** Usage observability, the status recommendation and its derivation, restart persistence, and the below-confidence fallback were confirmed in the first dogfood session.
 > The two behaviours gated on 20 sampled jobs, the `SizingDrift` verdict and `Binpack` actuating, were confirmed in a second session after Q399 migrated the tenant off the Classic protocol (which had orphaned 81% of the jobs it acquired, capping samples at 10); [`Throughput` actuated live](#throughput-actuating-live-2026-07-28) on the same tenant three days later.
 > See [Live validation](#live-validation-2026-07-25) and [Both ≥20-sample paths confirmed](#both-20-sample-paths-confirmed-2026-07-25-second-session).
 > **`NodeShare` is the one actuating profile with no live run yet** — it carries envtest confidence only, tracked as Q448.
@@ -125,7 +125,7 @@ Three changes close it, and they are asymmetric because the profiles are:
 
 **The e2e envelope is a deliberate lower bound.** `allocatable.cpu: 1500m / workersPerNode: 1` sits below both variants' static runner request (kata 2, dind 3), so actuation can only ever *reduce* a worker's ask — a wrong guess cannot make the release's own e2e gate unschedulable.
 It is CPU-only for the same reason.
-The true e2e-node allocatable has not been measured (the pool is `n2-standard-8` since Q627, the same 8 vCPU / 32 GB shape), and NodeShare divides into the runner container only, leaving the dind sidecar and Kata's 250m RuntimeClass overhead as the operator's accounting; the honest envelope therefore needs one `kubectl get node` reading first ([Q448](../STATUS.md#Q448)).
+The true e2e-node allocatable has not been measured (the pool is `n2-standard-8` since Q627, the same 8 vCPU / 32 GB shape), and NodeShare divides into the runner container only, leaving the dind sidecar and Kata's 250m RuntimeClass overhead as the operator's accounting; the honest envelope therefore needs one `kubectl get node` reading first ([Q448](../queue/Q448.md)).
 The trivial `÷1` divisor is fine here on purpose: the envtests above already cover the arithmetic (8÷4, 32Gi÷4), so the dogfood leg buys the thing envtest cannot — actuation through the real provisioner, on a real GKE node, for a real job.
 
 Decisions taken at pickup (implementation: `cmd/agc/internal/controller/runnerset_sizing_profile.go`, applied in `runnerSetTarget.Resolve`; design summary in [appendix H §H.7](../design/appendix-h-v2-api-decomposition.md#h7-reference-integrity--runtime-conditions-not-admission)):

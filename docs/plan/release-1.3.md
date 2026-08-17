@@ -77,7 +77,7 @@ The prose below carries the *why* of each; this table is the state.
 | Q603 | An AGC stopped between abandoning a job and its next delete cycle re-provisions it on restart | rides | 🔲 filed — the residual Q583 narrows but does not close |
 | Q604 | `stallJob` installs its runner-name conflict after the job is already pollable | gates | ✅ shipped 2026-08-02 — same reason: it reddened `main` |
 | Q406 | Capacity gate `AutoscalerVerdict` mode | rides | ⤴ punted — [Explicitly out of scope](#explicitly-out-of-scope) |
-| [Q273](../STATUS.md#Q273), [Q264](../STATUS.md#Q264) | `v1alpha1` + `v2alpha1` + classic **removal** | rides | ⤴ punted to `v2.0.0` — [Explicitly out of scope](#explicitly-out-of-scope) |
+| [Q273](../queue/Q273.md), [Q264](../queue/Q264.md) | `v1alpha1` + `v2alpha1` + classic **removal** | rides | ⤴ punted to `v2.0.0` — [Explicitly out of scope](#explicitly-out-of-scope) |
 | — | RC validated on dogfood ([§ A](#a-headline-feature-complete-satisfied)) | gates | ✅ **PASSED on `v1.3.0-rc.5`, 2026-08-03** ([verdict](#the-rc5-validation-verdict-2026-08-03)) — derived sizing confirmed at pod level, which rc.4's pass could not do |
 | <a id="Q627"></a>Q627 | The dogfood `e2e` pool has one node of C2 headroom | rides | ✅ closed 2026-08-02 — pool re-created on `n2-standard-8`, verified Ready with the kata label at `N2_CPUS` 8/200 |
 
@@ -123,7 +123,7 @@ Nothing already deployed changes behaviour, so it does not need to beat this tag
 **Q600 gates, mechanically rather than on severity.** `main`'s `unit-test` leg went red on `7fec2ff8` — `TestMultiplexer_DuplicateJobDeliveryProvisionsOnce` under `-race`, `expected 1, actual 0` — and pre-flight requires a green `main` to tag.
 It is a test-synchronization defect, not a product one: the test waited on the duplicate-delivery metric, which only the *losing* siblings increment, and then read the peak-provisioner count the *winner* produces several steps later.
 Diagnosed by reproducing the interleaving directly (a delay at the winner's handler entry took it from 0 failures in 400 local runs to 5 of 5), fixed by waiting on the counter the invariant reads, and confirmed still able to catch the Q260 regression by deleting the claim gate and requiring red.
-Filed to [flake watch](../STATUS.md#Q600); the weaker dedup predicate the measurement exposed was filed as Q601 and has since been fixed — per-session dedup registries, so the assertion counts distinct siblings rather than deliveries.
+Filed to [flake watch](../queue/Q600.md); the weaker dedup predicate the measurement exposed was filed as Q601 and has since been fixed — per-session dedup registries, so the assertion counts distinct siblings rather than deliveries.
 
 **Q602 gates for the same mechanical reason, and is worth more than its fix.** The next `main` run went red on a *different* `-race` test — `TestListener_AbandonedJobDoesNotSurviveARestart`, the Q583 fix's own — with `assert.Never` reporting that a restarted listener had provisioned a worker for a job the previous one gave up on.
 It reproduced locally at 1 in 40.
@@ -219,7 +219,7 @@ This is the verdict the tag has been owed since it was cut, and it clears the le
 | Signed v2 CRD manifest | blob signature verified; all five v2 CRDs applied and registered |
 | Teardown | drained to 0 nodes, exit 0 |
 
-**This pass is strictly stronger than rc.4's.** rc.4 cleared `NodeShare`'s state assertion but reported `derived value NOT checked — no live worker pod was caught during the matrix`, leaving the pod-level envelope arithmetic unconfirmed ([Q448](../STATUS.md#Q448)).
+**This pass is strictly stronger than rc.4's.** rc.4 cleared `NodeShare`'s state assertion but reported `derived value NOT checked — no live worker pod was caught during the matrix`, leaving the pod-level envelope arithmetic unconfirmed ([Q448](../queue/Q448.md)).
 This run caught a live worker: **1500m derived where the templates ask 2 and 3**.
 The release's headline feature is now confirmed at the pod level on real GKE rather than inferred from a condition.
 `Throughput` at 158 samples additionally means this RC ran the repo's own CI on derived sizing — validated in use.
@@ -306,7 +306,7 @@ The consequence is stronger than a pass: **this RC ran CI on derived sizing**, s
 
 **What this run did NOT establish.** `NodeShare` cleared its *state* assertion, but the leg reported `derived value NOT checked — no live worker pod was caught during the matrix`.
 The envelope arithmetic at pod level is therefore unconfirmed by this run.
-That is the same gap [Q448](../STATUS.md#Q448) already tracks, and it is worth stating rather than reading the green as total: the profile is provably `Active` and provably actuating, and the per-worker share it derives is not independently checked here.
+That is the same gap [Q448](../queue/Q448.md) already tracks, and it is worth stating rather than reading the green as total: the profile is provably `Active` and provably actuating, and the per-worker share it derives is not independently checked here.
 
 **rc.4 is not `main`.** The tag points at `084f00a5`; `main` has since taken the Q596, Q603, Q605 and docs changes.
 Nothing in that set is implicated in what the gate exercised, but a GA tag cut from a later commit carries code this validation did not cover — decide that explicitly at the cut rather than inheriting this pass.
@@ -476,7 +476,7 @@ Wire-identical either way, so it is a Go-API break for `api` module consumers on
 | Deferred | Was | Why out of 1.3 |
 |---|---|---|
 | Capacity gate `AutoscalerVerdict` mode | Q406 | The quota pre-claim rung and `SchedulerVerdict` (Q405) shipped; `AutoscalerVerdict` was M-sized and unstarted at the cut. Describe what shipped as exactly that rather than implying the full ladder. (It shipped after 1.3, on 2026-07-27.) |
-| `v1alpha1` + `v2alpha1` + classic **removal** | [Q273](../STATUS.md#Q273), [Q264](../STATUS.md#Q264) | 1.3 is the *notice*. Executing the removal in the same release it is announced would violate the one-release-ahead policy. These land at `v2.0.0`. |
+| `v1alpha1` + `v2alpha1` + classic **removal** | [Q273](../queue/Q273.md), [Q264](../queue/Q264.md) | 1.3 is the *notice*. Executing the removal in the same release it is announced would violate the one-release-ahead policy. These land at `v2.0.0`. |
 | `v2` GA API version | [v2-ga.md](v2-ga.md) | Gated on a beta soak that has not started. Deliberately slow: GA signs a permanent backward-compatibility contract. |
 
 ## Critical path & ordering

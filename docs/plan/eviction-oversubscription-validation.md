@@ -24,7 +24,7 @@ Any published latency figure needs a clean run with no `timeout-minutes` set.
 | Q417 | **Shipped 2026-07-26.** Was the hard prerequisite for the scale-set half of 1, and for 3 and 5: `ProvisionScaleSetWorker` is fire-and-forget, so scale-set evictions were never detected. Detection now runs from the owning reconciler off the worker pod ([scaleset-eviction-recovery.md § Phase 2 as built](scaleset-eviction-recovery.md#phase-2-as-built)). All three are unblocked. |
 | Q419 | **Shipped 2026-07-26** with Q417 — the docs half of the same gap. The tier-agnostic claims in the exec summary, README, and why-gag are now true of both tiers rather than needing a qualification. Independent of these experiments. |
 | Q420 | **Shipped 2026-07-26**, ahead of Q417 and independently of it — the reap deadline came from a pod annotation, not a pod watch. Orphaned Running workers would otherwise have contaminated 3 and 5 by holding quota, which is exactly the idle-capacity signature those experiments measure. |
-| [Q418](../STATUS.md#Q418) | Deferred, event-gated on experiment 1 attributing the delay. |
+| [Q418](../queue/Q418.md) | Deferred, event-gated on experiment 1 attributing the delay. |
 | [Q459](archive/q459-drained-worker-recovery.md) | **Filed by experiment 2**, 2026-07-27. Its residual: neither tier recovers a drained worker, and whether that matters turns on what GitHub does with the runner's own relayed report — a live-GitHub question. Both halves measured 2026-07-29; decided **close, gated on `deletionTimestamp`**, and Q502 shipped that implementation on both tiers. |
 
 ## Experiment 1: mid-job eviction latency, both tiers (Q396)
@@ -37,7 +37,7 @@ The genuinely additive assertion is the retry budget (the Q106 sharded-reservati
 
 - **Venue:** live-GitHub on kind, per the row.
 - **Proves:** the real eviction-to-conclusion latency, attributed to a mechanism.
-- **Unlocks:** a defensible number in place of the confounded one, and the [Q418](../STATUS.md#Q418) trigger.
+- **Unlocks:** a defensible number in place of the confounded one, and the [Q418](../queue/Q418.md) trigger.
 - **Unblocked** — Q417 shipped 2026-07-26, so the scale-set tier now detects evictions and fires the rerun this experiment measures.
 
 ### Result, measured 2026-07-29
@@ -251,7 +251,7 @@ Three constraints shape it:
 1. **The scale-set name is the RunnerSet's single `runnerLabels` entry** ([runnerset_scaleset.go](../../cmd/agc/internal/controller/runnerset_scaleset.go)), and CEL enforces exactly one.
    So the fixture workflow's `runs-on` has to be that label, and it cannot be `e2e` without colliding with the classic tenant's runner group.
 2. **The fixture workflow takes `runs-on` as a `workflow_dispatch` input.** `drain-probe.yml` in `actions-gateway/gateway-test` pinned `runs-on: e2e`; it now takes an input defaulting to `e2e`, so the classic measurement is unchanged and one fixture serves both tiers.
-   This is also the change [Q530](../STATUS.md#Q530) names as its prerequisite for live-run isolation, so that row is partly unblocked.
+   This is also the change [Q530](../queue/Q530.md) names as its prerequisite for live-run isolation, so that row is partly unblocked.
 3. **The listener's bootstrap is asserted before anything is dispatched.** A tenant that never registers its scale set would otherwise surface as "the job stayed queued for ten minutes" — indistinguishable from GitHub being slow, from a label mismatch, and from the runner group's public-repository rule.
    `Listener.Start` publishes `Degraded=False/SessionAuthorized` only after ensuring the scale set *and* opening the session, so that condition is checked first and its failure dumps every condition on the RunnerSet.
 
@@ -288,7 +288,7 @@ The graceful counterpart, where the runner reliably gets its own report out, is 
 
 **"Usually" is doing real work in that sentence, and this section originally read "always".** It inferred from the 137 exit that no SIGTERM was relayed and nothing reached GitHub.
 The exit code does not carry that: a runner that reports and *then* overruns its grace is SIGKILLed too, and the 2026-08-03 scale-set pair exited 137 on both sides of a 9m38s/17s split.
-What the runner managed to say is now read from its own log and from GitHub's per-step records rather than inferred from the exit code — see [Q657](../STATUS.md#Q657) and the scale-set result above.
+What the runner managed to say is now read from its own log and from GitHub's per-step records rather than inferred from the exit code — see [Q657](../queue/Q657.md) and the scale-set result above.
 
 **Sizing the cap needed a measurement of its own.** The kubelet charges a pod only its writable layer, emptyDirs and logs — image layers are read-only and are not charged — and a pod built from the real runner image was measured at **28KiB** against the node's `stats/summary` endpoint.
 The e2e fixture jobs add nothing to that: neither checks out a repository.
@@ -628,7 +628,7 @@ Two caveats on the numbers, both in the conservative direction:
 
 Both gateways deregistered cleanly on teardown — the fixture repo listed zero runners afterwards — which also confirms the `real-ag-` prefix reasoning above against real registrations rather than against the naming code.
 
-## Experiment 5: utilization delta ([Q424](../STATUS.md#Q424), deferred)
+## Experiment 5: utilization delta ([Q424](../queue/Q424.md), deferred)
 
 Same workload on dogfood, tiers off versus tiers on, occupancy measured over a fixed window.
 
@@ -644,10 +644,10 @@ Q417 shipped 2026-07-26, so nothing here is blocked on it any more.
    Its residual is [Q459](archive/q459-drained-worker-recovery.md), which needs live-GitHub and so sequences with the other live-GitHub work below rather than ahead of it.
 2. ~~Q422 (experiment 4)~~ — **done 2026-07-31**; see the [result](#half-b-result-measured-2026-07-31).
    Both halves are now covered, and it left no residual.
-3. Q396 (experiment 1), which then gates [Q418](../STATUS.md#Q418).
+3. Q396 (experiment 1), which then gates [Q418](../queue/Q418.md).
    Fold [Q459](archive/q459-drained-worker-recovery.md) in around here: both want a real GitHub run interrupted mid-job, and Q396 is already standing that up.
 4. ~~Q423 (experiment 3)~~ — **done 2026-07-29**; see [Result](#result-measured-2026-07-29-preemption-is-not-eviction). ~~Its residual is Q497~~ — **also done 2026-07-29** ([plan](archive/q497-preemption-recovery.md)): the `PreemptionByScheduler` marker resolved the discriminator question for the preemption slice without waiting on Q459's human-cancel one, exactly as predicted here.
-   Then revive [Q424](../STATUS.md#Q424) (experiment 5).
+   Then revive [Q424](../queue/Q424.md) (experiment 5).
 
 ## Acceptance criteria
 

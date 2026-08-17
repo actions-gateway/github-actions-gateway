@@ -8,7 +8,7 @@
 Two defects with one root cause: the v2 front-door work (Q273) routed the *onboarding* docs to v2 but left two tenant-facing surfaces behind.
 
 1. **[`migration-from-arc.md`](../../operations/migration-from-arc.md) still teaches the whole ARC migration on `v1alpha1`**, and asserts v1 is "the GA default".
-   Both halves are wrong: `v1alpha1` is alpha, is [deprecated](../../operations/v1alpha1-deprecation.md), and is queued for removal ([Q273](../../STATUS.md#Q273) → [Q264](../../STATUS.md#Q264)).
+   Both halves are wrong: `v1alpha1` is alpha, is [deprecated](../../operations/v1alpha1-deprecation.md), and is queued for removal ([Q273](../../queue/Q273.md) → [Q264](../../queue/Q264.md)).
 2. **Every onboarding doc names `v2alpha1` while also claiming v2 "has reached its first stability contract at `v2beta1`"** — self-contradictory, and it points new tenants at the coexistence version rather than the graduated one.
 
 The ARC guide is the worse of the two, because the version it names is not merely stale positioning — it changes the job-acquisition protocol the reader ends up on.
@@ -83,7 +83,7 @@ Rewrite [`migration-from-arc.md`](../../operations/migration-from-arc.md) onto `
 
 ## Out of scope
 
-- **Removing `v1alpha1`.** Still [Q273](../../STATUS.md#Q273), still gated on the deprecation window elapsing.
+- **Removing `v1alpha1`.** Still [Q273](../../queue/Q273.md), still gated on the deprecation window elapsing.
   This PR changes where readers are *sent*, not what is *served*.
 - **`v2alpha1` doc removal.** It stays served and stays documented for the migration on-ramp.
 - **Q398** (unqualified `kubectl` edits on a Classic `RunnerSet` hit the `v2beta1` storage version).

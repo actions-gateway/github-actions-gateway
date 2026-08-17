@@ -8,7 +8,7 @@ Both of the old boundaries cut sideways across the content, which is why the roa
 | Phase | Scope | Status |
 |---|---|---|
 | 1 | Extract `docs/features.md`; shrink `roadmap.md` to forward-looking only; lint the link discipline | ✅ Done |
-| 2 | Split `STATUS.md`'s Deferred + Flake watch onto their own page | ❌ Open ([Q569](../STATUS.md#Q569)) |
+| 2 | Split `STATUS.md`'s Deferred + Flake watch onto their own page | ❌ Open ([Q569](../queue/Q569.md)) |
 
 ## The problem, measured
 

@@ -1,7 +1,7 @@
 # Unit Test Speed Improvements
 
 **Status: Complete (Q17).** Items 1–4 below all shipped together in `c4660ea` (2026-05-23, the same commit that wrote this doc).
-The Q17 revival (2026-07-20) re-baselined against CI and shipped the single-invocation change described in [the re-baseline section](#2026-07-20-re-baseline-q17-revival); the remaining CI-latency levers (lint, coverage) are parked as [Q361](../../STATUS.md#Q361).
+The Q17 revival (2026-07-20) re-baselined against CI and shipped the single-invocation change described in [the re-baseline section](#2026-07-20-re-baseline-q17-revival); the remaining CI-latency levers (lint, coverage) are parked as [Q361](../../queue/Q361.md).
 
 This document analyses where time is spent in the unit test suite and describes four concrete improvements, in order of estimated impact.
 Each section covers motivation, implementation steps, files affected, and estimated savings.
@@ -263,7 +263,7 @@ Applies to both `make test` and the CI `-race` gate (`make test-race`).
 **Measured outcome (first PR run):** the `-race` unit gate dropped 189s → 163s (−14%).
 Smaller than the compile-serialization arithmetic suggests because the 4-vCPU CI runner was already near CPU-bound during the `cmd/agc`/`cmd/gmc` compiles — the win is the removal of the inter-module barriers (small-module idle time), not extra parallelism during the big compiles.
 
-**Remaining levers (parked as [Q361](../../STATUS.md#Q361)):**
+**Remaining levers (parked as [Q361](../../queue/Q361.md)):**
 
 - **lint** is now the workflow critical path: the per-module `golangci-lint` loop re-loads the shared dependency graph per module.
   Levers: a workspace-aware golangci-lint invocation, cross-run analysis cache tuning, or running the module loop concurrently on CI.

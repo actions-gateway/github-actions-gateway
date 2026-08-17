@@ -66,7 +66,7 @@ Filed as latent: "zero occurrences in `STATUS.md` today", which the build dispro
 
 Second defect, latent: `awk`'s `length()` counts **bytes** on this host (BWK awk 20200816) and **runes** under `gawk` in a UTF-8 locale.
 `STATUS.md` carries 52 em dashes, 51 🔲, 26 ✅.
-Measuring every cell exactly as the script extracts it, the longest is [Q555](../STATUS.md#Q555) at **249 bytes / 249 characters** — one byte of margin against the 250 cap, and Q640 (measured before it shipped, so no row to link) tied it on bytes at 249/245.
+Measuring every cell exactly as the script extracts it, the longest is [Q555](../queue/Q555.md) at **249 bytes / 249 characters** — one byte of margin against the 250 cap, and Q640 (measured before it shipped, so no row to link) tied it on bytes at 249/245.
 Nothing diverges today, but rows are routinely authored to fill the budget, and one at 251/249 would pass in one environment and fail in the other.
 
 ### Runtime is not the argument
@@ -212,7 +212,7 @@ The control — the same overflow on Q631, which has no escaped pipe — failed 
 CI runs the byte one: `ubuntu-latest` inherits Ubuntu 24.04's `/usr/bin/awk` → mawk 1.3.4, and the runner image's apt manifest adds no awk of its own.
 So the gate counted bytes in both places it actually ran, and the divergence was one `brew install gawk` away from arriving on a laptop.
 
-**No row was reclassified.** All 109 Queue and Deferred cells re-measured: the longest is [Q555](../STATUS.md#Q555) at 249 bytes / 249 characters, confirming the filed figure, and the largest byte-vs-rune gap on any row is 9 (Q525, 215 B / 206 chars).
+**No row was reclassified.** All 109 Queue and Deferred cells re-measured: the longest is [Q555](../queue/Q555.md) at 249 bytes / 249 characters, confirming the filed figure, and the largest byte-vs-rune gap on any row is 9 (Q525, 215 B / 206 chars).
 Nothing is over cap on either scale, and runes ≤ bytes always, so moving to characters can only relax, never break, an existing row.
 
 **One workflow gap closed.** `status-lint.yml` gated on `scripts/docs/lint-backlog.sh` alone, which no longer holds the rules; it now also triggers on `devtools/**`, pins the toolchain with `setup-go`, and takes 5 minutes instead of 2 for the build.

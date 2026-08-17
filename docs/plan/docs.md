@@ -3,7 +3,7 @@
 ## Status at a glance
 
 Last refreshed 2026-08-01.
-All Phase 1, Phase 2, and Phase 3 items shipped except the Grafana dashboards half of 3.2 ([Q568](../STATUS.md#Q568)).
+All Phase 1, Phase 2, and Phase 3 items shipped except the Grafana dashboards half of 3.2 ([Q568](../queue/Q568.md)).
 
 | # | Item | File | Status |
 |---|---|---|---|
@@ -19,7 +19,7 @@ All Phase 1, Phase 2, and Phase 3 items shipped except the Grafana dashboards ha
 | 2.7 | HPA silent-failure callout on ProxyConfig | `docs/design/03-api-contracts.md` | ✅ Done — Resources comment already includes the HPA `<unknown>` warning |
 | 2.8 | Reading-path guide in design README | `docs/design/README.md` | ✅ Done |
 | 3.1 | Network architecture doc | [docs/design/network-architecture.md](../design/network-architecture.md) | ✅ Done |
-| 3.2 | Alerting and dashboards doc | [docs/operations/observability-alerting.md](../operations/observability-alerting.md) | ⚠️ Mostly done — alert rules, SLO recording rules and runbook links shipped (under `observability-alerting.md`, not the planned `alerting.md`); Grafana dashboards remain, tracked as [Q568](../STATUS.md#Q568) |
+| 3.2 | Alerting and dashboards doc | [docs/operations/observability-alerting.md](../operations/observability-alerting.md) | ⚠️ Mostly done — alert rules, SLO recording rules and runbook links shipped (under `observability-alerting.md`, not the planned `alerting.md`); Grafana dashboards remain, tracked as [Q568](../queue/Q568.md) |
 | 3.3 | Tenant onboarding checklist | [docs/operations/tenant-onboarding.md](../operations/tenant-onboarding.md) | ✅ Done |
 | 3.4 | Cost modeling appendix | [docs/design/appendix-f-cost-model.md](../design/appendix-f-cost-model.md) | ✅ Done |
 | X | Token-refresh alerting threshold cross-link | `docs/design/07-test-plan.md §7.1` | ✅ Done |

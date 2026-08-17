@@ -32,7 +32,7 @@ Measured during Q561 (2026-08-01):
   `docs/**` and `hooks/**` are absent from the e2e filter, so the sole match was `scripts/*` catching what was then `scripts/source-links-hook-test.sh` (now [`scripts/docs/source-links-hook-test.sh`](../../../scripts/docs/source-links-hook-test.sh), where it cannot match).
 - #1063 is the control: docs + `hooks/backlog_link.py` + `mkdocs.yml`, no script — e2e correctly skipped.
 - On #1071 the unnecessary run **failed** `E2E_Migration_MigratedTenantReconciles‑ IntoAWorkingControlPlane` (timeout; 61 of 62 specs passed) while `main` was green across the 8 preceding runs.
-  A documentation change was blocked by a flake it had no business meeting ([Q570](../../STATUS.md#Q570)).
+  A documentation change was blocked by a flake it had no business meeting ([Q570](../../queue/Q570.md)).
 
 ### Prior art
 

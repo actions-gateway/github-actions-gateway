@@ -1,7 +1,7 @@
 # Q273 — Make v2 the front door + exemplary v1→v2 migration (plan)
 
 **Status:** ▶ Started 2026-07-06.
-**Scope:** the *do-now* front-door / positioning / onboarding / migration slice of [Q273](../STATUS.md#Q273).
+**Scope:** the *do-now* front-door / positioning / onboarding / migration slice of [Q273](../queue/Q273.md).
 Full "v2-only" (v1 removal) stays gated on v2beta1 (Q74) — **this plan removes nothing**.
 Strategy source: [v1-classic-sunset-review.md §6.2](v1-classic-sunset-review.md).
 

@@ -132,7 +132,7 @@ It is "nobody has pushed this far enough yet, and here is how far we have got".
 
 **Leg 2: GAG is making it safe.** Kata micro-VM workers give a job root without a shared kernel, already the default in GAG's own end-to-end suite.
 Per-tenant egress plus default-deny NetworkPolicy, reconciled rather than hand-built, close the network half, including the path Kata does not close (a micro-VM does not change the pod's network identity, so cloud metadata still answers from inside the guest).
-Still open and load-bearing: [Q408](../STATUS.md#Q408), [Q539](../STATUS.md#Q539), [Q540](../STATUS.md#Q540), [Q716](../STATUS.md#Q716), under the [secure multi-tenant OSS CI](secure-multi-tenant-oss-ci.md) umbrella.
+Still open and load-bearing: [Q408](../queue/Q408.md), [Q539](../queue/Q539.md), [Q540](../queue/Q540.md), [Q716](../queue/Q716.md), under the [secure multi-tenant OSS CI](secure-multi-tenant-oss-ci.md) umbrella.
 
 **Leg 3: GAG keeps it operable.** Quota-aware intake and automatic re-run are consequences of leg 2, not standalone features, and should be presented that way.
 Bin-packing tenants onto shared expensive nodes *requires* enforceable per-tenant quotas, and enforcing a quota is what strands jobs unless intake respects it before the claim.
@@ -174,7 +174,7 @@ The messaging consequence:
 
 **The pre-claim seat is the trap.** ARC's listener already holds a Kubernetes clientset and `actions/scaleset` already exposes `SetMaxRunners`, so the seat is a permissions change away for anyone who wants it.
 Claim the **signal** (live quota headroom computed and put in the capacity header), never the seat.
-The one place it is structurally defensible is gang scheduling ([Q718](../STATUS.md#Q718)): a multi-node job needs N co-scheduled pods in one topology domain, and the protocol advertises capacity as a single integer, so no `SetMaxRunners` workaround exists for a placement predicate.
+The one place it is structurally defensible is gang scheduling ([Q718](../queue/Q718.md)): a multi-node job needs N co-scheduled pods in one topology domain, and the protocol advertises capacity as a single integer, so no `SetMaxRunners` workaround exists for a placement predicate.
 
 ## 5. Channels — where to reach the ICP (ranked by fit)
 

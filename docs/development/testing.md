@@ -1124,7 +1124,7 @@ Each case below is the evidence for its rule, so the rule is still readable off 
 
 These shortcuts recur, and each produces confident-but-wrong diagnoses:
 
-- **Treating a reproduction you built as the mechanism.** [Q820](../STATUS.md#Q820)'s plan doc reproduced its signature line for line by racing a `rm -rf` against a live git in the same repository, then spent three rounds hunting a remover that exists nowhere in the suite or the fan-out around it.
+- **Treating a reproduction you built as the mechanism.** [Q820](../queue/Q820.md)'s plan doc reproduced its signature line for line by racing a `rm -rf` against a live git in the same repository, then spent three rounds hunting a remover that exists nowhere in the suite or the fan-out around it.
   The trees were intact at the moment of failure, so there was never a remover to find.
   What refuted the whole family the first time it fired was a reading taken from the *failing* system: the state of the throwaway trees, ten lines of `ERR` trap.
   When the question is narrower than a root cause, break the operation deterministically rather than racing it.
@@ -1577,7 +1577,7 @@ Each was caught by comparing its output against values already documented elsewh
 The section above is about a scan that reads the wrong *argument*.
 This one is about a scan that reads the wrong *context*: an `awk` or `grep` pipeline that remembers which function, section, or block it is inside, and never clears that memory when the block ends.
 
-[Q820](../STATUS.md#Q820)'s instrumentation turned on which `git commit -qam` calls sit inside a function, because `set -o errtrace` is load-bearing only for those.
+[Q820](../queue/Q820.md)'s instrumentation turned on which `git commit -qam` calls sit inside a function, because `set -o errtrace` is load-bearing only for those.
 The scan was:
 
 ```awk

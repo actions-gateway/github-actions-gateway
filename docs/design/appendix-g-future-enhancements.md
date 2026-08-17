@@ -320,7 +320,7 @@ Operator guidance: [tenant-onboarding.md § worker scale-up rate limit](../opera
 ## G.12. Warm Worker Pool (`minIdleWorkers`)
 
 > **Not the same as node-/workspace-layer warmth.** This is about holding **pre-created worker pods** so a job skips pod scheduling.
-> It is *not* image warmth (a peer-to-peer mirror / pre-pull DaemonSet — see [G.11](#g11-worker-scale-up-rate-limiting-anti-stampede) and the Q211 guide) and *not* build-/model-cache warmth (a cache volume mounted in the worker `podTemplate` — a raw PVC works today; a *managed* backend is [Q215](../STATUS.md#Q215)).
+> It is *not* image warmth (a peer-to-peer mirror / pre-pull DaemonSet — see [G.11](#g11-worker-scale-up-rate-limiting-anti-stampede) and the Q211 guide) and *not* build-/model-cache warmth (a cache volume mounted in the worker `podTemplate` — a raw PVC works today; a *managed* backend is [Q215](../queue/Q215.md)).
 > Those cheaper layers should be exhausted first; this item is the residual.
 
 **Current behavior.** Worker pods are created **reactively** the moment a job is acquired from the broker long-poll, with a just-in-time (JIT) runner config bound to that job, and released on completion ([§2 architecture](02-architecture.md)).
@@ -336,7 +336,7 @@ So GAG is already "warm" at the layer ARC's `minRunners > 0` exists to warm; onl
 |---|---|
 | Runner **registration** | Already eliminated — goroutine session pool. |
 | **Image** pull | P2P image mirror (Spegel/Dragonfly) / pre-pull DaemonSet. |
-| Build cache / **model weights** (the real GPU/ML startup cost) | Cache volume in the `podTemplate` (raw PVC works today; managed backend = [Q215](../STATUS.md#Q215)). |
+| Build cache / **model weights** (the real GPU/ML startup cost) | Cache volume in the `podTemplate` (raw PVC works today; managed backend = [Q215](../queue/Q215.md)). |
 | **Pod scheduling** | *This item* — the only layer a warm pod pool uniquely addresses. |
 
 Only teams for whom pod-schedule latency is a large fraction of job time (sub-minute, high-frequency, human-waited CPU jobs) *after* exhausting the rows above are candidates.
@@ -407,7 +407,7 @@ Until that changes, Kata-isolated runners are still only suitable for *trusted* 
 **The durable answer** that would let the variant carry untrusted / OSS-PR CI: an in-cluster pull-through registry mirror (so workers need no direct registry egress) plus a tight egress policy scoped to the mirror, GitHub, and DNS.
 Operator-facing context: [kata-dind-workloads.md](../operations/kata-dind-workloads.md).
 
-**Status: active — the Demand trigger fired 2026-07-31 (operator ask), moving [Q408](../STATUS.md#Q408) into the Queue with a phased plan: [q408-untrusted-pr-egress.md](../plan/q408-untrusted-pr-egress.md).** Published on the [public roadmap](../roadmap.md#exploring--longer-term) as the named path to untrusted-PR CI.
+**Status: active — the Demand trigger fired 2026-07-31 (operator ask), moving [Q408](../queue/Q408.md) into the Queue with a phased plan: [q408-untrusted-pr-egress.md](../plan/q408-untrusted-pr-egress.md).** Published on the [public roadmap](../roadmap.md#exploring--longer-term) as the named path to untrusted-PR CI.
 
 ---
 

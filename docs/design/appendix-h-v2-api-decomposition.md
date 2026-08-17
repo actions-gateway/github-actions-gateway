@@ -969,7 +969,7 @@ Each carries a recommendation grounded in precedent (Gateway API, ARC, cert-mana
    Pod Security Admission is a **namespace-scoped** control in Kubernetes, and v1 hung it on a *sub-namespace* object (`ActionsGateway.spec.securityProfile`) — so under multi-gateway (#1) two `ActionsGateway`s in one namespace fight over the single namespace PSA label.
    The fix **deletes the question instead of answering it: `securityProfile` becomes a namespace-scoped concern, not a per-gateway field.** Drop `SecurityProfile` from `ActionsGatewaySpec` (a cheap follow-up to the just-merged M1 `v2alpha1` types — alpha, no compatibility guarantee) and let the namespace own its Pod Security level, GMC-guarded exactly as today: the downgrade-protection and `privileged`-eligibility machinery (`securityProfileRank`, `validateSecurityProfileTransition`, the `allow-profile-downgrade` keyword) stays, now keyed **once per namespace** instead of per gateway.
    Co-located gateways therefore always share one posture; tenants that need *different* postures use *different* namespaces — the natural PSA isolation boundary anyway.
-   Land the field-home change no later than **M3a ([Q164](../STATUS.md#queue))**, where `ActionsGateway` is first reconciled, so M3a reads the profile from its new home rather than building per-gateway logic that M3b would rip out.
+   Land the field-home change no later than **M3a (Q164)**, where `ActionsGateway` is first reconciled, so M3a reads the profile from its new home rather than building per-gateway logic that M3b would rip out.
    Migration is unaffected (one v1 namespace → one gateway → one profile).
 
    **Implemented mechanism (M3a, Q175).** The namespace-side selector is the label `actions-gateway.com/security-profile: baseline|restricted|privileged` (`SecurityProfileLabel`); absent on a managed tenant namespace ⇒ `baseline` (secure default).
@@ -1000,7 +1000,7 @@ Each carries a recommendation grounded in precedent (Gateway API, ARC, cert-mana
 
 The migration ([§H.11](#h11-migration-v2-tool-assisted)) is the first and only place two invariants this design *asserts* are tested against real v1 data.
 Both are stated confidently above; neither has been exercised.
-They are acceptance criteria the M5 tool ([Q165](../STATUS.md#queue)) must meet — and, because they are pure data-shape questions, they can be validated **before** M5 by a mapping over representative v1 fixtures, surfacing any v2 schema gap at alpha-rewrite cost instead of post-adoption cost.
+They are acceptance criteria the M5 tool (Q165) must meet — and, because they are pure data-shape questions, they can be validated **before** M5 by a mapping over representative v1 fixtures, surfacing any v2 schema gap at alpha-rewrite cost instead of post-adoption cost.
 (The `v2alpha1` types do not exist yet, so this is a fixtures-and-asserted-output exercise, not runnable tool code, until M1 lands.)
 
 ### Invariant 1 — "no behavior change" (the non-goal most at risk)

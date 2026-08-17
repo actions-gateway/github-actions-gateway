@@ -8,7 +8,7 @@ The two prior ports of the same shape are Q417 (eviction recovery) and Q443 (the
 ## Why it matters now
 
 `v2beta1` is ScaleSet-only and ScaleSet is the default `acquisitionProtocol`, so no v2 tenant has either recovery today.
-[Q264](../../STATUS.md#Q264) deletes the classic machinery at `v2.0.0`, which would turn the gap into the silent capability deletion [04-operational-flows.md](../../design/04-operational-flows.md) names, which is the outcome Q417 and Q443 were ported to avoid.
+[Q264](../../queue/Q264.md) deletes the classic machinery at `v2.0.0`, which would turn the gap into the silent capability deletion [04-operational-flows.md](../../design/04-operational-flows.md) names, which is the outcome Q417 and Q443 were ported to avoid.
 
 ## What the classic tier actually does
 

@@ -138,7 +138,7 @@ The line is the evidence, not the wording.
 When the measurement leaves the row's own observations describing a *different* defect, that row is finished: retire it with the refutation recorded, and let the new defect take a new ID.
 
 #1441 is the instance.
-Q809 was filed on three `e2e-calico` failures read as NetworkPolicy enforcement negatives; diagnosis attributed all three to one scale-set drain-recovery spec, which is [Q549](../STATUS.md#Q549)'s mode B. The diagnosis was right and the retitle in place cost three things anyway:
+Q809 was filed on three `e2e-calico` failures read as NetworkPolicy enforcement negatives; diagnosis attributed all three to one scale-set drain-recovery spec, which is [Q549](../queue/Q549.md)'s mode B. The diagnosis was right and the retitle in place cost three things anyway:
 
 - **Every citation of Q809 re-pointed silently.** A repurpose leaves the anchor alive, so `make doc-links` and rule 5 see nothing: they catch a dead anchor, never a live one that has changed meaning.
   Seven files cited Q809 in its original sense at the moment it changed meaning, and three of them still asserted the refuted failures two days later, in a workflow comment, a spec comment and `testing.md`.
@@ -196,7 +196,7 @@ A message to a human is a filing with the safety rail removed.
 
 It fired twice on 2026-08-12, in both directions.
 A worker raised the "X-test fails under `make check`, passes standalone" family as an unfiled class; a dispatcher relayed it, citing Q596's 2418 runs and Q703's 240 as evidence that no class row existed.
-[Q738](../STATUS.md#Q738) already said "measured across this family" and already named those two rows, so the maintainer was asked to decide something on the premise that it was unfiled.
+[Q738](../queue/Q738.md) already said "measured across this family" and already named those two rows, so the maintainer was asked to decide something on the premise that it was unfiled.
 The observation was real and the escalation still cost a wrong premise, which is the same shape as the three duplicate filings above: right finding, no matcher in the path.
 
 Before escalating, run the search you would run before filing, and say what it returned.
@@ -558,12 +558,12 @@ Exceptions: a flake rooted in an outside service that hasn't recurred (file, don
 
 **Sweep the idiom, not just the instance.** When the cause is an idiom rather than a one-off, the same idiom is usually elsewhere in the file or package, and nothing else will go looking.
 Sweep it in the fixing PR and state what the sweep found, "nothing" included: a stated empty sweep is evidence, while an unstated one is indistinguishable from not having looked.
-Q602 taught one scale-set listener test to wait on a listener-produced signal and left a comment explaining why; four days later [Q685](../STATUS.md#Q685) was the same defect in a sibling test in the same file, and the sweep it finally prompted found a third case.
+Q602 taught one scale-set listener test to wait on a listener-produced signal and left a comment explaining why; four days later [Q685](../queue/Q685.md) was the same defect in a sibling test in the same file, and the sweep it finally prompted found a third case.
 That one never flaked: its positive assertion held whether or not the listener ever observed the completion, so waiting for CI would never have surfaced it.
 
 **A campaign that pins a flake often measures a production defect too, and a flake filed later often turns out to be one already on the Queue.** Either way the pair gets cross-linked the moment it is recognised, with [one row owning the measurement](#two-rows-on-one-defect-cross-link-them-and-say-which-owns-the-measurement).
 
-**Once the mitigation ships, move the row to [Flake watch](../STATUS.md#flake-watch)** — a Deferred subsection whose revive mechanic differs from the rest of the table: the trigger is always `**Event:** recurs on main after the fix`, and on recurrence the row returns to the **top** of the Queue, escalated (the first mitigation didn't hold).
+**Once the mitigation ships, move the row to [flake watch](../queue/README.md)** — a Deferred subsection whose revive mechanic differs from the rest of the table: the trigger is always `**Event:** recurs on main after the fix`, and on recurrence the row returns to the **top** of the Queue, escalated (the first mitigation didn't hold).
 Keeping the row (rather than closing it) preserves the memory that a fix was already attempted, so a second occurrence reads as a recurrence, not a fresh find.
 The lifecycle:
 
@@ -573,7 +573,7 @@ The lifecycle:
 - **Soaked or obsolete** → retire to the ledger (below).
 
 A sighting on a **PR branch** does not meet the trigger, so the row stays in Flake watch — but it is still evidence the mitigation is incomplete: record it (on the row, or in the doc the row links) and count the soak from that date rather than from the fix.
-Record *which mode* failed, too, where the row's fix addressed a specific one: [Q549](../STATUS.md#Q549)'s second sighting was a mode its fix never covered, and a row naming only the fixed mode would have sent the next session to re-diagnose the wrong thing.
+Record *which mode* failed, too, where the row's fix addressed a specific one: [Q549](../queue/Q549.md)'s second sighting was a mode its fix never covered, and a row naming only the fixed mode would have sent the next session to re-diagnose the wrong thing.
 
 This is the one place the general "done rows are deleted" rule does **not** apply, which makes it easy to miss when a flake fix otherwise looks like a routine change.
 `scripts/docs/lint-backlog.sh` enforces it (rule 8): a `flake`-labelled Queue row that disappears entirely — measured against the [merge base](#a-moved-row-defeats-conflict-detection) with `origin/main`, or the pre-commit state under `--staged` — fails the lint, naming the row and pointing here.
@@ -638,7 +638,7 @@ It fires only on that deletion, never on a steady-state scan — plenty of open 
 For the rare case where the vanished row was such a citation and real work genuinely remains elsewhere, `BACKLOG_ALLOW_PROGRESS_STALE="plan/NAME.md"` admits it.
 
 When you flip a plan to `✅`, add (or update) a **Status** banner at the top of its plan doc naming the Deferred IDs carrying its residuals (e.g.
-"Status: Complete — residuals deferred as [Q11](../STATUS.md#Q11)").
+"Status: Complete — residuals deferred as [Q11](../queue/Q11.md)").
 The plan doc is **not** archived in this case — its `✅` Progress row still references it.
 
 ### What parking a row obliges elsewhere
@@ -655,7 +655,7 @@ Deleting a row has a documented cascade — the Progress flip, plan archival, th
 | Prose cross-references on the same page | Nothing checks these. Moving a roadmap bullet between sections leaves any "the near-term work below" phrasing pointing at the wrong place, and `make doc-links` reads links, not sentences. |
 
 Only the first two were written down before.
-A 2026-07-30 groom that deferred [Q273](../STATUS.md#Q273) found the other three the expensive way — two by opening a red PR, the third by re-reading the page.
+A 2026-07-30 groom that deferred [Q273](../queue/Q273.md) found the other three the expensive way — two by opening a red PR, the third by re-reading the page.
 
 ## A label earns its place by discriminating
 

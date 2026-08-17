@@ -26,7 +26,7 @@ These are foundations, not placeholders:
 | **Capacity planning for mixed GPU shapes** | Worked scenarios for 8-GPU, 2-GPU, and CPU-only sets sharing one namespace quota | [appendix-e](../design/appendix-e-capacity-planning.md#scenario-1-team-with-3-runnergroups-and-20-concurrent-gpu-jobs-at-peak) |
 
 What is missing is not the plumbing.
-It is the conventions that make a GPU runner set feel native ([Q216](../STATUS.md#Q216)) and the ability to express a job that needs more than one node at once ([Q718](../STATUS.md#Q718)).
+It is the conventions that make a GPU runner set feel native ([Q216](../queue/Q216.md)) and the ability to express a job that needs more than one node at once ([Q718](../queue/Q718.md)).
 
 ## The collision with the security goal
 
@@ -62,7 +62,7 @@ That is a coherent story, but only if it is stated rather than discovered by an 
 
 ## Why gang scheduling is structurally hard, and why that matters
 
-[Q718](../STATUS.md#Q718) is not a bigger version of Q216.
+[Q718](../queue/Q718.md) is not a bigger version of Q216.
 A multi-node training or distributed-test job needs **N pods co-scheduled in one topology domain** (NVLink, InfiniBand).
 The runner-scale-set protocol advertises capacity to GitHub as **a single integer**.
 A gang requirement is a placement predicate, not a count, so there is no integer that expresses "four pods, same domain, or none".
@@ -112,7 +112,7 @@ Do not claim GPU Operator or Node Feature Discovery awareness, gang scheduling, 
 
 Shipped: scale-to-zero workers, priority tiers with reserved floors, disruption re-run for preempted GPU jobs, GPU-safe right-sizing, per-tenant utilization metrics, mixed-shape capacity planning.
 
-Open, with rows: [Q216](../STATUS.md#Q216) (first-class GPU conventions, GPU Operator and NFD awareness), [Q718](../STATUS.md#Q718) (gang scheduling and topology-aware placement), [Q407](../STATUS.md#Q407) (`ProvisioningRequest` capacity probe, which is how a gang would ask an autoscaler whether it can be placed before the claim).
+Open, with rows: [Q216](../queue/Q216.md) (first-class GPU conventions, GPU Operator and NFD awareness), [Q718](../queue/Q718.md) (gang scheduling and topology-aware placement), [Q407](../queue/Q407.md) (`ProvisioningRequest` capacity probe, which is how a gang would ask an autoscaler whether it can be placed before the claim).
 
 Both open rows are **demand-gated on purpose**: they need a real GPU CI workload to design against, and Q216's own note says so.
 Designing them against an imagined one is how the wrong abstraction ships.

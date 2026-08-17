@@ -156,7 +156,7 @@ sequenceDiagram
    The wrapper stays resident as PID 1 and relays SIGTERM/SIGINT down to the engine, so a pod termination (eviction, node drain) reaches the process that can actually abort the job and report it (Q385).
    Note the precondition: the relay carries a *pod* termination.
    A run **cancelled at GitHub** does not terminate the pod — the cancellation arrives on the AGC's broker session and nothing forwards it to the worker, so the runner executes its remaining steps while GitHub concludes the job at its own ~5-minute cancellation grace (measured 2026-07-29: a `sleep 600` job ran the full 600s after its run was cancelled).
-   [Q501](../STATUS.md#Q501) carries that gap; what it has closed so far is the *actuator* — when the AGC does give up on a job (step 5's lock loss), the worker pod is now deleted rather than left running to the `maxWorkerLifetime` cap.
+   [Q501](../queue/Q501.md) carries that gap; what it has closed so far is the *actuator* — when the AGC does give up on a job (step 5's lock loss), the worker pod is now deleted rather than left running to the `maxWorkerLifetime` cap.
    **The gap is specific to this tier.** On **ScaleSet** the listener holds a message queue for the whole job, and a cancelled run puts a terminal `JobCompleted` on it — measured live at ~0.2 s for a job with no runner attached (Q468) — which stamps `actions-gateway.com/job-completed-at` on the worker and hands it to the reaper's five-minute `Running` grace (step 11, Q420).
    So the ScaleSet worst case is GitHub's cancellation grace plus the reap grace, against classic's *whole remaining job* bounded only by `maxWorkerLifetime`.
    Detail: [q501-cancel-relay.md](../plan/q501-cancel-relay.md).
