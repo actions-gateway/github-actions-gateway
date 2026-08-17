@@ -1,7 +1,8 @@
 # Q889: Migrate the backlog to the per-item store
 
-**Status:** Planning.
-Nothing implemented.
+**Status:** Phase 1 in progress.
+Both agent scripts adopted (Q694, Q814 and Q828 closed); `queue.py` and the rules checker remain.
+Phases 2 to 6 not started.
 
 Replace the single `docs/STATUS.md` Queue table with the `session-backlog` skill's per-item store under `docs/queue/`, adopt its Python tooling, and groom the backlog to remove what the move obsoletes.
 
@@ -44,25 +45,36 @@ Recorded here because the plan is unreadable without them.
 4. **Flake watch rows become items.** Recommended `status: deferred` with a `flake` label, keeping the `**Event:** recurs on main after the fix` trigger convention.
    Deferred is the skill's parked-awaiting-a-trigger state, where blocked means waiting on a dependency and would put every flake row in the blocked set a groom reads each pass.
    *(Maintainer said blocked; deferred is this plan's counter-proposal and needs a yes before phase 2.)*
-5. **Rules 8, 9, 10 and 11 are ported to a repo-local checker**, since `queue.py lint` has no equivalent.
-   `queue.py claims` covers rule 12.
+5. **Rules 8, 9 and 11 are ported to a repo-local checker**, since `queue.py lint` has no equivalent.
+   `queue.py claims` covers rule 12, and rule 10 is dropped on the measurement below.
 6. **No `docs/milestones/` directory.** The milestone/design split already exists as the `milestone` label and as the index's topical sections; a third classification by directory would cost re-homing across 157 plans, re-base every moved file's outbound links, and fork `no-plan-refs-check`, `plan-index-check`, the plan-index merge driver, `.gitattributes` and the path filters, all of which key on `docs/plan/`.
 7. **#1587 merges first**; this work branches from `main` after it lands.
 
-## What each of the four rules becomes
+## What each rule becomes
 
 The point of porting rather than accepting the loss is that each guards a loss the store does not otherwise prevent.
+Which is why the fourth is dropped: measurement found it guards nothing the layout does not already refuse.
 
 | Rule | Guards | New home |
 |---|---|---|
 | 8: a `flake` row may not vanish | a flake fix deleting the recurrence memory | store check: an item with `flake` may not be deleted, only moved to the retired ledger |
 | 9: the last row of a plan flips its Progress | a plan reading as active after its work shipped | `plan-index-check`, which already reads Status cells and already gates linked-iff-live |
-| 10: a deleted row may not reappear | a reorder-over-delete rebase resurrecting shipped work | store check against the merge base; cheaper here, since an item file is added once and deleted once |
 | 11: closed label vocabulary | a typo'd label sticking silently | store check over frontmatter `labels` against a declared set |
 
-Rule 10 is worth re-examining rather than porting mechanically: it exists because a *relocated* row and a *deleted* row are indistinguishable to a line-position merge.
-Under one-file-per-item a deletion is a file removal, so the failure mode may not survive the layout.
-Confirm before building it.
+**Rule 10 was measured rather than ported, and the measurement says do not build it.** Measured 2026-08-17 in throwaway repositories, git 2.55.0, both arms run:
+
+| Layout | The merge | Outcome |
+|---|---|---|
+| Single table, a row relocated far enough from the deletion to clear the diff context | **exit 0, clean** | the completed row is silently resurrected |
+| Per-item store, a `rank` edit against a file deletion | **exit 1, `CONFLICT (modify/delete)`** | the file is left in the tree, so resurrecting it takes an explicit `git add` |
+
+The rule exists because a *relocated* row and a *deleted* row are indistinguishable to a line-position merge.
+One file per item makes them a modify and a delete of one path, which git refuses rather than resolves, so the silent default the rule was built for is gone and what remains is a careless resolution of a loud conflict.
+That residual belongs to the reconciliation habit [already documented for hand-resolved conflicts](../development/maintaining-backlog.md#a-hand-resolved-conflict-drops-rows-the-markers-never-named), not to a new gate.
+
+The first control run got this wrong in the informative direction: a four-row fixture put the relocation inside the deletion's diff context, so the table arm conflicted too and the comparison read as "no difference".
+Reproducing the documented silent case needed twenty rows and a relocation from position 18 to the top.
+A probe that cannot reproduce a defect the repo has already met twice is measuring itself.
 
 ## Phases
 
@@ -70,9 +82,10 @@ Each phase is separately verifiable.
 They land as one PR unless the maintainer splits it.
 
 **1.
-Tooling, changing nothing.** Vendor `queue.py` and the claim allocator; adopt `pr-requeue-eligible.py` and `pr-mergeability-watch.py`; write the repo-local checker for rules 8/9/10/11.
+Tooling, changing nothing.** Vendor `queue.py`; adopt `pr-requeue-eligible.py` and `pr-mergeability-watch.py`; write the repo-local checker for rules 8, 9 and 11.
 Wire the gates.
 Retire nothing.
+**Not** the claim allocator: this repo's `alloc-queue-id.sh` is upstream of the skill's, which cites this repo's 460+ live claims as its own proof point, and `backloglint` rule 12 already enforces what `queue.py claims` does.
 The store does not exist yet, so `queue.py lint` reports `0 item(s) OK`.
 Read the count, not the exit code: an empty run is a clean bill of health for a store it never read.
 
@@ -112,5 +125,5 @@ Delete `docs/STATUS.md`, then groom.** Remove or rewrite items the work obsolete
 - Round-trip equality: the store renders to the pre-migration table.
 - Count reconciliation: 176 items in, 176 out, and the rendered order matches.
 - Every one of the 218 anchors resolves (`make doc-links`).
-- The rules-8/9/10/11 checker is shown **failing** on each violation before it is trusted to pass.
+- The rules-8/9/11 checker is shown **failing** on each violation before it is trusted to pass, one proof per rule rather than one for the checker.
 - `make check` green over the final tree.
