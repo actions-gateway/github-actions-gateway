@@ -3088,6 +3088,14 @@
 <td>Q850 built the enumeration and its self-test: <code>reasontiers</code> reads each reason's index off the callee's declaration, which is what the v1.4.0 regex got wrong. Remaining work is wiring it into the <code>api-surface-since.sh</code> pre-flight.</td>
 </tr>
 <tr>
+<td><a id="Q890"></a>Q890</td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/docs/queue.py">Nothing keeps the four vendored files identical to upstream</a></td>
+<td><code>ci</code> <code>debt</code> <code>retro</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>Phase 1 vendored <code>queue.py</code>, its rank vectors and two agent scripts byte-identical so an upstream fix lands as a clean overwrite; nothing holds them there. The fork drifting both ways was the defect, unseen until asked. Needs a fetch or a digest.</td>
+</tr>
+<tr>
 <td><a id="Q846"></a>Q846</td>
 <td><a href="../development/technical-debt/">A tooling issue is deduped at filing time, after the recommendation is already made</a></td>
 <td><code>docs</code> <code>debt</code> <code>retro</code></td>
