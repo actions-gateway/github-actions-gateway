@@ -1,6 +1,7 @@
 # Backlog
 
-One file per item. Priority is the `rank` key, not the position of a line in a table, so two sessions taking the top two items touch two different files and never conflict.
+One file per item.
+Priority is the `rank` key, not the position of a line in a table, so two sessions taking the top two items touch two different files and never conflict.
 
 Pick the top ready item, or read the whole backlog in priority order:
 
@@ -14,14 +15,20 @@ python3 scripts/docs/queue.py render
 
 ## Conventions
 
-**Status:** `ready` · `blocked` · `deferred`
-**Size:** S = one session · M = 2-3 sessions · L = multi-session, needs a phased plan doc in [`docs/plan/`](../plan/README.md)
-**Labels:** `milestone` `security` `tests` `speed` `docs` `ci` `dogfood` `debt` `feature` `bug` `flake` `retro` `1.6-gate` (blocks the Release 1.6 tag, [scoped on the ladder](../plan/release-ladder.md)) `2.0-gate` (blocks the [v2 GA](../plan/v2-ga.md) tag)
+**Status:** `ready` · `blocked` · `deferred`  
+**Size:** S = one session · M = 2-3 sessions · L = multi-session, needs a phased plan doc in [`docs/plan/`](../plan/README.md)  
+**Labels:** `milestone` `security` `tests` `speed` `docs` `ci` `dogfood` `debt` `feature` `bug` `flake` `retro` `1.6-gate` (blocks the Release 1.6 tag, [scoped on the ladder](../plan/release-ladder.md)) `2.0-gate` (blocks the [v2 GA](../plan/v2-ga.md) tag)  
 **New IDs:** `make queue-id TITLE="…"`: it searches for near-duplicates, then claims ([why there is no counter](../development/queue-id-allocation.md))
 
-The label list is closed: `check-queue-rules.sh` fails an item carrying a label this page does not declare. Adding a category means adding it here first. Gate labels for shipped releases are retired rather than kept, because no open item can carry one.
+The trailing hard breaks above are load-bearing: `check-queue-rules.sh` anchors the vocabulary to a line starting `**Labels:**`, and without them `mdreflow` folds all four into one paragraph.
+It exits unmeasurable rather than passing when that happens, which is how this was caught.
 
-A `deferred` item carries no priority position and is not picked from the top. Each waits on an explicit trigger, tagged by source: **Demand:** an outside operator or user ask · **Event:** an observable outside-our-control condition · **Decision:** our own call, where we are the blocker.
+The label list is closed: `check-queue-rules.sh` fails an item carrying a label this page does not declare.
+Adding a category means adding it here first.
+Gate labels for shipped releases are retired rather than kept, because no open item can carry one.
+
+A `deferred` item carries no priority position and is not picked from the top.
+Each waits on an explicit trigger, tagged by source: **Demand:** an outside operator or user ask · **Event:** an observable outside-our-control condition · **Decision:** our own call, where we are the blocker.
 
 ## Rules the gates enforce
 
