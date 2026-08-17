@@ -97,6 +97,8 @@ The titles were the work; the migration was one command.
 
 **3.
 Switch the 53 consumers.** Retire, repoint or rewrite each: `lint-backlog.sh`/`backloglint`, `check-status-isolation.sh`, `find-duplicate-rows.sh`, `git-merge-status.sh`, `next-task.sh`, `backlog-metrics.sh`/`backlogmetrics`, `queue-unblock.sh`, `alloc-queue-id.sh`, plus `roadmapcheck` and `check-plan-index.sh` which read Queue membership, plus `STATUS_GATES`/`gate-lists-check`, the pre-commit hook, `.gitattributes`, `status-lint.yml`, the path filters, and piped-gate's `docs/STATUS.md` overlap exemption.
+Re-counted at the start of the work: **61 files outside `docs/` reference `STATUS.md`**, 40 under `scripts/`, 10 under `devtools/` and 11 of wiring.
+The 53 above counted tools rather than files; whichever unit, re-derive it rather than quoting it.
 
 **4.
 Anchors and docs.** Rewrite 218 `STATUS.md#QNNN` references across 50 docs to the item pages.
@@ -183,6 +185,24 @@ Measured on the local oracle rather than the exit code, since the same green wou
 The check re-runs `migrate` into a throwaway store and compares the *loaded* items, so the thing being compared is `queue.py`'s own reading of the table rather than a second parser free to drift from it.
 Rank values are excluded and only the order they produce is compared, because a re-rank inside the store is the one operation the store exists to allow and a stricter check would fire on it.
 It retires itself: once `docs/STATUS.md` is deleted in phase 6 it passes and says the two can no longer disagree, so nothing has to remember to remove it.
+
+## Phase 3, in progress
+
+**Phase 2's gate is what lets this go incrementally.** `queue-drift-check` holds the table and the store to the same items, fields and order, so for as long as it is green the two are interchangeable and a consumer reading either returns the same answer.
+That removes the reason phase 3 had to be atomic: consumers switch a group at a time, and no window exists where the backlog says two different things.
+
+**Repointing a consumer is not a path swap, because the link format changed too.** `rebase_link` rewrites a table's `#QNNN` anchor to `QNNN.md`, so any consumer that parses links, or takes a span up to the next period, reads something different at the new path.
+Measured on `queue-unblock.sh`: its blocker clause ran `Blocked by` up to the next period, which in the store stops inside the first link's `.md` — the first blocker still matches and every later one in a list disappears, with no error.
+A two-blocker line finds `Q1` and misses `Q2`.
+That is the shape to look for in the remaining consumers, and it is invisible to a test that only exercises one blocker, which is why the rewrite came with the script's first suite.
+
+**The table's own gates stay until the table dies.** `lint-backlog.sh`, `check-status-isolation.sh` and `git-merge-status.sh` take `docs/STATUS.md` as their subject rather than as a source, and the table is live through phase 5 and still obliged to match the store.
+Retiring them in phase 3 would leave it ungated while the drift gate keeps depending on it.
+They belong in phase 6, with the deletion.
+
+**`backlog-metrics.sh` is a phase-6 decision, not a phase-3 one.** `queue.py metrics` replays the store's git history, and the store has 3 commits against `docs/STATUS.md`'s 1155.
+Switching it now would report flow metrics over nothing while looking like a working tool.
+Deleting the table ends that series whatever happens, so what phase 6 has to decide is whether the old series is frozen into a doc, bridged, or simply allowed to restart.
 
 ## Working rules for the remaining phases
 
