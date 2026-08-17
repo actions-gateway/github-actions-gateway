@@ -50,7 +50,8 @@ CHECK_FAST_GATES := lint-backlog status-isolation-check roadmap-check \
                     actionlint uses-pinned-check chart-crds-check chart-rbac-check chart-webhook-check \
                     codegen-check api-reference-check scripts-test claude-usage-test \
                     doc-links release-pins-check em-dash-check page-density-check \
-                    script-docs-check semver-floor-sources-check template-library-check \
+                    script-docs-check queue-rules-check \
+                    semver-floor-sources-check template-library-check \
                     md-reflow-check comparison-stamps-check promql-check \
                     metric-tiers-check reason-tiers-check
 
@@ -184,6 +185,7 @@ SCRIPTS_TESTS := agent/claude-go-throttle-hook-test agent/local-throttle-test \
                  docs/git-merge-plan-index-test docs/git-merge-roadmap-test \
                  docs/git-merge-status-test \
                  docs/lint-backlog-test \
+                 docs/check-queue-rules-test \
                  docs/queue-test docs/rank-vectors-test \
                  docs/release-gates-hook-test docs/release-version-hook-test \
                  docs/source-links-hook-test \
