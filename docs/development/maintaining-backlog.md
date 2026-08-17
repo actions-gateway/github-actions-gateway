@@ -41,6 +41,8 @@ What holds the rules for them is the tooling below, which is in-tree and runs in
 - **The Notes cap is hard, and counted as the cell is written**: ≤ 250 characters, where an em dash costs one and an escaped `\|` costs two.
   Past 200 characters the row must link a doc from its Item or Notes cell — a `#QN` sibling anchor doesn't count, since sibling rows are capped too.
   The same caps apply to Deferred trigger cells.
+  **The store adds a cap the table never had**: an item title is at most 72 characters, because it renders whole in every index row and in `queue.py next`'s kickoff prompt.
+  Adopting it cost 62 rewritten titles.
 - **A literal pipe is written `\|`, code spans included, and `lint-backlog` rule 13 gates it** by comparing each row's own width against its table header.
   Measured 2026-08-14: Q866's Notes rendered as far as its opening backtick, losing the remaining two thirds, and the truncation also hid an over-cap cell from rule 4.
   **Budget for that second half: escaping the pipe is not a one-character fix.** Every rule downstream had been reading the stub before the pipe, so the cell they measure changes the moment it renders whole, and one of them can newly fail on a row nobody edited.
@@ -56,9 +58,14 @@ What holds the rules for them is the tooling below, which is in-tree and runs in
 - **Backlog commits are isolated here by two enforcing gates, not by convention** ([which, and why neither subsumes the other](#isolated-commits-and-what-actually-enforces-them)).
   When a rebase or merge conflicts on this file, resolve it via the [fast path](#resolving-a-statusmd-only-conflict-verify-cheap-push-now) below.
 
-**The layout is the single table**, which is the one the skill's tooling and every gate here enforce.
-The skill also describes a per-item store as a destination; no cutover has landed on `main`, so this page and `lint-backlog` both describe the table.
-A page that starts describing the store before a cutover has landed on `main` is [acting on a decision it cannot confirm](parallel-dispatch.md#coordination-channels).
+**The layout is both, and every backlog edit lands twice.** The per-item store shipped to `main` in Q889 phase 2 and lives at [`docs/queue/`](../queue/README.md), one file per item, with priority carried by a `rank` key instead of a line position.
+`docs/STATUS.md` is still here and still the source every gate below reads, so the two are held to each other by `make queue-drift-check`, which fails the moment they stop agreeing on any item, field or order.
+
+So filing, closing or re-ranking an item means the same edit in both places: the table row, and `docs/queue/QNNN.md`.
+The gate names exactly what is missing rather than reporting a mismatch, and `python3 scripts/docs/queue.py --store docs/queue migrate docs/STATUS.md` regenerates the store wholesale if that is easier than hand-editing.
+This is the interim cost of not cutting over in one 400-file commit, and it ends when phase 6 deletes the table ([the plan](../plan/q889-backlog-item-store.md)).
+
+Until then this page keeps describing the table's mechanics (the merge driver, the escaped pipe, the isolated commit) because they are live, and a page that stops describing a mechanism still in use is wrong in the more expensive direction.
 
 ## Isolated commits, and what actually enforces them
 
