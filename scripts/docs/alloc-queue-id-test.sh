@@ -260,6 +260,37 @@ else
 		"$FLEET workers still took $FLEET distinct IDs, so the assertion above does not test the claim"
 fi
 
+# --- the seam to the duplicate matcher (Q889) ------------------------------
+#
+# The near-duplicate search has its own suite, and this one used to stop at
+# that boundary — so neither side covered the arguments passed across it. That
+# is how the search kept working for a while after it stopped: the store moved
+# to docs/queue/, the caller went on passing the retired --file, and the `|| true`
+# guarding the call turned the error into silence. The allocation still
+# succeeded, which is the only thing anyone was watching.
+
+fixture "$WORK/dup"
+mkdir -p "$WORK/dup/repo/docs/queue"
+{
+	printf -- '---\nid: Q901\nrank: a1\nlabels:\n    - debt\nstatus: ready\nsize: S\n'
+	printf -- 'target: ../plan/p.md\n---\n\n# GMC CRD manifest drifts from the AGC types it embeds\n\nnotes\n'
+} >"$WORK/dup/repo/docs/queue/Q901.md"
+git -C "$WORK/dup/repo" add docs/queue >/dev/null
+git -C "$WORK/dup/repo" "${git_id[@]}" commit -qm 'fixture store' >/dev/null
+
+export PATH="$WORK/dup/bin:$PATH"
+export FIXTURE_ORIGIN="$WORK/dup/origin.git"
+dup_err="$WORK/dup/out/dup.err"
+(cd "$WORK/dup/repo" && "$ALLOC" 'The GMC CRD manifests are stale and no gate notices') \
+	>/dev/null 2>"$dup_err" || true
+
+if grep -q 'Q901' "$dup_err"; then
+	ok 'the allocator reaches the duplicate matcher and surfaces its hit'
+else
+	bad 'the allocator reaches the duplicate matcher and surfaces its hit' \
+		"nothing about Q901 on stderr; the search is being swallowed: $(head -2 "$dup_err")"
+fi
+
 # --- The no-reserve report is gone (Q656) ----------------------------------
 
 if out="$("$ALLOC" --peek 2>&1)"; then

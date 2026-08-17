@@ -28,8 +28,10 @@
 # does not provide — containment divides by the *shorter* title, so a five-word
 # row scores 0.40 on two incidental words.
 #
-# Deferred and Flake watch are searched too. A row duplicating a parked item is
-# the same mistake, and the parked tables are exactly the ones nobody greps.
+# Deferred and flake-watch items are searched too. A row duplicating a parked
+# item is the same mistake, and parked items are exactly the ones nobody greps.
+# They are `status: deferred` in the store; a `flake` label separates the two,
+# the same split `migrate` made when the tables became one directory.
 #
 # Notes cells are deliberately NOT matched. Containment normalises by the
 # shorter side, so folding a ~250-char Notes cell into the row's token set can
@@ -40,9 +42,9 @@
 # file are genuinely separate defects, say.
 #
 # Usage:
-#   find-duplicate-rows.sh "<the row title you are about to file>"
+#   find-duplicate-rows.sh "<the item title you are about to file>"
 #   find-duplicate-rows.sh --target <item-link> "<title>"
-#   find-duplicate-rows.sh --file <path> "<title>"
+#   find-duplicate-rows.sh --store <dir> "<title>"
 #   find-duplicate-rows.sh --audit    # score every existing pair; how noisy is it?
 #
 # Calibration against the shipped backlog: docs/development/maintaining-backlog.md
@@ -72,14 +74,42 @@ usage() {
 	awk '/^# Usage:/,/^$/ { sub(/^#[[:space:]]?/, ""); print }' "$0"
 }
 
-# Rank every Queue/Deferred/Flake-watch row against the title in $QUERY, emitting
-# "score<TAB>ID<TAB>table<TAB>target-flag<TAB>title" for each row over the bar,
-# unsorted. With $LIST_ONLY set it emits "ID<TAB>target<TAB>title" for every row
-# instead and scores nothing — the audit needs the same row parsing, and a second
+# Read the store into "ID<TAB>target<TAB>title<TAB>section" once. Every consumer
+# below re-reads this file rather than the 174 item files, because --audit runs
+# the matcher once per row and re-parsing the store each time is quadratic.
+#
+# The section label is derived, not stored: an item is deferred or not, and a
+# deferred one carrying `flake` is what the table called Flake watch. That is
+# the same split `migrate` made when three tables became one directory.
+store_rows() {
+	local store=$1
+	awk '
+	function flush() {
+		if (id == "") return
+		printf "%s\t%s\t%s\t%s\n", id, target, title, \
+			(status == "deferred" ? (flake ? "Flake watch" : "Deferred") : "Queue")
+	}
+	FNR == 1 { flush(); id = ""; target = ""; title = ""; status = ""; flake = 0; fm = 0 }
+	FNR == 1 && /^---$/ { fm = 1; next }
+	fm && /^---$/ { fm = 0; next }
+	fm && /^id:/     { id = $2 }
+	fm && /^target:/ { target = $2 }
+	fm && /^status:/ { status = $2 }
+	fm && /^[[:space:]]*-[[:space:]]*flake[[:space:]]*$/ { flake = 1 }
+	fm && /^labels:.*flake/ { flake = 1 }
+	!fm && title == "" && /^# / { title = substr($0, 3) }
+	END { flush() }
+	' "$store"/Q*.md
+}
+
+# Rank every item against the title in $QUERY, emitting
+# "score<TAB>ID<TAB>section<TAB>target-flag<TAB>title" for each over the bar,
+# unsorted. With $LIST_ONLY set it emits "ID<TAB>target<TAB>title" for every item
+# instead and scores nothing — the audit needs the same reading, and a second
 # copy of it would be free to drift out of agreement with this one.
 score_rows() {
-	local file=$1
-	awk \
+	local rows=$1
+	awk -F'\t' \
 		-v min_shared="$MIN_SHARED" -v min_score="$MIN_SCORE" \
 		-v tgt_shared="$TARGET_MIN_SHARED" -v tgt_score="$TARGET_MIN_SCORE" '
 	function norm(s,   t) {
@@ -105,20 +135,11 @@ score_rows() {
 		}
 		return k
 	}
-	# Item-cell link target, anchor stripped: two rows about one defect point at
-	# one file even when they describe it in different words.
-	function link_target(cell,   t) {
-		if (!match(cell, /\]\([^)]*\)/)) return ""
-		t = substr(cell, RSTART + 2, RLENGTH - 3)
-		sub(/#.*/, "", t)
-		return t
-	}
-	function link_text(cell,   t) {
-		t = cell
-		gsub(/\]\([^)]*\)/, " ", t)
-		gsub(/\[/, " ", t)
-		return t
-	}
+	# Two items about one defect point at one file even when they describe it in
+	# different words. The anchor a table row carried is gone; the store rebases
+	# every target one directory down, uniformly, so equality between two items
+	# survives the move even though the strings changed.
+	function bare(t) { sub(/#.*/, "", t); return t }
 	BEGIN {
 		split("the a an and or but so of to on at for from with by is are was were be been " \
 		      "it its that this these those not only every each all any than then when where " \
@@ -127,26 +148,13 @@ score_rows() {
 		for (i in sw) stop[sw[i]] = 1
 		list_only = (ENVIRON["LIST_ONLY"] != "")
 		qn = tokenize(ENVIRON["QUERY"], qtok)
-		qtarget = ENVIRON["QUERY_TARGET"]
-		sub(/#.*/, "", qtarget)
+		qtarget = bare(ENVIRON["QUERY_TARGET"])
 	}
-	/^## Queue/        { table = "Queue";       next }
-	/^## Deferred/     { table = "Deferred";    next }
-	/^### Flake watch/ { table = "Flake watch"; next }
-	# Any other section — Progress above all, whose anchors are plan rows rather
-	# than items (Q509) — takes the matcher out of scope until the next heading.
-	/^## /             { table = "";            next }
-	table == "" { next }
-	# A Queue/Deferred row: anchor immediately followed by the visible ID.
-	/^\| <a id="Q[0-9]+"><\/a>Q[0-9]+ \|/ {
-		match($0, /id="Q[0-9]+"/)
-		id = substr($0, RSTART + 4, RLENGTH - 5)
-		split($0, cell, /\|/)
-		title = link_text(cell[3])
-		gsub(/^[[:space:]]+|[[:space:]]+$/, "", title)
+	{
+		id = $1; target = $2; title = $3; table = $4
 
 		if (list_only) {
-			printf "%s\t%s\t%s\n", id, link_target(cell[3]), title
+			printf "%s\t%s\t%s\n", id, target, title
 			next
 		}
 
@@ -158,7 +166,7 @@ score_rows() {
 		for (x in qtok) if (x in rtok) shared++
 		smaller = (qn < rn) ? qn : rn
 		score = shared / smaller
-		same_target = (qtarget != "" && qtarget == link_target(cell[3]))
+		same_target = (qtarget != "" && qtarget == bare(target))
 
 		if (shared >= min_shared && score >= min_score)
 			hit = 1
@@ -170,7 +178,7 @@ score_rows() {
 
 		printf "%.2f\t%s\t%s\t%s\t%s\n", score, id, table, (same_target ? "same target" : ""), title
 	}
-	' "$file"
+	' "$rows"
 }
 
 # --audit: run every shipped row through the matcher as if it were being filed.
@@ -178,7 +186,7 @@ score_rows() {
 # goes stale as the backlog grows — this is how it gets re-measured rather than
 # re-asserted. Symmetric hits collapse to one line.
 audit() {
-	local file=$1 id target title rows=0 flagged=0 hit_id
+	local rows_file=$1 id target title rows=0 flagged=0 hit_id
 	while IFS=$'\t' read -r id target title; do
 		rows=$((rows + 1))
 		while IFS=$'\t' read -r _ hit_id _; do
@@ -186,14 +194,14 @@ audit() {
 			[[ "$hit_id" < "$id" ]] || continue
 			flagged=$((flagged + 1))
 			printf '%s\t%s\n' "$id" "$hit_id"
-		done < <(QUERY="$title" QUERY_TARGET="$target" score_rows "$file")
-	done < <(LIST_ONLY=1 score_rows "$file")
+		done < <(QUERY="$title" QUERY_TARGET="$target" score_rows "$rows_file")
+	done < <(LIST_ONLY=1 score_rows "$rows_file")
 	printf 'rows=%d pairs=%d flagged=%d\n' \
 		"$rows" "$((rows * (rows - 1) / 2))" "$flagged"
 }
 
 main() {
-	local query='' target='' file='' mode=search
+	local query='' target='' store='' mode=search
 
 	while (($# > 0)); do
 		case "$1" in
@@ -206,9 +214,9 @@ main() {
 			[[ -n "$target" ]] || die '--target wants a link'
 			shift 2
 			;;
-		--file)
-			file=${2:-}
-			[[ -n "$file" ]] || die '--file wants a path'
+		--store)
+			store=${2:-}
+			[[ -n "$store" ]] || die '--store wants a directory'
 			shift 2
 			;;
 		-h | --help)
@@ -226,18 +234,25 @@ main() {
 
 	[[ "$mode" == audit || -n "$query" ]] ||
 		die 'wants the title of the row you are about to file'
-	[[ -n "$file" ]] || file="$(git rev-parse --show-toplevel)/docs/STATUS.md"
+	[[ -n "$store" ]] || store="$(git rev-parse --show-toplevel)/docs/queue"
 	# A missing backlog is not an error here: this runs inside ID allocation,
 	# which already tolerates one (a fresh clone, a detached scratch tree).
-	[[ -f "$file" ]] || return 0
+	# An empty directory is the same case and must take the same exit, or a
+	# fresh clone starts failing its first `make queue-id`.
+	[[ -d "$store" ]] || return 0
+	local rows_file
+	rows_file="$(mktemp)"
+	trap 'rm -f "$rows_file"' RETURN
+	store_rows "$store" >"$rows_file" 2>/dev/null || true
+	[[ -s "$rows_file" ]] || return 0
 
 	if [[ "$mode" == audit ]]; then
-		audit "$file"
+		audit "$rows_file"
 		return 0
 	fi
 
 	local hits
-	hits=$(QUERY="$query" QUERY_TARGET="$target" score_rows "$file" | sort -rn)
+	hits=$(QUERY="$query" QUERY_TARGET="$target" score_rows "$rows_file" | sort -rn)
 	[[ -n "$hits" ]] || return 0
 
 	printf 'Possible near-duplicates of "%s" — advisory, nothing is blocked:\n\n' "$query"

@@ -126,10 +126,14 @@ claim() {
 # Advisory near-duplicate search for one title. Never fails the allocation: a
 # broken matcher must not stop a row being filed.
 search_duplicates() {
-	local title=$1 file=$2 target=$3 script
+	local title=$1 target=$2 script
 	script="$(dirname "$0")/find-duplicate-rows.sh"
 	[[ -x "$script" ]] || return 0
-	"$script" --file "$file" ${target:+--target "$target"} "$title" >&2 || true
+	# No source argument: the matcher defaults to docs/queue/ and resolves it
+	# from the repo root (Q889). Passing the old --file here would die into the
+	# `|| true` below, which is the failure this call is least able to show —
+	# the allocation still succeeds and the search just stops happening.
+	"$script" ${target:+--target "$target"} "$title" >&2 || true
 }
 
 main() {
@@ -163,7 +167,7 @@ main() {
 
 	local title
 	for title in ${titles[@]+"${titles[@]}"}; do
-		search_duplicates "$title" "$file" "$target"
+		search_duplicates "$title" "$target"
 	done
 
 	local count=${#titles[@]} floor claimed_max file_max
