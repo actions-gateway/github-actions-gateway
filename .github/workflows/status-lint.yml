@@ -20,6 +20,10 @@ on:
       - 'scripts/docs/lint-backlog.sh'
       - 'scripts/docs/check-roadmap.sh'
       - 'scripts/docs/check-status-isolation.sh'
+      - 'scripts/docs/check-queue-rules.py'
+      # 'docs/queue/**' joins both lists at the phase-2 cutover (Q889).
+      # check-path-filters rejects it today: the directory does not exist,
+      # so the pattern would match nothing and gate nothing.
       # The backlog gate's rules live in devtools/docs/backloglint over the
       # shared parse layer (Q613), so a change there changes this gate's verdict.
       - 'devtools/**'
@@ -62,6 +66,7 @@ jobs:
               - 'scripts/docs/lint-backlog.sh'
               - 'scripts/docs/check-roadmap.sh'
               - 'scripts/docs/check-status-isolation.sh'
+              - 'scripts/docs/check-queue-rules.py'
               - 'devtools/**'
               - '.github/workflows/status-lint.yml'
       # A JS action reports failure only as an ::error:: annotation, so a rerun
@@ -112,6 +117,19 @@ jobs:
       # row without graduating the roadmap bullet that names it.
       - name: check roadmap against the backlog
         run: scripts/docs/check-roadmap.sh
+
+      - name: check the backlog store rules
+        # Rules 8, 9 and 11 (Q889): a flake item may not vanish, a plan's
+        # last item obliges its index row, the label vocabulary is closed.
+        # Reports 0 checked until docs/queue/ exists.
+        #
+        # Runs the script, like every other step in this job. It has to live in
+        # THIS job rather than status-lint-gate: that one is the aggregate
+        # required-status job and has no actions/checkout, so a step there sees
+        # no repository at all. Placed there first, it failed twice for one
+        # cause wearing two faces, 'No rule to make target' for the make form
+        # and exit 127 for the script.
+        run: scripts/docs/check-queue-rules.sh
 
   # Aggregate required-status gate. Mark THIS job's check context
   # (`status-lint-gate`) required in the branch ruleset — never the path-gated

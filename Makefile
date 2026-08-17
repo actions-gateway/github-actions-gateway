@@ -181,6 +181,17 @@ reason-tiers-check: ## Fail on a condition/Event reason with no acquisition-tier
 script-docs-check: ## Fail when a script under scripts/ has no scripts/README.md entry
 	scripts/docs/check-script-docs.sh
 
+# The three backlog rules queue.py lint has no equivalent for, because each is a
+# function of what the branch changed rather than of what the store holds: a
+# flake item may not vanish, deleting a plan's last item obliges its index row,
+# and the label vocabulary is closed. Reports 0 checked until the store exists
+# (Q889); rule 10 was dropped on measurement and rule 12 is `queue.py claims`.
+# status-scope: none — reads docs/queue/, never docs/STATUS.md, so a
+# backlog-table-only change cannot fail it. Revisit at the cutover.
+.PHONY: queue-rules-check
+queue-rules-check: ## Fail when a backlog store change breaks rules 8, 9 or 11
+	scripts/docs/check-queue-rules.sh
+
 # Comparison-table stamp gate (Q801). why-gag.md renders competitor claims as
 # green checks and red X's, and eleven of them shipped with no ARC version and no
 # date because the format had nowhere to put "unverified" — two then went false
