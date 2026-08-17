@@ -3026,6 +3026,11 @@ Each has inline ✓ markers per item.</p>
 <td>⚠️ All three phases shipped 2026-08-02..04. Measured: <code>check-doc-links.sh</code> never checked a badge-wrapped link's outer target (3 live in README, one relative), <code>lint-backlog.sh</code> shifted every table field on one escaped pipe (Q625 carried a live instance), and its character cap meant bytes or runes depending on the <code>awk</code>; the roadmap gate charged a bullet with the paragraph after it, and the metrics replay had mis-booked a removal since June. Q612, Q613 and Q614 all done, with Q654's em-dash gate on the same layer. The merge driver is deliberately excluded</td>
 </tr>
 <tr>
+<td><a href="q889-backlog-item-store/">q889-backlog-item-store.md</a></td>
+<td>Replace the single <code>docs/STATUS.md</code> Queue table with the <code>session-backlog</code> skill's per-item store under <code>docs/queue/</code>, adopt its Python tooling, and port the lint rules the store has no equivalent for</td>
+<td>🚧 In progress, filed 2026-08-16, superseding the stale <a href="https://github.com/actions-gateway/github-actions-gateway/pull/1534">#1534</a> attempt and its unlanded Go <code>queuestore</code>. Six phases: tooling, the store, the 53 machine consumers, 218 anchor references, the <code>/dev/queue/</code> render, then delete the table and groom. <a href="../STATUS/#Q889">Q889</a></td>
+</tr>
+<tr>
 <td><a href="website/">website.md</a></td>
 <td>Public GitHub Pages site: MkDocs Material rendering of <code>docs/</code> + a custom landing page and "vs ARC" comparison; domain decision folded in (org move)</td>
 <td>✅ Done — scaffold, landing, comparison, and public launch shipped (was Q52/Q99/Q129, all completed)</td>
