@@ -228,6 +228,12 @@ The baseline counted the first class only, so the work was understated by the si
 Both of the others are silent under a naive substitution: a pattern written `#Q[0-9]*` matches the literal `#QNNN` with zero digits and rewrites it to `queue/Q.md`, and a pattern written `#Q[0-9]+` skips every section anchor and leaves it pointing at a file phase 6 deletes.
 That is how the classes were found at all: `grep -o 'STATUS\.md#Q[0-9]*'` counted 53 in `docs/plan/README.md` where a `\d+` pattern counted 52, and the one-reference gap was `#deferred`.
 
+**`check-plan-index.sh` reads both sources now, and that is the shape rather than a halfway house.** Its invariant 3 had to move with the 52 anchors in `docs/plan/README.md`, since the cells it reads are the ones that changed.
+Its invariant 1 could not: a plan counts as referenced when a backlog row *or* a Progress row names it, and decision 3 deletes Progress rather than migrating it, so 21 active plans whose only reference is a Progress row read as unreferenced the moment invariant 1 looks at items alone.
+Measured, not assumed — every one of a five-plan sample appears in the Progress table.
+So invariant 1 keeps reading the table and moves when Progress does, in the phase that decides where Progress lands.
+The gate's summary line is identical across the switch.
+
 **Depth is the second trap.** 192 of the item anchors sit one directory under `docs/` and take `../queue/`, but 25 sit two deep (`docs/plan/archive/`) and take `../../queue/`.
 A single substitution applied tree-wide gets those 25 wrong, and `check-doc-links` is what would catch it — so the rewrite is per-file with the prefix derived from the file's own depth, and the gate is the reconciliation rather than a leftover grep.
 
