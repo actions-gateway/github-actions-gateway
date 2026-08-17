@@ -21,7 +21,7 @@ Beta's "production-relyable" signal is itself an adoption driver (nobody relies 
 
 ## The blocker sequence
 
-Ordered in the [Queue](../STATUS.md).
+Ordered in the [Queue](../queue/README.md).
 **Q191/Q196/Q197/Q15/Q218 are independent and run in parallel; Q74 waits for all five.**
 
 ### 1. Q191 — Broker-compatibility sweep *(run first)*
@@ -137,7 +137,7 @@ Rotation (you rotate the Secret vs. the anchor rotates), RBAC (mount a Secret vs
 It is also on-strategy: workload identity removes the App key from the cluster entirely — the strict-upgrade direction of the secure-by-default principle.
 
 **MVP = Vault transit.** The first signer implementation is Vault transit + Kubernetes auth, because it is **kind-validatable** (see Testing), serves the managed-PKI/Vault operator persona (cf.
-[Q174](../STATUS.md)), and avoids three-cloud-SDK sprawl.
+[Q174](../queue/README.md)), and avoids three-cloud-SDK sprawl.
 Cloud KMS providers slot in behind the same signer interface as additive follow-ups.
 
 ## Testing
@@ -163,4 +163,4 @@ Cloud KMS providers slot in behind the same signer interface as additive follow-
 
 - Cloud KMS workload-identity providers (AWS/GCP/Azure) — additive impls behind the Q197 signer interface.
 - PAT or other credential methods — additive union members.
-- The real-cluster capacity run ([Q181](../STATUS.md)), AGC HA ([Q169](../STATUS.md)), and proxy feature/sharing items (Q19/Q166/Q173/Q174) — all additive and independently triggered.
+- The real-cluster capacity run ([Q181](../queue/README.md)), AGC HA ([Q169](../queue/README.md)), and proxy feature/sharing items (Q19/Q166/Q173/Q174) — all additive and independently triggered.

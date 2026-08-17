@@ -3,7 +3,7 @@
 A public website for GitHub Actions Gateway (GAG): a marketing landing page that converts an evaluator in under a minute, plus a searchable rendering of the existing `docs/` tree.
 The goal is to do what GitHub's file browser cannot — real full-text search, rendered diagrams, a punchy "vs ARC" comparison, and a front door that answers *"is this worth replacing Actions Runner Controller (ARC) for?"* before the visitor leaves.
 
-This is net-new scope tracked as STATUS Queue [Q129](../STATUS.md).
+This is net-new scope tracked as STATUS Queue [Q129](../queue/README.md).
 It is **not** a 1.0 gate.
 It depends on no code changes; it is additive tooling plus content assembled from docs that already exist.
 
@@ -20,7 +20,7 @@ It depends on no code changes; it is additive tooling plus content assembled fro
 | Annotated `ActionsGateway` CR example | ✅ Shipped — in `why-gag.md`, fields verified against `getting-started.md` |
 | Social card from existing asset | ✅ Shipped — OG/Twitter card via `overrides/main.html`; favicon left at Material default |
 | Public launch | ✅ Launched 2026-06-16 — Pages enabled, deployed via `workflow_dispatch`; landing + banner reflect the `v1.0.0` GA install and keep the Q99 capacity caveat |
-| Cross-tree link reconcile (build `--strict`) | ❌ Follow-up, folded into [Q52](../STATUS.md) — see below |
+| Cross-tree link reconcile (build `--strict`) | ❌ Follow-up, folded into [Q52](../queue/README.md) — see below |
 
 ## Audience and the one job
 
@@ -104,7 +104,7 @@ Exclude `docs/plan/` and `docs/STATUS.md` (internal planning) and `docs/developm
 - **Why GAG / vs ARC** — the highest-leverage conversion page.
   A clean comparison matrix (priority tiers / eviction retry / per-tenant egress / listener cost / scale-to-zero), each row linking to the design doc that backs the claim.
   This is what gets pasted into a team's decision doc.
-  Relates to [Q60](../STATUS.md) (competitive analysis) — keep the marketing comparison here and the rigorous analysis in [appendix-d](../design/appendix-d-alternatives-considered.md).
+  Relates to [Q60](../queue/README.md) (competitive analysis) — keep the marketing comparison here and the rigorous analysis in [appendix-d](../design/appendix-d-alternatives-considered.md).
 - **Architecture** — convert the README's ASCII four-tier diagram to a rendered mermaid/SVG diagram (GMC → AGC → proxy → worker), each tier clickable into its design section.
 - **Annotated `ActionsGateway` CR** — syntax-highlighted, commented YAML showing how little a tenant writes to get a fully isolated gateway.
   The "one CR does all this" demo moment.
@@ -124,7 +124,7 @@ Specifics:
   This cleared the bulk of the anchor mismatches.
 - **Known broken links on the site (build warnings, not errors).** Two classes remain and are deliberately deferred: (1) ~19 stale intra-doc anchors that are also wrong on github.com (pre-existing doc bugs); (2) links from docs into repo files outside `docs/` (`../charts/…`, `../../.github/…`, `cmd/…`) that resolve on github.com but 404 on the standalone site.
   The build is **not** `--strict`, so these warn without failing.
-  Reconciling them — and then flipping the CI build to `--strict` as a link gate — folds into [Q52](../STATUS.md) (markdown link + anchor CI gate).
+  Reconciling them — and then flipping the CI build to `--strict` as a link gate — folds into [Q52](../queue/README.md) (markdown link + anchor CI gate).
   Do this as part of the pre-launch pass.
 - **Launch procedure (gated on Q99).** The `pages.yml` deploy job only runs on `workflow_dispatch`; `pull_request`/`push` merely validate the build.
   To launch: land Q99's claim fixes, reconcile the landing/comparison copy, enable Pages (Settings → Pages → Source: GitHub Actions), then run the workflow.
@@ -150,7 +150,7 @@ Durable maintenance conventions — the brand-asset generator, the progressive-e
 
 ## Decided (sequencing)
 
-- **Build in parallel with [Q99](../STATUS.md); gate only the public launch.** The site work (scaffold, tooling, nav, diagram conversion, page structure) has no dependency on Q99 and proceeds now.
+- **Build in parallel with [Q99](../queue/README.md); gate only the public launch.** The site work (scaffold, tooling, nav, diagram conversion, page structure) has no dependency on Q99 and proceeds now.
   The rendered docs pages render `docs/` source directly, so they inherit Q99's claim fixes automatically with no site-side change.
   The only surface that *duplicates* the claims Q99 flags ("thousands of sessions", egress-blocked) is the hand-authored landing + "vs ARC" copy — reconcile that against the corrected source as a final pass before flipping Pages public / announcing.
   So Q99 gates the launch, not the work.

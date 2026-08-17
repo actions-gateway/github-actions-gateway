@@ -103,7 +103,7 @@ The Gateway Manager Controller (GMC) does not install RuntimeClasses or runtime 
 
 A worker pod is one runner container plus, optionally, sidecars.
 A Kubernetes pod terminates only when **every** regular `spec.containers[]` entry has exited, so a sidecar that runs for the life of the job — a `docker:dind` daemon, a rootless BuildKit sidecar, a metrics agent — keeps the pod alive after the runner container finishes if it is declared as a **regular container**.
-The pod lingers, and because GAG counts a pod as an active session until it reaps, the runner slot stays charged against the `RunnerSet`'s `maxWorkers` — the same stranding class as [Q247](../STATUS.md) (a pod left behind after its job is gone).
+The pod lingers, and because GAG counts a pod as an active session until it reaps, the runner slot stays charged against the `RunnerSet`'s `maxWorkers` — the same stranding class as [Q247](../queue/README.md) (a pod left behind after its job is gone).
 Under a concurrent matrix the pool collapses to the pods that happened to reap.
 
 GAG does **not** solve this with a bespoke reaper — it relies on the upstream mechanism.

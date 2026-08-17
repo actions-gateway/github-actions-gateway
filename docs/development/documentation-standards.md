@@ -4,7 +4,7 @@ The canonical home for **how we write and maintain docs** — the goals, the sty
 It complements two neighbours rather than repeating them:
 
 - [doc-update-matrix.md](doc-update-matrix.md) — *which* docs to update for each kind of change.
-- [maintaining-backlog.md](maintaining-backlog.md) — rules specific to [STATUS.md](../STATUS.md).
+- [maintaining-backlog.md](maintaining-backlog.md) — rules specific to [STATUS.md](../queue/README.md).
 
 The bar is **correct and findable first, usable as well** — not polish in place of substance.
 A beautifully scannable doc that is wrong, missing, or the wrong type for the reader's task still fails.

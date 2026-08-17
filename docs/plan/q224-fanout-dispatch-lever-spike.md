@@ -6,7 +6,7 @@ Before the user commits to (or declines) the Q264 scale-set rewrite, this spike 
 
 **Verdict up front: no AGC-side lever provides a *reliable* fix; #530/§5 stands — [Option E (Q264)](q264-scale-set-protocol.md) is the only structural fix.**
 
-- **H2 (unique/ephemeral runner names): NON-LEVER (reasoned, high confidence).** Renaming the same reactively-grown slots adds **zero** distinct idle runners — the actual binding constraint — while defeating the [Q114](../STATUS.md) recycle optimization and worsening the stale-runner-record clutter that already confounds re-routes.
+- **H2 (unique/ephemeral runner names): NON-LEVER (reasoned, high confidence).** Renaming the same reactively-grown slots adds **zero** distinct idle runners — the actual binding constraint — while defeating the [Q114](../queue/README.md) recycle optimization and worsening the stale-runner-record clutter that already confounds re-routes.
   The #8 orphaning is runner-**id** churn on recycle, not name reuse; unique names do not fix it and can worsen it.
 - **H1 (warm idle *listener* baseline): at best a probabilistic stopgap, not a fix — and its efficacy is unconfirmed (the #8 data leans *against* it).** Note the reframe: the lever the dispatch problem needs is a warm baseline of idle **long-poll listeners** (a *new* `minIdleListeners`-style knob), **not** Q261/[G.12](../design/appendix-g-future-enhancements.md#g12-warm-worker-pool-minidleworkers) `minIdleWorkers` (warm worker **pods**), which presents no extra idle runners to GitHub and so does nothing for dispatch starvation.
   Even in its favourable case, H1 converges on reimplementing the scale-set capacity model on top of the fan-out-prone offer-to-many protocol, *without* the single authoritative stream or capacity header — strictly dominated by Option E.
@@ -48,7 +48,7 @@ Whether that helps is decided entirely by §4.
 
 ## 3. H2 — unique/ephemeral runner names: NON-LEVER
 
-Today the agent name is deterministic by slot index — `fmt.Sprintf("%s-%d", groupName, index)` →`ci8-1`, `ci8-2` ([`pool.go:328`](../../cmd/agc/internal/agentpool/pool.go)) — and [Q114](../STATUS.md) single-use recycle **re-registers the same name** (same index) after each job.
+Today the agent name is deterministic by slot index — `fmt.Sprintf("%s-%d", groupName, index)` →`ci8-1`, `ci8-2` ([`pool.go:328`](../../cmd/agc/internal/agentpool/pool.go)) — and [Q114](../queue/README.md) single-use recycle **re-registers the same name** (same index) after each job.
 H2 proposes a unique/ephemeral name per registration so GitHub "distributes" rather than "piles."
 
 It fails on the mechanism:
@@ -101,7 +101,7 @@ But the existing evidence **leans toward (b)**:
 Suppose the §5 probe shows (a) — warm-wide classic spreads.
 H1 would still be a **probability improvement, not a structural guarantee**, because GAG's topology re-enters churn the moment load is sustained:
 
-- Every completed job **recycles** its runner ([Q114](../STATUS.md) single-use): deregister → re-register, a seconds-long window in which that runner is absent and any job GitHub stages to its old id **orphans** (the #8 failure, unchanged).
+- Every completed job **recycles** its runner ([Q114](../queue/README.md) single-use): deregister → re-register, a seconds-long window in which that runner is absent and any job GitHub stages to its old id **orphans** (the #8 failure, unchanged).
 - Sustaining N warm idle listeners under continuous burst means continuously re-warming through that churn.
 
 To make H1 reliable you would additionally need **non-recycling ephemeral runners** (one runner per job, never reused) **plus** a continuously-maintained warm baseline **plus** capacity-accurate advertisement — i.e. you reconstruct the **scale-set capacity model** on top of the **fan-out-prone offer-to-many protocol**, keeping the very race Option E removes by construction.

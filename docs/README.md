@@ -6,7 +6,7 @@ For the project overview see the top-level [README](../README.md); for the conde
 ## Start here
 
 - [getting-started.md](getting-started.md) — deploy the system, wire up the GitHub App, validate, and rotate credentials.
-- [STATUS.md](STATUS.md) — single source of truth for progress and priorities.
+- [STATUS.md](queue/README.md) — single source of truth for progress and priorities.
   Also published as a [filterable page](https://actions-gateway.com/dev/STATUS/) on the `dev` docs site, with label, status, and size chips.
 
 ## Sections
@@ -17,7 +17,7 @@ For the project overview see the top-level [README](../README.md); for the conde
 | [development/](development/README.md) | Developer workflow — building, testing, kind iteration, Go workspaces, code generation. |
 | [operations/](operations/README.md) | Operator guides — runbook, troubleshooting, observability, upgrades, tenant onboarding. |
 | [reference/](reference/README.md) | Generated API reference — every field of every `actions-gateway.com/v2beta1` kind. |
-| [plan/](plan/README.md) | Implementation plans and audits. Authoritative ordering lives in [STATUS.md](STATUS.md). |
+| [plan/](plan/README.md) | Implementation plans and audits. Authoritative ordering lives in [STATUS.md](queue/README.md). |
 | [releases/](releases/README.md) | The curated GitHub Release body for each stable tag, verbatim. Authoring source, not a site page. |
 
 ## Find your path

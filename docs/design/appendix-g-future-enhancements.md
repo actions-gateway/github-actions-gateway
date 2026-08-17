@@ -222,7 +222,7 @@ If KMS, telemetry, and worker-egress had each grown their own near-duplicate des
 **Resolved (Q204):** the descriptor is now the shared [`EgressPeer`](../../api/v2alpha1/actionsgateway_types.go) type (selector | CIDR
 + an optional explicit port), and `signer.vault.networkPolicy` references it.
   The extraction is serialization-compatible — the field keys (`podSelector`, `namespaceSelector`, `cidr`) are unchanged, so the v2alpha1 shape already shipped is preserved; only the additive optional `port` is new, with the Vault builder still deriving the port from the address when `port` is unset.
-  Future consumers (KMS, telemetry) now reference the same type instead of forking it — the shape that is far cheaper to settle before the v2alpha1 → v2beta1 graduation ([Q74](../STATUS.md)) than after.
+  Future consumers (KMS, telemetry) now reference the same type instead of forking it — the shape that is far cheaper to settle before the v2alpha1 → v2beta1 graduation ([Q74](../queue/README.md)) than after.
 
 **What would trigger building any of it.** A concrete signer provider beyond Vault (KMS), a policy-CNI operator who needs their tracing endpoint or a job dependency reachable, or the graduation review deciding to consolidate the peer descriptor.
 

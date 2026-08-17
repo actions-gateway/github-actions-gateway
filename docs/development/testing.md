@@ -125,7 +125,7 @@ Every edit made while the gate is running is unverified, and that includes the p
 **Re-run `make check` over the final tree before concluding.** The confirming run is cheap — the gates covering that work are the fast ones, which take no heavy-build slot, and the heavy phases are cache-warm.
 A **code** edit voids the verdict outright rather than merely narrowing it, and "code" means anything the gate compiles or lints: `scripts/*.sh` and the `Makefile` count, not only Go.
 
-**A `Bash` tool call during the run can turn the gate red on its own, without touching a file.** Every Bash call runs the piped-gate `PreToolUse` hook, which rebuilds the shared `.build/pipedgate` binary; `claude-piped-gate-hook-test`'s no-toolchain case `rm -f`s that same binary and then asserts the hook falls back, so a rebuild landing inside its window makes the case read a real deny payload and fail ([Q825](../STATUS.md)).
+**A `Bash` tool call during the run can turn the gate red on its own, without touching a file.** Every Bash call runs the piped-gate `PreToolUse` hook, which rebuilds the shared `.build/pipedgate` binary; `claude-piped-gate-hook-test`'s no-toolchain case `rm -f`s that same binary and then asserts the hook falls back, so a rebuild landing inside its window makes the case read a real deny payload and fail ([Q825](../queue/README.md)).
 Measured 2026-08-14: two failures in one session, the second reproducing on demand while tool calls continued and clearing immediately once the run was left alone.
 The failure names a suite the change never touched, so it reads as ambient flake rather than as something the session caused.
 **Once the confirming run starts, wait for its task notification and issue no Bash calls**: not a status peek, not a `git` read.
@@ -573,7 +573,7 @@ Behaviour is asserted by `scripts/docs/check-release-links-test.sh` under `make 
 
 ### The roadmap coherence gate
 
-`make roadmap-check` (`scripts/docs/check-roadmap.sh`) fails when the public [roadmap](../roadmap.md) disagrees with the backlog in [`docs/STATUS.md`](../STATUS.md).
+`make roadmap-check` (`scripts/docs/check-roadmap.sh`) fails when the public [roadmap](../roadmap.md) disagrees with the backlog in [`docs/STATUS.md`](../queue/README.md).
 It exists because the two drift silently and expensively: a 2026-07-25 audit found **six of seven** "In progress / near-term" roadmap items had already shipped, and the v2 API was still badged `alpha` more than two weeks after `v2beta1` graduated — released that way, because a stable tag deploys that tag's docs permanently.
 The `docs/development/doc-update-matrix.md` rule requiring the update already existed; a human-followed convention was not enough.
 
@@ -827,8 +827,8 @@ The failure message names the single `make -C <module> manifests`/`deepcopy` if 
 Never hand-edit the generated YAML or Go.
 
 **Why the DeepCopy half is here.** It was left out at first, on the reasoning that a type needing new DeepCopy code fails to compile without it.
-That holds for a *changed* type and is false for an *added* one: `ClusterCapacity` ([Q470](../STATUS.md), PR #917) shipped with no `DeepCopy`/`DeepCopyInto` at all and an `ActionsGatewaySpec.DeepCopyInto` that never copied the field, so `ActionsGateway.DeepCopy()` returned an object aliasing the caller's pointer — mutating the copy would reach the object in the shared informer cache.
-Nothing failed to compile and nothing failed CI; it was found incidentally, by someone running `make generate` for an unrelated change ([Q477](../STATUS.md)).
+That holds for a *changed* type and is false for an *added* one: `ClusterCapacity` ([Q470](../queue/README.md), PR #917) shipped with no `DeepCopy`/`DeepCopyInto` at all and an `ActionsGatewaySpec.DeepCopyInto` that never copied the field, so `ActionsGateway.DeepCopy()` returned an object aliasing the caller's pointer — mutating the copy would reach the object in the shared informer cache.
+Nothing failed to compile and nothing failed CI; it was found incidentally, by someone running `make generate` for an unrelated change ([Q477](../queue/README.md)).
 
 **The DeepCopy half regenerates into a copy of the working tree**, not into a redirected output dir like the manifests half.
 The `object` generator writes `zz_generated.deepcopy.go` beside its source, and controller-gen's output rule for it joins every package onto one path — `api/v2alpha1` and `api/v2beta1` would both land on the same file and the second would win.
@@ -1129,7 +1129,7 @@ These shortcuts recur, and each produces confident-but-wrong diagnoses:
   What refuted the whole family the first time it fired was a reading taken from the *failing* system: the state of the throwaway trees, ten lines of `ERR` trap.
   When the question is narrower than a root cause, break the operation deterministically rather than racing it.
   `chmod 500` on `.git/objects` fails every object write on demand, and settled in one run a discriminator whose racing predecessor had generalized from the wrong case.
-- **Symptom-matching a prior issue.** A match against a flake row on the [backlog](../STATUS.md), a previously fixed bug, or a memory of "this is always X" is a hypothesis: read the actual events, describe the actual pod, pull the actual log line before spending a billable re-run, a fix PR, or a state-changing command on the remembered cause.
+- **Symptom-matching a prior issue.** A match against a flake row on the [backlog](../queue/README.md), a previously fixed bug, or a memory of "this is always X" is a hypothesis: read the actual events, describe the actual pod, pull the actual log line before spending a billable re-run, a fix PR, or a state-changing command on the remembered cause.
   If the environment tears down evidence on failure, capturing diagnostics *before* teardown is part of the fix, not optional (filed from the v1.2.0 release retro, where gate failures had to be re-run just to observe them).
 - **Trusting source inspection.** A plan doc's ✅ investigation findings usually derive from source-reading, so treat them as unverified until confirmed end-to-end: actually exec the thing (PR #59).
 - **Reading CI evidence after re-running the job.** `gh run view <id> --log-failed` reports the **latest attempt**, so re-running a red job destroys the view of the failure you are diagnosing: it returns the new attempt's (empty) failure set, which looks exactly like "the diagnostic never ran".
@@ -1218,13 +1218,13 @@ Each is a claim about state, and each has a cheap way of being wrong:
   The verdict reached three merged PR descriptions and the opening instruction of a dispatched worker session before a CI job passing on the same commit forced the comparison.
 - **A completeness claim inherits the blind spots of the inventory behind it.** "Every capability reaches both acquisition tiers" was read off `features.md`'s tier badges and the parity table in [v2-ga.md](../plan/v2-ga.md), on 2026-08-13.
   Both were accurate.
-  Both are hand-authored, so neither can show a gap nobody thought to record, which is the blind spot [Q776](https://github.com/actions-gateway/github-actions-gateway/blob/main/docs/STATUS.md)'s own row describes and which was cited in the same document that leaned on the badges.
+  Both are hand-authored, so neither can show a gap nobody thought to record, which is the blind spot [Q776](https://github.com/actions-gateway/github-actions-gateway/blob/main/docs/queue/README.md)'s own row describes and which was cited in the same document that leaned on the badges.
   Q844 was sitting in it: restart-safe disruption recovery is classic-only, and the marketing surface claimed it for both tiers with no badge at all.
 
 - **An explanation offered to the user is a claim, and this repo has usually already written the answer down.** Four went wrong across the 1.5 release cycle in one session, and three were caught by the user asking a follow-up rather than by any check.
   A sentinel event was called a defect when it was [Q630's reconciliation working as designed](../operations/release.md#run-it-detached-the-sentinel-reports-it-back), documented in the previous release's plan doc.
   A tier-parity claim was said to rest on a hand-verified walk when `E2E_Migration_V1ToV2` gates the migration end to end, including reconcile-to-Ready.
-  A `Throughput: Active` result was written up as unexpected in both the release notes and a plan doc, when [Q773](https://github.com/actions-gateway/github-actions-gateway/blob/main/docs/STATUS.md) had said since 2026-08-09 that it is the norm and the runbook is stale.
+  A `Throughput: Active` result was written up as unexpected in both the release notes and a plan doc, when [Q773](https://github.com/actions-gateway/github-actions-gateway/blob/main/docs/queue/README.md) had said since 2026-08-09 that it is the norm and the runbook is stale.
   Each was plausible, none was checked, and each reached a document before it reached a doubt.
   The Queue, the plan doc of the release that shipped it, and the runbook are where this project keeps its answers.
 
@@ -1560,7 +1560,7 @@ The failure is silent in both directions at once: the scan reports a neighbourin
 
 Three instances in the 1.5 cycle, all on the same argument:
 
-- The v1.4.0 release pre-flight matched `Event(obj, type, reason)` only, missed the `recordEvent(type, reason, action)` shape, and returned a false no-change ([Q780](https://github.com/actions-gateway/github-actions-gateway/blob/main/docs/STATUS.md)).
+- The v1.4.0 release pre-flight matched `Event(obj, type, reason)` only, missed the `recordEvent(type, reason, action)` shape, and returned a false no-change ([Q780](https://github.com/actions-gateway/github-actions-gateway/blob/main/docs/queue/README.md)).
 - The 2026-08-14 pre-flight keyed on `recordEvent(` and missed the two additions recording through `RecordEvent(`.
 - `reasontiers`' first version keyed the reason's index on the function name, read the scale-set listener's *action* string `"ProvisionWorker"` as a reason, and missed four reasons entirely.
   The AGC has two methods named `recordEvent` and two named `Event`, with the reason at a different index in each.
@@ -1969,7 +1969,7 @@ The same reasoning covers the caller: [`verify-release-test.sh`](../../scripts/r
 
 The tier above says *what* observes a bug; this says *where that tier can run*.
 Most validation is local on a dev machine; a short list needs real GitHub, real cloud, or real scale.
-The **environment definitions** below are durable; the **Q-item mapping** is a snapshot of the [backlog](../STATUS.md) as of 2026-06 and may lag.
+The **environment definitions** below are durable; the **Q-item mapping** is a snapshot of the [backlog](../queue/README.md) as of 2026-06 and may lag.
 
 - **Local — `kind` (the default).** Unit, envtest, cluster-only/fake-GitHub e2e, and the load harness need only a Linux-kernel cluster plus a fake or in-cluster GitHub.
   This covers the large majority of work and runs on an Intel Mac under Docker Desktop.
@@ -2883,7 +2883,7 @@ make trivy-scan
 
 The five images we build from a minimal/distroless or scratch base (`gmc`, `agc`, `proxy`, `fakegithub`, and the `FROM scratch` `wrapper`) **block** the gate — every package in them is one we chose, so a finding is actionable by bumping a dependency or the base digest.
 The `worker` image is built `FROM` the upstream `ghcr.io/actions/actions-runner` and inherits CVEs in the bundled node20 runtime and the runner's own Go binaries that we cannot fix without forking the runner; its leg is the sole **report-only** one (findings printed, never blocks).
-Runner-base CVEs are reduced by bumping the pinned tag — automated via the `docker` ecosystem in `dependabot.yml` and tracked in [`STATUS.md`](../STATUS.md) Q70.
+Runner-base CVEs are reduced by bumping the pinned tag — automated via the `docker` ecosystem in `dependabot.yml` and tracked in [`STATUS.md`](../queue/README.md) Q70.
 
 The same `trivy` job also generates an **SBOM** (Software Bill of Materials, SPDX-JSON, via [`syft`](https://github.com/anchore/syft)) for each image it builds and uploads it as a `sbom-<image>.spdx.json` build artifact.
 This runs on every code PR purely so the SBOM-generation path can't silently break before a release — it does **not** sign or publish anything.

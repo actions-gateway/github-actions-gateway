@@ -1,13 +1,13 @@
 # Plans
 
 Topic-organized index of plan files.
-For current status and priorities, see [docs/STATUS.md](../STATUS.md).
+For current status and priorities, see [docs/STATUS.md](../queue/README.md).
 
 Each file is a self-contained plan with rationale, scope, and (where appropriate) a status table near the top.
 Authoritative state always lives in the individual file.
 
 Legend: ✅ done, ⚠️ partial / mixed (open **Queue** item remains), 💤 deferred (parked with a trigger, tracked in [deferred in the backlog](../queue/README.md)), ❌ open, ⓘ informational (forward-looking spec or design rationale, no progress to track).
-A plan with only deferred residuals is ✅, not ⚠️ — see [maintaining-backlog.md](../development/maintaining-backlog.md#-means-an-open-queue-row-remains--deferred-residuals-dont-count).
+A plan with only deferred residuals is ✅, not ⚠️ — see [maintaining-backlog.md](../development/maintaining-backlog.md#an-open-marker-means-an-open-item-remains--deferred-residuals-dont-count).
 
 ## Implementation roadmap
 

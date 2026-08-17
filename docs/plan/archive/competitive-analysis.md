@@ -1,7 +1,7 @@
 # Competitive analysis notes — GAG vs ARC (working notes for Q60)
 
 **Status: unverified working notes.** Distilled from a product discussion on 2026-06-13 while reworking the website benefits.
-These are the claims we *think* are true; [Q60](../../STATUS.md) is the place to verify each against ARC's current behavior/docs and fold confirmed conclusions into [appendix-d](../../design/appendix-d-alternatives-considered.md).
+These are the claims we *think* are true; [Q60](../../queue/README.md) is the place to verify each against ARC's current behavior/docs and fold confirmed conclusions into [appendix-d](../../design/appendix-d-alternatives-considered.md).
 The website states only the high-confidence subset (flagged below); everything marked **VERIFY** stays off the site until checked.
 
 ## The overarching theme: cost
@@ -27,7 +27,7 @@ Lead the website with it.
   OOM/eviction mid-job is worse than stated: zombie runner, job stuck `Queued` until manual cleanup ([#4155](https://github.com/actions/actions-runner-controller/issues/4155), [#4203](https://github.com/actions/actions-runner-controller/issues/4203)).
   "Teams avoid enforcing `ResourceQuota`" is reasonable inference, not sourced.
   GAG's two distinct paths both cover this: (a) the provisioner's in-place **quota-rejection retry** (`maxQuotaRetries`, holds the lock) and (b) the Job Lock Renewer's **eviction retry** (rerun-failed-jobs).
-  Cross-ref [Q59](../../STATUS.md) (pre-acquire capacity gate).
+  Cross-ref [Q59](../../queue/README.md) (pre-acquire capacity gate).
 - **Website: high confidence** (our design) — state the quota→self-service story.
 
 ## Priority-tiered scheduling
@@ -36,7 +36,7 @@ Lead the website with it.
   You can burn down many heterogeneous queues at once (short/long, big/small) so a PR's full test battery finishes, instead of big expensive tests starving behind a flood of small queued ones.
 - Critical because **most repos run a battery of different tests on each PR.**
 - **VERIFY:** ARC has no per-quota "floor" primitive (confirm).
-  Whether the effect is approximable in ARC via separate scale sets + `PriorityClass`es, and how Kueue compares (borrowing/quota/priority) — cross-ref the Kueue angle in [Q60](../../STATUS.md)/[Q59](../../STATUS.md).
+  Whether the effect is approximable in ARC via separate scale sets + `PriorityClass`es, and how Kueue compares (borrowing/quota/priority) — cross-ref the Kueue angle in [Q60](../../queue/README.md)/[Q59](../../queue/README.md).
 - **Website: high confidence** — state the "at least N, no blocked critical jobs, PRs still finish" framing.
 
 ## Scale to zero (esp. GPU / e2e)
@@ -91,4 +91,4 @@ Lead the website with it.
 - etcd object-size cap for large multi-group CRs (sharding guidance).
 - Listener-scheduling-latency-under-contention hypothesis (may be marginal).
 - ARC per-tenant metrics parity.
-- Kueue as an alternative for the priority/quota story (cross-ref [Q59](../../STATUS.md)).
+- Kueue as an alternative for the priority/quota story (cross-ref [Q59](../../queue/README.md)).

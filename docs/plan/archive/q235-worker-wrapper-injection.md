@@ -15,7 +15,7 @@ Consequences:
 
 - A **default** install (no per-tenant `workerImage`) provisions worker pods that silently no-op every job — the pod exits `Completed` with empty logs and the AGC's `RenewJob` 401s.
   Tests never caught it: the e2e suite always passes the wrapper image explicitly.
-  Found live in [Q224](../../STATUS.md).
+  Found live in [Q224](../../queue/README.md).
 - An **ARC migrator's** custom/slim image (`FROM actions-runner` + tooling) is not drop-in: it has `Runner.Worker` but the stock entrypoint, so it must be rebuilt with the wrapper layered on.
 
 ## Goal
@@ -77,7 +77,7 @@ A runtime probe-and-fallback is out of scope for v1.
 - **Unit** ([provisioner](../../../cmd/agc/internal/provisioner)): image-volume path, init-container path, command override, `RUNNER_HOME_DIR`/`PATH` env, init-container hardening under `restricted`, and `WRAPPER_DELIVERY` selection (incl. version gate).
 - **E2e** (kind): a case that sets `WORKER_IMG` to the **bare upstream** `actions-runner` (not the wrapper image) and asserts a job runs end-to-end — the regression the unit tests can't cover.
   Run on both the ≥1.33 (image-volume) and an init-fallback path.
-- **Live**: dogfood re-validate with `DefaultWorkerImage` = upstream + injection (the [Q224](../../STATUS.md) path), worker image **unset**.
+- **Live**: dogfood re-validate with `DefaultWorkerImage` = upstream + injection (the [Q224](../../queue/README.md) path), worker image **unset**.
 
 ## Rollout
 

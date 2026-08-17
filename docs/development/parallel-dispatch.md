@@ -237,7 +237,7 @@ Backgrounding does not reduce contention either — it stops the queue time from
 The real need is preventing two workers from implementing the **same** Queue item — an *assignment* problem — not keeping `docs/STATUS.md` out of worker hands.
 Each worker removes its own completed row in its own isolated commit, so PRs stay self-contained and the Queue stays current as they merge.
 
-**Self-healing absorbs the resolution, not the cycle it costs.** The [merge driver](maintaining-backlog.md#the-merge-driver-resolve-queue-rows-by-id-not-by-line-position) decides the Queue table by row ID, so a sibling's row deletion resolves silently inside the worker's `git rebase origin/main`.
+**Self-healing absorbs the resolution, not the cycle it costs.** The [merge driver](maintaining-backlog.md#the-merge-drivers-resolve-registry-rows-by-key-not-by-line-position) decides the Queue table by row ID, so a sibling's row deletion resolves silently inside the worker's `git rebase origin/main`.
 It is per-clone `git config`, so it never runs on GitHub: the mergeability read behind `mergeStateStatus` and the merge queue's candidate build both take the plain three-way merge, where two adjacent row deletions conflict.
 That server-side half is the expensive one.
 A PR that is merely *behind* costs nothing, while a `DIRTY` one must rebase and force-push, and the force-push restarts the whole CI cycle whatever the driver did locally.

@@ -183,7 +183,7 @@ Two independent things worth recording:
 
 ### Phase 2 — recommendation in status: confirmed
 
-`status.sizingRecommendation` appeared on the `runner` container at exactly `sampleCount: 5` (`MinSamplesForRecommendation`), carrying `windowStartTime` and both raw statistics beside the derived values (the capture below spells that field `windowStart`, its name at observation time; [Q485](../STATUS.md) renamed it before the 1.3 tag, values unchanged):
+`status.sizingRecommendation` appeared on the `runner` container at exactly `sampleCount: 5` (`MinSamplesForRecommendation`), carrying `windowStartTime` and both raw statistics beside the derived values (the capture below spells that field `windowStart`, its name at observation time; [Q485](../queue/README.md) renamed it before the 1.3 tag, values unchanged):
 
 ```json
 {

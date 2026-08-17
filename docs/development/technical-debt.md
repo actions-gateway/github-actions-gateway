@@ -4,7 +4,7 @@ How this project classifies technical debt, decides what to do about each piece,
 This is the **policy** (the rules) and the **strategy** (the lifecycle that enforces them).
 The mechanics live in adjacent docs and are linked rather than repeated:
 
-- [maintaining-backlog.md](maintaining-backlog.md) — how to record and prioritize a debt item in [docs/STATUS.md](../STATUS.md).
+- [maintaining-backlog.md](maintaining-backlog.md) — how to record and prioritize a debt item in [docs/STATUS.md](../queue/README.md).
 - [backpressure.md](backpressure.md): the automated feedback loops that stop debt at authoring time.
 - [release-1.0.md](../plan/release-1.0.md) — the quality gates that block the 1.0 release (bucket F).
 - [appendix-g-future-enhancements.md](../design/appendix-g-future-enhancements.md) — long-horizon non-commitments.
@@ -13,7 +13,7 @@ The mechanics live in adjacent docs and are linked rather than repeated:
 
 Technical debt is work we **knowingly defer** that trades short-term progress for a long-term carrying cost — a shortcut taken on purpose, or erosion we have noticed but not yet paid down.
 It is distinct from a plain bug: a bug is incorrect behavior we want fixed; debt is a *known* gap between what exists and what we would build with unlimited time.
-A debt item may *cause* bugs (the [Q76](../STATUS.md) agent-pool claim race is debt that can corrupt sessions), but the defining trait is that we are choosing — explicitly — when to pay it.
+A debt item may *cause* bugs (the [Q76](../queue/README.md) agent-pool claim race is debt that can corrupt sessions), but the defining trait is that we are choosing — explicitly — when to pay it.
 
 The policy below exists so that choice is always **explicit and recorded**, never an accident of an unreviewed shortcut.
 
@@ -45,10 +45,10 @@ Decide deliberately:
    A behavior-preserving cleanup that the current change naturally touches (e.g. extracting a duplicated security context while editing the builder it lives in) qualifies.
    Verify it changes no behavior.
 2. **Flag to the Queue** — near- or long-term work that someone should do but not now.
-   Add a row to the Queue in [docs/STATUS.md](../STATUS.md) **at the priority it deserves**, with the *why* of any decision it depends on.
+   Add a row to the Queue in [docs/STATUS.md](../queue/README.md) **at the priority it deserves**, with the *why* of any decision it depends on.
    Follow [maintaining-backlog.md](maintaining-backlog.md).
 3. **Defer** — a real commitment with no near-term intent, waiting on an explicit trigger (a tool, a cluster, a dependency that does not exist yet).
-   It goes in the **Deferred** section of [docs/STATUS.md](../STATUS.md), out of the priority ordering, and returns to the Queue when its trigger fires.
+   It goes in the **Deferred** section of [docs/STATUS.md](../queue/README.md), out of the priority ordering, and returns to the Queue when its trigger fires.
 4. **Decline** — a long-horizon idea we are explicitly *not* committing to.
    It belongs in [appendix-g-future-enhancements.md](../design/appendix-g-future-enhancements.md), not the backlog.
 
@@ -186,7 +186,7 @@ Two corroborating signals when the first read is ambiguous:
 
 Parsing structured text is necessary but not sufficient.
 A script that must reproduce its input **byte for byte** is worse off with an abstract syntax tree, which discards exactly the fidelity it depends on.
-[`git-merge-status.sh`](../../scripts/docs/git-merge-status.sh) and [`merge-keyed-records.awk`](../../scripts/lib/merge-keyed-records.awk) parse Markdown tables and stay in `awk` for that reason: a merge driver reconstructs the file line for line, conflict-marker fallback included.
+[`git-merge-plan-index.sh`](../../scripts/docs/git-merge-plan-index.sh) and [`merge-keyed-records.awk`](../../scripts/lib/merge-keyed-records.awk) parse Markdown tables and stay in `awk` for that reason: a merge driver reconstructs the file line for line, conflict-marker fallback included.
 
 #### Worked examples
 
@@ -196,7 +196,7 @@ The [Q612 survey](../plan/markdown-gates-parser.md) and the Queue row that asked
 | Script | Lines | Reads | Verdict |
 |---|---|---|---|
 | [`scripts/docs/check-doc-links.sh`](../../scripts/docs/check-doc-links.sh) | 252, now 76 | 178 of them were one `awk` program implementing a Markdown parser plus the github-slugger algorithm | **Rewritten** (Q612) — the checker is [`devtools/docs/doclinks`](../../devtools/docs/doclinks/) over a shared goldmark parse layer; the script keeps the file selection |
-| [`scripts/docs/lint-backlog.sh`](../../scripts/docs/lint-backlog.sh) | 518, now 92 | Queue rows split on a literal `\|` field separator at fixed indices; one escaped pipe in a cell shifted every field and the row's rules then evaluated the wrong ones | **Rewritten** (Q613): the rules are [`devtools/docs/backloglint`](../../devtools/docs/backloglint/) over the same parse layer; the script keeps the file selection and the environment interface |
+| `scripts/docs/lint-backlog.sh` (since retired, Q889) | 518, now 92 | Queue rows split on a literal `\|` field separator at fixed indices; one escaped pipe in a cell shifted every field and the row's rules then evaluated the wrong ones | **Rewritten** (Q613): the rules are `devtools/docs/backloglint` over the same parse layer; the script keeps the file selection and the environment interface |
 | [`scripts/dev/validate-egress-ip.sh`](../../scripts/dev/validate-egress-ip.sh) | 603 | Zero `awk`/`jq`/`sed` invocations. Field extraction is delegated to `kubectl -o jsonpath`; the body is `kubectl`, `helm`, `gcloud`, `curl`, and `docker` calls | **Stays shell** |
 | [`scripts/dogfood/setup.sh`](../../scripts/dogfood/setup.sh) | 791 | One line invoking `awk`/`jq`/`sed`. The longest script under `scripts/`, and the least parsing of the four | **Stays shell** |
 | [`scripts/agent/claude-piped-gate-hook.sh`](../../scripts/agent/claude-piped-gate-hook.sh) | 393, now 74 | 175 of its 257 code lines were a hand-rolled shell-grammar scanner: quote state, heredoc bodies, subshell nesting, matched delimiters | **Rewritten** (Q625): the decision is [`devtools/agent/pipedgate`](../../devtools/agent/pipedgate/) over `mvdan.cc/sh`; the script keeps the build seam and the registry path |
@@ -251,14 +251,14 @@ We track the ones that are cheap, automatable, and catch real regressions — an
 
 | Metric | Decision |
 |---|---|
-| **Test coverage** | Track — measured in CI, gated by a no-regression ratchet ([Q77](../STATUS.md)). |
-| **Code duplication** | Track — `dupl` linter ([Q78](../STATUS.md)). |
-| **Data-race freedom** | Track — `-race` on unit tests, the core concern for a goroutine-multiplexing engine ([Q79](../STATUS.md)). |
-| **Static security findings** | Track — `gosec` ([Q80](../STATUS.md)); unchecked errors via `errcheck` ([Q81](../STATUS.md)). |
+| **Test coverage** | Track — measured in CI, gated by a no-regression ratchet ([Q77](../queue/README.md)). |
+| **Code duplication** | Track — `dupl` linter ([Q78](../queue/README.md)). |
+| **Data-race freedom** | Track — `-race` on unit tests, the core concern for a goroutine-multiplexing engine ([Q79](../queue/README.md)). |
+| **Static security findings** | Track — `gosec` ([Q80](../queue/README.md)); unchecked errors via `errcheck` ([Q81](../queue/README.md)). |
 | **Reachable CVEs** | Track — `govulncheck` + `trivy`, already gating ([backpressure.md](backpressure.md)). |
-| **Open-item count / age** | Track lightly — the labeled Queue in [docs/STATUS.md](../STATUS.md) is the register; formal aging is overkill at this scale. |
-| **Function length** | Track — `funlen` as a ratcheted ceiling ([Q371](../STATUS.md)): the threshold starts just above the worst surviving function and lowers as long functions are decomposed, the same "gates by not getting worse" pattern the coverage ratchet uses. Cyclomatic complexity proper (`gocyclo`) stays skipped — length is the cheaper proxy, and Q367 showed the god `main`/`run` functions were the real target. |
-| **Suppression hygiene** | Track — `nolintlint` (`allow-unused: false`, `require-specific: true`) ([Q371](../STATUS.md)): an inert or blanket `//nolint` directive fails the build, so a suppression cannot outlive the finding it documents (the class the dead `nolint:gocyclo` on the old `main()` was). |
+| **Open-item count / age** | Track lightly — the labeled Queue in [docs/STATUS.md](../queue/README.md) is the register; formal aging is overkill at this scale. |
+| **Function length** | Track — `funlen` as a ratcheted ceiling ([Q371](../queue/README.md)): the threshold starts just above the worst surviving function and lowers as long functions are decomposed, the same "gates by not getting worse" pattern the coverage ratchet uses. Cyclomatic complexity proper (`gocyclo`) stays skipped — length is the cheaper proxy, and Q367 showed the god `main`/`run` functions were the real target. |
+| **Suppression hygiene** | Track — `nolintlint` (`allow-unused: false`, `require-specific: true`) ([Q371](../queue/README.md)): an inert or blanket `//nolint` directive fails the build, so a suppression cannot outlive the finding it documents (the class the dead `nolint:gocyclo` on the old `main()` was). |
 | Technical-debt ratio, defect ratio, DORA velocity (lead time, change-failure rate), debt index | **Skip**: each needs an issue tracker, a remediation-cost estimator, or a delivery cadence this project does not have. Revisit if the project grows a team and a release pipeline. |
 
 The principle: **a metric earns a place only when it changes a decision.** A number nobody acts on is itself a small piece of debt.
@@ -277,7 +277,7 @@ Where a gate is threshold-shaped (coverage, `dupl`, `funlen`), it gates by **not
 |---|---|
 | Deciding fix / flag / defer / decline | this doc |
 | Deciding whether a shell gate should become a Go devtool | this doc ([the criterion](#a-shell-gate-becomes-a-go-devtool-on-parsing-density-not-length)), pointed to from [bash-style.md](bash-style.md) |
-| Recording and prioritizing an item | [maintaining-backlog.md](maintaining-backlog.md) → [docs/STATUS.md](../STATUS.md) |
+| Recording and prioritizing an item | [maintaining-backlog.md](maintaining-backlog.md) → [docs/STATUS.md](../queue/README.md) |
 | Escalating a session *finding* into a rule, a gate, or a prompt line | this doc ([the ladder](#the-ladder)) |
 | The automated prevention loops | [backpressure.md](backpressure.md) |
 | Release-blocking gates | [release-1.0.md](../plan/release-1.0.md) (bucket F) |

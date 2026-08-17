@@ -112,7 +112,7 @@ Verified:
 
 The e2e is what closes the argument.
 Every other tier stamps the `DisruptionTarget` condition by hand, so only this one converts "the AGC recovers a pod carrying this condition" into "the AGC recovers a real preemption" — it is the sole venue with a real kube-scheduler.
-It also found [Q504](../../STATUS.md) on its first run: the rerun call ignored `GITHUB_API_BASE_URL` and was refused a `401` by `api.github.com`, so recovery had never been able to work on GHES either.
+It also found [Q504](../../queue/README.md) on its first run: the rerun call ignored `GITHUB_API_BASE_URL` and was refused a `401` by `api.github.com`, so recovery had never been able to work on GHES either.
 That is the value of asserting a *successful* re-run rather than an absence — every prior spec on this path asserted absence, which passes whether the call goes nowhere or to the wrong host.
 
 Metric labels changed (`cause` on three counters); the migration note is in [observability-metrics.md](../../operations/observability-metrics.md#breaking-observability-changes-q417).

@@ -52,7 +52,7 @@ Blast radius is the highest of the four: it runs in `make check`, in `STATUS_GAT
 
 ### `lint-backlog.sh` splits table rows positionally
 
-[`scripts/docs/lint-backlog.sh`](../../scripts/docs/lint-backlog.sh) reads the Queue with `awk -F'|'` and fixed field indices.
+`scripts/docs/lint-backlog.sh` (retired with the table, Q889) reads the Queue with `awk -F'|'` and fixed field indices.
 One escaped pipe in any cell shifts every field, measured:
 
 ```
@@ -124,7 +124,7 @@ Each keeps its `scripts/` entry point, per [`scripts/README.md`](../../scripts/R
 
 ### Out of scope, deliberately
 
-[`git-merge-status.sh`](../../scripts/docs/git-merge-status.sh) and [`merge-keyed-records.awk`](../../scripts/lib/merge-keyed-records.awk) stay as they are, as does the [`git-merge-plan-index.sh`](../../scripts/docs/git-merge-plan-index.sh) sibling.
+`git-merge-status.sh` (retired with the table, Q889) and [`merge-keyed-records.awk`](../../scripts/lib/merge-keyed-records.awk) stay as they are, as does the [`git-merge-plan-index.sh`](../../scripts/docs/git-merge-plan-index.sh) sibling.
 A merge driver must reconstruct the file **line for line**, including the conflict-marker fallback; an AST discards exactly the byte-level fidelity it depends on.
 Rewriting it onto goldmark would be actively wrong, not merely unnecessary.
 

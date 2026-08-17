@@ -167,7 +167,7 @@ Judge each one against what the bullet is enumerating.
 
 ## Related, and deliberately not absorbed
 
-- [Q650](../STATUS.md) covers em-dash density in the same files.
+- [Q650](../queue/README.md) covers em-dash density in the same files.
   Different concern, different phase.
   A split that removes a dash because the sentence ended does not count as progress on it.
 - PR #1322 rewrote lead paragraphs in several of these files for answer-first structure.

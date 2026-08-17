@@ -27,7 +27,7 @@ Both cost about two seconds.
 Because `make generate` covers every module, it also handles the cross-module case below — an AGC type edit reaches the GMC manifest without you having to know it embeds one.
 
 This has to stay true.
-`cmd/gmc`'s `generate` was once DeepCopy-only, so the root loop over the three modules' `generate` skipped GMC's manifests — the one module whose CRD embeds another module's types, and so the exact miss behind [Q440](../STATUS.md) ([Q458](../STATUS.md)).
+`cmd/gmc`'s `generate` was once DeepCopy-only, so the root loop over the three modules' `generate` skipped GMC's manifests — the one module whose CRD embeds another module's types, and so the exact miss behind [Q440](../queue/README.md) ([Q458](../queue/README.md)).
 **A module's `generate` must keep depending on its `manifests`**; if one stops, the root target silently under-covers again and only `make codegen-check` notices.
 
 ## Per-module targets
@@ -66,13 +66,13 @@ It runs in `make check` and in CI's `lint` job, so a forgotten `make generate` i
 
 **The cross-module case is why it exists.** The GMC's `ActionsGateway` CRD embeds AGC types (`RunnerGroupSpec`), so a doc comment or field edited in `cmd/agc/api/` changes the *GMC* manifest — and only `make -C cmd/gmc manifests` propagates it.
 `make -C cmd/agc manifests` does not.
-PR #793 edited a `quotaRetryDelay` doc comment in `RunnerGroupSpec` and the GMC CRD stayed stale, handing every later GMC contributor that hunk as unrelated diff noise ([Q440](../STATUS.md)).
+PR #793 edited a `quotaRetryDelay` doc comment in `RunnerGroupSpec` and the GMC CRD stayed stale, handing every later GMC contributor that hunk as unrelated diff noise ([Q440](../queue/README.md)).
 
 The root `make generate` (or `make manifests`) is the way not to have to reason about this: it covers all three modules, so an AGC type edit reaches the GMC manifest without you knowing it had to.
 **If you use the per-module targets instead, regenerate every module that embeds the type you changed, not just the one you edited.**
 
 **The DeepCopy half is gated for a different reason.** Missing DeepCopy code was assumed to fail the build, and for a *changed* type it does.
-For an *added* one it does not: `ClusterCapacity` ([Q470](../STATUS.md)) shipped with no `DeepCopy`/`DeepCopyInto` and an `ActionsGatewaySpec.DeepCopyInto` that never copied the field, so `ActionsGateway.DeepCopy()` handed back an object aliasing the caller's pointer into the shared informer cache — compiling cleanly and passing CI ([Q477](../STATUS.md)).
+For an *added* one it does not: `ClusterCapacity` ([Q470](../queue/README.md)) shipped with no `DeepCopy`/`DeepCopyInto` and an `ActionsGatewaySpec.DeepCopyInto` that never copied the field, so `ActionsGateway.DeepCopy()` handed back an object aliasing the caller's pointer into the shared informer cache — compiling cleanly and passing CI ([Q477](../queue/README.md)).
 **`make manifests` alone no longer satisfies the gate after a type change; `make generate` does.**
 
 The gate also fails if a module gains a `manifests:` or `deepcopy:` target without being registered in the script's `MODULES` table or `DEEPCOPY_MODULES` list, or if a registration stops matching the module's own recipe — so it cannot quietly under-cover.
@@ -122,7 +122,7 @@ The split:
 - **`charts/actions-gateway/templates/crds/`** — the two **v1alpha1** (`actions-gateway.github.com`) CRDs: `ActionsGateway`, `RunnerGroup` (sourced from `cmd/*/config/crd`).
 - **`charts/actions-gateway-crds-v2/templates/crds/`** — the five **v2alpha1** (`actions-gateway.com`) CRDs: `ActionsGateway`, `EgressProxy`, `RunnerSet`, `RunnerTemplate`, `ClusterRunnerTemplate` (sourced from `api/config/crd`).
   They live in a **separate, opt-in chart** because the `RunnerTemplate`/`ClusterRunnerTemplate` CRDs each embed a full `PodTemplateSpec` (~600 KB) and adding them to the main chart pushed its Helm release Secret past the hard **1 MiB** limit (Helm stores the rendered manifest *plus* a copy of the chart source, gzipped, in one Secret).
-  A separate release keeps each chart within budget and makes v2 opt-in ([Q149](../STATUS.md)).
+  A separate release keeps each chart within budget and makes v2 opt-in ([Q149](../queue/README.md)).
 
 `scripts/manifest/sync-chart-crds.sh` writes both charts in one pass.
 After regenerating manifests, re-sync:
@@ -131,10 +131,10 @@ After regenerating manifests, re-sync:
 make chart-crds   # scripts/manifest/sync-chart-crds.sh — regenerates the chart CRD templates from the sources
 ```
 
-`make chart-crds-check` (run by `make check`, `make manifest-validate`, and CI's `manifest-validate.yml`) fails if a chart copy drifted from its source, or if the **GMC-bundled** RunnerGroup CRD (`cmd/gmc/config/crd/bases/…runnergroups.yaml`, a bundled copy of the *imported* type) has drifted from the AGC-authoritative copy — a k8s.io/api skew that would otherwise silently prune fields on deploy ([Q73](../STATUS.md)).
+`make chart-crds-check` (run by `make check`, `make manifest-validate`, and CI's `manifest-validate.yml`) fails if a chart copy drifted from its source, or if the **GMC-bundled** RunnerGroup CRD (`cmd/gmc/config/crd/bases/…runnergroups.yaml`, a bundled copy of the *imported* type) has drifted from the AGC-authoritative copy — a k8s.io/api skew that would otherwise silently prune fields on deploy ([Q73](../queue/README.md)).
 **`make -C cmd/gmc manifests` cannot refresh the bundled copy** — controller-gen walks only the GMC module's own packages (`paths="./..."`), and the `RunnerGroup` type lives in `cmd/agc/api/`.
 The remedy after any RunnerGroup type change: regenerate the AGC copy (`make -C cmd/agc manifests`), `cp` it over the GMC-bundled path, then `make chart-crds`.
-For a k8s.io/api skew, align the module versions ([Q68](../STATUS.md)) first, then do the same.
+For a k8s.io/api skew, align the module versions ([Q68](../queue/README.md)) first, then do the same.
 
 ## Sync the Helm chart RBAC (after any RBAC marker change)
 
@@ -146,7 +146,7 @@ After regenerating manifests, re-sync the chart:
 make chart-rbac   # scripts/manifest/sync-chart-rbac.sh — regenerates charts/actions-gateway/files/manager-role-rules.yaml
 ```
 
-`make chart-rbac-check` (run by `make check`, `make manifest-validate`, and CI's `manifest-validate.yml`) fails if the fragment drifted from `cmd/gmc/config/rbac/role.yaml` — so a permission added via a marker but not propagated to the chart, which would leave the deployed GMC missing the grant, fails CI ([Q142](../STATUS.md)).
+`make chart-rbac-check` (run by `make check`, `make manifest-validate`, and CI's `manifest-validate.yml`) fails if the fragment drifted from `cmd/gmc/config/rbac/role.yaml` — so a permission added via a marker but not propagated to the chart, which would leave the deployed GMC missing the grant, fails CI ([Q142](../queue/README.md)).
 
 ## Sync the Helm chart webhook (after any webhook-marker change)
 
@@ -158,7 +158,7 @@ After regenerating manifests, re-sync the chart:
 make chart-webhook   # scripts/manifest/sync-chart-webhook.sh — regenerates charts/actions-gateway/templates/webhook.yaml
 ```
 
-`make chart-webhook-check` (run by `make check`, `make manifest-validate`, and CI's `manifest-validate.yml`) fails if the chart template drifted from the controller-gen source — so a marker change (a new intercepted resource/operation, a path or `failurePolicy` change) that is regenerated into `config/` but not propagated to the chart fails CI ([Q143](../STATUS.md)).
+`make chart-webhook-check` (run by `make check`, `make manifest-validate`, and CI's `manifest-validate.yml`) fails if the chart template drifted from the controller-gen source — so a marker change (a new intercepted resource/operation, a path or `failurePolicy` change) that is regenerated into `config/` but not propagated to the chart fails CI ([Q143](../queue/README.md)).
 
 ## AGC ClusterRole rules (NOT controller-gen)
 
@@ -170,13 +170,13 @@ The `agc-tenant-role` ClusterRole — the permission set every AGC ServiceAccoun
 It deliberately withholds permissions the AGC's own marker role (`cmd/agc/config/rbac/role.yaml`, ClusterRole `agc-role`) grants (e.g.
 `runnergroups` create/delete, `secrets` patch) for least privilege, so generating it from the markers would be a privilege escalation.
 Its single source is the hand-maintained fragment `charts/actions-gateway/files/agc-tenant-role-rules.yaml`: the chart embeds it via `.Files.Get` in `templates/agc-tenant-role.yaml`, and the GMC integration suite (`installAGCTenantClusterRole`) reads the same file — so the shipped role and the RBAC-scope test can never drift.
-Edit the fragment, not either consumer ([Q143](../STATUS.md)).
+Edit the fragment, not either consumer ([Q143](../queue/README.md)).
 
 ### agc-clusterrunnertemplate-reader
 
-The `agc-clusterrunnertemplate-reader` ClusterRole carries the cluster-scoped reads a namespaced `RoleBinding` cannot authorize — `clusterrunnertemplates` and (since [Q450](../STATUS.md)) `runtimeclasses`.
+The `agc-clusterrunnertemplate-reader` ClusterRole carries the cluster-scoped reads a namespaced `RoleBinding` cannot authorize — `clusterrunnertemplates` and (since [Q450](../queue/README.md)) `runtimeclasses`.
 Its source is likewise the hand-maintained fragment `charts/actions-gateway/files/agc-clusterrunnertemplate-reader-rules.yaml`.
-Unlike the tenant role it holds *exactly* what the markers declare for those kinds, so the drift test asserts verb-level equality both ways, plus the read-only property the cluster-wide scope depends on: any write verb here fails the test ([Q454](../STATUS.md), rationale in [design/05-security.md](../design/05-security.md#the-agcs-cluster-scoped-read-surface)).
+Unlike the tenant role it holds *exactly* what the markers declare for those kinds, so the drift test asserts verb-level equality both ways, plus the read-only property the cluster-wide scope depends on: any write verb here fails the test ([Q454](../queue/README.md), rationale in [design/05-security.md](../design/05-security.md#the-agcs-cluster-scoped-read-surface)).
 Adding a cluster-scoped kind to the AGC means editing the marker in `doc.go` *and* this fragment in the same change.
 
 ## RBAC marker placement
@@ -219,7 +219,7 @@ Each is a claim about how gofmt, controller-gen, or the apiserver behaves, so a 
   The same split applies to the worker-pod sidecar contract ([`api/apisidecar`](../../api/apisidecar/sidecar.go)): the heuristic and the annotation key live there, and each version keeps a `RunnerTemplateSpec`-typed wrapper.
 - **Everything else the two v2 packages share must stay identical.** Kubernetes requires the *versioned types* to be duplicated per version, but the shared spec fragments beside them (`shared_types.go`, `scheduling_types.go`, the near-identical `actionsgateway_types.go`/`egressproxy_types.go`/`runnertemplate_types.go`) are identical by contract, and a one-sided edit breaks the storage/hub conversion silently.
   [`scripts/go/check-v2-api-sync.sh`](../../scripts/go/check-v2-api-sync.sh) (wired into `make check` and CI's `lint` job via `make v2-api-sync-check`) holds **every** `.go` file present in both packages identical, normalising away the entitled differences: the `package` clause, a `+kubebuilder:storageversion` marker, and a `+kubebuilder:deprecatedversion` marker (only `v2alpha1` carries it, and its warning text names the deprecated version and Kind, so it cannot be mirrored).
-  Files that genuinely differ per version (`runnerset_types.go`, `conversion.go`, `groupversion_info.go`, `types_test.go`, `zz_generated.deepcopy.go`) are named in the script's `EXEMPT` list with the reason — the DeepCopy exemption leans on `make codegen-check` guarding those two files instead, which it does since [Q477](../STATUS.md); a stale entry fails the gate, and a file added to both packages is covered the day it lands with no edit to the script.
+  Files that genuinely differ per version (`runnerset_types.go`, `conversion.go`, `groupversion_info.go`, `types_test.go`, `zz_generated.deepcopy.go`) are named in the script's `EXEMPT` list with the reason — the DeepCopy exemption leans on `make codegen-check` guarding those two files instead, which it does since [Q477](../queue/README.md); a stale entry fails the gate, and a file added to both packages is covered the day it lands with no edit to the script.
 
 ## No per-file license headers
 
