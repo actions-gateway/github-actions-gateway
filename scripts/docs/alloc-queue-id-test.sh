@@ -40,10 +40,6 @@ readonly FLOOR=900
 fails=0
 WORK="$(mktemp -d)"
 
-# A label cell carries backticks, and SC2016 reads a literal backtick in a
-# single-quoted string as legacy command substitution. Carrying one in a
-# variable keeps the fixture row faithful without the false positive.
-bt="$(printf '\140')"
 
 git_id=(-c user.email=t@t -c user.name=t)
 
@@ -129,19 +125,18 @@ stub_gh() {
 }
 
 # fixture DIR — build an isolated origin/worktree pair and a `gh` stub under
-# DIR. The backlog it writes carries one row, Q900, so the floor is known.
+# DIR. The store it writes carries one item, Q900, so the floor is known.
 fixture() {
 	local dir="$1"
 	mkdir -p "$dir/bin" "$dir/out" "$dir/repo/docs"
 	git init -q --bare "$dir/origin.git"
 	git init -q "$dir/repo"
+	mkdir -p "$dir/repo/docs/queue"
 	{
-		printf '# Project Status\n\n## Queue\n\n'
-		printf '| ID | Item | Labels | St | Sz | Notes |\n|---|---|---|---|---|---|\n'
-		printf '| <a id="Q%d"></a>Q%d | [a row that already exists](x.md) | %s | 🔲 | S | notes |\n' \
-			"$FLOOR" "$FLOOR" "${bt}debt${bt}"
-	} >"$dir/repo/docs/STATUS.md"
-	git -C "$dir/repo" add docs/STATUS.md
+		printf -- '---\nid: Q%d\nrank: a1\nlabels:\n    - debt\nstatus: ready\nsize: S\n' "$FLOOR"
+		printf -- 'target: ../x.md\n---\n\n# an item that already exists\n\nnotes\n'
+	} >"$dir/repo/docs/queue/Q$FLOOR.md"
+	git -C "$dir/repo" add docs/queue
 	git -C "$dir/repo" "${git_id[@]}" commit -qm 'fixture backlog'
 	git -C "$dir/repo" remote add origin "$dir/origin.git"
 	# Claims anchor to the root commit, so the origin has to carry that object.

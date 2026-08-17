@@ -200,6 +200,22 @@ That is the shape to look for in the remaining consumers, and it is invisible to
 Retiring them in phase 3 would leave it ungated while the drift gate keeps depending on it.
 They belong in phase 6, with the deletion.
 
+**Phase 3's movable set is much smaller than 61, and the rest is not deferral but dependency.** Of the 61 files, 43 hold a live reference and 18 mention the table only in prose.
+Sorting the 43 by what actually blocks them:
+
+- **Movable now, and done**: `next-task.sh`, `queue-unblock.sh`, `find-duplicate-rows.sh`, `alloc-queue-id.sh` (both its duplicate search and its ID floor), and `roadmapcheck`.
+  Each reads the backlog to answer a question, so the drift gate makes the switch verifiable by output.
+- **Blocked on phase 4**, because they assert a *link format* rather than a path: `check-plan-index.sh` and its suite, `git-merge-plan-index-test.sh`, the two hook suites.
+  Invariant 3 requires a plan's Status cell to link `../STATUS.md#QNNN`, which is exactly the anchor phase 4 rewrites; moving it earlier would mean a transitional rule accepting both forms that someone then has to remember to tighten.
+- **Must outlive the table, so phase 6**: `lint-backlog.sh`, `check-status-isolation.sh`, `git-merge-status.sh`, `backloglint`, the pre-commit hook, and the `status-lint.yml` steps that run them.
+  These take `docs/STATUS.md` as their subject, and it is live and drift-gated through phase 5.
+- **Incidental**: path-filter lists, `gate-list.sh`, the release tooling and the `semverfloor` tests name the file without reading a backlog from it.
+
+**`.gitattributes` and piped-gate need no change, and that is a decision rather than an omission.** The merge driver and the overlap discount both exist because one table is contended by construction.
+A store has no equivalent: two sessions touching different items touch different files, and two touching the *same* item have a real conflict that must not be discounted or auto-resolved by row ID.
+So `docs/queue/**` deliberately gets neither, and the `docs/STATUS.md` entries retire with the table.
+Written down because the helpful-looking move is to add the store to both lists, which would rebuild the problem the store exists to remove.
+
 **`backlog-metrics.sh` is a phase-6 decision, not a phase-3 one.** `queue.py metrics` replays the store's git history, and the store has 3 commits against `docs/STATUS.md`'s 1155.
 Switching it now would report flow metrics over nothing while looking like a working tool.
 Deleting the table ends that series whatever happens, so what phase 6 has to decide is whether the old series is frozen into a doc, bridged, or simply allowed to restart.
