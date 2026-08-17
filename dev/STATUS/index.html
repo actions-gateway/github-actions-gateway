@@ -4180,6 +4180,13 @@
 <td>M</td>
 <td><strong>Event:</strong> kindnet <code>e2e / e2e</code> red on <code>main</code> again. 07-18 escalation was misattributed (Q349, pre-fix). Dump now captures nfqueue/memory counters + full-window kindnet logs — attribute per the plan's triage table before any code change.</td>
 </tr>
+<tr>
+<td><a id="Q891"></a>Q891</td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/integration-test.yml">A codeload 429 on an action download abandons the changes job</a></td>
+<td><code>flake</code> <code>ci</code></td>
+<td>S</td>
+<td><strong>Event:</strong> a <code>changes</code> job is abandoned on <code>main</code> outside a GitHub incident window. The lone sighting (2026-08-17 13:33 UTC, #1598) falls inside the incident declared at 13:40, ~20% errors with Actions degraded. No retry of ours is in that path.</td>
+</tr>
 </tbody>
 </table>
 
