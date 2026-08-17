@@ -1266,6 +1266,13 @@ State when a read was taken whenever reporting one, and re-read before acting on
 
 Both were filed upstream as [claude-skills#131](https://github.com/karlkfi/claude-skills/issues/131), and `verify-claims` now triggers on a claim about where code came from and on a reading taken earlier.
 
+**A decision recalled from a summary.** The third shape arrived on 2026-08-17 and is the same failure aimed at the maintainer rather than at the code.
+A question asked mid-session had offered three options about one PR; the answer, "merge it first, migrate on top", survived a compaction as a bare quoted phrase with the question no longer attached to it.
+It was then read as a general sequencing decision about two later phases of unrelated work, acted on by holding a finished PR back, and stated back to the maintainer as their own rule.
+It was not: the answer was about `#1587`, which had merged hours earlier.
+A decision reads as settled context rather than as a claim, so none of the rules above fire on it, and the cost lands on the one party who cannot check the transcript as cheaply as you can — they have to remember, while re-reading the question the answer belonged to takes one search.
+So: quote a decision only from the exchange that produced it, and when a summary is the only source, go back and read what was asked before treating the answer as a rule.
+
 ### A negative result implicates the probe's identifier first
 
 The section above is about a probe that answers a different question.
