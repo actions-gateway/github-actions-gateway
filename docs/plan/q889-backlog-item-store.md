@@ -216,6 +216,21 @@ A store has no equivalent: two sessions touching different items touch different
 So `docs/queue/**` deliberately gets neither, and the `docs/STATUS.md` entries retire with the table.
 Written down because the helpful-looking move is to add the store to both lists, which would rebuild the problem the store exists to remove.
 
+**Phase 4's anchors are four classes, not one, and only the largest is mechanical.** Re-measured 2026-08-17, 233 references to `STATUS.md#…` across the tree where the baseline recorded 218:
+
+| Count | Class | Treatment |
+|---|---|---|
+| 217 | `#Q<digits>` item anchors, 50 files | substitution, but see the depth below |
+| 5 | `#QNNN` prose placeholders, 3 files | must **not** be rewritten: they document the format |
+| 11 | section anchors `#deferred`, `#queue`, `#flake-watch`, `#progress` | each needs a destination decided, not substituted |
+
+The baseline counted the first class only, so the work was understated by the sixteen references that need judgement.
+Both of the others are silent under a naive substitution: a pattern written `#Q[0-9]*` matches the literal `#QNNN` with zero digits and rewrites it to `queue/Q.md`, and a pattern written `#Q[0-9]+` skips every section anchor and leaves it pointing at a file phase 6 deletes.
+That is how the classes were found at all: `grep -o 'STATUS\.md#Q[0-9]*'` counted 53 in `docs/plan/README.md` where a `\d+` pattern counted 52, and the one-reference gap was `#deferred`.
+
+**Depth is the second trap.** 192 of the item anchors sit one directory under `docs/` and take `../queue/`, but 25 sit two deep (`docs/plan/archive/`) and take `../../queue/`.
+A single substitution applied tree-wide gets those 25 wrong, and `check-doc-links` is what would catch it — so the rewrite is per-file with the prefix derived from the file's own depth, and the gate is the reconciliation rather than a leftover grep.
+
 **`backlog-metrics.sh` is a phase-6 decision, not a phase-3 one.** `queue.py metrics` replays the store's git history, and the store has 3 commits against `docs/STATUS.md`'s 1155.
 Switching it now would report flow metrics over nothing while looking like a working tool.
 Deleting the table ends that series whatever happens, so what phase 6 has to decide is whether the old series is frozen into a doc, bridged, or simply allowed to restart.
