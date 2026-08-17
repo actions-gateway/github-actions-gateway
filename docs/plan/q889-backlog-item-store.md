@@ -145,11 +145,16 @@ What does need work is the title cap.
 This is not a migration defect: the single table capped the *Notes* cell at 250 characters and never capped the Item cell at all, so adopting the store imposes a constraint this backlog has never been held to.
 The cap is deliberate upstream, because a title renders whole in every index row, in `next`'s kickoff prompt, and in any session named after the item, so it is the one field with nowhere to overflow.
 
+**Settled 2026-08-17: rewrite all 61 by hand.** The cap stays, because the reasons for it are this repo's reasons too, and the alternatives both cost more than they save: raising it means either patching the vendored `queue.py`, forking the file phase 1 spent its whole length un-forking, or duplicating the check locally; and an allowlist of 61 IDs is how a cap stops meaning anything.
+
 Rewriting them is judgement rather than truncation, and the two obvious mechanical answers are both wrong: cutting at 72 characters severs titles mid-identifier, and moving the tail into the body leaves a title that no longer says what the item is.
 A representative case fixed by hand shows the shape, `Q490` going from a spec name plus its symptom to "A fan-out completion spec cancels a job every delivery completed" at 64 characters, with the spec name moved into the body where it costs nothing.
 
 The round-trip is what surfaced this, which is the outcome the skill predicts for running one against a live table.
 Two smaller things came with it: `v2.0.0` is not a label, though a regex over the `**Labels:**` line reads it as one because it is backticked link text inside `2.0-gate`'s parenthetical, and the derived vocabulary is 18 labels rather than 19.
+
+So phase 2 is two pieces of work, and the titles are the larger: rewrite the 61, then migrate.
+Doing it the other way round means editing item files the migration is about to overwrite.
 
 Still owed before the store can land: the flake-watch items need their status checked against the `deferred` decision, `docs/queue/README.md` needs the label vocabulary, and `docs/queue/**` joins both path lists in `status-lint.yml`, where a comment already says so.
 
