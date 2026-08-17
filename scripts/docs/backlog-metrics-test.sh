@@ -187,7 +187,7 @@ git -C "$REPO3" init -q -b trunk
 # cycle times below are the fixture's and not the day the suite runs.
 commit_on() {
 	local date="$1" subject="$2"
-	GIT_AUTHOR_DATE="$1T12:00:00" GIT_COMMITTER_DATE="$1T12:00:00" \
+	GIT_AUTHOR_DATE="${date}T12:00:00" GIT_COMMITTER_DATE="${date}T12:00:00" \
 		git -C "$REPO3" "${GIT_ID[@]}" commit -qam "$subject"
 }
 

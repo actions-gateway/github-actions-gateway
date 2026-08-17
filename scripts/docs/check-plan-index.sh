@@ -3,14 +3,24 @@
 # check-plan-index.sh — keep docs/plan/README.md and the docs/plan/ tree in sync,
 # in both directions. Two invariants, both fail-fast so drift can't ship:
 #
-#   1. README → STATUS.  Every plan in the *active* (non-Archive) part of
-#      docs/plan/README.md must still be referenced by docs/STATUS.md — a
-#      Progress-table row or a Queue/Deferred item — UNLESS its README row is
-#      marked ⓘ (informational: ongoing spec / strategy / research with no
-#      progress to track). A ✅/⚠️ plan that STATUS.md no longer references is
-#      closed work that was never archived: exactly the drift that makes the
-#      plan index read as "lots still open" when it isn't. The fix is to archive
-#      it the moment its last STATUS reference is removed — see
+#   1. An open plan has open work. An active (non-Archive) row in
+#      docs/plan/README.md whose Status cell carries an open marker (⚠️ ❌ 🚧 🔲)
+#      must be backed by a live backlog item: one targeting the plan, or one
+#      linked from the cell itself. A ✅/💤/ⓘ row is exempt — it is claiming no
+#      open work, so there is nothing for an item to back.
+#
+#      This read the Progress table until Q889 deleted it, asking the mirror
+#      question: is this plan referenced anywhere in the backlog? Progress
+#      answered it for 21 plans whose work had finished, and the ✅ it answered
+#      with is the same marker docs/plan/README.md carries in its own Status
+#      cell — so the signal survives the table, one file closer to the claim it
+#      guards. The direction reverses with it, and gains rather than loses: a
+#      finished plan no longer has to be referenced to stay legal, and a plan
+#      *claiming* open work now has to prove it, which is the case that goes
+#      stale silently. Both rows this found on arrival said "all phases shipped"
+#      under a ⚠️ (Q893's class, caught by reading rather than by a gate).
+#
+#      A plan that has genuinely finished is archived — see
 #      docs/development/maintaining-backlog.md#archiving-completed-plan-docs.
 #
 #   2. disk ↔ README.  Every plan file on disk must have a row in README, in the
@@ -22,7 +32,7 @@
 #      it into README; this direction catches the ones that never did.
 #
 #   3. Status cell ↔ Queue row. In an active row's Status cell (column 3), a
-#      QNNN that is still a row in docs/STATUS.md must be written as a link to
+#      QNNN that is still a live item must be written as a link to
 #      its anchor, and one that is not must be written bare. The bare form is
 #      the closed form — maintaining-backlog.md's closing protocol already says
 #      to de-link an ID when its row goes — so requiring the link while the row
@@ -63,21 +73,16 @@ source "$SCRIPT_DIR/../lib/common.sh"
 repo_root="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
 readme="$repo_root/docs/plan/README.md"
 store="$repo_root/docs/queue"
-# Invariant 1 still reads the table, and invariant 3 no longer does (Q889).
-# The split is not laziness: a plan is "referenced" when a backlog row OR a
-# Progress row names it, and Progress has no counterpart in the store — it is
-# deleted rather than migrated, so 21 active plans whose only reference is a
-# Progress row would read as unreferenced the moment this looked at items
-# alone. Invariant 1 moves when Progress does.
-status="$repo_root/docs/STATUS.md"
 plan_dir="$repo_root/docs/plan"
 
-for f in "$readme" "$status"; do
-    if [[ ! -f "$f" ]]; then
-        printf 'check-plan-index: required file not found: %s\n' "$f" >&2
-        exit 2
-    fi
-done
+if [[ ! -f "$readme" ]]; then
+    printf 'check-plan-index: required file not found: %s\n' "$readme" >&2
+    exit 2
+fi
+if [[ ! -d "$store" ]]; then
+    printf 'check-plan-index: required directory not found: %s\n' "$store" >&2
+    exit 2
+fi
 
 # --- README extraction -------------------------------------------------------
 # Each table row is `| [text](target) | ... |`; the column-1 link is the plan.
@@ -85,13 +90,28 @@ done
 # rows (after it) link "archive/<name>.md". Regexes are strings (not /.../) so
 # the "/" in a character class cannot terminate them.
 
-# Active plans EXCLUDING ⓘ rows — these must stay STATUS-referenced (invariant 1).
-mapfile -t status_checked < <(awk '
+# Active plans whose Status cell claims open work — these must be backed by a
+# live item (invariant 1). The marker is read from column 3 rather than from the
+# whole line: a Scope cell describing what a plan is about can carry a ❌ in
+# prose, and charging the row for it would gate the description instead of the
+# claim. Emits `plan<TAB>linked-IDs` so the cell's own links count as backing.
+mapfile -t open_rows < <(awk '
     /^## Archive/ { exit }
     /^\| \[/ && $0 !~ /ⓘ/ {
-        if (match($0, "\\]\\([^/):]+\\.md\\)")) {
-            print substr($0, RSTART + 2, RLENGTH - 3)
+        line = $0
+        gsub(/\\\|/, "\001", line)
+        if (split(line, col, "|") != 5) next
+        if (col[4] !~ /⚠️|❌|🚧|🔲/) next
+        if (!match($0, "\\]\\([^/):]+\\.md\\)")) next
+        plan = substr($0, RSTART + 2, RLENGTH - 3)
+        ids = ""
+        cell = col[4]
+        while (match(cell, "\\.\\./queue/Q[0-9]+\\.md")) {
+            id = substr(cell, RSTART + 9, RLENGTH - 12)
+            ids = ids " " id
+            cell = substr(cell, RSTART + RLENGTH)
         }
+        print plan "\t" ids
     }
 ' "$readme" | sort -u)
 
@@ -135,19 +155,34 @@ contains() {
 
 errors=0
 
-# Invariant 1: active README plans (non-ⓘ) must be STATUS-referenced.
-unref=()
-for plan in "${status_checked[@]}"; do
-    grep -qF "$plan" "$status" || unref+=("$plan")
+# Invariant 1: a row claiming open work must be backed by a live item.
+unbacked=()
+for row in ${open_rows+"${open_rows[@]}"}; do
+    IFS=$'\t' read -r plan ids <<<"$row"
+    backed=""
+    # An item targeting the plan. Restricted to item files: the store's README
+    # is a page about the backlog, and a plan named in its prose would back a
+    # row that no item carries.
+    if grep -rqF --include='Q*.md' "$plan" "$store"; then
+        backed=1
+    fi
+    # Or an ID the cell links, which must still exist as an item. Invariant 3
+    # already rejects a link to a dead one, so a stale link cannot back a row.
+    for id in $ids; do
+        [[ -f "$store/$id.md" ]] && backed=1
+    done
+    [[ -n "$backed" ]] || unbacked+=("$plan")
 done
-if (( ${#unref[@]} > 0 )); then
+if (( ${#unbacked[@]} > 0 )); then
     errors=1
     {
-        printf 'check-plan-index: %d active plan(s) in docs/plan/README.md are no longer referenced by docs/STATUS.md.\n' "${#unref[@]}"
-        printf 'Archive each (git mv to docs/plan/archive/, move its README row to the Archive table, rebase its links)\n'
-        printf 'or — if it is ongoing spec/strategy/research — mark its README row ⓘ. See\n'
+        printf 'check-plan-index: %d active plan(s) in docs/plan/README.md claim open work no backlog item carries.\n' "${#unbacked[@]}"
+        printf 'Either the work is done — flip the Status cell to ✅ and archive the plan (git mv to\n'
+        printf 'docs/plan/archive/, move its README row to the Archive table, rebase its links) — or it is\n'
+        printf 'real and unfiled, so file the item. If the plan is ongoing spec/strategy/research with no\n'
+        printf 'progress to track, mark its README row ⓘ. See\n'
         printf 'docs/development/maintaining-backlog.md#archiving-completed-plan-docs\n'
-        for c in "${unref[@]}"; do printf '  - docs/plan/%s\n' "$c"; done
+        for c in "${unbacked[@]}"; do printf '  - docs/plan/%s\n' "$c"; done
     } >&2
 fi
 
@@ -189,7 +224,7 @@ if (( ${#dangling_active[@]} + ${#dangling_archive[@]} > 0 )); then
     } >&2
 fi
 
-# Invariant 3: a Status cell links a QNNN iff that row is still in STATUS.md.
+# Invariant 3: a Status cell links a QNNN iff that item is still in the store.
 # One awk pass over both files — the live-ID list first, then the active part of
 # README. Escaped pipes are protected before the column split: a `\|` inside a
 # cell shifts every column after it, which is the defect the backlog lint
@@ -267,7 +302,7 @@ if (( ${#dangling[@]} > 0 )); then
         printf 'docs/development/maintaining-backlog.md#closing-a-row-what-else-moves\n'
         for c in "${dangling[@]}"; do
             IFS=$'\t' read -r l i <<<"$c"
-            printf '  - docs/plan/README.md:%s links %s, which has no <a id> in docs/STATUS.md\n' "$l" "$i"
+            printf '  - docs/plan/README.md:%s links %s, which is no longer an item in docs/queue/\n' "$l" "$i"
         done
     } >&2
 fi
@@ -280,7 +315,7 @@ if (( ${#unlinked[@]} > 0 )); then
         printf 'so closing the row breaks the anchor and forces the cell to be re-read.\n'
         for c in "${unlinked[@]}"; do
             IFS=$'\t' read -r l i <<<"$c"
-            printf '  - docs/plan/README.md:%s names %s, which is still a row in docs/STATUS.md\n' "$l" "$i"
+            printf '  - docs/plan/README.md:%s names %s, which is still an item in docs/queue/\n' "$l" "$i"
         done
     } >&2
 fi
@@ -360,5 +395,5 @@ if (( errors )); then
     exit 1
 fi
 
-printf 'check-plan-index: ok (%d active, %d archived; all STATUS-referenced or ⓘ, all indexed both ways, every Status-cell QNNN linked iff its row is live, %d shipped-release row(s) not reading as open)\n' \
+printf 'check-plan-index: ok (%d active, %d archived; every open-marked row backed by a live item, all indexed both ways, every Status-cell QNNN linked iff its row is live, %d shipped-release row(s) not reading as open)\n' \
     "${#indexed_active[@]}" "${#indexed_archive[@]}" "$release_checked"

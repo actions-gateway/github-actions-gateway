@@ -45,40 +45,39 @@ cleanup() {
 trap cleanup EXIT
 
 # new_repo QUEUE_IDS DEFERRED_IDS [PLAN] — start a throwaway repo holding the plan
-# files every fixture indexes, and a docs/STATUS.md whose Queue and Deferred
-# tables anchor the given space-separated IDs. The Progress row keeps invariant
-# 1 satisfied, so a case only ever fails on the rule it is testing. PLAN names
-# the single active plan file, which the release cases point at a release-X.Y.md.
+# files every fixture indexes, and a docs/queue/ store carrying the given
+# space-separated IDs. PLAN names the single active plan file, which the release
+# cases point at a release-X.Y.md.
+#
+# Every item's body targets the plan, which keeps invariant 1 satisfied so a case
+# only ever fails on the rule it is testing — the job the Progress row did before
+# Q889 deleted it. A case testing invariant 1 itself calls unback to take it away.
 new_repo() {
     local queue="$1" deferred="$2" plan="${3:-alpha.md}" id
     WORK="$(mktemp -d)"
     workdirs+=("$WORK")
     git -C "$WORK" init -q
-    mkdir -p "$WORK/docs/plan/archive"
+    mkdir -p "$WORK/docs/plan/archive" "$WORK/docs/queue"
     printf '# Alpha\n' >"$WORK/docs/plan/$plan"
     printf '# Zeta\n' >"$WORK/docs/plan/archive/zeta.md"
-    # shellcheck disable=SC2016 # the backticks are a Markdown label cell, not substitution
-    {
-        printf '# Project Status\n\n## Progress\n\n| Plan | Labels | St |\n|---|---|---|\n'
-        printf '| [Alpha](plan/%s) | `docs` | 🔲 |\n' "$plan"
-        printf '\n## Queue\n\n| ID | Item | Labels | St | Sz | Notes |\n|---|---|---|---|---|---|\n'
-        for id in $queue; do
-            printf '| <a id="%s"></a>%s | Thing | `docs` | 🔲 | S | note |\n' "$id" "$id"
-        done
-        printf '\n## Deferred\n\n| ID | Item | Labels | Sz | Trigger to revive |\n|---|---|---|---|---|\n'
-        for id in $deferred; do
-            printf '| <a id="%s"></a>%s | Thing | `docs` | S | **Demand:** someone asks. |\n' "$id" "$id"
-        done
-    } >"$WORK/docs/STATUS.md"
-    # Invariant 3 reads the live IDs from the store, invariant 1 still reads the
-    # table for its Progress row (Q889). Both fixtures, because the checker
-    # genuinely reads both.
-    mkdir -p "$WORK/docs/queue"
     for id in $queue $deferred; do
         {
             printf -- '---\nid: %s\nrank: a1\nlabels:\n    - docs\n' "$id"
-            printf -- 'status: ready\nsize: S\n---\n\n# Thing\n\nnote\n'
+            printf -- 'status: ready\nsize: S\n---\n\n# Thing\n\n'
+            printf -- 'Tracked in [the plan](../plan/%s).\n' "$plan"
         } >"$WORK/docs/queue/$id.md"
+    done
+}
+
+# unback — strip the plan target from every item, leaving the store with no item
+# that names the plan. Invariant 1 then rests entirely on what the Status cell
+# itself links, which is the half these cases vary.
+unback() {
+    local f
+    for f in "$WORK"/docs/queue/Q*.md; do
+        [[ -e "$f" ]] || continue
+        printf -- '---\nid: %s\nrank: a1\nlabels:\n    - docs\nstatus: ready\nsize: S\n---\n\n# Thing\n\nnote\n' \
+            "$(basename "$f" .md)" >"$f"
     done
 }
 
@@ -119,6 +118,46 @@ expect() {
     fi
     printf 'ok   %s\n' "$name"
 }
+
+# --- invariant 1: a row claiming open work must be backed by a live item ----
+#
+# Untested before Q889, because the fixture's Progress row satisfied the old
+# form of this rule in every case. Both directions are asserted: a claim with
+# nothing behind it is rejected, and each of the three ways a row can be legal
+# is accepted on its own, so a rule that stopped reading any one of them fails
+# here rather than passing quietly.
+
+new_repo 'Q10' ''
+unback
+index '| [alpha.md](alpha.md) | Alpha scope | ⚠️ Open, more to do |'
+expect 'an open-marked row no item carries is rejected' 1 'claim open work no backlog item carries'
+
+new_repo 'Q10' ''
+index '| [alpha.md](alpha.md) | Alpha scope | ⚠️ Open, more to do |'
+expect 'an open-marked row an item targets is accepted' 0
+
+new_repo 'Q10' ''
+unback
+index '| [alpha.md](alpha.md) | Alpha scope | ⚠️ Open, gated on [Q10](../queue/Q10.md) |'
+expect 'an open-marked row linking a live item is accepted' 0
+
+new_repo 'Q10' ''
+unback
+index '| [alpha.md](alpha.md) | Alpha scope | ✅ Done — nothing left |'
+expect 'a done row needs no backing item' 0
+
+new_repo 'Q10' ''
+unback
+index '| [alpha.md](alpha.md) | Alpha scope | ⓘ Ongoing strategy, ⚠️ revisited each release |'
+expect 'an ⓘ row is exempt even carrying an open marker' 0
+
+# The marker is read from the Status cell alone. A Scope cell describing what a
+# plan is about can carry one in prose, and charging the row for it would gate
+# the description rather than the claim.
+new_repo 'Q10' ''
+unback
+index '| [alpha.md](alpha.md) | Alpha scope: why ❌ was the wrong default | ✅ Done |'
+expect 'an open marker in the Scope cell does not charge the row' 0
 
 # --- red: the staleness the rule exists to catch ---------------------------
 
