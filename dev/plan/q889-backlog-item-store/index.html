@@ -2589,10 +2589,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#what-each-of-the-four-rules-becomes" class="md-nav__link">
+  <a href="#what-each-rule-becomes" class="md-nav__link">
     <span class="md-ellipsis">
       
-        What each of the four rules becomes
+        What each rule becomes
       
     </span>
   </a>
@@ -2615,6 +2615,28 @@
     <span class="md-ellipsis">
       
         Risks
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#phase-2-measured-but-not-landed" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 2, measured but not landed
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#working-rules-for-the-remaining-phases" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Working rules for the remaining phases
       
     </span>
   </a>
@@ -2653,8 +2675,9 @@
 
 
 <h1 id="q889-migrate-the-backlog-to-the-per-item-store">Q889: Migrate the backlog to the per-item store<a class="headerlink" href="#q889-migrate-the-backlog-to-the-per-item-store" title="Permanent link">&para;</a></h1>
-<p><strong>Status:</strong> Planning.
-Nothing implemented.</p>
+<p><strong>Status:</strong> Phase 1 in progress.
+Both agent scripts adopted (Q694, Q814 and Q828 closed); <code>queue.py</code> and the rules checker remain.
+Phases 2 to 6 not started.</p>
 <p>Replace the single <code>docs/STATUS.md</code> Queue table with the <code>session-backlog</code> skill's per-item store under <code>docs/queue/</code>, adopt its Python tooling, and groom the backlog to remove what the move obsoletes.</p>
 <p>Supersedes the attempt on <a href="https://github.com/actions-gateway/github-actions-gateway/pull/1534">#1534</a> (draft, +4150/−1 across 186 files, stale).
 That branch carries a Go <code>queuestore</code> implementation and its own row Q869, neither of which reached <code>main</code>; closing it discards both.</p>
@@ -2709,14 +2732,16 @@ Recorded here because the plan is unreadable without them.</p>
    What is unique to Progress is the <code>⚠️ = at least one open Queue row remains</code> semantic that <code>lint-backlog</code> rule 9 guards; that moves to <code>plan-index-check</code>.</li>
 <li><strong>Flake watch rows become items.</strong> Recommended <code>status: deferred</code> with a <code>flake</code> label, keeping the <code>**Event:** recurs on main after the fix</code> trigger convention.
    Deferred is the skill's parked-awaiting-a-trigger state, where blocked means waiting on a dependency and would put every flake row in the blocked set a groom reads each pass.
-   <em>(Maintainer said blocked; deferred is this plan's counter-proposal and needs a yes before phase 2.)</em></li>
-<li><strong>Rules 8, 9, 10 and 11 are ported to a repo-local checker</strong>, since <code>queue.py lint</code> has no equivalent.
-   <code>queue.py claims</code> covers rule 12.</li>
+   Settled 2026-08-17: <code>deferred</code>, so phase 2 is unblocked.
+   The trigger convention is what carries the flake lifecycle, and a <code>flake</code> row parked awaiting a recurrence is not waiting on a dependency; putting them in <code>blocked</code> would have added every one of them to the set a groom reads each pass, for rows whose whole point is that nothing is expected to happen.</li>
+<li><strong>Rules 8, 9 and 11 are ported to a repo-local checker</strong>, since <code>queue.py lint</code> has no equivalent.
+   <code>queue.py claims</code> covers rule 12, and rule 10 is dropped on the measurement below.</li>
 <li><strong>No <code>docs/milestones/</code> directory.</strong> The milestone/design split already exists as the <code>milestone</code> label and as the index's topical sections; a third classification by directory would cost re-homing across 157 plans, re-base every moved file's outbound links, and fork <code>no-plan-refs-check</code>, <code>plan-index-check</code>, the plan-index merge driver, <code>.gitattributes</code> and the path filters, all of which key on <code>docs/plan/</code>.</li>
 <li><strong>#1587 merges first</strong>; this work branches from <code>main</code> after it lands.</li>
 </ol>
-<h2 id="what-each-of-the-four-rules-becomes">What each of the four rules becomes<a class="headerlink" href="#what-each-of-the-four-rules-becomes" title="Permanent link">&para;</a></h2>
-<p>The point of porting rather than accepting the loss is that each guards a loss the store does not otherwise prevent.</p>
+<h2 id="what-each-rule-becomes">What each rule becomes<a class="headerlink" href="#what-each-rule-becomes" title="Permanent link">&para;</a></h2>
+<p>The point of porting rather than accepting the loss is that each guards a loss the store does not otherwise prevent.
+Which is why the fourth is dropped: measurement found it guards nothing the layout does not already refuse.</p>
 <table>
 <thead>
 <tr>
@@ -2737,27 +2762,48 @@ Recorded here because the plan is unreadable without them.</p>
 <td><code>plan-index-check</code>, which already reads Status cells and already gates linked-iff-live</td>
 </tr>
 <tr>
-<td>10: a deleted row may not reappear</td>
-<td>a reorder-over-delete rebase resurrecting shipped work</td>
-<td>store check against the merge base; cheaper here, since an item file is added once and deleted once</td>
-</tr>
-<tr>
 <td>11: closed label vocabulary</td>
 <td>a typo'd label sticking silently</td>
 <td>store check over frontmatter <code>labels</code> against a declared set</td>
 </tr>
 </tbody>
 </table>
-<p>Rule 10 is worth re-examining rather than porting mechanically: it exists because a <em>relocated</em> row and a <em>deleted</em> row are indistinguishable to a line-position merge.
-Under one-file-per-item a deletion is a file removal, so the failure mode may not survive the layout.
-Confirm before building it.</p>
+<p><strong>Rule 10 was measured rather than ported, and the measurement says do not build it.</strong> Measured 2026-08-17 in throwaway repositories, git 2.55.0, both arms run:</p>
+<table>
+<thead>
+<tr>
+<th>Layout</th>
+<th>The merge</th>
+<th>Outcome</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Single table, a row relocated far enough from the deletion to clear the diff context</td>
+<td><strong>exit 0, clean</strong></td>
+<td>the completed row is silently resurrected</td>
+</tr>
+<tr>
+<td>Per-item store, a <code>rank</code> edit against a file deletion</td>
+<td><strong>exit 1, <code>CONFLICT (modify/delete)</code></strong></td>
+<td>the file is left in the tree, so resurrecting it takes an explicit <code>git add</code></td>
+</tr>
+</tbody>
+</table>
+<p>The rule exists because a <em>relocated</em> row and a <em>deleted</em> row are indistinguishable to a line-position merge.
+One file per item makes them a modify and a delete of one path, which git refuses rather than resolves, so the silent default the rule was built for is gone and what remains is a careless resolution of a loud conflict.
+That residual belongs to the reconciliation habit <a href="../../development/maintaining-backlog/#a-hand-resolved-conflict-drops-rows-the-markers-never-named">already documented for hand-resolved conflicts</a>, not to a new gate.</p>
+<p>The first control run got this wrong in the informative direction: a four-row fixture put the relocation inside the deletion's diff context, so the table arm conflicted too and the comparison read as "no difference".
+Reproducing the documented silent case needed twenty rows and a relocation from position 18 to the top.
+A probe that cannot reproduce a defect the repo has already met twice is measuring itself.</p>
 <h2 id="phases">Phases<a class="headerlink" href="#phases" title="Permanent link">&para;</a></h2>
 <p>Each phase is separately verifiable.
 They land as one PR unless the maintainer splits it.</p>
 <p><strong>1.
-Tooling, changing nothing.</strong> Vendor <code>queue.py</code> and the claim allocator; adopt <code>pr-requeue-eligible.py</code> and <code>pr-mergeability-watch.py</code>; write the repo-local checker for rules 8/9/10/11.
+Tooling, changing nothing.</strong> Vendor <code>queue.py</code>; adopt <code>pr-requeue-eligible.py</code> and <code>pr-mergeability-watch.py</code>; write the repo-local checker for rules 8, 9 and 11.
 Wire the gates.
 Retire nothing.
+<strong>Not</strong> the claim allocator: this repo's <code>alloc-queue-id.sh</code> is upstream of the skill's, which cites this repo's 460+ live claims as its own proof point, and <code>backloglint</code> rule 12 already enforces what <code>queue.py claims</code> does.
 The store does not exist yet, so <code>queue.py lint</code> reports <code>0 item(s) OK</code>.
 Read the count, not the exit code: an empty run is a clean bill of health for a store it never read.</p>
 <p><strong>2.
@@ -2786,12 +2832,49 @@ Delete <code>docs/STATUS.md</code>, then groom.</strong> Remove or rewrite items
   Every freshness read must move to <code>docs/queue</code>.</li>
 <li><strong>Two linters, one silent wrong-tool error.</strong> <code>queue.py lint</code> pointed at a directory holding a table finds no <code>Q*.md</code> and reports <code>0 item(s) OK</code> at exit 0.</li>
 </ul>
+<h2 id="phase-2-measured-but-not-landed">Phase 2, measured but not landed<a class="headerlink" href="#phase-2-measured-but-not-landed" title="Permanent link">&para;</a></h2>
+<p><code>queue.py migrate</code> was run against the live table on 2026-08-17 and reconciled, then the output was discarded rather than committed.
+It is one command to regenerate, and committing it would have shipped a tree whose own gate fails: rule 11 reads the label vocabulary from <code>docs/queue/README.md</code>, which does not exist yet, so the checker exits 2 rather than passing.</p>
+<p>What the run established, so phase 2 starts from a measurement rather than a hope:</p>
+<ul>
+<li><strong>173 items written, and the ID sets reconcile in both directions</strong> against the 174 anchors in the table.</li>
+<li><strong>The one difference is <code>Q248</code></strong>, which the migration correctly left behind: it is an item ID on a <em>Progress</em> row rather than a Queue row, which is the edge case this plan already flagged as needing a decision instead of a mechanical move.</li>
+<li><strong>Order is preserved end to end.</strong> The Queue's 106 rows are the store's first 106 in order, and the remaining 67 match Deferred plus Flake watch in order.
+  That is the check worth running, because the table's order <em>is</em> the priority and a count cannot see it scrambled.</li>
+</ul>
+<p>Three probes were written before one measured the right thing, which is worth recording because the first two both looked plausible.
+Comparing <code>render --all</code> against the Queue section interleaves deferred items by rank; matching <code>\bQ\d+\b</code> over the rendered table catches IDs quoted inside Notes text, so <code>Q811</code> cited in <code>Q871</code>'s note read as a reordering.
+Only reading the first column answers the question asked.</p>
+<p><strong>The re-run on 2026-08-17 found the real phase-2 cost, and it is not the migration.</strong> The flake-watch handling needed no work at all: all 29 rows arrive as <code>status: deferred</code> carrying <code>flake</code>, which is decision 4 satisfied by <code>migrate</code> itself.
+What does need work is the title cap.</p>
+<p><strong>61 of the 173 items have titles over the store's 72-character cap</strong>, the longest at 130.
+<code>queue.py lint</code> fails on every one, so the store cannot land until they are rewritten.
+This is not a migration defect: the single table capped the <em>Notes</em> cell at 250 characters and never capped the Item cell at all, so adopting the store imposes a constraint this backlog has never been held to.
+The cap is deliberate upstream, because a title renders whole in every index row, in <code>next</code>'s kickoff prompt, and in any session named after the item, so it is the one field with nowhere to overflow.</p>
+<p><strong>Settled 2026-08-17: rewrite all 61 by hand.</strong> The cap stays, because the reasons for it are this repo's reasons too, and the alternatives both cost more than they save: raising it means either patching the vendored <code>queue.py</code>, forking the file phase 1 spent its whole length un-forking, or duplicating the check locally; and an allowlist of 61 IDs is how a cap stops meaning anything.</p>
+<p>Rewriting them is judgement rather than truncation, and the two obvious mechanical answers are both wrong: cutting at 72 characters severs titles mid-identifier, and moving the tail into the body leaves a title that no longer says what the item is.
+A representative case fixed by hand shows the shape, <code>Q490</code> going from a spec name plus its symptom to "A fan-out completion spec cancels a job every delivery completed" at 64 characters, with the spec name moved into the body where it costs nothing.</p>
+<p>The round-trip is what surfaced this, which is the outcome the skill predicts for running one against a live table.
+Two smaller things came with it: <code>v2.0.0</code> is not a label, though a regex over the <code>**Labels:**</code> line reads it as one because it is backticked link text inside <code>2.0-gate</code>'s parenthetical, and the derived vocabulary is 18 labels rather than 19.</p>
+<p>So phase 2 is two pieces of work, and the titles are the larger: rewrite the 61, then migrate.
+Doing it the other way round means editing item files the migration is about to overwrite.</p>
+<p>Still owed before the store can land: the flake-watch items need their status checked against the <code>deferred</code> decision, <code>docs/queue/README.md</code> needs the label vocabulary, and <code>docs/queue/**</code> joins both path lists in <code>status-lint.yml</code>, where a comment already says so.</p>
+<h2 id="working-rules-for-the-remaining-phases">Working rules for the remaining phases<a class="headerlink" href="#working-rules-for-the-remaining-phases" title="Permanent link">&para;</a></h2>
+<p>Both came out of phase 1 and both cost something before they were written down.</p>
+<p><strong>Check what the local version guarded before adopting an external port.</strong> Every adoption so far has been better than the copy it replaced in every measurable way and has still dropped something the local one covered.
+The mergeability watch's upstream suite never exercised <code>BLOCKED</code>, where ours did in three cases; the re-enqueue gate stopped recording a verdict for a probe that could not run, where ours wrote <code>UNMEASURABLE</code>.
+Neither is visible from reading the port, only from diffing its guarantees against the local one's, so the check is: enumerate what the thing being replaced asserted, then find each assertion in the replacement or account for its absence.
+<code>queue.py</code> and the rules checker are both still to adopt.</p>
+<p><strong>A reading of an upstream file ages, so re-read it before acting.</strong> The skills audit that opened this work was correct when taken and obsolete thirty-five minutes later, when an upstream merge retired a section the audit had deliberately kept.
+Nothing signalled it, because a reading is not a measurement that can be re-run against a system; it is a snapshot of someone else's repository.
+So state when a read was taken whenever reporting one, and re-read before acting on it rather than trusting the earlier pass.
+Five phases of this plan rest on reading files this repo does not own.</p>
 <h2 id="verification">Verification<a class="headerlink" href="#verification" title="Permanent link">&para;</a></h2>
 <ul>
 <li>Round-trip equality: the store renders to the pre-migration table.</li>
 <li>Count reconciliation: 176 items in, 176 out, and the rendered order matches.</li>
 <li>Every one of the 218 anchors resolves (<code>make doc-links</code>).</li>
-<li>The rules-8/9/10/11 checker is shown <strong>failing</strong> on each violation before it is trusted to pass.</li>
+<li>The rules-8/9/11 checker is shown <strong>failing</strong> on each violation before it is trusted to pass, one proof per rule rather than one for the checker.</li>
 <li><code>make check</code> green over the final tree.</li>
 </ul>
 

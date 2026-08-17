@@ -3056,22 +3056,6 @@
 <td>Measured 2026-08-14: #1526 changed the platform dashboard with no <code>docs/assets/</code> render, so the screenshot lost a panel series. Nothing enforces the README's rule. Judge a PR's whole diff, not a commit, and exempt a description-only edit (#1531).</td>
 </tr>
 <tr>
-<td><a id="Q814"></a>Q814</td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/agent/pr-requeue-eligible.sh">An ordinary <code>DIRTY</code> wake captures no conflict set, because <code>--assess</code> refuses before it probes</a></td>
-<td><code>ci</code> <code>debt</code> <code>retro</code></td>
-<td>🔲</td>
-<td>S</td>
-<td>Measured 2026-08-12 on #1431: <code>--assess</code> refuses at <code>human_enqueued</code>, ahead of the probe, so it records <code>base_oid -</code>. Q810 captures a queue eviction only, not an ordinary DIRTY wake (<a href="../development/parallel-dispatch/#conflict-policy">the class</a>).</td>
-</tr>
-<tr>
-<td><a id="Q828"></a>Q828</td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/agent/pr-requeue-eligible.sh">A verdict record written before the format change is refused as if it were corrupt</a></td>
-<td><code>bug</code> <code>ci</code> <code>retro</code></td>
-<td>🔲</td>
-<td>S</td>
-<td>Measured 2026-08-12 on #1426: an <code>--assess</code> predating #1431 writes <code>ELIGIBLE main</code>, but <code>record()</code> now writes keyed <code>verdict</code> lines, so <code>--confirm</code> reads '' and refuses. Fails closed, but reads as corruption, not skew (Q805's class).</td>
-</tr>
-<tr>
 <td><a id="Q564"></a>Q564</td>
 <td><a href="../design/appendix-g-future-enhancements/#g3-proxy-side-audit-logging">Proxy-side audit logging</a></td>
 <td><code>security</code> <code>feature</code></td>
@@ -3238,14 +3222,6 @@
 <td>🔲</td>
 <td>S</td>
 <td>Q709 shipped the record but not the trigger: nothing reaches for <code>record-launch.sh</code>, so a run launched without it has no handle after a compaction. Candidate seam: foreground-guard <code>hint</code>, unverified.</td>
-</tr>
-<tr>
-<td><a id="Q694"></a>Q694</td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/agent/pr-requeue-eligible-test.sh"><code>pr-requeue-eligible</code>'s timeline and GraphQL reads are untested behind the <code>gh</code> stub</a></td>
-<td><code>tests</code> <code>retro</code></td>
-<td>🔲</td>
-<td>S</td>
-<td>The checker gates an unattended merge, but the stub returns post-<code>--jq</code> text, so a malformed <code>--jq</code> in <code>human_enqueued</code> or <code>in_queue</code> fails as a live crash, not a red suite. All three reads ran live in Q805; the suite still cannot see them.</td>
 </tr>
 <tr>
 <td><a id="Q817"></a>Q817</td>

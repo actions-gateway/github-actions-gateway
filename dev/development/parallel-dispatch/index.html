@@ -3141,9 +3141,9 @@ Afterwards the branch merges clean, so <code>git merge-tree origin/main HEAD</co
 Ask later why the PR was evicted, or whether the worker and the dispatcher saw the same thing, and there is no answer left to read.
 That is not hypothetical: a dispatcher's post-hoc read once contradicted a worker's contemporaneous <code>--assess</code>, and by then neither could be confirmed (Q810).</p>
 <p><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/agent/pr-requeue-eligible.sh"><code>pr-requeue-eligible.sh --assess</code></a> runs before the rebase and appends what it measured to <code>tmp/requeue/&lt;pr&gt;.verdict</code>: the two commit OIDs it merged, and the paths that conflicted.</p>
-<p><strong>On an ordinary <code>DIRTY</code> wake it captures nothing, so take the measurement by hand first.</strong> The eligibility checks run before the probe, and the first of them is whether a human has ever enqueued the PR.
-A worker healing its own not-yet-enqueued PR is the common case and fails that check, so <code>--assess</code> refuses and records a verdict carrying no OIDs and no conflict set — the measurement the capture exists to preserve, lost on exactly the wake that prompted it (Q814, hit independently by two workers on 2026-08-12).
-Until the ordering changes, run the driverless-clone <code>merge-tree</code> below yourself <strong>before</strong> rebasing.</p>
+<p><strong>It captures on an ordinary <code>DIRTY</code> wake too, which it did not always do.</strong> The eligibility checks used to run ahead of the probe, and the first of them is whether a human has ever enqueued the PR.
+A worker healing its own not-yet-enqueued PR is the common case and fails that check, so <code>--assess</code> refused and recorded a verdict carrying no OIDs and no conflict set: the measurement the capture exists to preserve, lost on exactly the wake that prompted it (Q814, hit independently by two workers on 2026-08-12).
+The local probe now runs first and the paginated timeline read stays behind the checks, so the cheapest-first intent survives and the record carries the OIDs either way.</p>
 <h3 id="probing-a-merge-without-the-driver">Probing a merge without the driver<a class="headerlink" href="#probing-a-merge-without-the-driver" title="Permanent link">&para;</a></h3>
 <ul>
 <li>
@@ -3161,9 +3161,9 @@ Until the ordering changes, run the driverless-clone <code>merge-tree</code> bel
 <a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>git<span class="w"> </span>--git-dir<span class="o">=</span>/tmp/nodrv<span class="w"> </span>fetch<span class="w"> </span>--quiet<span class="w"> </span><span class="s2">&quot;</span><span class="k">$(</span><span class="nb">pwd</span><span class="k">)</span><span class="s2">&quot;</span><span class="w"> </span>&lt;base_oid&gt;<span class="w"> </span>&lt;head_oid&gt;
 <a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>git<span class="w"> </span>--git-dir<span class="o">=</span>/tmp/nodrv<span class="w"> </span>merge-tree<span class="w"> </span>--write-tree<span class="w"> </span>&lt;base_oid&gt;<span class="w"> </span>&lt;head_oid&gt;
 </code></pre></div>
-<p><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/agent/pr-requeue-eligible.sh"><code>pr-requeue-eligible.sh</code></a> uses the <code>driver=false</code> form, and its comment claims to measure "what the merge queue will see".
-  It does not; it measures which driver-owned files both sides touched, a superset.
-  That is conservative for its own <code>ELIGIBLE</code> rule, which discounts those paths anyway, so it cannot manufacture a false <code>ELIGIBLE</code> — but read as "does this branch need a heal" it is a false positive every time a branch and <code>main</code> both touch <code>docs/STATUS.md</code>.</p>
+<p><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/agent/pr-requeue-eligible.py"><code>pr-requeue-eligible</code></a> used the <code>driver=false</code> form under a comment claiming to measure "what the merge queue will see".
+  It did not; it measured which driver-owned files both sides touched, a superset, which is conservative for its own <code>ELIGIBLE</code> rule but a false positive every time a branch and <code>main</code> both touch <code>docs/STATUS.md</code> if read as "does this branch need a heal".
+  It now derives the owned paths and the driver names from <code>.gitattributes</code> instead of the two hand-kept arrays it carried, so a stale list can no longer under-report, which is the direction that would let an unattended enqueue through.</p>
 <p>Two further traps made the <code>-c</code> form look like it was working, both measured 2026-08-12 and both silent.
   <strong>A misspelled driver name fails open</strong>: git ignores the unknown config key, runs the real driver anyway, and exits 0, so a probe written against a guessed name (<code>merge.status</code> for <code>docs/STATUS.md</code>, whose driver is <code>backlog</code>) produces byte-identical output to no probe at all.
   Together with the fabricated conflicts above, that is a probe whose two spellings are wrong in opposite directions and neither of which is ever an error.
@@ -3188,7 +3188,9 @@ Until the ordering changes, run the driverless-clone <code>merge-tree</code> bel
   That command is printed as well as recorded, which is what puts it in the session transcript the worker reports from.</p>
 </li>
 <li>
-<p><strong>Refusals are recorded too</strong>, so an absent record means the assessment never ran rather than ran-and-refused.
+<p><strong>A <code>WAKE</code> refusal is recorded, a probe that could not run is not.</strong> So an absent record means either that the assessment never ran or that it ran and could not measure, and the file cannot tell you which.
+  <code>--confirm</code> fails closed either way, since no record is not <code>ELIGIBLE</code>; what is lost is diagnostic, on exactly the after-the-fact question the record exists for.
+  The shell predecessor wrote a third verdict, <code>UNMEASURABLE</code>, for this; the Python treats a probe that could not run as never a verdict, which is defensible and is filed upstream as <a href="https://github.com/karlkfi/claude-skills/issues/129">claude-skills#129</a> rather than patched here, because an unmodified vendor is what keeps the next fix a clean overwrite.
   Records accumulate and the last one governs, which keeps a refusal that short-circuited before probing from erasing the measurement an earlier one took.</p>
 </li>
 <li>
