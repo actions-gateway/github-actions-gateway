@@ -42,10 +42,13 @@ ARG TARGETOS TARGETARCH
 # the whole point of this stage: a cache mount lives in BuildKit's own state,
 # which `cache-to type=gha` does not export and which CI never has, because
 # docker/setup-buildx-action boots a fresh builder on every run. A plain
-# directory is part of the layer, so the GitHub Actions layer cache carries it
-# between runs and this stage is a cache HIT on any run that did not change
-# vendor/. Dependencies live in the workspace vendor/ at the repo root; `go
-# build` auto-selects -mod=vendor when go.work and vendor/ are both present.
+# directory is part of the layer, so a layer cache carries it between runs and
+# this stage is a HIT on any run that did not change vendor/, wherever such a
+# cache is actually wired up. CI has none: the e2e bake's type=gha cache is
+# inert from a `run:` step (docker-bake.hcl's GHA_CACHE comment, Q931), so this
+# stage recompiles every run. Dependencies live in the workspace vendor/ at
+# the repo root; `go build` auto-selects -mod=vendor when go.work and vendor/
+# are both present.
 ENV GOCACHE=/gocache \
     CGO_ENABLED=0 \
     GOOS=$TARGETOS \
