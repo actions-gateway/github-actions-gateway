@@ -3214,6 +3214,10 @@ It is a prerequisite, not an enhancement.</strong></p>
 </code></pre></div>
 <p>Re-probed with it on, the metadata server serves the workload-pool identity (<code>&lt;project&gt;.svc.id.goog</code>) instead of the node's service account.
 Also set <code>automountServiceAccountToken: false</code> on the runner pod so it carries no Kubernetes API token, and consider a NetworkPolicy denying egress to <code>169.254.169.254/32</code> as defence in depth.</p>
+<p>On a cluster whose CNI enforces egress NetworkPolicy, the tenant policies this system generates already close that path, so the defence-in-depth leg is one you inherit rather than one you write.
+It does not work by naming the address: NetworkPolicy is allowlist-only, and the metadata address sits inside the link-local block <code>169.254.0.0/16</code> the DNS rule has to admit for NodeLocal DNSCache.
+What keeps it unreachable is that the rule only admits port 53, and the metadata service does not answer there.
+Two consequences for an operator: on a CNI that does <strong>not</strong> enforce egress (kindnet, and any cluster without a policy plugin) you get none of this and Workload Identity is doing all the work, and if you edit the generated policies to widen the link-local rule beyond port 53 you reopen the path.</p>
 <p>On other clouds the equivalent controls are IMDSv2 with a hop limit of 1 plus a restrictive instance profile (AWS), or Azure AD Workload Identity with the IMDS endpoint blocked.</p>
 </blockquote>
 <p>Kata advances GAG's <a href="../../design/05-security/#53-security-profiles-and-the-privileged-opt-in">secure-by-default principle</a> on the axis that matters: the workload that historically demanded a <code>privileged: true</code> container now runs without one, converting a kernel escape from node compromise into a discarded guest.

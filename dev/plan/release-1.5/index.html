@@ -3223,9 +3223,8 @@ Re-deriving at the tag is what closes that window, and it is cheap enough to rep
 <ul>
 <li><strong>Fold the scale-up token bucket into the advertised capacity.</strong> The bucket is waited on at <code>provisioner.go:532</code> and <code>:793</code>, after the claim, with the job holding its GitHub lock, which the CRD godoc states outright (<code>api/v2beta1/runnerset_types.go:394-400</code>).
   Expressing free tokens as a fourth <code>min()</code> rung in <code>AdvertiseCapacity</code> would make the anti-stampede claim structurally honest.</li>
-<li><strong>Assert a worker pod cannot reach the cloud metadata server.</strong> Three docs advise denying <code>169.254.169.254/32</code>, Q226 measured HTTP 200 from inside a Kata guest, and no test names the address.
-  <em>(Multi-label runner sets were held here too, and were accepted on 2026-08-09: the row is Q726, now labelled <code>1.5-gate</code>, and the gap inventory it belongs to is <a href="../arc-parity/">arc-parity.md</a>.)</em></li>
 </ul>
+<p><em>(Multi-label runner sets were held here too, and were accepted on 2026-08-09: the row is Q726, now labelled <code>1.5-gate</code>, and the gap inventory it belongs to is <a href="../arc-parity/">arc-parity.md</a>.)</em></p>
 <h2 id="in-scope-reconcile-the-marketing-surfaces">In scope: reconcile the marketing surfaces<a class="headerlink" href="#in-scope-reconcile-the-marketing-surfaces" title="Permanent link">&para;</a></h2>
 <p>1.5 carries the marketing-claim work identified by the 2026-08-06 competitive review.
 It touches no shipped artifact, so individual corrections can land continuously as docs PRs, but the release does not tag until the reconciliation has been done and its verdict recorded here.</p>

@@ -2676,14 +2676,6 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>Phase 1 is built and awaits a green Kata e2e whose log names no non-GitHub non-registry host, then Phase 2 mirrors.</td>
 </tr>
 <tr>
-<td><a href="Q716/">Q716</a></td>
-<td><a href="../design/05-security/">Assert a worker pod cannot reach the cloud metadata server</a></td>
-<td><code>security</code> <code>tests</code></td>
-<td>🔲</td>
-<td>S</td>
-<td>Three docs advise denying <code>169.254.169.254/32</code> and Q226 measured HTTP 200 from inside a Kata guest, but no test names the address.</td>
-</tr>
-<tr>
 <td><a href="Q564/">Q564</a></td>
 <td><a href="../design/appendix-g-future-enhancements/#g3-proxy-side-audit-logging">Proxy-side audit logging</a></td>
 <td><code>security</code> <code>feature</code></td>
@@ -2882,6 +2874,22 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>🔲</td>
 <td>S</td>
 <td>A suite that copies a gate into a fixture inherits its inputs, so changing one breaks it with no textual reference to grep.</td>
+</tr>
+<tr>
+<td><a href="Q916/">Q916</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/CLAUDE.md">A compressed CLAUDE.md rule can contradict the doc it points at</a></td>
+<td><code>docs</code> <code>ci</code> <code>debt</code> <code>retro</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>CLAUDE.md:69 sends a fixed <code>flake</code> row to the retired ledger; <a href="../development/maintaining-backlog/">maintaining-backlog.md</a> has two …</td>
+</tr>
+<tr>
+<td><a href="Q918/">Q918</a></td>
+<td><a href="../development/testing/">Five instruments measured returning a clean result that meant nothing</a></td>
+<td><code>docs</code> <code>tests</code> <code>retro</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>One batch, five: a non-fence-aware heading regex; <code>gh run list --commit</code> empty on queue-merged commits (runs attach to the merge_group …</td>
 </tr>
 <tr>
 <td><a href="Q893/">Q893</a></td>
