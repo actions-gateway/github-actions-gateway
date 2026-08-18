@@ -36,7 +36,7 @@
 # The lists live in their own file rather than in the Makefile precisely so
 # this driver can own the routed path outright: .gitattributes routes per file,
 # and routing the whole Makefile would make every ordinary change to it count
-# as driver-owned wherever that matters, piped-gate's overlap discount included.
+# as driver-owned wherever that matters.
 #
 # WHAT IT REFUSES TO DO. Any uncertainty ends the same way: re-run the plain
 # three-way merge and leave its conflict markers, with a one-line reason on

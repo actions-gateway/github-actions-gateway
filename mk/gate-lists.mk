@@ -9,9 +9,8 @@
 #
 # Routing is per file, so the routed file has to be one that is wholly
 # driver-owned. Keeping these lists in the Makefile would have routed the whole
-# Makefile, and piped-gate discounts a driver-owned path when it weighs branch
-# overlap, which would have quietly discounted every ordinary Makefile change
-# with it.
+# Makefile, sending every ordinary conflict in it through a driver that
+# understands only these lists.
 
 # The one-command pre-review gate. Run this before requesting review or opening a
 # PR: gofmt + golangci-lint, the backlog store rules, shellcheck over scripts/, and
@@ -165,7 +164,6 @@ DOCS_GATES := doc-links plan-index-check no-plan-refs-check em-dash-check \
 # already drifted to 50 names for 55 suites (Q671). `gate-lists-check`
 # reconciles this list against the scripts/**/*-test.sh files on disk, both ways.
 SCRIPTS_TESTS := agent/claude-go-throttle-hook-test agent/local-throttle-test \
-                 agent/claude-piped-gate-hook-test \
                  agent/foreground-guard-patterns-test \
                  agent/pr-requeue-eligible-test agent/record-launch-test \
                  agent/pr-mergeability-watch-test \

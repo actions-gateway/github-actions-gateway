@@ -125,12 +125,6 @@ Every edit made while the gate is running is unverified, and that includes the p
 **Re-run `make check` over the final tree before concluding.** The confirming run is cheap — the gates covering that work are the fast ones, which take no heavy-build slot, and the heavy phases are cache-warm.
 A **code** edit voids the verdict outright rather than merely narrowing it, and "code" means anything the gate compiles or lints: `scripts/*.sh` and the `Makefile` count, not only Go.
 
-**A `Bash` tool call during the run can turn the gate red on its own, without touching a file.** Every Bash call runs the piped-gate `PreToolUse` hook, which rebuilds the shared `.build/pipedgate` binary; `claude-piped-gate-hook-test`'s no-toolchain case `rm -f`s that same binary and then asserts the hook falls back, so a rebuild landing inside its window makes the case read a real deny payload and fail ([Q825](../queue/README.md)).
-Measured 2026-08-14: two failures in one session, the second reproducing on demand while tool calls continued and clearing immediately once the run was left alone.
-The failure names a suite the change never touched, so it reads as ambient flake rather than as something the session caused.
-**Once the confirming run starts, wait for its task notification and issue no Bash calls**: not a status peek, not a `git` read.
-That is also the cheapest way to keep the run from being voided by an edit, since the two habits are one habit.
-
 **The exit code you read has to belong to the gate.** A verdict is only as good as the command that reported it, and the usual way that breaks is wrapping the gate in something that has an exit status of its own.
 Three shapes, all seen in real sessions:
 
@@ -246,7 +240,7 @@ Two safety nets cover that gap, both reusing `scripts/agent/local-throttle.sh` s
   For the first, add the prefix manually or split the invocations onto separate commands; for the second, use the `make` target or retry, since a probe that failed under load usually answers on the next call.
 
 The decision is [`devtools/agent/gothrottle`](../../devtools/agent/gothrottle), a Go program over a real shell parser (`mvdan.cc/sh`); the shell file is the entry point that resolves and execs it, and its failure paths (no Go toolchain, a build error, an unparseable command) are silent, so the hook is never the reason a Bash call fails; the one exception is a `-race` whose prefix could not be resolved, below.
-It became Go for the same reason its sibling `pipedgate` did (Q708): 178 of the shell version's 423 lines hand-rolled a shell-grammar scanner, which is the parsing-density criterion in [technical-debt.md](technical-debt.md#a-shell-gate-becomes-a-go-devtool-on-parsing-density-not-length).
+It became Go for the same reason the since-retired `pipedgate` did (Q708): 178 of the shell version's 423 lines hand-rolled a shell-grammar scanner, which is the parsing-density criterion in [technical-debt.md](technical-debt.md#a-shell-gate-becomes-a-go-devtool-on-parsing-density-not-length).
 
 **Set `GOTHROTTLE_DEBUG` to find out why the hook said nothing.** Silence is the failure contract, and it is also why a failure here is unattributable: every silent path across the entry point and the binary ends in exit 0 with empty stdout, so the suite could only ever report `got decision= reason=` (Q703).
 With the variable set, each path names itself on stderr, and the probe that resolves the throttle prefix reports whether it *failed* or reported throttling *off*, which are otherwise the same empty string.
@@ -331,7 +325,7 @@ Q343 concluded from that there was "no supported knob to share test results acro
   The unit tier does no such thing, and the release images already build with `-trimpath`.
 - **Two cosmetic consequences.** Adopting the flag changes the build-cache keys, so the first unit run after it lands recompiles from scratch once, machine-wide.
 - **A test that reads a repo file outside its own module keeps its cached result when that file changes**, so the package prints `(cached)` and green while the thing it asserts on is broken.
-  Measured 2026-08-11 on `devtools/agent/pipedgate`, whose `TestShippedRegistryCarriesRepoStateSettings` reconciles `.claude/piped-gate-guard.json` against the repo-root `.gitattributes`: appending a line to `.gitattributes` and re-running left it `(cached)`.
+  Measured 2026-08-11 on the since-retired `devtools/agent/pipedgate`, whose `TestShippedRegistryCarriesRepoStateSettings` reconciled its registry against the repo-root `.gitattributes`: appending a line to `.gitattributes` and re-running left it `(cached)`.
   Q799 shipped a `.gitattributes` entry without its registry half that way: `make check` green locally, `coverage` red in CI on a cold cache.
   This bites the `devtools/` gates hardest, because they are exactly the ones that read repo-root config as data.
   Run the package with `-count=1` (or `go clean -testcache` in that module) whenever the change under test is a file the test *reads* rather than one it compiles.
@@ -878,7 +872,7 @@ Go's test-result cache keys a run on the files the test opened, but it drops eve
 `cmd/go/internal/test` skips them with "Do not recheck files outside the module, GOPATH, or GOROOT root".
 A unit test asserting against a repo file one level up is therefore invisible to its own cache key: change that file alone and `go test` replays the previous pass.
 
-Measured 2026-08-17 (Q895): `make check` reported `pipedgate (cached)` and exited 0 while the package run directly failed 5 assertions, as did CI.
+Measured 2026-08-17 (Q895) on the since-retired `pipedgate`: `make check` reported it `(cached)` and exited 0 while the package run directly failed 5 assertions, as did CI.
 The same shape had silently disarmed the root-`Dockerfile` runner-version lockstep gate, where bumping the pinned tag left `cmd/agc/names` cached and green.
 That is the drift #197 introduced, arriving through the gate written to catch it.
 Both were settled by deleting the mechanism: change the external file, require the cached run to go red.
@@ -1203,15 +1197,16 @@ Each is a claim about state, and each has a cheap way of being wrong:
   The tool that generates a measurement is a dependency like any other, and its release notes are evidence.
   "Not answerable from this dataset" is a statement about the instrument and does not license "not answerable".
 - **An exit code read through a pipe is the pipe's.** `make check | tail -40` reports `tail`'s status, so a failing gate reads as `0`.
-  Redirect to a file and read `$?` from the command itself, then reconcile it against the output. This one has a mechanical check now (Q625): [`scripts/agent/claude-piped-gate-hook.sh`](../../scripts/agent/claude-piped-gate-hook.sh) is a `PreToolUse` hook that denies a Bash call that pipes a registered gate into a filter, or reads `$PIPESTATUS` (which does not exist in zsh, the shell the Bash tool runs, and expands to empty there).
-  It denies rather than asks because a deny's reason is shown to the model and an ask's to the user, so the fix lands where the command gets rewritten instead of being relayed by hand (Q697).
-  Wanting the output rather than the status is legitimate and indistinguishable from the bug, so every verdict has a break-glass: re-run prefixed with `PIPED_GATE_OVERRIDE=<reason>`, and file a Queue row when the rule, not the call, is what is wrong.
-  The gate list is `.claude/piped-gate-guard.json`, and what the hook cannot see is enumerated in the package comment of [`devtools/agent/pipedgate`](../../devtools/agent/pipedgate/), which is where the decision actually lives.
-  The same hook carries two warnings about repository state rather than exit status: a `git push` onto a base that moved into this branch's own files (Q665), and a `gh pr create` overlapping an open PR (Q668).
-  Both are documented where their rules are, in [CONTRIBUTING.md](../../CONTRIBUTING.md#pushing-to-a-pr-that-is-already-open).
+  Redirect to a file and read `$?` from the command itself, then reconcile it against the output. This one has a mechanical check: the installed **pipe-guard** plugin (`karlkfi/claude-pipe-guard`) is a `PreToolUse` hook that denies a Bash call that pipes a registered gate into a filter, or reads `$PIPESTATUS` (which does not exist in zsh, the shell the Bash tool runs, and expands to empty there).
+  It denies rather than asks because a deny's reason is shown to the model and an ask's to the user, so the fix lands where the command gets rewritten instead of being relayed by hand.
+  Wanting the output rather than the status is legitimate and indistinguishable from the bug, so every verdict has a break-glass: re-run prefixed with `PIPE_GUARD_OVERRIDE=<reason>`, and file the defect upstream when the rule, not the call, is what is wrong.
+  The gate list ships with the plugin; a project extends it with `.claude/pipe-guard.json`, which this repo does not need because the shipped list already covers its gates.
+  This replaced a repo-local hook of the same shape, retired because it duplicated the plugin's three rules while forcing a second override variable on every break-glass.
+  The repo hook also carried two checks about repository state rather than exit status — a `git push` onto a base that moved into this branch's own files (Q665), and a `gh pr create` overlapping an open PR (Q668) — which the plugin does not.
+  Both rules still hold and are now unenforced, documented where they belong in [CONTRIBUTING.md](../../CONTRIBUTING.md#pushing-to-a-pr-that-is-already-open).
 - **Backgrounded, `; echo "EXIT=$?"` reports the `echo`'s status, not the gate's.** The redirect-and-echo idiom above is written for a foreground run, where the echoed line is the thing you read; run with `run_in_background: true` and the completion notification carries the *chain's* status instead. Preserve the status explicitly, and still reconcile against the log: `make check > tmp/check.log 2>&1; rc=$?; echo "EXIT=$rc"; exit $rc`.
   Confirmed directly: `( false; echo "EXIT=$?" )` prints `EXIT=1` and exits 0; the `rc=` form prints `EXIT=1` and exits 1. Re-measured through the Bash tool on 2026-08-04, which is the path that matters: a backgrounded `false > /dev/null 2>&1; echo "EXIT=$?"` wrote `EXIT=1` to its output file and notified `completed (exit code 0)`.
-  The same hook as above covers this shape (Q681): it asks when a **backgrounded** call names a registered gate and ends in something that cannot carry the gate's failure out (an `echo`, a `||` fallback, a trailing `&`), and stays silent for the `exit $rc` form, for the gate as the last statement, and for the identical command run in the *foreground*, where the echo is the thing you read.
+  The same hook as above covers this shape: it denies when a **backgrounded** call names a registered gate and ends in something that cannot carry the gate's failure out (an `echo`, a `||` fallback, a trailing `&`), and stays silent for the `exit $rc` form, for the gate as the last statement, and for the identical command run in the *foreground*, where the echo is the thing you read.
 - **A `pgrep -f` pattern that appears in your own command line matches your own shell.** Probing a background gate with `pgrep -f "make check > tmp/check.log"` answers "running" for as long as you keep asking, because the Bash tool's invocation carries the pattern as text and is itself a match.
   This is worse than having no probe: the reading is stable, plausible, and completely independent of whether the gate is still alive, so it survives every re-check.
   A background run's verdict comes from its completion notification and its output file, never from a process probe.

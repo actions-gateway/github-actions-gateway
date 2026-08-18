@@ -16,6 +16,7 @@ Newest retirement first.
 
 | ID | Item | Fix PR | Retired | Why retired |
 |---|---|---|---|---|
+| Q825 | The no-toolchain case flakes twice over: pipeline status, and a rebuild | #1630 | 2026-08-18 | Obsolete: `claude-piped-gate-hook-test.sh` and the `.build/pipedgate` binary it raced were both deleted when the repo hook was retired for duplicating the installed pipe-guard plugin. Neither the pipeline-status bug at :150 nor the rebuild race has a subject left. |
 | Q471 | `validate-cluster-test` flakes under parallel `make check` load | #963 | 2026-08-18 | Soaked: 411 green `unit-test` runs since 2026-07-29 (bar ≥25, infra). |
 | Q490 | A fan-out completion spec cancels a job every delivery completed | #965 | 2026-08-18 | Soaked: 411 green `unit-test` runs since 2026-07-29 (bar ≥50, correctness-guarding). |
 | Q498 | Provisioner eviction/rerun tests flake under parallel load | #1010 | 2026-08-18 | Soaked: 381 green `unit-test` runs since 2026-07-31 (bar ≥50, correctness-guarding). |

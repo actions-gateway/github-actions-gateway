@@ -17,13 +17,13 @@
 # 178 of its 423 lines hand-rolling a shell-grammar scanner (quote state,
 # heredoc bodies, command position), because regular expressions cannot count
 # brackets. That is the parsing-density criterion in technical-debt.md § A shell
-# gate becomes a Go devtool on parsing density, not length, and the sibling hook
-# was ported for the same reason (Q625). It failed the way that section
+# gate becomes a Go devtool on parsing density, not length, and the since-retired
+# piped-gate hook was ported for the same reason (Q625). It failed the way that section
 # predicts, silently and in both directions: a heredoc body naming `go test
 # -race` read as an invocation until Q624, and a `-race` passed to a wrapper
 # still read as none until Q696.
 #
-# The build seam is the sibling's, for the same reasons: the binary is cached in
+# The build seam came from that hook, for the same reasons: the binary is cached in
 # .build/ and staleness decided by one `find` (a cold `go build` costs ~1.6 s and
 # an up-to-date one still ~226 ms); concurrent sessions each fire this on every
 # Bash call, so the build writes a PID-suffixed file and renames it into place,
