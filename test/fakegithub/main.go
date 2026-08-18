@@ -397,7 +397,24 @@ func (s *server) mainMux() http.Handler {
 	// handleRunnerAPI below.
 	mux.Handle("/_apis/", s.scaleSet.Handler())
 	mux.Handle("/queue/", s.scaleSet.Handler())
+	// Everything else is unserved. Registered explicitly rather than left to the
+	// mux's own NotFound so the answer carries the marker below.
+	mux.HandleFunc("/", notServed)
 	return mux
+}
+
+// unservedHeader marks a response the fake produced because nothing serves the
+// path, as opposed to a handler's own 404 for a resource that does not exist.
+// The two are the same status, and the endpoint-parity gate has to tell them
+// apart: deleting an unregistered runner 404s from a route that exists, while
+// Q811's run read 404'd from a route that did not, and only the second is a
+// venue that has drifted from the code (devtools/e2e/endpointparity).
+const unservedHeader = "X-Fakegithub-Unserved"
+
+// notServed answers a path no handler claims, marked so a caller can tell.
+func notServed(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set(unservedHeader, "1")
+	http.NotFound(w, r)
 }
 
 // scaleSetAPIV3 serves the two REST hops of the scale-set bootstrap — the
@@ -487,7 +504,7 @@ func (s *server) handleRunnerAPI(w http.ResponseWriter, r *http.Request) {
 	}
 	idx := strings.Index(path, "/actions/runners")
 	if idx < 0 {
-		http.NotFound(w, r)
+		notServed(w, r)
 		return
 	}
 	rest := strings.TrimPrefix(path[idx:], "/actions/runners")
@@ -1360,7 +1377,7 @@ func (s *server) handleReposAPI(w http.ResponseWriter, r *http.Request) {
 		s.handleRunStatus(w, id)
 		return
 	}
-	http.NotFound(w, r)
+	notServed(w, r)
 }
 
 // runIDFromRunPath reports the run_id of a bare .../actions/runs/{run_id} path —

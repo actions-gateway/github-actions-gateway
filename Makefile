@@ -172,6 +172,15 @@ metric-tiers-check: ## Fail on an AGC metric with no acquisition-tier row, or a 
 reason-tiers-check: ## Fail on a condition/Event reason with no acquisition-tier row, or a tier claim the source refutes
 	scripts/docs/check-reason-tiers.sh
 
+# The e2e venue and the code it exercises drifted apart with nothing comparing
+# them: Q811 added a run read, test/fakegithub 404'd it, and the drained-worker
+# spec failed thirteen merge-queue entries while the PR stayed green. Both sides
+# derive from source here: the AGC's request sites on one, the fake answering a
+# probe on the other, so a call the venue cannot serve fails on the PR adding it.
+.PHONY: endpoint-parity-check
+endpoint-parity-check: ## Fail when the AGC calls a GitHub REST endpoint the e2e fake does not serve
+	scripts/e2e/check-endpoint-parity.sh
+
 # scripts/README.md coverage gate (Q688). That page is the only map from a
 # script to the gate that runs it, and listing the sixteen *-test.sh files that
 # had drifted off it fixes the day rather than the week — so the gate is the
