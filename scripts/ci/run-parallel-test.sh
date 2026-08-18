@@ -16,6 +16,12 @@
 # a defect to go and read (Q837). The cases below pin both halves, since
 # silencing a kill and calling it a failure are both wrong.
 #
+# Wall time is the second claim (Q819): a fan-out's total is its slowest member,
+# so every run reports per-label seconds slowest-first. The timing sits inside
+# the same subshell whose exit status `wait` collects, so the cases below pin
+# that it costs no verdict — a failure, a kill and a missing command each keep
+# their status while gaining a duration.
+#
 # Runs under `make check` (via `make scripts-test`) and the CI shellcheck job.
 set -euo pipefail
 shopt -s inherit_errexit
@@ -149,6 +155,59 @@ want 'only the first colon splits the spec' '^\[colon\] a:b:c$'
 rp
 want_rc 'no arguments exits non-zero' 1
 want 'no arguments prints usage' 'usage:'
+
+# want_order NAME FIRST SECOND — assert FIRST's line precedes SECOND's. grep is
+# line-oriented, so an ordering claim cannot be written as one pattern.
+want_order() {
+	local name="$1" first="$2" second="$3" a b
+	# `|| true` on each: a pattern that matches nothing is this assertion's own
+	# failure to report, not a reason for `set -e` to abandon the suite.
+	a="$(grep -En -- "$first" <<<"$out" | head -1 | cut -d: -f1 || true)"
+	b="$(grep -En -- "$second" <<<"$out" | head -1 | cut -d: -f1 || true)"
+	if [[ -n "$a" && -n "$b" ]] && (( a < b )); then
+		printf 'ok   %-42s\n' "$name"
+	else
+		printf 'FAIL %-42s /%s/ at %s should precede /%s/ at %s\n%s\n' \
+			"$name" "$first" "${a:-none}" "$second" "${b:-none}" "$out" >&2
+		fails=$((fails + 1))
+	fi
+}
+
+# Q819: a slow gate hid behind a label for three CI-speed rounds because the
+# fan-out never timed anything. Every run now reports each label's wall time.
+# The seconds are asserted as ranges, not exact values: the duration truncates
+# both endpoints, so a command spanning a second boundary reports one more.
+rp "quick:true" "slow:sleep 2"
+want_rc 'a timed run still exits 0' 0
+want 'the run reports wall time' 'wall time, slowest first'
+want 'a slow command reports its seconds' '^\[run-parallel\] +[2-9][0-9]*s +slow$'
+want 'a fast command is reported too' '^\[run-parallel\] +[01]s +quick$'
+want 'the run reports its own elapsed time' 'elapsed [0-9]+s across 2 command\(s\)'
+
+# Slowest first, so the member setting the fan-out's total is the first line
+# read. Ordering is by duration, not spawn order: `slow` is passed second.
+want_order 'the slowest command is listed first' '[0-9]s +slow$' '[0-9]s +quick$'
+
+# The trap this change had to avoid: the timing sits inside the same subshell
+# whose status `wait` collects, so a bookkeeping step that swallowed the status
+# would turn every gate green. A failure stays red, named, and exact.
+rp "timed-ok:true" "timed-boom:sh -c 'sleep 1; exit 3'"
+want_rc 'timing does not swallow a failure' 1
+want 'a timed failure keeps its exit status' 'FAILED:.*timed-boom \(exit 3\)'
+want 'a timed failure still reports its seconds' '^\[run-parallel\] +[1-9][0-9]*s +timed-boom$'
+want_order 'the failure summary follows the timing' 'wall time, slowest first' 'FAILED:'
+
+# A kill keeps its 128+n status too, and still reports the time it spent before
+# the signal arrived.
+rp "timed-kill:sh -c 'sleep 1; kill -9 \$\$'"
+want_rc 'timing does not swallow a kill' 137
+want 'a killed command is still named a kill' 'KILLED:.*timed-kill \(signal 9, exit 137\)'
+want 'a killed command still reports its seconds' '^\[run-parallel\] +[1-9][0-9]*s +timed-kill$'
+
+# A missing command has no wall time worth reading, but dropping it from the
+# block would make the timing disagree with the failure summary about what ran.
+rp "absent-timed:this-command-does-not-exist-q819"
+want 'a missing command still appears in the timing' '^\[run-parallel\] +[0-9]+s +absent-timed$'
 
 if (( fails > 0 )); then
 	echo "run-parallel-test: $fails failure(s)" >&2
