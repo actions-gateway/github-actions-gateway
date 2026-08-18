@@ -195,10 +195,11 @@ jobs:
               - 'scripts/go/go-work-tidy.sh'
               - 'Makefile'
               - '.github/workflows/unit-test.yml'
-            # Scope for the three gates that read the workflows themselves: the
-            # path-filter coherence gate (Q429), actionlint (Q579) and the
-            # `uses:` pin gate (Q644). Their trigger set is the same — any
-            # workflow edit must re-run all three — so they share one filter
+            # Scope for every gate that reads the workflows themselves: the
+            # path-filter coherence gate (Q429), actionlint (Q579), the `uses:`
+            # pin gate (Q644), the semver floor's source check (Q831) and the
+            # cosign pin gate (Q903). Their trigger set is the same, since any
+            # workflow edit must re-run all of them, so they share one filter
             # rather than keeping lists that would have to stay in step.
             # Deliberately the only filter watching ALL of .github/workflows/:
             # editing any workflow's `filters:` block must re-run the gate that
@@ -218,6 +219,10 @@ jobs:
               # The semver-floor-sources job below reads publish.yml, covered by
               # the tree above, but its own checker must re-run the gate too.
               - 'scripts/release/semver-floor.sh'
+              # Same for the cosign-pin job (Q903): its subjects are publish.yml
+              # and the Makefile, both above, but a change to the comparison
+              # itself must re-run it.
+              - 'scripts/ci/check-cosign-pin.sh'
               # devtools/ backs the two gates here whose logic outgrew shell:
               # devtools/ci/pathfilters and devtools/ci/usespin.
               - 'devtools/**'
@@ -570,6 +575,21 @@ jobs:
       - name: semver floor sees every release artifact (make semver-floor-sources-check)
         run: make semver-floor-sources-check
 
+  # Assert publish.yml signs with the cosign COSIGN_VERSION verifies with (Q903).
+  # Gated on `workflows` for the reason semver-floor-sources gives: publish.yml is
+  # half its subject, and the Makefile, the other half, is in that filter too.
+  # Its own job so a drifted pin reads as a drifted pin rather than as one of the
+  # workflow linters failing. Pure shell over two files: no toolchain, seconds.
+  cosign-pin:
+    needs: [changes]
+    if: needs.changes.outputs.workflows == 'true' || github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    runs-on: ${{ (github.event_name == 'workflow_dispatch' && inputs.target_gag) && fromJSON(vars.GAG_RUNNER || '"ubuntu-latest"') || 'ubuntu-latest' }}
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: signer and verifier pin the same cosign (make cosign-pin-check)
+        run: make cosign-pin-check
+
   # Run the claude-usage/ Python suite (Q437). That module holds the committed
   # record of the project's Claude Code usage — for days whose session transcripts
   # have since been archived, the CSVs under claude-usage/data/ are the only
@@ -607,7 +627,7 @@ jobs:
   # and passes only when every needed job succeeded or was legitimately skipped.
   # See docs/development/testing.md#path-gated-workflows-verify-the-heavy-gates-actually-ran.
   unit-test-gate:
-    needs: [changes, lint, shellcheck, actionlint, uses-pinned, vendor-check, tidy-check, unit-test, coverage, path-filters, semver-floor-sources, claude-usage-test]
+    needs: [changes, lint, shellcheck, actionlint, uses-pinned, cosign-pin, vendor-check, tidy-check, unit-test, coverage, path-filters, semver-floor-sources, claude-usage-test]
     if: ${{ always() }}
     runs-on: ubuntu-latest
     timeout-minutes: 2

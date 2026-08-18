@@ -21,9 +21,11 @@ CRD_REF_DOCS   := $(REPO_ROOT)/.build/crd-ref-docs
 MDREFLOW       := $(REPO_ROOT)/.build/mdreflow
 COSIGN         := $(REPO_ROOT)/.build/cosign
 # COSIGN_VERSION pins the cosign release used to verify published signatures.
-# Keep in step with the `cosign-release` pinned in .github/workflows/publish.yml
-# so a local `make verify-release` uses the same verifier the publish run signed
-# with. Bump deliberately (see docs/operations/release.md).
+# Held in step with the `cosign-release` pinned in .github/workflows/publish.yml
+# by `make cosign-pin-check`, so a local `make verify-release` uses the same
+# verifier the publish run signed with. A bump also needs the new platform
+# digests in scripts/release/download-cosign.sh; bump deliberately (see
+# docs/operations/release.md).
 COSIGN_VERSION ?= v2.5.2
 
 KIND_CLUSTER  ?= actions-gateway-e2e
@@ -656,6 +658,14 @@ actionlint: $(ACTIONLINT) ## Lint .github/workflows/** with actionlint (schema, 
 .PHONY: uses-pinned-check
 uses-pinned-check: ## Assert every workflow/action `uses:` is a 40-hex SHA with a version comment (tags are mutable)
 	scripts/ci/check-uses-pinned.sh
+
+# publish.yml signs with the cosign it installs, `make verify-release` verifies
+# with the one COSIGN_VERSION pins, and until Q903 only a comment beside each
+# asked them to name the same binary. Also fails when a cosign-installer step
+# loses its `cosign-release` input, which floats the signer to latest.
+.PHONY: cosign-pin-check
+cosign-pin-check: ## Assert COSIGN_VERSION matches every `cosign-release` publish.yml signs with (Q903)
+	scripts/ci/check-cosign-pin.sh
 
 .PHONY: queue-unblock
 queue-unblock: ## List Queue items blocked by ID=<id> (e.g. make queue-unblock ID=Q12; bare 12 also accepted)

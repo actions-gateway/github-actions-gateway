@@ -1184,7 +1184,7 @@ The comment is not decoration: it is what Dependabot reads to know which release
 Exempt shapes, because neither is a mutable third-party reference: a local `./…` action or reusable workflow, which is in-tree code the same PR reviews, and a `docker://` image, which must carry an `@sha256:` digest instead.
 An unparseable workflow fails the gate rather than being skipped.
 
-The runtime tool downloads in the publish path are pinned the same way: `cosign` via `sigstore/cosign-installer` with an explicit `cosign-release` (kept in step with `COSIGN_VERSION` in the Makefile so a local `make verify-release` uses the same version that signed), and `syft` by `SYFT_VERSION` plus the `SYFT_SHA256` of its release tarball, downloaded through [`scripts/fetch/download-verified.sh`](../../scripts/fetch/download-verified.sh).
+The runtime tool downloads in the publish path are pinned the same way: `cosign` via `sigstore/cosign-installer` with an explicit `cosign-release` (held in step with `COSIGN_VERSION` in the Makefile by `make cosign-pin-check`, so a local `make verify-release` uses the same version that signed), and `syft` by `SYFT_VERSION` plus the `SYFT_SHA256` of its release tarball, downloaded through [`scripts/fetch/download-verified.sh`](../../scripts/fetch/download-verified.sh).
 That download used to go through `anchore/sbom-action/download-syft`, which fetches anchore's `install.sh` and runs it with no retry, so one transient CDN denial failed the step outright (Q806).
 The helper retries and refuses to write bytes that miss the pinned digest, so absorbing the flake tightened the pin rather than loosening it: the release now names the exact syft bytes instead of trusting an installer to resolve them.
 
@@ -1227,4 +1227,5 @@ The first two controls protect *who* runs the pipeline and *how* signatures are 
 - **The cosign verify binary is checksummed.** GitHub release assets are mutable for an existing tag, so a raw download of the release verifier can't be trusted on its own.
   The publish pipeline obtains cosign via the SHA-pinned `sigstore/cosign-installer` action (which performs its own signature verification); the *local* verify path (`make verify-release` → `scripts/release/download-cosign.sh`) pins the expected SHA256 per platform in-repo and refuses to install a binary whose bytes don't match.
   Bumping `COSIGN_VERSION` must add the new digests to that script (it fails closed on an unpinned version) — the same deliberate-pin discipline as `KIND_BINARY_SHA256` in `e2e-test.yml`.
+  It must also carry the same version into publish.yml's `cosign-release`, which `make cosign-pin-check` enforces (Q903): a one-sided bump leaves `make verify-release` running a verifier the publish job never signed with, and cosign verifies across versions until it doesn't.
   The `$(COSIGN)` make rule keys on the pinned version, so a bump re-downloads instead of serving whatever `.build/cosign` already holds (Q857).
