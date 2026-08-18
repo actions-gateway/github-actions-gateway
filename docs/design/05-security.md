@@ -594,6 +594,12 @@ See [Appendix B](appendix-b-worker-isolation.md) for the full tradeoff between `
 **Kata bounds the kernel, not the pod network.** A micro-VM does not isolate the cloud metadata server: Q226 measured the node's GCE service-account token endpoint returning `HTTP 200` from *inside* a Kata guest on GKE.
 Escaping the container is no longer a path to the node, but minting node credentials over the pod network still is.
 Kata must therefore be paired with a metadata control (GKE Workload Identity, AWS IMDSv2 hop-limit 1, or a NetworkPolicy denying `169.254.169.254/32`) and `automountServiceAccountToken: false` — which the AGC already sets unconditionally on worker pods.
+
+On a cluster with a policy-enforcing CNI, the tenant policies this system generates already supply that NetworkPolicy leg, though not in the shape the sentence above implies.
+NetworkPolicy is allowlist-only and has no deny primitive, so nothing here names the metadata address.
+The address falls inside the link-local block `169.254.0.0/16` that the DNS rule admits for NodeLocal DNSCache (§H.5), and what keeps the metadata server out is that this rule is scoped to port 53, which the metadata service does not serve.
+Widening that rule's ports, or adding any egress rule with an empty `to`, hands a worker pod the node's cloud credentials.
+Both halves are now tested: `TestBuildNetworkPolicy_DeniesCloudMetadataServer` pins the authored policy on every PR, and `E2E_V2_DirectEgress_MetadataServerBlocked` proves a real CNI honours the port scoping on the Calico lane (Q716).
 Kata is one layer, not a posture; the capabilities a DinD workload still needs inside the guest approach `privileged`, so the whole guarantee rests on the VM boundary.
 See [Running DinD workloads under Kata § What Kata does not buy you](../operations/kata-dind-workloads.md#what-kata-does-not-buy-you).
 

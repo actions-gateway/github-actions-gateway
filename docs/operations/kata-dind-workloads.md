@@ -277,6 +277,11 @@ Two are easy to miss: **`FOWNER`** (image layer unpack `chmod`s files it does no
 > Re-probed with it on, the metadata server serves the workload-pool identity (`<project>.svc.id.goog`) instead of the node's service account.
 > Also set `automountServiceAccountToken: false` on the runner pod so it carries no Kubernetes API token, and consider a NetworkPolicy denying egress to `169.254.169.254/32` as defence in depth.
 >
+> On a cluster whose CNI enforces egress NetworkPolicy, the tenant policies this system generates already close that path, so the defence-in-depth leg is one you inherit rather than one you write.
+> It does not work by naming the address: NetworkPolicy is allowlist-only, and the metadata address sits inside the link-local block `169.254.0.0/16` the DNS rule has to admit for NodeLocal DNSCache.
+> What keeps it unreachable is that the rule only admits port 53, and the metadata service does not answer there.
+> Two consequences for an operator: on a CNI that does **not** enforce egress (kindnet, and any cluster without a policy plugin) you get none of this and Workload Identity is doing all the work, and if you edit the generated policies to widen the link-local rule beyond port 53 you reopen the path.
+>
 > On other clouds the equivalent controls are IMDSv2 with a hop limit of 1 plus a restrictive instance profile (AWS), or Azure AD Workload Identity with the IMDS endpoint blocked.
 
 Kata advances GAG's [secure-by-default principle](../design/05-security.md#53-security-profiles-and-the-privileged-opt-in) on the axis that matters: the workload that historically demanded a `privileged: true` container now runs without one, converting a kernel escape from node compromise into a discarded guest.

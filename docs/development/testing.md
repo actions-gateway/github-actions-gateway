@@ -2428,7 +2428,11 @@ It runs `if: always()` in `e2e-reusable.yml` and never exits non-zero, because i
 Run it locally against any report to get the same table.
 
 **Egress-enforcing CNI profile.** `make e2e-cluster KIND_CNI=calico` builds the cluster with Calico instead of kindnet (see [kind-iteration.md § CNI selection](kind-iteration.md#cni-selection-kindnet-default-vs-calico)).
-**Five** specs gate on `egressEnforcingCNI()`, skipping themselves on kindnet (whose enforcer does not drop egress) and asserting real packet drops only on a Calico/Cilium cluster: the two runtime egress negatives (`E2E_GMC_TenantProvisioning_WorkloadEgressBlockedToNonProxyPod`, `E2E_GMC_TenantProvisioning_WorkerCannotReachK8sAPI`), the two manager metrics-NP specs (`E2E_GMC_ManagerMetricsNP_DeniesUnlabeledNamespace`, `E2E_GMC_ManagerMetricsNP_AllowsLabeledNamespace`), and `E2E_V2_DirectEgress_NonGitHubBlocked`.
+**Six** specs gate on `egressEnforcingCNI()`, skipping themselves on kindnet (whose enforcer does not drop egress) and asserting real packet drops only on a Calico/Cilium cluster: the two runtime egress negatives (`E2E_GMC_TenantProvisioning_WorkloadEgressBlockedToNonProxyPod`, `E2E_GMC_TenantProvisioning_WorkerCannotReachK8sAPI`), the two manager metrics-NP specs (`E2E_GMC_ManagerMetricsNP_DeniesUnlabeledNamespace`, `E2E_GMC_ManagerMetricsNP_AllowsLabeledNamespace`), `E2E_V2_DirectEgress_NonGitHubBlocked`, and `E2E_V2_DirectEgress_MetadataServerBlocked` (Q716).
+
+That last one carries its own destination: a kind cluster has no cloud metadata server, so the spec stands one up at `169.254.169.254` on every node (a privileged `hostNetwork` DaemonSet) before probing it.
+Without that the assertion would pass whether or not the NetworkPolicy did anything.
+Its third leg — the same workload pod reaching the same address on port 53 — is what makes a vacuous pass impossible: if link-local were simply unroutable, that leg would fail too.
 `egressEnforcingCNI()` is the authoritative list; prose copies of it have gone stale twice, so grep the call sites rather than trusting a count.
 Run them with the Calico profile when validating NetworkPolicy enforcement changes (Q7b/Q83).
 
@@ -2924,7 +2928,8 @@ Getting it wrong the other way is just as costly — a verdict of `BLOCKED` on a
 #### The Calico e2e lane
 
 - **[`e2e-calico.yml`](../../.github/workflows/e2e-calico.yml)** — `kind_cni: calico` (Q119). kindnet accepts `NetworkPolicy` but its bundled enforcer does not drop egress, so the NetworkPolicy-enforcement specs self-skip on the per-PR kindnet leg; on Calico they assert real packet drops.
-  The full suite runs on both CNIs — these specs simply activate under Calico: the two `TenantProvisioning` egress negatives (`WorkloadEgressBlockedToNonProxyPod`, `WorkerCannotReachK8sAPI`), `ProxyConnectWorks` (which runs on both but is only truly enforced here), and the two `ManagerMetricsNP` specs (Q83).
+  The full suite runs on both CNIs — these specs simply activate under Calico: the two `TenantProvisioning` egress negatives (`WorkloadEgressBlockedToNonProxyPod`, `WorkerCannotReachK8sAPI`), `ProxyConnectWorks` (which runs on both but is only truly enforced here), the two `ManagerMetricsNP` specs (Q83), and the two `V2_DirectEgress` negatives (`NonGitHubBlocked`, `MetadataServerBlocked`).
+  `egressEnforcingCNI()`'s call sites are the authoritative list; grep them rather than trusting this sentence.
   No per-lane spec selection is needed — the suite's runtime `egressEnforcingCNI()` self-skip does the routing.
 
   **When it runs:** **at merge-queue time (and on push to main) only when the diff touches NetworkPolicy/proxy code** — the GMC (`cmd/gmc/**`, which generates the tenant + manager policies and the proxy), the egress proxy (`cmd/proxy/**`), the chart's policy templates (`charts/actions-gateway/**`), or the CNI/cluster plumbing (`scripts/e2e/**`, `scripts/fetch/**`, `scripts/lib/**`, `Makefile`, the two e2e workflows — the script groups held identical to `e2e-test.yml`'s by [assertion 4](#the-path-filter-gate) of the path-filter gate).

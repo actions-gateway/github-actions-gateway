@@ -11,6 +11,7 @@
 #   - E2E_GMC_ManagerMetricsNP_DeniesUnlabeledNamespace            (calico-only, Q83)
 #   - E2E_GMC_ManagerMetricsNP_AllowsLabeledNamespace             (calico-only, Q83)
 #   - E2E_V2_DirectEgress_NonGitHubBlocked                        (calico-only)
+#   - E2E_V2_DirectEgress_MetadataServerBlocked                   (calico-only, Q716)
 # egressEnforcingCNI() is the authoritative list — this comment omitted the
 # direct-egress spec from the v2 work until #1417, and testing.md's copy had the
 # same gap, so grep the call sites rather than trusting either count.

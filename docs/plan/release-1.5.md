@@ -406,8 +406,8 @@ Held here so the reasoning is not lost, not committed to the release:
 
 - **Fold the scale-up token bucket into the advertised capacity.** The bucket is waited on at `provisioner.go:532` and `:793`, after the claim, with the job holding its GitHub lock, which the CRD godoc states outright (`api/v2beta1/runnerset_types.go:394-400`).
   Expressing free tokens as a fourth `min()` rung in `AdvertiseCapacity` would make the anti-stampede claim structurally honest.
-- **Assert a worker pod cannot reach the cloud metadata server.** Three docs advise denying `169.254.169.254/32`, Q226 measured HTTP 200 from inside a Kata guest, and no test names the address.
-  *(Multi-label runner sets were held here too, and were accepted on 2026-08-09: the row is Q726, now labelled `1.5-gate`, and the gap inventory it belongs to is [arc-parity.md](arc-parity.md).)*
+
+*(Multi-label runner sets were held here too, and were accepted on 2026-08-09: the row is Q726, now labelled `1.5-gate`, and the gap inventory it belongs to is [arc-parity.md](arc-parity.md).)*
 
 ## In scope: reconcile the marketing surfaces
 
