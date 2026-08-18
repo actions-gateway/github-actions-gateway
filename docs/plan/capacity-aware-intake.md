@@ -1,6 +1,8 @@
 # Capacity-Aware Job Intake
 
-> **Status: ✅ Complete (2026-07-31).** Every build item (0a–2d) and every measurement row (V1–V3) is done.
+> **Status: ✅ Complete (2026-08-18).** Every build item (0a–2e) and every measurement row (V1–V3) is done.
+> Item 2e is the late one: `Observe` read the scheduler and the autoscaler but not the kubelet, so a worker that bound to a node and then could not start its container tripped no rung at all ([§9k](#9k-the-kubelets-startup-verdict-q714), Q714, shipped 2026-08-18).
+> It is asserted in envtest only; a `V` row for it would need a live cluster and none has run.
 > The one residual is item 3 — the `ProvisioningRequest` probe — deferred as [Q407](../queue/Q407.md) with its triggers in [Appendix G.16](../design/appendix-g-future-enhancements.md#g16-provisioningrequest-pre-acquire-capacity-probe-check-capacity); [§9h](#9h-what-the-dogfood-re-run-measured-for-the-latch-q513) supplies the number its trigger (a) reads against (~1 probe claim per window).
 
 The admission ladder in [`cmd/agc/internal/provisioner/admission.go`](../../cmd/agc/internal/provisioner/admission.go) gates job acquisition on two rungs today: observed namespace-ResourceQuota headroom (#784) and the owner's declared worker ceiling (Q59).
@@ -24,6 +26,7 @@ That principle, and why it makes the quota rung safe to gate on while the schedu
 | 2b | Assert phase 2's matcher against a real autoscaler's events, in kind | M | ✅ Done ([§9c](#9c-the-live-autoscaler-harness-and-what-it-measured-q474), Q474, 2026-07-28) — cluster-autoscaler only (V3) |
 | 2c | Stop one loop's two verdicts from gating: the concurrency window | S | ✅ Done ([§9d](#9d-the-concurrency-window-q478), Q478, 2026-07-28) |
 | 2d | The latch: a bound that survives the reap, with a probe slot on both tiers | M | ✅ Done ([§9g](#9g-the-latch--a-bound-that-survives-the-reap-q512), Q512, 2026-07-30) — effect measured (V2 re-run) |
+| 2e | Gate on the kubelet's verdict too: a worker that bound and never started | M | ✅ Done ([§9k](#9k-the-kubelets-startup-verdict-q714), Q714, 2026-08-18); envtest only, not measured live |
 | V1 | Measure item 0a's effect — the scale-set quota rung — on dogfood | M | ✅ Measured ([§9f](#9f-what-the-dogfood-run-measured-for-the-quota-rung-q462), Q462, 2026-07-31) — rung binds; bias-low margin 0–2 jobs, never inverted |
 | V2 | Measure items 1 and 2's effect — both capacity-gate signals — on dogfood | M | ✅ Measured ([§9e](#9e-what-the-dogfood-run-measured-q469), Q469, 2026-07-31) — **no reduction on the ScaleSet tier**; fixed by item 2d, re-run measured ([§9h](#9h-what-the-dogfood-re-run-measured-for-the-latch-q513), Q513) |
 | V3 | Extend item 2b's live-autoscaler drift gate to Karpenter | M | ✅ Done ([§9i](#9i-the-karpenter-arm-of-the-drift-gate-and-what-it-measured-q479), Q479, 2026-07-31) — vocabulary/attribution hold; recorder-generation premise corrected |
@@ -725,6 +728,68 @@ Recovery does not loop tightly: the abandoned-run sweeper waits for capacity tha
 **Why this matters beyond intake.** Both 1.4 DinD templates ship that placeholder and require the operator to replace it, so this is the failure a first-time user of the library hits, not a corner case.
 [`runner-template-library.md`](../operations/runner-template-library.md) and [`kata-dind-workloads.md`](../operations/kata-dind-workloads.md) now describe the real split: the pod says `ImagePullBackOff` within seconds, while the `RunnerSet` stays quiet until the deadline.
 Closing Q714 changes what an operator watches, so it must update both.
+
+## 9k. The kubelet's startup verdict (Q714)
+
+Shipped 2026-08-18.
+[§9j](#9j-the-gap-is-operator-visible-in-shipped-docs-q714) measured the gap; this is what closed it.
+`Observe` read two signals, and both of them ask the same question: can this pod be *placed*.
+Nothing asked whether a pod that WAS placed ever ran.
+
+**A sibling signal, not a wider reading of the existing one.** `podUnschedulable` keys on `PodScheduled=False`/`Unschedulable`, and that narrowness is deliberate: its godoc argues it, and the argument holds for the case it was written for, where a `ResourceQuota` rejection can never present because it blocks pod admission before a pod exists.
+Folding a bound-but-failing pod into that name would make one condition mean two things, and would leave an operator's remedy ambiguous: a node, a taint or a quota for one, an image for the other.
+So the new predicate is `podStartupBackoff`, in [`worker_startup_verdict.go`](../../cmd/agc/internal/controller/worker_startup_verdict.go), reading the opposite half of `PodScheduled`.
+The two are disjoint by construction: a bound pod can never carry `PodScheduled=False`.
+`WorkerCapacityDeclined` gains a third `True` reason, `PodsNotStarting`, which is what the condition was built for: it "stays stable across all three phases while the source underneath it changes" (§5).
+No CRD change, no new mode, no API break; `Off` is still the default.
+
+**It is evaluated on every cluster, and that is the whole design point.** The other two signals are selected by `clusterCapacity.nodeAutoscaling` because [§D.8](../design/appendix-d-alternatives-considered.md#d8-gating-intake-on-capacity-which-signals-are-safe-to-gate-on)'s question, is another actor waiting on this pod to make capacity appear, has different answers on a fixed and an elastic cluster.
+Put the same question to a bound pod and the answer is the same everywhere: no. The pod is already placed, no autoscaler consumes its stuckness, and no node anyone adds changes whether its image resolves.
+So the rung checks it *before* the cluster fact splits the other two, and `TestV2_RunnerSet_CapacityGate_WorkerThatCannotStartSkipsAcquire` asserts it against the **elastic** gateway, where the autoscaler path fails open for want of an Event.
+That makes a decline there attributable to nothing else.
+
+**The timing argument is not Q95's, and could not be.** `unschedulableGrace` is half `pendingPodDeadline` so `WorkersUnschedulable` cannot be set in the same pass the reaper deletes its evidence.
+This signal takes **no** time-based grace, for three reasons, and copying the factor would have been wrong in both directions:
+
+* The scheduler's verdict is a snapshot, stamped on the first failed attempt, and a completing pod or an arriving node can overturn it a second later.
+  A dwell is what turns it into evidence.
+  `ImagePullBackOff` is not a snapshot: the kubelet reports it only after a pull has already failed *and* it has entered exponential backoff.
+  The dwell is inside the signal, which is why the matcher takes `ImagePullBackOff` and deliberately refuses `ErrImagePull`, the single pre-backoff failure.
+  **That exclusion is the grace**, so widening the matcher removes it silently.
+  Hence `TestCapacityGate_StartupVerdictIgnoresAPreBackoffFailure`, and a one-entry `startupBackoffReasons` map rather than an inline condition.
+* `pendingPodDeadline` is generous **for image pulls** by its own godoc, so half of it (five minutes at the defaults) would admit five minutes of doomed claims against a verdict §9j measured landing about two seconds after the pod is created.
+* Q95's flapping cannot arise here anyway.
+  It needs the condition set at the reap; this one is set seconds into the pod's life and the latch, not a grace factor, is what carries it across the reap.
+
+**What the matcher covers, and what it deliberately does not.** The image-pull family only, on the same reasoning §4 gives for placeability: it is a property of the pod SHAPE, so every worker this owner would create next carries the same reference and fails identically.
+`CreateContainerConfigError` and its neighbours are out, because a per-pod config error is not evidence about the next pod.
+Init containers and native sidecars count alongside regular containers, since a worker whose injected proxy sidecar cannot pull never runs its job either.
+Widening later is a data edit and a test row, following the same narrow-matcher-plus-fail-open habit §7 argues for the autoscaler vocabulary.
+
+**A re-check, because the watch cannot see this transition.** `workerPodPhaseChangePredicate` drops updates that change no phase, and a pod entering `ImagePullBackOff` changes none, so without a requeue the gate would first learn of an unpullable image when the reaper deleted the pod ten minutes later.
+`startupVerdictRecheck` is 10s, a third of the elastic path's 30s, because it costs a third of nothing: that path spends uncached Event reads per stuck pod while this one re-reads a pod list the reconcile already holds.
+Only the undecided direction needs it: a pod that finally starts goes Pending→Running and a reaped one is deleted, and the watch delivers both.
+
+### The latch had to change, and this is the part that was not obvious
+
+Q512's latch releases when a worker pod has **scheduled** since the decline.
+Against this signal that rule is wrong, and wrong in the direction that quietly undoes the latch: a probe pod binds within a second and only reveals that it cannot start seconds later, so the gap between the two is a window in which nothing is declining and a fresh binding is on record.
+The latch would release, the advertisement would snap back to the full ceiling, and the burst of *N* wasted claims [§9e](#9e-what-the-dogfood-run-measured-q469) measured would come back: the same no-op, reached by a different route, and invisible in the reason or the value because only the timing differs.
+
+So the release evidence is now a worker pod that **started**: a container that has run, read off `state.Running`, `state.Terminated` or `lastState`.
+Binding was only ever a proxy for "a worker can run here", and this signal is exactly the case that falsifies the proxy.
+
+The rule is uniform rather than per-origin, which is a deliberate trade.
+Keeping two rules would have needed two latched reasons to carry the origin through `AwaitingProbe`, adding a value to the condition, the gauge's `reason` label and two operator tables, to buy a difference that only shows up in the pathological case.
+Uniform costs a healthy probe the seconds between binding and its first container running, and in the pathological case it is strictly better: a latch held on a probe that bound and then wedged is the correct answer under either origin.
+It does tighten a shipped, measured behaviour ([§9h](#9h-what-the-dogfood-re-run-measured-for-the-latch-q513)) in the *more*-gating direction, which this rung is otherwise careful never to do.
+The reason that is acceptable here and nowhere else in the rung: the latched state does not close intake, it rate-limits it to one probe job per deadline window, so a wrongly-held latch throttles a tenant and cannot starve one.
+`TestCapacityGate_LatchHoldsWhileTheProbeHasOnlyBound` is the negative control, and deleting either mechanism was confirmed to turn exactly the tests naming it red.
+
+**Not measured live.** Everything above is envtest and unit.
+A `V` row would need a dogfood burst against an unpullable worker image.
+The number it would produce, residual claims per window, should be the same ~1 per (deadline + reassignment) window [§9h](#9h-what-the-dogfood-re-run-measured-for-the-latch-q513) measured for the placeability signals, since the trickle machinery is shared.
+That is a prediction, not a measurement.
 
 ## 10. Non-goals
 

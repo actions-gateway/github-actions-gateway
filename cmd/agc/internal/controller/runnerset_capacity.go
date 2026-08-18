@@ -3,6 +3,7 @@ package controller
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/provisioner"
@@ -120,8 +121,9 @@ func (r *RunnerSetReconciler) applyCapacityGateCondition(ctx context.Context, rs
 		message = latchedCapacityMessage(prev)
 		// Nothing re-triggers a reconcile when a probe pod binds but stays Pending
 		// (image pull) — the Pod watch fires on phase changes only — so the latched
-		// state polls at the same cadence the elastic signal already uses.
-		recheck = autoscalerVerdictRecheck
+		// state polls at the same cadence the elastic signal already uses, or faster
+		// while a bound probe has yet to declare itself.
+		recheck = soonest(autoscalerVerdictRecheck, startupRecheck(unsched))
 	}
 
 	wasDeclined := prev != nil && prev.Status == metav1.ConditionTrue
@@ -153,8 +155,19 @@ func (r *RunnerSetReconciler) applyCapacityGateCondition(ctx context.Context, rs
 //   - No stuck pod exists. A not-declined verdict reached WITH stuck pods present is
 //     the autoscaler's own answer (an acting signal, or fail-open on an unreadable or
 //     unrecognized vocabulary), and there the fail-open contract owns the decision.
-//   - No worker pod has scheduled since the condition became True. A post-decline
-//     binding — whenever the pod was created — is capacity returning, and clears.
+//     A not-starting pod needs no arm here — that verdict declines outright, so a
+//     fresh CapacityAvailable already means there is none.
+//   - No worker pod has STARTED since the condition became True. A post-decline
+//     container start — whenever the pod was created — is capacity returning, and
+//     clears.
+//
+// Starting rather than scheduling is Q714's correction to Q512. Binding was a proxy
+// for "a worker can run here", and the kubelet's startup verdict is exactly the case
+// where the proxy is wrong: a probe pod binds within a second and only reveals that
+// it cannot start seconds later, so releasing on the bind would restore the full
+// advertisement inside that gap — reintroducing the §9e no-op this latch removed. For
+// the two placeability reasons the stronger evidence is free, since a pod that starts
+// has necessarily bound; it costs a healthy probe the seconds between the two.
 //
 // Holding on ABSENCE of evidence inverts the rung's fail-open habit, and is safe
 // only because the latch never closes intake: its floor is one probe job per
@@ -170,7 +183,7 @@ func capacityGateLatchHolds(prev *metav1.Condition, freshReason string, unsched 
 	if len(unsched.stuckPods) > 0 {
 		return false
 	}
-	return !unsched.lastScheduledAt.After(prev.LastTransitionTime.Time)
+	return !unsched.lastStartedAt.After(prev.LastTransitionTime.Time)
 }
 
 // latchedCapacityMessage carries the reaped verdict into the latched condition, so
@@ -181,7 +194,7 @@ func latchedCapacityMessage(prev *metav1.Condition) string {
 		return prev.Message
 	}
 	return fmt.Sprintf("job intake is limited to one probe job per pending-pod deadline window: "+
-		"the declined worker pods were reaped before capacity returned (%s: %s); the gate reopens when a worker pod schedules",
+		"the declined worker pods were reaped before capacity returned (%s: %s); the gate reopens when a worker pod starts",
 		prev.Reason, truncate(prev.Message, 200))
 }
 
@@ -202,8 +215,20 @@ func latchedCapacityMessage(prev *metav1.Condition) string {
 // would apply semantics the operator did not ask for.
 func (r *RunnerSetReconciler) evalCapacityGate(ctx context.Context, mode string, unsched workersUnschedulable, gw *v2alpha1.ActionsGateway) (declined bool, reason, message string, recheck time.Duration) {
 	if mode != v2alpha1.CapacityGateModeObserve {
+		// Nothing is evaluated, so nothing is worth coming back for either.
 		return false, v2alpha1.ReasonGateModeUnsupported, fmt.Sprintf(
 			"capacity gate mode %q is not implemented by this AGC; job intake is not gated", mode), 0
+	}
+	// A bound worker pod that has not yet resolved either way is invisible to the Pod
+	// watch, so every verdict below carries the re-check that will notice when it does.
+	defer func() { recheck = soonest(recheck, startupRecheck(unsched)) }()
+
+	// The kubelet's verdict comes first, and comes before the cluster fact splits the
+	// other two signals, because it is the one signal no autoscaler can answer: these
+	// pods are already placed, so nothing about a new node changes whether their image
+	// resolves. Gating on it is sound on an elastic cluster and a fixed one alike.
+	if len(unsched.notStartingPods) > 0 {
+		return true, v2alpha1.ReasonPodsNotStarting, notStartingMessage(unsched.notStartingPods), 0
 	}
 	if gatewayNodeAutoscaling(gw) == v2alpha1.NodeAutoscalingAbsent {
 		// The operator asserts nothing will add a node, so the scheduler's verdict is
@@ -218,6 +243,48 @@ func (r *RunnerSetReconciler) evalCapacityGate(ctx context.Context, mode string,
 	// not coming. This is also the default, and it is the safe one: it can only ever
 	// under-gate relative to the scheduler's verdict.
 	return r.evalAutoscalerVerdictGate(ctx, unsched)
+}
+
+// startupVerdictRecheck is how often a gated set re-reads a bound worker pod that is
+// still Pending with no startup verdict either way.
+//
+// A periodic re-check is required, not merely nice, for the reason the elastic path
+// needs one: the Pod watch drops updates that change no phase, and a pod entering
+// ImagePullBackOff changes none — so without it nothing would wake the reconciler
+// between the pod's creation and its pendingPodDeadline reap, and the gate would
+// learn of an unpullable image ten minutes after the kubelet did.
+//
+// It is a third of the elastic path's interval because it costs a third of nothing:
+// that path spends uncached Event reads per stuck pod, while this one re-reads a pod
+// list the reconcile already holds. §9j measured the kubelet reaching its verdict ~2s
+// after the pod is created, so the interval — not the signal — is what bounds how
+// long intake continues past the decision, and it bounds it at seconds against a
+// ten-minute default deadline.
+//
+// Only the undecided direction needs it. Recovery does not: a pod that finally starts
+// goes Pending→Running and a pod that is reaped is deleted, and the watch delivers
+// both.
+const startupVerdictRecheck = 10 * time.Second
+
+// startupRecheck returns the re-check a not-yet-decided bound worker pod needs, or 0
+// when every bound pod has already resolved one way or the other.
+func startupRecheck(unsched workersUnschedulable) time.Duration {
+	if unsched.startupPending {
+		return startupVerdictRecheck
+	}
+	return 0
+}
+
+// notStartingMessage renders the kubelet's startup verdict for the condition: how many
+// worker pods bound and failed to start, and each one's own waiting message, which is
+// what names the image that will not pull.
+func notStartingMessage(pods []notStartingPod) string {
+	parts := make([]string, 0, len(pods))
+	for _, p := range pods {
+		parts = append(parts, fmt.Sprintf("%s (%s)", p.name, p.detail))
+	}
+	return fmt.Sprintf("job intake is gated: %d worker pod(s) were placed on a node but could not be started: %s",
+		len(pods), strings.Join(parts, "; "))
 }
 
 // gatewayNodeAutoscaling returns the gateway's effective node-autoscaling fact,
