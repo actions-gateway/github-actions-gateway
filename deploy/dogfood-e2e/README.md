@@ -40,7 +40,7 @@ What pins the pod unprivileged is the platform-owned `ClusterRunnerTemplate`, no
 
 ² The shared RunnerSet in [base/resources.yaml](base/resources.yaml) selects the `NodeShare` sizing profile, so the runner container's CPU **request** is derived (envelope ÷ `workersPerNode`) rather than taken from the template.
 This tenant is where the release gate validates that profile — it needs no usage history, so it actuates on the first job, and `validate-release.sh` fails the RC if it does not.
-The declared envelope is deliberately **below** both variants' static request, so actuation can only lower a worker's ask; tightening it needs a measured node allocatable ([Q448](../../docs/STATUS.md#Q448)).
+The declared envelope is deliberately **below** both variants' static request, so actuation can only lower a worker's ask; tightening it needs a measured node allocatable ([Q448](../../docs/queue/Q448.md)).
 
 Both use one build-capable runner image (`scripts/dogfood/e2e-runner/Dockerfile` — docker CLI + buildx + helm + kubectl + jq; added by the Q231 wiring PR) and the wired [`e2e-reusable.yml`](../../.github/workflows/e2e-reusable.yml) (`GAG_E2E_RUNNER`).
 
@@ -101,7 +101,7 @@ Then re-add the binary via the `scripts/ci/check-tools.sh` registry — version-
 - **dind:** privileged DinD confirmed working on GKE COS cgroup v2 (daemon up, native-sidecar reaping verified).
   Full **Calico e2e ran clean-green on GAG** (2026-07-07): pod `Completed`, no OOM, ~18 min.
   The [Q247](../../docs/plan/archive/gke-dogfood-turnup-findings.md) session-orphaning was intermittent, not deterministic — this run concluded cleanly; Q247's renewal + self-teardown fixes (resolved) hardened it.
-- **Pod sizing is measured, not guessed** ([Q248](../../docs/STATUS.md#Q248)): the worker pod's `requests`/`limits`, now shipped in [`templates/privileged-dind/template.yaml`](../templates/privileged-dind/template.yaml), are derived from that run's peak — the `runner` is CPU-heavy (~4940m peak, the e2e specs + CLI), the `dind` sidecar is memory-heavy (~2343Mi peak, the in-DinD `kind`+Calico cluster).
+- **Pod sizing is measured, not guessed** ([Q248](../../docs/plan/dogfood-runner-rightsizing.md)): the worker pod's `requests`/`limits`, now shipped in [`templates/privileged-dind/template.yaml`](../templates/privileged-dind/template.yaml), are derived from that run's peak — the `runner` is CPU-heavy (~4940m peak, the e2e specs + CLI), the `dind` sidecar is memory-heavy (~2343Mi peak, the in-DinD `kind`+Calico cluster).
   CPU is requests-only (no limit → bursts); `runner(3)+dind(1)=4` vCPU of requests packs exactly one worker pod per `e2-standard-8` node, so the two `maxWorkers` pods land on two nodes and concurrent e2e legs don't CPU-throttle each other.
   Full rationale + the measured table: [dogfood-runner-rightsizing.md § e2e worker sizing](../../docs/plan/dogfood-runner-rightsizing.md#e2e-worker-sizing--measured-then-derived-dind-2026-07-07).
 - **kata:** live-validated green end-to-end on GAG (2026-07-16, Q286) and now the default variant.

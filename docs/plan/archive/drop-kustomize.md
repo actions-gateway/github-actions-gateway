@@ -1,11 +1,11 @@
 # Plan: Helm as the sole cluster-install path (Q142)
 
-← [STATUS](../../STATUS.md) · absorbs [Q73](../../STATUS.md)
+← [STATUS](../../queue/README.md) · absorbs [Q73](../../queue/README.md)
 
 ## Goal
 
 Make the **Helm chart** the single thing that installs the gateway to a cluster, and eliminate the duplicate, hand-maintained manifests that currently exist in both `cmd/*/config/` (kustomize) and `charts/actions-gateway/`.
-Today there are two parallel deploy systems and the chart's CRDs/RBAC are hand-copied from the generated `config/` output — a silent-drift liability ([Q73](../../STATUS.md)).
+Today there are two parallel deploy systems and the chart's CRDs/RBAC are hand-copied from the generated `config/` output — a silent-drift liability ([Q73](../../queue/README.md)).
 
 ## What stays, what goes
 

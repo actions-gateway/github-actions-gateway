@@ -1,6 +1,6 @@
 """MkDocs hook that renders each roadmap bullet's release commitment as a chip.
 
-The commitment lives in `docs/STATUS.md` as an `X.Y-gate` label, meaning "this
+The commitment lives in the backlog store as an `X.Y-gate` label, meaning "this
 row blocks that tag"; `docs/roadmap.md` is where an adopter reads it. The page
 used to say so in prose — "Gating the 1.5 release", typed by hand on three of
 twenty-three bullets — which is a second copy of a fact the backlog already
@@ -21,7 +21,7 @@ whose rows carry no gate — every "Exploring / longer-term" entry — renders
 unchanged: no chip is the honest rendering of no commitment.
 
 Two things it deliberately does not do. It never invents a chip for a Q-ID that
-is not in `STATUS.md`: a dangling ID means the work shipped, which is
+is not in the store: a dangling ID means the work shipped, which is
 `roadmapcheck` rule 2's finding and not something to paper over here. And an
 annotation inside a code fence is prose about the format, not an annotation —
 the same reading `roadmapcheck` takes, so the gate and the renderer agree about
@@ -44,62 +44,63 @@ import sys
 # The one page carrying release commitments. features.md states what shipped and
 # needs no gate; the operator docs are versioned with the release they document.
 _ROADMAP_SRC = "roadmap.md"
-_STATUS_SRC = "STATUS.md"
+_STORE_DIR = "queue"
 
 # The bullet's binding to its backlog rows. Matches roadmapcheck's own pattern,
 # including the `[^-]` window that stops at the comment's closing dashes.
 _ANNOTATION = re.compile(r"<!--\s*q:([^-]*)-->")
 
-# The STATUS.md ID cell, `<a id="QN"></a>QN`, and the `X.Y-gate` label. The
-# backticks are load-bearing: they separate the label from a mention of one in
-# prose.
-_ROW_ID = re.compile(r'<a id="(Q[0-9]+)"></a>')
-_GATE_LABEL = re.compile(r"`([0-9]+\.[0-9]+)-gate`")
+# An item's YAML frontmatter, and the `labels:` block within it. Scoped to the
+# frontmatter so a label named in the body's prose is not read as one the item
+# wears — the job the backticks did when labels lived in a table cell.
+_FRONTMATTER = re.compile(r"\A---\n(.*?)\n---\n", re.S)
+_LABELS_BLOCK = re.compile(r"^labels:(.*?)(?=^\S|\Z)", re.M | re.S)
+_GATE_LABEL = re.compile(r"\b([0-9]+\.[0-9]+)-gate\b")
+_ITEM = re.compile(r"\AQ[0-9]+\Z")
 
 # A fenced code block's delimiter, at CommonMark's three leading spaces.
 _FENCE = re.compile(r"^ {0,3}(`{3,}|~{3,})")
 
-_LABELS_COLUMN = "labels"
 
+def item_gates(source):
+    """Return the release gates one item's Markdown declares, newest last.
 
-def _cells(row):
-    """Split one GFM table row into its cells.
-
-    Cells here never contain an escaped `|` — one would end the column — so the
-    naive split is exact for this file, and the `-gate` labels it reads are the
-    same ones devtools/docs/roadmapcheck reads off a real Markdown AST.
+    Read from the `labels:` block of the YAML frontmatter, never from the body:
+    an item whose notes discuss a gate is not an item that blocks one. Both
+    label shapes are accepted, the block list `migrate` writes and the inline
+    list a hand-filed item may use, because the store carries both.
     """
-    return [cell.strip() for cell in row.strip().strip("|").split("|")]
+    front = _FRONTMATTER.match(source)
+    if front is None:
+        return []
+    block = _LABELS_BLOCK.search(front.group(1))
+    if block is None:
+        return []
+    found = []
+    for gate in _GATE_LABEL.findall(block.group(1)):
+        if gate not in found:
+            found.append(gate)
+    return sorted(found, key=_version_key)
 
 
-def gates(status_markdown):
-    """Return {Q-ID: [gate, …]} for every row in the backlog that carries one.
-
-    The Labels column is located from each table's header rather than assumed,
-    so a column added ahead of it moves the read instead of silently pointing
-    the gate lookup at the wrong cell.
-    """
+def gates(store_dir):
+    """Return {Q-ID: [gate, …]} for every item in the store that carries one."""
     out = {}
-    labels_at = None
-    for line in status_markdown.splitlines():
-        if not line.lstrip().startswith("|"):
-            labels_at = None
+    try:
+        names = sorted(os.listdir(store_dir))
+    except OSError:
+        return out
+    for name in names:
+        if not name.endswith(".md") or not _ITEM.match(name[:-3]):
             continue
-        cells = _cells(line)
-        match = _ROW_ID.search(line)
-        if match is None:
-            lowered = [cell.lower() for cell in cells]
-            if _LABELS_COLUMN in lowered:
-                labels_at = lowered.index(_LABELS_COLUMN)
+        try:
+            with open(os.path.join(store_dir, name), encoding="utf-8") as handle:
+                source = handle.read()
+        except OSError:
             continue
-        if labels_at is None or labels_at >= len(cells):
-            continue
-        found = []
-        for gate in _GATE_LABEL.findall(cells[labels_at]):
-            if gate not in found:
-                found.append(gate)
+        found = item_gates(source)
         if found:
-            out[match.group(1)] = sorted(found, key=_version_key)
+            out[name[:-3]] = found
     return out
 
 
@@ -148,19 +149,13 @@ def on_page_markdown(markdown, page, config, **_kwargs):
     """Render the release chips on the roadmap page, and nowhere else."""
     if page.file.src_uri != _ROADMAP_SRC:
         return markdown
-    status = os.path.join(config["docs_dir"], _STATUS_SRC)
-    try:
-        with open(status, encoding="utf-8") as handle:
-            source = handle.read()
-    except OSError:
-        # No backlog to read is a version-free render, not a build failure: the
-        # same stance hooks/release_version.py takes on a missing git history.
-        return markdown
-    return render(markdown, gates(source))
+    # No backlog to read is a version-free render, not a build failure: the
+    # same stance hooks/release_version.py takes on a missing git history, and
+    # gates() returns an empty map rather than raising.
+    return render(markdown, gates(os.path.join(config["docs_dir"], _STORE_DIR)))
 
 
 if __name__ == "__main__":
     docs_dir = sys.argv[1] if len(sys.argv) > 1 else "docs"
-    with open(os.path.join(docs_dir, _STATUS_SRC), encoding="utf-8") as handle:
-        for q_id, found in sorted(gates(handle.read()).items()):
-            print(q_id, " ".join(found))
+    for q_id, found in sorted(gates(os.path.join(docs_dir, _STORE_DIR)).items()):
+        print(q_id, " ".join(found))

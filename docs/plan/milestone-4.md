@@ -24,7 +24,7 @@
 ## Status at a glance
 
 Last refreshed 2026-06-12.
-**All success criteria are now live-validated.** The multi-tenant, delete-isolation, and end-to-end-proxy-job rows were proven on a real kind cluster with real GitHub App credentials on 2026-06-11/12 — see [§12 Live multi-tenant validation evidence](#12-live-multi-tenant-validation-evidence-2026-06-1112) for the full session record, including the four product bugs it surfaced (tracked as Q114–Q117 in [STATUS.md](../STATUS.md)).
+**All success criteria are now live-validated.** The multi-tenant, delete-isolation, and end-to-end-proxy-job rows were proven on a real kind cluster with real GitHub App credentials on 2026-06-11/12 — see [§12 Live multi-tenant validation evidence](#12-live-multi-tenant-validation-evidence-2026-06-1112) for the full session record, including the four product bugs it surfaced (tracked as Q114–Q117 in [STATUS.md](../queue/README.md)).
 
 | Success criterion | Status | Notes |
 |---|---|---|
@@ -960,7 +960,7 @@ Recorded as Q118 (set the env in the GMC + fix the Dockerfile-vs-`DefaultWorkerI
 `tenant-a` was untouched (`Ready=True`, AGC + 2/2 proxy pods running, RunnerGroup intact) and subsequently ran run 27395702908 to green.
 Deleting `gateway-a` at the end, with a healthy session, also **deregistered its runners from GitHub** — the repo runner list went empty.
 
-### Product bugs surfaced (all filed in [STATUS.md](../STATUS.md))
+### Product bugs surfaced (all filed in [STATUS.md](../queue/README.md))
 
 The live run worked **only after** working around these; none are caught by unit/cluster-only/fake-GitHub tiers:
 

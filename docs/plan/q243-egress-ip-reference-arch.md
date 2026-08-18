@@ -6,7 +6,7 @@ It compares the two viable production mechanisms (Cilium Egress Gateway vs per-t
 **Scope of this document: design + written reference architecture, now fully live-validated.** Two live runs on throwaway GKE Dataplane V2 clusters (torn down same-session) proved the claim end-to-end:
 
 - ✅ The **Cloud NAT mechanism is proven** ([campaign, 2026-07-07](q243-q245-q230-live-validation-campaign.md)): two tenants (distinguished by node pool + pod secondary range) egress from **distinct, stable** source IPs, stable across pod reschedule (see [Live-validation results](#live-validation-results-2026-07-07)).
-- ✅ **GAG binds a real EgressProxy to its egress IP — proven live** *(2026-07-13; the design was resolved by [Q282](../STATUS.md) and asserted only in envtest until this run)*: a GMC-provisioned `EgressProxy` with `spec.scheduling` lands **both** replicas on one tenant pool → **one** Cloud NAT IP, distinct per tenant and stable across reschedule.
+- ✅ **GAG binds a real EgressProxy to its egress IP — proven live** *(2026-07-13; the design was resolved by [Q282](../queue/README.md) and asserted only in envtest until this run)*: a GMC-provisioned `EgressProxy` with `spec.scheduling` lands **both** replicas on one tenant pool → **one** Cloud NAT IP, distinct per tenant and stable across reschedule.
   `EgressProxy.spec.scheduling` and `ActionsGateway.spec.scheduling` carry `nodeSelector`/`tolerations`/`affinity` through to the proxy pool and AGC pods, and a supplied `podAntiAffinity` **replaces** the builder's required cross-node spread (so a single-node tenant pool no longer strands replicas in `Pending`).
   The 2026-07-07 two-IP spread is gone.
   See [Result — PASS (2026-07-13)](#result--pass-2026-07-13) and [Placement pass-through](#placement-pass-through-q282).
@@ -14,7 +14,7 @@ It compares the two viable production mechanisms (Cilium Egress Gateway vs per-t
   The working primitive is a **dedicated pod secondary range per tenant node pool + a per-range Cloud NAT + `--disable-default-snat`** (so pod IPs, not the node IP, are the NAT source).
   Corrected in [Approach B](#approach-b--per-tenant-cloud-nat).
 
-Completes Q243 (the [STATUS](../STATUS.md) Queue row is removed on completion — this doc is the durable reference).
+Completes Q243 (the [STATUS](../queue/README.md) Queue row is removed on completion — this doc is the durable reference).
 Was a v2beta1 (Q74) blocker alongside Q224 and [Q242](archive/q242-g1-proxy-destination-allowlist.md).
 
 ---

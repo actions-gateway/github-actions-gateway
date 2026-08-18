@@ -16,7 +16,6 @@ on:
     paths-ignore:
       - '**.md'
       - 'docs/**'
-      - '!docs/STATUS.md'
       # Generated from api/v2beta1 and gated by the `lint` job's
       # api-reference-check (Q632), so a hand-edit landing on main must still
       # reach that gate — a docs path that is code output, not prose.
@@ -252,10 +251,10 @@ jobs:
   lint:
     needs: [changes]
     # `code` is the whole trigger set: every gate below is driven by a Go
-    # change. The backlog format gate lives in status-lint.yml's `lint-status`
-    # job, which covers every path that can change how docs/STATUS.md lints, so
-    # a second copy here would charge a docs/STATUS.md-only PR ~170s of Go
-    # linting for a check already running beside it (Q808).
+    # change. The backlog gate lives in status-lint.yml's `lint-status` job,
+    # which covers every path that can change its verdict, so a second copy here
+    # would charge a backlog-only PR ~170s of Go linting for a check already
+    # running beside it (Q808).
     if: needs.changes.outputs.code == 'true' || github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     runs-on: ${{ (github.event_name == 'workflow_dispatch' && inputs.target_gag) && fromJSON(vars.GAG_RUNNER || '"ubuntu-latest"') || 'ubuntu-latest' }}
     timeout-minutes: 10

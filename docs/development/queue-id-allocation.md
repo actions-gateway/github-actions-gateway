@@ -1,6 +1,6 @@
 # Agent reference: Allocating backlog Q-IDs
 
-Backlog IDs are allocated by claiming a git ref on the remote, not by a counter line in [`docs/STATUS.md`](../STATUS.md).
+Backlog IDs are allocated by claiming a git ref on the remote, not by a counter line in [the backlog](../queue/README.md).
 
 ```bash
 make queue-id TITLE='GMC CRD manifest drifts from the AGC types it embeds'
@@ -100,10 +100,10 @@ A four-worker dispatch batch takes rows 1 through 4 and every pair is adjacent.
 
 What the ref allocator removes is the *expensive* class (duplicate IDs and the renumbering cascade) and the one conflict that was guaranteed rather than incidental.
 Row conflicts remain, are two lines, and resolve obviously.
-Their real danger is a botched resolution — a done row silently restored — not the conflict itself; `lint-backlog` rule 10 now catches that ([why](maintaining-backlog.md#a-moved-row-defeats-conflict-detection)).
+Their real danger is a botched resolution — a done row silently restored — not the conflict itself; `lint-backlog` rule 10 now catches that ([why](maintaining-backlog.md#a-moved-row-defeated-conflict-detection-and-one-file-per-item-ends-it)).
 
 Every row in the table above is a *line-position* verdict.
-The [merge driver](maintaining-backlog.md#the-merge-driver-resolve-queue-rows-by-id-not-by-line-position) re-decides the same cases by row ID, which makes all of them clean, and leaves conflict markers only where the two sides genuinely disagree about one row.
+The [merge driver](maintaining-backlog.md#the-merge-drivers-resolve-registry-rows-by-key-not-by-line-position) re-decides the same cases by row ID, which makes all of them clean, and leaves conflict markers only where the two sides genuinely disagree about one row.
 It is opt-in per clone (`make merge-driver`) and applies to local merges and rebases only, so the numbers above are still what an uninstalled clone — and GitHub's squash-merge — will do.
 
 ## Alternatives considered
@@ -114,7 +114,7 @@ Projects v2 has a position field, but it lives outside the repo and cannot be di
 Issues would also cost the lintable write path that keeps Notes under the cap and pushes rationale into a doc, and the atomicity of deleting the row in the same diff as the work.
 Revisit if outside contributors need to see and claim work; that is the one thing issues clearly win.
 
-**A custom merge driver for `STATUS.md`.** Shipped — [`scripts/docs/git-merge-status.sh`](../../scripts/docs/git-merge-status.sh), documented in [maintaining-backlog.md](maintaining-backlog.md#the-merge-driver-resolve-queue-rows-by-id-not-by-line-position).
+**A custom merge driver for the backlog table.** Shipped, then retired with the table it served (Q889); the surviving registry drivers are documented in [maintaining-backlog.md](maintaining-backlog.md#the-merge-drivers-resolve-registry-rows-by-key-not-by-line-position).
 It resolves the Queue table by ID set-semantics during merge and rebase, which is where the pain is, and keeps the whole existing tooling stack.
 It needs a one-time `git config` per clone (`make merge-driver`; git will not let `.gitattributes` configure a driver, since that would be remote code execution on clone) and degrades to ordinary conflict markers both when unconfigured and whenever the resolution is not certain.
 It does not help GitHub's server-side squash-merge.

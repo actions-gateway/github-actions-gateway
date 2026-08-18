@@ -239,7 +239,7 @@ Both are dispatcher-tracked follow-ups, not blockers on Q267's merge.
 **Re-route #8 — Q267 live-reconfirmed: the wide pool HOLDS (collapse seam gone); Q224 still NOT green, now cleanly isolated to GitHub's fan-out distinct-delivery starvation (2026-07-05).** The definitive clean-namespace close-out.
 Built `agc:e2e-63cddfc` (amd64 `sha256:ab7811e7…`, index `sha256:be26d80c…`, HEAD/#528 = Option A default-on + Q266 loser-defer + Q267 token-400 ride-out), deployed via the GMC `AGC_IMAGE` patch with **no** explicit `AGC_FANOUT_COMPLETION` env (shipped default-on confirmed: `os.Getenv("AGC_FANOUT_COMPLETION") != "false"`; the AGC pod's `imageID` matched the pushed digest).
 Ran from a **fresh tenant** — a new `ActionsGateway/dogfood8` + `RunnerSet/ci8` with a **new label `gag-ci8`** so the AGC's runner records are `ci8-N`, sidestepping the guard-un-cleanable stale `ci-N` clutter that confounded #6/#7 (the old `dogfood`/`ci` CI gateway was deleted so its AGC couldn't churn the stale records).
-Capacity: non-preemptible `workers-od` **`e2-standard-4 ×4`, `pd-standard`** ([Q248](../../STATUS.md#Q248), 6 nodes Ready throughout, zero preemption), `default-pool` 2, worker CPU request 1.
+Capacity: non-preemptible `workers-od` **`e2-standard-4 ×4`, `pd-standard`** ([Q248](../dogfood-runner-rightsizing.md), 6 nodes Ready throughout, zero preemption), `default-pool` 2, worker CPU request 1.
 The Q265 lever at its widest: **`maxListeners = 48`** (the exact config that collapsed to `online = 0` in #7), `maxWorkers = 8`, `spec.logLevel: debug`.
 **No mid-run AGC restart** (the #7 confound).
 Fired the same ~7-job matrix as #5/#6/#7 — push-event reruns of `28734640377` (unit-test, 6 gag jobs) + `28734640415` (integration) **on the exact deployed commit `63cddfc`**, concurrency-immune — at `08:50:22Z`.
@@ -262,7 +262,7 @@ Net: **distinct-job-delivery starvation + pool-growth stall** → indefinite `in
 **Attribution (what it is and isn't).** It is **not** a recycle-churn seam — Q259/Q266/Q267 markers were all **0** (no token-400, no fatal deregister, no collapse).
 It is **not** the `completejob` tax — **0** `worker capacity full` (re-route #6's finding holds).
 It is **not** an AGC code bug — deduping identical planIDs is correct, and the 5 distinct planIDs simply never arrived.
-It **is** GitHub's server-side fan-out job-assignment interacting with GAG's **many-acquirers + stable-name single-use recycle** ([Q114](../../STATUS.md)) topology — the class [Option E / Q264](../q264-scale-set-protocol.md) (one acquirer, one authoritative job stream, **no** sibling deliveries and **no** per-name recycling) eliminates *by construction*.
+It **is** GitHub's server-side fan-out job-assignment interacting with GAG's **many-acquirers + stable-name single-use recycle** ([Q114](../../queue/README.md)) topology — the class [Option E / Q264](../q264-scale-set-protocol.md) (one acquirer, one authoritative job stream, **no** sibling deliveries and **no** per-name recycling) eliminates *by construction*.
 Because the pool self-limited to **3 ≪ 48**, `maxListeners` width is **not** the binding constraint (a moderate `maxListeners` reproduces the same 3-session stall), so no re-run at a narrower width was warranted.
 
 **Verdict.** **Q267: DONE** (wide pool holds at `maxListeners = 48`; the #7 collapse seam is gone).
@@ -276,7 +276,7 @@ Built `agc:e2e-8a29b75` (index `sha256:4c88631d…`, amd64 `sha256:91dd52ad…`,
 **The wrapper bump is mandatory:** the scale-set worker runs `run.sh --jitconfig` only when the wrapper honors `WORKER_MODE=scaleset`; the stale rc.6 wrapper ran the classic payload path and **every** worker errored `read payload: open …/job-payload/payload: no such file` — the AGC set the env correctly, the old wrapper ignored it.
 A fresh **ScaleSet tenant** replaced the classic one: `ActionsGateway/dogfoodss` (repo-scoped, **direct-egress** to match the classic baseline, `logLevel: debug`), `RunnerTemplate/default-ss` (build-capable `dogfood-runner:2.335.1` + Athens), `RunnerSet/ciss` (`acquisitionProtocol: ScaleSet`, single `runnerLabels: [gag-scaleset2]`, `maxWorkers: 8`).
 **The pinned rc.6 v2 CRD chart had to be `helm upgrade`d to HEAD first** — it predated the `acquisitionProtocol` field, so the RunnerSet apply 400'd `unknown field "spec.acquisitionProtocol"`.
-Capacity: non-preemptible `workers-od` `e2-standard-4 ×4` `pd-standard` ([Q248](../../STATUS.md#Q248)), `default-pool` 2, worker CPU req 1.
+Capacity: non-preemptible `workers-od` `e2-standard-4 ×4` `pd-standard` ([Q248](../dogfood-runner-rightsizing.md)), `default-pool` 2, worker CPU req 1.
 Fired the same ~7-job matrix as re-routes #5–#8 — push-event reruns of unit-test.yml `28752455482` (6 jobs) + integration-test.yml `28752455509` (1 job) on sha `4ea41f6`, routed via `GAG_RUNNER → "gag-scaleset2"`.
 
 **Q224 GATE — MET.
@@ -289,7 +289,7 @@ Capacity gating held: `maxWorkers=8` advertised as `X-ScaleSetMaxCapacity`; GitH
 **But a pristine all-7-green sweep was NOT obtained — 3 green, 4 non-green, every non-green ORTHOGONAL to acquisition.** `shellcheck`/`tidy-check`/`vendor-check` ✅ (the last confirms Athens under the scale-set worker).
 `unit-test` ❌ + `coverage` ❌: a **self-referential dogfooding artifact** — the provisioner sets `WORKER_MODE=scaleset` on the runner *container*, the job's `go test` inherits it, and the `cmd/worker` tests take the jitconfig branch and fail their classic-payload assertions (`TestRun_ReadPayloadErrorIsWrapped`, …); `cover-check` runs the same suite.
 This bites **only** because GAG dogfoods its own CI on its own scale-set worker — a normal tenant is unaffected.
-**Fix = the `cmd/worker` tests must pin `WORKER_MODE` (Queue item); it must land on `main` before a clean-green dogfood re-run is possible.** `integration-test` ❌: envtest `context canceled` under node CPU saturation (98–101% during the 7-wide burst) — a capacity confound ([Q248](../../STATUS.md#Q248)).
+**Fix = the `cmd/worker` tests must pin `WORKER_MODE` (Queue item); it must land on `main` before a clean-green dogfood re-run is possible.** `integration-test` ❌: envtest `context canceled` under node CPU saturation (98–101% during the 7-wide burst) — a capacity confound ([Q248](../dogfood-runner-rightsizing.md)).
 `lint` (cancelled): hit its own `timeout-minutes: 10` (golangci-lint pathologically slow on the saturated node) — a mundane timeout, **not** a lock lapse.
 **U5 was not tested** (no mid-job eviction; the two ~10-min durations were natural runtime / a job timeout).
 

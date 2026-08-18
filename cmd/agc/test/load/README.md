@@ -1,6 +1,6 @@
 # AGC load-test harness (Q13)
 
-An in-process load test that pins the design's headline capacity claim: **thousands of virtual runner sessions multiplexed as goroutines inside one AGC**, each costing **one runner re-registration per job** (the single-use JIT lifecycle, [Q114](../../../../docs/STATUS.md)).
+An in-process load test that pins the design's headline capacity claim: **thousands of virtual runner sessions multiplexed as goroutines inside one AGC**, each costing **one runner re-registration per job** (the single-use JIT lifecycle, [Q114](../../../../docs/queue/README.md)).
 
 It drives the AGC's real listener-multiplexing core — the same `listener.Multiplexer` + `agentpool.Pool` + per-goroutine `broker.Client` wiring that `RunnerGroupReconciler` builds in production — against an in-process broker stub, a controller-runtime fake client for agent Secrets, and an in-memory registrar.
 **No cluster and no GitHub credentials are required.**
@@ -13,7 +13,7 @@ make load-test-full    # same scale, realistic job hold, writes results/latest.m
 ```
 
 Both wrap a single `go test -tags load -run TestAGCLoad ./test/load/...` in `cmd/agc`, under the desktop-safety throttle prefix (a no-op on CI).
-A run holds ~1,000 goroutines; the throttle keeps a GUI dev machine responsive ([Q92](../../../../docs/STATUS.md)).
+A run holds ~1,000 goroutines; the throttle keeps a GUI dev machine responsive ([Q92](../../../../docs/queue/README.md)).
 
 ### Tuning
 

@@ -1,7 +1,7 @@
 # GAG Dogfood CI Runner Right-Sizing
 
 > **Status: ✅ COMPLETE (2026-07-07).** Node-pool disk class RESOLVED (2026-07-05); general-worker pod `requests`/`limits` RIGHT-SIZED (2026-07-06); **e2e-worker (DinD) pod `requests`/`limits` RIGHT-SIZED from a measured clean-green Calico run (2026-07-07)**; the optional "small" tier **measured and formally declined** (the packing waste is not material).
-> Tracked as [Q248](../STATUS.md#Q248).
+> Tracked as Q248, closed with the work.
 > Every worker pod's original `requests`/`limits` were an unmeasured guess; they are now replaced with values derived from measured peak — general workers see [§ Phase 2 — general](#phase-2--derived-requestslimits-2026-07-06-general-workers), e2e workers see [§ e2e worker sizing](#e2e-worker-sizing--measured-then-derived-dind-2026-07-07), the small tier see [§ Small tier](#small-tier--measured-then-declined-2026-07-07).
 > **The dominant general-pool capacity ceiling turned out to be the node-pool *disk class*, not the pod requests** — see [§ Node-pool disk class](#node-pool-disk-class-the-real-maxworkers-ceiling-q248-2026-07-05) below (resolved 2026-07-05: `pd-balanced`→`pd-standard`, no quota bump).
 

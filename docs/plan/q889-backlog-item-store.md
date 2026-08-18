@@ -1,8 +1,8 @@
 # Q889: Migrate the backlog to the per-item store
 
-**Status:** Phases 1 to 4 merged (#1595, #1596, #1598, #1600); phase 5 is open.
-The store is live at `docs/queue/` alongside the table, held to it by `queue-drift-check`, and every reference that can point at an item now does.
-Phase 6, the atomic cutover, is the last.
+**Status:** Complete.
+Phases 1 to 5 merged (#1595, #1596, #1598, #1600, #1602); phase 6 is the cutover in this change.
+The backlog is `docs/queue/`, one file per item, and `docs/STATUS.md` is deleted.
 
 Replace the single `docs/STATUS.md` Queue table with the `session-backlog` skill's per-item store under `docs/queue/`, adopt its Python tooling, and groom the backlog to remove what the move obsoletes.
 
@@ -117,7 +117,37 @@ No second Pages deploy, as planned.
 Two dependencies that fail quietly are recorded in [website.md](../development/website.md#the-backlog-renders-at-build-time): the hook must precede `source_links.py`, and its guard counts item rows rather than bytes.
 
 **6.
-Delete `docs/STATUS.md`, then groom.** Remove or rewrite items the work obsoletes, including anything asserting the table's mechanics.
+Delete `docs/STATUS.md`, then groom.** ✅ The table, its five gates, the Progress table, the `/dev/STATUS/` page, and the prose describing all of them.
+
+## Phase 6, the cutover
+
+**The scope was wrong again, and in the same direction as the four before it.** Phase 6 was written as "delete the table, retire five gates, groom".
+Three things it did not name were load-bearing, and each was found by a gate or a build rather than by reading:
+
+- **`queue.py lint` ran in no gate at all.** The store's own format rules — frontmatter, rank shape, filename/id agreement, the 72-character title cap, unresolvable targets — had been vendored since phase 1 and were enforced by nothing.
+  Retiring `lint-backlog` without wiring them would have left the backlog with *no* format gate, which is a net loss of enforcement dressed as a cleanup.
+  It found a dead target on arrival: `Q878` named a suite this phase deleted, in a frontmatter field no markdown link checker can see.
+- **`release_gates.py` fails silent.** Its missing-file path returns the page unchanged, so deleting the table would have dropped every roadmap release chip on a green build.
+  This is the second hook in two phases whose failure mode is quiet (phase 5's was the render guard), which is now a pattern rather than a coincidence: a build-time hook reading a file it does not own needs its absence to be loud.
+- **`page-density-check` scans the store**, because a git pathspec glob crosses directory separators and `docs/*.md` selects all 178 item pages.
+  `gate-lists-check` derived that the moment `QUEUE_GATES` was repointed, which is Q749's defect caught by the machinery Q749 bought.
+
+**Two consumers were repointed rather than retired, and the distinction is what the retirement turned on.** A gate takes the backlog as its *subject* or as a *source*.
+`lint-backlog`, `check-status-isolation`, `git-merge-status` and `queue-drift-check` were subjects: their whole reason to exist was a property of one table, and they retire with it.
+`STATUS_GATES` and `plan-index-check`'s invariant 1 were sources: they answer a question that survives the storage, so they move to the store instead.
+Sorting by that question rather than by "does it mention `STATUS.md`" is what kept a seconds-long verification set and a staleness guard alive through the cutover.
+
+**Invariant 1 reversed direction and gained by it.** It asked whether the backlog referenced a plan, counting a Progress row; the store has no Progress, and 21 plans had no other reference.
+It now asks whether a plan *claiming open work* is backed by a live item.
+The old form could not see a plan whose phases had all shipped while its marker never moved, and the new one found two on arrival, both reading "all phases shipped" under a `⚠️`.
+The 21 archivals it no longer demands are [Q894](../queue/Q894.md); folding 21 moves and 142 inbound references into the cutover was the larger risk.
+
+**The metrics series is bridged rather than restarted**, on the maintainer's call.
+Both eras produce the same event, so the series is continuous; the two bulk commits at the seam are storage rather than flow and are suppressed, and the seam is reported instead of hidden — an era boundary in the summary and an `era` column in the event stream, so a chart can draw its delimiter where the storage changed.
+The assertion that distinguishes a bridge from two concatenated series is one item filed before the seam and completed after it: 41 days, where a restart says 10 and a stop says open.
+
+**Rule 10 was measured rather than ported**, and the measurement said not to build it — the table's silent reorder-over-delete resurrection becomes a `CONFLICT (modify/delete)` git refuses.
+The first control run could not reproduce the defect it was measuring, which is recorded because it read as "no difference" rather than as a broken probe.
 
 ## Risks
 

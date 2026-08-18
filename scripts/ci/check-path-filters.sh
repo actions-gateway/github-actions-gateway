@@ -92,7 +92,7 @@ NARROW_FILTERS=(
 	'manifest-validate.yml:manifests' # generated YAML, not the Go types behind it
 	'manifest-validate.yml:promql'    # the shipped PrometheusRule and the two docs describing its alerts
 	'license-notices.yml:notices'     # vendor/ and the notices generator
-	'status-lint.yml:status'          # docs/STATUS.md, docs/roadmap.md, and their linters
+	'status-lint.yml:status'          # docs/queue/, docs/roadmap.md, and their linters
 	'plan-hygiene.yml:plan'           # the plan index plus any .go file (for plan-ref scanning)
 	'autoscaler-drift.yml:autoscaler' # the CA/kwok pins, the kwok manifests, and the matcher under test
 	'autoscaler-drift.yml:karpenter'  # the Karpenter pins/recipe and its live test (Q479)

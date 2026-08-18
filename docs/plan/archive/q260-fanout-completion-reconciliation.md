@@ -306,7 +306,7 @@ A clean "pool holds at maxWorkers" measurement was **not** achieved:
 - **Fix the recycle slot-stranding seam** (new Queue item, Q259/Q114 family), then **re-benchmark on a fresh, clean dogfood namespace** at moderate `maxListeners` (≈ 8–16), with `maxWorkers` widened, to obtain the clean "holds at maxWorkers" measurement Q265 set out to get.
   **Update (re-route #7, 2026-07-05):** the `maxWorkers` widening needs **no SSD-quota bump** — right-sizing the worker boot disk `pd-balanced → pd-standard` takes it off the SSD quota (Q248, done).
   The re-benchmark then confirmed Q266's seam is gone but surfaced the *real* residual: the online-session / broker-credential recycle churn keeps the online idle pool near 0 (see §8 and re-route #7), so the clean measurement is still gated on that seam + a clean namespace.
-- **Q224's throughput residual** stays open, now attributed to (a) the recycle seam above and (b) worker capacity ([Q248](../../STATUS.md)) — both tuning/fix, not architectural.
+- **Q224's throughput residual** stays open, now attributed to (a) the recycle seam above and (b) worker capacity ([Q248](../../queue/README.md)) — both tuning/fix, not architectural.
 
 Full live evidence: [`gke-dogfood.md`](gke-dogfood-turnup-findings.md) re-route #6.
 
@@ -322,7 +322,7 @@ Key properties:
 
 - **No net capacity regression.** The deduped-loser goroutines were *already* occupying their listener slots as pollers; holding them blocked (rather than exiting) keeps the slots they had.
   It counts as a poller = **false** while parked (`SetPolling(false)` is set before the job), so a parked loser is never mistaken for available polling capacity.
-- **Worker capacity is freed.** A loser provisions no pod, so it **releases its `Admit` worker-capacity reservation before parking** — otherwise F−1 losers would pin the tight `maxWorkers` ceiling ([Q248](../../STATUS.md)) with runners that do nothing.
+- **Worker capacity is freed.** A loser provisions no pod, so it **releases its `Admit` worker-capacity reservation before parking** — otherwise F−1 losers would pin the tight `maxWorkers` ceiling ([Q248](../../queue/README.md)) with runners that do nothing.
 - **Bounded fallback for a stuck winner.** If the winner never concludes (crash/hang), the wait is capped at `defaultLoserRecycleDeferTimeout` (16 min, just past GitHub's ~15-minute unstarted-job timeout that force-releases the assignment), so a loser slot can never leak.
 - **Only under Option A.** The defer applies only when `AGC_FANOUT_COMPLETION` is enabled (the default) — that is what clears the loser's `422`.
   With it off, losers fall back to the eager-recycle path (documented as the worse opt-out).
@@ -334,7 +334,7 @@ It FAILS against pre-Q266 behaviour (the eager losers exit) and needs no GKE tur
 **Live re-benchmark (2026-07-05, [`gke-dogfood.md`](gke-dogfood-turnup-findings.md) re-route #7).** Q266's targeted seam is **confirmed eliminated live**: at moderate `maxListeners = 12` the fatal `deregister conflicting`/`recycle blocked` listener exits that collapsed the pool in §7 (41/38) were **0**; deduped losers **park** (busy-at-GitHub, pod-less) instead of exiting; Option A `completejob` (5) and dedup (7) fired.
 **But full-matrix green / "holds at `maxWorkers`" was STILL not obtained.** The residual is neither Q266's seam nor the `completejob` tax (0 `worker capacity full`) — it is a **two-way bind**: throughput needs `maxListeners ≈ maxWorkers × fan-out`, yet a wide `maxListeners` (48) multiplies GitHub runner records and inflates the **broker-credential / registration recycle churn** (Q259/Q114 — `"Registration … was not found"`) that keeps the **online idle pool near 0**, collapsing to `online = 0`; a moderate `maxListeners` (12) is stable but serializes to ≈ `maxListeners / fan-out ≈ 2` concurrent jobs.
 Un-cleanable stale records (guard-blocked mass-delete) compound it.
-A clean measurement needs the **online-session / broker-credential recycle seam** fixed *and* a clean namespace — both still blocked in-session, so [Q224](../../STATUS.md) full-matrix green **cannot yet be claimed**.
+A clean measurement needs the **online-session / broker-credential recycle seam** fixed *and* a clean namespace — both still blocked in-session, so [Q224](../../queue/README.md) full-matrix green **cannot yet be claimed**.
 Separately, the `maxWorkers ≈ 4` SSD ceiling §7's honest-bounds flagged is **resolved** — not via an SSD-quota bump but by right-sizing the worker boot disk to `pd-standard` (off the SSD quota entirely), see [`dogfood-runner-rightsizing.md`](../dogfood-runner-rightsizing.md#node-pool-disk-class-the-real-maxworkers-ceiling-q248-2026-07-05).
 
 ## 9. Re-route #8 — Q267 confirmed, and the residual isolated to fan-out *dispatch* (2026-07-05)
@@ -350,7 +350,7 @@ The clean-namespace wide-pool close-out ([`gke-dogfood.md`](gke-dogfood-turnup-f
   The online-idle pool **stalled at 3 sessions ≪ 48** because a duplicate delivery does not grow the demand-driven 1:1 replacement pool.
   This **refines §5's "reconcilable AGC-side"**: the *completion* accounting is reconcilable (a job that *receives its planID* concludes green), but the fan-out *dispatch* stochastically starves distinct jobs (#5 got 3/7 green, #8 got 2/7 with 5 wedged), so a **reliable** full-matrix green is **not** achievable on the classic many-acquirers protocol.
 
-- **Consequence for Q264.** This is a real throughput/assignment **wall** — distinct from the `completejob`-tax wall §7 ruled out (0 capacity rejections) — driven by GitHub's server-side fan-out assignment against GAG's many-acquirers + stable-name single-use ([Q114](../../STATUS.md)) topology.
+- **Consequence for Q264.** This is a real throughput/assignment **wall** — distinct from the `completejob`-tax wall §7 ruled out (0 capacity rejections) — driven by GitHub's server-side fan-out assignment against GAG's many-acquirers + stable-name single-use ([Q114](../../queue/README.md)) topology.
   It **strengthens the [Option E / Q264](../q264-scale-set-protocol.md) case** (one acquirer, one authoritative stream, no sibling deliveries, no per-name recycle) — which eliminates the class by construction — though Q264 stays a deferred v-next decision, not force-triggered.
   **Q224/Q242 stay open**, now blocked on the fan-out dispatch topology, not on any recycle/capacity/tax seam (all resolved).
   Evidence: AGC debug logs (`agc:e2e-63cddfc`), reruns `28734640377`/`28734640415` (burst `08:50:22Z`).
@@ -361,7 +361,7 @@ The clean-namespace wide-pool close-out ([`gke-dogfood.md`](gke-dogfood-turnup-f
 ## 10. Q265 — close-out: comparison settled, ScaleSet decisively wins (2026-07-06)
 
 Q265 asked for a head-to-head fan-out (Option A / classic) vs scale-set throughput benchmark at a wide worker pool.
-**Both sides have now been measured live on the dogfood cluster under the clean conditions Q265 required — the two confounders that previously blocked a clean "holds at `maxWorkers`" run (the Q266 loser-slot-stranding seam §8 and the Q267 online-session / broker-credential recycle seam §9) are fixed, and the SSD `maxWorkers` cap is gone (workers on `pd-standard`, [Q248](../../STATUS.md)).
+**Both sides have now been measured live on the dogfood cluster under the clean conditions Q265 required — the two confounders that previously blocked a clean "holds at `maxWorkers`" run (the Q266 loser-slot-stranding seam §8 and the Q267 online-session / broker-credential recycle seam §9) are fixed, and the SSD `maxWorkers` cap is gone (workers on `pd-standard`, [Q248](../../queue/README.md)).
 No further turn-up is needed: the comparison is decided.**
 
 ### The measured comparison

@@ -1,3 +1,9 @@
+# Named for the file it used to lint. docs/STATUS.md is gone (Q889) and the
+# backlog is docs/queue/, but this workflow's `status-lint-gate` job is a
+# required check in the branch ruleset: renaming it would leave the required
+# context reporting nothing and wedge the merge queue on every PR. The rename
+# is a repo-settings change, not a file change, so the name stays until both
+# move together.
 name: status-lint
 on:
   # No pull_request path filter: this workflow must trigger on EVERY PR so its
@@ -14,17 +20,14 @@ on:
   push:
     branches: [main]
     paths:
-      - 'docs/STATUS.md'
       - 'docs/roadmap.md'
       - 'docs/features.md'
-      - 'scripts/docs/lint-backlog.sh'
       - 'scripts/docs/check-roadmap.sh'
-      - 'scripts/docs/check-status-isolation.sh'
       - 'scripts/docs/check-queue-rules.py'
-      - 'scripts/docs/check-queue-drift.py'
+      - 'scripts/docs/queue.py'
       - 'docs/queue/**'
-      # The backlog gate's rules live in devtools/docs/backloglint over the
-      # shared parse layer (Q613), so a change there changes this gate's verdict.
+      # The roadmap gate reads its rows through the shared parse layer in
+      # devtools/ (Q613), so a change there changes this gate's verdict.
       - 'devtools/**'
       - '.github/workflows/status-lint.yml'
 
@@ -59,14 +62,11 @@ jobs:
         with:
           filters: |
             status:
-              - 'docs/STATUS.md'
               - 'docs/roadmap.md'
               - 'docs/features.md'
-              - 'scripts/docs/lint-backlog.sh'
               - 'scripts/docs/check-roadmap.sh'
-              - 'scripts/docs/check-status-isolation.sh'
               - 'scripts/docs/check-queue-rules.py'
-              - 'scripts/docs/check-queue-drift.py'
+              - 'scripts/docs/queue.py'
               - 'docs/queue/**'
               - 'devtools/**'
               - '.github/workflows/status-lint.yml'
@@ -81,43 +81,33 @@ jobs:
     needs: [changes]
     if: needs.changes.outputs.status == 'true' || github.event_name == 'push'
     runs-on: ubuntu-latest
-    # 5, not 2: the backlog gate builds devtools/docs/backloglint (Q613), and a
-    # cold module build has to fit inside the budget alongside the two checks.
+    # 5, not 2: the roadmap gate builds devtools/docs/roadmapcheck, and a cold
+    # module build has to fit inside the budget alongside the two checks.
     timeout-minutes: 5
     steps:
-      # fetch-depth: 0 for the isolation check below — it reads the commits the
-      # branch adds, which a shallow checkout does not carry.
+      # fetch-depth: 0 for the store rules below — rule 8 and rule 9 are
+      # functions of what the branch changed, so they read the merge base,
+      # which a shallow checkout does not carry.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
-      # The backlog gate is a Go program now. Pinning the toolchain to go.work
-      # keeps it off whatever the runner image happens to default to, which is
-      # the version that decides whether the build downloads a second one.
+      # The roadmap gate is a Go program. Pinning the toolchain to go.work keeps
+      # it off whatever the runner image happens to default to, which is the
+      # version that decides whether the build downloads a second one.
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.work
-      - name: lint docs/STATUS.md format
-        run: scripts/docs/lint-backlog.sh
-      # Backlog edits are isolated commits; the pre-commit hook that enforces
-      # that reads the index, so an --amend onto a code commit passes it and
-      # still writes a mixed commit (Q652). This reads the commits themselves.
-      #
-      # PRs only. A squash-merge collapses a PR's commits into one, so main's
-      # own history is mixed by construction and scanning it would fail every
-      # merge — the rule's value lives entirely inside a PR, which is the range
-      # scanned here.
-      - name: check docs/STATUS.md commit isolation
-        if: github.event_name == 'pull_request'
-        env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-        run: scripts/docs/check-status-isolation.sh --base "$BASE_SHA" --head "$HEAD_SHA"
       # Roadmap/backlog coherence (make roadmap-check). It lives here rather
       # than in unit-test.yml because that workflow path-ignores docs, and the
-      # drift this catches arrives on docs-only PRs: deleting a shipped Queue
-      # row without graduating the roadmap bullet that names it.
+      # drift this catches arrives on docs-only PRs: deleting a shipped item
+      # without graduating the roadmap bullet that names it.
       - name: check roadmap against the backlog
         run: scripts/docs/check-roadmap.sh
+
+      - name: lint the backlog store format
+        # The store's own rules, from the vendored queue.py (Q889). It replaces
+        # what lint-backlog enforced on the retired table.
+        run: scripts/docs/lint-queue.sh
 
       - name: check the backlog store rules
         # Rules 8, 9 and 11 (Q889): a flake item may not vanish, a plan's
@@ -130,13 +120,6 @@ jobs:
         # cause wearing two faces, 'No rule to make target' for the make form
         # and exit 127 for the script.
         run: scripts/docs/check-queue-rules.sh
-
-      - name: check the table and the store still agree
-        # Until phase 3 switches the consumers, the backlog is written down
-        # twice and an edit to one side alone is silent (Q889). This is the
-        # gate that makes it loud. It retires itself: once docs/STATUS.md is
-        # deleted it passes and says the two can no longer disagree.
-        run: scripts/docs/check-queue-drift.sh
 
   # Aggregate required-status gate. Mark THIS job's check context
   # (`status-lint-gate`) required in the branch ruleset — never the path-gated

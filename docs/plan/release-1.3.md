@@ -40,7 +40,7 @@
 > So `validate-release.sh v1.3.0-rc.3` is the first run in a position to clear this gate.
 
 The scope and Definition of Done for the `v1.3.0` tag.
-Queue rows that block this tag carry the `1.3-gate` label in [docs/STATUS.md](../STATUS.md); this file is what that label points at, per the "scope the release in a plan doc first, then add the label" rule in [maintaining-backlog.md](../development/maintaining-backlog.md#dont-pre-assign-release-versions-to-backlog-items).
+Queue rows that block this tag carry the `1.3-gate` label in [docs/STATUS.md](../queue/README.md); this file is what that label points at, per the "scope the release in a plan doc first, then add the label" rule in [maintaining-backlog.md](../development/maintaining-backlog.md#dont-pre-assign-release-versions-to-backlog-items).
 
 Cutting mechanics (pre-flight, tagging, verification, the dogfood release-candidate gate) live in [operations/release.md](../operations/release.md) and are not repeated here.
 

@@ -21,7 +21,7 @@ Point the condition at this playbook and fill in the run-specific knobs.
 A ready-to-paste template:
 
 > **`/goal`** Act as the **dispatcher** for a parallel-dispatch run, following `docs/development/parallel-dispatch.md`.
-> Clear **[BATCH — e.g. "the remaining `1.0-gate` Queue items in `docs/STATUS.md`"]**: one worker session (task chip) and one PR per task, **max [N] concurrent** (from `scripts/agent/local-throttle.sh workers`).
+> Clear **[BATCH — e.g. "the remaining `1.0-gate` items in `docs/queue/`"]**: one worker session (task chip) and one PR per task, **max [N] concurrent** (from `scripts/agent/local-throttle.sh workers`).
 > Spawn each worker by invoking `/session-worker` with only the delta; the skill carries the contract.
 > **You own assignment, merge ordering, and scope.** Verify each PR's scope and that its heavy gates ran, then **report it ready.
 > I merge; you never do.** **No secret may be read, printed, logged, or passed to a model** — exclude any task needing real credentials and tell me.
@@ -234,10 +234,10 @@ Backgrounding does not reduce contention either — it stops the queue time from
 
 ### The dispatcher owns assignment, not coordination files
 
-The real need is preventing two workers from implementing the **same** Queue item — an *assignment* problem — not keeping `docs/STATUS.md` out of worker hands.
+The real need is preventing two workers from implementing the **same** backlog item — an *assignment* problem — not keeping `docs/STATUS.md` out of worker hands.
 Each worker removes its own completed row in its own isolated commit, so PRs stay self-contained and the Queue stays current as they merge.
 
-**Self-healing absorbs the resolution, not the cycle it costs.** The [merge driver](maintaining-backlog.md#the-merge-driver-resolve-queue-rows-by-id-not-by-line-position) decides the Queue table by row ID, so a sibling's row deletion resolves silently inside the worker's `git rebase origin/main`.
+**Self-healing absorbs the resolution, not the cycle it costs.** The [merge driver](maintaining-backlog.md#the-merge-drivers-resolve-registry-rows-by-key-not-by-line-position) decides the Queue table by row ID, so a sibling's row deletion resolves silently inside the worker's `git rebase origin/main`.
 It is per-clone `git config`, so it never runs on GitHub: the mergeability read behind `mergeStateStatus` and the merge queue's candidate build both take the plain three-way merge, where two adjacent row deletions conflict.
 That server-side half is the expensive one.
 A PR that is merely *behind* costs nothing, while a `DIRTY` one must rebase and force-push, and the force-push restarts the whole CI cycle whatever the driver did locally.

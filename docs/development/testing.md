@@ -97,12 +97,12 @@ That is the list — this page names the target rather than transcribing it, bec
 `make list-script-tests` does the same for the `scripts/` suites the `scripts-test` gate fans out over, for the same reason: that list was transcribed into a 1,399-character help line naming 50 of its 55 suites (Q671).
 
 The shape is two phases.
-First a concurrent fan-out of the cheap gates — the `docs/STATUS.md` and roadmap/plan-index coherence lints, the single-Go-version and license-header and conflict-marker checks, the v2 API and CI path-filter reconciliations, `shellcheck` and `actionlint`, the chart and codegen and API-reference drift gates, the Markdown link check, and the `scripts-test` and `claude-usage-test` suites — none of which takes a [heavy-build slot](#resource-auto-throttle-on-gui-dev-machines).
+First a concurrent fan-out of the cheap gates — the backlog store and roadmap/plan-index coherence lints, the single-Go-version and license-header and conflict-marker checks, the v2 API and CI path-filter reconciliations, `shellcheck` and `actionlint`, the chart and codegen and API-reference drift gates, the Markdown link check, and the `scripts-test` and `claude-usage-test` suites — none of which takes a [heavy-build slot](#resource-auto-throttle-on-gui-dev-machines).
 Then three sequential heavy phases: [`build-tags-check`](#the-build-tag-gate), `lint` (gofmt across all modules plus `golangci-lint`), and [`cover-check`](#coverage-measurement-and-the-ratchet), which supersets `make test` — the same unit-test packages, run once per module with `-cover`, plus the per-module coverage floor.
 Each of the three takes a machine-wide slot, so they cannot usefully overlap.
 The gates with behaviour worth knowing have their own `### The … gate` section below.
 
-Two subset targets cut the wait when a change touches only one kind of file, and both are strict subsets of `make check` rather than a second opinion: `make status-gates` for a `docs/STATUS.md`-only edit, and `make docs-gates` for prose.
+Two subset targets cut the wait when a change touches only one kind of file, and both are strict subsets of `make check` rather than a second opinion: `make queue-gates` for a backlog-only edit, and `make docs-gates` for prose.
 The prose one exists because those gates run at the very *end* of `make check`, so a docs slip costs a full ten-minute cycle to discover; running them when the prose is written costs seconds.
 
 **A shell edit needs `make shellcheck` on its own.** Neither subset target includes it.
@@ -120,12 +120,12 @@ The consequence to keep in mind: **a green `make check` does not imply a green `
 So after any dependency change, run `make vendor-sync` (the one-shot remedy) and commit the result before pushing; see [go-workspaces.md § Changing dependencies](go-workspaces.md#changing-dependencies).
 As a backstop, `make check` prints a one-line reminder (via `scripts/ci/check-dep-advisory.sh`, its last step) whenever the change it sees touches a dependency file — advisory only, it never fails the gate, and it does not fire on an import-only change.
 
-**A background run's verdict covers only the tree it saw.** `make check` is routinely launched as a *background* task so the doc updates, the `docs/STATUS.md` row, and the PR body can be written while it runs — that is the recommended shape ([parallel-dispatch.md § Run the local gate in the background](parallel-dispatch.md#run-the-local-gate-in-the-background-not-on-the-critical-path)), but it means a green report can describe a tree that no longer exists.
-Every edit made while the gate is running is unverified, and that includes the parallel work itself: `docs/STATUS.md`, `docs/**`, and the plan docs are gated by `lint-backlog`, `doc-links`, `roadmap-check`, and `plan-index-check`.
+**A background run's verdict covers only the tree it saw.** `make check` is routinely launched as a *background* task so the doc updates, the backlog item, and the PR body can be written while it runs — that is the recommended shape ([parallel-dispatch.md § Run the local gate in the background](parallel-dispatch.md#run-the-local-gate-in-the-background-not-on-the-critical-path)), but it means a green report can describe a tree that no longer exists.
+Every edit made while the gate is running is unverified, and that includes the parallel work itself: `docs/queue/**`, `docs/**`, and the plan docs are gated by `queue-lint`, `queue-rules-check`, `doc-links`, `roadmap-check`, and `plan-index-check`.
 **Re-run `make check` over the final tree before concluding.** The confirming run is cheap — the gates covering that work are the fast ones, which take no heavy-build slot, and the heavy phases are cache-warm.
 A **code** edit voids the verdict outright rather than merely narrowing it, and "code" means anything the gate compiles or lints: `scripts/*.sh` and the `Makefile` count, not only Go.
 
-**A `Bash` tool call during the run can turn the gate red on its own, without touching a file.** Every Bash call runs the piped-gate `PreToolUse` hook, which rebuilds the shared `.build/pipedgate` binary; `claude-piped-gate-hook-test`'s no-toolchain case `rm -f`s that same binary and then asserts the hook falls back, so a rebuild landing inside its window makes the case read a real deny payload and fail ([Q825](../STATUS.md)).
+**A `Bash` tool call during the run can turn the gate red on its own, without touching a file.** Every Bash call runs the piped-gate `PreToolUse` hook, which rebuilds the shared `.build/pipedgate` binary; `claude-piped-gate-hook-test`'s no-toolchain case `rm -f`s that same binary and then asserts the hook falls back, so a rebuild landing inside its window makes the case read a real deny payload and fail ([Q825](../queue/README.md)).
 Measured 2026-08-14: two failures in one session, the second reproducing on demand while tool calls continued and clearing immediately once the run was left alone.
 The failure names a suite the change never touched, so it reads as ambient flake rather than as something the session caused.
 **Once the confirming run starts, wait for its task notification and issue no Bash calls**: not a status peek, not a `git` read.
@@ -150,7 +150,7 @@ Three shapes, all seen in real sessions:
 The general form: when a command's output is filtered, tested, or counted, the *filter's* status replaces the command's — and when it is merely *followed* by another statement, the last statement's status replaces it.
 Read both, or read neither and check the artifact.
 
-**Run order.** The cheap gates (everything except `lint` and `cover-check`) take no heavy-build slot and are independent, so `make check` runs them concurrently through [`scripts/ci/run-parallel.sh`](../../scripts/ci/run-parallel.sh) and reports them first — a `docs/STATUS.md` format slip surfaces in seconds instead of waiting out the unit suite.
+**Run order.** The cheap gates (everything except `lint` and `cover-check`) take no heavy-build slot and are independent, so `make check` runs them concurrently through [`scripts/ci/run-parallel.sh`](../../scripts/ci/run-parallel.sh) and reports them first — a backlog format slip surfaces in seconds instead of waiting out the unit suite.
 Every line is prefixed with its gate's label, so a failure stays attributable.
 (`make -j` is not used: macOS ships GNU make 3.81, which has no `-O` output sync, so two failing gates would interleave unreadably.)
 The heavy phases then run in sequence, each taking a slot of its own.
@@ -158,7 +158,7 @@ The heavy phases then run in sequence, each taking a slot of its own.
 Test output is non-verbose by default: `go test` prints one `ok <pkg>` line per passing package and the full output of any package that fails (compress success, expand failure).
 When debugging a **slow or hanging** test, add `V=1` (`make check V=1` or `make test V=1`) to stream output live — without `-v`, `go test` buffers each package's output until the package completes, so a hung test shows nothing (not even its `t.Log` lines) until it finishes or hits `-timeout`.
 
-A sub-second subset also runs automatically at commit time via the tracked pre-commit hook in `.githooks/`: gofmt on staged Go files, the STATUS.md lint, and [`em-dash-check`](documentation-standards.md#enforcing-the-em-dash-rule) when any Markdown is staged.
+A sub-second subset also runs automatically at commit time via the tracked pre-commit hook in `.githooks/`: gofmt on staged Go files and [`em-dash-check`](documentation-standards.md#enforcing-the-em-dash-rule) when any Markdown is staged.
 Each part is skipped unless its file type is staged, so most commits pay nothing.
 Install it once with `make hooks` (or `scripts/dev/setup.sh`); bypass a single commit with `git commit --no-verify`.
 
@@ -573,12 +573,12 @@ Behaviour is asserted by `scripts/docs/check-release-links-test.sh` under `make 
 
 ### The roadmap coherence gate
 
-`make roadmap-check` (`scripts/docs/check-roadmap.sh`) fails when the public [roadmap](../roadmap.md) disagrees with the backlog in [`docs/STATUS.md`](../STATUS.md).
+`make roadmap-check` (`scripts/docs/check-roadmap.sh`) fails when the public [roadmap](../roadmap.md) disagrees with the backlog in [`docs/queue/`](../queue/README.md).
 It exists because the two drift silently and expensively: a 2026-07-25 audit found **six of seven** "In progress / near-term" roadmap items had already shipped, and the v2 API was still badged `alpha` more than two weeks after `v2beta1` graduated — released that way, because a stable tag deploys that tag's docs permanently.
 The `docs/development/doc-update-matrix.md` rule requiring the update already existed; a human-followed convention was not enough.
 
 What makes it mechanical is a property of this repo's backlog: **done Queue rows are deleted** (git is the archive).
-So a roadmap bullet naming a Q-ID that `STATUS.md` no longer has is an exact, zero-false-negative signal that the work shipped.
+So a roadmap bullet naming a Q-ID the store no longer holds is an exact, zero-false-negative signal that the work shipped.
 Each bullet under "In progress / near-term" and "Exploring / longer-term" therefore carries an invisible annotation naming its backing rows:
 
 ```markdown
@@ -600,7 +600,7 @@ Every count fell by 5 to 24 words on the roadmap and by exactly 1 on `features.m
 Rule 12 reports the stray paragraph at its own line and names the bullet it landed on, and both caps state the line span they counted, so a count that disagrees with the bullet on screen can be reconciled without re-parsing the page.
 The two capped pages use no multi-paragraph bullets; the grid cards on `index.md` and `why-gag.md` do, and are checked for badges alone.
 
-CI runs the same script from [`status-lint.yml`](../../.github/workflows/status-lint.yml) — alongside the `STATUS.md` format lint and under the same `status-lint-gate` required check — rather than from `unit-test.yml`, which path-ignores docs.
+CI runs the same script from [`status-lint.yml`](../../.github/workflows/status-lint.yml) — alongside the backlog store's own lint and rules, under the same `status-lint-gate` required check — rather than from `unit-test.yml`, which path-ignores docs.
 That placement is load-bearing: the drift arrives on docs-only PRs, which never trigger the Go suite.
 
 The one gap it cannot close: deleting the Queue row *and* the annotation together, without moving the bullet.
@@ -781,8 +781,9 @@ It fails when:
 - `check:`'s sequential phases stop matching `CHECK_HEAVY_GATES`, or its fan-out line runs anything beyond the `CHECK_FAST_GATES` expansion.
   This is what keeps `make list-gates` complete: a gate wired straight into the recipe would run on every `make check` without ever being listed;
 - a target is declared `.PHONY` twice — the bulk block that used to restate 53 target names at the top of the `Makefile`, and that every gate-adding branch conflicted on, cannot come back;
-- `STATUS_GATES` stops being a subset of `CHECK_FAST_GATES`, so `make status-gates` — the seconds-long verify for a `docs/STATUS.md`-only edit — stays a strict subset of the full gate rather than a second opinion;
-- a fast gate *outside* `STATUS_GATES` selects `docs/STATUS.md`, which is the direction that had no enforcement: `em-dash-check` and `page-density-check` both scanned the file for as long as they had existed, while the comment above the variable called the list complete (Q749).
+- `QUEUE_GATES` stops being a subset of `CHECK_FAST_GATES`, so `make queue-gates` — the seconds-long verify for a backlog-only edit — stays a strict subset of the full gate rather than a second opinion;
+- a fast gate *outside* `QUEUE_GATES` selects a backlog item, which is the direction that had no enforcement: `em-dash-check` and `page-density-check` both scanned the backlog for as long as they had existed, while the comment above the variable called the list complete (Q749).
+  It fired again when the rule was repointed at the store, on `page-density-check` against all 178 item pages.
   Membership is derived from the pathspec each gate's script hands git, the same question the gate itself asks.
   A gate whose recipe runs no `scripts/` file has no derivable file set and declares instead, with a `# status-scope: none` comment and its reason directly above its `.PHONY`, as `md-reflow-check` does;
 - a gate runs in `make check` but in no workflow, so it gates nothing on a PR.
@@ -827,8 +828,8 @@ The failure message names the single `make -C <module> manifests`/`deepcopy` if 
 Never hand-edit the generated YAML or Go.
 
 **Why the DeepCopy half is here.** It was left out at first, on the reasoning that a type needing new DeepCopy code fails to compile without it.
-That holds for a *changed* type and is false for an *added* one: `ClusterCapacity` ([Q470](../STATUS.md), PR #917) shipped with no `DeepCopy`/`DeepCopyInto` at all and an `ActionsGatewaySpec.DeepCopyInto` that never copied the field, so `ActionsGateway.DeepCopy()` returned an object aliasing the caller's pointer — mutating the copy would reach the object in the shared informer cache.
-Nothing failed to compile and nothing failed CI; it was found incidentally, by someone running `make generate` for an unrelated change ([Q477](../STATUS.md)).
+That holds for a *changed* type and is false for an *added* one: `ClusterCapacity` ([Q470](../queue/README.md), PR #917) shipped with no `DeepCopy`/`DeepCopyInto` at all and an `ActionsGatewaySpec.DeepCopyInto` that never copied the field, so `ActionsGateway.DeepCopy()` returned an object aliasing the caller's pointer — mutating the copy would reach the object in the shared informer cache.
+Nothing failed to compile and nothing failed CI; it was found incidentally, by someone running `make generate` for an unrelated change ([Q477](../queue/README.md)).
 
 **The DeepCopy half regenerates into a copy of the working tree**, not into a redirected output dir like the manifests half.
 The `object` generator writes `zz_generated.deepcopy.go` beside its source, and controller-gen's output rule for it joins every package onto one path — `api/v2alpha1` and `api/v2beta1` would both land on the same file and the second would win.
@@ -1129,7 +1130,7 @@ These shortcuts recur, and each produces confident-but-wrong diagnoses:
   What refuted the whole family the first time it fired was a reading taken from the *failing* system: the state of the throwaway trees, ten lines of `ERR` trap.
   When the question is narrower than a root cause, break the operation deterministically rather than racing it.
   `chmod 500` on `.git/objects` fails every object write on demand, and settled in one run a discriminator whose racing predecessor had generalized from the wrong case.
-- **Symptom-matching a prior issue.** A match against a flake row on the [backlog](../STATUS.md), a previously fixed bug, or a memory of "this is always X" is a hypothesis: read the actual events, describe the actual pod, pull the actual log line before spending a billable re-run, a fix PR, or a state-changing command on the remembered cause.
+- **Symptom-matching a prior issue.** A match against a flake row on the [backlog](../queue/README.md), a previously fixed bug, or a memory of "this is always X" is a hypothesis: read the actual events, describe the actual pod, pull the actual log line before spending a billable re-run, a fix PR, or a state-changing command on the remembered cause.
   If the environment tears down evidence on failure, capturing diagnostics *before* teardown is part of the fix, not optional (filed from the v1.2.0 release retro, where gate failures had to be re-run just to observe them).
 - **Trusting source inspection.** A plan doc's ✅ investigation findings usually derive from source-reading, so treat them as unverified until confirmed end-to-end: actually exec the thing (PR #59).
 - **Reading CI evidence after re-running the job.** `gh run view <id> --log-failed` reports the **latest attempt**, so re-running a red job destroys the view of the failure you are diagnosing: it returns the new attempt's (empty) failure set, which looks exactly like "the diagnostic never ran".
@@ -1203,8 +1204,8 @@ Each is a claim about state, and each has a cheap way of being wrong:
 - **A cause you can watch happening is still only a hypothesis, and a real one does not crowd out a second.** #1432's `--assess` reported "no human has enqueued this PR" for a PR a human demonstrably had, during a GitHub timeline degradation that was real, concurrent, and sufficient to explain it, so the investigation closed there and the row was filed against it.
   Measured later: `gh api --paginate` runs its `--jq` per page and prints one count per page (a 290-event timeline answers `100 100 90`), which `((n > 0))` reads as an arithmetic syntax error and reports as that same sentence — on a healthy network, for any PR past 100 timeline events (Q805).
   Two mechanisms, one symptom, and the outage was the one you could see.
-- **A check sequenced before a state-changing command does not gate it.** `scripts/docs/lint-backlog.sh > tmp/lint.log; git add docs/STATUS.md && git commit` runs the commit whatever the linter said, because `;` sequences rather than conditions, and the `&&` binds the commit to `git add` instead.
-  Bind the mutation to the check that authorizes it, `scripts/docs/lint-backlog.sh && git add docs/STATUS.md && git commit`.
+- **A check sequenced before a state-changing command does not gate it.** `scripts/docs/lint-queue.sh > tmp/lint.log; git add docs/queue && git commit` runs the commit whatever the linter said, because `;` sequences rather than conditions, and the `&&` binds the commit to `git add` instead.
+  Bind the mutation to the check that authorizes it, `scripts/docs/lint-queue.sh && git add docs/queue && git commit`.
   The pre-commit hook backstops this particular file, and a backstop is not a reason to write the chain so that it depends on one.
 - **A completion predicate must key on what ends the run, not on a string that appears in it.** A `Monitor` armed on `make check` for `check-dep-advisory`, the advisory that runs last, fired while the gate was still inside `scripts-test`, because `ci/check-dep-advisory-test` is a suite name that phase prints as it works.
   The report went out as "run complete" with `build-tags-check`, `lint` and `cover-check` not yet started (measured 2026-08-12).
@@ -1218,13 +1219,13 @@ Each is a claim about state, and each has a cheap way of being wrong:
   The verdict reached three merged PR descriptions and the opening instruction of a dispatched worker session before a CI job passing on the same commit forced the comparison.
 - **A completeness claim inherits the blind spots of the inventory behind it.** "Every capability reaches both acquisition tiers" was read off `features.md`'s tier badges and the parity table in [v2-ga.md](../plan/v2-ga.md), on 2026-08-13.
   Both were accurate.
-  Both are hand-authored, so neither can show a gap nobody thought to record, which is the blind spot [Q776](https://github.com/actions-gateway/github-actions-gateway/blob/main/docs/STATUS.md)'s own row describes and which was cited in the same document that leaned on the badges.
+  Both are hand-authored, so neither can show a gap nobody thought to record, which is the blind spot [Q776](https://github.com/actions-gateway/github-actions-gateway/blob/main/docs/queue/README.md)'s own row describes and which was cited in the same document that leaned on the badges.
   Q844 was sitting in it: restart-safe disruption recovery is classic-only, and the marketing surface claimed it for both tiers with no badge at all.
 
 - **An explanation offered to the user is a claim, and this repo has usually already written the answer down.** Four went wrong across the 1.5 release cycle in one session, and three were caught by the user asking a follow-up rather than by any check.
   A sentinel event was called a defect when it was [Q630's reconciliation working as designed](../operations/release.md#run-it-detached-the-sentinel-reports-it-back), documented in the previous release's plan doc.
   A tier-parity claim was said to rest on a hand-verified walk when `E2E_Migration_V1ToV2` gates the migration end to end, including reconcile-to-Ready.
-  A `Throughput: Active` result was written up as unexpected in both the release notes and a plan doc, when [Q773](https://github.com/actions-gateway/github-actions-gateway/blob/main/docs/STATUS.md) had said since 2026-08-09 that it is the norm and the runbook is stale.
+  A `Throughput: Active` result was written up as unexpected in both the release notes and a plan doc, when [Q773](https://github.com/actions-gateway/github-actions-gateway/blob/main/docs/queue/README.md) had said since 2026-08-09 that it is the norm and the runbook is stale.
   Each was plausible, none was checked, and each reached a document before it reached a doubt.
   The Queue, the plan doc of the release that shipped it, and the runbook are where this project keeps its answers.
 
@@ -1560,7 +1561,7 @@ The failure is silent in both directions at once: the scan reports a neighbourin
 
 Three instances in the 1.5 cycle, all on the same argument:
 
-- The v1.4.0 release pre-flight matched `Event(obj, type, reason)` only, missed the `recordEvent(type, reason, action)` shape, and returned a false no-change ([Q780](https://github.com/actions-gateway/github-actions-gateway/blob/main/docs/STATUS.md)).
+- The v1.4.0 release pre-flight matched `Event(obj, type, reason)` only, missed the `recordEvent(type, reason, action)` shape, and returned a false no-change ([Q780](https://github.com/actions-gateway/github-actions-gateway/blob/main/docs/queue/README.md)).
 - The 2026-08-14 pre-flight keyed on `recordEvent(` and missed the two additions recording through `RecordEvent(`.
 - `reasontiers`' first version keyed the reason's index on the function name, read the scale-set listener's *action* string `"ProvisionWorker"` as a reason, and missed four reasons entirely.
   The AGC has two methods named `recordEvent` and two named `Event`, with the reason at a different index in each.
@@ -1969,7 +1970,7 @@ The same reasoning covers the caller: [`verify-release-test.sh`](../../scripts/r
 
 The tier above says *what* observes a bug; this says *where that tier can run*.
 Most validation is local on a dev machine; a short list needs real GitHub, real cloud, or real scale.
-The **environment definitions** below are durable; the **Q-item mapping** is a snapshot of the [backlog](../STATUS.md) as of 2026-06 and may lag.
+The **environment definitions** below are durable; the **Q-item mapping** is a snapshot of the [backlog](../queue/README.md) as of 2026-06 and may lag.
 
 - **Local — `kind` (the default).** Unit, envtest, cluster-only/fake-GitHub e2e, and the load harness need only a Linux-kernel cluster plus a fake or in-cluster GitHub.
   This covers the large majority of work and runs on an Intel Mac under Docker Desktop.
@@ -2883,7 +2884,7 @@ make trivy-scan
 
 The five images we build from a minimal/distroless or scratch base (`gmc`, `agc`, `proxy`, `fakegithub`, and the `FROM scratch` `wrapper`) **block** the gate — every package in them is one we chose, so a finding is actionable by bumping a dependency or the base digest.
 The `worker` image is built `FROM` the upstream `ghcr.io/actions/actions-runner` and inherits CVEs in the bundled node20 runtime and the runner's own Go binaries that we cannot fix without forking the runner; its leg is the sole **report-only** one (findings printed, never blocks).
-Runner-base CVEs are reduced by bumping the pinned tag — automated via the `docker` ecosystem in `dependabot.yml` and tracked in [`STATUS.md`](../STATUS.md) Q70.
+Runner-base CVEs are reduced by bumping the pinned tag — automated via the `docker` ecosystem in `dependabot.yml` and tracked in [the backlog](../queue/README.md) as Q70.
 
 The same `trivy` job also generates an **SBOM** (Software Bill of Materials, SPDX-JSON, via [`syft`](https://github.com/anchore/syft)) for each image it builds and uploads it as a `sbom-<image>.spdx.json` build artifact.
 This runs on every code PR purely so the SBOM-generation path can't silently break before a release — it does **not** sign or publish anything.

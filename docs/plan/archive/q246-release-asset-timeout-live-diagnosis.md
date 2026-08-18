@@ -1,6 +1,6 @@
 # Q246 — Live cold-cache diagnosis of the dogfood release-asset download timeout
 
-**Status:** ✅ done — cause confirmed (a) Q61 cache race; minimal fix implemented (this session) **Owner:** worker session **Parent:** [gke-dogfood.md](../gke-dogfood.md) (Q246 note), blocks [Q224](../../STATUS.md)
+**Status:** ✅ done — cause confirmed (a) Q61 cache race; minimal fix implemented (this session) **Owner:** worker session **Parent:** [gke-dogfood.md](../gke-dogfood.md) (Q246 note), blocks [Q224](../../queue/README.md)
 
 ## Goal (one sentence)
 Confirm on a live GKE cold run whether the dogfood release-asset download timeout (shellcheck/coverage tool tarballs) is caused by **(a)** the Q61 cold-start IP-range-cache race or **(b)** the Q247 node-CPU exhaustion that co-occurred — and act on the confirmed cause only.

@@ -57,7 +57,7 @@ Everything below this section is *how* to cut a release.
 This section is *whether* to — the question the rest of the page assumes has already been answered.
 
 Start from the record, not from memory.
-The delete-on-done Queue erases delivered work from `STATUS.md` by design, so nothing in the backlog shows what has piled up since the last tag:
+The delete-on-done backlog erases delivered work by design, so nothing in the backlog shows what has piled up since the last tag:
 
 ```bash
 scripts/release/release-delta.sh
@@ -226,7 +226,7 @@ The point of doing it here rather than at the tag is that the answers are free b
   This step exists because the alternative is remembering.
   The `v1.2.0`→next window accumulated a required pre-upgrade `kubectl apply`, a removed values key that fails the render, and a rollback that re-arms a cluster-wide outage — each recorded correctly in `docs/operations/upgrade.md` by the change that introduced it, and each invisible to anyone reading a generated changelog.
 
-- **Reconcile [`docs/roadmap.md`](../roadmap.md) and [`docs/features.md`](../features.md) against [`docs/STATUS.md`](https://github.com/actions-gateway/github-actions-gateway/blob/main/docs/STATUS.md) before you tag.** The same freeze that applies to the announce bar applies here: a stable tag deploys that tag's docs wholesale, so a stale roadmap is published permanently under that version.
+- **Reconcile [`docs/roadmap.md`](../roadmap.md) and [`docs/features.md`](../features.md) against [`docs/queue/`](https://github.com/actions-gateway/github-actions-gateway/blob/main/docs/queue/README.md) before you tag.** The same freeze that applies to the announce bar applies here: a stable tag deploys that tag's docs wholesale, so a stale roadmap is published permanently under that version.
   `make roadmap-check` catches the mechanical half — a roadmap bullet naming a deleted Queue row, or one sitting in the wrong section — and it runs in CI.
   What it cannot catch is the move itself: **work that shipped this cycle needs a `docs/features.md` line**, and a Deferred row describing a capability an adopter would ask about belongs in *Exploring*.
   A 2026-07-25 audit found six of seven near-term items already shipped.

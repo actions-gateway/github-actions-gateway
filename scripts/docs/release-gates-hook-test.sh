@@ -9,7 +9,7 @@
 # NOT appear: an ungated row, a shipped row, a label mentioned in prose. A
 # renderer that emitted a chip for those would be exactly as wrong as the
 # hand-typed sentence it replaced, and just as quiet about it. The last case
-# guards the other direction — a STATUS.md format change that makes every lookup
+# guards the other direction — a store format change that makes every lookup
 # miss would otherwise render a chipless page that looks intentional.
 #
 # Runs under `make check` (via `make scripts-test`) and the CI shellcheck job.
@@ -46,42 +46,41 @@ spec = importlib.util.spec_from_file_location("release_gates", sys.argv[1])
 hook = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(hook)
 
-with open(sys.argv[2], encoding="utf-8") as handle:
-    status = handle.read()
 with open(sys.argv[3], encoding="utf-8") as handle:
     page = handle.read()
-sys.stdout.write(hook.render(page, hook.gates(status)))
+sys.stdout.write(hook.render(page, hook.gates(sys.argv[2])))
 PY
 
-# status ROW... — write a STATUS.md whose Queue holds the given `ID:labels`
-# entries, labels comma-separated and rendered backticked the way the real table
-# does. The backticks are what separate a label from a mention of one.
-status() {
-	local entry labels file="$WORKDIR/STATUS.md"
-	{
-		printf '# Project Status\n\n## Queue\n\n'
-		printf '| ID | Item | Labels | St | Sz | Notes |\n|---|---|---|---|---|---|\n'
-		for entry in "$@"; do
-			labels="${entry#*:}"
-			# shellcheck disable=SC2016 # backticks are Markdown here, not substitution
-			printf '| <a id="%s"></a>%s | Thing | `%s` | 🔲 | S | note |\n' \
-				"${entry%%:*}" "${entry%%:*}" "${labels//,/\` \`}"
-		done
-	} >"$file"
-	printf '%s\n' "$file"
+# store ENTRY... — write a store holding the given `ID:labels` entries, labels
+# comma-separated and written as the YAML block list `queue.py migrate` emits.
+store() {
+	local entry id label dir="$WORKDIR/queue"
+	rm -rf "$dir"
+	mkdir -p "$dir"
+	for entry in "$@"; do
+		id="${entry%%:*}"
+		{
+			printf -- '---\nid: %s\nrank: m\nlabels:\n' "$id"
+			# shellcheck disable=SC2086 # the comma split is the point
+			for label in ${entry#*:}; do printf -- '    - %s\n' "$label"; done
+			printf -- 'status: ready\nsize: S\n---\n\n# Thing\n\nnote\n'
+		} >"$dir/$id.md"
+	done
+	printf '%s\n' "$dir"
 }
 
-# expect NAME WANT_SUBSTRING_OR_'' PAGE_BODY -- STATUS_ROW...
+# expect NAME WANT_SUBSTRING_OR_'' PAGE_BODY -- ITEM...
 #
-# Renders PAGE_BODY against a STATUS.md holding STATUS_ROW..., then asserts the
-# output does (or, with an empty WANT, does not) carry a release chip.
+# Renders PAGE_BODY against a store holding ITEM..., then asserts the output
+# does (or, with an empty WANT, does not) carry a release chip.
 expect() {
-	local name="$1" want="$2" body="$3" statusfile got
+	local name="$1" want="$2" body="$3" storedir got entries=()
 	shift 3
 	[[ "${1:-}" == "--" ]] && shift
-	statusfile="$(status "$@")"
+	for e in "$@"; do entries+=("${e%%:*}:${e#*:}"); done
+	storedir="$(store "${entries[@]//,/ }")"
 	printf '%s\n' "$body" >"$WORKDIR/page.md"
-	got="$(python3 "$WORKDIR/drive.py" "$HOOK" "$statusfile" "$WORKDIR/page.md")"
+	got="$(python3 "$WORKDIR/drive.py" "$HOOK" "$storedir" "$WORKDIR/page.md")"
 	if [[ -z "$want" ]]; then
 		if [[ "$got" != *gag-release-chip* ]]; then
 			printf 'ok   %s\n' "$name"
@@ -143,14 +142,16 @@ example
 - **Thing** <!-- q:Q1 -->' -- 'Q1:1.5-gate'
 
 # --- format-drift guards ------------------------------------------------------
-# Both write STATUS.md by hand, because the shapes under test are ones the
-# fixture helper cannot produce.
+# Both write an item by hand, because the shapes under test are ones the fixture
+# helper cannot produce.
 
 drift() {
-	local name="$1" want="$2" statusbody="$3" page="$4" got
-	printf '%s\n' "$statusbody" >"$WORKDIR/STATUS.md"
+	local name="$1" want="$2" item="$3" page="$4" got dir="$WORKDIR/drift"
+	rm -rf "$dir"
+	mkdir -p "$dir"
+	printf '%s\n' "$item" >"$dir/Q1.md"
 	printf '%s\n' "$page" >"$WORKDIR/page.md"
-	got="$(python3 "$WORKDIR/drive.py" "$HOOK" "$WORKDIR/STATUS.md" "$WORKDIR/page.md")"
+	got="$(python3 "$WORKDIR/drive.py" "$HOOK" "$dir" "$WORKDIR/page.md")"
 	if [[ "$want" == "none" && "$got" != *gag-release-chip* ]] ||
 		[[ "$want" != "none" && "$got" == *"$want"* ]]; then
 		printf 'ok   %s\n' "$name"
@@ -160,25 +161,54 @@ drift() {
 	fi
 }
 
-# The Labels column is located from the header, so a column inserted ahead of it
-# moves the read rather than silently pointing it at the wrong cell.
-# shellcheck disable=SC2016 # backticks below are Markdown, not substitution
-drift 'the Labels column is found by header, not position' '>1.5<' \
-	'## Queue
+# `migrate` writes a block list; a hand-filed item may use the inline form. Both
+# are the store's, so the hook reads both.
+drift 'an inline label list is read' '>1.5<' \
+	'---
+id: Q1
+rank: m
+labels: [feature, 1.5-gate]
+status: ready
+size: S
+---
 
-| ID | Owner | Item | Labels | St |
-|---|---|---|---|---|
-| <a id="Q1"></a>Q1 | nobody | Thing | `1.5-gate` | 🔲 |' \
+# Thing' \
 	'- **Thing** <!-- q:Q1 -->'
 
-# A gate label quoted in a Notes cell is a mention, not a commitment.
-# shellcheck disable=SC2016 # ditto
-drift 'a gate named in Notes is not a label' none \
-	'## Queue
+# A gate named in the body is a mention, not a commitment. This is the job the
+# backticks did when labels lived in a table cell, and the frontmatter boundary
+# does it now — so the body below carries the label in every shape it could.
+# shellcheck disable=SC2016 # the backticked label below is Markdown, not substitution
+drift 'a gate named in the body is not a label' none \
+	'---
+id: Q1
+rank: m
+labels:
+    - feature
+status: ready
+size: S
+---
 
-| ID | Item | Labels | Notes |
-|---|---|---|---|
-| <a id="Q1"></a>Q1 | Thing | `feature` | dropped its `1.5-gate` label |' \
+# Thing
+
+Dropped its 1.5-gate label, and `1.5-gate` with it.' \
+	'- **Thing** <!-- q:Q1 -->'
+
+# Frontmatter only. A labels key further down the body is body text, and reading
+# it would reopen exactly the mention-versus-commitment hole above.
+# shellcheck disable=SC2016 # the backticked label below is Markdown, not substitution
+drift 'a labels block outside the frontmatter is not read' none \
+	'---
+id: Q1
+rank: m
+status: ready
+size: S
+---
+
+# Thing
+
+labels:
+    - 1.5-gate' \
 	'- **Thing** <!-- q:Q1 -->'
 
 # --- the real tree ------------------------------------------------------------
@@ -186,9 +216,9 @@ drift 'a gate named in Notes is not a label' none \
 # from "nothing is gated" by eye. Assert the real backlog still resolves gates.
 resolved="$(python3 "$HOOK" "$REPO_ROOT/docs" | wc -l | tr -d ' ')"
 if [[ "$resolved" -gt 0 ]]; then
-	printf 'ok   docs/STATUS.md still resolves %s gated row(s)\n' "$resolved"
+	printf 'ok   docs/queue/ still resolves %s gated item(s)\n' "$resolved"
 else
-	printf 'FAIL docs/STATUS.md resolved no gated rows — the table format changed?\n' >&2
+	printf 'FAIL docs/queue/ resolved no gated items — the store format changed?\n' >&2
 	fails=$((fails + 1))
 fi
 

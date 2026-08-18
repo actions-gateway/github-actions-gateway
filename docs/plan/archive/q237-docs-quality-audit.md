@@ -2,7 +2,7 @@
 
 > **Status: ✅ Done — audit complete (2026-06-30).** Fan-out audit of the published `docs/` set against the six-goal quality rubric in [documentation-standards.md](../../development/documentation-standards.md#goals-what-good-looks-like).
 > 57 findings filed below.
-> The audit **produced** this ranked list; the fixes are follow-on work tracked on the [STATUS Queue](../../STATUS.md) (see [Remediation](#remediation)).
+> The audit **produced** this ranked list; the fixes are follow-on work tracked on the [STATUS Queue](../../queue/README.md) (see [Remediation](#remediation)).
 > This is the recurring "docs-vs-code drift audit" that documentation-standards.md lists as the highest-value *Proposed* quality signal.
 
 ## Goal

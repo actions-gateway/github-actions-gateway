@@ -541,10 +541,9 @@ gate_repo="$WORKDIR/gate"
 rm -rf "$gate_repo"
 mkdir -p "$gate_repo/docs/plan/archive" "$gate_repo/docs/queue" "$gate_repo/scripts/lib" "$gate_repo/scripts/docs"
 cp -R "$REPO_ROOT/docs/plan/." "$gate_repo/docs/plan/"
-cp "$REPO_ROOT/docs/STATUS.md" "$gate_repo/docs/STATUS.md"
-# The gate reads both sources since Q889: the store for invariant 3's live IDs,
-# the table for invariant 1's Progress rows. Copying one and not the other
-# leaves the baseline red, which reads as the driver having broken the index.
+# The gate reads the store for both invariants since Q889 -- invariant 3's live
+# IDs and invariant 1's backing items. Omitting it leaves the baseline red,
+# which reads as the driver having broken the index.
 cp -R "$REPO_ROOT/docs/queue/." "$gate_repo/docs/queue/"
 cp "$DRIVER" "$gate_repo/scripts/docs/git-merge-plan-index.sh"
 cp "$INDEX_CHECK" "$gate_repo/scripts/docs/check-plan-index.sh"

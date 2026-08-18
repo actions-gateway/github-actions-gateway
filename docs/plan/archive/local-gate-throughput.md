@@ -250,7 +250,7 @@ The band is gone, and the conclusion survives for the opposite reason: **one hol
 Under `-c utility` a single run took ~37 %, and the second slot was dividing a ceiling; now it is competing for a nearly-full one.
 
 The throughput column also understates what slot 2 is for.
-The problem it was added to solve ([Q376](../../STATUS.md)) was *queue depth* — a sibling session blocked for a full run before it could start.
+The problem it was added to solve ([Q376](../../queue/README.md)) was *queue depth* — a sibling session blocked for a full run before it could start.
 Two holders finish in 36.7 s where strict serialization needs 23.0 + 23.0 = 46 s, so the second session both starts immediately and finishes sooner.
 That is the argument for slot 2, and it does not extend to slot 3.
 

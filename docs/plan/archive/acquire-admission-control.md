@@ -1,7 +1,7 @@
 # Pre-Acquisition Admission Control (Capacity-Gated `acquirejob`)
 
 Status: ✅ Implemented (in-memory reservation-counter gate).
-Tracked as [Q59](../../STATUS.md).
+Tracked as [Q59](../../queue/README.md).
 
 > **What shipped.** The in-memory reservation-counter variant (the leading candidate below) is live: an `AdmitFunc` hook on `listener.Config` ([`goroutine.go`](../../../cmd/agc/internal/listener/goroutine.go)) is consulted before `AcquireJob`; the per-RunnerGroup gate lives in the provisioner ([`admission.go`](../../../cmd/agc/internal/provisioner/admission.go)) and reads the ceiling from the freshly cached RunnerGroup each call (honours spec edits, Q117).
 > Rejections increment `actions_gateway_jobs_admission_rejected_total`.
@@ -78,9 +78,9 @@ Key design questions to resolve in implementation:
    - **In-memory reservation counter** owned by the provisioner/multiplexer, incremented at admit and decremented on pod terminal state.
      Fast, but is soft state lost on AGC restart (acceptable — fail-safe, like the eviction counter; budget resets generously, never starves).
      **Leading candidate.**
-   - **Informer-backed pod cache** (ties into [Q64](../../STATUS.md), which already wants the provisioner to *watch* pods instead of polling).
+   - **Informer-backed pod cache** (ties into [Q64](../../queue/README.md), which already wants the provisioner to *watch* pods instead of polling).
      The admit check reads the cache instead of the API server.
-     Best long-term; pairs naturally with [Q63](../../STATUS.md)'s RunnerGroup `Owns(&Pod)`.
+     Best long-term; pairs naturally with [Q63](../../queue/README.md)'s RunnerGroup `Owns(&Pod)`.
    - Keep the live `List` but move it pre-acquire.
      Simplest, slowest, racy.
 
@@ -122,7 +122,7 @@ If a future requirement genuinely needs durable cross-restart job state (it does
 ## Relationship to Kueue (why an off-the-shelf k8s queue isn't the admission layer)
 
 [Kueue](https://kueue.sigs.k8s.io/) is the popular Kubernetes-native job queueing / quota manager (ClusterQueue, LocalQueue, ResourceFlavor, Cohort borrowing, `WorkloadPriorityClass` preemption).
-It is a natural thing to reach for when someone asks "why not just put a priority queue in front of the runners?" — and it is sometimes layered under ARC for GPU/quota management (e.g. the pattern vendors like Exostellar use; *specifics to verify in the [Q60](../../STATUS.md) competitive analysis*).
+It is a natural thing to reach for when someone asks "why not just put a priority queue in front of the runners?" — and it is sometimes layered under ARC for GPU/quota management (e.g. the pattern vendors like Exostellar use; *specifics to verify in the [Q60](../../queue/README.md) competitive analysis*).
 So the design must say explicitly why GAG does not delegate admission to it.
 
 **Kueue gates the wrong layer for this problem.** Per its own docs, Kueue "decides when a job should wait, when a job should be admitted to start (as in pods can be created), and when a job should be preempted" — it operates *only* on Kubernetes resources and controls **pod creation**.
@@ -175,6 +175,6 @@ The spec proves both halves of the contract the gate rests on, observing GitHub'
 
 - ~~Confirm (live) whether a ceiling-held, already-acquired job is cancelled vs. redelivered.~~ **Resolved (Q154): cancelled, not redelivered.** See "End-to-end verification (Q154)" above.
 - ~~Decide reservation-counter vs. informer-cache for the gate's count source.~~ **Resolved: reservation counter** (the leading candidate), shipped as a pure in-memory per-RunnerGroup counter independent of the provisioner's List-backed `ceilingCheck`.
-  If [Q64](../../STATUS.md) later moves the provisioner to an informer-backed pod cache, the gate's *backstop* (`ceilingCheck`) can read that cache; the gate's own reservation count stays in-memory by design (it must reserve pre-pod, which no observed-pod source can do).
+  If [Q64](../../queue/README.md) later moves the provisioner to an informer-backed pod cache, the gate's *backstop* (`ceilingCheck`) can read that cache; the gate's own reservation count stays in-memory by design (it must reserve pre-pod, which no observed-pod source can do).
 - Should the gate be per-`RunnerGroup` only, or also enforce an AGC-wide aggregate ceiling?
   Per-RG matches today's `ceilingCheck`; an aggregate cap would be new policy and should be raised separately.

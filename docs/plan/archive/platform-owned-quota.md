@@ -2,7 +2,7 @@
 
 **Decision (2026-06-13):** the platform admin owns the `Namespace`, `ResourceQuota`, and `LimitRange`; GAG operates *within* them and never creates or mutates them.
 Remove `spec.namespaceQuota` from the `ActionsGateway` CRD and drop the GMC's `resourcequotas`/`limitranges` write RBAC.
-A breaking CRD change, done **pre-1.0 while it is free** (post-1.0 it would need a conversion webhook — see deferred [Q74](../../STATUS.md)).
+A breaking CRD change, done **pre-1.0 while it is free** (post-1.0 it would need a conversion webhook — see deferred [Q74](../../queue/README.md)).
 
 Tracked as STATUS Queue Q130.
 **Implemented (2026-06-14):** the CRD/RBAC/controller/docs edits landed; see the Status section below.
@@ -17,7 +17,7 @@ The site (correctly) says "the platform team caps each tenant," but today:
 - The GMC **creates** the `ResourceQuota` from the spec, which **conflicts with existing investments** — platform teams already manage namespaces + quotas via GitOps or a tenant operator (Capsule, HNC, vCluster, kiosk).
   GAG either fights them or silently overrides their allocation.
 - Owning quotas forces broad GMC RBAC.
-  Dropping it is **least privilege** and shrinks the cluster-wide-write surface flagged in [Q122](../../STATUS.md).
+  Dropping it is **least privilege** and shrinks the cluster-wide-write surface flagged in [Q122](../../queue/README.md).
 
 The corrected model: the platform provisions the namespace + quota (+ optional `LimitRange`) — it already creates and labels the namespace per [getting-started](../../getting-started.md) — and GAG provisions pods/deployments *within* them, reading remaining quota but never setting it.
 
@@ -33,16 +33,16 @@ The corrected model: the platform provisions the namespace + quota (+ optional `
 
 ### RBAC
 - Remove `resourcequotas` (and `limitranges` if present) verbs from [role.yaml:27](../../../cmd/gmc/config/rbac/role.yaml:27) and [charts rbac.yaml:33](../../../charts/actions-gateway/templates/rbac.yaml:33); `make manifests`.
-- Partially subsumes [Q122](../../STATUS.md): its proposed quota-write *confinement* becomes moot once we drop the write entirely.
+- Partially subsumes [Q122](../../queue/README.md): its proposed quota-write *confinement* becomes moot once we drop the write entirely.
 
 ### Docs (operator-facing + design + website)
 - `getting-started.md` step 2: platform creates the namespace **and** a `ResourceQuota` (+ optional `LimitRange`); remove `namespaceQuota` from the CR example in step 4.
 - `02-architecture.md` (Tenant Provisioner, ~line 69): GAG operates within a platform-provided quota; no longer derives/creates it.
 - `operations/tenant-onboarding.md`: platform provisions namespace + quota; tenant supplies only the CR.
-- `05-security.md` / `operations/security-operations.md`: reduced GMC RBAC; ties [Q121](../../STATUS.md)/[Q122](../../STATUS.md).
+- `05-security.md` / `operations/security-operations.md`: reduced GMC RBAC; ties [Q121](../../queue/README.md)/[Q122](../../queue/README.md).
 - `appendix-a` / `appendix-e` capacity planning: `priorityTiers` / `maxWorkers` soft ceilings pair with the platform-owned quota.
 - **Website** CR examples (`index.md` is fine; `why-gag.md` shows the CR) drop `namespaceQuota`.
-  This also removes the live inconsistency where the site frames "platform caps the tenant" beside a tenant-authored quota — tracked under [Q129](../../STATUS.md), fix alongside this change.
+  This also removes the live inconsistency where the site frames "platform caps the tenant" beside a tenant-authored quota — tracked under [Q129](../../queue/README.md), fix alongside this change.
 
 ### Migration (pre-1.0)
 - Operators must ensure a platform-managed `ResourceQuota` exists in each tenant namespace **before** upgrading; GAG stops managing it.

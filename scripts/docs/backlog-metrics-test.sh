@@ -158,8 +158,8 @@ field() {
 		END { if (!found) print "-" }' <<<"$EVENTS2"
 }
 
-expect_eq 'escaped pipe keeps the title whole' 'Item A | B' "$(field Q7 7)"
-expect_eq 'escaped pipe does not shift the size cell' S "$(field Q7 6)"
+expect_eq 'escaped pipe keeps the title whole' 'Item A | B' "$(field Q7 8)"
+expect_eq 'escaped pipe does not shift the size cell' S "$(field Q7 7)"
 expect_eq 'a fenced example row is not parked in Deferred' \
 	'  parked in Deferred: 1 (excluded from aging WIP)' \
 	"$(grep 'parked in Deferred' <<<"$SUMMARY2")"
@@ -168,6 +168,98 @@ expect_eq 'a fenced example row is not parked in Deferred' \
 # is a deliberate one — every metric moves with it.
 expect_eq 'the replay itself sees the fenced row (line-based by construction)' \
 	open "$(field Q9 5)"
+
+# --- the seam: one series across the storage move (Q889) ----------------------
+#
+# The two bulk commits at the cutover are storage, not flow, and each fails in
+# its own direction if unsuppressed: the migration would re-file every live item
+# on migration day (destroying every cycle time that spans the seam), and the
+# deletion would resolve the whole open backlog on one day. Both are asserted
+# here against a fixture carrying an item that is filed in one era and completed
+# in the other, which is the only shape that can tell a bridged series from two
+# concatenated ones.
+
+REPO3="$WORKDIR/repo3"
+mkdir -p "$REPO3/docs"
+git -C "$REPO3" init -q -b trunk
+
+# commit_on DATE SUBJECT — commit the worktree with both clocks pinned, so the
+# cycle times below are the fixture's and not the day the suite runs.
+commit_on() {
+	local date="$1" subject="$2"
+	GIT_AUTHOR_DATE="${date}T12:00:00" GIT_COMMITTER_DATE="${date}T12:00:00" \
+		git -C "$REPO3" "${GIT_ID[@]}" commit -qam "$subject"
+}
+
+# item ID STATUS — one store file.
+item() {
+	printf -- '---\nid: %s\ntitle: Item %s\nstatus: %s\nsize: s\nrank: m\n---\n\nnotes\n' \
+		"$1" "$1" "$2" >"$REPO3/docs/queue/$1.md"
+}
+
+status_md "" -- "$(qrow Q1)" "$(qrow Q2)" "$(qrow Q3)" -- >"$REPO3/docs/STATUS.md"
+git -C "$REPO3" add docs/STATUS.md
+commit_on 2020-01-01 'docs(status): add Q1, Q2, Q3'
+
+status_md "" -- "$(qrow Q1)" "$(qrow Q3)" -- >"$REPO3/docs/STATUS.md"
+commit_on 2020-01-11 'docs(status): complete Q2'
+
+# The migration: every live item arrives under docs/queue/ in one commit.
+mkdir -p "$REPO3/docs/queue"
+item Q1 open
+item Q3 deferred
+git -C "$REPO3" add docs/queue
+commit_on 2020-02-01 'docs(queue): migrate the backlog to the item store'
+
+# The cutover: the table goes, with both remaining rows still in it.
+git -C "$REPO3" rm -q docs/STATUS.md
+commit_on 2020-02-02 'docs(queue): delete docs/STATUS.md'
+
+item Q5 open
+git -C "$REPO3" add docs/queue
+commit_on 2020-02-05 'docs(queue): file Q5'
+
+git -C "$REPO3" rm -q docs/queue/Q1.md
+commit_on 2020-02-11 'docs(queue): complete Q1'
+
+EVENTS3="$("$METRICS" --events "$REPO3/docs/STATUS.md")"
+SUMMARY3="$("$METRICS" "$REPO3/docs/STATUS.md")"
+
+col3() {
+	awk -F'\t' -v id="$1" -v col="$2" '$1 == id { print $col; found = 1 }
+		END { if (!found) print "-" }' <<<"$EVENTS3"
+}
+
+expect_eq 'the cutover deletion is not a removal' open "$(col3 Q3 5)"
+expect_eq 'a table-era item keeps its filing date across the migration' \
+	2020-01-01 "$(col3 Q1 2)"
+# 2020-01-01 to 2020-02-11. The number is the whole point: a series that
+# restarted at the migration would say 10 days (filed 2020-02-01), and one that
+# stopped at the cutover would say open.
+expect_eq 'an item filed before the seam and completed after it is one span' \
+	41 "$(col3 Q1 4)"
+expect_eq 'a store-era completion is booked' completed "$(col3 Q1 5)"
+expect_eq 'a table-era item is attributed to the table era' table "$(col3 Q1 6)"
+expect_eq 'a store-era arrival is attributed to the store era' store "$(col3 Q5 6)"
+expect_eq 'a store-era arrival carries the date it was filed' \
+	2020-02-05 "$(col3 Q5 2)"
+expect_eq 'a store-era arrival takes its title from the item file' \
+	'Item Q5' "$(col3 Q5 8)"
+expect_eq 'the table era still completes its own removals' \
+	completed "$(col3 Q2 5)"
+
+expect_eq 'the summary marks where the storage changed' \
+	'  ─── docs/STATUS.md: 3 filed ─── 2020-02-02 cutover ─── docs/queue/: 1 filed ───' \
+	"$(grep 'cutover' <<<"$SUMMARY3")"
+expect_eq 'both eras count into one completed total' \
+	'  completed:       2' \
+	"$(grep 'completed:' <<<"$SUMMARY3")"
+expect_eq 'the whole open backlog is not resolved by the deletion' \
+	'  open now:        2' \
+	"$(grep 'open now:' <<<"$SUMMARY3")"
+expect_eq 'a store item parked by frontmatter stays out of aging WIP' \
+	'  parked in Deferred: 1 (excluded from aging WIP)' \
+	"$(grep 'parked in Deferred' <<<"$SUMMARY3")"
 
 if (( fails )); then
 	printf '%d failure(s)\n' "$fails" >&2

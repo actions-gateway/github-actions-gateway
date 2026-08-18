@@ -27,11 +27,12 @@ copyright: Licensed under the Apache License 2.0.
 # the versioned site. The dev override in pages.yml carries this entry too.
 # See website.md § Publication scope.
 #
-# /queue/ is the per-item backlog store (Q889). It sits with /STATUS.md and
-# /plan/ here: repo-internal, published on `dev` only. `/dev/queue/` is the
-# store's README with the ordered backlog appended at build time by
-# hooks/queue_page.py, so there is no generated page in the tree.
-exclude_docs: !ENV [MKDOCS_EXCLUDE_DOCS, "/README.md\n/STATUS.md\n/plan/\n/queue/\n/development/\n/postmortems/\n/releases/\n/assets/README.md\n/assets/fonts/README.md\n"]
+# /queue/ is the backlog (Q889), one file per item. It sits with /plan/ here:
+# repo-internal, published on `dev` only. `/dev/queue/` is the store's README
+# with the ordered backlog appended at build time by hooks/queue_page.py, so
+# there is no generated page in the tree. It replaced /dev/STATUS/, which the
+# retired table published.
+exclude_docs: !ENV [MKDOCS_EXCLUDE_DOCS, "/README.md\n/plan/\n/queue/\n/development/\n/postmortems/\n/releases/\n/assets/README.md\n/assets/fonts/README.md\n"]
 
 # Published but deliberately absent from the nav, which stays the operator-facing
 # table of contents on every version: the repo-internal tree the `dev` version
@@ -50,7 +51,6 @@ exclude_docs: !ENV [MKDOCS_EXCLUDE_DOCS, "/README.md\n/STATUS.md\n/plan/\n/queue
 # exclude_docs above rather than to suppress a report.
 not_in_nav: |
   /README.md
-  /STATUS.md
   /plan/
   /queue/
   /development/
@@ -145,8 +145,8 @@ extra:
 # so one markdown link works everywhere. See website.md § Links into the source
 # tree.
 #
-# backlog_link.py derives whether this build carries docs/STATUS.md, so the
-# version banner links the backlog only where the page exists (Q558).
+# backlog_link.py derives whether this build carries the backlog store, so the
+# version banner links it only where the page exists (Q558).
 #
 # queue_page.py renders the backlog into /dev/queue/ and MUST precede
 # source_links.py: hooks run in this order, both use on_page_markdown, and an

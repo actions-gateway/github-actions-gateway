@@ -8,7 +8,7 @@ It uses the repo's `make` targets and a local image registry, so run it from a c
 Two things this flow does that a released install would not, both flagged as backlog items:
 
 - Installs the **v2alpha1 CRDs** alongside the v1 platform.
-  A v1-only install currently crash-loops the AGC (its v2 `RunnerSet` reconciler is registered unconditionally and its informer cache never syncs) — see `Q261` in [docs/STATUS.md](../STATUS.md).
+  A v1-only install currently crash-loops the AGC (its v2 `RunnerSet` reconciler is registered unconditionally and its informer cache never syncs) — see `Q261` in [docs/STATUS.md](../queue/README.md).
 - Adds a **`LimitRange`** so the requests-less AGC pod is admitted under the namespace `ResourceQuota` — see `Q262`.
 
 ## Prerequisites

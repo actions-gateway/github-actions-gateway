@@ -92,7 +92,7 @@ The suspicion was that the suite's `trap 'rm -rf "$WORKDIR"' EXIT` fires when on
 A script setting that trap, then running a `$( )` command substitution and a failing `( exit 3 )`, still has its `WORKDIR` present after both, and the trap fires exactly once, at script exit.
 The same reasoning kills the variant where a `merge_repo` failure takes the tree with it.
 
-This also holds for the near-identical siblings [`git-merge-status-test.sh`](../../scripts/docs/git-merge-status-test.sh) and [`git-merge-roadmap-test.sh`](../../scripts/docs/git-merge-roadmap-test.sh), which share the shape.
+This also holds for the near-identical siblings `git-merge-status-test.sh` (since retired, Q889) and [`git-merge-roadmap-test.sh`](../../scripts/docs/git-merge-roadmap-test.sh), which share the shape.
 
 ### The tree was not already gone when the git command started
 

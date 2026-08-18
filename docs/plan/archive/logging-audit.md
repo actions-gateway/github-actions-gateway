@@ -1,6 +1,6 @@
 # Cross-module logging audit
 
-**Status:** Theme A (F1) ✅ resolved (1.0-gate JSON-unification — see the Fix below); Themes B–G filed to the [STATUS Queue](../../STATUS.md) (Q86–Q89).
+**Status:** Theme A (F1) ✅ resolved (1.0-gate JSON-unification — see the Fix below); Themes B–G filed to the [STATUS Queue](../../queue/README.md) (Q86–Q89).
 Theme C folds into Theme G.
 
 A cross-module audit of every log call site in the repo (`cmd/agc`, `cmd/gmc`, `cmd/worker`, `cmd/proxy`, `broker/`, `githubapp/`, `cmd/probe`).

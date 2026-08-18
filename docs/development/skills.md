@@ -65,7 +65,7 @@ Everything under `docs/` publishes to [actions-gateway.com](https://actions-gate
 
 ### `session-backlog`
 
-The format and grooming process for the Queue in [docs/STATUS.md](../STATUS.md).
+The format and grooming process for the backlog in [docs/queue/](../queue/README.md).
 [maintaining-backlog.md](maintaining-backlog.md) is authoritative wherever the two overlap, and this repo's own tooling (`lint-backlog.sh` over the `backloglint` rules, the ID allocator, the merge drivers) enforces the format with or without the skill installed.
 
 ### `session-orchestrator`

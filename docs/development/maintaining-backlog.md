@@ -1,53 +1,44 @@
 # Agent reference: Maintaining the backlog
 
-`docs/STATUS.md` is the single source of truth for project progress and priorities.
-It is high-contention — almost every session edits it — so keeping churn low matters as much as keeping it accurate.
+[`docs/queue/`](../queue/README.md) is the single source of truth for project progress and priorities: one file per item, with priority carried by a `rank` key rather than by a line position.
+Almost every session edits the backlog, so keeping churn low matters as much as keeping it accurate — and one file per item is most of how that is achieved, since two sessions touching different items now touch different files.
 
 The format and process come from the globally-installed **[`session-backlog`](skills.md#session-backlog) skill**, which agents invoke for the full playbook: the format, adding, picking, deferring, completing, the grooming checklist, staleness signals, and migration.
-**This page does not restate any of that.** It states what is true *here* — the character caps, the ID allocator, the merge driver, the Progress table, the release scope ledger, the flake-watch lifecycle, and every measurement taken in this repo.
+**This page does not restate any of that.** It states what is true *here* — the character caps, the ID allocator, the release scope ledger, the flake-watch lifecycle, and every measurement taken in this repo.
 **Where the two overlap, this page wins**; read a difference as this repo being more specific, not as the skill being wrong.
 
 A contributor reading this page alone therefore gets the deltas rather than the process.
 What holds the rules for them is the tooling below, which is in-tree and runs in `make check` and the pre-commit hook whether or not the skill is installed:
 
-- [`scripts/docs/lint-backlog.sh`](../../scripts/docs/lint-backlog.sh) — enforces every format rule below.
-  It selects the file and maps the environment interface onto flags; the rules themselves are [`devtools/docs/backloglint`](../../devtools/docs/backloglint/), whose package comment is the canonical rule list.
-  Rows are read from the GFM table AST rather than split on a literal `|`, and cell lengths count characters rather than bytes (Q613).
-  Runs in `make check` (`make lint-backlog`), CI ([`status-lint.yml`](../../.github/workflows/status-lint.yml)), and the pre-commit hook.
-  The hook's `--staged` mode also rejects a staged set that carries `docs/STATUS.md` alongside other files — the index half of [the isolation rule](#isolated-commits-and-what-actually-enforces-them).
-- [`scripts/docs/check-status-isolation.sh`](../../scripts/docs/check-status-isolation.sh) — fails a branch whose commits mix the backlog with anything else.
-  Backs `make status-isolation-check`; runs in `make check`, `make status-gates`, and [`status-lint.yml`](../../.github/workflows/status-lint.yml).
-  [Why it exists next to the hook](#isolated-commits-and-what-actually-enforces-them).
+- [`scripts/docs/queue.py`](../../scripts/docs/queue.py) — the store's reader, checker and order tool, vendored byte-identical from the skill and never edited here.
+  `queue.py lint` is a pure function of the directory: frontmatter, rank shape, filename/id agreement, the 72-character title cap, unresolvable targets.
+- [`scripts/docs/check-queue-rules.py`](../../scripts/docs/check-queue-rules.py) — the three rules `queue.py lint` cannot express, because each is a function of what the *branch changed* rather than of what the store holds: a `flake` item may not simply vanish, deleting a plan's last item obliges its index row, and the label vocabulary is closed.
+  Backs `make queue-rules-check`; runs in `make check`, `make queue-gates`, and CI ([`status-lint.yml`](../../.github/workflows/status-lint.yml)).
 - [`scripts/docs/alloc-queue-id.sh`](../../scripts/docs/alloc-queue-id.sh) — allocates a new Q-ID (`make queue-id TITLE="…"`) by claiming a ref on the remote, so concurrent sessions never take the same one.
   Rationale, the alternatives weighed, and what it does *not* fix: [queue-id-allocation.md](queue-id-allocation.md).
 - [`scripts/docs/find-duplicate-rows.sh`](../../scripts/docs/find-duplicate-rows.sh) — the near-duplicate search that allocation runs before it claims an ID.
   Advisory: it never blocks a filing.
   [How it is calibrated](#search-before-you-file).
-- [`scripts/docs/git-merge-status.sh`](../../scripts/docs/git-merge-status.sh) — a git merge driver that resolves Queue-table conflicts by row ID rather than by line position, and falls back to ordinary conflict markers for anything ambiguous.
-  Its siblings [`git-merge-plan-index.sh`](../../scripts/docs/git-merge-plan-index.sh) and [`git-merge-roadmap.sh`](../../scripts/docs/git-merge-roadmap.sh) do the same for [`docs/plan/README.md`](../plan/README.md), keyed on the plan path, and for [`docs/roadmap.md`](../roadmap.md), keyed on each bullet's backlog annotation.
-  One `make merge-driver` per clone installs all three; a no-op until then.
-  [Details below](#the-merge-driver-resolve-queue-rows-by-id-not-by-line-position).
+- [`git-merge-plan-index.sh`](../../scripts/docs/git-merge-plan-index.sh) and [`git-merge-roadmap.sh`](../../scripts/docs/git-merge-roadmap.sh) — merge drivers for [`docs/plan/README.md`](../plan/README.md), keyed on the plan path, and [`docs/roadmap.md`](../roadmap.md), keyed on each bullet's backlog annotation.
+  One `make merge-driver` per clone installs them; a no-op until then.
+  **The backlog itself has no driver, deliberately**: one file per item is what the driver was compensating for, and two sessions editing the *same* item have a real conflict that must not be resolved by ID behind anyone's back.
+  [Details below](#the-merge-drivers-resolve-registry-rows-by-key-not-by-line-position).
 - [`scripts/docs/next-task.sh`](../../scripts/docs/next-task.sh) — prints a kickoff prompt (or `--title`) for the top ready item, for starting a fresh session on the next task.
   A thin forward to `queue.py next` since Q889; it reads `docs/queue/` and takes no file path.
-- [`scripts/docs/backlog-metrics.sh`](../../scripts/docs/backlog-metrics.sh) — replays the file's git history into flow metrics (throughput, cycle time, prune ratio, aging WIP).
-  Read-only.
-  The replay reads each diff line's cells through the shared Markdown parse layer, so an escaped pipe in a cell cannot shift a row's fields (Q614).
+- [`scripts/docs/backlog-metrics.sh`](../../scripts/docs/backlog-metrics.sh) — replays the backlog's git history into flow metrics (throughput, cycle time, prune ratio, aging WIP).
+  Read-only, and continuous across the storage move: it reads the retired table by path and the store after it, suppresses the two bulk commits at the seam, and marks where the storage changed so a span across it stays one span (Q889).
 
 ## Where the format differs from the skill
 
 - **There is no `**Next ID:**` counter line.** IDs are claimed instead, with `make queue-id TITLE="…"`, which takes a `refs/queue-ids/QN` ref on the remote.
   A shared mutable counter handed concurrent sessions the same ID and conflicted on the same line by construction, forcing a renumber ([Q382](queue-id-allocation.md#why-the-counter-had-to-go)).
   Allocation also runs [the duplicate search](#search-before-you-file), which is the part of "search before you file" a mechanism can carry; reading the candidates it prints is the part that is on you.
-- **The Notes cap is hard, and counted as the cell is written**: ≤ 250 characters, where an em dash costs one and an escaped `\|` costs two.
-  Past 200 characters the row must link a doc from its Item or Notes cell — a `#QN` sibling anchor doesn't count, since sibling rows are capped too.
-  The same caps apply to Deferred trigger cells.
-  **The store adds a cap the table never had**: an item title is at most 72 characters, because it renders whole in every index row and in `queue.py next`'s kickoff prompt.
-  Adopting it cost 62 rewritten titles.
-- **A literal pipe is written `\|`, code spans included, and `lint-backlog` rule 13 gates it** by comparing each row's own width against its table header.
-  Measured 2026-08-14: Q866's Notes rendered as far as its opening backtick, losing the remaining two thirds, and the truncation also hid an over-cap cell from rule 4.
-  **Budget for that second half: escaping the pipe is not a one-character fix.** Every rule downstream had been reading the stub before the pipe, so the cell they measure changes the moment it renders whole, and one of them can newly fail on a row nobody edited.
-  Q866's Notes went from a measured 100 characters to 269 against the 250 cap, and had to be trimmed in the same edit.
-- **A row never cites a count of the backlog.** "42 Queue rows", "60 parked" and friends go stale on the next filing — the file they measure is the one thing guaranteed to change under them, often the same day.
+- **The notes cap is hard, and counted as the text is written**: ≤ 250 characters, where an em dash costs one.
+  Past 200 characters the item must link a doc — a sibling item's link doesn't count, since siblings are capped too.
+  The same cap applies to a deferred item's trigger.
+  **A title is at most 72 characters**, because it renders whole in every index row and in `queue.py next`'s kickoff prompt, which is the one field with nowhere to overflow.
+  The table capped notes and never capped titles at all, so adopting the store imposed a constraint this backlog had never been held to: 62 of 173 titles were over, the longest at 130, and all 62 were rewritten by hand rather than truncated.
+- **An item never cites a count of the backlog.** "42 Queue rows", "60 parked" and friends go stale on the next filing — the file they measure is the one thing guaranteed to change under them, often the same day.
   State the *shape* instead ("the Queue is read top-down; the parked rows are only grepped on a trigger"), and put any dated figure in the linked plan doc, where a point-in-time measurement belongs.
   Q569's row was corrected twice in one session — 36 → 42 → 44 — before the count came out entirely.
 - **A non-commitment belongs in [appendix-g](../design/appendix-g-future-enhancements.md)**, never parked in Deferred.
@@ -55,53 +46,27 @@ What holds the rules for them is the tooling below, which is in-tree and runs in
 - **`make queue-unblock ID=QN` lists every dependent** when a blocker lands, which is what makes the skill's `Blocked by [QN](#QN)` convention worth writing exactly.
 - **A row's asserted defect gets re-checked before it is implemented, not only when it is groomed.** Q506's row named a `noproxy` GHES gap that Q322 had already fixed; taking the row at its word would have "fixed" a non-bug and missed the real one next to it.
   An audit row inheriting an unverified premise is the sharpest case, but the rule is general — [what a row can be wrong about, and what each mistake cost](#a-rows-asserted-defect-is-a-claim-not-a-finding).
-- **Backlog commits are isolated here by two enforcing gates, not by convention** ([which, and why neither subsumes the other](#isolated-commits-and-what-actually-enforces-them)).
-  When a rebase or merge conflicts on this file, resolve it via the [fast path](#resolving-a-statusmd-only-conflict-verify-cheap-push-now) below.
+- **The isolated-commit rule is gone with the table it protected.** A backlog edit no longer has to be its own commit, because the cost it was avoiding was a rebase conflict on one contended file, and one file per item removes it at the source ([what it was, and what replaced it](#isolated-commits-and-what-replaced-them)).
 
-**The layout is both, and every backlog edit lands twice.** The per-item store shipped to `main` in Q889 phase 2 and lives at [`docs/queue/`](../queue/README.md), one file per item, with priority carried by a `rank` key instead of a line position.
-`docs/STATUS.md` is still here and still the source every gate below reads, so the two are held to each other by `make queue-drift-check`, which fails the moment they stop agreeing on any item, field or order.
+## Isolated commits, and what replaced them
 
-So filing, closing or re-ranking an item means the same edit in both places: the table row, and `docs/queue/QNNN.md`.
-The gate names exactly what is missing rather than reporting a mismatch, and `python3 scripts/docs/queue.py --store docs/queue migrate docs/STATUS.md` regenerates the store wholesale if that is easier than hand-editing.
-This is the interim cost of not cutting over in one 400-file commit, and it ends when phase 6 deletes the table ([the plan](../plan/q889-backlog-item-store.md)).
+**The rule was: a commit touching `docs/STATUS.md` touches nothing else.** Not "no code" — nothing.
+Two gates enforced it, a pre-commit hook reading the index and `check-status-isolation.sh` reading the branch's commits, because the hook was structurally blind to an `--amend` onto a code commit (Q652).
 
-Until then this page keeps describing the table's mechanics (the merge driver, the escaped pipe, the isolated commit) because they are live, and a page that stops describing a mechanism still in use is wrong in the more expensive direction.
+**It is retired, and the reason it existed is what retired it.** Isolation bought exactly one thing: a rebase conflict on the backlog stayed confined to one file and resolved trivially.
+That cost came from every session editing the same file, which is the property the item store removes — two sessions filing different items now write different paths, and git has nothing to reconcile.
+A rule whose whole benefit was containing a conflict that can no longer happen is overhead, and a real one: it forced a plan doc, a roadmap bullet and the item they belong to into three commits.
 
-## Isolated commits, and what actually enforces them
+**What is still true is the amend hazard, in its general form.** `git commit --amend` rewrites `HEAD`, never the commit owning the path you meant to fix, so amending to correct an earlier commit folds the fix into the newest one instead.
+Nothing warns you, because the amend is an ordinary command that did what you asked.
+Read `git show --stat HEAD` before amending, and use `git commit --fixup=<sha>` with `GIT_SEQUENCE_EDITOR=true git rebase --autosquash origin/main` when the target is not `HEAD`.
 
-**The rule: a commit that touches `docs/STATUS.md` touches nothing else.** Not "no code" — nothing.
-A plan doc, a roadmap bullet and the row deletion they belong to are three commits, in whatever order.
-That literal shape is also the shape practice already has: across the last 80 merged PRs, all 74 commits touching the file were backlog-only, so encoding the sentence as written breaks no workflow anyone is using.
-Several isolated backlog commits in one PR is ordinary and stays green — [#1239](https://github.com/actions-gateway/github-actions-gateway/pull/1239) landed three.
-
-**`git commit --amend` after the row change amends the row change.** Order is free to the gates, but the backlog commit is usually the last one written, so it sits at `HEAD`; a later fix to the other half lands on it and builds exactly the mixed commit this rule forbids.
-Nothing warns you, because the amend is a perfectly ordinary command that did what you asked.
-Read `git show --stat HEAD` before amending anything, and write the row change once the rest is settled rather than mid-iteration.
-`check-status-isolation.sh` does catch the mix, but on the pushed branch, a CI cycle after the cheap moment to notice.
-
-Two mechanisms enforce it, and neither subsumes the other:
-
-| | pre-commit hook (`lint-backlog.sh --staged`) | `make status-isolation-check`, and status-lint.yml |
-|---|---|---|
-| Fires | at `git commit`, before the mistake exists | on `make check` and on the pushed PR |
-| Reads | the **index** | the **commits** |
-| Bypass | `--no-verify`; absent entirely until `make hooks` | none |
-
-The hook is the better feedback loop and the weaker guarantee, and reading the index rather than the commit it produces is what makes it structurally blind to the case that motivated the second half: stage only `docs/STATUS.md`, `git commit --amend` onto a code commit, and the hook sees a clean index while git writes a commit carrying both.
-That is measured, and pinned as a test case in [`check-status-isolation-test.sh`](../../scripts/docs/check-status-isolation-test.sh).
-
-**The commit half scans a PR, never `main`.** Merges here are squash-merges, so a PR that kept its backlog edit in its own commit still lands on `main` as one commit touching `docs/STATUS.md` and everything else — mixed by construction.
-The individual commits exist only while the PR is open, which makes that window the one place the property is both true and checkable; a scan of `main`'s history would fail on every merge and mean nothing.
-
-**Scope, and a commit that predates the gate.** The range is `merge-base(base, HEAD)..HEAD`: the commits the branch adds, never one already on the base.
-So every commit the gate can fail belongs to the branch being failed, and `git rebase -i` can always split it — there is no history it is asked to judge and cannot fix, which is why an older mixed commit gets no exemption.
-When rewriting genuinely costs more than it buys, `BACKLOG_ALLOW_MIXED_COMMITS="<sha> ..."` admits named commits, the same deliberate-and-reviewable shape as `BACKLOG_ALLOW_RESURRECT` and friends.
-Merge commits are skipped: their file list depends on which parent you diff against, so "what this commit touched" has no single answer for them.
+**Backlog edits still get their own commit when the change also touches code**, not as a gate but as a courtesy to review: the item is the *why*, the code is the *what*, and a reviewer reading one should not have to separate them by hand.
 
 ### A gate label and its roadmap bullet are two commits, and the first one is red
 
 `roadmapcheck` rule 7 requires a row labelled `X.Y-gate` **and** carrying `feature` or `security` to be named by a roadmap bullet, so adding the label and adding the bullet are one change in intent.
-Isolation splits them regardless: the label lives in `docs/STATUS.md` and the bullet in `docs/roadmap.md`, so they cannot share a commit.
+They land in different files regardless: the label lives on the item in `docs/queue/` and the bullet in `docs/roadmap.md`.
 
 **A gate label answers two questions, and only one of them obliges a bullet.** Release scope is not all one kind: a capability or a security fix is what someone upgrades *for*, while the CI, test, docs and dogfood work that also blocks a tag is process.
 Requiring a bullet for both put our own release harness on the page people read to evaluate the product, so the obligation follows `feature`/`security` rather than the gate label alone.
@@ -114,13 +79,13 @@ Only `status-isolation-check` reads commits individually, and it has no opinion 
 
 ## Closing a row: what else moves
 
-Deleting a Queue row is the one backlog edit with reach outside `docs/STATUS.md`.
+Closing an item is the one backlog edit with reach outside `docs/queue/`.
 The row is an anchor, a plan doc's last reference, and often a roadmap bullet's reason to exist, so removing it breaks things in files the closing change never opened.
 Every one of these is caught by a gate, and every one is cheaper to do up front than to diagnose from a gate failure pointing somewhere unexpected.
 
 Work through all four:
 
-1. **De-link the ID wherever the repo cites it.** `grep -rn "STATUS.md#QNNN" docs/` finds every anchor that is now dead (`make doc-links`).
+1. **De-link the ID wherever the repo cites it.** `grep -rn "queue/QNNN.md" docs/` finds every link that is now dead (`make doc-links`).
    Rewrite them as a **bare `QNNN`**, the form the Archive rows in [`docs/plan/README.md`](../plan/README.md) already use.
    Keep the prose; only the link goes.
    In an active plan's Status cell the de-link is gated rather than tidy: `make plan-index-check` requires a live row to be linked and a closed one to be bare, so the anchor dying is what puts the cell in front of someone (Q800).
@@ -128,10 +93,10 @@ Work through all four:
 2. **Delete the roadmap bullet, continuation lines included.** A forward-looking bullet exists because the row does ([rule 7](#a-gate-label-and-its-roadmap-bullet-are-two-commits-and-the-first-one-is-red)), so it goes when the row does.
    Its indented follow-on lines are part of the same list item: leave one behind and Markdown attaches it to the **previous** bullet, whose word count then breaks the cap.
    `make roadmap-check` names the stray line and the bullet it landed on (rule 12), and reports the cap over the line span it actually counted, so a violation on a bullet you never touched no longer reads as a pre-existing failure.
-3. **Archive the plan doc if this was its last `STATUS.md` reference**, per [the protocol below](#archiving-completed-plan-docs), whose step 4 is the one most often missed: dropping a level into `archive/` re-bases **the moved doc's own outbound links**, not just the links pointing at it.
+3. **Archive the plan doc if this was its last backlog reference**, per [the protocol below](#archiving-completed-plan-docs), whose step 4 is the one most often missed: dropping a level into `archive/` re-bases **the moved doc's own outbound links**, not just the links pointing at it.
 4. **Update the plan's `docs/plan/README.md` row** in the same change, moving it to the Archive section.
 
-The cluster is wider than the docs tree: Q790 was the same shape in the merge tooling, where piped-gate's `docs/STATUS.md` overlap exemption discounted the path unconditionally and so stayed silent on exactly the row *deletion* the driver refuses to resolve: a row deleted on one side and edited on the other.
+The cluster is wider than the docs tree: Q790 was the same shape in the merge tooling, where piped-gate's backlog overlap exemption discounted the path unconditionally and so stayed silent on exactly the row *deletion* the driver refuses to resolve: a row deleted on one side and edited on the other.
 When something new mishandles a closing row, it belongs with these rather than as a fresh curiosity.
 
 ### Repurposing an ID is a closure with every step skipped
@@ -150,7 +115,7 @@ Q809 was filed on three `e2e-calico` failures read as NetworkPolicy enforcement 
 - **Every citation of Q809 re-pointed silently.** A repurpose leaves the anchor alive, so `make doc-links` and rule 5 see nothing: they catch a dead anchor, never a live one that has changed meaning.
   Seven files cited Q809 in its original sense at the moment it changed meaning, and three of them still asserted the refuted failures two days later, in a workflow comment, a spec comment and `testing.md`.
   A closure would have run `grep -rn Q809` over all seven as [step 1](#closing-a-row-what-else-moves).
-- **The refuted hypothesis left the file.** `calico` appears nowhere in `docs/STATUS.md` afterwards, so nothing recorded that the enforcement negatives had been suspected and cleared, and the next session to see a calico failure starts cold.
+- **The refuted hypothesis left the backlog.** `calico` appears nowhere in it afterwards, so nothing recorded that the enforcement negatives had been suspected and cleared, and the next session to see a calico failure starts cold.
   [The ledger](flake-watch-retired.md) is where that belongs.
 - **The cross-link was care, not mechanism.** #1441 named Q549 by hand.
   Passing the new title to `make queue-id` returns Q549 at 0.43 on the same target, which is the prompt [nothing else supplies](#two-rows-on-one-defect-cross-link-them-and-say-which-owns-the-measurement).
@@ -159,7 +124,7 @@ Q809 was filed on three `e2e-calico` failures read as NetworkPolicy enforcement 
 Measured on a two-commit probe against the shipped linter: the repurpose passes, and deleting the same row fails with rule 8 naming `BACKLOG_ALLOW_FLAKE_DELETE`, so the honest closure is the one that hits a red gate and the shortcut is the one that goes green.
 For a flake row whose defect was **refuted rather than fixed**, that override is the correct move: retire the row to [the ledger](flake-watch-retired.md) with no fix PR, which is a third route out of Flake watch alongside [soaked and obsolete](#retiring-a-flake-watch-row).
 
-**Nothing gates this, and a title check is the wrong gate to reach for.** Scoring every Queue row's before/after title across the backlog's whole history with the same matcher `make queue-id` uses (1,108 commits touching `docs/STATUS.md`, 80 title changes) leaves 27 whose new title does not match its old one.
+**Nothing gates this, and a title check is the wrong gate to reach for.** Scoring every item's before/after title across the backlog's whole history with the same matcher `make queue-id` uses (1,108 commits touching `docs/STATUS.md`, 80 title changes) leaves 27 whose new title does not match its old one.
 One is this repurpose.
 Nine are pre-allocator duplicate-ID renumbers across four collisions, the last on 2026-07-05, a class [rule 12](queue-id-allocation.md#reserving-not-reporting) now prevents at filing time.
 The remaining 17 are ordinary retitles of a live row.
@@ -248,14 +213,17 @@ Two of the eleven look like real duplicates nobody caught: Q663 and Q612 are bot
 Loosening either ratio by 0.05 roughly doubles the count.
 Re-run the audit before changing a threshold.
 
-## The merge driver: resolve Queue rows by ID, not by line position
+## The merge drivers: resolve registry rows by key, not by line position
 
-Most `docs/STATUS.md` conflicts are an artifact of the file's shape rather than a real disagreement.
-A plain three-way merge decides by line position, and the process puts every edit in the same place: pick from the top, insert at the priority the item deserves, flakes first.
-One untouched row of separation merges cleanly; **adjacent** rows do not, so a four-worker dispatch batch that takes rows 1–4 conflicts by construction ([the measurements](queue-id-allocation.md#what-this-fixes-and-what-it-does-not)).
+A registry file — one row per plan, per script, per gate — puts every branch's edit in the same place, and a plain three-way merge decides by line position.
+One untouched row of separation merges cleanly; **adjacent** rows do not, so concurrent work collides by construction ([the measurements](queue-id-allocation.md#what-this-fixes-and-what-it-does-not)).
+Four files here are routed to a driver that decides by **row key** instead: a row deleted on either side is deleted, a row added on either side is present, a row changed on one side takes that change, and row order is rebuilt from whichever side reordered.
+They run on local merges, rebases, cherry-picks and stash applications — everywhere the pain is.
 
-[`scripts/docs/git-merge-status.sh`](../../scripts/docs/git-merge-status.sh) is a git merge driver that decides the Queue table by **row ID** instead: a row deleted on either side is deleted, a row added on either side is present, a row changed on one side takes that change, and row order is rebuilt from whichever side reordered.
-It runs on local merges, rebases, cherry-picks and stash applications — everywhere the pain is.
+**The backlog is deliberately not one of them.** It was, until Q889: `docs/STATUS.md` was one table every session edited, and `git-merge-status.sh` resolved its rows by ID.
+One file per item retires both the contention and the driver.
+Two sessions filing different items write different paths and git has nothing to reconcile, and two editing the *same* item have a genuine disagreement that must surface as a conflict rather than be resolved by ID behind anyone's back.
+Adding `docs/queue/**` to `.gitattributes` is the helpful-looking move that would rebuild the problem the store exists to remove.
 
 **One-time setup, per clone:**
 
@@ -263,48 +231,35 @@ It runs on local merges, rebases, cherry-picks and stash applications — everyw
 make merge-driver
 ```
 
-`.gitattributes` already routes the file to `merge=backlog`, but git deliberately refuses to let a tracked file define a driver's *command* — that would be remote code execution on clone — so the config half is per-clone and opt-in.
+`.gitattributes` already routes each file to its driver, but git deliberately refuses to let a tracked file define a driver's *command* — that would be remote code execution on clone — so the config half is per-clone and opt-in.
 **Nothing requires you to install it:** until you do, the attribute names an undefined driver and git silently uses its built-in three-way merge, which is exactly the pre-driver behaviour.
 [`scripts/dev/setup.sh`](../../scripts/dev/setup.sh) installs it for you, as it does the git hooks.
 
-**What it refuses to resolve.** Every uncertainty ends the same way — the plain three-way merge re-runs and its conflict markers stand, with a one-line reason on stderr:
+**What a driver refuses to resolve.** Every uncertainty ends the same way — the plain three-way merge re-runs and its conflict markers stand, with a one-line reason on stderr: a row changed on both sides, a row deleted on one side and edited on the other, one key filed on both sides with different content, rows reordered on both sides, a row whose key is missing or malformed, and any conflict outside the keyed rows.
+A conflict marker costs a minute; a wrongly resolved row loses state.
 
-| Situation | Outcome |
-|---|---|
-| A row changed on both sides | conflict markers |
-| A row deleted on one side, edited on the other | conflict markers |
-| One ID filed on both sides with different content | conflict markers |
-| Rows reordered on both sides | conflict markers |
-| A row whose anchor is missing or disagrees with its visible ID | conflict markers |
-| A conflict outside the Queue rows (Progress table, Deferred table, prose) | conflict markers |
-
-A conflict marker costs a minute; a wrongly resolved row loses backlog state.
-Two consequences worth internalising: the driver **cannot resurrect a row the other side deleted** (a deletion either wins outright or produces markers, never a re-add), and it claims **no** knowledge of the Progress or Deferred tables — those merge as plain text, exactly as before.
-
-**The refusal is per row, but the fallback is per file.** Every case in the table ends by re-running `git merge-file` over the whole file, so the hunk it marks spans the refused row *and* every row added beside it on either side: one refused row produced a five-row hunk in [the measurement below](#a-hand-resolved-conflict-drops-rows-the-markers-never-named).
+**The refusal is per row, but the fallback is per file.** Every refusal ends by re-running `git merge-file` over the whole file, so the hunk it marks spans the refused row *and* every row added beside it on either side: one refused row produced a five-row hunk in [the measurement below](#a-hand-resolved-conflict-drops-rows-the-markers-never-named).
 Picking a side of that hunk is what loses rows neither side disagreed about.
 
-**It does not help GitHub**, which cannot see a clone's config: the server-side squash-merge, the mergeability read behind `mergeStateStatus`, and the merge queue's candidate build all take the plain three-way merge.
-That is why a batch's row deletions are [spaced at assignment](parallel-dispatch.md#the-dispatcher-owns-assignment-not-coordination-files) rather than left to the driver.
-And a driver-resolved merge is still a merge you own: read the resulting row set, then run the three gates below.
-`make lint-backlog` remains the independent backstop — rules 8, 9 and 10 all still apply to whatever the driver produced.
+**They do not help GitHub**, which cannot see a clone's config: the server-side squash-merge, the mergeability read behind `mergeStateStatus`, and the merge queue's candidate build all take the plain three-way merge.
+A driver-resolved merge is also still a merge you own: read the resulting row set, then run the gates.
 
 ### The same treatment for `docs/plan/README.md`
 
-The plan index has `STATUS.md`'s contention and the same cause.
+The plan index has the same contention and the same cause.
 Every plan doc that lands adds one long row, every archival moves one to the top of the Archive table, and the topical sections concentrate both on the same few neighbours.
 Over the 22 changes to the file that merged between 2026-08-01 and 2026-08-03, **18 of the 231 pairs touch a row in common; the other 213 disagree only about line position** — and adjacency makes a plain three-way merge conflict on those anyway.
 
 [`scripts/docs/git-merge-plan-index.sh`](../../scripts/docs/git-merge-plan-index.sh) decides them by the **plan path in column 1**, sharing the Queue driver's row rules and its refusal discipline.
 That key is not a new convention: [`check-plan-index.sh`](../../scripts/docs/check-plan-index.sh) already reads the same cell, so the driver and the gate cannot disagree about what a row is.
 
-Two things differ from the `STATUS.md` driver:
+Two things are specific to it:
 
 - **It merges every table in the file, not one named section.** Archiving a plan is a delete in a topical table and an add in the Archive table, and a section-scoped merge would read that as an unexplained deletion.
 - **It checks the whole file afterwards for a plan listed twice**, comparing basenames so `archive/x.md` and `x.md` count as one plan.
   Per-table merges cannot see that pair, which one branch archiving a plan while another relocates it produces.
 
-Everything else is the Queue driver's behaviour: a row changed on both sides, a row deleted on one side and edited on the other, one plan filed twice with different text, rows reordered on both sides, a row whose first cell is not a link, and a side that added or removed a whole table all fall back to the plain three-way merge and its conflict markers.
+Everything else is the shared behaviour: a row changed on both sides, a row deleted on one side and edited on the other, one plan filed twice with different text, rows reordered on both sides, a row whose first cell is not a link, and a side that added or removed a whole table all fall back to the plain three-way merge and its conflict markers.
 
 ### And for `docs/roadmap.md`
 
@@ -313,108 +268,75 @@ That makes every gate PR the same edit in the same two sections.
 Measured on `docs/roadmap.md` at 61cf54e7b: two branches each deleting their own bullet from the near-term list conflict under a plain three-way merge, while the same two deletions ten bullets apart merge clean.
 [Q715](https://github.com/actions-gateway/github-actions-gateway/pull/1392)'s PR met that shape three times in one session, each time as a merge-queue eviction followed by a hand-resolved rebase.
 
-**What the driver buys is the rebase, not the eviction.** A merge driver is per-clone `git config`, and GitHub builds the merge queue's candidate itself, so the server-side conflict recurs exactly as before ([merge-queue.md](../plan/merge-queue.md) measured the same thing for `docs/STATUS.md`, which has had a driver since Q611).
+**What the driver buys is the rebase, not the eviction.** A merge driver is per-clone `git config`, and GitHub builds the merge queue's candidate itself, so the server-side conflict recurs exactly as before ([merge-queue.md](../plan/merge-queue.md) measured the same thing for the backlog table, which had a driver from Q611 until Q889 retired both).
 What changes is the heal: the rebase that follows an eviction resolves silently instead of by hand.
-Fewer evictions is a different problem, and the lever is spacing before serializing: the same two deletions ten bullets apart merged clean, so a batch whose items sit apart on the page never meets the conflict ([the same rule for Queue rows](parallel-dispatch.md#the-dispatcher-owns-assignment-not-coordination-files)).
+Fewer evictions is a different problem, and the lever is spacing before serializing: the same two deletions ten bullets apart merged clean, so a batch whose bullets sit apart on the page never meets the conflict.
 
 [`scripts/docs/git-merge-roadmap.sh`](../../scripts/docs/git-merge-roadmap.sh) decides the bullets by that **annotation**, normalized to a comma-joined ID list.
 The key is not a new convention either: `devtools/docs/roadmapcheck` already parses the same comment, so the driver and the gate cannot disagree about what a bullet is.
 
-Two things differ from the other two drivers:
+Two things are specific to it:
 
 - **A bullet spans several lines**, which the shared record rules do not model, so each one is encoded onto a single line and decoded after the merge.
 - **The blank lines between bullets are held beside the records, not inside them.** Fold the trailing blank into a bullet and deleting a list's last bullet reads as an *edit* of its neighbour, which then collides with the other side deleting that neighbour: the exact merge the driver exists to resolve.
 
 A run of bullets is only merged this way when every bullet in it is annotated, so an ordinary bulleted paragraph elsewhere on the page keeps git's own merge.
-Everything else is the Queue driver's behaviour, plus a whole-page check that no binding ended up on two bullets.
+Everything else is the shared behaviour, plus a whole-page check that no binding ended up on two bullets.
 
-`make merge-driver` installs all three drivers.
+`make merge-driver` installs all four drivers ([`scripts/README.md`](../../scripts/README.md#per-clone-setup) lists them).
 None is required: until you run it the `.gitattributes` lines name undefined drivers and git uses its built-in three-way merge, which is exactly the pre-driver behaviour.
 
-## Resolving a `STATUS.md`-only conflict: verify cheap, push now
+## Verifying a backlog-only change: run the subset, push now
 
-Because every session edits `docs/STATUS.md`, rebase and merge conflicts on it are routine — fewer with the merge driver installed, never zero.
-When the conflict is **confined to `docs/STATUS.md`**, re-running the full `make check` before pushing is not just unnecessary — it is what causes the *next* conflict.
-
-The full gate takes ~6 minutes.
-Every one of those minutes is a window in which a sibling session merges its own `STATUS.md` edit and puts your branch behind again, so you resolve, wait ~6 minutes, and lose the race a second time.
-It is a feedback loop, not bad luck: [PR #724](https://github.com/actions-gateway/github-actions-gateway/pull/724) went around it four times.
-Shrinking the verify step from ~6 minutes to a few seconds is what breaks the loop.
-
-**The fast path** — only when `git status` shows `docs/STATUS.md` as the sole conflicted path:
-
-1. Resolve the conflict in `docs/STATUS.md`.
-2. Check for leftover markers before staging: `git diff --check`.
-   An `Edit`-based resolution can silently leave one behind, and `git diff --check` catches it in the working tree — before it becomes a commit the gate has to reject.
-3. If you resolved the hunk by hand rather than letting the driver decide it, [reconcile the row set](#a-hand-resolved-conflict-drops-rows-the-markers-never-named).
-   A clean marker scan says the resolution is well-formed, not that it kept every row.
-4. Run only the gates that can actually observe a `STATUS.md` change:
-
-   ```bash
-   make status-gates
-   ```
-
-5. Commit and push **immediately**.
-   Do not wait on `make check`.
-
-`make check` adds nothing here: no gate it runs beyond these reads `docs/STATUS.md`, and CI runs the full gate on the pushed branch regardless.
-`status-gates` is the complete set a `STATUS.md`-only diff can fail, and every member is also in `make check`, so this is a strict subset and never a second opinion.
-
-**Run the target, don't transcribe its contents.** This list used to be spelled out here as three `make` targets, and it was wrong: `roadmap-check` and `plan-index-check` both read Queue membership and both can fail on a `STATUS.md`-only diff.
-A grooming pass that parked a row followed the three-target list, went green locally, and opened a PR red on `roadmap-check`.
-The set now lives in the `STATUS_GATES` variable in the [`Makefile`](../../Makefile), whose comment names each member and what it catches, so there is one copy to keep true.
-Transcribing is not the only way it drifts: `em-dash-check` and `page-density-check` both scan the file and were both missing from the variable while its comment called the list complete (Q749), so `make gate-lists-check` now derives membership from the pathspec each gate hands git and fails when a fast gate that scans `docs/STATUS.md` is left out.
-
-**When it does not apply:** if the conflict touches *any* other file — code, a plan doc, another page under `docs/` — this is a normal conflict.
-Resolve it and run the full `make check` (plus whatever heavier tier the change warrants) before pushing.
-The fast path is licensed by the narrowness of the diff, not by the presence of `STATUS.md` in it.
-
-**It is also not a general shortcut for authoring.** The minutes it saves buy speed in a race you are already losing — a sibling session merging its own edit while you verify.
-Authoring a groom, filing a row, or completing an item is not that race, and a Queue edit routinely [cascades](#what-parking-a-row-obliges-elsewhere) into a plan doc, `plan/README.md`, or a roadmap bullet, which puts the diff outside this section's narrowness anyway.
-Author the change first: if it really did touch only `docs/STATUS.md`, the gate set above still covers it; otherwise run `make check`.
-
-### A moved row defeats conflict detection
-
-Git raises a delete/modify conflict only when both sides touch the *same* lines.
-Reordering a row moves it, so a branch that **relocates** a row while `main` **deletes** it produces no conflict at all: git applies the delete at the old position and the re-add at the new one, and a completed row silently comes back.
-**A clean rebase is not evidence of a correct one.**
-
-This is the second and more dangerous of the two ways a done row comes back — the squash-merge case at least leaves a conflict to notice.
-Both occurred on 2026-07-25: the squash case in [#766](https://github.com/actions-gateway/github-actions-gateway/pull/766)/[#768](https://github.com/actions-gateway/github-actions-gateway/pull/768), and the reorder case while rebasing a release-planning branch across [#805](https://github.com/actions-gateway/github-actions-gateway/pull/805), which had shipped the very row that branch was relabelling.
-A third near-miss on 2026-07-26 — a row inserted directly above one `main` had just deleted — is what finally bought the automated check below.
-
-**`make lint-backlog` checks this for you** (rule 10).
-An ID present in your `docs/STATUS.md` but absent from the baseline's is *new* when the baseline's history never carried its anchor, and a *resurrection* when it did — the distinction a manual eyeball can't make cheaply.
-The rule fires only once your branch already contains the commit that did the deleting, so a branch that is merely behind `main` isn't flagged for a deletion a rebase will apply anyway.
-
-**That baseline is the merge base with `origin/main`, not its tip.** Every git-backed rule here asks what *your branch* changed, which is a question about the branch point.
-Against the tip, a row `main` deleted while your branch was behind read as one you had added, and rule 12 then demanded you allocate an ID for a row another session had already finished (Q684).
-Under `--staged` the baseline is the pre-commit tree instead, because that mode asks what the *commit* changes.
-
-The [merge driver](#the-merge-driver-resolve-queue-rows-by-id-not-by-line-position) closes the reorder-over-delete path at the source — it decides by ID, so a relocated row cannot outvote a deletion — but only for people who installed it, and only for local merges.
-The lint rule stays the load-bearing check.
-
-Deliberately re-opening a closed item?
-`BACKLOG_ALLOW_RESURRECT="Q1 Q2" make lint-backlog`.
-
-**To inspect by hand**, list the IDs your branch has that the branch point did not.
-Read the branch point, not `origin/main` — against the tip this prints every row `main` has deleted since you branched:
+A backlog-only change cannot fail most of `make check`, and the full gate takes ~6 minutes.
+Run the subset instead:
 
 ```bash
-base="$(git merge-base HEAD origin/main)"
-comm -23 <(grep -o 'id="Q[0-9]*"' docs/STATUS.md | sort -u) <(git show "${base}:docs/STATUS.md" | grep -o 'id="Q[0-9]*"' | sort -u)
+make queue-gates
 ```
 
-Every ID it prints should be one *you* filed.
-Anything else is a row `main` deleted and your rebase brought back — check whether its work shipped before you push.
+That is the complete set a `docs/queue/`-only diff can fail, and every member is also in `make check`, so it is a strict subset and never a second opinion.
+CI runs the full gate on the pushed branch regardless.
+
+**Run the target, don't transcribe its contents.** This list was once spelled out here as three `make` targets, and it was wrong: `roadmap-check` and `plan-index-check` both read backlog membership and both can fail on a backlog-only diff.
+A grooming pass that parked a row followed the three-target list, went green locally, and opened a PR red on `roadmap-check`.
+The set now lives in the `QUEUE_GATES` variable in [`mk/gate-lists.mk`](../../mk/gate-lists.mk), whose comment names each member and what it catches, so there is one copy to keep true.
+Transcribing is not the only way it drifts: `em-dash-check` and `page-density-check` both scan the backlog and were both missing from the variable while its comment called the list complete (Q749), so `make gate-lists-check` derives membership from the pathspec each gate hands git and fails when a fast gate that selects an item file is left out.
+It fired again at the cutover, on `page-density-check` against all 178 store pages.
+
+**When it does not apply:** if the change touches *any* other file — code, a plan doc, another page under `docs/` — run the full `make check` (plus whatever heavier tier the change warrants).
+Closing an item routinely [cascades](#what-parking-a-row-obliges-elsewhere) into a plan doc, `plan/README.md`, or a roadmap bullet, which puts the diff outside this section's narrowness.
+Author the change first, then pick the gate by what the diff actually touches.
+
+### A moved row defeated conflict detection, and one file per item ends it
+
+Under the single table, priority was a line position, so a branch that **relocated** a row while `main` **deleted** it produced no conflict at all: git applied the delete at the old position and the re-add at the new one, and a completed row silently came back.
+A clean rebase was not evidence of a correct one.
+It happened twice on 2026-07-25 and near-missed a third time the next day, which is what bought `lint-backlog` rule 10.
+
+**Rule 10 was measured at the cutover rather than ported, and the measurement said not to build it.** In throwaway repositories on git 2.55.0, both arms run:
+
+| Layout | The merge | Outcome |
+|---|---|---|
+| Single table, a row relocated far enough from the deletion to clear the diff context | **exit 0, clean** | the completed row is silently resurrected |
+| Per-item store, a `rank` edit against a file deletion | **exit 1, `CONFLICT (modify/delete)`** | the file is left in the tree, so resurrecting it takes an explicit `git add` |
+
+The rule existed because a *relocated* row and a *deleted* row are indistinguishable to a line-position merge.
+One file per item makes them a modify and a delete of one path, which git refuses rather than resolves, so the silent default the rule was built for is gone and what remains is a careless resolution of a loud conflict.
+That residual belongs to the reconciliation habit below, not to a gate.
+
+The first control run got this wrong in the informative direction: a four-row fixture put the relocation inside the deletion's diff context, so the table arm conflicted too and the comparison read as "no difference".
+Reproducing the documented silent case needed twenty rows and a relocation from position 18 to the top.
+**A probe that cannot reproduce a defect the repo has already met twice is measuring itself.**
 
 ### A hand-resolved conflict drops rows the markers never named
 
-Rule 10 catches a row that comes *back*.
-The mirror case is a row that quietly goes *away*, and no rule catches that one, because deleting a row is how a row closes: a lint pass cannot tell a completed item from a casualty.
+A conflict git refuses is loud; the resolution that follows is not.
+The case no rule catches is an item that quietly goes *away*, because deleting one is how an item closes: no lint pass can tell a completed item from a casualty.
+This applies to the keyed registry files that still have drivers, and to any hand-resolved backlog conflict.
 
-Measured on [#1471](https://github.com/actions-gateway/github-actions-gateway/pull/1471): the driver refused a `Q738` row both sides had edited, which is correct behaviour for a keyed merge, and the hand resolution that followed **deleted `Q823` and `Q822`**, rows belonging to `main` that the PR never touched, while **dropping `Q836` and `Q837`**, the two rows the PR existed to add.
-`git rebase` reported success, no marker remained, and `make status-gates` passed on the result.
+Measured on [#1471](https://github.com/actions-gateway/github-actions-gateway/pull/1471), against the backlog table when it still had a driver: the driver refused a `Q738` row both sides had edited, which is correct behaviour for a keyed merge, and the hand resolution that followed **deleted `Q823` and `Q822`**, rows belonging to `main` that the PR never touched, while **dropping `Q836` and `Q837`**, the two rows the PR existed to add.
+`git rebase` reported success, no marker remained, and the backlog gate subset passed on the result.
 **An absent marker proves a resolution is well-formed, never that it is correct.**
 
 Reproduced in a throwaway repo with the driver installed (git 2.55.0), one refused row sitting between two rows added on each side:
@@ -426,19 +348,19 @@ Reproduced in a throwaway repo with the driver installed (git 2.55.0), one refus
 
 `git diff --check` exits 0 in both.
 The second case is the worse one, because the branch ends up changing nothing at all while its commit subject and PR description still claim two rows.
-Do not lean on rule 8 for the first: it covers one label out of the whole vocabulary, and #1471 recorded `status-gates` passing on the damaged tree even though both lost rows carried it.
+Do not lean on rule 8 for the first: it covers one label out of the whole vocabulary, and #1471 recorded the gate subset passing on the damaged tree even though both lost rows carried it.
 That tree was repaired before it was ever committed, so which of the two accounts of rule 8 applies there is no longer measurable.
 
 **So reconcile the row set, not the markers.** Two comparisons name every casualty, and neither needs a count you memorised before the rebase started:
 
 ```bash
-# rows your branch had and no longer has
-comm -23 <(git show ORIG_HEAD:docs/STATUS.md | grep -o 'id="Q[0-9]*"' | sort -u) <(grep -o 'id="Q[0-9]*"' docs/STATUS.md | sort -u)
-# rows main has and your branch does not
-comm -13 <(grep -o 'id="Q[0-9]*"' docs/STATUS.md | sort -u) <(git show origin/main:docs/STATUS.md | grep -o 'id="Q[0-9]*"' | sort -u)
+# items your branch had and no longer has
+comm -23 <(git ls-tree --name-only ORIG_HEAD docs/queue/ | sort) <(git ls-tree --name-only HEAD docs/queue/ | sort)
+# items main has and your branch does not
+comm -13 <(git ls-tree --name-only HEAD docs/queue/ | sort) <(git ls-tree --name-only origin/main docs/queue/ | sort)
 ```
 
-Every ID the first prints should be one `main` closed; every ID the second prints should be one *you* closed.
+Every path the first prints should be one `main` closed; every path the second prints should be one *you* closed.
 Anything else is collateral from the resolution.
 Run them before `git rebase --continue`, and promptly either way: the next rebase or merge rewrites `ORIG_HEAD`.
 
@@ -583,7 +505,7 @@ A sighting on a **PR branch** does not meet the trigger, so the row stays in Fla
 Record *which mode* failed, too, where the row's fix addressed a specific one: [Q549](../queue/Q549.md)'s second sighting was a mode its fix never covered, and a row naming only the fixed mode would have sent the next session to re-diagnose the wrong thing.
 
 This is the one place the general "done rows are deleted" rule does **not** apply, which makes it easy to miss when a flake fix otherwise looks like a routine change.
-`scripts/docs/lint-backlog.sh` enforces it (rule 8): a `flake`-labelled Queue row that disappears entirely — measured against the [merge base](#a-moved-row-defeats-conflict-detection) with `origin/main`, or the pre-commit state under `--staged` — fails the lint, naming the row and pointing here.
+`scripts/docs/lint-backlog.sh` enforces it (rule 8): a `flake`-labelled Queue row that disappears entirely — measured against the [merge base](#a-moved-row-defeated-conflict-detection-and-one-file-per-item-ends-it) with `origin/main`, or the pre-commit state under `--staged` — fails the lint, naming the row and pointing here.
 Retiring a row per the ledger rules below is the deliberate exception: `BACKLOG_ALLOW_FLAKE_DELETE="Q123"` lets specific IDs through.
 
 ### Retiring a flake-watch row
@@ -624,41 +546,41 @@ On retirement, **move the row to [flake-watch-retired.md](flake-watch-retired.md
 That preserves the "a fix was already attempted here" memory at zero live-table cost: if the flake ever returns post-retirement it re-enters as a fresh find, and the ledger is one `grep` away to reconnect the history.
 Deleting outright throws that memory away and makes the next occurrence look novel.
 
-## The Progress table
+## Plan-level status lives in the plan index
 
-`docs/STATUS.md` keeps a plan-level **Progress** table above the Queue — one row per plan doc.
-Update it only when a plan's overall status changes (⚠️ → ✅, a new plan lands, a plan retires); most STATUS.md commits touch only the Queue.
-If completing a Queue row closes the last open item under a Progress row, update both in the same commit.
+The backlog table carried a **Progress** table above the Queue, one row per plan doc, and the store has no counterpart: [`docs/plan/README.md`](../plan/README.md) already carried per-plan Status cells with strictly more information, so Q889 deleted Progress rather than migrating it.
+Update a plan's Status cell when its overall status changes; most backlog edits touch no plan at all.
 
-When you remove a Queue row for a **shipped user-facing capability**, also check whether it graduates a bullet on the website [roadmap.md](../roadmap.md) — an "In progress / near-term" item moving to "Available now (1.0)" — and state its true maturity (GA vs. alpha) so the roadmap doesn't overclaim.
-`make roadmap-check` (in `make check`) catches the drift for you: each forward-looking roadmap bullet carries an invisible `<!-- q:QN -->` annotation, so deleting the row here fails the gate until the bullet moves.
-Deleting the row and the annotation without moving the bullet defeats it, which is the one case still on you.
+When you close an item for a **shipped user-facing capability**, also check whether it graduates a bullet on the website [roadmap.md](../roadmap.md) — an "In progress / near-term" item moving to "Available now" — and state its true maturity (GA vs. alpha) so the roadmap doesn't overclaim.
+`make roadmap-check` (in `make check`) catches the drift for you: each forward-looking roadmap bullet carries an invisible `<!-- q:QN -->` annotation, so deleting the item here fails the gate until the bullet moves.
+Deleting the item and the annotation without moving the bullet defeats it, which is the one case still on you.
 
-### `⚠️` means an open *Queue* row remains — deferred residuals don't count
+### An open marker means an open *item* remains — deferred residuals don't count
 
-A plan is `⚠️` only while it has at least one open row **in the Queue**.
-Intentionally-deferred residuals live in Deferred (or, for non-commitments, in [appendix-g](../design/appendix-g-future-enhancements.md)) and do **not** keep a plan `⚠️`: a plan whose only remainders are Deferred rows is `✅`.
-This keeps the table honest — `⚠️` reads as "active work remains," not "a box was once left unchecked."
+A plan's Status cell carries an open marker (⚠️ ❌ 🚧 🔲) only while at least one item is genuinely open under it.
+Intentionally-deferred residuals live in the store with `status: deferred` (or, for non-commitments, in [appendix-g](../design/appendix-g-future-enhancements.md)) and do **not** keep a plan open: a plan whose only remainders are deferred is done.
+This keeps the index honest — an open marker reads as "active work remains," not "a box was once left unchecked."
 
-`scripts/docs/lint-backlog.sh` enforces the transition at the moment it becomes owed: deleting the **last** Queue row that links `plan/NAME.md` fails the gate while that plan's Progress row is still `⚠️`, naming the plan and the flip.
-It fires only on that deletion, never on a steady-state scan — plenty of open rows merely *cite* a completed plan as evidence, and treating those as active work would make the rule cry wolf.
-For the rare case where the vanished row was such a citation and real work genuinely remains elsewhere, `BACKLOG_ALLOW_PROGRESS_STALE="plan/NAME.md"` admits it.
+Two gates hold it, from opposite directions.
+`check-queue-rules.py` rule 9 enforces the transition at the moment it becomes owed: deleting the **last** item targeting `plan/NAME.md` fails while that plan's index row still reads as open, naming the plan and the flip.
+It fires only on that deletion, never on a steady-state scan — plenty of open items merely *cite* a completed plan as evidence, and treating those as active work would make the rule cry wolf.
+`check-plan-index.sh` invariant 1 asks the mirror question on every run: a row claiming open work must be backed by a live item, either one targeting the plan or one the cell itself links.
+That is what catches a plan whose phases all shipped while its marker never moved, which rule 9 cannot see because no deletion is involved — it found two the day it was written, both reading "all phases shipped" under a ⚠️.
 
-When you flip a plan to `✅`, add (or update) a **Status** banner at the top of its plan doc naming the Deferred IDs carrying its residuals (e.g.
+When you flip a plan to done, add (or update) a **Status** banner at the top of its plan doc naming the deferred IDs carrying its residuals (e.g.
 "Status: Complete — residuals deferred as [Q11](../queue/Q11.md)").
-The plan doc is **not** archived in this case — its `✅` Progress row still references it.
+The plan doc is **not** archived in this case — the deferred items still reference it.
 
 ### What parking a row obliges elsewhere
 
-Deleting a row has a documented cascade — the Progress flip, plan archival, the roadmap graduation.
-**Moving a row to Deferred has the same one**, because parking changes Queue membership exactly as deleting does, and everything downstream reads Queue membership rather than row existence:
+Closing an item has a documented cascade — the plan's status flip, plan archival, the roadmap graduation.
+**Parking one has the same cascade**, because deferring changes open membership exactly as closing does, and everything downstream reads whether work is open rather than whether the item exists:
 
 | What to check | Why parking triggers it |
 |---|---|
-| The plan's **Progress** row | A plan whose only remainders are now Deferred is `✅`, not `⚠️` — deferred residuals don't count (above). |
-| The plan doc's **Status** banner | That `✅` flip owes one, naming the Deferred IDs and their triggers. |
-| The plan's row in [`plan/README.md`](../plan/README.md) | Its status text usually describes the residual as open work. |
-| The [roadmap](../roadmap.md) bullet annotated `<!-- q:QN -->` | An "In progress / near-term" bullet must name at least one row still **in the Queue**; an all-Deferred bullet was parked and belongs under "Exploring / longer-term". `make roadmap-check` fails until it moves. |
+| The plan's row in [`plan/README.md`](../plan/README.md) | A plan whose only remainders are now deferred is done, not open — deferred residuals don't count (above), and invariant 1 fails while the marker says otherwise. |
+| The plan doc's **Status** banner | That flip owes one, naming the deferred IDs and their triggers. |
+| The [roadmap](../roadmap.md) bullet annotated `<!-- q:QN -->` | An "In progress / near-term" bullet must name at least one item still open; an all-deferred bullet was parked and belongs under "Exploring / longer-term". `make roadmap-check` fails until it moves. |
 | Prose cross-references on the same page | Nothing checks these. Moving a roadmap bullet between sections leaves any "the near-term work below" phrasing pointing at the wrong place, and `make doc-links` reads links, not sentences. |
 
 Only the first two were written down before.
@@ -714,11 +636,11 @@ Everything from that decision to the tag is a backlog question, and this is its 
 | Q551 | Job skipped permanently after 4 attempts | `1.3-gate` | 🔲 open |
 | Q406 | Capacity gate `AutoscalerVerdict` mode | rides | ⤴ punted (see *Explicitly out of scope*) |
 
-Link each ID to its `STATUS.md` anchor while the row is open; a shipped or punted row's link goes stale when the row is deleted, so drop it as the row's status flips — the Q-ID itself stays, and it is what git history is searchable by.
+Link each ID to its item page while it is open; a shipped or punted item's link goes stale when the file is deleted, so drop it as the row's status flips — the Q-ID itself stays, and it is what git history is searchable by.
 
 **Delivered is a tick, not a narrative.** A row flips to ✅ in the same change that deletes its Queue row — the plan-docs-stay-current discipline already owns that edit, so the ledger costs nothing extra to keep true.
 
-**The cut condition is one grep:** no `-gate` row for this release remains in the Queue (`grep '1.3-gate' docs/STATUS.md`), plus the release-candidate dogfood validation, which is deliberately not a Queue row because it can only run against a published RC.
+**The cut condition is one grep:** no `-gate` item for this release remains open (`grep -l '1.3-gate' docs/queue/Q*.md`), plus the release-candidate dogfood validation, which is deliberately not a Queue row because it can only run against a published RC.
 
 **That validation still gets a ledger row** — Q-ID `—`, since it has none:
 
@@ -752,13 +674,13 @@ That is how the section came to advertise nine things as *actively being built* 
 
 ## Archiving completed plan docs
 
-When a plan's work fully lands and `docs/STATUS.md` no longer references it (no Progress row, no Queue/Deferred row), move the doc under `docs/plan/archive/` rather than deleting it.
+When a plan's work fully lands and no backlog item references it, move the doc under `docs/plan/archive/` rather than deleting it.
 The rationale is usually more valuable than the diff, but a fully-closed plan in the top level of `docs/plan/` is noise for the next session scanning for active work.
 
-**Archive on close, not on audit.** Do this in the same body of work that removes the plan's last `STATUS.md` reference — the moment you delete its final Queue row, or flip its Progress row to `✅` with nothing left open.
+**Archive on close, not on audit.** Do this in the same body of work that removes the plan's last backlog reference — the moment you delete its final Queue row, or flip its Progress row to `✅` with nothing left open.
 Two gates (both in `make check`) enforce it so the omission can't ship silently:
 
-- **`make plan-index-check`** fails when an active, non-ⓘ plan listed in `docs/plan/README.md` is no longer referenced by `STATUS.md` — i.e. a plan that should have been archived.
+- **`make plan-index-check`** fails when an active, non-ⓘ plan listed in `docs/plan/README.md` claims open work backed by no live item — i.e. a plan that should have been archived.
   To clear it: archive the plan (below), or, if it's ongoing spec/strategy/research, mark its README row `ⓘ`.
 - **`make doc-links`** fails on any broken link the move introduces.
 
@@ -783,13 +705,13 @@ It silences exactly that line and shows up in the diff, so the exception stays r
 
 **Protocol:**
 
-1. **Confirm STATUS.md doesn't reference the doc.** `grep -n "<docname>" docs/STATUS.md` should be empty.
+1. **Confirm no item references the doc.** `grep -rn "<docname>" docs/queue/` should be empty.
 2. **Confirm the work actually landed.** Read the plan's Status banner if it has one; otherwise grep the codebase for the named tests, types, or behaviors the plan promised.
    A plan with open work is **not** archive-ready — leave it in place and make sure the open work has a Queue row.
 3. `git mv docs/plan/<docname>.md docs/plan/archive/<docname>.md` — preserves history.
 4. **Update any in-repo links** to the new path: `docs/plan/README.md` (move the row to the **Archive** section), other plan docs (`grep -rn "<docname>.md" docs/plan/`), the `docs/development|design|operations` trees, and **the moved doc's own outbound links** — dropping a level into `archive/` breaks every relative link in the doc itself (`make doc-links` catches all of these).
 5. **Bundle archival in one commit** when several plans close in the same session — easier to review and revert as a unit.
-6. **Do not edit STATUS.md in the same commit** as the archive move; STATUS.md edits are always isolated.
+6. **Keep the archive move in its own commit**, so the rename reads as a rename rather than as part of a content change.
 
 A plan that is partially complete stays in `docs/plan/`.
 Archive is for "everything in this doc has shipped," not "most of it has."

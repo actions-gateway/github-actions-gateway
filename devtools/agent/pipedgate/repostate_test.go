@@ -109,8 +109,12 @@ func TestRepoStateWarnings(t *testing.T) {
 			cmd:  "git push -u origin HEAD",
 			repo: fakeRepo{branchFiles: []string{"cmd/agc/run.go"}},
 		},
-		// Every branch edits the backlog, and a merge driver resolves it by row
-		// ID. Counting it would make this fire on every push.
+		// A registry file nearly every branch edits, resolved by a merge driver
+		// keyed on its row. Counting it would make this fire on every push. The
+		// fixture was docs/STATUS.md until Q889 deleted it; the roadmap is the
+		// closest surviving shape, and the backlog has no driver now. Not the
+		// plan index, whose path no-plan-refs-check forbids in code because
+		// plans get archived and the citation rots with the move.
 		{
 			name: "overlap only in the merge-driver-owned files",
 			cmd:  "git push -u origin HEAD",
@@ -119,33 +123,33 @@ func TestRepoStateWarnings(t *testing.T) {
 		{
 			name: "a driver-owned overlap does not mask a real one",
 			cmd:  "git push -u origin HEAD",
-			repo: fakeRepo{branchFiles: []string{"docs/STATUS.md", "Makefile"}, baseGained: []string{"docs/STATUS.md", "Makefile"}},
+			repo: fakeRepo{branchFiles: []string{"docs/roadmap.md", "Makefile"}, baseGained: []string{"docs/roadmap.md", "Makefile"}},
 			warn: true,
 		},
 		// Q790, both directions. The discount holds only while the merge really
 		// resolves: the driver refuses on a row deleted on one side and edited on
 		// the other, which is what every flake-row move looks like, and #1383 was
-		// left dirty by #1384 with docs/STATUS.md as its only changed file.
+		// left dirty by #1384 with docs/roadmap.md as its only changed file.
 		{
 			name: "a driver-owned overlap the merge leaves conflicted",
 			cmd:  "git push -u origin HEAD",
 			repo: fakeRepo{
-				branchFiles: []string{"docs/STATUS.md"},
-				baseGained:  []string{"docs/STATUS.md"},
-				conflicts:   []string{"docs/STATUS.md"},
+				branchFiles: []string{"docs/roadmap.md"},
+				baseGained:  []string{"docs/roadmap.md"},
+				conflicts:   []string{"docs/roadmap.md"},
 			},
 			warn:   true,
 			substr: "dirty now, not at kickback time",
 		},
 		// The other direction, and the one that makes dropping the entry the wrong
-		// fix: nearly every branch edits the backlog, so a discount that stopped
-		// holding for a resolvable merge would fire on nearly every push.
+		// fix: nearly every branch edits a registry file, so a discount that
+		// stopped holding for a resolvable merge would fire on nearly every push.
 		{
 			name: "a driver-owned overlap the merge resolves stays discounted",
 			cmd:  "git push -u origin HEAD",
 			repo: fakeRepo{
-				branchFiles: []string{"docs/STATUS.md"},
-				baseGained:  []string{"docs/STATUS.md"},
+				branchFiles: []string{"docs/roadmap.md"},
+				baseGained:  []string{"docs/roadmap.md"},
 				conflicts:   []string{"cmd/agc/run.go"},
 			},
 		},
@@ -323,11 +327,11 @@ func TestMergeProbeRunsOnlyForDiscountedOverlap(t *testing.T) {
 		},
 		{
 			name: "discounted on one side only",
-			repo: fakeRepo{branchFiles: []string{"docs/STATUS.md"}, baseGained: []string{"Makefile"}},
+			repo: fakeRepo{branchFiles: []string{"docs/roadmap.md"}, baseGained: []string{"Makefile"}},
 		},
 		{
 			name: "discounted on both sides",
-			repo: fakeRepo{branchFiles: []string{"docs/STATUS.md"}, baseGained: []string{"docs/STATUS.md"}},
+			repo: fakeRepo{branchFiles: []string{"docs/roadmap.md"}, baseGained: []string{"docs/roadmap.md"}},
 			want: 1,
 		},
 	}
@@ -347,13 +351,13 @@ func TestMergeProbeRunsOnlyForDiscountedOverlap(t *testing.T) {
 	// ref, and a PreToolUse hook must not fetch — so it never pays for the probe.
 	calls := 0
 	repo := fakeRepo{
-		branchFiles: []string{"docs/STATUS.md"},
-		openPRs:     []PR{{Number: 1, Files: []string{"docs/STATUS.md"}}},
-		conflicts:   []string{"docs/STATUS.md"},
+		branchFiles: []string{"docs/roadmap.md"},
+		openPRs:     []PR{{Number: 1, Files: []string{"docs/roadmap.md"}}},
+		conflicts:   []string{"docs/roadmap.md"},
 		mergeCalls:  &calls,
 	}
 	if got := Decide("gh pr create --fill", false, reg, repo); got != "" {
-		t.Errorf("want silence for a backlog-only PR overlap, got: %s", got)
+		t.Errorf("want silence for a driver-owned-only PR overlap, got: %s", got)
 	}
 	if calls != 0 {
 		t.Errorf("gh pr create ran the merge probe %d times", calls)
@@ -378,17 +382,17 @@ func TestParseMergeTree(t *testing.T) {
 	// Three stages of one path, then the empty record, then the messages — which
 	// also name the path and must not be read as conflicts of their own.
 	raw := tree + nul +
-		"100644 69bc260a 1\tdocs/STATUS.md" + nul +
-		"100644 b671dca3 2\tdocs/STATUS.md" + nul +
-		"100644 bf2c188e 3\tdocs/STATUS.md" + nul +
+		"100644 69bc260a 1\tdocs/roadmap.md" + nul +
+		"100644 b671dca3 2\tdocs/roadmap.md" + nul +
+		"100644 bf2c188e 3\tdocs/roadmap.md" + nul +
 		"100644 aa11bb22 2\tMakefile" + nul +
 		"100644 cc33dd44 3\tMakefile" + nul +
 		nul +
-		"1" + nul + "docs/STATUS.md" + nul + "CONFLICT (contents)" + nul +
-		"CONFLICT (content): Merge conflict in docs/STATUS.md\n" + nul
+		"1" + nul + "docs/roadmap.md" + nul + "CONFLICT (contents)" + nul +
+		"CONFLICT (content): Merge conflict in docs/roadmap.md\n" + nul
 
 	got := parseMergeTree([]byte(raw))
-	want := []string{"docs/STATUS.md", "Makefile"}
+	want := []string{"docs/roadmap.md", "Makefile"}
 	if len(got) != len(want) {
 		t.Fatalf("parseMergeTree = %v, want %v", got, want)
 	}
@@ -485,7 +489,7 @@ func TestStatusVerdictWinsOverRepoState(t *testing.T) {
 
 // The shipped registry has to carry the repo-state settings, not just gates: a
 // missing overlap_ignore would make both checks fire on every branch that
-// touches the backlog, which is all of them. Reconciled against .gitattributes
+// touches a registry file, which is nearly all of them. Reconciled against .gitattributes
 // in both directions, so neither file can gain an entry alone.
 func TestShippedRegistryCarriesRepoStateSettings(t *testing.T) {
 	reg := shippedRegistry(t)

@@ -4,7 +4,7 @@ A gate run locally and the same gate run in CI answered differently about the sa
 The local answer was wrong, and nothing about the run looked wrong: it took no flag it did not know, printed plausible output, and named four real files.
 
 Kept because the interesting part is not the build rule.
-That is a one-line Makefile defect already tracked as [Q842](https://github.com/actions-gateway/github-actions-gateway/blob/main/docs/STATUS.md).
+That is a one-line Makefile defect already tracked as [Q842](https://github.com/actions-gateway/github-actions-gateway/blob/main/docs/queue/README.md).
 The interesting part is what a wrong verdict did once it was believed: it entered three pull request descriptions, all of which merged, and became the opening instruction of a dispatched worker session, gaining authority at each restatement without ever gaining evidence.
 
 ## Impact
@@ -48,7 +48,7 @@ It is a reasonable inference: the four files are byte-identical to `origin/main`
 What is not considered is a third possibility, that the instrument is wrong.
 
 **2026-08-13 to 08-14.** The claim is restated in three pull request descriptions as a note about repository state, each time alongside the observation that CI cannot see the gate because it is in `CHECK_FAST_GATES` and no workflow runs it.
-That observation is true and is filed as a second instance of [Q831](https://github.com/actions-gateway/github-actions-gateway/blob/main/docs/STATUS.md).
+That observation is true and is filed as a second instance of [Q831](https://github.com/actions-gateway/github-actions-gateway/blob/main/docs/queue/README.md).
 It also supplies a ready explanation for why nobody else has noticed, which removes the one prompt that might have triggered a re-check.
 
 **2026-08-14.** A worker session is dispatched with "unbreak `main`" first and the Q831 wiring second.

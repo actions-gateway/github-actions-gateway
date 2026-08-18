@@ -22,7 +22,6 @@
 4 deploy/monitoring/README.md
 7 deploy/monitoring/preview/README.md
 7 docs/README.md
-39 docs/STATUS.md
 17 docs/assets/README.md
 11 docs/assets/fonts/README.md
 61 docs/design/01-executive-summary.md

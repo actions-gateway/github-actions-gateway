@@ -14,7 +14,7 @@
 # with it.
 
 # The one-command pre-review gate. Run this before requesting review or opening a
-# PR: gofmt + golangci-lint, STATUS.md format lint, shellcheck over scripts/, and
+# PR: gofmt + golangci-lint, the backlog store rules, shellcheck over scripts/, and
 # the (plain) unit tests — the fast local loop. The CI `unit-test` job runs the
 # same unit tests but under the race detector (`make test-race`); that heavier
 # run stays out of `check` so the dev gate doesn't become an unthrottled `-race`
@@ -25,7 +25,7 @@
 #
 # The cheap gates below take no heavy-build slot and are independent of each
 # other, so they run concurrently (~50s serial -> ~15s) and report first: a
-# STATUS.md format slip should not wait out the unit suite to tell you. They go
+# backlog format slip should not wait out the unit suite to tell you. They go
 # through scripts/ci/run-parallel.sh rather than `make -j` because macOS ships GNU
 # make 3.81, which has no `-O` output sync — `-j` would interleave two failing
 # gates' output unreadably, while run-parallel.sh labels every line with its
@@ -37,12 +37,12 @@
 # These two variables are the single source of truth for what `make check` runs.
 # `make list-gates` renders them with each gate's own `##` description, so the
 # docs name that target instead of transcribing the list (Q649) — the same
-# reason STATUS_GATES exists below. `gate-lists-check` reconciles the recipe,
+# reason QUEUE_GATES exists below. `gate-lists-check` reconciles the recipe,
 # the .PHONY declarations and the doc pointer against them — and, since Q831,
 # `.github/workflows/` too: a gate listed here that no workflow runs is enforced
 # by `make check` alone, so it gates nothing on a PR. A gate that is
 # deliberately local-only says so with `# ci-scope: none` above its .PHONY.
-CHECK_FAST_GATES := lint-backlog status-isolation-check roadmap-check \
+CHECK_FAST_GATES := roadmap-check \
                     plan-index-check no-plan-refs-check \
                     go-version-check license-header-check conflict-markers-check \
                     v2-api-sync-check path-filters-check gate-lists-check shellcheck \
@@ -50,27 +50,24 @@ CHECK_FAST_GATES := lint-backlog status-isolation-check roadmap-check \
                     actionlint uses-pinned-check chart-crds-check chart-rbac-check chart-webhook-check \
                     codegen-check api-reference-check scripts-test claude-usage-test \
                     doc-links release-pins-check em-dash-check page-density-check \
-                    script-docs-check queue-rules-check queue-drift-check \
+                    script-docs-check queue-rules-check queue-lint \
                     semver-floor-sources-check template-library-check \
                     md-reflow-check comparison-stamps-check promql-check \
                     metric-tiers-check reason-tiers-check
 
 CHECK_HEAVY_GATES := build-tags-check lint cover-check
 
-# The complete set of gates a docs/STATUS.md-only change can fail, so a backlog
+# The complete set of gates a docs/queue/-only change can fail, so a backlog
 # edit can be verified in seconds instead of waiting out the full `make check`:
-#   lint-backlog          the format rules
-#   status-isolation-check a commit on this branch carries the backlog plus something else
-#   roadmap-check         a row changed table or vanished while a roadmap bullet still names it
-#   plan-index-check      the last Queue row citing a plan went away, so archival is owed
+#   queue-lint            the store's own format: frontmatter, rank, title cap, a target that no longer resolves
+#   queue-rules-check     a flake item vanished, a plan's last item left its index row open, a label is undeclared
+#   roadmap-check         an item changed status or vanished while a roadmap bullet still names it
+#   plan-index-check      the last item citing a plan went away, so archival is owed
 #   conflict-markers-check a marker survived an Edit-based conflict resolution
-#   doc-links             a #QN anchor or plan link broke while rows moved
-#   em-dash-check         a Notes cell pushed the file over its baseline ceiling
-#   page-density-check    an admonition run in the prose above the tables
-# status-isolation-check reads the branch's commits rather than its diff, which
-# is why it belongs here rather than only in CI: the fast path exists for the
-# hurried resolve-and-push, which is exactly when an --amend lands on the wrong
-# HEAD (Q652). It is git-only and costs milliseconds.
+#   doc-links             an item's target or a plan link broke while items moved
+#   em-dash-check         an item's notes pushed the file over its baseline ceiling
+#   md-reflow-check       an item body written as one paragraph rather than one sentence per line
+#   page-density-check    an admonition run, or a stat tile repeated across pages
 # Every entry is also in CHECK_FAST_GATES, so this is a strict subset of `make
 # check` and never a second opinion. Completeness is the half that had no
 # enforcement: em-dash-check scans `*.md` and page-density-check `docs/*.md`, both
@@ -80,13 +77,18 @@ CHECK_HEAVY_GATES := build-tags-check lint cover-check
 # itself. The list lives as a variable, and the docs point at the target rather
 # than transcribing it, because a hand-copied list is what drifted first:
 # docs/development/maintaining-backlog.md named three of them and called that the
-# complete set, so a `docs/STATUS.md` change that parked a row shipped a PR red
-# on roadmap-check.
-STATUS_GATES := lint-backlog status-isolation-check roadmap-check plan-index-check \
-                 queue-drift-check \
-                 conflict-markers-check doc-links em-dash-check page-density-check
+# complete set, so a backlog change that parked an item shipped a PR red on
+# roadmap-check.
+#
+# Three members retired with the table (Q889). lint-backlog and
+# status-isolation-check took docs/STATUS.md as their subject rather than as a
+# source; queue-drift-check held the table and the store to the same items
+# through the migration and has nothing left to compare.
+QUEUE_GATES := queue-lint queue-rules-check roadmap-check plan-index-check \
+                 conflict-markers-check doc-links em-dash-check md-reflow-check \
+                 page-density-check
 
-# The gates a prose change can fail, for the same reason STATUS_GATES exists one
+# The gates a prose change can fail, for the same reason QUEUE_GATES exists one
 # rung over: they cost seconds each and they are what a docs change trips at the
 # very END of a ten-minute `make check`, which is the worst possible moment to
 # learn it. CLAUDE.md asked contributors to remember to run them as a set the
@@ -100,7 +102,7 @@ STATUS_GATES := lint-backlog status-isolation-check roadmap-check plan-index-che
 #   md-reflow-check      prose that is not sentence-per-line
 #   page-density-check   an admonition wall, or a stat tile repeated across pages
 #   release-pins-check   an install/upgrade page pinning a superseded release
-# Every entry is also in CHECK_FAST_GATES, so like STATUS_GATES this is a strict
+# Every entry is also in CHECK_FAST_GATES, so like QUEUE_GATES this is a strict
 # subset of `make check` and never a second opinion.
 DOCS_GATES := doc-links plan-index-check no-plan-refs-check em-dash-check \
               md-reflow-check page-density-check release-pins-check \
@@ -181,12 +183,10 @@ SCRIPTS_TESTS := agent/claude-go-throttle-hook-test agent/local-throttle-test \
                  docs/check-release-pins-test \
                  docs/check-roadmap-test docs/check-no-plan-refs-in-code-test \
                  docs/check-plan-index-test docs/check-script-docs-test \
-                 docs/alloc-queue-id-test docs/check-status-isolation-test \
+                 docs/alloc-queue-id-test \
                  docs/find-duplicate-rows-test \
                  docs/git-merge-plan-index-test docs/git-merge-roadmap-test \
-                 docs/git-merge-status-test \
-                 docs/lint-backlog-test \
-                 docs/check-queue-rules-test docs/check-queue-drift-test \
+                 docs/check-queue-rules-test \
                  docs/queue-unblock-test \
                  docs/queue-test docs/rank-vectors-test \
                  docs/release-gates-hook-test docs/release-version-hook-test \

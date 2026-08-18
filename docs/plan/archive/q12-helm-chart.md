@@ -1,6 +1,6 @@
 # Q12 — Production Helm chart (`charts/actions-gateway/`)
 
-← [Milestone 5 §1](../milestone-5.md#1-packaging-helm-chart) | [Release 1.0 §C](../release-1.0.md#c-packaging--supply-chain--gating--recommended) | [STATUS](../../STATUS.md)
+← [Milestone 5 §1](../milestone-5.md#1-packaging-helm-chart) | [Release 1.0 §C](../release-1.0.md#c-packaging--supply-chain--gating--recommended) | [STATUS](../../queue/README.md)
 
 **Goal.** Ship a Helm chart that an operator can `helm install` to deploy the Gateway Manager Controller (GMC) — its CRDs, RBAC, validating webhook, and admission policy — with every default at the secure posture already encoded in the `cmd/gmc/config/` kustomize bases.
 Helm was decided over Kustomize ([D-M5-1](../milestone-5.md#11-install-vehicle--decided-helm-chart)).
@@ -64,7 +64,7 @@ Each has a documented default and a `values.schema.json` entry where it constrai
 
 The GMC's `crd/bases/…_runnergroups.yaml` (8041 lines) is **stale** vs the AGC authoritative `cmd/agc/config/crd/…_runnergroups.yaml` (8738 lines).
 The chart sources the **AGC** copy per the task.
-Reconciling the two bases (so `make manifests` keeps them in sync) is **[Q73](../../STATUS.md)** and is out of scope here — this PR only consumes the authoritative copy.
+Reconciling the two bases (so `make manifests` keeps them in sync) is **[Q73](../../queue/README.md)** and is out of scope here — this PR only consumes the authoritative copy.
 
 ## Offline validation (no cluster)
 
@@ -91,7 +91,7 @@ A later **production-posture re-validation** on the current chart (digest-pinned
 
 ## Out of scope (documented future slices)
 
-- CI drift check that re-renders the chart and diffs against the kustomize bases (M5 §7 risk row) — folds into [Q66](../../STATUS.md) install-artifact validation.
-- `polaris` posture scan against the rendered output — **[Q14](../../STATUS.md)**.
-- Publishing the chart as an OCI artifact with digest-pinned images and cosign signatures — **[Q28](../../STATUS.md)**.
-- Reconciling the RunnerGroup CRD drift at the kustomize-base layer — **[Q73](../../STATUS.md)**.
+- CI drift check that re-renders the chart and diffs against the kustomize bases (M5 §7 risk row) — folds into [Q66](../../queue/README.md) install-artifact validation.
+- `polaris` posture scan against the rendered output — **[Q14](../../queue/README.md)**.
+- Publishing the chart as an OCI artifact with digest-pinned images and cosign signatures — **[Q28](../../queue/README.md)**.
+- Reconciling the RunnerGroup CRD drift at the kustomize-base layer — **[Q73](../../queue/README.md)**.

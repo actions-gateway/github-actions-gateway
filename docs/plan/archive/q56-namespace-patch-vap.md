@@ -1,7 +1,7 @@
 # Q56 — Gate GMC cluster-wide `namespaces: patch` (k8s audit §B B2)
 
 **Status:** ✅ Done — shipped via the `namespace-psa-guard` VAP + marker-label contract; covered by `TestGMC_NamespacePSAGuard_EnforcesMarkerAndFieldScope`.
-**Queue:** [Q56](../../STATUS.md) · **Finding:** [k8s-best-practices.md §B B2](k8s-best-practices.md#b-rbac--cluster-wide-privilege-)
+**Queue:** [Q56](../../queue/README.md) · **Finding:** [k8s-best-practices.md §B B2](k8s-best-practices.md#b-rbac--cluster-wide-privilege-)
 
 ## Goal
 
@@ -37,7 +37,7 @@ The marker scope already bounds the blast radius to GMC-managed tenant namespace
 A compromised GMC can still flip the PSA profile *within a tenant namespace it already manages* (e.g.
 `baseline` → `privileged` on that one tenant).
 That blast radius is inherent — the GMC's whole job is managing that tenant's PSA.
-The complementary control is CEL immutability / downgrade-audit on `securityProfile` itself, tracked as [Q33](../../STATUS.md) (k8s audit §D D5).
+The complementary control is CEL immutability / downgrade-audit on `securityProfile` itself, tracked as [Q33](../../queue/README.md) (k8s audit §D D5).
 Q56 is strictly about non-tenant namespaces.
 
 ## Deliverables

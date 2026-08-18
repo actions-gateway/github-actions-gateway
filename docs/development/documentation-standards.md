@@ -4,7 +4,7 @@ The canonical home for **how we write and maintain docs** — the goals, the sty
 It complements two neighbours rather than repeating them:
 
 - [doc-update-matrix.md](doc-update-matrix.md) — *which* docs to update for each kind of change.
-- [maintaining-backlog.md](maintaining-backlog.md) — rules specific to [STATUS.md](../STATUS.md).
+- [maintaining-backlog.md](maintaining-backlog.md) — rules specific to [the backlog](../queue/README.md).
 
 The bar is **correct and findable first, usable as well** — not polish in place of substance.
 A beautifully scannable doc that is wrong, missing, or the wrong type for the reader's task still fails.
@@ -356,7 +356,7 @@ The check is in `make check` and costs about a second for the whole tree.
 
 Measured 2026-08-13 on mdreflow v0.1.7: 99.70% of interior line breaks in the docset's prose sit at a sentence boundary, 13,746 of 13,787, leaving 41.
 The formatter declines 38 paragraphs across 8 files, spanning 90 source lines.
-"In-scope" excludes the generated docs and `docs/STATUS.md`, which `.mdreflow.yaml` skips.
+"In-scope" excludes the generated docs, which `.mdreflow.yaml` skips.
 Re-derive both rather than quoting them: `make md-reflow-coverage` recomputes the percentage and `ARGS=-v` lists all 41, while `make md-reflow-explain` names each declined paragraph with a stable reason code.
 Neither number is this page's to hold, and the classification below is reproducible without re-diagnosing anything.
 
@@ -433,7 +433,7 @@ Keep them current:
 - **Keep each `README.md` index complete.** A new doc gets a row in its directory's `README.md` index in the same change (a goal-2 *findability* failure otherwise).
 - **Archive finished plans.** When a plan's last STATUS reference is removed, update its [`docs/plan/README.md`](../plan/README.md) row and archive the plan in the same change — `make plan-index-check` enforces this.
   See [maintaining-backlog.md](maintaining-backlog.md#archiving-completed-plan-docs).
-- **STATUS.md gets its own commit.** It is high-contention; isolating its changes keeps rebases trivial.
+- **A backlog change gets its own commit when the change also touches code.** The item is the *why* and the code the *what*; a reviewer should not have to separate them.
   Queue Notes have a hard 250-char cap (lint-enforced).
   Details: [maintaining-backlog.md](maintaining-backlog.md).
 - **Links and anchors are checked, twice.** `make doc-links` (in `make check`) fails on broken cross-file links and heading anchors as **github.com** resolves them; `make docs-build` re-checks them as the **published site** does.
@@ -448,7 +448,7 @@ What exists today, and what's proposed:
 | Signal | Goal | Status |
 |---|---|---|
 | `make plan-index-check` — every plan doc is indexed/archived, and no `release-X.Y.md` row still reads as open for a published release (Q812) | 1, 2 | Wired (`make check`). |
-| STATUS.md lint — Queue shape, 250-char Note cap | 1 | Wired (`make check`). |
+| Backlog store lint — frontmatter, rank, 72-char title cap, unresolvable targets | 1 | Wired (`make check`). |
 | Per-change doc updates via the [doc-update-matrix](doc-update-matrix.md) | 1 | Convention, enforced in review (PR self-check). |
 | `make doc-links` — broken cross-file links + heading anchors, GitHub slugs (Q52) | 1, 2 | Wired (`make check`). The automated guard against link rot. |
 | `make docs-build` — the same links as the published site resolves them (Q560) | 1, 2 | Wired (`pages.yml` PR gate). Catches the site-only 404s `doc-links` cannot see. |
