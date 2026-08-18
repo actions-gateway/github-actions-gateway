@@ -143,6 +143,16 @@ em-dash-check: ## Fail when a doc gains em-dashes above its baseline, or a new d
 page-density-check: ## Fail on an admonition wall, or a stat tile saying the same thing on two pages
 	scripts/docs/check-page-density.sh
 
+# upgrade.md's hand-kept index against its own headings (Q865). doc-links can
+# only fail an anchor that is written, so a heading the index never mentions has
+# no link to check and drops out of the page's own map in silence: three had,
+# and the entries for three more had drifted out of document order. Scoped to
+# that one page — every other doc either has no hand-kept index or is short
+# enough to read whole, and a repo-wide version wants its own item.
+.PHONY: upgrade-toc-check
+upgrade-toc-check: ## Fail when upgrade.md's Table of Contents has lost, gained, or reordered a heading
+	scripts/docs/check-upgrade-toc.sh
+
 # The shipped PrometheusRule is an appliable artifact whose PromQL nothing parsed
 # (Q827) and whose docs drifted from it unnoticed (Q818). Both failures are
 # silent: a wrong expression never fires, and a documented-but-unshipped rule
