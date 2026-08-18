@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q864/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q910/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>Ship the abandoned-runs panel the tenant dashboard doc already documents - GitHub Actions Gateway</title>
+        <title>Parse the shipped dashboards' PromQL, not just the rules file - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#ship-the-abandoned-runs-panel-the-tenant-dashboard-doc-already-documents" class="md-skip">
+        <a href="#parse-the-shipped-dashboards-promql-not-just-the-rules-file" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Ship the abandoned-runs panel the tenant dashboard doc already documents
+              Parse the shipped dashboards' PromQL, not just the rules file
             
           </span>
         </div>
@@ -2567,9 +2567,11 @@
   
 
 
-<h1 id="ship-the-abandoned-runs-panel-the-tenant-dashboard-doc-already-documents">Ship the abandoned-runs panel the tenant dashboard doc already documents<a class="headerlink" href="#ship-the-abandoned-runs-panel-the-tenant-dashboard-doc-already-documents" title="Permanent link">&para;</a></h1>
-<p>Measured 2026-08-14: <a href="../../operations/observability-dashboards/">Row 3</a> lists an <code>Abandoned runs awaiting capacity</code> panel on <code>abandoned_run_rerun_waits_total</code>; the shipped JSON has none, and the grid slot beside it is free.
-Q818's shape.</p>
+<h1 id="parse-the-shipped-dashboards-promql-not-just-the-rules-file">Parse the shipped dashboards' PromQL, not just the rules file<a class="headerlink" href="#parse-the-shipped-dashboards-promql-not-just-the-rules-file" title="Permanent link">&para;</a></h1>
+<p><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/manifest/check-promql.sh">check-promql.sh</a> pins <code>RULE_FILE</code> to <code>deploy/monitoring/prometheusrule.yaml</code>, so <code>promqlcheck</code> reads one file and the two shipped dashboards' 44 + 18 <code>targets[].expr</code> are parsed by nothing.
+Measured 2026-08-18: replacing a tenant-dashboard expression with <code>sum by ((((</code> still passes <code>manifest-validate</code>, whose dashboard step is a <code>jq</code> syntax parse (Q827) that a malformed query string satisfies.
+Same class as Q827 one step on: syntax is gated, the queries are not.
+Distinct from <a href="../Q868/">Q868</a>, which gates the render.</p>
 
 
 
