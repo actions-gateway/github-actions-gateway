@@ -18,9 +18,12 @@ Every open item, in priority order, is in the [working backlog](https://actions-
 
 ## In progress / near-term
 
-Committed to a named release.
-Every item here blocks a release tag, and nothing else appears in this section: work waiting on demand, on an unbuilt prerequisite, or on hardware sits under [Exploring / longer-term](#exploring--longer-term) with the signal that revives it.
-The pill beside each title names the release it blocks, read from the backlog rather than typed here, so it cannot outlive the commitment.
+Scoped work, none of it waiting on an outside signal.
+Anything that waits on demand, on an unbuilt prerequisite, or on hardware sits under [Exploring / longer-term](#exploring--longer-term) with the event that revives it.
+
+Some of this is committed to a named release, and a pill beside the title says which.
+The pill is read from the backlog rather than typed here, so it cannot outlive the commitment.
+No pill means the item is on the near-term plan with no release decided for it yet.
 
 
 - **[Persistent and shared worker storage](operations/README.md)** <!-- q:Q719 --> Workers are storage-less by design and nothing validates a `ReadWriteMany` volume mounted into one, so the stance is undocumented rather than decided. `ReadWriteMany` is how jobs share files and what ARC's `containerMode: kubernetes` depends on, so it also matters to anyone migrating off that mode.

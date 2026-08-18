@@ -41,28 +41,36 @@ Each waits on a real signal, and each carries a revive trigger on the backlog ra
 
 | Waiting on | Items |
 |---|---|
-| Recorded demand from an operator | The proxy hardening cluster: [Q564](../queue/Q564.md) audit logging, [Q565](../queue/Q565.md) rate limiting, [Q566](../queue/Q566.md) in-cluster TLS, [Q567](../queue/Q567.md) per-group pools |
-| An operator ask plus measurement | [Q408](../queue/Q408.md) untrusted-PR egress isolation |
+| Recorded demand from an operator | The proxy hardening cluster: [Q565](../queue/Q565.md) rate limiting, [Q566](../queue/Q566.md) in-cluster TLS, [Q567](../queue/Q567.md) per-group pools |
 | An unbuilt prerequisite | [Q555](../queue/Q555.md) flaky-job retry, which needs a real job outcome |
 | Hardware nobody has yet | [Q765](../queue/Q765.md) GHES validation on a real appliance |
 
+**Two of the original seven are back.** [Q408](../queue/Q408.md) waited on an operator ask plus a measurement and [Q564](../queue/Q564.md) on recorded demand, and both triggers fired by 2026-08-13: the maintainer is the operator asking for untrusted-PR CI, and Q564's demand is [Q725](../queue/Q725.md), which had sat in the Queue the whole time.
+That is the trigger list working rather than a rule being bent, and it is what narrowed the rule above.
+
 The proxy cluster is the clearest case and the one most likely to be re-litigated.
-[release-1.4.md](release-1.4.md) shelved all four together with the reasoning that they are a coherent release theme, and recorded in the same breath that **none has demand recorded against it**.
+[release-1.4.md](release-1.4.md) shelved all four together with the reasoning that they are a coherent release theme, and recorded in the same breath that **none had demand recorded against it**.
+That still holds of the three left, and Q564 leaving on a recorded ask is the reasoning working rather than failing.
 A theme with no demand is a theme, not a release.
 
 ## The rule this establishes
 
-**The roadmap's near-term section means "committed to a named release".** An item with no release belongs in Deferred with a revive trigger, and surfaces on the roadmap under *Exploring / longer-term*.
+**The roadmap's near-term section means "not waiting on an outside signal".** An item that waits on demand, on an unbuilt prerequisite, or on hardware belongs in Deferred with a revive trigger, and surfaces on the roadmap under *Exploring / longer-term*.
 
 This is enforceable rather than aspirational: `roadmapcheck` already binds each roadmap bullet to its backlog rows and requires a near-term bullet to name at least one Queue row.
 Parking an item moves the row to Deferred, which moves the bullet, which the gate checks.
+
+**Narrowed 2026-08-18.** This rule originally read *"committed to a named release"*, which is a stronger claim than the gate makes and than the ladder can keep.
+The two coincide only while every ungated item is also parked, and a revive trigger firing breaks that: [Q408](../queue/Q408.md) and [Q564](../queue/Q564.md) came back to the Queue on 2026-08-13 with their triggers fired, so rule 4 moved both bullets into near-term with no release to name.
+Restoring the stronger reading needs either an invented gate label, which publishes a commitment nobody made, or a re-parked row whose trigger has fired, which is the dishonesty this page exists to remove, pointed the other way.
+The release commitment is the narrower claim the `X.Y-gate` label carries on its own, so near-term holds both gated and ungated work (Q843).
 
 The failure mode to watch is the comfortable one: leaving an item in the Queue because parking it feels like giving up.
 Deferred is not a graveyard here, it is a trigger list, and every row in it names the event that revives it.
 
 ## What this does not decide
 
-**Applied 2026-08-09.** The seven punted items above moved to Deferred with the triggers this page names, and [Q719](../queue/Q719.md) and [Q727](../queue/Q727.md) now carry `1.6-gate`, which is what publishes the commitment where an adopter reads it.
+**Applied 2026-08-09.** The seven punted items moved to Deferred with the triggers this page names (five of them still are), and [Q719](../queue/Q719.md) and [Q727](../queue/Q727.md) now carry `1.6-gate`, which is what publishes the commitment where an adopter reads it.
 
 That does not make 1.6 a decided release.
 The labels encode the target, and the reading above still governs: if both items slip on demand, the labels come off rather than an empty tag being cut.
