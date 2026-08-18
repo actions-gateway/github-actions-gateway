@@ -79,6 +79,8 @@ status_md() {
 REPO="$WORKDIR/repo"
 mkdir -p "$REPO"
 git -C "$REPO" init -q -b trunk
+# Q820: no detached maintenance racing the next command in a fixture repo.
+git -C "$REPO" config maintenance.auto false
 
 status_md "$(prow Q3)" -- "$(qrow Q1)" "$(qrow Q2)" -- "$(drow Q4)" \
 	>"$REPO/STATUS.md"
@@ -130,6 +132,7 @@ expect_eq 'deferred row is parked, not aging' \
 REPO2="$WORKDIR/repo2"
 mkdir -p "$REPO2"
 git -C "$REPO2" init -q -b trunk
+git -C "$REPO2" config maintenance.auto false
 
 # An escaped pipe inside a cell. Splitting the row on every `|` truncates the
 # title at the escape and shifts every field after it, so the row's size is read
@@ -182,6 +185,7 @@ expect_eq 'the replay itself sees the fenced row (line-based by construction)' \
 REPO3="$WORKDIR/repo3"
 mkdir -p "$REPO3/docs"
 git -C "$REPO3" init -q -b trunk
+git -C "$REPO3" config maintenance.auto false
 
 # commit_on DATE SUBJECT — commit the worktree with both clocks pinned, so the
 # cycle times below are the fixture's and not the day the suite runs.

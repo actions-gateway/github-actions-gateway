@@ -222,6 +222,8 @@ func TestGitPagerAgainstRealGit(t *testing.T) {
 	}
 
 	run("init", "-q", "-b", "main")
+	// Q820: no detached maintenance racing the next command in a fixture repo.
+	run("config", "maintenance.auto", "false")
 	write("docs/operations/upgrade.md", "one\n")
 	write("scripts/ci/gate.sh", "#!/bin/sh\n")
 	run("add", "-A")

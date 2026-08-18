@@ -27,6 +27,8 @@ func gitRepo(t *testing.T) string {
 		}
 	}
 	run("init", "-q", "-b", "main")
+	// Q820: no detached maintenance racing the next command in a fixture repo.
+	run("config", "maintenance.auto", "false")
 	commit := func(path, subject, body string) {
 		full := filepath.Join(dir, path)
 		if err := os.MkdirAll(filepath.Dir(full), 0o750); err != nil {

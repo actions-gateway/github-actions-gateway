@@ -134,6 +134,8 @@ setup_repo() {
     (
         cd "$d"
         git init -q -b main
+        # Q820: no detached maintenance racing the next command in a fixture repo.
+        git config maintenance.auto false
         git config user.email t@t.t
         git config user.name t
         git commit -q --allow-empty -m base
@@ -190,6 +192,7 @@ prepared_repo() {
     shift
     mkdir -p "$dir"
     git -C "$dir" init -q .
+    git -C "$dir" config maintenance.auto false
     git -C "$dir" config user.email t@example.com
     git -C "$dir" config user.name t
     : >"$dir/seed"

@@ -357,6 +357,8 @@ fi
 G="$TMP/repo"
 mkdir -p "$G/docs/queue"
 git -C "$G" init -q
+# Q820: no detached maintenance racing the next command in a fixture repo.
+git -C "$G" config maintenance.auto false
 git -C "$G" config user.email t@example.com
 git -C "$G" config user.name Test
 item "$G/docs/queue" Q1 a0 ready
@@ -397,8 +399,10 @@ fi
 C="$TMP/claims"
 mkdir -p "$C"
 git init -q --bare "$C/origin.git"
+git -C "$C/origin.git" config maintenance.auto false
 git -C "$C/origin.git" symbolic-ref HEAD refs/heads/main
 git init -q "$C/work"
+git -C "$C/work" config maintenance.auto false
 git -C "$C/work" config user.email t@example.com
 git -C "$C/work" config user.name Test
 CS="$C/work/docs/queue"
@@ -472,6 +476,7 @@ rm "$CS/Q900.md"
 # Merge base, not tip. main completes Q1 and deletes it while this branch is
 # behind; the branch still carries the row, and it did not add it.
 git clone -q -b main "$C/origin.git" "$C/other"
+git -C "$C/other" config maintenance.auto false
 git -C "$C/other" config user.email t@example.com
 git -C "$C/other" config user.name Test
 git -C "$C/other" rm -q docs/queue/Q1.md

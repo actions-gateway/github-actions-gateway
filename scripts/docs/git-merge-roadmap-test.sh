@@ -99,6 +99,15 @@ roadmap_page() {
 
 # --- the merge harness --------------------------------------------------------
 
+# no_auto_maintenance REPO — stop this throwaway repo running background git.
+#
+# Q820: every commit otherwise spawns a detached `git maintenance run --auto`
+# that outlives it and prunes while the next command writes to the same repo.
+# A fixture repo has nothing to maintain, so the fix is not to start it.
+no_auto_maintenance() {
+	git -C "$1" config maintenance.auto false
+}
+
 # plain_repo NAME — a fresh repo carrying the committed half of the setup (the
 # .gitattributes line) but NOT the per-clone driver config. Echoes its path.
 # `trunk` keeps the throwaway repos off the protected branch names.
@@ -109,6 +118,7 @@ plain_repo() {
 	git -C "$repo" init -q -b trunk
 	git -C "$repo" config user.email test@example.invalid
 	git -C "$repo" config user.name test
+	no_auto_maintenance "$repo"
 	printf -- '%s merge=roadmap\n' "$TARGET" >"$repo/.gitattributes"
 	printf -- '%s\n' "$repo"
 }
@@ -593,6 +603,24 @@ if (( rc == 0 )) && cmp -s "$real_out" "$WORKDIR/real-theirs.md"; then
 	ok "$TARGET: deleting $real_last one-sided reproduces that file"
 else
 	bad "$TARGET: a one-sided real deletion did not apply cleanly (rc=$rc)"
+fi
+
+# --- no background git in a fixture repo --------------------------------------
+
+# Q820's cause, asserted on behaviour rather than on the config key that
+# currently delivers it: a commit in a fixture repo must spawn nothing that
+# outlives it. Dropping the no_auto_maintenance call turns this red.
+maint_repo="$(plain_repo maintenance)"
+printf -- 'x\n' >"$maint_repo/$TARGET"
+git -C "$maint_repo" add "$TARGET" .gitattributes
+git -C "$maint_repo" "${GIT_ID[@]}" commit -qm base
+printf -- 'y\n' >"$maint_repo/$TARGET"
+maint_trace="$WORKDIR/maintenance-trace.log"
+GIT_TRACE=1 git -C "$maint_repo" "${GIT_ID[@]}" commit -qam next >"$maint_trace" 2>&1
+if grep -q 'maintenance run' "$maint_trace"; then
+	bad "a fixture commit spawned background maintenance: $(grep -m1 -o 'git maintenance run.*' "$maint_trace")"
+else
+	ok 'a fixture commit spawns no detached maintenance'
 fi
 
 if (( fails > 0 )); then

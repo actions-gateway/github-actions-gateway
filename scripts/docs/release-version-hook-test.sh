@@ -37,6 +37,8 @@ setup_repo() {
 	(
 		cd "$d"
 		git init -q -b main
+		# Q820: no detached maintenance racing the next command in a fixture repo.
+		git config maintenance.auto false
 		git config user.email t@t.t
 		git config user.name t
 		git commit -q --allow-empty -m base

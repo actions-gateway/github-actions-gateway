@@ -1971,6 +1971,37 @@ Four failure modes, each measured here, and each producing a **confident, wrong 
   It reads as a reproduction, and it is the flake's own signature, so nothing about the log says otherwise.
   Land the code first, then measure; the doc and backlog work that fills the wait is exactly the work a running gate does not decide ([run the local gate in the background](parallel-dispatch.md#run-the-local-gate-in-the-background-not-on-the-critical-path)), so do that against a tree the harness is not sampling.
 
+### A fixture repo must not run background git
+
+A throwaway repository built by a suite sets `maintenance.auto false` at creation:
+
+```bash
+git -C "$repo" config maintenance.auto false
+```
+
+Git spawns `git maintenance run --auto --detach` from `commit`, `merge`, `fetch`, `am` and `pull` (measured on git 2.55.0; `init`, `add`, `clone`, `rebase` and `cherry-pick` do not).
+Detached, that process outlives the command that started it and runs while the next one writes to the same repo.
+It stays harmless until the fixture holds enough loose objects to cross `gc.auto` (default 6700), at which point it reaches `git repack -d -l --cruft`, whose prune removes an object fanout directory between the next command's `mkdir` and the `open` under it: `unable to create temporary file`, exit 128, green on rerun ([Q820](../queue/Q820.md)).
+
+Only one fixture in the repo has ever been large enough, because it copies the whole of `docs/queue/` — nine repacks per run.
+That is the reason to set the key everywhere rather than where a flake has been seen: the threshold is crossed by a fixture growing, not by a suite changing, so the suite that acquires the defect is not the one that was edited.
+
+**Assert it on behaviour, never on the config key.** A suite that sets the key and checks the key has tested its own setup.
+Commit twice under `GIT_TRACE` pointed at a file, and require nothing matching `maintenance run`:
+
+```bash
+GIT_TRACE=1 git -C "$repo" commit -qam next >"$trace" 2>&1
+grep -q 'maintenance run' "$trace" && bad '...'
+```
+
+The trace goes to a **file**, not stderr: a detached child has no stderr, which is what hid the mechanism for three rounds of [Q820](../queue/Q820.md).
+The three merge-driver suites carry that assertion; the rest carry the config call alone.
+
+To check the whole tier, run each suite with `GIT_TRACE` set to a per-suite path and count `run_command: git maintenance run` (each spawn writes three trace lines, so count that one).
+Before the Q878 sweep: 217 spawns across 17 of 88 suites.
+After: zero.
+A text search for `git init` cannot answer this — one suite drives git from embedded Python through an args list, and no query for a command string will ever see it.
+
 ### Testing a `main`-shaped script: the entry-point seam, and the errexit trap
 
 A script whose logic lives in `main()` needs a seam before it can be sourced at all.

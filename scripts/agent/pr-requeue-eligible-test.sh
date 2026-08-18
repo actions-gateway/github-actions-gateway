@@ -60,6 +60,8 @@ def build_repo(tmp, conflict_paths):
     repo = Path(tmp) / "repo"
     repo.mkdir()
     git(["init", "-q", "-b", "main"], repo)
+    # Q820: no detached maintenance racing the next command in a fixture repo.
+    git(["config", "maintenance.auto", "false"], repo)
     git(["config", "user.email", "t@example.com"], repo)
     git(["config", "user.name", "T"], repo)
     for p in conflict_paths:
