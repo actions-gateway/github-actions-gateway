@@ -61,8 +61,6 @@ What follows is only what that skill cannot know.
 - **The gate is `make check`**, and the fast prose gate is `make docs-gates`.
   Run `docs-gates` the moment prose is written rather than waiting on the ten-minute gate; `em-dash-check` and `md-reflow-check` are the two it catches that nothing else does until then.
   The sub-gates worth reading by name in `make check`'s output are `doc-links`, `lint-backlog`, `plan-index-check`, `no-plan-refs-check` and `em-dash-check`.
-- **Once the final gate is running, a `Bash` call is an edit.** Any Bash call runs the piped-gate hook, which rebuilds the shared `.build/pipedgate` binary that `claude-piped-gate-hook-test` deletes mid-run, so the suite reads a real deny payload and fails (Q825).
-  Wait for the task notification rather than polling.
 - **Allocate every new Queue ID with `make queue-id TITLE="…"`**, never by hand — it searches for near-duplicates before it claims, and concurrent workers otherwise pick the same number.
 - **A `flake` row is not deleted when it is fixed.** It moves to Deferred § Flake watch with a revive trigger, per `lint-backlog.sh` rule 8.
   Match the rows already there.
@@ -368,7 +366,7 @@ Resolve a keyed conflict by keeping **both** sides and verifying each survives, 
 - **A clean merge proves the absence of a textual conflict and nothing else.** Measured 2026-08-12 across one batch: three open PRs asserted about a thing called "quota", carrying two referents between them, a Kubernetes `ResourceQuota` tenant cap in two of them and a global, project-wide GCE CPU limit in the third.
   A keyword scan reads a single collision across the three where there are really two referents.
   A topic-level glance happens to group them correctly, because the two sharing a referent are also the two competitor-analysis PRs, and that is the more dangerous result: the grouping is a coincidence of this batch, and a method that succeeds by coincidence gets trusted on the next one.
-  When overriding piped-gate's overlap denial, say what the other PR claims, not only where it sits.
+  When reporting an overlap between two PRs, say what the other PR claims, not only where it sits.
 
 ## PR-watcher requirements
 

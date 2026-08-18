@@ -89,7 +89,7 @@ shopt -s inherit_errexit 2>/dev/null || true
 ```
 
 On bash 4.4+ this is identical to the strict line; on 3.2 it gives up the coverage rather than the hook.
-Only `claude-piped-gate-hook-test.sh` exercised this, because it is the one suite that strips `PATH` (to simulate a missing Go toolchain) and so is the only one that reaches the system bash at all.
+Only the since-retired `claude-piped-gate-hook-test.sh` exercised this, because it stripped `PATH` (to simulate a missing Go toolchain) and so was the one suite reaching the system bash at all; `check-tools-test.sh` is now the only suite that stubs `PATH` this way.
 
 What this costs when it goes unnoticed is a misattributed failure, not just a late one.
 A fixture builder that keeps running after its setup broke turns one root failure into a cascade of downstream errors, and the last line in the log belongs to the *subject* rather than the fixture.

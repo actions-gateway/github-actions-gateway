@@ -102,7 +102,7 @@ expect failopen-hook-allowed 0 '#!/usr/bin/env bash
 set -euo pipefail
 shopt -s inherit_errexit 2>/dev/null || true
 
-x="$(echo hi)"' '' claude-piped-gate-hook.sh
+x="$(echo hi)"' '' claude-go-throttle-hook.sh
 # Anywhere else the same form is a silent opt-out of the protection.
 expect failopen-elsewhere-rejected 1 '#!/usr/bin/env bash
 set -euo pipefail

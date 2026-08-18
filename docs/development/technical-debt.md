@@ -199,7 +199,7 @@ The [Q612 survey](../plan/markdown-gates-parser.md) and the Queue row that asked
 | `scripts/docs/lint-backlog.sh` (since retired, Q889) | 518, now 92 | Queue rows split on a literal `\|` field separator at fixed indices; one escaped pipe in a cell shifted every field and the row's rules then evaluated the wrong ones | **Rewritten** (Q613): the rules are `devtools/docs/backloglint` over the same parse layer; the script keeps the file selection and the environment interface |
 | [`scripts/dev/validate-egress-ip.sh`](../../scripts/dev/validate-egress-ip.sh) | 603 | Zero `awk`/`jq`/`sed` invocations. Field extraction is delegated to `kubectl -o jsonpath`; the body is `kubectl`, `helm`, `gcloud`, `curl`, and `docker` calls | **Stays shell** |
 | [`scripts/dogfood/setup.sh`](../../scripts/dogfood/setup.sh) | 791 | One line invoking `awk`/`jq`/`sed`. The longest script under `scripts/`, and the least parsing of the four | **Stays shell** |
-| [`scripts/agent/claude-piped-gate-hook.sh`](../../scripts/agent/claude-piped-gate-hook.sh) | 393, now 74 | 175 of its 257 code lines were a hand-rolled shell-grammar scanner: quote state, heredoc bodies, subshell nesting, matched delimiters | **Rewritten** (Q625): the decision is [`devtools/agent/pipedgate`](../../devtools/agent/pipedgate/) over `mvdan.cc/sh`; the script keeps the build seam and the registry path |
+| `scripts/agent/claude-piped-gate-hook.sh` (since retired) | 393, now 74 | 175 of its 257 code lines were a hand-rolled shell-grammar scanner: quote state, heredoc bodies, subshell nesting, matched delimiters | **Rewritten** (Q625): the decision became `devtools/agent/pipedgate` over `mvdan.cc/sh`; both retired with the hook, which duplicated the installed pipe-guard plugin |
 
 Sorted by length, the verdicts run backwards: the three shortest are the rewrites and the two longest stay shell.
 That is why length is not the signal.
@@ -213,8 +213,8 @@ Most of that is a one-time cost per module, not per gate: `devtools/` already ex
 The gate keeps its `scripts/` entry point either way, so the [script map](../../scripts/README.md) stays in one place.
 
 **A Claude Code `PreToolUse` hook is in scope, and fail-open survives the move.** The objection that keeps a hook in shell is that it runs on every Bash call and must never be the reason one fails, so it cannot depend on a binary someone remembered to build.
-The [`claude-piped-gate-hook.sh`](../../scripts/agent/claude-piped-gate-hook.sh) shim answers that and is the pattern to copy: build on demand, cache in `.build/`, decide staleness with one `find` against the sources, write PID-suffixed and `mv` into place so concurrent sessions exec a whole binary, and exit 0 with no output on every failure — no toolchain, a build error, a missing registry.
-It is also *faster* than the shell it replaced (18 ms per Bash call against 33 ms), because two `jq` spawns and bash startup cost more than the decision does.
+The [`claude-go-throttle-hook.sh`](../../scripts/agent/claude-go-throttle-hook.sh) shim answers that and is the pattern to copy: build on demand, cache in `.build/`, decide staleness with one `find` against the sources, write PID-suffixed and `mv` into place so concurrent sessions exec a whole binary, and exit 0 with no output on every failure — no toolchain, a build error, a missing throttle script.
+The seam is also *faster* than the shell it replaced, measured on the since-retired sibling that first carried it: 18 ms per Bash call against 33 ms, because two `jq` spawns and bash startup cost more than the decision does.
 
 None of this argues for rewriting shell in general.
 Almost every script under `scripts/` sits on the orchestration side of the line and should stay there; the criterion exists to find the few that do not.

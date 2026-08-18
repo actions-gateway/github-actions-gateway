@@ -129,19 +129,10 @@ jobs:
               # never executed. It reaches the `scripts` filter below too; that
               # one gates shellcheck, which does not touch Go (Q618).
               - 'devtools/**'
-              # devtools/agent/pipedgate's table test reads the shipped registry
-              # rather than a fixture (Q625), so a registry edit that broke a
-              # pattern must re-run this job's Go tests too.
-              - '.claude/piped-gate-guard.json'
               - 'coverage-baseline.txt'
               - '.github/workflows/unit-test.yml'
             scripts:
               - 'scripts/**'
-              # The piped-gate hook's registry (Q625). It is data, not shell, so
-              # shellcheck skips it — but claude-piped-gate-hook-test.sh reads
-              # the shipped file rather than a copy, so a registry edit that
-              # broke a pattern would otherwise land with its test never run.
-              - '.claude/piped-gate-guard.json'
               # The shipped runner template library and the dogfood e2e overlays
               # that consume it (Q554). Neither is shell, so shellcheck skips
               # both — but this job's `make template-library-check` reconciles

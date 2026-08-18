@@ -9,7 +9,8 @@ therefore invisible to the cache key: change the file alone and `go test`
 replays a cached pass.
 
 Measured 2026-08-17 (Q895): `make check` reported `pipedgate (cached)` and
-exited 0 while the package run directly failed 5 assertions, as did CI. The
+exited 0 while the package run directly failed 5 assertions, as did CI. That
+package has since been retired, so the live instances are the ones below. The
 same shape silently disarmed the root-Dockerfile runner-version lockstep gate —
 bumping the pinned tag left `cmd/agc/names` cached and green, which is the
 drift #197 introduced arriving through the gate written to catch it.
