@@ -487,7 +487,7 @@ Exceptions: a flake rooted in an outside service that hasn't recurred (file, don
 
 **Sweep the idiom, not just the instance.** When the cause is an idiom rather than a one-off, the same idiom is usually elsewhere in the file or package, and nothing else will go looking.
 Sweep it in the fixing PR and state what the sweep found, "nothing" included: a stated empty sweep is evidence, while an unstated one is indistinguishable from not having looked.
-Q602 taught one scale-set listener test to wait on a listener-produced signal and left a comment explaining why; four days later [Q685](../queue/Q685.md) was the same defect in a sibling test in the same file, and the sweep it finally prompted found a third case.
+Q602 taught one scale-set listener test to wait on a listener-produced signal and left a comment explaining why; four days later Q685 was the same defect in a sibling test in the same file, and the sweep it finally prompted found a third case.
 That one never flaked: its positive assertion held whether or not the listener ever observed the completion, so waiting for CI would never have surfaced it.
 
 **A campaign that pins a flake often measures a production defect too, and a flake filed later often turns out to be one already on the Queue.** Either way the pair gets cross-linked the moment it is recognised, with [one row owning the measurement](#two-rows-on-one-defect-cross-link-them-and-say-which-owns-the-measurement).

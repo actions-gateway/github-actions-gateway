@@ -5,7 +5,7 @@ The last rung of the graduation ladder defined in [v2-api.md § API maturity & g
 This plan starts **after `v1.3.0` ships**.
 It is deliberately unhurried: General Availability (GA) signs a permanent backward-compatibility contract on a five-kind API surface, and the contract cannot be walked back.
 
-> **Status: parked — no active work, every phase carried by a Deferred trigger.** Phases 1, 2 and 4 wait on [Q413](../queue/Q413.md) (**Event:** `v1.3.0` ships, starting the Phase 1 soak); Phase 3's coupled removals wait on [Q273](../queue/Q273.md) and [Q264](../queue/Q264.md); the Phase 2 alias decision is [Q452](../queue/Q452.md).
+> **Status: parked — no active work, every phase carried by a Deferred trigger.** Phases 1, 2 and 4 wait on [Q413](../queue/Q413.md) (**Event:** the Phase 1 soak closes; `v1.3.0` shipped 2026-08-03 and criterion 1 has since elapsed); Phase 3's coupled removals wait on [Q273](../queue/Q273.md) and [Q264](../queue/Q264.md); the Phase 2 alias decision is [Q452](../queue/Q452.md).
 > The `✅` on this plan's [index row](README.md) means *no open item remains*, not that the graduation has happened — deferred residuals [don't count](../development/maintaining-backlog.md#an-open-marker-means-an-open-item-remains--deferred-residuals-dont-count).
 > The phase table below is the real state.
 
