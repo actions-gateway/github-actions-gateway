@@ -2660,6 +2660,14 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td><code>main</code> itself fails this gate (run 32172968731); 1638 only surfaced it.</td>
 </tr>
 <tr>
+<td><a href="Q929/">Q929</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/go/go-lint.sh">The lint gate returns two verdicts on one tree</a></td>
+<td><code>flake</code> <code>ci</code></td>
+<td>🔲</td>
+<td>M</td>
+<td>Measured 2026-08-18: <code>c99129aa</code> passed <code>lint</code> in run 32145897225 and failed in 32172968731, <code>nolintlint</code> calling two staticcheck directives …</td>
+</tr>
+<tr>
 <td><a href="Q902/">Q902</a></td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/go/go-test-integration.sh">The integration and e2e tiers drop the same out-of-module cache inputs</a></td>
 <td><code>ci</code> <code>tests</code> <code>debt</code></td>
