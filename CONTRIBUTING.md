@@ -312,8 +312,15 @@ Fetch before the final gate run, not after it: a rebase discovered afterwards vo
 The title said nothing about that.
 Revise before opening; if the other PR's evidence invalidates yours, put that on the Queue row instead of shipping around it.
 
-**A hook asks when it sees the overlap** (Q668): at `gh pr create` it compares this branch's files against every open PR's and names the ones that collide, discounting the merge-driver-owned files that every branch edits.
-It costs one `gh pr list` call and stays silent when that fails (offline, or a rate-limited token), so it can miss an overlap but never blocks the create.
+**A hook asks when it sees the overlap** (Q668): at `gh pr create` it compares this branch's changes against every open PR's and names the ones that collide, discounting the merge-driver-owned files that every branch edits.
+It compares **line ranges, not just paths** (Q862): two edits at opposite ends of one large file cannot collide, and reading them as a collision cost three overrides in two days (#1505, #1527, #1531).
+Each range spans the three lines of context its diff carries on either side, so two edits within six lines of each other still collide.
+Ranges come from one local `git diff` plus a `gh pr diff` for each PR that already shares a path, at most three.
+It stays silent when `gh pr list` fails (offline, or a rate-limited token), so it can miss an overlap but never blocks the create.
+A diff fetch that fails narrows nothing instead, keeping the path-only warning and marking that PR `paths only`.
+The guard runs in every session at once, so a missed collision costs more than a false positive.
+**The fix it asks for is the reading, not a re-scope**: read the other PR's diff and body, then re-run the create with `PIPED_GATE_OVERRIDE=<reason>` saying what that PR claims rather than only where it sits.
+Splitting your change to dodge the overlap is the wrong move when both changes are wanted.
 
 **The jointly-red case is machine-checked at merge time.** Two individually green PRs used to merge into a red `main` because a PR gate only ever sees its own base — #1062 raised MkDocs' link validation to strict-build warnings (Q560) while #1063 added a link that trips it (Q558); each passed without the other and the merged tree built dirty.
 The **merge queue** closes this for the workflows it actually runs: every merge validates the candidate result (your branch plus whatever is ahead of it in the queue, on current `main`) before it lands, and a failing entry is kicked back to its PR with the failure attached, the signal pr-sentinel already reacts to.
