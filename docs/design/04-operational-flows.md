@@ -131,7 +131,7 @@ sequenceDiagram
    The *signal* follows from the platform operator's `ActionsGateway.spec.clusterCapacity.nodeAutoscaling`, because which reading of an unschedulable pod is sound is a property of the cluster, identical for every set in it.
    Splitting them is what makes the one harmful misconfiguration — gating on the scheduler's verdict where an autoscaler was about to add a node — **unrepresentable** rather than merely documented, and it stops a tenant being asked to speak for infrastructure they may not own.
 
-   **The two signals.** With `nodeAutoscaling: Absent` the gate reads the scheduler's verdict, sound because nothing is waiting on those pods.
+   **The two placeability signals.** With `nodeAutoscaling: Absent` the gate reads the scheduler's verdict, sound because nothing is waiting on those pods.
    With `Present` (the default) it reads the *autoscaler's own declination* — cluster-autoscaler's `NotTriggerScaleUp`, or Karpenter's `FailedScheduling` from a non-scheduler reporter — recorded as an Event on a stuck worker pod, because only the autoscaler saying it will not act is evidence that no node is coming.
    Both feed the identical rung, condition, and metric label.
    `Present` is the default deliberately: it can only ever *under*-gate, so a cluster whose operator never set the field keeps today's behavior.
@@ -140,8 +140,14 @@ sequenceDiagram
    Events are read uncached, field-selected to one pod, only for pods already stuck past the scheduling grace, and bounded per reconcile — there is no Event informer, and a healthy set costs zero reads.
    Detail: [Appendix H §H.7](appendix-h-v2-api-decomposition.md#h7-reference-integrity--runtime-conditions-not-admission).
 
+   **A third signal, selected by nothing (Q714).** Both signals above ask whether a pod can be *placed*.
+   A worker pod that WAS placed and then could not be started, with the kubelet in `ImagePullBackOff` (what an unreplaced `workerImage` placeholder produces), answers neither, so it tripped no rung at all and every job delivered in its `pendingPodDeadline` window was claimed.
+   The gate now reads that too, as `PodsNotStarting`, and reads it on **every** cluster rather than under one value of `nodeAutoscaling`: §D.8's question is whether another actor is waiting on the pod to make capacity appear, and a bound pod is not a request for anything.
+   The kubelet's backoff is the verdict, so the signal needs no scheduling grace of its own, which is also why the matcher takes `ImagePullBackOff` and refuses the pre-backoff `ErrImagePull`.
+
    **The capacity rung self-resolves through a probe, and that is what keeps it safe.** It reads the `WorkerCapacityDeclined` condition, which is derived from the *existence* of a stuck worker pod — and because the reaper deletes exactly that pod at `pendingPodDeadline`, the condition does not clear on the reap: it **latches** as `AwaitingProbe` and admits exactly one probe job (Q512).
-   The probe's pod is the fresh evidence, in whichever direction it lands — it schedules and the gate clears completely, or it sticks and the live verdict returns.
+   The probe's pod is the fresh evidence, in whichever direction it lands: one of its containers runs and the gate clears completely, or it sticks and the live verdict returns.
+   Running rather than merely being scheduled is the release condition (Q714), because a probe binds within a second and only reveals that it cannot start seconds later, so releasing on the binding would restore the full advertisement inside that gap.
    A burst of *N* jobs that would each have been claimed and cancelled becomes roughly one wasted claim per deadline window — a bound on the rate, not an elimination.
    The latch is what makes that rate hold on the scale-set tier too, where capacity is an integer per poll rather than a decision per job: clearing on the reap would restore the whole advertisement each window (measured as a no-op — [plan §9e](../plan/capacity-aware-intake.md#9e-what-the-dogfood-run-measured-q469)).
    Nothing here removes the need for `pendingPodDeadline` and the reaper.
@@ -188,7 +194,7 @@ The advertised number is the **minimum** of the ladder's rungs, recomputed every
 |---|---|---|
 | Ceiling (Q59) | the max `priorityTiers` threshold, else `maxWorkers`, else `10` | — (the `10` default *is* the fallback) |
 | Quota (#784, Q443) | this set's non-terminal worker pods **+** how many more the namespace `ResourceQuota` can admit | no bound (the ceiling stands) |
-| Capacity (Q405, Q406, Q512) | this set's non-terminal worker pods, while its capacity gate is declining — no room for one more; **plus one probe slot** while the gate is latched (`AwaitingProbe`) with no probe pod outstanding | no bound (gate `Off`, an unimplemented mode, nothing declining, or nothing readable) |
+| Capacity (Q405, Q406, Q512, Q714) | this set's non-terminal worker pods, while its capacity gate is declining — no room for one more; **plus one probe slot** while the gate is latched (`AwaitingProbe`) with no probe pod outstanding | no bound (gate `Off`, an unimplemented mode, nothing declining, or nothing readable) |
 
 Three properties follow, and they are why this is not merely the classic gate in different clothing:
 

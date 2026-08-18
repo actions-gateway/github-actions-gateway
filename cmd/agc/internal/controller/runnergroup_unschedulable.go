@@ -43,6 +43,36 @@ type workersUnschedulable struct {
 	// the evidence that capacity returned, and the transition time rather than the
 	// creation time is what lets a long-stuck pod that finally squeezes in count too.
 	lastScheduledAt time.Time
+	// lastStartedAt is the newest first-container-start among the listed pods (zero
+	// when none ever ran), whatever their phase. It supersedes lastScheduledAt as the
+	// latch's release evidence (Q714): binding was only a proxy for "a worker can run
+	// here", and notStartingPods is the case that falsifies the proxy.
+	lastStartedAt time.Time
+	// notStartingPods are the worker pods the scheduler placed and the kubelet then
+	// could not start — the sibling verdict to stuckPods, disjoint from it by
+	// construction because the two read opposite halves of PodScheduled (Q714).
+	//
+	// Carried out for the capacity gate, like stuckPods: nothing else consumes it,
+	// and WorkersUnschedulable deliberately stays silent about it, because a bound
+	// pod is not a scheduling problem and reporting it there would send an operator
+	// after a node, a taint, or a quota when the fix is an image.
+	notStartingPods []notStartingPod
+	// startupPending reports that at least one bound worker pod is still Pending with
+	// no startup verdict either way. It is what the gate schedules a re-check on: the
+	// Pod watch drops updates that change no phase (workerPodPhaseChangePredicate),
+	// and a pod entering ImagePullBackOff changes none, so nothing would otherwise
+	// wake the reconciler between the pod's creation and its pendingPodDeadline.
+	startupPending bool
+}
+
+// notStartingPod is one worker pod the kubelet bound and could not start, with the
+// kubelet's own waiting message. Name and detail rather than the object: the gate
+// needs them for the condition message and for nothing else, and the pod-shaped
+// verdict this signal produces has no per-pod follow-up read the way the autoscaler
+// verdict's Event lookup does.
+type notStartingPod struct {
+	name   string
+	detail string
 }
 
 // evalWorkersUnschedulable computes the WorkersUnschedulable condition (Q157) for
@@ -90,8 +120,22 @@ func evalWorkersUnschedulableForPods(pods []corev1.Pod, now time.Time, grace tim
 		if at, ok := provisioner.PodScheduledAt(pod); ok && at.After(st.lastScheduledAt) {
 			st.lastScheduledAt = at
 		}
+		if at, ok := podStartedAt(pod); ok && at.After(st.lastStartedAt) {
+			st.lastStartedAt = at
+		}
 		if !pod.DeletionTimestamp.IsZero() || pod.Status.Phase != corev1.PodPending {
 			continue
+		}
+		// The kubelet's verdict, taken with no grace of its own: unlike the
+		// scheduler's, it is not a snapshot the next moment can overturn — the pod
+		// is already in backoff, so the attempt has happened. A bound pod can never
+		// carry PodScheduled=False, so this arm and the one below are exclusive.
+		if backoff, detail := podStartupBackoff(pod); backoff {
+			st.notStartingPods = append(st.notStartingPods, notStartingPod{name: pod.Name, detail: truncate(detail, 160)})
+			continue
+		}
+		if podBound(pod) {
+			st.startupPending = true
 		}
 		graceDue := pod.CreationTimestamp.Add(grace)
 		if wait := graceDue.Sub(now); wait > 0 {

@@ -89,6 +89,7 @@ const (
 	ReasonWorkersSchedulable      = apiconditions.ReasonWorkersSchedulable
 	ReasonCapacityAvailable       = apiconditions.ReasonCapacityAvailable
 	ReasonScaleUpDeclined         = apiconditions.ReasonScaleUpDeclined
+	ReasonPodsNotStarting         = apiconditions.ReasonPodsNotStarting
 	ReasonAwaitingProbe           = apiconditions.ReasonAwaitingProbe
 	ReasonGateModeUnsupported     = apiconditions.ReasonGateModeUnsupported
 	ReasonAgentProvisioningFailed = apiconditions.ReasonAgentProvisioningFailed

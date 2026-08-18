@@ -161,10 +161,14 @@ func TestCapacityGate_LatchesWhenThePodIsReaped(t *testing.T) {
 	assert.Equal(t, msg, c.Message)
 }
 
-// TestCapacityGate_LatchClearsWhenAProbeSchedules: the probe pod binding is the
-// evidence that capacity returned, and it must clear the latch completely — the whole
-// advertisement comes back, not another probe slot.
-func TestCapacityGate_LatchClearsWhenAProbeSchedules(t *testing.T) {
+// TestCapacityGate_LatchClearsWhenAProbeStarts: the probe pod's first container
+// running is the evidence that capacity returned, and it must clear the latch
+// completely — the whole advertisement comes back, not another probe slot.
+//
+// The probe is still Pending when it clears, which is the point of reading container
+// state rather than the phase: a pod whose init container is running has demonstrated
+// the cluster can start a worker while the phase still says Pending.
+func TestCapacityGate_LatchClearsWhenAProbeStarts(t *testing.T) {
 	now := time.Now()
 	rs := rsObj("set", "ns", gateOn(v2alpha1.CapacityGateModeObserve))
 	pod := capWorkerPod("ns", "set", "worker-stuck", corev1.PodPending, now.Add(-6*time.Minute),
@@ -176,17 +180,54 @@ func TestCapacityGate_LatchClearsWhenAProbeSchedules(t *testing.T) {
 	r.applyWorkerCapacityConditions(context.Background(), rs, capTemplate(""), gwFixed())
 	require.True(t, meta.IsStatusConditionTrue(rs.Status.Conditions, v2alpha1.ConditionWorkerCapacityDeclined))
 
-	// The probe binds after the decline began — still Pending (pulling images), which
-	// is why the check reads PodScheduled and not the phase.
 	probe := capWorkerPod("ns", "set", "worker-probe", corev1.PodPending, now, corev1.ConditionTrue, "", "")
-	probe.Status.Conditions[0].LastTransitionTime = metav1.NewTime(time.Now().Add(time.Minute))
+	probe.Status.Conditions[0].LastTransitionTime = metav1.NewTime(now.Add(time.Minute))
+	capStarted(probe, now.Add(time.Minute))
 	require.NoError(t, r.Create(context.Background(), probe))
 	r.applyWorkerCapacityConditions(context.Background(), rs, capTemplate(""), gwFixed())
 
 	c := meta.FindStatusCondition(rs.Status.Conditions, v2alpha1.ConditionWorkerCapacityDeclined)
 	require.NotNil(t, c)
-	assert.Equal(t, metav1.ConditionFalse, c.Status, "a scheduled probe is capacity returning")
+	assert.Equal(t, metav1.ConditionFalse, c.Status, "a started probe is capacity returning")
 	assert.Equal(t, v2alpha1.ReasonCapacityAvailable, c.Reason)
+}
+
+// TestCapacityGate_LatchHoldsWhileTheProbeHasOnlyBound is Q714's negative control on
+// Q512's latch, and the reason the release evidence had to change from scheduling to
+// starting.
+//
+// A probe pod binds within a second of creation and only reveals that it cannot start
+// seconds later. Releasing the latch on the bind therefore restores the full
+// advertisement inside that gap — GitHub assigns the whole ceiling, and the burst of
+// wasted claims the latch exists to bound comes back. Nothing about this window is
+// visible in the reason or the value; only the timing differs, which is why it needs
+// a test rather than an argument.
+func TestCapacityGate_LatchHoldsWhileTheProbeHasOnlyBound(t *testing.T) {
+	now := time.Now()
+	rs := rsObj("set", "ns", gateOn(v2alpha1.CapacityGateModeObserve))
+	pod := capWorkerPod("ns", "set", "worker-stuck", corev1.PodPending, now.Add(-6*time.Minute),
+		corev1.ConditionFalse, corev1.PodReasonUnschedulable, "untolerated taint")
+
+	r := capReconciler(t, now, pod)
+	r.applyWorkerCapacityConditions(context.Background(), rs, capTemplate(""), gwFixed())
+	require.NoError(t, r.Delete(context.Background(), pod))
+	r.applyWorkerCapacityConditions(context.Background(), rs, capTemplate(""), gwFixed())
+	require.True(t, meta.IsStatusConditionTrue(rs.Status.Conditions, v2alpha1.ConditionWorkerCapacityDeclined))
+
+	// Bound after the decline, no container has run yet: the kubelet has not said
+	// anything either way, so nothing has shown that capacity returned.
+	probe := capWorkerPod("ns", "set", "worker-probe", corev1.PodPending, now, corev1.ConditionTrue, "", "")
+	probe.Status.Conditions[0].LastTransitionTime = metav1.NewTime(now.Add(time.Minute))
+	require.NoError(t, r.Create(context.Background(), probe))
+	requeue := r.applyWorkerCapacityConditions(context.Background(), rs, capTemplate(""), gwFixed())
+
+	c := meta.FindStatusCondition(rs.Status.Conditions, v2alpha1.ConditionWorkerCapacityDeclined)
+	require.NotNil(t, c)
+	assert.Equal(t, metav1.ConditionTrue, c.Status,
+		"a probe that has only bound is not yet evidence that a worker can run here")
+	assert.Equal(t, v2alpha1.ReasonAwaitingProbe, c.Reason)
+	assert.Equal(t, startupVerdictRecheck, requeue,
+		"an undecided bound probe fires no phase-change watch event, so the gate must poll for its verdict")
 }
 
 // TestCapacityGate_LatchIgnoresPreDeclineSchedulingEvidence: a pod that scheduled
@@ -922,4 +963,183 @@ func TestRunnerSetTarget_LatchedCapacityDeclined(t *testing.T) {
 // keyOf is the object's namespace/name as the Target adapter stores it.
 func keyOf(rs *v2alpha1.RunnerSet) client.ObjectKey {
 	return client.ObjectKey{Namespace: rs.Namespace, Name: rs.Name}
+}
+
+// --- the kubelet's startup verdict (Q714) ----------------------------------
+
+// TestCapacityGate_DeclinesOnAWorkerThatBoundAndCouldNotStart is Q714's headline
+// assertion. `podUnschedulable` reads PodScheduled=False, so a worker that binds to a
+// node and then cannot pull its image trips no rung at all: it sits Pending until the
+// reaper deletes it at pendingPodDeadline, and every job delivered in that window is
+// claimed, spending a single-use JIT runner record and holding a GitHub job lock.
+//
+// It asserts BOTH cluster facts, which is the design point rather than table padding.
+// The other two signals are selected by clusterCapacity.nodeAutoscaling because an
+// unschedulable pod may be the request that makes a node appear. A bound pod is not a
+// request for anything, so no autoscaler is waiting on it and the verdict is sound
+// wherever it is read.
+func TestCapacityGate_DeclinesOnAWorkerThatBoundAndCouldNotStart(t *testing.T) {
+	const image = `Back-off pulling image "example.invalid/build-capable-runner:replace-me"`
+
+	for _, tt := range []struct {
+		name string
+		gw   *v2alpha1.ActionsGateway
+	}{
+		{"fixed-size cluster", gwFixed()},
+		{"elastic cluster", gwElastic()},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			now := time.Now()
+			pod := capBackingOff(capWorkerPod("ns", "set", "worker-backoff", corev1.PodPending,
+				now.Add(-time.Minute), corev1.ConditionTrue, "", ""), "ImagePullBackOff", image)
+			rs := rsObj("set", "ns", gateOn(v2alpha1.CapacityGateModeObserve))
+			r := capReconciler(t, now, pod)
+
+			r.applyWorkerCapacityConditions(context.Background(), rs, capTemplate(""), tt.gw)
+
+			c := meta.FindStatusCondition(rs.Status.Conditions, v2alpha1.ConditionWorkerCapacityDeclined)
+			require.NotNil(t, c)
+			assert.Equal(t, metav1.ConditionTrue, c.Status)
+			assert.Equal(t, v2alpha1.ReasonPodsNotStarting, c.Reason)
+			assert.Contains(t, c.Message, "worker-backoff")
+			assert.Contains(t, c.Message, "example.invalid",
+				"the kubelet's own message names the image, which is the operator's whole remedy")
+
+			// The sibling condition must stay silent: this pod is not a scheduling
+			// problem, and reporting it there would send an operator after a node, a
+			// taint, or a quota when the fix is an image.
+			unsched := meta.FindStatusCondition(rs.Status.Conditions, v2alpha1.ConditionWorkersUnschedulable)
+			require.NotNil(t, unsched)
+			assert.Equal(t, metav1.ConditionFalse, unsched.Status)
+			assert.Equal(t, v2alpha1.ReasonWorkersSchedulable, unsched.Reason)
+		})
+	}
+}
+
+// TestCapacityGate_StartupVerdictNeedsNoSchedulingGrace: the scheduling grace is half
+// pendingPodDeadline so WorkersUnschedulable cannot be set in the same pass the reaper
+// deletes its evidence (Q95). Copying that number here would be wrong in both
+// directions — pendingPodDeadline is deliberately generous FOR image pulls, so half of
+// it would admit minutes of doomed claims, while the kubelet reaches its verdict in
+// about two seconds (§9j).
+//
+// The backoff state is this signal's grace instead: it is the kubelet's conclusion
+// after an attempt, not a snapshot the next moment can overturn. So a pod far inside
+// the scheduling grace still gates.
+func TestCapacityGate_StartupVerdictNeedsNoSchedulingGrace(t *testing.T) {
+	now := time.Now()
+	// Created one second ago against a ten-minute deadline: nowhere near the
+	// five-minute grace an unschedulable pod would have to sit out.
+	pod := capBackingOff(capWorkerPod("ns", "set", "worker-fresh", corev1.PodPending,
+		now.Add(-time.Second), corev1.ConditionTrue, "", ""), "ImagePullBackOff", "Back-off pulling image")
+	rs := rsObj("set", "ns", gateOn(v2alpha1.CapacityGateModeObserve))
+	r := capReconciler(t, now, pod)
+
+	r.applyWorkerCapacityConditions(context.Background(), rs, capTemplate(""), gwElastic())
+
+	c := meta.FindStatusCondition(rs.Status.Conditions, v2alpha1.ConditionWorkerCapacityDeclined)
+	require.NotNil(t, c)
+	assert.Equal(t, v2alpha1.ReasonPodsNotStarting, c.Reason)
+}
+
+// TestCapacityGate_StartupVerdictIgnoresAPreBackoffFailure: ErrImagePull is one failed
+// pull, which a registry blip produces and the next attempt clears. Gating on it would
+// be gating on the attempt rather than the kubelet's conclusion — and since excluding
+// it is the whole of this signal's grace, an accidental widening here would remove the
+// grace silently.
+func TestCapacityGate_StartupVerdictIgnoresAPreBackoffFailure(t *testing.T) {
+	now := time.Now()
+	pod := capBackingOff(capWorkerPod("ns", "set", "worker-firsttry", corev1.PodPending,
+		now.Add(-time.Second), corev1.ConditionTrue, "", ""), "ErrImagePull", "failed to pull image")
+	rs := rsObj("set", "ns", gateOn(v2alpha1.CapacityGateModeObserve))
+	r := capReconciler(t, now, pod)
+
+	requeue := r.applyWorkerCapacityConditions(context.Background(), rs, capTemplate(""), gwElastic())
+
+	c := meta.FindStatusCondition(rs.Status.Conditions, v2alpha1.ConditionWorkerCapacityDeclined)
+	require.NotNil(t, c)
+	assert.Equal(t, metav1.ConditionFalse, c.Status, "one failed pull is not the kubelet's verdict")
+	assert.Equal(t, v2alpha1.ReasonCapacityAvailable, c.Reason)
+	assert.Equal(t, startupVerdictRecheck, requeue,
+		"the pod is bound and undecided, so the gate must come back for the verdict")
+}
+
+// TestCapacityGate_StartupVerdictSchedulesItsOwnRecheck: the Pod watch drops updates
+// that change no phase, and a pod entering ImagePullBackOff changes none. Without a
+// re-check the gate would first learn of an unpullable image when the reaper deleted
+// the pod ten minutes later — the deadline this rung exists to stop jobs waiting out.
+func TestCapacityGate_StartupVerdictSchedulesItsOwnRecheck(t *testing.T) {
+	now := time.Now()
+	rs := rsObj("set", "ns", gateOn(v2alpha1.CapacityGateModeObserve))
+
+	// Bound, Pending, no verdict either way: the window the watch cannot see through.
+	starting := capWorkerPod("ns", "set", "worker-starting", corev1.PodPending, now, corev1.ConditionTrue, "", "")
+	r := capReconciler(t, now, starting)
+	assert.Equal(t, startupVerdictRecheck,
+		r.applyWorkerCapacityConditions(context.Background(), rs, capTemplate(""), gwFixed()))
+
+	// Once it has started there is nothing left to come back for: the phase change to
+	// Running is an event the watch does deliver.
+	started := capStarted(capWorkerPod("ns", "set", "worker-started", corev1.PodPending, now,
+		corev1.ConditionTrue, "", ""), now)
+	rs2 := rsObj("set2", "ns", gateOn(v2alpha1.CapacityGateModeObserve))
+	r2 := capReconciler(t, now, started)
+	assert.Zero(t, r2.applyWorkerCapacityConditions(context.Background(), rs2, capTemplate(""), gwFixed()))
+}
+
+// TestCapacityGate_StartupVerdictIsOffByDefault: the gate is opt-in, so a set that
+// never set spec.capacityGate must carry no condition at all even with a worker pod
+// wedged in backoff — the same no-cost-for-the-default contract every other signal
+// keeps.
+func TestCapacityGate_StartupVerdictIsOffByDefault(t *testing.T) {
+	now := time.Now()
+	pod := capBackingOff(capWorkerPod("ns", "set", "worker-backoff", corev1.PodPending,
+		now.Add(-time.Minute), corev1.ConditionTrue, "", ""), "ImagePullBackOff", "Back-off pulling image")
+	rs := rsObj("set", "ns", func(r *v2alpha1.RunnerSet) {
+		r.Spec.PendingPodDeadline = &metav1.Duration{Duration: 10 * time.Minute}
+	})
+	r := capReconciler(t, now, pod)
+
+	requeue := r.applyWorkerCapacityConditions(context.Background(), rs, capTemplate(""), gwElastic())
+
+	assert.Nil(t, meta.FindStatusCondition(rs.Status.Conditions, v2alpha1.ConditionWorkerCapacityDeclined))
+	assert.Zero(t, requeue, "an ungated set must not pay a re-check for a signal it never asked for")
+}
+
+// TestCapacityGate_StartupVerdictLatchesAndTrickles is the end-to-end rate property
+// for this signal: decline, reap, latch, one probe, and the live verdict re-earned
+// when that probe sticks. It is the §9e no-op check in miniature — a gate that cleared
+// on the reap would restore the whole advertisement once per deadline window, and a
+// burst of N wasted claims would stay N.
+func TestCapacityGate_StartupVerdictLatchesAndTrickles(t *testing.T) {
+	now := time.Now()
+	rs := rsObj("set", "ns", gateOn(v2alpha1.CapacityGateModeObserve))
+	pod := capBackingOff(capWorkerPod("ns", "set", "worker-backoff", corev1.PodPending,
+		now.Add(-time.Minute), corev1.ConditionTrue, "", ""), "ImagePullBackOff", "Back-off pulling image")
+
+	r := capReconciler(t, now, pod)
+	r.applyWorkerCapacityConditions(context.Background(), rs, capTemplate(""), gwElastic())
+	require.Equal(t, v2alpha1.ReasonPodsNotStarting,
+		meta.FindStatusCondition(rs.Status.Conditions, v2alpha1.ConditionWorkerCapacityDeclined).Reason)
+
+	// The reaper deletes the gate's own evidence at pendingPodDeadline.
+	require.NoError(t, r.Delete(context.Background(), pod))
+	r.applyWorkerCapacityConditions(context.Background(), rs, capTemplate(""), gwElastic())
+	c := meta.FindStatusCondition(rs.Status.Conditions, v2alpha1.ConditionWorkerCapacityDeclined)
+	require.NotNil(t, c)
+	assert.Equal(t, metav1.ConditionTrue, c.Status)
+	assert.Equal(t, v2alpha1.ReasonAwaitingProbe, c.Reason)
+	assert.Contains(t, c.Message, v2alpha1.ReasonPodsNotStarting,
+		"the reaped verdict must survive into the latched message, or the operator loses the image")
+
+	// The probe job's pod carries the same unreplaced image and sticks the same way.
+	probe := capBackingOff(capWorkerPod("ns", "set", "worker-probe", corev1.PodPending, now,
+		corev1.ConditionTrue, "", ""), "ImagePullBackOff", "Back-off pulling image")
+	probe.Status.Conditions[0].LastTransitionTime = metav1.NewTime(now.Add(time.Minute))
+	require.NoError(t, r.Create(context.Background(), probe))
+	r.applyWorkerCapacityConditions(context.Background(), rs, capTemplate(""), gwElastic())
+	c = meta.FindStatusCondition(rs.Status.Conditions, v2alpha1.ConditionWorkerCapacityDeclined)
+	require.NotNil(t, c)
+	assert.Equal(t, v2alpha1.ReasonPodsNotStarting, c.Reason,
+		"a probe that sticks must return the live verdict, not sit latched")
 }

@@ -293,10 +293,11 @@ const (
 	// ReasonCapacityAvailable is the WorkerCapacityDeclined=False reason (Q405): the
 	// gate is engaged and is not refusing intake. The True reasons name the SIGNAL the
 	// gate read, so the operator can tell which rung stopped their jobs —
-	// ReasonPodsUnschedulable (mode SchedulerVerdict, reusing the reason the sibling
-	// WorkersUnschedulable condition already publishes) and ReasonScaleUpDeclined (mode
-	// AutoscalerVerdict). Q407 adds CapacityUnavailable; it is not declared until its
-	// mode ships.
+	// ReasonPodsUnschedulable (the scheduler's verdict, reusing the reason the sibling
+	// WorkersUnschedulable condition already publishes), ReasonScaleUpDeclined (the
+	// autoscaler's own declination) and ReasonPodsNotStarting (the kubelet's, on a pod
+	// that bound and never started). Q407 adds CapacityUnavailable; it is not declared
+	// until its mode ships.
 	ReasonCapacityAvailable = "CapacityAvailable"
 	// ReasonScaleUpDeclined is the WorkerCapacityDeclined=True reason for mode
 	// AutoscalerVerdict (Q406): the cluster autoscaler itself recorded, on a worker pod
@@ -310,13 +311,38 @@ const (
 	// cluster, so an operator reading the reason learns which assertion their set is
 	// resting on.
 	ReasonScaleUpDeclined = "ScaleUpDeclined"
+	// ReasonPodsNotStarting is the WorkerCapacityDeclined=True reason for the kubelet's
+	// startup verdict (Q714): a worker pod BOUND to a node and then failed to start,
+	// with the kubelet in backoff on the container image. The pod's own backoff message
+	// is carried into the condition message, which names the image that will not pull.
+	//
+	// It is the sibling of ReasonPodsUnschedulable, not a widening of it. The two read
+	// opposite halves of PodScheduled: that one is the scheduler saying no node can host
+	// the pod, this one is a pod already hosted whose container never ran. Folding them
+	// into one reason would make an operator's remedy ambiguous — a node/taint/quota fix
+	// for one, an image or registry fix for the other.
+	//
+	// Unlike both other True reasons this one is evaluated on EVERY cluster, not selected
+	// by clusterCapacity.nodeAutoscaling. The asymmetry the mode split exists for is
+	// whether another actor is waiting on the pod to make capacity appear
+	// (docs/design/appendix-d-alternatives-considered.md §D.8); a bound pod is already
+	// placed, so no autoscaler is waiting on it and no new node changes the pull.
+	ReasonPodsNotStarting = "PodsNotStarting"
 	// ReasonAwaitingProbe is the WorkerCapacityDeclined=True reason for the latched
 	// state (Q512): every stuck worker pod that produced the declined verdict has been
 	// reaped, and nothing has yet shown that capacity returned, so the decline is
 	// retained rather than cleared. Intake is not closed — it is limited to one probe
 	// job per pendingPodDeadline window; the pod that job produces is the evidence
-	// that resolves the latch (it schedules and the condition clears, or it sticks and
-	// the live reason returns).
+	// that resolves the latch (it STARTS and the condition clears, or it sticks and the
+	// live reason returns).
+	//
+	// Starting, rather than merely scheduling, is what resolves it (Q714). Binding was
+	// only ever a proxy for "a worker can run here", and ReasonPodsNotStarting is the
+	// case that falsifies the proxy: a probe pod binds instantly and reveals itself
+	// seconds later, so releasing the latch on the bind would restore the full
+	// advertisement in the gap — the very no-op this latch was built to remove. For the
+	// two placeability reasons the stronger evidence costs the seconds between a healthy
+	// probe binding and its first container running.
 	//
 	// The latch exists because the gate's evidence is the stuck pod itself, and the
 	// reaper deletes that pod: without it, clearing restored the scale-set tier's full

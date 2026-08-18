@@ -357,3 +357,103 @@ func TestV2_RunnerSet_ScaleSet_CapacityGateWithholdsAdvertisedCapacity(t *testin
 		client.MatchingLabels{provisioner.LabelRunnerSet: setName}))
 	require.Len(t, pods.Items, 1, "no further worker pod may be built while the set withholds capacity")
 }
+
+// markImagePullBackOff puts a worker pod into the shape a real kubelet reports for an
+// unpullable image: bound to a node, phase still Pending, and the runner container
+// waiting in ImagePullBackOff. Measured on a kind cluster against the placeholder the
+// 1.4 DinD templates ship (capacity-aware-intake.md §9j); envtest runs no kubelet, so
+// the status is stamped rather than produced.
+func markImagePullBackOff(t *testing.T, pod *corev1.Pod, image string) {
+	t.Helper()
+	pod.Status.Phase = corev1.PodPending
+	pod.Status.Conditions = []corev1.PodCondition{{
+		Type:   corev1.PodScheduled,
+		Status: corev1.ConditionTrue,
+	}}
+	pod.Status.ContainerStatuses = []corev1.ContainerStatus{{
+		Name:  provisioner.WorkerContainerName,
+		Image: image,
+		State: corev1.ContainerState{Waiting: &corev1.ContainerStateWaiting{
+			Reason:  "ImagePullBackOff",
+			Message: `Back-off pulling image "` + image + `"`,
+		}},
+	}}
+	require.NoError(t, k8sClient.Status().Update(ctx, pod))
+}
+
+// TestV2_RunnerSet_CapacityGate_WorkerThatCannotStartSkipsAcquire is Q714 through the
+// whole loop: a real Pod that BOUND to a node and then could not start must close the
+// gate and leave the next delivered job queued at GitHub.
+//
+// The gateway is the ELASTIC one, which is the load-bearing choice. Under
+// nodeAutoscaling: Present the only other signal is the autoscaler's own declination,
+// read from Events — and no Event is recorded here, so that path fails open. A decline
+// observed in this configuration can therefore have come from nothing but the kubelet's
+// startup verdict, which is what makes this the assertion that the verdict is not
+// selected by the cluster fact the other two are.
+//
+// Like the sibling classic test, the skip is asserted on the broker stub's acquire
+// counter rather than on the absence of a pod: "no pod appeared" would also pass if the
+// AGC had claimed the job and then failed to place it, which is the claim-and-stall
+// this rung exists to prevent.
+func TestV2_RunnerSet_CapacityGate_WorkerThatCannotStartSkipsAcquire(t *testing.T) {
+	const ns = "v2-rs-capgate-nostart"
+	const setName = "capgate-nostart-set"
+	const image = "example.invalid/build-capable-runner:replace-me"
+	createNSForAGC(t, ns)
+
+	require.NoError(t, k8sClient.Create(ctx, newGatewayForSet("gw", ns, "")))
+	require.NoError(t, k8sClient.Create(ctx, newRunnerTemplate("tmpl", ns)))
+	rs := newRunnerSet(setName, ns, "gw")
+	rs.Spec.MaxWorkers = ptr.To(int32(3))
+	rs.Spec.CapacityGate = &v2alpha1.CapacityGate{Mode: v2alpha1.CapacityGateModeObserve}
+	// Long enough that the reaper cannot delete the gate's evidence mid-assertion.
+	rs.Spec.PendingPodDeadline = &metav1.Duration{Duration: 5 * time.Minute}
+	rs.Spec.CompletedPodTTL = &metav1.Duration{Duration: time.Hour}
+	require.NoError(t, k8sClient.Create(ctx, rs))
+	t.Cleanup(func() {
+		_ = k8sClient.Delete(context.Background(), rs)
+		_ = k8sClient.Delete(context.Background(), newGatewayForSet("gw", ns, ""))
+		_ = k8sClient.Delete(context.Background(), &v2alpha1.RunnerTemplate{ObjectMeta: metav1.ObjectMeta{Name: "tmpl", Namespace: ns}})
+	})
+
+	rec := startRunnerSetReconciler(t)
+	waitForSetReadyReason(t, ns, setName, metav1.ConditionTrue, v2alpha1.ReasonListenerActive)
+
+	acquiresBefore := brokerStub.AcquireJobCalls()
+	capacityBefore := admissionRejections(ns, setName, runnercore.AdmitReasonCapacity)
+	ceilingBefore := admissionRejections(ns, setName, runnercore.AdmitReasonCeiling)
+
+	pod := createV2WorkerPod(t, ns, setName, "worker-unpullable")
+	markImagePullBackOff(t, pod, image)
+	waitForCapacityDeclined(t, rec.Client, ns, setName, v2alpha1.ReasonPodsNotStarting, 25*time.Second)
+
+	// The scheduler signal must stay quiet on the same object: this pod was placed, so
+	// reporting it as unschedulable would send an operator after a node it already has.
+	var seen v2alpha1.RunnerSet
+	require.NoError(t, k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: setName}, &seen))
+	unsched := meta.FindStatusCondition(seen.Status.Conditions, v2alpha1.ConditionWorkersUnschedulable)
+	require.NotNil(t, unsched)
+	require.Equal(t, metav1.ConditionFalse, unsched.Status,
+		"a bound pod is not a scheduling failure, whatever the kubelet then makes of it")
+	declined := meta.FindStatusCondition(seen.Status.Conditions, v2alpha1.ConditionWorkerCapacityDeclined)
+	require.NotNil(t, declined)
+	require.Contains(t, declined.Message, image,
+		"the condition must name the image, which is the operator's whole remedy")
+
+	id := enqueueJobOnOwnerSession(15*time.Second, setName, nil, broker.RunnerJobRequestBody{})
+	require.NotEmpty(t, id, "a session for %s should be active", setName)
+
+	require.Eventually(t, func() bool {
+		return admissionRejections(ns, setName, runnercore.AdmitReasonCapacity) > capacityBefore
+	}, 20*time.Second, 25*time.Millisecond,
+		"a delivery under a gate closed by the kubelet's startup verdict must be rejected with reason=capacity")
+
+	require.Never(t, func() bool {
+		return brokerStub.AcquireJobCalls() > acquiresBefore
+	}, 2*time.Second, 100*time.Millisecond,
+		"a job whose worker cannot start must be left queued at GitHub, never claimed by acquirejob")
+
+	require.Equal(t, ceilingBefore, admissionRejections(ns, setName, runnercore.AdmitReasonCeiling),
+		"the capacity rung reserves nothing and must never be attributed to the ceiling")
+}

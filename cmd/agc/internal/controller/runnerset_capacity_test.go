@@ -72,6 +72,25 @@ func capWorkerPod(ns, setName, name string, phase corev1.PodPhase, created time.
 	return p
 }
 
+// capBackingOff puts a bound worker pod into the kubelet's image-pull backoff — the
+// shape §9j measured from the 1.4 DinD templates' example.invalid placeholder.
+func capBackingOff(pod *corev1.Pod, reason, message string) *corev1.Pod {
+	pod.Status.ContainerStatuses = []corev1.ContainerStatus{{
+		Name:  provisioner.WorkerContainerName,
+		State: corev1.ContainerState{Waiting: &corev1.ContainerStateWaiting{Reason: reason, Message: message}},
+	}}
+	return pod
+}
+
+// capStarted marks a worker pod's runner container as having begun running at at.
+func capStarted(pod *corev1.Pod, at time.Time) *corev1.Pod {
+	pod.Status.ContainerStatuses = []corev1.ContainerStatus{{
+		Name:  provisioner.WorkerContainerName,
+		State: corev1.ContainerState{Running: &corev1.ContainerStateRunning{StartedAt: metav1.NewTime(at)}},
+	}}
+	return pod
+}
+
 func capReconciler(t *testing.T, now time.Time, objs ...client.Object) *RunnerSetReconciler {
 	t.Helper()
 	return &RunnerSetReconciler{

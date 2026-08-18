@@ -545,20 +545,23 @@ Those two count the *cost* of the refusal; the gate's own state is `actions_gate
 **Cause.** This is **deliberate, and only ever happens on a set that opted in.** The runner set has `spec.capacityGate.mode: Observe` (Q405, Q406, Q470), and the signal the gate reads is currently saying the cluster cannot place another worker pod of this set's shape.
 The gateway is refusing to claim work it cannot run, because each such claim spends a single-use JIT runner record, holds a GitHub job lock until `pendingPodDeadline`, and ends in a **cancelled** workflow run rather than a redelivered one.
 
-Which signal it read follows from the gateway's `spec.clusterCapacity.nodeAutoscaling`, not from anything on the set.
-The condition's `reason` names it:
+Which of the two **placeability** signals it read follows from the gateway's `spec.clusterCapacity.nodeAutoscaling`, not from anything on the set.
+The third reason below is not selected by anything; it is read on every cluster.
+The condition's `reason` names which one decided:
 
 | `reason` | Gateway says | What was observed |
 |---|---|---|
 | `ScaleUpDeclined` | `nodeAutoscaling: Present` (default) | The cluster autoscaler itself recorded, on a stuck worker pod, that it will **not** add a node for it. The message carries the autoscaler's own per-node-group text. |
 | `PodsUnschedulable` | `nodeAutoscaling: Absent` | The scheduler's own verdict — the same `PodScheduled=False`/`Unschedulable` fact behind [`WorkersUnschedulable`](#runnergroup-reports-workersunschedulable). |
-| `AwaitingProbe` | either | The stuck pods that produced the verdict were reaped at `pendingPodDeadline`, and nothing has yet shown that capacity returned — the decline is **retained** (Q512). Intake is limited to **one probe job** per deadline window, not closed; the message carries the reaped verdict. Clears when a worker pod schedules. |
+| `PodsNotStarting` | either | A worker pod **was** placed on a node and then could not be started: the kubelet is in `ImagePullBackOff` on its image (Q714). The message carries the kubelet's own text, which names the image. Almost always an unpullable or misspelled `workerImage`; see [below](#the-reason-is-podsnotstarting-the-image-will-not-pull). |
+| `AwaitingProbe` | either | The stuck pods that produced the verdict were reaped at `pendingPodDeadline`, and nothing has yet shown that capacity returned, so the decline is **retained** (Q512). Intake is limited to **one probe job** per deadline window, not closed; the message carries the reaped verdict. Clears when a worker pod **starts**: a container that has actually run, not merely a pod that has been scheduled. |
 | `CapacityAvailable` (status `False`) | either | The gate is engaged and is **not** refusing intake. |
 | `GateModeUnsupported` (status `False`) | — | This AGC does not implement the mode the set selected, so no rung is evaluated. See [below](#the-mode-is-reported-as-unsupported). |
 
 A set with no `capacityGate` (the default) never carries this condition at all — its absence is not a failure to report, it means the set did not opt in.
 
-> **The gate throttles, it does not seal.** When the reaper deletes the stuck pod at `pendingPodDeadline`, the condition does not clear — it latches as `AwaitingProbe` and admits exactly **one probe job**; if capacity is still missing, that job's pod trips the live verdict again, and if it schedules the gate clears completely.
+> **The gate throttles, it does not seal.** When the reaper deletes the stuck pod at `pendingPodDeadline`, the condition does not clear — it latches as `AwaitingProbe` and admits exactly **one probe job**; if capacity is still missing, that job's pod trips the live verdict again, and once one of its containers runs the gate clears completely.
+> Starting rather than merely being scheduled is the release condition, because a probe pod binds within a second of being created and only reveals that it cannot start seconds later; releasing on the binding would restore the full advertisement inside that gap (Q714).
 > Expect roughly one claim per deadline window, not zero — a `RunnerSet` that never claims anything again has a different problem.
 > On an idle gated set whose shape stays unplaceable, `AwaitingProbe` can persist `True` indefinitely; that is truthful, and harmless until jobs arrive.
 >
@@ -635,6 +638,37 @@ The next delivered job (classic) or the next long-poll (`ScaleSet`) picks that u
 > kubectl patch actionsgateway -n <namespace> <gateway> --type=merge \
 >   -p '{"spec":{"clusterCapacity":{"nodeAutoscaling":"Present"}}}'
 > ```
+
+### The Reason Is `PodsNotStarting`: the Image Will Not Pull
+
+This reason is not about placement at all, which is why it reads the same on a fixed-size cluster and an elastic one.
+The worker pod **was** scheduled, it has a node, and then the kubelet could not start its container, so it sits `Pending` in `ImagePullBackOff` until the reaper deletes it at `pendingPodDeadline`.
+No node anyone adds changes that, so the gate refuses intake wherever it sees it.
+
+Look at the pod, not the set: it reports the problem within seconds, while the `RunnerSet` reported nothing at all before Q714.
+
+```sh
+kubectl get pods -n <namespace> -l actions-gateway.com/runner-set=<runner-set> \
+  -o custom-columns='NAME:.metadata.name,PHASE:.status.phase,STATE:.status.containerStatuses[*].state.waiting.reason'
+```
+
+```sh
+kubectl describe pod -n <namespace> <worker-pod>   # the Failed event names the host or the manifest
+```
+
+Almost always one of:
+
+| What you see | Fix |
+|---|---|
+| The image host is `example.invalid` | A template placeholder was never replaced. Both DinD templates ship one deliberately so an unreplaced value fails at pull rather than mid-job. Set a real `workerImage` ([runner template library](runner-template-library.md)). |
+| `401`/`403` on the pull | The pull Secret is missing from this namespace, or is not referenced by the worker's ServiceAccount ([air-gapped install](air-gapped-install.md) step 5). |
+| `manifest unknown`, or a tag that does not exist | A typo in `workerImage`, or a digest that did not survive relocation into a mirror. |
+| The registry host does not resolve | Worker egress does not reach it; check the tenant's `EgressProxy` and any NetworkPolicy in the namespace. |
+
+The gate reads the kubelet's **backoff**, not its first failed pull: a single `ErrImagePull` from a registry blip is ignored, and the next attempt clears it.
+So a `PodsNotStarting` decline means the kubelet has already tried, failed, and scheduled a retry.
+
+Once the image pulls, the next worker pod starts and the condition clears on the following reconcile, with no restart and no change to the set.
 
 ### A Cluster-Wide Verdict Closes Every Set at Once
 
