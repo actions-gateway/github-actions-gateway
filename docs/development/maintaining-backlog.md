@@ -546,6 +546,33 @@ On retirement, **move the row to [flake-watch-retired.md](flake-watch-retired.md
 That preserves the "a fix was already attempted here" memory at zero live-table cost: if the flake ever returns post-retirement it re-enters as a fresh find, and the ledger is one `grep` away to reconnect the history.
 Deleting outright throws that memory away and makes the next occurrence look novel.
 
+## A plan enumerates readers, not references
+
+A plan's scope section lists what a change has to touch, and the natural way to build that list is to grep for the thing's name.
+That counts *references*.
+What a change breaks is whatever *reads* the thing, and the two sets differ by every reader that never names it.
+No better query closes the gap, because the gap is the absence of the string being searched for.
+
+[Q889](../plan/q889-backlog-item-store.md) moved the backlog from one table to the per-item store in six phases, and understated its scope in all five that preceded the cutover, every time in the same direction.
+Its phase 6 section records three readers a reference count could not have reached, one of each kind:
+
+| The reader | Q889's case | Why no query reaches it |
+|---|---|---|
+| A reference in a structured field | `Q878`'s frontmatter `target:` named a suite the phase deleted | It is not link syntax, so no markdown link checker resolves it. `queue.py lint` reads that field and found it on arrival, having been vendored since phase 1 and wired into no gate until the cutover |
+| A consumer whose failure is silent | [`hooks/release_gates.py`](../../hooks/release_gates.py) returns an empty gate map when its source is unreadable, so the page renders with no release chips at exit 0; deleting the table would have dropped every one of them on a green build | Grep does find it, since it names the path. Nothing tells you the build that stayed green ran it rather than watched it give up. Phase 5's render guard was the same shape, which makes it a class rather than an instance |
+| A glob that crosses into the new tree | `page-density-check`'s `docs/*.md` pathspec selects every item page | Nothing names the store. A git pathspec glob crosses directory separators, so what points at the tree is a separator the query does not stop at. Measured 2026-08-18: 151 of the 408 files it selects are items |
+
+**Enumerate from the reader's side.** Ask each thing that runs what it reads, instead of asking the artifact who names it.
+One gate here already works that way: `gate-lists-check` resolves every gate's own pathspec against the real repo and fails when a gate selecting an item is missing from `QUEUE_GATES`, which is how the crossing glob surfaced the moment that list was repointed at the store.
+Resolve any glob against the tree the change *leaves*, not the one it starts from, since a directory that does not exist yet matches nothing.
+
+**Write the count as a floor.** "61 files name it, plus whatever reads it without naming it" keeps the number as the start of the enumeration; "61 files" reads as the end of one.
+Sort each reader you find by whether it takes the artifact as its **subject** or as a **source**: a gate whose whole reason to exist is a property of that one file retires with it, and a gate answering a question that outlives the storage gets repointed instead.
+Sorting on "does it mention the path" answers neither question, and asking the other one is what carried a staleness guard and a seconds-long verification set through Q889's cutover intact.
+
+**A phase that overran its scope is evidence about the method, not about that phase.** Q889 read each miss as local and re-counted, which is why its fifth phase repeated the fourth's mistake and the cutover then found three more.
+Re-enumerate the next phase from the reader's side rather than grepping again more carefully.
+
 ## Plan-level status lives in the plan index
 
 The backlog table carried a **Progress** table above the Queue, one row per plan doc, and the store has no counterpart: [`docs/plan/README.md`](../plan/README.md) already carried per-plan Status cells with strictly more information, so Q889 deleted Progress rather than migrating it.
