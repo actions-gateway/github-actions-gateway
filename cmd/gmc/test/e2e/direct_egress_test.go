@@ -294,13 +294,23 @@ spec:
 // Without it the spec is vacuous: a kind cluster has no metadata server, so a
 // probe of that address fails for every pod whatever the NetworkPolicy says.
 //
-// hostNetwork + privileged because the address has to exist in the NODE's network
-// namespace, which is where a pod's link-local traffic lands — the same shape
-// NodeLocal DNSCache uses for 169.254.20.10. A DaemonSet rather than a Deployment
-// because link-local is node-scoped: a probe pod reaches only its OWN node's copy,
-// so every node needs one. Both listeners bind the link-local address explicitly
-// rather than 0.0.0.0, so neither collides with anything already on the node's
-// ports (kubelet on :80-adjacent ports, systemd-resolved on 127.0.0.53:53).
+// hostNetwork because the address has to exist in the NODE's network namespace,
+// which is where a pod's link-local traffic lands — the same shape NodeLocal
+// DNSCache uses for 169.254.20.10. A DaemonSet rather than a Deployment because
+// link-local is node-scoped: a probe pod reaches only its OWN node's copy.
+//
+// The listener is fakegithub, whose ADDR/CONTROL_ADDR env vars bind it wherever
+// we ask. It is used here purely as an HTTP server that is already built and
+// side-loaded onto the kind nodes; nothing in this spec touches its GitHub
+// behaviour, and any status it answers with proves the point equally, because
+// the assertions read curl's exit code rather than the HTTP status.
+//
+// An earlier revision served with busybox httpd from the curl image and
+// crash-looped every pod: Alpine ships httpd in busybox-extras, not in the base
+// busybox that curlimages/curl carries. Serving from an image this repo builds
+// removes that class of guess. The one applet still needed is `ip`, in the init
+// container, and its failure is now attributable to a single container rather
+// than being one of two FATAL paths in a combined script.
 func deployMetadataStandin() {
 	const dsName = "metadata-standin"
 
@@ -320,12 +330,15 @@ spec:
         app: %[1]s
     spec:
       hostNetwork: true
-      # Land on control-plane nodes too: the e2e probe pods are not confined to
+      # Land on control-plane nodes too: the probe pods are not confined to
       # workers, and a node without the stand-in yields an unreachable control.
       tolerations:
       - operator: Exists
-      containers:
-      - name: standin
+      initContainers:
+      # Sole job is the address, so a failure here is unambiguous. Idempotent
+      # because the e2e cluster is reused across runs: an address left by a
+      # previous run must not fail the pod.
+      - name: add-metadata-address
         image: %[3]s
         imagePullPolicy: IfNotPresent
         securityContext:
@@ -334,50 +347,66 @@ spec:
         command: ["sh", "-c"]
         args:
         - |
-          set -u
-          # The address has to exist in the NODE netns before anything can serve
-          # on it. Idempotent because the e2e cluster is reused across runs: an
-          # address left by a previous run must not fail the container.
-          if ! ip addr show dev lo 2>/dev/null | grep -q '169[.]254[.]169[.]254'; then
-            ip addr add 169.254.169.254/32 dev lo 2>/dev/null ||
-              ifconfig lo:0 169.254.169.254 netmask 255.255.255.255 up 2>/dev/null || {
-                echo "FATAL: cannot add 169.254.169.254 to lo"
-                busybox --list 2>&1 | tr '\n' ' '
-                exit 1
-              }
+          set -eu
+          if ip addr show dev lo | grep -q '169[.]254[.]169[.]254'; then
+            echo "169.254.169.254 already present on lo"
+          else
+            ip addr add 169.254.169.254/32 dev lo
           fi
-          mkdir -p /www
-          echo 'metadata-standin-ok' > /www/index.html
-          # busybox httpd daemonises, so one script can start both listeners.
-          # :80 is the real metadata port; :53 is the port the link-local DNS rule
-          # admits, and serving it is what lets the spec prove the block is the
-          # PORT scoping rather than the address being unreachable.
-          for port in 80 53; do
-            httpd -p 169.254.169.254:$port -h /www || {
-              echo "FATAL: busybox httpd could not bind :$port"
-              busybox --list 2>&1 | tr '\n' ' '
-              exit 1
-            }
-          done
-          echo "metadata stand-in listening on 169.254.169.254 ports 80 and 53"
-          sleep infinity
-        # The container's main process is a sleep, so without this the pod reports
-        # Ready before httpd has bound and the control probe races it. Readiness
-        # here means "actually serving on both ports", which is what the caller's
-        # rollout wait needs it to mean.
+          ip addr show dev lo
+      containers:
+      # Two listeners, same address, different ports. :80 is the real metadata
+      # port. :53 is the port the link-local DNS rule admits, and serving it is
+      # what lets the spec prove the block is the PORT scoping rather than the
+      # address being unreachable. runAsUser 0 because both are privileged
+      # ports; CONTROL_ADDR differs so the two containers do not collide in the
+      # shared host network namespace.
+      - name: meta-http
+        image: %[4]s
+        imagePullPolicy: IfNotPresent
+        securityContext:
+          runAsUser: 0
+        env:
+        - name: ADDR
+          value: "169.254.169.254:80"
+        - name: CONTROL_ADDR
+          value: "169.254.169.254:9090"
+        # A tcpSocket probe is executed by the kubelet, so readiness needs no
+        # shell or curl inside this distroless image. Readiness here means the
+        # port is actually accepting, which is what the caller's wait needs it
+        # to mean — the pod's containers would otherwise report Ready before
+        # either listener bound, and the control probe would race them.
         readinessProbe:
-          exec:
-            command:
-            - sh
-            - -c
-            - curl -sf --max-time 3 http://169.254.169.254:80/ && curl -sf --max-time 3 http://169.254.169.254:53/
+          tcpSocket:
+            host: 169.254.169.254
+            port: 80
           initialDelaySeconds: 2
           periodSeconds: 3
-          failureThreshold: 20
-`, dsName, infraNamespace, curlImage)
+          failureThreshold: 30
+      - name: meta-dns-port
+        image: %[4]s
+        imagePullPolicy: IfNotPresent
+        securityContext:
+          runAsUser: 0
+        env:
+        - name: ADDR
+          value: "169.254.169.254:53"
+        - name: CONTROL_ADDR
+          value: "169.254.169.254:9091"
+        readinessProbe:
+          tcpSocket:
+            host: 169.254.169.254
+            port: 53
+          initialDelaySeconds: 2
+          periodSeconds: 3
+          failureThreshold: 30
+`, dsName, infraNamespace, curlImage, fakegithubImage)
 
 	Expect(utils.ApplyManifest(manifest)).To(Succeed(), "apply metadata stand-in DaemonSet")
 	DeferCleanup(func() {
+		if CurrentSpecReport().Failed() {
+			dumpMetadataStandin(dsName)
+		}
 		_, _ = utils.Run(exec.Command("kubectl", "delete", "daemonset", dsName,
 			"-n", infraNamespace, "--ignore-not-found", "--wait=false"))
 	})
@@ -393,6 +422,45 @@ spec:
 		g.Expect(parts[0]).NotTo(Equal("0"), "metadata stand-in DaemonSet scheduled onto no nodes")
 		g.Expect(parts[1]).To(Equal(parts[0]), "metadata stand-in not ready on every node (%s)", out)
 	}, 3*time.Minute, 3*time.Second).Should(Succeed())
+}
+
+// dumpMetadataStandin writes the stand-in's state to the Ginkgo output on
+// failure. Added because the first CI run of this spec reported only
+// "not ready on every node (3/0)": the pods were crash-looping and nothing
+// captured why, which cost a full 15-minute lane run to diagnose from events
+// alone. Best-effort, like DumpCNIEnforcerState — call it only on a failure path.
+func dumpMetadataStandin(dsName string) {
+	_, _ = fmt.Fprintf(GinkgoWriter, "\n===== metadata stand-in state =====\n")
+	for _, args := range [][]string{
+		{"get", "pods", "-n", infraNamespace, "-l", "app=" + dsName, "-o", "wide"},
+		{"describe", "daemonset", dsName, "-n", infraNamespace},
+		{"describe", "pods", "-n", infraNamespace, "-l", "app=" + dsName},
+	} {
+		out, err := utils.Run(exec.Command("kubectl", args...))
+		_, _ = fmt.Fprintf(GinkgoWriter, "--- kubectl %s ---\n%s\n(err: %v)\n",
+			strings.Join(args, " "), out, err)
+	}
+	// Per-container logs, current and previous: a crash-looped container's fatal
+	// line survives only in --previous.
+	pods, err := utils.Run(exec.Command("kubectl", "get", "pods", "-n", infraNamespace,
+		"-l", "app="+dsName, "-o", "name"))
+	if err != nil {
+		return
+	}
+	for _, pod := range strings.Fields(pods) {
+		for _, container := range []string{"add-metadata-address", "meta-http", "meta-dns-port"} {
+			for _, prev := range []bool{false, true} {
+				args := []string{"logs", pod, "-n", infraNamespace, "-c", container, "--tail=40"}
+				if prev {
+					args = append(args, "--previous")
+				}
+				out, logErr := utils.Run(exec.Command("kubectl", args...))
+				_, _ = fmt.Fprintf(GinkgoWriter, "--- %s/%s (previous=%v) ---\n%s\n(err: %v)\n",
+					pod, container, prev, out, logErr)
+			}
+		}
+	}
+	_, _ = fmt.Fprintf(GinkgoWriter, "===== end metadata stand-in state =====\n\n")
 }
 
 // directEgressManifest renders the proxy-less v2 object set: ONE ActionsGateway
