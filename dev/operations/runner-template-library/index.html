@@ -2981,10 +2981,13 @@ The reserved <code>.invalid</code> host is chosen so an unreplaced value fails a
 <p><strong>Watch the worker pod, not the <code>RunnerSet</code>, when you suspect an unreplaced image.</strong> The pod reports the problem within seconds: it binds to a node and then sits Pending in <code>ImagePullBackOff</code>, with a <code>Failed</code> event naming the host it could not resolve.</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>kubectl<span class="w"> </span>get<span class="w"> </span>pods<span class="w"> </span>-n<span class="w"> </span>team-a<span class="w"> </span>-l<span class="w"> </span>actions-gateway.com/runner-set<span class="o">=</span>linux
 </code></pre></div>
-<p>The <code>RunnerSet</code> stays quiet for much longer, because a pod that cannot pull its image still scheduled perfectly well.
-<code>WorkersUnschedulable</code> reports only the scheduler's verdict, so it stays False and <code>actions_gateway_runnerset_workers_unschedulable</code> stays 0 for the whole window.
-The first <code>RunnerSet</code>-level signal is the <code>WorkerPodStuckPending</code> Warning event the reaper emits when it deletes the pod at <code>spec.pendingPodDeadline</code>, 10 minutes after the pod was created unless you lower that field.
-Until then the pod holds a concurrency slot, and each further job the set acquires starts the same cycle again.</p>
+<p><code>WorkersUnschedulable</code> will not tell you: a pod that cannot pull its image still scheduled perfectly well, so that condition stays False and <code>actions_gateway_runnerset_workers_unschedulable</code> stays 0 for the whole window.
+It is reporting the scheduler's verdict, and the scheduler said yes.</p>
+<p><strong>What the <code>RunnerSet</code> says depends on whether you opted into the capacity gate.</strong></p>
+<p>With <code>spec.capacityGate.mode: Observe</code>, the set reports <code>WorkerCapacityDeclined=True</code> with <code>reason: PodsNotStarting</code> within seconds of the kubelet backing off, the condition message carries the image it could not pull, and the gateway <strong>stops claiming jobs</strong> for this set rather than repeating the cycle per job (<a href="../troubleshooting/#the-reason-is-podsnotstarting-the-image-will-not-pull">troubleshooting</a>).
+Intake is throttled to one probe job per <code>pendingPodDeadline</code> window, not stopped, so the set recovers on its own once the image pulls.</p>
+<p>Without it (the default) the first <code>RunnerSet</code>-level signal is the <code>WorkerPodStuckPending</code> Warning event the reaper emits when it deletes the pod at <code>spec.pendingPodDeadline</code>, 10 minutes after the pod was created unless you lower that field.
+Until then the pod holds a concurrency slot, and each further job the set acquires starts the same cycle again, spending a single-use runner registration on every one.</p>
 <p><strong>A namespace at PSA <code>privileged</code>, plus GAG's three gates.</strong> Both entries need capabilities that Pod Security Standards <code>baseline</code> forbids, and PSA has no Kata-aware level in between.
 Tenants cannot self-elevate: the namespace needs all four settings in one object.</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">v1</span>

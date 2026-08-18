@@ -2865,6 +2865,34 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#9k-the-kubelets-startup-verdict-q714" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        9k. The kubelet's startup verdict (Q714)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="9k. The kubelet&#39;s startup verdict (Q714)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#the-latch-had-to-change-and-this-is-the-part-that-was-not-obvious" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The latch had to change, and this is the part that was not obvious
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#10-non-goals" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2897,7 +2925,9 @@
 
 <h1 id="capacity-aware-job-intake">Capacity-Aware Job Intake<a class="headerlink" href="#capacity-aware-job-intake" title="Permanent link">&para;</a></h1>
 <blockquote>
-<p><strong>Status: ✅ Complete (2026-07-31).</strong> Every build item (0a–2d) and every measurement row (V1–V3) is done.
+<p><strong>Status: ✅ Complete (2026-08-18).</strong> Every build item (0a–2e) and every measurement row (V1–V3) is done.
+Item 2e is the late one: <code>Observe</code> read the scheduler and the autoscaler but not the kubelet, so a worker that bound to a node and then could not start its container tripped no rung at all (<a href="#9k-the-kubelets-startup-verdict-q714">§9k</a>, Q714, shipped 2026-08-18).
+It is asserted in envtest only; a <code>V</code> row for it would need a live cluster and none has run.
 The one residual is item 3 — the <code>ProvisioningRequest</code> probe — deferred as <a href="../../queue/Q407/">Q407</a> with its triggers in <a href="../../design/appendix-g-future-enhancements/#g16-provisioningrequest-pre-acquire-capacity-probe-check-capacity">Appendix G.16</a>; <a href="#9h-what-the-dogfood-re-run-measured-for-the-latch-q513">§9h</a> supplies the number its trigger (a) reads against (~1 probe claim per window).</p>
 </blockquote>
 <p>The admission ladder in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/provisioner/admission.go"><code>cmd/agc/internal/provisioner/admission.go</code></a> gates job acquisition on two rungs today: observed namespace-ResourceQuota headroom (#784) and the owner's declared worker ceiling (Q59).
@@ -2965,6 +2995,12 @@ That principle, and why it makes the quota rung safe to gate on while the schedu
 <td>The latch: a bound that survives the reap, with a probe slot on both tiers</td>
 <td>M</td>
 <td>✅ Done (<a href="#9g-the-latch--a-bound-that-survives-the-reap-q512">§9g</a>, Q512, 2026-07-30) — effect measured (V2 re-run)</td>
+</tr>
+<tr>
+<td>2e</td>
+<td>Gate on the kubelet's verdict too: a worker that bound and never started</td>
+<td>M</td>
+<td>✅ Done (<a href="#9k-the-kubelets-startup-verdict-q714">§9k</a>, Q714, 2026-08-18); envtest only, not measured live</td>
 </tr>
 <tr>
 <td>V1</td>
@@ -3670,6 +3706,57 @@ Recovery does not loop tightly: the abandoned-run sweeper waits for capacity tha
 <p><strong>Why this matters beyond intake.</strong> Both 1.4 DinD templates ship that placeholder and require the operator to replace it, so this is the failure a first-time user of the library hits, not a corner case.
 <a href="../../operations/runner-template-library/"><code>runner-template-library.md</code></a> and <a href="../../operations/kata-dind-workloads/"><code>kata-dind-workloads.md</code></a> now describe the real split: the pod says <code>ImagePullBackOff</code> within seconds, while the <code>RunnerSet</code> stays quiet until the deadline.
 Closing Q714 changes what an operator watches, so it must update both.</p>
+<h2 id="9k-the-kubelets-startup-verdict-q714">9k. The kubelet's startup verdict (Q714)<a class="headerlink" href="#9k-the-kubelets-startup-verdict-q714" title="Permanent link">&para;</a></h2>
+<p>Shipped 2026-08-18.
+<a href="#9j-the-gap-is-operator-visible-in-shipped-docs-q714">§9j</a> measured the gap; this is what closed it.
+<code>Observe</code> read two signals, and both of them ask the same question: can this pod be <em>placed</em>.
+Nothing asked whether a pod that WAS placed ever ran.</p>
+<p><strong>A sibling signal, not a wider reading of the existing one.</strong> <code>podUnschedulable</code> keys on <code>PodScheduled=False</code>/<code>Unschedulable</code>, and that narrowness is deliberate: its godoc argues it, and the argument holds for the case it was written for, where a <code>ResourceQuota</code> rejection can never present because it blocks pod admission before a pod exists.
+Folding a bound-but-failing pod into that name would make one condition mean two things, and would leave an operator's remedy ambiguous: a node, a taint or a quota for one, an image for the other.
+So the new predicate is <code>podStartupBackoff</code>, in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/controller/worker_startup_verdict.go"><code>worker_startup_verdict.go</code></a>, reading the opposite half of <code>PodScheduled</code>.
+The two are disjoint by construction: a bound pod can never carry <code>PodScheduled=False</code>.
+<code>WorkerCapacityDeclined</code> gains a third <code>True</code> reason, <code>PodsNotStarting</code>, which is what the condition was built for: it "stays stable across all three phases while the source underneath it changes" (§5).
+No CRD change, no new mode, no API break; <code>Off</code> is still the default.</p>
+<p><strong>It is evaluated on every cluster, and that is the whole design point.</strong> The other two signals are selected by <code>clusterCapacity.nodeAutoscaling</code> because <a href="../../design/appendix-d-alternatives-considered/#d8-gating-intake-on-capacity-which-signals-are-safe-to-gate-on">§D.8</a>'s question, is another actor waiting on this pod to make capacity appear, has different answers on a fixed and an elastic cluster.
+Put the same question to a bound pod and the answer is the same everywhere: no. The pod is already placed, no autoscaler consumes its stuckness, and no node anyone adds changes whether its image resolves.
+So the rung checks it <em>before</em> the cluster fact splits the other two, and <code>TestV2_RunnerSet_CapacityGate_WorkerThatCannotStartSkipsAcquire</code> asserts it against the <strong>elastic</strong> gateway, where the autoscaler path fails open for want of an Event.
+That makes a decline there attributable to nothing else.</p>
+<p><strong>The timing argument is not Q95's, and could not be.</strong> <code>unschedulableGrace</code> is half <code>pendingPodDeadline</code> so <code>WorkersUnschedulable</code> cannot be set in the same pass the reaper deletes its evidence.
+This signal takes <strong>no</strong> time-based grace, for three reasons, and copying the factor would have been wrong in both directions:</p>
+<ul>
+<li>The scheduler's verdict is a snapshot, stamped on the first failed attempt, and a completing pod or an arriving node can overturn it a second later.
+  A dwell is what turns it into evidence.
+  <code>ImagePullBackOff</code> is not a snapshot: the kubelet reports it only after a pull has already failed <em>and</em> it has entered exponential backoff.
+  The dwell is inside the signal, which is why the matcher takes <code>ImagePullBackOff</code> and deliberately refuses <code>ErrImagePull</code>, the single pre-backoff failure.
+  <strong>That exclusion is the grace</strong>, so widening the matcher removes it silently.
+  Hence <code>TestCapacityGate_StartupVerdictIgnoresAPreBackoffFailure</code>, and a one-entry <code>startupBackoffReasons</code> map rather than an inline condition.</li>
+<li><code>pendingPodDeadline</code> is generous <strong>for image pulls</strong> by its own godoc, so half of it (five minutes at the defaults) would admit five minutes of doomed claims against a verdict §9j measured landing about two seconds after the pod is created.</li>
+<li>Q95's flapping cannot arise here anyway.
+  It needs the condition set at the reap; this one is set seconds into the pod's life and the latch, not a grace factor, is what carries it across the reap.</li>
+</ul>
+<p><strong>What the matcher covers, and what it deliberately does not.</strong> The image-pull family only, on the same reasoning §4 gives for placeability: it is a property of the pod SHAPE, so every worker this owner would create next carries the same reference and fails identically.
+<code>CreateContainerConfigError</code> and its neighbours are out, because a per-pod config error is not evidence about the next pod.
+Init containers and native sidecars count alongside regular containers, since a worker whose injected proxy sidecar cannot pull never runs its job either.
+Widening later is a data edit and a test row, following the same narrow-matcher-plus-fail-open habit §7 argues for the autoscaler vocabulary.</p>
+<p><strong>A re-check, because the watch cannot see this transition.</strong> <code>workerPodPhaseChangePredicate</code> drops updates that change no phase, and a pod entering <code>ImagePullBackOff</code> changes none, so without a requeue the gate would first learn of an unpullable image when the reaper deleted the pod ten minutes later.
+<code>startupVerdictRecheck</code> is 10s, a third of the elastic path's 30s, because it costs a third of nothing: that path spends uncached Event reads per stuck pod while this one re-reads a pod list the reconcile already holds.
+Only the undecided direction needs it: a pod that finally starts goes Pending→Running and a reaped one is deleted, and the watch delivers both.</p>
+<h3 id="the-latch-had-to-change-and-this-is-the-part-that-was-not-obvious">The latch had to change, and this is the part that was not obvious<a class="headerlink" href="#the-latch-had-to-change-and-this-is-the-part-that-was-not-obvious" title="Permanent link">&para;</a></h3>
+<p>Q512's latch releases when a worker pod has <strong>scheduled</strong> since the decline.
+Against this signal that rule is wrong, and wrong in the direction that quietly undoes the latch: a probe pod binds within a second and only reveals that it cannot start seconds later, so the gap between the two is a window in which nothing is declining and a fresh binding is on record.
+The latch would release, the advertisement would snap back to the full ceiling, and the burst of <em>N</em> wasted claims <a href="#9e-what-the-dogfood-run-measured-q469">§9e</a> measured would come back: the same no-op, reached by a different route, and invisible in the reason or the value because only the timing differs.</p>
+<p>So the release evidence is now a worker pod that <strong>started</strong>: a container that has run, read off <code>state.Running</code>, <code>state.Terminated</code> or <code>lastState</code>.
+Binding was only ever a proxy for "a worker can run here", and this signal is exactly the case that falsifies the proxy.</p>
+<p>The rule is uniform rather than per-origin, which is a deliberate trade.
+Keeping two rules would have needed two latched reasons to carry the origin through <code>AwaitingProbe</code>, adding a value to the condition, the gauge's <code>reason</code> label and two operator tables, to buy a difference that only shows up in the pathological case.
+Uniform costs a healthy probe the seconds between binding and its first container running, and in the pathological case it is strictly better: a latch held on a probe that bound and then wedged is the correct answer under either origin.
+It does tighten a shipped, measured behaviour (<a href="#9h-what-the-dogfood-re-run-measured-for-the-latch-q513">§9h</a>) in the <em>more</em>-gating direction, which this rung is otherwise careful never to do.
+The reason that is acceptable here and nowhere else in the rung: the latched state does not close intake, it rate-limits it to one probe job per deadline window, so a wrongly-held latch throttles a tenant and cannot starve one.
+<code>TestCapacityGate_LatchHoldsWhileTheProbeHasOnlyBound</code> is the negative control, and deleting either mechanism was confirmed to turn exactly the tests naming it red.</p>
+<p><strong>Not measured live.</strong> Everything above is envtest and unit.
+A <code>V</code> row would need a dogfood burst against an unpullable worker image.
+The number it would produce, residual claims per window, should be the same ~1 per (deadline + reassignment) window <a href="#9h-what-the-dogfood-re-run-measured-for-the-latch-q513">§9h</a> measured for the placeability signals, since the trickle machinery is shared.
+That is a prediction, not a measurement.</p>
 <h2 id="10-non-goals">10. Non-goals<a class="headerlink" href="#10-non-goals" title="Permanent link">&para;</a></h2>
 <ul>
 <li>Predicting schedulability in-process from node allocatable.

@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q714/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q904/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>Gate intake on workers that schedule but never start - GitHub Actions Gateway</title>
+        <title>Nothing gates a .build/ tool rule declaring its version-pin file - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#gate-intake-on-workers-that-schedule-but-never-start" class="md-skip">
+        <a href="#nothing-gates-a-build-tool-rule-declaring-its-version-pin-file" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Gate intake on workers that schedule but never start
+              Nothing gates a .build/ tool rule declaring its version-pin file
             
           </span>
         </div>
@@ -2567,9 +2567,9 @@
   
 
 
-<h1 id="gate-intake-on-workers-that-schedule-but-never-start">Gate intake on workers that schedule but never start<a class="headerlink" href="#gate-intake-on-workers-that-schedule-but-never-start" title="Permanent link">&para;</a></h1>
-<p><code>podUnschedulable()</code> keys on <code>PodScheduled=False</code>, so an <code>ImagePullBackOff</code> worker trips no rung: it binds, never starts, and each claim spends a JIT record and holds a lock to <code>pendingPodDeadline</code>.
-Measured; the 1.4 DinD placeholder hits it.</p>
+<h1 id="nothing-gates-a-build-tool-rule-declaring-its-version-pin-file">Nothing gates a <code>.build/</code> tool rule declaring its version-pin file<a class="headerlink" href="#nothing-gates-a-build-tool-rule-declaring-its-version-pin-file" title="Permanent link">&para;</a></h1>
+<p>Q842 set the pattern and a Makefile comment states it, but no gate holds it, so cosign was added without one and served a stale verifier until Q857.
+The next non-Go pinned tool repeats it.</p>
 
 
 

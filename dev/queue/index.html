@@ -2708,14 +2708,6 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>The proxy emits counters only today, so nothing carries a per-connection egress record.</td>
 </tr>
 <tr>
-<td><a href="Q714/">Q714</a></td>
-<td><a href="../plan/capacity-aware-intake/">Gate intake on workers that schedule but never start</a></td>
-<td><code>bug</code> <code>feature</code></td>
-<td>🔲</td>
-<td>M</td>
-<td><code>podUnschedulable()</code> keys on <code>PodScheduled=False</code>, so an <code>ImagePullBackOff</code> worker trips no rung: it binds, never starts, and each claim …</td>
-</tr>
-<tr>
 <td><a href="Q825/">Q825</a></td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/agent/claude-piped-gate-hook-test.sh">The no-toolchain case flakes twice over: pipeline status, and a rebuild</a></td>
 <td><code>flake</code> <code>tests</code> <code>bug</code></td>
@@ -2756,20 +2748,28 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td><code>git-merge-roadmap-test</code> shares Q820's shape and carries its <code>ERR</code> trap, but not the <code>Q820:</code> tree state, so a sighting names a line and …</td>
 </tr>
 <tr>
-<td><a href="Q857/">Q857</a></td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/Makefile">A <code>COSIGN_VERSION</code> bump never re-downloads, so the old verifier stays</a></td>
-<td><code>ci</code> <code>debt</code> <code>bug</code></td>
-<td>🔲</td>
-<td>S</td>
-<td>Q842 gave each Go tool rule its pin file; cosign's pin is a make variable, so <code>$(COSIGN)</code> has no file to depend on and make skips an …</td>
-</tr>
-<tr>
 <td><a href="Q899/">Q899</a></td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/publish.yml"><code>publish.yml</code>'s image build has no retry, so a 403 fails a release</a></td>
 <td><code>ci</code> <code>debt</code></td>
 <td>🔲</td>
 <td>S</td>
 <td>The half of <a href="Q863/">Q863</a> its fix deliberately left: same unretried base-image pull, but the release build is <code>no-cache: true</code> and five …</td>
+</tr>
+<tr>
+<td><a href="Q903/">Q903</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/Makefile">Nothing gates <code>COSIGN_VERSION</code> against <code>publish.yml</code>'s <code>cosign-release</code></a></td>
+<td><code>ci</code> <code>debt</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>Only a comment keeps the two in step, so <code>make verify-release</code> can use a verifier the publish job never signed with.</td>
+</tr>
+<tr>
+<td><a href="Q904/">Q904</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/Makefile">Nothing gates a <code>.build/</code> tool rule declaring its version-pin file</a></td>
+<td><code>ci</code> <code>debt</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>Q842 set the pattern and a Makefile comment states it, but no gate holds it, so cosign was added without one and served a stale verifier …</td>
 </tr>
 <tr>
 <td><a href="Q866/">Q866</a></td>
@@ -3218,6 +3218,14 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>🔲</td>
 <td>S</td>
 <td>The other three §3.2 deliverables shipped (21 alert rules, SLO recording rules, runbook links).</td>
+</tr>
+<tr>
+<td><a href="Q906/">Q906</a></td>
+<td><a href="../operations/runner-template-library/">Report workers that bind and never start on an ungated RunnerSet</a></td>
+<td><code>feature</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>Q714 made this visible only through <code>spec.capacityGate</code>, which is an intake decision and off by default, so an ungated set still says …</td>
 </tr>
 <tr>
 <td><a href="Q657/">Q657</a></td>

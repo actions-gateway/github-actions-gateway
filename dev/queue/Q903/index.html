@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q857/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q903/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>A COSIGN_VERSION bump never re-downloads, so the old verifier stays - GitHub Actions Gateway</title>
+        <title>Nothing gates COSIGN_VERSION against publish.yml's cosign-release - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#a-cosign_version-bump-never-re-downloads-so-the-old-verifier-stays" class="md-skip">
+        <a href="#nothing-gates-cosign_version-against-publishymls-cosign-release" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              A COSIGN_VERSION bump never re-downloads, so the old verifier stays
+              Nothing gates COSIGN_VERSION against publish.yml's cosign-release
             
           </span>
         </div>
@@ -2567,9 +2567,9 @@
   
 
 
-<h1 id="a-cosign_version-bump-never-re-downloads-so-the-old-verifier-stays">A <code>COSIGN_VERSION</code> bump never re-downloads, so the old verifier stays<a class="headerlink" href="#a-cosign_version-bump-never-re-downloads-so-the-old-verifier-stays" title="Permanent link">&para;</a></h1>
-<p>Q842 gave each Go tool rule its pin file; cosign's pin is a make variable, so <code>$(COSIGN)</code> has no file to depend on and make skips an existing binary.
-The fail-closed digest table in <code>download-cosign.sh</code> only runs if the rule does.</p>
+<h1 id="nothing-gates-cosign_version-against-publishymls-cosign-release">Nothing gates <code>COSIGN_VERSION</code> against <code>publish.yml</code>'s <code>cosign-release</code><a class="headerlink" href="#nothing-gates-cosign_version-against-publishymls-cosign-release" title="Permanent link">&para;</a></h1>
+<p>Only a comment keeps the two in step, so <code>make verify-release</code> can use a verifier the publish job never signed with.
+Unlike kind, polaris, shellcheck and syft, cosign has no updatecli manifest.</p>
 
 
 

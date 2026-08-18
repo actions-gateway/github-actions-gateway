@@ -4509,7 +4509,8 @@ Two layers enforce that a signature can only ever be a tag signature:</p>
   A Dependabot <code>go.mod</code> bump legitimately fails this gate until a follow-up vendor sync lands; that is the intended signal (see <a href="../../development/go-workspaces/#changing-dependencies">go-workspaces.md § Changing dependencies</a>).</li>
 <li><strong>The cosign verify binary is checksummed.</strong> GitHub release assets are mutable for an existing tag, so a raw download of the release verifier can't be trusted on its own.
   The publish pipeline obtains cosign via the SHA-pinned <code>sigstore/cosign-installer</code> action (which performs its own signature verification); the <em>local</em> verify path (<code>make verify-release</code> → <code>scripts/release/download-cosign.sh</code>) pins the expected SHA256 per platform in-repo and refuses to install a binary whose bytes don't match.
-  Bumping <code>COSIGN_VERSION</code> must add the new digests to that script (it fails closed on an unpinned version) — the same deliberate-pin discipline as <code>KIND_BINARY_SHA256</code> in <code>e2e-test.yml</code>.</li>
+  Bumping <code>COSIGN_VERSION</code> must add the new digests to that script (it fails closed on an unpinned version) — the same deliberate-pin discipline as <code>KIND_BINARY_SHA256</code> in <code>e2e-test.yml</code>.
+  The <code>$(COSIGN)</code> make rule keys on the pinned version, so a bump re-downloads instead of serving whatever <code>.build/cosign</code> already holds (Q857).</li>
 </ul>
 
 

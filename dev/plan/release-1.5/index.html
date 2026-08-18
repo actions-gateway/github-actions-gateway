@@ -3223,7 +3223,6 @@ Re-deriving at the tag is what closes that window, and it is cheap enough to rep
 <ul>
 <li><strong>Fold the scale-up token bucket into the advertised capacity.</strong> The bucket is waited on at <code>provisioner.go:532</code> and <code>:793</code>, after the claim, with the job holding its GitHub lock, which the CRD godoc states outright (<code>api/v2beta1/runnerset_types.go:394-400</code>).
   Expressing free tokens as a fourth <code>min()</code> rung in <code>AdvertiseCapacity</code> would make the anti-stampede claim structurally honest.</li>
-<li><strong>Gate intake on workers that schedule but never start.</strong> <code>podUnschedulable()</code> keys on <code>PodScheduled=False</code>, so an <code>ImagePullBackOff</code> worker trips no rung: it binds to a node, never starts, and each claim spends a JIT record and a lock until <code>pendingPodDeadline</code>.</li>
 <li><strong>Assert a worker pod cannot reach the cloud metadata server.</strong> Three docs advise denying <code>169.254.169.254/32</code>, Q226 measured HTTP 200 from inside a Kata guest, and no test names the address.
   <em>(Multi-label runner sets were held here too, and were accepted on 2026-08-09: the row is Q726, now labelled <code>1.5-gate</code>, and the gap inventory it belongs to is <a href="../arc-parity/">arc-parity.md</a>.)</em></li>
 </ul>

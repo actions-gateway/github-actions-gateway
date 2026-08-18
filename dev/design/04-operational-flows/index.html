@@ -3216,7 +3216,7 @@ All three were classic-only, which the <code>v2.0.0</code> removal of classic ac
 <p><strong>Two inputs, from two parties (Q470).</strong> The <em>mode</em> is the tenant's <code>spec.capacityGate.mode</code> (<code>Off</code>|<code>Observe</code>) — how hard should this set try not to claim work it cannot run.
    The <em>signal</em> follows from the platform operator's <code>ActionsGateway.spec.clusterCapacity.nodeAutoscaling</code>, because which reading of an unschedulable pod is sound is a property of the cluster, identical for every set in it.
    Splitting them is what makes the one harmful misconfiguration — gating on the scheduler's verdict where an autoscaler was about to add a node — <strong>unrepresentable</strong> rather than merely documented, and it stops a tenant being asked to speak for infrastructure they may not own.</p>
-<p><strong>The two signals.</strong> With <code>nodeAutoscaling: Absent</code> the gate reads the scheduler's verdict, sound because nothing is waiting on those pods.
+<p><strong>The two placeability signals.</strong> With <code>nodeAutoscaling: Absent</code> the gate reads the scheduler's verdict, sound because nothing is waiting on those pods.
    With <code>Present</code> (the default) it reads the <em>autoscaler's own declination</em> — cluster-autoscaler's <code>NotTriggerScaleUp</code>, or Karpenter's <code>FailedScheduling</code> from a non-scheduler reporter — recorded as an Event on a stuck worker pod, because only the autoscaler saying it will not act is evidence that no node is coming.
    Both feed the identical rung, condition, and metric label.
    <code>Present</code> is the default deliberately: it can only ever <em>under</em>-gate, so a cluster whose operator never set the field keeps today's behavior.
@@ -3224,8 +3224,13 @@ All three were classic-only, which the <code>v2.0.0</code> removal of classic ac
    So is recency: the verdict is the newest relevant event, so an autoscaler that declined and then scaled up reopens the gate rather than being remembered as a no. Recency is deliberately asymmetric — one autoscaler loop can record both verdicts for one pod milliseconds apart, so a declination counts as superseding a scale-up only from more than a second later, and a closer pair resolves open.
    Events are read uncached, field-selected to one pod, only for pods already stuck past the scheduling grace, and bounded per reconcile — there is no Event informer, and a healthy set costs zero reads.
    Detail: <a href="../appendix-h-v2-api-decomposition/#h7-reference-integrity--runtime-conditions-not-admission">Appendix H §H.7</a>.</p>
+<p><strong>A third signal, selected by nothing (Q714).</strong> Both signals above ask whether a pod can be <em>placed</em>.
+   A worker pod that WAS placed and then could not be started, with the kubelet in <code>ImagePullBackOff</code> (what an unreplaced <code>workerImage</code> placeholder produces), answers neither, so it tripped no rung at all and every job delivered in its <code>pendingPodDeadline</code> window was claimed.
+   The gate now reads that too, as <code>PodsNotStarting</code>, and reads it on <strong>every</strong> cluster rather than under one value of <code>nodeAutoscaling</code>: §D.8's question is whether another actor is waiting on the pod to make capacity appear, and a bound pod is not a request for anything.
+   The kubelet's backoff is the verdict, so the signal needs no scheduling grace of its own, which is also why the matcher takes <code>ImagePullBackOff</code> and refuses the pre-backoff <code>ErrImagePull</code>.</p>
 <p><strong>The capacity rung self-resolves through a probe, and that is what keeps it safe.</strong> It reads the <code>WorkerCapacityDeclined</code> condition, which is derived from the <em>existence</em> of a stuck worker pod — and because the reaper deletes exactly that pod at <code>pendingPodDeadline</code>, the condition does not clear on the reap: it <strong>latches</strong> as <code>AwaitingProbe</code> and admits exactly one probe job (Q512).
-   The probe's pod is the fresh evidence, in whichever direction it lands — it schedules and the gate clears completely, or it sticks and the live verdict returns.
+   The probe's pod is the fresh evidence, in whichever direction it lands: one of its containers runs and the gate clears completely, or it sticks and the live verdict returns.
+   Running rather than merely being scheduled is the release condition (Q714), because a probe binds within a second and only reveals that it cannot start seconds later, so releasing on the binding would restore the full advertisement inside that gap.
    A burst of <em>N</em> jobs that would each have been claimed and cancelled becomes roughly one wasted claim per deadline window — a bound on the rate, not an elimination.
    The latch is what makes that rate hold on the scale-set tier too, where capacity is an integer per poll rather than a decision per job: clearing on the reap would restore the whole advertisement each window (measured as a no-op — <a href="../../plan/capacity-aware-intake/#9e-what-the-dogfood-run-measured-q469">plan §9e</a>).
    Nothing here removes the need for <code>pendingPodDeadline</code> and the reaper.
@@ -3286,7 +3291,7 @@ GitHub then holds <code>totalAssignedJobs</code> at or below that value, so the 
 <td>no bound (the ceiling stands)</td>
 </tr>
 <tr>
-<td>Capacity (Q405, Q406, Q512)</td>
+<td>Capacity (Q405, Q406, Q512, Q714)</td>
 <td>this set's non-terminal worker pods, while its capacity gate is declining — no room for one more; <strong>plus one probe slot</strong> while the gate is latched (<code>AwaitingProbe</code>) with no probe pod outstanding</td>
 <td>no bound (gate <code>Off</code>, an unimplemented mode, nothing declining, or nothing readable)</td>
 </tr>
