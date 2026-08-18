@@ -154,9 +154,12 @@ merge_repo() {
 	printf '%s\n' "$repo"
 }
 
+MERGE_LOG="$WORKDIR/merge.log"
+
 # run_merge REPO BASE OURS THEIRS — commit BASE on trunk, OURS on branch `ours`,
-# THEIRS on branch `theirs`, then merge theirs into ours. Sets MERGE_RC and
-# leaves the result at $REPO/$TARGET.
+# THEIRS on branch `theirs`, then merge theirs into ours. Sets MERGE_RC, writes
+# the merge's combined output to MERGE_LOG, and leaves the result at
+# $REPO/$TARGET.
 run_merge() {
 	local repo="$1" base="$2" ours="$3" theirs="$4"
 	local -a paths=("$TARGET" .gitattributes)
@@ -176,7 +179,7 @@ run_merge() {
 	git -C "$repo" "${GIT_ID[@]}" commit -qam ours --allow-empty
 
 	MERGE_RC=0
-	git -C "$repo" "${GIT_ID[@]}" merge theirs >/dev/null 2>&1 || MERGE_RC=$?
+	git -C "$repo" "${GIT_ID[@]}" merge theirs >"$MERGE_LOG" 2>&1 || MERGE_RC=$?
 }
 
 # keys FILE — every row's plan path, in file order, space-separated. This is the
@@ -203,6 +206,25 @@ ok() { printf 'ok   %s\n' "$1"; }
 bad() {
 	printf 'FAIL %s\n' "$1" >&2
 	fails=$((fails + 1))
+}
+
+# diag LOG — the output a failing call produced, indented under the assertion.
+# Interpolate it into a bad() message; the command substitution eats the
+# trailing newline.
+#
+# Every assertion below reports this, because an exit code does not classify a
+# git failure on its own. Measured on git 2.55.0: 1 is a conflict but also an
+# unmergeable ref, 2 is the merge strategy failing (a failed object write, a
+# dirty worktree), and 128 is git dying before the strategy runs (a held
+# index.lock, a merge already in progress). Only the output separates them, and
+# a conflict writes its report to stdout rather than stderr.
+diag() {
+	if [[ -s "$1" ]]; then
+		printf '\n'
+		sed 's/^/     | /' "$1"
+	else
+		printf ' (no output)'
+	fi
 }
 
 # expect_resolved NAME WANT_KEYS -- BASE -- OURS -- THEIRS
@@ -242,8 +264,10 @@ expect_resolved() {
 	EXPECT_TEXT=''
 	got="$(keys "$repo/$TARGET")"
 	got="${got% }"
-	if (( MERGE_RC != 0 )); then
-		bad "$name: merge reported a conflict (rc=$MERGE_RC)"
+	if (( MERGE_RC == 1 )); then
+		bad "$name: merge conflicted (rc=1)$(diag "$MERGE_LOG")"
+	elif (( MERGE_RC != 0 )); then
+		bad "$name: git merge failed without conflicting (rc=$MERGE_RC)$(diag "$MERGE_LOG")"
 	elif has_markers "$repo"; then
 		bad "$name: conflict markers left behind"
 	elif [[ "$got" != "$want" ]]; then
@@ -270,8 +294,10 @@ expect_conflict() {
 
 	if (( MERGE_RC == 0 )); then
 		bad "$name: merge succeeded, but the outcome was not knowable"
+	elif (( MERGE_RC != 1 )); then
+		bad "$name: git merge failed instead of conflicting (rc=$MERGE_RC)$(diag "$MERGE_LOG")"
 	elif ! has_markers "$repo"; then
-		bad "$name: conflict reported without conflict markers to resolve"
+		bad "$name: conflict reported without conflict markers to resolve$(diag "$MERGE_LOG")"
 	else
 		ok "$name"
 	fi
@@ -410,7 +436,7 @@ if (( MERGE_RC == 0 )) && ! has_markers "$restructure" &&
 	[[ "$(keys "$restructure/$TARGET")" == 'a.md b.md sec.md archive/old.md c.md ' ]]; then
 	ok 'a side adds a whole table       -> falls back to git, which merges it'
 else
-	bad "a new table should fall back to git's merge (rc=$MERGE_RC, keys=[$(keys "$restructure/$TARGET")])"
+	bad "a new table should fall back to git's merge (rc=$MERGE_RC, keys=[$(keys "$restructure/$TARGET")])$(diag "$MERGE_LOG")"
 fi
 
 # --- regions outside the rows -------------------------------------------------
@@ -424,10 +450,10 @@ sed 's/^Topic-organized index of plan files\./Our new intro./' \
 sed 's/^Topic-organized index of plan files\./Their new intro./' \
 	"$WORKDIR/p-base.md" >"$WORKDIR/p-theirs.md"
 run_merge "$prose_repo" "$WORKDIR/p-base.md" "$WORKDIR/p-ours.md" "$WORKDIR/p-theirs.md"
-if (( MERGE_RC != 0 )) && has_markers "$prose_repo"; then
+if (( MERGE_RC == 1 )) && has_markers "$prose_repo"; then
 	ok 'outside the rows: contested prose -> markers'
 else
-	bad "outside the rows: a contested intro line should conflict (rc=$MERGE_RC)"
+	bad "outside the rows: a contested intro line should conflict (rc=$MERGE_RC)$(diag "$MERGE_LOG")"
 fi
 
 # --- absence is a no-op -------------------------------------------------------
@@ -445,7 +471,7 @@ run_merge "$unconfigured" "$WORKDIR/u-base.md" "$WORKDIR/u-ours.md" "$WORKDIR/u-
 if (( MERGE_RC == 0 )) && ! has_markers "$unconfigured"; then
 	ok 'no driver configured: git merges distant edits as before'
 else
-	bad "no driver configured: the attribute must be a no-op, not an error (rc=$MERGE_RC)"
+	bad "no driver configured: the attribute must be a no-op, not an error (rc=$MERGE_RC)$(diag "$MERGE_LOG")"
 fi
 
 # Same repo, the adjacent case: without the driver this is the conflict that
@@ -456,10 +482,10 @@ plan_index "$A" "$B" -- "$SEC" -- "$ARCH" >"$WORKDIR/u2-base.md"
 plan_index "$A" "$B" "$C" -- "$SEC" -- "$ARCH" >"$WORKDIR/u2-ours.md"
 plan_index "$A" "$B" "$D" -- "$SEC" -- "$ARCH" >"$WORKDIR/u2-theirs.md"
 run_merge "$unconfigured2" "$WORKDIR/u2-base.md" "$WORKDIR/u2-ours.md" "$WORKDIR/u2-theirs.md"
-if (( MERGE_RC != 0 )); then
+if (( MERGE_RC == 1 )); then
 	ok 'no driver configured: adjacent adds still conflict (the motivating case)'
 else
-	bad 'no driver configured: adjacent adds were expected to conflict'
+	bad "no driver configured: adjacent adds were expected to conflict (rc=$MERGE_RC)$(diag "$MERGE_LOG")"
 fi
 
 # --- rebase, which is where the pain actually is -------------------------------
@@ -479,12 +505,12 @@ git -C "$rebase_repo" checkout -q -b work trunk
 plan_index "$A" "$B" "$D" -- "$SEC" -- "$ARCH" >"$rebase_repo/$TARGET"
 git -C "$rebase_repo" "${GIT_ID[@]}" commit -qam 'file d'
 rc=0
-git -C "$rebase_repo" "${GIT_ID[@]}" rebase main >/dev/null 2>&1 || rc=$?
+git -C "$rebase_repo" "${GIT_ID[@]}" rebase main >"$WORKDIR/rebase.log" 2>&1 || rc=$?
 if (( rc == 0 )) && [[ "$(keys "$rebase_repo/$TARGET")" == 'a.md b.md c.md d.md sec.md archive/old.md ' ]] &&
 	! has_markers "$rebase_repo"; then
 	ok 'rebase onto main: both new plan rows applied'
 else
-	bad "rebase onto main should resolve by plan path (rc=$rc, keys=[$(keys "$rebase_repo/$TARGET")])"
+	bad "rebase onto main should resolve by plan path (rc=$rc, keys=[$(keys "$rebase_repo/$TARGET")])$(diag "$WORKDIR/rebase.log")"
 	git -C "$rebase_repo" rebase --abort >/dev/null 2>&1 || true
 fi
 
@@ -507,11 +533,11 @@ git -C "$subdir_repo" checkout -q -b ours trunk
 cp "$WORKDIR/s-ours.md" "$subdir_repo/$TARGET"
 git -C "$subdir_repo" "${GIT_ID[@]}" commit -qam ours
 rc=0
-(cd "$subdir_repo/docs/plan" && git "${GIT_ID[@]}" merge theirs >/dev/null 2>&1) || rc=$?
+(cd "$subdir_repo/docs/plan" && git "${GIT_ID[@]}" merge theirs >"$MERGE_LOG" 2>&1) || rc=$?
 if (( rc == 0 )) && [[ "$(keys "$subdir_repo/$TARGET")" == 'a.md b.md c.md d.md sec.md archive/old.md ' ]]; then
 	ok 'merge from a subdirectory resolves the relative driver path'
 else
-	bad "merge from a subdirectory failed (rc=$rc, keys=[$(keys "$subdir_repo/$TARGET")])"
+	bad "merge from a subdirectory failed (rc=$rc, keys=[$(keys "$subdir_repo/$TARGET")])$(diag "$MERGE_LOG")"
 fi
 
 # --- the real plan index ------------------------------------------------------
@@ -523,11 +549,11 @@ real_out="$WORKDIR/real-ours.md"
 cp "$REPO_ROOT/$TARGET" "$real_out"
 rc=0
 "$DRIVER" "$REPO_ROOT/$TARGET" "$real_out" "$REPO_ROOT/$TARGET" 7 "$TARGET" \
-	>/dev/null 2>&1 || rc=$?
+	>"$WORKDIR/real-identity.log" 2>&1 || rc=$?
 if (( rc == 0 )) && cmp -s "$real_out" "$REPO_ROOT/$TARGET"; then
 	ok "$TARGET: an identity merge is byte-identical"
 else
-	bad "$TARGET: identity merge changed the file or failed (rc=$rc)"
+	bad "$TARGET: identity merge changed the file or failed (rc=$rc)$(diag "$WORKDIR/real-identity.log")"
 fi
 
 # One real deletion against the real file, to prove the splitter finds every real
@@ -537,11 +563,11 @@ grep -vF "]($first_key)" "$REPO_ROOT/$TARGET" >"$WORKDIR/real-theirs.md"
 cp "$REPO_ROOT/$TARGET" "$real_out"
 rc=0
 "$DRIVER" "$REPO_ROOT/$TARGET" "$real_out" "$WORKDIR/real-theirs.md" 7 "$TARGET" \
-	>/dev/null 2>&1 || rc=$?
+	>"$WORKDIR/real-delete.log" 2>&1 || rc=$?
 if (( rc == 0 )) && cmp -s "$real_out" "$WORKDIR/real-theirs.md"; then
 	ok "$TARGET: deleting $first_key one-sided reproduces that file"
 else
-	bad "$TARGET: a one-sided real deletion did not apply cleanly (rc=$rc)"
+	bad "$TARGET: a one-sided real deletion did not apply cleanly (rc=$rc)$(diag "$WORKDIR/real-delete.log")"
 fi
 
 # --- agreement with the gate --------------------------------------------------
@@ -580,7 +606,7 @@ git -C "$gate_repo" "${GIT_ID[@]}" commit -qm base
 # Baseline: the gate must pass on the untouched copy, or the assertion below
 # proves nothing.
 base_gate_rc=0
-(cd "$gate_repo" && ./scripts/docs/check-plan-index.sh) >/dev/null 2>&1 || base_gate_rc=$?
+(cd "$gate_repo" && ./scripts/docs/check-plan-index.sh) >"$WORKDIR/gate-base.log" 2>&1 || base_gate_rc=$?
 
 # file_plan REPO NAME — add a plan file plus its README row directly under the
 # first table's separator. ⓘ so invariant 1 (must stay STATUS-referenced) does
@@ -610,15 +636,20 @@ git -C "$gate_repo" add -A
 git -C "$gate_repo" "${GIT_ID[@]}" commit -qm 'file our plan'
 
 merge_rc=0
-git -C "$gate_repo" "${GIT_ID[@]}" merge theirs >/dev/null 2>&1 || merge_rc=$?
+git -C "$gate_repo" "${GIT_ID[@]}" merge theirs >"$MERGE_LOG" 2>&1 || merge_rc=$?
 gate_rc=0
-(cd "$gate_repo" && ./scripts/docs/check-plan-index.sh) >/dev/null 2>&1 || gate_rc=$?
+(cd "$gate_repo" && ./scripts/docs/check-plan-index.sh) >"$WORKDIR/gate-merged.log" 2>&1 || gate_rc=$?
 if (( base_gate_rc == 0 )) && (( merge_rc == 0 )) && (( gate_rc == 0 )) &&
 	grep -q '](zz-our-plan.md)' "$gate_repo/$TARGET" &&
 	grep -q '](zz-their-plan.md)' "$gate_repo/$TARGET"; then
 	ok 'check-plan-index.sh accepts a driver-resolved adjacent-add merge'
 else
-	bad "gate agreement: base=$base_gate_rc merge=$merge_rc gate=$gate_rc"
+	# Three calls, three logs: which one is non-zero says which to read, and a
+	# baseline that failed means the merge assertion proved nothing.
+	bad "gate agreement: base=$base_gate_rc merge=$merge_rc gate=$gate_rc
+   baseline gate:$(diag "$WORKDIR/gate-base.log")
+   merge:$(diag "$MERGE_LOG")
+   gate after merge:$(diag "$WORKDIR/gate-merged.log")"
 fi
 
 # --- no background git in a fixture repo --------------------------------------
