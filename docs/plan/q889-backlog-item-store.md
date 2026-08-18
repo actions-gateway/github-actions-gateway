@@ -1,7 +1,7 @@
 # Q889: Migrate the backlog to the per-item store
 
 **Status:** Complete.
-Phases 1 to 5 merged (#1595, #1596, #1598, #1600, #1602); phase 6 is the cutover in this change.
+All six phases merged: #1595, #1596, #1598, #1600, #1602, and the cutover in #1603 on 2026-08-18.
 The backlog is `docs/queue/`, one file per item, and `docs/STATUS.md` is deleted.
 
 Replace the single `docs/STATUS.md` Queue table with the `session-backlog` skill's per-item store under `docs/queue/`, adopt its Python tooling, and groom the backlog to remove what the move obsoletes.
@@ -223,7 +223,7 @@ The check re-runs `migrate` into a throwaway store and compares the *loaded* ite
 Rank values are excluded and only the order they produce is compared, because a re-rank inside the store is the one operation the store exists to allow and a stricter check would fire on it.
 It retires itself: once `docs/STATUS.md` is deleted in phase 6 it passes and says the two can no longer disagree, so nothing has to remember to remove it.
 
-## Phase 3, in progress
+## Phase 3, landed 2026-08-17
 
 **Phase 2's gate is what lets this go incrementally.** `queue-drift-check` holds the table and the store to the same items, fields and order, so for as long as it is green the two are interchangeable and a consumer reading either returns the same answer.
 That removes the reason phase 3 had to be atomic: consumers switch a group at a time, and no window exists where the backlog says two different things.
@@ -278,7 +278,7 @@ A single substitution applied tree-wide gets those 25 wrong, and `check-doc-link
 Switching it now would report flow metrics over nothing while looking like a working tool.
 Deleting the table ends that series whatever happens, so what phase 6 has to decide is whether the old series is frozen into a doc, bridged, or simply allowed to restart.
 
-## Working rules for the remaining phases
+## Working rules the phases produced
 
 Both came out of phase 1 and both cost something before they were written down.
 
