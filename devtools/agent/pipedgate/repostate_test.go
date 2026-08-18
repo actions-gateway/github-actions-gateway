@@ -75,9 +75,15 @@ var errProbe = errors.New("probe failed")
 // overlap_ignore has to track that file: a third driver-owned path added there
 // and not here would start counting as a real overlap on every branch, and
 // both checks would fire always.
+//
+// testdata/gitattributes is an in-module symlink to it. Read directly as
+// ../../../.gitattributes the path leaves the devtools module root, and go
+// drops such reads from the test-cache key, so this drift check would replay a
+// stale pass (testing.md § The out-of-module test read gate). The name carries
+// no leading dot because git reads a .gitattributes wherever it finds one.
 func mergeDriverOwned(t *testing.T) []string {
 	t.Helper()
-	raw, err := os.ReadFile(filepath.Join("..", "..", "..", ".gitattributes"))
+	raw, err := os.ReadFile(filepath.Join("testdata", "gitattributes"))
 	if err != nil {
 		t.Fatalf("read .gitattributes: %v", err)
 	}

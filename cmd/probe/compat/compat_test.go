@@ -9,9 +9,11 @@ import (
 	"testing"
 )
 
-// reportPath is the committed report, relative to this package directory
-// (cmd/probe/compat → repo root is three levels up).
-const reportPath = "../../../docs/development/broker-compatibility.md"
+// reportPath is the committed report, reached through an in-module symlink:
+// docs/ sits outside the cmd/probe module root, and a read that leaves it is
+// dropped from the test-cache key, so an edit to the report alone would replay
+// a cached green (testing.md § The out-of-module test read gate).
+const reportPath = "testdata/broker-compatibility.md"
 
 // TestCompat runs every broker-compatibility check. It is the runnable suite
 // wired into `make check`/CI: a failing check means the broker.Client no longer

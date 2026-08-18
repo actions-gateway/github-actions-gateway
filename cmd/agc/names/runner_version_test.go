@@ -30,8 +30,11 @@ var dockerfileFromRE = regexp.MustCompile(
 // image — exactly the drift #197 introduced. Failing CI here forces the
 // constants to be updated in the same change.
 func TestRunnerVersionLockstep(t *testing.T) {
-	// cmd/agc/names → the repo-root Dockerfile
-	const dockerfilePath = "../../../Dockerfile"
+	// The repo-root Dockerfile, via an in-module symlink. Reaching it directly
+	// as ../../../Dockerfile leaves the cmd/agc module root, which go drops from
+	// the test-cache key: a Dependabot bump alone then replays a cached green,
+	// which is this test inverted (testing.md § The out-of-module test read gate).
+	const dockerfilePath = "testdata/Dockerfile"
 
 	raw, err := os.ReadFile(dockerfilePath)
 	if err != nil {

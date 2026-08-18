@@ -298,6 +298,15 @@ template-library-check: ## Fail if deploy/templates/ ships an entry no dogfood e
 v2-api-sync-check: ## Fail if a shared api/v2alpha1 + api/v2beta1 file diverges (beyond the package/storageversion lines)
 	scripts/go/check-v2-api-sync.sh
 
+# Go's test cache drops file reads that resolve outside the package's module root
+# (Q895), so a unit test asserting against a repo file one level up replays a stale
+# pass when only that file changes. Measured: `make check` reported `pipedgate
+# (cached)` and exited 0 while the package failed 5 assertions, as did CI. The fix
+# is a symlink under the package's own testdata/; this gate fails a direct read.
+.PHONY: test-cache-inputs-check
+test-cache-inputs-check: ## Fail if a unit test reads a file outside its module root (go drops it from the test-cache key)
+	scripts/go/check-test-cache-inputs.sh
+
 # Compile and vet the build-tagged Go files no other fast gate builds (Q404).
 # `make lint` and `make test` both use the DEFAULT tag set, so the integration
 # (envtest), e2e, and load packages are invisible to them and a compile break

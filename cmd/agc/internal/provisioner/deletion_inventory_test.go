@@ -68,18 +68,18 @@ type boundarySpec struct {
 var boundarySpecs = []boundarySpec{
 	{
 		name:       "E2E_GitHub_CancelledRunLeavesNoDeletionMark",
-		path:       "../../../gmc/test/e2e/github_e2e_test.go",
+		path:       "testdata/gmc/test/e2e/github_e2e_test.go",
 		credGated:  true,
 		whatItPins: "a human cancel at GitHub stays distinguishable from a drain at the pod — the assertion #1032 invalidated",
 	},
 	{
 		name:       "E2E_AGC_ScaleSetRecovery",
-		path:       "../../../gmc/test/e2e/worker_scaleset_recovery_test.go",
+		path:       "testdata/gmc/test/e2e/worker_scaleset_recovery_test.go",
 		whatItPins: "scale-set recovery under the chart's shipped RBAC, on a real kubelet (Q519)",
 	},
 	{
 		name:       "E2E_AGC_WorkerNodeDrain",
-		path:       "../../../gmc/test/e2e/worker_drain_test.go",
+		path:       "testdata/gmc/test/e2e/worker_drain_test.go",
 		whatItPins: "a drained worker that never ran its container is left unrecovered (Q421)",
 	},
 	{
@@ -104,17 +104,17 @@ var boundarySpecs = []boundarySpec{
 	},
 	{
 		name:       "E2E_AGC_PreemptedWorkerIsRecovered",
-		path:       "../../../gmc/test/e2e/worker_preemption_test.go",
+		path:       "testdata/gmc/test/e2e/worker_preemption_test.go",
 		whatItPins: "recovery of a delete-driven disruption that detection deliberately does NOT key on the mark (Q497), sampling the mark alongside",
 	},
 	{
 		name:       "E2E_AGC_CompletedPodReaped",
-		path:       "../../../gmc/test/e2e/worker_lifecycle_test.go",
+		path:       "testdata/gmc/test/e2e/worker_lifecycle_test.go",
 		whatItPins: "the reaper's stamp-then-delete path end to end, on a completed worker",
 	},
 	{
 		name:       "E2E_AGC_StuckPendingPodReaped",
-		path:       "../../../gmc/test/e2e/worker_lifecycle_test.go",
+		path:       "testdata/gmc/test/e2e/worker_lifecycle_test.go",
 		whatItPins: "the reaper's stamp-then-delete path on a worker that never started",
 	},
 }
@@ -133,20 +133,25 @@ var deletionMarkTokens = []string{
 // breaks one goes red on its own and needs no pointer. These trees are the ones whose
 // green can simply be absent — skipped for want of credentials, or gated behind a
 // workflow path filter.
+//
+// The cmd/gmc trees are reached through testdata/gmc, an in-module symlink. A
+// ../../../gmc path leaves the cmd/agc module root, and go drops such reads from
+// the test-cache key, so this sweep would replay a stale pass after a gmc test
+// changed (testing.md § The out-of-module test read gate).
 var heavyTierRoots = []string{
-	"../../../gmc/test/e2e",
+	"testdata/gmc/test/e2e",
 	"../controller/integration",
-	"../../../gmc/internal/controller/integration",
+	"testdata/gmc/internal/controller/integration",
 }
 
 // nonBoundaryFiles are heavy-tier test files that name the deletion mark without
 // asserting the deletion boundary. Each needs a reason, because "this one does not
 // count" is the judgement a sweep exists to make explicit.
 var nonBoundaryFiles = map[string]string{
-	"../../../gmc/test/e2e/e2e_test.go":                                      "a jsonpath readiness template filters out pods that are mid-delete; no assertion about the mark",
+	"testdata/gmc/test/e2e/e2e_test.go":                                      "a jsonpath readiness template filters out pods that are mid-delete; no assertion about the mark",
 	"../controller/integration/q260_late_redelivery_test.go":                 "filters live worker pods with DeletionTimestamp.IsZero(); the subject is delivery dedup",
-	"../../../gmc/internal/controller/integration/v2_teardown_test.go":       "asserts an ActionsGateway CR is mid-deletion; CR finalizers, not worker pods",
-	"../../../gmc/internal/controller/integration/priorityclass_vap_test.go": "asserts a RunnerGroup CR is held deleting by its finalizer; an admission-policy subject",
+	"testdata/gmc/internal/controller/integration/v2_teardown_test.go":       "asserts an ActionsGateway CR is mid-deletion; CR finalizers, not worker pods",
+	"testdata/gmc/internal/controller/integration/priorityclass_vap_test.go": "asserts a RunnerGroup CR is held deleting by its finalizer; an admission-policy subject",
 }
 
 // TestDeletePathInventory_MatchesDeclaredSites fails when the AGC's set of client

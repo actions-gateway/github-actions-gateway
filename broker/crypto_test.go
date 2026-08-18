@@ -41,12 +41,14 @@ type cryptoFixture struct {
 	Plaintext     json.RawMessage `json:"plaintext"`
 }
 
-// loadFixture reads testdata/crypto_fixture.json. Go tests run with the
-// working directory set to the package directory (broker/), so the path is
-// relative to that.
+// loadFixture reads the repo-root testdata/crypto_fixture.json through
+// broker/testdata/, an in-module symlink. Go tests run with the working
+// directory set to the package directory (broker/), and a path leaving the
+// module root is dropped from the test-cache key — a direct ../testdata read
+// caches stale (testing.md § The out-of-module test read gate).
 func loadFixture(t *testing.T) cryptoFixture {
 	t.Helper()
-	data, err := os.ReadFile("../testdata/crypto_fixture.json")
+	data, err := os.ReadFile("testdata/crypto_fixture.json")
 	require.NoError(t, err, "testdata/crypto_fixture.json must exist")
 	var f cryptoFixture
 	require.NoError(t, json.Unmarshal(data, &f))

@@ -27,11 +27,14 @@ import (
 // a cluster-wide grant bound by a ClusterRoleBinding, not scoped to a tenant
 // namespace. These two tests are that gate.
 const (
-	agcTenantRoleRulesFile     = "agc-tenant-role-rules.yaml"
-	agcClusterReaderRulesFile  = "agc-clusterrunnertemplate-reader-rules.yaml"
-	agcRBACMarkerFile          = "doc.go"
-	clusterReaderClusterRole   = "agc-clusterrunnertemplate-reader"
-	chartRulesFragmentRelative = "charts/actions-gateway/files"
+	agcTenantRoleRulesFile    = "agc-tenant-role-rules.yaml"
+	agcClusterReaderRulesFile = "agc-clusterrunnertemplate-reader-rules.yaml"
+	agcRBACMarkerFile         = "doc.go"
+	clusterReaderClusterRole  = "agc-clusterrunnertemplate-reader"
+	// testdata/chartfiles is an in-module symlink to charts/actions-gateway/files:
+	// the chart tree sits outside the cmd/agc module root, and go drops such reads
+	// from the test-cache key (testing.md § The out-of-module test read gate).
+	chartRulesFragmentRelative = "testdata/chartfiles"
 )
 
 // readOnlyVerbs are the only verbs agc-clusterrunnertemplate-reader may grant.
@@ -59,11 +62,10 @@ func (k grantKey) String() string {
 	return k.resource + "." + k.group
 }
 
-// chartRulesPath resolves a rules fragment under charts/actions-gateway/files.
-// The package sits four directories below the repo root.
+// chartRulesPath resolves a rules fragment under charts/actions-gateway/files,
+// reached through the in-module symlink named by chartRulesFragmentRelative.
 func chartRulesPath(name string) string {
-	return filepath.Join("..", "..", "..", "..",
-		filepath.FromSlash(chartRulesFragmentRelative), name)
+	return filepath.Join(filepath.FromSlash(chartRulesFragmentRelative), name)
 }
 
 // readChartRules parses a Helm chart rules fragment — a bare YAML list of

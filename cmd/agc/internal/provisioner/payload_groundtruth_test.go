@@ -13,8 +13,10 @@ import (
 // groundTruthPayload is the redacted capture of a live AcquireJob response
 // (cmd/probe writes it; testdata/README.md documents the redactions). It is the
 // only artefact in the repo that says what GitHub actually sends, which is why the
-// tests below read it instead of a hand-written payload.
-const groundTruthPayload = "../../../../testdata/job_payload.json"
+// tests below read it instead of a hand-written payload. Reached through an
+// in-module symlink so it is part of this package's test-cache key
+// (testing.md § The out-of-module test read gate).
+const groundTruthPayload = "testdata/job_payload.json"
 
 func loadGroundTruthPayload(t *testing.T) acquirePayload {
 	t.Helper()

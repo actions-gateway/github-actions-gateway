@@ -38,11 +38,15 @@ func (r crdReader) Get(_ context.Context, key client.ObjectKey, obj client.Objec
 
 // loadShippedCRD reads the controller-gen CRD this repo ships for name, e.g.
 // runnersets.actions-gateway.com -> api/config/crd/actions-gateway.com_runnersets.yaml.
+// testdata/crd is an in-module symlink to that directory: the api module sits
+// outside the cmd/gmc module root, and go drops reads that leave it from the
+// test-cache key, so `make manifests` output would replay a cached green
+// (testing.md § The out-of-module test read gate).
 func loadShippedCRD(t *testing.T, name string) *unstructured.Unstructured {
 	t.Helper()
 	plural, group, ok := strings.Cut(name, ".")
 	require.True(t, ok, "CRD name %q must be <plural>.<group>", name)
-	data, err := os.ReadFile("../../../../api/config/crd/" + group + "_" + plural + ".yaml")
+	data, err := os.ReadFile("testdata/crd/" + group + "_" + plural + ".yaml")
 	require.NoError(t, err, "shipped CRD for %s must exist; run 'make manifests'", name)
 	crd := &unstructured.Unstructured{}
 	require.NoError(t, yaml.Unmarshal(data, &crd.Object))

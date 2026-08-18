@@ -45,7 +45,8 @@
 CHECK_FAST_GATES := roadmap-check \
                     plan-index-check no-plan-refs-check \
                     go-version-check license-header-check conflict-markers-check \
-                    v2-api-sync-check path-filters-check gate-lists-check shellcheck \
+                    v2-api-sync-check test-cache-inputs-check \
+                    path-filters-check gate-lists-check shellcheck \
                     errexit-prologue-check \
                     actionlint uses-pinned-check chart-crds-check chart-rbac-check chart-webhook-check \
                     codegen-check api-reference-check scripts-test claude-usage-test \
@@ -202,6 +203,7 @@ SCRIPTS_TESTS := agent/claude-go-throttle-hook-test agent/local-throttle-test \
                  fetch/download-verified-test fetch/pull-image-with-retry-test \
                  manifest/check-promql-test \
                  go/check-codegen-drift-test go/check-v2-api-sync-test \
+                 go/check-test-cache-inputs-test \
                  go/coverage-test go/go-lint-scope-test go/go-test-run-filter-test \
                  go/go-test-integration-test \
                  go/go-vet-tags-test go/go-work-tidy-test \

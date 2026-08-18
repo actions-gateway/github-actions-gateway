@@ -872,6 +872,45 @@ The `deepcopy-generator-*` cases pin the `$(YEAR)` split — one asserts the exp
 The script guards `main` with `if [[ "${BASH_SOURCE[0]}" == "${0}" ]]` so the suite can source it for those helpers without building controller-gen or regenerating anything; **keep that guard, and keep new parsing in a named function** rather than inline in an assertion, or it becomes untestable.
 Assertion 3 (drift) still needs a real controller-gen run and stays in `make codegen-check`.
 
+### The out-of-module test read gate
+
+Go's test-result cache keys a run on the files the test opened, but it drops every `open`/`stat` whose path resolves outside the package's **module** root.
+`cmd/go/internal/test` skips them with "Do not recheck files outside the module, GOPATH, or GOROOT root".
+A unit test asserting against a repo file one level up is therefore invisible to its own cache key: change that file alone and `go test` replays the previous pass.
+
+Measured 2026-08-17 (Q895): `make check` reported `pipedgate (cached)` and exited 0 while the package run directly failed 5 assertions, as did CI.
+The same shape had silently disarmed the root-`Dockerfile` runner-version lockstep gate, where bumping the pinned tag left `cmd/agc/names` cached and green.
+That is the drift #197 introduced, arriving through the gate written to catch it.
+Both were settled by deleting the mechanism: change the external file, require the cached run to go red.
+Seven unit packages across five modules were affected.
+
+The boundary is the **module** root, not the package directory.
+An in-module read at any depth is tracked correctly, confirmed by a control probe in both directions: mutating an in-module `testdata/` file invalidates the cache, and mutating a repo-root file does not.
+So the fix belongs at the suite rather than at [`scripts/go/go-test.sh`](../../scripts/go/go-test.sh).
+`-count=1` there would defeat the cache for the whole workspace, and forcing only the affected packages measured 101 s against 1 s cached, 74 s of it two large controller packages carrying one escaping test each.
+That is the wrong granularity, because a package is the smallest thing `-count=1` can bust.
+
+**Read the file through a committed symlink under the package's own `testdata/`.** The read then resolves inside the module root and the file becomes a real cache input, at no runtime cost:
+
+```bash
+ln -s ../../../../Dockerfile cmd/agc/names/testdata/Dockerfile
+```
+
+```go
+const dockerfilePath = "testdata/Dockerfile"
+```
+
+`go list` ignores directories named `testdata`, so a symlink there cannot pull another module into a build.
+The recorded key is the target's `stat` (size, mode, mtime) rather than its content, so a regeneration that rewrites a file byte-identically still re-runs the package.
+That is the safe direction, and it is why `make manifests` re-runs the CRD schema tests.
+
+`make test-cache-inputs-check` ([`scripts/go/check-test-cache-inputs.sh`](../../scripts/go/check-test-cache-inputs.sh)) fails when a unit test reaches out directly.
+It covers both spellings: a `"../x"` literal, and `filepath.Join("..", "x")`, whose leading segments are separate arguments and so match no single literal.
+A lexical sweep cannot tell a path that is read from one that is data, so the exceptions are an allowlist carrying that judgement rather than a pattern.
+`cmd/worker/worker_test.go`'s `"../../etc/passwd"` is a map key in a path-traversal fixture, and nothing opens it.
+Files behind `//go:build integration` or `e2e` are skipped, because those tiers share the defect but not the invocation (Q902).
+[`check-test-cache-inputs-test.sh`](../../scripts/go/check-test-cache-inputs-test.sh) asserts both directions against fixture repos, and counts the allowlist so a bulk exemption fails rather than passing quietly.
+
 ### The claude-usage snapshot gate
 
 `make claude-usage-test` ([`scripts/agent/claude-usage-test.sh`](../../scripts/agent/claude-usage-test.sh)) runs the Python unit tests in [`claude-usage/`](../../claude-usage/README.md) — the only tests in the repo that aren't Go or bash.
