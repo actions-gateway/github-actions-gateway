@@ -2644,10 +2644,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#phase-3-in-progress" class="md-nav__link">
+  <a href="#phase-3-landed-2026-08-17" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Phase 3, in progress
+        Phase 3, landed 2026-08-17
       
     </span>
   </a>
@@ -2655,10 +2655,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#working-rules-for-the-remaining-phases" class="md-nav__link">
+  <a href="#working-rules-the-phases-produced" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Working rules for the remaining phases
+        Working rules the phases produced
       
     </span>
   </a>
@@ -2698,7 +2698,7 @@
 
 <h1 id="q889-migrate-the-backlog-to-the-per-item-store">Q889: Migrate the backlog to the per-item store<a class="headerlink" href="#q889-migrate-the-backlog-to-the-per-item-store" title="Permanent link">&para;</a></h1>
 <p><strong>Status:</strong> Complete.
-Phases 1 to 5 merged (#1595, #1596, #1598, #1600, #1602); phase 6 is the cutover in this change.
+All six phases merged: #1595, #1596, #1598, #1600, #1602, and the cutover in #1603 on 2026-08-18.
 The backlog is <code>docs/queue/</code>, one file per item, and <code>docs/STATUS.md</code> is deleted.</p>
 <p>Replace the single <code>docs/STATUS.md</code> Queue table with the <code>session-backlog</code> skill's per-item store under <code>docs/queue/</code>, adopt its Python tooling, and groom the backlog to remove what the move obsoletes.</p>
 <p>Supersedes the attempt on <a href="https://github.com/actions-gateway/github-actions-gateway/pull/1534">#1534</a> (draft, +4150/−1 across 186 files, stale).
@@ -2938,7 +2938,7 @@ Measured on the local oracle rather than the exit code, since the same green wou
 The check re-runs <code>migrate</code> into a throwaway store and compares the <em>loaded</em> items, so the thing being compared is <code>queue.py</code>'s own reading of the table rather than a second parser free to drift from it.
 Rank values are excluded and only the order they produce is compared, because a re-rank inside the store is the one operation the store exists to allow and a stricter check would fire on it.
 It retires itself: once <code>docs/STATUS.md</code> is deleted in phase 6 it passes and says the two can no longer disagree, so nothing has to remember to remove it.</p>
-<h2 id="phase-3-in-progress">Phase 3, in progress<a class="headerlink" href="#phase-3-in-progress" title="Permanent link">&para;</a></h2>
+<h2 id="phase-3-landed-2026-08-17">Phase 3, landed 2026-08-17<a class="headerlink" href="#phase-3-landed-2026-08-17" title="Permanent link">&para;</a></h2>
 <p><strong>Phase 2's gate is what lets this go incrementally.</strong> <code>queue-drift-check</code> holds the table and the store to the same items, fields and order, so for as long as it is green the two are interchangeable and a consumer reading either returns the same answer.
 That removes the reason phase 3 had to be atomic: consumers switch a group at a time, and no window exists where the backlog says two different things.</p>
 <p><strong>Repointing a consumer is not a path swap, because the link format changed too.</strong> <code>rebase_link</code> rewrites a table's <code>#QNNN</code> anchor to <code>QNNN.md</code>, so any consumer that parses links, or takes a span up to the next period, reads something different at the new path.
@@ -3003,7 +3003,7 @@ A single substitution applied tree-wide gets those 25 wrong, and <code>check-doc
 <p><strong><code>backlog-metrics.sh</code> is a phase-6 decision, not a phase-3 one.</strong> <code>queue.py metrics</code> replays the store's git history, and the store has 3 commits against <code>docs/STATUS.md</code>'s 1155.
 Switching it now would report flow metrics over nothing while looking like a working tool.
 Deleting the table ends that series whatever happens, so what phase 6 has to decide is whether the old series is frozen into a doc, bridged, or simply allowed to restart.</p>
-<h2 id="working-rules-for-the-remaining-phases">Working rules for the remaining phases<a class="headerlink" href="#working-rules-for-the-remaining-phases" title="Permanent link">&para;</a></h2>
+<h2 id="working-rules-the-phases-produced">Working rules the phases produced<a class="headerlink" href="#working-rules-the-phases-produced" title="Permanent link">&para;</a></h2>
 <p>Both came out of phase 1 and both cost something before they were written down.</p>
 <p><strong>Check what the local version guarded before adopting an external port.</strong> Every adoption so far has been better than the copy it replaced in every measurable way and has still dropped something the local one covered.
 The mergeability watch's upstream suite never exercised <code>BLOCKED</code>, where ours did in three cases; the re-enqueue gate stopped recording a verdict for a probe that could not run, where ours wrote <code>UNMEASURABLE</code>.
