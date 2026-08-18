@@ -139,7 +139,10 @@ import (
 )
 
 type payload struct {
-	ToolName  string `json:"tool_name"`
+	ToolName string `json:"tool_name"`
+	// Cwd is the directory the Bash call will run in. A payload shape that does
+	// not carry it leaves the zero value, which resolveRoot reads as no answer.
+	Cwd       string `json:"cwd"`
 	ToolInput struct {
 		Command string `json:"command"`
 		// RunInBackground is absent on a foreground call, so the zero value is
@@ -190,10 +193,7 @@ func run(registryPath string, stdin io.Reader, stdout io.Writer) int {
 		return 0
 	}
 
-	// The registry sits at <root>/.claude/, and the probes must run against the
-	// worktree the hook was installed in rather than wherever the tool was
-	// exec'd from.
-	root, err := filepath.Abs(filepath.Dir(filepath.Dir(registryPath)))
+	root, err := resolveRoot(p.Cwd, registryPath)
 	if err != nil {
 		return 0
 	}
@@ -211,4 +211,56 @@ func run(registryPath string, stdin io.Reader, stdout io.Writer) int {
 		return 0
 	}
 	return 0
+}
+
+// resolveRoot decides which working tree the repo-state probes judge.
+//
+// The registry sits at <root>/.claude/, so its path names the checkout the hook
+// was installed in — which is not always the one the session is working in.
+// EnterWorktree moves a session into a worktree and leaves the hook behind, so
+// resolving from the registry answers about the launch checkout's branch:
+// overlaps this branch does not have, and silence about the ones it does (Q859).
+// The payload's cwd is where the Bash call itself will run, so it names the tree
+// the answer has to be about.
+//
+// The fallback is the registry root rather than silence. This fires on every
+// Bash call in the repo, so a cwd that names no checkout — an absent field, a
+// directory since removed, a session parked outside any clone — has to leave the
+// checks working as they did rather than switch them off.
+//
+// Deciding costs no subprocess: .git is a file in a worktree and a directory in
+// the primary checkout, and an Lstat walk up from cwd answers for both. That
+// keeps the package comment's claim that only the probes themselves fork, on
+// every Bash call that never reaches one.
+func resolveRoot(cwd, registryPath string) (string, error) {
+	fallback, err := filepath.Abs(filepath.Dir(filepath.Dir(registryPath)))
+	if err != nil {
+		return "", err
+	}
+	if cwd == "" {
+		return fallback, nil
+	}
+	abs, err := filepath.Abs(cwd)
+	if err != nil {
+		return fallback, nil
+	}
+	if root := worktreeRoot(abs); root != "" {
+		return root, nil
+	}
+	return fallback, nil
+}
+
+// worktreeRoot returns the nearest ancestor of dir holding a .git entry, or ""
+// when the walk reaches the filesystem root without finding one.
+func worktreeRoot(dir string) string {
+	for {
+		if _, err := os.Lstat(filepath.Join(dir, ".git")); err == nil {
+			return dir
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			return ""
+		}
+		dir = parent
+	}
 }
