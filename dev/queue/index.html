@@ -3875,6 +3875,22 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>S</td>
 <td>Its archival protocol reads "if <code>docs/STATUS.md</code> still references it", and states <code>plan-index-check</code>'s pre-Q889 direction; invariant 1 now …</td>
 </tr>
+<tr>
+<td><a href="Q912/">Q912</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/test/fakegithub/main.go">endpoint-parity gate startup failure has an unproven root cause</a></td>
+<td><code>ci</code> <code>debt</code> <code>retro</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>The Q871 gate went red under <code>make check</code> on its own PR, then green once the fake's output moved from an inherited pipe to a file, and the …</td>
+</tr>
+<tr>
+<td><a href="Q913/">Q913</a></td>
+<td><a href="../development/testing/">A gate's failure path is the one path no green run exercises</a></td>
+<td><code>docs</code> <code>tests</code> <code>retro</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>Q871's checker waited on the child's exit status in two places, so a fake dying during startup deadlocked it.</td>
+</tr>
 </tbody>
 </table>
 
