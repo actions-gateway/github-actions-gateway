@@ -2568,7 +2568,8 @@
 
 
 <h1 id="three-unrelated-suites-fail-under-concurrent-load-and-pass-on-rerun">Three unrelated suites fail under concurrent load and pass on rerun<a class="headerlink" href="#three-unrelated-suites-fail-under-concurrent-load-and-pass-on-rerun" title="Permanent link">&para;</a></h1>
-<p>Measured 2026-08-12 under 8 workers: <code>provisioner</code> eviction-window and <code>controller</code> 2m timeout failed in one window with piped-gate rc=141 (<a href="../Q825/">Q825</a>), all green on rerun.
+<p>Measured 2026-08-12 under 8 workers: <code>provisioner</code> eviction-window and <code>controller</code> 2m timeout failed in one window, all green on rerun.
+A third suite failed with them and has since been deleted with the piped-gate hook, so only these two remain observable.
 Contention suspected, unproven: <code>scripts-test</code> runs past the semaphore.</p>
 
 

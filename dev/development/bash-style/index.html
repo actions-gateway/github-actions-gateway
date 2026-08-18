@@ -2797,7 +2797,7 @@ They alone carry the tolerant form, and the gate rejects it everywhere else:</p>
 <a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="nb">shopt</span><span class="w"> </span>-s<span class="w"> </span>inherit_errexit<span class="w"> </span><span class="m">2</span>&gt;/dev/null<span class="w"> </span><span class="o">||</span><span class="w"> </span><span class="nb">true</span>
 </code></pre></div>
 <p>On bash 4.4+ this is identical to the strict line; on 3.2 it gives up the coverage rather than the hook.
-Only <code>claude-piped-gate-hook-test.sh</code> exercised this, because it is the one suite that strips <code>PATH</code> (to simulate a missing Go toolchain) and so is the only one that reaches the system bash at all.</p>
+Only the since-retired <code>claude-piped-gate-hook-test.sh</code> exercised this, because it stripped <code>PATH</code> (to simulate a missing Go toolchain) and so was the one suite reaching the system bash at all; <code>check-tools-test.sh</code> is now the only suite that stubs <code>PATH</code> this way.</p>
 <p>What this costs when it goes unnoticed is a misattributed failure, not just a late one.
 A fixture builder that keeps running after its setup broke turns one root failure into a cascade of downstream errors, and the last line in the log belongs to the <em>subject</em> rather than the fixture.
 In Q703, <code>release-delta-test</code>'s fixture repository lost a commit object partway through <code>build_repo</code>; the suite ran seven more failing <code>git commit</code> calls and ended on <code>release-delta: 'HEAD' is not a commit-ish in this repo</code>, which reads as a defect in the report under test.

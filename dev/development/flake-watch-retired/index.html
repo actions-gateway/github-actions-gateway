@@ -2589,6 +2589,13 @@ A refuted row that was <a href="../maintaining-backlog/#repurposing-an-id-is-a-c
 </thead>
 <tbody>
 <tr>
+<td>Q825</td>
+<td>The no-toolchain case flakes twice over: pipeline status, and a rebuild</td>
+<td>#1630</td>
+<td>2026-08-18</td>
+<td>Obsolete: <code>claude-piped-gate-hook-test.sh</code> and the <code>.build/pipedgate</code> binary it raced were both deleted when the repo hook was retired for duplicating the installed pipe-guard plugin. Neither the pipeline-status bug at :150 nor the rebuild race has a subject left.</td>
+</tr>
+<tr>
 <td>Q471</td>
 <td><code>validate-cluster-test</code> flakes under parallel <code>make check</code> load</td>
 <td>#963</td>

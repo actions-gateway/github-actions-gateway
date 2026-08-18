@@ -2660,20 +2660,12 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>Q895 fixed the cached unit tier and scoped the tagged tiers out, because they share the defect but not the invocation.</td>
 </tr>
 <tr>
-<td><a href="Q859/">Q859</a></td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/devtools/agent/pipedgate/main.go">piped-gate's overlap probe judges the hook's checkout, not the session's</a></td>
-<td><code>ci</code> <code>debt</code> <code>bug</code> <code>retro</code></td>
-<td>🔲</td>
-<td>S</td>
-<td><code>pipedgate</code> takes its repo root from the registry path, probing the hook's own worktree.</td>
-</tr>
-<tr>
 <td><a href="Q820/">Q820</a></td>
 <td><a href="../plan/q820-scripts-test-temp-file-flake/"><code>git-merge-plan-index-test</code> dies on a temp-file error under the fan-out</a></td>
 <td><code>flake</code> <code>ci</code></td>
-<td>🔲</td>
+<td>💤</td>
 <td>S</td>
-<td>Four sightings, one shape: <code>unable to create temporary file</code>, rc 128, under the <code>make check</code> fan-out.</td>
+<td><strong>Event:</strong> the <code>unable to create temporary file</code> signature recurs on <code>main</code> after the fix.</td>
 </tr>
 <tr>
 <td><a href="Q408/">Q408</a></td>
@@ -2700,14 +2692,6 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>The proxy emits counters only today, so nothing carries a per-connection egress record.</td>
 </tr>
 <tr>
-<td><a href="Q825/">Q825</a></td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/agent/claude-piped-gate-hook-test.sh">The no-toolchain case flakes twice over: pipeline status, and a rebuild</a></td>
-<td><code>flake</code> <code>tests</code> <code>bug</code></td>
-<td>🔲</td>
-<td>S</td>
-<td><code>rc=$?</code> at :150 is the pipeline's status, not the hook's (<code>jq</code> SIGPIPEs).</td>
-</tr>
-<tr>
 <td><a href="Q823/">Q823</a></td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/go/coverage.sh"><code>agc/internal/controller</code> swings 5x against a fixed 2m coverage budget</a></td>
 <td><code>flake</code> <code>ci</code> <code>tests</code></td>
@@ -2721,7 +2705,7 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td><code>flake</code> <code>ci</code> <code>tests</code></td>
 <td>🔲</td>
 <td>M</td>
-<td>Measured 2026-08-12 under 8 workers: <code>provisioner</code> eviction-window and <code>controller</code> 2m timeout failed in one window with piped-gate rc=141 …</td>
+<td>Measured 2026-08-12 under 8 workers: <code>provisioner</code> eviction-window and <code>controller</code> 2m timeout failed in one window, all green on rerun.</td>
 </tr>
 <tr>
 <td><a href="Q826/">Q826</a></td>
@@ -2730,6 +2714,14 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>🔲</td>
 <td>S</td>
 <td>Seen once 2026-08-12 at load 101-111 on 18 cores (41 go procs, 8 siblings): passed one <code>make check</code>, failed the next on an identical tree …</td>
+</tr>
+<tr>
+<td><a href="Q914/">Q914</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/docs/git-merge-plan-index-test.sh"><code>git-merge-plan-index-test</code> calls every failed merge a conflict</a></td>
+<td><code>tests</code> <code>ci</code></td>
+<td>🔲</td>
+<td>S</td>
+<td><code>run_merge</code> runs <code>git merge &gt;/dev/null 2&gt;&amp;1</code>, so any non-conflict failure reaches the assertion as <code>merge reported a conflict (rc=…)</code> with …</td>
 </tr>
 <tr>
 <td><a href="Q878/">Q878</a></td>
@@ -3388,14 +3380,6 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>Measured 2026-08-08: slate body is Lc 66.9 against a 75 floor, so Q731's <code>--gag-muted</code> could only reach 55.6 without out-contrasting body …</td>
 </tr>
 <tr>
-<td><a href="Q745/">Q745</a></td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.claude/piped-gate-guard.json">piped-gate lets a backgrounded gate report a trailing command's status</a></td>
-<td><code>debt</code> <code>retro</code></td>
-<td>🔲</td>
-<td>S</td>
-<td><code>make check &gt; log; echo "EXIT=$?"; grep …</code> backgrounded reports <code>grep</code>'s 0, so a red gate reads green.</td>
-</tr>
-<tr>
 <td><a href="Q735/">Q735</a></td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/devtools/release/semverfloor/narrow.go">Narrow the semver floor past test files in released package dirs</a></td>
 <td><code>debt</code></td>
@@ -3450,14 +3434,6 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>🔲</td>
 <td>S</td>
 <td><code>is_authored_prompt</code> keys on the <code>"You are "</code> prefix, which two wordings share by luck.</td>
-</tr>
-<tr>
-<td><a href="Q882/">Q882</a></td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.claude/piped-gate-guard.json">piped-gate tells a release branch to rebase onto main</a></td>
-<td><code>debt</code> <code>retro</code></td>
-<td>🔲</td>
-<td>S</td>
-<td>It read <code>release-1.5</code> as a stale PR branch.</td>
 </tr>
 <tr>
 <td><a href="Q888/">Q888</a></td>

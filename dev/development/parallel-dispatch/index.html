@@ -2955,8 +2955,6 @@ What follows is only what that skill cannot know.</p>
 <li><strong>The gate is <code>make check</code></strong>, and the fast prose gate is <code>make docs-gates</code>.
   Run <code>docs-gates</code> the moment prose is written rather than waiting on the ten-minute gate; <code>em-dash-check</code> and <code>md-reflow-check</code> are the two it catches that nothing else does until then.
   The sub-gates worth reading by name in <code>make check</code>'s output are <code>doc-links</code>, <code>lint-backlog</code>, <code>plan-index-check</code>, <code>no-plan-refs-check</code> and <code>em-dash-check</code>.</li>
-<li><strong>Once the final gate is running, a <code>Bash</code> call is an edit.</strong> Any Bash call runs the piped-gate hook, which rebuilds the shared <code>.build/pipedgate</code> binary that <code>claude-piped-gate-hook-test</code> deletes mid-run, so the suite reads a real deny payload and fails (Q825).
-  Wait for the task notification rather than polling.</li>
 <li><strong>Allocate every new Queue ID with <code>make queue-id TITLE="…"</code></strong>, never by hand — it searches for near-duplicates before it claims, and concurrent workers otherwise pick the same number.</li>
 <li><strong>A <code>flake</code> row is not deleted when it is fixed.</strong> It moves to Deferred § Flake watch with a revive trigger, per <code>lint-backlog.sh</code> rule 8.
   Match the rows already there.</li>
@@ -3219,7 +3217,7 @@ Resolve a keyed conflict by keeping <strong>both</strong> sides and verifying ea
 <p><strong>A clean merge proves the absence of a textual conflict and nothing else.</strong> Measured 2026-08-12 across one batch: three open PRs asserted about a thing called "quota", carrying two referents between them, a Kubernetes <code>ResourceQuota</code> tenant cap in two of them and a global, project-wide GCE CPU limit in the third.
   A keyword scan reads a single collision across the three where there are really two referents.
   A topic-level glance happens to group them correctly, because the two sharing a referent are also the two competitor-analysis PRs, and that is the more dangerous result: the grouping is a coincidence of this batch, and a method that succeeds by coincidence gets trusted on the next one.
-  When overriding piped-gate's overlap denial, say what the other PR claims, not only where it sits.</p>
+  When reporting an overlap between two PRs, say what the other PR claims, not only where it sits.</p>
 </li>
 </ul>
 <h2 id="pr-watcher-requirements">PR-watcher requirements<a class="headerlink" href="#pr-watcher-requirements" title="Permanent link">&para;</a></h2>

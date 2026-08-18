@@ -2861,7 +2861,7 @@ The durable design rationale for what the unit/integration/e2e layers cover live
 <tr>
 <td><a href="q820-scripts-test-temp-file-flake/">q820-scripts-test-temp-file-flake.md</a></td>
 <td><code>git-merge-plan-index-test</code> dies on a git temp-file error under the <code>make check</code> fan-out and passes on rerun: the exclusion record, so the next sighting starts from what is already ruled out rather than re-deriving it</td>
-<td>❌ Open — sighting 4 read every throwaway repo intact at the moment of failure, so the <code>rm -rf</code>-racing-a-live-git family that matched the signature is a look-alike, not the cause; no mechanism yet explains a temp-file creation that fails with the tree present (<a href="../queue/Q820/">Q820</a>)</td>
+<td>✅ Fixed — the remover was git's own detached <code>git maintenance --auto</code>, which repacks and prunes a fixture repo while the next command writes to it, removing an object fanout directory between that command's <code>mkdir</code> and its <code>open</code>; fixture repos now set <code>maintenance.auto false</code>, and the row is on flake watch pending a soak (<a href="../queue/Q820/">Q820</a>)</td>
 </tr>
 </tbody>
 </table>

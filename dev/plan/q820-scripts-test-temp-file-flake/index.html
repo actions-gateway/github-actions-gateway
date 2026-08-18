@@ -2567,6 +2567,28 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#the-mechanism" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The mechanism
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-fix" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The fix
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#sightings" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2578,10 +2600,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#sighting-4-nothing-was-removed" class="md-nav__link">
+  <a href="#where-the-earlier-rounds-went-wrong" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Sighting 4: nothing was removed
+        Where the earlier rounds went wrong
       
     </span>
   </a>
@@ -2589,88 +2611,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#what-is-ruled-out" class="md-nav__link">
+  <a href="#what-stayed-ruled-out" class="md-nav__link">
     <span class="md-ellipsis">
       
-        What is ruled out
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="What is ruled out">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#a-trap-firing-on-a-subshell-exit-is-not-the-remover" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        A trap firing on a subshell exit is not the remover
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#the-tree-was-not-already-gone-when-the-git-command-started" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        The tree was not already gone when the git command started
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#no-cross-suite-path-collision-is-visible-in-the-source" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        No cross-suite path collision is visible in the source
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#the-failure-family-kept-as-a-look-alike" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        The failure family, kept as a look-alike
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="The failure family, kept as a look-alike">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#but-no-candidate-remover-exists" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        But no candidate remover exists
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#reproducing-locally" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Reproducing locally
+        What stayed ruled out
       
     </span>
   </a>
@@ -2678,10 +2622,32 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#what-the-next-sighting-should-capture" class="md-nav__link">
+  <a href="#neighbouring-defects-not-this-one" class="md-nav__link">
     <span class="md-ellipsis">
       
-        What the next sighting should capture
+        Neighbouring defects, not this one
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#reproducing-if-it-recurs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Reproducing, if it recurs
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#if-it-recurs-anyway" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        If it recurs anyway
       
     </span>
   </a>
@@ -2710,25 +2676,68 @@
 
 <h1 id="q820--git-merge-plan-index-test-dies-on-a-temp-file-error-under-the-parallel-scripts-test-runner">Q820 — <code>git-merge-plan-index-test</code> dies on a temp-file error under the parallel scripts-test runner<a class="headerlink" href="#q820--git-merge-plan-index-test-dies-on-a-temp-file-error-under-the-parallel-scripts-test-runner" title="Permanent link">&para;</a></h1>
 <p><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/docs/git-merge-plan-index-test.sh"><code>scripts/docs/git-merge-plan-index-test.sh</code></a> builds throwaway git repos under a <code>mktemp -d</code> and runs the <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/docs/git-merge-plan-index.sh"><code>docs/plan/README.md</code> merge driver</a> against them.
-Under <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/ci/run-parallel.sh"><code>make scripts-test</code></a>, which launches every <code>scripts/**/*-test.sh</code> suite at once, it occasionally dies on a git temp-file error and passes on rerun with no code change.</p>
-<p><strong>Status:</strong> watching, and pointed somewhere new.
-Sighting 4 caught the suite failing with every throwaway repository still intact, so <strong>the concurrent-removal family this file spent three rounds on is not what is happening</strong>.
-The family remains reproducible on demand and still produces the signature, which is what made it convincing; it is a coincidental match.
-No fix has been written, because nothing here yet names a cause.
-The suite carries instrumentation only: an <code>ERR</code> trap that names the failing line and reads the trees at the moment of failure.</p>
-<p>Three things changed on 2026-08-15.
-Sighting 4 took the reading above, on the trap's first run after it was added.
-The candidate set of failing calls was <strong>six, and is eight</strong>: the last line discriminates on what was staged rather than on which command staged it, so the gate-agreement case's two <code>git add -A</code> calls belong in the set that had excluded them.
-And the absence of a <code>rm</code> error from the sightings' output, previously read as the main argument against the family, turns out not to exclude it, which no longer matters much now that the reading does.</p>
+Under <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/ci/run-parallel.sh"><code>make scripts-test</code></a>, which launches every <code>scripts/**/*-test.sh</code> suite at once, it occasionally died on a git temp-file error and passed on rerun with no code change.</p>
+<p><strong>Status: cause named and fixed 2026-08-18.</strong> The remover was git itself.
+Every commit in a fixture repo spawned a <strong>detached</strong> <code>git maintenance run --auto</code>, and about nine per suite run went on to repack and prune, removing each object fanout directory they emptied.
+Detached, that gc outlives the command that spawned it and runs while the <em>next</em> command writes to the same repo.
+When it removed a fanout directory in the window between git's <code>mkdir</code> and the <code>open</code> beneath it, the write failed with <code>unable to create temporary file</code> and exit 128.</p>
+<p>Everything below was measured on macOS 15.5 (Darwin 25.5.0, arm64, 18 cores), git 2.55.0, bash 5.3.15, unless it names CI.</p>
 <h2 id="the-signature">The signature<a class="headerlink" href="#the-signature" title="Permanent link">&para;</a></h2>
-<p>Identical in sightings 1 to 3.
-Sighting 4 shares the first line and the exit status but differs below that, as its own section sets out:</p>
+<p>Identical in sightings 1 to 3, and reproduced locally:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>[git-merge-plan-index-test] error: unable to create temporary file: No such file or directory
 <a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>[git-merge-plan-index-test] error: docs/plan/README.md: failed to insert into database
 <a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>[git-merge-plan-index-test] error: unable to index file 'docs/plan/README.md'
 <a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>[git-merge-plan-index-test] fatal: updating files failed
 <a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>[run-parallel] FAILED: git-merge-plan-index-test (exit 128)
 </code></pre></div>
+<p>A shorter variant loses the middle two lines and names the commit object instead of a blob:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>error: unable to create temporary file: Invalid argument
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>fatal: failed to write commit object
+</code></pre></div>
+<p>Both are the same fault; the difference is only which object the prune happened to race.</p>
+<h2 id="the-mechanism">The mechanism<a class="headerlink" href="#the-mechanism" title="Permanent link">&para;</a></h2>
+<p>Taken with a <code>DYLD_INSERT_LIBRARIES</code> interposer on <code>open</code>, <code>mkdir</code>, <code>rmdir</code> and <code>unlink</code>, writing to a file so a detached process is visible.
+Two pids, one repository, interleaved:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>pid=76221 unlink .git/objects/ca/657e4a4f73bf76…      gc prunes a packed loose object
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>pid=76221 rmdir  .git/objects/ca                       and removes the fanout it emptied
+<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>pid=76343 mkdir  .git/objects/cc            rc=0       the committing git creates its fanout
+<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>pid=76221 rmdir  .git/objects/cc                       gc removes it
+<a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>pid=76343 open   .git/objects/cc/tmp_obj_…  ENOENT     fatal
+</code></pre></div>
+<p>pid 76221 is a garbage collection: it writes <code>pack-*.mtimes</code>, <code>.bitmap</code> and <code>.promisor</code>, then unlinks the loose objects it packed and rmdirs each emptied fanout directory. git's ordinary path for a new fanout directory is <code>open</code> failing <code>ENOENT</code>, then <code>mkdir</code>, then a second <code>open</code>; four such sequences completed in pid 76343 moments earlier.
+The fifth lost the race.</p>
+<p>At the fatal <code>open</code> the interposer also recorded the working directory valid, <code>.git</code> present and <code>.git/objects</code> present, which is why nothing about the repository looked wrong.</p>
+<p><strong>Counts, from one clean suite run traced end to end:</strong> 64 processes spawned as <code>git maintenance run --auto --quiet --detach</code>, of which 9 reached <code>git repack -d -l --cruft --cruft-expiration=2.weeks.ago --quiet --write-midx</code>.
+So the gc is not rare; only the collision is.</p>
+<p><strong>Why the fan-out matters.</strong> The window is the microseconds between one process's <code>mkdir</code> and its own next <code>open</code>.
+Contention lengthens both the gc and the descheduled commit, which is why <code>make check</code> reproduces it and a quiet <code>make scripts-test</code> does not.</p>
+<h2 id="the-fix">The fix<a class="headerlink" href="#the-fix" title="Permanent link">&para;</a></h2>
+<p><code>plain_repo</code> and the gate-agreement repo now set <code>maintenance.auto false</code> on every fixture repo, which stops the spawn at source (measured: <code>gc.auto=0</code> also works; <code>maintenance.auto</code> is the knob that names the intent).
+A fixture repo has nothing to maintain, so the fix is to not start it.</p>
+<p>Verification:</p>
+<table>
+<thead>
+<tr>
+<th></th>
+<th>Before</th>
+<th>After</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>git maintenance run --auto … --detach</code> spawned per suite run</td>
+<td>64</td>
+<td>0</td>
+</tr>
+<tr>
+<td><code>git repack … --cruft</code> spawned per suite run</td>
+<td>9</td>
+<td>0</td>
+</tr>
+</tbody>
+</table>
+<p>The suite carries an assertion for it, written against behaviour rather than the config key that currently delivers it: a fixture commit under <code>GIT_TRACE=1</code> must spawn nothing matching <code>maintenance run</code>.
+Proved able to fail by deleting the mechanism: with the <code>no_auto_maintenance</code> call removed from <code>plain_repo</code>, it reports <code>FAIL a fixture commit spawned background maintenance: git maintenance run --auto --quiet --detach</code> and the suite exits 1.</p>
 <h2 id="sightings">Sightings<a class="headerlink" href="#sightings" title="Permanent link">&para;</a></h2>
 <table>
 <thead>
@@ -2756,240 +2765,80 @@ Sighting 4 shares the first line and the exit status but differs below that, as 
 <td>3</td>
 <td>2026-08-15</td>
 <td>CI, PR #1534, run <a href="https://github.com/actions-gateway/github-actions-gateway/actions/runs/31884780048">31884780048</a></td>
-<td>Ephemeral runner; green on rerun of the same commit, no code change</td>
+<td>Ephemeral runner; green on rerun of the same commit</td>
 </tr>
 <tr>
 <td>4</td>
 <td>2026-08-15</td>
 <td>local, under <code>make check</code></td>
-<td>The first sighting taken with the tree read. Every repository intact; different errno; died on the commit object rather than a blob</td>
+<td>First sighting with the tree read. Every repository intact; <code>EINVAL</code>; commit object</td>
+</tr>
+<tr>
+<td>5</td>
+<td>2026-08-18</td>
+<td>local, reproduction harness</td>
+<td><code>EINVAL</code>, commit object, every repository intact</td>
+</tr>
+<tr>
+<td>6</td>
+<td>2026-08-18</td>
+<td>local, harness</td>
+<td><code>ENOENT</code>, blob: the CI signature, on macOS</td>
+</tr>
+<tr>
+<td>7</td>
+<td>2026-08-18</td>
+<td>local, harness, instrumented</td>
+<td>The syscall sequence above, naming the gc</td>
 </tr>
 </tbody>
 </table>
-<p>Two different ephemeral runners on two different pull requests, plus two local runs, is what rules out the host temp pressure sighting 1 suspected: an ephemeral runner starts clean.
-Sighting 3's job ran on GitHub-hosted <code>ubuntu-latest</code> (<code>runner_group_name: GitHub Actions</code>), not on a self-hosted dogfood runner.</p>
-<p><strong>Reading sighting 3 costs a step-level look.</strong> The failing check is named <code>shellcheck</code> and shellcheck itself passed: the job runs several steps, and the one that failed is <code>scripts behavioural tests (make scripts-test)</code>.
+<p><strong>Reading sighting 3 costs a step-level look.</strong> The failing check is named <code>shellcheck</code> and shellcheck itself passed: the one that failed is the <code>scripts behavioural tests (make scripts-test)</code> step.
 <code>unit-test-gate</code> also reported failure because it aggregates the gating jobs' results.
-One root cause, two red checks, and neither check name points at the suite.
 Read the step conclusions:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>gh<span class="w"> </span>api<span class="w"> </span>repos/actions-gateway/github-actions-gateway/actions/jobs/95012397955<span class="w"> </span>--jq<span class="w"> </span><span class="s1">'.steps[] | "\(.number) \(.conclusion) \(.name)"'</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>gh<span class="w"> </span>api<span class="w"> </span>repos/actions-gateway/github-actions-gateway/actions/jobs/95012397955<span class="w"> </span>--jq<span class="w"> </span><span class="s1">'.steps[] | "\(.number) \(.conclusion) \(.name)"'</span>
 </code></pre></div>
-<h2 id="sighting-4-nothing-was-removed">Sighting 4: nothing was removed<a class="headerlink" href="#sighting-4-nothing-was-removed" title="Permanent link">&para;</a></h2>
-<p>The <code>ERR</code> trap's tree reading landed on its first run after being added, under <code>make check</code> on an 18-core machine:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>error: unable to create temporary file: Invalid argument
-<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>fatal: failed to write commit object
-<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>git-merge-plan-index-test.sh:158: FAILED (rc=128): git -C "$repo" "${GIT_ID[@]}" commit -qam theirs --allow-empty
-<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>Q820: WORKDIR=/var/folders/cs/.../T/tmp.pzy5nrmARw present=yes
-<a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>Q820:   /var/folders/cs/.../T/tmp.pzy5nrmARw/resolved-21074 .git=yes objects=yes
-<a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a>Q820:   /var/folders/cs/.../T/tmp.pzy5nrmARw/resolved-23703 .git=yes objects=yes
-</code></pre></div>
-<p><code>objects=yes</code> on every repository, taken at the moment of failure.
-<strong>Nothing had been removed</strong>, which is the one thing the concurrent-removal family requires.
-The suite passed on rerun with no code change, and the two repositories present are the count the second <code>expect_resolved</code> case would have built, so the run was where the line number says it was.</p>
-<p>Read this as evidence against the family rather than as its refutation, because two things differ from the three CI sightings:</p>
-<table>
-<thead>
-<tr>
-<th></th>
-<th>Sightings 1 to 3</th>
-<th>Sighting 4</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>errno</td>
-<td><code>No such file or directory</code> (ENOENT)</td>
-<td><code>Invalid argument</code> (EINVAL)</td>
-</tr>
-<tr>
-<td>Object being written</td>
-<td>a blob (<code>failed to insert into database</code>, <code>unable to index file</code>)</td>
-<td>the commit object (<code>failed to write commit object</code>)</td>
-</tr>
-<tr>
-<td>Lines</td>
-<td>four</td>
-<td>two</td>
-</tr>
-</tbody>
-</table>
-<p>What they share is the whole rest of the shape: this suite, <code>unable to create temporary file</code> as the first line, exit <strong>128</strong>, a <code>commit -qam</code> as the failing call, and the parallel fan-out.</p>
-<p>The reading that matters is that git failed to create a temporary file in an object directory that <strong>was still there</strong>.
-That is not a removal, so it is not the family, and no mechanism yet proposed in this file explains it.
-A transient failure of temporary-file creation under fan-out load fits every sighting and assumes no remover; it is a shape, not yet a cause, and the errno split is the part it does not explain.</p>
-<h2 id="what-is-ruled-out">What is ruled out<a class="headerlink" href="#what-is-ruled-out" title="Permanent link">&para;</a></h2>
-<p>Measured 2026-08-15 on git 2.55.0 and bash 5.3.15 (macOS arm64).
-The probe scripts are not committed; each is a few lines and is described below well enough to rewrite.</p>
-<h3 id="a-trap-firing-on-a-subshell-exit-is-not-the-remover">A trap firing on a subshell exit is not the remover<a class="headerlink" href="#a-trap-firing-on-a-subshell-exit-is-not-the-remover" title="Permanent link">&para;</a></h3>
-<p>The suspicion was that the suite's <code>trap 'rm -rf "$WORKDIR"' EXIT</code> fires when one of its <code>$( )</code> helpers or the <code>(cd "$repo" &amp;&amp; … --install)</code> subshell exits, removing a tree a later case still uses.</p>
-<p><strong>It cannot.</strong> Bash resets traps in subshells.
-A script setting that trap, then running a <code>$( )</code> command substitution and a failing <code>( exit 3 )</code>, still has its <code>WORKDIR</code> present after both, and the trap fires exactly once, at script exit.
-The same reasoning kills the variant where a <code>merge_repo</code> failure takes the tree with it.</p>
-<p>This also holds for the near-identical siblings <code>git-merge-status-test.sh</code> (since retired, Q889) and <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/docs/git-merge-roadmap-test.sh"><code>git-merge-roadmap-test.sh</code></a>, which share the shape.</p>
-<h3 id="the-tree-was-not-already-gone-when-the-git-command-started">The tree was not already gone when the git command started<a class="headerlink" href="#the-tree-was-not-already-gone-when-the-git-command-started" title="Permanent link">&para;</a></h3>
-<p>The Queue row's original wording, "the repo gone mid-merge", is wrong as literally written.
-Every removal staged <strong>before</strong> a git command fails earlier, and differently:</p>
-<table>
-<thead>
-<tr>
-<th>What was removed first</th>
-<th>What git says</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>.git/objects</code></td>
-<td><code>fatal: not a git repository (or any of the parent directories): .git</code></td>
-</tr>
-<tr>
-<td><code>.git/objects</code>, with <code>GIT_DIR</code> pinned so git cannot search upward</td>
-<td><code>fatal: not a git repository: '&lt;path&gt;/.git'</code></td>
-</tr>
-<tr>
-<td>the whole repo directory</td>
-<td><code>fatal: cannot change to '&lt;path&gt;': No such file or directory</code></td>
-</tr>
-<tr>
-<td><code>.git/objects</code>, then <code>git merge</code> rather than <code>git add</code></td>
-<td><code>fatal: not a git repository (or any of the parent directories): .git</code></td>
-</tr>
-</tbody>
-</table>
-<p>None is the signature.
-The signature comes from git's loose-object write path, which is only reached <strong>after</strong> git has validated the repository and read the worktree file.
-Whatever goes wrong therefore lands inside a live git process's window, not before it.</p>
-<p><strong>Side finding worth keeping:</strong> git treats a repository whose <code>.git/objects</code> is missing as invalid and <strong>searches upward</strong> for an enclosing one.
-A first version of this probe put its throwaway repos inside the worktree and silently operated on the real repository instead: <code>git -C "$broken_repo" add</code> reported that <code>tmp/q820</code> is gitignored.
-Any probe of this class belongs in a <code>mktemp -d</code> outside the repo tree.</p>
-<h3 id="no-cross-suite-path-collision-is-visible-in-the-source">No cross-suite path collision is visible in the source<a class="headerlink" href="#no-cross-suite-path-collision-is-visible-in-the-source" title="Permanent link">&para;</a></h3>
+<h2 id="where-the-earlier-rounds-went-wrong">Where the earlier rounds went wrong<a class="headerlink" href="#where-the-earlier-rounds-went-wrong" title="Permanent link">&para;</a></h2>
+<p>Three readings in this file pointed away from the answer, and each is worth keeping.</p>
+<p><strong>The errno split was read as possibly two bugs.</strong> Sighting 4's <code>EINVAL</code> on a commit object against sightings 1 to 3's <code>ENOENT</code> on a blob looked like it might split by platform.
+Both variants reproduced on one macOS host, so it never did: it is one fault, and the errno only records which object lost the race.</p>
+<p><strong>"Every repository intact" was read as excluding a removal.</strong> It does exclude the family this file spent three rounds on, where something removes the repo or its <code>.git</code>.
+It does not exclude a remover that only takes <em>empty fanout directories</em>, which is what a prune does and what leaves every repository intact by construction.
+The reading was correct; the inference from it was too broad.</p>
+<p><strong>The remover was looked for outside git.</strong> Every candidate considered was a shell <code>rm -rf</code>: the suite's EXIT trap, <code>plain_repo</code>'s, a sibling suite's, the runner's <code>SIGTERM</code> path.
+The actual remover is a <code>git</code> process that the suite never invokes and that no line of the suite mentions, spawned by <code>git commit</code> itself.
+A trace that only watched shell removals would never have found it.</p>
+<p><strong>And the instrument that found it nearly reported a false negative twice.</strong> <code>/usr/bin/env</code> is SIP-<code>restricted</code>, so <code>#!/usr/bin/env bash</code> clears every <code>DYLD_*</code> variable before bash starts and the whole process tree runs uninstrumented; the suite has to be invoked as <code>"$(command -v bash)" &lt;script&gt;</code> instead.
+And a detached child has no stderr, so traces must go to a file or the one process that mattered writes into the void.
+Both were caught only by a load proof, a constructor that prints one line per process, because without it "no anomalies logged" and "the library never loaded" are the same output.</p>
+<h2 id="what-stayed-ruled-out">What stayed ruled out<a class="headerlink" href="#what-stayed-ruled-out" title="Permanent link">&para;</a></h2>
 <ul>
-<li>Every suite in the fan-out that needs scratch space uses <code>mktemp -d</code>, which is atomic and unique.</li>
-<li>No suite's <code>rm -rf</code> targets anything outside its own scratch tree.
-  Re-measured 2026-08-15 over all of <code>scripts/</code>, not just <code>*-test.sh</code> as the first pass did: every scratch root in the tree is either a <code>mktemp -d</code> or a path under the repository's gitignored <code>tmp/</code>, and the handful of fixed in-repo ones (<code>check-page-density-test.sh</code>, <code>check-comparison-stamps-test.sh</code>, <code>check-script-docs-test.sh</code>) cannot reach the host temp tree this suite's <code>WORKDIR</code> lives in.
-  Nothing under <code>scripts/</code> removes anything in the host temp tree outside its own <code>mktemp -d</code>.</li>
-<li>No script under <code>scripts/</code> sets <code>TMPDIR</code> or <code>HOME</code>.</li>
-<li><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/lib/merge-driver-common.sh"><code>merge-driver-common.sh</code></a> gives each driver invocation its own <code>mktemp -d "${TMPDIR:-/tmp}/${DRIVER_NAME}-merge.XXXXXX"</code>, so two drivers running at once cannot share one.</li>
+<li><strong>A trap firing on a subshell exit is not the remover.</strong> Bash resets traps in subshells, so <code>trap 'rm -rf "$WORKDIR"' EXIT</code> cannot fire when a <code>$( )</code> helper or the <code>(cd "$repo" &amp;&amp; … --install)</code> subshell exits.</li>
+<li><strong>The tree was not already gone when the git command started.</strong> Every removal staged <em>before</em> a git command fails earlier and differently (<code>fatal: not a git repository</code>, <code>fatal: cannot change to …</code>), never with this signature, which is only reached after git has validated the repository.</li>
+<li><strong>No cross-suite path collision.</strong> Every scratch root under <code>scripts/</code> is a <code>mktemp -d</code> or a path under the gitignored <code>tmp/</code>; no script sets <code>TMPDIR</code> or <code>HOME</code>; 100 consecutive suite runs recorded 100 distinct workdirs.</li>
+<li><strong>The host filesystem does not fail under this churn.</strong> A git-free probe doing the same create-and-delete churn (16 processes, 153,600 file creations) had zero failures.
+  Its question is narrower than "the filesystem never fails", since it did not reproduce git's renames and fsyncs, but it kills the churn theory.</li>
+<li><strong><code>SIGTERM</code> from the runner.</strong> That path exits 143, and every Q820 sighting is 128.</li>
 </ul>
-<h2 id="the-failure-family-kept-as-a-look-alike">The failure family, kept as a look-alike<a class="headerlink" href="#the-failure-family-kept-as-a-look-alike" title="Permanent link">&para;</a></h2>
-<p><strong>Superseded by sighting 4</strong>, which failed with every repository intact.
-This section is kept because the family is real, reproducible on demand, and produces the signature, which is exactly what makes it a trap for the next reader: a reproduction that matches the symptom is not a diagnosis.
-Everything below still holds on its own terms; none of it is evidence about this flake.</p>
-<p>A removal racing a <strong>live</strong> git process in the same repository reproduces the signature exactly.
-Racing <code>rm -rf "$repo/.git"</code> against a <code>git add -A</code> over 1,500 files, at delays stepped between 10 ms and 55 ms, hit it on 2 of 60 attempts:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>error: unable to create temporary file: No such file or directory
-<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>error: docs/plan/f0.md: failed to insert into database
-<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>error: unable to index file 'docs/plan/f0.md'
-</code></pre></div>
-<p>The window is narrow, which fits a flake seen three times in four days rather than one seen every run.</p>
-<p>Two qualifications matter for the next occurrence.</p>
-<p><strong>What is removed decides the message.</strong> Racing <code>rm -rf "$repo"</code>, the whole tree, gives <code>fatal: unable to stat 'docs/plan/f1097.md'</code> instead, because <code>rm</code> reaches the worktree files before git finishes writing objects.
-The racing <code>rm</code> may also error <code>Directory not empty</code>, when git creates an object fanout directory under one <code>rm</code> has already passed; a traversal that outlasts git's last write takes the tree silently instead, which is why that line's absence excludes nothing.
-Only a removal that takes <code>.git</code> first lands on the signature.</p>
-<p><strong>The last line names what was staged, not which command staged it.</strong> An earlier reading of this section attributed <code>fatal: updating files failed</code> to <code>git commit -a</code> specifically, and narrowed the failing call to the suite's six <code>commit -qam</code> invocations.
-That is wrong, and it wrongly excluded two more.</p>
-<p>The discriminator can be measured without a race at all, which is what settles it.
-<code>chmod 500</code> on a repository's <code>.git/objects</code> makes loose-object <em>writes</em> fail while leaving reads intact, so every candidate command reaches the same failure point deterministically.
-The first line then reports <code>insufficient permission</code> (EACCES) rather than the sightings' ENOENT, but the last line and the exit status come from the same code path, and those are the parts under test.
-Measured 2026-08-15 on git 2.55.0 (macOS arm64):</p>
-<table>
-<thead>
-<tr>
-<th>Command</th>
-<th>Staged content</th>
-<th>Last line</th>
-<th>rc</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>git commit -qam</code></td>
-<td>modified tracked file</td>
-<td><code>fatal: updating files failed</code></td>
-<td>128</td>
-</tr>
-<tr>
-<td><code>git add -A</code></td>
-<td>modified tracked file</td>
-<td><code>fatal: updating files failed</code></td>
-<td>128</td>
-</tr>
-<tr>
-<td><code>git add &lt;path&gt;</code></td>
-<td>modified tracked file</td>
-<td><code>fatal: updating files failed</code></td>
-<td>128</td>
-</tr>
-<tr>
-<td><code>git add -A</code></td>
-<td>modified tracked + new untracked</td>
-<td><code>fatal: updating files failed</code></td>
-<td>128</td>
-</tr>
-<tr>
-<td><code>git add -A</code></td>
-<td>new untracked only</td>
-<td><code>fatal: adding files failed</code></td>
-<td>128</td>
-</tr>
-<tr>
-<td><code>git checkout -q -b</code></td>
-<td>nothing</td>
-<td>(succeeds)</td>
-<td>0</td>
-</tr>
-<tr>
-<td><code>git merge</code></td>
-<td>contested file</td>
-<td><code>Merge with strategy ort failed.</code></td>
-<td>2</td>
-</tr>
-</tbody>
-</table>
-<p>So <code>fatal: updating files failed</code> is emitted by any command that stages a <strong>modified tracked</strong> file, <code>git add</code> included.
-<code>fatal: adding files failed</code> appears only when everything staged is untracked, which is why the earlier measurement of a "plain <code>git add -A</code>" read as a clean discriminator: it happened to stage new files.
-When both kinds are staged, the modified tracked file is processed first and decides the message.</p>
-<p>Two exclusions get stronger in exchange.
-<code>git merge</code> produces a different signature entirely and exits 2, not 128, and <code>git checkout -q -b</code> writes no objects on this path at all, so neither can ever be the failing call.
-Both previously rested on a zero out of 40 attempts, which the reproduction rate made weak evidence.</p>
-<p>The corrected candidate set is <strong>eight</strong> calls, all of which stage a modified tracked <code>docs/plan/README.md</code>:</p>
-<ul>
-<li>the two <code>commit -qam</code> in <code>run_merge</code></li>
-<li>the two <code>commit -qam</code> staging the rebase case</li>
-<li>the two <code>commit -qam</code> staging the subdirectory case</li>
-<li><strong>the two <code>git add -A</code> in the gate-agreement case</strong>, which <code>file_plan</code> reaches after it rewrites the tracked <code>README.md</code></li>
-</ul>
-<p>The gate-agreement pair is the correction that matters, because the earlier reading named that case explicitly as one that "would have failed with a different last line".
-It is the only candidate in a repository built from the real <code>docs/plan/</code> tree rather than from fixtures.
-Its <code>add -A</code> still writes only the two objects <code>file_plan</code> dirties, though, so it carries no wider a race window than the six commits; the suite's one large write (156 files, at the <code>add -A</code> that first populates that repository) stages untracked content only and is excluded by the last line.</p>
-<h3 id="but-no-candidate-remover-exists">But no candidate remover exists<a class="headerlink" href="#but-no-candidate-remover-exists" title="Permanent link">&para;</a></h3>
-<p>This is where it stops.
-The family is confirmed, and nothing in the suite or the fan-out can supply the concurrent <code>rm -rf</code>:</p>
-<ul>
-<li>The suite's merges are strictly sequential, so no git is still running when the next <code>plain_repo</code> call removes a tree.</li>
-<li><code>plain_repo</code>'s <code>rm -rf "$repo"</code> only collides with an earlier repo when <code>$RANDOM</code> repeats (<code>merge_repo "resolved-$RANDOM"</code>), and even then the earlier repo's git has already exited.</li>
-<li>The suite's own <code>trap 'rm -rf "$WORKDIR"' EXIT</code> runs after the last command, and cannot fire early, per the subshell finding above.</li>
-<li>A <code>SIGTERM</code> from <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/ci/run-parallel.sh"><code>run-parallel.sh</code></a>'s <code>cleanup</code> would fit the shape, since the EXIT trap would remove the tree while a git child kept running, but that path exits <strong>143</strong> and all three sightings report <strong>128</strong>.</li>
-</ul>
-<h2 id="reproducing-locally">Reproducing locally<a class="headerlink" href="#reproducing-locally" title="Permanent link">&para;</a></h2>
-<p><strong>Run <code>make check</code>, not <code>make scripts-test</code>.</strong> Sighting 4 came from a single <code>make check</code> on an 18-core machine, where 14 consecutive <code>make scripts-test</code> runs on the same machine had not hit it.
-<code>make check</code> runs the scripts fan-out alongside the Go phases rather than alone, so the contention is far higher than the suite's own fan-out produces, and the earlier reading that a local machine may not be contended enough was measuring the wrong command.
-One run is not a rate, but it is the first local reproduction, and it makes this cheaper to chase locally than to wait on CI for.</p>
-<p><strong>Do not edit tracked docs while the loop runs.</strong> The suite's gate-agreement case copies the <em>live working tree</em> (<code>cp -R "$REPO_ROOT/docs/plan/." …</code> and <code>cp "$REPO_ROOT/docs/STATUS.md" …</code>), so a plan file added without its <a href="../"><code>docs/plan/README.md</code></a> row yet fails the case's own baseline with <code>FAIL gate agreement: base=1 …</code> and exit <strong>1</strong>.
-That is a self-inflicted transient rather than this flake, and the exit status tells them apart: Q820 exits <strong>128</strong>.</p>
-<h2 id="what-the-next-sighting-should-capture">What the next sighting should capture<a class="headerlink" href="#what-the-next-sighting-should-capture" title="Permanent link">&para;</a></h2>
-<ol>
-<li><strong>The step-level conclusions</strong>, per the <code>gh api</code> call above.
-   The check name will again say <code>shellcheck</code>.</li>
-<li><strong>Which of the eight staging calls failed.</strong> The signature's last line narrows it to that set but not to one call, so the suite now answers it itself.
-   An <code>ERR</code> trap prints <code>git-merge-plan-index-test.sh:&lt;line&gt;: FAILED (rc=128): &lt;command&gt;</code> just above the git errors, and <code>set -o errtrace</code> is what reaches the two commits inside <code>run_merge</code>; the rest are at top level, where the trap fires without it.
-   Measured by injecting a failing <code>git rev-parse</code> into <code>run_merge</code>: the trap named the injected line and reproduced the rc=128 the sightings carry, and a clean run prints nothing.</li>
-<li><strong>The <code>Q820:</code> tree reading</strong>, which sighting 4 answered as <code>objects=yes</code> and which every later sighting should be compared against.
-   A second <code>objects=yes</code> on a Linux runner would carry the finding across to the ENOENT variant, which is the gap sighting 4 leaves open; an <code>objects=no</code> would mean the two errnos are two different faults and the family is back for one of them.</li>
-<li><strong>The errno and which object failed.</strong> Sighting 4 is EINVAL on a commit object; sightings 1 to 3 are ENOENT on a blob.
-   Whether that splits by platform (macOS against <code>ubuntu-latest</code>) or varies within one is the cheapest question outstanding, and it decides whether this is one bug or two.</li>
-<li><strong>Whether a sibling suite failed in the same run.</strong> <a href="../../queue/Q826/">Q826</a> is a sibling flake in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/ci/git-merge-gate-lists-test.sh"><code>git-merge-gate-lists-test.sh</code></a> with a different signature, and <a href="../../queue/Q822/">Q822</a> tracks unrelated suites failing under concurrent load.
-   A shared window would reframe all three as one contention problem rather than three defects.</li>
-</ol>
+<p><strong>Side finding worth keeping:</strong> git treats a repository whose <code>.git/objects</code> is missing as invalid and searches <em>upward</em> for an enclosing one, so a probe of this class placed inside the worktree silently operates on the real repository.
+Put throwaway repos under <code>mktemp -d</code>.</p>
+<h2 id="neighbouring-defects-not-this-one">Neighbouring defects, not this one<a class="headerlink" href="#neighbouring-defects-not-this-one" title="Permanent link">&para;</a></h2>
+<p><strong>A merge failure is reported as a conflict, with the message discarded.</strong> <code>run_merge</code> runs <code>git merge … &gt;/dev/null 2&gt;&amp;1</code>, so any non-conflict failure reaches the assertion as <code>merge reported a conflict (rc=…)</code> with nothing to read.
+Two <code>main</code> runs on 2026-08-18 (32131116724, 32131423171) failed that way at <code>rc=128</code> with no diagnosable output.
+Measured: an ordinary conflict exits <strong>1</strong> and a merge whose object write fails exits <strong>2</strong>, so <code>rc=128</code> is neither, and this suite cannot currently say what it was.
+Tracked separately; this fix does not touch it, and the abort path it fixes exits 128 from the <em>suite</em>, which is a different thing from the inner merge's 128.</p>
+<p><strong>Two exit statuses are noise once the machine is oversubscribed.</strong> 137 is the OOM killer and 143 a <code>SIGTERM</code> from outside; both appeared in the reproduction harness at high worker counts and neither is this flake.
+Q837 (shipped) labels them <code>KILLED</code> rather than as a gate failure and pins 128 as <code>FAILED</code>, so this signature is unchanged by it.</p>
+<h2 id="reproducing-if-it-recurs">Reproducing, if it recurs<a class="headerlink" href="#reproducing-if-it-recurs" title="Permanent link">&para;</a></h2>
+<p>Run the suite itself 16 to 32 wide in a loop, each copy redirecting to its own log, keeping only the logs of runs that exited non-zero, with a <code>make check</code> alongside it for contention.
+That reproduced it at roughly 1 run in 100 to 300; the harness is a dozen lines and was not committed.
+Watch the syscalls with an interposer on <code>open</code>/<code>mkdir</code>/<code>rmdir</code>/<code>unlink</code>, remembering both instrumentation traps above.</p>
+<p><strong>Do not edit tracked docs while the loop runs.</strong> The gate-agreement case copies the live <code>docs/plan/</code> and <code>docs/queue/</code> trees, so a plan file added without its <a href="../"><code>docs/plan/README.md</code></a> row fails that case's baseline with exit <strong>1</strong>, which is self-inflicted rather than this flake.</p>
+<h2 id="if-it-recurs-anyway">If it recurs anyway<a class="headerlink" href="#if-it-recurs-anyway" title="Permanent link">&para;</a></h2>
+<p>The fix removes the only concurrent writer found in these repositories, so a recurrence means a different one.
+Capture, in order: the failing call from the <code>ERR</code> trap, the <code>Q820:</code> tree reading, the errno and which object, and whether a sibling suite failed in the same run.
+<a href="../../queue/Q826/">Q826</a> is a sibling flake in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/ci/git-merge-gate-lists-test.sh"><code>git-merge-gate-lists-test.sh</code></a> with a different signature, and <a href="../../queue/Q822/">Q822</a> tracks unrelated suites failing under concurrent load.</p>
+<p>The same fixture-repo defect exists wherever a suite commits in a throwaway repo, so <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/docs/git-merge-roadmap-test.sh"><code>git-merge-roadmap-test.sh</code></a> and the other merge-driver suites carry it too (<a href="../../queue/Q878/">Q878</a>).</p>
 
 
 

@@ -2568,9 +2568,8 @@
 
 
 <h1 id="git-merge-plan-index-test-dies-on-a-temp-file-error-under-the-fan-out"><code>git-merge-plan-index-test</code> dies on a temp-file error under the fan-out<a class="headerlink" href="#git-merge-plan-index-test-dies-on-a-temp-file-error-under-the-fan-out" title="Permanent link">&para;</a></h1>
-<p>Four sightings, one shape: <code>unable to create temporary file</code>, rc 128, under the <code>make check</code> fan-out.
-Sighting 4 (local, 08-15) read every repo intact at failure, so the concurrent-removal theory is out.
-Cause unknown; errno differs macOS vs CI.</p>
+<p><strong>Event:</strong> the <code>unable to create temporary file</code> signature recurs on <code>main</code> after the fix.
+Cause was git's own detached <code>git maintenance --auto</code>, pruning a fanout directory between a concurrent commit's <code>mkdir</code> and <code>open</code>; fixture repos now set <code>maintenance.auto false</code>, asserted on behaviour.</p>
 
 
 

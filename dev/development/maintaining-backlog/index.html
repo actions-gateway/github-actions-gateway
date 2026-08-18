@@ -2726,7 +2726,7 @@ Every one of these is caught by a gate, and every one is cheaper to do up front 
 <li><strong>Archive the plan doc if this was its last backlog reference</strong>, per <a href="#archiving-completed-plan-docs">the protocol below</a>, whose step 4 is the one most often missed: dropping a level into <code>archive/</code> re-bases <strong>the moved doc's own outbound links</strong>, not just the links pointing at it.</li>
 <li><strong>Update the plan's <code>docs/plan/README.md</code> row</strong> in the same change, moving it to the Archive section.</li>
 </ol>
-<p>The cluster is wider than the docs tree: Q790 was the same shape in the merge tooling, where piped-gate's backlog overlap exemption discounted the path unconditionally and so stayed silent on exactly the row <em>deletion</em> the driver refuses to resolve: a row deleted on one side and edited on the other.
+<p>The cluster is wider than the docs tree: Q790 was the same shape in the merge tooling, where the since-retired piped-gate hook's backlog overlap exemption discounted the path unconditionally and so stayed silent on exactly the row <em>deletion</em> the driver refuses to resolve: a row deleted on one side and edited on the other.
 When something new mishandles a closing row, it belongs with these rather than as a fresh curiosity.</p>
 <h3 id="repurposing-an-id-is-a-closure-with-every-step-skipped">Repurposing an ID is a closure with every step skipped<a class="headerlink" href="#repurposing-an-id-is-a-closure-with-every-step-skipped" title="Permanent link">&para;</a></h3>
 <p>A measurement that refutes a row's asserted defect usually hands you a different one, and the cheapest edit is to rewrite the row in place: same anchor, same ID, new title, new Notes.
