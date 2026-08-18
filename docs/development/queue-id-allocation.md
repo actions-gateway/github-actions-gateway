@@ -1,6 +1,6 @@
 # Agent reference: Allocating backlog Q-IDs
 
-Backlog IDs are allocated by claiming a git ref on the remote, not by a counter line in [`docs/STATUS.md`](../queue/README.md).
+Backlog IDs are allocated by claiming a git ref on the remote, not by a counter line in [the backlog](../queue/README.md).
 
 ```bash
 make queue-id TITLE='GMC CRD manifest drifts from the AGC types it embeds'

@@ -4,7 +4,7 @@ How this project classifies technical debt, decides what to do about each piece,
 This is the **policy** (the rules) and the **strategy** (the lifecycle that enforces them).
 The mechanics live in adjacent docs and are linked rather than repeated:
 
-- [maintaining-backlog.md](maintaining-backlog.md) — how to record and prioritize a debt item in [docs/STATUS.md](../queue/README.md).
+- [maintaining-backlog.md](maintaining-backlog.md) — how to record and prioritize a debt item in [the backlog](../queue/README.md).
 - [backpressure.md](backpressure.md): the automated feedback loops that stop debt at authoring time.
 - [release-1.0.md](../plan/release-1.0.md) — the quality gates that block the 1.0 release (bucket F).
 - [appendix-g-future-enhancements.md](../design/appendix-g-future-enhancements.md) — long-horizon non-commitments.
@@ -45,10 +45,10 @@ Decide deliberately:
    A behavior-preserving cleanup that the current change naturally touches (e.g. extracting a duplicated security context while editing the builder it lives in) qualifies.
    Verify it changes no behavior.
 2. **Flag to the Queue** — near- or long-term work that someone should do but not now.
-   Add a row to the Queue in [docs/STATUS.md](../queue/README.md) **at the priority it deserves**, with the *why* of any decision it depends on.
+   File an item in [the backlog](../queue/README.md) **at the priority it deserves**, with the *why* of any decision it depends on.
    Follow [maintaining-backlog.md](maintaining-backlog.md).
 3. **Defer** — a real commitment with no near-term intent, waiting on an explicit trigger (a tool, a cluster, a dependency that does not exist yet).
-   It goes in the **Deferred** section of [docs/STATUS.md](../queue/README.md), out of the priority ordering, and returns to the Queue when its trigger fires.
+   It is filed `status: deferred` in [the backlog](../queue/README.md), out of the priority ordering, and returns to the Queue when its trigger fires.
 4. **Decline** — a long-horizon idea we are explicitly *not* committing to.
    It belongs in [appendix-g-future-enhancements.md](../design/appendix-g-future-enhancements.md), not the backlog.
 
@@ -256,7 +256,7 @@ We track the ones that are cheap, automatable, and catch real regressions — an
 | **Data-race freedom** | Track — `-race` on unit tests, the core concern for a goroutine-multiplexing engine ([Q79](../queue/README.md)). |
 | **Static security findings** | Track — `gosec` ([Q80](../queue/README.md)); unchecked errors via `errcheck` ([Q81](../queue/README.md)). |
 | **Reachable CVEs** | Track — `govulncheck` + `trivy`, already gating ([backpressure.md](backpressure.md)). |
-| **Open-item count / age** | Track lightly — the labeled Queue in [docs/STATUS.md](../queue/README.md) is the register; formal aging is overkill at this scale. |
+| **Open-item count / age** | Track lightly — the labeled backlog in [docs/queue/](../queue/README.md) is the register; formal aging is overkill at this scale. |
 | **Function length** | Track — `funlen` as a ratcheted ceiling ([Q371](../queue/README.md)): the threshold starts just above the worst surviving function and lowers as long functions are decomposed, the same "gates by not getting worse" pattern the coverage ratchet uses. Cyclomatic complexity proper (`gocyclo`) stays skipped — length is the cheaper proxy, and Q367 showed the god `main`/`run` functions were the real target. |
 | **Suppression hygiene** | Track — `nolintlint` (`allow-unused: false`, `require-specific: true`) ([Q371](../queue/README.md)): an inert or blanket `//nolint` directive fails the build, so a suppression cannot outlive the finding it documents (the class the dead `nolint:gocyclo` on the old `main()` was). |
 | Technical-debt ratio, defect ratio, DORA velocity (lead time, change-failure rate), debt index | **Skip**: each needs an issue tracker, a remediation-cost estimator, or a delivery cadence this project does not have. Revisit if the project grows a team and a release pipeline. |
@@ -277,7 +277,7 @@ Where a gate is threshold-shaped (coverage, `dupl`, `funlen`), it gates by **not
 |---|---|
 | Deciding fix / flag / defer / decline | this doc |
 | Deciding whether a shell gate should become a Go devtool | this doc ([the criterion](#a-shell-gate-becomes-a-go-devtool-on-parsing-density-not-length)), pointed to from [bash-style.md](bash-style.md) |
-| Recording and prioritizing an item | [maintaining-backlog.md](maintaining-backlog.md) → [docs/STATUS.md](../queue/README.md) |
+| Recording and prioritizing an item | [maintaining-backlog.md](maintaining-backlog.md) → [docs/queue/](../queue/README.md) |
 | Escalating a session *finding* into a rule, a gate, or a prompt line | this doc ([the ladder](#the-ladder)) |
 | The automated prevention loops | [backpressure.md](backpressure.md) |
 | Release-blocking gates | [release-1.0.md](../plan/release-1.0.md) (bucket F) |

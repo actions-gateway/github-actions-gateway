@@ -5,8 +5,8 @@
 # injects one defect into a healthy fixture and requires a failure: a gate that
 # runs without a .PHONY or a `##` line, a heavy phase in the recipe that is not in
 # CHECK_HEAVY_GATES, a gate hand-wired into the fan-out line, a target declared
-# .PHONY twice, a STATUS_GATES member outside CHECK_FAST_GATES, a fast gate that
-# scans docs/STATUS.md while STATUS_GATES omits it, a gate whose file set is
+# .PHONY twice, a QUEUE_GATES member outside CHECK_FAST_GATES, a fast gate that
+# selects a backlog item while QUEUE_GATES omits it, a gate whose file set is
 # neither derivable nor declared, a gate no workflow runs, a doc that
 # stopped pointing at the list targets, and a scripts/ suite on disk that
 # SCRIPTS_TESTS omits — the one whose symptom is a green `make scripts-test` that
@@ -37,10 +37,12 @@ mkdir -p "$SCRIPTS/one" "$SCRIPTS/go"
 touch "$SCRIPTS/one/first-test.sh" "$SCRIPTS/one/second-test.sh" "$SCRIPTS/go/go-test.sh"
 SUITES='one/first-test one/second-test'
 
-# The gate scripts the STATUS_GATES-completeness rule reads. Their pathspecs are
-# resolved against the real repo, which is the point: `docs/*.md` selects
-# docs/STATUS.md there, so the wide gate below is scoped the way em-dash-check
-# and page-density-check are.
+# The gate scripts the QUEUE_GATES-completeness rule reads. Their pathspecs are
+# resolved against the real repo, which is the point: a git glob crosses
+# directory separators, so `docs/*.md` selects every item under docs/queue/
+# there and the wide gate below is scoped the way em-dash-check and
+# page-density-check are. That is not hypothetical — page-density-check was
+# exactly this shape when the rule was repointed at the store (Q889).
 printf "git_candidates '*.go' | select_present_files\n" >"$SCRIPTS/one/alpha.sh"
 printf "git_candidates '*.go' ':!:vendor/*' | select_present_files\n" >"$SCRIPTS/one/beta.sh"
 printf "git_candidates 'docs/*.md' | select_present_files\n" >"$SCRIPTS/one/wide.sh"
@@ -51,7 +53,7 @@ fails=0
 # a fixture with two fast gates and two heavy ones declared, whose `check:` recipe
 # fans out over CHECK_FAST_GATES and then runs heavy-one only. Recipe lines need
 # real tabs, so they are emitted rather than written inline. beta's recipe and the
-# comment above its .PHONY are the two inputs the STATUS_GATES-completeness rule
+# comment above its .PHONY are the two inputs the QUEUE_GATES-completeness rule
 # reads: which files it selects, and whether it declares itself out of scope.
 # shellcheck disable=SC2016 # the recipe body is make source text, not shell expansions
 write_makefile() {
@@ -118,7 +120,7 @@ write_makefile "$FIXTURE_DIR/Makefile.dupe" '.PHONY: alpha beta'
 write_makefile "$FIXTURE_DIR/Makefile.wide" '' '' 'scripts/one/wide.sh'
 write_makefile "$FIXTURE_DIR/Makefile.opaque" '' '' 'true'
 write_makefile "$FIXTURE_DIR/Makefile.marked" '' '' 'true' \
-	'# status-scope: none - beta reads no Markdown'
+	'# queue-scope: none - beta reads no Markdown'
 write_makefile "$FIXTURE_DIR/Makefile.ci-marked" '' '' 'true' \
 	'# ci-scope: none - beta is a local-only convenience'
 
@@ -158,7 +160,7 @@ expect_check() {
 }
 
 # The healthy fixture passes — without this the red cases below prove nothing.
-expect_check healthy 0 --fast 'alpha beta' --heavy 'heavy-one' --status 'alpha'
+expect_check healthy 0 --fast 'alpha beta' --heavy 'heavy-one' --queue 'alpha'
 
 # A gate that runs but has no .PHONY and no `##` line: `make list-gates` would
 # print it blank and make would look for a file by that name.
@@ -181,29 +183,29 @@ expect_check duplicate-phony 1 --fast 'alpha beta' --heavy 'heavy-one' \
 	--makefile "$FIXTURE_DIR/Makefile.dupe"
 assert_output duplicate-phony 'more than once'
 
-# STATUS_GATES must stay a subset of CHECK_FAST_GATES, the claim its comment makes.
-expect_check status-gates-not-subset 1 --fast 'alpha beta' --heavy 'heavy-one' \
-	--status 'alpha heavy-one'
-assert_output status-gates-not-subset 'heavy-one'
+# QUEUE_GATES must stay a subset of CHECK_FAST_GATES, the claim its comment makes.
+expect_check queue-gates-not-subset 1 --fast 'alpha beta' --heavy 'heavy-one' \
+	--queue 'alpha heavy-one'
+assert_output queue-gates-not-subset 'heavy-one'
 
-# And the direction rule 4 cannot see: a fast gate that scans docs/STATUS.md
-# while STATUS_GATES omits it. This is Q749's defect — em-dash-check and
+# And the direction rule 4 cannot see: a fast gate that selects a backlog item
+# while QUEUE_GATES omits it. This is Q749's defect — em-dash-check and
 # page-density-check both selected the file from the day each was written — so
 # the fixture gate is scoped the same way, through a `docs/*.md` pathspec.
-expect_check status-gates-incomplete 1 --fast 'alpha beta' --heavy 'heavy-one' \
-	--status 'alpha' --makefile "$FIXTURE_DIR/Makefile.wide"
-assert_output status-gates-incomplete 'docs/STATUS.md'
-assert_output status-gates-incomplete beta
-expect_check status-gates-complete 0 --fast 'alpha beta' --heavy 'heavy-one' \
-	--status 'alpha beta' --makefile "$FIXTURE_DIR/Makefile.wide"
+expect_check queue-gates-incomplete 1 --fast 'alpha beta' --heavy 'heavy-one' \
+	--queue 'alpha' --makefile "$FIXTURE_DIR/Makefile.wide"
+assert_output queue-gates-incomplete 'docs/queue/'
+assert_output queue-gates-incomplete beta
+expect_check queue-gates-complete 0 --fast 'alpha beta' --heavy 'heavy-one' \
+	--queue 'alpha beta' --makefile "$FIXTURE_DIR/Makefile.wide"
 
 # A gate running no scripts/ file has no pathspec to derive from, so it must say
 # which side it is on rather than being assumed out of scope.
-expect_check status-scope-underivable 1 --fast 'alpha beta' --heavy 'heavy-one' \
-	--status 'alpha' --makefile "$FIXTURE_DIR/Makefile.opaque"
-assert_output status-scope-underivable 'status-scope'
-expect_check status-scope-declared 0 --fast 'alpha beta' --heavy 'heavy-one' \
-	--status 'alpha' --makefile "$FIXTURE_DIR/Makefile.marked"
+expect_check queue-scope-underivable 1 --fast 'alpha beta' --heavy 'heavy-one' \
+	--queue 'alpha' --makefile "$FIXTURE_DIR/Makefile.opaque"
+assert_output queue-scope-underivable 'queue-scope'
+expect_check queue-scope-declared 0 --fast 'alpha beta' --heavy 'heavy-one' \
+	--queue 'alpha' --makefile "$FIXTURE_DIR/Makefile.marked"
 
 # Rule 8 (Q831): a gate can join CHECK_FAST_GATES and be run by no workflow,
 # which every rule above reports as healthy — `make check` enforces it locally
@@ -223,7 +225,7 @@ expect_check gate-in-ci-comment-only 1 --fast 'alpha beta' --heavy 'heavy-one' \
 assert_output gate-in-ci-comment-only beta
 
 # The two indirect routes that are real coverage: the gate's script invoked
-# directly (status-lint runs lint-backlog.sh), and another make target running
+# directly (status-lint runs check-queue-rules.sh), and another make target running
 # it (manifest-validate runs the three chart-*-check scripts).
 expect_check gate-in-ci-via-script 0 --fast 'alpha beta' --heavy 'heavy-one' \
 	--workflows "$WF_SCRIPT"
@@ -233,10 +235,10 @@ expect_check gate-in-ci-via-wrapper 0 --fast 'alpha beta' --heavy 'heavy-one' \
 # A gate that runs no scripts/ file has no indirect route to be covered by, so
 # an unwired one must say which side it is on rather than pass by default.
 expect_check ci-scope-underivable 1 --fast 'alpha beta' --heavy 'heavy-one' \
-	--makefile "$FIXTURE_DIR/Makefile.opaque" --workflows "$WF_NO_BETA" --status 'alpha beta'
+	--makefile "$FIXTURE_DIR/Makefile.opaque" --workflows "$WF_NO_BETA" --queue 'alpha beta'
 assert_output ci-scope-underivable 'ci-scope'
 expect_check ci-scope-declared 0 --fast 'alpha beta' --heavy 'heavy-one' \
-	--makefile "$FIXTURE_DIR/Makefile.ci-marked" --workflows "$WF_NO_BETA" --status 'alpha beta'
+	--makefile "$FIXTURE_DIR/Makefile.ci-marked" --workflows "$WF_NO_BETA" --queue 'alpha beta'
 
 # The doc has to keep naming both targets rather than re-transcribing the lists.
 expect_check doc-lost-pointer 1 --fast 'alpha beta' --heavy 'heavy-one' --doc "$STALE_DOC"

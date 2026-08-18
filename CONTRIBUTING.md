@@ -87,7 +87,7 @@ make merge-driver  # installs the Markdown merge drivers (optional, recommended)
 ```
 
 `scripts/dev/setup.sh` runs both of the last two for you.
-The pre-commit hook is a sub-second gate, each part firing only when the file type it covers is staged: gofmt on staged Go files, the `docs/STATUS.md` format lint, and the em-dash ceiling when any Markdown is staged.
+The pre-commit hook is a sub-second gate, each part firing only when the file type it covers is staged: gofmt on staged Go files and the em-dash ceiling when any Markdown is staged.
 Bypass a single commit with `git commit --no-verify`.
 
 **Using linked worktrees?
@@ -106,7 +106,7 @@ Q571 hit exactly this when `lint-backlog.sh` moved into `scripts/docs/`; `--no-v
 Repoint a worktree's own copy with `git config --worktree core.hooksPath .githooks`.
 Note the repo-level value in `.git/config` is shared by every worktree, so `make hooks` there fixes all of them at once — but a `config.worktree` entry outranks it and has to be cleared per worktree.
 
-`make merge-driver` is a per-clone `git config` that makes `docs/STATUS.md` conflicts resolve by backlog row ID, `docs/plan/README.md` conflicts by plan path, and `docs/roadmap.md` conflicts by each bullet's `<!-- q:QN -->` backlog annotation, instead of by line position — all three files are high-contention and their conflicts are usually an artifact of two rows being adjacent, not a real disagreement.
+`make merge-driver` is a per-clone `git config` that makes `docs/plan/README.md` conflicts resolve by plan path and `docs/roadmap.md` conflicts by each bullet's `<!-- q:QN -->` backlog annotation, instead of by line position — all three files are high-contention and their conflicts are usually an artifact of two rows being adjacent, not a real disagreement.
 Git will not let a tracked file define a merge driver's command, so this half cannot be committed.
 It is genuinely optional: without it, git uses its built-in three-way merge, and with it anything ambiguous still gets ordinary conflict markers.
 Details: [`docs/development/maintaining-backlog.md`](docs/development/maintaining-backlog.md#the-merge-drivers-resolve-registry-rows-by-key-not-by-line-position).
@@ -285,7 +285,7 @@ It fires only when what `main` gained overlaps the files this branch changes.
 `main` takes ~47 merges a day, so "the base moved" alone is true at nearly every push and would be accepted without reading.
 It reads the local `origin/main` ref and never fetches, so it under-reports until you do, and it stays silent when the probe fails.
 The merge-driver-owned files are discounted, but only while the merge really resolves them, which the hook settles by asking `git merge-tree` rather than by assuming (Q790).
-The driver refuses on a row deleted on one side and edited on the other, the shape every flake-row move takes, and a branch whose only changed file is `docs/STATUS.md` can be `DIRTY` on that alone.
+The driver refuses on a row deleted on one side and edited on the other, and a branch whose only changed files are driver-owned can be `DIRTY` on that alone.
 
 Whatever happens, verify what actually landed **by content, not SHA** — see below.
 
@@ -342,7 +342,7 @@ Two mechanics make the follow-through safe once the base lands:
 - **Verify the base landed by content, never by SHA.** A squash orphans the original SHAs, so `git log` cannot tell you the work is in.
   Check the code: `git show origin/main:<path> | grep <the symbol you added>`.
 - **Retargeting the PR does not re-point CI — the push does.** `gh pr edit --base main` changes where the PR merges, but the checks already queued still resolve their range against the base SHA recorded at the last push, which the squash has orphaned.
-  The merge-base then falls back to a commit predating the base PR, and range-scanning gates report on `main`'s own history: `lint-status` will name other people's commits as mixing `docs/STATUS.md` with code.
+  The merge-base then falls back to a commit predating the base PR, and range-scanning gates report on `main`'s own history: the backlog store rules, which ask what *your branch* changed, will charge you with other people's item deletions.
   Nothing is wrong with your branch.
   Do the `--onto` rebase and push, and the next run computes a real merge-base.
 
@@ -387,7 +387,7 @@ When you see that, resolve by rehoming, then diff your result against the other 
 git diff origin/main -- <the file you restructured>
 ```
 
-Queue items in `docs/STATUS.md` are identified by `Q`-prefixed IDs (e.g.
+Backlog items in `docs/queue/` are identified by `Q`-prefixed IDs (e.g.
 `Q44`).
 Use the bare ID in commit messages and PR bodies — its `Q` prefix is what keeps GitHub from auto-linking to PR/issue 44 (`#44` would be linked, `Q44` is not).
 

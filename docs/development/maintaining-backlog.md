@@ -66,7 +66,7 @@ Read `git show --stat HEAD` before amending, and use `git commit --fixup=<sha>` 
 ### A gate label and its roadmap bullet are two commits, and the first one is red
 
 `roadmapcheck` rule 7 requires a row labelled `X.Y-gate` **and** carrying `feature` or `security` to be named by a roadmap bullet, so adding the label and adding the bullet are one change in intent.
-Isolation splits them regardless: the label lives in `docs/STATUS.md` and the bullet in `docs/roadmap.md`, so they cannot share a commit.
+They land in different files regardless: the label lives on the item in `docs/queue/` and the bullet in `docs/roadmap.md`.
 
 **A gate label answers two questions, and only one of them obliges a bullet.** Release scope is not all one kind: a capability or a security fix is what someone upgrades *for*, while the CI, test, docs and dogfood work that also blocks a tag is process.
 Requiring a bullet for both put our own release harness on the page people read to evaluate the product, so the obligation follows `feature`/`security` rather than the gate label alone.
@@ -79,13 +79,13 @@ Only `status-isolation-check` reads commits individually, and it has no opinion 
 
 ## Closing a row: what else moves
 
-Deleting a Queue row is the one backlog edit with reach outside `docs/STATUS.md`.
+Closing an item is the one backlog edit with reach outside `docs/queue/`.
 The row is an anchor, a plan doc's last reference, and often a roadmap bullet's reason to exist, so removing it breaks things in files the closing change never opened.
 Every one of these is caught by a gate, and every one is cheaper to do up front than to diagnose from a gate failure pointing somewhere unexpected.
 
 Work through all four:
 
-1. **De-link the ID wherever the repo cites it.** `grep -rn "STATUS.md#QNNN" docs/` finds every anchor that is now dead (`make doc-links`).
+1. **De-link the ID wherever the repo cites it.** `grep -rn "queue/QNNN.md" docs/` finds every link that is now dead (`make doc-links`).
    Rewrite them as a **bare `QNNN`**, the form the Archive rows in [`docs/plan/README.md`](../plan/README.md) already use.
    Keep the prose; only the link goes.
    In an active plan's Status cell the de-link is gated rather than tidy: `make plan-index-check` requires a live row to be linked and a closed one to be bare, so the anchor dying is what puts the cell in front of someone (Q800).
@@ -93,10 +93,10 @@ Work through all four:
 2. **Delete the roadmap bullet, continuation lines included.** A forward-looking bullet exists because the row does ([rule 7](#a-gate-label-and-its-roadmap-bullet-are-two-commits-and-the-first-one-is-red)), so it goes when the row does.
    Its indented follow-on lines are part of the same list item: leave one behind and Markdown attaches it to the **previous** bullet, whose word count then breaks the cap.
    `make roadmap-check` names the stray line and the bullet it landed on (rule 12), and reports the cap over the line span it actually counted, so a violation on a bullet you never touched no longer reads as a pre-existing failure.
-3. **Archive the plan doc if this was its last `STATUS.md` reference**, per [the protocol below](#archiving-completed-plan-docs), whose step 4 is the one most often missed: dropping a level into `archive/` re-bases **the moved doc's own outbound links**, not just the links pointing at it.
+3. **Archive the plan doc if this was its last backlog reference**, per [the protocol below](#archiving-completed-plan-docs), whose step 4 is the one most often missed: dropping a level into `archive/` re-bases **the moved doc's own outbound links**, not just the links pointing at it.
 4. **Update the plan's `docs/plan/README.md` row** in the same change, moving it to the Archive section.
 
-The cluster is wider than the docs tree: Q790 was the same shape in the merge tooling, where piped-gate's `docs/STATUS.md` overlap exemption discounted the path unconditionally and so stayed silent on exactly the row *deletion* the driver refuses to resolve: a row deleted on one side and edited on the other.
+The cluster is wider than the docs tree: Q790 was the same shape in the merge tooling, where piped-gate's backlog overlap exemption discounted the path unconditionally and so stayed silent on exactly the row *deletion* the driver refuses to resolve: a row deleted on one side and edited on the other.
 When something new mishandles a closing row, it belongs with these rather than as a fresh curiosity.
 
 ### Repurposing an ID is a closure with every step skipped
@@ -115,7 +115,7 @@ Q809 was filed on three `e2e-calico` failures read as NetworkPolicy enforcement 
 - **Every citation of Q809 re-pointed silently.** A repurpose leaves the anchor alive, so `make doc-links` and rule 5 see nothing: they catch a dead anchor, never a live one that has changed meaning.
   Seven files cited Q809 in its original sense at the moment it changed meaning, and three of them still asserted the refuted failures two days later, in a workflow comment, a spec comment and `testing.md`.
   A closure would have run `grep -rn Q809` over all seven as [step 1](#closing-a-row-what-else-moves).
-- **The refuted hypothesis left the file.** `calico` appears nowhere in `docs/STATUS.md` afterwards, so nothing recorded that the enforcement negatives had been suspected and cleared, and the next session to see a calico failure starts cold.
+- **The refuted hypothesis left the backlog.** `calico` appears nowhere in it afterwards, so nothing recorded that the enforcement negatives had been suspected and cleared, and the next session to see a calico failure starts cold.
   [The ledger](flake-watch-retired.md) is where that belongs.
 - **The cross-link was care, not mechanism.** #1441 named Q549 by hand.
   Passing the new title to `make queue-id` returns Q549 at 0.43 on the same target, which is the prompt [nothing else supplies](#two-rows-on-one-defect-cross-link-them-and-say-which-owns-the-measurement).
@@ -124,7 +124,7 @@ Q809 was filed on three `e2e-calico` failures read as NetworkPolicy enforcement 
 Measured on a two-commit probe against the shipped linter: the repurpose passes, and deleting the same row fails with rule 8 naming `BACKLOG_ALLOW_FLAKE_DELETE`, so the honest closure is the one that hits a red gate and the shortcut is the one that goes green.
 For a flake row whose defect was **refuted rather than fixed**, that override is the correct move: retire the row to [the ledger](flake-watch-retired.md) with no fix PR, which is a third route out of Flake watch alongside [soaked and obsolete](#retiring-a-flake-watch-row).
 
-**Nothing gates this, and a title check is the wrong gate to reach for.** Scoring every Queue row's before/after title across the backlog's whole history with the same matcher `make queue-id` uses (1,108 commits touching `docs/STATUS.md`, 80 title changes) leaves 27 whose new title does not match its old one.
+**Nothing gates this, and a title check is the wrong gate to reach for.** Scoring every item's before/after title across the backlog's whole history with the same matcher `make queue-id` uses (1,108 commits touching `docs/STATUS.md`, 80 title changes) leaves 27 whose new title does not match its old one.
 One is this repurpose.
 Nine are pre-allocator duplicate-ID renumbers across four collisions, the last on 2026-07-05, a class [rule 12](queue-id-allocation.md#reserving-not-reporting) now prevents at filing time.
 The remaining 17 are ordinary retitles of a live row.
@@ -636,11 +636,11 @@ Everything from that decision to the tag is a backlog question, and this is its 
 | Q551 | Job skipped permanently after 4 attempts | `1.3-gate` | 🔲 open |
 | Q406 | Capacity gate `AutoscalerVerdict` mode | rides | ⤴ punted (see *Explicitly out of scope*) |
 
-Link each ID to its `STATUS.md` anchor while the row is open; a shipped or punted row's link goes stale when the row is deleted, so drop it as the row's status flips — the Q-ID itself stays, and it is what git history is searchable by.
+Link each ID to its item page while it is open; a shipped or punted item's link goes stale when the file is deleted, so drop it as the row's status flips — the Q-ID itself stays, and it is what git history is searchable by.
 
 **Delivered is a tick, not a narrative.** A row flips to ✅ in the same change that deletes its Queue row — the plan-docs-stay-current discipline already owns that edit, so the ledger costs nothing extra to keep true.
 
-**The cut condition is one grep:** no `-gate` row for this release remains in the Queue (`grep '1.3-gate' docs/STATUS.md`), plus the release-candidate dogfood validation, which is deliberately not a Queue row because it can only run against a published RC.
+**The cut condition is one grep:** no `-gate` item for this release remains open (`grep -l '1.3-gate' docs/queue/Q*.md`), plus the release-candidate dogfood validation, which is deliberately not a Queue row because it can only run against a published RC.
 
 **That validation still gets a ledger row** — Q-ID `—`, since it has none:
 
@@ -674,13 +674,13 @@ That is how the section came to advertise nine things as *actively being built* 
 
 ## Archiving completed plan docs
 
-When a plan's work fully lands and `docs/STATUS.md` no longer references it (no Progress row, no Queue/Deferred row), move the doc under `docs/plan/archive/` rather than deleting it.
+When a plan's work fully lands and no backlog item references it, move the doc under `docs/plan/archive/` rather than deleting it.
 The rationale is usually more valuable than the diff, but a fully-closed plan in the top level of `docs/plan/` is noise for the next session scanning for active work.
 
-**Archive on close, not on audit.** Do this in the same body of work that removes the plan's last `STATUS.md` reference — the moment you delete its final Queue row, or flip its Progress row to `✅` with nothing left open.
+**Archive on close, not on audit.** Do this in the same body of work that removes the plan's last backlog reference — the moment you delete its final Queue row, or flip its Progress row to `✅` with nothing left open.
 Two gates (both in `make check`) enforce it so the omission can't ship silently:
 
-- **`make plan-index-check`** fails when an active, non-ⓘ plan listed in `docs/plan/README.md` is no longer referenced by `STATUS.md` — i.e. a plan that should have been archived.
+- **`make plan-index-check`** fails when an active, non-ⓘ plan listed in `docs/plan/README.md` claims open work backed by no live item — i.e. a plan that should have been archived.
   To clear it: archive the plan (below), or, if it's ongoing spec/strategy/research, mark its README row `ⓘ`.
 - **`make doc-links`** fails on any broken link the move introduces.
 
@@ -705,13 +705,13 @@ It silences exactly that line and shows up in the diff, so the exception stays r
 
 **Protocol:**
 
-1. **Confirm STATUS.md doesn't reference the doc.** `grep -n "<docname>" docs/STATUS.md` should be empty.
+1. **Confirm no item references the doc.** `grep -rn "<docname>" docs/queue/` should be empty.
 2. **Confirm the work actually landed.** Read the plan's Status banner if it has one; otherwise grep the codebase for the named tests, types, or behaviors the plan promised.
    A plan with open work is **not** archive-ready — leave it in place and make sure the open work has a Queue row.
 3. `git mv docs/plan/<docname>.md docs/plan/archive/<docname>.md` — preserves history.
 4. **Update any in-repo links** to the new path: `docs/plan/README.md` (move the row to the **Archive** section), other plan docs (`grep -rn "<docname>.md" docs/plan/`), the `docs/development|design|operations` trees, and **the moved doc's own outbound links** — dropping a level into `archive/` breaks every relative link in the doc itself (`make doc-links` catches all of these).
 5. **Bundle archival in one commit** when several plans close in the same session — easier to review and revert as a unit.
-6. **Do not edit STATUS.md in the same commit** as the archive move; STATUS.md edits are always isolated.
+6. **Keep the archive move in its own commit**, so the rename reads as a rename rather than as part of a content change.
 
 A plan that is partially complete stays in `docs/plan/`.
 Archive is for "everything in this doc has shipped," not "most of it has."
