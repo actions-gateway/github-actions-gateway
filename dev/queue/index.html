@@ -2652,6 +2652,14 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 </thead>
 <tbody>
 <tr>
+<td><a href="Q923/">Q923</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/transport/trustpool_test.go">CI <code>nolintlint</code> calls two SA1019 directives unused, blocking every PR</a></td>
+<td><code>ci</code> <code>bug</code></td>
+<td>🔲</td>
+<td>S</td>
+<td><code>main</code> itself fails this gate (run 32172968731); 1638 only surfaced it.</td>
+</tr>
+<tr>
 <td><a href="Q902/">Q902</a></td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/go/go-test-integration.sh">The integration and e2e tiers drop the same out-of-module cache inputs</a></td>
 <td><code>ci</code> <code>tests</code> <code>debt</code></td>
