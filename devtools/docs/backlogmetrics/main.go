@@ -86,7 +86,7 @@ func main() {
 		if err != nil {
 			fail(err)
 		}
-		defer f.Close()
+		defer func() { _ = f.Close() }()
 		if err := r.read(f, storeEra); err != nil {
 			fail(err)
 		}

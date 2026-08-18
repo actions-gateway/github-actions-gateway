@@ -25,12 +25,12 @@ go build ./cmd/probe/...
 echo "==> installing git hooks (core.hooksPath -> .githooks)"
 git config core.hooksPath .githooks
 
-# .gitattributes routes docs/STATUS.md to `merge=backlog` and docs/plan/README.md
-# to `merge=planindex`, but git will not let a tracked file define a driver's
-# command, so the config half has to be per-clone. Without it, git just uses its
-# built-in three-way merge.
-echo "==> installing the Markdown merge drivers (merge.backlog, merge.planindex)"
-scripts/docs/git-merge-status.sh --install
+# .gitattributes routes docs/plan/README.md to `merge=planindex` and its three
+# sibling registries likewise, but git will not let a tracked file define a
+# driver's command, so the config half has to be per-clone. Without it, git just
+# uses its built-in three-way merge. `make merge-driver` installs the full set;
+# this is the subset a fresh clone hits first.
+echo "==> installing the Markdown merge drivers (merge.planindex)"
 scripts/docs/git-merge-plan-index.sh --install
 
 echo ""
