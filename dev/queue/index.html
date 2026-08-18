@@ -2676,14 +2676,6 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>Measured 2026-08-17 on Q889 phase 6: <code>make check</code> reported <code>pipedgate (cached)</code> and exited 0 while the package run directly failed 5 …</td>
 </tr>
 <tr>
-<td><a href="Q863/">Q863</a></td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/Dockerfile">A <code>docker buildx</code> base-image pull has no retry, so one 403 fails a build</a></td>
-<td><code>flake</code> <code>ci</code></td>
-<td>🔲</td>
-<td>S</td>
-<td>Measured 2026-08-14 on #1515: <code>trivy (proxy)</code> 403'd HEAD-ing the pinned distroless digest while agc/gmc/fakegithub pulled it green in the …</td>
-</tr>
-<tr>
 <td><a href="Q859/">Q859</a></td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/devtools/agent/pipedgate/main.go">piped-gate's overlap probe judges the hook's checkout, not the session's</a></td>
 <td><code>ci</code> <code>debt</code> <code>bug</code> <code>retro</code></td>
@@ -2780,12 +2772,28 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>Q842 gave each Go tool rule its pin file; cosign's pin is a make variable, so <code>$(COSIGN)</code> has no file to depend on and make skips an …</td>
 </tr>
 <tr>
+<td><a href="Q899/">Q899</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/publish.yml"><code>publish.yml</code>'s image build has no retry, so a 403 fails a release</a></td>
+<td><code>ci</code> <code>debt</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>The half of <a href="Q863/">Q863</a> its fix deliberately left: same unretried base-image pull, but the release build is <code>no-cache: true</code> and five …</td>
+</tr>
+<tr>
 <td><a href="Q866/">Q866</a></td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/devtools/docs/metrictiers/main.go"><code>metrictiers</code> reads its ledger with a hand-rolled scan, not the parser</a></td>
 <td><code>ci</code> <code>debt</code></td>
 <td>🔲</td>
 <td>S</td>
 <td>Q612 moved every Markdown gate onto <code>devtools/docs/markdown</code>; this one shipped after and scans for <code>\|</code>-prefixed lines.</td>
+</tr>
+<tr>
+<td><a href="Q900/">Q900</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/docker-bake.hcl">Nothing verifies buildx's <code>type=gha</code> cache works from a <code>run:</code> step</a></td>
+<td><code>ci</code> <code>debt</code></td>
+<td>🔲</td>
+<td>S</td>
+<td><code>docker-bake.hcl:40</code> says the cache env vars arrive "after docker/setup-buildx-action has injected" them; that action's v4.2.0 source …</td>
 </tr>
 <tr>
 <td><a href="Q401/">Q401</a></td>
@@ -3818,6 +3826,14 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>💤</td>
 <td>S</td>
 <td><strong>Event:</strong> a <code>changes</code> job is abandoned on <code>main</code> outside a GitHub incident window.</td>
+</tr>
+<tr>
+<td><a href="Q863/">Q863</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/security-scan.yml">A <code>docker buildx</code> base-image pull has no retry, so one 403 fails a build</a></td>
+<td><code>flake</code> <code>ci</code></td>
+<td>💤</td>
+<td>S</td>
+<td><strong>Event:</strong> a <code>trivy</code> shard 403s on a base-image pull on <code>main</code> after the fix.</td>
 </tr>
 <tr>
 <td><a href="Q897/">Q897</a></td>

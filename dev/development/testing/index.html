@@ -3781,6 +3781,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#image-builds-retry-the-transport-never-the-pin" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Image builds: retry the transport, never the pin
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#path-gated-workflows-verify-the-heavy-gates-actually-ran" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -6248,6 +6259,21 @@ The <code>trivy</code> job uses it because its six shards otherwise pull the sam
 <p>One constraint drives its shape, and it is easy to get wrong: <strong><code>docker load</code> cannot restore a manifest digest.</strong> A saved-and-reloaded image comes back with its <code>RepoTags</code> but no <code>RepoDigests</code>, so a digest-pinned <code>name:tag@sha256:…</code> ref never resolves from the cache and the consumer silently pulls from the registry anyway — a cache that looks like it works and does nothing.
 The cached image is therefore re-exposed under a local-only tag (<code>BUILDKIT_LOCAL_IMAGE</code>) and the consumer points at that.
 This does not weaken the pin: the cold-path pull is still digest-verified against the pinned ref, and the cache key carries that same digest, so the local tag can only ever name the bytes the pin selected.</p>
+<h3 id="image-builds-retry-the-transport-never-the-pin">Image builds: retry the transport, never the pin<a class="headerlink" href="#image-builds-retry-the-transport-never-the-pin" title="Permanent link">&para;</a></h3>
+<p>A <code>docker buildx build</code> resolves each <code>FROM</code> against the registry, and that resolution has no retry of its own, so one denial fails the whole build.
+Measured 2026-08-14 on #1515 (Q863): the <code>trivy (proxy)</code> shard got a 403 HEAD-ing the pinned distroless digest while the agc, gmc and fakegithub shards pulled <strong>that same digest</strong> green in the same run, and a rerun with no code change went green.
+Same digest, different result, is the transport failing.</p>
+<p><strong>So the retry goes on the transport, and the pins stay untouched.</strong> Unpinning a base image or loosening the digest check would make the 403 go away by removing the thing that makes the build reproducible, and it would break more than it fixed: the three <code>FROM gcr.io/distroless/static:nonroot@sha256:…</code> stages and the <code>ghcr.io/actions/actions-runner</code> pin are load-bearing, and the note at <code>Dockerfile:211</code> records that a gate fails CI when that <code>FROM</code> line and the Go constants disagree.</p>
+<p>The shape differs by call site, because <strong>a step that <code>uses:</code> an action cannot be wrapped in a shell loop</strong> the way <code>retry.sh</code> wraps a command:</p>
+<ul>
+<li><strong><code>security-scan.yml</code></strong> runs the same <code>docker/build-push-action</code> step twice: the first attempt carries <code>continue-on-error</code> (masking that attempt only), a <code>sleep 30</code> follows on failure, and the rebuild runs unmasked, so a second failure still reds the job.
+  A denial that clears at all clears in seconds; re-asking in the same second only re-asks an edge that is still saying no.</li>
+<li><strong><code>scripts/security/trivy-scan.sh</code></strong>, the local mirror of that matrix, routes its build through <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/fetch/retry.sh"><code>retry.sh</code></a> at <code>RETRY_ATTEMPTS=3</code>.
+  Retries are cheap either way: buildkit serves whatever layers the previous attempt completed.</li>
+</ul>
+<p><strong>Swapping the action for a raw <code>docker buildx build</code> would be the tidier fix and is the wrong trade.</strong> It moves <code>cache-from: type=gha</code> into a <code>run:</code> step, where the Actions cache credentials are not exposed the same way, and a cache <em>import</em> failure is only a warning, so that regression would surface as a slower job and never as a red one.
+Q900 is measuring which way that actually falls.</p>
+<p><code>publish.yml</code>'s build is deliberately still unretried (Q899): it is <code>no-cache: true</code>, and five steps read <code>steps.build.outputs.digest</code>, one of them the signed-provenance subject, so a second attempt has to carry that digest through without ever signing the wrong one.</p>
 <h3 id="path-gated-workflows-verify-the-heavy-gates-actually-ran">Path-gated workflows: verify the heavy gates actually ran<a class="headerlink" href="#path-gated-workflows-verify-the-heavy-gates-actually-ran" title="Permanent link">&para;</a></h3>
 <p>Most code-exercising workflows keep unrelated PRs cheap by <strong>skipping their expensive jobs internally</strong> rather than skipping the whole workflow.
 The build/lint/test/security gates (<code>unit-test.yml</code>, <code>integration-test.yml</code>, <code>e2e-test.yml</code>, <code>e2e-calico.yml</code>, <code>security-scan.yml</code> — trivy + govulncheck, <code>manifest-validate.yml</code>, <code>license-notices.yml</code>, plus <code>status-lint.yml</code>, <code>plan-hygiene.yml</code> and <code>autoscaler-drift.yml</code>) trigger on <strong>every</strong> <code>pull_request</code> (no top-level path filter), then a <code>dorny/paths-filter</code> <code>changes</code> job classifies the diff and each real job's <code>if:</code> guard skips it when nothing it covers changed.

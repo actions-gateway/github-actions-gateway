@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q863/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q900/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>A docker buildx base-image pull has no retry, so one 403 fails a build - GitHub Actions Gateway</title>
+        <title>Nothing verifies buildx's type=gha cache works from a run: step - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#a-docker-buildx-base-image-pull-has-no-retry-so-one-403-fails-a-build" class="md-skip">
+        <a href="#nothing-verifies-buildxs-typegha-cache-works-from-a-run-step" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              A docker buildx base-image pull has no retry, so one 403 fails a build
+              Nothing verifies buildx's type=gha cache works from a run: step
             
           </span>
         </div>
@@ -2567,10 +2567,11 @@
   
 
 
-<h1 id="a-docker-buildx-base-image-pull-has-no-retry-so-one-403-fails-a-build">A <code>docker buildx</code> base-image pull has no retry, so one 403 fails a build<a class="headerlink" href="#a-docker-buildx-base-image-pull-has-no-retry-so-one-403-fails-a-build" title="Permanent link">&para;</a></h1>
-<p><strong>Event:</strong> a <code>trivy</code> shard 403s on a base-image pull on <code>main</code> after the fix. → top of Queue, escalated.
-Mitigated by a second build attempt 30s later, and by <code>retry.sh</code> in the local mirror.
-<code>publish.yml</code>'s build is still unretried — <a href="../Q899/">Q899</a>, deliberately left.</p>
+<h1 id="nothing-verifies-buildxs-typegha-cache-works-from-a-run-step">Nothing verifies buildx's <code>type=gha</code> cache works from a <code>run:</code> step<a class="headerlink" href="#nothing-verifies-buildxs-typegha-cache-works-from-a-run-step" title="Permanent link">&para;</a></h1>
+<p><code>docker-bake.hcl:40</code> says the cache env vars arrive "after docker/setup-buildx-action has injected" them; that action's v4.2.0 source exports no such variable, and Docker's own docs say an inline <code>buildx</code> must expose them itself.
+The e2e bake sets <code>cache-to type=gha</code> from a <code>run:</code> step and passes, which argues the vars do reach it — from the runner, not the action — so either the comment misattributes the mechanism or the cache is a no-op.
+A <code>cache-from</code> miss is only a warning, so it would read as a slow job, never a red one.
+Measure a cache hit, then fix whichever is wrong.</p>
 
 
 
