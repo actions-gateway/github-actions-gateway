@@ -3796,6 +3796,14 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>CLAUDE.md's closing checklist says a <code>flake</code> item "moves to the retired ledger instead of being deleted", skipping the first of …</td>
 </tr>
 <tr>
+<td><a href="Q909/">Q909</a></td>
+<td><a href="../development/maintaining-backlog/">A queue-store edit passes every gate a session actually runs</a></td>
+<td><code>docs</code> <code>debt</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>Measured 2026-08-18: <code>make docs-gates</code> runs neither <code>queue-lint</code> nor <code>queue-rules-check</code> (zero "queue" in its output), so a session that …</td>
+</tr>
+<tr>
 <td><a href="Q797/">Q797</a></td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/controller/integration/provisioning_test.go">Three GMC provisioning integration tests time out under the race run</a></td>
 <td><code>flake</code> <code>tests</code></td>
