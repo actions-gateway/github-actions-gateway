@@ -6,6 +6,7 @@ package e2e
 import (
 	"fmt"
 	"os/exec"
+	"strings"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -231,7 +232,168 @@ spec:
 		Expect(logs).To(ContainSubstring("HTTP_CODE=000"),
 			"direct-egress workload pod completed an HTTP exchange with a non-GitHub destination — NP did not deny it; logs:\n%s", logs)
 	})
+
+	// Q716. The runtime half of TestBuildNetworkPolicy_DeniesCloudMetadataServer
+	// (cmd/gmc/internal/controller/metadata_egress_test.go), which pins the same
+	// property at the authoring level on every PR.
+	//
+	// Nothing denies the metadata address by name — NetworkPolicy is allowlist-only.
+	// What keeps it unreachable is that the sole rule admitting its address, the
+	// link-local ipBlock 169.254.0.0/16 that NodeLocal DNSCache needs (Q136), is
+	// scoped to port 53. This spec proves a policy-enforcing CNI actually honours
+	// that port scoping on an ipBlock peer, which the authoring test cannot say.
+	//
+	// Kata is not the control here and asserting Kata isolation would test the wrong
+	// layer: it bounds the kernel, not the pod network. Q226 measured the address
+	// still reachable from inside a Kata micro-VM on GKE with the token endpoint
+	// returning HTTP 200 (docs/operations/kata-dind-workloads.md).
+	It("E2E_V2_DirectEgress_MetadataServerBlocked: a workload pod cannot reach the cloud metadata server", func() {
+		if !egressEnforcingCNI() {
+			Skip("cluster CNI does not enforce NetworkPolicy egress (kindnet); the metadata-server block " +
+				"can only be proven on Calico — recreate with `make e2e-cluster KIND_CNI=calico` (Q7b/Q119)")
+		}
+
+		deployMetadataStandin()
+
+		// Both URLs are the SAME address; only the port differs. That is the whole
+		// point — the assertion is about the port scoping of one ipBlock peer, so
+		// varying anything else would weaken it.
+		const metadataHTTP = "http://169.254.169.254:80/"
+		const metadataDNSPort = "http://169.254.169.254:53/"
+
+		By("control: an unlabelled pod reaches the metadata stand-in on :80 (destination is up)")
+		logs := runEgressProbe(tenantNS, "metadata-control", false, metadataHTTP)
+		Expect(logs).To(MatchRegexp(`CURL_RC=0(\s|$)`),
+			"control pod could not reach the metadata stand-in on :80 — the stand-in DaemonSet is not serving, "+
+				"so the negative below would pass whatever the NetworkPolicy does; logs:\n%s", logs)
+
+		// The anti-vacuity control, and the reason this spec cannot pass because
+		// nothing ran. A blocked :80 means the port scoping held ONLY if link-local
+		// is reachable from this same pod's network context at all; if the whole
+		// block were unroutable, or the probe pod were broken, this leg fails too
+		// and the negative is correctly disqualified rather than silently trusted.
+		By("anti-vacuity: a workload-labelled pod DOES reach the same link-local address on :53")
+		logs = runEgressProbe(tenantNS, "metadata-linklocal-dns", true, metadataDNSPort)
+		Expect(logs).To(MatchRegexp(`CURL_RC=0(\s|$)`),
+			"workload pod could not reach link-local on :53 — the NodeLocal DNSCache allowance (Q136) is not in "+
+				"effect, so a blocked :80 below would prove nothing about port scoping; logs:\n%s", logs)
+
+		By("negative: a workload-labelled pod cannot reach the metadata server on :80")
+		logs = runEgressProbe(tenantNS, "metadata-blocked", true, metadataHTTP)
+		Expect(logs).To(MatchRegexp(`CURL_RC=(7|28)(\s|$)`),
+			"a worker pod reached the cloud metadata server at 169.254.169.254:80 — it can read the node's cloud "+
+				"credentials. The link-local DNS allowance (Q136) has leaked beyond port 53; logs:\n%s", logs)
+		Expect(logs).To(ContainSubstring("HTTP_CODE=000"),
+			"workload pod completed an HTTP exchange with the cloud metadata server — NP did not deny it; logs:\n%s", logs)
+	})
 })
+
+// deployMetadataStandin stands a cloud metadata server up at 169.254.169.254 on
+// every node, so the negative above has a live destination to be blocked FROM.
+//
+// Without it the spec is vacuous: a kind cluster has no metadata server, so a
+// probe of that address fails for every pod whatever the NetworkPolicy says.
+//
+// hostNetwork + privileged because the address has to exist in the NODE's network
+// namespace, which is where a pod's link-local traffic lands — the same shape
+// NodeLocal DNSCache uses for 169.254.20.10. A DaemonSet rather than a Deployment
+// because link-local is node-scoped: a probe pod reaches only its OWN node's copy,
+// so every node needs one. Both listeners bind the link-local address explicitly
+// rather than 0.0.0.0, so neither collides with anything already on the node's
+// ports (kubelet on :80-adjacent ports, systemd-resolved on 127.0.0.53:53).
+func deployMetadataStandin() {
+	const dsName = "metadata-standin"
+
+	By("deploying the cloud metadata stand-in DaemonSet in " + infraNamespace)
+	manifest := fmt.Sprintf(`apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: %[1]s
+  namespace: %[2]s
+spec:
+  selector:
+    matchLabels:
+      app: %[1]s
+  template:
+    metadata:
+      labels:
+        app: %[1]s
+    spec:
+      hostNetwork: true
+      # Land on control-plane nodes too: the e2e probe pods are not confined to
+      # workers, and a node without the stand-in yields an unreachable control.
+      tolerations:
+      - operator: Exists
+      containers:
+      - name: standin
+        image: %[3]s
+        imagePullPolicy: IfNotPresent
+        securityContext:
+          privileged: true
+          runAsUser: 0
+        command: ["sh", "-c"]
+        args:
+        - |
+          set -u
+          # The address has to exist in the NODE netns before anything can serve
+          # on it. Idempotent because the e2e cluster is reused across runs: an
+          # address left by a previous run must not fail the container.
+          if ! ip addr show dev lo 2>/dev/null | grep -q '169[.]254[.]169[.]254'; then
+            ip addr add 169.254.169.254/32 dev lo 2>/dev/null ||
+              ifconfig lo:0 169.254.169.254 netmask 255.255.255.255 up 2>/dev/null || {
+                echo "FATAL: cannot add 169.254.169.254 to lo"
+                busybox --list 2>&1 | tr '\n' ' '
+                exit 1
+              }
+          fi
+          mkdir -p /www
+          echo 'metadata-standin-ok' > /www/index.html
+          # busybox httpd daemonises, so one script can start both listeners.
+          # :80 is the real metadata port; :53 is the port the link-local DNS rule
+          # admits, and serving it is what lets the spec prove the block is the
+          # PORT scoping rather than the address being unreachable.
+          for port in 80 53; do
+            httpd -p 169.254.169.254:$port -h /www || {
+              echo "FATAL: busybox httpd could not bind :$port"
+              busybox --list 2>&1 | tr '\n' ' '
+              exit 1
+            }
+          done
+          echo "metadata stand-in listening on 169.254.169.254 ports 80 and 53"
+          sleep infinity
+        # The container's main process is a sleep, so without this the pod reports
+        # Ready before httpd has bound and the control probe races it. Readiness
+        # here means "actually serving on both ports", which is what the caller's
+        # rollout wait needs it to mean.
+        readinessProbe:
+          exec:
+            command:
+            - sh
+            - -c
+            - curl -sf --max-time 3 http://169.254.169.254:80/ && curl -sf --max-time 3 http://169.254.169.254:53/
+          initialDelaySeconds: 2
+          periodSeconds: 3
+          failureThreshold: 20
+`, dsName, infraNamespace, curlImage)
+
+	Expect(utils.ApplyManifest(manifest)).To(Succeed(), "apply metadata stand-in DaemonSet")
+	DeferCleanup(func() {
+		_, _ = utils.Run(exec.Command("kubectl", "delete", "daemonset", dsName,
+			"-n", infraNamespace, "--ignore-not-found", "--wait=false"))
+	})
+
+	By("waiting for the metadata stand-in to be ready on every node")
+	Eventually(func(g Gomega) {
+		out, err := utils.Run(exec.Command("kubectl", "get", "daemonset", dsName,
+			"-n", infraNamespace,
+			"-o", "jsonpath={.status.desiredNumberScheduled}/{.status.numberReady}"))
+		g.Expect(err).NotTo(HaveOccurred())
+		parts := strings.SplitN(out, "/", 2)
+		g.Expect(parts).To(HaveLen(2), "unexpected DaemonSet status %q", out)
+		g.Expect(parts[0]).NotTo(Equal("0"), "metadata stand-in DaemonSet scheduled onto no nodes")
+		g.Expect(parts[1]).To(Equal(parts[0]), "metadata stand-in not ready on every node (%s)", out)
+	}, 3*time.Minute, 3*time.Second).Should(Succeed())
+}
 
 // directEgressManifest renders the proxy-less v2 object set: ONE ActionsGateway
 // with no defaultProxyRef (⇒ direct egress, §H.10), one RunnerTemplate, and one
