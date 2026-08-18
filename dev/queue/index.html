@@ -2724,14 +2724,6 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>Seen once 2026-08-12 at load 101-111 on 18 cores (41 go procs, 8 siblings): passed one <code>make check</code>, failed the next on an identical tree …</td>
 </tr>
 <tr>
-<td><a href="Q914/">Q914</a></td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/docs/git-merge-plan-index-test.sh"><code>git-merge-plan-index-test</code> calls every failed merge a conflict</a></td>
-<td><code>tests</code> <code>ci</code></td>
-<td>🔲</td>
-<td>S</td>
-<td><code>run_merge</code> runs <code>git merge &gt;/dev/null 2&gt;&amp;1</code>, so any non-conflict failure reaches the assertion as <code>merge reported a conflict (rc=…)</code> with …</td>
-</tr>
-<tr>
 <td><a href="Q878/">Q878</a></td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/docs/git-merge-roadmap-test.sh">Give the sibling merge-driver suites Q820's tree reading</a></td>
 <td><code>tests</code> <code>ci</code> <code>retro</code></td>
@@ -2748,14 +2740,6 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>The half of <a href="Q863/">Q863</a> its fix deliberately left: same unretried base-image pull, but the release build is <code>no-cache: true</code> and five …</td>
 </tr>
 <tr>
-<td><a href="Q903/">Q903</a></td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/Makefile">Nothing gates <code>COSIGN_VERSION</code> against <code>publish.yml</code>'s <code>cosign-release</code></a></td>
-<td><code>ci</code> <code>debt</code></td>
-<td>🔲</td>
-<td>S</td>
-<td>Only a comment keeps the two in step, so <code>make verify-release</code> can use a verifier the publish job never signed with.</td>
-</tr>
-<tr>
 <td><a href="Q904/">Q904</a></td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/Makefile">Nothing gates a <code>.build/</code> tool rule declaring its version-pin file</a></td>
 <td><code>ci</code> <code>debt</code></td>
@@ -2764,12 +2748,28 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>Q842 set the pattern and a Makefile comment states it, but no gate holds it, so cosign was added without one and served a stale verifier …</td>
 </tr>
 <tr>
+<td><a href="Q926/">Q926</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/release/download-cosign-test.sh">Only the host platform's cosign digest is asserted</a></td>
+<td><code>ci</code> <code>debt</code></td>
+<td>🔲</td>
+<td>S</td>
+<td><code>download-cosign-test.sh</code> derives the platform from <code>uname</code> and asserts a pinned digest for that one, so a <code>COSIGN_VERSION</code> bump that adds …</td>
+</tr>
+<tr>
 <td><a href="Q900/">Q900</a></td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/docker-bake.hcl">Nothing verifies buildx's <code>type=gha</code> cache works from a <code>run:</code> step</a></td>
 <td><code>ci</code> <code>debt</code></td>
 <td>🔲</td>
 <td>S</td>
 <td><code>docker-bake.hcl:40</code> says the cache env vars arrive "after docker/setup-buildx-action has injected" them; that action's v4.2.0 source …</td>
+</tr>
+<tr>
+<td><a href="Q927/">Q927</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/release/download-cosign.sh">cosign has no updatecli manifest, so its pin only moves by hand</a></td>
+<td><code>ci</code> <code>security</code> <code>debt</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>kind, polaris, shellcheck and syft each have one; cosign does not, so the binary that signs and verifies every release is the one pin …</td>
 </tr>
 <tr>
 <td><a href="Q401/">Q401</a></td>
@@ -2818,6 +2818,22 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>🔲</td>
 <td>S</td>
 <td>#1417 shipped on "3 of 5 calico enforcement negatives failed"; #1441 refuted it next day, yet 3 of the 6 comments #1417 wrote still …</td>
+</tr>
+<tr>
+<td><a href="Q924/">Q924</a></td>
+<td><a href="../development/maintaining-backlog/#retiring-a-flake-watch-row">maintaining-backlog.md's flake gate references are stale post-Q889</a></td>
+<td><code>docs</code> <code>debt</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>Measured 2026-08-18: it names <code>scripts/docs/lint-backlog.sh</code>, which <a href="../plan/q889-backlog-item-store/">Q889</a> deleted, and twice a …</td>
+</tr>
+<tr>
+<td><a href="Q928/">Q928</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/CLAUDE.md">CLAUDE.md states a notes cap the item store deliberately retired</a></td>
+<td><code>docs</code> <code>debt</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>CLAUDE.md and <code>maintaining-backlog.md</code> call the 250-char notes cap hard.</td>
 </tr>
 <tr>
 <td><a href="Q868/">Q868</a></td>
@@ -2884,14 +2900,6 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>A suite that copies a gate into a fixture inherits its inputs, so changing one breaks it with no textual reference to grep.</td>
 </tr>
 <tr>
-<td><a href="Q916/">Q916</a></td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/CLAUDE.md">A compressed CLAUDE.md rule can contradict the doc it points at</a></td>
-<td><code>docs</code> <code>ci</code> <code>debt</code> <code>retro</code></td>
-<td>🔲</td>
-<td>S</td>
-<td>CLAUDE.md:69 sends a fixed <code>flake</code> row to the retired ledger; <a href="../development/maintaining-backlog/">maintaining-backlog.md</a> has two …</td>
-</tr>
-<tr>
 <td><a href="Q918/">Q918</a></td>
 <td><a href="../development/testing/">Five instruments measured returning a clean result that meant nothing</a></td>
 <td><code>docs</code> <code>tests</code> <code>retro</code></td>
@@ -2938,14 +2946,6 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>🔲</td>
 <td>S</td>
 <td>Measured 2026-08-08: 9 of 25 workflows declare it; not this one, so its 5 gates never see the candidate merge.</td>
-</tr>
-<tr>
-<td><a href="Q819/">Q819</a></td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/ci/run-parallel.sh"><code>run-parallel.sh</code> never times a gate, so a slow one hides in the output</a></td>
-<td><code>ci</code> <code>debt</code> <code>retro</code></td>
-<td>🔲</td>
-<td>S</td>
-<td>Measured 2026-08-12: <code>doc-links</code> sat at 161s in CI, 38s locally, unseen through three CI-speed rounds, because 30 fast gates run …</td>
 </tr>
 <tr>
 <td><a href="Q832/">Q832</a></td>
@@ -3788,14 +3788,6 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>Every <code>*-gate</code> counts a <code>skipped</code> need as a pass, so a docs-only PR later given code reads green while unit, integration and security never …</td>
 </tr>
 <tr>
-<td><a href="Q907/">Q907</a></td>
-<td><a href="../development/maintaining-backlog/#retiring-a-flake-watch-row">CLAUDE.md sends a fixed flake row straight to the retired ledger</a></td>
-<td><code>docs</code> <code>debt</code></td>
-<td>🔲</td>
-<td>S</td>
-<td>CLAUDE.md's closing checklist says a <code>flake</code> item "moves to the retired ledger instead of being deleted", skipping the first of …</td>
-</tr>
-<tr>
 <td><a href="Q909/">Q909</a></td>
 <td><a href="../development/maintaining-backlog/">A queue-store edit passes every gate a session actually runs</a></td>
 <td><code>docs</code> <code>debt</code></td>
@@ -3890,6 +3882,22 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>🔲</td>
 <td>S</td>
 <td>The table names each item punted past <code>v2.0.0</code>, and no gate reads it: <code>check-plan-index</code> binds <code>plan/README.md</code> Status cells to a row …</td>
+</tr>
+<tr>
+<td><a href="Q933/">Q933</a></td>
+<td><a href="../development/testing/">testing.md's run-parallel section omits the wall-time block</a></td>
+<td><code>docs</code> <code>ci</code> <code>retro</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>testing.md § Run order documents <code>run-parallel.sh</code>'s FAILED/KILLED lines but not the per-label wall time Q819 added, and that section is …</td>
+</tr>
+<tr>
+<td><a href="Q934/">Q934</a></td>
+<td>Worker contention sweep false-positives on unrelated histories</td>
+<td><code>debt</code> <code>retro</code></td>
+<td>🔲</td>
+<td></td>
+<td><code>git diff --quiet origin/main...$b</code> exits non-zero on a branch with no merge base, so the <code>session-worker</code> contention sweep reads …</td>
 </tr>
 </tbody>
 </table>

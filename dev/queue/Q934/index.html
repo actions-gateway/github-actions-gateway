@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q914/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q934/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>git-merge-plan-index-test calls every failed merge a conflict - GitHub Actions Gateway</title>
+        <title>Worker contention sweep false-positives on unrelated histories - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#git-merge-plan-index-test-calls-every-failed-merge-a-conflict" class="md-skip">
+        <a href="#worker-contention-sweep-false-positives-on-unrelated-histories" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              git-merge-plan-index-test calls every failed merge a conflict
+              Worker contention sweep false-positives on unrelated histories
             
           </span>
         </div>
@@ -2567,10 +2567,9 @@
   
 
 
-<h1 id="git-merge-plan-index-test-calls-every-failed-merge-a-conflict"><code>git-merge-plan-index-test</code> calls every failed merge a conflict<a class="headerlink" href="#git-merge-plan-index-test-calls-every-failed-merge-a-conflict" title="Permanent link">&para;</a></h1>
-<p><code>run_merge</code> runs <code>git merge &gt;/dev/null 2&gt;&amp;1</code>, so any non-conflict failure reaches the assertion as <code>merge reported a conflict (rc=…)</code> with nothing to read.
-Measured 2026-08-18: a conflict exits 1, a failed object write exits 2, so runs 32131116724 and 32131423171 on <code>main</code> (both <code>rc=128</code>) were neither and are undiagnosable.
-Separate from <a href="../Q820/">Q820</a>, whose 128 is the suite aborting.</p>
+<h1 id="worker-contention-sweep-false-positives-on-unrelated-histories">Worker contention sweep false-positives on unrelated histories<a class="headerlink" href="#worker-contention-sweep-false-positives-on-unrelated-histories" title="Permanent link">&para;</a></h1>
+<p><code>git diff --quiet origin/main...$b</code> exits non-zero on a branch with no merge base, so the <code>session-worker</code> contention sweep reads <code>origin/gh-pages</code> as touching the file.
+Measured 2026-08-18; the loop lives upstream in <code>karlkfi/claude-skills</code>.</p>
 
 
 

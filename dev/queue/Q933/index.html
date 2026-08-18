@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q819/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q933/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>run-parallel.sh never times a gate, so a slow one hides in the output - GitHub Actions Gateway</title>
+        <title>testing.md's run-parallel section omits the wall-time block - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#run-parallelsh-never-times-a-gate-so-a-slow-one-hides-in-the-output" class="md-skip">
+        <a href="#testingmds-run-parallel-section-omits-the-wall-time-block" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              run-parallel.sh never times a gate, so a slow one hides in the output
+              testing.md's run-parallel section omits the wall-time block
             
           </span>
         </div>
@@ -2567,9 +2567,8 @@
   
 
 
-<h1 id="run-parallelsh-never-times-a-gate-so-a-slow-one-hides-in-the-output"><code>run-parallel.sh</code> never times a gate, so a slow one hides in the output<a class="headerlink" href="#run-parallelsh-never-times-a-gate-so-a-slow-one-hides-in-the-output" title="Permanent link">&para;</a></h1>
-<p>Measured 2026-08-12: <code>doc-links</code> sat at 161s in CI, 38s locally, unseen through three CI-speed rounds, because 30 fast gates run concurrently and the runner labels output without timing it.
-Emit per-label wall time; <code>run-parallel-test.sh</code> pins it.</p>
+<h1 id="testingmds-run-parallel-section-omits-the-wall-time-block">testing.md's run-parallel section omits the wall-time block<a class="headerlink" href="#testingmds-run-parallel-section-omits-the-wall-time-block" title="Permanent link">&para;</a></h1>
+<p>testing.md § Run order documents <code>run-parallel.sh</code>'s FAILED/KILLED lines but not the per-label wall time Q819 added, and that section is where a reader goes to find which gate is slow.</p>
 
 
 

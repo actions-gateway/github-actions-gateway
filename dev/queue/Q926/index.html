@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q903/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q926/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>Nothing gates COSIGN_VERSION against publish.yml's cosign-release - GitHub Actions Gateway</title>
+        <title>Only the host platform's cosign digest is asserted - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#nothing-gates-cosign_version-against-publishymls-cosign-release" class="md-skip">
+        <a href="#only-the-host-platforms-cosign-digest-is-asserted" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Nothing gates COSIGN_VERSION against publish.yml's cosign-release
+              Only the host platform's cosign digest is asserted
             
           </span>
         </div>
@@ -2567,9 +2567,10 @@
   
 
 
-<h1 id="nothing-gates-cosign_version-against-publishymls-cosign-release">Nothing gates <code>COSIGN_VERSION</code> against <code>publish.yml</code>'s <code>cosign-release</code><a class="headerlink" href="#nothing-gates-cosign_version-against-publishymls-cosign-release" title="Permanent link">&para;</a></h1>
-<p>Only a comment keeps the two in step, so <code>make verify-release</code> can use a verifier the publish job never signed with.
-Unlike kind, polaris, shellcheck and syft, cosign has no updatecli manifest.</p>
+<h1 id="only-the-host-platforms-cosign-digest-is-asserted">Only the host platform's cosign digest is asserted<a class="headerlink" href="#only-the-host-platforms-cosign-digest-is-asserted" title="Permanent link">&para;</a></h1>
+<p><code>download-cosign-test.sh</code> derives the platform from <code>uname</code> and asserts a pinned digest for that one, so a <code>COSIGN_VERSION</code> bump that adds only the linux lines passes CI and breaks <code>make cosign</code> on every Mac, which is where <code>make verify-release</code> is actually run.
+The table in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/release/download-cosign.sh">download-cosign.sh</a> carries four platforms; assert all four, not the one the test happens to run on.
+Found while adding Q903's pin gate, which compares version strings and never reads the table.</p>
 
 
 
