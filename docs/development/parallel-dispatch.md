@@ -138,6 +138,8 @@ Three of those land differently:
 - **Contention has a guard attached.** When several workers will touch one large doc, say so **and** say what the resulting `gh pr create` denial means: *read the other PR and override with the reading*, never *re-scope this change*.
   A worker who shrinks a good change to get past the guard reports that as scoping rather than friction, so it never reaches a friction report and cannot be found retrospectively.
   Measured across one batch: five overrides, each recorded with a reading, one of which caught a cross-PR contradiction nothing else would have.
+  Since Q862 the denial says this itself, and fires on colliding **line ranges** rather than shared paths, so a warning that survives is one two edits can actually reach each other through.
+  Saying it in the prompt is now reinforcement rather than the only place a worker hears it.
 
 **Keep the slash invocation**, and read the `<command-name>` marker it records as a set — `{"/dispatch-worker", "/session-worker"}` — because sessions dispatched before the skill was renamed carry the old spelling and stay valid.
 
@@ -360,6 +362,8 @@ Resolve a keyed conflict by keeping **both** sides and verifying each survives, 
 - **"Same file" and "different sections" both predict badly; diff context is what decides.** Measured 2026-08-12 on one file in one batch: two edits to adjacent rows of a Markdown table conflicted, while two edits to sections 180 lines apart rebased as a pure line offset.
   A dispatcher reasoning from "they touch different cells" got the first one wrong and would have got the second one right by luck.
   Measure the pair rather than predicting it, and say which you did when you tell a worker.
+  Q862 moved that measurement into the `gh pr create` guard, which now compares the two branches' changed line ranges, each carrying its diff's three lines of context, so the adjacent rows still collide and the 180-line gap no longer does.
+  It is the same measurement, not a replacement for taking one: the guard fires at create time on PRs that are already open, while a dispatcher needs the answer before it assigns the work.
 
 - **A clean merge proves the absence of a textual conflict and nothing else.** Measured 2026-08-12 across one batch: three open PRs asserted about a thing called "quota", carrying two referents between them, a Kubernetes `ResourceQuota` tenant cap in two of them and a global, project-wide GCE CPU limit in the third.
   A keyword scan reads a single collision across the three where there are really two referents.

@@ -82,25 +82,33 @@
 //     re-run would have caught. Measured 2026-08-05: `main` takes ~47 merges a
 //     day, so the bare "the base moved" signal is non-empty at nearly every
 //     push and a warning on it would be accepted reflexively.
-//   - `gh pr create` opening a PR whose files an open PR already changes
-//     (Q668). Duplicated or mutually-invalidating work, which a PR title does
-//     not reveal.
+//   - `gh pr create` opening a PR whose lines an open PR already changes
+//     (Q668, narrowed by Q862). Duplicated or mutually-invalidating work, which
+//     a PR title does not reveal. Paths alone read two edits at opposite ends
+//     of one large file as a collision — three sightings in two days (#1505,
+//     #1527, #1531), each costing a manual `git merge-tree` and an override —
+//     so a shared path is narrowed by the line ranges `gh pr diff` reports.
 //
 // Both discount the merge-driver-owned files (overlap_ignore in the registry):
 // nearly every PR edits docs/STATUS.md, and most conflicts there are resolved by
 // row ID rather than reviewed. Most, not all — the driver refuses on a row
 // deleted on one side and edited on the other — so the push check holds the
 // discount only while the merge really resolves, and asks `git merge-tree` when
-// one of those paths is in both change sets (Q790). The create check cannot: the
-// other PR's head is not a local ref and a hook must not fetch, and duplicated
-// work rather than a conflict is what it is looking for.
+// one of those paths is in both change sets (Q790). The create check cannot ask
+// git at all, because the other PR's head is not a local ref and a hook must not
+// fetch, so it discounts them flatly and asks GitHub for the diff instead.
 //
 // These are the only checks that cost a subprocess, and they run only after the
 // parse finds their trigger at command position — two `git diff`s for the push
-// plus one `git merge-tree` when a discounted path is in both change sets, one
-// `gh pr list` round trip for the create. Both probes fail silent on any
-// error, which is what offline, an expired or rate-limited gh token, a shallow
-// clone, and a missing origin/main all reduce to; `git` is bounded at 3 s and
+// plus one `git merge-tree` when a discounted path is in both change sets; one
+// `gh pr list` round trip for the create, plus one local `git diff` and at most
+// three `gh pr diff` fetches, and only for the PRs that already share a path
+// (measured 2026-08-18: 1.0 s per fetch against #1610). Whether the check fires
+// at all fails silent on any error, which is what offline, an expired or
+// rate-limited gh token, a shallow clone, and a missing origin/main all reduce
+// to; the line-range narrowing fails the other way, back to the path-only
+// warning, because this fires on every session in this repo at once and a
+// missed collision costs more than a false positive. `git` is bounded at 3 s and
 // `gh` at 5 s so a dead network costs a pause rather than a stall. The base is
 // read from the LOCAL origin/main ref — the hook does not fetch, because a
 // PreToolUse hook must not mutate refs behind the session — so a session that

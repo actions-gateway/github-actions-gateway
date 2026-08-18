@@ -25,10 +25,12 @@ var (
 )
 
 // Repo answers questions about local git state and open pull requests. Every
-// method returns an error rather than a partial answer, and every caller reads
-// an error as silence: both checks are warnings, and one that fires because a
-// probe failed — offline, a rate-limited or expired gh token, no origin/main —
-// is worse than no warning at all.
+// method returns an error rather than a partial answer. The four that decide
+// whether a check fires at all read an error as silence: both checks are
+// warnings, and one that fires because a probe failed — offline, a
+// rate-limited or expired gh token, no origin/main — is worse than no warning
+// at all. The two hunk probes only narrow a warning the path sets already
+// raised, so an error there falls back to the path-only reading instead.
 type Repo interface {
 	// BranchFiles returns the paths this branch changes against the base.
 	BranchFiles() ([]string, error)
@@ -39,6 +41,10 @@ type Repo interface {
 	// MergeConflicts returns the paths merging the base into this branch leaves
 	// conflicted, empty when the merge is clean.
 	MergeConflicts() ([]string, error)
+	// BranchHunks returns the line ranges this branch changes, by path.
+	BranchHunks() (Hunks, error)
+	// PRHunks returns the line ranges the given pull request changes, by path.
+	PRHunks(number int) (Hunks, error)
 }
 
 // PR is one open pull request and the paths it changes.
@@ -46,6 +52,17 @@ type PR struct {
 	Number int
 	Files  []string
 }
+
+// LineRange is a half-open [Start, End) range of pre-image line numbers — the
+// coordinate space both sides of a comparison share, because both are diffed
+// against a merge base rather than against each other.
+type LineRange struct {
+	Start int
+	End   int
+}
+
+// Hunks maps a path to the line ranges a diff changes in it.
+type Hunks map[string][]LineRange
 
 // repoStateWarning returns the warning for a command whose correctness depends
 // on repository state rather than on its own text. Nothing runs until the parse
@@ -147,8 +164,8 @@ func conflictingIgnored(repo Repo, reg *compiled, mine, gained []string) []strin
 	return out
 }
 
-// prOverlapWarning warns when an open PR already changes files this branch
-// changes (Q668).
+// prOverlapWarning warns when an open PR already changes lines this branch
+// changes (Q668, narrowed by Q862).
 func prOverlapWarning(reg *compiled, repo Repo) string {
 	mine, err := repo.BranchFiles()
 	if err != nil || len(mine) == 0 {
@@ -158,13 +175,22 @@ func prOverlapWarning(reg *compiled, repo Repo) string {
 	if err != nil {
 		return ""
 	}
+	hunks := hunkOverlap{repo: repo, budget: prDiffBudget}
 	var hits []string
 	for _, pr := range prs {
 		overlap := intersect(mine, pr.Files, reg.overlapIgnore)
 		if len(overlap) == 0 {
 			continue
 		}
-		hits = append(hits, "#"+strconv.Itoa(pr.Number)+" ("+joinPaths(overlap, 3)+")")
+		overlap, measured := hunks.narrow(pr.Number, overlap)
+		if len(overlap) == 0 {
+			continue
+		}
+		hit := "#" + strconv.Itoa(pr.Number) + " (" + joinPaths(overlap, 3)
+		if !measured {
+			hit += ", paths only"
+		}
+		hits = append(hits, hit+")")
 		if len(hits) == 3 {
 			break
 		}
@@ -172,12 +198,157 @@ func prOverlapWarning(reg *compiled, repo Repo) string {
 	if len(hits) == 0 {
 		return ""
 	}
-	return "`gh pr create` — an open PR already changes files this branch changes: " + strings.Join(hits, ", ") +
-		". Overlapping PRs duplicate or invalidate each other, and the title says nothing about it: read the " +
-		"diff and the body before opening, or scope this PR so they do not overlap. If the overlap is " +
-		"intended, re-run this create prefixed with " + overrideVar + "=<reason>. The merge-driver-owned " +
-		"files are excluded, so this is a real overlap and not a shared backlog edit. " +
+	return "`gh pr create` — an open PR already changes lines this branch changes: " + strings.Join(hits, ", ") +
+		". Overlapping PRs duplicate or invalidate each other, and the title says nothing about it. Read that " +
+		"PR's diff and body, then re-run this create prefixed with " + overrideVar + "=<reason> saying what it " +
+		"claims, not only where it sits — reading it is the fix, and re-scoping this PR to dodge the overlap " +
+		"usually is not. Merge-driver-owned files are excluded, and so are hunks too far apart to touch; " +
+		"`paths only` marks a PR whose diff could not be read, reported on its file list alone. " +
 		"See CONTRIBUTING.md#re-check-concurrent-work-before-opening."
+}
+
+// prDiffBudget caps the per-PR diff fetches one `gh pr create` can pay for.
+// Only a PR already sharing a path is a candidate and the message renders three
+// hits, so a fourth candidate keeps the path-only reading rather than adding a
+// 5 s round trip to a hook that holds up the Bash call it fires on.
+const prDiffBudget = 3
+
+// hunkOverlap narrows a path overlap to the paths whose changed line ranges can
+// reach each other (Q862).
+//
+// Path sets alone read two edits at opposite ends of one large file as a
+// collision: three sightings in two days (#1505, #1527, #1531), each costing a
+// manual `git merge-tree` and an override. Diff context is what decides —
+// measured 2026-08-12, two edits to adjacent table rows conflicted while two
+// 180 lines apart rebased as a pure line offset
+// (docs/development/parallel-dispatch.md).
+//
+// Every failure keeps the path-only reading rather than dropping the warning.
+// This fires on every session in this repo at once, so silence on a real
+// collision costs more than the false positive being narrowed away.
+type hunkOverlap struct {
+	repo   Repo
+	mine   Hunks
+	looked bool
+	budget int
+}
+
+// narrow returns the paths whose ranges can reach each other, and whether the
+// ranges were read at all. An unmeasured verdict keeps every path it was given.
+func (h *hunkOverlap) narrow(number int, paths []string) ([]string, bool) {
+	if h.budget <= 0 {
+		return paths, false
+	}
+	if !h.looked {
+		h.looked = true
+		if mine, err := h.repo.BranchHunks(); err == nil {
+			h.mine = mine
+		}
+	}
+	if len(h.mine) == 0 {
+		return paths, false
+	}
+	h.budget--
+	theirs, err := h.repo.PRHunks(number)
+	if err != nil || len(theirs) == 0 {
+		return paths, false
+	}
+	var kept []string
+	for _, p := range paths {
+		if rangesTouch(h.mine[p], theirs[p]) {
+			kept = append(kept, p)
+		}
+	}
+	return kept, true
+}
+
+// rangesTouch reports whether two sets of changed ranges can affect each other.
+// An empty set means that path's ranges were not read — a binary file, a rename
+// carrying no hunks, a diff GitHub declined to generate — and reads as touching,
+// because then the shared path is the only evidence there is.
+func rangesTouch(a, b []LineRange) bool {
+	if len(a) == 0 || len(b) == 0 {
+		return true
+	}
+	for _, x := range a {
+		for _, y := range b {
+			if x.Start < y.End && y.Start < x.End {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// hunkHeader reads the pre-image side of a `@@ -a,b +c,d @@` header.
+var hunkHeader = regexp.MustCompile(`^@@ -([0-9]+)(?:,([0-9]+))? \+`)
+
+// parseHunks reads a unified diff into the pre-image line ranges it changes, by
+// path. Both sides carry the default three lines of context and a `@@ -a,b`
+// count includes them, so two edits closer together than the context they carry
+// already share a range here — the granularity a rebase conflicts at.
+//
+// A file header is a `--- ` line immediately followed by a `+++ ` line. The pair
+// is what makes it one: a removed line whose own text begins `-- ` renders as
+// `--- ` in the body, and alone would be read as a header.
+func parseHunks(raw []byte) Hunks {
+	out := Hunks{}
+	path, prev := "", ""
+	for _, line := range strings.Split(string(raw), "\n") {
+		switch {
+		case strings.HasPrefix(line, "+++ ") && strings.HasPrefix(prev, "--- "):
+			path = headerPath(line[4:], prev[4:])
+		case strings.HasPrefix(line, "@@ ") && path != "":
+			if r, ok := parseHunkHeader(line); ok {
+				out[path] = append(out[path], r)
+			}
+		}
+		prev = line
+	}
+	return out
+}
+
+// parseHunkHeader reads the pre-image range. An absent count means one line, and
+// a zero count is an insertion between two lines, given width so it can still
+// reach its neighbours.
+func parseHunkHeader(line string) (LineRange, bool) {
+	m := hunkHeader.FindStringSubmatch(line)
+	if m == nil {
+		return LineRange{}, false
+	}
+	start, err := strconv.Atoi(m[1])
+	if err != nil {
+		return LineRange{}, false
+	}
+	count := 1
+	if m[2] != "" {
+		if count, err = strconv.Atoi(m[2]); err != nil {
+			return LineRange{}, false
+		}
+	}
+	if count == 0 {
+		count = 1
+	}
+	return LineRange{Start: start, End: start + count}, true
+}
+
+// headerPath takes the path from the `+++` side, falling back to the `---` side
+// for a deletion, whose `+++` is /dev/null. The a/ and b/ prefixes are pinned on
+// the git call rather than guessed here, so a session with diff.noprefix set
+// still parses.
+func headerPath(plus, minus string) string {
+	if p := headerField(plus, "b/"); p != "" {
+		return p
+	}
+	return headerField(minus, "a/")
+}
+
+func headerField(field, prefix string) string {
+	field = strings.SplitN(field, "\t", 2)[0]
+	if !strings.HasPrefix(field, prefix) {
+		return ""
+	}
+	return strings.TrimPrefix(field, prefix)
 }
 
 // hasCallHead reports whether any call in the tree has a head matching re. A
@@ -245,6 +416,31 @@ func (r execRepo) BranchFiles() ([]string, error) {
 
 func (r execRepo) BaseGained() ([]string, error) {
 	return r.lines(gitTimeout, "git", "diff", "--name-only", "HEAD..."+r.baseRef)
+}
+
+// BranchHunks reads this branch's own changed ranges. The a/ and b/ prefixes are
+// pinned because diff.noprefix is a config a session may have set and the parser
+// keys on them; verified 2026-08-18 on git 2.55.0 that the flags win over it.
+func (r execRepo) BranchHunks() (Hunks, error) {
+	out, err := r.output(gitTimeout, "git", "diff", "--src-prefix=a/", "--dst-prefix=b/", r.baseRef+"...HEAD")
+	if err != nil {
+		return nil, err
+	}
+	return parseHunks(out), nil
+}
+
+// PRHunks reads an open PR's changed ranges. `gh pr diff` is GitHub's own diff
+// against that PR's merge base, which is not necessarily this branch's: when
+// something landed between the two branch points the pre-image numbers are
+// shifted, and the context each range carries is the tolerance for it. Captured
+// from the real command against #1610 on 2026-08-18 — the same a/ b/ prefixes
+// and `@@ -a,b +c,d @@` headers git prints locally.
+func (r execRepo) PRHunks(number int) (Hunks, error) {
+	out, err := r.output(ghTimeout, "gh", "pr", "diff", strconv.Itoa(number))
+	if err != nil {
+		return nil, err
+	}
+	return parseHunks(out), nil
 }
 
 // MergeConflicts asks git what merging the base into this branch leaves
