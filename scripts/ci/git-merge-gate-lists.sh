@@ -55,10 +55,10 @@
 #
 #   make merge-driver     # installs every driver in this repo together
 #
-# .gitattributes already routes Makefile to `merge=gatelists`, but git will not
-# let a tracked file define the driver's command — that would be remote code
-# execution on clone — so the `merge.gatelists.driver` config is per-clone and
-# opt-in. Until you run the setup, the attribute names an undefined driver and
+# .gitattributes already routes mk/gate-lists.mk to `merge=gatelists`, but git
+# will not let a tracked file define the driver's command — that would be remote
+# code execution on clone — so the `merge.gatelists.driver` config is per-clone
+# and opt-in. Until you run the setup, the attribute names an undefined driver and
 # git silently uses its built-in three-way merge: the pre-driver behaviour,
 # exactly.
 #
@@ -94,10 +94,25 @@ DEFAULT_PATH='mk/gate-lists.mk'
 # The lists this driver owns. Every one is a whitespace-separated, order-
 # insensitive set that PRs append to, and every one is reconciled by
 # gate-lists-check. A variable not named here is merged by git alone.
-MANAGED_VARS=(CHECK_FAST_GATES CHECK_HEAVY_GATES STATUS_GATES SCRIPTS_TESTS)
+#
+# This array and the assignments in mk/gate-lists.mk must name the same set.
+# lift_vars below hard-fails on a name it cannot find, so a list renamed or
+# dropped there without this array following refuses every merge of that file;
+# a list added there without this array following is merged by git alone, which
+# is the line-position conflict the driver exists to remove.
+# git-merge-gate-lists-test.sh reconciles the two, in both directions.
+MANAGED_VARS=(CHECK_FAST_GATES CHECK_HEAVY_GATES QUEUE_GATES DOCS_GATES SCRIPTS_TESTS)
 
 # shellcheck source=scripts/lib/merge-driver-common.sh
 . "$SCRIPT_DIR/../lib/merge-driver-common.sh"
+
+# --managed-vars — print the array above, one name per line, so the suite
+# reconciles the value the driver runs on rather than re-deriving it from this
+# source. Handled before merge_driver_init, which expects the git placeholders.
+if [[ "${1:-}" == "--managed-vars" ]]; then
+	printf '%s\n' "${MANAGED_VARS[@]}"
+	exit 0
+fi
 
 merge_driver_init "$@"
 
