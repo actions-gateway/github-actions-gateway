@@ -144,6 +144,35 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 2
     steps:
+      # `always()` above makes a skipped `e2e` a pass, by design (Q675) — so on a
+      # PR a green `e2e-gate` reads the same whether the suite ran or never
+      # started, and the check UI has nowhere to say which (Q872). Say it here.
+      # Ordered before the gate step so a failing gate still reports. Narration
+      # only: the required check and the Q675 trade are unchanged.
+      - name: say whether the suite ran
+        env:
+          E2E_RESULT: ${{ needs.e2e.result }}
+          E2E_RELEVANT: ${{ needs.changes.outputs.e2e }}
+          EVENT: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          # Backticks inside the single-quoted markdown are code spans for the
+          # rendered summary, not command substitution.
+          # shellcheck disable=SC2016
+          if [[ "${E2E_RESULT}" != 'skipped' ]]; then
+            printf -- '### e2e (kindnet): %s\n' "${E2E_RESULT}"
+          elif [[ "${EVENT}" == 'pull_request' ]]; then
+            printf -- '### e2e (kindnet): did not run\n\n%s\n' \
+              'This lane runs in the merge queue, never on a pull request, so a green `e2e-gate` here is **not** a verdict on e2e.'
+            if [[ "${E2E_RELEVANT}" == 'true' ]]; then
+              printf -- '\n%s\n' 'This PR changes e2e-relevant paths, so the queue will run it and a break surfaces there as a kickback. For an earlier verdict: `make e2e`, or dispatch this workflow.'
+            else
+              printf -- '\n%s\n' 'This PR changes no e2e-relevant path, so the queue will skip it too.'
+            fi
+          else
+            printf -- '### e2e (kindnet): did not run\n\n%s\n' \
+              "No e2e-relevant path changed in this \`${EVENT}\` event."
+          fi >> "${GITHUB_STEP_SUMMARY}"
       - name: require every gating job to have succeeded or skipped
         env:
           RESULTS: ${{ join(needs.*.result, ' ') }}
