@@ -1,0 +1,62 @@
+# Fail when the AGC calls a GitHub REST endpoint the e2e fake does not serve
+# (Q871). Its own workflow rather than a job in unit-test.yml because its inputs
+# straddle the Go source and the e2e venue: unit-test.yml path-ignores nothing
+# relevant here, but the gate has to run whenever EITHER side moves, and folding
+# it in would tie a fake-only change to the whole unit matrix.
+#
+# The `paths` below are the gate's actual inputs and nothing else: the modules
+# whose request sites it folds, the fake it probes, the checker and its entry
+# point, the Makefile target, and this file. `scripts/lib/**` is there because
+# the entry point sources common.sh.
+#
+# The two lists are the same list written twice — GitHub has no anchor syntax
+# across `pull_request` and `push` — so every edit belongs in both.
+name: endpoint-parity
+
+on:
+  pull_request:
+    paths:
+      - 'cmd/agc/**'
+      - 'broker/**'
+      - 'githubapp/**'
+      - 'scaleset/**'
+      - 'test/fakegithub/**'
+      - 'devtools/e2e/endpointparity/**'
+      - 'devtools/go.mod'
+      - 'devtools/go.sum'
+      - 'scripts/e2e/check-endpoint-parity.sh'
+      - 'scripts/e2e/check-endpoint-parity-test.sh'
+      - 'scripts/lib/**'
+      - 'Makefile'
+      - '.github/workflows/endpoint-parity.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'cmd/agc/**'
+      - 'broker/**'
+      - 'githubapp/**'
+      - 'scaleset/**'
+      - 'test/fakegithub/**'
+      - 'devtools/e2e/endpointparity/**'
+      - 'devtools/go.mod'
+      - 'devtools/go.sum'
+      - 'scripts/e2e/check-endpoint-parity.sh'
+      - 'scripts/e2e/check-endpoint-parity-test.sh'
+      - 'scripts/lib/**'
+      - 'Makefile'
+      - '.github/workflows/endpoint-parity.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  endpoint-parity:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.work
+      - name: e2e venue endpoint parity (make endpoint-parity-check)
+        run: make endpoint-parity-check

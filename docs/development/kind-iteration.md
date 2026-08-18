@@ -237,6 +237,19 @@ The AGC therefore selects its registrar **stub-first**: when both `STUB_AUTH_URL
 
 The GMC rolls itself after env changes; tenant AGC pods pick up the new env on their next reconcile (force with `kubectl annotate actionsgateway <name> -n <ns> poke=$(date +%s) --overwrite`).
 
+### A new GitHub REST call has to reach the fake too
+
+fakegithub serves the endpoints the AGC calls and 404s everything else, so a call added without a matching handler fails only in the e2e tier, and only for whichever spec happens to exercise it.
+Q811 added a run read that way: the drained-worker spec failed thirteen merge-queue entries while the PR that introduced the call stayed green.
+
+`make endpoint-parity-check` closes that loop on the PR instead.
+It folds every `http.NewRequest` site in the modules the AGC links into a path, then builds and runs the fake and probes each one, so a call the venue cannot serve fails within seconds of being written.
+Neither side is a list anyone maintains: the served set is the fake answering, which is also why it sees the endpoints `handleReposAPI` routes by suffix inside a single `HandleFunc`.
+
+Some URLs the AGC is handed rather than composes: the broker root, or a message-queue URL the fake minted in an earlier hop.
+Those have no path of their own to hold the fake to, and each is pinned in the checker with who supplies it.
+The gate fails on a request site that is neither resolved nor pinned, because an endpoint that stops being derived stops being demanded.
+
 ## Tightening the inner loop
 
 A full `make e2e-up` run is ~10 minutes per cycle.
