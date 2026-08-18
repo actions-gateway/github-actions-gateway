@@ -898,12 +898,28 @@ const dockerfilePath = "testdata/Dockerfile"
 The recorded key is the target's `stat` (size, mode, mtime) rather than its content, so a regeneration that rewrites a file byte-identically still re-runs the package.
 That is the safe direction, and it is why `make manifests` re-runs the CRD schema tests.
 
-`make test-cache-inputs-check` ([`scripts/go/check-test-cache-inputs.sh`](../../scripts/go/check-test-cache-inputs.sh)) fails when a unit test reaches out directly.
+`make test-cache-inputs-check` ([`scripts/go/check-test-cache-inputs.sh`](../../scripts/go/check-test-cache-inputs.sh)) fails when a cached test reaches out directly.
 It covers both spellings: a `"../x"` literal, and `filepath.Join("..", "x")`, whose leading segments are separate arguments and so match no single literal.
 A lexical sweep cannot tell a path that is read from one that is data, so the exceptions are an allowlist carrying that judgement rather than a pattern.
 `cmd/worker/worker_test.go`'s `"../../etc/passwd"` is a map key in a path-traversal fixture, and nothing opens it.
-Files behind `//go:build integration` or `e2e` are skipped, because those tiers share the defect but not the invocation (Q902).
+Files behind `//go:build e2e` are skipped; the `integration` tier is covered (Q902, below).
 [`check-test-cache-inputs-test.sh`](../../scripts/go/check-test-cache-inputs-test.sh) asserts both directions against fixture repos, and counts the allowlist so a bulk exemption fails rather than passing quietly.
+
+#### The integration tier has the same defect; the e2e tier has no cache to defeat
+
+Measured 2026-08-18 (Q902) on `cmd/gmc/internal/controller/integration`, whose `TestCRDSchemaStale_PrunedBoundaryFieldIsDetected` installed CRDs from `../../../../../api/config/crd`.
+A warm run, then a second reporting `(cached)`; renaming the `spec.runnerGroup` property in that out-of-module CRD and running again still reported `(cached)` and exited 0, while `-count=1` over the same tree failed the test.
+So the tier caches, and an out-of-module CRD change replayed a stale green: the same defect as the unit tier, reached through the same fix.
+
+The exposed invocation is a direct `go test -tags integration`, or a bare [`go-test-integration.sh`](../../scripts/go/go-test-integration.sh), which deliberately does not force `-count=1` so an unchanged tree replays in seconds.
+CI is not exposed: [`integration-test.yml`](../../.github/workflows/integration-test.yml) passes `-count=1`.
+Nor, in practice, is `make test-integration`, because its `manifests`/`generate` prerequisite rewrites an in-module CRD file byte-identically on every invocation and the recorded key is the `stat`.
+Measured on the same package: `(cached)`, then one `make -C cmd/gmc generate` against an otherwise unchanged tree, then a full re-run.
+That is incidental protection rather than a guarantee, which is why the fix belongs at the suite.
+
+**The e2e tier is not exposed at all.** `make e2e` runs `ginkgo run`, which compiles with `go test -c` and execs the binary itself, and a compiled binary run directly consults no test-result cache.
+Measured both ways on a throwaway module: `go test` twice reports `(cached)` on the second run, while `go test -c` plus two execs of the binary runs the test both times.
+The two `runtime.Caller` repo-root lookups in `cmd/gmc/test/e2e` are therefore correct as they stand.
 
 ### The claude-usage snapshot gate
 

@@ -324,7 +324,7 @@ v2-api-sync-check: ## Fail if a shared api/v2alpha1 + api/v2beta1 file diverges 
 # assertions, as did CI. The fix
 # is a symlink under the package's own testdata/; this gate fails a direct read.
 .PHONY: test-cache-inputs-check
-test-cache-inputs-check: ## Fail if a unit test reads a file outside its module root (go drops it from the test-cache key)
+test-cache-inputs-check: ## Fail if a cached test reads a file outside its module root (go drops it from the test-cache key)
 	scripts/go/check-test-cache-inputs.sh
 
 # Compile and vet the build-tagged Go files no other fast gate builds (Q404).

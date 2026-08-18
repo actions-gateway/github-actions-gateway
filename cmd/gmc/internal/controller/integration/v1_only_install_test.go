@@ -39,8 +39,8 @@ func TestV1OnlyInstall_GMCComesUpClean(t *testing.T) {
 	v1Env := &envtest.Environment{
 		CRDDirectoryPaths: []string{
 			"../../../config/crd/bases",
-			"../../../../agc/config/crd",
-			// Deliberately NO "../../../../../api/config/crd": omitting the five v2
+			"testdata/agc-crd",
+			// Deliberately NO "testdata/crd": omitting the five v2
 			// (actions-gateway.com/v2alpha1) CRDs reproduces a v1-only install.
 		},
 		ErrorIfCRDPathMissing: true,

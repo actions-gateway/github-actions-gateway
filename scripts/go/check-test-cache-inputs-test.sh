@@ -105,8 +105,11 @@ func read() { _, _ = os.ReadFile("../sibling/f.txt") }
 GO
 assert_gate "$d" 0 "a ../ read staying inside the module root passes"
 
-# --- green: the tagged tiers are out of scope (their own invocation, Q902) ----
-d="$(fixture tagged)"
+# --- red: the integration tier is in scope too (Q902) ------------------------
+# `go test` caches this tier, and a bare `scripts/go/go-test-integration.sh` run
+# deliberately replays from that cache, so an escaping read replays stale there
+# exactly as it does in the unit tier.
+d="$(fixture integration)"
 cat >"$d/mod/pkg/x_test.go" <<'GO'
 //go:build integration
 
@@ -116,7 +119,22 @@ import "os"
 
 func read() { _, _ = os.ReadFile("../../outside.txt") }
 GO
-assert_gate "$d" 0 "an //go:build integration file is skipped"
+assert_gate "$d" 1 "an //go:build integration file is checked"
+
+# --- green: the e2e tier consults no test-result cache (Q902) ----------------
+# `ginkgo run` compiles with `go test -c` and execs the binary itself, so there
+# is no cached result for an escaping read to replay.
+d="$(fixture e2e)"
+cat >"$d/mod/pkg/x_test.go" <<'GO'
+//go:build e2e
+
+package pkg
+
+import "os"
+
+func read() { _, _ = os.ReadFile("../../outside.txt") }
+GO
+assert_gate "$d" 0 "an //go:build e2e file is skipped"
 
 # --- this tree stays green, and its allowlist stays specific ------------------
 rc=0

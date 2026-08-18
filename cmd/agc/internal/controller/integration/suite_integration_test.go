@@ -63,8 +63,10 @@ func TestMain(m *testing.M) {
 	testEnv = &envtest.Environment{
 		CRDDirectoryPaths: []string{
 			"../../../config/crd",
-			// The five v2 (actions-gateway.com) CRDs live in the neutral api module.
-			"../../../../../api/config/crd",
+			// The five v2 (actions-gateway.com) CRDs live in the neutral api module,
+			// reached through testdata/ so the read stays inside this module root and
+			// go keeps it as a test-cache input (Q902).
+			"testdata/crd",
 		},
 		ErrorIfCRDPathMissing: true,
 		Scheme:                testScheme,

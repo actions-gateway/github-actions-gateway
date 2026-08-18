@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""check-test-cache-inputs.py — unit tests may not read outside their module root.
+"""check-test-cache-inputs.py — cached tests may not read outside their module root.
 
 Go's test-result cache keys a run on the files the test opened, but it drops
 every `open`/`stat` whose path resolves outside the package's *module* root
@@ -17,11 +17,15 @@ drift #197 introduced arriving through the gate written to catch it.
 
 The fix is a committed symlink under the package's own testdata/, so the read
 lands inside the module root and the file becomes a real cache input. This gate
-fails when a unit test reaches out directly instead.
+fails when a cached test reaches out directly instead.
 
-Scope is the cached unit tier. Files behind //go:build integration or e2e are
-skipped: those tiers have the same defect but a different invocation, tracked
-as Q902.
+Scope is every tier `go test` caches — the unit tier and the `integration` tier
+alike. Measured 2026-08-18 (Q902) on cmd/gmc/internal/controller/integration:
+warm, `(cached)`, then a renamed spec.runnerGroup property in the out-of-module
+api/config/crd still replayed `(cached)` and green, while -count=1 over the same
+tree failed. Files behind //go:build e2e are skipped, because `ginkgo run`
+compiles with `go test -c` and execs the binary itself, so that tier consults no
+test-result cache at all.
 
 Usage: check-test-cache-inputs.py [--list]
   --list  Print every escaping read found, allowlisted or not, and exit 0.
@@ -40,13 +44,13 @@ ALLOW = {
         "a map key in a path-traversal fixture; nothing opens it",
 }
 
-TAGGED_OUT = re.compile(r"^//go:build\b.*\b(integration|e2e)\b", re.M)
+E2E_OUT = re.compile(r"^//go:build\b.*\be2e\b", re.M)
 STRING_LIT = re.compile(r'"((?:[^"\\]|\\.)*)"')
 JOIN_CALL = re.compile(r"filepath\.Join\(([^()]*)\)", re.S)
 
 
-def tracked_unit_tests():
-    """Every tracked _test.go outside vendor/ that the cached unit tier builds."""
+def tracked_tests():
+    """Every tracked _test.go outside vendor/, whatever tier builds it."""
     out = subprocess.run(
         ["git", "ls-files", "*_test.go"], capture_output=True, text=True, check=True
     ).stdout.split()
@@ -97,9 +101,9 @@ def main():
     listing = "--list" in sys.argv[1:]
     findings, listed = [], []
 
-    for path in tracked_unit_tests():
+    for path in tracked_tests():
         src = open(path, encoding="utf-8").read()
-        if TAGGED_OUT.search(src):
+        if E2E_OUT.search(src):
             continue
         for shown, target in escaping_reads(path, src):
             listed.append((path, shown, target))
@@ -113,10 +117,10 @@ def main():
         return 0
 
     if not findings:
-        print(f"ok: no unit test reads outside its module root ({len(ALLOW)} allowlisted)")
+        print(f"ok: no cached test reads outside its module root ({len(ALLOW)} allowlisted)")
         return 0
 
-    print("Unit tests read files outside their module root, which go's", file=sys.stderr)
+    print("Tests read files outside their module root, which go's", file=sys.stderr)
     print("test cache drops from the key — these assertions replay stale:", file=sys.stderr)
     print("", file=sys.stderr)
     for path, shown, target in findings:

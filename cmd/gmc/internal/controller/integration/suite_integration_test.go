@@ -117,11 +117,14 @@ func TestMain(m *testing.M) {
 	testEnv = &envtest.Environment{
 		CRDDirectoryPaths: []string{
 			"../../../config/crd/bases",
-			"../../../../agc/config/crd",
+			// The two out-of-module CRD sets are reached through testdata/ symlinks so
+			// the reads resolve inside this module root and go keeps them as test-cache
+			// inputs (Q902).
+			"testdata/agc-crd",
 			// The v2 (actions-gateway.com) CRDs live in the neutral api module —
 			// the five tenant kinds plus the cluster-scoped PriorityClassAllowlist
 			// the priorityclass-allowlist-guard policy uses as its paramKind (Q492).
-			"../../../../../api/config/crd",
+			"testdata/crd",
 			// Stub Cilium/Calico CRDs (Q208) so the FQDN-mode unstructured apply lands
 			// against the test apiserver. Minimal preserve-unknown-fields schemas — real
 			// clusters install the CNI's own CRDs.
@@ -412,9 +415,9 @@ func startGMCReconcilerWithOptions(t *testing.T, ipFetcher controller.GitHubIPRa
 // templates/agc-tenant-role.yaml; this suite reads the SAME file so the role
 // granted in envtest is byte-identical to the one production ships — the
 // RBAC-scope test can never silently drift from the deployed permission set.
+// Reached through a testdata/ symlink for the same reason as the CRD paths above.
 var agcTenantRoleRulesPath = filepath.Join(
-	"..", "..", "..", "..", "..",
-	"charts", "actions-gateway", "files", "agc-tenant-role-rules.yaml",
+	"testdata", "chartfiles", "agc-tenant-role-rules.yaml",
 )
 
 // installAGCTenantClusterRole installs the agc-tenant-role ClusterRole the Helm

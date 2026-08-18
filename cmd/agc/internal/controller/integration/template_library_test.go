@@ -15,9 +15,10 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-// templateLibraryDir is the shipped runner template library, relative to this
-// package. Same hop count as the suite's api/config/crd path.
-const templateLibraryDir = "../../../../../deploy/templates"
+// templateLibraryDir is the shipped runner template library, reached through a
+// testdata/ symlink so the read resolves inside this module root and go keeps it
+// as a test-cache input (Q902).
+const templateLibraryDir = "testdata/templates"
 
 // TestTemplateLibrary_Admitted applies every shipped library entry to a real
 // apiserver (Q554).
