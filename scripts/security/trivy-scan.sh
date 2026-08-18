@@ -37,7 +37,14 @@ for name in $TRIVY_IMAGES; do
 		[[ "$ro" == "$name" ]] && code=0
 	done
 	echo "==> building local/$name:trivy from the root Dockerfile (target $name)"
-	docker buildx build --load -t "local/$name:trivy" --target "$name" -f Dockerfile .
+	# The base-image pull inside the build reaches the registry with no retry of
+	# its own, so one transient denial fails the whole scan (Q863). retry.sh
+	# re-runs the build; buildkit serves whatever layers the previous attempt
+	# completed, so a retry is cheap. The CI trivy matrix this script mirrors
+	# gets the same second attempt, spelled as a step because a `uses:` step
+	# cannot be wrapped in a shell loop.
+	RETRY_ATTEMPTS=3 "$REPO_ROOT/scripts/fetch/retry.sh" \
+		docker buildx build --load -t "local/$name:trivy" --target "$name" -f Dockerfile .
 	echo "==> trivy image local/$name:trivy (exit-code $code)"
 	trivy image --severity "$TRIVY_SEVERITY" --ignore-unfixed --exit-code "$code" "local/$name:trivy"
 done
