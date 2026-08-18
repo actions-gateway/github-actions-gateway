@@ -2676,22 +2676,6 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>Measured 2026-08-17 on Q889 phase 6: <code>make check</code> reported <code>pipedgate (cached)</code> and exited 0 while the package run directly failed 5 …</td>
 </tr>
 <tr>
-<td><a href="Q873/">Q873</a></td>
-<td><a href="../development/testing/#the-e2e-workflows-kindnet-and-calico">Merge-group-only e2e was priced against flakes, not deterministic breaks</a></td>
-<td><code>docs</code> <code>ci</code> <code>retro</code></td>
-<td>🔲</td>
-<td>S</td>
-<td>Q675 accepted queue-time kickbacks "against a measured 1% e2e failure rate".</td>
-</tr>
-<tr>
-<td><a href="Q896/">Q896</a></td>
-<td><a href="../development/maintaining-backlog/">A plan enumerates readers, not references, and grep cannot see a reader</a></td>
-<td><code>docs</code> <code>debt</code> <code>retro</code></td>
-<td>🔲</td>
-<td>S</td>
-<td>Q889's scope was understated in all five phases: it counted textual references, and what bit was what <em>reads</em> the thing.</td>
-</tr>
-<tr>
 <td><a href="Q862/">Q862</a></td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/devtools/agent/pipedgate/repostate.go">The PR-overlap check intersects paths, so disjoint hunks read as overlap</a></td>
 <td><code>ci</code> <code>debt</code> <code>retro</code></td>
@@ -3850,6 +3834,14 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>💤</td>
 <td>S</td>
 <td><strong>Event:</strong> a <code>changes</code> job is abandoned on <code>main</code> outside a GitHub incident window.</td>
+</tr>
+<tr>
+<td><a href="Q897/">Q897</a></td>
+<td><a href="../plan/">The plan index still instructs archival against the deleted STATUS.md</a></td>
+<td><code>docs</code> <code>debt</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>Its archival protocol reads "if <code>docs/STATUS.md</code> still references it", and states <code>plan-index-check</code>'s pre-Q889 direction; invariant 1 now …</td>
 </tr>
 </tbody>
 </table>
