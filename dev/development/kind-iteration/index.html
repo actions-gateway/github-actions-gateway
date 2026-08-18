@@ -2731,6 +2731,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Pointing AGC at fakegithub vs real GitHub">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#a-new-github-rest-call-has-to-reach-the-fake-too" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        A new GitHub REST call has to reach the fake too
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -2959,6 +2976,15 @@ The suite uses this to point AGC at fakegithub:</p>
 <p>Since the <code>gitHubURL</code> field became required, a GMC-provisioned AGC always carries <code>GITHUB_ORG_URL</code> (threaded from <code>spec.gitHubURL</code>).
 The AGC therefore selects its registrar <strong>stub-first</strong>: when both <code>STUB_AUTH_URL</code> and <code>STUB_BROKER_URL</code> are set it uses the stub registrar regardless of <code>GITHUB_ORG_URL</code>, so the fakegithub overrides above win; unsetting the stub pair (as the real-GitHub swap does) falls through to the GitHub registrar.</p>
 <p>The GMC rolls itself after env changes; tenant AGC pods pick up the new env on their next reconcile (force with <code>kubectl annotate actionsgateway &lt;name&gt; -n &lt;ns&gt; poke=$(date +%s) --overwrite</code>).</p>
+<h3 id="a-new-github-rest-call-has-to-reach-the-fake-too">A new GitHub REST call has to reach the fake too<a class="headerlink" href="#a-new-github-rest-call-has-to-reach-the-fake-too" title="Permanent link">&para;</a></h3>
+<p>fakegithub serves the endpoints the AGC calls and 404s everything else, so a call added without a matching handler fails only in the e2e tier, and only for whichever spec happens to exercise it.
+Q811 added a run read that way: the drained-worker spec failed thirteen merge-queue entries while the PR that introduced the call stayed green.</p>
+<p><code>make endpoint-parity-check</code> closes that loop on the PR instead.
+It folds every <code>http.NewRequest</code> site in the modules the AGC links into a path, then builds and runs the fake and probes each one, so a call the venue cannot serve fails within seconds of being written.
+Neither side is a list anyone maintains: the served set is the fake answering, which is also why it sees the endpoints <code>handleReposAPI</code> routes by suffix inside a single <code>HandleFunc</code>.</p>
+<p>Some URLs the AGC is handed rather than composes: the broker root, or a message-queue URL the fake minted in an earlier hop.
+Those have no path of their own to hold the fake to, and each is pinned in the checker with who supplies it.
+The gate fails on a request site that is neither resolved nor pinned, because an endpoint that stops being derived stops being demanded.</p>
 <h2 id="tightening-the-inner-loop">Tightening the inner loop<a class="headerlink" href="#tightening-the-inner-loop" title="Permanent link">&para;</a></h2>
 <p>A full <code>make e2e-up</code> run is ~10 minutes per cycle.
 To iterate on a single component:</p>

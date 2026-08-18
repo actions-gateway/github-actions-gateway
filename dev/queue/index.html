@@ -2652,14 +2652,6 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 </thead>
 <tbody>
 <tr>
-<td><a href="Q871/">Q871</a></td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/test/fakegithub/main.go">Fail a PR when the AGC calls an endpoint the e2e fake does not serve</a></td>
-<td><code>ci</code> <code>tests</code> <code>debt</code> <code>retro</code></td>
-<td>🔲</td>
-<td>S</td>
-<td>Q811 added a run GET; fakegithub serves two paths and 404s the rest, so the drained-worker spec failed 13 merge-queue entries while the PR …</td>
-</tr>
-<tr>
 <td><a href="Q895/">Q895</a></td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/go/go-test.sh">A cached Go test result let <code>make check</code> pass what CI failed</a></td>
 <td><code>ci</code> <code>tests</code> <code>debt</code> <code>retro</code></td>
@@ -3500,12 +3492,28 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td><strong>Event:</strong> the next live-GitHub run reports <code>Q501 candidate A outcome</code> — the cancel spec now takes that reading, and nothing is buildable …</td>
 </tr>
 <tr>
+<td><a href="Q905/">Q905</a></td>
+<td><a href="../development/testing/">A testing.md sentence sits under the bullet after the one it belongs to</a></td>
+<td><code>docs</code> <code>debt</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>"The tier now says it for you" closes the derived-gate bullet, but what it describes is the envtest suite clock naming a bystander test …</td>
+</tr>
+<tr>
 <td><a href="Q530/">Q530</a></td>
 <td><a href="../plan/q511-live-github-run-isolation/#the-decision-forbid-concurrency">Isolate concurrent live-GitHub runs instead of forbidding them</a></td>
 <td><code>tests</code></td>
 <td>💤</td>
 <td>L</td>
 <td><strong>Decision:</strong> the singleton rule (enforced by Q511's preflight) is costing more than parallel live runs are worth.</td>
+</tr>
+<tr>
+<td><a href="Q908/">Q908</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/ci/gate-list.sh"><code># status-scope: none</code> is dead syntax that two gates still carry</a></td>
+<td><code>docs</code> <code>debt</code></td>
+<td>🔲</td>
+<td>S</td>
+<td><code>STATUS_GATES</code> retired with Q889 and <code>gate-list.sh</code> no longer mentions it, so the annotation gates nothing: <code>make gate-lists-check</code> passes …</td>
 </tr>
 <tr>
 <td><a href="Q397/">Q397</a></td>

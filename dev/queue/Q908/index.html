@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q871/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q908/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>Fail a PR when the AGC calls an endpoint the e2e fake does not serve - GitHub Actions Gateway</title>
+        <title># status-scope: none is dead syntax that two gates still carry - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#fail-a-pr-when-the-agc-calls-an-endpoint-the-e2e-fake-does-not-serve" class="md-skip">
+        <a href="#-status-scope-none-is-dead-syntax-that-two-gates-still-carry" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Fail a PR when the AGC calls an endpoint the e2e fake does not serve
+              # status-scope: none is dead syntax that two gates still carry
             
           </span>
         </div>
@@ -2567,9 +2567,10 @@
   
 
 
-<h1 id="fail-a-pr-when-the-agc-calls-an-endpoint-the-e2e-fake-does-not-serve">Fail a PR when the AGC calls an endpoint the e2e fake does not serve<a class="headerlink" href="#fail-a-pr-when-the-agc-calls-an-endpoint-the-e2e-fake-does-not-serve" title="Permanent link">&para;</a></h1>
-<p>Q811 added a run GET; fakegithub serves two paths and 404s the rest, so the drained-worker spec failed 13 merge-queue entries while the PR stayed green.
-Derive both sides from source the way <code>metric-tiers</code> does.</p>
+<h1 id="-status-scope-none-is-dead-syntax-that-two-gates-still-carry"><code># status-scope: none</code> is dead syntax that two gates still carry<a class="headerlink" href="#-status-scope-none-is-dead-syntax-that-two-gates-still-carry" title="Permanent link">&para;</a></h1>
+<p><code>STATUS_GATES</code> retired with Q889 and <code>gate-list.sh</code> no longer mentions it, so the annotation gates nothing: <code>make gate-lists-check</code> passes with it removed (measured 2026-08-18).
+Two Makefile targets still declare it and <code>scripts/README.md</code> still documents the rule that reads it, so the next gate author copies both.
+Drop all three.</p>
 
 
 
