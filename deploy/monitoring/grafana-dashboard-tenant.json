@@ -406,6 +406,23 @@
       ]
     },
     {
+      "type": "barchart",
+      "title": "Abandoned runs awaiting capacity (1h)",
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "gridPos": { "h": 7, "w": 6, "x": 0, "y": 23 },
+      "id": 28,
+      "description": "Force-cancelled abandoned runs waiting for the owner to place a worker pod again before their automatic re-run fires (Q691), split by acquisition tier since Q766 ported the recovery to scaleset. outcome=expired is the one to watch: nothing was placed inside the wait window, so the job is silently lost until someone re-runs it by hand. outcome=capacity_returned handed the re-run to the shared per-run retry budget, where it reports as cause=abandoned on the disruption-retries panel.",
+      "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "expr": "sum by (runner_group, tier, outcome) (increase(actions_gateway_abandoned_run_rerun_waits_total{namespace=~\"$namespace\", runner_group=~\"$runner_group\"}[1h]))",
+          "legendFormat": "{{runner_group}} ({{tier}}/{{outcome}})",
+          "refId": "A"
+        }
+      ]
+    },
+    {
       "type": "stat",
       "title": "AGC / proxy version",
       "datasource": { "type": "prometheus", "uid": "${datasource}" },
