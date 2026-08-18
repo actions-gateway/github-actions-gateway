@@ -214,7 +214,23 @@ jobs:
           # BUILDKIT_LOCAL_IMAGE note on the job env for why this is the local
           # tag and not the digest-pinned ref.
           driver-opts: image=${{ env.BUILDKIT_LOCAL_IMAGE }}
+      # Two attempts: the base-image pull inside the build reaches the registry
+      # with no retry of its own. Measured 2026-08-14 on #1515, this leg 403'd
+      # HEAD-ing the pinned distroless digest while three sibling shards pulled
+      # that same digest green in the same run (Q863). Same digest, different
+      # result, is the transport failing, so the retry is on the transport and
+      # the Dockerfile's digest pins are untouched.
+      #
+      # Two steps rather than a loop: a `uses:` step cannot be wrapped the way
+      # scripts/fetch/retry.sh wraps a command, and swapping the action for a
+      # raw `docker buildx build` would move `cache-from: type=gha` into a
+      # `run:` step where the cache credentials are not exposed the same way.
+      # See docs/development/testing.md#image-builds-retry-the-transport-never-the-pin
       - name: build ${{ matrix.name }} image
+        id: build
+        # Masks THIS attempt only. The rebuild below runs unmasked, so a second
+        # failure still fails the job.
+        continue-on-error: true
         uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
         with:
           context: .
@@ -226,6 +242,25 @@ jobs:
           # no cache-to so these scan builds never evict the e2e build cache.
           # One scope, not one per image: every target shares the Dockerfile's
           # `deps` stage, so the bake exports that warm Go build cache once.
+          cache-from: type=gha,scope=images
+      - name: back off before rebuilding ${{ matrix.name }}
+        if: steps.build.outcome == 'failure'
+        # A denial that clears at all clears in seconds; re-asking in the same
+        # second only re-asks an edge that is still saying no.
+        run: sleep 30
+      - name: rebuild ${{ matrix.name }} image
+        if: steps.build.outcome == 'failure'
+        # `with:` is a copy of the first attempt's; keep the two in step. The
+        # build is `load: true`, local only with nothing pushed, so a second
+        # attempt can only ask the registry the same question twice, and
+        # buildkit serves whatever layers the first attempt completed.
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
+        with:
+          context: .
+          file: Dockerfile
+          target: ${{ matrix.name }}
+          load: true
+          tags: local/${{ matrix.name }}:scan
           cache-from: type=gha,scope=images
       - name: install syft
         # Installed from the pinned release rather than via anchore/sbom-action:

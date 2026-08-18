@@ -2682,6 +2682,26 @@ One constraint drives its shape, and it is easy to get wrong: **`docker load` ca
 The cached image is therefore re-exposed under a local-only tag (`BUILDKIT_LOCAL_IMAGE`) and the consumer points at that.
 This does not weaken the pin: the cold-path pull is still digest-verified against the pinned ref, and the cache key carries that same digest, so the local tag can only ever name the bytes the pin selected.
 
+### Image builds: retry the transport, never the pin
+
+A `docker buildx build` resolves each `FROM` against the registry, and that resolution has no retry of its own, so one denial fails the whole build.
+Measured 2026-08-14 on #1515 (Q863): the `trivy (proxy)` shard got a 403 HEAD-ing the pinned distroless digest while the agc, gmc and fakegithub shards pulled **that same digest** green in the same run, and a rerun with no code change went green.
+Same digest, different result, is the transport failing.
+
+**So the retry goes on the transport, and the pins stay untouched.** Unpinning a base image or loosening the digest check would make the 403 go away by removing the thing that makes the build reproducible, and it would break more than it fixed: the three `FROM gcr.io/distroless/static:nonroot@sha256:…` stages and the `ghcr.io/actions/actions-runner` pin are load-bearing, and the note at `Dockerfile:211` records that a gate fails CI when that `FROM` line and the Go constants disagree.
+
+The shape differs by call site, because **a step that `uses:` an action cannot be wrapped in a shell loop** the way `retry.sh` wraps a command:
+
+- **`security-scan.yml`** runs the same `docker/build-push-action` step twice: the first attempt carries `continue-on-error` (masking that attempt only), a `sleep 30` follows on failure, and the rebuild runs unmasked, so a second failure still reds the job.
+  A denial that clears at all clears in seconds; re-asking in the same second only re-asks an edge that is still saying no.
+- **`scripts/security/trivy-scan.sh`**, the local mirror of that matrix, routes its build through [`retry.sh`](../../scripts/fetch/retry.sh) at `RETRY_ATTEMPTS=3`.
+  Retries are cheap either way: buildkit serves whatever layers the previous attempt completed.
+
+**Swapping the action for a raw `docker buildx build` would be the tidier fix and is the wrong trade.** It moves `cache-from: type=gha` into a `run:` step, where the Actions cache credentials are not exposed the same way, and a cache *import* failure is only a warning, so that regression would surface as a slower job and never as a red one.
+Q900 is measuring which way that actually falls.
+
+`publish.yml`'s build is deliberately still unretried (Q899): it is `no-cache: true`, and five steps read `steps.build.outputs.digest`, one of them the signed-provenance subject, so a second attempt has to carry that digest through without ever signing the wrong one.
+
 ### Path-gated workflows: verify the heavy gates actually ran
 
 Most code-exercising workflows keep unrelated PRs cheap by **skipping their expensive jobs internally** rather than skipping the whole workflow.
