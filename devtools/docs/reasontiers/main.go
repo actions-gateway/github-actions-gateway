@@ -32,6 +32,11 @@
 // same way: a site under a tier-exclusive directory refutes the opposite claim,
 // and a shared file says nothing. The ledger row carries the positive claim, and
 // inventory is what makes the row unavoidable.
+//
+// `-list <agc-src-dir> <api-dir>` prints the same scan's reasons instead of
+// checking them, which is what the release pre-flight diffs between two refs
+// (Q780). The scan covers the AGC only, as the ledger does; the GMC's Event
+// reasons are enumerated by nothing (Q925).
 package main
 
 import (
@@ -136,8 +141,20 @@ type ledgerRow struct {
 }
 
 func main() {
+	if len(os.Args) == 4 && os.Args[1] == "-list" {
+		lines, err := list(os.Args[2], os.Args[3])
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "reasontiers: %v\n", err)
+			os.Exit(2)
+		}
+		for _, l := range lines {
+			fmt.Println(l)
+		}
+		return
+	}
 	if len(os.Args) != 5 {
 		fmt.Fprintln(os.Stderr, "usage: reasontiers <agc-src-dir> <api-dir> <observability-metrics.md> <troubleshooting.md>")
+		fmt.Fprintln(os.Stderr, "       reasontiers -list <agc-src-dir> <api-dir>")
 		os.Exit(2)
 	}
 	findings, err := run(os.Args[1], os.Args[2], os.Args[3], os.Args[4])
@@ -154,6 +171,48 @@ func main() {
 	}
 }
 
+// list enumerates what the scan places, as "condition <value>" and
+// "event <value>" lines, for a caller that wants the set rather than a verdict
+// on it: the release pre-flight diffs it between two refs so the notes state
+// which reasons a tag publishes for the first time.
+//
+// Every way the scan can come back short is an error here rather than a shorter
+// list, because a caller diffing two refs cannot tell an empty enumeration from
+// an honest one — an unreadable ref would report every reason as new, and a ref
+// carrying a recorder shape this scanner cannot place would drop exactly the
+// reasons a release note most needs. Both sides are printed because the guards
+// establish both; a caller takes the kind it wants.
+func list(srcDir, apiDir string) ([]string, error) {
+	values, err := reasonValues(apiDir, srcDir)
+	if err != nil {
+		return nil, err
+	}
+	sigs, err := recorderSignatures(srcDir)
+	if err != nil {
+		return nil, err
+	}
+	conds, events, unresolved, err := scanSource(srcDir, values, sigs)
+	if err != nil {
+		return nil, err
+	}
+	if len(unresolved) > 0 {
+		return nil, fmt.Errorf("%d reason argument(s) under %s could not be placed, so the enumeration is short: %s", len(unresolved), srcDir, strings.Join(unresolved, "; "))
+	}
+	if err := errEmptySide(srcDir, conds, events); err != nil {
+		return nil, err
+	}
+
+	var lines []string
+	for value := range conds {
+		lines = append(lines, "condition "+value)
+	}
+	for value := range events {
+		lines = append(lines, "event "+value)
+	}
+	sort.Strings(lines)
+	return lines, nil
+}
+
 func run(srcDir, apiDir, ledgerDoc, eventDoc string) ([]string, error) {
 	values, err := reasonValues(apiDir, srcDir)
 	if err != nil {
@@ -167,8 +226,8 @@ func run(srcDir, apiDir, ledgerDoc, eventDoc string) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	if len(conds) == 0 || len(events) == 0 {
-		return nil, fmt.Errorf("scanning %s found %d condition reasons and %d Event reasons — an empty side is not a clean tree", srcDir, len(conds), len(events))
+	if err := errEmptySide(srcDir, conds, events); err != nil {
+		return nil, err
 	}
 
 	docBytes, err := os.ReadFile(ledgerDoc)
@@ -200,6 +259,15 @@ func run(srcDir, apiDir, ledgerDoc, eventDoc string) ([]string, error) {
 	findings = append(findings, checkEventReference(events, string(eventDocBytes), eventDoc)...)
 	sort.Strings(findings)
 	return findings, nil
+}
+
+// errEmptySide rejects a scan that found nothing on one side. Both entry points
+// need it: an empty inventory is an unreadable tree, not a clean one.
+func errEmptySide(srcDir string, conds, events map[string]*reason) error {
+	if len(conds) > 0 && len(events) > 0 {
+		return nil
+	}
+	return fmt.Errorf("scanning %s found %d condition reasons and %d Event reasons — an empty side is not a clean tree", srcDir, len(conds), len(events))
 }
 
 // parseGo parses every non-test Go file under root, calling fn for each.

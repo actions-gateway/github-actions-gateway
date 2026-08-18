@@ -18,6 +18,10 @@
 # this") needs a human, and a gate that answered them mechanically would be
 # wrong in both directions.
 #
+# The Event reasons are enumerated by devtools/docs/reasontiers, which needs Go
+# and adds a build plus two `git archive` extractions to a run that has AGC
+# source in its window (Q780). A window with none skips all of it.
+#
 # Exit status is 0 whether or not surface changed; `--quiet` suppresses the
 # per-section output and exits 1 when nothing changed, for scripted callers that
 # only want to know whether a review is needed.
@@ -37,6 +41,15 @@ API_PATHS=(
 	"cmd/gmc/api"
 	"cmd/agc/config/crd"
 	"cmd/gmc/config/crd"
+)
+
+# REASON_SRC — the trees the Event-reason scan reads, and the only trees it
+# reads: the AGC, and the shared vocabulary its reasons are declared in. The
+# enumeration is a pure function of these two, so a window that changes neither
+# cannot have changed a reason, which is what lets the scan be skipped entirely.
+REASON_SRC=(
+	"cmd/agc"
+	"api"
 )
 
 quiet=0
@@ -74,7 +87,86 @@ done
 
 changed="$(git diff --name-only "$ref"..HEAD -- "${existing_paths[@]}")"
 
-if [[ -z "$changed" ]]; then
+WORK="$(mktemp -d)"
+trap 'rm -rf "$WORK"' EXIT INT TERM
+
+# An Event reason is an argument at the recording site rather than a declaration,
+# so no pattern over the source enumerates it: two recorders here are named Event
+# and two recordEvent, with the reason at a different index in each. The v1.4.0
+# notes were enumerated by a pattern that read the wrong declaration, published
+# the action string `ProvisionWorker` as a reason, and missed four real ones.
+# devtools/docs/reasontiers reads the index off the callee's own declaration and
+# fails rather than shortening its list, which is what makes a set diff of its
+# output mean anything (Q780).
+#
+# reason_error carries why a scan did not produce a set, so the section can say
+# that instead of printing an empty one — an unreadable ref would otherwise
+# report every reason as new, and an unreadable HEAD as none.
+reason_error=""
+reasons_bin=""
+
+build_reasontiers() {
+	if ! command -v go >/dev/null 2>&1; then
+		reason_error="go is not on PATH"
+		return 1
+	fi
+	reasons_bin="$WORK/reasontiers"
+	# devtools/ is outside the Go workspace, hence GOWORK=off — see
+	# docs/development/go-workspaces.md.
+	if ! (cd devtools && GOWORK=off go build -o "$reasons_bin" ./docs/reasontiers) >"$WORK/build.log" 2>&1; then
+		reason_error="building devtools/docs/reasontiers failed: $(tail -n 1 "$WORK/build.log")"
+		return 1
+	fi
+}
+
+# scan_ref REV TAG — extract REV's reason trees under $WORK/TAG and write the
+# scan to $WORK/TAG.reasons. HEAD is extracted rather than read from the working
+# tree so both ends are git content, as every other section here already is.
+scan_ref() {
+	local rev="$1" tag="$2"
+	mkdir -p "$WORK/$tag"
+	if ! git archive --format=tar --output="$WORK/$tag.tar" "$rev" -- "${REASON_SRC[@]}" 2>"$WORK/$tag.err"; then
+		reason_error="git archive $rev failed: $(tail -n 1 "$WORK/$tag.err")"
+		return 1
+	fi
+	if ! tar -xf "$WORK/$tag.tar" -C "$WORK/$tag" 2>"$WORK/$tag.err"; then
+		reason_error="extracting $rev failed: $(tail -n 1 "$WORK/$tag.err")"
+		return 1
+	fi
+	if ! "$reasons_bin" -list "$WORK/$tag/cmd/agc" "$WORK/$tag/api" >"$WORK/$tag.reasons" 2>"$WORK/$tag.err"; then
+		reason_error="scanning $rev: $(tail -n 1 "$WORK/$tag.err")"
+		return 1
+	fi
+}
+
+# event_reasons_at TAG — the Event reason values from TAG's scan, re-sorted here
+# so both sides of the comm below collate the way this shell's sort does.
+event_reasons_at() {
+	awk '$1 == "event" { print $2 }' "$WORK/$1.reasons" | sort
+}
+
+# event_reason_body — what the section says: the reasons new since REF, or why
+# there is no set to report. Never empty in the second case, because an empty
+# section there would read as "none new".
+event_reason_body() {
+	if [[ -z "$reason_error" ]]; then
+		printf '%s' "$new_event_reasons"
+		return
+	fi
+	printf 'COULD NOT ENUMERATE: %s\n' "$reason_error"
+	printf 'This is not a report of none-new. Fix it, or enumerate by hand, before publishing.'
+}
+
+new_event_reasons=""
+if [[ -n "$(git diff --name-only "$ref"..HEAD -- "${REASON_SRC[@]}")" ]]; then
+	if build_reasontiers && scan_ref "$ref" ref && scan_ref HEAD head; then
+		new_event_reasons="$(comm -13 <(event_reasons_at ref) <(event_reasons_at head))"
+	fi
+fi
+
+# A failed scan counts as "something to review" for the same reason it is not an
+# empty section: nobody can say the Event surface is unchanged until it runs.
+if [[ -z "$changed" && -z "$new_event_reasons" && -z "$reason_error" ]]; then
 	if ((quiet)); then
 		exit 1
 	fi
@@ -136,6 +228,7 @@ section "Added fields (wire names)" "$(added_lines 'json:"')"
 section "Added or changed enum constraints" "$(added_lines 'kubebuilder:validation:Enum')"
 section "Added or changed defaults" "$(added_lines 'kubebuilder:default')"
 section "New condition types and reasons" "$(new_values '^[[:space:]]*(Condition|Reason)[A-Z][A-Za-z0-9]*[[:space:]]*=[[:space:]]*"')"
+section "New Event reasons (AGC only; nothing enumerates the GMC's)" "$(event_reason_body)"
 section "New label and annotation keys" "$(new_values '=[[:space:]]*"(actions-gateway\.com|actions-gateway\.github\.com)/')"
 
 echo

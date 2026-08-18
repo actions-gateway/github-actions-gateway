@@ -3,6 +3,8 @@ package main
 import (
 	"os"
 	"path/filepath"
+	"slices"
+	"sort"
 	"strings"
 	"testing"
 )
@@ -378,5 +380,66 @@ func TestX(t *T) {
 	findings := runCase(t, src, goodLedger, goodRunbook)
 	if len(findings) != 0 {
 		t.Fatalf("expected no findings, got %v", findings)
+	}
+}
+
+// The release pre-flight diffs list's output between two refs (Q780), so it
+// enumerates both kinds and its ordering is the one `comm` needs.
+func TestListEnumeratesBothKinds(t *testing.T) {
+	lines, err := list(srcTree(t, nil), apiTree(t))
+	if err != nil {
+		t.Fatalf("list: %v", err)
+	}
+	var conds, events []string
+	for _, l := range lines {
+		switch {
+		case strings.HasPrefix(l, "condition "):
+			conds = append(conds, strings.TrimPrefix(l, "condition "))
+		case strings.HasPrefix(l, "event "):
+			events = append(events, strings.TrimPrefix(l, "event "))
+		default:
+			t.Fatalf("line carries no kind: %q", l)
+		}
+	}
+	if len(conds) == 0 || len(events) == 0 {
+		t.Fatalf("expected both kinds, got %d condition and %d event lines", len(conds), len(events))
+	}
+	if !sort.StringsAreSorted(lines) {
+		t.Fatalf("output is not sorted, so a set diff of it would be wrong: %v", lines)
+	}
+	if !slices.Contains(events, "WorkerPodStuckPending") {
+		t.Fatalf("expected the shared reconciler's Event reason, got %v", events)
+	}
+	if !slices.Contains(conds, "ListenerActive") {
+		t.Fatalf("expected the shared reconciler's condition reason, got %v", conds)
+	}
+}
+
+// A caller diffing two refs cannot tell a short list from an honest one, so
+// every way the scan comes back incomplete is an error rather than a shorter
+// enumeration. An unreadable ref would otherwise report every reason as new.
+func TestListRefusesToBeShort(t *testing.T) {
+	computed := `package controller
+
+import corev1 "k8s.io/api/core/v1"
+
+func (r *R) warn(rs *RS, err error) {
+	r.recordEvent(rs, corev1.EventTypeWarning, deriveReason(err), "Act", "n")
+}
+`
+	cases := map[string]string{
+		"empty tree":         "",
+		"unplaceable reason": computed,
+	}
+	for name, body := range cases {
+		t.Run(name, func(t *testing.T) {
+			src := t.TempDir()
+			if body != "" {
+				src = srcTree(t, map[string]string{"internal/controller/computed.go": body})
+			}
+			if _, err := list(src, apiTree(t)); err == nil {
+				t.Fatal("expected an error rather than a short enumeration")
+			}
+		})
 	}
 }
