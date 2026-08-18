@@ -36,6 +36,8 @@ fi
 pids=()
 labels=()
 
+# shellcheck disable=SC2329 # invoked by `trap cleanup EXIT`; shellcheck 0.11 misses
+# that whenever the script ends in an explicit `exit`.
 cleanup() {
     local pid
     for pid in "${pids[@]+"${pids[@]}"}"; do
@@ -85,11 +87,7 @@ if (( ${#killed[@]} > 0 )); then
     printf '[run-parallel] KILLED means a signal ended the command before it reached a verdict. This runner never kills a child, so the signal came from elsewhere: SIGTERM (143) under host contention is not a gate failure, while signal 9 (137) is the OOM killer and is.\n' >&2
 fi
 
-# A verdict outranks a kill: exit 1 whenever anything reached a bad one. No
-# trailing `exit 0` — shellcheck 0.11.0 reads an unconditional one as proof the
-# EXIT trap is unreachable and reports cleanup() as never invoked (SC2329).
-if (( ${#failed[@]} > 0 )); then
-    exit 1
-elif (( ${#killed[@]} > 0 )); then
-    exit "$kill_rc"
-fi
+# A verdict outranks a kill: exit 1 whenever anything reached a bad one.
+# kill_rc stays 0 when nothing was killed, so a clean run exits 0 here.
+(( ${#failed[@]} > 0 )) && exit 1
+exit "$kill_rc"
