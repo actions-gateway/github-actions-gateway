@@ -72,6 +72,8 @@ mkdir -p "$GIT_DIR_FIXTURE/scripts/lib"
 (
 	cd "$GIT_DIR_FIXTURE"
 	git init -q -b main .
+	# Q820: no detached maintenance racing the next command in a fixture repo.
+	git config maintenance.auto false
 	printf 'scripts/scratch.sh\n' >.gitignore
 	: >scripts/tracked.sh
 	: >scripts/deleted.sh

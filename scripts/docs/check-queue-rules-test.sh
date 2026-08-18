@@ -36,6 +36,8 @@ newrepo() {  # newrepo <dir>  -> a repo with a store, a vocabulary and a base re
     local r="$1"
     mkdir -p "$r/docs/queue" "$r/docs/development" "$r/docs/plan"
     git init -q -b main "$r"
+    # Q820: no detached maintenance racing the next command in a fixture repo.
+    git -C "$r" config maintenance.auto false
     git -C "$r" config user.email t@e.com
     git -C "$r" config user.name T
     # shellcheck disable=SC2016  # the backticks are markdown code spans in the

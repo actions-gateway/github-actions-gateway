@@ -173,6 +173,8 @@ mkdir -p "$REPO/scripts"
 (
 	cd "$REPO"
 	git init -q -b main
+	# Q820: no detached maintenance racing the next command in a fixture repo.
+	git config maintenance.auto false
 	git config user.email t@example.com
 	git config user.name Test
 	git config "merge.scriptindex.name" 'test'
@@ -199,6 +201,33 @@ if ((rebase_rc == 0)) && grep -qF 'agent/b.sh' "$REPO/scripts/README.md" && grep
 else
 	bad "a real git rebase resolves adjacent adds through .gitattributes" \
 		"rc=$rebase_rc; $(tail -2 "$FIXTURE_DIR/rebase.log" | tr '\n' ' ')"
+fi
+
+# --- no background git in a fixture repo --------------------------------------
+
+# Q820's cause, asserted on behaviour rather than on the config key that
+# currently delivers it: a commit in a fixture repo must spawn nothing that
+# outlives it. Dropping the `maintenance.auto false` call turns this red.
+MAINT_REPO="$FIXTURE_DIR/maintenance"
+mkdir -p "$MAINT_REPO"
+(
+	cd "$MAINT_REPO"
+	git init -q -b main
+	git config maintenance.auto false
+	git config user.email t@example.com
+	git config user.name Test
+	printf 'x\n' >f
+	git add -A
+	git commit -qm base
+) >/dev/null 2>&1
+printf 'y\n' >"$MAINT_REPO/f"
+MAINT_TRACE="$FIXTURE_DIR/maintenance-trace.log"
+GIT_TRACE=1 git -C "$MAINT_REPO" commit -qam next >"$MAINT_TRACE" 2>&1
+if grep -q 'maintenance run' "$MAINT_TRACE"; then
+	bad "a fixture commit spawned background maintenance" \
+		"$(grep -m1 -o 'git maintenance run.*' "$MAINT_TRACE")"
+else
+	ok 'a fixture commit spawns no detached maintenance'
 fi
 
 if ((fails > 0)); then

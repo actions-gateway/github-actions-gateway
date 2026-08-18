@@ -141,6 +141,8 @@ mkdir -p "$SELECT_REPO/scripts/ci"
 (
 	cd "$SELECT_REPO"
 	git init -q -b main .
+	# Q820: no detached maintenance racing the next command in a fixture repo.
+	git config maintenance.auto false
 	printf 'scripts/ignored.sh\n' >.gitignore
 	printf '#!/usr/bin/env bash\nset -euo pipefail\nshopt -s inherit_errexit\n' >scripts/ci/clean.sh
 	git add -A >/dev/null
@@ -183,6 +185,7 @@ mkdir -p "$EMPTY_REPO"
 (
 	cd "$EMPTY_REPO"
 	git init -q -b main .
+	git config maintenance.auto false
 	printf 'placeholder\n' >README.md
 	git add -A >/dev/null
 	git -c user.name=test -c user.email=test@example.com commit -qm init --no-verify

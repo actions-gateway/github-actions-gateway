@@ -145,4 +145,8 @@ The fix removes the only concurrent writer found in these repositories, so a rec
 Capture, in order: the failing call from the `ERR` trap, the `Q820:` tree reading, the errno and which object, and whether a sibling suite failed in the same run.
 [Q826](../queue/Q826.md) is a sibling flake in [`git-merge-gate-lists-test.sh`](../../scripts/ci/git-merge-gate-lists-test.sh) with a different signature, and [Q822](../queue/Q822.md) tracks unrelated suites failing under concurrent load.
 
-The same fixture-repo defect exists wherever a suite commits in a throwaway repo, so [`git-merge-roadmap-test.sh`](../../scripts/docs/git-merge-roadmap-test.sh) and the other merge-driver suites carry it too ([Q878](../queue/Q878.md)).
+**This mechanism does not reach Q826**, measured 2026-08-18 while sweeping the fix across the tier.
+That fixture holds about six objects against `gc.auto`'s default 6700, so its three detached maintenance runs return without repacking anything, and there is no prune to race — the trace shows the `maintenance run` line followed straight by the next suite command, where this suite's shows `git repack -d -l --cruft` under it.
+A merge driver exiting non-zero reproduces Q826's line verbatim, and [`merge-driver-common.sh`](../../scripts/lib/merge-driver-common.sh)'s `ERR` trap turns any internal failure into a fallback conflict, so the driver's own exit is where to look.
+
+The same fixture-repo defect existed wherever a suite commits in a throwaway repo; Q878 swept it, and every fixture repo in the tree now sets the key ([the rule](../development/testing.md#a-fixture-repo-must-not-run-background-git)).

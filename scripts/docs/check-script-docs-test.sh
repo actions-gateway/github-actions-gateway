@@ -41,6 +41,8 @@ repo() {
     local dir="$WORKDIR/$1"
     mkdir -p "$dir/scripts/go"
     git -C "$dir" init -q
+    # Q820: no detached maintenance racing the next command in a fixture repo.
+    git -C "$dir" config maintenance.auto false
     printf '#!/usr/bin/env bash\ntrue\n' >"$dir/scripts/go/go-lint.sh"
     # shellcheck disable=SC2016 # backticks are Markdown code spans, not shell
     {
@@ -124,6 +126,7 @@ expect "README with no tables is a hard error" 2 "$drifted" 'cannot judge'
 empty="$WORKDIR/empty"
 mkdir -p "$empty"
 git -C "$empty" init -q
+git -C "$empty" config maintenance.auto false
 printf 'placeholder\n' >"$empty/README.md"
 commit "$empty"
 expect "empty file set is a hard error" 2 "$empty" 'no scripts to check'

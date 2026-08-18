@@ -25,6 +25,8 @@ setup_repo() {
 	(
 		cd "$d"
 		git init -q -b main
+		# Q820: no detached maintenance racing the next command in a fixture repo.
+		git config maintenance.auto false
 		git config user.email t@t.t
 		git config user.name t
 		# A base commit on `main`, then a clone-like `origin/main` ref pointing at

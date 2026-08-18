@@ -131,6 +131,9 @@ fixture() {
 	mkdir -p "$dir/bin" "$dir/out" "$dir/repo/docs"
 	git init -q --bare "$dir/origin.git"
 	git init -q "$dir/repo"
+	# Q820: no detached maintenance racing the next command in a fixture repo.
+	git -C "$dir/origin.git" config maintenance.auto false
+	git -C "$dir/repo" config maintenance.auto false
 	mkdir -p "$dir/repo/docs/queue"
 	{
 		printf -- '---\nid: Q%d\nrank: a1\nlabels:\n    - debt\nstatus: ready\nsize: S\n' "$FLOOR"

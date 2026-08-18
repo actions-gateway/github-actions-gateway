@@ -85,6 +85,8 @@ mkdir -p "$SELECT_REPO"
 (
 	cd "$SELECT_REPO"
 	git init -q -b main .
+	# Q820: no detached maintenance racing the next command in a fixture repo.
+	git config maintenance.auto false
 	printf 'ignored.txt\n' >.gitignore
 	printf 'clean\n' >tracked.txt
 	printf 'clean\n' >doomed.txt

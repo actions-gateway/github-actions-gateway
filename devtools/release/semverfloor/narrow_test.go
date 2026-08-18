@@ -75,6 +75,8 @@ func narrowRepo(t *testing.T) string {
 	t.Helper()
 	dir := t.TempDir()
 	gitRun(t, dir, "init", "-q", "-b", "main")
+	// Q820: no detached maintenance racing the next command in a fixture repo.
+	gitRun(t, dir, "config", "maintenance.auto", "false")
 	return dir
 }
 
