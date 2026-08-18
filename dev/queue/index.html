@@ -2652,12 +2652,12 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 </thead>
 <tbody>
 <tr>
-<td><a href="Q895/">Q895</a></td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/go/go-test.sh">A cached Go test result let <code>make check</code> pass what CI failed</a></td>
-<td><code>ci</code> <code>tests</code> <code>debt</code> <code>retro</code></td>
+<td><a href="Q902/">Q902</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/go/go-test-integration.sh">The integration and e2e tiers drop the same out-of-module cache inputs</a></td>
+<td><code>ci</code> <code>tests</code> <code>debt</code></td>
 <td>🔲</td>
-<td>S</td>
-<td>Measured 2026-08-17 on Q889 phase 6: <code>make check</code> reported <code>pipedgate (cached)</code> and exited 0 while the package run directly failed 5 …</td>
+<td>M</td>
+<td>Q895 fixed the cached unit tier and scoped the tagged tiers out, because they share the defect but not the invocation.</td>
 </tr>
 <tr>
 <td><a href="Q859/">Q859</a></td>

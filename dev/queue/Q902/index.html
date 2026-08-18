@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q895/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q902/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>A cached Go test result let make check pass what CI failed - GitHub Actions Gateway</title>
+        <title>The integration and e2e tiers drop the same out-of-module cache inputs - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#a-cached-go-test-result-let-make-check-pass-what-ci-failed" class="md-skip">
+        <a href="#the-integration-and-e2e-tiers-drop-the-same-out-of-module-cache-inputs" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              A cached Go test result let make check pass what CI failed
+              The integration and e2e tiers drop the same out-of-module cache inputs
             
           </span>
         </div>
@@ -2567,9 +2567,16 @@
   
 
 
-<h1 id="a-cached-go-test-result-let-make-check-pass-what-ci-failed">A cached Go test result let <code>make check</code> pass what CI failed<a class="headerlink" href="#a-cached-go-test-result-let-make-check-pass-what-ci-failed" title="Permanent link">&para;</a></h1>
-<p>Measured 2026-08-17 on Q889 phase 6: <code>make check</code> reported <code>pipedgate (cached)</code> and exited 0 while the package run directly failed 5 assertions, as did CI.
-The suite reads its registry at runtime; the cause is unverified.</p>
+<h1 id="the-integration-and-e2e-tiers-drop-the-same-out-of-module-cache-inputs">The integration and e2e tiers drop the same out-of-module cache inputs<a class="headerlink" href="#the-integration-and-e2e-tiers-drop-the-same-out-of-module-cache-inputs" title="Permanent link">&para;</a></h1>
+<p>Q895 fixed the cached unit tier and scoped the tagged tiers out, because they share the defect but not the invocation.
+Twelve reads behind <code>//go:build integration</code> or <code>e2e</code> still resolve outside their module root, so go drops them from the test-cache key: <code>cmd/gmc/internal/controller/integration</code> installs CRDs from <code>../../../../../api/config/crd</code>, <code>cmd/agc/.../integration</code> reads <code>../../../../../deploy/templates</code>, and both e2e suites resolve a repo root from <code>runtime.Caller</code>.
+Regenerating a CRD without touching the package would replay a cached green.</p>
+<p><code>-count=1</code> is applied only when <code>RUN</code> is set (<code>cmd/agc/Makefile:48</code>, <code>cmd/gmc/Makefile:66</code>), so a default <code>make test-integration</code> can serve a cached result.
+That makes the exposure narrower than the unit tier's but not absent, and it needs its own measurement rather than an inference: an envtest run is expensive, and <code>manifests</code>/<code>generate</code> run as prerequisites, so whether a cache hit is reachable in practice is unverified.</p>
+<p>Measure first, on one package, by deleting the mechanism the way Q895 did: warm, confirm a literal <code>(cached)</code> line, change a CRD, require red.
+If reachable, either extend the <code>testdata/</code> symlink convention to these packages or force <code>-count=1</code> on the tier, where the cost is already dominated by envtest bring-up.
+Then narrow the <code>//go:build</code> skip in <code>scripts/go/check-test-cache-inputs.py</code>, which is what keeps this invisible today.
+Mechanism: <a href="../../development/testing/#the-out-of-module-test-read-gate">testing.md § The out-of-module test read gate</a>.</p>
 
 
 
