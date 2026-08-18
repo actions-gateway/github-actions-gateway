@@ -2721,15 +2721,7 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td><code>flake</code> <code>ci</code> <code>tests</code></td>
 <td>🔲</td>
 <td>S</td>
-<td>Seen once 2026-08-12 at load 101-111 on 18 cores (41 go procs, 8 siblings): passed one <code>make check</code>, failed the next on an identical tree …</td>
-</tr>
-<tr>
-<td><a href="Q878/">Q878</a></td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/docs/git-merge-roadmap-test.sh">Give the sibling merge-driver suites Q820's tree reading</a></td>
-<td><code>tests</code> <code>ci</code> <code>retro</code></td>
-<td>🔲</td>
-<td>S</td>
-<td><code>git-merge-roadmap-test</code> shares Q820's shape and carries its <code>ERR</code> trap, but not the <code>Q820:</code> tree state, so a sighting names a line and …</td>
+<td>Seen once 2026-08-12 at load 101-111, 8 siblings, identical tree, passed standalone: `Could not apply ...</td>
 </tr>
 <tr>
 <td><a href="Q899/">Q899</a></td>
@@ -2762,6 +2754,22 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>🔲</td>
 <td>S</td>
 <td><code>docker-bake.hcl:40</code> says the cache env vars arrive "after docker/setup-buildx-action has injected" them; that action's v4.2.0 source …</td>
+</tr>
+<tr>
+<td><a href="Q921/">Q921</a></td>
+<td><a href="../development/testing/#a-fixture-repo-must-not-run-background-git">Gate the fixture-repo <code>maintenance.auto</code> invariant so it cannot regress</a></td>
+<td><code>tests</code> <code>ci</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>16 suites carry <code>maintenance.auto false</code> with no assertion; a text query cannot check them, since one drives git from embedded Python.</td>
+</tr>
+<tr>
+<td><a href="Q922/">Q922</a></td>
+<td><a href="../development/maintaining-backlog/">Docs name the retired <code>lint-backlog.sh</code> as the live backlog linter</a></td>
+<td><code>docs</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>Q889 retired it with the table; <code>queue.py lint</code> and <code>check-queue-rules.py</code> carry its rules now.</td>
 </tr>
 <tr>
 <td><a href="Q927/">Q927</a></td>
