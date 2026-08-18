@@ -47,7 +47,8 @@ CHECK_FAST_GATES := roadmap-check \
                     v2-api-sync-check test-cache-inputs-check \
                     path-filters-check gate-lists-check shellcheck \
                     errexit-prologue-check \
-                    actionlint uses-pinned-check chart-crds-check chart-rbac-check chart-webhook-check \
+                    actionlint uses-pinned-check cosign-pin-check \
+                    chart-crds-check chart-rbac-check chart-webhook-check \
                     codegen-check api-reference-check scripts-test claude-usage-test \
                     doc-links release-pins-check em-dash-check page-density-check \
                     script-docs-check queue-rules-check queue-lint \
@@ -175,7 +176,8 @@ SCRIPTS_TESTS := agent/claude-go-throttle-hook-test agent/local-throttle-test \
                  ci/check-errexit-prologue-test ci/check-tools-test \
                  ci/git-merge-gate-lists-test \
                  docs/git-merge-script-index-test \
-                 ci/check-uses-pinned-test ci/run-parallel-test \
+                 ci/check-uses-pinned-test ci/check-cosign-pin-test \
+                 ci/run-parallel-test \
                  ci/check-template-library-test \
                  docs/backlog-metrics-test docs/check-comparison-stamps-test \
                  docs/check-doc-links-test \
