@@ -1601,6 +1601,20 @@ Nothing distinguished that from a fix that worked.
 
 `scripts/agent/foreground-guard-patterns-test.sh` is the durable form of that probe, controls included.
 
+### A syscall-level probe of a `scripts/` suite has two silent ways to measure nothing
+
+Tracing what a suite's child processes actually do means interposing on libc with `DYLD_INSERT_LIBRARIES`, and two mechanics here make that report a clean negative while observing nothing at all.
+
+- **`#!/usr/bin/env bash` strips it.** `/usr/bin/env` is SIP-`restricted`, so dyld clears every `DYLD_*` variable before bash starts and the whole process tree below runs uninstrumented.
+  Every suite in `SCRIPTS_TESTS` has that shebang.
+  Invoke the script as `"$(command -v bash)" <script>` to keep the variable; Homebrew's bash and git are adhoc-signed, so the library does load once it survives that far.
+- **A detached child has no stderr.** Writing traces to stderr loses exactly the processes worth watching.
+  Q820's remover was a `git maintenance run --auto --detach` that git spawns from every commit, and it was invisible until traces went to a file named by an environment variable.
+
+Both were caught only by a load proof: a constructor in the interposed library that prints one line per process when an environment variable is set.
+Without it, "no anomalies logged" and "the library never loaded" are the same output — the general rule one section up, in the one place where the harness fails silently by default.
+Detail: [q820-scripts-test-temp-file-flake.md](../plan/q820-scripts-test-temp-file-flake.md).
+
 ### Extracting a call argument by name is wrong wherever two functions share one
 
 A scan that pulls an argument out of a call has to decide which argument, and the cheap way is a table keyed on the callee's name.
