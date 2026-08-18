@@ -6,7 +6,7 @@ This file exists so the next occurrence is classified before anything is changed
 
 **Status:** watching.
 Mode A is diagnosed and mitigated (PR #1120).
-**Mode B is diagnosed as of 2026-08-12 and fixed under [Q809](../queue/Q809.md)**; see [Mode B, attributed](#mode-b-attributed-2026-08-12-the-claim-was-made-and-lost) below.
+**Mode B is diagnosed as of 2026-08-12 and fixed under Q809**; see [Mode B, attributed](#mode-b-attributed-2026-08-12-the-claim-was-made-and-lost) below.
 It recurred three times that day, once on `main`, which fired this row's revive trigger; those three runs are the first with an AGC log line that names the failure, and it is not either cause the spec's own message guesses at.
 Reset the [soak clock](../development/maintaining-backlog.md#retiring-a-flake-watch-row) to **2026-08-12**: count green runs from the claim fix, not from PR #1120.
 

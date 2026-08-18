@@ -123,7 +123,7 @@ Nothing already deployed changes behaviour, so it does not need to beat this tag
 **Q600 gates, mechanically rather than on severity.** `main`'s `unit-test` leg went red on `7fec2ff8` — `TestMultiplexer_DuplicateJobDeliveryProvisionsOnce` under `-race`, `expected 1, actual 0` — and pre-flight requires a green `main` to tag.
 It is a test-synchronization defect, not a product one: the test waited on the duplicate-delivery metric, which only the *losing* siblings increment, and then read the peak-provisioner count the *winner* produces several steps later.
 Diagnosed by reproducing the interleaving directly (a delay at the winner's handler entry took it from 0 failures in 400 local runs to 5 of 5), fixed by waiting on the counter the invariant reads, and confirmed still able to catch the Q260 regression by deleting the claim gate and requiring red.
-Filed to [flake watch](../queue/Q600.md); the weaker dedup predicate the measurement exposed was filed as Q601 and has since been fixed — per-session dedup registries, so the assertion counts distinct siblings rather than deliveries.
+Filed to flake watch as Q600; the weaker dedup predicate the measurement exposed was filed as Q601 and has since been fixed — per-session dedup registries, so the assertion counts distinct siblings rather than deliveries.
 
 **Q602 gates for the same mechanical reason, and is worth more than its fix.** The next `main` run went red on a *different* `-race` test — `TestListener_AbandonedJobDoesNotSurviveARestart`, the Q583 fix's own — with `assert.Never` reporting that a restarted listener had provisioned a worker for a job the previous one gave up on.
 It reproduced locally at 1 in 40.
