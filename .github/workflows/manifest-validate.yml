@@ -92,8 +92,9 @@ jobs:
               - 'scripts/fetch/**'
               - 'scripts/lib/**'
               - '.github/workflows/manifest-validate.yml'
-            # The promql gate compares the shipped PrometheusRule against the two
-            # docs that describe its alerts, so its trigger set spans both — the
+            # The promql gate parses the shipped PrometheusRule and both Grafana
+            # dashboards, and compares the rules against the two docs that
+            # describe its alerts, so its trigger set spans both — the
             # `manifests` filter above deliberately covers neither doc. The
             # workflow's push-to-main trigger path-ignores docs/**, so a
             # docs-only edit reaches this gate on the PR rather than after the
@@ -164,11 +165,12 @@ jobs:
           export PATH="${HOME}/.local/bin:${PATH}"  # pip --user yamllint
           make manifest-validate
 
-  # Parse the shipped PromQL and reconcile the alert rules with the docs that
+  # Parse the shipped PromQL — the rule file's expressions and both dashboards'
+  # panel queries (Q910) — and reconcile the alert rules with the docs that
   # describe them (Q827; Q831 wired it). Its own job rather than a step in
   # `validate`: that job installs helm, kubeconform and yamllint to answer a
   # different question, and this one needs none of them — only Go, to build
-  # .build/promqlcheck from devtools/. Both failures it catches are silent, so
+  # .build/promqlcheck from devtools/. Every failure it catches is silent, so
   # the verdict has to be readable on its own.
   promql:
     needs: [changes]
@@ -182,7 +184,7 @@ jobs:
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.work
-      - name: PromQL parses and matches its docs (make promql-check)
+      - name: PromQL parses in the rules and the dashboards, and matches its docs (make promql-check)
         run: make promql-check
 
   # Aggregate required-status gate. Mark THIS job's check context

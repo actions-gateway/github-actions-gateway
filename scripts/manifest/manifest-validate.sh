@@ -74,6 +74,10 @@ yamllint_paths="charts/actions-gateway charts/actions-gateway-crds-v2 cmd/agc/co
 
 # The shipped Grafana dashboards. Nothing parsed them before Q827, so a stray
 # comma survived to whoever imported the file. jq is required-tier already.
+#
+# This step is a JSON syntax parse and nothing more: a panel query is a string,
+# so `sum by ((((` satisfies it (Q910). The queries themselves are parsed by
+# `make promql-check`, which needs no host tool.
 dashboards="$REPO_ROOT/deploy/monitoring/grafana-dashboard-tenant.json
 $REPO_ROOT/deploy/monitoring/grafana-dashboard-platform.json"
 
@@ -109,7 +113,7 @@ echo "==> yamllint (static manifests + chart metadata)"
 # shellcheck disable=SC2086  # path and flag lists word-split intentionally
 yamllint --strict -c "$REPO_ROOT/.yamllint.yaml" $yamllint_paths
 
-echo "==> jq: shipped Grafana dashboards parse as JSON (Q827)"
+echo "==> jq: shipped Grafana dashboards parse as JSON (Q827; their queries are make promql-check)"
 while IFS= read -r dashboard; do
 	jq empty "$dashboard"
 done <<<"$dashboards"

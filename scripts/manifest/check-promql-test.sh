@@ -4,9 +4,9 @@
 #
 # The Go checker's own cases live in devtools/monitoring/promqlcheck/main_test.go
 # and cover what each finding means. What only this suite can cover is the entry
-# point: that the gate defaults to the three shipped paths, that it reports the
-# real tree as clean, and that it fails on a defect rather than passing by
-# checking nothing.
+# point: that the gate defaults to the shipped paths — the rule file, its two
+# docs and both dashboards — that it reports the real tree as clean, and that it
+# fails on a defect rather than passing by checking nothing.
 #
 # Both directions are asserted throughout. A gate that stopped finding anything
 # fails as silently as one that finds everything, and the shipped-tree case is
@@ -60,6 +60,31 @@ trap 'rm -rf "$TMP"' EXIT
 expect_rc "shipped tree passes with no arguments" 0 -- "$GATE"
 expect_output "names the file it checked" "prometheusrule.yaml" -- "$GATE"
 
+# The default path list reaches both dashboards (Q910). Asserted through the
+# target count rather than the two filenames: a path that was listed but never
+# walked would still print its own name.
+default_out="$("$GATE" 2>&1 || true)"
+if [[ "$default_out" =~ ([0-9]+)\ dashboard\ target ]] && ((BASH_REMATCH[1] > 0)); then
+    ok "default run parses dashboard targets (${BASH_REMATCH[1]})"
+else
+    fail "default run parsed no dashboard targets; got: $default_out"
+fi
+
+# Q910's measurement, end to end. `sum by ((((` is the expression the row seeded,
+# and the jq control below is why the row exists: manifest-validate's dashboard
+# step is `jq empty`, which accepts this same file.
+jq '(.panels[] | select(.targets != null) | .targets[0].expr) = "sum by (((("' \
+    "$REPO_ROOT/deploy/monitoring/grafana-dashboard-tenant.json" > "$TMP/broken-dashboard.json"
+expect_rc "malformed dashboard expr fails" 1 -- "$GATE" \
+    "$REPO_ROOT/deploy/monitoring/prometheusrule.yaml" \
+    "$REPO_ROOT/docs/operations/observability-alerting.md" \
+    "$REPO_ROOT/docs/operations/runbook.md" "$TMP/broken-dashboard.json"
+expect_output "malformed dashboard expr names the panel and the parse failure" "expr does not parse" -- \
+    "$GATE" "$REPO_ROOT/deploy/monitoring/prometheusrule.yaml" \
+    "$REPO_ROOT/docs/operations/observability-alerting.md" \
+    "$REPO_ROOT/docs/operations/runbook.md" "$TMP/broken-dashboard.json"
+expect_rc "the same file still passes jq empty (what this gate adds)" 0 -- jq empty "$TMP/broken-dashboard.json"
+
 # A malformed expression is caught.
 cp "$REPO_ROOT/deploy/monitoring/prometheusrule.yaml" "$TMP/rule.yaml"
 awk '{ if ($0 ~ /actions_gateway_active_sessions == 0/) print "            actions_gateway_active_sessions =="; else print }' \
@@ -78,10 +103,15 @@ expect_output "a documented-but-unshipped rule is caught" "documented but not sh
     "$GATE" "$TMP/missing-rule.yaml" "$REPO_ROOT/docs/operations/observability-alerting.md" \
     "$REPO_ROOT/docs/operations/runbook.md"
 
-# Argument handling: 0 or 3, never 1 or 2.
+# Argument handling: 0, or 3 plus any dashboards — never 1 or 2, and every path
+# named has to exist.
 expect_rc "one argument is rejected" 2 -- "$GATE" "$TMP/rule.yaml"
 expect_rc "a missing file is rejected" 2 -- "$GATE" "$TMP/nope.yaml" \
     "$REPO_ROOT/docs/operations/observability-alerting.md" "$REPO_ROOT/docs/operations/runbook.md"
+expect_rc "a missing dashboard is rejected" 2 -- "$GATE" \
+    "$REPO_ROOT/deploy/monitoring/prometheusrule.yaml" \
+    "$REPO_ROOT/docs/operations/observability-alerting.md" \
+    "$REPO_ROOT/docs/operations/runbook.md" "$TMP/nope.json"
 
 printf '\n'
 if ((failures > 0)); then
