@@ -10,10 +10,15 @@ import (
 
 // shippedRegistry loads .claude/piped-gate-guard.json — the file the hook reads
 // at runtime, not a copy. A registry edit that broke a pattern would otherwise
-// pass a suite asserting its own fixture.
+// pass a suite asserting its own fixture. testdata/piped-gate-guard.json is an
+// in-module symlink to it: reached directly as ../../../.claude/… the read
+// leaves the devtools module root, and go drops those from the test-cache key,
+// so a broken registry replayed a cached green — the fixture problem this
+// comment rejects, arriving by another route (Q895,
+// testing.md § The out-of-module test read gate).
 func shippedRegistry(t *testing.T) *compiled {
 	t.Helper()
-	path := filepath.Join("..", "..", "..", ".claude", "piped-gate-guard.json")
+	path := filepath.Join("testdata", "piped-gate-guard.json")
 	raw, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatalf("read shipped registry: %v", err)
@@ -209,7 +214,7 @@ func TestDecide(t *testing.T) {
 // An unanchored pattern searches the whole head, which is how a rule starts
 // matching text that merely mentions a command.
 func TestShippedRegistryPatternsAreAnchored(t *testing.T) {
-	path := filepath.Join("..", "..", "..", ".claude", "piped-gate-guard.json")
+	path := filepath.Join("testdata", "piped-gate-guard.json")
 	raw, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatalf("read shipped registry: %v", err)

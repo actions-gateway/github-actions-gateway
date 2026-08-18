@@ -294,6 +294,12 @@ jobs:
       # drift it guards could reach main unnoticed.
       - name: v2 API package sync (make v2-api-sync-check)
         run: make v2-api-sync-check
+      # Fail a unit test that reads a repo file outside its module root (Q895).
+      # Go drops those reads from the test-cache key, so the assertion replays a
+      # stale pass when only the external file changes -- which is how a cached
+      # `make check` went green over a suite CI failed.
+      - name: Out-of-module test reads (make test-cache-inputs-check)
+        run: make test-cache-inputs-check
       # Compile + vet the build-tagged (integration/e2e/load) Go files (Q404).
       # `make lint` above and the unit-test job both build with the DEFAULT tag
       # set, so a compile break in an envtest/e2e/load package used to reach only
