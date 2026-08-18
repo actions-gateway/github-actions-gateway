@@ -54,7 +54,7 @@ CHECK_FAST_GATES := roadmap-check \
                     script-docs-check queue-rules-check queue-lint \
                     semver-floor-sources-check template-library-check \
                     md-reflow-check comparison-stamps-check promql-check \
-                    metric-tiers-check reason-tiers-check \
+                    metric-tiers-check reason-tiers-check upgrade-toc-check \
                     endpoint-parity-check
 
 CHECK_HEAVY_GATES := build-tags-check lint cover-check
@@ -104,11 +104,12 @@ QUEUE_GATES := queue-lint queue-rules-check roadmap-check plan-index-check \
 #   md-reflow-check      prose that is not sentence-per-line
 #   page-density-check   an admonition wall, or a stat tile repeated across pages
 #   release-pins-check   an install/upgrade page pinning a superseded release
+#   upgrade-toc-check    a heading added to upgrade.md that its own index never gained
 # Every entry is also in CHECK_FAST_GATES, so like QUEUE_GATES this is a strict
 # subset of `make check` and never a second opinion.
 DOCS_GATES := doc-links plan-index-check no-plan-refs-check em-dash-check \
               md-reflow-check page-density-check release-pins-check \
-              release-notes-check
+              release-notes-check upgrade-toc-check
 
 # Behavioural assertions for the scripts/ tree that shellcheck (a linter) can't
 # express — the tags-only release signing-identity regexp (Q124), the
@@ -181,6 +182,7 @@ SCRIPTS_TESTS := agent/claude-go-throttle-hook-test agent/local-throttle-test \
                  docs/backlog-metrics-test docs/check-comparison-stamps-test \
                  docs/check-doc-links-test \
                  docs/check-em-dash-test docs/check-page-density-test \
+                 docs/check-upgrade-toc-test \
                  docs/check-release-links-test \
                  docs/check-release-pins-test \
                  docs/check-roadmap-test docs/check-no-plan-refs-in-code-test \
