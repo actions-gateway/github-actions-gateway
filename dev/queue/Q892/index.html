@@ -2568,9 +2568,8 @@
 
 
 <h1 id="a-suite-that-copies-a-gate-into-a-fixture-is-invisible-to-grep">A suite that copies a gate into a fixture is invisible to grep<a class="headerlink" href="#a-suite-that-copies-a-gate-into-a-fixture-is-invisible-to-grep" title="Permanent link">&para;</a></h1>
-<p>A suite that copies a gate into a fixture inherits that gate's inputs, so changing one breaks it with no textual reference to grep.
-Twice in <code>git-merge-plan-index-test</code>, in both directions: <code>check-plan-index</code> gained a source (2026-08-16), then lost one at the Q889 cutover (2026-08-17).
-Only <code>make check</code> noticed either.
+<p>A suite that copies a gate into a fixture inherits its inputs, so changing one breaks it with no textual reference to grep.
+Twice in <code>git-merge-plan-index-test</code>, both directions, at the Q889 cutover.
 Name the consumers, or detect the copy.</p>
 
 

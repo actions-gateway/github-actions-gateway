@@ -2568,8 +2568,8 @@
 
 
 <h1 id="re-point-git-blame-ignore-revs-at-the-squashed-reflow-commit">Re-point <code>.git-blame-ignore-revs</code> at the squashed reflow commit<a class="headerlink" href="#re-point-git-blame-ignore-revs-at-the-squashed-reflow-commit" title="Permanent link">&para;</a></h1>
-<p>The squash mints a SHA that exists only once the reflow PR lands, so the file ships naming its pre-merge one.
-On git 2.55.0 that is a silent no-op, not an error.</p>
+<p>The file names <code>0acea95c</code>, the pre-merge branch SHA, which is not on <code>main</code>, so on git 2.55.0 it is a silent no-op rather than an error.
+Re-point it at the squash <code>af3f9934</code>, and decide whether the v0.3.0 reflow <code>d3e58aeb</code> belongs too.</p>
 
 
 

@@ -2568,8 +2568,8 @@
 
 
 <h1 id="file-upstream-karpenter-kwok-chart-panics-on-its-own-defaults">File upstream: karpenter kwok chart panics on its own defaults<a class="headerlink" href="#file-upstream-karpenter-kwok-chart-panics-on-its-own-defaults" title="Permanent link">&para;</a></h1>
-<p>At v1.14.0 the chart renders <code>featureGates.staticCapacity</code>/<code>.capacityBuffer</code> into <code>FEATURE_GATES</code> but values.yaml omits both keys; the empty string panics the controller at startup.
-Q479's harness sets them explicitly as a workaround.</p>
+<p><strong>Decision:</strong> we spend a session on the upstream-report batch.
+At v1.14.0 the chart renders <code>featureGates.staticCapacity</code>/<code>.capacityBuffer</code> into <code>FEATURE_GATES</code> but values.yaml omits both; the empty string panics the controller.</p>
 
 
 

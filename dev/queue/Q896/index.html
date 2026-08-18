@@ -2568,10 +2568,9 @@
 
 
 <h1 id="a-plan-enumerates-readers-not-references-and-grep-cannot-see-a-reader">A plan enumerates readers, not references, and grep cannot see a reader<a class="headerlink" href="#a-plan-enumerates-readers-not-references-and-grep-cannot-see-a-reader" title="Permanent link">&para;</a></h1>
-<p>Q889's stated scope was understated in all five phases that measured it, always the same way: it counted textual references, and what bit was what <em>reads</em> the thing.
-Phase 6 alone missed three, each found by a gate or a build rather than by reading.
-The three shapes grep is blind to: a frontmatter field, a build-time hook whose missing-file path returns success, and a pathspec glob that crosses directory separators.
-Write the rule where plan docs are specified.</p>
+<p>Q889's scope was understated in all five phases: it counted textual references, and what bit was what <em>reads</em> the thing.
+Grep is blind to a frontmatter field, a hook that returns success, and a crossing glob.
+Write the rule with the plan-doc spec.</p>
 
 
 

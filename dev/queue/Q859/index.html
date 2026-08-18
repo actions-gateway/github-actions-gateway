@@ -2568,8 +2568,8 @@
 
 
 <h1 id="piped-gates-overlap-probe-judges-the-hooks-checkout-not-the-sessions">piped-gate's overlap probe judges the hook's checkout, not the session's<a class="headerlink" href="#piped-gates-overlap-probe-judges-the-hooks-checkout-not-the-sessions" title="Permanent link">&para;</a></h1>
-<p><code>main.go:188</code> probes the hook's installed worktree by design, assuming it is the session's.
-<code>EnterWorktree</code> breaks it: the session keeps the launch checkout's hook, so PR-create and push both flagged overlaps this branch lacks.
+<p><code>pipedgate</code> takes its repo root from the registry path, probing the hook's own worktree.
+<code>EnterWorktree</code> breaks that: the session keeps the launch checkout's hook, so PR-create and push flagged overlaps this branch lacks.
 A cwd fix reverses it.</p>
 
 

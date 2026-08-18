@@ -2568,8 +2568,8 @@
 
 
 <h1 id="nothing-clears-a-session-sourced-runnerversiontooold-once-fixed">Nothing clears a session-sourced <code>RunnerVersionTooOld</code> once fixed<a class="headerlink" href="#nothing-clears-a-session-sourced-runnerversiontooold-once-fixed" title="Permanent link">&para;</a></h1>
-<p><code>session.go:162</code> is its only writer and sets <code>True</code> alone — Q332's clear-on-recovery covered <code>Degraded</code>/<code>RateLimited</code>, not this.
-The listener exits non-retriably, so there is no recovery poll to clear on, and Q715's image reading defers to it.</p>
+<p><code>session.go</code> is the only session-sourced writer and sets <code>True</code> alone; Q332's clear-on-recovery covered <code>Degraded</code>/<code>RateLimited</code>, not this.
+The listener exits non-retriably, and Q715's image reading defers rather than overwriting.</p>
 
 
 

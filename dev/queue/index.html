@@ -2668,6 +2668,14 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td><code>if: always()</code> counts a <code>skipped</code> heavy job as passing, so a PR breaking e2e looks identical to one that does not, and #1515 read ready 13 …</td>
 </tr>
 <tr>
+<td><a href="Q895/">Q895</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/go/go-test.sh">A cached Go test result let <code>make check</code> pass what CI failed</a></td>
+<td><code>ci</code> <code>tests</code> <code>debt</code> <code>retro</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>Measured 2026-08-17 on Q889 phase 6: <code>make check</code> reported <code>pipedgate (cached)</code> and exited 0 while the package run directly failed 5 …</td>
+</tr>
+<tr>
 <td><a href="Q873/">Q873</a></td>
 <td><a href="../development/testing/#the-e2e-workflows-kindnet-and-calico">Merge-group-only e2e was priced against flakes, not deterministic breaks</a></td>
 <td><code>docs</code> <code>ci</code> <code>retro</code></td>
@@ -2676,20 +2684,12 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>Q675 accepted queue-time kickbacks "against a measured 1% e2e failure rate".</td>
 </tr>
 <tr>
-<td><a href="Q895/">Q895</a></td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/go/go-test.sh">A cached Go test result let <code>make check</code> pass what CI failed</a></td>
-<td><code>ci</code> <code>tests</code> <code>debt</code> <code>retro</code></td>
-<td>🔲</td>
-<td>S</td>
-<td>Measured 2026-08-17 on Q889 phase 6: <code>make check</code> reported <code>ok … devtools/agent/pipedgate (cached)</code> and exited 0, while the same package …</td>
-</tr>
-<tr>
 <td><a href="Q896/">Q896</a></td>
 <td><a href="../development/maintaining-backlog/">A plan enumerates readers, not references, and grep cannot see a reader</a></td>
 <td><code>docs</code> <code>debt</code> <code>retro</code></td>
 <td>🔲</td>
 <td>S</td>
-<td>Q889's stated scope was understated in all five phases that measured it, always the same way: it counted textual references, and what bit …</td>
+<td>Q889's scope was understated in all five phases: it counted textual references, and what bit was what <em>reads</em> the thing.</td>
 </tr>
 <tr>
 <td><a href="Q862/">Q862</a></td>
@@ -2717,11 +2717,11 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 </tr>
 <tr>
 <td><a href="Q859/">Q859</a></td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/agent/claude-piped-gate-hook.sh">piped-gate's overlap probe judges the hook's checkout, not the session's</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/devtools/agent/pipedgate/main.go">piped-gate's overlap probe judges the hook's checkout, not the session's</a></td>
 <td><code>ci</code> <code>debt</code> <code>bug</code> <code>retro</code></td>
 <td>🔲</td>
 <td>S</td>
-<td><code>main.go:188</code> probes the hook's installed worktree by design, assuming it is the session's.</td>
+<td><code>pipedgate</code> takes its repo root from the registry path, probing the hook's own worktree.</td>
 </tr>
 <tr>
 <td><a href="Q820/">Q820</a></td>
@@ -2746,6 +2746,14 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>🔲</td>
 <td>S</td>
 <td>Three docs advise denying <code>169.254.169.254/32</code> and Q226 measured HTTP 200 from inside a Kata guest, but no test names the address.</td>
+</tr>
+<tr>
+<td><a href="Q564/">Q564</a></td>
+<td><a href="../design/appendix-g-future-enhancements/#g3-proxy-side-audit-logging">Proxy-side audit logging</a></td>
+<td><code>security</code> <code>feature</code></td>
+<td>🔲</td>
+<td>M</td>
+<td>The proxy emits counters only today, so nothing carries a per-connection egress record.</td>
 </tr>
 <tr>
 <td><a href="Q714/">Q714</a></td>
@@ -2801,7 +2809,7 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td><code>tests</code> <code>ci</code> <code>retro</code></td>
 <td>🔲</td>
 <td>S</td>
-<td><code>git-merge-roadmap-test</code> shares Q820's shape and already carries its <code>ERR</code> trap, but not the <code>Q820:</code> tree state it added, so a sighting …</td>
+<td><code>git-merge-roadmap-test</code> shares Q820's shape and carries its <code>ERR</code> trap, but not the <code>Q820:</code> tree state, so a sighting names a line and …</td>
 </tr>
 <tr>
 <td><a href="Q857/">Q857</a></td>
@@ -2823,25 +2831,25 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td><a href="Q401/">Q401</a></td>
 <td><a href="../operations/node-shutdown-budgets/">File upstream k8s issue: delete-path probe results never reach <code>Ready</code></a></td>
 <td><code>docs</code></td>
-<td>🔲</td>
+<td>💤</td>
 <td>S</td>
-<td>Q388 measured: on ordinary delete the probe fails throughout termination but <code>Ready</code> never flips; removal comes from <code>deletionTimestamp</code>.</td>
+<td><strong>Decision:</strong> we spend a session on the upstream-report batch.</td>
 </tr>
 <tr>
 <td><a href="Q402/">Q402</a></td>
 <td><a href="../operations/troubleshooting/">GKE DPv2 NodeLocal DNSCache NP repro — file against Google's docs</a></td>
 <td><code>docs</code></td>
-<td>🔲</td>
+<td>💤</td>
 <td>S</td>
-<td>Google's NodeLocal DNSCache page names DPv2 as exempt from extra NP rules; Q229 measured the opposite (node-local-dns peer required).</td>
+<td><strong>Decision:</strong> we spend a session on the upstream-report batch.</td>
 </tr>
 <tr>
 <td><a href="Q531/">Q531</a></td>
 <td><a href="../plan/capacity-aware-intake/#9i-the-karpenter-arm-of-the-drift-gate-and-what-it-measured-q479">File upstream: karpenter kwok chart panics on its own defaults</a></td>
 <td><code>docs</code></td>
-<td>🔲</td>
+<td>💤</td>
 <td>S</td>
-<td>At v1.14.0 the chart renders <code>featureGates.staticCapacity</code>/<code>.capacityBuffer</code> into <code>FEATURE_GATES</code> but values.yaml omits both keys; the …</td>
+<td><strong>Decision:</strong> we spend a session on the upstream-report batch.</td>
 </tr>
 <tr>
 <td><a href="Q838/">Q838</a></td>
@@ -2892,12 +2900,12 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>Measured 2026-08-14: #1526 changed the platform dashboard with no <code>docs/assets/</code> render, so the screenshot lost a panel series.</td>
 </tr>
 <tr>
-<td><a href="Q564/">Q564</a></td>
-<td><a href="../design/appendix-g-future-enhancements/#g3-proxy-side-audit-logging">Proxy-side audit logging</a></td>
-<td><code>security</code> <code>feature</code></td>
+<td><a href="Q372/">Q372</a></td>
+<td><a href="../plan/structural-debt-audit-2026-07/">Re-run the structural debt audit</a></td>
+<td><code>debt</code></td>
 <td>🔲</td>
 <td>M</td>
-<td>The proxy emits counters only today, so nothing carries a per-connection egress record.</td>
+<td>The audit is due: v1.4.0 and v1.5.0 were both cut after the 2026-07-20 baseline of 41,011 non-test Go lines.</td>
 </tr>
 <tr>
 <td><a href="Q539/">Q539</a></td>
@@ -2937,7 +2945,7 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td><code>ci</code> <code>tests</code> <code>debt</code> <code>retro</code></td>
 <td>🔲</td>
 <td>S</td>
-<td>A suite that copies a gate into a fixture inherits that gate's inputs, so changing one breaks it with no textual reference to grep.</td>
+<td>A suite that copies a gate into a fixture inherits its inputs, so changing one breaks it with no textual reference to grep.</td>
 </tr>
 <tr>
 <td><a href="Q893/">Q893</a></td>
@@ -3169,7 +3177,7 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td><code>bug</code> <code>debt</code></td>
 <td>🔲</td>
 <td>S</td>
-<td><code>session.go:162</code> is its only writer and sets <code>True</code> alone — Q332's clear-on-recovery covered <code>Degraded</code>/<code>RateLimited</code>, not this.</td>
+<td><code>session.go</code> is the only session-sourced writer and sets <code>True</code> alone; Q332's clear-on-recovery covered <code>Degraded</code>/<code>RateLimited</code>, not this.</td>
 </tr>
 <tr>
 <td><a href="Q727/">Q727</a></td>
@@ -3193,7 +3201,7 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td><code>debt</code> <code>feature</code></td>
 <td>🔲</td>
 <td>M</td>
-<td>Waited on at <code>provisioner.go:532</code>/<code>:793</code>, after the claim, with the job holding its GitHub lock (the CRD godoc says so).</td>
+<td><code>scaleUp.wait</code> runs after the claim, with the job holding its GitHub lock (the CRD godoc says so).</td>
 </tr>
 <tr>
 <td><a href="Q722/">Q722</a></td>
@@ -3225,7 +3233,7 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td><code>feature</code> <code>security</code></td>
 <td>🚫</td>
 <td>M</td>
-<td>The Security persona needs evidence produced unprompted: per-tenant egress attribution, admission rejections, abuse signals.</td>
+<td>Blocked by <a href="Q564/">Q564</a>: the proxy emits counters, not a record per connection.</td>
 </tr>
 <tr>
 <td><a href="Q720/">Q720</a></td>
@@ -3428,14 +3436,6 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>Measured 2026-08-08: slate body is Lc 66.9 against a 75 floor, so Q731's <code>--gag-muted</code> could only reach 55.6 without out-contrasting body …</td>
 </tr>
 <tr>
-<td><a href="Q744/">Q744</a></td>
-<td><a href="../development/testing/#the-status-you-report-is-a-claim-too">A cumulative per-file ceiling admits a jointly-red merge of two PRs</a></td>
-<td><code>ci</code> <code>retro</code></td>
-<td>🔲</td>
-<td>S</td>
-<td>Measured 2026-08-08 on <code>testing.md</code> (ceiling 594): #1340 added net +1 em-dash and #1342 +2, each green alone, together red on <code>main</code> for …</td>
-</tr>
-<tr>
 <td><a href="Q745/">Q745</a></td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.claude/piped-gate-guard.json">piped-gate lets a backgrounded gate report a trailing command's status</a></td>
 <td><code>debt</code> <code>retro</code></td>
@@ -3455,9 +3455,9 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td><a href="Q783/">Q783</a></td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/CONTRIBUTING.md#skip-the-reflow-commit-in-git-blame">Re-point <code>.git-blame-ignore-revs</code> at the squashed reflow commit</a></td>
 <td><code>docs</code></td>
-<td>🚫</td>
+<td>🔲</td>
 <td>S</td>
-<td>The squash mints a SHA that exists only once the reflow PR lands, so the file ships naming its pre-merge one.</td>
+<td>The file names <code>0acea95c</code>, the pre-merge branch SHA, which is not on <code>main</code>, so on git 2.55.0 it is a silent no-op rather than an error.</td>
 </tr>
 <tr>
 <td><a href="Q804/">Q804</a></td>
@@ -3521,7 +3521,7 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td><code>docs</code> <code>debt</code></td>
 <td>🔲</td>
 <td>M</td>
-<td>Q889 deleted the Progress table, whose ✅ rows were the only backlog reference 21 active plans had, and rekeyed <code>plan-index-check</code> invariant …</td>
+<td>Q889 deleted the Progress table, whose ✅ rows were 21 active plans' only backlog reference, and rekeyed <code>plan-index-check</code> invariant 1.</td>
 </tr>
 <tr>
 <td><a href="Q501/">Q501</a></td>
@@ -3580,20 +3580,12 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td><strong>Demand:</strong> a Classic operator reports listener slots going quiet, OR Classic removal slips.</td>
 </tr>
 <tr>
-<td><a href="Q372/">Q372</a></td>
-<td><a href="../plan/structural-debt-audit-2026-07/">Re-run the structural debt audit</a></td>
-<td><code>debt</code></td>
-<td>💤</td>
-<td>M</td>
-<td><strong>Event:</strong> the next minor release is cut, OR non-test Go LOC grows ≥20% over the 41,011-line baseline (2026-07-20) — whichever first.</td>
-</tr>
-<tr>
 <td><a href="Q354/">Q354</a></td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/e2e-reusable.yml">Raise e2e/tested K8s floor 1.35 → 1.36</a></td>
 <td><code>ci</code> <code>tests</code></td>
 <td>💤</td>
 <td>S</td>
-<td><strong>Event:</strong> GKE regular channel reaches 1.36, OR we want a 1.36-only feature (explicit floor-raise), OR kind stops shipping 1.35 node images.</td>
+<td><strong>Event:</strong> the GKE regular channel <em>defaults</em> to 1.36, OR a 1.36-only feature is wanted, OR kind stops shipping 1.35 node images.</td>
 </tr>
 <tr>
 <td><a href="Q174/">Q174</a></td>
@@ -3745,7 +3737,7 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td><code>milestone</code></td>
 <td>💤</td>
 <td>L</td>
-<td><strong>Event:</strong> <code>v1.3.0</code> ships, starting the Phase 1 soak: no incompatible <code>v2beta1</code> shape change over two minors, all five kinds carrying real …</td>
+<td><strong>Event:</strong> the <a href="../plan/v2-ga/#phase-1--the-soak-what-well-validated-means">Phase 1 soak</a> closes.</td>
 </tr>
 <tr>
 <td><a href="Q273/">Q273</a></td>
@@ -3828,30 +3820,6 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td><strong>Demand:</strong> a bandwidth-heavy runner group saturates a co-tenant's pool.</td>
 </tr>
 <tr>
-<td><a href="Q806/">Q806</a></td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/security-scan.yml">A transient syft download fails the SBOM step in scan and publish</a></td>
-<td><code>flake</code> <code>ci</code></td>
-<td>💤</td>
-<td>S</td>
-<td><strong>Event:</strong> an SBOM step fails on <code>main</code> fetching syft after the fix.</td>
-</tr>
-<tr>
-<td><a href="Q829/">Q829</a></td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/fetch/download-verified.sh">A pinned download outlives <code>download-verified.sh</code>'s retry budget</a></td>
-<td><code>flake</code> <code>ci</code></td>
-<td>💤</td>
-<td>S</td>
-<td><strong>Event:</strong> any <code>download-verified.sh</code> step fails on <code>main</code> after the fix.</td>
-</tr>
-<tr>
-<td><a href="Q803/">Q803</a></td>
-<td><a href="../development/testing/#coverage-measurement-and-the-ratchet"><code>cmd/proxy</code> coverage is nondeterministic and its floor has no headroom</a></td>
-<td><code>flake</code> <code>ci</code> <code>tests</code></td>
-<td>💤</td>
-<td>S</td>
-<td><strong>Event:</strong> <code>cmd/proxy</code> fails <code>cover-check</code> on <code>main</code> after the fix.</td>
-</tr>
-<tr>
 <td><a href="Q797/">Q797</a></td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/controller/integration/provisioning_test.go">Three GMC provisioning integration tests time out under the race run</a></td>
 <td><code>flake</code> <code>tests</code></td>
@@ -3868,188 +3836,12 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td><strong>Event:</strong> it fails on <code>main</code> with the CNI enforcer fingerprint <em>unchanged</em> across the probe, which the failure message states outright: a …</td>
 </tr>
 <tr>
-<td><a href="Q703/">Q703</a></td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/agent/claude-go-throttle-hook-test.sh"><code>claude-go-throttle-hook-test</code> reads an empty decision under the fan-out</a></td>
-<td><code>flake</code> <code>ci</code></td>
-<td>💤</td>
-<td>S</td>
-<td><strong>Event:</strong> it fails on <code>main</code> again.</td>
-</tr>
-<tr>
-<td><a href="Q741/">Q741</a></td>
-<td><a href="../development/testing/#the-envtest-suite-budget">GMC envtest suite exceeds its 5m timeout</a></td>
-<td><code>flake</code> <code>tests</code></td>
-<td>💤</td>
-<td>S</td>
-<td><strong>Event:</strong> a run prints <code>ran out of its 10m budget</code> on <code>main</code> post-fix.</td>
-</tr>
-<tr>
-<td><a href="Q761/">Q761</a></td>
-<td><a href="../development/testing/#a-backstop-shorter-than-the-subjects-own-budget-is-not-a-backstop"><code>TestAbandonedProbe_Redispatched</code> bounds a verdict on 20s of wall clock</a></td>
-<td><code>flake</code> <code>tests</code></td>
-<td>💤</td>
-<td>S</td>
-<td><strong>Event:</strong> a verdict wait fails on <code>main</code> after the fix (each derives its bound from the probe's own timeout, window and tails).</td>
-</tr>
-<tr>
-<td><a href="Q752/">Q752</a></td>
-<td><a href="../development/testing/#a-backstop-shorter-than-the-subjects-own-budget-is-not-a-backstop"><code>record-launch-test</code>'s 10s launch bound fails under the fan-out</a></td>
-<td><code>flake</code> <code>tests</code></td>
-<td>💤</td>
-<td>S</td>
-<td><strong>Event:</strong> the tree case fails on <code>main</code> after the fix (the stop wait is now <code>wait</code> on the wrapper, no clock).</td>
-</tr>
-<tr>
-<td><a href="Q789/">Q789</a></td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/docs/alloc-queue-id-test.sh"><code>alloc-queue-id-test</code>'s <code>gh</code> stub reads a ref-lock collision as broken</a></td>
-<td><code>flake</code> <code>tests</code></td>
-<td>💤</td>
-<td>S</td>
-<td><strong>Event:</strong> the fleet fails <code>every concurrent allocator exits 0</code> on <code>main</code> after the fix (the stub maps <code>cannot lock ref</code> to the 422 the …</td>
-</tr>
-<tr>
-<td><a href="Q690/">Q690</a></td>
-<td><a href="../development/testing/#two-clocks-in-one-assertion"><code>release-sentinel-test</code>'s live-run case fails under the fan-out</a></td>
-<td><code>flake</code> <code>tests</code></td>
-<td>💤</td>
-<td>S</td>
-<td><strong>Event:</strong> the live-run cases fail on <code>main</code> after the Q690 fix (they count the watcher's own polls against a stubbed <code>sleep</code>/<code>date</code>; no …</td>
-</tr>
-<tr>
-<td><a href="Q685/">Q685</a></td>
-<td><a href="../development/testing/#synchronize-on-the-signal-you-assert-on"><code>TestListener_RestartDoesNotReprovisionAConcludedJob</code> saw a re-provision</a></td>
-<td><code>flake</code> <code>tests</code> <code>ci</code></td>
-<td>💤</td>
-<td>S</td>
-<td><strong>Event:</strong> it fails <code>Condition satisfied</code> on <code>main</code> after the Q685 fix.</td>
-</tr>
-<tr>
-<td><a href="Q664/">Q664</a></td>
-<td><a href="../design/02-architecture/"><code>E2E_AGC_StuckPendingPodReaped</code> times out, the workers never reaped</a></td>
-<td><code>flake</code> <code>tests</code> <code>ci</code></td>
-<td>💤</td>
-<td>S</td>
-<td><strong>Event:</strong> it times out on <code>main</code> after the Q664 fix (the reconcilers cap work-queue retry at 30s, so a reconcile error cannot strand the …</td>
-</tr>
-<tr>
-<td><a href="Q648/">Q648</a></td>
-<td><a href="../development/testing/#runnergithub-egress-attribution-q352">The runner→GitHub egress probe scores an HTTP 403 as reachable</a></td>
-<td><code>flake</code> <code>tests</code> <code>ci</code></td>
-<td>💤</td>
-<td>S</td>
-<td><strong>Event:</strong> a <code>real-github-egress</code> spec fails on <code>main</code> after the Q648 fix and the banner misattributes it — <code>BLOCKED</code> on a spec still red …</td>
-</tr>
-<tr>
-<td><a href="Q642/">Q642</a></td>
-<td><a href="../development/testing/#the-clock-is-as-often-a-deadline-around-a-process-as-a-sleep-inside-one"><code>progress-watch-test</code>'s <code>interval 0</code> case fails under the fan-out</a></td>
-<td><code>flake</code> <code>tests</code></td>
-<td>💤</td>
-<td>S</td>
-<td><strong>Event:</strong> the <code>interval 0</code> case fails on <code>main</code> after the Q642 fix (it asserts on ticks a stubbed <code>sleep</code> records; no deadline bounds the …</td>
-</tr>
-<tr>
-<td><a href="Q596/">Q596</a></td>
-<td><a href="../development/testing/#the-v2-api-sync-gate"><code>check-v2-api-sync-test</code>'s <code>tree-in-sync</code> fails under the fan-out</a></td>
-<td><code>flake</code> <code>ci</code></td>
-<td>💤</td>
-<td>S</td>
-<td><strong>Event:</strong> <code>tree-in-sync</code> fails on <code>main</code> after the Q596 fix.</td>
-</tr>
-<tr>
-<td><a href="Q604/">Q604</a></td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scaleset/scalesetstub/stub.go"><code>stallJob</code> installs its runner-name conflict after the job is pollable</a></td>
-<td><code>flake</code> <code>tests</code></td>
-<td>💤</td>
-<td>S</td>
-<td><strong>Event:</strong> a <code>stallJob</code> caller fails <code>must be held for a re-offer</code> on <code>main</code> after the Q604 fix (<code>EnqueueStalledJob</code> registers the conflict …</td>
-</tr>
-<tr>
-<td><a href="Q602/">Q602</a></td>
-<td><a href="../development/testing/#synchronize-on-the-signal-you-assert-on"><code>TestListener_AbandonedJobDoesNotSurviveARestart</code> stops before delete</a></td>
-<td><code>flake</code> <code>tests</code></td>
-<td>💤</td>
-<td>S</td>
-<td><strong>Event:</strong> it fails <code>Condition satisfied</code> on <code>main</code> after the Q602 fix (the test now waits for <code>deleteAttempts &gt; 0</code>, the delete the …</td>
-</tr>
-<tr>
-<td><a href="Q600/">Q600</a></td>
-<td><a href="../development/testing/#synchronize-on-the-signal-you-assert-on"><code>TestMultiplexer_DuplicateJobDeliveryProvisionsOnce</code> reads too early</a></td>
-<td><code>flake</code> <code>tests</code></td>
-<td>💤</td>
-<td>S</td>
-<td><strong>Event:</strong> it fails <code>expected 1, actual 0</code> on <code>main</code> after the Q600 fix (the test now waits on <code>handlerMax &gt;= 1</code>, the counter the invariant …</td>
-</tr>
-<tr>
-<td><a href="Q809/">Q809</a></td>
-<td><a href="../plan/q549-scaleset-rerun-flake/#mode-b-attributed-2026-08-12-the-claim-was-made-and-lost">A drained worker's recovery is detected, then lost at the claim</a></td>
-<td><code>flake</code> <code>tests</code></td>
-<td>💤</td>
-<td>M</td>
-<td><strong>Event:</strong> the re-run wait fails on <code>main</code> after the claim fix.</td>
-</tr>
-<tr>
 <td><a href="Q549/">Q549</a></td>
 <td><a href="../plan/q549-scaleset-rerun-flake/"><code>E2E_AGC_ScaleSetDrainedWorkerClaimAndRerunLandUnderChartRBAC</code> times out</a></td>
 <td><code>flake</code> <code>tests</code></td>
 <td>💤</td>
 <td>S</td>
 <td><strong>Event:</strong> the re-run wait fails on <code>main</code> in a shape neither mode covers (<a href="../plan/q549-scaleset-rerun-flake/">triage</a>).</td>
-</tr>
-<tr>
-<td><a href="Q570/">Q570</a></td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/test/e2e/migration_v1_to_v2_test.go">Migration e2e times out when the v1 proxy pool takes both workers</a></td>
-<td><code>flake</code> <code>tests</code></td>
-<td>💤</td>
-<td>S</td>
-<td><strong>Event:</strong> the migrated proxy-pool wait times out on <code>main</code> after the Q570 fix (the tenant pins its inline pool with `WithProxyReplicas(1 …</td>
-</tr>
-<tr>
-<td><a href="Q559/">Q559</a></td>
-<td><a href="../development/testing/#the-two-effects-can-be-one-object-read-through-two-clients"><code>TestV2_RunnerSet_CapacityGate_FixedClusterSkipsAcquire</code> acquires anyway</a></td>
-<td><code>flake</code> <code>tests</code></td>
-<td>💤</td>
-<td>S</td>
-<td><strong>Event:</strong> it fails <code>reason=capacity</code> on <code>main</code> after the Q559 fix (the wait reads the condition through the reconciler's own cached client …</td>
-</tr>
-<tr>
-<td><a href="Q548/">Q548</a></td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/e2e/chart-released-upgrade-check.sh">Released-upgrade check dies on tar EPIPE reading the chart's values.yaml</a></td>
-<td><code>flake</code> <code>ci</code></td>
-<td>💤</td>
-<td>S</td>
-<td><strong>Event:</strong> <code>tar: Cannot write: Broken pipe</code> fails <code>chart-released-upgrade-check</code> on <code>main</code> after the Q548 fix (the awk consumer reads the …</td>
-</tr>
-<tr>
-<td><a href="Q516/">Q516</a></td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/go/go-lint.sh">Stale sibling-worktree lint cache fails <code>make check</code> cross-session</a></td>
-<td><code>ci</code> <code>flake</code></td>
-<td>💤</td>
-<td>S</td>
-<td><strong>Event:</strong> local lint reports findings citing a deleted <code>.claude/worktrees/*</code> path after the Q516 fix (go-lint.sh scopes …</td>
-</tr>
-<tr>
-<td><a href="Q498/">Q498</a></td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/provisioner/provisioner_test.go">Provisioner eviction/rerun tests flake under parallel load</a></td>
-<td><code>flake</code> <code>tests</code></td>
-<td>💤</td>
-<td>S</td>
-<td><strong>Event:</strong> an eviction/rerun test fails again on <code>main</code> (unreproduced post-Q503: 320 runs under saturating load; #1010 made the recovery …</td>
-</tr>
-<tr>
-<td><a href="Q490/">Q490</a></td>
-<td><a href="../development/testing/#synchronize-on-the-signal-you-assert-on">A fan-out completion spec cancels a job every delivery completed</a></td>
-<td><code>tests</code> <code>flake</code></td>
-<td>💤</td>
-<td>S</td>
-<td><strong>Event:</strong> it fails <code>cancelled</code> vs <code>completed</code> on <code>main</code> after the Q490 fix (the stub publishes <code>CompleteJobCalls</code> only after committing …</td>
-</tr>
-<tr>
-<td><a href="Q471/">Q471</a></td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/e2e/validate-cluster-test.sh"><code>validate-cluster-test</code> flakes under parallel <code>make check</code> load</a></td>
-<td><code>flake</code> <code>tests</code></td>
-<td>💤</td>
-<td>S</td>
-<td><strong>Event:</strong> a <code>metrics</code>/<code>retry</code> assertion fails on <code>main</code> after the Q471 fix (the retry paths now read a fake clock the fake <code>sleep</code> …</td>
 </tr>
 <tr>
 <td><a href="Q300/">Q300</a></td>

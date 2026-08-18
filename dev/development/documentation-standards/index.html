@@ -2992,6 +2992,8 @@ Neither half is optional, and neither substitutes for the other.</p>
 <h2 id="enforcing-the-em-dash-rule">Enforcing the em-dash rule<a class="headerlink" href="#enforcing-the-em-dash-rule" title="Permanent link">&para;</a></h2>
 <p><code>make em-dash-check</code> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/docs/check-em-dash.sh"><code>scripts/docs/check-em-dash.sh</code></a>) counts the dashes and fails the build.
 It runs inside <code>make check</code> and as its own job in the <code>doc-links</code> CI workflow.</p>
+<p><strong>A per-file ceiling is a per-PR check, so two PRs can merge jointly red.</strong> Each sits within its own ceiling on its own base, so per-PR CI never sees the merge result: measured twice on 2026-08-08, the second reaching <code>main</code> (<a href="../../queue/Q742/">Q742</a>).
+Whether the merge queue runs this gate on the candidate at all is the first thing to establish, and the fix is to ratchet on the diff rather than the file total.</p>
 <p><strong>What it does not count.</strong> A raw <code>grep -o '—' | wc -l</code> was the rule's only instrument before, and it counts four shapes where the dash is legitimate, which is most of why the rule was unmeasurable.
 The counter reads the parsed document instead (<a href="https://github.com/actions-gateway/github-actions-gateway/tree/main/devtools/docs/emdash"><code>devtools/docs/emdash</code></a>, over the goldmark layer Q612 built), and skips:</p>
 <table>

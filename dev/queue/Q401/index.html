@@ -2568,8 +2568,8 @@
 
 
 <h1 id="file-upstream-k8s-issue-delete-path-probe-results-never-reach-ready">File upstream k8s issue: delete-path probe results never reach <code>Ready</code><a class="headerlink" href="#file-upstream-k8s-issue-delete-path-probe-results-never-reach-ready" title="Permanent link">&para;</a></h1>
-<p>Q388 measured: on ordinary delete the probe fails throughout termination but <code>Ready</code> never flips; removal comes from <code>deletionTimestamp</code>. k8s#124648 covers only eviction.
-Head of the upstream-report batch; three of four remain (Q426 filed).</p>
+<p><strong>Decision:</strong> we spend a session on the upstream-report batch.
+Q388 measured: on ordinary delete the probe fails throughout termination but <code>Ready</code> never flips; removal comes from <code>deletionTimestamp</code>. k8s#124648 covers only eviction.</p>
 
 
 

@@ -2589,6 +2589,181 @@ A refuted row that was <a href="../maintaining-backlog/#repurposing-an-id-is-a-c
 </thead>
 <tbody>
 <tr>
+<td>Q471</td>
+<td><code>validate-cluster-test</code> flakes under parallel <code>make check</code> load</td>
+<td>#963</td>
+<td>2026-08-18</td>
+<td>Soaked: 411 green <code>unit-test</code> runs since 2026-07-29 (bar ≥25, infra).</td>
+</tr>
+<tr>
+<td>Q490</td>
+<td>A fan-out completion spec cancels a job every delivery completed</td>
+<td>#965</td>
+<td>2026-08-18</td>
+<td>Soaked: 411 green <code>unit-test</code> runs since 2026-07-29 (bar ≥50, correctness-guarding).</td>
+</tr>
+<tr>
+<td>Q498</td>
+<td>Provisioner eviction/rerun tests flake under parallel load</td>
+<td>#1010</td>
+<td>2026-08-18</td>
+<td>Soaked: 381 green <code>unit-test</code> runs since 2026-07-31 (bar ≥50, correctness-guarding).</td>
+</tr>
+<tr>
+<td>Q516</td>
+<td>Stale sibling-worktree lint cache fails <code>make check</code> cross-session</td>
+<td>#1014</td>
+<td>2026-08-18</td>
+<td>Soaked: 381 green <code>unit-test</code> runs since 2026-07-31 (bar ≥25, infra).</td>
+</tr>
+<tr>
+<td>Q548</td>
+<td>Released-upgrade check dies on tar EPIPE reading the chart's values.yaml</td>
+<td>#1044</td>
+<td>2026-08-18</td>
+<td>Soaked: 381 green <code>unit-test</code> runs since 2026-07-31 (bar ≥25, infra).</td>
+</tr>
+<tr>
+<td>Q559</td>
+<td><code>TestV2_RunnerSet_CapacityGate_FixedClusterSkipsAcquire</code> acquires anyway</td>
+<td>#1116</td>
+<td>2026-08-18</td>
+<td>Soaked: 223 green <code>integration-test</code> runs since 2026-08-01 (bar ≥50, correctness-guarding).</td>
+</tr>
+<tr>
+<td>Q570</td>
+<td>Migration e2e times out when the v1 proxy pool takes both workers</td>
+<td>#1112</td>
+<td>2026-08-18</td>
+<td>Soaked: 215 green <code>e2e-test</code> runs since 2026-08-01 (bar ≥50, correctness-guarding).</td>
+</tr>
+<tr>
+<td>Q604</td>
+<td><code>stallJob</code> installs its runner-name conflict after the job is pollable</td>
+<td>#1143</td>
+<td>2026-08-18</td>
+<td>Soaked: 342 green <code>unit-test</code> runs since 2026-08-01 (bar ≥50, correctness-guarding).</td>
+</tr>
+<tr>
+<td>Q596</td>
+<td><code>check-v2-api-sync-test</code>'s <code>tree-in-sync</code> fails under the fan-out</td>
+<td>#1146</td>
+<td>2026-08-18</td>
+<td>Soaked: 286 green <code>unit-test</code> runs since 2026-08-02 (bar ≥25, infra).</td>
+</tr>
+<tr>
+<td>Q600</td>
+<td><code>TestMultiplexer_DuplicateJobDeliveryProvisionsOnce</code> reads too early</td>
+<td>#1142</td>
+<td>2026-08-18</td>
+<td>Soaked: 286 green <code>unit-test</code> runs since 2026-08-02 (bar ≥50, correctness-guarding).</td>
+</tr>
+<tr>
+<td>Q602</td>
+<td><code>TestListener_AbandonedJobDoesNotSurviveARestart</code> stops before delete</td>
+<td>#1143</td>
+<td>2026-08-18</td>
+<td>Soaked: 286 green <code>unit-test</code> runs since 2026-08-02 (bar ≥50, correctness-guarding).</td>
+</tr>
+<tr>
+<td>Q642</td>
+<td><code>progress-watch-test</code>'s <code>interval 0</code> case fails under the fan-out</td>
+<td>#1222</td>
+<td>2026-08-18</td>
+<td>Soaked: 227 green <code>unit-test</code> runs since 2026-08-04 (bar ≥25, infra).</td>
+</tr>
+<tr>
+<td>Q648</td>
+<td>The runner→GitHub egress probe scores an HTTP 403 as reachable</td>
+<td>#1217</td>
+<td>2026-08-18</td>
+<td>Soaked: 148 green <code>e2e-test</code> runs since 2026-08-04 (bar ≥50, correctness-guarding).</td>
+</tr>
+<tr>
+<td>Q664</td>
+<td><code>E2E_AGC_StuckPendingPodReaped</code> times out, the workers never reaped</td>
+<td>#1244</td>
+<td>2026-08-18</td>
+<td>Soaked: 148 green <code>e2e-test</code> runs since 2026-08-04 (bar ≥50, correctness-guarding).</td>
+</tr>
+<tr>
+<td>Q685</td>
+<td><code>TestListener_RestartDoesNotReprovisionAConcludedJob</code> saw a re-provision</td>
+<td>#1296</td>
+<td>2026-08-18</td>
+<td>Soaked: 180 green <code>unit-test</code> runs since 2026-08-06 (bar ≥50, correctness-guarding).</td>
+</tr>
+<tr>
+<td>Q690</td>
+<td><code>release-sentinel-test</code>'s live-run case fails under the fan-out</td>
+<td>#1310</td>
+<td>2026-08-18</td>
+<td>Soaked: 180 green <code>unit-test</code> runs since 2026-08-06 (bar ≥25, infra).</td>
+</tr>
+<tr>
+<td>Q703</td>
+<td><code>claude-go-throttle-hook-test</code> reads an empty decision under the fan-out</td>
+<td>#1384</td>
+<td>2026-08-18</td>
+<td>Soaked: 122 green <code>unit-test</code> runs since 2026-08-11 (bar ≥25, infra).</td>
+</tr>
+<tr>
+<td>Q741</td>
+<td>GMC envtest suite exceeds its 5m timeout</td>
+<td>#1387</td>
+<td>2026-08-18</td>
+<td>Soaked: 88 green <code>integration-test</code> runs since 2026-08-11 (bar ≥25, infra).</td>
+</tr>
+<tr>
+<td>Q752</td>
+<td><code>record-launch-test</code>'s 10s launch bound fails under the fan-out</td>
+<td>#1389</td>
+<td>2026-08-18</td>
+<td>Soaked: 122 green <code>unit-test</code> runs since 2026-08-11 (bar ≥25, infra).</td>
+</tr>
+<tr>
+<td>Q761</td>
+<td><code>TestAbandonedProbe_Redispatched</code> bounds a verdict on 20s of wall clock</td>
+<td>#1389</td>
+<td>2026-08-18</td>
+<td>Soaked: 122 green <code>unit-test</code> runs since 2026-08-11 (bar ≥50, correctness-guarding).</td>
+</tr>
+<tr>
+<td>Q789</td>
+<td><code>alloc-queue-id-test</code>'s <code>gh</code> stub reads a ref-lock collision as broken</td>
+<td>#1389</td>
+<td>2026-08-18</td>
+<td>Soaked: 122 green <code>unit-test</code> runs since 2026-08-11 (bar ≥25, infra).</td>
+</tr>
+<tr>
+<td>Q806</td>
+<td>A transient syft download fails the SBOM step in scan and publish</td>
+<td>#1428</td>
+<td>2026-08-18</td>
+<td>Soaked: 73 green <code>security-scan</code> runs since 2026-08-12 (bar ≥25, infra).</td>
+</tr>
+<tr>
+<td>Q809</td>
+<td>A drained worker's recovery is detected, then lost at the claim</td>
+<td>#1441</td>
+<td>2026-08-18</td>
+<td>Soaked: 75 green <code>e2e-test</code> runs since 2026-08-12 (bar ≥50, correctness-guarding).</td>
+</tr>
+<tr>
+<td>Q803</td>
+<td><code>cmd/proxy</code> coverage is nondeterministic and its floor has no headroom</td>
+<td>#1433</td>
+<td>2026-08-18</td>
+<td>Soaked: 81 green <code>unit-test</code> runs since 2026-08-13 (bar ≥50, correctness-guarding).</td>
+</tr>
+<tr>
+<td>Q829</td>
+<td>A pinned download outlives <code>download-verified.sh</code>'s retry budget</td>
+<td>#1482</td>
+<td>2026-08-18</td>
+<td>Soaked: 81 green <code>unit-test</code> runs since 2026-08-13 (bar ≥25, infra).</td>
+</tr>
+<tr>
 <td>none</td>
 <td>e2e-calico NetworkPolicy enforcement negatives intermittently see traffic that should be blocked</td>
 <td>none</td>

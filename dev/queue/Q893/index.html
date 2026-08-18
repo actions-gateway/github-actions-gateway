@@ -2569,10 +2569,7 @@
 
 <h1 id="nothing-gates-a-plan-docs-status-header-against-the-repo">Nothing gates a plan doc's Status header against the repo<a class="headerlink" href="#nothing-gates-a-plan-docs-status-header-against-the-repo" title="Permanent link">&para;</a></h1>
 <p>Twice in one session a plan's Status line claimed a shipped phase: <code>Phase 1 in progress</code> after two merged, <code>4 to 6 not started</code> with 4 in review.
-Caught by reading, not a gate.
-Half of this is now gated: Q889 rekeyed <code>plan-index-check</code> invariant 1 onto the <em>index row's</em> Status cell, which caught two rows claiming open work after every phase had shipped.
-The plan doc's own Status header has no gate at all, and that is the half left.
-A plan naming merged PRs while claiming a phase is open is gateable.</p>
+Q889 gated the index row's Status cell; the plan doc's own header has none, and that is the half left.</p>
 
 
 

@@ -2568,8 +2568,8 @@
 
 
 <h1 id="fold-the-scale-up-token-bucket-into-the-advertised-capacity">Fold the scale-up token bucket into the advertised capacity<a class="headerlink" href="#fold-the-scale-up-token-bucket-into-the-advertised-capacity" title="Permanent link">&para;</a></h1>
-<p>Waited on at <code>provisioner.go:532</code>/<code>:793</code>, after the claim, with the job holding its GitHub lock (the CRD godoc says so).
-A fourth <code>min()</code> rung in <code>AdvertiseCapacity</code> would never assign the burst in the first place.</p>
+<p><code>scaleUp.wait</code> runs after the claim, with the job holding its GitHub lock (the CRD godoc says so).
+A fourth <code>min()</code> rung would never assign the burst, and <code>admission.go</code> needs it in <code>Admit</code> too or it ships to one tier.</p>
 
 
 

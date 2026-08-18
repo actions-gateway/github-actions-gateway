@@ -2568,11 +2568,8 @@
 
 
 <h1 id="a-cached-go-test-result-let-make-check-pass-what-ci-failed">A cached Go test result let <code>make check</code> pass what CI failed<a class="headerlink" href="#a-cached-go-test-result-let-make-check-pass-what-ci-failed" title="Permanent link">&para;</a></h1>
-<p>Measured 2026-08-17 on Q889 phase 6: <code>make check</code> reported <code>ok … devtools/agent/pipedgate (cached)</code> and exited 0, while the same package run directly failed 5 assertions and CI's <code>unit-test</code> failed with it.
-The suite reads <code>.claude/piped-gate-guard.json</code> at runtime, which the change had edited.
-Cache invalidation is the suspected mechanism and is unverified.
-The fix then tripped <code>no-plan-refs-check</code> twice, so the cold-cache re-run earned its place.
-A green gate that ran no test is the class the repo already names.</p>
+<p>Measured 2026-08-17 on Q889 phase 6: <code>make check</code> reported <code>pipedgate (cached)</code> and exited 0 while the package run directly failed 5 assertions, as did CI.
+The suite reads its registry at runtime; the cause is unverified.</p>
 
 
 
