@@ -102,19 +102,23 @@ func TestEgressProxyNetworkPolicy_GrantedIngressPeerANDsBothSelectors(t *testing
 	ep := proxyWithSharing("provider", "pool", "team-a")
 	np := buildEgressProxyNetworkPolicy(ep, nil)
 
-	var granted *networkingv1.NetworkPolicyIngressRule
+	// Index rather than a pointer: staticcheck's SA5011 does not treat t.Fatal as
+	// terminal in every environment, so a *rule guarded by a nil check reads to it
+	// as a possible nil dereference below. Selecting by index keeps the guard
+	// explicit and leaves no pointer for that check to reason about.
+	grantedIdx := -1
 	for i := range np.Spec.Ingress {
-		rule := &np.Spec.Ingress[i]
-		for _, peer := range rule.From {
+		for _, peer := range np.Spec.Ingress[i].From {
 			if peer.NamespaceSelector != nil &&
 				peer.NamespaceSelector.MatchLabels[corev1.LabelMetadataName] == "team-a" {
-				granted = rule
+				grantedIdx = i
 			}
 		}
 	}
-	if granted == nil {
+	if grantedIdx < 0 {
 		t.Fatal("no ingress rule admits the granted namespace team-a")
 	}
+	granted := np.Spec.Ingress[grantedIdx]
 	if len(granted.From) != 1 {
 		t.Fatalf("granted rule has %d peers; both selectors must sit in ONE peer or they OR", len(granted.From))
 	}
