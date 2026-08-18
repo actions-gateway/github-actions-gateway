@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q872/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q898/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>e2e-gate reports green on a PR where the suite never ran - GitHub Actions Gateway</title>
+        <title>The other eight gates cannot say whether their heavy job ran - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#e2e-gate-reports-green-on-a-pr-where-the-suite-never-ran" class="md-skip">
+        <a href="#the-other-eight-gates-cannot-say-whether-their-heavy-job-ran" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              e2e-gate reports green on a PR where the suite never ran
+              The other eight gates cannot say whether their heavy job ran
             
           </span>
         </div>
@@ -2567,9 +2567,10 @@
   
 
 
-<h1 id="e2e-gate-reports-green-on-a-pr-where-the-suite-never-ran"><code>e2e-gate</code> reports green on a PR where the suite never ran<a class="headerlink" href="#e2e-gate-reports-green-on-a-pr-where-the-suite-never-ran" title="Permanent link">&para;</a></h1>
-<p><code>if: always()</code> counts a <code>skipped</code> heavy job as passing, so a PR breaking e2e looks identical to one that does not, and #1515 read ready 13 times.
-Say so in the job summary; the required check and Q675's trade stay as they are.</p>
+<h1 id="the-other-eight-gates-cannot-say-whether-their-heavy-job-ran">The other eight gates cannot say whether their heavy job ran<a class="headerlink" href="#the-other-eight-gates-cannot-say-whether-their-heavy-job-ran" title="Permanent link">&para;</a></h1>
+<p>Every <code>*-gate</code> counts a <code>skipped</code> need as a pass, so a docs-only PR later given code reads green while unit, integration and security never saw it.
+Q872 gave the two e2e lanes a job-summary line saying which; the other eight still need one.
+That summary is what replaces the per-PR by-hand check in <a href="../../development/testing/#path-gated-workflows-verify-the-heavy-gates-actually-ran">testing.md</a>.</p>
 
 
 

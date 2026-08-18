@@ -2660,14 +2660,6 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>Q811 added a run GET; fakegithub serves two paths and 404s the rest, so the drained-worker spec failed 13 merge-queue entries while the PR …</td>
 </tr>
 <tr>
-<td><a href="Q872/">Q872</a></td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/e2e-test.yml"><code>e2e-gate</code> reports green on a PR where the suite never ran</a></td>
-<td><code>ci</code> <code>debt</code> <code>retro</code></td>
-<td>🔲</td>
-<td>S</td>
-<td><code>if: always()</code> counts a <code>skipped</code> heavy job as passing, so a PR breaking e2e looks identical to one that does not, and #1515 read ready 13 …</td>
-</tr>
-<tr>
 <td><a href="Q895/">Q895</a></td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/go/go-test.sh">A cached Go test result let <code>make check</code> pass what CI failed</a></td>
 <td><code>ci</code> <code>tests</code> <code>debt</code> <code>retro</code></td>
@@ -3786,6 +3778,22 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>💤</td>
 <td>L</td>
 <td><strong>Demand:</strong> a bandwidth-heavy runner group saturates a co-tenant's pool.</td>
+</tr>
+<tr>
+<td><a href="Q898/">Q898</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/unit-test.yml">The other eight gates cannot say whether their heavy job ran</a></td>
+<td><code>ci</code> <code>debt</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>Every <code>*-gate</code> counts a <code>skipped</code> need as a pass, so a docs-only PR later given code reads green while unit, integration and security never …</td>
+</tr>
+<tr>
+<td><a href="Q907/">Q907</a></td>
+<td><a href="../development/maintaining-backlog/#retiring-a-flake-watch-row">CLAUDE.md sends a fixed flake row straight to the retired ledger</a></td>
+<td><code>docs</code> <code>debt</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>CLAUDE.md's closing checklist says a <code>flake</code> item "moves to the retired ledger instead of being deleted", skipping the first of …</td>
 </tr>
 <tr>
 <td><a href="Q797/">Q797</a></td>
