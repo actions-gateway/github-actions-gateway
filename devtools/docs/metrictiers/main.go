@@ -80,6 +80,8 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+
+	"github.com/actions-gateway/github-actions-gateway/devtools/docs/markdown"
 )
 
 // Tier vocabulary. The ledger states one of these per metric; the first three are
@@ -219,7 +221,7 @@ type valueRow struct {
 type ledger struct {
 	rows       []ledgerRow
 	values     []valueRow
-	first, end int // 1-based, half-open
+	first, end int // 1-based, inclusive: the section body, heading excluded
 }
 
 func main() {
@@ -675,7 +677,8 @@ func trailingName(e ast.Expr) string {
 
 // ledgerHeading is the section the ledger table lives under. Matching on the
 // heading rather than on the first table keeps the parse anchored when the
-// reference above it grows another sub-table.
+// reference above it grows another sub-table. Both constants carry their marker
+// because findings quote them; the parse takes the level separately.
 const ledgerHeading = "## Acquisition-tier reach"
 
 // valueHeading is the sub-section holding the label-value table. It sits inside
@@ -684,80 +687,49 @@ const ledgerHeading = "## Acquisition-tier reach"
 const valueHeading = "### Label-value reach"
 
 func parseLedger(doc string) (ledger, error) {
-	lines := strings.Split(doc, "\n")
-	start := -1
-	for i, l := range lines {
-		if strings.TrimSpace(l) == ledgerHeading {
-			start = i
-			break
-		}
-	}
-	if start < 0 {
+	parsed := markdown.Parse([]byte(doc))
+	first, end, ok := parsed.SectionRange(2, strings.TrimPrefix(ledgerHeading, "## "))
+	if !ok {
 		return ledger{}, fmt.Errorf("no %q section — the tier ledger is the gate's input and cannot be absent", ledgerHeading)
 	}
+	valueFirst, valueEnd, hasValues := parsed.SectionRange(3, strings.TrimPrefix(valueHeading, "### "))
 
 	var rows []ledgerRow
 	var values []valueRow
-	inTable, inValues := false, false
-	end := len(lines)
-	for i := start + 1; i < len(lines); i++ {
-		line := strings.TrimSpace(lines[i])
-		if strings.HasPrefix(line, "## ") {
-			end = i
-			break
-		}
-		if strings.HasPrefix(line, "### ") {
-			inValues = line == valueHeading
-			inTable = false
+	for _, tbl := range parsed.Tables() {
+		if tbl.Line < first || tbl.Line > end {
 			continue
 		}
-		if !strings.HasPrefix(line, "|") {
-			continue
-		}
-		cells := splitRow(line)
-		if len(cells) < 3 {
-			continue
-		}
-		if strings.HasPrefix(cells[0], "---") {
-			inTable = true
-			continue
-		}
-		if !inTable {
-			continue // header row
-		}
-		name := strings.Trim(cells[0], "`")
-		if !metricNameRE.MatchString(name) {
-			return ledger{}, fmt.Errorf("line %d: %q is not an actions_gateway_* metric name", i+1, cells[0])
-		}
-		if inValues {
-			if len(cells) < 5 {
-				return ledger{}, fmt.Errorf("line %d: a %q row needs metric, label, value, tier and a reason", i+1, valueHeading)
+		inValues := hasValues && tbl.Line >= valueFirst && tbl.Line <= valueEnd
+		for _, r := range tbl.Rows {
+			if len(r.Cells) < 3 {
+				continue
 			}
-			values = append(values, valueRow{
-				metric: name,
-				label:  strings.Trim(cells[1], "`"),
-				value:  strings.Trim(cells[2], "`"),
-				tier:   cells[3],
-				note:   cells[4],
-				line:   i + 1,
-			})
-			continue
+			name := strings.Trim(r.Cells[0], "`")
+			if !metricNameRE.MatchString(name) {
+				return ledger{}, fmt.Errorf("line %d: %q is not an actions_gateway_* metric name", r.Line, r.Cells[0])
+			}
+			if inValues {
+				if len(r.Cells) < 5 {
+					return ledger{}, fmt.Errorf("line %d: a %q row needs metric, label, value, tier and a reason", r.Line, valueHeading)
+				}
+				values = append(values, valueRow{
+					metric: name,
+					label:  strings.Trim(r.Cells[1], "`"),
+					value:  strings.Trim(r.Cells[2], "`"),
+					tier:   r.Cells[3],
+					note:   r.Cells[4],
+					line:   r.Line,
+				})
+				continue
+			}
+			rows = append(rows, ledgerRow{name: name, tier: r.Cells[1], note: r.Cells[2], line: r.Line})
 		}
-		rows = append(rows, ledgerRow{name: name, tier: cells[1], note: cells[2], line: i + 1})
 	}
 	if len(rows) == 0 {
 		return ledger{}, fmt.Errorf("the %q table is empty", ledgerHeading)
 	}
-	return ledger{rows: rows, values: values, first: start + 1, end: end + 1}, nil
-}
-
-func splitRow(line string) []string {
-	parts := strings.Split(strings.Trim(line, "|"), "|")
-	out := make([]string, 0, len(parts))
-	for _, p := range parts {
-		out = append(out, strings.TrimSpace(p))
-	}
-	return out
+	return ledger{rows: rows, values: values, first: first, end: end}, nil
 }
 
 func checkInventory(all []series, led ledger, docPath string) []string {
@@ -793,7 +765,7 @@ func checkReference(all []series, doc string, led ledger, docPath string) []stri
 	lines := strings.Split(doc, "\n")
 	var body []string
 	for i, l := range lines {
-		if n := i + 1; n >= led.first && n < led.end {
+		if n := i + 1; n >= led.first && n <= led.end {
 			continue
 		}
 		body = append(body, l)

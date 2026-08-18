@@ -415,8 +415,9 @@ func TestValueRowNamingAnUnemittedValueFails(t *testing.T) {
 // The tier label is the axis, not a value on it, so a row about it would restate
 // the series row and go stale on its own schedule.
 func TestValueRowOnTheTierLabelFails(t *testing.T) {
-	ledger := strings.Replace(goodLedger, "## Next\n",
-		"| `actions_gateway_eviction_retries_total` | `tier` | `scaleset` | Scale-set only | Tautology. |\n\n## Next\n", 1)
+	lastValue := "| `actions_gateway_eviction_retries_total` | `cause` | `abandoned` | Classic only | The renew loop is the only producer (`internal/provisioner/eviction.go`). |\n"
+	ledger := strings.Replace(goodLedger, lastValue,
+		lastValue+"| `actions_gateway_eviction_retries_total` | `tier` | `scaleset` | Scale-set only | Tautology. |\n", 1)
 	findings := runCase(t, tree(t, nil), goodReference+ledger, goodParity)
 	requireFinding(t, findings, "states the acquisition tier as its own value")
 }
@@ -547,5 +548,50 @@ func (q *Q) drive() { q.handleEviction("some_reason", "classic") }
 		if strings.Contains(f, `cause="some_reason"`) {
 			t.Fatalf("a value from the same-named twin must not be attributed: %s", f)
 		}
+	}
+}
+
+// A fenced row inside the ledger section documents the table's format; it is not
+// an entry in it. The hand-rolled scan read every `|`-prefixed line in the
+// section as a row, so an example block failed the gate (Q866).
+func TestFencedLedgerRowIsNotAnEntry(t *testing.T) {
+	ledger := strings.Replace(goodLedger, goodValues,
+		"A row names the metric, its tier, and why:\n\n"+
+			"```markdown\n"+
+			"| `actions_gateway_example_total` | Classic only | Absent by design on the other tier. |\n"+
+			"```\n\n"+goodValues, 1)
+	findings := runCase(t, tree(t, nil), goodReference+ledger, goodParity)
+	if len(findings) != 0 {
+		t.Fatalf("expected no findings, got %v", findings)
+	}
+}
+
+// The same for a fenced header and delimiter — a format template, whose first
+// cell is not a metric name. The scan rejected it as a malformed entry and
+// refused to run at all.
+func TestFencedTemplateRowIsNotAnEntry(t *testing.T) {
+	ledger := strings.Replace(goodLedger, goodValues,
+		"The shape of a row:\n\n"+
+			"```markdown\n"+
+			"| Metric | Tier | Why, and what to read on the other tier |\n"+
+			"| --- | --- | --- |\n"+
+			"```\n\n"+goodValues, 1)
+	findings := runCase(t, tree(t, nil), goodReference+ledger, goodParity)
+	if len(findings) != 0 {
+		t.Fatalf("expected no findings, got %v", findings)
+	}
+}
+
+// The value sub-section parses through the same path, so a fenced row there is
+// the same defect.
+func TestFencedValueRowIsNotAnEntry(t *testing.T) {
+	ledger := strings.Replace(goodLedger, "## Next\n",
+		"A value row adds the label and the value:\n\n"+
+			"```markdown\n"+
+			"| `actions_gateway_example_total` | `cause` | `example` | Scale-set only | Only the orphan scan produces it. |\n"+
+			"```\n\n## Next\n", 1)
+	findings := runCase(t, tree(t, nil), goodReference+ledger, goodParity)
+	if len(findings) != 0 {
+		t.Fatalf("expected no findings, got %v", findings)
 	}
 }
