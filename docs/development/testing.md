@@ -2802,6 +2802,19 @@ Two callers drive it so a kind bump, image-tag change, or flake mitigation is ma
   **It does not run on a pull request (Q675).** The queue validates the candidate merge result, so a per-PR run only bought a second verdict on the same commit: 58% of e2e runs were `pull_request` events, and 40% of branches paid two or more of them (worst: 9) as later pushes superseded earlier ones.
   On a PR the heavy job is skipped and `e2e-gate` still reports green, so the required check is satisfied and the PR can enqueue.
   What this costs: an e2e break now surfaces as a queue kickback rather than at push time, accepted against a measured 1% e2e failure rate over 200 runs.
+
+  **That 1% prices one arm of the trade.** A rate over runs values every failure at one kickback, which is what a flake costs: the re-run is green, so the queue itself supplies the resolution and the branch pays one extra cycle.
+  A deterministic break has no such bound, because the demotion is what removes the branch-side signal: nothing on the PR names the cause, so every enqueue reproduces it.
+  On #1515 that ran to 13 queue entries, 12 of them kicked back on the same spec, before the cause was found and the 13th merged.
+  Measured 2026-08-18 over the 255 merge-group e2e runs since the demotion shipped, spanning 188 pull requests: 19 entries failed, 12 of them that one branch, and the other six failing branches paid one or two apiece.
+  One deterministic break therefore cost more kickbacks than every other e2e failure of that six-day window combined.
+  Re-take it from `gh api repos/{owner}/{repo}/actions/workflows/e2e-test.yml/runs?event=merge_group`, grouping `head_branch` on its `pr-<n>` segment.
+
+  **The pre-change rate could not have seen that arm.** Its 200-run window is one in which e2e still ran on pull requests (116 of those runs were `pull_request` events), so a deterministic break surfaced on the branch before the queue ever saw it and could not show up in that data as a repeated kickback at all.
+  The measurement observes the arm the demotion leaves alone and is silent on the arm it creates.
+  None of this is a reason to reverse the demotion, whose saving (58% of e2e runs, roughly 240s off the PR-side critical path) is real and unchanged.
+  It is the term a revisit needs, and the number to take is kickbacks per branch rather than failures per run.
+
   Iterating locally is unchanged: `make e2e` with `SUITE`/`RUN` is still the way to exercise a spec before pushing, and `workflow_dispatch` still runs the full lane on demand.
 
 **Infrastructure image caching.** External images that the kind *nodes* would otherwise pull on every run — a recurring flake source under registry rate limits and a latency cost on the critical path — are pre-pulled on the runner (cached via `actions/cache`, retried) and seeded onto the nodes so the in-cluster pull is a local hit.
