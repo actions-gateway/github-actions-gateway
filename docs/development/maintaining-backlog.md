@@ -351,18 +351,34 @@ The second case is the worse one, because the branch ends up changing nothing at
 Do not lean on rule 8 for the first: it covers one label out of the whole vocabulary, and #1471 recorded the gate subset passing on the damaged tree even though both lost rows carried it.
 That tree was repaired before it was ever committed, so which of the two accounts of rule 8 applies there is no longer measurable.
 
-**So reconcile the row set, not the markers.** Two comparisons name every casualty, and neither needs a count you memorised before the rebase started:
+**So reconcile the row set, not the markers.** [`reconcile-queue-rows.sh`](../../scripts/docs/reconcile-queue-rows.sh) does it, and needs no count you memorised before the rebase started:
 
 ```bash
-# items your branch had and no longer has
-comm -23 <(git ls-tree --name-only ORIG_HEAD docs/queue/ | sort) <(git ls-tree --name-only HEAD docs/queue/ | sort)
-# items main has and your branch does not
-comm -13 <(git ls-tree --name-only HEAD docs/queue/ | sort) <(git ls-tree --name-only origin/main docs/queue/ | sort)
+make queue-reconcile
 ```
 
-Every path the first prints should be one `main` closed; every path the second prints should be one *you* closed.
-Anything else is collateral from the resolution.
-Run them before `git rebase --continue`, and promptly either way: the next rebase or merge rewrites `ORIG_HEAD`.
+Run it while the conflict is still open — before `git rebase --continue` or `git commit` — or immediately after.
+It names every item that left your row set and every item the other side has that you do not, and says which of them the two sides account for: an item is accounted for when the side that no longer has it is the side that deleted it.
+Anything else is collateral from the resolution, which it prints with the ref that still holds the file, and exits 1 for.
+
+**Which comparison is right depends on where the resolution currently lives, which is why this is a script rather than two commands to type.** Measured on git 2.55.0:
+
+| State | The row set before | Your row set now | The other side |
+|---|---|---|---|
+| Rebase in progress | `.git/rebase-*/orig-head` | the **index** | `.git/rebase-merge/onto` |
+| Merge in progress | `HEAD` | the **index** | `MERGE_HEAD` |
+| Neither | `ORIG_HEAD` | `HEAD` | `origin/main` |
+
+Mid-operation the resolution is in the index, and `HEAD` is the replay so far — it excludes the very commit being resolved.
+Reading `HEAD` there reports every row the branch adds as a casualty: on a fixture whose branch files two items and whose `main` closes one, it names three suspects where the index names the one that is real.
+That is the reading Q840 shipped, at exactly the moment it told you to run it, so the false positives arrive mixed in with the true one they bury.
+Only the third row needs `ORIG_HEAD`, which the next rebase or merge overwrites — pass `--base` to name the pre-resolution tip by hand once it is gone.
+
+A read it cannot take exits 2 rather than guessing: an item still unmerged under the store, a branch that never merged the other side at all, or a ref that does not resolve.
+`reconcile-queue-rows-test.sh` pairs every case, and drives real `git rebase` and `git merge` conflicts rather than staging a tree by hand, since a hand-staged fixture agrees with an implementation reading either `HEAD` or the index and cannot see the distinction under test.
+
+**No CI gate can run any of this**, which is why it is a local command and not a check: every ref it reads is gone by push time.
+Nor is widening rule 8 past `flake` a substitute, since deleting an item is how an item closes: the rule would then refuse every closure, which gates a different thing entirely.
 
 The diffstat answers the same question and is what actually caught #1471 (`1 insertion, 3 deletions` on a branch that adds two rows), but it only fires if you knew the expected counts going in, and it names no IDs.
 Either way the principle is [the one bulk mechanical changes already use](testing.md#a-bulk-mechanical-change-proves-itself-by-reconciliation-not-by-an-empty-leftover-query): a scan that finds nothing cannot distinguish "nothing was lost" from "this instrument cannot see the loss".

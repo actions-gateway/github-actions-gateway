@@ -189,7 +189,7 @@ SCRIPTS_TESTS := agent/claude-go-throttle-hook-test agent/local-throttle-test \
                  docs/find-duplicate-rows-test \
                  docs/git-merge-plan-index-test docs/git-merge-roadmap-test \
                  docs/check-queue-rules-test \
-                 docs/queue-unblock-test \
+                 docs/queue-unblock-test docs/reconcile-queue-rows-test \
                  docs/queue-test docs/rank-vectors-test \
                  docs/release-gates-hook-test docs/release-version-hook-test \
                  docs/source-links-hook-test \

@@ -662,6 +662,13 @@ queue-unblock: ## List Queue items blocked by ID=<id> (e.g. make queue-unblock I
 	@if [ -z "$(ID)" ]; then echo "Usage: make queue-unblock ID=<id>" >&2; exit 1; fi
 	@scripts/docs/queue-unblock.sh $(ID)
 
+# Deliberately not a gate. It reads the state of a resolution in progress --
+# the index, and .git/rebase-*/orig-head -- none of which survives to a push,
+# so CI has nothing to run it against (Q858).
+.PHONY: queue-reconcile
+queue-reconcile: ## Name backlog items a merge/rebase resolution dropped (run mid-conflict or just after)
+	@scripts/docs/reconcile-queue-rows.sh $(ARGS)
+
 # Consolidated third-party license attribution. scripts/release/gen-third-party-notices.sh
 # concatenates every vendored module's LICENSE/NOTICE/COPYING text into the
 # committed THIRD-PARTY-NOTICES file, which each production Dockerfile COPYs into
