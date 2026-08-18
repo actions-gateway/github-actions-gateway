@@ -107,11 +107,13 @@ list-gates: ## List every gate `make check` runs, in order, with what each one c
 # overlap them), so this asserts those lines match CHECK_HEAVY_GATES, that the
 # fast phase runs nothing beyond the CHECK_FAST_GATES fan-out, that every gate is
 # a documented .PHONY target, that no target is declared .PHONY twice, that
-# SCRIPTS_TESTS names exactly the scripts/**/*-test.sh files on disk, and that
-# testing.md still points at the list targets rather than re-transcribing them.
+# SCRIPTS_TESTS names exactly the scripts/**/*-test.sh files on disk, that
+# testing.md still points at the list targets rather than re-transcribing them,
+# and that QUEUE_GATES and DOCS_GATES are each the complete subset of
+# CHECK_FAST_GATES their comments claim, in both directions.
 .PHONY: gate-lists-check
 gate-lists-check: ## Fail when `make check`'s gate and suite lists disagree with their derived consumers
-	scripts/ci/gate-list.sh --check --fast '$(CHECK_FAST_GATES)' --heavy '$(CHECK_HEAVY_GATES)' --queue '$(QUEUE_GATES)' --suites '$(SCRIPTS_TESTS)'
+	scripts/ci/gate-list.sh --check --fast '$(CHECK_FAST_GATES)' --heavy '$(CHECK_HEAVY_GATES)' --queue '$(QUEUE_GATES)' --docs '$(DOCS_GATES)' --suites '$(SCRIPTS_TESTS)'
 
 
 .PHONY: queue-gates
