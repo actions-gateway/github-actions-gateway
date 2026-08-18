@@ -2948,14 +2948,6 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>Measured 2026-08-12: <code>doc-links</code> sat at 161s in CI, 38s locally, unseen through three CI-speed rounds, because 30 fast gates run …</td>
 </tr>
 <tr>
-<td><a href="Q843/">Q843</a></td>
-<td><a href="../roadmap/">The roadmap near-term rule and its gate disagree on what belongs there</a></td>
-<td><code>docs</code> <code>ci</code></td>
-<td>🔲</td>
-<td>S</td>
-<td><code>roadmap.md</code> says every near-term item blocks a release tag and its pill is read from the backlog; <code>check-roadmap</code> moves any bullet naming …</td>
-</tr>
-<tr>
 <td><a href="Q832/">Q832</a></td>
 <td><a href="../roadmap/">Roadmap bullets lose sentence-per-line: mdreflow declines every <code>q:</code></a></td>
 <td><code>ci</code> <code>docs</code> <code>retro</code></td>
@@ -3890,6 +3882,14 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>🔲</td>
 <td>S</td>
 <td>Q871's checker waited on the child's exit status in two places, so a fake dying during startup deadlocked it.</td>
+</tr>
+<tr>
+<td><a href="Q932/">Q932</a></td>
+<td><a href="../plan/release-ladder/">Nothing binds release-ladder's punted table to its rows' deferred status</a></td>
+<td><code>docs</code> <code>ci</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>The table names each item punted past <code>v2.0.0</code>, and no gate reads it: <code>check-plan-index</code> binds <code>plan/README.md</code> Status cells to a row …</td>
 </tr>
 </tbody>
 </table>

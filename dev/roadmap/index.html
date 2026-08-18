@@ -2710,9 +2710,11 @@ There is no paid tier and no commercial roadmap, so the plan below is about capa
 Priorities move with what adopters actually hit first, so the surest way to influence what comes next is to <a href="https://github.com/actions-gateway/github-actions-gateway/issues">open an issue</a> describing your setup.
 Every open item, in priority order, is in the <a href="https://actions-gateway.com/dev/STATUS/">working backlog</a>.</p>
 <h2 id="in-progress--near-term">In progress / near-term<a class="headerlink" href="#in-progress--near-term" title="Permanent link">&para;</a></h2>
-<p>Committed to a named release.
-Every item here blocks a release tag, and nothing else appears in this section: work waiting on demand, on an unbuilt prerequisite, or on hardware sits under <a href="#exploring--longer-term">Exploring / longer-term</a> with the signal that revives it.
-The pill beside each title names the release it blocks, read from the backlog rather than typed here, so it cannot outlive the commitment.</p>
+<p>Scoped work, none of it waiting on an outside signal.
+Anything that waits on demand, on an unbuilt prerequisite, or on hardware sits under <a href="#exploring--longer-term">Exploring / longer-term</a> with the event that revives it.</p>
+<p>Some of this is committed to a named release, and a pill beside the title says which.
+The pill is read from the backlog rather than typed here, so it cannot outlive the commitment.
+No pill means the item is on the near-term plan with no release decided for it yet.</p>
 <ul>
 <li>
 <p><strong><a href="../operations/">Persistent and shared worker storage</a></strong> <span class="gag-release-chip" title="Blocks the 1.6 release">1.6</span> <!-- q:Q719 --> Workers are storage-less by design and nothing validates a <code>ReadWriteMany</code> volume mounted into one, so the stance is undocumented rather than decided. <code>ReadWriteMany</code> is how jobs share files and what ARC's <code>containerMode: kubernetes</code> depends on, so it also matters to anyone migrating off that mode.
