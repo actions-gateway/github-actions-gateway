@@ -2676,14 +2676,6 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>Measured 2026-08-17 on Q889 phase 6: <code>make check</code> reported <code>pipedgate (cached)</code> and exited 0 while the package run directly failed 5 …</td>
 </tr>
 <tr>
-<td><a href="Q862/">Q862</a></td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/devtools/agent/pipedgate/repostate.go">The PR-overlap check intersects paths, so disjoint hunks read as overlap</a></td>
-<td><code>ci</code> <code>debt</code> <code>retro</code></td>
-<td>🔲</td>
-<td>S</td>
-<td>Three sightings in two days: #1505, #1527, #1531, each denying a create over disjoint hunks and costing a manual <code>git merge-tree</code> plus an …</td>
-</tr>
-<tr>
 <td><a href="Q863/">Q863</a></td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/Dockerfile">A <code>docker buildx</code> base-image pull has no retry, so one 403 fails a build</a></td>
 <td><code>flake</code> <code>ci</code></td>
