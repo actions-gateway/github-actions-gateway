@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q915/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q920/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>gate-lists merge driver refuses every merge; its suite cannot see it - GitHub Actions Gateway</title>
+        <title>gate-list.sh never checks DOCS_GATES against its subset claim - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#gate-lists-merge-driver-refuses-every-merge-its-suite-cannot-see-it" class="md-skip">
+        <a href="#gate-listsh-never-checks-docs_gates-against-its-subset-claim" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              gate-lists merge driver refuses every merge; its suite cannot see it
+              gate-list.sh never checks DOCS_GATES against its subset claim
             
           </span>
         </div>
@@ -2567,12 +2567,11 @@
   
 
 
-<h1 id="gate-lists-merge-driver-refuses-every-merge-its-suite-cannot-see-it">gate-lists merge driver refuses every merge; its suite cannot see it<a class="headerlink" href="#gate-lists-merge-driver-refuses-every-merge-its-suite-cannot-see-it" title="Permanent link">&para;</a></h1>
-<p><code>MANAGED_VARS</code> still names <code>STATUS_GATES</code> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/ci/git-merge-gate-lists.sh">git-merge-gate-lists.sh:97</a>), which #1603 renamed to <code>QUEUE_GATES</code>; <code>lift_vars</code> hard-fails on a managed variable it cannot find, so the driver refuses <code>mk/gate-lists.mk</code> outright and git leaves ordinary conflict markers.
-Measured 2026-08-18 rebasing Q865 onto #1627, both of which appended a gate: <code>merge-gate-lists: base: STATUS_GATES is not assigned in this file</code>, resolved by hand.
-The suite stays green because its fixture declares <code>STATUS_GATES</code> (<code>git-merge-gate-lists-test.sh:47</code>), so it asserts a file shape the repo no longer has.
-<code>DOCS_GATES</code> is unmanaged too, added after the driver.
-Fix the name, add <code>DOCS_GATES</code>, and derive the fixture from the real file so the suite cannot pass on a shape that has moved.</p>
+<h1 id="gate-listsh-never-checks-docs_gates-against-its-subset-claim"><code>gate-list.sh</code> never checks <code>DOCS_GATES</code> against its subset claim<a class="headerlink" href="#gate-listsh-never-checks-docs_gates-against-its-subset-claim" title="Permanent link">&para;</a></h1>
+<p><code>DOCS_GATES</code> says in its own comment that every entry is also in <code>CHECK_FAST_GATES</code>, "so like QUEUE_GATES this is a strict subset of <code>make check</code> and never a second opinion".
+It is not: <code>release-notes-check</code> is in <code>DOCS_GATES</code> and in no other list (measured 2026-08-18 against <code>mk/gate-lists.mk</code>), so <code>make docs-gates</code> runs a gate <code>make check</code> does not.
+<code>gate-list.sh</code> takes <code>--fast</code>, <code>--heavy</code>, <code>--queue</code> and <code>--suites</code>; its rules 4 and 7 hold <code>QUEUE_GATES</code> to that same claim in both directions, and nothing passes <code>DOCS_GATES</code> in at all.
+Add a <code>--docs</code> argument and give it rules 4 and 7's treatment, then settle whether <code>release-notes-check</code> joins <code>CHECK_FAST_GATES</code> or leaves <code>DOCS_GATES</code>.</p>
 
 
 

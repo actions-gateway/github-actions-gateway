@@ -2724,14 +2724,6 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td><code>git-merge-roadmap-test</code> shares Q820's shape and carries its <code>ERR</code> trap, but not the <code>Q820:</code> tree state, so a sighting names a line and …</td>
 </tr>
 <tr>
-<td><a href="Q915/">Q915</a></td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/ci/git-merge-gate-lists.sh">gate-lists merge driver refuses every merge; its suite cannot see it</a></td>
-<td><code>ci</code> <code>debt</code></td>
-<td>🔲</td>
-<td>S</td>
-<td><code>MANAGED_VARS</code> still names <code>STATUS_GATES</code> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/ci/git-merge-gate-lists.sh">git-merge-gate-lists.sh:97</a>), which #1603 renamed to …</td>
-</tr>
-<tr>
 <td><a href="Q899/">Q899</a></td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/publish.yml"><code>publish.yml</code>'s image build has no retry, so a 403 fails a release</a></td>
 <td><code>ci</code> <code>debt</code></td>
@@ -3490,6 +3482,14 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>🔲</td>
 <td>S</td>
 <td><code>STATUS_GATES</code> retired with Q889 and <code>gate-list.sh</code> no longer mentions it, so the annotation gates nothing: <code>make gate-lists-check</code> passes …</td>
+</tr>
+<tr>
+<td><a href="Q920/">Q920</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/ci/gate-list.sh"><code>gate-list.sh</code> never checks <code>DOCS_GATES</code> against its subset claim</a></td>
+<td><code>ci</code> <code>debt</code></td>
+<td>🔲</td>
+<td>S</td>
+<td><code>DOCS_GATES</code> says in its own comment that every entry is also in <code>CHECK_FAST_GATES</code>, "so like QUEUE_GATES this is a strict subset of `make …</td>
 </tr>
 <tr>
 <td><a href="Q397/">Q397</a></td>
