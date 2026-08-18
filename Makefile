@@ -1104,5 +1104,23 @@ $(GINKGO): $(REPO_ROOT)/cmd/gmc/go.mod $(REPO_ROOT)/cmd/gmc/go.sum
 # cosign is a non-Go-vendored binary tool (its dependency tree is too large to
 # vendor like the kubebuilder-ecosystem tools above), so it is downloaded at a
 # pinned version — the same pattern as the shellcheck/kubeconform CI installs.
-$(COSIGN):
+#
+# Its pin is a make variable, not a file, so the rule has nothing on disk to
+# depend on the way the Go tool rules above do (Q857): without a prerequisite
+# make takes an existing .build/cosign for up to date forever, and a bump keeps
+# serving the old verifier to `make verify-release` and the dogfood CRD smoke.
+# COSIGN_PIN carries the resolved version in its name, so the rule fires on a
+# change and only on a change, keeping the network fetch off every other run.
+# Keying on the value also catches a COSIGN_VERSION= override, which a tracked
+# pin file would miss.
+# A failed download leaves the sentinel newer than the binary, so the next
+# invocation retries rather than going quietly green.
+COSIGN_PIN := $(REPO_ROOT)/.build/cosign-$(COSIGN_VERSION).pin
+
+$(COSIGN): $(COSIGN_PIN)
 	scripts/release/download-cosign.sh $@ $(COSIGN_VERSION)
+
+$(COSIGN_PIN):
+	mkdir -p $(REPO_ROOT)/.build
+	rm -f $(REPO_ROOT)/.build/cosign-*.pin
+	touch $@

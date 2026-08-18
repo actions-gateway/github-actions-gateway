@@ -1227,3 +1227,4 @@ The first two controls protect *who* runs the pipeline and *how* signatures are 
 - **The cosign verify binary is checksummed.** GitHub release assets are mutable for an existing tag, so a raw download of the release verifier can't be trusted on its own.
   The publish pipeline obtains cosign via the SHA-pinned `sigstore/cosign-installer` action (which performs its own signature verification); the *local* verify path (`make verify-release` → `scripts/release/download-cosign.sh`) pins the expected SHA256 per platform in-repo and refuses to install a binary whose bytes don't match.
   Bumping `COSIGN_VERSION` must add the new digests to that script (it fails closed on an unpinned version) — the same deliberate-pin discipline as `KIND_BINARY_SHA256` in `e2e-test.yml`.
+  The `$(COSIGN)` make rule keys on the pinned version, so a bump re-downloads instead of serving whatever `.build/cosign` already holds (Q857).
