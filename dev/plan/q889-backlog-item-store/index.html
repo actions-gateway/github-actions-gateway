@@ -142,7 +142,7 @@
             <div class="md-banner__inner md-grid md-typeset">
               You're not viewing the latest release.
   <a href="https://actions-gateway.com/dev"><strong>Go to the current docs.</strong></a>
-    <a href="../../STATUS/">See the working backlog.</a>
+    <a href="../../queue/">See the working backlog.</a>
 
             </div>
             <script>var el=document.querySelector("[data-md-component=outdated]"),base=new URL("../.."),outdated=__md_get("__outdated",sessionStorage,base);!0===outdated&&el&&(el.hidden=!1)</script>
@@ -2611,6 +2611,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#phase-6-the-cutover" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 6, the cutover
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#risks" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2686,9 +2697,9 @@
 
 
 <h1 id="q889-migrate-the-backlog-to-the-per-item-store">Q889: Migrate the backlog to the per-item store<a class="headerlink" href="#q889-migrate-the-backlog-to-the-per-item-store" title="Permanent link">&para;</a></h1>
-<p><strong>Status:</strong> Phases 1 to 4 merged (#1595, #1596, #1598, #1600); phase 5 is open.
-The store is live at <code>docs/queue/</code> alongside the table, held to it by <code>queue-drift-check</code>, and every reference that can point at an item now does.
-Phase 6, the atomic cutover, is the last.</p>
+<p><strong>Status:</strong> Complete.
+Phases 1 to 5 merged (#1595, #1596, #1598, #1600, #1602); phase 6 is the cutover in this change.
+The backlog is <code>docs/queue/</code>, one file per item, and <code>docs/STATUS.md</code> is deleted.</p>
 <p>Replace the single <code>docs/STATUS.md</code> Queue table with the <code>session-backlog</code> skill's per-item store under <code>docs/queue/</code>, adopt its Python tooling, and groom the backlog to remove what the move obsoletes.</p>
 <p>Supersedes the attempt on <a href="https://github.com/actions-gateway/github-actions-gateway/pull/1534">#1534</a> (draft, +4150/−1 across 186 files, stale).
 That branch carries a Go <code>queuestore</code> implementation and its own row Q869, neither of which reached <code>main</code>; closing it discards both.</p>
@@ -2840,7 +2851,32 @@ The website.</strong> ✅ <code>/dev/queue/</code> is the store's README with th
 No second Pages deploy, as planned.
 Two dependencies that fail quietly are recorded in <a href="../../development/website/#the-backlog-renders-at-build-time">website.md</a>: the hook must precede <code>source_links.py</code>, and its guard counts item rows rather than bytes.</p>
 <p><strong>6.
-Delete <code>docs/STATUS.md</code>, then groom.</strong> Remove or rewrite items the work obsoletes, including anything asserting the table's mechanics.</p>
+Delete <code>docs/STATUS.md</code>, then groom.</strong> ✅ The table, its five gates, the Progress table, the <code>/dev/STATUS/</code> page, and the prose describing all of them.</p>
+<h2 id="phase-6-the-cutover">Phase 6, the cutover<a class="headerlink" href="#phase-6-the-cutover" title="Permanent link">&para;</a></h2>
+<p><strong>The scope was wrong again, and in the same direction as the four before it.</strong> Phase 6 was written as "delete the table, retire five gates, groom".
+Three things it did not name were load-bearing, and each was found by a gate or a build rather than by reading:</p>
+<ul>
+<li><strong><code>queue.py lint</code> ran in no gate at all.</strong> The store's own format rules — frontmatter, rank shape, filename/id agreement, the 72-character title cap, unresolvable targets — had been vendored since phase 1 and were enforced by nothing.
+  Retiring <code>lint-backlog</code> without wiring them would have left the backlog with <em>no</em> format gate, which is a net loss of enforcement dressed as a cleanup.
+  It found a dead target on arrival: <code>Q878</code> named a suite this phase deleted, in a frontmatter field no markdown link checker can see.</li>
+<li><strong><code>release_gates.py</code> fails silent.</strong> Its missing-file path returns the page unchanged, so deleting the table would have dropped every roadmap release chip on a green build.
+  This is the second hook in two phases whose failure mode is quiet (phase 5's was the render guard), which is now a pattern rather than a coincidence: a build-time hook reading a file it does not own needs its absence to be loud.</li>
+<li><strong><code>page-density-check</code> scans the store</strong>, because a git pathspec glob crosses directory separators and <code>docs/*.md</code> selects all 178 item pages.
+  <code>gate-lists-check</code> derived that the moment <code>QUEUE_GATES</code> was repointed, which is Q749's defect caught by the machinery Q749 bought.</li>
+</ul>
+<p><strong>Two consumers were repointed rather than retired, and the distinction is what the retirement turned on.</strong> A gate takes the backlog as its <em>subject</em> or as a <em>source</em>.
+<code>lint-backlog</code>, <code>check-status-isolation</code>, <code>git-merge-status</code> and <code>queue-drift-check</code> were subjects: their whole reason to exist was a property of one table, and they retire with it.
+<code>STATUS_GATES</code> and <code>plan-index-check</code>'s invariant 1 were sources: they answer a question that survives the storage, so they move to the store instead.
+Sorting by that question rather than by "does it mention <code>STATUS.md</code>" is what kept a seconds-long verification set and a staleness guard alive through the cutover.</p>
+<p><strong>Invariant 1 reversed direction and gained by it.</strong> It asked whether the backlog referenced a plan, counting a Progress row; the store has no Progress, and 21 plans had no other reference.
+It now asks whether a plan <em>claiming open work</em> is backed by a live item.
+The old form could not see a plan whose phases had all shipped while its marker never moved, and the new one found two on arrival, both reading "all phases shipped" under a <code>⚠️</code>.
+The 21 archivals it no longer demands are <a href="../../queue/Q894/">Q894</a>; folding 21 moves and 142 inbound references into the cutover was the larger risk.</p>
+<p><strong>The metrics series is bridged rather than restarted</strong>, on the maintainer's call.
+Both eras produce the same event, so the series is continuous; the two bulk commits at the seam are storage rather than flow and are suppressed, and the seam is reported instead of hidden — an era boundary in the summary and an <code>era</code> column in the event stream, so a chart can draw its delimiter where the storage changed.
+The assertion that distinguishes a bridge from two concatenated series is one item filed before the seam and completed after it: 41 days, where a restart says 10 and a stop says open.</p>
+<p><strong>Rule 10 was measured rather than ported</strong>, and the measurement said not to build it — the table's silent reorder-over-delete resurrection becomes a <code>CONFLICT (modify/delete)</code> git refuses.
+The first control run could not reproduce the defect it was measuring, which is recorded because it read as "no difference" rather than as a broken probe.</p>
 <h2 id="risks">Risks<a class="headerlink" href="#risks" title="Permanent link">&para;</a></h2>
 <ul>
 <li><strong>Review size.</strong> Roughly 176 new files, 218 rewritten references and 53 consumer changes in one PR.

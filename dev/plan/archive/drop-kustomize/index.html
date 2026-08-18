@@ -142,7 +142,7 @@
             <div class="md-banner__inner md-grid md-typeset">
               You're not viewing the latest release.
   <a href="https://actions-gateway.com/dev"><strong>Go to the current docs.</strong></a>
-    <a href="../../../STATUS/">See the working backlog.</a>
+    <a href="../../../queue/">See the working backlog.</a>
 
             </div>
             <script>var el=document.querySelector("[data-md-component=outdated]"),base=new URL("../../.."),outdated=__md_get("__outdated",sessionStorage,base);!0===outdated&&el&&(el.hidden=!1)</script>
@@ -2659,10 +2659,10 @@
 
 
 <h1 id="plan-helm-as-the-sole-cluster-install-path-q142">Plan: Helm as the sole cluster-install path (Q142)<a class="headerlink" href="#plan-helm-as-the-sole-cluster-install-path-q142" title="Permanent link">&para;</a></h1>
-<p>← <a href="../../../STATUS/">STATUS</a> · absorbs <a href="../../../STATUS/">Q73</a></p>
+<p>← <a href="../../../queue/">STATUS</a> · absorbs <a href="../../../queue/">Q73</a></p>
 <h2 id="goal">Goal<a class="headerlink" href="#goal" title="Permanent link">&para;</a></h2>
 <p>Make the <strong>Helm chart</strong> the single thing that installs the gateway to a cluster, and eliminate the duplicate, hand-maintained manifests that currently exist in both <code>cmd/*/config/</code> (kustomize) and <code>charts/actions-gateway/</code>.
-Today there are two parallel deploy systems and the chart's CRDs/RBAC are hand-copied from the generated <code>config/</code> output — a silent-drift liability (<a href="../../../STATUS/">Q73</a>).</p>
+Today there are two parallel deploy systems and the chart's CRDs/RBAC are hand-copied from the generated <code>config/</code> output — a silent-drift liability (<a href="../../../queue/">Q73</a>).</p>
 <h2 id="what-stays-what-goes">What stays, what goes<a class="headerlink" href="#what-stays-what-goes" title="Permanent link">&para;</a></h2>
 <p><code>config/</code> is <strong>not</strong> purely an install vehicle — it is the code-generation and test substrate, and that role is irreplaceable:</p>
 <ul>

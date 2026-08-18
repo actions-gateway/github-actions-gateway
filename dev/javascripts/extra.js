@@ -61,7 +61,7 @@
     history.replaceState(null, "", url);
   }
 
-  // Bars sharing a query key move together. STATUS renders one bar per
+  // Bars sharing a query key move together. The backlog renders one bar per
   // dimension per table, so a reload applies `?label=ci` to all of them; a
   // click has to do the same or the shared link and the live page disagree.
   var barsByParam = {};
@@ -185,8 +185,11 @@
     }
   }
 
-  // Backlog tables (STATUS.md's Queue, Deferred, Flake watch and Progress) ->
-  // one chip bar per dimension: label, status, size. The three intersect.
+  // The backlog table -> one chip bar per dimension: label, status, size. The
+  // three intersect. Since Q889 that is the store's rendered index at
+  // /dev/queue/, which queue.py emits with the same headers, backticked labels
+  // and emoji status the retired docs/STATUS.md tables carried, so this needs
+  // no knowledge of which one it is looking at.
   // Recognised by shape rather than by page, but narrowly: a Labels column
   // alone would also match the metric tables in the design and observability
   // docs, so an ID/Item first column is required too.

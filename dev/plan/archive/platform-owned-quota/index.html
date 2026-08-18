@@ -142,7 +142,7 @@
             <div class="md-banner__inner md-grid md-typeset">
               You're not viewing the latest release.
   <a href="https://actions-gateway.com/dev"><strong>Go to the current docs.</strong></a>
-    <a href="../../../STATUS/">See the working backlog.</a>
+    <a href="../../../queue/">See the working backlog.</a>
 
             </div>
             <script>var el=document.querySelector("[data-md-component=outdated]"),base=new URL("../../.."),outdated=__md_get("__outdated",sessionStorage,base);!0===outdated&&el&&(el.hidden=!1)</script>
@@ -2683,7 +2683,7 @@
 <h1 id="platform-owned-resourcequota--remove-tenant-authored-quota-from-the-cr">Platform-owned ResourceQuota — remove tenant-authored quota from the CR<a class="headerlink" href="#platform-owned-resourcequota--remove-tenant-authored-quota-from-the-cr" title="Permanent link">&para;</a></h1>
 <p><strong>Decision (2026-06-13):</strong> the platform admin owns the <code>Namespace</code>, <code>ResourceQuota</code>, and <code>LimitRange</code>; GAG operates <em>within</em> them and never creates or mutates them.
 Remove <code>spec.namespaceQuota</code> from the <code>ActionsGateway</code> CRD and drop the GMC's <code>resourcequotas</code>/<code>limitranges</code> write RBAC.
-A breaking CRD change, done <strong>pre-1.0 while it is free</strong> (post-1.0 it would need a conversion webhook — see deferred <a href="../../../STATUS/">Q74</a>).</p>
+A breaking CRD change, done <strong>pre-1.0 while it is free</strong> (post-1.0 it would need a conversion webhook — see deferred <a href="../../../queue/">Q74</a>).</p>
 <p>Tracked as STATUS Queue Q130.
 <strong>Implemented (2026-06-14):</strong> the CRD/RBAC/controller/docs edits landed; see the Status section below.</p>
 <h2 id="why">Why<a class="headerlink" href="#why" title="Permanent link">&para;</a></h2>
@@ -2695,7 +2695,7 @@ The site (correctly) says "the platform team caps each tenant," but today:</p>
 <li>The GMC <strong>creates</strong> the <code>ResourceQuota</code> from the spec, which <strong>conflicts with existing investments</strong> — platform teams already manage namespaces + quotas via GitOps or a tenant operator (Capsule, HNC, vCluster, kiosk).
   GAG either fights them or silently overrides their allocation.</li>
 <li>Owning quotas forces broad GMC RBAC.
-  Dropping it is <strong>least privilege</strong> and shrinks the cluster-wide-write surface flagged in <a href="../../../STATUS/">Q122</a>.</li>
+  Dropping it is <strong>least privilege</strong> and shrinks the cluster-wide-write surface flagged in <a href="../../../queue/">Q122</a>.</li>
 </ul>
 <p>The corrected model: the platform provisions the namespace + quota (+ optional <code>LimitRange</code>) — it already creates and labels the namespace per <a href="../../../getting-started/">getting-started</a> — and GAG provisions pods/deployments <em>within</em> them, reading remaining quota but never setting it.</p>
 <h2 id="scope">Scope<a class="headerlink" href="#scope" title="Permanent link">&para;</a></h2>
@@ -2712,17 +2712,17 @@ The site (correctly) says "the platform team caps each tenant," but today:</p>
 <h3 id="rbac">RBAC<a class="headerlink" href="#rbac" title="Permanent link">&para;</a></h3>
 <ul>
 <li>Remove <code>resourcequotas</code> (and <code>limitranges</code> if present) verbs from <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/config/rbac/role.yaml#L27">role.yaml:27</a> and <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/charts/actions-gateway/templates/rbac.yaml#L33">charts rbac.yaml:33</a>; <code>make manifests</code>.</li>
-<li>Partially subsumes <a href="../../../STATUS/">Q122</a>: its proposed quota-write <em>confinement</em> becomes moot once we drop the write entirely.</li>
+<li>Partially subsumes <a href="../../../queue/">Q122</a>: its proposed quota-write <em>confinement</em> becomes moot once we drop the write entirely.</li>
 </ul>
 <h3 id="docs-operator-facing--design--website">Docs (operator-facing + design + website)<a class="headerlink" href="#docs-operator-facing--design--website" title="Permanent link">&para;</a></h3>
 <ul>
 <li><code>getting-started.md</code> step 2: platform creates the namespace <strong>and</strong> a <code>ResourceQuota</code> (+ optional <code>LimitRange</code>); remove <code>namespaceQuota</code> from the CR example in step 4.</li>
 <li><code>02-architecture.md</code> (Tenant Provisioner, ~line 69): GAG operates within a platform-provided quota; no longer derives/creates it.</li>
 <li><code>operations/tenant-onboarding.md</code>: platform provisions namespace + quota; tenant supplies only the CR.</li>
-<li><code>05-security.md</code> / <code>operations/security-operations.md</code>: reduced GMC RBAC; ties <a href="../../../STATUS/">Q121</a>/<a href="../../../STATUS/">Q122</a>.</li>
+<li><code>05-security.md</code> / <code>operations/security-operations.md</code>: reduced GMC RBAC; ties <a href="../../../queue/">Q121</a>/<a href="../../../queue/">Q122</a>.</li>
 <li><code>appendix-a</code> / <code>appendix-e</code> capacity planning: <code>priorityTiers</code> / <code>maxWorkers</code> soft ceilings pair with the platform-owned quota.</li>
 <li><strong>Website</strong> CR examples (<code>index.md</code> is fine; <code>why-gag.md</code> shows the CR) drop <code>namespaceQuota</code>.
-  This also removes the live inconsistency where the site frames "platform caps the tenant" beside a tenant-authored quota — tracked under <a href="../../../STATUS/">Q129</a>, fix alongside this change.</li>
+  This also removes the live inconsistency where the site frames "platform caps the tenant" beside a tenant-authored quota — tracked under <a href="../../../queue/">Q129</a>, fix alongside this change.</li>
 </ul>
 <h3 id="migration-pre-10">Migration (pre-1.0)<a class="headerlink" href="#migration-pre-10" title="Permanent link">&para;</a></h3>
 <ul>

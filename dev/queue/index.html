@@ -142,7 +142,7 @@
             <div class="md-banner__inner md-grid md-typeset">
               You're not viewing the latest release.
   <a href="https://actions-gateway.com/dev"><strong>Go to the current docs.</strong></a>
-    <a href="../STATUS/">See the working backlog.</a>
+    <a href="./">See the working backlog.</a>
 
             </div>
             <script>var el=document.querySelector("[data-md-component=outdated]"),base=new URL(".."),outdated=__md_get("__outdated",sessionStorage,base);!0===outdated&&el&&(el.hidden=!1)</script>
@@ -2652,14 +2652,6 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 </thead>
 <tbody>
 <tr>
-<td><a href="Q889/">Q889</a></td>
-<td><a href="../plan/q889-backlog-item-store/">Migrate the backlog to the per-item store</a></td>
-<td><code>docs</code> <code>ci</code> <code>debt</code></td>
-<td>🔲</td>
-<td>L</td>
-<td>Position-is-priority makes this table contended by construction: taking the top <em>k</em> rows conflicts for every k ≥ 2, and the merge drivers …</td>
-</tr>
-<tr>
 <td><a href="Q871/">Q871</a></td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/test/fakegithub/main.go">Fail a PR when the AGC calls an endpoint the e2e fake does not serve</a></td>
 <td><code>ci</code> <code>tests</code> <code>debt</code> <code>retro</code></td>
@@ -2682,6 +2674,22 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>🔲</td>
 <td>S</td>
 <td>Q675 accepted queue-time kickbacks "against a measured 1% e2e failure rate".</td>
+</tr>
+<tr>
+<td><a href="Q895/">Q895</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/go/go-test.sh">A cached Go test result let <code>make check</code> pass what CI failed</a></td>
+<td><code>ci</code> <code>tests</code> <code>debt</code> <code>retro</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>Measured 2026-08-17 on Q889 phase 6: <code>make check</code> reported <code>ok … devtools/agent/pipedgate (cached)</code> and exited 0, while the same package …</td>
+</tr>
+<tr>
+<td><a href="Q896/">Q896</a></td>
+<td><a href="../development/maintaining-backlog/">A plan enumerates readers, not references, and grep cannot see a reader</a></td>
+<td><code>docs</code> <code>debt</code> <code>retro</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>Q889's stated scope was understated in all five phases that measured it, always the same way: it counted textual references, and what bit …</td>
 </tr>
 <tr>
 <td><a href="Q862/">Q862</a></td>
@@ -2789,11 +2797,11 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 </tr>
 <tr>
 <td><a href="Q878/">Q878</a></td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/docs/git-merge-status-test.sh">Give the sibling merge-driver suites Q820's tree reading</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/docs/git-merge-roadmap-test.sh">Give the sibling merge-driver suites Q820's tree reading</a></td>
 <td><code>tests</code> <code>ci</code> <code>retro</code></td>
 <td>🔲</td>
 <td>S</td>
-<td><code>git-merge-status-test</code> and <code>git-merge-roadmap-test</code> share Q820's shape and already carry its <code>ERR</code> trap, but not the <code>Q820:</code> tree state it …</td>
+<td><code>git-merge-roadmap-test</code> shares Q820's shape and already carries its <code>ERR</code> trap, but not the <code>Q820:</code> tree state it added, so a sighting …</td>
 </tr>
 <tr>
 <td><a href="Q857/">Q857</a></td>
@@ -2929,7 +2937,7 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td><code>ci</code> <code>tests</code> <code>debt</code> <code>retro</code></td>
 <td>🔲</td>
 <td>S</td>
-<td>A suite that copies a gate into a fixture inherits that gate's inputs, so adding one breaks it with no textual reference to grep.</td>
+<td>A suite that copies a gate into a fixture inherits that gate's inputs, so changing one breaks it with no textual reference to grep.</td>
 </tr>
 <tr>
 <td><a href="Q893/">Q893</a></td>
@@ -3097,7 +3105,7 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td><code>docs</code> <code>debt</code> <code>retro</code></td>
 <td>🔲</td>
 <td>S</td>
-<td>Searches STATUS.md's three tables only, so "known and accepted" is invisible: Q692's session nearly filed the merge-driver gap this page …</td>
+<td>Searches the backlog only, so "known and accepted" is invisible: Q692's session nearly filed the merge-driver gap this page already states.</td>
 </tr>
 <tr>
 <td><a href="Q686/">Q686</a></td>
@@ -3130,14 +3138,6 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>🔲</td>
 <td>S</td>
 <td><code>isContextArg</code> keys on a first arg named <code>ctx</code>-ish or a <code>context.*</code> call, so <code>Client.Delete(c, pod)</code> is skipped silently: fail-open inside …</td>
-</tr>
-<tr>
-<td><a href="Q569/">Q569</a></td>
-<td><a href="../plan/docs-page-boundaries/#phase-2-splitting-the-parked-register-q569">Split Deferred + Flake watch off <code>STATUS.md</code></a></td>
-<td><code>docs</code></td>
-<td>🔲</td>
-<td>M</td>
-<td>Phase 2 of the page-boundary split: the Queue is read top-down, parked rows only on a trigger.</td>
 </tr>
 <tr>
 <td><a href="Q793/">Q793</a></td>
@@ -3489,7 +3489,7 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td><code>ci</code> <code>debt</code> <code>retro</code></td>
 <td>🔲</td>
 <td>S</td>
-<td>Its <code>plan</code> filter matches <code>docs/plan/README.md</code>, <code>docs/STATUS.md</code> and <code>**.go</code>, not <code>docs/plan/*.md</code>, so a PR adding only a plan doc skips …</td>
+<td>Its <code>plan</code> filter matches <code>docs/plan/README.md</code>, <code>docs/queue/**</code> and <code>**.go</code>, not <code>docs/plan/*.md</code>, so a PR adding only a plan doc skips …</td>
 </tr>
 <tr>
 <td><a href="Q883/">Q883</a></td>
@@ -3516,12 +3516,12 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td><code>merge_max_into</code> only revises upward, so a sharpened classifier's downward correction is dropped silently, and the total still rising on …</td>
 </tr>
 <tr>
-<td><a href="Q885/">Q885</a></td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.githooks/pre-commit">A pathspec <code>git commit</code> bypasses the lint-backlog pre-commit backstop</a></td>
-<td><code>debt</code> <code>retro</code></td>
+<td><a href="Q894/">Q894</a></td>
+<td><a href="../plan/">Archive the plans left active only by the deleted Progress table</a></td>
+<td><code>docs</code> <code>debt</code></td>
 <td>🔲</td>
-<td>S</td>
-<td>Measured 2026-08-16: an over-cap row left unstaged commits clean via <code>git commit -- docs/STATUS.md</code> while the hook runs; <code>--staged</code> catches …</td>
+<td>M</td>
+<td>Q889 deleted the Progress table, whose ✅ rows were the only backlog reference 21 active plans had, and rekeyed <code>plan-index-check</code> invariant …</td>
 </tr>
 <tr>
 <td><a href="Q501/">Q501</a></td>

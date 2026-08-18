@@ -142,7 +142,7 @@
             <div class="md-banner__inner md-grid md-typeset">
               You're not viewing the latest release.
   <a href="https://actions-gateway.com/dev"><strong>Go to the current docs.</strong></a>
-    <a href="../../../STATUS/">See the working backlog.</a>
+    <a href="../../../queue/">See the working backlog.</a>
 
             </div>
             <script>var el=document.querySelector("[data-md-component=outdated]"),base=new URL("../../.."),outdated=__md_get("__outdated",sessionStorage,base);!0===outdated&&el&&(el.hidden=!1)</script>
@@ -3364,7 +3364,7 @@ That reasoning said <code>slots</code> "was never adding hardware" because every
 The band is gone, and the conclusion survives for the opposite reason: <strong>one holder now reaches 81–85 % CPU on its own</strong>, so there is genuinely little machine left for a second to claim.
 Under <code>-c utility</code> a single run took ~37 %, and the second slot was dividing a ceiling; now it is competing for a nearly-full one.</p>
 <p>The throughput column also understates what slot 2 is for.
-The problem it was added to solve (<a href="../../../STATUS/">Q376</a>) was <em>queue depth</em> — a sibling session blocked for a full run before it could start.
+The problem it was added to solve (<a href="../../../queue/">Q376</a>) was <em>queue depth</em> — a sibling session blocked for a full run before it could start.
 Two holders finish in 36.7 s where strict serialization needs 23.0 + 23.0 = 46 s, so the second session both starts immediately and finishes sooner.
 That is the argument for slot 2, and it does not extend to slot 3.</p>
 <p><code>GAG_HEAVY_BUILD_SLOTS</code> still overrides the default in both directions for anyone whose machine or taste differs.</p>

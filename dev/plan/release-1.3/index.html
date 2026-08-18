@@ -142,7 +142,7 @@
             <div class="md-banner__inner md-grid md-typeset">
               You're not viewing the latest release.
   <a href="https://actions-gateway.com/dev"><strong>Go to the current docs.</strong></a>
-    <a href="../../STATUS/">See the working backlog.</a>
+    <a href="../../queue/">See the working backlog.</a>
 
             </div>
             <script>var el=document.querySelector("[data-md-component=outdated]"),base=new URL("../.."),outdated=__md_get("__outdated",sessionStorage,base);!0===outdated&&el&&(el.hidden=!1)</script>
@@ -2816,7 +2816,7 @@ That is fixed — the gate routes through a run-scoped <code>workflow_dispatch</
 So <code>validate-release.sh v1.3.0-rc.3</code> is the first run in a position to clear this gate.</p>
 </blockquote>
 <p>The scope and Definition of Done for the <code>v1.3.0</code> tag.
-Queue rows that block this tag carry the <code>1.3-gate</code> label in <a href="../../STATUS/">docs/STATUS.md</a>; this file is what that label points at, per the "scope the release in a plan doc first, then add the label" rule in <a href="../../development/maintaining-backlog/#dont-pre-assign-release-versions-to-backlog-items">maintaining-backlog.md</a>.</p>
+Queue rows that block this tag carry the <code>1.3-gate</code> label in <a href="../../queue/">docs/STATUS.md</a>; this file is what that label points at, per the "scope the release in a plan doc first, then add the label" rule in <a href="../../development/maintaining-backlog/#dont-pre-assign-release-versions-to-backlog-items">maintaining-backlog.md</a>.</p>
 <p>Cutting mechanics (pre-flight, tagging, verification, the dogfood release-candidate gate) live in <a href="../../operations/release/">operations/release.md</a> and are not repeated here.</p>
 <h2 id="scope-ledger">Scope ledger<a class="headerlink" href="#scope-ledger" title="Permanent link">&para;</a></h2>
 <p>Planned vs delivered, per the <a href="../../development/maintaining-backlog/#cutting-a-release-the-scope-ledger">scope-ledger convention</a>.

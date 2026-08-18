@@ -142,7 +142,7 @@
             <div class="md-banner__inner md-grid md-typeset">
               You're not viewing the latest release.
   <a href="https://actions-gateway.com/dev"><strong>Go to the current docs.</strong></a>
-    <a href="../../STATUS/">See the working backlog.</a>
+    <a href="../../queue/">See the working backlog.</a>
 
             </div>
             <script>var el=document.querySelector("[data-md-component=outdated]"),base=new URL("../.."),outdated=__md_get("__outdated",sessionStorage,base);!0===outdated&&el&&(el.hidden=!1)</script>
@@ -2650,7 +2650,7 @@ It uses the repo's <code>make</code> targets and a local image registry, so run 
 <p>Two things this flow does that a released install would not, both flagged as backlog items:</p>
 <ul>
 <li>Installs the <strong>v2alpha1 CRDs</strong> alongside the v1 platform.
-  A v1-only install currently crash-loops the AGC (its v2 <code>RunnerSet</code> reconciler is registered unconditionally and its informer cache never syncs) — see <code>Q261</code> in <a href="../../STATUS/">docs/STATUS.md</a>.</li>
+  A v1-only install currently crash-loops the AGC (its v2 <code>RunnerSet</code> reconciler is registered unconditionally and its informer cache never syncs) — see <code>Q261</code> in <a href="../../queue/">docs/STATUS.md</a>.</li>
 <li>Adds a <strong><code>LimitRange</code></strong> so the requests-less AGC pod is admitted under the namespace <code>ResourceQuota</code> — see <code>Q262</code>.</li>
 </ul>
 <h2 id="prerequisites">Prerequisites<a class="headerlink" href="#prerequisites" title="Permanent link">&para;</a></h2>

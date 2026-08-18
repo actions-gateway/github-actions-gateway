@@ -142,7 +142,7 @@
             <div class="md-banner__inner md-grid md-typeset">
               You're not viewing the latest release.
   <a href="https://actions-gateway.com/dev"><strong>Go to the current docs.</strong></a>
-    <a href="../../../STATUS/">See the working backlog.</a>
+    <a href="../../../queue/">See the working backlog.</a>
 
             </div>
             <script>var el=document.querySelector("[data-md-component=outdated]"),base=new URL("../../.."),outdated=__md_get("__outdated",sessionStorage,base);!0===outdated&&el&&(el.hidden=!1)</script>
@@ -2716,7 +2716,7 @@ Consequences:</p>
 <ul>
 <li>A <strong>default</strong> install (no per-tenant <code>workerImage</code>) provisions worker pods that silently no-op every job — the pod exits <code>Completed</code> with empty logs and the AGC's <code>RenewJob</code> 401s.
   Tests never caught it: the e2e suite always passes the wrapper image explicitly.
-  Found live in <a href="../../../STATUS/">Q224</a>.</li>
+  Found live in <a href="../../../queue/">Q224</a>.</li>
 <li>An <strong>ARC migrator's</strong> custom/slim image (<code>FROM actions-runner</code> + tooling) is not drop-in: it has <code>Runner.Worker</code> but the stock entrypoint, so it must be rebuilt with the wrapper layered on.</li>
 </ul>
 <h2 id="goal">Goal<a class="headerlink" href="#goal" title="Permanent link">&para;</a></h2>
@@ -2771,7 +2771,7 @@ A runtime probe-and-fallback is out of scope for v1.</p>
 <li><strong>Unit</strong> (<a href="https://github.com/actions-gateway/github-actions-gateway/tree/main/cmd/agc/internal/provisioner">provisioner</a>): image-volume path, init-container path, command override, <code>RUNNER_HOME_DIR</code>/<code>PATH</code> env, init-container hardening under <code>restricted</code>, and <code>WRAPPER_DELIVERY</code> selection (incl. version gate).</li>
 <li><strong>E2e</strong> (kind): a case that sets <code>WORKER_IMG</code> to the <strong>bare upstream</strong> <code>actions-runner</code> (not the wrapper image) and asserts a job runs end-to-end — the regression the unit tests can't cover.
   Run on both the ≥1.33 (image-volume) and an init-fallback path.</li>
-<li><strong>Live</strong>: dogfood re-validate with <code>DefaultWorkerImage</code> = upstream + injection (the <a href="../../../STATUS/">Q224</a> path), worker image <strong>unset</strong>.</li>
+<li><strong>Live</strong>: dogfood re-validate with <code>DefaultWorkerImage</code> = upstream + injection (the <a href="../../../queue/">Q224</a> path), worker image <strong>unset</strong>.</li>
 </ul>
 <h2 id="rollout">Rollout<a class="headerlink" href="#rollout" title="Permanent link">&para;</a></h2>
 <ol>

@@ -142,7 +142,7 @@
             <div class="md-banner__inner md-grid md-typeset">
               You're not viewing the latest release.
   <a href="https://actions-gateway.com/dev"><strong>Go to the current docs.</strong></a>
-    <a href="../../STATUS/">See the working backlog.</a>
+    <a href="../../queue/">See the working backlog.</a>
 
             </div>
             <script>var el=document.querySelector("[data-md-component=outdated]"),base=new URL("../.."),outdated=__md_get("__outdated",sessionStorage,base);!0===outdated&&el&&(el.hidden=!1)</script>
@@ -2725,7 +2725,7 @@ This is the escape-hatch check the <a href="../archive/gke-dogfood-turnup-findin
 Before the user commits to (or declines) the Q264 scale-set rewrite, this spike tests two proposed AGC-side levers against the mechanism and the existing live evidence.</p>
 <p><strong>Verdict up front: no AGC-side lever provides a <em>reliable</em> fix; #530/§5 stands — <a href="../q264-scale-set-protocol/">Option E (Q264)</a> is the only structural fix.</strong></p>
 <ul>
-<li><strong>H2 (unique/ephemeral runner names): NON-LEVER (reasoned, high confidence).</strong> Renaming the same reactively-grown slots adds <strong>zero</strong> distinct idle runners — the actual binding constraint — while defeating the <a href="../../STATUS/">Q114</a> recycle optimization and worsening the stale-runner-record clutter that already confounds re-routes.
+<li><strong>H2 (unique/ephemeral runner names): NON-LEVER (reasoned, high confidence).</strong> Renaming the same reactively-grown slots adds <strong>zero</strong> distinct idle runners — the actual binding constraint — while defeating the <a href="../../queue/">Q114</a> recycle optimization and worsening the stale-runner-record clutter that already confounds re-routes.
   The #8 orphaning is runner-<strong>id</strong> churn on recycle, not name reuse; unique names do not fix it and can worsen it.</li>
 <li><strong>H1 (warm idle <em>listener</em> baseline): at best a probabilistic stopgap, not a fix — and its efficacy is unconfirmed (the #8 data leans <em>against</em> it).</strong> Note the reframe: the lever the dispatch problem needs is a warm baseline of idle <strong>long-poll listeners</strong> (a <em>new</em> <code>minIdleListeners</code>-style knob), <strong>not</strong> Q261/<a href="../../design/appendix-g-future-enhancements/#g12-warm-worker-pool-minidleworkers">G.12</a> <code>minIdleWorkers</code> (warm worker <strong>pods</strong>), which presents no extra idle runners to GitHub and so does nothing for dispatch starvation.
   Even in its favourable case, H1 converges on reimplementing the scale-set capacity model on top of the fan-out-prone offer-to-many protocol, <em>without</em> the single authoritative stream or capacity header — strictly dominated by Option E.</li>
@@ -2760,7 +2760,7 @@ Outcome — <strong>2/7 green, 5/7 wedged <code>in_progress</code> indefinitely<
 <p>This is genuinely AGC-side and changeable — an eager warm baseline of idle listeners <em>would</em> present more distinct idle runners at t=0 (that is H1).
 Whether that helps is decided entirely by §4.</p>
 <h2 id="3-h2--uniqueephemeral-runner-names-non-lever">3. H2 — unique/ephemeral runner names: NON-LEVER<a class="headerlink" href="#3-h2--uniqueephemeral-runner-names-non-lever" title="Permanent link">&para;</a></h2>
-<p>Today the agent name is deterministic by slot index — <code>fmt.Sprintf("%s-%d", groupName, index)</code> →<code>ci8-1</code>, <code>ci8-2</code> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/agentpool/pool.go"><code>pool.go:328</code></a>) — and <a href="../../STATUS/">Q114</a> single-use recycle <strong>re-registers the same name</strong> (same index) after each job.
+<p>Today the agent name is deterministic by slot index — <code>fmt.Sprintf("%s-%d", groupName, index)</code> →<code>ci8-1</code>, <code>ci8-2</code> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/agentpool/pool.go"><code>pool.go:328</code></a>) — and <a href="../../queue/">Q114</a> single-use recycle <strong>re-registers the same name</strong> (same index) after each job.
 H2 proposes a unique/ephemeral name per registration so GitHub "distributes" rather than "piles."</p>
 <p>It fails on the mechanism:</p>
 <ul>
@@ -2806,7 +2806,7 @@ But the existing evidence <strong>leans toward (b)</strong>:</p>
 <p>Suppose the §5 probe shows (a) — warm-wide classic spreads.
 H1 would still be a <strong>probability improvement, not a structural guarantee</strong>, because GAG's topology re-enters churn the moment load is sustained:</p>
 <ul>
-<li>Every completed job <strong>recycles</strong> its runner (<a href="../../STATUS/">Q114</a> single-use): deregister → re-register, a seconds-long window in which that runner is absent and any job GitHub stages to its old id <strong>orphans</strong> (the #8 failure, unchanged).</li>
+<li>Every completed job <strong>recycles</strong> its runner (<a href="../../queue/">Q114</a> single-use): deregister → re-register, a seconds-long window in which that runner is absent and any job GitHub stages to its old id <strong>orphans</strong> (the #8 failure, unchanged).</li>
 <li>Sustaining N warm idle listeners under continuous burst means continuously re-warming through that churn.</li>
 </ul>
 <p>To make H1 reliable you would additionally need <strong>non-recycling ephemeral runners</strong> (one runner per job, never reused) <strong>plus</strong> a continuously-maintained warm baseline <strong>plus</strong> capacity-accurate advertisement — i.e. you reconstruct the <strong>scale-set capacity model</strong> on top of the <strong>fan-out-prone offer-to-many protocol</strong>, keeping the very race Option E removes by construction.

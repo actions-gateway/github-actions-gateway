@@ -142,7 +142,7 @@
             <div class="md-banner__inner md-grid md-typeset">
               You're not viewing the latest release.
   <a href="https://actions-gateway.com/dev"><strong>Go to the current docs.</strong></a>
-    <a href="../../STATUS/">See the working backlog.</a>
+    <a href="../../queue/">See the working backlog.</a>
 
             </div>
             <script>var el=document.querySelector("[data-md-component=outdated]"),base=new URL("../.."),outdated=__md_get("__outdated",sessionStorage,base);!0===outdated&&el&&(el.hidden=!1)</script>
@@ -2942,7 +2942,7 @@ It compares the two viable production mechanisms (Cilium Egress Gateway vs per-t
 <p><strong>Scope of this document: design + written reference architecture, now fully live-validated.</strong> Two live runs on throwaway GKE Dataplane V2 clusters (torn down same-session) proved the claim end-to-end:</p>
 <ul>
 <li>✅ The <strong>Cloud NAT mechanism is proven</strong> (<a href="../q243-q245-q230-live-validation-campaign/">campaign, 2026-07-07</a>): two tenants (distinguished by node pool + pod secondary range) egress from <strong>distinct, stable</strong> source IPs, stable across pod reschedule (see <a href="#live-validation-results-2026-07-07">Live-validation results</a>).</li>
-<li>✅ <strong>GAG binds a real EgressProxy to its egress IP — proven live</strong> <em>(2026-07-13; the design was resolved by <a href="../../STATUS/">Q282</a> and asserted only in envtest until this run)</em>: a GMC-provisioned <code>EgressProxy</code> with <code>spec.scheduling</code> lands <strong>both</strong> replicas on one tenant pool → <strong>one</strong> Cloud NAT IP, distinct per tenant and stable across reschedule.
+<li>✅ <strong>GAG binds a real EgressProxy to its egress IP — proven live</strong> <em>(2026-07-13; the design was resolved by <a href="../../queue/">Q282</a> and asserted only in envtest until this run)</em>: a GMC-provisioned <code>EgressProxy</code> with <code>spec.scheduling</code> lands <strong>both</strong> replicas on one tenant pool → <strong>one</strong> Cloud NAT IP, distinct per tenant and stable across reschedule.
   <code>EgressProxy.spec.scheduling</code> and <code>ActionsGateway.spec.scheduling</code> carry <code>nodeSelector</code>/<code>tolerations</code>/<code>affinity</code> through to the proxy pool and AGC pods, and a supplied <code>podAntiAffinity</code> <strong>replaces</strong> the builder's required cross-node spread (so a single-node tenant pool no longer strands replicas in <code>Pending</code>).
   The 2026-07-07 two-IP spread is gone.
   See <a href="#result--pass-2026-07-13">Result — PASS (2026-07-13)</a> and <a href="#placement-pass-through-q282">Placement pass-through</a>.</li>
@@ -2950,7 +2950,7 @@ It compares the two viable production mechanisms (Cilium Egress Gateway vs per-t
   The working primitive is a <strong>dedicated pod secondary range per tenant node pool + a per-range Cloud NAT + <code>--disable-default-snat</code></strong> (so pod IPs, not the node IP, are the NAT source).
   Corrected in <a href="#approach-b--per-tenant-cloud-nat">Approach B</a>.</li>
 </ul>
-<p>Completes Q243 (the <a href="../../STATUS/">STATUS</a> Queue row is removed on completion — this doc is the durable reference).
+<p>Completes Q243 (the <a href="../../queue/">STATUS</a> Queue row is removed on completion — this doc is the durable reference).
 Was a v2beta1 (Q74) blocker alongside Q224 and <a href="../archive/q242-g1-proxy-destination-allowlist/">Q242</a>.</p>
 <hr />
 <h2 id="why-this-exists-the-claim-vs-the-current-mechanism">Why this exists: the claim vs. the current mechanism<a class="headerlink" href="#why-this-exists-the-claim-vs-the-current-mechanism" title="Permanent link">&para;</a></h2>

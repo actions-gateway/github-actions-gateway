@@ -142,7 +142,7 @@
             <div class="md-banner__inner md-grid md-typeset">
               You're not viewing the latest release.
   <a href="https://actions-gateway.com/dev"><strong>Go to the current docs.</strong></a>
-    <a href="../../STATUS/">See the working backlog.</a>
+    <a href="../../queue/">See the working backlog.</a>
 
             </div>
             <script>var el=document.querySelector("[data-md-component=outdated]"),base=new URL("../.."),outdated=__md_get("__outdated",sessionStorage,base);!0===outdated&&el&&(el.hidden=!1)</script>
@@ -2835,7 +2835,7 @@
 This is the <strong>policy</strong> (the rules) and the <strong>strategy</strong> (the lifecycle that enforces them).
 The mechanics live in adjacent docs and are linked rather than repeated:</p>
 <ul>
-<li><a href="../maintaining-backlog/">maintaining-backlog.md</a> — how to record and prioritize a debt item in <a href="../../STATUS/">docs/STATUS.md</a>.</li>
+<li><a href="../maintaining-backlog/">maintaining-backlog.md</a> — how to record and prioritize a debt item in <a href="../../queue/">the backlog</a>.</li>
 <li><a href="../backpressure/">backpressure.md</a>: the automated feedback loops that stop debt at authoring time.</li>
 <li><a href="../../plan/release-1.0/">release-1.0.md</a> — the quality gates that block the 1.0 release (bucket F).</li>
 <li><a href="../../design/appendix-g-future-enhancements/">appendix-g-future-enhancements.md</a> — long-horizon non-commitments.</li>
@@ -2843,7 +2843,7 @@ The mechanics live in adjacent docs and are linked rather than repeated:</p>
 <h2 id="what-we-mean-by-technical-debt">What we mean by technical debt<a class="headerlink" href="#what-we-mean-by-technical-debt" title="Permanent link">&para;</a></h2>
 <p>Technical debt is work we <strong>knowingly defer</strong> that trades short-term progress for a long-term carrying cost — a shortcut taken on purpose, or erosion we have noticed but not yet paid down.
 It is distinct from a plain bug: a bug is incorrect behavior we want fixed; debt is a <em>known</em> gap between what exists and what we would build with unlimited time.
-A debt item may <em>cause</em> bugs (the <a href="../../STATUS/">Q76</a> agent-pool claim race is debt that can corrupt sessions), but the defining trait is that we are choosing — explicitly — when to pay it.</p>
+A debt item may <em>cause</em> bugs (the <a href="../../queue/">Q76</a> agent-pool claim race is debt that can corrupt sessions), but the defining trait is that we are choosing — explicitly — when to pay it.</p>
 <p>The policy below exists so that choice is always <strong>explicit and recorded</strong>, never an accident of an unreviewed shortcut.</p>
 <h2 id="classification">Classification<a class="headerlink" href="#classification" title="Permanent link">&para;</a></h2>
 <p>We classify each item so its severity and owner are obvious.
@@ -2893,10 +2893,10 @@ Decide deliberately:</p>
    A behavior-preserving cleanup that the current change naturally touches (e.g. extracting a duplicated security context while editing the builder it lives in) qualifies.
    Verify it changes no behavior.</li>
 <li><strong>Flag to the Queue</strong> — near- or long-term work that someone should do but not now.
-   Add a row to the Queue in <a href="../../STATUS/">docs/STATUS.md</a> <strong>at the priority it deserves</strong>, with the <em>why</em> of any decision it depends on.
+   File an item in <a href="../../queue/">the backlog</a> <strong>at the priority it deserves</strong>, with the <em>why</em> of any decision it depends on.
    Follow <a href="../maintaining-backlog/">maintaining-backlog.md</a>.</li>
 <li><strong>Defer</strong> — a real commitment with no near-term intent, waiting on an explicit trigger (a tool, a cluster, a dependency that does not exist yet).
-   It goes in the <strong>Deferred</strong> section of <a href="../../STATUS/">docs/STATUS.md</a>, out of the priority ordering, and returns to the Queue when its trigger fires.</li>
+   It is filed <code>status: deferred</code> in <a href="../../queue/">the backlog</a>, out of the priority ordering, and returns to the Queue when its trigger fires.</li>
 <li><strong>Decline</strong> — a long-horizon idea we are explicitly <em>not</em> committing to.
    It belongs in <a href="../../design/appendix-g-future-enhancements/">appendix-g-future-enhancements.md</a>, not the backlog.</li>
 </ol>
@@ -3066,7 +3066,7 @@ The two look alike from the outside, so the decision needs a test that reads the
 </ul>
 <p>Parsing structured text is necessary but not sufficient.
 A script that must reproduce its input <strong>byte for byte</strong> is worse off with an abstract syntax tree, which discards exactly the fidelity it depends on.
-<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/docs/git-merge-status.sh"><code>git-merge-status.sh</code></a> and <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/lib/merge-keyed-records.awk"><code>merge-keyed-records.awk</code></a> parse Markdown tables and stay in <code>awk</code> for that reason: a merge driver reconstructs the file line for line, conflict-marker fallback included.</p>
+<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/docs/git-merge-plan-index.sh"><code>git-merge-plan-index.sh</code></a> and <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/lib/merge-keyed-records.awk"><code>merge-keyed-records.awk</code></a> parse Markdown tables and stay in <code>awk</code> for that reason: a merge driver reconstructs the file line for line, conflict-marker fallback included.</p>
 <h4 id="worked-examples">Worked examples<a class="headerlink" href="#worked-examples" title="Permanent link">&para;</a></h4>
 <p>Line counts measured 2026-08-03 with <code>wc -l</code>.
 The <a href="../../plan/markdown-gates-parser/">Q612 survey</a> and the Queue row that asked for this section cited 235, 601, and 790; all three scripts have drifted since.</p>
@@ -3087,10 +3087,10 @@ The <a href="../../plan/markdown-gates-parser/">Q612 survey</a> and the Queue ro
 <td><strong>Rewritten</strong> (Q612) — the checker is <a href="https://github.com/actions-gateway/github-actions-gateway/tree/main/devtools/docs/doclinks"><code>devtools/docs/doclinks</code></a> over a shared goldmark parse layer; the script keeps the file selection</td>
 </tr>
 <tr>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/docs/lint-backlog.sh"><code>scripts/docs/lint-backlog.sh</code></a></td>
+<td><code>scripts/docs/lint-backlog.sh</code> (since retired, Q889)</td>
 <td>518, now 92</td>
 <td>Queue rows split on a literal <code>\|</code> field separator at fixed indices; one escaped pipe in a cell shifted every field and the row's rules then evaluated the wrong ones</td>
-<td><strong>Rewritten</strong> (Q613): the rules are <a href="https://github.com/actions-gateway/github-actions-gateway/tree/main/devtools/docs/backloglint"><code>devtools/docs/backloglint</code></a> over the same parse layer; the script keeps the file selection and the environment interface</td>
+<td><strong>Rewritten</strong> (Q613): the rules are <code>devtools/docs/backloglint</code> over the same parse layer; the script keeps the file selection and the environment interface</td>
 </tr>
 <tr>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/dev/validate-egress-ip.sh"><code>scripts/dev/validate-egress-ip.sh</code></a></td>
@@ -3159,19 +3159,19 @@ We track the ones that are cheap, automatable, and catch real regressions — an
 <tbody>
 <tr>
 <td><strong>Test coverage</strong></td>
-<td>Track — measured in CI, gated by a no-regression ratchet (<a href="../../STATUS/">Q77</a>).</td>
+<td>Track — measured in CI, gated by a no-regression ratchet (<a href="../../queue/">Q77</a>).</td>
 </tr>
 <tr>
 <td><strong>Code duplication</strong></td>
-<td>Track — <code>dupl</code> linter (<a href="../../STATUS/">Q78</a>).</td>
+<td>Track — <code>dupl</code> linter (<a href="../../queue/">Q78</a>).</td>
 </tr>
 <tr>
 <td><strong>Data-race freedom</strong></td>
-<td>Track — <code>-race</code> on unit tests, the core concern for a goroutine-multiplexing engine (<a href="../../STATUS/">Q79</a>).</td>
+<td>Track — <code>-race</code> on unit tests, the core concern for a goroutine-multiplexing engine (<a href="../../queue/">Q79</a>).</td>
 </tr>
 <tr>
 <td><strong>Static security findings</strong></td>
-<td>Track — <code>gosec</code> (<a href="../../STATUS/">Q80</a>); unchecked errors via <code>errcheck</code> (<a href="../../STATUS/">Q81</a>).</td>
+<td>Track — <code>gosec</code> (<a href="../../queue/">Q80</a>); unchecked errors via <code>errcheck</code> (<a href="../../queue/">Q81</a>).</td>
 </tr>
 <tr>
 <td><strong>Reachable CVEs</strong></td>
@@ -3179,15 +3179,15 @@ We track the ones that are cheap, automatable, and catch real regressions — an
 </tr>
 <tr>
 <td><strong>Open-item count / age</strong></td>
-<td>Track lightly — the labeled Queue in <a href="../../STATUS/">docs/STATUS.md</a> is the register; formal aging is overkill at this scale.</td>
+<td>Track lightly — the labeled backlog in <a href="../../queue/">docs/queue/</a> is the register; formal aging is overkill at this scale.</td>
 </tr>
 <tr>
 <td><strong>Function length</strong></td>
-<td>Track — <code>funlen</code> as a ratcheted ceiling (<a href="../../STATUS/">Q371</a>): the threshold starts just above the worst surviving function and lowers as long functions are decomposed, the same "gates by not getting worse" pattern the coverage ratchet uses. Cyclomatic complexity proper (<code>gocyclo</code>) stays skipped — length is the cheaper proxy, and Q367 showed the god <code>main</code>/<code>run</code> functions were the real target.</td>
+<td>Track — <code>funlen</code> as a ratcheted ceiling (<a href="../../queue/">Q371</a>): the threshold starts just above the worst surviving function and lowers as long functions are decomposed, the same "gates by not getting worse" pattern the coverage ratchet uses. Cyclomatic complexity proper (<code>gocyclo</code>) stays skipped — length is the cheaper proxy, and Q367 showed the god <code>main</code>/<code>run</code> functions were the real target.</td>
 </tr>
 <tr>
 <td><strong>Suppression hygiene</strong></td>
-<td>Track — <code>nolintlint</code> (<code>allow-unused: false</code>, <code>require-specific: true</code>) (<a href="../../STATUS/">Q371</a>): an inert or blanket <code>//nolint</code> directive fails the build, so a suppression cannot outlive the finding it documents (the class the dead <code>nolint:gocyclo</code> on the old <code>main()</code> was).</td>
+<td>Track — <code>nolintlint</code> (<code>allow-unused: false</code>, <code>require-specific: true</code>) (<a href="../../queue/">Q371</a>): an inert or blanket <code>//nolint</code> directive fails the build, so a suppression cannot outlive the finding it documents (the class the dead <code>nolint:gocyclo</code> on the old <code>main()</code> was).</td>
 </tr>
 <tr>
 <td>Technical-debt ratio, defect ratio, DORA velocity (lead time, change-failure rate), debt index</td>
@@ -3220,7 +3220,7 @@ Each gate is the durable form of a detect-and-pay-down cycle: once paid, it does
 </tr>
 <tr>
 <td>Recording and prioritizing an item</td>
-<td><a href="../maintaining-backlog/">maintaining-backlog.md</a> → <a href="../../STATUS/">docs/STATUS.md</a></td>
+<td><a href="../maintaining-backlog/">maintaining-backlog.md</a> → <a href="../../queue/">docs/queue/</a></td>
 </tr>
 <tr>
 <td>Escalating a session <em>finding</em> into a rule, a gate, or a prompt line</td>

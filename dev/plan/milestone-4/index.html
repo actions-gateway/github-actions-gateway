@@ -142,7 +142,7 @@
             <div class="md-banner__inner md-grid md-typeset">
               You're not viewing the latest release.
   <a href="https://actions-gateway.com/dev"><strong>Go to the current docs.</strong></a>
-    <a href="../../STATUS/">See the working backlog.</a>
+    <a href="../../queue/">See the working backlog.</a>
 
             </div>
             <script>var el=document.querySelector("[data-md-component=outdated]"),base=new URL("../.."),outdated=__md_get("__outdated",sessionStorage,base);!0===outdated&&el&&(el.hidden=!1)</script>
@@ -3229,7 +3229,7 @@
 </ul>
 <h2 id="status-at-a-glance">Status at a glance<a class="headerlink" href="#status-at-a-glance" title="Permanent link">&para;</a></h2>
 <p>Last refreshed 2026-06-12.
-<strong>All success criteria are now live-validated.</strong> The multi-tenant, delete-isolation, and end-to-end-proxy-job rows were proven on a real kind cluster with real GitHub App credentials on 2026-06-11/12 — see <a href="#12-live-multi-tenant-validation-evidence-2026-06-1112">§12 Live multi-tenant validation evidence</a> for the full session record, including the four product bugs it surfaced (tracked as Q114–Q117 in <a href="../../STATUS/">STATUS.md</a>).</p>
+<strong>All success criteria are now live-validated.</strong> The multi-tenant, delete-isolation, and end-to-end-proxy-job rows were proven on a real kind cluster with real GitHub App credentials on 2026-06-11/12 — see <a href="#12-live-multi-tenant-validation-evidence-2026-06-1112">§12 Live multi-tenant validation evidence</a> for the full session record, including the four product bugs it surfaced (tracked as Q114–Q117 in <a href="../../queue/">STATUS.md</a>).</p>
 <table>
 <thead>
 <tr>
@@ -4316,7 +4316,7 @@ Recorded as Q118 (set the env in the GMC + fix the Dockerfile-vs-<code>DefaultWo
 <p><code>kubectl delete actionsgateway gateway-b -n tenant-b</code> returned after the finalizer drained; afterwards <code>tenant-b</code> contained only the namespace itself, the <code>default</code> ServiceAccount, and the operator-created <code>github-app-creds</code> Secret (the namespace is never deleted by design).
 <code>tenant-a</code> was untouched (<code>Ready=True</code>, AGC + 2/2 proxy pods running, RunnerGroup intact) and subsequently ran run 27395702908 to green.
 Deleting <code>gateway-a</code> at the end, with a healthy session, also <strong>deregistered its runners from GitHub</strong> — the repo runner list went empty.</p>
-<h3 id="product-bugs-surfaced-all-filed-in-statusmd">Product bugs surfaced (all filed in <a href="../../STATUS/">STATUS.md</a>)<a class="headerlink" href="#product-bugs-surfaced-all-filed-in-statusmd" title="Permanent link">&para;</a></h3>
+<h3 id="product-bugs-surfaced-all-filed-in-statusmd">Product bugs surfaced (all filed in <a href="../../queue/">STATUS.md</a>)<a class="headerlink" href="#product-bugs-surfaced-all-filed-in-statusmd" title="Permanent link">&para;</a></h3>
 <p>The live run worked <strong>only after</strong> working around these; none are caught by unit/cluster-only/fake-GitHub tiers:</p>
 <ol>
 <li><strong>Q115 — default worker SecurityContext breaks the runner image.</strong> Q31's <code>applySecurityDefaults</code> stamps pod-level <code>runAsNonRoot: true</code>; the <code>actions-runner</code> image uses non-numeric <code>USER runner</code>, so kubelet fails every default-path worker pod with <code>CreateContainerConfigError: container has runAsNonRoot and image has non-numeric user</code>.

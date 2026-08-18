@@ -142,7 +142,7 @@
             <div class="md-banner__inner md-grid md-typeset">
               You're not viewing the latest release.
   <a href="https://actions-gateway.com/dev"><strong>Go to the current docs.</strong></a>
-    <a href="../../STATUS/">See the working backlog.</a>
+    <a href="../../queue/">See the working backlog.</a>
 
             </div>
             <script>var el=document.querySelector("[data-md-component=outdated]"),base=new URL("../.."),outdated=__md_get("__outdated",sessionStorage,base);!0===outdated&&el&&(el.hidden=!1)</script>
@@ -2805,7 +2805,7 @@
 <h1 id="gag-dogfood-ci-runner-right-sizing">GAG Dogfood CI Runner Right-Sizing<a class="headerlink" href="#gag-dogfood-ci-runner-right-sizing" title="Permanent link">&para;</a></h1>
 <blockquote>
 <p><strong>Status: ✅ COMPLETE (2026-07-07).</strong> Node-pool disk class RESOLVED (2026-07-05); general-worker pod <code>requests</code>/<code>limits</code> RIGHT-SIZED (2026-07-06); <strong>e2e-worker (DinD) pod <code>requests</code>/<code>limits</code> RIGHT-SIZED from a measured clean-green Calico run (2026-07-07)</strong>; the optional "small" tier <strong>measured and formally declined</strong> (the packing waste is not material).
-Tracked as <a href="../../STATUS/#Q248">Q248</a>.
+Tracked as Q248, closed with the work.
 Every worker pod's original <code>requests</code>/<code>limits</code> were an unmeasured guess; they are now replaced with values derived from measured peak — general workers see <a href="#phase-2--derived-requestslimits-2026-07-06-general-workers">§ Phase 2 — general</a>, e2e workers see <a href="#e2e-worker-sizing--measured-then-derived-dind-2026-07-07">§ e2e worker sizing</a>, the small tier see <a href="#small-tier--measured-then-declined-2026-07-07">§ Small tier</a>.
 <strong>The dominant general-pool capacity ceiling turned out to be the node-pool <em>disk class</em>, not the pod requests</strong> — see <a href="#node-pool-disk-class-the-real-maxworkers-ceiling-q248-2026-07-05">§ Node-pool disk class</a> below (resolved 2026-07-05: <code>pd-balanced</code>→<code>pd-standard</code>, no quota bump).</p>
 </blockquote>

@@ -142,7 +142,7 @@
             <div class="md-banner__inner md-grid md-typeset">
               You're not viewing the latest release.
   <a href="https://actions-gateway.com/dev"><strong>Go to the current docs.</strong></a>
-    <a href="../../../STATUS/">See the working backlog.</a>
+    <a href="../../../queue/">See the working backlog.</a>
 
             </div>
             <script>var el=document.querySelector("[data-md-component=outdated]"),base=new URL("../../.."),outdated=__md_get("__outdated",sessionStorage,base);!0===outdated&&el&&(el.hidden=!1)</script>
@@ -2723,7 +2723,7 @@ These baseline properties are documented durably in <a href="../../../design/05-
 <tr>
 <td>A3</td>
 <td>✅</td>
-<td>~~RunnerGroup controller has no <code>Owns()</code> / watch on worker Pods or agent Secrets — evicted pods leave <code>ActiveSessions</code> stale until the next Generation bump.~~ Fixed 2026-06-03 (<a href="../../../STATUS/">Q63</a>): <code>SetupWithManager</code> now adds <code>.Watches(&amp;corev1.Pod{}, podToRunnerGroup)</code> filtered by <code>workerPodPredicate</code> (label <code>actions-gateway/runner-group</code> present; Create/Delete, plus Update only on a phase change so eviction — which surfaces as <code>Running→Failed</code>, not a delete — still wakes the controller). The watch reuses the shared Pod informer (same one Q64's <code>InformerPodWaiter</code> drives), so it adds no second cache. <strong>Pods only, deliberately:</strong> the agent-Secret half is <em>not</em> implemented — a Secret watch would establish a Secret informer and cache credential material, violating W3/H-2 (Secrets bypass the cache via <code>DisableFor</code>). Covered by <code>runnergroup_podwatch_internal_test.go</code> (predicate/map-func) + <code>TestAGC_Reconciler_WorkerPodEventTriggersReconcile</code> (envtest end-to-end).</td>
+<td>~~RunnerGroup controller has no <code>Owns()</code> / watch on worker Pods or agent Secrets — evicted pods leave <code>ActiveSessions</code> stale until the next Generation bump.~~ Fixed 2026-06-03 (<a href="../../../queue/">Q63</a>): <code>SetupWithManager</code> now adds <code>.Watches(&amp;corev1.Pod{}, podToRunnerGroup)</code> filtered by <code>workerPodPredicate</code> (label <code>actions-gateway/runner-group</code> present; Create/Delete, plus Update only on a phase change so eviction — which surfaces as <code>Running→Failed</code>, not a delete — still wakes the controller). The watch reuses the shared Pod informer (same one Q64's <code>InformerPodWaiter</code> drives), so it adds no second cache. <strong>Pods only, deliberately:</strong> the agent-Secret half is <em>not</em> implemented — a Secret watch would establish a Secret informer and cache credential material, violating W3/H-2 (Secrets bypass the cache via <code>DisableFor</code>). Covered by <code>runnergroup_podwatch_internal_test.go</code> (predicate/map-func) + <code>TestAGC_Reconciler_WorkerPodEventTriggersReconcile</code> (envtest end-to-end).</td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/controller/runnergroup_controller.go">runnergroup_controller.go (<code>podToRunnerGroup</code>/<code>workerPodPredicate</code>)</a></td>
 <td>—</td>
 </tr>
@@ -2744,7 +2744,7 @@ These baseline properties are documented durably in <a href="../../../design/05-
 <tr>
 <td>A6</td>
 <td>✅</td>
-<td>~~Eleven <code>apply*</code> helpers do read-modify-write without <code>IsConflict</code> handling.~~ Fixed 2026-06-06 (<a href="../../../STATUS/">Q65</a>): the nine per-reconcile helpers (<code>applyServiceAccount</code>/<code>RoleBinding</code>/<code>NetworkPolicy</code>/<code>ResourceQuota</code>/<code>Deployment</code>/<code>Service</code>/<code>PDB</code>/<code>HPA</code>/<code>RunnerGroup</code>) plus <code>applyOwnedSecret</code> now use <code>controllerutil.CreateOrPatch</code>, which re-reads inside the call and writes a minimal merge patch of only the controller-managed fields — conflict-safe (a concurrent writer on unmanaged fields is neither clobbered nor forces an avoidable <code>IsConflict</code>) and no longer clobbers server-assigned fields (verified: <code>applyService</code> preserves <code>ClusterIP</code>). <code>applyRoleBinding</code> keeps the immutable-<code>roleRef</code> delete+recreate upgrade path via a sentinel error. <code>ensureProxyCert</code> now routes through <code>applyOwnedSecret</code> (DRY). The 11th helper, <code>applyNamespacePSA</code>, already uses Server-Side Apply (B2/B3) and is left as-is — already conflict-safe and conflict-reporting. Covered by <code>apply_helpers_test.go</code> (fake-client unit) + <code>apply_nochurn_test.go</code> (envtest: asserts child-resource <code>resourceVersion</code> stability across periodic reconciles, proving the whole-<code>Spec</code> helpers don't churn against a real apiserver that re-defaults + skips no-op writes). Why <code>CreateOrPatch</code> and not Server-Side Apply — see the <a href="#a6-design-note-createorpatch-vs-server-side-apply">A6 design note</a> (rationale promoted to <a href="../../../design/02-architecture/#design-choice-reconciler-writes-use-createorpatch-not-server-side-apply">02-architecture.md</a>).</td>
+<td>~~Eleven <code>apply*</code> helpers do read-modify-write without <code>IsConflict</code> handling.~~ Fixed 2026-06-06 (<a href="../../../queue/">Q65</a>): the nine per-reconcile helpers (<code>applyServiceAccount</code>/<code>RoleBinding</code>/<code>NetworkPolicy</code>/<code>ResourceQuota</code>/<code>Deployment</code>/<code>Service</code>/<code>PDB</code>/<code>HPA</code>/<code>RunnerGroup</code>) plus <code>applyOwnedSecret</code> now use <code>controllerutil.CreateOrPatch</code>, which re-reads inside the call and writes a minimal merge patch of only the controller-managed fields — conflict-safe (a concurrent writer on unmanaged fields is neither clobbered nor forces an avoidable <code>IsConflict</code>) and no longer clobbers server-assigned fields (verified: <code>applyService</code> preserves <code>ClusterIP</code>). <code>applyRoleBinding</code> keeps the immutable-<code>roleRef</code> delete+recreate upgrade path via a sentinel error. <code>ensureProxyCert</code> now routes through <code>applyOwnedSecret</code> (DRY). The 11th helper, <code>applyNamespacePSA</code>, already uses Server-Side Apply (B2/B3) and is left as-is — already conflict-safe and conflict-reporting. Covered by <code>apply_helpers_test.go</code> (fake-client unit) + <code>apply_nochurn_test.go</code> (envtest: asserts child-resource <code>resourceVersion</code> stability across periodic reconciles, proving the whole-<code>Spec</code> helpers don't churn against a real apiserver that re-defaults + skips no-op writes). Why <code>CreateOrPatch</code> and not Server-Side Apply — see the <a href="#a6-design-note-createorpatch-vs-server-side-apply">A6 design note</a> (rationale promoted to <a href="../../../design/02-architecture/#design-choice-reconciler-writes-use-createorpatch-not-server-side-apply">02-architecture.md</a>).</td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/controller/actionsgateway_controller.go">actionsgateway_controller.go</a></td>
 <td>—</td>
 </tr>
@@ -2866,7 +2866,7 @@ Proxy pods (GMC <code>buildProxyDeployment</code>) already ship a full hardened 
 </table>
 <h2 id="d-crd-design-polish-">D. CRD design polish 🟡<a class="headerlink" href="#d-crd-design-polish-" title="Permanent link">&para;</a></h2>
 <p>Mostly cosmetic + future-proofing; no security implications except D5.
-<strong>D1–D6 closed 2026-06-06 (<a href="../../../STATUS/">Q33</a>); D7 deferred to v1beta1 graduation.</strong></p>
+<strong>D1–D6 closed 2026-06-06 (<a href="../../../queue/">Q33</a>); D7 deferred to v1beta1 graduation.</strong></p>
 <table>
 <thead>
 <tr>
@@ -2962,14 +2962,14 @@ Resolved under Q34; the secure-by-default vs install-prerequisite trade-off for 
 <td>✅</td>
 <td>Metrics endpoint uses controller-runtime self-signed cert; cert-manager <code>[METRICS-WITH-CERTS]</code> block commented out. Prometheus scrape requires <code>insecure_skip_verify</code>.</td>
 <td><code>kustomization.yaml</code></td>
-<td><strong>Kept opt-in by decision.</strong> The /metrics endpoint is already TLS + RBAC-authn gated (<code>metrics_auth_role</code>); cert-manager only upgrades scrape-path verification — defense-in-depth, not a required control. Enabling by default would hard-require cert-manager at install. Documented as an opt-in; becomes a Helm values toggle in <a href="../../../STATUS/">Q12</a>.</td>
+<td><strong>Kept opt-in by decision.</strong> The /metrics endpoint is already TLS + RBAC-authn gated (<code>metrics_auth_role</code>); cert-manager only upgrades scrape-path verification — defense-in-depth, not a required control. Enabling by default would hard-require cert-manager at install. Documented as an opt-in; becomes a Helm values toggle in <a href="../../../queue/">Q12</a>.</td>
 </tr>
 <tr>
 <td>E4</td>
 <td>✅</td>
 <td><code>../prometheus</code> (ServiceMonitor) commented out by default — no out-of-box Prom scraping.</td>
 <td><code>kustomization.yaml</code></td>
-<td><strong>Kept opt-in by decision.</strong> Pure observability wiring, no security dimension; the ServiceMonitor CRD only exists with the Prometheus Operator installed, so default-on would break <code>apply</code> on clusters without it. Documented opt-in; Helm values toggle in <a href="../../../STATUS/">Q12</a>.</td>
+<td><strong>Kept opt-in by decision.</strong> Pure observability wiring, no security dimension; the ServiceMonitor CRD only exists with the Prometheus Operator installed, so default-on would break <code>apply</code> on clusters without it. Documented opt-in; Helm values toggle in <a href="../../../queue/">Q12</a>.</td>
 </tr>
 <tr>
 <td>E5</td>

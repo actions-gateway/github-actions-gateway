@@ -142,7 +142,7 @@
             <div class="md-banner__inner md-grid md-typeset">
               You're not viewing the latest release.
   <a href="https://actions-gateway.com/dev"><strong>Go to the current docs.</strong></a>
-    <a href="../../STATUS/">See the working backlog.</a>
+    <a href="../../queue/">See the working backlog.</a>
 
             </div>
             <script>var el=document.querySelector("[data-md-component=outdated]"),base=new URL("../.."),outdated=__md_get("__outdated",sessionStorage,base);!0===outdated&&el&&(el.hidden=!1)</script>
@@ -2642,7 +2642,7 @@
 
 
 <h1 id="agent-reference-allocating-backlog-q-ids">Agent reference: Allocating backlog Q-IDs<a class="headerlink" href="#agent-reference-allocating-backlog-q-ids" title="Permanent link">&para;</a></h1>
-<p>Backlog IDs are allocated by claiming a git ref on the remote, not by a counter line in <a href="../../STATUS/"><code>docs/STATUS.md</code></a>.</p>
+<p>Backlog IDs are allocated by claiming a git ref on the remote, not by a counter line in <a href="../../queue/">the backlog</a>.</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>make<span class="w"> </span>queue-id<span class="w"> </span><span class="nv">TITLE</span><span class="o">=</span><span class="s1">'GMC CRD manifest drifts from the AGC types it embeds'</span>
 </code></pre></div>
 <p>That searches the backlog for near-duplicates of the title, prints any candidates to stderr, then claims and prints one ID (<code>Q423</code>).
@@ -2746,9 +2746,9 @@ Q382 recorded three such renumberings across a single PR's rebases.</p>
 A four-worker dispatch batch takes rows 1 through 4 and every pair is adjacent.</p>
 <p>What the ref allocator removes is the <em>expensive</em> class (duplicate IDs and the renumbering cascade) and the one conflict that was guaranteed rather than incidental.
 Row conflicts remain, are two lines, and resolve obviously.
-Their real danger is a botched resolution — a done row silently restored — not the conflict itself; <code>lint-backlog</code> rule 10 now catches that (<a href="../maintaining-backlog/#a-moved-row-defeats-conflict-detection">why</a>).</p>
+Their real danger is a botched resolution — a done row silently restored — not the conflict itself; <code>lint-backlog</code> rule 10 now catches that (<a href="../maintaining-backlog/#a-moved-row-defeated-conflict-detection-and-one-file-per-item-ends-it">why</a>).</p>
 <p>Every row in the table above is a <em>line-position</em> verdict.
-The <a href="../maintaining-backlog/#the-merge-driver-resolve-queue-rows-by-id-not-by-line-position">merge driver</a> re-decides the same cases by row ID, which makes all of them clean, and leaves conflict markers only where the two sides genuinely disagree about one row.
+The <a href="../maintaining-backlog/#the-merge-drivers-resolve-registry-rows-by-key-not-by-line-position">merge driver</a> re-decides the same cases by row ID, which makes all of them clean, and leaves conflict markers only where the two sides genuinely disagree about one row.
 It is opt-in per clone (<code>make merge-driver</code>) and applies to local merges and rebases only, so the numbers above are still what an uninstalled clone — and GitHub's squash-merge — will do.</p>
 <h2 id="alternatives-considered">Alternatives considered<a class="headerlink" href="#alternatives-considered" title="Permanent link">&para;</a></h2>
 <p><strong>Move the backlog to GitHub issues.</strong> Rejected.
@@ -2756,7 +2756,7 @@ Issues would give free IDs, no backlog conflicts, and a native in-flight signal,
 Projects v2 has a position field, but it lives outside the repo and cannot be diffed.
 Issues would also cost the lintable write path that keeps Notes under the cap and pushes rationale into a doc, and the atomicity of deleting the row in the same diff as the work.
 Revisit if outside contributors need to see and claim work; that is the one thing issues clearly win.</p>
-<p><strong>A custom merge driver for <code>STATUS.md</code>.</strong> Shipped — <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/docs/git-merge-status.sh"><code>scripts/docs/git-merge-status.sh</code></a>, documented in <a href="../maintaining-backlog/#the-merge-driver-resolve-queue-rows-by-id-not-by-line-position">maintaining-backlog.md</a>.
+<p><strong>A custom merge driver for the backlog table.</strong> Shipped, then retired with the table it served (Q889); the surviving registry drivers are documented in <a href="../maintaining-backlog/#the-merge-drivers-resolve-registry-rows-by-key-not-by-line-position">maintaining-backlog.md</a>.
 It resolves the Queue table by ID set-semantics during merge and rebase, which is where the pain is, and keeps the whole existing tooling stack.
 It needs a one-time <code>git config</code> per clone (<code>make merge-driver</code>; git will not let <code>.gitattributes</code> configure a driver, since that would be remote code execution on clone) and degrades to ordinary conflict markers both when unconfigured and whenever the resolution is not certain.
 It does not help GitHub's server-side squash-merge.

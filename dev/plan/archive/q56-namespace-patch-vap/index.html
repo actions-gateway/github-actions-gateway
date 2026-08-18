@@ -142,7 +142,7 @@
             <div class="md-banner__inner md-grid md-typeset">
               You're not viewing the latest release.
   <a href="https://actions-gateway.com/dev"><strong>Go to the current docs.</strong></a>
-    <a href="../../../STATUS/">See the working backlog.</a>
+    <a href="../../../queue/">See the working backlog.</a>
 
             </div>
             <script>var el=document.querySelector("[data-md-component=outdated]"),base=new URL("../../.."),outdated=__md_get("__outdated",sessionStorage,base);!0===outdated&&el&&(el.hidden=!1)</script>
@@ -2710,7 +2710,7 @@
 
 <h1 id="q56--gate-gmc-cluster-wide-namespaces-patch-k8s-audit-b-b2">Q56 — Gate GMC cluster-wide <code>namespaces: patch</code> (k8s audit §B B2)<a class="headerlink" href="#q56--gate-gmc-cluster-wide-namespaces-patch-k8s-audit-b-b2" title="Permanent link">&para;</a></h1>
 <p><strong>Status:</strong> ✅ Done — shipped via the <code>namespace-psa-guard</code> VAP + marker-label contract; covered by <code>TestGMC_NamespacePSAGuard_EnforcesMarkerAndFieldScope</code>.
-<strong>Queue:</strong> <a href="../../../STATUS/">Q56</a> · <strong>Finding:</strong> <a href="../k8s-best-practices/#b-rbac--cluster-wide-privilege-">k8s-best-practices.md §B B2</a></p>
+<strong>Queue:</strong> <a href="../../../queue/">Q56</a> · <strong>Finding:</strong> <a href="../k8s-best-practices/#b-rbac--cluster-wide-privilege-">k8s-best-practices.md §B B2</a></p>
 <h2 id="goal">Goal<a class="headerlink" href="#goal" title="Permanent link">&para;</a></h2>
 <p>A compromised GMC pod must not be able to relabel a non-tenant namespace (notably <code>kube-system</code>) Pod Security Admission (PSA) profile.
 Today the GMC holds cluster-wide <code>namespaces: patch/update</code> so it can stamp PSA labels on tenant namespaces — but that same grant lets a compromised pod relabel <code>kube-system</code> to <code>privileged</code>.</p>
@@ -2740,7 +2740,7 @@ The marker scope already bounds the blast radius to GMC-managed tenant namespace
 <p>A compromised GMC can still flip the PSA profile <em>within a tenant namespace it already manages</em> (e.g.
 <code>baseline</code> → <code>privileged</code> on that one tenant).
 That blast radius is inherent — the GMC's whole job is managing that tenant's PSA.
-The complementary control is CEL immutability / downgrade-audit on <code>securityProfile</code> itself, tracked as <a href="../../../STATUS/">Q33</a> (k8s audit §D D5).
+The complementary control is CEL immutability / downgrade-audit on <code>securityProfile</code> itself, tracked as <a href="../../../queue/">Q33</a> (k8s audit §D D5).
 Q56 is strictly about non-tenant namespaces.</p>
 <h2 id="deliverables">Deliverables<a class="headerlink" href="#deliverables" title="Permanent link">&para;</a></h2>
 <h3 id="manifests">Manifests<a class="headerlink" href="#manifests" title="Permanent link">&para;</a></h3>

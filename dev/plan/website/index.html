@@ -142,7 +142,7 @@
             <div class="md-banner__inner md-grid md-typeset">
               You're not viewing the latest release.
   <a href="https://actions-gateway.com/dev"><strong>Go to the current docs.</strong></a>
-    <a href="../../STATUS/">See the working backlog.</a>
+    <a href="../../queue/">See the working backlog.</a>
 
             </div>
             <script>var el=document.querySelector("[data-md-component=outdated]"),base=new URL("../.."),outdated=__md_get("__outdated",sessionStorage,base);!0===outdated&&el&&(el.hidden=!1)</script>
@@ -2732,7 +2732,7 @@
 <h1 id="project-website-github-pages">Project website (GitHub Pages)<a class="headerlink" href="#project-website-github-pages" title="Permanent link">&para;</a></h1>
 <p>A public website for GitHub Actions Gateway (GAG): a marketing landing page that converts an evaluator in under a minute, plus a searchable rendering of the existing <code>docs/</code> tree.
 The goal is to do what GitHub's file browser cannot — real full-text search, rendered diagrams, a punchy "vs ARC" comparison, and a front door that answers <em>"is this worth replacing Actions Runner Controller (ARC) for?"</em> before the visitor leaves.</p>
-<p>This is net-new scope tracked as STATUS Queue <a href="../../STATUS/">Q129</a>.
+<p>This is net-new scope tracked as STATUS Queue <a href="../../queue/">Q129</a>.
 It is <strong>not</strong> a 1.0 gate.
 It depends on no code changes; it is additive tooling plus content assembled from docs that already exist.</p>
 <h2 id="status-at-a-glance">Status at a glance<a class="headerlink" href="#status-at-a-glance" title="Permanent link">&para;</a></h2>
@@ -2782,7 +2782,7 @@ It depends on no code changes; it is additive tooling plus content assembled fro
 </tr>
 <tr>
 <td>Cross-tree link reconcile (build <code>--strict</code>)</td>
-<td>❌ Follow-up, folded into <a href="../../STATUS/">Q52</a> — see below</td>
+<td>❌ Follow-up, folded into <a href="../../queue/">Q52</a> — see below</td>
 </tr>
 </tbody>
 </table>
@@ -2875,7 +2875,7 @@ Exclude <code>docs/plan/</code> and <code>docs/STATUS.md</code> (internal planni
 <li><strong>Why GAG / vs ARC</strong> — the highest-leverage conversion page.
   A clean comparison matrix (priority tiers / eviction retry / per-tenant egress / listener cost / scale-to-zero), each row linking to the design doc that backs the claim.
   This is what gets pasted into a team's decision doc.
-  Relates to <a href="../../STATUS/">Q60</a> (competitive analysis) — keep the marketing comparison here and the rigorous analysis in <a href="../../design/appendix-d-alternatives-considered/">appendix-d</a>.</li>
+  Relates to <a href="../../queue/">Q60</a> (competitive analysis) — keep the marketing comparison here and the rigorous analysis in <a href="../../design/appendix-d-alternatives-considered/">appendix-d</a>.</li>
 <li><strong>Architecture</strong> — convert the README's ASCII four-tier diagram to a rendered mermaid/SVG diagram (GMC → AGC → proxy → worker), each tier clickable into its design section.</li>
 <li><strong>Annotated <code>ActionsGateway</code> CR</strong> — syntax-highlighted, commented YAML showing how little a tenant writes to get a fully isolated gateway.
   The "one CR does all this" demo moment.</li>
@@ -2892,7 +2892,7 @@ Specifics:</p>
   This cleared the bulk of the anchor mismatches.</li>
 <li><strong>Known broken links on the site (build warnings, not errors).</strong> Two classes remain and are deliberately deferred: (1) ~19 stale intra-doc anchors that are also wrong on github.com (pre-existing doc bugs); (2) links from docs into repo files outside <code>docs/</code> (<code>../charts/…</code>, <code>../../.github/…</code>, <code>cmd/…</code>) that resolve on github.com but 404 on the standalone site.
   The build is <strong>not</strong> <code>--strict</code>, so these warn without failing.
-  Reconciling them — and then flipping the CI build to <code>--strict</code> as a link gate — folds into <a href="../../STATUS/">Q52</a> (markdown link + anchor CI gate).
+  Reconciling them — and then flipping the CI build to <code>--strict</code> as a link gate — folds into <a href="../../queue/">Q52</a> (markdown link + anchor CI gate).
   Do this as part of the pre-launch pass.</li>
 <li><strong>Launch procedure (gated on Q99).</strong> The <code>pages.yml</code> deploy job only runs on <code>workflow_dispatch</code>; <code>pull_request</code>/<code>push</code> merely validate the build.
   To launch: land Q99's claim fixes, reconcile the landing/comparison copy, enable Pages (Settings → Pages → Source: GitHub Actions), then run the workflow.</li>
@@ -2916,7 +2916,7 @@ Specifics:</p>
 </ul>
 <h2 id="decided-sequencing">Decided (sequencing)<a class="headerlink" href="#decided-sequencing" title="Permanent link">&para;</a></h2>
 <ul>
-<li><strong>Build in parallel with <a href="../../STATUS/">Q99</a>; gate only the public launch.</strong> The site work (scaffold, tooling, nav, diagram conversion, page structure) has no dependency on Q99 and proceeds now.
+<li><strong>Build in parallel with <a href="../../queue/">Q99</a>; gate only the public launch.</strong> The site work (scaffold, tooling, nav, diagram conversion, page structure) has no dependency on Q99 and proceeds now.
   The rendered docs pages render <code>docs/</code> source directly, so they inherit Q99's claim fixes automatically with no site-side change.
   The only surface that <em>duplicates</em> the claims Q99 flags ("thousands of sessions", egress-blocked) is the hand-authored landing + "vs ARC" copy — reconcile that against the corrected source as a final pass before flipping Pages public / announcing.
   So Q99 gates the launch, not the work.</li>

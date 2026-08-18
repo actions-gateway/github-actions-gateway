@@ -142,7 +142,7 @@
             <div class="md-banner__inner md-grid md-typeset">
               You're not viewing the latest release.
   <a href="https://actions-gateway.com/dev"><strong>Go to the current docs.</strong></a>
-    <a href="../../STATUS/">See the working backlog.</a>
+    <a href="../../queue/">See the working backlog.</a>
 
             </div>
             <script>var el=document.querySelector("[data-md-component=outdated]"),base=new URL("../.."),outdated=__md_get("__outdated",sessionStorage,base);!0===outdated&&el&&(el.hidden=!1)</script>
@@ -2809,7 +2809,7 @@ The most parser-dense gate is the untested one.</p>
 </table>
 <p>Blast radius is the highest of the four: it runs in <code>make check</code>, in <code>STATUS_GATES</code>, and in its own <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/doc-links.yml"><code>doc-links.yml</code></a> workflow.</p>
 <h3 id="lint-backlogsh-splits-table-rows-positionally"><code>lint-backlog.sh</code> splits table rows positionally<a class="headerlink" href="#lint-backlogsh-splits-table-rows-positionally" title="Permanent link">&para;</a></h3>
-<p><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/docs/lint-backlog.sh"><code>scripts/docs/lint-backlog.sh</code></a> reads the Queue with <code>awk -F'|'</code> and fixed field indices.
+<p><code>scripts/docs/lint-backlog.sh</code> (retired with the table, Q889) reads the Queue with <code>awk -F'|'</code> and fixed field indices.
 One escaped pipe in any cell shifts every field, measured:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>| … | Item with a \| pipe | `lbl` | 🔲 | S | short note |   → NF=9  $5=[ `lbl` ]  $7=[ S ]
 <a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>| … | Item plain          | `lbl` | 🔲 | S | short note |   → NF=8  $5=[ 🔲 ]    $7=[ short note ]
@@ -2893,7 +2893,7 @@ No decision left for Q612.</p>
 </ol>
 <p>Each keeps its <code>scripts/</code> entry point, per <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/README.md"><code>scripts/README.md</code></a>: the gate map stays in one place.</p>
 <h3 id="out-of-scope-deliberately">Out of scope, deliberately<a class="headerlink" href="#out-of-scope-deliberately" title="Permanent link">&para;</a></h3>
-<p><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/docs/git-merge-status.sh"><code>git-merge-status.sh</code></a> and <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/lib/merge-keyed-records.awk"><code>merge-keyed-records.awk</code></a> stay as they are, as does the <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/docs/git-merge-plan-index.sh"><code>git-merge-plan-index.sh</code></a> sibling.
+<p><code>git-merge-status.sh</code> (retired with the table, Q889) and <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/lib/merge-keyed-records.awk"><code>merge-keyed-records.awk</code></a> stay as they are, as does the <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/docs/git-merge-plan-index.sh"><code>git-merge-plan-index.sh</code></a> sibling.
 A merge driver must reconstruct the file <strong>line for line</strong>, including the conflict-marker fallback; an AST discards exactly the byte-level fidelity it depends on.
 Rewriting it onto goldmark would be actively wrong, not merely unnecessary.</p>
 <p>Also out: <code>check-codegen-drift.sh</code>, the <code>chart-*-check.sh</code> family, <code>validate-egress-ip.sh</code>, <code>dogfood/setup.sh</code>, and the <code>e2e/</code> scripts.

@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q885/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q896/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>A pathspec git commit bypasses the lint-backlog pre-commit backstop - GitHub Actions Gateway</title>
+        <title>A plan enumerates readers, not references, and grep cannot see a reader - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#a-pathspec-git-commit-bypasses-the-lint-backlog-pre-commit-backstop" class="md-skip">
+        <a href="#a-plan-enumerates-readers-not-references-and-grep-cannot-see-a-reader" class="md-skip">
           Skip to content
         </a>
       
@@ -142,7 +142,7 @@
             <div class="md-banner__inner md-grid md-typeset">
               You're not viewing the latest release.
   <a href="https://actions-gateway.com/dev"><strong>Go to the current docs.</strong></a>
-    <a href="../../STATUS/">See the working backlog.</a>
+    <a href="../">See the working backlog.</a>
 
             </div>
             <script>var el=document.querySelector("[data-md-component=outdated]"),base=new URL("../.."),outdated=__md_get("__outdated",sessionStorage,base);!0===outdated&&el&&(el.hidden=!1)</script>
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              A pathspec git commit bypasses the lint-backlog pre-commit backstop
+              A plan enumerates readers, not references, and grep cannot see a reader
             
           </span>
         </div>
@@ -2567,10 +2567,11 @@
   
 
 
-<h1 id="a-pathspec-git-commit-bypasses-the-lint-backlog-pre-commit-backstop">A pathspec <code>git commit</code> bypasses the lint-backlog pre-commit backstop<a class="headerlink" href="#a-pathspec-git-commit-bypasses-the-lint-backlog-pre-commit-backstop" title="Permanent link">&para;</a></h1>
-<p>Measured 2026-08-16: an over-cap row left unstaged commits clean via <code>git commit -- docs/STATUS.md</code> while the hook runs; <code>--staged</code> catches it once <code>git add</code>ed.
-CLAUDE.md prefers that pathspec form.
-Mechanism unverified.</p>
+<h1 id="a-plan-enumerates-readers-not-references-and-grep-cannot-see-a-reader">A plan enumerates readers, not references, and grep cannot see a reader<a class="headerlink" href="#a-plan-enumerates-readers-not-references-and-grep-cannot-see-a-reader" title="Permanent link">&para;</a></h1>
+<p>Q889's stated scope was understated in all five phases that measured it, always the same way: it counted textual references, and what bit was what <em>reads</em> the thing.
+Phase 6 alone missed three, each found by a gate or a build rather than by reading.
+The three shapes grep is blind to: a frontmatter field, a build-time hook whose missing-file path returns success, and a pathspec glob that crosses directory separators.
+Write the rule where plan docs are specified.</p>
 
 
 

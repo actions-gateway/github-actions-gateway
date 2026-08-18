@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q569/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q895/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>Split Deferred + Flake watch off STATUS.md - GitHub Actions Gateway</title>
+        <title>A cached Go test result let make check pass what CI failed - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#split-deferred--flake-watch-off-statusmd" class="md-skip">
+        <a href="#a-cached-go-test-result-let-make-check-pass-what-ci-failed" class="md-skip">
           Skip to content
         </a>
       
@@ -142,7 +142,7 @@
             <div class="md-banner__inner md-grid md-typeset">
               You're not viewing the latest release.
   <a href="https://actions-gateway.com/dev"><strong>Go to the current docs.</strong></a>
-    <a href="../../STATUS/">See the working backlog.</a>
+    <a href="../">See the working backlog.</a>
 
             </div>
             <script>var el=document.querySelector("[data-md-component=outdated]"),base=new URL("../.."),outdated=__md_get("__outdated",sessionStorage,base);!0===outdated&&el&&(el.hidden=!1)</script>
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Split Deferred + Flake watch off STATUS.md
+              A cached Go test result let make check pass what CI failed
             
           </span>
         </div>
@@ -2567,10 +2567,12 @@
   
 
 
-<h1 id="split-deferred--flake-watch-off-statusmd">Split Deferred + Flake watch off <code>STATUS.md</code><a class="headerlink" href="#split-deferred--flake-watch-off-statusmd" title="Permanent link">&para;</a></h1>
-<p>Phase 2 of the page-boundary split: the Queue is read top-down, parked rows only on a trigger.
-27,738 tokens 2026-08-09, 31,597 on 2026-08-13 against the 25,000 agent-read cap.
-Needs <code>check-roadmap.sh</code> a second path, rule 8 over two files.</p>
+<h1 id="a-cached-go-test-result-let-make-check-pass-what-ci-failed">A cached Go test result let <code>make check</code> pass what CI failed<a class="headerlink" href="#a-cached-go-test-result-let-make-check-pass-what-ci-failed" title="Permanent link">&para;</a></h1>
+<p>Measured 2026-08-17 on Q889 phase 6: <code>make check</code> reported <code>ok … devtools/agent/pipedgate (cached)</code> and exited 0, while the same package run directly failed 5 assertions and CI's <code>unit-test</code> failed with it.
+The suite reads <code>.claude/piped-gate-guard.json</code> at runtime, which the change had edited.
+Cache invalidation is the suspected mechanism and is unverified.
+The fix then tripped <code>no-plan-refs-check</code> twice, so the cold-cache re-run earned its place.
+A green gate that ran no test is the class the repo already names.</p>
 
 
 

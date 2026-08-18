@@ -146,7 +146,7 @@
             <div class="md-banner__inner md-grid md-typeset">
               You're not viewing the latest release.
   <a href="https://actions-gateway.com/dev"><strong>Go to the current docs.</strong></a>
-    <a href="../../STATUS/">See the working backlog.</a>
+    <a href="../../queue/">See the working backlog.</a>
 
             </div>
             <script>var el=document.querySelector("[data-md-component=outdated]"),base=new URL("../.."),outdated=__md_get("__outdated",sessionStorage,base);!0===outdated&&el&&(el.hidden=!1)</script>
@@ -3238,7 +3238,7 @@ If KMS, telemetry, and worker-egress had each grown their own near-duplicate des
 <strong>Resolved (Q204):</strong> the descriptor is now the shared <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/api/v2alpha1/actionsgateway_types.go"><code>EgressPeer</code></a> type (selector | CIDR
 + an optional explicit port), and <code>signer.vault.networkPolicy</code> references it.
   The extraction is serialization-compatible — the field keys (<code>podSelector</code>, <code>namespaceSelector</code>, <code>cidr</code>) are unchanged, so the v2alpha1 shape already shipped is preserved; only the additive optional <code>port</code> is new, with the Vault builder still deriving the port from the address when <code>port</code> is unset.
-  Future consumers (KMS, telemetry) now reference the same type instead of forking it — the shape that is far cheaper to settle before the v2alpha1 → v2beta1 graduation (<a href="../../STATUS/">Q74</a>) than after.</p>
+  Future consumers (KMS, telemetry) now reference the same type instead of forking it — the shape that is far cheaper to settle before the v2alpha1 → v2beta1 graduation (<a href="../../queue/">Q74</a>) than after.</p>
 <p><strong>What would trigger building any of it.</strong> A concrete signer provider beyond Vault (KMS), a policy-CNI operator who needs their tracing endpoint or a job dependency reachable, or the graduation review deciding to consolidate the peer descriptor.</p>
 <p><strong>Related.</strong> <a href="../05-security/">05-security.md</a> (the per-tenant NetworkPolicy isolation model); <a href="#g1-proxy-enforced-destination-allowlist">G.1 Proxy-Enforced Destination Allowlist</a>; <a href="#g8-optional-disable-able-egress-proxy">G.8 Optional Egress Proxy</a>; <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/controller/builder.go"><code>builder.go</code></a>.</p>
 <hr />

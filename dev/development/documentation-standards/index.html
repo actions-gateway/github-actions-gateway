@@ -142,7 +142,7 @@
             <div class="md-banner__inner md-grid md-typeset">
               You're not viewing the latest release.
   <a href="https://actions-gateway.com/dev"><strong>Go to the current docs.</strong></a>
-    <a href="../../STATUS/">See the working backlog.</a>
+    <a href="../../queue/">See the working backlog.</a>
 
             </div>
             <script>var el=document.querySelector("[data-md-component=outdated]"),base=new URL("../.."),outdated=__md_get("__outdated",sessionStorage,base);!0===outdated&&el&&(el.hidden=!1)</script>
@@ -2878,7 +2878,7 @@
 It complements two neighbours rather than repeating them:</p>
 <ul>
 <li><a href="../doc-update-matrix/">doc-update-matrix.md</a> — <em>which</em> docs to update for each kind of change.</li>
-<li><a href="../maintaining-backlog/">maintaining-backlog.md</a> — rules specific to <a href="../../STATUS/">STATUS.md</a>.</li>
+<li><a href="../maintaining-backlog/">maintaining-backlog.md</a> — rules specific to <a href="../../queue/">the backlog</a>.</li>
 </ul>
 <p>The bar is <strong>correct and findable first, usable as well</strong> — not polish in place of substance.
 A beautifully scannable doc that is wrong, missing, or the wrong type for the reader's task still fails.
@@ -3250,7 +3250,7 @@ The check is in <code>make check</code> and costs about a second for the whole t
 <h3 id="what-stays-hard-wrapped-and-why-it-stays-that-way">What stays hard-wrapped, and why it stays that way<a class="headerlink" href="#what-stays-hard-wrapped-and-why-it-stays-that-way" title="Permanent link">&para;</a></h3>
 <p>Measured 2026-08-13 on mdreflow v0.1.7: 99.70% of interior line breaks in the docset's prose sit at a sentence boundary, 13,746 of 13,787, leaving 41.
 The formatter declines 38 paragraphs across 8 files, spanning 90 source lines.
-"In-scope" excludes the generated docs and <code>docs/STATUS.md</code>, which <code>.mdreflow.yaml</code> skips.
+"In-scope" excludes the generated docs, which <code>.mdreflow.yaml</code> skips.
 Re-derive both rather than quoting them: <code>make md-reflow-coverage</code> recomputes the percentage and <code>ARGS=-v</code> lists all 41, while <code>make md-reflow-explain</code> names each declined paragraph with a stable reason code.
 Neither number is this page's to hold, and the classification below is reproducible without re-diagnosing anything.</p>
 <p>That figure reads lower than the 99.81% this section carried before, and the tree did not get worse: the measurement got wider.
@@ -3310,7 +3310,7 @@ Keep them current:</p>
 <li><strong>Keep each <code>README.md</code> index complete.</strong> A new doc gets a row in its directory's <code>README.md</code> index in the same change (a goal-2 <em>findability</em> failure otherwise).</li>
 <li><strong>Archive finished plans.</strong> When a plan's last STATUS reference is removed, update its <a href="../../plan/"><code>docs/plan/README.md</code></a> row and archive the plan in the same change — <code>make plan-index-check</code> enforces this.
   See <a href="../maintaining-backlog/#archiving-completed-plan-docs">maintaining-backlog.md</a>.</li>
-<li><strong>STATUS.md gets its own commit.</strong> It is high-contention; isolating its changes keeps rebases trivial.
+<li><strong>A backlog change gets its own commit when the change also touches code.</strong> The item is the <em>why</em> and the code the <em>what</em>; a reviewer should not have to separate them.
   Queue Notes have a hard 250-char cap (lint-enforced).
   Details: <a href="../maintaining-backlog/">maintaining-backlog.md</a>.</li>
 <li><strong>Links and anchors are checked, twice.</strong> <code>make doc-links</code> (in <code>make check</code>) fails on broken cross-file links and heading anchors as <strong>github.com</strong> resolves them; <code>make docs-build</code> re-checks them as the <strong>published site</strong> does.
@@ -3335,7 +3335,7 @@ What exists today, and what's proposed:</p>
 <td>Wired (<code>make check</code>).</td>
 </tr>
 <tr>
-<td>STATUS.md lint — Queue shape, 250-char Note cap</td>
+<td>Backlog store lint — frontmatter, rank, 72-char title cap, unresolvable targets</td>
 <td>1</td>
 <td>Wired (<code>make check</code>).</td>
 </tr>

@@ -142,7 +142,7 @@
             <div class="md-banner__inner md-grid md-typeset">
               You're not viewing the latest release.
   <a href="https://actions-gateway.com/dev"><strong>Go to the current docs.</strong></a>
-    <a href="../../../STATUS/">See the working backlog.</a>
+    <a href="../../../queue/">See the working backlog.</a>
 
             </div>
             <script>var el=document.querySelector("[data-md-component=outdated]"),base=new URL("../../.."),outdated=__md_get("__outdated",sessionStorage,base);!0===outdated&&el&&(el.hidden=!1)</script>
@@ -2664,7 +2664,7 @@
 
 
 <h1 id="q12--production-helm-chart-chartsactions-gateway">Q12 — Production Helm chart (<code>charts/actions-gateway/</code>)<a class="headerlink" href="#q12--production-helm-chart-chartsactions-gateway" title="Permanent link">&para;</a></h1>
-<p>← <a href="../../milestone-5/#1-packaging-helm-chart">Milestone 5 §1</a> | <a href="../../release-1.0/#c-packaging--supply-chain--gating--recommended">Release 1.0 §C</a> | <a href="../../../STATUS/">STATUS</a></p>
+<p>← <a href="../../milestone-5/#1-packaging-helm-chart">Milestone 5 §1</a> | <a href="../../release-1.0/#c-packaging--supply-chain--gating--recommended">Release 1.0 §C</a> | <a href="../../../queue/">STATUS</a></p>
 <p><strong>Goal.</strong> Ship a Helm chart that an operator can <code>helm install</code> to deploy the Gateway Manager Controller (GMC) — its CRDs, RBAC, validating webhook, and admission policy — with every default at the secure posture already encoded in the <code>cmd/gmc/config/</code> kustomize bases.
 Helm was decided over Kustomize (<a href="../../milestone-5/#11-install-vehicle--decided-helm-chart">D-M5-1</a>).</p>
 <p><strong>Scope of this PR (slice 1 — the whole GMC core install).</strong> A lint-clean, offline-validated chart that renders the complete GMC control plane.
@@ -2770,7 +2770,7 @@ Each has a documented default and a <code>values.schema.json</code> entry where 
 <h2 id="runnergroup-crd-drift-q73--note-only-not-fixed-here">RunnerGroup CRD drift (Q73 — note only, not fixed here)<a class="headerlink" href="#runnergroup-crd-drift-q73--note-only-not-fixed-here" title="Permanent link">&para;</a></h2>
 <p>The GMC's <code>crd/bases/…_runnergroups.yaml</code> (8041 lines) is <strong>stale</strong> vs the AGC authoritative <code>cmd/agc/config/crd/…_runnergroups.yaml</code> (8738 lines).
 The chart sources the <strong>AGC</strong> copy per the task.
-Reconciling the two bases (so <code>make manifests</code> keeps them in sync) is <strong><a href="../../../STATUS/">Q73</a></strong> and is out of scope here — this PR only consumes the authoritative copy.</p>
+Reconciling the two bases (so <code>make manifests</code> keeps them in sync) is <strong><a href="../../../queue/">Q73</a></strong> and is out of scope here — this PR only consumes the authoritative copy.</p>
 <h2 id="offline-validation-no-cluster">Offline validation (no cluster)<a class="headerlink" href="#offline-validation-no-cluster" title="Permanent link">&para;</a></h2>
 <ol>
 <li><code>helm lint charts/actions-gateway</code></li>
@@ -2793,10 +2793,10 @@ Chart-specific observations:</p>
 <p>A later <strong>production-posture re-validation</strong> on the current chart (digest-pinned <code>v1.1.0-rc.4</code> images, no dev opt-outs, the clean no-workaround tenant path) ran as <a href="../../milestone-5/#15-live-validation-q219--2026-06-28">M5 Q219</a> and surfaced + fixed an AGC egress-proxy trust bug that blocked runner registration on every proxied install.</p>
 <h2 id="out-of-scope-documented-future-slices">Out of scope (documented future slices)<a class="headerlink" href="#out-of-scope-documented-future-slices" title="Permanent link">&para;</a></h2>
 <ul>
-<li>CI drift check that re-renders the chart and diffs against the kustomize bases (M5 §7 risk row) — folds into <a href="../../../STATUS/">Q66</a> install-artifact validation.</li>
-<li><code>polaris</code> posture scan against the rendered output — <strong><a href="../../../STATUS/">Q14</a></strong>.</li>
-<li>Publishing the chart as an OCI artifact with digest-pinned images and cosign signatures — <strong><a href="../../../STATUS/">Q28</a></strong>.</li>
-<li>Reconciling the RunnerGroup CRD drift at the kustomize-base layer — <strong><a href="../../../STATUS/">Q73</a></strong>.</li>
+<li>CI drift check that re-renders the chart and diffs against the kustomize bases (M5 §7 risk row) — folds into <a href="../../../queue/">Q66</a> install-artifact validation.</li>
+<li><code>polaris</code> posture scan against the rendered output — <strong><a href="../../../queue/">Q14</a></strong>.</li>
+<li>Publishing the chart as an OCI artifact with digest-pinned images and cosign signatures — <strong><a href="../../../queue/">Q28</a></strong>.</li>
+<li>Reconciling the RunnerGroup CRD drift at the kustomize-base layer — <strong><a href="../../../queue/">Q73</a></strong>.</li>
 </ul>
 
 

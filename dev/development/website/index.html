@@ -142,7 +142,7 @@
             <div class="md-banner__inner md-grid md-typeset">
               You're not viewing the latest release.
   <a href="https://actions-gateway.com/dev"><strong>Go to the current docs.</strong></a>
-    <a href="../../STATUS/">See the working backlog.</a>
+    <a href="../../queue/">See the working backlog.</a>
 
             </div>
             <script>var el=document.querySelector("[data-md-component=outdated]"),base=new URL("../.."),outdated=__md_get("__outdated",sessionStorage,base);!0===outdated&&el&&(el.hidden=!1)</script>
@@ -3077,7 +3077,7 @@ They share one geometry rule in <a href="../../stylesheets/extra.css"><code>extr
 <tr>
 <td><code>gag-release-chip</code></td>
 <td>the release this roadmap item blocks</td>
-<td><code>docs/STATUS.md</code>, injected at build time</td>
+<td><code>docs/queue/</code>, injected at build time</td>
 </tr>
 <tr>
 <td><code>gag-tier-badge</code></td>
@@ -3095,7 +3095,7 @@ They share one geometry rule in <a href="../../stylesheets/extra.css"><code>extr
 Rules 9-11 of <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/devtools/docs/roadmapcheck/badges.go"><code>devtools/docs/roadmapcheck</code></a> enforce it, and <code>scripts/docs/check-roadmap-test.sh</code> pins every removal case.</p>
 <h3 id="the-release-chip">The release chip<a class="headerlink" href="#the-release-chip" title="Permanent link">&para;</a></h3>
 <p>A roadmap bullet's release commitment is <strong>derived, never typed</strong>.
-<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/hooks/release_gates.py"><code>hooks/release_gates.py</code></a> reads the <code>X.Y-gate</code> labels out of <code>docs/STATUS.md</code>, follows each bullet's existing <code>&lt;!-- q:QN --&gt;</code> annotation, and injects the pill:</p>
+<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/hooks/release_gates.py"><code>hooks/release_gates.py</code></a> reads the <code>X.Y-gate</code> labels out of each item's frontmatter in <code>docs/queue/</code>, follows each bullet's existing <code>&lt;!-- q:QN --&gt;</code> annotation, and injects the pill:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="k">-</span><span class="w"> </span><span class="gs">**[Bind each runner set to a GitHub runner group](plan/release-1.5.md)**</span> &lt;!-- q:Q712 --&gt;
 </code></pre></div>
 <p>renders with a <code>1.5</code> pill beside the title, and loses it the day the label comes off.
@@ -3704,7 +3704,7 @@ On github.com the same README renders as the conventions alone, which is the rig
 </tr>
 <tr>
 <td><code>dev</code></td>
-<td>The above <strong>plus</strong> the repo-internal docs: <code>docs/STATUS.md</code> (the <a href="#the-backlog-page">backlog</a>), <code>docs/queue/</code> (the <a href="#the-backlog-renders-at-build-time">item store</a>), <code>docs/plan/</code>, <code>docs/development/</code> (this file included), <code>docs/assets/</code>'s READMEs</td>
+<td>The above <strong>plus</strong> the repo-internal docs: <code>docs/queue/</code> (the <a href="#the-backlog-page">backlog</a>, rendered <a href="#the-backlog-renders-at-build-time">at build time</a>), <code>docs/plan/</code>, <code>docs/development/</code> (this file included), <code>docs/assets/</code>'s READMEs</td>
 </tr>
 <tr>
 <td><em>no version</em></td>
@@ -3738,7 +3738,7 @@ Two PRs open at once can each pass and still merge into a red <code>main</code> 
 <p>The <code>nav</code> is the operator-facing table of contents, so a published page is either in it or declared in <code>not_in_nav</code>.
 Two kinds are declared:</p>
 <ul>
-<li>the repo-internal tree the <code>dev</code> version publishes (<code>STATUS.md</code>, <code>plan/</code>, <code>development/</code>), reachable by URL, by search, and from the roadmap's backlog link;</li>
+<li>the repo-internal tree the <code>dev</code> version publishes (<code>queue/</code>, <code>plan/</code>, <code>development/</code>), reachable by URL, by search, and from the roadmap's backlog link;</li>
 <li><code>operations/examples/</code>, sample manifests reached from the page that explains them (<a href="../../operations/admission-policies/">admission-policies.md</a>) rather than browsed from the TOC.</li>
 </ul>
 <p>Everything else in <code>nav</code>.
@@ -3755,8 +3755,9 @@ Add a page and <code>make docs-build</code> fails until it is either in <code>na
 <code>not_in_nav</code> is what suppresses the report for a deliberate omission, so it stays populated — the empty list is MkDocs' <em>reported</em> one, never this key.
 The one inert entry is <code>/README.md</code>: MkDocs drops <code>docs/README.md</code> as an <code>index.md</code> conflict before nav is evaluated, so it reaches no scope's list and is kept only to mirror <code>exclude_docs</code>.</p>
 <h3 id="the-backlog-page">The backlog page<a class="headerlink" href="#the-backlog-page" title="Permanent link">&para;</a></h3>
-<p><code>docs/STATUS.md</code> renders at <a href="https://actions-gateway.com/dev/STATUS/"><code>/dev/STATUS/</code></a> with filter chips over its tables — see <a href="#progressive-enhancement-docsjavascriptsextrajs">§ Progressive enhancement</a>.
-The markdown file stays the single source of truth: the lint gate, the isolated-commit merge discipline, the <code>&lt;a id="QN"&gt;</code> anchors, and the <a href="../maintaining-backlog/">backlog workflow</a> all operate on the table, and the site is a read-only view of it.</p>
+<p>The backlog renders at <a href="https://actions-gateway.com/dev/queue/"><code>/dev/queue/</code></a> with filter chips over its table — see <a href="#progressive-enhancement-docsjavascriptsextrajs">§ Progressive enhancement</a>.
+The store stays the single source of truth: <code>queue.py lint</code>, the <a href="../maintaining-backlog/">store rules</a>, and every item's own page operate on <code>docs/queue/</code>, and the rendered index is a read-only view of it.
+It replaced <code>/dev/STATUS/</code>, which the retired table published, and the chips carried across unchanged because <code>queue.py render</code> emits the same headers, backticked labels and emoji status the table carried.</p>
 <p><strong>How a reader reaches it.</strong> The page is deliberately absent from the <code>nav</code> (see <a href="#publication-scope">§ Publication scope</a>), so three routes carry the traffic:</p>
 <table>
 <thead>
@@ -3830,12 +3831,12 @@ So is a <strong>directory under <code>docs/</code></strong>, which resolves to t
 <code>[label]: target</code> definition. Python-Markdown resolves the two into the same
 link, so covering only the first would leave the rarer form silently dead.</p>
 <p>This was already needed before the backlog page: <code>design/</code> and <code>operations/</code> shipped such links dead.
-Publishing the repo-internal docs made it load-bearing — 724 links across the tree, 34 on <code>STATUS.md</code> alone.
+Publishing the repo-internal docs made it load-bearing — 724 links across the tree, dozens in the backlog alone.
 <code>scripts/docs/source-links-hook-test.sh</code> asserts the rewrite in both directions under <code>make check</code>.</p>
 <h3 id="unpublished-is-per-build-not-per-path-q561">Unpublished is per build, not per path (Q561)<a class="headerlink" href="#unpublished-is-per-build-not-per-path-q561" title="Permanent link">&para;</a></h3>
 <p>"Does not publish" is decided <strong>per build, from its own file set</strong> — <code>on_files</code> records the src_uris whose <code>inclusion.is_included()</code>, the same derivation <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/hooks/backlog_link.py"><code>hooks/backlog_link.py</code></a> uses for the banner link.
 Escaping <code>docs/</code> is only one way to qualify.
-The other is <a href="#publication-scope">publication scope</a>: <code>plan/</code>, <code>development/</code> and <code>STATUS.md</code> are pages on <code>dev</code> and absent from every release, so a <code>design/</code> page citing <code>../plan/milestone-4.md</code> must resolve <strong>in-site on <code>dev</code></strong> and <strong>on github.com from a release</strong>.
+The other is <a href="#publication-scope">publication scope</a>: <code>plan/</code>, <code>development/</code> and <code>queue/</code> are pages on <code>dev</code> and absent from every release, so a <code>design/</code> page citing <code>../plan/milestone-4.md</code> must resolve <strong>in-site on <code>dev</code></strong> and <strong>on github.com from a release</strong>.
 One markdown source, both renderings, no per-version editing:</p>
 <table>
 <thead>
@@ -3890,7 +3891,7 @@ The same README also covers the animated wormhole logomark (<code>generate-wormh
 </tr>
 <tr>
 <td>Backlog label / status / size chips + per-row label clicks</td>
-<td>the <code>Labels</code>, <code>St</code> and <code>Sz</code> columns of <code>docs/STATUS.md</code>'s Queue, Deferred, Flake watch and Progress tables</td>
+<td>the <code>Labels</code>, <code>St</code> and <code>Sz</code> columns of the backlog table rendered at <code>/dev/queue/</code></td>
 </tr>
 <tr>
 <td>Scroll reveals</td>
@@ -3911,7 +3912,7 @@ Selecting the default (<code>All</code>) drops the key rather than writing it, k
   A bar whose table has no such chip falls back to <code>All</code> rather than emptying itself, which is also what makes an unrecognised value in a hand-edited URL harmless.</li>
 </ul>
 <p>Verify both paths agree, rather than either one alone:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="c1">// make docs-serve with the dev scope, then on /STATUS/</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="c1">// make docs-serve with the dev scope, then on /queue/</span>
 <a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a><span class="kd">const</span><span class="w"> </span><span class="nx">counts</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">()</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="p">[...</span><span class="nb">document</span><span class="p">.</span><span class="nx">querySelectorAll</span><span class="p">(</span><span class="s1">'.backlog-count'</span><span class="p">)].</span><span class="nx">map</span><span class="p">(</span><span class="nx">c</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="nx">c</span><span class="p">.</span><span class="nx">textContent</span><span class="p">);</span>
 <a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a><span class="c1">// click path</span>
 <a id="__codelineno-13-4" name="__codelineno-13-4" href="#__codelineno-13-4"></a><span class="nb">document</span><span class="p">.</span><span class="nx">querySelector</span><span class="p">(</span><span class="s1">'.backlog-filter .persona-chip[data-persona="ci"]'</span><span class="p">).</span><span class="nx">click</span><span class="p">();</span>

@@ -142,7 +142,7 @@
             <div class="md-banner__inner md-grid md-typeset">
               You're not viewing the latest release.
   <a href="https://actions-gateway.com/dev"><strong>Go to the current docs.</strong></a>
-    <a href="../../STATUS/">See the working backlog.</a>
+    <a href="../../queue/">See the working backlog.</a>
 
             </div>
             <script>var el=document.querySelector("[data-md-component=outdated]"),base=new URL("../.."),outdated=__md_get("__outdated",sessionStorage,base);!0===outdated&&el&&(el.hidden=!1)</script>
@@ -2919,7 +2919,7 @@ Point the condition at this playbook and fill in the run-specific knobs.
 A ready-to-paste template:</p>
 <blockquote>
 <p><strong><code>/goal</code></strong> Act as the <strong>dispatcher</strong> for a parallel-dispatch run, following <code>docs/development/parallel-dispatch.md</code>.
-Clear <strong>[BATCH — e.g. "the remaining <code>1.0-gate</code> Queue items in <code>docs/STATUS.md</code>"]</strong>: one worker session (task chip) and one PR per task, <strong>max [N] concurrent</strong> (from <code>scripts/agent/local-throttle.sh workers</code>).
+Clear <strong>[BATCH — e.g. "the remaining <code>1.0-gate</code> items in <code>docs/queue/</code>"]</strong>: one worker session (task chip) and one PR per task, <strong>max [N] concurrent</strong> (from <code>scripts/agent/local-throttle.sh workers</code>).
 Spawn each worker by invoking <code>/session-worker</code> with only the delta; the skill carries the contract.
 <strong>You own assignment, merge ordering, and scope.</strong> Verify each PR's scope and that its heavy gates ran, then <strong>report it ready.
 I merge; you never do.</strong> <strong>No secret may be read, printed, logged, or passed to a model</strong> — exclude any task needing real credentials and tell me.
@@ -3091,9 +3091,9 @@ The one mechanism a stagger could offer — let one worker warm <code>GOCACHE</c
 And <code>make check</code> takes a slot three separate times, releasing between phases, so whatever spacing you set at <em>t=0</em> is gone by the second acquisition.
 Backgrounding does not reduce contention either — it stops the queue time from being <em>dead</em> time, which is the part that was actually costing the batch (Q376).</p>
 <h3 id="the-dispatcher-owns-assignment-not-coordination-files">The dispatcher owns assignment, not coordination files<a class="headerlink" href="#the-dispatcher-owns-assignment-not-coordination-files" title="Permanent link">&para;</a></h3>
-<p>The real need is preventing two workers from implementing the <strong>same</strong> Queue item — an <em>assignment</em> problem — not keeping <code>docs/STATUS.md</code> out of worker hands.
+<p>The real need is preventing two workers from implementing the <strong>same</strong> backlog item — an <em>assignment</em> problem — not keeping <code>docs/STATUS.md</code> out of worker hands.
 Each worker removes its own completed row in its own isolated commit, so PRs stay self-contained and the Queue stays current as they merge.</p>
-<p><strong>Self-healing absorbs the resolution, not the cycle it costs.</strong> The <a href="../maintaining-backlog/#the-merge-driver-resolve-queue-rows-by-id-not-by-line-position">merge driver</a> decides the Queue table by row ID, so a sibling's row deletion resolves silently inside the worker's <code>git rebase origin/main</code>.
+<p><strong>Self-healing absorbs the resolution, not the cycle it costs.</strong> The <a href="../maintaining-backlog/#the-merge-drivers-resolve-registry-rows-by-key-not-by-line-position">merge driver</a> decides the Queue table by row ID, so a sibling's row deletion resolves silently inside the worker's <code>git rebase origin/main</code>.
 It is per-clone <code>git config</code>, so it never runs on GitHub: the mergeability read behind <code>mergeStateStatus</code> and the merge queue's candidate build both take the plain three-way merge, where two adjacent row deletions conflict.
 That server-side half is the expensive one.
 A PR that is merely <em>behind</em> costs nothing, while a <code>DIRTY</code> one must rebase and force-push, and the force-push restarts the whole CI cycle whatever the driver did locally.

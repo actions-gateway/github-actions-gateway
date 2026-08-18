@@ -142,7 +142,7 @@
             <div class="md-banner__inner md-grid md-typeset">
               You're not viewing the latest release.
   <a href="https://actions-gateway.com/dev"><strong>Go to the current docs.</strong></a>
-    <a href="../../STATUS/">See the working backlog.</a>
+    <a href="../../queue/">See the working backlog.</a>
 
             </div>
             <script>var el=document.querySelector("[data-md-component=outdated]"),base=new URL("../.."),outdated=__md_get("__outdated",sessionStorage,base);!0===outdated&&el&&(el.hidden=!1)</script>
@@ -2645,7 +2645,7 @@
 <p>A gate run locally and the same gate run in CI answered differently about the same commit for five days.
 The local answer was wrong, and nothing about the run looked wrong: it took no flag it did not know, printed plausible output, and named four real files.</p>
 <p>Kept because the interesting part is not the build rule.
-That is a one-line Makefile defect already tracked as <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/docs/STATUS.md">Q842</a>.
+That is a one-line Makefile defect already tracked as <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/docs/queue/README.md">Q842</a>.
 The interesting part is what a wrong verdict did once it was believed: it entered three pull request descriptions, all of which merged, and became the opening instruction of a dispatched worker session, gaining authority at each restatement without ever gaining evidence.</p>
 <h2 id="impact">Impact<a class="headerlink" href="#impact" title="Permanent link">&para;</a></h2>
 <ul>
@@ -2677,7 +2677,7 @@ The tree is clean; the binary is four days stale.</p>
 It is a reasonable inference: the four files are byte-identical to <code>origin/main</code>, which does rule out the working branch as the cause, and that check is performed and passes.
 What is not considered is a third possibility, that the instrument is wrong.</p>
 <p><strong>2026-08-13 to 08-14.</strong> The claim is restated in three pull request descriptions as a note about repository state, each time alongside the observation that CI cannot see the gate because it is in <code>CHECK_FAST_GATES</code> and no workflow runs it.
-That observation is true and is filed as a second instance of <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/docs/STATUS.md">Q831</a>.
+That observation is true and is filed as a second instance of <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/docs/queue/README.md">Q831</a>.
 It also supplies a ready explanation for why nobody else has noticed, which removes the one prompt that might have triggered a re-check.</p>
 <p><strong>2026-08-14.</strong> A worker session is dispatched with "unbreak <code>main</code>" first and the Q831 wiring second.
 The Q831 half is real and lands, wiring five previously unwired gates.

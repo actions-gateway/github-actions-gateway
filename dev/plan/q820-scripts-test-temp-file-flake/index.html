@@ -142,7 +142,7 @@
             <div class="md-banner__inner md-grid md-typeset">
               You're not viewing the latest release.
   <a href="https://actions-gateway.com/dev"><strong>Go to the current docs.</strong></a>
-    <a href="../../STATUS/">See the working backlog.</a>
+    <a href="../../queue/">See the working backlog.</a>
 
             </div>
             <script>var el=document.querySelector("[data-md-component=outdated]"),base=new URL("../.."),outdated=__md_get("__outdated",sessionStorage,base);!0===outdated&&el&&(el.hidden=!1)</script>
@@ -2825,7 +2825,7 @@ The probe scripts are not committed; each is a few lines and is described below 
 <p><strong>It cannot.</strong> Bash resets traps in subshells.
 A script setting that trap, then running a <code>$( )</code> command substitution and a failing <code>( exit 3 )</code>, still has its <code>WORKDIR</code> present after both, and the trap fires exactly once, at script exit.
 The same reasoning kills the variant where a <code>merge_repo</code> failure takes the tree with it.</p>
-<p>This also holds for the near-identical siblings <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/docs/git-merge-status-test.sh"><code>git-merge-status-test.sh</code></a> and <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/docs/git-merge-roadmap-test.sh"><code>git-merge-roadmap-test.sh</code></a>, which share the shape.</p>
+<p>This also holds for the near-identical siblings <code>git-merge-status-test.sh</code> (since retired, Q889) and <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/docs/git-merge-roadmap-test.sh"><code>git-merge-roadmap-test.sh</code></a>, which share the shape.</p>
 <h3 id="the-tree-was-not-already-gone-when-the-git-command-started">The tree was not already gone when the git command started<a class="headerlink" href="#the-tree-was-not-already-gone-when-the-git-command-started" title="Permanent link">&para;</a></h3>
 <p>The Queue row's original wording, "the repo gone mid-merge", is wrong as literally written.
 Every removal staged <strong>before</strong> a git command fails earlier, and differently:</p>

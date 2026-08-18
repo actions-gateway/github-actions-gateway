@@ -142,7 +142,7 @@
             <div class="md-banner__inner md-grid md-typeset">
               You're not viewing the latest release.
   <a href="https://actions-gateway.com/dev"><strong>Go to the current docs.</strong></a>
-    <a href="../../STATUS/">See the working backlog.</a>
+    <a href="../">See the working backlog.</a>
 
             </div>
             <script>var el=document.querySelector("[data-md-component=outdated]"),base=new URL("../.."),outdated=__md_get("__outdated",sessionStorage,base);!0===outdated&&el&&(el.hidden=!1)</script>
@@ -2568,7 +2568,7 @@
 
 
 <h1 id="plan-hygiene-skips-a-pr-that-only-adds-a-plan-doc"><code>plan-hygiene</code> skips a PR that only adds a plan doc<a class="headerlink" href="#plan-hygiene-skips-a-pr-that-only-adds-a-plan-doc" title="Permanent link">&para;</a></h1>
-<p>Its <code>plan</code> filter matches <code>docs/plan/README.md</code>, <code>docs/STATUS.md</code> and <code>**.go</code>, not <code>docs/plan/*.md</code>, so a PR adding only a plan doc skips the job that catches its missing row.</p>
+<p>Its <code>plan</code> filter matches <code>docs/plan/README.md</code>, <code>docs/queue/**</code> and <code>**.go</code>, not <code>docs/plan/*.md</code>, so a PR adding only a plan doc skips the job that catches its missing row.</p>
 
 
 

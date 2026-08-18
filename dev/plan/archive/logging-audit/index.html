@@ -142,7 +142,7 @@
             <div class="md-banner__inner md-grid md-typeset">
               You're not viewing the latest release.
   <a href="https://actions-gateway.com/dev"><strong>Go to the current docs.</strong></a>
-    <a href="../../../STATUS/">See the working backlog.</a>
+    <a href="../../../queue/">See the working backlog.</a>
 
             </div>
             <script>var el=document.querySelector("[data-md-component=outdated]"),base=new URL("../../.."),outdated=__md_get("__outdated",sessionStorage,base);!0===outdated&&el&&(el.hidden=!1)</script>
@@ -2659,7 +2659,7 @@
 
 
 <h1 id="cross-module-logging-audit">Cross-module logging audit<a class="headerlink" href="#cross-module-logging-audit" title="Permanent link">&para;</a></h1>
-<p><strong>Status:</strong> Theme A (F1) ✅ resolved (1.0-gate JSON-unification — see the Fix below); Themes B–G filed to the <a href="../../../STATUS/">STATUS Queue</a> (Q86–Q89).
+<p><strong>Status:</strong> Theme A (F1) ✅ resolved (1.0-gate JSON-unification — see the Fix below); Themes B–G filed to the <a href="../../../queue/">STATUS Queue</a> (Q86–Q89).
 Theme C folds into Theme G.</p>
 <p>A cross-module audit of every log call site in the repo (<code>cmd/agc</code>, <code>cmd/gmc</code>, <code>cmd/worker</code>, <code>cmd/proxy</code>, <code>broker/</code>, <code>githubapp/</code>, <code>cmd/probe</code>).
 It found one 1.0-gating defect (mixed log formats on a single stream), a credential-leak <em>surface</em> (no live leak, but uncapped upstream bodies wrapped into errors), and a set of post-1.0 observability gaps.

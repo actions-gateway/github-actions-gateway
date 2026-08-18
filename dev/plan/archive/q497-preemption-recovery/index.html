@@ -142,7 +142,7 @@
             <div class="md-banner__inner md-grid md-typeset">
               You're not viewing the latest release.
   <a href="https://actions-gateway.com/dev"><strong>Go to the current docs.</strong></a>
-    <a href="../../../STATUS/">See the working backlog.</a>
+    <a href="../../../queue/">See the working backlog.</a>
 
             </div>
             <script>var el=document.querySelector("[data-md-component=outdated]"),base=new URL("../../.."),outdated=__md_get("__outdated",sessionStorage,base);!0===outdated&&el&&(el.hidden=!1)</script>
@@ -2858,7 +2858,7 @@ Verified:</p>
 </table>
 <p>The e2e is what closes the argument.
 Every other tier stamps the <code>DisruptionTarget</code> condition by hand, so only this one converts "the AGC recovers a pod carrying this condition" into "the AGC recovers a real preemption" — it is the sole venue with a real kube-scheduler.
-It also found <a href="../../../STATUS/">Q504</a> on its first run: the rerun call ignored <code>GITHUB_API_BASE_URL</code> and was refused a <code>401</code> by <code>api.github.com</code>, so recovery had never been able to work on GHES either.
+It also found <a href="../../../queue/">Q504</a> on its first run: the rerun call ignored <code>GITHUB_API_BASE_URL</code> and was refused a <code>401</code> by <code>api.github.com</code>, so recovery had never been able to work on GHES either.
 That is the value of asserting a <em>successful</em> re-run rather than an absence — every prior spec on this path asserted absence, which passes whether the call goes nowhere or to the wrong host.</p>
 <p>Metric labels changed (<code>cause</code> on three counters); the migration note is in <a href="../../../operations/observability-metrics/#breaking-observability-changes-q417">observability-metrics.md</a>.</p>
 

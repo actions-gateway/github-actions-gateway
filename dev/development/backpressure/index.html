@@ -142,7 +142,7 @@
             <div class="md-banner__inner md-grid md-typeset">
               You're not viewing the latest release.
   <a href="https://actions-gateway.com/dev"><strong>Go to the current docs.</strong></a>
-    <a href="../../STATUS/">See the working backlog.</a>
+    <a href="../../queue/">See the working backlog.</a>
 
             </div>
             <script>var el=document.querySelector("[data-md-component=outdated]"),base=new URL("../.."),outdated=__md_get("__outdated",sessionStorage,base);!0===outdated&&el&&(el.hidden=!1)</script>
@@ -2733,14 +2733,14 @@ A second principle: <strong>the local verdict must match the CI verdict</strong>
 <tbody>
 <tr>
 <td><strong>Pre-commit hook</strong></td>
-<td><code>gofmt</code> on staged <code>.go</code> files; <code>docs/STATUS.md</code> format lint when that file is staged</td>
+<td><code>gofmt</code> on staged <code>.go</code> files; the em-dash ceiling when Markdown is staged</td>
 <td>every <code>git commit</code></td>
 <td>~0.5s</td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.githooks/pre-commit"><code>.githooks/pre-commit</code></a></td>
 </tr>
 <tr>
 <td><strong><code>make check</code></strong></td>
-<td><code>gofmt</code> + <code>golangci-lint</code> + <code>STATUS.md</code> lint + plan-index/no-plan-refs drift + single-Go-version + v2 API package sync + <code>shellcheck</code> + chart CRD/RBAC/webhook drift + <code>scripts-test</code> + the <a href="../testing/#the-claude-usage-snapshot-gate"><code>claude-usage/</code> Python suite</a> + doc link/anchor check + unit tests (with the coverage ratchet), all modules</td>
+<td><code>gofmt</code> + <code>golangci-lint</code> + backlog store lint + plan-index/no-plan-refs drift + single-Go-version + v2 API package sync + <code>shellcheck</code> + chart CRD/RBAC/webhook drift + <code>scripts-test</code> + the <a href="../testing/#the-claude-usage-snapshot-gate"><code>claude-usage/</code> Python suite</a> + doc link/anchor check + unit tests (with the coverage ratchet), all modules</td>
 <td>manual, before requesting review</td>
 <td>minutes cold / seconds warm</td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/Makefile"><code>Makefile</code></a> <code>check</code> target</td>
@@ -2799,7 +2799,7 @@ Bypass the hook for a single commit with <code>git commit --no-verify</code>.</p
 </tr>
 <tr>
 <td>Structural rules</td>
-<td><code>scripts/docs/lint-backlog.sh</code> — <code>docs/STATUS.md</code> format: no <code>**Next ID:**</code> counter and every new ID holds a <code>refs/queue-ids/QN</code> claim (IDs come from <code>make queue-id</code>), unique IDs + anchors, 🔲/🚫-only states, Notes/trigger caps with the doc-link rule</td>
+<td><code>scripts/docs/lint-queue.sh</code> — the backlog store's format: frontmatter shape, rank shape, filename/id agreement, the 72-character title cap, targets that no longer resolve. Its sibling <code>check-queue-rules.sh</code> carries the three rules that are functions of what the branch changed</td>
 <td><code>.githooks/pre-commit</code> (also enforces isolated STATUS.md commits); <code>make check</code>; <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/status-lint.yml"><code>status-lint.yml</code></a></td>
 </tr>
 <tr>
@@ -2836,7 +2836,7 @@ CLAUDE.md tells contributors which tier proves which bug class.</p>
 <p>Local verdict equals CI verdict by deliberate construction:
 - <code>make trivy-scan</code> is "mirrored exactly by the CI <code>trivy</code> job so local and CI verdicts match" (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/Makefile"><code>Makefile</code></a>).
 - <code>make vulncheck</code> "matches the CI <code>govulncheck</code> gate."
-- <code>make check</code> runs the same gofmt + <code>golangci-lint</code> + <code>STATUS.md</code> lint + unit tests as <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/unit-test.yml"><code>unit-test.yml</code></a> (plus additional gates it supersets — <code>shellcheck</code>, chart CRD/RBAC/webhook drift, plan-index/no-plan-refs, doc link/anchor check, and the coverage ratchet — each mirrored by its own CI workflow), so a green <code>make check</code> means a green unit-test workflow.</p>
+- <code>make check</code> runs the same gofmt + <code>golangci-lint</code> + backlog lint + unit tests as <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/unit-test.yml"><code>unit-test.yml</code></a> (plus additional gates it supersets — <code>shellcheck</code>, chart CRD/RBAC/webhook drift, plan-index/no-plan-refs, doc link/anchor check, and the coverage ratchet — each mirrored by its own CI workflow), so a green <code>make check</code> means a green unit-test workflow.</p>
 <p>This parity is what makes the fast local signal worth trusting.</p>
 <h3 id="document-expectations--a">Document expectations — A−<a class="headerlink" href="#document-expectations--a" title="Permanent link">&para;</a></h3>
 <p>CLAUDE.md carries a doc-update matrix, a test-tier selection guide, and an agent-reference table mapping task → doc; <a href="../testing/">testing.md</a> is the canonical run-command source; <code>make check</code> is the single "run before review" command.
@@ -2844,7 +2844,7 @@ Held just short of A because expectations are spread across prose plus the one c
 <h3 id="self-reinforcing-correct-twice--automate--a">Self-reinforcing (correct twice → automate) — A<a class="headerlink" href="#self-reinforcing-correct-twice--automate--a" title="Permanent link">&para;</a></h3>
 <p>The article's core principle is visibly practiced.
 <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.golangci.yml"><code>.golangci.yml</code></a> states its scope is to "catch regressions of the bugs and idiom violations tracked in Queue items 38–41."
-<code>scripts/docs/lint-backlog.sh</code> exists solely because the <code>docs/STATUS.md</code> format (e.g. the 250-char Notes cap) kept getting violated.
+<code>scripts/docs/lint-queue.sh</code> exists solely because the backlog format (e.g. the 250-character notes cap) kept getting violated.
 The workspace-guard PreToolUse hook is real-time backpressure on file operations, and branch-guard is the same on git operations — prompting before commits, pushes, or destructive commands on a protected branch.
 (These two guards are harness/<code>CLAUDE.md</code>-level, not repo-tracked hook scripts; the repo does track two PreToolUse hooks of its own, <code>scripts/agent/claude-go-throttle-hook.sh</code> and <code>scripts/agent/claude-no-subagent-workers-hook.sh</code>.)
 Each is a repeated correction turned into an automated gate.</p>
@@ -2858,7 +2858,7 @@ The only deduction is that git cannot set <code>core.hooksPath</code> automatica
 <ul>
 <li><strong>Hook install is one-time, not automatic on clone</strong> — a git limitation; <code>make hooks</code> / <code>scripts/dev/setup.sh</code> is the workaround.</li>
 <li><strong><code>integration-test.yml</code> hard-codes <code>-v</code></strong> — noisy on green, but CI-only and useful for opaque envtest failures (deliberate).</li>
-<li><strong>The pre-commit hook covers <code>gofmt</code> + <code>STATUS.md</code> only, not <code>golangci-lint</code></strong> — deliberate, to stay sub-second; <code>golangci-lint</code> runs in <code>make check</code> and CI.</li>
+<li><strong>The pre-commit hook covers <code>gofmt</code> + the em-dash ceiling only, not <code>golangci-lint</code></strong> — deliberate, to stay sub-second; <code>golangci-lint</code> runs in <code>make check</code> and CI.</li>
 </ul>
 
 

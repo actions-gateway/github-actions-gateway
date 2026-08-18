@@ -146,7 +146,7 @@
             <div class="md-banner__inner md-grid md-typeset">
               You're not viewing the latest release.
   <a href="https://actions-gateway.com/dev"><strong>Go to the current docs.</strong></a>
-    <a href="../../STATUS/">See the working backlog.</a>
+    <a href="../../queue/">See the working backlog.</a>
 
             </div>
             <script>var el=document.querySelector("[data-md-component=outdated]"),base=new URL("../.."),outdated=__md_get("__outdated",sessionStorage,base);!0===outdated&&el&&(el.hidden=!1)</script>
@@ -3502,7 +3502,7 @@ The verification step below is therefore not optional on the first release — i
 <p>Everything below this section is <em>how</em> to cut a release.
 This section is <em>whether</em> to — the question the rest of the page assumes has already been answered.</p>
 <p>Start from the record, not from memory.
-The delete-on-done Queue erases delivered work from <code>STATUS.md</code> by design, so nothing in the backlog shows what has piled up since the last tag:</p>
+The delete-on-done backlog erases delivered work by design, so nothing in the backlog shows what has piled up since the last tag:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>scripts/release/release-delta.sh
 </code></pre></div>
 <p>It reports, for <code>&lt;last stable tag&gt;..origin/main</code>, the commits by Conventional Commit type (breaking ones called out), the Queue rows closed in that window, the API diffstat, and the operator-facing pages touched.
@@ -3631,7 +3631,7 @@ The point of doing it here rather than at the tag is that the answers are free b
 <p>This step exists because the alternative is remembering.
   The <code>v1.2.0</code>→next window accumulated a required pre-upgrade <code>kubectl apply</code>, a removed values key that fails the render, and a rollback that re-arms a cluster-wide outage — each recorded correctly in <code>docs/operations/upgrade.md</code> by the change that introduced it, and each invisible to anyone reading a generated changelog.</p>
 <ul>
-<li><strong>Reconcile <a href="../../roadmap/"><code>docs/roadmap.md</code></a> and <a href="../../features/"><code>docs/features.md</code></a> against <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/docs/STATUS.md"><code>docs/STATUS.md</code></a> before you tag.</strong> The same freeze that applies to the announce bar applies here: a stable tag deploys that tag's docs wholesale, so a stale roadmap is published permanently under that version.
+<li><strong>Reconcile <a href="../../roadmap/"><code>docs/roadmap.md</code></a> and <a href="../../features/"><code>docs/features.md</code></a> against <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/docs/queue/README.md"><code>docs/queue/</code></a> before you tag.</strong> The same freeze that applies to the announce bar applies here: a stable tag deploys that tag's docs wholesale, so a stale roadmap is published permanently under that version.
   <code>make roadmap-check</code> catches the mechanical half — a roadmap bullet naming a deleted Queue row, or one sitting in the wrong section — and it runs in CI.
   What it cannot catch is the move itself: <strong>work that shipped this cycle needs a <code>docs/features.md</code> line</strong>, and a Deferred row describing a capability an adopter would ask about belongs in <em>Exploring</em>.
   A 2026-07-25 audit found six of seven near-term items already shipped.</li>

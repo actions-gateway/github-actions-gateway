@@ -142,7 +142,7 @@
             <div class="md-banner__inner md-grid md-typeset">
               You're not viewing the latest release.
   <a href="https://actions-gateway.com/dev"><strong>Go to the current docs.</strong></a>
-    <a href="../../../STATUS/">See the working backlog.</a>
+    <a href="../../../queue/">See the working backlog.</a>
 
             </div>
             <script>var el=document.querySelector("[data-md-component=outdated]"),base=new URL("../../.."),outdated=__md_get("__outdated",sessionStorage,base);!0===outdated&&el&&(el.hidden=!1)</script>
@@ -2653,7 +2653,7 @@
 
 
 <h1 id="q246--live-cold-cache-diagnosis-of-the-dogfood-release-asset-download-timeout">Q246 — Live cold-cache diagnosis of the dogfood release-asset download timeout<a class="headerlink" href="#q246--live-cold-cache-diagnosis-of-the-dogfood-release-asset-download-timeout" title="Permanent link">&para;</a></h1>
-<p><strong>Status:</strong> ✅ done — cause confirmed (a) Q61 cache race; minimal fix implemented (this session) <strong>Owner:</strong> worker session <strong>Parent:</strong> <a href="../../gke-dogfood/">gke-dogfood.md</a> (Q246 note), blocks <a href="../../../STATUS/">Q224</a></p>
+<p><strong>Status:</strong> ✅ done — cause confirmed (a) Q61 cache race; minimal fix implemented (this session) <strong>Owner:</strong> worker session <strong>Parent:</strong> <a href="../../gke-dogfood/">gke-dogfood.md</a> (Q246 note), blocks <a href="../../../queue/">Q224</a></p>
 <h2 id="goal-one-sentence">Goal (one sentence)<a class="headerlink" href="#goal-one-sentence" title="Permanent link">&para;</a></h2>
 <p>Confirm on a live GKE cold run whether the dogfood release-asset download timeout (shellcheck/coverage tool tarballs) is caused by <strong>(a)</strong> the Q61 cold-start IP-range-cache race or <strong>(b)</strong> the Q247 node-CPU exhaustion that co-occurred — and act on the confirmed cause only.</p>
 <h2 id="premise-correction-already-established-do-not-re-litigate">Premise correction (already established, do not re-litigate)<a class="headerlink" href="#premise-correction-already-established-do-not-re-litigate" title="Permanent link">&para;</a></h2>

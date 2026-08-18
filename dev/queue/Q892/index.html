@@ -142,7 +142,7 @@
             <div class="md-banner__inner md-grid md-typeset">
               You're not viewing the latest release.
   <a href="https://actions-gateway.com/dev"><strong>Go to the current docs.</strong></a>
-    <a href="../../STATUS/">See the working backlog.</a>
+    <a href="../">See the working backlog.</a>
 
             </div>
             <script>var el=document.querySelector("[data-md-component=outdated]"),base=new URL("../.."),outdated=__md_get("__outdated",sessionStorage,base);!0===outdated&&el&&(el.hidden=!1)</script>
@@ -2568,8 +2568,9 @@
 
 
 <h1 id="a-suite-that-copies-a-gate-into-a-fixture-is-invisible-to-grep">A suite that copies a gate into a fixture is invisible to grep<a class="headerlink" href="#a-suite-that-copies-a-gate-into-a-fixture-is-invisible-to-grep" title="Permanent link">&para;</a></h1>
-<p>A suite that copies a gate into a fixture inherits that gate's inputs, so adding one breaks it with no textual reference to grep.
-<code>check-plan-index</code> gained a second source and only <code>make check</code> noticed.
+<p>A suite that copies a gate into a fixture inherits that gate's inputs, so changing one breaks it with no textual reference to grep.
+Twice in <code>git-merge-plan-index-test</code>, in both directions: <code>check-plan-index</code> gained a source (2026-08-16), then lost one at the Q889 cutover (2026-08-17).
+Only <code>make check</code> noticed either.
 Name the consumers, or detect the copy.</p>
 
 

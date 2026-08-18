@@ -142,7 +142,7 @@
             <div class="md-banner__inner md-grid md-typeset">
               You're not viewing the latest release.
   <a href="https://actions-gateway.com/dev"><strong>Go to the current docs.</strong></a>
-    <a href="../../STATUS/">See the working backlog.</a>
+    <a href="../../queue/">See the working backlog.</a>
 
             </div>
             <script>var el=document.querySelector("[data-md-component=outdated]"),base=new URL("../.."),outdated=__md_get("__outdated",sessionStorage,base);!0===outdated&&el&&(el.hidden=!1)</script>
@@ -2790,7 +2790,7 @@ Used here when repo tooling misbehaves and the fix belongs upstream rather than 
 Everything under <code>docs/</code> publishes to <a href="https://actions-gateway.com/">actions-gateway.com</a>, so editing one of these files edits a live page.
 <a href="../website/#measure-the-render-the-source-cannot-answer-these-questions">website.md</a> holds the repo-specific probes it runs.</p>
 <h3 id="session-backlog"><code>session-backlog</code><a class="headerlink" href="#session-backlog" title="Permanent link">&para;</a></h3>
-<p>The format and grooming process for the Queue in <a href="../../STATUS/">docs/STATUS.md</a>.
+<p>The format and grooming process for the backlog in <a href="../../queue/">docs/queue/</a>.
 <a href="../maintaining-backlog/">maintaining-backlog.md</a> is authoritative wherever the two overlap, and this repo's own tooling (<code>lint-backlog.sh</code> over the <code>backloglint</code> rules, the ID allocator, the merge drivers) enforces the format with or without the skill installed.</p>
 <h3 id="session-orchestrator"><code>session-orchestrator</code><a class="headerlink" href="#session-orchestrator" title="Permanent link">&para;</a></h3>
 <p>The dispatcher half of a parallel run: deciding whether a batch is worth parallelizing, spawning workers as full sessions, and carrying every PR to ready without merging any.

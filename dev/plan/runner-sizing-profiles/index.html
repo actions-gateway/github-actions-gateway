@@ -142,7 +142,7 @@
             <div class="md-banner__inner md-grid md-typeset">
               You're not viewing the latest release.
   <a href="https://actions-gateway.com/dev"><strong>Go to the current docs.</strong></a>
-    <a href="../../STATUS/">See the working backlog.</a>
+    <a href="../../queue/">See the working backlog.</a>
 
             </div>
             <script>var el=document.querySelector("[data-md-component=outdated]"),base=new URL("../.."),outdated=__md_get("__outdated",sessionStorage,base);!0===outdated&&el&&(el.hidden=!1)</script>
@@ -3133,7 +3133,7 @@ All seven metric families are exported with live data, labelled by namespace, ru
 <li><strong><code>jobs_unsampled_total</code> earns its place.</strong> Some CI jobs finish inside one 15s sample interval, and the counter makes that visible instead of silently biasing the histogram toward long jobs.</li>
 </ul>
 <h3 id="phase-2--recommendation-in-status-confirmed">Phase 2 — recommendation in status: confirmed<a class="headerlink" href="#phase-2--recommendation-in-status-confirmed" title="Permanent link">&para;</a></h3>
-<p><code>status.sizingRecommendation</code> appeared on the <code>runner</code> container at exactly <code>sampleCount: 5</code> (<code>MinSamplesForRecommendation</code>), carrying <code>windowStartTime</code> and both raw statistics beside the derived values (the capture below spells that field <code>windowStart</code>, its name at observation time; <a href="../../STATUS/">Q485</a> renamed it before the 1.3 tag, values unchanged):</p>
+<p><code>status.sizingRecommendation</code> appeared on the <code>runner</code> container at exactly <code>sampleCount: 5</code> (<code>MinSamplesForRecommendation</code>), carrying <code>windowStartTime</code> and both raw statistics beside the derived values (the capture below spells that field <code>windowStart</code>, its name at observation time; <a href="../../queue/">Q485</a> renamed it before the 1.3 tag, values unchanged):</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="p">{</span>
 <a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="w">  </span><span class="nt">"container"</span><span class="p">:</span><span class="w"> </span><span class="s2">"runner"</span><span class="p">,</span>
 <a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="w">  </span><span class="nt">"observedPeak"</span><span class="p">:</span><span class="w">  </span><span class="p">{</span><span class="w"> </span><span class="nt">"cpu"</span><span class="p">:</span><span class="w"> </span><span class="s2">"3745m"</span><span class="p">,</span><span class="w"> </span><span class="nt">"memory"</span><span class="p">:</span><span class="w"> </span><span class="s2">"2273Mi"</span><span class="w"> </span><span class="p">},</span>

@@ -146,7 +146,7 @@
             <div class="md-banner__inner md-grid md-typeset">
               You're not viewing the latest release.
   <a href="https://actions-gateway.com/dev"><strong>Go to the current docs.</strong></a>
-    <a href="../../STATUS/">See the working backlog.</a>
+    <a href="../../queue/">See the working backlog.</a>
 
             </div>
             <script>var el=document.querySelector("[data-md-component=outdated]"),base=new URL("../.."),outdated=__md_get("__outdated",sessionStorage,base);!0===outdated&&el&&(el.hidden=!1)</script>
@@ -2892,7 +2892,7 @@ The Gateway Manager Controller (GMC) does not install RuntimeClasses or runtime 
 <h2 id="b5-sidecar-containers-and-pod-reaping-q249">B.5. Sidecar containers and pod reaping (Q249)<a class="headerlink" href="#b5-sidecar-containers-and-pod-reaping-q249" title="Permanent link">&para;</a></h2>
 <p>A worker pod is one runner container plus, optionally, sidecars.
 A Kubernetes pod terminates only when <strong>every</strong> regular <code>spec.containers[]</code> entry has exited, so a sidecar that runs for the life of the job — a <code>docker:dind</code> daemon, a rootless BuildKit sidecar, a metrics agent — keeps the pod alive after the runner container finishes if it is declared as a <strong>regular container</strong>.
-The pod lingers, and because GAG counts a pod as an active session until it reaps, the runner slot stays charged against the <code>RunnerSet</code>'s <code>maxWorkers</code> — the same stranding class as <a href="../../STATUS/">Q247</a> (a pod left behind after its job is gone).
+The pod lingers, and because GAG counts a pod as an active session until it reaps, the runner slot stays charged against the <code>RunnerSet</code>'s <code>maxWorkers</code> — the same stranding class as <a href="../../queue/">Q247</a> (a pod left behind after its job is gone).
 Under a concurrent matrix the pool collapses to the pods that happened to reap.</p>
 <p>GAG does <strong>not</strong> solve this with a bespoke reaper — it relies on the upstream mechanism.
 A <strong>native sidecar</strong> (<a href="https://github.com/kubernetes/enhancements/tree/master/keps/sig-node/753-sidecar-containers">KEP-753</a>: a <code>restartPolicy: Always</code> init container, beta/on-by-default in Kubernetes 1.29, GA in 1.33) is torn down by the kubelet when the main container exits, so the pod completes on its own.

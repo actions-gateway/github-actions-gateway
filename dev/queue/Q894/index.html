@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q889/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q894/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>Migrate the backlog to the per-item store - GitHub Actions Gateway</title>
+        <title>Archive the plans left active only by the deleted Progress table - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#migrate-the-backlog-to-the-per-item-store" class="md-skip">
+        <a href="#archive-the-plans-left-active-only-by-the-deleted-progress-table" class="md-skip">
           Skip to content
         </a>
       
@@ -142,7 +142,7 @@
             <div class="md-banner__inner md-grid md-typeset">
               You're not viewing the latest release.
   <a href="https://actions-gateway.com/dev"><strong>Go to the current docs.</strong></a>
-    <a href="../../STATUS/">See the working backlog.</a>
+    <a href="../">See the working backlog.</a>
 
             </div>
             <script>var el=document.querySelector("[data-md-component=outdated]"),base=new URL("../.."),outdated=__md_get("__outdated",sessionStorage,base);!0===outdated&&el&&(el.hidden=!1)</script>
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Migrate the backlog to the per-item store
+              Archive the plans left active only by the deleted Progress table
             
           </span>
         </div>
@@ -2567,9 +2567,11 @@
   
 
 
-<h1 id="migrate-the-backlog-to-the-per-item-store">Migrate the backlog to the per-item store<a class="headerlink" href="#migrate-the-backlog-to-the-per-item-store" title="Permanent link">&para;</a></h1>
-<p>Position-is-priority makes this table contended by construction: taking the top <em>k</em> rows conflicts for every k ≥ 2, and the merge drivers reach the resolution but never the retest.
-Adopt the store, its Python tooling, and port rules 8/9/11.</p>
+<h1 id="archive-the-plans-left-active-only-by-the-deleted-progress-table">Archive the plans left active only by the deleted Progress table<a class="headerlink" href="#archive-the-plans-left-active-only-by-the-deleted-progress-table" title="Permanent link">&para;</a></h1>
+<p>Q889 deleted the Progress table, whose ✅ rows were the only backlog reference 21 active plans had, and rekeyed <code>plan-index-check</code> invariant 1 on the index's own marker so it no longer demands their archival.
+That is the trade the cutover took: the rule got stricter where staleness actually hides, and stopped gating a finished plan left sitting in the active index.
+Measured 2026-08-17: 21 plans, plus <code>docs-page-boundaries.md</code> and <code>q889-backlog-item-store.md</code>, and 142 inbound references to re-base.
+Too large to fold into the cutover, and mechanical enough to reconcile rather than eyeball.</p>
 
 
 

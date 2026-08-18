@@ -142,7 +142,7 @@
             <div class="md-banner__inner md-grid md-typeset">
               You're not viewing the latest release.
   <a href="https://actions-gateway.com/dev"><strong>Go to the current docs.</strong></a>
-    <a href="../../STATUS/">See the working backlog.</a>
+    <a href="../../queue/">See the working backlog.</a>
 
             </div>
             <script>var el=document.querySelector("[data-md-component=outdated]"),base=new URL("../.."),outdated=__md_get("__outdated",sessionStorage,base);!0===outdated&&el&&(el.hidden=!1)</script>
@@ -2756,7 +2756,7 @@ In brief: the architecture review found the breaking surface fully covered; ever
 We do <strong>not</strong> gate on external adoption — <code>v1alpha1</code> never carried a stability contract either, and a <code>v3</code> re-cut remains the escape hatch if the shape proves wrong.
 Beta's "production-relyable" signal is itself an adoption driver (nobody relies on an alpha that may vanish without notice).</p>
 <h2 id="the-blocker-sequence">The blocker sequence<a class="headerlink" href="#the-blocker-sequence" title="Permanent link">&para;</a></h2>
-<p>Ordered in the <a href="../../STATUS/">Queue</a>.
+<p>Ordered in the <a href="../../queue/">Queue</a>.
 <strong>Q191/Q196/Q197/Q15/Q218 are independent and run in parallel; Q74 waits for all five.</strong></p>
 <h3 id="1-q191--broker-compatibility-sweep-run-first">1. Q191 — Broker-compatibility sweep <em>(run first)</em><a class="headerlink" href="#1-q191--broker-compatibility-sweep-run-first" title="Permanent link">&para;</a></h3>
 <p>GAG re-implements the GitHub broker protocol, so a protocol gap could force a CRD change.
@@ -2846,7 +2846,7 @@ This reverses the <a href="../../design/appendix-h-v2-api-decomposition/#h15-oth
 Rotation (you rotate the Secret vs. the anchor rotates), RBAC (mount a Secret vs. bind an annotated ServiceAccount), validation (parse a PEM vs. resolve a key + verify the identity binding), and failure modes (<code>SecretNotFound</code> vs. <code>SignerUnreachable</code>) all differ.
 It is also on-strategy: workload identity removes the App key from the cluster entirely — the strict-upgrade direction of the secure-by-default principle.</p>
 <p><strong>MVP = Vault transit.</strong> The first signer implementation is Vault transit + Kubernetes auth, because it is <strong>kind-validatable</strong> (see Testing), serves the managed-PKI/Vault operator persona (cf.
-<a href="../../STATUS/">Q174</a>), and avoids three-cloud-SDK sprawl.
+<a href="../../queue/">Q174</a>), and avoids three-cloud-SDK sprawl.
 Cloud KMS providers slot in behind the same signer interface as additive follow-ups.</p>
 <h2 id="testing">Testing<a class="headerlink" href="#testing" title="Permanent link">&para;</a></h2>
 <table>
@@ -2894,7 +2894,7 @@ Cloud KMS providers slot in behind the same signer interface as additive follow-
 <ul>
 <li>Cloud KMS workload-identity providers (AWS/GCP/Azure) — additive impls behind the Q197 signer interface.</li>
 <li>PAT or other credential methods — additive union members.</li>
-<li>The real-cluster capacity run (<a href="../../STATUS/">Q181</a>), AGC HA (<a href="../../STATUS/">Q169</a>), and proxy feature/sharing items (Q19/Q166/Q173/Q174) — all additive and independently triggered.</li>
+<li>The real-cluster capacity run (<a href="../../queue/">Q181</a>), AGC HA (<a href="../../queue/">Q169</a>), and proxy feature/sharing items (Q19/Q166/Q173/Q174) — all additive and independently triggered.</li>
 </ul>
 
 
