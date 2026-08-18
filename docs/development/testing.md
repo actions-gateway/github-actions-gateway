@@ -155,6 +155,14 @@ Every line is prefixed with its gate's label, so a failure stays attributable.
 (`make -j` is not used: macOS ships GNU make 3.81, which has no `-O` output sync, so two failing gates would interleave unreadably.)
 The heavy phases then run in sequence, each taking a slot of its own.
 
+**A red `run-parallel` summary has two kinds of line, and they call for different responses.** `FAILED: label (exit N)` means the gate ran to a verdict and the verdict was bad, so it names a defect to go and read.
+`KILLED: label (signal N, exit 128+N)` means a signal ended the command before it reached any verdict.
+The runner never kills a child (every pid is waited, siblings are never cancelled), so the signal came from elsewhere.
+Under host contention that is usually SIGTERM (`signal 15, exit 143`), which says nothing about the gate and wants a re-run rather than a hunt; signal 9 (`exit 137`) is the OOM killer, which does.
+Both still exit non-zero, because a killed command did not do its work.
+What separates them is the fan-out's own status: 1 when anything reached a bad verdict, and otherwise the first killed command's own `128+N` (Q837).
+Exit 128 is not a signal death, since git spends it on any fatal error, so it stays a `FAILED`.
+
 Test output is non-verbose by default: `go test` prints one `ok <pkg>` line per passing package and the full output of any package that fails (compress success, expand failure).
 When debugging a **slow or hanging** test, add `V=1` (`make check V=1` or `make test V=1`) to stream output live — without `-v`, `go test` buffers each package's output until the package completes, so a hung test shows nothing (not even its `t.Log` lines) until it finishes or hits `-timeout`.
 

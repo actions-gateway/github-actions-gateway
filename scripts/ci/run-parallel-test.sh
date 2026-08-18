@@ -10,6 +10,12 @@
 # command the kernel killed (128+n; 137 is the OOM killer's) or one that was
 # never found (127). Five flakes in this family went undiagnosed while the
 # summary named only a label (Q703).
+#
+# The status also decides the verdict: a signal death is reported under KILLED
+# and exits with its own 128+n status, because it reached no verdict and is not
+# a defect to go and read (Q837). The cases below pin both halves, since
+# silencing a kill and calling it a failure are both wrong.
+#
 # Runs under `make check` (via `make scripts-test`) and the CI shellcheck job.
 set -euo pipefail
 shopt -s inherit_errexit
@@ -86,8 +92,38 @@ want_no 'a passing sibling is not reported' 'ok-one \(exit'
 # A command the kernel kills is reported as a signal, not as an assertion
 # failure. 137 (SIGKILL) is what an OOM kill looks like in a labeled log.
 rp "killed:sh -c 'kill -9 \$\$'"
-want_rc 'a killed command fails the fan-out' 1
-want 'a signal death is named as a signal' 'killed \(signal 9, exit 137\)'
+want_rc 'a kill exits with the killed status' 137
+want 'a signal death is named as a signal' 'KILLED:.*killed \(signal 9, exit 137\)'
+want_no 'a kill is not counted as a failure' 'FAILED'
+want 'the summary says a kill is not a gate failure' 'not a gate failure'
+
+# Q837's measurement: SIGTERM under host contention. An external kill must not
+# read as a real gate failure, and must not vanish from the output either.
+rp "term:sh -c 'kill -15 \$\$'"
+want_rc 'a SIGTERM kill exits 143, not 1' 143
+want 'a SIGTERM kill is named as signal 15' 'KILLED:.*term \(signal 15, exit 143\)'
+want_no 'a SIGTERM kill is not counted as a failure' 'FAILED'
+
+# A verdict outranks a kill: something reached a bad verdict, so the fan-out
+# exits 1 — and the kill is still reported beside it.
+rp "boom:sh -c 'exit 3'" "killed:sh -c 'kill -9 \$\$'"
+want_rc 'a real failure beside a kill exits 1' 1
+want 'the failure is reported' 'FAILED:.*boom \(exit 3\)'
+want 'the kill is reported beside it' 'KILLED:.*killed \(signal 9, exit 137\)'
+
+# Two kills exit with the first status, and the second is still reported. This
+# also pins that the first-kill bookkeeping survives `set -e`.
+rp "first:sh -c 'kill -15 \$\$'" "second:sh -c 'kill -9 \$\$'"
+want_rc 'two kills exit with the first status' 143
+want 'a second kill is reported too' 'KILLED:.*second \(signal 9, exit 137\)'
+
+# 128 is not a signal death: git spends it on any fatal error, which is what
+# Q820's temp-file signature looks like. It stays a primary failure, so the
+# split is rc > 128 rather than the row's rc >= 128.
+rp "gitfatal:sh -c 'exit 128'"
+want_rc 'exit 128 still fails the fan-out' 1
+want 'exit 128 is a failure, not a kill' 'FAILED:.*gitfatal \(exit 128\)'
+want_no 'exit 128 is not reported as a kill' 'KILLED'
 
 # 127 is a missing command, not a failing one — the distinction a bare label
 # also erased.
