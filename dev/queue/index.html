@@ -2764,14 +2764,6 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td><code>podUnschedulable()</code> keys on <code>PodScheduled=False</code>, so an <code>ImagePullBackOff</code> worker trips no rung: it binds, never starts, and each claim …</td>
 </tr>
 <tr>
-<td><a href="Q837/">Q837</a></td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/ci/run-parallel.sh">A <code>run-parallel</code> exit 143 means the gate was killed, not that it failed</a></td>
-<td><code>docs</code> <code>ci</code> <code>retro</code></td>
-<td>🔲</td>
-<td>S</td>
-<td>Measured 2026-08-12: <code>signal 15, exit 143</code> is an external kill, and <code>run-parallel.sh</code> waits on every pid rather than killing siblings.</td>
-</tr>
-<tr>
 <td><a href="Q825/">Q825</a></td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/agent/claude-piped-gate-hook-test.sh">The no-toolchain case flakes twice over: pipeline status, and a rebuild</a></td>
 <td><code>flake</code> <code>tests</code> <code>bug</code></td>
