@@ -135,6 +135,9 @@ Neither half is optional, and neither substitutes for the other.
 `make em-dash-check` ([`scripts/docs/check-em-dash.sh`](../../scripts/docs/check-em-dash.sh)) counts the dashes and fails the build.
 It runs inside `make check` and as its own job in the `doc-links` CI workflow.
 
+**A per-file ceiling is a per-PR check, so two PRs can merge jointly red.** Each sits within its own ceiling on its own base, so per-PR CI never sees the merge result: measured twice on 2026-08-08, the second reaching `main` ([Q742](../queue/Q742.md)).
+Whether the merge queue runs this gate on the candidate at all is the first thing to establish, and the fix is to ratchet on the diff rather than the file total.
+
 **What it does not count.** A raw `grep -o '—' | wc -l` was the rule's only instrument before, and it counts four shapes where the dash is legitimate, which is most of why the rule was unmeasurable.
 The counter reads the parsed document instead ([`devtools/docs/emdash`](../../devtools/docs/emdash/), over the goldmark layer Q612 built), and skips:
 
