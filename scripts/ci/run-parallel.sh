@@ -20,6 +20,10 @@
 # contention that is SIGTERM. Both are still reported and both still exit
 # non-zero — a killed command did not do its work, and 137 is the OOM killer's.
 #
+# Every run ends with per-label wall time, slowest first. A fan-out's total is
+# its slowest member, so that block is the only place a gate's cost is legible
+# (Q819).
+#
 # Example:
 #   scripts/ci/run-parallel.sh \
 #     "cert-manager:make apply-cert-manager" \
@@ -36,6 +40,11 @@ fi
 pids=()
 labels=()
 
+# Children report their own wall time here: a subshell cannot assign to the
+# parent, and the parent cannot time them itself because `wait` collects in spawn
+# order while commands finish in any order.
+timings="$(mktemp -d)"
+
 # shellcheck disable=SC2329 # invoked by `trap cleanup EXIT`; shellcheck 0.11 misses
 # that whenever the script ends in an explicit `exit`.
 cleanup() {
@@ -43,17 +52,32 @@ cleanup() {
     for pid in "${pids[@]+"${pids[@]}"}"; do
         kill "$pid" 2>/dev/null || true
     done
+    rm -rf "$timings"
 }
 trap cleanup EXIT INT TERM
 
 for spec in "$@"; do
     label="${spec%%:*}"
     cmd="${spec#*:}"
+    idx="${#pids[@]}"
     # Wrap in a subshell so $! is the subshell's PID and wait correctly reflects
     # the pipeline's exit code (via inherited pipefail) rather than awk's.
     # awk -v passes the label as a literal string, avoiding sed delimiter and
     # metacharacter issues. fflush() ensures lines appear in real time.
-    ( bash -c "$cmd" 2>&1 | awk -v label="[$label]" '{ print label, $0; fflush() }' ) &
+    #
+    # The status is captured off the pipeline and the subshell exits on it, so
+    # nothing between the two can change the verdict — the timing write is
+    # advisory, and a full disk or an unwritable TMPDIR costs a duration rather
+    # than a gate's red or green. `date +%s` rather than SECONDS: resetting
+    # SECONDS per subshell reads to shellcheck as a lost assignment (SC2030), and
+    # the suppression would be wider than the line it covers.
+    (
+        started="$(date +%s)"
+        rc=0
+        bash -c "$cmd" 2>&1 | awk -v label="[$label]" '{ print label, $0; fflush() }' || rc=$?
+        printf '%s\t%s\n' "$(( $(date +%s) - started ))" "$label" > "$timings/$idx" || true
+        exit "$rc"
+    ) &
     pids+=($!)
     labels+=("$label")
 done
@@ -78,6 +102,22 @@ for i in "${!pids[@]}"; do
         failed+=("${labels[$i]} (exit $rc)")
     fi
 done
+
+# Wall time before the failure summary, so a red run still ends on its failures.
+# A command killed before it could report leaves no file and prints "?".
+{
+    for i in "${!labels[@]}"; do
+        if [[ -s "$timings/$i" ]]; then
+            cat "$timings/$i"
+        else
+            printf '%s\t%s\n' -1 "${labels[$i]}"
+        fi
+    done
+} | sort -rn | awk -F'\t' '
+    BEGIN { print "[run-parallel] wall time, slowest first:" }
+    { printf "[run-parallel] %8s  %s\n", ($1 < 0 ? "?" : $1 "s"), $2 }
+' || true
+printf '[run-parallel] elapsed %ss across %d command(s)\n' "$SECONDS" "${#labels[@]}"
 
 if (( ${#failed[@]} > 0 )); then
     printf '[run-parallel] FAILED: %s\n' "${failed[@]}" >&2
