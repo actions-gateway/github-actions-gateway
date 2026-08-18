@@ -17,8 +17,10 @@ comes off. Nothing on the page names a release, so nothing on the page can
 disagree with the backlog about one.
 
 A bullet naming several rows shows each distinct gate, lowest first. A bullet
-whose rows carry no gate — every "Exploring / longer-term" entry — renders
-unchanged: no chip is the honest rendering of no commitment.
+whose rows carry no gate renders unchanged: no chip is the honest rendering of
+no commitment. Every "Exploring / longer-term" entry is ungated, and so is a
+near-term item whose revive trigger fired before a release was decided for it,
+so an absent chip is not itself a placement finding (Q843).
 
 Two things it deliberately does not do. It never invents a chip for a Q-ID that
 is not in the store: a dangling ID means the work shipped, which is

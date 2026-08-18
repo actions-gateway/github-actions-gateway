@@ -694,10 +694,15 @@ Both are reversible and both are cheap, which is the point: the expensive failur
 Only the second reads the prose, and only it goes quiet once the version is a derived chip rather than a sentence; the coverage half reads the annotation and the label alone, so it holds whatever the bullet looks like.
 Naming a version without claiming to gate it stays free, which is how Q273's bullet names `v2.0.0` while carrying no label.
 
-**A near-term roadmap bullet means "committed to a named release".** An item with no `X.Y-gate` label behind it belongs in Deferred with a revive trigger, which puts its bullet under *Exploring / longer-term*.
+**A near-term roadmap bullet means "not waiting on an outside signal".** An item that waits on demand, on an unbuilt prerequisite, or on hardware belongs in Deferred with a revive trigger, which puts its bullet under *Exploring / longer-term*.
 The [release ladder](../plan/release-ladder.md) is where that rule and the current 1.5 → 1.6 → 2.0 shape are argued; what enforces it is rule 3, since a bullet naming only Deferred rows fails the gate.
 The failure mode it exists to catch is the comfortable one: leaving an item in the Queue because parking it feels like giving up.
 That is how the section came to advertise nine things as *actively being built* while they waited on demand, a prerequisite, or hardware nobody has.
+
+**A release commitment is the narrower claim, and the `X.Y-gate` label alone carries it.** The rule above read *"committed to a named release"* until 2026-08-18, which held only while every ungated item was also parked.
+Reviving [Q408](../queue/Q408.md) and [Q564](../queue/Q564.md) broke that: both revive triggers had fired, so rule 4 moved their bullets into near-term, and neither had a release to name.
+Both ways of restoring the stronger wording are worse than dropping it: invent a gate label, which publishes a promise nobody decided, or re-park a row whose trigger has fired, which misstates why it is parked (Q843).
+So near-term holds some items with a pill and some without, and the pill is the only place a release is claimed.
 
 ## Archiving completed plan docs
 
