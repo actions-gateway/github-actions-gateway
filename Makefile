@@ -309,8 +309,9 @@ v2-api-sync-check: ## Fail if a shared api/v2alpha1 + api/v2beta1 file diverges 
 
 # Go's test cache drops file reads that resolve outside the package's module root
 # (Q895), so a unit test asserting against a repo file one level up replays a stale
-# pass when only that file changes. Measured: `make check` reported `pipedgate
-# (cached)` and exited 0 while the package failed 5 assertions, as did CI. The fix
+# pass when only that file changes. Measured on the since-retired `pipedgate`:
+# `make check` reported it `(cached)` and exited 0 while the package failed 5
+# assertions, as did CI. The fix
 # is a symlink under the package's own testdata/; this gate fails a direct read.
 .PHONY: test-cache-inputs-check
 test-cache-inputs-check: ## Fail if a unit test reads a file outside its module root (go drops it from the test-cache key)

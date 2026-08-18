@@ -872,7 +872,7 @@ Go's test-result cache keys a run on the files the test opened, but it drops eve
 `cmd/go/internal/test` skips them with "Do not recheck files outside the module, GOPATH, or GOROOT root".
 A unit test asserting against a repo file one level up is therefore invisible to its own cache key: change that file alone and `go test` replays the previous pass.
 
-Measured 2026-08-17 (Q895): `make check` reported `pipedgate (cached)` and exited 0 while the package run directly failed 5 assertions, as did CI.
+Measured 2026-08-17 (Q895) on the since-retired `pipedgate`: `make check` reported it `(cached)` and exited 0 while the package run directly failed 5 assertions, as did CI.
 The same shape had silently disarmed the root-`Dockerfile` runner-version lockstep gate, where bumping the pinned tag left `cmd/agc/names` cached and green.
 That is the drift #197 introduced, arriving through the gate written to catch it.
 Both were settled by deleting the mechanism: change the external file, require the cached run to go red.
