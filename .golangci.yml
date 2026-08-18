@@ -185,8 +185,11 @@ linters:
           - staticcheck
         text: "SA1019.*scheme\\.Builder"
       # System cert pool test deliberately uses x509.CertPool.Subjects to
-      # assert superset behavior; rewrite is tracked separately.
-      - path: cmd/agc/internal/transport/proxytrust_test\.go
+      # assert superset behavior; rewrite is tracked separately. The path is the
+      # gate's own blind spot: #1137 renamed the file and this rule kept matching
+      # nothing, so a `//nolint` here is unused wherever staticcheck stays quiet
+      # (Q923).
+      - path: cmd/agc/internal/transport/trustpool_test\.go
         linters:
           - staticcheck
         text: "SA1019.*Subjects"

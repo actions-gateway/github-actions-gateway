@@ -168,7 +168,7 @@ func TestBuildTrustPool_PreservesSystemRoots(t *testing.T) {
 	if err != nil {
 		t.Skipf("system cert pool unavailable on this platform: %v", err)
 	}
-	sysSubjects := len(sys.Subjects()) //nolint:staticcheck // SA1019: counting subjects is the only way to observe "appended, not replaced"; the empty-pool skip below covers the platform-verifier case the deprecation warns about
+	sysSubjects := len(sys.Subjects())
 	if sysSubjects == 0 {
 		t.Skip("system cert pool is empty; cannot verify superset property")
 	}
@@ -179,7 +179,7 @@ func TestBuildTrustPool_PreservesSystemRoots(t *testing.T) {
 		t.Fatalf("BuildTrustPool: %v", err)
 	}
 
-	combined := len(pool.Subjects()) //nolint:staticcheck // SA1019: see the sysSubjects note above
+	combined := len(pool.Subjects())
 	if combined != sysSubjects+1 {
 		t.Fatalf("combined pool: want %d subjects (system %d + 1 proxy), got %d",
 			sysSubjects+1, sysSubjects, combined)
