@@ -40,6 +40,22 @@ cp actions-gateway-platform.png ../../../docs/assets/grafana-dashboard-platform.
 Copy only the dashboards you actually changed.
 The synthetic workload differs run to run, so re-committing an unchanged dashboard's PNG is pure binary churn.
 
+`make dashboard-render-check` enforces this step, in `make check` and on every PR (Q868).
+It reads the branch's whole diff against the merge base with `origin/main`, so landing the JSON in one commit and the PNG in another is fine.
+A panel `description` is exempt: it renders as an info-icon tooltip that no screenshot carries, so rewording one asks for no render.
+Anything else that changed in the JSON does.
+
+Skipping the render is how the published screenshot drifts, and the drift is silent: the page keeps showing a plausible dashboard, and only somebody holding the JSON open can tell it is a release behind.
+That is what [#1526](https://github.com/actions-gateway/github-actions-gateway/pull/1526) shipped, adding a series to the platform dashboard's fleet-conditions panel while the screenshot kept the old five.
+
+For a JSON change that provably cannot alter the render, name the file to skip:
+
+```sh
+DASHBOARD_ALLOW_STALE_RENDER=grafana-dashboard-platform.json make dashboard-render-check
+```
+
+It reports what it excused rather than passing in silence.
+
 Prerequisites: `docker`, `kind`, `helm`, `kubectl`, `curl` on `PATH`.
 (On macOS the script adds Docker Desktop's bundled `kubectl` automatically if it isn't already on `PATH`.)
 `magick` (ImageMagick) is optional — when present, each PNG is auto-cropped to remove the dead space Grafana leaves below the last panel row; without it the render keeps the full `HEIGHT`.

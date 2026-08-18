@@ -91,6 +91,7 @@ NARROW_FILTERS=(
 	'e2e-calico.yml:calico'           # NetworkPolicy/proxy code only; other PRs stay on the kindnet leg
 	'manifest-validate.yml:manifests' # generated YAML, not the Go types behind it
 	'manifest-validate.yml:promql'    # the shipped PrometheusRule and the two docs describing its alerts
+	'manifest-validate.yml:dashboards' # the two dashboards and the two screenshots the docs embed
 	'license-notices.yml:notices'     # vendor/ and the notices generator
 	'status-lint.yml:status'          # docs/queue/, docs/roadmap.md, and their linters
 	'plan-hygiene.yml:plan'           # the plan index plus any .go file (for plan-ref scanning)
