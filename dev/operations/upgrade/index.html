@@ -3931,6 +3931,8 @@ For <strong>initial installation</strong> of the GMC, see <a href="../install/">
 <li><a href="#pre-upgrade-validation-checklist">Pre-Upgrade Validation Checklist</a></li>
 <li><a href="#migration-notes">Migration Notes</a></li>
 <li><a href="#non-breaking-job_duration_seconds-now-measures-worker-pod-lifetime-the-classic-tier-span-shrinks">Non-breaking: job_duration_seconds now measures worker pod lifetime (the classic-tier span shrinks)</a></li>
+<li><a href="#non-breaking-deleting-a-cancelled-runs-worker-no-longer-re-queues-the-job">Non-breaking: deleting a cancelled run's worker no longer re-queues the job</a></li>
+<li><a href="#non-breaking-an-abandoned-run-is-force-cancelled-and-re-run-automatically-on-both-acquisition-tiers">Non-breaking: an abandoned run is force-cancelled and re-run automatically, on both acquisition tiers</a></li>
 <li><a href="#non-breaking-v1alpha1-is-deprecated-and-the-apiserver-now-warns">Non-breaking: v1alpha1 is deprecated and the apiserver now warns</a></li>
 <li><a href="#non-breaking-an-egressproxy-pools-pods-drop-the-app-actions-gateway-proxy-label-its-pool-is-recreated-once">Non-breaking: an EgressProxy pool's pods drop the app: actions-gateway-proxy label (its pool is recreated once)</a></li>
 <li><a href="#non-breaking-github-enterprise-server-gateways-now-reach-their-own-appliance-they-never-did">Non-breaking: GitHub Enterprise Server gateways now reach their own appliance (they never did)</a></li>
@@ -3939,9 +3941,9 @@ For <strong>initial installation</strong> of the GMC, see <a href="../install/">
 <li><a href="#non-breaking-a-worker-lost-while-the-agc-was-down-is-now-re-run-automatically-causevanished">Non-breaking: a worker lost while the AGC was down is now re-run automatically (cause="vanished")</a></li>
 <li><a href="#non-breaking-drained-and-hand-deleted-workers-are-now-re-run-automatically-causedeletion">Non-breaking: drained and hand-deleted workers are now re-run automatically (cause="deletion")</a></li>
 <li><a href="#non-breaking-an-evicted-jobs-auto-re-run-now-lands-github-refused-it-before">Non-breaking: an evicted job's auto-re-run now lands (GitHub refused it before)</a></li>
-<li><a href="#non-breaking-classic-tier-eviction-auto-retry-now-fires-it-never-did-against-real-github">Non-breaking: classic-tier eviction auto-retry now fires (it never did against real GitHub)</a></li>
 <li><a href="#non-breaking-eviction-auto-retry-now-honours-github_api_base_url-it-never-did-on-ghes">Non-breaking: eviction auto-retry now honours GITHUB_API_BASE_URL (it never did on GHES)</a></li>
 <li><a href="#non-breaking-preempted-workers-are-now-re-run-automatically-eviction-counters-gain-a-cause-label">Non-breaking: preempted workers are now re-run automatically; eviction counters gain a cause label</a></li>
+<li><a href="#non-breaking-classic-tier-eviction-auto-retry-now-fires-it-never-did-against-real-github">Non-breaking: classic-tier eviction auto-retry now fires (it never did against real GitHub)</a></li>
 <li><a href="#breaking-pre-ga-capacitygatemode-values-replaced-by-observe--a-gateway-level-cluster-fact">BREAKING (pre-GA): capacityGate.mode values replaced by Observe + a gateway-level cluster fact</a></li>
 <li><a href="#non-breaking-an-over-long-derived-runnergroup-name-is-bounded-and-renamed">Non-breaking: an over-long derived RunnerGroup name is bounded (and renamed)</a></li>
 <li><a href="#non-breaking-a-runnersets-agent-secrets-and-runner-names-gain-an-rs--prefix">Non-breaking: a RunnerSet's agent Secrets and runner names gain an rs- prefix</a></li>
@@ -3957,6 +3959,7 @@ For <strong>initial installation</strong> of the GMC, see <a href="../install/">
 <li><a href="#gmc-upgrade">GMC Upgrade</a></li>
 <li><a href="#a-gmc-restart-costs-tenants-nothing-a-gmc-upgrade-rolls-every-one-of-them">A GMC restart costs tenants nothing; a GMC upgrade rolls every one of them</a></li>
 <li><a href="#gmc-install-and-upgrade-via-helm-recommended">GMC install and upgrade via Helm (recommended)</a></li>
+<li><a href="#priorityclass-allowlist-configmap-to-cr">PriorityClass allowlist: ConfigMap to CR</a></li>
 <li><a href="#gmc-post-upgrade-validation">GMC post-upgrade validation</a></li>
 <li><a href="#gmc-rollback">GMC rollback</a></li>
 <li><a href="#agc-upgrade">AGC Upgrade</a></li>

@@ -2732,6 +2732,14 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td><code>git-merge-roadmap-test</code> shares Q820's shape and carries its <code>ERR</code> trap, but not the <code>Q820:</code> tree state, so a sighting names a line and …</td>
 </tr>
 <tr>
+<td><a href="Q915/">Q915</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/ci/git-merge-gate-lists.sh">gate-lists merge driver refuses every merge; its suite cannot see it</a></td>
+<td><code>ci</code> <code>debt</code></td>
+<td>🔲</td>
+<td>S</td>
+<td><code>MANAGED_VARS</code> still names <code>STATUS_GATES</code> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/ci/git-merge-gate-lists.sh">git-merge-gate-lists.sh:97</a>), which #1603 renamed to …</td>
+</tr>
+<tr>
 <td><a href="Q899/">Q899</a></td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/publish.yml"><code>publish.yml</code>'s image build has no retry, so a 403 fails a release</a></td>
 <td><code>ci</code> <code>debt</code></td>
@@ -2810,14 +2818,6 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>🔲</td>
 <td>S</td>
 <td>#1417 shipped on "3 of 5 calico enforcement negatives failed"; #1441 refuted it next day, yet 3 of the 6 comments #1417 wrote still …</td>
-</tr>
-<tr>
-<td><a href="Q865/">Q865</a></td>
-<td><a href="../operations/upgrade/#table-of-contents">Gate the <code>upgrade.md</code> table of contents against its own headings</a></td>
-<td><code>docs</code> <code>ci</code> <code>debt</code></td>
-<td>🔲</td>
-<td>S</td>
-<td>Measured 2026-08-14: the hand-kept TOC carries 24 of 25 migration notes in an order that no longer matches them, so a note is unreachable …</td>
 </tr>
 <tr>
 <td><a href="Q868/">Q868</a></td>
@@ -3842,6 +3842,14 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>🔲</td>
 <td>S</td>
 <td>Its archival protocol reads "if <code>docs/STATUS.md</code> still references it", and states <code>plan-index-check</code>'s pre-Q889 direction; invariant 1 now …</td>
+</tr>
+<tr>
+<td><a href="Q911/">Q911</a></td>
+<td><a href="../operations/troubleshooting/#table-of-contents">Gate every hand-kept table of contents against its own headings</a></td>
+<td><code>docs</code> <code>ci</code> <code>debt</code></td>
+<td>🔲</td>
+<td>M</td>
+<td>Q865 gated one page, because widening it was a larger change than that row held.</td>
 </tr>
 <tr>
 <td><a href="Q912/">Q912</a></td>
