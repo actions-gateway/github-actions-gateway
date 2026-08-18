@@ -186,6 +186,15 @@ script-docs-check: ## Fail when a script under scripts/ has no scripts/README.md
 # flake item may not vanish, deleting a plan's last item obliges its index row,
 # and the label vocabulary is closed. Rule 10 was dropped on measurement and
 # rule 12 is `queue.py claims` (Q889).
+# The store's own format lint: frontmatter, rank shape, filename/id agreement,
+# the 72-character title cap, targets that no longer resolve. It replaces what
+# lint-backlog enforced on the table, which Q889 retired with it -- the vendored
+# queue.py has carried these rules since phase 1 and ran in no gate until now,
+# so a dead target sat in the store until a docs build tripped over it.
+.PHONY: queue-lint
+queue-lint: ## Fail when the backlog store breaks its own format rules
+	scripts/docs/lint-queue.sh
+
 .PHONY: queue-rules-check
 queue-rules-check: ## Fail when a backlog store change breaks rules 8, 9 or 11
 	scripts/docs/check-queue-rules.sh

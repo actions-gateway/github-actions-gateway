@@ -24,6 +24,7 @@ on:
       - 'docs/features.md'
       - 'scripts/docs/check-roadmap.sh'
       - 'scripts/docs/check-queue-rules.py'
+      - 'scripts/docs/queue.py'
       - 'docs/queue/**'
       # The roadmap gate reads its rows through the shared parse layer in
       # devtools/ (Q613), so a change there changes this gate's verdict.
@@ -65,6 +66,7 @@ jobs:
               - 'docs/features.md'
               - 'scripts/docs/check-roadmap.sh'
               - 'scripts/docs/check-queue-rules.py'
+              - 'scripts/docs/queue.py'
               - 'docs/queue/**'
               - 'devtools/**'
               - '.github/workflows/status-lint.yml'
@@ -101,6 +103,11 @@ jobs:
       # without graduating the roadmap bullet that names it.
       - name: check roadmap against the backlog
         run: scripts/docs/check-roadmap.sh
+
+      - name: lint the backlog store format
+        # The store's own rules, from the vendored queue.py (Q889). It replaces
+        # what lint-backlog enforced on the retired table.
+        run: scripts/docs/lint-queue.sh
 
       - name: check the backlog store rules
         # Rules 8, 9 and 11 (Q889): a flake item may not vanish, a plan's

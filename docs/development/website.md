@@ -64,7 +64,7 @@ They share one geometry rule in [`extra.css`](../stylesheets/extra.css) and diff
 |---|---|---|
 | `gag-v2-badge` | needs the `v2beta1` API | the bullet, hand-written |
 | `gag-maturity-badge` | the API shape is still under its first stability contract | the bullet, hand-written |
-| `gag-release-chip` | the release this roadmap item blocks | `docs/STATUS.md`, injected at build time |
+| `gag-release-chip` | the release this roadmap item blocks | `docs/queue/`, injected at build time |
 | `gag-tier-badge` | reaches only one acquisition tier | the bullet, bound to a backlog row |
 | `gag-new-badge` | arrived in a named release | the bullet, expired by a gate |
 
@@ -74,7 +74,7 @@ Rules 9-11 of [`devtools/docs/roadmapcheck`](../../devtools/docs/roadmapcheck/ba
 ### The release chip
 
 A roadmap bullet's release commitment is **derived, never typed**.
-[`hooks/release_gates.py`](../../hooks/release_gates.py) reads the `X.Y-gate` labels out of `docs/STATUS.md`, follows each bullet's existing `<!-- q:QN -->` annotation, and injects the pill:
+[`hooks/release_gates.py`](../../hooks/release_gates.py) reads the `X.Y-gate` labels out of each item's frontmatter in `docs/queue/`, follows each bullet's existing `<!-- q:QN -->` annotation, and injects the pill:
 
 ```markdown
 - **[Bind each runner set to a GitHub runner group](plan/release-1.5.md)** <!-- q:Q712 -->
@@ -610,7 +610,7 @@ Scope is **per version**, not per site (Q558):
 | Version | Publishes |
 |---|---|
 | `stable` and every numbered release | Operator docs only: `docs/design/`, `docs/operations/`, `docs/index.md`, `why-gag.md`, `features.md`, `roadmap.md` |
-| `dev` | The above **plus** the repo-internal docs: `docs/STATUS.md` (the [backlog](#the-backlog-page)), `docs/queue/` (the [item store](#the-backlog-renders-at-build-time)), `docs/plan/`, `docs/development/` (this file included), `docs/assets/`'s READMEs |
+| `dev` | The above **plus** the repo-internal docs: `docs/queue/` (the [backlog](#the-backlog-page), rendered [at build time](#the-backlog-renders-at-build-time)), `docs/plan/`, `docs/development/` (this file included), `docs/assets/`'s READMEs |
 | *no version* | `docs/releases/` — see the trap below |
 
 A release is a frozen build, so a backlog published in one would be a snapshot stale from tag day.
@@ -644,7 +644,7 @@ Two PRs open at once can each pass and still merge into a red `main` — Q560 ra
 The `nav` is the operator-facing table of contents, so a published page is either in it or declared in `not_in_nav`.
 Two kinds are declared:
 
-- the repo-internal tree the `dev` version publishes (`STATUS.md`, `plan/`, `development/`), reachable by URL, by search, and from the roadmap's backlog link;
+- the repo-internal tree the `dev` version publishes (`queue/`, `plan/`, `development/`), reachable by URL, by search, and from the roadmap's backlog link;
 - `operations/examples/`, sample manifests reached from the page that explains them ([admission-policies.md](../operations/admission-policies.md)) rather than browsed from the TOC.
 
 Everything else in `nav`.
@@ -667,8 +667,9 @@ The one inert entry is `/README.md`: MkDocs drops `docs/README.md` as an `index.
 
 ### The backlog page
 
-`docs/STATUS.md` renders at [`/dev/STATUS/`](https://actions-gateway.com/dev/STATUS/) with filter chips over its tables — see [§ Progressive enhancement](#progressive-enhancement-docsjavascriptsextrajs).
-The markdown file stays the single source of truth: the lint gate, the isolated-commit merge discipline, the `<a id="QN">` anchors, and the [backlog workflow](maintaining-backlog.md) all operate on the table, and the site is a read-only view of it.
+The backlog renders at [`/dev/queue/`](https://actions-gateway.com/dev/queue/) with filter chips over its table — see [§ Progressive enhancement](#progressive-enhancement-docsjavascriptsextrajs).
+The store stays the single source of truth: `queue.py lint`, the [store rules](maintaining-backlog.md), and every item's own page operate on `docs/queue/`, and the rendered index is a read-only view of it.
+It replaced `/dev/STATUS/`, which the retired table published, and the chips carried across unchanged because `queue.py render` emits the same headers, backticked labels and emoji status the table carried.
 
 **How a reader reaches it.** The page is deliberately absent from the `nav` (see [§ Publication scope](#publication-scope)), so three routes carry the traffic:
 
@@ -721,14 +722,14 @@ Both link syntaxes are rewritten — inline `](target)` and the reference-style
 link, so covering only the first would leave the rarer form silently dead.
 
 This was already needed before the backlog page: `design/` and `operations/` shipped such links dead.
-Publishing the repo-internal docs made it load-bearing — 724 links across the tree, 34 on `STATUS.md` alone.
+Publishing the repo-internal docs made it load-bearing — 724 links across the tree, dozens in the backlog alone.
 `scripts/docs/source-links-hook-test.sh` asserts the rewrite in both directions under `make check`.
 
 ### Unpublished is per build, not per path (Q561)
 
 "Does not publish" is decided **per build, from its own file set** — `on_files` records the src_uris whose `inclusion.is_included()`, the same derivation [`hooks/backlog_link.py`](../../hooks/backlog_link.py) uses for the banner link.
 Escaping `docs/` is only one way to qualify.
-The other is [publication scope](#publication-scope): `plan/`, `development/` and `STATUS.md` are pages on `dev` and absent from every release, so a `design/` page citing `../plan/milestone-4.md` must resolve **in-site on `dev`** and **on github.com from a release**.
+The other is [publication scope](#publication-scope): `plan/`, `development/` and `queue/` are pages on `dev` and absent from every release, so a `design/` page citing `../plan/milestone-4.md` must resolve **in-site on `dev`** and **on github.com from a release**.
 One markdown source, both renderings, no per-version editing:
 
 | Scope | `../plan/milestone-4.md` becomes |
@@ -761,7 +762,7 @@ The interactive features layer on top of plain markdown that already renders on 
 | Persona filter chips + per-row pills (clicking a row pill selects its chip) | the `Personas` column of the table in `docs/operations/README.md` |
 | Per-doc audience pills | the `> **Audience:** …` blockquote under each operations doc's title |
 | Reading-path role chips | the bold role leads (`**Architect**`, …) in `docs/design/README.md` § Reading Paths by Role |
-| Backlog label / status / size chips + per-row label clicks | the `Labels`, `St` and `Sz` columns of `docs/STATUS.md`'s Queue, Deferred, Flake watch and Progress tables |
+| Backlog label / status / size chips + per-row label clicks | the `Labels`, `St` and `Sz` columns of the backlog table rendered at `/dev/queue/` |
 | Scroll reveals | landing + `why-gag` pages only (skipped for `prefers-reduced-motion` / no-JS) |
 
 **Keep those source markers intact** when editing — deleting the table column, a blockquote, or a bold role lead silently breaks the matching site feature.
@@ -782,7 +783,7 @@ Two properties are load-bearing, and both are easy to break by accident:
 Verify both paths agree, rather than either one alone:
 
 ```js
-// make docs-serve with the dev scope, then on /STATUS/
+// make docs-serve with the dev scope, then on /queue/
 const counts = () => [...document.querySelectorAll('.backlog-count')].map(c => c.textContent);
 // click path
 document.querySelector('.backlog-filter .persona-chip[data-persona="ci"]').click();

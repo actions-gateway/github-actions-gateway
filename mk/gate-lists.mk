@@ -50,7 +50,7 @@ CHECK_FAST_GATES := roadmap-check \
                     actionlint uses-pinned-check chart-crds-check chart-rbac-check chart-webhook-check \
                     codegen-check api-reference-check scripts-test claude-usage-test \
                     doc-links release-pins-check em-dash-check page-density-check \
-                    script-docs-check queue-rules-check \
+                    script-docs-check queue-rules-check queue-lint \
                     semver-floor-sources-check template-library-check \
                     md-reflow-check comparison-stamps-check promql-check \
                     metric-tiers-check reason-tiers-check
@@ -59,6 +59,7 @@ CHECK_HEAVY_GATES := build-tags-check lint cover-check
 
 # The complete set of gates a docs/queue/-only change can fail, so a backlog
 # edit can be verified in seconds instead of waiting out the full `make check`:
+#   queue-lint            the store's own format: frontmatter, rank, title cap, a target that no longer resolves
 #   queue-rules-check     a flake item vanished, a plan's last item left its index row open, a label is undeclared
 #   roadmap-check         an item changed status or vanished while a roadmap bullet still names it
 #   plan-index-check      the last item citing a plan went away, so archival is owed
@@ -83,7 +84,7 @@ CHECK_HEAVY_GATES := build-tags-check lint cover-check
 # status-isolation-check took docs/STATUS.md as their subject rather than as a
 # source; queue-drift-check held the table and the store to the same items
 # through the migration and has nothing left to compare.
-QUEUE_GATES := queue-rules-check roadmap-check plan-index-check \
+QUEUE_GATES := queue-lint queue-rules-check roadmap-check plan-index-check \
                  conflict-markers-check doc-links em-dash-check md-reflow-check \
                  page-density-check
 

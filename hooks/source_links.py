@@ -4,7 +4,7 @@ The `docs/` tree doubles as in-repo documentation browsed on github.com, where a
 relative link like `../cmd/agc/main.go` resolves to the source file. MkDocs has
 no such file to serve, so it leaves the link untouched and the published page
 404s. Publishing the repo-internal docs on the `dev` version (Q558) made that
-load-bearing — `STATUS.md` alone carries 34 source links — but the same links
+load-bearing — the backlog alone carries dozens of source links — but the same links
 already shipped dead from `design/` and `operations/`.
 
 This hook rewrites every relative target the build does not publish into an

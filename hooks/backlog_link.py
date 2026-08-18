@@ -1,6 +1,6 @@
 """MkDocs hook that tells the theme whether this build carries the backlog page.
 
-`docs/STATUS.md` publishes on the `dev` version only (Q558), so a link to it
+The backlog store publishes on the `dev` version only (Q558), so a link to it
 from shared site chrome has to vanish on every other version or it ships a 404.
 Rather than a second flag that can drift out of step with `exclude_docs`, this
 derives the answer from the build itself: the link renders exactly when the page
@@ -13,7 +13,7 @@ scope.
 
 from __future__ import annotations
 
-_BACKLOG_SRC = "STATUS.md"
+_BACKLOG_SRC = "queue/README.md"
 
 
 def on_files(files, config):

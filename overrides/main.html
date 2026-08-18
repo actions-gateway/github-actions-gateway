@@ -38,12 +38,13 @@
       release.
 
       The backlog link is gated on config.extra.backlog_page (hooks/backlog_link.py),
-      which is true only where STATUS.md survived exclude_docs, i.e. on `dev`. An
-      older release therefore gets the warning without a link that would 404.
+      which is true only where the backlog store survived exclude_docs, i.e. on
+      `dev`. An older release therefore gets the warning without a link that
+      would 404.
 
       404.html renders this block too, as a theme template with no `page` in
       context: reading page.url there fails the whole build, and a hand-built
-      `{{ base_url }}/…` yields the protocol-relative `//STATUS/`. Hence an
+      `{{ base_url }}/…` yields the protocol-relative `//queue/`. Hence an
       absolute site_url for the release link, the `| url` filter for the
       per-page one, and no backlog link at all without a `page` — on a
       versioned tree the filter resolves it against site_url rather than the
@@ -51,7 +52,7 @@
   You're not viewing the latest release.
   <a href="{{ config.site_url }}"><strong>Go to the current docs.</strong></a>
   {%- if page and config.extra.backlog_page %}
-    <a href="{{ 'STATUS/' | url }}">See the working backlog.</a>
+    <a href="{{ 'queue/' | url }}">See the working backlog.</a>
   {%- endif %}
 {% endblock %}
 
