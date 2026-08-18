@@ -55,12 +55,16 @@
 // contradiction unless one of them is emitted from a tier-exclusive file, which
 // would be a naming collision worth fixing at the source.
 //
-// The contradiction check sees direct field writes only. A tier that increments
-// through an adapter interface — the scale-set listener's PollErrorRecorder, whose
-// method body sits in runnercore — writes no site in a tier-exclusive file, so its
-// reach is invisible here. That is why the check is one-sided: it refutes a
-// single-tier claim and never confirms one, and the ledger row is what carries the
-// positive claim. inventory is the check that makes the row unavoidable.
+// The contradiction check reads emission sites and the derived value origins
+// both. Sites alone see direct field writes, so a tier that increments through an
+// adapter interface — the scale-set listener's PollErrorRecorder, whose method
+// body sits in runnercore — was invisible to it, and message_poll_errors_total
+// took a Classic only row with everything green (Q867). The derivation walks out
+// of the Prometheus call to the literal, so it names the file the site analysis
+// cannot reach. The check stays one-sided even so: it refutes a single-tier claim
+// and never confirms one, because a shared file says nothing about which tiers
+// execute it. The ledger row carries the positive claim, and inventory is the
+// check that makes the row unavoidable.
 package main
 
 import (
@@ -68,6 +72,7 @@ import (
 	"go/ast"
 	"go/parser"
 	"go/token"
+	"maps"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -269,7 +274,7 @@ func run(srcDir, metricsDoc, parityDoc string) ([]string, error) {
 	findings = append(findings, checkReference(all, doc, led, metricsDoc)...)
 	findings = append(findings, checkVocabulary(led, metricsDoc)...)
 	findings = append(findings, checkEmission(all, sites)...)
-	findings = append(findings, checkContradiction(all, sites, led)...)
+	findings = append(findings, checkContradiction(all, sites, values, led)...)
 	findings = append(findings, checkParityList(string(parityBytes), led, parityDoc)...)
 	findings = append(findings, checkValueInventory(all, values, led, metricsDoc)...)
 	findings = append(findings, checkValueRows(all, values, led, files, metricsDoc)...)
@@ -857,24 +862,64 @@ func checkEmission(all []series, sites map[string][]string) []string {
 // stale-after-a-port direction: Q766 moved the abandoned-run recovery onto the
 // scale-set tier, and nothing would have reported a ledger still calling it
 // classic-only.
-func checkContradiction(all []series, sites map[string][]string, led ledger) []string {
+//
+// Two kinds of evidence, because an emission site is not the only place a tier's
+// reach shows. A tier that increments through an adapter writes no site in a
+// tier-exclusive file: the scale-set listener hands a reason to runnercore's
+// PollErrorRecorder, whose method body holds the Prometheus call, so
+// message_poll_errors_total read Classic only with the gate green (Q867). The
+// value derivation walks the other way — from the call out to the literal — and
+// its origins name scalesetlistener where the sites do not, so a value origin in
+// the excluded tier's subtree refutes the row as well (Q851).
+//
+// An origin is read only once it has been placed on one declaration, so a
+// same-named function elsewhere cannot lend a file to a series it never emits;
+// an unplaceable call goes to checkDerivationGaps instead.
+func checkContradiction(all []series, sites map[string][]string, values valueSet, led ledger) []string {
 	tier := map[string]string{}
 	for _, r := range led.rows {
 		tier[r.name] = r.tier
 	}
 	var findings []string
 	for _, s := range all {
+		excluded := oppositeTier(tier[s.name])
+		if excluded == "" {
+			continue
+		}
+		refutes := isScaleSetOnly
+		if excluded == tierClassic {
+			refutes = isClassicOnly
+		}
+
+		reported := map[string]bool{}
 		for _, site := range s.sites(sites) {
-			switch {
-			case tier[s.name] == tierClassic && isScaleSetOnly(site):
-				findings = append(findings, fmt.Sprintf(
-					"%s: %s is emitted here, and the ledger calls it %q",
-					site, s.name, tierClassic))
-			case tier[s.name] == tierScaleSet && isClassicOnly(site):
-				findings = append(findings, fmt.Sprintf(
-					"%s: %s is emitted here, and the ledger calls it %q",
-					site, s.name, tierScaleSet))
+			if !refutes(site) || reported[site] {
+				continue
 			}
+			reported[site] = true
+			findings = append(findings, fmt.Sprintf(
+				"%s: %s is emitted here, and the ledger calls it %q",
+				site, s.name, tier[s.name]))
+		}
+
+		// One finding per file rather than per value: the row states one claim
+		// about the series, and every reason a file names refutes the same claim.
+		named := map[string][]string{}
+		for label, vals := range values[s.name] {
+			for _, v := range vals {
+				for _, o := range v.origins {
+					if !refutes(o) || reported[o] {
+						continue
+					}
+					named[o] = append(named[o], fmt.Sprintf("%s=%q", label, v.value))
+				}
+			}
+		}
+		for _, o := range slices.Sorted(maps.Keys(named)) {
+			slices.Sort(named[o])
+			findings = append(findings, fmt.Sprintf(
+				"%s: %s{%s} is named here, and the ledger calls the series %q — the value is named here and counted elsewhere, so the emission sites alone do not show this tier's reach",
+				o, s.name, strings.Join(named[o], ", "), tier[s.name]))
 		}
 	}
 	return findings

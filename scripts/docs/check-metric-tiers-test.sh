@@ -3,7 +3,7 @@
 # check-metric-tiers-test.sh — assertions for check-metric-tiers.sh.
 #
 # The Go checker's own cases live in devtools/docs/metrictiers/main_test.go and
-# cover what each of the six findings means, against a synthetic source tree.
+# cover what each of its checks means, against a synthetic source tree.
 # What only this suite can cover is the entry point: that the gate defaults to
 # the three shipped paths, that it reports the real tree as clean, and that it
 # fails on a defect seeded into the real ledger rather than passing by checking
@@ -102,6 +102,18 @@ awk '{ if ($0 ~ /^\| `actions_gateway_eviction_retries_total` \| `cause` \| `van
        else print }' "$METRICS_DOC" > "$TMP/flipped-value.md"
 expect_output "a value row the source refutes fails" "is named here, and the ledger calls it" -- \
     "$GATE" "$AGC_SRC" "$TMP/flipped-value.md" "$PARITY_DOC"
+
+# Q867: a series the excluded tier reaches through an adapter. message_poll_errors_total
+# is written in runnercore, so neither listener holds an emission site in its own
+# subtree and the site half of the contradiction check sees nothing — the scale-set
+# arm is visible only as the origin of the reason values it names. Seeding it on the
+# real tree is what this suite can do that the synthetic one cannot.
+awk '{ if ($0 ~ /^\| `actions_gateway_message_poll_errors_total` \| Both \|/) \
+         print "| `actions_gateway_message_poll_errors_total` | Classic only | Seeded defect. |"; \
+       else print }' "$METRICS_DOC" > "$TMP/adapter-tier.md"
+expect_output "a single-tier claim only a value origin refutes fails" \
+    "is named here, and the ledger calls the series" -- \
+    "$GATE" "$AGC_SRC" "$TMP/adapter-tier.md" "$PARITY_DOC"
 
 # A claim the file layout cannot prove rests on a guard, and the row must cite it
 # — otherwise the value table is the hand-kept list the ledger exists to replace.

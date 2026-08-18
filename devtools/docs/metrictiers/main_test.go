@@ -433,6 +433,56 @@ func TestHelpMissingAnEmittedValueFails(t *testing.T) {
 	requireFinding(t, findings, "its Help does not name it")
 }
 
+// Q867: the ledger claims one tier, the counter is written from a shared file,
+// and the excluded tier reaches it by naming a value. No emission site sits in a
+// tier-exclusive subtree, so the site half of the check is silent and the value
+// origin is the only evidence there is — which is how
+// message_poll_errors_total took a Classic only row with the gate green.
+func TestSingleTierClaimRefutedByAValueOriginFails(t *testing.T) {
+	ledger := strings.Replace(goodLedger,
+		"| `actions_gateway_eviction_retries_total` | Both | Ported, split by the tier label. |",
+		"| `actions_gateway_eviction_retries_total` | Classic only | Ported, split by the tier label. |", 1)
+	findings := runCase(t, tree(t, nil), goodReference+ledger, goodParity)
+	requireFinding(t, findings,
+		`orphaned_scaleset.go: actions_gateway_eviction_retries_total{cause="vanished"} is named here`)
+	for _, f := range findings {
+		if strings.Contains(f, "is emitted here") {
+			t.Fatalf("no emission site is tier-exclusive, so the site half must not be what fires: %s", f)
+		}
+	}
+}
+
+// The same evidence in the other direction, since a one-directional check would
+// pass the case above and still miss a scale-set row the classic tier refutes.
+func TestScaleSetOnlyClaimRefutedByAClassicValueOriginFails(t *testing.T) {
+	classic := listenerSrc + `
+func (l *L) evict(p *P) { p.handleEviction("classic", "abandoned") }
+`
+	ledger := strings.Replace(goodLedger,
+		"| `actions_gateway_eviction_retries_total` | Both | Ported, split by the tier label. |",
+		"| `actions_gateway_eviction_retries_total` | Scale-set only | Ported, split by the tier label. |", 1)
+	src := tree(t, map[string]string{"internal/listener/goroutine.go": classic})
+	findings := runCase(t, src, goodReference+ledger, goodParity)
+	requireFinding(t, findings,
+		`goroutine.go: actions_gateway_eviction_retries_total{cause="abandoned"} is named here`)
+}
+
+// A value origin in a shared file says nothing about which tiers run it, so it
+// must not refute a row on its own — the check only ever refutes.
+func TestSharedValueOriginDoesNotRefuteASingleTierClaim(t *testing.T) {
+	// The causes are named in a shared file and a scale-set-only one, and neither
+	// is classic-only, so a Scale-set only row has nothing here to refute it.
+	ledger := strings.Replace(goodLedger,
+		"| `actions_gateway_eviction_retries_total` | Both | Ported, split by the tier label. |",
+		"| `actions_gateway_eviction_retries_total` | Scale-set only | Ported, split by the tier label. |", 1)
+	findings := runCase(t, tree(t, nil), goodReference+ledger, goodParity)
+	for _, f := range findings {
+		if strings.Contains(f, "is named here, and the ledger calls the series") {
+			t.Fatalf("eviction.go is shared and cannot refute a tier claim: %s", f)
+		}
+	}
+}
+
 // The seam that sets the resolution bound: the scale-set arm reaches a shared
 // counter through a wrapper and a classifier, so a derivation that stops early
 // sees the classic literals alone and calls every value classic-only.
