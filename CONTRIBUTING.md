@@ -281,6 +281,10 @@ The stray branch then needs deleting (`git push origin --delete <branch>`), whic
 Rebasing onto a moved `main` is still worth it when what moved can affect your gate — `git diff HEAD...origin/main --stat` says what did — because a queue kickback costs a full check cycle where a local re-run would have caught it first.
 The local-gate window varies by an order of magnitude across the machines this repo has been measured on (a cold `make check` is ~21 min on a 4-core Intel i7 and 102 s on an 18-core M5 Max — [measurements](docs/plan/archive/local-gate-throughput.md)), so the longer your gate, the more of `main`'s merge traffic lands inside it.
 
+**Which range depends on which question.** `HEAD...origin/main` reports what the base gained since the fork, which is what the sentence above asks for; its reverse, `origin/main...HEAD`, reports what this branch changed.
+The bare two-dot `git diff origin/main` answers neither once the base moves, because it compares the two tips: every commit `main` took since the fork reads as a deletion this branch made.
+Measured 2026-08-18 on a branch holding one commit against a base that had gained three, the bare form reported 4 changed files, three of them `main`'s own and every one of those as a deletion.
+
 **A hook asks about the overlap at the push itself** (Q665), because the rule above is read before the gate starts and the push happens after it.
 It fires only when what `main` gained overlaps the files this branch changes.
 `main` takes ~47 merges a day, so "the base moved" alone is true at nearly every push and would be accepted without reading.
@@ -315,7 +319,7 @@ Revise before opening; if the other PR's evidence invalidates yours, put that on
 
 **Nothing checks this for you.** A repo-local hook used to compare this branch's changes against every open PR's at `gh pr create` (Q668), narrowed to colliding line ranges rather than shared paths (Q862) after reading disjoint hunks in one large file as a collision cost three overrides in two days (#1505, #1527, #1531).
 It was retired with the rest of that hook, which duplicated the installed pipe-guard plugin; the plugin carries no repo-state checks.
-Run the comparison by hand: `gh pr list` for what is open, then `gh pr diff <n>` for any PR sharing a path with your own `git diff HEAD...origin/main --stat`.
+Run the comparison by hand: `gh pr list` for what is open, then `gh pr diff <n>` for any PR sharing a path with your own `git diff origin/main...HEAD --stat`.
 Two edits within six lines of each other collide, because a diff carries three lines of context on either side.
 **What that check asked for is the reading, not a re-scope**: read the other PR's diff and body, and say what that PR claims rather than only where it sits.
 Splitting your change to dodge the overlap is the wrong move when both changes are wanted.
