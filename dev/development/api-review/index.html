@@ -3319,8 +3319,8 @@ Any such carrier needs a round-trip test — see <code>TestRunnerSetConversion_R
 </code></pre></div>
 <p>It diffs the API packages and CRD manifests between the last tag and <code>HEAD</code> and prints what changed.
 Everything it lists is surface this release publishes for the first time; everything it does not list has already shipped and is governed by the compatibility rules instead.</p>
-<p>The one section that is not a diff of declarations is <code>New Event reasons</code>: a reason reaches the recorder as an argument, so that set is scanned out of the AGC source at each end by <a href="https://github.com/actions-gateway/github-actions-gateway/tree/main/devtools/docs/reasontiers"><code>devtools/docs/reasontiers</code></a>, which needs Go on <code>PATH</code>.
-It covers the AGC only, and it says <code>COULD NOT ENUMERATE</code> rather than printing an empty section when it cannot run.</p>
+<p>The one section that is not a diff of declarations is <code>New Event reasons</code>: a reason reaches the recorder as an argument, so that set is scanned out of the AGC and GMC source at each end by <a href="https://github.com/actions-gateway/github-actions-gateway/tree/main/devtools/docs/reasontiers"><code>devtools/docs/reasontiers</code></a>, which needs Go on <code>PATH</code>.
+It says <code>COULD NOT ENUMERATE</code> rather than printing an empty section when it cannot run.</p>
 <p>Pass an explicit ref to review a different span, e.g. <code>scripts/release/api-surface-since.sh v1.1.0</code>.</p>
 <p>It reports rather than passing or failing on purpose: every question below needs a human, and a gate answering them mechanically would be wrong in both directions.</p>
 <h3 id="step-2--ask-these-of-each-addition">Step 2 — ask these of each addition<a class="headerlink" href="#step-2--ask-these-of-each-addition" title="Permanent link">&para;</a></h3>
