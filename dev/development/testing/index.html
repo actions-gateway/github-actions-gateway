@@ -5316,7 +5316,7 @@ That is correct exactly until two functions share a name and hold the argument a
 The failure is silent in both directions at once: the scan reports a neighbouring argument as a hit, and reports nothing for the calls whose index it guessed past.</p>
 <p>Three instances in the 1.5 cycle, all on the same argument:</p>
 <ul>
-<li>The v1.4.0 release pre-flight matched <code>Event(obj, type, reason)</code> only, missed the <code>recordEvent(type, reason, action)</code> shape, and returned a false no-change (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/docs/queue/README.md">Q780</a>).</li>
+<li>The v1.4.0 release pre-flight matched <code>Event(obj, type, reason)</code> only, missed the <code>recordEvent(type, reason, action)</code> shape, and returned a false no-change (Q780).</li>
 <li>The 2026-08-14 pre-flight keyed on <code>recordEvent(</code> and missed the two additions recording through <code>RecordEvent(</code>.</li>
 <li><code>reasontiers</code>' first version keyed the reason's index on the function name, read the scale-set listener's <em>action</em> string <code>"ProvisionWorker"</code> as a reason, and missed four reasons entirely.
   The AGC has two methods named <code>recordEvent</code> and two named <code>Event</code>, with the reason at a different index in each.</li>

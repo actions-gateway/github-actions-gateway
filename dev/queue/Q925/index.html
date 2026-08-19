@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q780/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q925/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>Enumerate Kubernetes Event reasons mechanically for the release notes - GitHub Actions Gateway</title>
+        <title>Enumerate the GMC's Event reasons for the release notes - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#enumerate-kubernetes-event-reasons-mechanically-for-the-release-notes" class="md-skip">
+        <a href="#enumerate-the-gmcs-event-reasons-for-the-release-notes" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Enumerate Kubernetes Event reasons mechanically for the release notes
+              Enumerate the GMC's Event reasons for the release notes
             
           </span>
         </div>
@@ -2567,9 +2567,9 @@
   
 
 
-<h1 id="enumerate-kubernetes-event-reasons-mechanically-for-the-release-notes">Enumerate Kubernetes Event reasons mechanically for the release notes<a class="headerlink" href="#enumerate-kubernetes-event-reasons-mechanically-for-the-release-notes" title="Permanent link">&para;</a></h1>
-<p>Q850 built the enumeration and its self-test: <code>reasontiers</code> reads each reason's index off the callee's declaration, which is what the v1.4.0 regex got wrong.
-Remaining work is wiring it into the <code>api-surface-since.sh</code> pre-flight.</p>
+<h1 id="enumerate-the-gmcs-event-reasons-for-the-release-notes">Enumerate the GMC's Event reasons for the release notes<a class="headerlink" href="#enumerate-the-gmcs-event-reasons-for-the-release-notes" title="Permanent link">&para;</a></h1>
+<p><code>reasontiers</code> scans <code>cmd/agc</code> only, so <code>api-surface-since.sh</code> reports half the Event reasons an operator meets (Q780).
+Run on <code>cmd/gmc</code> it exits 2 at <code>found 0 condition reasons</code>: GMC reasons use the <code>gmcv2alpha1</code> alias <code>reasonPkgs</code> omits.</p>
 
 
 

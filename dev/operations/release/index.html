@@ -3590,7 +3590,8 @@ The point of doing it here rather than at the tag is that the answers are free b
   Nothing lints this — it is judgement, not a gate that can pass or fail mechanically.</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>scripts/release/api-surface-since.sh
 </code></pre></div>
-<p>Apply the checklist in <a href="../../development/api-review/#step-2--ask-these-of-each-addition">api-review.md</a> to each addition it lists, record the verdict in the release's plan doc, and file anything deferred as a Queue row carrying this release's gate label.
+<p>It needs Go on <code>PATH</code>: the Event reasons are scanned out of the source at each end rather than pattern-matched, so a window carrying AGC changes builds <code>devtools/docs/reasontiers</code> first.
+  Apply the checklist in <a href="../../development/api-review/#step-2--ask-these-of-each-addition">api-review.md</a> to each addition it lists, record the verdict in the release's plan doc, and file anything deferred as a Queue row carrying this release's gate label.
   <strong>"Ship as-is, deliberately" is a valid and common outcome</strong> — the point is that the shape is chosen rather than frozen by default.</p>
 <p>This step exists because it nearly did not happen: Q476 renamed <code>capacityGate.mode: On</code> days before 1.3.0 would have published it, and only because the question came up in an unrelated conversation.</p>
 <ul>
@@ -4091,9 +4092,13 @@ That asymmetry is exactly what a reader cannot discover for themselves.</p>
 <p><strong>Diff every surface an operator can see, not just the CRDs.</strong> Each of these is enumerable, and each hides in a different file, so a review that reads only the Go diff misses most of them.
 <code>v1.3.0</code> shipped five: CRD fields, metric names, Kubernetes Event reasons, condition reasons, and configuration (chart values, env tunables, CLI flags).
 Diff each between the two tags mechanically rather than reading the changelog for them — the Event reasons and the metrics had no enumeration at all until they were diffed, and the notes had already been through several reviews.</p>
+<p><strong>The AGC's Event reasons are now enumerated for you</strong> by <code>api-surface-since.sh</code>, in its <code>New Event reasons</code> section (Q780).
+An empty section there means none are new, because the scanner behind it refuses rather than shortening its list; a section reading <code>COULD NOT ENUMERATE</code> is the other answer and blocks the claim until it is fixed.
+Nothing enumerates the <strong>GMC's</strong> Event reasons (Q925), so those are still a hand extraction — and the trap below is what makes a hand extraction expensive.</p>
 <p>Two traps.
 <strong>A rename reads as a removal</strong> when the extraction is scoped to one directory: env vars first appeared to have 17 removals, all of which were code moving out of <code>cmd/</code>; re-running repo-wide showed zero.
 <strong>Adjacent string arguments read as the same thing</strong>: <code>recordEvent(obj, type, reason, action, …)</code> puts a reason and an action side by side, so <code>ProvisionWorker</code> and <code>ApplyAGCAutoscaler</code> both survived extraction as reasons until each call site was checked.
+That is the mistake the AGC scanner was written to stop making: it reads the reason argument's index off the callee's own declaration, because two recorders here are named <code>Event</code> and two <code>recordEvent</code>, with the reason at a different index in each.
 Always report "none removed" when it is true — operators are looking for exactly that.</p>
 <p><strong>Diff <code>docs/</code> as well, and link what is new from where it is actionable.</strong> A new operator page is the strongest signal of a capability the notes forgot, and a heavily grown one shows where the release's real weight landed:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-36-1" name="__codelineno-36-1" href="#__codelineno-36-1"></a>git<span class="w"> </span>diff<span class="w"> </span>--name-status<span class="w"> </span>v&lt;prev&gt;..origin/main<span class="w"> </span>--<span class="w"> </span>docs/operations/<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span><span class="s1">'^A'</span>
