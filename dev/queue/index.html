@@ -2716,28 +2716,12 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>Seen once 2026-08-12 at load 101-111, 8 siblings, identical tree, passed standalone: `Could not apply ...</td>
 </tr>
 <tr>
-<td><a href="Q899/">Q899</a></td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/publish.yml"><code>publish.yml</code>'s image build has no retry, so a 403 fails a release</a></td>
-<td><code>ci</code> <code>debt</code></td>
-<td>🔲</td>
-<td>S</td>
-<td>The half of <a href="Q863/">Q863</a> its fix deliberately left: same unretried base-image pull, but the release build is <code>no-cache: true</code> and five …</td>
-</tr>
-<tr>
 <td><a href="Q904/">Q904</a></td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/Makefile">Nothing gates a <code>.build/</code> tool rule declaring its version-pin file</a></td>
 <td><code>ci</code> <code>debt</code></td>
 <td>🔲</td>
 <td>S</td>
 <td>Q842 set the pattern and a Makefile comment states it, but no gate holds it, so cosign was added without one and served a stale verifier …</td>
-</tr>
-<tr>
-<td><a href="Q926/">Q926</a></td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/release/download-cosign-test.sh">Only the host platform's cosign digest is asserted</a></td>
-<td><code>ci</code> <code>debt</code></td>
-<td>🔲</td>
-<td>S</td>
-<td><code>download-cosign-test.sh</code> derives the platform from <code>uname</code> and asserts a pinned digest for that one, so a <code>COSIGN_VERSION</code> bump that adds …</td>
 </tr>
 <tr>
 <td><a href="Q921/">Q921</a></td>

@@ -3922,6 +3922,13 @@ Because each version builds from <strong>its own tag</strong>, the version pins 
 The versioned-docs model, and the one-time <code>mike</code> seeding of releases cut before it landed, are documented in <a href="../../development/website/#versioned-deploy-mike">website.md § Versioned deploy</a>.</p>
 </blockquote>
 <h3 id="3-verify-the-publish">3. Verify the publish<a class="headerlink" href="#3-verify-the-publish" title="Permanent link">&para;</a></h3>
+<blockquote>
+<p><strong>A red "Build and push" step in a green <code>publish</code> job is expected, not a half-published release.</strong> The base-image pull inside the build has no retry of its own, so a transient registry denial fails it (Q863).
+The first attempt is therefore masked and a "Rebuild and push" step follows it; a second failure is unmasked and reds the job.
+Because the release build is <code>no-cache: true</code> the retry's index digest differs from the first attempt's, so a "Resolve the published index digest" step picks the attempt that actually published and every signature, SBOM, and recorded pin binds to that one.
+Nothing signs the superseded index, and the digest in the run summary is the digest the tag serves.
+See <a href="../../development/testing/#image-builds-retry-the-transport-never-the-pin">testing.md § Image builds: retry the transport, never the pin</a>.</p>
+</blockquote>
 <p>Confirm every image <strong>and the chart</strong> was signed by <em>this</em> workflow before announcing the release.
 The one-command check uses the pinned cosign (<code>make</code> downloads <code>COSIGN_VERSION</code> — the same version <code>publish.yml</code> signs with — into <code>.build/</code>):</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-27-1" name="__codelineno-27-1" href="#__codelineno-27-1"></a>make<span class="w"> </span>verify-release<span class="w"> </span><span class="nv">VERSION</span><span class="o">=</span>vX.Y.Z

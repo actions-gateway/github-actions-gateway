@@ -2570,7 +2570,7 @@
 <h1 id="cosign-has-no-updatecli-manifest-so-its-pin-only-moves-by-hand">cosign has no updatecli manifest, so its pin only moves by hand<a class="headerlink" href="#cosign-has-no-updatecli-manifest-so-its-pin-only-moves-by-hand" title="Permanent link">&para;</a></h1>
 <p>kind, polaris, shellcheck and syft each have one; cosign does not, so the binary that signs and verifies every release is the one pin nothing keeps fresh.
 Q903's gate holds the copies to each other, which is a different property: three sites agreeing on a stale version still agree.
-The pattern the other four use does not transfer unchanged, because cosign's pin is four per-platform digests in a shell <code>case</code> block rather than one <code>SHA256:</code> field, so a manifest has to rewrite the block and resolve four digests (see <a href="../Q926/">Q926</a>).</p>
+The pattern the other four use does not transfer unchanged, because cosign's pin is four per-platform digests in a shell <code>case</code> block rather than one <code>SHA256:</code> field, so a manifest has to rewrite the block and resolve four digests — all four now asserted by <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/release/download-cosign-test.sh">download-cosign-test.sh</a>.</p>
 
 
 

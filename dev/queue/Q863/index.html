@@ -2570,7 +2570,7 @@
 <h1 id="a-docker-buildx-base-image-pull-has-no-retry-so-one-403-fails-a-build">A <code>docker buildx</code> base-image pull has no retry, so one 403 fails a build<a class="headerlink" href="#a-docker-buildx-base-image-pull-has-no-retry-so-one-403-fails-a-build" title="Permanent link">&para;</a></h1>
 <p><strong>Event:</strong> a <code>trivy</code> shard 403s on a base-image pull on <code>main</code> after the fix. → top of Queue, escalated.
 Mitigated by a second build attempt 30s later, and by <code>retry.sh</code> in the local mirror.
-<code>publish.yml</code>'s build is still unretried — <a href="../Q899/">Q899</a>, deliberately left.</p>
+<code>publish.yml</code>'s build is retried too now, through a resolver step so the retry's index digest is the only one anything signs.</p>
 
 
 
