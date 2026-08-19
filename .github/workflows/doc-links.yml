@@ -5,34 +5,30 @@
 # own workflow rather than jobs in unit-test.yml: that workflow deliberately
 # path-ignores docs, so a docs-only change must trigger *these* lightweight
 # checks and nothing else — the Go suite never runs on a pure-docs PR. Mirrors
-# how e2e-test.yml is its own workflow. The `paths` below scope it to Markdown
-# plus the checkers, the docs-site build inputs the release-links oracle is
-# built from, and this workflow file, so a code-only change doesn't trigger it.
-# `scripts/**` is deliberately the whole tree rather than the individual
-# checkers: script-docs-check (Q688) takes the tree itself as an input, so a
-# script added anywhere under it must re-run this workflow. `.mdreflow.yaml`
-# and `tools/go.mod` are the md-reflow gate's other two inputs: the
-# formatter's config, and the line that pins the formatter — a version bump
-# changes what the gate accepts, with no Markdown in the diff to route it here
-# otherwise. The pin rather than all of `tools/**`, so an unrelated tool bump
-# does not drag the docs-site build in release-links along with it.
+# how e2e-test.yml is its own workflow.
 #
-# The two lists are the same list written twice — GitHub has no anchor syntax
-# across `pull_request` and `push` — so every edit belongs in both.
+# The `docs` filter in the `changes` job below scopes the gates to Markdown plus
+# the checkers, the docs-site build inputs the release-links oracle is built
+# from, and this workflow file, so a code-only change runs nothing but `changes`
+# and `doc-links-gate`. The `push` list is the same list written a second time —
+# GitHub has no anchor syntax between a trigger's `paths` and a filter's — so
+# every edit belongs in both.
 name: doc-links
 
 on:
+  # No pull_request path filter: this workflow must trigger on EVERY PR so its
+  # `doc-links-gate` job always reports its check (a path-skipped workflow leaves
+  # a required check Pending and wedges the merge). Fine-grained skipping happens
+  # inside via the `changes` job — see
+  # docs/development/testing.md#path-gated-workflows-verify-the-heavy-gates-actually-ran.
   pull_request:
-    paths:
-      - '**.md'
-      - 'scripts/**'
-      - 'devtools/docs/**'
-      - 'mkdocs.yml'
-      - 'requirements-docs.txt'
-      - '.mdreflow.yaml'
-      - 'tools/go.mod'
-      - 'Makefile'
-      - '.github/workflows/doc-links.yml'
+  # Merge queue: also run on the queue's candidate merge commit (Q743). Without
+  # it these gates only ever see a branch against its own base, so a rule that is
+  # a function of the merge result — the em-dash ratchet of Q742, and any later
+  # one — cannot be enforced: two PRs each green on their own base merge to a red
+  # `main`. paths-filter diffs merge_group events via git against the event's
+  # base/head, so non-matching queue entries stay cheap.
+  merge_group:
   push:
     branches: [main]
     paths:
@@ -55,12 +51,64 @@ permissions:
   contents: read
 
 jobs:
+  # Fine-grained path gate. The workflow now triggers on every PR (so
+  # doc-links-gate can report), so classify the diff here and skip the content
+  # gates when nothing they read changed. On push to main they always run.
+  #
+  # One filter for all eleven gates: they share one path list, because each reads
+  # the same Markdown walk plus the tooling behind it. `scripts/**` is
+  # deliberately the whole tree rather than the individual
+  # checkers: script-docs-check (Q688) takes the tree itself as an input, so a
+  # script added anywhere under it must re-run these gates. `.mdreflow.yaml` and
+  # `tools/go.mod` are the md-reflow gate's other two inputs: the formatter's
+  # config, and the line that pins the formatter — a version bump changes what
+  # the gate accepts, with no Markdown in the diff to route it here otherwise.
+  # The pin rather than all of `tools/**`, so an unrelated tool bump does not
+  # drag the docs-site build in release-links along with it.
+  changes:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      docs: ${{ steps.filter.outcome == 'success' && steps.filter.outputs.docs || 'true' }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
+        id: filter
+        # paths-filter resolves the changed-file list through ONE un-retried
+        # GitHub API call (@actions/github Octokit carries no retry plugin), so a
+        # single transient 5xx fails this job and, with it, the gate. Survive it:
+        # the job output above fails OPEN, running the gated jobs rather than
+        # skipping them when the diff could not be classified (Q363).
+        continue-on-error: true
+        with:
+          filters: |
+            docs:
+              - '**.md'
+              - 'scripts/**'
+              - 'devtools/docs/**'
+              - 'mkdocs.yml'
+              - 'requirements-docs.txt'
+              - '.mdreflow.yaml'
+              - 'tools/go.mod'
+              - 'Makefile'
+              - '.github/workflows/doc-links.yml'
+      # A JS action reports failure only as an ::error:: annotation, so a rerun
+      # that replaces the check run erases it — leaving a log that simply stops
+      # after `Invoking listFiles` with no error anywhere (Q363). Say it plainly.
+      - name: warn when change detection failed
+        if: steps.filter.outcome == 'failure'
+        run: echo "::warning::paths-filter could not classify the diff; assuming every filter matched so the gated jobs run"
+
   # Walk every tracked, non-vendored Markdown file and fail on dead relative
   # file links or `#anchors` that match no GitHub heading slug / explicit
   # <a id>. `make doc-links` (scripts/docs/check-doc-links.sh) is the single source
   # of truth, so the local and CI verdicts match. No Go toolchain needed — just
   # a checkout so `git ls-files` sees the tracked tree.
   doc-links:
+    needs: [changes]
+    if: needs.changes.outputs.docs == 'true' || github.event_name == 'push'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -71,8 +119,10 @@ jobs:
   # Enforce the em-dash density rule (Q654). Same file walk as doc-links and
   # the same counter dependency, but its own job so a density failure and a
   # dead link are separate verdicts on the PR. The counter reads the parsed
-  # document, which is why 'devtools/docs/**' is in the triggers above.
+  # document, which is why 'devtools/docs/**' is in the filter above.
   em-dash:
+    needs: [changes]
+    if: needs.changes.outputs.docs == 'true' || github.event_name == 'push'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -86,6 +136,8 @@ jobs:
   # path-ignores — and its own job so a density failure reads apart from a
   # dead link. No Go step: unlike the em-dash counter this gate is pure shell.
   page-density:
+    needs: [changes]
+    if: needs.changes.outputs.docs == 'true' || github.event_name == 'push'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -101,6 +153,8 @@ jobs:
   # with the em-dash job it shares a module with — the runner image's toolchain
   # builds devtools/.
   upgrade-toc:
+    needs: [changes]
+    if: needs.changes.outputs.docs == 'true' || github.event_name == 'push'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -118,6 +172,8 @@ jobs:
   # shellcheck job gives: it keeps the verdict off whatever the runner image
   # happens to default to.
   md-reflow:
+    needs: [changes]
+    if: needs.changes.outputs.docs == 'true' || github.event_name == 'push'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -134,6 +190,8 @@ jobs:
   # docs, so a cell that lost its stamp would reach no gate there. Its own job
   # so an unstamped verdict and a dead link are separate verdicts on the PR.
   comparison-stamps:
+    needs: [changes]
+    if: needs.changes.outputs.docs == 'true' || github.event_name == 'push'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -147,6 +205,8 @@ jobs:
   # path-ignores docs, so a README edit that dropped an entry would reach no
   # gate there.
   script-docs:
+    needs: [changes]
+    if: needs.changes.outputs.docs == 'true' || github.event_name == 'push'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -159,10 +219,12 @@ jobs:
   # because it spans the Makefile, a doc and the scripts/ tree, and this is the
   # only workflow whose triggers cover all three: unit-test.yml path-ignores
   # docs, so a docs-only change that dropped the `make list-gates` pointer would
-  # skip the gate that exists to catch it. The `scripts/**` trigger is the suite
-  # half: a suite added without touching the Makefile is exactly the
-  # unlisted-suite case, and it reaches no other trigger here.
+  # skip the gate that exists to catch it. The `scripts/**` filter entry is the
+  # suite half: a suite added without touching the Makefile is exactly the
+  # unlisted-suite case, and it reaches no other entry here.
   gate-lists:
+    needs: [changes]
+    if: needs.changes.outputs.docs == 'true' || github.event_name == 'push'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -174,6 +236,8 @@ jobs:
   # is load-bearing: the gate derives the current release from the tags, and a
   # shallow checkout has none — it would fall back to the remote, or skip.
   release-pins:
+    needs: [changes]
+    if: needs.changes.outputs.docs == 'true' || github.event_name == 'push'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -189,6 +253,8 @@ jobs:
   # Its own job so a duplicate h1 reads apart from a link that does not resolve
   # — and unlike release-links it is offline, so it needs no venv and no tags.
   release-notes:
+    needs: [changes]
+    if: needs.changes.outputs.docs == 'true' || github.event_name == 'push'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -207,6 +273,8 @@ jobs:
   # fetch-depth: 0 for the same reason pages.yml's build job takes it — the
   # announce bar's version comes from the tag list at build time (Q393).
   release-links:
+    needs: [changes]
+    if: needs.changes.outputs.docs == 'true' || github.event_name == 'push'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -218,3 +286,42 @@ jobs:
           python-version: '3.x'
       - name: release-note site links resolve (make release-links-check)
         run: make release-links-check
+
+  # Aggregate gate. Mark THIS job's check context (`doc-links-gate`) required in
+  # the branch ruleset — never the path-gated jobs above, because a path-skip
+  # leaves them Pending and blocks the merge forever. Passes only when every
+  # needed job succeeded or was legitimately skipped. Registering it is what
+  # makes the merge queue evaluate these gates rather than merely run them
+  # (Q743); until then the workflow reports on the candidate merge and nothing
+  # blocks on the verdict. See
+  # docs/development/testing.md#path-gated-workflows-verify-the-heavy-gates-actually-ran.
+  doc-links-gate:
+    needs:
+      - changes
+      - doc-links
+      - em-dash
+      - page-density
+      - upgrade-toc
+      - md-reflow
+      - comparison-stamps
+      - script-docs
+      - gate-lists
+      - release-pins
+      - release-notes
+      - release-links
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: require every gating job to have succeeded or skipped
+        env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          set -euo pipefail
+          echo "needed job results: ${RESULTS}"
+          for r in ${RESULTS}; do
+            case "$r" in
+              success | skipped) ;;
+              *) echo "::error::a gating job concluded '${r}'"; exit 1 ;;
+            esac
+          done

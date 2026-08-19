@@ -168,7 +168,7 @@ Install it once with `make hooks` (or `scripts/dev/setup.sh`); bypass a single c
 
 The em-dash part is there for *when* it fires rather than for coverage, since `make check` already runs it.
 It is the gate a docs change most often trips at the very end of a full run, after the heavy phases are paid for, and commit time is the first moment the answer is both cheap (410 ms warm) and unavoidable.
-It holds one branch to its own ceiling; two branches each sitting *at* a ceiling and merging over it is a property of the merge result, not of either commit (Q742, Q743).
+It holds one branch to its own ceiling; two branches each sitting *at* a ceiling and merging over it is a property of the merge result, not of either commit, which is why the gate has to reach the merge queue as well (Q742, Q943).
 
 #### Measuring the local gate: start from what is already recorded
 
@@ -519,7 +519,7 @@ Accepted findings inside a `run:` block carry the same targeted `# shellcheck di
 ### The doc-link gate
 
 `make doc-links` runs `scripts/docs/check-doc-links.sh` over every present, non-vendored Markdown file — tracked, or untracked and not gitignored ([the shared file selection](#gates-scan-present-files-not-just-tracked-ones)) — and is wired into `make check`, so the local pre-review gate matches CI.
-CI runs the same `make doc-links` target from its **own** workflow, [`.github/workflows/doc-links.yml`](../../.github/workflows/doc-links.yml), scoped (via `on.paths`) to `**.md`, the checker, and the workflow itself.
+CI runs the same `make doc-links` target from its **own** workflow, [`.github/workflows/doc-links.yml`](../../.github/workflows/doc-links.yml), scoped by that workflow's internal `changes` filter to `**.md`, the checkers, the docs-site build inputs, and the workflow itself.
 It is deliberately separate from `unit-test.yml` — that workflow path-ignores docs, so a docs-only change triggers only this lightweight check and never the Go suite (mirroring how `e2e-test.yml` is its own workflow).
 
 It fails on two classes of breakage: **dead relative file links** (a `[text](path)` whose resolved target is neither a present file nor directory — a trailing `:NN` line reference is tolerated and only the file part is resolved) and **dead anchors** (a `#fragment` that matches no heading slug or explicit `<a id>`/`<a name>` in the target Markdown file).
@@ -720,7 +720,7 @@ The assertion was verified by injecting `'cmd/**.go'` into a real filter and req
 
 #### A path list written twice: the trigger and the filter
 
-Three workflows — `e2e-calico.yml`, `plan-hygiene.yml`, `status-lint.yml` — express the same scoping decision **twice**, because the two legs are gated by different mechanisms:
+Four workflows — `doc-links.yml`, `e2e-calico.yml`, `plan-hygiene.yml`, `status-lint.yml` — express the same scoping decision **twice**, because the two legs are gated by different mechanisms:
 
 - **The PR leg** triggers on every `pull_request` with no path filter (so its `gate` job always reports its required check) and is scoped by the internal `changes` filter.
 - **The post-merge leg** triggers on `push` to `main` and is scoped by `on.push.paths` — a plain GitHub Actions trigger filter, not a `dorny/paths-filter` block.
@@ -731,8 +731,9 @@ GitHub Actions does not reliably resolve YAML anchors, so the list is duplicated
 Q571 shipped exactly that regression and merged green: it rewrote `e2e-calico.yml`'s filter to `scripts/{e2e,fetch,lib}/**` and left the push list naming the two now-moved files it had always enumerated.
 Assertion 5 is the recurrence guard — it compares the two as sorted sets and prints a diff of the difference.
 
-Two more workflows (`doc-links.yml`, `dockerfile-lint.yml`) duplicate a list across `pull_request.paths` and `push.paths` instead.
+One workflow (`dockerfile-lint.yml`) duplicates a list across `pull_request.paths` and `push.paths` instead.
 That is the same hazard in a different shape and is **not** yet gated; both lists agree today (Q572).
+`doc-links.yml` was the second until Q743 moved it onto the trigger-and-filter shape above, which brought it under assertion 5.
 
 #### `scripts/` is grouped by blast radius
 
@@ -2808,7 +2809,7 @@ The e2e bake is the standing proof: it bakes from a `run:` step with `GHA_CACHE=
 ### Path-gated workflows: verify the heavy gates actually ran
 
 Most code-exercising workflows keep unrelated PRs cheap by **skipping their expensive jobs internally** rather than skipping the whole workflow.
-The build/lint/test/security gates (`unit-test.yml`, `integration-test.yml`, `e2e-test.yml`, `e2e-calico.yml`, `security-scan.yml` — trivy + govulncheck, `manifest-validate.yml`, `license-notices.yml`, plus `status-lint.yml`, `plan-hygiene.yml` and `autoscaler-drift.yml`) trigger on **every** `pull_request` (no top-level path filter), then a `dorny/paths-filter` `changes` job classifies the diff and each real job's `if:` guard skips it when nothing it covers changed.
+The build/lint/test/security gates (`unit-test.yml`, `integration-test.yml`, `e2e-test.yml`, `e2e-calico.yml`, `security-scan.yml` — trivy + govulncheck, `manifest-validate.yml`, `license-notices.yml`, plus `status-lint.yml`, `plan-hygiene.yml`, `doc-links.yml` and `autoscaler-drift.yml`) trigger on **every** `pull_request` (no top-level path filter), then a `dorny/paths-filter` `changes` job classifies the diff and each real job's `if:` guard skips it when nothing it covers changed.
 Each workflow ends with a small **`<workflow>-gate`** job (`unit-test-gate`, `security-scan-gate`, …; `if: always()`, `needs:` every real job) that passes only when each concluded `success` or `skipped` — this is the job whose check context is (or is intended to be) the branch's **required status check**.
 The ids are unique per workflow on purpose: a normal job's check-run name **is its job id**, GitHub matches required checks by that name, so nine jobs all named `gate` would collapse to one indistinguishable entry in the ruleset UI.
 See [required-status-checks.md](../plan/archive/required-status-checks.md).
@@ -2821,6 +2822,9 @@ Adding a job to one of these workflows means adding it to the gate's `needs` in 
 Triggering on every PR and gating internally means the `gate` context always reports — green (all jobs skipped) on an unrelated PR, red when a real job fails — so it is safe to require.
 
 **The same pattern serves the merge queue's `merge_group` event.** The nine workflows behind required checks also trigger on `merge_group`, so their gate contexts report on the queue's candidate merge commit.
+`doc-links.yml` is the tenth: Q743 gave it the trigger and the `doc-links-gate` job, so the docs-content gates now run on the candidate merge.
+They do not yet **block** it — the queue arbitrates on the ruleset's required checks alone, and registering `doc-links-gate` is a repo-settings change that can only follow the workflow onto `main`, for the ordering reason [merge-queue.md](../plan/merge-queue.md) gives.
+Until it is registered a red docs gate on a candidate merge is visible and not binding.
 That is the queue analogue of the Pending-wedge above: a required check that never reports on the merge-group ref stalls the entry until `check_response_timeout_minutes` expires it.
 The `changes` job needs no per-event configuration: on `merge_group`, paths-filter's `base`/`ref` default to the event's commit hashes and detection runs via git against the checkout, so a docs-only queue entry skips the heavy legs exactly as a docs-only PR does.
 The queue is active on `main` (2026-08-03, `merge_queue` rule in the `default-protect` ruleset); [merge-queue.md](../plan/merge-queue.md) records the parameters, the rollback, and the activation-ordering constraint it satisfied.
