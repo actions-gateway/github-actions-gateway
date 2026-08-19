@@ -52,6 +52,7 @@ jobs:
     outputs:
       manifests: ${{ steps.filter.outcome == 'success' && steps.filter.outputs.manifests || 'true' }}
       promql: ${{ steps.filter.outcome == 'success' && steps.filter.outputs.promql || 'true' }}
+      dashboards: ${{ steps.filter.outcome == 'success' && steps.filter.outputs.dashboards || 'true' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
@@ -107,6 +108,19 @@ jobs:
               - 'scripts/manifest/check-promql.sh'
               - 'tools/**'
               - 'Makefile'
+              - '.github/workflows/manifest-validate.yml'
+            # The render gate pairs each dashboard with the screenshot the docs
+            # embed, so its trigger set is both sides of that pair (Q868). It
+            # judges the branch's whole diff against the merge base, so the PNG
+            # half has to trigger it too: a PR whose only later push is the
+            # render must re-run and go green.
+            dashboards:
+              - 'deploy/monitoring/grafana-dashboard-*.json'
+              - 'docs/assets/grafana-dashboard-*.png'
+              - 'scripts/manifest/check-dashboard-render.py'
+              - 'scripts/manifest/check-dashboard-render.sh'
+              - 'Makefile'
+              - 'mk/gate-lists.mk'
               - '.github/workflows/manifest-validate.yml'
       # A JS action reports failure only as an ::error:: annotation, so a rerun
       # that replaces the check run erases it — leaving a log that simply stops
@@ -187,13 +201,34 @@ jobs:
       - name: PromQL parses in the rules and the dashboards, and matches its docs (make promql-check)
         run: make promql-check
 
+  # A dashboard change must ship the screenshot the docs embed (Q868). Its own
+  # job rather than a step in `validate`: that one installs helm, kubeconform and
+  # yamllint to answer a different question, and this needs none of them — only
+  # git history. fetch-depth: 0 is the requirement, and the reason it cannot be a
+  # step there: the gate judges the branch's whole diff against the merge base
+  # with origin/main, which a shallow checkout does not carry. Same shape as the
+  # backlog store rules in status-lint.yml.
+  dashboard-render:
+    needs: [changes]
+    if: needs.changes.outputs.dashboards == 'true' || github.event_name == 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - name: dashboards ship their screenshots (make dashboard-render-check)
+        run: make dashboard-render-check
+
   # Aggregate required-status gate. Mark THIS job's check context
   # (`manifest-validate-gate`) required in the branch ruleset — never the
   # path-gated jobs above, because a path-skip leaves them Pending and blocks the
   # merge forever. Passes only when every needed job succeeded or was
   # legitimately skipped. See docs/development/testing.md#path-gated-workflows-verify-the-heavy-gates-actually-ran.
   manifest-validate-gate:
-    needs: [changes, validate, promql]
+    needs: [changes, validate, promql, dashboard-render]
     if: ${{ always() }}
     runs-on: ubuntu-latest
     timeout-minutes: 2

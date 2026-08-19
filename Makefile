@@ -168,6 +168,15 @@ upgrade-toc-check: ## Fail when upgrade.md's Table of Contents has lost, gained,
 promql-check: ## Fail on unparseable PromQL in the rules or the dashboards, or alert rules that have drifted from their docs
 	scripts/manifest/check-promql.sh
 
+# The docs embed a screenshot per dashboard, and deploy/monitoring/preview/README.md
+# asks a contributor to re-render after changing one. Nothing enforced it: #1526
+# added a panel series with no render, so the published screenshot lost that
+# series and still read as the current dashboard (Q868). The drift is silent —
+# the page shows a plausible dashboard either way.
+.PHONY: dashboard-render-check
+dashboard-render-check: ## Fail when a dashboard changed beyond its panel descriptions and its screenshot did not
+	scripts/manifest/check-dashboard-render.sh
+
 # Capability parity between the two acquisition tiers rested on a one-time seam
 # walk that went stale four times (Q683, Q691, Q713, Q844), each a capability
 # classic-only from birth with nothing re-walking it. This inverts the

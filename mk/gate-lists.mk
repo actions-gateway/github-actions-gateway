@@ -56,7 +56,8 @@ CHECK_FAST_GATES := roadmap-check \
                     md-reflow-check comparison-stamps-check promql-check \
                     metric-tiers-check reason-tiers-check upgrade-toc-check \
                     endpoint-parity-check \
-                    release-notes-check
+                    release-notes-check \
+                    dashboard-render-check
 
 CHECK_HEAVY_GATES := build-tags-check lint cover-check
 
@@ -229,4 +230,5 @@ SCRIPTS_TESTS := agent/claude-go-throttle-hook-test agent/local-throttle-test \
                  release/check-release-digests-test \
                  updatecli/latest-cluster-autoscaler-patch-test \
                  docs/check-metric-tiers-test docs/check-reason-tiers-test \
-                 e2e/check-endpoint-parity-test
+                 e2e/check-endpoint-parity-test \
+                 manifest/check-dashboard-render-test
