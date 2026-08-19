@@ -2964,12 +2964,12 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>Measured 2026-08-13 on mdreflow v0.1.7: 20 markers, 20 declined paragraphs, all <code>raw-html-decl-opener</code>; 21/21 on 2026-08-12, so the pair …</td>
 </tr>
 <tr>
-<td><a href="Q835/">Q835</a></td>
-<td><a href="../development/documentation-standards/#what-stays-hard-wrapped-and-why-it-stays-that-way"><code>documentation-standards</code> names one mdreflow guard where there are three</a></td>
-<td><code>docs</code></td>
+<td><a href="Q939/">Q939</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/docs/md-reflow-coverage.sh"><code>md-reflow-coverage</code> counts the excluded generated doc through a symlink</a></td>
+<td><code>docs</code> <code>debt</code></td>
 <td>🔲</td>
 <td>S</td>
-<td>Measured 2026-08-12: a break is also declined before a sentence opening with <code>code</code>, <code>**bold**</code> or <code>*italic*</code>, and after one whose period …</td>
+<td><code>excluded()</code> drops <code>docs/development/broker-compatibility.md</code>, but <code>git ls-files '*.md'</code> also yields …</td>
 </tr>
 <tr>
 <td><a href="Q813/">Q813</a></td>
@@ -3914,6 +3914,14 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>🔲</td>
 <td>S</td>
 <td>Closing Q900 left <code>testing.md</code> saying "Q900 is measuring which way that actually falls", and no gate could see it.</td>
+</tr>
+<tr>
+<td><a href="Q941/">Q941</a></td>
+<td><a href="../development/parallel-dispatch/"><code>session-worker</code>'s contract is silent where four workers needed it</a></td>
+<td><code>docs</code> <code>debt</code> <code>retro</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>Reported by workers during the 2026-08-18 batch, each quoting the copy loaded into its own context.</td>
 </tr>
 </tbody>
 </table>

@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q835/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q939/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>documentation-standards names one mdreflow guard where there are three - GitHub Actions Gateway</title>
+        <title>md-reflow-coverage counts the excluded generated doc through a symlink - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#documentation-standards-names-one-mdreflow-guard-where-there-are-three" class="md-skip">
+        <a href="#md-reflow-coverage-counts-the-excluded-generated-doc-through-a-symlink" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              documentation-standards names one mdreflow guard where there are three
+              md-reflow-coverage counts the excluded generated doc through a symlink
             
           </span>
         </div>
@@ -2567,9 +2567,12 @@
   
 
 
-<h1 id="documentation-standards-names-one-mdreflow-guard-where-there-are-three"><code>documentation-standards</code> names one mdreflow guard where there are three<a class="headerlink" href="#documentation-standards-names-one-mdreflow-guard-where-there-are-three" title="Permanent link">&para;</a></h1>
-<p>Measured 2026-08-12: a break is also declined before a sentence opening with <code>code</code>, <code>**bold**</code> or <code>*italic*</code>, and after one whose period sits inside bold.
-With <a href="../Q832/">Q832</a>'s <code>q:</code> markers that is three causes, not the one the page names.</p>
+<h1 id="md-reflow-coverage-counts-the-excluded-generated-doc-through-a-symlink"><code>md-reflow-coverage</code> counts the excluded generated doc through a symlink<a class="headerlink" href="#md-reflow-coverage-counts-the-excluded-generated-doc-through-a-symlink" title="Permanent link">&para;</a></h1>
+<p><code>excluded()</code> drops <code>docs/development/broker-compatibility.md</code>, but <code>git ls-files '*.md'</code> also yields <code>cmd/probe/compat/testdata/broker-compatibility.md</code>, a symlink to it added 2026-08-18 by Q895.
+The formatter refuses that path outright (<code>refused: not a regular file (symlink)</code>), so the script measures a file mdreflow never walks and books its 18 lines as permanent residue: 18 of the 62 reported on 2026-08-18, with the same file's interior breaks inflating the denominator.
+The script's own header names this failure mode.
+<code>check-em-dash.sh</code> and <code>check-doc-links.sh</code> already drop symlinks from the same walk; do the same here.
+Then re-take the figures in <a href="../../development/documentation-standards/#what-stays-hard-wrapped-and-why-it-stays-that-way">documentation-standards.md</a>, which still hold a v0.1.7 reading the pin moved past on 2026-08-15.</p>
 
 
 

@@ -3254,13 +3254,16 @@ The check is in <code>make check</code> and costs about a second for the whole t
 The formatter declines 38 paragraphs across 8 files, spanning 90 source lines.
 "In-scope" excludes the generated docs, which <code>.mdreflow.yaml</code> skips.
 Re-derive both rather than quoting them: <code>make md-reflow-coverage</code> recomputes the percentage and <code>ARGS=-v</code> lists all 41, while <code>make md-reflow-explain</code> names each declined paragraph with a stable reason code.
-Neither number is this page's to hold, and the classification below is reproducible without re-diagnosing anything.</p>
+Neither number is this page's to hold, and the classification below is reproducible without re-diagnosing anything.
+Those figures were taken against v0.1.7 and the pin has since moved to v0.3.0, which splits sentences v0.1.7 joined, so re-derive before citing them rather than reading them as current.</p>
 <p>That figure reads lower than the 99.81% this section carried before, and the tree did not get worse: the measurement got wider.
 The 41 split two ways, and the split is the finding.
 Twenty sit in paragraphs mdreflow declines and reports, which <code>--explain</code> accounts for exactly.
 The other 21 sit in two MkDocs admonition bodies mdreflow never sees at all: an admonition body reflows while it holds a single block and silently leaves scope once it holds two, reported neither as a change nor as a decline.
 A hand-derived count could not see the second group, because nothing named it.</p>
 <p>What remains is a small set of guards, each a correctness property rather than a defect, and <code>--explain</code> names which one fired.
+The set is a property of the pinned version, so read it off <code>tools/go.mod</code> rather than off this page: mdreflow carries twelve reason codes at v0.3.0, and three fire on this tree, measured 2026-08-18.
+They are <code>raw-html-decl-opener</code>, <code>deep-nesting</code> and <code>link-ref-def-shape</code>; the link guard below is a fourth, <code>possible-link-ref-def</code>, which no paragraph here currently trips.
 The one an author must not fight is the link guard: moving a break inside a link construct is where render changes come from, so mdreflow passes over any paragraph where a link's text or destination is left open at a line end:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>Control plane (GMC rolls to
 <a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>rc.6, [self-hosted] ready). Second sentence.       → reflows
@@ -3270,6 +3273,26 @@ The one an author must not fight is the link guard: moving a break inside a link
 </code></pre></div>
 <p>Do not hand-wrap around it.
 A paragraph the formatter leaves alone is correctly formatted, and hand-joining to force one through is how a link ends up straddling a break in the first place.</p>
+<p>Two further causes carry no reason code at all, because nothing is declined.
+Both are the segmenter not seeing a sentence boundary, so no break is offered, the rest of the paragraph reflows normally, and <code>--explain</code> has nothing to report.
+There were three until v0.3.0, which started a new line for a sentence opening with inline code or emphasis where v0.1.7 had joined it onto the sentence before.</p>
+<p>The first is terminal punctuation sitting inside an inline span:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>This is a [sentence.](https://example.com) Next one.   → stays joined
+<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>And **bold.** After bold.                              → stays joined
+<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>And `code.` After code.                                → stays joined
+<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a>And **bold**. After bold.                              → splits
+</code></pre></div>
+<p>Link text, bold, italic and inline code all behave that way, and moving the punctuation outside the closing delimiter is what makes the break appear.
+That one is a defect rather than a design choice, filed upstream as <a href="https://github.com/jbeda/mdreflow/issues/2">jbeda/mdreflow#2</a> against the link spelling and still open; the other three spellings are the same bug.</p>
+<p>The second is by design: a new sentence must open with an uppercase letter, a digit, a quote or a bracket, or with inline code or emphasis the parse confirms.
+A sentence opening with a bare lowercase tool name qualifies as none of those, so it stays on the line above.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>One sentence here. mdreflow refuses it.                → stays joined
+<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>One sentence here. The formatter refuses it.           → splits
+</code></pre></div>
+<p>Both measured 2026-08-18 on the pinned v0.3.0, and both are shapes <code>--explain</code> cannot account for, alongside the admonition bodies above.
+So a line carrying two sentences in an otherwise sentence-per-line paragraph is likelier to be one of these than a hand-wrap that slipped past the gate.
+Hand-breaking is not the answer here any more than it is above: the next run joins the line straight back, measured on both shapes.
+The only lever an author has is the prose, moving the punctuation outside the closing delimiter or opening the sentence with a capital, and neither is worth forcing on a line that reads well as it stands.</p>
 <h3 id="coverage-is-not-the-check-that-matters">Coverage is not the check that matters<a class="headerlink" href="#coverage-is-not-the-check-that-matters" title="Permanent link">&para;</a></h3>
 <p>The coverage figure counts line breaks.
 It cannot see whether a page still renders what it should, and that difference is not academic: a MkDocs callout flattened into a paragraph still scores as sentence-per-line, because it is.</p>
