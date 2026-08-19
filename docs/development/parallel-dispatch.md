@@ -202,6 +202,24 @@ The mechanics here:
 
 ## Concurrency and contention
 
+**`gh pr list` cannot see a branch pushed before its pull request exists**, so a contention brief built from it reads as a closed list and is not one.
+Measured across the 2026-08-18 batch: three separate briefs cleared a file an unmerged branch was already editing, and a worker's own sweep caught each one rather than the dispatcher.
+Derive contention from the remote refs and keep the PR list as the weaker second opinion:
+
+```bash
+for b in $(git branch -r --format='%(refname:short)'); do
+    git diff --quiet "origin/main...$b" -- <path> || printf '%s\n' "$b"
+done
+```
+
+Fire it at a known-contended path first: a sweep that never matched and a sweep that found nothing print the same thing.
+A branch with no merge base exits non-zero and reads as a false hit, which is what `origin/gh-pages` does here (Q934).
+
+**The two instruments are complementary rather than ranked.** The sweep finds every branch that touches the path, which is a superset; the PR list says which of them is in flight.
+An unmerged branch carrying commits but no open PR is normally abandoned residue rather than contention, and this repo keeps those deliberately.
+Measured 2026-08-18 on this page: the sweep returned eight branches where `gh pr list` returned none, and all eight were stale.
+
+
 **Take the concurrency cap from the machine**, not from a constant:
 
 ```bash
