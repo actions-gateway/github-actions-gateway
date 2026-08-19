@@ -2965,15 +2965,51 @@ This applies to the keyed registry files that still have drivers, and to any han
 The second case is the worse one, because the branch ends up changing nothing at all while its commit subject and PR description still claim two rows.
 Do not lean on rule 8 for the first: it covers one label out of the whole vocabulary, and #1471 recorded the gate subset passing on the damaged tree even though both lost rows carried it.
 That tree was repaired before it was ever committed, so which of the two accounts of rule 8 applies there is no longer measurable.</p>
-<p><strong>So reconcile the row set, not the markers.</strong> Two comparisons name every casualty, and neither needs a count you memorised before the rebase started:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="c1"># items your branch had and no longer has</span>
-<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>comm<span class="w"> </span>-23<span class="w"> </span>&lt;<span class="o">(</span>git<span class="w"> </span>ls-tree<span class="w"> </span>--name-only<span class="w"> </span>ORIG_HEAD<span class="w"> </span>docs/queue/<span class="w"> </span><span class="p">|</span><span class="w"> </span>sort<span class="o">)</span><span class="w"> </span>&lt;<span class="o">(</span>git<span class="w"> </span>ls-tree<span class="w"> </span>--name-only<span class="w"> </span>HEAD<span class="w"> </span>docs/queue/<span class="w"> </span><span class="p">|</span><span class="w"> </span>sort<span class="o">)</span>
-<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="c1"># items main has and your branch does not</span>
-<a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a>comm<span class="w"> </span>-13<span class="w"> </span>&lt;<span class="o">(</span>git<span class="w"> </span>ls-tree<span class="w"> </span>--name-only<span class="w"> </span>HEAD<span class="w"> </span>docs/queue/<span class="w"> </span><span class="p">|</span><span class="w"> </span>sort<span class="o">)</span><span class="w"> </span>&lt;<span class="o">(</span>git<span class="w"> </span>ls-tree<span class="w"> </span>--name-only<span class="w"> </span>origin/main<span class="w"> </span>docs/queue/<span class="w"> </span><span class="p">|</span><span class="w"> </span>sort<span class="o">)</span>
+<p><strong>So reconcile the row set, not the markers.</strong> <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/docs/reconcile-queue-rows.sh"><code>reconcile-queue-rows.sh</code></a> does it, and needs no count you memorised before the rebase started:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>make<span class="w"> </span>queue-reconcile
 </code></pre></div>
-<p>Every path the first prints should be one <code>main</code> closed; every path the second prints should be one <em>you</em> closed.
-Anything else is collateral from the resolution.
-Run them before <code>git rebase --continue</code>, and promptly either way: the next rebase or merge rewrites <code>ORIG_HEAD</code>.</p>
+<p>Run it while the conflict is still open — before <code>git rebase --continue</code> or <code>git commit</code> — or immediately after.
+It names every item that left your row set and every item the other side has that you do not, and says which of them the two sides account for: an item is accounted for when the side that no longer has it is the side that deleted it.
+Anything else is collateral from the resolution, which it prints with the ref that still holds the file, and exits 1 for.</p>
+<p><strong>Which comparison is right depends on where the resolution currently lives, which is why this is a script rather than two commands to type.</strong> Measured on git 2.55.0:</p>
+<table>
+<thead>
+<tr>
+<th>State</th>
+<th>The row set before</th>
+<th>Your row set now</th>
+<th>The other side</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Rebase in progress</td>
+<td><code>.git/rebase-*/orig-head</code></td>
+<td>the <strong>index</strong></td>
+<td><code>.git/rebase-merge/onto</code></td>
+</tr>
+<tr>
+<td>Merge in progress</td>
+<td><code>HEAD</code></td>
+<td>the <strong>index</strong></td>
+<td><code>MERGE_HEAD</code></td>
+</tr>
+<tr>
+<td>Neither</td>
+<td><code>ORIG_HEAD</code></td>
+<td><code>HEAD</code></td>
+<td><code>origin/main</code></td>
+</tr>
+</tbody>
+</table>
+<p>Mid-operation the resolution is in the index, and <code>HEAD</code> is the replay so far — it excludes the very commit being resolved.
+Reading <code>HEAD</code> there reports every row the branch adds as a casualty: on a fixture whose branch files two items and whose <code>main</code> closes one, it names three suspects where the index names the one that is real.
+That is the reading Q840 shipped, at exactly the moment it told you to run it, so the false positives arrive mixed in with the true one they bury.
+Only the third row needs <code>ORIG_HEAD</code>, which the next rebase or merge overwrites — pass <code>--base</code> to name the pre-resolution tip by hand once it is gone.</p>
+<p>A read it cannot take exits 2 rather than guessing: an item still unmerged under the store, a branch that never merged the other side at all, or a ref that does not resolve.
+<code>reconcile-queue-rows-test.sh</code> pairs every case, and drives real <code>git rebase</code> and <code>git merge</code> conflicts rather than staging a tree by hand, since a hand-staged fixture agrees with an implementation reading either <code>HEAD</code> or the index and cannot see the distinction under test.</p>
+<p><strong>No CI gate can run any of this</strong>, which is why it is a local command and not a check: every ref it reads is gone by push time.
+Nor is widening rule 8 past <code>flake</code> a substitute, since deleting an item is how an item closes: the rule would then refuse every closure, which gates a different thing entirely.</p>
 <p>The diffstat answers the same question and is what actually caught #1471 (<code>1 insertion, 3 deletions</code> on a branch that adds two rows), but it only fires if you knew the expected counts going in, and it names no IDs.
 Either way the principle is <a href="../testing/#a-bulk-mechanical-change-proves-itself-by-reconciliation-not-by-an-empty-leftover-query">the one bulk mechanical changes already use</a>: a scan that finds nothing cannot distinguish "nothing was lost" from "this instrument cannot see the loss".</p>
 <h2 id="when-the-context-doesnt-fit-write-the-doc--whatever-the-items-size">When the context doesn't fit, write the doc — whatever the item's size<a class="headerlink" href="#when-the-context-doesnt-fit-write-the-doc--whatever-the-items-size" title="Permanent link">&para;</a></h2>

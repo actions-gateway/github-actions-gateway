@@ -2891,6 +2891,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="The out-of-module test read gate">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#the-integration-tier-has-the-same-defect-the-e2e-tier-has-no-cache-to-defeat" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The integration tier has the same defect; the e2e tier has no cache to defeat
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
         
           <li class="md-nav__item">
@@ -4712,12 +4729,24 @@ That is the wrong granularity, because a package is the smallest thing <code>-co
 <p><code>go list</code> ignores directories named <code>testdata</code>, so a symlink there cannot pull another module into a build.
 The recorded key is the target's <code>stat</code> (size, mode, mtime) rather than its content, so a regeneration that rewrites a file byte-identically still re-runs the package.
 That is the safe direction, and it is why <code>make manifests</code> re-runs the CRD schema tests.</p>
-<p><code>make test-cache-inputs-check</code> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/go/check-test-cache-inputs.sh"><code>scripts/go/check-test-cache-inputs.sh</code></a>) fails when a unit test reaches out directly.
+<p><code>make test-cache-inputs-check</code> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/go/check-test-cache-inputs.sh"><code>scripts/go/check-test-cache-inputs.sh</code></a>) fails when a cached test reaches out directly.
 It covers both spellings: a <code>"../x"</code> literal, and <code>filepath.Join("..", "x")</code>, whose leading segments are separate arguments and so match no single literal.
 A lexical sweep cannot tell a path that is read from one that is data, so the exceptions are an allowlist carrying that judgement rather than a pattern.
 <code>cmd/worker/worker_test.go</code>'s <code>"../../etc/passwd"</code> is a map key in a path-traversal fixture, and nothing opens it.
-Files behind <code>//go:build integration</code> or <code>e2e</code> are skipped, because those tiers share the defect but not the invocation (Q902).
+Files behind <code>//go:build e2e</code> are skipped; the <code>integration</code> tier is covered (Q902, below).
 <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/go/check-test-cache-inputs-test.sh"><code>check-test-cache-inputs-test.sh</code></a> asserts both directions against fixture repos, and counts the allowlist so a bulk exemption fails rather than passing quietly.</p>
+<h4 id="the-integration-tier-has-the-same-defect-the-e2e-tier-has-no-cache-to-defeat">The integration tier has the same defect; the e2e tier has no cache to defeat<a class="headerlink" href="#the-integration-tier-has-the-same-defect-the-e2e-tier-has-no-cache-to-defeat" title="Permanent link">&para;</a></h4>
+<p>Measured 2026-08-18 (Q902) on <code>cmd/gmc/internal/controller/integration</code>, whose <code>TestCRDSchemaStale_PrunedBoundaryFieldIsDetected</code> installed CRDs from <code>../../../../../api/config/crd</code>.
+A warm run, then a second reporting <code>(cached)</code>; renaming the <code>spec.runnerGroup</code> property in that out-of-module CRD and running again still reported <code>(cached)</code> and exited 0, while <code>-count=1</code> over the same tree failed the test.
+So the tier caches, and an out-of-module CRD change replayed a stale green: the same defect as the unit tier, reached through the same fix.</p>
+<p>The exposed invocation is a direct <code>go test -tags integration</code>, or a bare <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/go/go-test-integration.sh"><code>go-test-integration.sh</code></a>, which deliberately does not force <code>-count=1</code> so an unchanged tree replays in seconds.
+CI is not exposed: <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/integration-test.yml"><code>integration-test.yml</code></a> passes <code>-count=1</code>.
+Nor, in practice, is <code>make test-integration</code>, because its <code>manifests</code>/<code>generate</code> prerequisite rewrites an in-module CRD file byte-identically on every invocation and the recorded key is the <code>stat</code>.
+Measured on the same package: <code>(cached)</code>, then one <code>make -C cmd/gmc generate</code> against an otherwise unchanged tree, then a full re-run.
+That is incidental protection rather than a guarantee, which is why the fix belongs at the suite.</p>
+<p><strong>The e2e tier is not exposed at all.</strong> <code>make e2e</code> runs <code>ginkgo run</code>, which compiles with <code>go test -c</code> and execs the binary itself, and a compiled binary run directly consults no test-result cache.
+Measured both ways on a throwaway module: <code>go test</code> twice reports <code>(cached)</code> on the second run, while <code>go test -c</code> plus two execs of the binary runs the test both times.
+The two <code>runtime.Caller</code> repo-root lookups in <code>cmd/gmc/test/e2e</code> are therefore correct as they stand.</p>
 <h3 id="the-claude-usage-snapshot-gate">The claude-usage snapshot gate<a class="headerlink" href="#the-claude-usage-snapshot-gate" title="Permanent link">&para;</a></h3>
 <p><code>make claude-usage-test</code> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/agent/claude-usage-test.sh"><code>scripts/agent/claude-usage-test.sh</code></a>) runs the Python unit tests in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/claude-usage/README.md"><code>claude-usage/</code></a> — the only tests in the repo that aren't Go or bash.
 That module is the committed record of the project's Claude Code usage, and for days whose session transcripts have since been archived its CSVs are the <strong>only</strong> surviving copy, so <code>compute_metrics.py</code>'s merge rule (never revise a recorded day downward, never collapse two machines' shares of one day) is load-bearing.

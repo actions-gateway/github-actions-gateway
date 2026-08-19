@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q858/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q936/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>Reconciling a hand-resolved keyed merge's row set has no automated form - GitHub Actions Gateway</title>
+        <title>The test-cache-input gate cannot see a runtime.Caller-derived repo root - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#reconciling-a-hand-resolved-keyed-merges-row-set-has-no-automated-form" class="md-skip">
+        <a href="#the-test-cache-input-gate-cannot-see-a-runtimecaller-derived-repo-root" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Reconciling a hand-resolved keyed merge's row set has no automated form
+              The test-cache-input gate cannot see a runtime.Caller-derived repo root
             
           </span>
         </div>
@@ -2567,10 +2567,14 @@
   
 
 
-<h1 id="reconciling-a-hand-resolved-keyed-merges-row-set-has-no-automated-form">Reconciling a hand-resolved keyed merge's row set has no automated form<a class="headerlink" href="#reconciling-a-hand-resolved-keyed-merges-row-set-has-no-automated-form" title="Permanent link">&para;</a></h1>
-<p>Q840 shipped the manual <code>comm</code> against <code>ORIG_HEAD</code>; no CI gate can run it, since <code>ORIG_HEAD</code> is gone by push time.
-Needs a local form.
-Measured: rule 8 covers <code>flake</code> only, so every other dropped row passes clean.</p>
+<h1 id="the-test-cache-input-gate-cannot-see-a-runtimecaller-derived-repo-root">The test-cache-input gate cannot see a runtime.Caller-derived repo root<a class="headerlink" href="#the-test-cache-input-gate-cannot-see-a-runtimecaller-derived-repo-root" title="Permanent link">&para;</a></h1>
+<p>The gate is a lexical sweep for a <code>"../x"</code> literal and for <code>filepath.Join("..", "x")</code>, so it is blind to a path built from a variable, and above all to the repo root a suite derives from <code>runtime.Caller(0)</code>.
+That shape is already in the tree, at <code>cmd/gmc/test/e2e/e2e_suite_test.go:317</code> and <code>cmd/gmc/test/e2e/migration_v1_to_v2_test.go:278</code>.</p>
+<p>Not exposed today: both sites sit behind <code>//go:build e2e</code>, and the e2e tier consults no test-result cache at all, because <code>ginkgo run</code> compiles with <code>go test -c</code> and execs the binary itself (measured, Q902).
+The gap is that Q902 widened the gate to the <code>integration</code> tier, which <em>is</em> cached, so the same idiom in an integration test would pass the gate silently while replaying a stale green.</p>
+<p>Fix is a detector that reads the shape rather than the spelling: flag <code>runtime.Caller</code> in a test file outside the e2e tier, or resolve paths through the AST instead of a regex.
+Measure first by grepping for the idiom under the cached tiers, and confirm it is genuinely absent before building anything, since a gate for a pattern nobody uses is cost without cover.
+Mechanism: <a href="../../development/testing/#the-out-of-module-test-read-gate">testing.md § The out-of-module test read gate</a>.</p>
 
 
 

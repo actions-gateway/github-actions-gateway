@@ -2668,14 +2668,6 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>Measured 2026-08-18: <code>c99129aa</code> passed <code>lint</code> in run 32145897225 and failed in 32172968731, <code>nolintlint</code> calling two staticcheck directives …</td>
 </tr>
 <tr>
-<td><a href="Q902/">Q902</a></td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/go/go-test-integration.sh">The integration and e2e tiers drop the same out-of-module cache inputs</a></td>
-<td><code>ci</code> <code>tests</code> <code>debt</code></td>
-<td>🔲</td>
-<td>M</td>
-<td>Q895 fixed the cached unit tier and scoped the tagged tiers out, because they share the defect but not the invocation.</td>
-</tr>
-<tr>
 <td><a href="Q820/">Q820</a></td>
 <td><a href="../plan/q820-scripts-test-temp-file-flake/"><code>git-merge-plan-index-test</code> dies on a temp-file error under the fan-out</a></td>
 <td><code>flake</code> <code>ci</code></td>
@@ -2812,14 +2804,6 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>Measured 2026-08-12 closing Q821: <code>features.md</code> points at the guide and the admission gate reads <code>hard - used</code> against the worker …</td>
 </tr>
 <tr>
-<td><a href="Q858/">Q858</a></td>
-<td><a href="../development/maintaining-backlog/#a-hand-resolved-conflict-drops-rows-the-markers-never-named">Reconciling a hand-resolved keyed merge's row set has no automated form</a></td>
-<td><code>ci</code> <code>debt</code></td>
-<td>🔲</td>
-<td>S</td>
-<td>Q840 shipped the manual <code>comm</code> against <code>ORIG_HEAD</code>; no CI gate can run it, since <code>ORIG_HEAD</code> is gone by push time.</td>
-</tr>
-<tr>
 <td><a href="Q861/">Q861</a></td>
 <td><a href="../development/maintaining-backlog/#a-rows-asserted-defect-is-a-claim-not-a-finding">Refuting a measurement obliges a sweep of the artifacts it justified</a></td>
 <td><code>docs</code> <code>debt</code> <code>retro</code></td>
@@ -2850,14 +2834,6 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>🔲</td>
 <td>S</td>
 <td>Measured 2026-08-14: #1526 changed the platform dashboard with no <code>docs/assets/</code> render, so the screenshot lost a panel series.</td>
-</tr>
-<tr>
-<td><a href="Q910/">Q910</a></td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/manifest/check-promql.sh">Parse the shipped dashboards' PromQL, not just the rules file</a></td>
-<td><code>ci</code> <code>debt</code></td>
-<td>🔲</td>
-<td>S</td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/manifest/check-promql.sh">check-promql.sh</a> pins <code>RULE_FILE</code> to <code>deploy/monitoring/prometheusrule.yaml</code>, so <code>promqlcheck</code> …</td>
 </tr>
 <tr>
 <td><a href="Q372/">Q372</a></td>
@@ -2898,14 +2874,6 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>🔲</td>
 <td>S</td>
 <td>Phase 1 vendored <code>queue.py</code>, its rank vectors and two agent scripts byte-identical so an upstream fix lands as a clean overwrite; nothing …</td>
-</tr>
-<tr>
-<td><a href="Q892/">Q892</a></td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/docs/git-merge-plan-index-test.sh">A suite that copies a gate into a fixture is invisible to grep</a></td>
-<td><code>ci</code> <code>tests</code> <code>debt</code> <code>retro</code></td>
-<td>🔲</td>
-<td>S</td>
-<td>A suite that copies a gate into a fixture inherits its inputs, so changing one breaks it with no textual reference to grep.</td>
 </tr>
 <tr>
 <td><a href="Q918/">Q918</a></td>
@@ -3090,6 +3058,14 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>🔲</td>
 <td>S</td>
 <td><code>isContextArg</code> keys on a first arg named <code>ctx</code>-ish or a <code>context.*</code> call, so <code>Client.Delete(c, pod)</code> is skipped silently: fail-open inside …</td>
+</tr>
+<tr>
+<td><a href="Q936/">Q936</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/go/check-test-cache-inputs.py">The test-cache-input gate cannot see a runtime.Caller-derived repo root</a></td>
+<td><code>ci</code> <code>tests</code> <code>debt</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>The gate is a lexical sweep for a <code>"../x"</code> literal and for <code>filepath.Join("..", "x")</code>, so it is blind to a path built from a variable, and …</td>
 </tr>
 <tr>
 <td><a href="Q793/">Q793</a></td>
@@ -3850,6 +3826,14 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>🔲</td>
 <td>S</td>
 <td>Its archival protocol reads "if <code>docs/STATUS.md</code> still references it", and states <code>plan-index-check</code>'s pre-Q889 direction; invariant 1 now …</td>
+</tr>
+<tr>
+<td><a href="Q940/">Q940</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/README.md">scripts/README.md still says check-plan-index reads docs/STATUS.md</a></td>
+<td><code>docs</code> <code>debt</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>The registry entry has invariant 1 reading <code>docs/STATUS.md</code> and warns that pointing it at items alone reports 21 plans unreferenced; Q889 …</td>
 </tr>
 <tr>
 <td><a href="Q911/">Q911</a></td>
