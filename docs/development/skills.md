@@ -14,7 +14,7 @@ Every entry below is a pointer plus the local usage, and nothing more.
 
 Two classes, and they answer differently.
 
-**Working-method skills cost a contributor nothing**: `deslop`, `verify-claims`, `rendered-page-review`, `tech-docs-layers`, `github-issue-filer`, `session-retro`.
+**Working-method skills cost a contributor nothing**: `deslop`, `readability`, `semantic-remediation`, `verify-claims`, `rendered-page-review`, `tech-docs-layers`, `github-issue-filer`, `session-retro`.
 They change how an *agent* works, never what a contributor must do, and the page that invokes each one carries this repo's half in full.
 If one of those pages ever reads as though the skill is required to follow it, that page has a defect, so file it.
 
@@ -50,18 +50,28 @@ Listed alphabetically; each heading is a stable anchor.
 
 Removes AI tells from prose, and supplies the writing system that avoids them in the first place.
 Used here for anything a reader outside the work will read.
-[release.md](../operations/release.md) calls for it over a draft release note, the most-read prose the project ships.
+It is the third of the four prose passes a release note goes through: [release.md § The prose passes](../operations/release.md#the-prose-passes).
 
 ### `github-issue-filer`
 
 Files an issue to any GitHub repo through `gh`, matching the target's template and searching for duplicates first.
 Used here when repo tooling misbehaves and the fix belongs upstream rather than in a local workaround.
 
+### `readability`
+
+Structures prose so a reader who did not do the work can find it, follow it, and act on it.
+Second of the four prose passes over a release note, where the reader is an operator deciding what an upgrade costs them: [release.md § The prose passes](../operations/release.md#the-prose-passes).
+
 ### `rendered-page-review`
 
 Reviews a page as a reader meets it: rendered, at real viewport widths, skimmed rather than read.
 Everything under `docs/` publishes to [actions-gateway.com](https://actions-gateway.com/), so editing one of these files edits a live page.
 [website.md](website.md#measure-the-render-the-source-cannot-answer-these-questions) holds the repo-specific probes it runs.
+
+### `semantic-remediation`
+
+Finds sentences that read fluently and fall apart on a literal read, then repairs them in a separate pass.
+Last of the four prose passes over a release note, after the other three, because editing is what introduces the defects it looks for: [release.md § The prose passes](../operations/release.md#the-prose-passes).
 
 ### `session-backlog`
 
@@ -92,6 +102,7 @@ The six-layer model for repo-resident documentation, applied when adding, restru
 Checks that the evidence under a statement could have shown the opposite, before the statement decides anything.
 Fires before reporting a gate result, diagnosing a failure, or writing a test or gate.
 [testing.md § Diagnosing failures](testing.md#diagnosing-failures-measure-before-asserting-a-root-cause) keeps this repo's measured cases (which run, which PR, what the numbers were) for the rules the skill states in general.
+It is also the first of the four prose passes over a release note, where the claim being checked is one the project is about to publish: [release.md § The prose passes](../operations/release.md#the-prose-passes).
 
 ## Keeping this page honest
 

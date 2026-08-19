@@ -108,6 +108,9 @@ Land that in `docs/releases/vX.Y.Z.md`, then reconcile it against what actually 
 scripts/release/check-release-digests.sh vX.Y.Z
 ```
 
+**Four prose passes over the draft before it publishes**, in order: `verify-claims`, `readability`, `deslop`, then `semantic-remediation` last, since the editing passes are what introduce the defects it looks for.
+[release.md § The prose passes](../../../docs/operations/release.md#the-prose-passes) says what each one owns.
+
 Then publish the body.
 This works because immutability freezes assets and the tag but leaves title and notes editable:
 

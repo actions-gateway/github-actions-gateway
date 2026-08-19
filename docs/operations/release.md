@@ -136,7 +136,7 @@ Reviewing it at the first RC and recording the verdict then is what keeps that c
 **A draft of the notes belongs at the first RC too, for the same reason and a stronger one.** Writing the notes is what forces the release's claims to be *stated*, and a stated claim is the only kind anyone can check.
 Reviewing that draft is therefore a discovery step, not a formatting pass: it is reliably where the release's remaining defects surface, because nothing else in pre-flight asks the product to describe itself.
 
-Interrogate the draft with three questions.
+Interrogate the draft with three questions, through [`verify-claims`](../development/skills.md#verify-claims); the other three prose passes bind at the stable tag, when the text publishes.
 Each of them found something real in the 1.5 cycle, and each found it *after* the candidate was cut, which is what made it expensive:
 
 1. **Does every claim in it still hold?** The 1.5 draft said multi-label registration closed a gap, and checking the neighbouring claims found `why-gag.md` asserting a capability was classic-only that had reached both tiers a release earlier.
@@ -964,7 +964,20 @@ Confirm they are **index** digests, not per-arch manifests — the mediaType mus
 A per-arch digest pins the workload to one architecture and fails to schedule on the other.
 This makes the tagged copy of the notes file permanently one section behind the published body, which is intended; `docs/releases/README.md` § Image digests explains why.
 
-**Run the `deslop` skill over the draft before publishing.** Release notes are the most-read prose the project ships.
+##### The prose passes
+
+Release notes are the most-read prose the project ships, and four skills run over the draft before publishing.
+Each owns a different defect class, so none of them substitutes for another, and the order is load-bearing: the first can change what the notes *say*, the rest change how they say it.
+
+1. [`verify-claims`](../development/skills.md#verify-claims), which re-derives every count, version, coverage statement and direction-of-change instead of carrying it forward.
+   Same pass as the [pre-flight interrogation](#1-pre-flight), re-run over the text that will actually publish, because the draft has been edited since.
+2. [`readability`](../development/skills.md#readability), for structure: what a reader meets before the truncation cut, whether a caveat survives being read alone, whether a term is explained where it is introduced.
+3. [`deslop`](../development/skills.md#deslop), for vocabulary and sentence mechanics.
+4. [`semantic-remediation`](../development/skills.md#semantic-remediation) last, over the edited text: sentences that read fluently and fall apart on a literal read.
+   It runs after the other three rather than beside them, because editing is what introduces the defects it looks for.
+
+The mechanical checks below settle what a machine can settle.
+These four are the half it cannot, and running them is not optional on a stable tag.
 
 ##### Before publishing: the mechanical checks
 

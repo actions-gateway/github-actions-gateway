@@ -68,9 +68,10 @@ At a candidate, these bind:
 
 - **`main` green and the version chosen**: every tag.
 - **API surface review**: pulled forward, because a rename decided after publication costs a new candidate.
-- **The notes draft, interrogated**: the discovery step, not a formatting pass.
+- **The notes draft, interrogated** through `verify-claims`: the discovery step, not a formatting pass.
   Ask what each claim rests on; re-derive every number rather than copying it forward.
   Every wrong figure in the 1.5 notes was a *derived* value gone stale, not a typo.
+  The other three prose passes (`readability`, `deslop`, `semantic-remediation`) bind at the stable tag, when the text publishes.
 
 The rest are stable-tag obligations.
 Say which you are deferring and why.
