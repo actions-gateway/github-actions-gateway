@@ -21,12 +21,14 @@ run:
   # harness, or the load harness — the same blind spot `go vet` had before Q404
   # closed it (see docs/development/testing.md#the-build-tag-gate).
   #
-  # Enabling all three at once is sound because they select DISJOINT package
-  # trees rather than alternative implementations of one package: no first-party
-  # file is constrained on the negation of another's tag. Keep it that way — the
-  # same invariant scripts/go/go-vet-tags.sh depends on, and that script's coverage
-  # assertion is what fails when a new tag appears, so this list stays in sync
-  # with its BUILD_TAGS by way of that gate.
+  # Enabling every tag at once is sound because each one only ADDS files to a
+  # build: no first-party file is constrained on the negation of another's tag.
+  # Keep it that way — the same invariant scripts/go/go-vet-tags.sh depends on.
+  #
+  # That script asserts this list names the same tags as its own BUILD_TAGS
+  # before it vets, so the two cannot drift (Q532). Its coverage assertion does
+  # not: that one reads the Go tree, where a tag added to BUILD_TAGS alone is
+  # already compiled, and says nothing about which tags reach the linters.
   build-tags:
     - integration
     - e2e
