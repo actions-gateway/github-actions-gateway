@@ -3468,14 +3468,6 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td><code>STATUS_GATES</code> retired with Q889 and <code>gate-list.sh</code> no longer mentions it, so the annotation gates nothing: <code>make gate-lists-check</code> passes …</td>
 </tr>
 <tr>
-<td><a href="Q920/">Q920</a></td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/ci/gate-list.sh"><code>gate-list.sh</code> never checks <code>DOCS_GATES</code> against its subset claim</a></td>
-<td><code>ci</code> <code>debt</code></td>
-<td>🔲</td>
-<td>S</td>
-<td><code>DOCS_GATES</code> says in its own comment that every entry is also in <code>CHECK_FAST_GATES</code>, "so like QUEUE_GATES this is a strict subset of `make …</td>
-</tr>
-<tr>
 <td><a href="Q397/">Q397</a></td>
 <td><a href="../plan/gke-dogfood/#recreate-is-proven-end-to-end-q380"><code>validate-cluster.sh</code> metrics-server retry, on a from-zero bootstrap</a></td>
 <td><code>dogfood</code></td>
@@ -3484,12 +3476,28 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td><strong>Event:</strong> the next dogfood recreate bootstraps from zero.</td>
 </tr>
 <tr>
+<td><a href="Q930/">Q930</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/ci/gate-list.sh"><code>gate-lists-check</code> cannot see a gate that hardcodes the page it reads</a></td>
+<td><code>ci</code> <code>debt</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>Rules 7 and 10 derive a gate's file set from the pathspecs its script hands git, which is the right question for a gate that walks a tree …</td>
+</tr>
+<tr>
 <td><a href="Q448/">Q448</a></td>
 <td><a href="../plan/runner-sizing-profiles/#the-live-path-and-why-the-rc-gate-could-not-have-found-this">Tighten the e2e NodeShare envelope against a measured allocatable</a></td>
 <td><code>tests</code> <code>dogfood</code></td>
 <td>💤</td>
 <td>S</td>
 <td><strong>Event:</strong> a dogfood turn-up stands an e2e node up — raising the envelope needs one live allocatable reading, less the dind sidecar and …</td>
+</tr>
+<tr>
+<td><a href="Q938/">Q938</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.gitattributes">The merge drivers resolve nothing on GitHub, where the merges happen</a></td>
+<td><code>ci</code> <code>debt</code></td>
+<td>🔲</td>
+<td>M</td>
+<td>Four files are routed to a merge driver so concurrent PRs appending entries merge as a set rather than by line position, and …</td>
 </tr>
 <tr>
 <td><a href="Q418/">Q418</a></td>

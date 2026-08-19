@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q920/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q938/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>gate-list.sh never checks DOCS_GATES against its subset claim - GitHub Actions Gateway</title>
+        <title>The merge drivers resolve nothing on GitHub, where the merges happen - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#gate-listsh-never-checks-docs_gates-against-its-subset-claim" class="md-skip">
+        <a href="#the-merge-drivers-resolve-nothing-on-github-where-the-merges-happen" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              gate-list.sh never checks DOCS_GATES against its subset claim
+              The merge drivers resolve nothing on GitHub, where the merges happen
             
           </span>
         </div>
@@ -2567,11 +2567,12 @@
   
 
 
-<h1 id="gate-listsh-never-checks-docs_gates-against-its-subset-claim"><code>gate-list.sh</code> never checks <code>DOCS_GATES</code> against its subset claim<a class="headerlink" href="#gate-listsh-never-checks-docs_gates-against-its-subset-claim" title="Permanent link">&para;</a></h1>
-<p><code>DOCS_GATES</code> says in its own comment that every entry is also in <code>CHECK_FAST_GATES</code>, "so like QUEUE_GATES this is a strict subset of <code>make check</code> and never a second opinion".
-It is not: <code>release-notes-check</code> is in <code>DOCS_GATES</code> and in no other list (measured 2026-08-18 against <code>mk/gate-lists.mk</code>), so <code>make docs-gates</code> runs a gate <code>make check</code> does not.
-<code>gate-list.sh</code> takes <code>--fast</code>, <code>--heavy</code>, <code>--queue</code> and <code>--suites</code>; its rules 4 and 7 hold <code>QUEUE_GATES</code> to that same claim in both directions, and nothing passes <code>DOCS_GATES</code> in at all.
-Add a <code>--docs</code> argument and give it rules 4 and 7's treatment, then settle whether <code>release-notes-check</code> joins <code>CHECK_FAST_GATES</code> or leaves <code>DOCS_GATES</code>.</p>
+<h1 id="the-merge-drivers-resolve-nothing-on-github-where-the-merges-happen">The merge drivers resolve nothing on GitHub, where the merges happen<a class="headerlink" href="#the-merge-drivers-resolve-nothing-on-github-where-the-merges-happen" title="Permanent link">&para;</a></h1>
+<p>Four files are routed to a merge driver so concurrent PRs appending entries merge as a set rather than by line position, and <code>maintaining-backlog.md</code> already records that the drivers cannot help GitHub, which cannot see a clone's config.
+What was never measured is the cost, which lands on exactly the batches the routing exists to serve: of seven PRs open together on 2026-08-18, five conflicted on a routed file under a <code>merge-tree</code> with every driver disabled — <code>scripts/README.md</code> in five of them and <code>mk/gate-lists.mk</code> in four — so each has to rebase behind the one before it, at a full CI cycle each.
+The trap is that no clone can see it: with the drivers configured every one of those merges resolves clean, and <code>mergeStateStatus</code> reported <code>CLEAN</code> for all eight PRs on one reading and <code>UNKNOWN</code> for all fourteen on another, never the conflict.
+Only <code>git -c merge.&lt;name&gt;.driver=false merge-tree</code> shows the state GitHub will act on, so a session that trusts either signal rebases when it is told to rather than when it is needed.
+The measurement is the deliverable here; the repair is open, and the plausible directions (one entry per line, sorted; or dropping the routing and accepting line-position conflicts) each touch all four routed files and want their own design pass.</p>
 
 
 
