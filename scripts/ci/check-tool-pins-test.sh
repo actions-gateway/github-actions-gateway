@@ -139,6 +139,51 @@ expect unparseable 2 'a makefile make cannot parse refuses' \
 		'$(TRIVY):' \
 		'	touch $@')"
 
+# The parser against a GNU make 4.x database. This box has only 3.81, which
+# prints a target-specific variable as a comment; 4.x prints it in rule
+# position, and read naively that makes `TOOL_PKG`, `:=` and the package path
+# three prerequisites of .build/mdreflow. Every Go tool rule failed that way on
+# CI run 32275796483 while this same suite passed locally, so the shape is
+# asserted here rather than left to CI.
+#
+# Reconstructed from that run's output, not captured: no make 4.x is available
+# here and installing one is not this gate's business. It therefore pins the
+# defect CI found and cannot vouch for the rest of 4.x's formatting, which is
+# why the gate also runs in CI.
+db="$FIXTURE_DIR/make4.db"
+{
+	printf '# Files\n'
+	printf '\n'
+	printf '%s/.build/mdreflow: TOOL_PKG := github.com/jbeda/mdreflow/cmd/mdreflow\n' "$REPO_ROOT"
+	printf '#  Implicit rule search has not been done.\n'
+	printf '\n'
+	printf '%s/.build/mdreflow: %s/tools/go.mod %s/tools/vendor/modules.txt\n' \
+		"$REPO_ROOT" "$REPO_ROOT" "$REPO_ROOT"
+	printf '#  Implicit rule search has not been done.\n'
+} > "$db"
+
+rules="$("$CHECKER" --database "$db" --print-rules)"
+if grep -qE 'TOOL_PKG|:=' <<<"$rules"; then
+	printf 'FAIL: make4-parse — a target-specific variable was read as prerequisites\n' >&2
+	printf '%s\n' "$rules" | sed 's/^/       /' >&2
+	((fails++)) || true
+elif [[ "$rules" != ".build/mdreflow|tools/go.mod tools/vendor/modules.txt" ]]; then
+	printf 'FAIL: make4-parse — expected the real rule alone, got:\n' >&2
+	printf '%s\n' "$rules" | sed 's/^/       /' >&2
+	((fails++)) || true
+else
+	printf 'ok: make4-parse — a make 4.x target-specific variable is not read as prerequisites\n'
+fi
+
+rc=0
+"$CHECKER" --database "$db" > /dev/null 2>&1 || rc=$?
+if ((rc != 2)); then
+	printf 'FAIL: print-rules-guard — --database without --print-rules: expected rc 2, got %d\n' "$rc" >&2
+	((fails++)) || true
+else
+	printf 'ok: print-rules-guard — --database alone is not a check (rc 2)\n'
+fi
+
 rc=0
 "$CHECKER" --makefile "$REPO_ROOT/Makefile" --nonsense > /dev/null 2>&1 || rc=$?
 if ((rc != 2)); then

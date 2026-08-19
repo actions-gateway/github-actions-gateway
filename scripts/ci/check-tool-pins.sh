@@ -19,6 +19,16 @@
 # share are make's problem rather than a pattern's — the parser that stops
 # matching is this gate's own failure mode, and it would report green.
 #
+# The database's shape is version-dependent in one place that matters. A
+# target-specific variable ($(MDREFLOW): TOOL_PKG := ...) prints as a comment
+# under GNU make 3.81, the make macOS ships, and as a rule-shaped
+# `target: VAR := value` line under 4.x, which CI runs. Read naively the 4.x
+# form makes `TOOL_PKG`, `:=` and the package path three prerequisites of
+# .build/mdreflow; measured on run 32275796483, where every Go tool rule failed
+# that way while the same tree passed locally. Assignment lines are dropped
+# below, and parse_rules is exercised against a captured 4.x database so the
+# shape this box cannot produce is still asserted.
+#
 # A tool binary is a `.build/` target that is not a prerequisite of another
 # `.build/` target. That is what separates the tools from the pin sentinels
 # ($(COSIGN_PIN)), which are prerequisites and correctly carry none themselves.
@@ -38,6 +48,12 @@
 #
 # Usage:
 #   check-tool-pins.sh [--makefile PATH]
+#   check-tool-pins.sh --database PATH --print-rules
+#
+# --database reads a captured `make -p` dump instead of invoking make, and
+# --print-rules prints the parsed `target|prereqs` lines. Together they are the
+# test seam for the parser, which has to hold across make versions this machine
+# cannot both run.
 #
 # Exits 1 on a finding, and 2 when the read yielded no `.build/` tool rules at
 # all — a database this gate could not parse must not report every rule pinned.
@@ -48,6 +64,8 @@ REPO_ROOT="$(git rev-parse --show-toplevel)"
 cd "$REPO_ROOT"
 
 MAKEFILE="Makefile"
+DATABASE=""
+PRINT_RULES=""
 # Overriding every version variable at once keeps the probe to one extra make
 # run. The value only has to differ from the real pin; it is never built.
 PROBE_VERSION="__tool_pin_probe__"
@@ -58,6 +76,13 @@ while (($# > 0)); do
 		MAKEFILE="$2"
 		shift
 		;;
+	--database)
+		DATABASE="$2"
+		shift
+		;;
+	--print-rules)
+		PRINT_RULES=1
+		;;
 	*)
 		printf 'check-tool-pins.sh: unknown argument: %s\n' "$1" >&2
 		exit 2
@@ -66,7 +91,22 @@ while (($# > 0)); do
 	shift
 done
 
-if [[ ! -f "$MAKEFILE" ]]; then
+# The two are one seam, and neither half is a check on its own: --database with
+# no --print-rules would parse a dump and exit 0 having asserted nothing, which
+# is the shape every refusal in this script exists to prevent.
+if [[ -n "$PRINT_RULES" && -z "$DATABASE" ]]; then
+	printf 'check-tool-pins.sh: --print-rules requires --database\n' >&2
+	exit 2
+fi
+if [[ -n "$DATABASE" && -z "$PRINT_RULES" ]]; then
+	printf 'check-tool-pins.sh: --database is a parser seam and requires --print-rules; it checks nothing on its own\n' >&2
+	exit 2
+fi
+if [[ -n "$DATABASE" && ! -f "$DATABASE" ]]; then
+	printf 'tool-pins: %s does not exist, so there is no database to parse\n' "$DATABASE" >&2
+	exit 2
+fi
+if [[ -z "$DATABASE" && ! -f "$MAKEFILE" ]]; then
 	printf 'tool-pins: %s does not exist, so this gate would check nothing\n' "$MAKEFILE" >&2
 	exit 2
 fi
@@ -99,6 +139,10 @@ build_rules() {
 			i = index($0, ":")
 			target = substr($0, 1, i - 1)
 			prereqs = substr($0, i + 1)
+			# A target-specific variable, which GNU make 4.x prints in this
+			# rule position: `target: VAR := value`. Its right-hand side is a
+			# value, not a prerequisite list.
+			if (prereqs ~ /^[ \t]*[A-Za-z_][A-Za-z0-9_]*[ \t]*[:+?]?=/) next
 			# Order-only prerequisites do not make a target out of date, so
 			# everything after the pipe is dropped before the count.
 			j = index(prereqs, "|")
@@ -124,6 +168,12 @@ version_vars() {
 		{ from_makefile = 0 }
 	' | sort -u
 }
+
+if [[ -n "$DATABASE" ]]; then
+	# The parser seam: no make run, no probe, just the rules the dump yields.
+	build_rules < "$DATABASE"
+	exit 0
+fi
 
 baseline="$(make_db | build_rules)"
 if [[ -z "$baseline" ]]; then
