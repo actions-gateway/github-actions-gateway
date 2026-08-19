@@ -641,6 +641,16 @@ roadmap-check: ## Fail when docs/roadmap.md names backlog rows that shipped or m
 plan-index-check: ## Assert every open-marked plan in docs/plan/README.md is backed by a live item
 	scripts/docs/check-plan-index.sh
 
+# The status half of the plan-index gate above, for the one page that states a
+# backlog status in prose. release-ladder.md's punted table claims each item it
+# names is Deferred and its revived paragraph claims the rest are not;
+# check-plan-index binds a Status cell to a row EXISTING, never to what that
+# row's status says, so a revived item stayed in the punted table for five days
+# (Q932).
+.PHONY: release-ladder-check
+release-ladder-check: ## Assert release-ladder.md's punted/revived split matches the store (Q932)
+	scripts/docs/check-release-ladder.sh
+
 # Keeps plan archival a docs-only operation: code that path-links a plan would
 # force a code edit (and heavy CI) when that plan is archived. Rationale in the
 # script header.
