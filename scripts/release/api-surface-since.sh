@@ -19,8 +19,8 @@
 # wrong in both directions.
 #
 # The Event reasons are enumerated by devtools/docs/reasontiers, which needs Go
-# and adds a build plus two `git archive` extractions to a run that has AGC
-# source in its window (Q780). A window with none skips all of it.
+# and adds a build plus two `git archive` extractions to a run that has AGC or
+# GMC source in its window (Q780, Q925). A window with none skips all of it.
 #
 # Exit status is 0 whether or not surface changed; `--quiet` suppresses the
 # per-section output and exits 1 when nothing changed, for scripted callers that
@@ -43,12 +43,17 @@ API_PATHS=(
 	"cmd/gmc/config/crd"
 )
 
-# REASON_SRC — the trees the Event-reason scan reads, and the only trees it
-# reads: the AGC, and the shared vocabulary its reasons are declared in. The
-# enumeration is a pure function of these two, so a window that changes neither
-# cannot have changed a reason, which is what lets the scan be skipped entirely.
-REASON_SRC=(
+# REASON_TREES — the binaries whose Event reasons are enumerated, each scanned
+# against the shared vocabulary in api/. REASON_SRC is those plus that
+# vocabulary: the enumeration is a pure function of them, so a window that
+# changes none cannot have changed a reason, which is what lets the scan be
+# skipped entirely.
+REASON_TREES=(
 	"cmd/agc"
+	"cmd/gmc"
+)
+REASON_SRC=(
+	"${REASON_TREES[@]}"
 	"api"
 )
 
@@ -125,7 +130,18 @@ build_reasontiers() {
 scan_ref() {
 	local rev="$1" tag="$2"
 	mkdir -p "$WORK/$tag"
-	if ! git archive --format=tar --output="$WORK/$tag.tar" "$rev" -- "${REASON_SRC[@]}" 2>"$WORK/$tag.err"; then
+	# git archive is fatal on a pathspec matching nothing, so name only the trees
+	# REV actually carries.
+	local -a reason_src_at_rev=()
+	local path
+	for path in "${REASON_SRC[@]}"; do
+		git cat-file -e "${rev}:${path}" 2>/dev/null && reason_src_at_rev+=("$path")
+	done
+	if ((${#reason_src_at_rev[@]} == 0)); then
+		reason_error="$rev carries none of ${REASON_SRC[*]}"
+		return 1
+	fi
+	if ! git archive --format=tar --output="$WORK/$tag.tar" "$rev" -- "${reason_src_at_rev[@]}" 2>"$WORK/$tag.err"; then
 		reason_error="git archive $rev failed: $(tail -n 1 "$WORK/$tag.err")"
 		return 1
 	fi
@@ -133,10 +149,17 @@ scan_ref() {
 		reason_error="extracting $rev failed: $(tail -n 1 "$WORK/$tag.err")"
 		return 1
 	fi
-	if ! "$reasons_bin" -list "$WORK/$tag/cmd/agc" "$WORK/$tag/api" >"$WORK/$tag.reasons" 2>"$WORK/$tag.err"; then
-		reason_error="scanning $rev: $(tail -n 1 "$WORK/$tag.err")"
-		return 1
-	fi
+	: >"$WORK/$tag.reasons"
+	local tree
+	for tree in "${REASON_TREES[@]}"; do
+		# A tree absent at REV contributes nothing rather than aborting: one added
+		# after the tag reports every reason as new, which is what it is.
+		[[ -d "$WORK/$tag/$tree" ]] || continue
+		if ! "$reasons_bin" -list "$WORK/$tag/$tree" "$WORK/$tag/api" >>"$WORK/$tag.reasons" 2>"$WORK/$tag.err"; then
+			reason_error="scanning $tree at $rev: $(tail -n 1 "$WORK/$tag.err")"
+			return 1
+		fi
+	done
 }
 
 # event_reasons_at TAG — the Event reason values from TAG's scan, re-sorted here
@@ -228,7 +251,7 @@ section "Added fields (wire names)" "$(added_lines 'json:"')"
 section "Added or changed enum constraints" "$(added_lines 'kubebuilder:validation:Enum')"
 section "Added or changed defaults" "$(added_lines 'kubebuilder:default')"
 section "New condition types and reasons" "$(new_values '^[[:space:]]*(Condition|Reason)[A-Z][A-Za-z0-9]*[[:space:]]*=[[:space:]]*"')"
-section "New Event reasons (AGC only; nothing enumerates the GMC's)" "$(event_reason_body)"
+section "New Event reasons" "$(event_reason_body)"
 section "New label and annotation keys" "$(new_values '=[[:space:]]*"(actions-gateway\.com|actions-gateway\.github\.com)/')"
 
 echo

@@ -25,6 +25,7 @@ const (
 	ReasonListenerActive = "ListenerActive"
 	ReasonWorkerCeilingReached = "WorkerCeilingReached"
 	ReasonVersionTooOld = "VersionTooOld"
+	ReasonQuotaExhausted = "QuotaExhausted"
 )
 `
 	aliasSrc = `package v2alpha1
@@ -35,6 +36,7 @@ const (
 	ReasonListenerActive = apiconditions.ReasonListenerActive
 	ReasonWorkerCeilingReached = apiconditions.ReasonWorkerCeilingReached
 	ReasonVersionTooOld = apiconditions.ReasonVersionTooOld
+	ReasonQuotaExhausted = apiconditions.ReasonQuotaExhausted
 )
 `
 
@@ -42,7 +44,11 @@ const (
 	// forwards its own reason parameter, and one literal reason of its own.
 	sharedSrc = `package controller
 
-import corev1 "k8s.io/api/core/v1"
+import (
+	corev1 "k8s.io/api/core/v1"
+
+	"github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
+)
 
 type EventRecorder interface {
 	Event(namespace, name, eventtype, reason, action, note string)
@@ -61,8 +67,10 @@ func (r *R) ready(rs *RS) {
 	// The classic listener: a condition reason no other tier writes.
 	listenerSrc = `package listener
 
+import agcv1alpha1 "github.com/actions-gateway/github-actions-gateway/agc/api/v1alpha1"
+
 func (l *L) rejected() {
-	setCondition(l.cfg, v1alpha1.ReasonVersionTooOld)
+	setCondition(l.cfg, agcv1alpha1.ReasonVersionTooOld)
 }
 `
 
@@ -72,7 +80,11 @@ func (l *L) rejected() {
 	// here and missed both of these.
 	scaleSetSrc = `package scalesetlistener
 
-import corev1 "k8s.io/api/core/v1"
+import (
+	corev1 "k8s.io/api/core/v1"
+
+	"github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
+)
 
 func (l *Listener) recordEvent(eventtype, reason, action, note string) {
 	l.cfg.Events.Event(eventtype, reason, action, note)
@@ -150,6 +162,49 @@ func apiTree(t *testing.T) string {
 	return dir
 }
 
+// A reason reaches the scanner through whatever identifier the importing file
+// chose, so the package — not that identifier — is what reasonPkgs names. Keying
+// on the identifier left every GMC recorder call unplaceable, because the GMC
+// imports this vocabulary as gmcv2alpha1 (Q925).
+func TestReasonReachedThroughAnImportAliasResolves(t *testing.T) {
+	const aliased = `package controller
+
+import (
+	corev1 "k8s.io/api/core/v1"
+
+	gmcv2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
+)
+
+func (r *R) degraded(rs *RS) {
+	reason := gmcv2alpha1.ReasonWorkerCeilingReached
+	r.recordEvent(rs, corev1.EventTypeWarning, reason, "Reconcile", "n")
+	r.recordEvent(rs, corev1.EventTypeWarning, gmcv2alpha1.ReasonListenerActive, "Reconcile", "n")
+}
+`
+	src := srcTree(t, map[string]string{"internal/controller/aliased.go": aliased})
+	if findings := runCase(t, src, goodLedger, goodRunbook); len(findings) != 0 {
+		t.Fatalf("aliased reasons should place as condition reasons; got %v", findings)
+	}
+}
+
+// The complement: an identifier the file does not import is not a package, so a
+// value reached through one is not the vocabulary's. QuotaExhausted is emitted
+// nowhere and has no ledger row, so reading the qualifier as a package reports
+// it as an unlisted reason.
+func TestUnimportedQualifierIsNotAPackage(t *testing.T) {
+	const shadowed = `package controller
+
+func (r *R) stale(rs *RS, v2beta1 struct{ ReasonQuotaExhausted string }) {
+	setCondition(rs, v2beta1.ReasonQuotaExhausted)
+}
+`
+	src := srcTree(t, map[string]string{"internal/controller/shadowed.go": shadowed})
+	findings := runCase(t, src, goodLedger, goodRunbook)
+	if len(findings) != 0 {
+		t.Fatalf("an unimported qualifier should be ignored; got %v", findings)
+	}
+}
+
 // runCase writes both docs and returns the findings.
 func runCase(t *testing.T, srcDir, ledger, runbook string) []string {
 	t.Helper()
@@ -211,18 +266,23 @@ func TestLedgerRowWithoutAReasonFails(t *testing.T) {
 // The stale-after-a-port direction: the source emits from the tier the ledger
 // says is excluded.
 func TestScaleSetOnlyClaimRefutedByAClassicSiteFails(t *testing.T) {
-	classic := listenerSrc + `
+	classic := `package listener
+
+import "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
+
 func (l *L) ceiling() {
 	setCondition(l.cfg, v2alpha1.ReasonWorkerCeilingReached)
 }
 `
-	src := srcTree(t, map[string]string{"internal/listener/session.go": classic})
+	src := srcTree(t, map[string]string{"internal/listener/ceiling.go": classic})
 	findings := runCase(t, src, goodLedger, goodRunbook)
 	requireFinding(t, findings, `WorkerCeilingReached is emitted here, and the ledger calls it "Scale-set only"`)
 }
 
 func TestClassicOnlyClaimRefutedByAScaleSetSiteFails(t *testing.T) {
 	port := `package provisioner
+
+import "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
 
 func (p *P) recover() {
 	setCondition(v2alpha1.ReasonVersionTooOld)

@@ -33,10 +33,10 @@
 // and a shared file says nothing. The ledger row carries the positive claim, and
 // inventory is what makes the row unavoidable.
 //
-// `-list <agc-src-dir> <api-dir>` prints the same scan's reasons instead of
-// checking them, which is what the release pre-flight diffs between two refs
-// (Q780). The scan covers the AGC only, as the ledger does; the GMC's Event
-// reasons are enumerated by nothing (Q925).
+// `-list <src-dir> <api-dir>` prints the same scan's reasons instead of checking
+// them, which is what the release pre-flight diffs between two refs (Q780). The
+// checks read the AGC, as the ledger does; -list is run over the GMC as well,
+// whose Event reasons no release stated before Q925.
 package main
 
 import (
@@ -94,7 +94,10 @@ var eventTypeSelectors = map[string]bool{
 // reasonConstRE matches the condition-reason constants' declared names.
 var reasonConstRE = regexp.MustCompile(`^Reason[A-Z][A-Za-z0-9]*$`)
 
-// reasonPkgs are the import identifiers a condition reason is referenced through.
+// reasonPkgs are the packages a condition reason is declared in, keyed by the
+// last segment of the import path rather than by the identifier a file reaches
+// them through — the identifier is the importer's choice, and the GMC reads the
+// same vocabulary through gmcv2alpha1 that the AGC reads through v2alpha1.
 // The v2 version packages re-export api/apiconditions, so the value behind
 // v2alpha1.ReasonX is resolved from there.
 var reasonPkgs = map[string]bool{
@@ -154,7 +157,7 @@ func main() {
 	}
 	if len(os.Args) != 5 {
 		fmt.Fprintln(os.Stderr, "usage: reasontiers <agc-src-dir> <api-dir> <observability-metrics.md> <troubleshooting.md>")
-		fmt.Fprintln(os.Stderr, "       reasontiers -list <agc-src-dir> <api-dir>")
+		fmt.Fprintln(os.Stderr, "       reasontiers -list <src-dir> <api-dir>")
 		os.Exit(2)
 	}
 	findings, err := run(os.Args[1], os.Args[2], os.Args[3], os.Args[4])
@@ -454,8 +457,9 @@ func scanSource(srcDir string, values map[string]string, sigs []recorderSig) (co
 			return fmt.Errorf("parse %s: %w", path, perr)
 		}
 		rel := filepath.ToSlash(path)
-		collectConditions(file, rel, values, conds)
-		unresolved = append(unresolved, collectEvents(file, fset, rel, values, sigs, events)...)
+		imports := importedPkgs(file)
+		collectConditions(file, rel, imports, values, conds)
+		unresolved = append(unresolved, collectEvents(file, fset, rel, imports, values, sigs, events)...)
 		return nil
 	})
 	if err != nil {
@@ -464,17 +468,38 @@ func scanSource(srcDir string, values map[string]string, sigs []recorderSig) (co
 	return conds, events, unresolved, nil
 }
 
+// importedPkgs maps the identifier each import is referenced through to the last
+// segment of its path, which is what reasonPkgs names. An identifier the file
+// does not import resolves to nothing, so a local shadowing a package name is
+// not read as one.
+func importedPkgs(file *ast.File) map[string]string {
+	out := map[string]string{}
+	for _, spec := range file.Imports {
+		path, err := strconv.Unquote(spec.Path.Value)
+		if err != nil {
+			continue
+		}
+		pkg := path[strings.LastIndex(path, "/")+1:]
+		ident := pkg
+		if spec.Name != nil {
+			ident = spec.Name.Name
+		}
+		out[ident] = pkg
+	}
+	return out
+}
+
 // collectConditions records every reference to a condition-reason constant. A
 // reason the AGC only compares against is one it also writes, or the comparison
 // is dead — so references, not writes, are the inventory. Over-approximating
 // adds a ledger row; it never drops one.
-func collectConditions(file *ast.File, rel string, values map[string]string, out map[string]*reason) {
+func collectConditions(file *ast.File, rel string, imports, values map[string]string, out map[string]*reason) {
 	ast.Inspect(file, func(n ast.Node) bool {
 		sel, ok := n.(*ast.SelectorExpr)
 		if !ok {
 			return true
 		}
-		if v, ok := constValue(sel, values); ok {
+		if v, ok := constValue(sel, imports, values); ok {
 			record(out, v, rel)
 		}
 		return true
@@ -482,9 +507,9 @@ func collectConditions(file *ast.File, rel string, values map[string]string, out
 }
 
 // constValue resolves a qualified Reason* reference to its string value.
-func constValue(sel *ast.SelectorExpr, values map[string]string) (string, bool) {
+func constValue(sel *ast.SelectorExpr, imports, values map[string]string) (string, bool) {
 	pkg, ok := sel.X.(*ast.Ident)
-	if !ok || !reasonPkgs[pkg.Name] || !reasonConstRE.MatchString(sel.Sel.Name) {
+	if !ok || !reasonPkgs[imports[pkg.Name]] || !reasonConstRE.MatchString(sel.Sel.Name) {
 		return "", false
 	}
 	v, ok := values[sel.Sel.Name]
@@ -493,7 +518,7 @@ func constValue(sel *ast.SelectorExpr, values map[string]string) (string, bool) 
 
 // collectEvents records the Event reasons a file decides, and reports every
 // recorder call whose reason argument it cannot place.
-func collectEvents(file *ast.File, fset *token.FileSet, rel string, values map[string]string, sigs []recorderSig, out map[string]*reason) []string {
+func collectEvents(file *ast.File, fset *token.FileSet, rel string, imports, values map[string]string, sigs []recorderSig, out map[string]*reason) []string {
 	var findings []string
 
 	// Function scope is what separates a forwarder's parameter from a local, so
@@ -525,7 +550,7 @@ func collectEvents(file *ast.File, fset *token.FileSet, rel string, values map[s
 			}
 			return true
 		}
-		literals, form := placeReason(arg, enclosingFunc(stack), values)
+		literals, form := placeReason(arg, enclosingFunc(stack), imports, values)
 		switch form {
 		case formLiteral:
 			for _, v := range literals {
@@ -599,7 +624,7 @@ func carriesEventType(call *ast.CallExpr) bool {
 
 // placeReason classifies one reason argument, resolving a local by scanning the
 // assignments to it inside the enclosing function.
-func placeReason(e ast.Expr, fn ast.Node, values map[string]string) ([]string, int) {
+func placeReason(e ast.Expr, fn ast.Node, imports, values map[string]string) ([]string, int) {
 	switch x := e.(type) {
 	case *ast.BasicLit:
 		if x.Kind != token.STRING {
@@ -611,7 +636,7 @@ func placeReason(e ast.Expr, fn ast.Node, values map[string]string) ([]string, i
 		}
 		return []string{s}, formLiteral
 	case *ast.SelectorExpr:
-		if _, ok := constValue(x, values); ok {
+		if _, ok := constValue(x, imports, values); ok {
 			return nil, formCondition
 		}
 		// A `.Reason`/`.reason` field read off a condition or a queued record.
@@ -626,7 +651,7 @@ func placeReason(e ast.Expr, fn ast.Node, values map[string]string) ([]string, i
 		if isParam(fn, x.Name) {
 			return nil, formForward
 		}
-		return resolveLocal(fn, x.Name, values)
+		return resolveLocal(fn, x.Name, imports, values)
 	}
 	return nil, formUnplaceable
 }
@@ -658,7 +683,7 @@ func isParam(fn ast.Node, name string) bool {
 // Event reasons those literals; all-constants makes it a re-emitted condition
 // reason. A mix, or anything else, is unplaceable — the two ledgers would each
 // half-carry it.
-func resolveLocal(fn ast.Node, name string, values map[string]string) ([]string, int) {
+func resolveLocal(fn ast.Node, name string, imports, values map[string]string) ([]string, int) {
 	var lits []string
 	consts, other := 0, 0
 	ast.Inspect(fn, func(n ast.Node) bool {
@@ -681,7 +706,7 @@ func resolveLocal(fn ast.Node, name string, values map[string]string) ([]string,
 				}
 				other++
 			case *ast.SelectorExpr:
-				if _, ok := constValue(rhs, values); ok {
+				if _, ok := constValue(rhs, imports, values); ok {
 					consts++
 					continue
 				}

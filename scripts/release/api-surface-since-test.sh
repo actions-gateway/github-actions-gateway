@@ -42,7 +42,11 @@ controller_src() {
 	cat <<EOF
 package controller
 
-import corev1 "k8s.io/api/core/v1"
+import (
+	corev1 "k8s.io/api/core/v1"
+
+	"github.com/actions-gateway/github-actions-gateway/api/apiconditions"
+)
 
 type EventRecorder interface {
 	Event(namespace, name, eventtype, reason, action, note string)
@@ -59,6 +63,35 @@ func (r *R) ready(rs *RS) {
 EOF
 }
 
+# The GMC half: its own recorder, and a reason reached through an import alias.
+# The real GMC imports the shared vocabulary as gmcv2alpha1, which is what left
+# every one of its recorder calls unplaceable until Q925.
+gmc_src() {
+	local reason="$1"
+	cat <<EOF
+package controller
+
+import (
+	corev1 "k8s.io/api/core/v1"
+
+	gmcv2alpha1 "github.com/actions-gateway/github-actions-gateway/api/apiconditions"
+)
+
+type GMCRecorder interface {
+	Event(namespace, name, eventtype, reason, action, note string)
+}
+
+func (r *G) recordEvent(ag *AG, eventtype, reason, action, note string) {
+	r.Recorder.Event(ag.Namespace, ag.Name, eventtype, reason, action, note)
+}
+
+func (r *G) provision(ag *AG) {
+	setCondition(ag, gmcv2alpha1.ReasonListenerActive)
+	r.recordEvent(ag, corev1.EventTypeNormal, "$reason", "Reconcile", "n")
+}
+EOF
+}
+
 # build_repo NAME — a fixture repo tagged v0.1.0 at a tree emitting
 # WorkerPodStuckPending. Echoes its path. devtools is symlinked rather than
 # copied so the script's `go build` finds the real scanner; it is gitignored, and
@@ -66,13 +99,14 @@ EOF
 build_repo() {
 	local d="$WORK/$1"
 	rm -rf "$d"
-	mkdir -p "$d/api/apiconditions" "$d/cmd/agc/internal/controller"
+	mkdir -p "$d/api/apiconditions" "$d/cmd/agc/internal/controller" "$d/cmd/gmc/internal/controller"
 	(
 		cd "$d"
 		printf 'devtools\n' >.gitignore
 		ln -s "$REPO_ROOT/devtools" devtools
 		api_src >api/apiconditions/conditions.go
 		controller_src WorkerPodStuckPending >cmd/agc/internal/controller/shared.go
+		gmc_src ProxyCertificateIssued >cmd/gmc/internal/controller/gateway.go
 		git init -q -b main
 		git config user.email t@t.t
 		git config user.name t
@@ -181,8 +215,24 @@ test_unscannable_window_says_so() {
 	check_contains unscannable-is-not-none "$(event_section "$out")" "not a report of none-new"
 }
 
+# The GMC is scanned too, and its reasons reach the section through the same
+# import alias the real one uses (Q925). Scoping REASON_TREES back to the AGC, or
+# keying reason resolution on the identifier again, both fail here.
+test_gmc_reason_is_listed() {
+	local d out
+	d="$(build_repo gmc-reason)"
+	(
+		cd "$d"
+		gmc_src WorkerDrainTimeout >cmd/gmc/internal/controller/gateway.go
+		git commit -q -am "feat: a new GMC Event reason"
+	)
+	out="$(run_script "$d")"
+	check gmc-reason-listed "$(event_section "$out")" "WorkerDrainTimeout"
+}
+
 test_new_reason_is_the_only_surface
 test_unchanged_reasons_report_none
+test_gmc_reason_is_listed
 test_empty_window_is_quiet
 test_unscannable_window_says_so
 
