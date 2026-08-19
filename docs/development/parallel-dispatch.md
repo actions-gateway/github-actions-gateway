@@ -121,6 +121,11 @@ It carries no CI output, so a batch of them does not fill the dispatcher's conte
 
 On `conflict` the dispatcher wakes the owning worker; the worker rebases onto the branch the wake names, re-runs the gate, pushes, and relaunches its own pr-sentinel watcher.
 
+**A `ready` names a pull request, never a revision.** pr-sentinel reports the PR number and its state, so a push during the watcher's sleep redirects what the verdict is about while the event still reads correct, green and unambiguous.
+Measured 2026-08-18: a watcher launched on head `0d458d95` fired `ready` after the branch had moved to `2c2d14b4`, and nothing in the event named either SHA.
+That is [the `--branch` filter's defect](testing.md#path-gated-workflows-verify-the-heavy-gates-actually-ran) one door over, and worse, because no flag makes it right.
+Re-read `headRefOid` and confirm the runs on that SHA before acting on any `ready` that followed a push.
+
 > **With no dispatcher, the window belongs to the worker.** A session started straight from a Q-ID has nobody to hand it to, and the assignment above silently addresses no one.
 > Measured 2026-08-14: three PRs from one dispatcher-less session went `DIRTY` five times between `ready` and merge, `docs/STATUS.md` being the file every one of them touched.
 
@@ -379,6 +384,10 @@ Two additions come from what broke here:
 **Do not arm a watch during a known-dirty window.** [`pr-mergeability-watch.sh`](../../scripts/agent/pr-mergeability-watch.sh) polls before its first sleep, so a watch armed against a PR that is already `DIRTY` fires `conflict` and exits within one `gh` call, spending the watch on a state you already knew.
 Arm it after the heal reports `CLEAN`.
 The inverse is not a symptom: an instant fire *after* a clean read means the PR went dirty in between, which is the watch working.
+
+**Disarm the watch once the PR is enqueued.** It is correct between `ready` and the enqueue and wrong after it: it wakes on a `mergeStateStatus` transition and asks for a rebase and force-push, which a queued PR rejects (`GH006`), while dequeuing to act on the wake would revoke a merge decision.
+The watch cannot tell which side of that boundary it sits on, because the enqueue is a decision it never observes, so a wake whose only correct response is inaction invites the wrong action instead.
+Arming is a step; disarming is one too.
 
 ## The no-secrets rule
 
