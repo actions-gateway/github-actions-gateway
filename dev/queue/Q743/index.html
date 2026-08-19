@@ -2570,7 +2570,8 @@
 <h1 id="doc-linksyml-has-no-merge_group-so-five-gates-skip-the-queue"><code>doc-links.yml</code> has no <code>merge_group</code>, so five gates skip the queue<a class="headerlink" href="#doc-linksyml-has-no-merge_group-so-five-gates-skip-the-queue" title="Permanent link">&para;</a></h1>
 <p>Measured 2026-08-08: 9 of 25 workflows declare it; not this one, so its 5 gates never see the candidate merge.
 Q742 ratchets the em-dash ceiling; this covers the other 4 gates and any later ratchet.
-Needs Q574's paths-filter <code>changes</code> job.</p>
+<code>status-lint.yml</code> already pairs <code>merge_group</code> with that <code>changes</code> job, so the Q574 dependency this row used to claim does not hold.
+Measured 2026-08-18: 5 workflows are queue-blind, and Q942 covers why rule 8 cannot see them.</p>
 
 
 

@@ -2828,14 +2828,6 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>CLAUDE.md and <code>maintaining-backlog.md</code> call the 250-char notes cap hard.</td>
 </tr>
 <tr>
-<td><a href="Q868/">Q868</a></td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/deploy/monitoring/preview/README.md">Gate a dashboard JSON change against its regenerated screenshot</a></td>
-<td><code>docs</code> <code>ci</code> <code>debt</code></td>
-<td>🔲</td>
-<td>S</td>
-<td>Measured 2026-08-14: #1526 changed the platform dashboard with no <code>docs/assets/</code> render, so the screenshot lost a panel series.</td>
-</tr>
-<tr>
 <td><a href="Q372/">Q372</a></td>
 <td><a href="../plan/structural-debt-audit-2026-07/">Re-run the structural debt audit</a></td>
 <td><code>debt</code></td>
@@ -2922,6 +2914,14 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>🔲</td>
 <td>S</td>
 <td>Measured 2026-08-08: 9 of 25 workflows declare it; not this one, so its 5 gates never see the candidate merge.</td>
+</tr>
+<tr>
+<td><a href="Q942/">Q942</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/ci/gate-list.sh"><code>gate-lists-check</code> rule 8 never asks whether a gate reaches the queue</a></td>
+<td><code>ci</code> <code>retro</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>Measured 2026-08-18: rule 8 asserts a gate is run by some workflow, never that the workflow declares <code>merge_group</code>, so a gate the merge …</td>
 </tr>
 <tr>
 <td><a href="Q832/">Q832</a></td>
