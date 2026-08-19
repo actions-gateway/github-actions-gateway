@@ -177,7 +177,11 @@ RETIRED_PATHS = (
     ("project_mgmt", ("docs/backlog/", "docs/todo/", "usage-stats/"), ("docs/STATUS.md",)),
 )
 BAND_NAMES = [b for b, _, _ in TREE_BANDS] + ["residual"]
+# Both units, for the reason the language series carry both: a rewrap moves a line
+# count and leaves a word count alone, and words are the unit closest to a token.
+# A band in lines alone cannot be put against token spend.
 BAND_COLUMNS = [f"band_{b}" for b in BAND_NAMES]
+BAND_WORD_COLUMNS = [f"band_{b}_words" for b in BAND_NAMES]
 
 
 def classify_path(path):
@@ -194,6 +198,20 @@ def classify_path(path):
         if path.startswith(dirs) or path in files:
             return band
     return "residual"
+
+
+def band_totals(per_file_maps):
+    """Sum ``{path: count}`` maps into ``{band: total}``, one band per name.
+
+    Zero-filled, so a row always carries every band column even on a day where a
+    band holds nothing. Takes several maps because a unit spans four of them (Go,
+    Markdown, YAML, scripts) and the bands cut across all four.
+    """
+    totals = {b: 0 for b in BAND_NAMES}
+    for per_file in per_file_maps:
+        for path, n in per_file.items():
+            totals[classify_path(path)] += n
+    return totals
 
 
 def resolve_host():
@@ -371,24 +389,16 @@ def grep_count(rev, pattern, paths):
     return total
 
 
-def grep_word_count(rev, pattern, paths):
-    """Whitespace-separated words across matching lines at a revision.
+def grep_words_per_file(rev, pattern, paths):
+    """Word counts as a ``{path: words}`` map at a revision.
 
     The reformat-proof half of the lines series: rewrapping a paragraph moves
-    every line count that spans it and leaves the word count identical, so a
-    ratio built on words survives a reflow that a per-line ratio cannot.
-    ``-h`` drops the ``rev:path:`` prefix so it isn't counted as content.
-    """
-    out = git("grep", "-h", "-E", pattern, rev, "--", *paths)
-    return sum(len(ln.split()) for ln in out.splitlines())
+    every line count that spans it and leaves the word count identical, so a ratio
+    built on words survives a reflow that a per-line ratio cannot.
 
-
-def grep_words_per_file(rev, pattern, paths):
-    """Word counts as a ``{path: words}`` map, so a path filter can be applied.
-
-    The YAML band needs this: ``grep_word_count`` over every ``*.yaml`` sums the
-    generated CRDs too, which the line series drops. Counting them would dilute
-    the cost ratio with output nobody authored.
+    Per file rather than per corpus because every caller filters paths — generated
+    CRDs out of the YAML band, ``zz_generated.*`` out of Go, and each tree band out
+    of the rest. A corpus total would count output nobody authored.
     """
     out = git("grep", "-E", pattern, rev, "--", *paths)
     counts = {}
@@ -837,18 +847,22 @@ def git_series():
                          if p not in generated and "/crd/" not in p}
         scripts_per_file = grep_lines_per_file(rev, "[^[:space:]]", SCRIPT_PATHS)
         go_words = grep_words_per_file(rev, "[^[:space:]]", GO_PATHS)
-        go_w = sum(c for p, c in go_words.items() if not is_generated_go(p))
-        md_w = grep_word_count(rev, "[^[:space:]]", MD_PATHS)
-        yaml_words_per_file = grep_words_per_file(rev, "[^[:space:]]", YAML_PATHS)
-        yaml_w = sum(c for p, c in yaml_words_per_file.items()
-                     if p not in generated and "/crd/" not in p)
-        scripts_w = grep_word_count(rev, "[^[:space:]]", SCRIPT_PATHS)
-        # The same authored lines the four language columns hold, re-cut by where
-        # in the tree they sit, so the bands sum to `go_code + md + yaml + scripts`.
-        bands = defaultdict(int)
-        for per_file in (go_per_file, md_per_file, yaml_per_file, scripts_per_file):
-            for p, n in per_file.items():
-                bands[classify_path(p)] += n
+        go_words_hand = {p: c for p, c in go_words.items() if not is_generated_go(p)}
+        go_w = sum(go_words_hand.values())
+        md_words_per_file = grep_words_per_file(rev, "[^[:space:]]", MD_PATHS)
+        md_w = sum(md_words_per_file.values())
+        yaml_words_per_file = {p: c for p, c
+                               in grep_words_per_file(rev, "[^[:space:]]", YAML_PATHS).items()
+                               if p not in generated and "/crd/" not in p}
+        yaml_w = sum(yaml_words_per_file.values())
+        scripts_words_per_file = grep_words_per_file(rev, "[^[:space:]]", SCRIPT_PATHS)
+        scripts_w = sum(scripts_words_per_file.values())
+        # The same authored text the four language columns hold, re-cut by where in
+        # the tree it sits. Once per unit: the line bands sum to
+        # `go_code + md + yaml + scripts` and the word bands sum to `words`.
+        bands = band_totals((go_per_file, md_per_file, yaml_per_file, scripts_per_file))
+        band_words = band_totals((go_words_hand, md_words_per_file, yaml_words_per_file,
+                                  scripts_words_per_file))
         rows[d] = {
             "date": d,
             "commits": cum,
@@ -884,6 +898,10 @@ def git_series():
             # is a classification gap rather than an "other" band: anything landing
             # in it is a path `classify_path` has no answer for.
             **{f"band_{b}": bands[b] for b in BAND_NAMES},
+            # The same split in words. Comments are counted here and subtracted from
+            # the line bands, so these are not the line bands converted — they are
+            # the corpus `words` covers, cut the same way.
+            **{f"band_{b}_words": band_words[b] for b in BAND_NAMES},
         }
     return rows
 
@@ -1493,7 +1511,7 @@ def main():
     write_csv(git_csv, ["date", "commits", "tests", "go_code", "go_test", "md", "yaml", "scripts",
                         "prs", "queue_closed", "queue_filed", "active_hours", "feat", "fix",
                         "go_words", "md_words", "yaml_words", "scripts_words", "words",
-                        *BAND_COLUMNS],
+                        *BAND_COLUMNS, *BAND_WORD_COLUMNS],
               [git_rows[d] for d in sorted(git_rows)])
     # Pull requests: merge-preserved and fetched incrementally, because the source
     # is a remote API rather than something recomputable offline. Existing rows are
