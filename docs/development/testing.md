@@ -2812,7 +2812,16 @@ The shape differs by call site, because **a step that `uses:` an action cannot b
 Buildx then drops the cache entry with no vertex and no warning, so the regression surfaces as a slower job and never as a red one.
 The e2e bake is the standing proof: it bakes from a `run:` step with `GHA_CACHE=true` and has never cached, while this job's `build-push-action` holds the token an action receives and emits the `importing cache manifest from gha:` vertex the bake never does (Q931).
 
-`publish.yml`'s build is deliberately still unretried (Q899): it is `no-cache: true`, and five steps read `steps.build.outputs.digest`, one of them the signed-provenance subject, so a second attempt has to carry that digest through without ever signing the wrong one.
+**`publish.yml` runs the same two-attempt shape, and adds a resolver step, because its build pushes (Q899).** `no-cache: true` means attempt 2 rebuilds every layer, so its index digest is not attempt 1's.
+Four steps bind the release to that digest: the signed SLSA provenance subject, the per-arch SBOM resolution, the cosign sign/attest, and the run-summary pin operators copy into chart values.
+Signing attempt 1's digest after attempt 2 republished the tag would mint a signature that verifies cryptographically against an index the tag no longer serves, which is worse than the failed release the retry exists to prevent.
+
+**So no consumer reads an attempt's digest at all.** Both attempts feed one `Resolve the published index digest` step, and everything downstream binds to its output.
+That step selects on the first attempt's **outcome**, never on whichever output happens to be non-empty: a `${RETRY:-${FIRST}}` fallback would quietly select attempt 1's superseded digest whenever attempt 2 pushed but reported none, so a retried build that yields no `sha256:` digest fails the job there instead, before anything is signed.
+A first attempt that pushed and then failed leaves its index in GHCR untagged, referenced by nothing and signed by nothing.
+
+Publish runs only on a `v*` tag, so no PR ever executes that job and a bad edit would surface during a release.
+[`check-publish-digest.sh`](../../scripts/ci/check-publish-digest.sh) (`make publish-digest-check`, CI job `publish-digest`) is therefore the only reading available beforehand: it fails when a step outside the resolver reads an attempt's digest, when the retry is ungated or masked, or when the two attempts' `with:` blocks drift apart, and refuses with rc 2 rather than reporting green when a subject it compares is absent.
 
 ### Path-gated workflows: verify the heavy gates actually ran
 

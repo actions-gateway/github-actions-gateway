@@ -559,6 +559,12 @@ gh run watch "$(gh run list --workflow=publish.yml --branch=vX.Y.Z -L1 --json da
 
 ### 3. Verify the publish
 
+> **A red "Build and push" step in a green `publish` job is expected, not a half-published release.** The base-image pull inside the build has no retry of its own, so a transient registry denial fails it (Q863).
+> The first attempt is therefore masked and a "Rebuild and push" step follows it; a second failure is unmasked and reds the job.
+> Because the release build is `no-cache: true` the retry's index digest differs from the first attempt's, so a "Resolve the published index digest" step picks the attempt that actually published and every signature, SBOM, and recorded pin binds to that one.
+> Nothing signs the superseded index, and the digest in the run summary is the digest the tag serves.
+> See [testing.md § Image builds: retry the transport, never the pin](../development/testing.md#image-builds-retry-the-transport-never-the-pin).
+
 Confirm every image **and the chart** was signed by *this* workflow before announcing the release.
 The one-command check uses the pinned cosign (`make` downloads `COSIGN_VERSION` — the same version `publish.yml` signs with — into `.build/`):
 
