@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 #
-# Unit tests for scripts/go/go-vet-tags.sh (Q404). Two properties, both asserted
-# against a scratch module rather than the tracked tree so a case can actually
-# be broken:
+# Unit tests for scripts/go/go-vet-tags.sh (Q404). Three properties, each
+# asserted against a scratch fixture rather than the tracked tree so a case can
+# actually be broken:
 #
 #   1. The tag-coverage guard fails on a build tag BUILD_TAGS does not list, and
 #      names the file. Otherwise a newly-introduced tag would reopen exactly the
@@ -11,6 +11,11 @@
 #      vet, which is what `make lint` and `make test` see, reports clean. That is
 #      the Q404 failure itself (an unused import in an `integration`-tagged test
 #      passed `make check` and failed CI's integration leg) in permanent form.
+#   3. The lint-sync guard fails when .golangci.yml's run.build-tags and
+#      BUILD_TAGS disagree in either direction, and when the key is absent
+#      altogether. That last case is the one worth the fixtures: a gate
+#      comparing two lists is vacuously green the moment both read as empty,
+#      which is the shape that let the lists drift unwatched (Q532).
 #
 # The gate is only worth having if it fails when it should, so these are the
 # standing form of the invert-the-fix verification
@@ -124,7 +129,89 @@ expect_vet untagged-vet-misses-break 0 "$listed"
 # With the tag applied, the same tree fails to typecheck.
 expect_vet tagged-vet-catches-break 1 "$listed" "$BUILD_TAGS"
 
-# --- 3. the tracked tree passes ----------------------------------------------
+# --- 3. lint config tag sync -------------------------------------------------
+
+# lint_config NAME TAG... — write a scratch golangci-lint config whose
+# run.build-tags holds TAGs (none writes the key with an empty list, which YAML
+# reads as null), and echo its path. A decoy `build-tags:` sits under a
+# different top-level key on either side of `run:`, so every fixture also proves
+# the parser is anchored on `run:` rather than taking the first list it sees or
+# the last.
+lint_config() {
+	local name="$1"
+	shift
+	local path="$FIXTURE_ROOT/$name.yml" tag
+	mkdir -p "$FIXTURE_ROOT"
+	{
+		printf 'version: "2"\n'
+		printf 'formatters:\n  build-tags:\n    - q532decoybefore\n'
+		printf 'run:\n  timeout: 10m\n  build-tags:\n'
+		for tag in "$@"; do
+			printf '    - %s\n' "$tag"
+		done
+		printf 'linters:\n  default: none\n  build-tags:\n    - q532decoyafter\n'
+	} >"$path"
+	printf '%s' "$path"
+}
+
+# expect_lint_sync NAME WANT_RC CONFIG [TAGS] — run the lint-sync guard against
+# CONFIG, with TAGS when given and the real BUILD_TAGS when not, and assert its
+# exit code. Output is captured so expect_output can grep it.
+expect_lint_sync() {
+	local name="$1" want_rc="$2" config="$3" tags="${4-$BUILD_TAGS}" got_rc=0
+	LAST_OUT="$(assert_lint_tags_match "$tags" "$config" 2>&1)" || got_rc=$?
+	if [[ "$got_rc" == "$want_rc" ]]; then
+		printf 'ok   %-34s rc=%s\n' "$name" "$got_rc"
+	else
+		printf 'FAIL %-34s want rc=%s got rc=%s\n%s\n' "$name" "$want_rc" "$got_rc" "$LAST_OUT" >&2
+		fails=$((fails + 1))
+	fi
+}
+
+# BUILD_TAGS as an array, so the fixtures below are built from the real list and
+# cannot drift from it.
+IFS=',' read -r -a build_tag_list <<<"$BUILD_TAGS"
+
+# The same set in the same order: nothing to report.
+in_sync_config="$(lint_config in-sync "${build_tag_list[@]}")"
+expect_lint_sync in-sync 0 "$in_sync_config"
+
+# Order is not meaning in YAML, and a reordered list must not read as drift —
+# otherwise the gate fails on an edit that changed nothing.
+reordered=("${build_tag_list[@]:1}" "${build_tag_list[0]}")
+expect_lint_sync reordered-still-in-sync 0 "$(lint_config reordered "${reordered[@]}")"
+
+# A tag BUILD_TAGS carries and the lint config drops: every linter goes blind to
+# the files behind it while `go vet` still covers them, which is why the
+# coverage guard cannot report it. This is Q532 itself.
+expect_lint_sync lint-missing-a-tag 1 "$(lint_config missing "${build_tag_list[@]:1}")"
+expect_output lint-missing-names-tag "${build_tag_list[0]}"
+expect_output lint-missing-explains 'missing from the lint config'
+
+# The other direction: a tag the lint config lists and BUILD_TAGS does not. Vet
+# then skips files golangci-lint builds, and BUILD_TAGS is the list to fix.
+expect_lint_sync lint-has-extra-tag 1 "$(lint_config extra "${build_tag_list[@]}" q532extra)"
+expect_output lint-extra-names-tag 'q532extra'
+expect_output lint-extra-explains 'listed only in the lint config'
+
+# The vacuous case: no entries at all. Two empty lists compare equal, so a guard
+# written the obvious way passes here and reports nothing for as long as the key
+# stays gone.
+expect_lint_sync lint-empty-list-fails 1 "$(lint_config empty)"
+expect_output lint-empty-explains 'no run.build-tags entries'
+
+# An unreadable config is the same hole reached by a different route: the tag
+# set golangci-lint applies is unknown, which is not the same as matching.
+expect_lint_sync lint-unreadable-fails 1 "$FIXTURE_ROOT/does-not-exist.yml"
+expect_output lint-unreadable-explains 'cannot read'
+
+# The same hole from the other side: an empty BUILD_TAGS against a populated
+# config. Each list needs its own emptiness guard, because one comparison of two
+# empty sets is exactly the answer that reports nothing.
+expect_lint_sync empty-build-tags-fails 1 "$in_sync_config" ''
+expect_output empty-build-tags-explains 'BUILD_TAGS is empty'
+
+# --- 4. the tracked tree passes ----------------------------------------------
 
 # Coverage only: the full workspace vet is `make build-tags-check`, and running
 # it here would make `make scripts-test` a heavy build.
@@ -144,6 +231,19 @@ else
 	printf 'FAIL %-34s a tracked first-party .go file is excluded even with -tags %s (rc=%d); run %s\n' \
 		tree-fully-covered "$BUILD_TAGS" "$tree_rc" "$REPO_ROOT/scripts/go/go-vet-tags.sh" >&2
 	printf '%s\n' "$tree_out" >&2
+	fails=$((fails + 1))
+fi
+
+# The live .golangci.yml against the live BUILD_TAGS — the assertion the gate
+# actually makes on every run. Unlike the fixtures above this reads the tracked
+# tree, so keep its output: "re-run it yourself" is no help in CI (Q596).
+tracked_rc=0
+tracked_out="$(assert_lint_tags_match "$BUILD_TAGS" "$GOLANGCI_CONFIG" 2>&1)" || tracked_rc=$?
+if ((tracked_rc == 0)); then
+	printf 'ok   %-34s %s\n' tracked-lint-config-in-sync "$GOLANGCI_CONFIG"
+else
+	printf 'FAIL %-34s rc=%d\n' tracked-lint-config-in-sync "$tracked_rc" >&2
+	printf '%s\n' "$tracked_out" >&2
 	fails=$((fails + 1))
 fi
 

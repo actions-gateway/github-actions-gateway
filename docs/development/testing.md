@@ -641,20 +641,27 @@ That suite's `tree-in-sync` assertion is the one that runs the gate against the 
 
 ### The build-tag gate
 
-`make build-tags-check` ([`scripts/go/go-vet-tags.sh`](../../scripts/go/go-vet-tags.sh)) compiles and vets the Go files that no other fast gate builds: everything behind `//go:build integration`, `e2e`, or `load`.
+`make build-tags-check` ([`scripts/go/go-vet-tags.sh`](../../scripts/go/go-vet-tags.sh)) compiles and vets the Go files that no other fast gate builds: everything behind `//go:build integration`, `e2e`, `load`, `autoscaler`, or `karpenter`.
 `make lint` and `make test` (and so `make check` and CI's `unit-test` job) build the workspace with the **default** tag set, which excludes those files entirely.
 So a refactor could leave an unused import or a stale call signature in an envtest suite, `make check` would pass green, and the break would surface only on CI's path-gated integration/e2e leg, which may not even run on the PR that introduced it (Q404).
 
-It runs one workspace-wide `go vet -tags integration,e2e,load` over every `go.work` module.
+It runs one workspace-wide `go vet -tags integration,e2e,load,autoscaler,karpenter` over every `go.work` module.
 `go vet` typechecks what it analyses, so a compile break fails the gate, and it needs no envtest assets, no cluster, and runs no tests.
 Actually *running* the tagged suites remains the job of [`make test-integration`](#integration-tests), the [e2e tiers](#end-to-end-tests), and [`make load-test-quick`](#load-tests).
 
-Enabling all three tags at once is sound because they select disjoint package trees rather than alternative implementations of one package: no first-party file is constrained on the negation of another's tag.
+Enabling every tag at once is sound because each one only ever *adds* files to a build: no first-party file is constrained on the negation of another's tag, so no combination conflicts.
+Most select whole package trees of their own, and `autoscaler` and `karpenter` instead add live tests to a package the default build already compiles, which is fine for the same reason, since they only have to not collide with the identifiers already there.
 If that ever changes, say a tag gaining a `!tag` counterpart file, the one-shot invocation stops working and the gate has to vet each tag separately.
 
-**Adding a build tag means editing this gate.** `BUILD_TAGS` in the script is the list, and a coverage assertion keeps it honest: before vetting, the gate asserts (from `go list`'s `IgnoredGoFiles`) that the tag set leaves **no** first-party `.go` file uncompiled.
-Introduce a tag it does not list and the gate fails with instructions, rather than silently carving another hole in the same shape as Q404.
-Both properties, the coverage guard failing on an unlisted tag and a tagged-file break that an untagged vet reports clean, are asserted by `scripts/go/go-vet-tags-test.sh` under `make scripts-test`.
+**Adding a build tag means editing this gate and `.golangci.yml`.** `BUILD_TAGS` in the script is the gate's list, and two assertions keep it honest before the vet runs.
+
+1. **Tag coverage.** The gate asserts (from `go list`'s `IgnoredGoFiles`) that the tag set leaves **no** first-party `.go` file uncompiled.
+   Introduce a tag `BUILD_TAGS` does not list and the gate fails with instructions, rather than silently carving another hole in the same shape as Q404.
+2. **Lint sync.** `.golangci.yml`'s `run.build-tags` must name the same tags, in either order.
+   Assertion 1 cannot see a tag that reached `BUILD_TAGS` and not the lint config, because golangci-lint reads its own copy: the Go tree is covered, while every linter stays blind to the files behind the tag (Q532).
+
+Each property is asserted by `scripts/go/go-vet-tags-test.sh` under `make scripts-test`: the coverage guard failing on an unlisted tag, a tagged-file break that an untagged vet reports clean, and the lint-sync guard failing in both drift directions as well as on a `run.build-tags` that is missing or empty.
+That last case is what the fixtures exist for, since a gate comparing two lists passes vacuously the moment both read as empty.
 
 ### The path-filter gate
 
@@ -759,7 +766,8 @@ It runs in `make check` and in the CI `doc-links` workflow, whose triggers are t
 Wired into `make check` and CI's `lint` job.
 
 **The rest of the linters see the tagged trees too.** `.golangci.yml` sets `run.build-tags: [integration, e2e, load, autoscaler, karpenter]`, so `gosec`, `errcheck`, `staticcheck`, `unused`, `dupl`, and `funlen` cover the envtest suites, the e2e harness, the load harness, and the live drift tests — the same files this gate compiles — rather than skipping them the way `go vet` did before Q404 (Q430).
-That list must stay in step with `BUILD_TAGS` in `scripts/go/go-vet-tags.sh`; the coverage assertion above is what catches a new tag, since it fails before either gate can silently skip a file.
+That list must stay in step with `BUILD_TAGS` in `scripts/go/go-vet-tags.sh`, and [the build-tag gate](#the-build-tag-gate) asserts the two match before it vets.
+Its coverage assertion cannot do that job: it reads the Go tree, where a tag added to `BUILD_TAGS` alone is already covered, so the lint config could drift out of step unwatched (Q532).
 
 Two things to know when a finding lands in a tagged package:
 
