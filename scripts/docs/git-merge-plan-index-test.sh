@@ -577,14 +577,48 @@ fi
 # agreement is asserted on the real file, through a real merge: two branches each
 # file a plan directly under the same table header — the neighbour position that
 # conflicts by construction — and the gate runs over the merged tree.
+#
+# The fixture is a replica of this repo, so it has to carry whatever the gate
+# reads. That set is not stable: Q889 changed it twice in one cutover, gaining
+# docs/queue/ in phase 3 and losing docs/STATUS.md in phase 6, and both times
+# the only thing that noticed was this suite going red -- a suite named for the
+# driver, which nobody editing the gate has reason to open. So the set is read
+# out of the gate rather than restated here.
+#
+# Read as text, never run: this suite asserts the driver, and asking the gate
+# what it needs would let the fixture be defined by a script the same block
+# then checks the merged tree against.
+gate_inputs() {
+	awk 'match($0, /^[a-z_]+="\$repo_root\/[^"]+"$/) {
+		path = $0
+		sub(/^[a-z_]+="\$repo_root\//, "", path)
+		sub(/"$/, "", path)
+		print path
+	}' "$INDEX_CHECK" | sort -u
+}
+
 gate_repo="$WORKDIR/gate"
 rm -rf "$gate_repo"
-mkdir -p "$gate_repo/docs/plan/archive" "$gate_repo/docs/queue" "$gate_repo/scripts/lib" "$gate_repo/scripts/docs"
-cp -R "$REPO_ROOT/docs/plan/." "$gate_repo/docs/plan/"
-# The gate reads the store for both invariants since Q889 -- invariant 3's live
-# IDs and invariant 1's backing items. Omitting it leaves the baseline red,
-# which reads as the driver having broken the index.
-cp -R "$REPO_ROOT/docs/queue/." "$gate_repo/docs/queue/"
+mkdir -p "$gate_repo/scripts/lib" "$gate_repo/scripts/docs"
+
+mapfile -t GATE_INPUTS < <(gate_inputs)
+# An awk that stopped matching reads no paths, copies nothing, and leaves the
+# gate to fail for want of its inputs -- red, but attributed to the index rather
+# than to this reader. The empty set is therefore its own assertion.
+if (( ${#GATE_INPUTS[@]} == 0 )); then
+	bad "gate inputs: no \$repo_root path found in ${INDEX_CHECK##*/}"
+fi
+for gate_input in ${GATE_INPUTS+"${GATE_INPUTS[@]}"}; do
+	if [[ -d "$REPO_ROOT/$gate_input" ]]; then
+		mkdir -p "$gate_repo/$gate_input"
+		cp -R "$REPO_ROOT/$gate_input/." "$gate_repo/$gate_input/"
+	elif [[ -f "$REPO_ROOT/$gate_input" ]]; then
+		mkdir -p "$gate_repo/${gate_input%/*}"
+		cp "$REPO_ROOT/$gate_input" "$gate_repo/$gate_input"
+	else
+		bad "gate inputs: ${INDEX_CHECK##*/} reads $gate_input, absent from this repo"
+	fi
+done
 cp "$DRIVER" "$gate_repo/scripts/docs/git-merge-plan-index.sh"
 cp "$INDEX_CHECK" "$gate_repo/scripts/docs/check-plan-index.sh"
 cp "$REPO_ROOT/scripts/lib/merge-keyed-records.awk" "$gate_repo/scripts/lib/"

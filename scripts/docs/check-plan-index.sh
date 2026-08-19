@@ -71,6 +71,11 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/../lib/common.sh"
 
 repo_root="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+# scripts/docs/git-merge-plan-index-test.sh runs this gate inside a replica repo
+# and reads the three assignments below to decide what that replica must hold,
+# so keep them literal `name="$repo_root/<path>"` lines. Anything computed is
+# invisible to that reader, and the replica then goes missing an input the gate
+# requires -- which reads there as the merge driver having broken the index.
 readme="$repo_root/docs/plan/README.md"
 store="$repo_root/docs/queue"
 plan_dir="$repo_root/docs/plan"
