@@ -372,6 +372,14 @@ jobs:
         # Seconds; the render half needs kubectl and degrades to a printed skip
         # without it.
         run: make template-library-check
+      - name: .build/ tool rules declare their version pin (make tool-pin-check)
+        # This job rather than one of its own: the gate's subjects are the
+        # Makefile and its own checker, and `scripts` is the filter that already
+        # names both. Named separately from `make scripts-test` for the reason
+        # the step above gives — a tool rule that would serve a stale binary
+        # should read as that, not as a suite's tail (Q904). Reads the resolved
+        # make database twice; no toolchain, no network, well under a second.
+        run: make tool-pin-check
   # Supply-chain integrity gate for the committed vendor trees (Q126). `go build
   # -mod=vendor` only checks vendor/modules.txt consistency, never that the
   # vendored source matches the go.sum hashes — so a tampered vendor/ edit would

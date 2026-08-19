@@ -57,7 +57,8 @@ CHECK_FAST_GATES := roadmap-check \
                     metric-tiers-check reason-tiers-check upgrade-toc-check \
                     endpoint-parity-check \
                     release-notes-check \
-                    dashboard-render-check
+                    dashboard-render-check \
+                    tool-pin-check
 
 CHECK_HEAVY_GATES := build-tags-check lint cover-check
 
@@ -231,4 +232,5 @@ SCRIPTS_TESTS := agent/claude-go-throttle-hook-test agent/local-throttle-test \
                  updatecli/latest-cluster-autoscaler-patch-test \
                  docs/check-metric-tiers-test docs/check-reason-tiers-test \
                  e2e/check-endpoint-parity-test \
-                 manifest/check-dashboard-render-test
+                 manifest/check-dashboard-render-test \
+                 ci/check-tool-pins-test

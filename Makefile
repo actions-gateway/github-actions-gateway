@@ -115,6 +115,17 @@ list-gates: ## List every gate `make check` runs, in order, with what each one c
 gate-lists-check: ## Fail when `make check`'s gate and suite lists disagree with their derived consumers
 	scripts/ci/gate-list.sh --check --fast '$(CHECK_FAST_GATES)' --heavy '$(CHECK_HEAVY_GATES)' --queue '$(QUEUE_GATES)' --docs '$(DOCS_GATES)' --suites '$(SCRIPTS_TESTS)'
 
+# The tool half of the wiring gate above: every .build/ tool rule declares the
+# file carrying its version pin as a prerequisite (the Q842 pattern the tool
+# rules below state in a comment). Without one make treats an existing binary as
+# up to date forever, so a bump serves the old tool against the new target —
+# which is how cosign shipped and served a stale verifier until Q857. Reads the
+# resolved make database, so a rule's shape is make's answer rather than a
+# regexp's (Q904).
+.PHONY: tool-pin-check
+tool-pin-check: ## Assert every .build/ tool rule declares its version-pin prerequisite (Q904)
+	scripts/ci/check-tool-pins.sh
+
 
 .PHONY: queue-gates
 queue-gates: ## Every gate a docs/queue/-only change can fail — the seconds-long verify for a backlog edit
