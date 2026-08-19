@@ -35,9 +35,14 @@ variable "VERSION" {
   default = ""
 }
 
-// GHA_CACHE controls GitHub Actions cache export/import. Empty by default so
-// local invocations don't fail with "ActionsRuntimeToken required"; CI sets it
-// to "true" after docker/setup-buildx-action has injected the cache env vars.
+// GHA_CACHE controls GitHub Actions cache export/import. Empty by default, and
+// inert wherever the caller is a `run:` step: the type=gha backend needs
+// ACTIONS_RUNTIME_TOKEN and ACTIONS_RESULTS_URL, which the runner injects into
+// action processes only, and docker/setup-buildx-action v4.2.0 exports no
+// environment of its own. Without them buildx drops both entries silently
+// (measured on buildx v0.36.1 / buildkit v0.30.0: exit 0, no import or export
+// vertex, no warning), so the e2e bake sets this to "true" and caches nothing.
+// Q931 owns making it real or dropping it.
 variable "GHA_CACHE" {
   default = ""
 }
