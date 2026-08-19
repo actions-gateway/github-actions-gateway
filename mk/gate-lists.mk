@@ -153,6 +153,10 @@ DOCS_GATES := doc-links plan-index-check no-plan-refs-check em-dash-check \
 # the cluster-autoscaler patch resolver updatecli runs unattended (it must stay
 # inside the pinned Kubernetes minor and never downgrade, or the weekly bump
 # manufactures the very version skew the drift gate exists to catch, Q483),
+# the cosign digest resolver beside it (it decides which bytes may become the
+# binary that verifies every release, so it has to read them from a checksums
+# file whose sigstore signature it has checked, and print nothing when it has
+# not — neither half is visible in review of the manifest, Q927),
 # the release gate's ownership lease, which is the sole trigger for tearing down
 # a prod-classified cluster the running process never scaled up — a live gate or
 # a hand-run debugging session read as orphaned deletes work in progress, which
@@ -235,4 +239,5 @@ SCRIPTS_TESTS := agent/claude-go-throttle-hook-test agent/local-throttle-test \
                  docs/check-metric-tiers-test docs/check-reason-tiers-test \
                  e2e/check-endpoint-parity-test \
                  manifest/check-dashboard-render-test \
-                 ci/check-tool-pins-test
+                 ci/check-tool-pins-test \
+                 updatecli/cosign-release-sha256-test

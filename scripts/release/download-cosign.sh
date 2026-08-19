@@ -19,8 +19,10 @@
 # (which performs its own signature verification); this script covers the local
 # verify path.
 #
-# Updating the pins on a version bump: fetch the release checksums and copy the
-# four cosign-<os>-<arch> lines, e.g.
+# Updating the pins on a version bump: updatecli.d/cosign.yaml does it weekly,
+# rewriting the four lines below together with COSIGN_VERSION and publish.yml's
+# cosign-release, from the release's sigstore-signed cosign_checksums.txt (Q927).
+# By hand, the same source:
 #   curl -fsSL https://github.com/sigstore/cosign/releases/download/<ver>/cosign_checksums.txt
 #
 # Usage: scripts/release/download-cosign.sh <output-path> <version>
@@ -36,13 +38,17 @@ fi
 
 # Pinned SHA256 digests of the official cosign release binaries, keyed by
 # "<version> <os>-<arch>". Add a block when bumping COSIGN_VERSION.
+#
+# One line per platform, single-spaced: updatecli.d/cosign.yaml rewrites each
+# with one regexp per platform, and aligning the digests would need a different
+# pattern per row for no reader's benefit.
 expected_sha256() {
 	local key="$1"
 	case "$key" in
 		"v2.5.2 darwin-amd64") echo "0681abe20a482f4b9b3ed65b3debb8c6346591f2dc484b6bfa79609ff1318de4" ;;
 		"v2.5.2 darwin-arm64") echo "51fdc6d8da8310d72df10065a52247b6bebfe990d4c946dd9f71e17588256011" ;;
-		"v2.5.2 linux-amd64")  echo "bcfeae05557a9f313ee4392d2f335d0ff69ebbfd232019e3736fb04999fe1734" ;;
-		"v2.5.2 linux-arm64")  echo "2cbcea1873ad76274c3f241ef175d204654e3aac3e73e6ec4504e5227015cb0a" ;;
+		"v2.5.2 linux-amd64") echo "bcfeae05557a9f313ee4392d2f335d0ff69ebbfd232019e3736fb04999fe1734" ;;
+		"v2.5.2 linux-arm64") echo "2cbcea1873ad76274c3f241ef175d204654e3aac3e73e6ec4504e5227015cb0a" ;;
 		*) return 1 ;;
 	esac
 }

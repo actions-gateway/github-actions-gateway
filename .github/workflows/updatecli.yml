@@ -3,8 +3,8 @@ name: updatecli
 # Bump version+checksum pins that Dependabot cannot see, because they live as
 # workflow env vars / Makefile variables / shell-script defaults rather than in a
 # package manifest. One manifest per pin under updatecli.d/ (kind, Calico,
-# shellcheck, polaris, buildkit, envtest, cluster-autoscaler, Karpenter); the
-# run below applies them all and opens a PR per manifest. See
+# shellcheck, polaris, syft, buildkit, envtest, cluster-autoscaler, Karpenter,
+# cosign); the run below applies them all and opens a PR per manifest. See
 # docs/development/dependency-updates.md for the rationale, the per-manifest table,
 # and the one-time repo setting this needs. (KIND_NODE_IMAGE stays manual — it has
 # no clean datasource and moves the tested Kubernetes version deliberately; so
@@ -44,6 +44,13 @@ jobs:
       - uses: updatecli/updatecli-action@d422ba543720d01a96d4c3e3ab8544cc188cd711 # v3.5.0
         with:
           version: v0.118.0
+      # updatecli.d/cosign.yaml verifies the sigstore signature on cosign's
+      # release checksums before reading a digest out of them, and the verifier
+      # is the cosign the repo already pins — so the trust chain is anchored in
+      # the pin being replaced. Downloaded here rather than inside the shell
+      # source, which would re-fetch it once per platform.
+      - name: Bootstrap the pinned cosign (updatecli.d/cosign.yaml verifies with it)
+        run: make cosign
       - name: updatecli apply (or diff on dispatch)
         env:
           # updatecli.d/kind.yaml reads these via requiredEnv. Owner/repo are
