@@ -11,8 +11,21 @@
 
 Verify your toolchain at any time with `scripts/ci/check-tools.sh` (or `make doctor`).
 It checks the tools the project needs — grouped into `required` (the fast `make check` loop), `e2e`, and `extended` (heavier gates, dogfood) tiers — and for anything missing prints a per-OS install command or, when a tool is installed but not on your `PATH`, the exact directory to add.
-A tool below a version floor the registry declares is reported the same way, with the version it found.
+A tool below a version floor the registry declares is reported the same way, with the version it found and the version required.
 It exits nonzero if a required tool is missing or too old, so it also works as a CI/setup preflight.
+
+`scripts/ci/check-tools.sh --floors` prints every floor and where it came from:
+
+```bash
+scripts/ci/check-tools.sh --floors
+```
+
+Most floors are not a second copy of a number.
+`shellcheck`, `kind`, `yamllint`, `kubeconform` and `polaris` already have exact versions pinned in `.github/workflows/`, so the registry points at the pin (`@ci:SHELLCHECK_VERSION`) instead of restating it.
+Three of the five are bumped by updatecli, and a bump carries the floor with it.
+`go` works the same way, reading the `go` directive out of `go.work` (`@go.work`).
+For the linters and validators among them the floor bites in only one direction, which is the one that costs: a version older than CI's finds fewer problems, so your local run goes green and CI goes red.
+A reference that stops resolving (a pin renamed, a workflow deleted) is reported as a broken registry row and fails the command, rather than leaving the tool silently unchecked.
 
 ### The bash floor
 
