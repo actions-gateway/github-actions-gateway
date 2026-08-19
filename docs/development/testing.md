@@ -513,6 +513,7 @@ There is no version env var to bump; it rides the `tools/` Dependabot channel wi
 
 **The shellcheck dependency is a false-green hazard, so the gate asserts it.** actionlint delegates inline `run:` blocks to shellcheck and, when shellcheck is absent from `PATH`, silently disables that integration and still exits 0 — half the gate reporting green having linted nothing, the same class as Q404 and Q432.
 The script therefore fails outright on a missing shellcheck rather than running degraded. shellcheck is already a `required`-tier tool in [`check-tools.sh`](../../scripts/ci/check-tools.sh), so `make doctor` covers it; the CI job installs the same pinned version the shellcheck job does, off a workflow-level `SHELLCHECK_VERSION`/`SHELLCHECK_SHA256` pair so the two cannot drift apart.
+`make doctor` reads that same `SHELLCHECK_VERSION` as shellcheck's version floor, so a local shellcheck older than CI's is reported rather than left to surface as a red CI job on a branch whose `make shellcheck` was green: an older linter finds fewer problems, which is the same false-green in the other direction.
 
 Accepted findings inside a `run:` block carry the same targeted `# shellcheck disable=SCxxxx` directive as a standalone script — placed above a `{ … }` group it covers the whole group, which is how `publish.yml`'s single-quoted `printf` format strings (a genuine SC2016 false positive) are justified once rather than per line.
 
