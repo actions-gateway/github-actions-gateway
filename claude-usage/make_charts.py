@@ -25,6 +25,7 @@ Outputs PNGs (1x + @2x) to claude-usage/charts/:
     velocity             work shipped per day on reformat- and workflow-proof proxies
     velocity_quality     churn, PR cycle time, and code survival
     lines_vs_words       the same corpus in lines and in words, and each cost ratio
+    authored_bands       authored lines split by product vs the machinery around it
     rhythm_weekday       what the project does on each day of the week
     rhythm_hour          the same, by local hour of the day
 """
@@ -103,16 +104,19 @@ MODEL_HATCH = {
     "Sonnet 4.6": "", "Opus 4.7": "..", "Opus 4.8": "xx", "Opus 5": "--",
     "Fable 5": "\\\\", "Haiku 4.5": "++", "Other": "oo", "Unknown": "",
 }
-# The lines-authored breakdown: (label, colour, hatch, extractor). Maximally
-# distinct OI hues, each paired with its own hatch.
+# The lines-authored breakdown, by what the work was *for* rather than what
+# language it is in: (label, colour, hatch, column). Maximally distinct OI hues,
+# each paired with its own hatch. Vendored code is in none of them — it costs no
+# tokens to produce, and at ~89% of the tracked tree it would erase the rest of
+# any shared axis. It appears once, as the context line under the chart.
 LINE_BANDS = [
-    ("Go code",       OI["blue"],       "",   lambda g: int(g["go_code"]) - int(g.get("go_test") or 0)),
-    ("Go tests",      OI["purple"],     ".",  lambda g: int(g.get("go_test") or 0)),
-    ("Docs",          OI["green"],      "/",  lambda g: int(g.get("md") or 0)),
-    ("YAML",          OI["yellow"],     "x",  lambda g: int(g.get("yaml") or 0)),
-    ("Scripts & web", OI["vermillion"], "\\", lambda g: int(g.get("scripts") or 0)),
+    ("Product",       OI["blue"],       "",   "band_product"),
+    ("Machinery",     OI["vermillion"], "\\", "band_machinery"),
+    ("Product docs",  OI["green"],      "/",  "band_product_docs"),
+    ("Machinery docs", OI["skyblue"],   "..", "band_machinery_docs"),
+    ("Project mgmt",  OI["purple"],     ".",  "band_project_mgmt"),
 ]
-# The same five bands counted in words. Words are the headline denominator: they
+# The four language bands counted in words. Words are the headline denominator: they
 # are the unit closest to what a token is, and a reformat cannot move them. The
 # honest cost is that a per-word ratio rewards length, so prose trimmed to say the
 # same thing in fewer words scores as less output.
@@ -1419,6 +1423,77 @@ def chart_lines_vs_words():
     save(fig, "lines_vs_words")
 
 
+def chart_authored_bands():
+    """Authored lines split by what the work was for, not what language it is in.
+
+    ``go_code`` answers "how much was written" and cannot answer "written for
+    what": the shipped controllers and the gates that check them are one number in
+    it. These are the same authored lines re-cut by tree position, so the machinery
+    the project built for itself is visible as its own share rather than as product
+    growth.
+
+    Drawn only when the CSV carries the bands. The committed data is a dated
+    snapshot, so a checkout predating the split has the older columns and gets no
+    chart rather than an empty one.
+    """
+    git = {r["date"]: r for r in load("git_metrics.csv")}
+    dates = [d for d in sorted(git) if any(git[d].get(col) for _, _, _, col in LINE_BANDS)]
+    if not dates:
+        return
+    xs = [dparse(d) for d in dates]
+    stacks = [[int(git[d].get(col) or 0) / 1e3 for d in dates] for _, _, _, col in LINE_BANDS]
+
+    fig, ax = plt.subplots(figsize=(11, 6.2))
+    polys = ax.stackplot(xs, *stacks, colors=[c for _, c, _, _ in LINE_BANDS],
+                         alpha=0.28, zorder=2)
+    for poly, (_, col, hatch, _) in zip(polys, LINE_BANDS):
+        poly.set_hatch(hatch)
+        poly.set_edgecolor(darken(col))  # hatch draws in the edge colour
+        poly.set_linewidth(0.0)
+    cumtop = np.cumsum(np.array(stacks), axis=0)
+    running = 0.0
+    for i, (label, col, _, _) in enumerate(LINE_BANDS):
+        ax.plot(xs, cumtop[i], color=darken(col), lw=2.4, solid_capstyle="round", zorder=4)
+        mid = running + stacks[i][-1] / 2
+        running += stacks[i][-1]
+        ax.annotate(f"{label}  {stacks[i][-1]:.0f}k", (xs[-1], mid), xytext=(7, 0),
+                    textcoords="offset points", va="center", fontsize=9.5,
+                    fontweight="bold", color=darken(col))
+
+    # By column, not by position: the ratio names two specific bands, and reading
+    # them off the stack order would follow any later reordering silently.
+    latest = {col: s[-1] for s, (_, _, _, col) in zip(stacks, LINE_BANDS)}
+    product = latest["band_product"]
+    machinery = latest["band_machinery"]
+    ax.set_title("What the lines were written for, not what language they are in",
+                 fontsize=14, fontweight="bold", loc="left")
+    ax.annotate(f"{machinery / product:.2f} lines of machinery per line of product",
+                (xs[-1], running), xytext=(-8, -14), textcoords="offset points",
+                ha="right", fontsize=11.5, fontweight="bold", color=GOLD,
+                path_effects=HALO, zorder=LABEL_Z)
+    ax.set_ylabel("authored lines (thousands)", fontsize=11)
+    ax.set_ylim(0, running * 1.06)
+    ax.set_xlim(xs[0], xs[-1])
+    ax.xaxis.set_major_formatter(mdates.DateFormatter("%b %-d"))
+    ax.xaxis.set_major_locator(mdates.DayLocator(interval=4))
+    plt.setp(ax.get_xticklabels(), rotation=45, ha="right", fontsize=8.5)
+    ax.grid(axis="y", alpha=0.22)
+    for s in ("top", "right"):
+        ax.spines[s].set_visible(False)
+
+    reflow_marker((ax,), ax, y=0.02)
+    head = summary().get("head_snapshot", {})
+    vendor = head.get("vendor_files")
+    context = (f"vendored dependencies ({vendor:,} of "
+               f"{vendor + head['authored_files']:,} tracked files) are in none of these bands: "
+               "they cost no tokens to produce"
+               if vendor else "vendored dependencies are in none of these bands")
+    fig.text(0.012, 0.006,
+             f"generated output excluded from every band · {context}",
+             fontsize=7.5, color="#999")
+    save(fig, "authored_bands")
+
+
 KIND_BANDS = [
     ("manual",     "opened by a person",  OI["blue"],       ""),
     ("dispatched", "opened by dispatch",  OI["orange"],     "//"),
@@ -1547,6 +1622,7 @@ def main():
     chart_rhythm("weekday")
     chart_rhythm("hour")
     chart_lines_vs_words()
+    chart_authored_bands()
     print(f"wrote charts to {CHARTS}")
 
 

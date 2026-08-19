@@ -35,7 +35,8 @@ Outputs (all under claude-usage/data/):
     model_daily.csv     daily per-model headline tokens (merge-preserved)
     session_metrics.csv daily session concurrency (merge-preserved, never estimated)
     session_kinds.csv   daily sessions and spend split by who opened the session
-    git_metrics.csv     daily commits, test count, Go/Markdown/YAML LOC (recomputed)
+    git_metrics.csv     daily commits, test count, Go/Markdown/YAML LOC, and the
+                        same authored lines banded by product vs machinery (recomputed)
     summary.json        headline totals, per-model split, HEAD snapshot, provenance
 """
 
@@ -106,6 +107,93 @@ SCRIPT_PATHS = [
     "Makefile", "**/Makefile", "*.mk", "Dockerfile*", "**/Dockerfile*",
     ":!vendor/**", ":!**/vendor/**",
 ]
+
+
+def is_vendor(path):
+    """True for a vendored dependency, at the repo root or inside any module.
+
+    Both halves are load-bearing: the substring form alone misses the top-level
+    ``vendor/``, which has no leading slash, and the prefix form alone misses
+    ``tools/vendor/``. Vendored code costs no tokens to produce, so it belongs in
+    none of the authored series.
+    """
+    return path.startswith("vendor/") or "/vendor/" in path
+
+
+def is_generated_go(path):
+    """True for controller-gen Go output, decided by filename rather than content.
+
+    The YAML band matches ``code generated|controller-gen`` in the file. That rule
+    misclassifies Go: it also claims hand-written source that merely names the
+    tool, including ``devtools/release/semverfloor/crdsurface.go``, its test, and
+    the kubebuilder markers in several controllers. The generator names its own
+    output ``zz_generated.*``, which answers the question the content cannot.
+    """
+    return path.rsplit("/", 1)[-1].startswith("zz_generated")
+
+
+# Which half of the project a tracked file was authored *for*. The language series
+# (`go_code`, `md`, `yaml`, `scripts`) say what was written; these say what it was
+# written for — the shipped product, or the machinery that builds, checks and
+# tracks it. `(band, directory prefixes, exact paths)`; the prefixes are disjoint,
+# so first-match-wins is presentational rather than a precedence rule.
+#
+# `claude-usage/` counts itself as project management. The tool is authored, tokens
+# were spent on it, and a metrics tool that excluded itself would understate the
+# total by exactly the part it can measure best.
+TREE_BANDS = (
+    ("product",
+     ("cmd/", "api/", "broker/", "githubapp/", "scaleset/", "deploy/", "charts/"),
+     ("Dockerfile",)),
+    ("machinery",
+     ("scripts/", "devtools/", "tools/", ".github/", "mk/", "hooks/", "test/",
+      "testdata/", "updatecli.d/", ".claude/", ".githooks/"),
+     (".golangci.yml", ".mdreflow.yaml", ".yamllint.yaml", ".gitattributes",
+      ".gitignore", ".dockerignore", "Makefile", "docker-bake.hcl", "go.work",
+      "coverage-baseline.txt", ".git-blame-ignore-revs", "requirements-docs.txt")),
+    ("project_mgmt",
+     ("docs/queue/", "docs/plan/", "docs/postmortems/", "claude-usage/"),
+     ()),
+    ("product_docs",
+     ("docs/design/", "docs/operations/", "docs/releases/", "docs/reference/",
+      "docs/assets/", "docs/stylesheets/", "docs/javascripts/", "overrides/"),
+     ("mkdocs.yml", "docs/CNAME", "docs/robots.txt", "docs/README.md",
+      "docs/getting-started.md", "artifacthub-repo.yml", "README.md", "DESIGN.md",
+      "LICENSE", "NOTICE", "SECURITY.md",
+      # The pages MkDocs publishes from the docs/ root.
+      "docs/index.md", "docs/why-gag.md", "docs/features.md", "docs/alternatives.md",
+      "docs/demo.md", "docs/roadmap.md")),
+    ("machinery_docs",
+     ("docs/development/",),
+     ("CONTRIBUTING.md", "CLAUDE.md", "AGENTS.md")),
+)
+# Paths the series still counts and the tree no longer has: the backlog under its
+# two earlier homes, `claude-usage/` under its first name, and the broker's test
+# double before the module split. None of them exists at HEAD, so none can move the
+# file census — they are here so the historical days band as honestly as the
+# current one instead of piling up in `residual`.
+RETIRED_PATHS = (
+    ("product", ("internal/",), ()),
+    ("project_mgmt", ("docs/backlog/", "docs/todo/", "usage-stats/"), ("docs/STATUS.md",)),
+)
+BAND_NAMES = [b for b, _, _ in TREE_BANDS] + ["residual"]
+BAND_COLUMNS = [f"band_{b}" for b in BAND_NAMES]
+
+
+def classify_path(path):
+    """The band a tracked path belongs to, or ``residual``.
+
+    Callers filter vendor first: this reads the path prefix and nothing else, so a
+    vendored file under a banded directory would be claimed by that band.
+
+    ``residual`` is a gap, not a catch-all. A file no band claims is one nobody has
+    classified, so it is counted and named rather than folded into a neighbour,
+    where it would dilute a band with no way to notice.
+    """
+    for band, dirs, files in TREE_BANDS + RETIRED_PATHS:
+        if path.startswith(dirs) or path in files:
+            return band
+    return "residual"
 
 
 def resolve_host():
@@ -677,10 +765,18 @@ def rhythm_series(offset_hours):
 def git_series():
     """Per-day cumulative commits, test count, and authored LOC at each day's last commit.
 
-    ``go_code`` is Go (code + tests, block comments counted as code); ``md`` is
-    non-blank Markdown; ``yaml`` is non-blank *hand-written* YAML — generated YAML
-    (CRDs and other controller-gen output) is excluded with the same heuristic the
-    HEAD snapshot uses, so it isn't credited as authored output.
+    ``go_code`` is hand-written Go (code + tests, block comments counted as code);
+    ``md`` is non-blank Markdown; ``yaml`` is non-blank *hand-written* YAML.
+    Generated output is credited to nobody in either language — controller-gen's
+    ``zz_generated.*`` Go by filename, generated YAML (CRDs and the rest) by the
+    same content heuristic the HEAD snapshot uses.
+
+    The ``band_*`` columns re-cut those same authored lines by what the work was
+    for — the shipped product, the machinery that checks it, project management,
+    and the two halves of the docs — so ``go_code`` no longer has to stand for
+    both "built the product" and "built the tooling". They sum to
+    ``go_code + md + yaml + scripts``; ``go_test`` is a subset of ``go_code`` and
+    is not a band.
 
     ``prs`` and ``queue_closed`` are cumulative like the rest. ``active_hours`` is
     not: it is the count of distinct clock hours that day with a commit landing in
@@ -726,30 +822,45 @@ def git_series():
         cum_closed += closures.get(d, 0)
         cum_filed += filings.get(d, 0)
         rev = last_hash[d]
-        nonblank = grep_count(rev, "[^[:space:]]", GO_PATHS)
-        line_comments = grep_count(rev, "^[[:space:]]*//", GO_PATHS)
-        test_nonblank = grep_count(rev, "[^[:space:]]", TEST_PATHS)
-        test_comments = grep_count(rev, "^[[:space:]]*//", TEST_PATHS)
-        md = sum(grep_lines_per_file(rev, "[^[:space:]]", MD_PATHS).values())
+        # Per file rather than per corpus, at the same cost: `git grep -c` is the
+        # same call either way, and the map is what the tree bands are summed from.
+        go_lines = grep_lines_per_file(rev, "[^[:space:]]", GO_PATHS)
+        go_comments = grep_lines_per_file(rev, "^[[:space:]]*//", GO_PATHS)
+        go_per_file = {p: n - go_comments.get(p, 0) for p, n in go_lines.items()
+                       if not is_generated_go(p)}
+        test_lines = grep_lines_per_file(rev, "[^[:space:]]", TEST_PATHS)
+        test_comments = grep_lines_per_file(rev, "^[[:space:]]*//", TEST_PATHS)
+        md_per_file = grep_lines_per_file(rev, "[^[:space:]]", MD_PATHS)
         yaml_counts = grep_lines_per_file(rev, "[^[:space:]]", YAML_PATHS)
         generated = grep_files_matching(rev, "code generated|controller-gen", YAML_PATHS)
-        yaml_hand = sum(c for p, c in yaml_counts.items()
-                        if p not in generated and "/crd/" not in p)
-        go_w = grep_word_count(rev, "[^[:space:]]", GO_PATHS)
+        yaml_per_file = {p: c for p, c in yaml_counts.items()
+                         if p not in generated and "/crd/" not in p}
+        scripts_per_file = grep_lines_per_file(rev, "[^[:space:]]", SCRIPT_PATHS)
+        go_words = grep_words_per_file(rev, "[^[:space:]]", GO_PATHS)
+        go_w = sum(c for p, c in go_words.items() if not is_generated_go(p))
         md_w = grep_word_count(rev, "[^[:space:]]", MD_PATHS)
         yaml_words_per_file = grep_words_per_file(rev, "[^[:space:]]", YAML_PATHS)
         yaml_w = sum(c for p, c in yaml_words_per_file.items()
                      if p not in generated and "/crd/" not in p)
         scripts_w = grep_word_count(rev, "[^[:space:]]", SCRIPT_PATHS)
+        # The same authored lines the four language columns hold, re-cut by where
+        # in the tree they sit, so the bands sum to `go_code + md + yaml + scripts`.
+        bands = defaultdict(int)
+        for per_file in (go_per_file, md_per_file, yaml_per_file, scripts_per_file):
+            for p, n in per_file.items():
+                bands[classify_path(p)] += n
         rows[d] = {
             "date": d,
             "commits": cum,
             "tests": grep_count(rev, "^func Test", TEST_PATHS),
-            "go_code": nonblank - line_comments,           # all Go: non-test + test
-            "go_test": test_nonblank - test_comments,      # the test subset of go_code
-            "md": md,
-            "yaml": yaml_hand,
-            "scripts": grep_count(rev, "[^[:space:]]", SCRIPT_PATHS),  # shell/python/web/build
+            # Hand-authored only: controller-gen's `zz_generated.*` is excluded the
+            # same way generated YAML is, and for the same reason.
+            "go_code": sum(go_per_file.values()),          # all Go: non-test + test
+            "go_test": sum(n - test_comments.get(p, 0) for p, n in test_lines.items()
+                           if not is_generated_go(p)),     # the test subset of go_code
+            "md": sum(md_per_file.values()),
+            "yaml": sum(yaml_per_file.values()),
+            "scripts": sum(scripts_per_file.values()),     # shell/python/web/build
             "prs": cum_prs,
             "queue_closed": cum_closed,
             "queue_filed": cum_filed,
@@ -769,6 +880,10 @@ def git_series():
             "yaml_words": yaml_w,
             "scripts_words": scripts_w,
             "words": go_w + md_w + yaml_w + scripts_w,
+            # The authored lines above, re-cut by what the work was for. `residual`
+            # is a classification gap rather than an "other" band: anything landing
+            # in it is a path `classify_path` has no answer for.
+            **{f"band_{b}": bands[b] for b in BAND_NAMES},
         }
     return rows
 
@@ -778,7 +893,8 @@ def go_split(path):
     code = comment = blank = 0
     in_block = False
     try:
-        lines = open(path, errors="replace").read().split("\n")
+        with open(path, errors="replace") as fh:
+            lines = fh.read().split("\n")
     except OSError:
         return (0, 0, 0)
     for ln in lines:
@@ -801,29 +917,41 @@ def go_split(path):
 
 
 def head_snapshot():
-    """Accurate line/test counts for the current working tree (excludes vendor)."""
-    tracked = [
-        f for f in git("ls-files").splitlines()
-        if f and "/vendor/" not in f and not f.startswith("vendor/")
-    ]
+    """Accurate line/test counts for the current working tree (excludes vendor).
+
+    Also carries the file census the ``band_*`` series are cut from — the count
+    per band, plus the vendored file count the bands deliberately leave out. One
+    number for vendor is the whole of its representation here: it costs no tokens
+    to produce, and on a shared axis it is 89% of the tracked tree.
+    """
+    tracked = [f for f in git("ls-files").splitlines() if f]
+    authored = [f for f in tracked if not is_vendor(f)]
+    band_files = defaultdict(int)
+    for f in authored:
+        band_files[classify_path(f)] += 1
     go = [0, 0, 0]
+    go_generated = 0
     md_nonblank = 0
     yaml_hand = 0
     yaml_gen = 0
     tests = 0
-    for rel in tracked:
+    for rel in authored:
         path = os.path.join(REPO, rel)
         if rel.endswith(".go"):
             c = go_split(path)
+            if is_generated_go(rel):
+                go_generated += c[0]
+                continue
             go = [a + b for a, b in zip(go, c)]
             if rel.endswith("_test.go"):
-                for ln in open(path, errors="replace"):
-                    if ln.startswith("func Test"):
-                        tests += 1
+                with open(path, errors="replace") as fh:
+                    tests += sum(1 for ln in fh if ln.startswith("func Test"))
         elif rel.endswith(".md"):
-            md_nonblank += sum(1 for ln in open(path, errors="replace") if ln.strip())
+            with open(path, errors="replace") as fh:
+                md_nonblank += sum(1 for ln in fh if ln.strip())
         elif rel.endswith((".yaml", ".yml")):
-            txt = open(path, errors="replace").read()
+            with open(path, errors="replace") as fh:
+                txt = fh.read()
             n = sum(1 for ln in txt.split("\n") if ln.strip())
             head = txt.lower()[:500]
             generated = ("code generated" in head) or ("/crd/" in rel) or ("controller-gen" in head)
@@ -832,10 +960,13 @@ def head_snapshot():
             else:
                 yaml_hand += n
     return {
-        "go_code": go[0], "go_comments": go[1],
+        "go_code": go[0], "go_comments": go[1], "go_generated": go_generated,
         "markdown_nonblank": md_nonblank,
         "yaml_handwritten": yaml_hand, "yaml_generated": yaml_gen,
         "tests": tests,
+        "authored_files": len(authored),
+        "vendor_files": len(tracked) - len(authored),
+        "band_files": {b: band_files[b] for b in BAND_NAMES},
         "commits": int(git("rev-list", "--count", "HEAD").strip() or 0),
     }
 
@@ -1361,7 +1492,8 @@ def main():
     git_rows = git_series()
     write_csv(git_csv, ["date", "commits", "tests", "go_code", "go_test", "md", "yaml", "scripts",
                         "prs", "queue_closed", "queue_filed", "active_hours", "feat", "fix",
-                        "go_words", "md_words", "yaml_words", "scripts_words", "words"],
+                        "go_words", "md_words", "yaml_words", "scripts_words", "words",
+                        *BAND_COLUMNS],
               [git_rows[d] for d in sorted(git_rows)])
     # Pull requests: merge-preserved and fetched incrementally, because the source
     # is a remote API rather than something recomputable offline. Existing rows are

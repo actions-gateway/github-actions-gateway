@@ -560,5 +560,241 @@ class PullRequestFetch(unittest.TestCase):
         self.assertEqual(got[7]["cycle_hours"], "2.0000")
 
 
+class VendorExclusion(unittest.TestCase):
+    """Both halves of the vendor test, and neither of them alone.
+
+    The prefix half is what catches the top-level ``vendor/``, which has no leading
+    slash; the substring half is what catches ``tools/vendor/``. Dropping either
+    lets ~96% of the tracked Go into a series whose whole point is authored output.
+    """
+
+    def test_the_top_level_directory_needs_the_prefix_test(self):
+        self.assertTrue(cm.is_vendor("vendor/k8s.io/api/core/v1/types.go"))
+        self.assertNotIn("/vendor/", "vendor/k8s.io/api/core/v1/types.go")
+
+    def test_a_nested_module_needs_the_substring_test(self):
+        self.assertTrue(cm.is_vendor("tools/vendor/sigs.k8s.io/controller-tools/main.go"))
+        self.assertFalse("tools/vendor/sigs.k8s.io/controller-tools/main.go".startswith("vendor/"))
+
+    def test_authored_paths_that_merely_read_like_vendor_are_kept(self):
+        for path in ("devtools/vendorlock/main.go", "docs/design/vendoring.md",
+                     "scripts/ci/vendor-check.sh"):
+            self.assertFalse(cm.is_vendor(path), path)
+
+
+class GeneratedGo(unittest.TestCase):
+    """Generated Go is decided by filename because the content rule is wrong here.
+
+    ``code generated|controller-gen`` is the YAML rule. Applied to Go it claims
+    hand-written source that names the tool — the semverfloor CRD-surface reader
+    and its test do exactly that, and so do the kubebuilder markers in several
+    controllers.
+    """
+
+    def test_controller_gen_output_is_generated(self):
+        for path in ("api/v2beta1/zz_generated.deepcopy.go",
+                     "cmd/gmc/api/v1alpha1/zz_generated.deepcopy.go"):
+            self.assertTrue(cm.is_generated_go(path), path)
+
+    def test_source_that_only_names_the_generator_is_authored(self):
+        for path in ("devtools/release/semverfloor/crdsurface.go",
+                     "devtools/release/semverfloor/crdsurface_test.go",
+                     "cmd/gmc/internal/controller/egressproxy_controller.go",
+                     "tools/tools.go"):
+            self.assertFalse(cm.is_generated_go(path), path)
+
+
+class TreeBands(unittest.TestCase):
+    """The band a path lands in, asserted path by path.
+
+    Every case here is one the classifier can get wrong: a docs page whose band
+    turns on which subdirectory it is in, a Go file under a product directory that
+    is nonetheless generated, and the metrics tool counting itself.
+    """
+
+    CASES = {
+        "product": (
+            "cmd/agc/internal/controller/runner.go",
+            "api/v2beta1/actionsgateway_types.go",
+            "broker/session.go",
+            "githubapp/token.go",
+            "scaleset/client.go",
+            "deploy/agc/deployment.yaml",
+            "charts/gateway/templates/_helpers.tpl",
+            "Dockerfile",
+        ),
+        "machinery": (
+            "scripts/ci/check-tools.sh",
+            "devtools/release/semverfloor/crdsurface.go",
+            "tools/tools.go",
+            ".github/workflows/unit-test.yml",
+            "mk/gate-lists.mk",
+            "hooks/pre-commit",
+            "test/e2e/suite_test.go",
+            "testdata/scaleset/message.json",
+            "updatecli.d/kind.yaml",
+            ".claude/foreground-guard.json",
+            "Makefile",
+            ".golangci.yml",
+            "go.work",
+        ),
+        "project_mgmt": (
+            "docs/queue/Q743.md",
+            "docs/plan/README.md",
+            "docs/postmortems/2026-08-14-index-lock.md",
+            "claude-usage/compute_metrics.py",
+            "claude-usage/data/git_metrics.csv",
+        ),
+        "product_docs": (
+            "docs/design/05-security.md",
+            "docs/operations/release.md",
+            "docs/releases/v0.3.0.md",
+            "docs/reference/crd.md",
+            "docs/assets/logo.svg",
+            "docs/stylesheets/extra.css",
+            "docs/javascripts/tabs.js",
+            "overrides/main.html",
+            "docs/index.md",
+            "docs/why-gag.md",
+            "docs/getting-started.md",
+            "mkdocs.yml",
+            "README.md",
+            "DESIGN.md",
+        ),
+        "machinery_docs": (
+            "docs/development/testing.md",
+            "docs/development/maintaining-backlog.md",
+            "CONTRIBUTING.md",
+            "CLAUDE.md",
+            "AGENTS.md",
+        ),
+    }
+
+    def test_every_case_lands_in_its_band(self):
+        for band, paths in self.CASES.items():
+            for path in paths:
+                self.assertEqual(cm.classify_path(path), band, path)
+
+    def test_no_case_lands_in_two_bands(self):
+        """A path claimed by two bands would make the first-match order load-bearing,
+        which the disjoint-prefix comment says it is not."""
+        seen = {}
+        for band, paths in self.CASES.items():
+            for path in paths:
+                self.assertNotIn(path, seen, f"{path} is listed under {seen.get(path)} too")
+                seen[path] = band
+
+    def test_the_two_halves_of_docs_are_told_apart(self):
+        """The split the bands exist for: the same file type, the same tree, opposite
+        sides of product-versus-machinery."""
+        self.assertEqual(cm.classify_path("docs/design/05-security.md"), "product_docs")
+        self.assertEqual(cm.classify_path("docs/development/testing.md"), "machinery_docs")
+        self.assertEqual(cm.classify_path("docs/queue/Q1.md"), "project_mgmt")
+
+    def test_the_metrics_tool_counts_itself(self):
+        """Deliberate: the tool is authored and tokens were spent on it, so excluding
+        it would understate the total by the part it measures best."""
+        self.assertEqual(cm.classify_path("claude-usage/make_charts.py"), "project_mgmt")
+
+    def test_generated_product_code_is_still_product(self):
+        """Bands say what the work was for; the generated filter says whether anyone
+        authored it. They are independent, and a band must not absorb the other job."""
+        path = "api/v2beta1/zz_generated.deepcopy.go"
+        self.assertEqual(cm.classify_path(path), "product")
+        self.assertTrue(cm.is_generated_go(path))
+
+    def test_an_unclassified_path_is_residual_rather_than_absorbed(self):
+        """The property that makes the census checkable. A catch-all band would take
+        this silently and the classification would stop being falsifiable."""
+        self.assertEqual(cm.classify_path("newthing/main.go"), "residual")
+        self.assertEqual(cm.classify_path("UNCLASSIFIED.md"), "residual")
+
+    def test_retired_paths_reuse_the_live_band_names(self):
+        """The retired list backfills history; inventing a band there would add a
+        column nothing writes."""
+        for band, _, _ in cm.RETIRED_PATHS:
+            self.assertIn(band, cm.BAND_NAMES)
+
+    def test_retired_paths_are_gone_from_the_tree(self):
+        """What makes the backfill safe: none of them exists at HEAD, so none can
+        move the file census the bands are checked against."""
+        tracked = set(cm.git("ls-files").splitlines())
+        if not tracked:
+            self.skipTest("no git checkout to read")
+        for _, dirs, files in cm.RETIRED_PATHS:
+            for f in files:
+                self.assertNotIn(f, tracked)
+            for d in dirs:
+                self.assertEqual([p for p in tracked if p.startswith(d)], [])
+
+
+class BandCensus(unittest.TestCase):
+    """The bands against the real tree, which is the claim being made.
+
+    Counts are not pinned: they move with every commit. What is pinned is that the
+    classification is total — every non-vendor tracked file is claimed by a band,
+    and the only files left over are root files carrying no authored content.
+    """
+
+    # Tracked, non-vendor, and deliberately in no band: none of them is authored
+    # text, so none contributes a line to any series.
+    KNOWN_RESIDUAL = {"THIRD-PARTY-NOTICES", "go.work.sum", "tmp/.gitkeep"}
+
+    def setUp(self):
+        self.tracked = [f for f in cm.git("ls-files").splitlines() if f]
+        if not self.tracked:
+            self.skipTest("no git checkout to read")
+        self.authored = [f for f in self.tracked if not cm.is_vendor(f)]
+
+    def test_vendor_dominates_the_tree_and_stays_out_of_the_census(self):
+        """The reason vendor is a single context number rather than a band."""
+        vendor = len(self.tracked) - len(self.authored)
+        self.assertGreater(vendor, len(self.authored) * 5)
+        self.assertEqual([f for f in self.authored if cm.is_vendor(f)], [])
+
+    def test_vendor_is_excluded_before_classification_and_never_by_it(self):
+        """``classify_path`` reads the path prefix and nothing else, so a vendored
+        file under a banded directory is ``machinery`` to it. The ordering is the
+        guard: drop the filter and 7k vendored files land in a band."""
+        path = "devtools/vendor/github.com/beorn7/perks/quantile/stream.go"
+        self.assertTrue(cm.is_vendor(path))
+        self.assertEqual(cm.classify_path(path), "machinery")
+
+    def test_every_authored_file_is_classified(self):
+        stray = sorted(f for f in self.authored
+                       if cm.classify_path(f) == "residual" and f not in self.KNOWN_RESIDUAL)
+        self.assertEqual(stray, [], "unclassified tracked files — add them to a band in "
+                                    "compute_metrics.TREE_BANDS rather than leaving them "
+                                    "to dilute the census")
+
+    def test_the_bands_partition_the_authored_tree(self):
+        counted = sum(1 for f in self.authored if cm.classify_path(f) in cm.BAND_NAMES)
+        self.assertEqual(counted, len(self.authored))
+
+    def test_product_and_machinery_are_both_substantial(self):
+        """The split is only worth drawing if neither side is a rounding error — the
+        state `go_code` alone could not show."""
+        counts = {b: 0 for b in cm.BAND_NAMES}
+        for f in self.authored:
+            counts[cm.classify_path(f)] += 1
+        self.assertGreater(counts["product"], 100)
+        self.assertGreater(counts["machinery"], 100)
+        self.assertGreater(counts["project_mgmt"], 100)
+
+
+class HeadSnapshotBands(unittest.TestCase):
+    """The snapshot carries the census the CSV bands are cut from, plus the one
+    vendor number that stays out of them."""
+
+    def test_snapshot_reports_the_census_and_the_vendor_context(self):
+        snap = cm.head_snapshot()
+        if not snap["authored_files"]:
+            self.skipTest("no git checkout to read")
+        self.assertEqual(sum(snap["band_files"].values()), snap["authored_files"])
+        self.assertEqual(sorted(snap["band_files"]), sorted(cm.BAND_NAMES))
+        self.assertGreater(snap["vendor_files"], snap["authored_files"])
+        self.assertGreater(snap["go_generated"], 0)
+
+
 if __name__ == "__main__":
     unittest.main()
