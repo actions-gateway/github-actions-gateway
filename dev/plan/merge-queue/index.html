@@ -2713,6 +2713,9 @@ Amortizing one combined run per batch removes the quadratic term.</p>
 <li>Concurrency groups key on <code>github.ref</code>; merge-group refs (<code>gh-readonly-queue/...</code>) are unique per queue entry, and <code>cancel-in-progress</code> stays scoped to <code>pull_request</code>.</li>
 <li>status-lint's per-PR isolation check reads <code>github.event.pull_request</code>; it is already gated <code>if: github.event_name == 'pull_request'</code> and simply skips on the queue run (the PR event already enforced it).</li>
 </ul>
+<p><strong>A tenth workflow followed, after this plan closed.</strong> <code>doc-links.yml</code> was not behind a required check and so was out of Phase 1's scope, which left its docs-content gates seeing each PR's own base and never the candidate merge — the shape Q742 measured on the em-dash ceiling.
+Q743 restructured it onto the same always-trigger + <code>changes</code> + aggregate-gate pattern and added the trigger.
+Registering <code>doc-links-gate</code> in the ruleset is Q943, and it carries this plan's ordering constraint: the workflow lands first, the required check second.</p>
 <h2 id="phase-2-activation-post-merge-ordering-matters">Phase 2: activation (post-merge, ordering matters)<a class="headerlink" href="#phase-2-activation-post-merge-ordering-matters" title="Permanent link">&para;</a></h2>
 <p>Enabling the queue before Phase 1 reaches <code>main</code> wedges every merge: the required checks would never report on <code>merge_group</code> refs.
 After Phase 1 merges, add the rule to the existing <code>default-protect</code> ruleset (id 17350763):</p>

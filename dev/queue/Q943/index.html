@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q743/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q943/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>doc-links.yml has no merge_group, so five gates skip the queue - GitHub Actions Gateway</title>
+        <title>doc-links-gate runs on the candidate merge but nothing blocks on it - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#doc-linksyml-has-no-merge_group-so-five-gates-skip-the-queue" class="md-skip">
+        <a href="#doc-links-gate-runs-on-the-candidate-merge-but-nothing-blocks-on-it" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              doc-links.yml has no merge_group, so five gates skip the queue
+              doc-links-gate runs on the candidate merge but nothing blocks on it
             
           </span>
         </div>
@@ -2567,11 +2567,11 @@
   
 
 
-<h1 id="doc-linksyml-has-no-merge_group-so-five-gates-skip-the-queue"><code>doc-links.yml</code> has no <code>merge_group</code>, so five gates skip the queue<a class="headerlink" href="#doc-linksyml-has-no-merge_group-so-five-gates-skip-the-queue" title="Permanent link">&para;</a></h1>
-<p>Measured 2026-08-08: 9 of 25 workflows declare it; not this one, so its 5 gates never see the candidate merge.
-Q742 ratchets the em-dash ceiling; this covers the other 4 gates and any later ratchet.
-<code>status-lint.yml</code> already pairs <code>merge_group</code> with that <code>changes</code> job, so the Q574 dependency this row used to claim does not hold.
-Measured 2026-08-18: 5 workflows are queue-blind, and Q942 covers why rule 8 cannot see them.</p>
+<h1 id="doc-links-gate-runs-on-the-candidate-merge-but-nothing-blocks-on-it"><code>doc-links-gate</code> runs on the candidate merge but nothing blocks on it<a class="headerlink" href="#doc-links-gate-runs-on-the-candidate-merge-but-nothing-blocks-on-it" title="Permanent link">&para;</a></h1>
+<p>Q743 gave <code>doc-links.yml</code> its <code>merge_group</code> trigger and an aggregate <code>doc-links-gate</code> job, so the docs gates now see the queue's candidate merge.
+The queue arbitrates on the ruleset's required checks alone, so a red verdict there is visible and not binding until <code>doc-links-gate</code> joins the nine in <code>default-protect</code> (id 17350763).
+That is a repo-settings change and must follow the workflow onto <code>main</code>: registering a check no run reports wedges every merge (<a href="../../plan/merge-queue/">merge-queue.md</a> Phase 2).
+Measured 2026-08-18: 10 of 28 workflows declare <code>merge_group</code>; 9 contexts are required.</p>
 
 
 

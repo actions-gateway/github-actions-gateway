@@ -2908,12 +2908,12 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>Measured across this family: Q596 2418 runs, Q703 240, Q803 5 at GOMAXPROCS=2, none reproducing a CI-only trigger.</td>
 </tr>
 <tr>
-<td><a href="Q743/">Q743</a></td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/doc-links.yml"><code>doc-links.yml</code> has no <code>merge_group</code>, so five gates skip the queue</a></td>
-<td><code>ci</code> <code>retro</code></td>
+<td><a href="Q943/">Q943</a></td>
+<td><a href="../plan/merge-queue/"><code>doc-links-gate</code> runs on the candidate merge but nothing blocks on it</a></td>
+<td><code>ci</code></td>
 <td>🔲</td>
-<td>S</td>
-<td>Measured 2026-08-08: 9 of 25 workflows declare it; not this one, so its 5 gates never see the candidate merge.</td>
+<td>XS</td>
+<td>Q743 gave <code>doc-links.yml</code> its <code>merge_group</code> trigger and an aggregate <code>doc-links-gate</code> job, so the docs gates now see the queue's candidate …</td>
 </tr>
 <tr>
 <td><a href="Q942/">Q942</a></td>
