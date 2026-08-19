@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q817/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q937/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>Docs teach bare two-dot git diff origin/main for a branch's own scope - GitHub Actions Gateway</title>
+        <title>Prose can call a deleted row live; only plan README column 3 is gated - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#docs-teach-bare-two-dot-git-diff-originmain-for-a-branchs-own-scope" class="md-skip">
+        <a href="#prose-can-call-a-deleted-row-live-only-plan-readme-column-3-is-gated" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Docs teach bare two-dot git diff origin/main for a branch's own scope
+              Prose can call a deleted row live; only plan README column 3 is gated
             
           </span>
         </div>
@@ -2567,9 +2567,17 @@
   
 
 
-<h1 id="docs-teach-bare-two-dot-git-diff-originmain-for-a-branchs-own-scope">Docs teach bare two-dot <code>git diff origin/main</code> for a branch's own scope<a class="headerlink" href="#docs-teach-bare-two-dot-git-diff-originmain-for-a-branchs-own-scope" title="Permanent link">&para;</a></h1>
-<p>Two-dot against a moving ref shows main's commits as yours: measured 2026-08-12, a post-rebase read listed 9 files the branch never touched.
-The merge-base rule is scoped to backlog lint; CONTRIBUTING teaches the bare form with no caveat.</p>
+<h1 id="prose-can-call-a-deleted-row-live-only-plan-readme-column-3-is-gated">Prose can call a deleted row live; only plan README column 3 is gated<a class="headerlink" href="#prose-can-call-a-deleted-row-live-only-plan-readme-column-3-is-gated" title="Permanent link">&para;</a></h1>
+<p>Closing Q900 left <code>testing.md</code> saying "Q900 is measuring which way that actually falls", and no gate could see it.
+Every check here is typed, and a bare ID in a sentence is neither a link, a Status cell, nor a roadmap bullet.
+Measured on this branch with Q900 already deleted, <code>doc-links</code> passed over 438 files and 6592 links; an orchestrator run over six chained PRs was clean too.
+Every row a batch deletes can leave this, and a batch deletes a dozen.
+The obvious gate does not survive measurement.
+2263 file/absent-id pairs across <code>docs/</code> cite a row not in the store; narrowing to <code>QNNN is|will|owns|…</code> still leaves 81, and every sampled one is correct prose ("Q495 is the worked example").
+<code>scripts/docs/check-plan-index.sh:34-48</code> already holds the discriminator, for one table: linked iff live, because "the anchor dies with the row and <code>make doc-links</code> says so".
+It keeps the bare form where the ID "describes what the plan was about and stays true".
+So the cheap half is a convention in maintaining-backlog.md: prose deferring an open question to a row links it, which makes the existing link gates catch the deletion.
+Whether the free-prose half is gateable at all is the open question; a claim that goes stale is not distinguishable from a citation by any pattern tried here.</p>
 
 
 

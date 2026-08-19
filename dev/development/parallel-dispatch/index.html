@@ -3002,6 +3002,10 @@ The base is read because the wake has to name a branch, and a stacked PR told to
 The wake names the base and never a <code>git rebase --onto</code> line: that needs the old base head, which <code>merge-base</code> cannot recover once the base has been force-pushed.
 It carries no CI output, so a batch of them does not fill the dispatcher's context with logs for failures the owning worker is fixing.</p>
 <p>On <code>conflict</code> the dispatcher wakes the owning worker; the worker rebases onto the branch the wake names, re-runs the gate, pushes, and relaunches its own pr-sentinel watcher.</p>
+<p><strong>A <code>ready</code> names a pull request, never a revision.</strong> pr-sentinel reports the PR number and its state, so a push during the watcher's sleep redirects what the verdict is about while the event still reads correct, green and unambiguous.
+Measured 2026-08-18: a watcher launched on head <code>0d458d95</code> fired <code>ready</code> after the branch had moved to <code>2c2d14b4</code>, and nothing in the event named either SHA.
+That is <a href="../testing/#path-gated-workflows-verify-the-heavy-gates-actually-ran">the <code>--branch</code> filter's defect</a> one door over, and worse, because no flag makes it right.
+Re-read <code>headRefOid</code> and confirm the runs on that SHA before acting on any <code>ready</code> that followed a push.</p>
 <blockquote>
 <p><strong>With no dispatcher, the window belongs to the worker.</strong> A session started straight from a Q-ID has nobody to hand it to, and the assignment above silently addresses no one.
 Measured 2026-08-14: three PRs from one dispatcher-less session went <code>DIRTY</code> five times between <code>ready</code> and merge, <code>docs/STATUS.md</code> being the file every one of them touched.</p>
@@ -3067,8 +3071,20 @@ The mechanics here:</p>
   Report the verdict and its <code>measured:</code> line, and hand the re-enqueue to the maintainer.</li>
 </ul>
 <h2 id="concurrency-and-contention">Concurrency and contention<a class="headerlink" href="#concurrency-and-contention" title="Permanent link">&para;</a></h2>
+<p><strong><code>gh pr list</code> cannot see a branch pushed before its pull request exists</strong>, so a contention brief built from it reads as a closed list and is not one.
+Measured across the 2026-08-18 batch: three separate briefs cleared a file an unmerged branch was already editing, and a worker's own sweep caught each one rather than the dispatcher.
+Derive contention from the remote refs and keep the PR list as the weaker second opinion:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="k">for</span><span class="w"> </span>b<span class="w"> </span><span class="k">in</span><span class="w"> </span><span class="k">$(</span>git<span class="w"> </span>branch<span class="w"> </span>-r<span class="w"> </span>--format<span class="o">=</span><span class="s1">'%(refname:short)'</span><span class="k">)</span><span class="p">;</span><span class="w"> </span><span class="k">do</span>
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="w">    </span>git<span class="w"> </span>diff<span class="w"> </span>--quiet<span class="w"> </span><span class="s2">"origin/main...</span><span class="nv">$b</span><span class="s2">"</span><span class="w"> </span>--<span class="w"> </span>&lt;path&gt;<span class="w"> </span><span class="o">||</span><span class="w"> </span><span class="nb">printf</span><span class="w"> </span><span class="s1">'%s\n'</span><span class="w"> </span><span class="s2">"</span><span class="nv">$b</span><span class="s2">"</span>
+<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="k">done</span>
+</code></pre></div>
+<p>Fire it at a known-contended path first: a sweep that never matched and a sweep that found nothing print the same thing.
+A branch with no merge base exits non-zero and reads as a false hit, which is what <code>origin/gh-pages</code> does here (Q934).</p>
+<p><strong>The two instruments are complementary rather than ranked.</strong> The sweep finds every branch that touches the path, which is a superset; the PR list says which of them is in flight.
+An unmerged branch carrying commits but no open PR is normally abandoned residue rather than contention, and this repo keeps those deliberately.
+Measured 2026-08-18 on this page: the sweep returned eight branches where <code>gh pr list</code> returned none, and all eight were stale.</p>
 <p><strong>Take the concurrency cap from the machine</strong>, not from a constant:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>scripts/agent/local-throttle.sh<span class="w"> </span>workers
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>scripts/agent/local-throttle.sh<span class="w"> </span>workers
 </code></pre></div>
 <p>It returns the smaller of what RAM and physical cores allow, under a ceiling of 12.
 A worker costs one Claude Code session (measured 0.43 GB mean / 0.60 GB peak resident) plus a share of the gate — and the gate share is already bounded by the <a href="../testing/#resource-auto-throttle-on-gui-dev-machines">2-slot semaphore</a> however many workers exist, so each extra worker costs the session alone.
@@ -3157,9 +3173,9 @@ The local probe now runs first and the paginated timeline read stays behind the 
   When you need the <em>paths</em> rather than the verdict, take them where no driver is configured:</p>
 </li>
 </ul>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>git<span class="w"> </span>clone<span class="w"> </span>--quiet<span class="w"> </span>--bare<span class="w"> </span>.<span class="w"> </span>/tmp/nodrv<span class="w">        </span><span class="c1"># or any clone that never ran make merge-driver</span>
-<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>git<span class="w"> </span>--git-dir<span class="o">=</span>/tmp/nodrv<span class="w"> </span>fetch<span class="w"> </span>--quiet<span class="w"> </span><span class="s2">"</span><span class="k">$(</span><span class="nb">pwd</span><span class="k">)</span><span class="s2">"</span><span class="w"> </span>&lt;base_oid&gt;<span class="w"> </span>&lt;head_oid&gt;
-<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>git<span class="w"> </span>--git-dir<span class="o">=</span>/tmp/nodrv<span class="w"> </span>merge-tree<span class="w"> </span>--write-tree<span class="w"> </span>&lt;base_oid&gt;<span class="w"> </span>&lt;head_oid&gt;
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>git<span class="w"> </span>clone<span class="w"> </span>--quiet<span class="w"> </span>--bare<span class="w"> </span>.<span class="w"> </span>/tmp/nodrv<span class="w">        </span><span class="c1"># or any clone that never ran make merge-driver</span>
+<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>git<span class="w"> </span>--git-dir<span class="o">=</span>/tmp/nodrv<span class="w"> </span>fetch<span class="w"> </span>--quiet<span class="w"> </span><span class="s2">"</span><span class="k">$(</span><span class="nb">pwd</span><span class="k">)</span><span class="s2">"</span><span class="w"> </span>&lt;base_oid&gt;<span class="w"> </span>&lt;head_oid&gt;
+<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>git<span class="w"> </span>--git-dir<span class="o">=</span>/tmp/nodrv<span class="w"> </span>merge-tree<span class="w"> </span>--write-tree<span class="w"> </span>&lt;base_oid&gt;<span class="w"> </span>&lt;head_oid&gt;
 </code></pre></div>
 <p><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/agent/pr-requeue-eligible.py"><code>pr-requeue-eligible</code></a> used the <code>driver=false</code> form under a comment claiming to measure "what the merge queue will see".
   It did not; it measured which driver-owned files both sides touched, a superset, which is conservative for its own <code>ELIGIBLE</code> rule but a false positive every time a branch and <code>main</code> both touch <code>docs/STATUS.md</code> if read as "does this branch need a heal".
@@ -3230,6 +3246,9 @@ Two additions come from what broke here:</p>
 <p><strong>Do not arm a watch during a known-dirty window.</strong> <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/agent/pr-mergeability-watch.sh"><code>pr-mergeability-watch.sh</code></a> polls before its first sleep, so a watch armed against a PR that is already <code>DIRTY</code> fires <code>conflict</code> and exits within one <code>gh</code> call, spending the watch on a state you already knew.
 Arm it after the heal reports <code>CLEAN</code>.
 The inverse is not a symptom: an instant fire <em>after</em> a clean read means the PR went dirty in between, which is the watch working.</p>
+<p><strong>Disarm the watch once the PR is enqueued.</strong> It is correct between <code>ready</code> and the enqueue and wrong after it: it wakes on a <code>mergeStateStatus</code> transition and asks for a rebase and force-push, which a queued PR rejects (<code>GH006</code>), while dequeuing to act on the wake would revoke a merge decision.
+The watch cannot tell which side of that boundary it sits on, because the enqueue is a decision it never observes, so a wake whose only correct response is inaction invites the wrong action instead.
+Arming is a step; disarming is one too.</p>
 <h2 id="the-no-secrets-rule">The no-secrets rule<a class="headerlink" href="#the-no-secrets-rule" title="Permanent link">&para;</a></h2>
 <p>Workers must never read, print, log, or pass any secret to a model, and the campaign must not introduce stored credentials.
 Where a task seems to need a secret (e.g. image signing), prefer the keyless/OIDC path; if that is genuinely infeasible, the worker <strong>flags it</strong> rather than introducing a key.

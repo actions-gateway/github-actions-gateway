@@ -2748,20 +2748,20 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td><code>download-cosign-test.sh</code> derives the platform from <code>uname</code> and asserts a pinned digest for that one, so a <code>COSIGN_VERSION</code> bump that adds …</td>
 </tr>
 <tr>
-<td><a href="Q900/">Q900</a></td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/docker-bake.hcl">Nothing verifies buildx's <code>type=gha</code> cache works from a <code>run:</code> step</a></td>
-<td><code>ci</code> <code>debt</code></td>
-<td>🔲</td>
-<td>S</td>
-<td><code>docker-bake.hcl:40</code> says the cache env vars arrive "after docker/setup-buildx-action has injected" them; that action's v4.2.0 source …</td>
-</tr>
-<tr>
 <td><a href="Q921/">Q921</a></td>
 <td><a href="../development/testing/#a-fixture-repo-must-not-run-background-git">Gate the fixture-repo <code>maintenance.auto</code> invariant so it cannot regress</a></td>
 <td><code>tests</code> <code>ci</code></td>
 <td>🔲</td>
 <td>S</td>
 <td>16 suites carry <code>maintenance.auto false</code> with no assertion; a text query cannot check them, since one drives git from embedded Python.</td>
+</tr>
+<tr>
+<td><a href="Q931/">Q931</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/e2e-reusable.yml">Make the e2e bake's <code>type=gha</code> cache real, or drop the dead config</a></td>
+<td><code>ci</code> <code>debt</code></td>
+<td>🔲</td>
+<td>M</td>
+<td>Q900 measured it: a <code>run:</code> step sees no <code>ACTIONS_RUNTIME_TOKEN</code> or <code>ACTIONS_RESULTS_URL</code>, before <em>or</em> after <code>docker/setup-buildx-action</code> …</td>
 </tr>
 <tr>
 <td><a href="Q922/">Q922</a></td>
@@ -3042,14 +3042,6 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>🔲</td>
 <td>S</td>
 <td>Q709 shipped the record but not the trigger: nothing reaches for <code>record-launch.sh</code>, so a run launched without it has no handle after a …</td>
-</tr>
-<tr>
-<td><a href="Q817/">Q817</a></td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/CONTRIBUTING.md#pushing-to-a-pr-that-is-already-open">Docs teach bare two-dot <code>git diff origin/main</code> for a branch's own scope</a></td>
-<td><code>docs</code> <code>retro</code></td>
-<td>🔲</td>
-<td>S</td>
-<td>Two-dot against a moving ref shows main's commits as yours: measured 2026-08-12, a post-rebase read listed 9 files the branch never touched.</td>
 </tr>
 <tr>
 <td><a href="Q841/">Q841</a></td>
@@ -3906,6 +3898,22 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>🔲</td>
 <td></td>
 <td><code>git diff --quiet origin/main...$b</code> exits non-zero on a branch with no merge base, so the <code>session-worker</code> contention sweep reads …</td>
+</tr>
+<tr>
+<td><a href="Q935/">Q935</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/docs/queue.py"><code>queue.py</code> cannot cite a path under a dot-directory such as <code>.github/</code></a></td>
+<td><code>ci</code> <code>debt</code></td>
+<td>🔲</td>
+<td>S</td>
+<td><code>scripts/docs/queue.py:498</code>'s citation regex opens with <code>\b</code>, and a leading <code>.</code> is not a word character, so the boundary never holds before …</td>
+</tr>
+<tr>
+<td><a href="Q937/">Q937</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/docs/check-plan-index.sh">Prose can call a deleted row live; only plan README column 3 is gated</a></td>
+<td><code>docs</code> <code>debt</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>Closing Q900 left <code>testing.md</code> saying "Q900 is measuring which way that actually falls", and no gate could see it.</td>
 </tr>
 </tbody>
 </table>

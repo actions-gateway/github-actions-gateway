@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q900/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q931/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>Nothing verifies buildx's type=gha cache works from a run: step - GitHub Actions Gateway</title>
+        <title>Make the e2e bake's type=gha cache real, or drop the dead config - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#nothing-verifies-buildxs-typegha-cache-works-from-a-run-step" class="md-skip">
+        <a href="#make-the-e2e-bakes-typegha-cache-real-or-drop-the-dead-config" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Nothing verifies buildx's type=gha cache works from a run: step
+              Make the e2e bake's type=gha cache real, or drop the dead config
             
           </span>
         </div>
@@ -2567,11 +2567,14 @@
   
 
 
-<h1 id="nothing-verifies-buildxs-typegha-cache-works-from-a-run-step">Nothing verifies buildx's <code>type=gha</code> cache works from a <code>run:</code> step<a class="headerlink" href="#nothing-verifies-buildxs-typegha-cache-works-from-a-run-step" title="Permanent link">&para;</a></h1>
-<p><code>docker-bake.hcl:40</code> says the cache env vars arrive "after docker/setup-buildx-action has injected" them; that action's v4.2.0 source exports no such variable, and Docker's own docs say an inline <code>buildx</code> must expose them itself.
-The e2e bake sets <code>cache-to type=gha</code> from a <code>run:</code> step and passes, which argues the vars do reach it — from the runner, not the action — so either the comment misattributes the mechanism or the cache is a no-op.
-A <code>cache-from</code> miss is only a warning, so it would read as a slow job, never a red one.
-Measure a cache hit, then fix whichever is wrong.</p>
+<h1 id="make-the-e2e-bakes-typegha-cache-real-or-drop-the-dead-config">Make the e2e bake's <code>type=gha</code> cache real, or drop the dead config<a class="headerlink" href="#make-the-e2e-bakes-typegha-cache-real-or-drop-the-dead-config" title="Permanent link">&para;</a></h1>
+<p>Q900 measured it: a <code>run:</code> step sees no <code>ACTIONS_RUNTIME_TOKEN</code> or <code>ACTIONS_RESULTS_URL</code>, before <em>or</em> after <code>docker/setup-buildx-action</code> v4.2.0 (probe run 32186577410).
+Buildx v0.36.1 then drops both cache entries silently, which is why the bake is green and caches nothing.
+The control is <code>security-scan.yml</code>: its <code>docker/build-push-action</code> does hold the token, and emits an <code>importing cache manifest from gha:</code> vertex absent from all three e2e bakes read here.
+Nothing writes <code>scope=images</code>, so <code>deps</code> recompiles everywhere.
+102.6 s / 99.5 s / 99.4 s on e2e runs 32145897962, 32142595219, 32143847937; 78.2 s / 81.9 s / 82.0 s on three trivy shards of run 32186370352.
+Both repairs are decisions rather than edits: <code>crazy-max/ghaction-github-runtime</code> adds a third-party action, and <code>docker/bake-action</code> costs the backgrounded bake.
+<code>docs/plan/e2e-ci-speed-round-2.md:100</code> and the <code>cache-from</code> comment in <code>security-scan.yml</code> still assert the restore works; correct both with whichever repair lands.</p>
 
 
 
