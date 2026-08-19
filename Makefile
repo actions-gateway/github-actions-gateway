@@ -681,6 +681,16 @@ uses-pinned-check: ## Assert every workflow/action `uses:` is a 40-hex SHA with 
 cosign-pin-check: ## Assert COSIGN_VERSION matches every `cosign-release` publish.yml signs with (Q903)
 	scripts/ci/check-cosign-pin.sh
 
+# publish.yml's release build retries, and `no-cache: true` means the retry's
+# index digest is not the first attempt's. Four steps bind the release to that
+# digest, the signed provenance subject among them, so a consumer reaching past
+# the resolver would sign an index the tag no longer serves. Publish runs only
+# on a v* tag, so this static gate is the only check that can fail before a
+# release rather than during one (Q899).
+.PHONY: publish-digest-check
+publish-digest-check: ## Assert publish.yml's retried build signs only the digest it published (Q899)
+	scripts/ci/check-publish-digest.sh
+
 .PHONY: queue-unblock
 queue-unblock: ## List Queue items blocked by ID=<id> (e.g. make queue-unblock ID=Q12; bare 12 also accepted)
 	@if [ -z "$(ID)" ]; then echo "Usage: make queue-unblock ID=<id>" >&2; exit 1; fi

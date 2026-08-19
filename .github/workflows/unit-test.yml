@@ -223,6 +223,10 @@ jobs:
               # and the Makefile, both above, but a change to the comparison
               # itself must re-run it.
               - 'scripts/ci/check-cosign-pin.sh'
+              # And the publish-digest job (Q899): publish.yml is its whole
+              # subject, covered by the tree above, but the gate's own rules
+              # must re-run it too.
+              - 'scripts/ci/check-publish-digest.sh'
               # devtools/ backs the two gates here whose logic outgrew shell:
               # devtools/ci/pathfilters and devtools/ci/usespin.
               - 'devtools/**'
@@ -590,6 +594,26 @@ jobs:
       - name: signer and verifier pin the same cosign (make cosign-pin-check)
         run: make cosign-pin-check
 
+  # Assert publish.yml's retried image build can only sign the digest it
+  # published (Q899). The release build is `no-cache: true`, so a retry rebuilds
+  # every layer and its index digest is not the first attempt's; four steps bind
+  # the release to that digest, the signed provenance subject among them.
+  # Publish runs only on a v* tag, so nothing here ever executes that job — this
+  # gate is the only reading available before a release rather than during one.
+  # Gated on `workflows` for the reason cosign-pin gives: publish.yml is its
+  # subject. Its own job so a superseded digest reads as a superseded digest
+  # rather than as one of the workflow linters failing. Pure shell over one file:
+  # no toolchain, seconds.
+  publish-digest:
+    needs: [changes]
+    if: needs.changes.outputs.workflows == 'true' || github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    runs-on: ${{ (github.event_name == 'workflow_dispatch' && inputs.target_gag) && fromJSON(vars.GAG_RUNNER || '"ubuntu-latest"') || 'ubuntu-latest' }}
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: the release build signs only what it published (make publish-digest-check)
+        run: make publish-digest-check
+
   # Run the claude-usage/ Python suite (Q437). That module holds the committed
   # record of the project's Claude Code usage — for days whose session transcripts
   # have since been archived, the CSVs under claude-usage/data/ are the only
@@ -627,7 +651,7 @@ jobs:
   # and passes only when every needed job succeeded or was legitimately skipped.
   # See docs/development/testing.md#path-gated-workflows-verify-the-heavy-gates-actually-ran.
   unit-test-gate:
-    needs: [changes, lint, shellcheck, actionlint, uses-pinned, cosign-pin, vendor-check, tidy-check, unit-test, coverage, path-filters, semver-floor-sources, claude-usage-test]
+    needs: [changes, lint, shellcheck, actionlint, uses-pinned, cosign-pin, publish-digest, vendor-check, tidy-check, unit-test, coverage, path-filters, semver-floor-sources, claude-usage-test]
     if: ${{ always() }}
     runs-on: ubuntu-latest
     timeout-minutes: 2

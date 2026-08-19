@@ -205,8 +205,27 @@ jobs:
           tags: |
             type=raw,value=${{ steps.tag.outputs.tag }}
             type=sha,format=long
+      # Two attempts, and exactly one digest. The base-image pull inside the
+      # build reaches the registry with no retry of its own: measured 2026-08-14
+      # on #1515, a security-scan shard 403'd HEAD-ing the pinned distroless
+      # digest while three siblings pulled that same digest green in the same run
+      # (Q863). Same digest, different result, is the transport failing, so the
+      # retry is on the transport and the Dockerfile's pins are untouched.
+      #
+      # This is NOT a copy of that security-scan retry, because this build pushes
+      # and is `no-cache: true`: attempt 2 rebuilds every layer, so its index
+      # digest does not match attempt 1's. Signing attempt 1's digest after
+      # attempt 2 republished the tag would mint a valid signature over an index
+      # the tag no longer serves. So no step downstream reads an attempt's digest
+      # at all: the attempts feed `Resolve the published index digest` below,
+      # every consumer reads that step's output, and `make publish-digest-check`
+      # fails the build if a new step reaches past it.
+      # See docs/development/testing.md#image-builds-retry-the-transport-never-the-pin
       - name: Build and push ${{ matrix.name }}
         id: build
+        # Masks THIS attempt only. The rebuild below runs unmasked, so a second
+        # failure still fails the job.
+        continue-on-error: true
         uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
         with:
           context: .
@@ -214,8 +233,8 @@ jobs:
           target: ${{ matrix.name }}
           push: true
           # Multi-arch (Q97): both platforms on every release. The result is an
-          # OCI image index; steps.build.outputs.digest below is the INDEX
-          # digest — the ref operators pin in chart values. No QEMU: the
+          # OCI image index; the digest resolved below is that INDEX digest —
+          # the ref operators pin in chart values. No QEMU: the
           # Dockerfile cross-compiles Go on $BUILDPLATFORM and the runtime
           # stages are COPY-only.
           platforms: linux/amd64,linux/arm64
@@ -249,6 +268,65 @@ jobs:
           # the attest-build-provenance step below instead, keeping the index the
           # two arch manifests the SBOM/sign steps assume.
           provenance: false
+      - name: Back off before rebuilding ${{ matrix.name }}
+        if: steps.build.outcome == 'failure'
+        # A denial that clears at all clears in seconds; re-asking in the same
+        # second only re-asks an edge that is still saying no.
+        run: sleep 30
+      - name: Rebuild and push ${{ matrix.name }}
+        id: rebuild
+        if: steps.build.outcome == 'failure'
+        # `with:` is a copy of the first attempt's values; keep the two in step.
+        # The rationale for each one is on the attempt above. `no-cache: true`
+        # above all: it is the Q127 supply-chain property, so a retry that
+        # reintroduced a cache would publish exactly what the first attempt
+        # refused to.
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
+        with:
+          context: .
+          file: Dockerfile
+          target: ${{ matrix.name }}
+          push: true
+          platforms: linux/amd64,linux/arm64
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            REVISION=${{ github.sha }}
+            VERSION=${{ steps.tag.outputs.tag }}
+          no-cache: true
+          provenance: false
+      - name: Resolve the published index digest
+        id: image
+        # The ONE place an attempt's digest is read; everything downstream binds
+        # to this output. Selection is on the first attempt's OUTCOME, never on
+        # whichever output happens to be non-empty: a `${RETRY:-${FIRST}}`
+        # fallback would quietly sign attempt 1's superseded index whenever
+        # attempt 2 pushed but reported no digest, which is the one failure this
+        # indirection exists to make unreachable. A retried build that yields no
+        # usable digest fails the job here instead, before anything is signed.
+        #
+        # A first attempt that pushed an index and then failed leaves that index
+        # in GHCR untagged. Nothing references it, nothing signs it, and the tag
+        # serves the retry's; GHCR reaps untagged manifests on its own.
+        env:
+          RETRIED: ${{ steps.build.outcome == 'failure' }}
+          FIRST_DIGEST: ${{ steps.build.outputs.digest }}
+          RETRY_DIGEST: ${{ steps.rebuild.outputs.digest }}
+        run: |
+          set -euo pipefail
+          if [[ "${RETRIED}" == "true" ]]; then
+            digest="${RETRY_DIGEST}"
+            echo "first build attempt failed; the retry's index is what was published"
+          else
+            digest="${FIRST_DIGEST}"
+          fi
+          if [[ ! "${digest}" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+            echo "refusing to continue: resolved index digest '${digest}' is not a sha256 digest" >&2
+            echo "signing or recording anything now would bind the release to an image this job did not publish" >&2
+            exit 1
+          fi
+          echo "resolved published index digest ${digest}"
+          echo "digest=${digest}" >> "${GITHUB_OUTPUT}"
       - name: Attest build provenance (signed, keyless)
         # Signed SLSA build-provenance for the pushed multi-arch INDEX (the digest
         # operators pin). KEYLESS, mirroring the cosign flow: the action mints the
@@ -263,7 +341,7 @@ jobs:
         uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
         with:
           subject-name: ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ matrix.name }}
-          subject-digest: ${{ steps.build.outputs.digest }}
+          subject-digest: ${{ steps.image.outputs.digest }}
           push-to-registry: true
       - name: Install cosign
         uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
@@ -299,7 +377,7 @@ jobs:
         id: sbom
         env:
           IMAGE: ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ matrix.name }}
-          INDEX_DIGEST: ${{ steps.build.outputs.digest }}
+          INDEX_DIGEST: ${{ steps.image.outputs.digest }}
         run: |
           set -euo pipefail
           # One SBOM per architecture, scanned from that arch's exact manifest
@@ -329,7 +407,7 @@ jobs:
           # Always reference the image by digest so the signature/attestation bind
           # to the exact bytes we pushed, not to whatever the tag resolves to later.
           IMAGE: ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ matrix.name }}
-          INDEX_DIGEST: ${{ steps.build.outputs.digest }}
+          INDEX_DIGEST: ${{ steps.image.outputs.digest }}
           DIGEST_AMD64: ${{ steps.sbom.outputs.digest-amd64 }}
           DIGEST_ARM64: ${{ steps.sbom.outputs.digest-arm64 }}
         run: |
@@ -356,7 +434,7 @@ jobs:
         # GitHub Release notes and the `helm install --set <img>.image.digest=…`
         # pins. See the release runbook (docs/operations/release.md).
         env:
-          IMAGE: ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ matrix.name }}@${{ steps.build.outputs.digest }}
+          IMAGE: ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ matrix.name }}@${{ steps.image.outputs.digest }}
         run: |
           set -euo pipefail
           # One bullet per matrix leg — legs run in parallel and can't share a
