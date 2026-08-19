@@ -45,6 +45,10 @@ Why this is the whole change:
 - Concurrency groups key on `github.ref`; merge-group refs (`gh-readonly-queue/...`) are unique per queue entry, and `cancel-in-progress` stays scoped to `pull_request`.
 - status-lint's per-PR isolation check reads `github.event.pull_request`; it is already gated `if: github.event_name == 'pull_request'` and simply skips on the queue run (the PR event already enforced it).
 
+**A tenth workflow followed, after this plan closed.** `doc-links.yml` was not behind a required check and so was out of Phase 1's scope, which left its docs-content gates seeing each PR's own base and never the candidate merge — the shape Q742 measured on the em-dash ceiling.
+Q743 restructured it onto the same always-trigger + `changes` + aggregate-gate pattern and added the trigger.
+Registering `doc-links-gate` in the ruleset is Q943, and it carries this plan's ordering constraint: the workflow lands first, the required check second.
+
 ## Phase 2: activation (post-merge, ordering matters)
 
 Enabling the queue before Phase 1 reaches `main` wedges every merge: the required checks would never report on `merge_group` refs.

@@ -93,6 +93,7 @@ NARROW_FILTERS=(
 	'manifest-validate.yml:promql'    # the shipped PrometheusRule and the two docs describing its alerts
 	'manifest-validate.yml:dashboards' # the two dashboards and the two screenshots the docs embed
 	'license-notices.yml:notices'     # vendor/ and the notices generator
+	'doc-links.yml:docs'              # tracked Markdown plus the docs-content checkers and the site build
 	'status-lint.yml:status'          # docs/queue/, docs/roadmap.md, and their linters
 	'plan-hygiene.yml:plan'           # the plan index plus any .go file (for plan-ref scanning)
 	'autoscaler-drift.yml:autoscaler' # the CA/kwok pins, the kwok manifests, and the matcher under test
@@ -115,6 +116,7 @@ SHARED_LANE_FILTERS=(
 # path filter, so the PR leg always classifies correctly) and only shows up as a
 # post-merge leg that silently did not run.
 PUSH_TRIGGER_FILTERS=(
+	'doc-links.yml:docs'
 	'e2e-calico.yml:calico'
 	'plan-hygiene.yml:plan'
 	'status-lint.yml:status'

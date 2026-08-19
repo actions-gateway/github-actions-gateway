@@ -328,11 +328,11 @@ Splitting your change to dodge the overlap is the wrong move when both changes a
 The **merge queue** closes this for the workflows it actually runs: every merge validates the candidate result (your branch plus whatever is ahead of it in the queue, on current `main`) before it lands, and a failing entry is kicked back to its PR with the failure attached, the signal pr-sentinel already reacts to.
 There is no manual union-gate or pre-merge freshness check to run; enqueue and let the queue arbitrate the race.
 
-**It closes it only for a workflow that declares `merge_group`,** which is 9 of the 25.
-[`doc-links.yml`](.github/workflows/doc-links.yml) does not, so its five gates (`em-dash`, `doc-links`, `gate-lists`, `release-links`, `release-pins`) are validated against each PR's own base and never against the candidate merge result.
-Measured 2026-08-08: #1340 and #1342 each added em-dashes to `docs/development/testing.md`, each was green alone, and the pair landed it at 595 against a ceiling of 594, turning `main` red on a gate the queue had no opportunity to run.
-Q743 carries the fix.
-Until it lands, the jointly-red case is still live for those five, and a ratcheted gate (em-dash density, the coverage floor) is where it bites: two branches can each sit at the ceiling.
+**It closes it only for a workflow that declares `merge_group`,** which is 10 of the 28.
+Measured 2026-08-08, back when [`doc-links.yml`](.github/workflows/doc-links.yml) did not: #1340 and #1342 each added em-dashes to `docs/development/testing.md`, each was green alone, and the pair landed it at 595 against a ceiling of 594, turning `main` red on a gate the queue had no opportunity to run.
+Q743 gave that workflow the trigger and an aggregate `doc-links-gate` job, so its docs gates now run on the candidate merge.
+They do not yet **block** it: the queue arbitrates on the ruleset's required checks alone, and registering `doc-links-gate` is a repo-settings change that has to follow the workflow onto `main` (Q943).
+Four workflows are still queue-blind — `conflict-markers.yml`, `endpoint-parity.yml`, `metric-tiers.yml`, `reason-tiers.yml` — and a ratcheted gate (em-dash density, the coverage floor) is where that bites: two branches can each sit at the ceiling.
 
 ### When new work blocks an open PR
 
