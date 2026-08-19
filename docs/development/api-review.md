@@ -317,6 +317,9 @@ scripts/release/api-surface-since.sh
 It diffs the API packages and CRD manifests between the last tag and `HEAD` and prints what changed.
 Everything it lists is surface this release publishes for the first time; everything it does not list has already shipped and is governed by the compatibility rules instead.
 
+The one section that is not a diff of declarations is `New Event reasons`: a reason reaches the recorder as an argument, so that set is scanned out of the AGC source at each end by [`devtools/docs/reasontiers`](../../devtools/docs/reasontiers/), which needs Go on `PATH`.
+It covers the AGC only, and it says `COULD NOT ENUMERATE` rather than printing an empty section when it cannot run.
+
 Pass an explicit ref to review a different span, e.g. `scripts/release/api-surface-since.sh v1.1.0`.
 
 It reports rather than passing or failing on purpose: every question below needs a human, and a gate answering them mechanically would be wrong in both directions.

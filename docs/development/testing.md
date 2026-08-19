@@ -1618,7 +1618,7 @@ The failure is silent in both directions at once: the scan reports a neighbourin
 
 Three instances in the 1.5 cycle, all on the same argument:
 
-- The v1.4.0 release pre-flight matched `Event(obj, type, reason)` only, missed the `recordEvent(type, reason, action)` shape, and returned a false no-change ([Q780](https://github.com/actions-gateway/github-actions-gateway/blob/main/docs/queue/README.md)).
+- The v1.4.0 release pre-flight matched `Event(obj, type, reason)` only, missed the `recordEvent(type, reason, action)` shape, and returned a false no-change (Q780).
 - The 2026-08-14 pre-flight keyed on `recordEvent(` and missed the two additions recording through `RecordEvent(`.
 - `reasontiers`' first version keyed the reason's index on the function name, read the scale-set listener's *action* string `"ProvisionWorker"` as a reason, and missed four reasons entirely.
   The AGC has two methods named `recordEvent` and two named `Event`, with the reason at a different index in each.

@@ -176,6 +176,7 @@ The point of doing it here rather than at the tag is that the answers are free b
   scripts/release/api-surface-since.sh
   ```
 
+  It needs Go on `PATH`: the Event reasons are scanned out of the source at each end rather than pattern-matched, so a window carrying AGC changes builds `devtools/docs/reasontiers` first.
   Apply the checklist in [api-review.md](../development/api-review.md#step-2--ask-these-of-each-addition) to each addition it lists, record the verdict in the release's plan doc, and file anything deferred as a Queue row carrying this release's gate label.
   **"Ship as-is, deliberately" is a valid and common outcome** — the point is that the shape is chosen rather than frozen by default.
 
@@ -748,9 +749,14 @@ That asymmetry is exactly what a reader cannot discover for themselves.
 `v1.3.0` shipped five: CRD fields, metric names, Kubernetes Event reasons, condition reasons, and configuration (chart values, env tunables, CLI flags).
 Diff each between the two tags mechanically rather than reading the changelog for them — the Event reasons and the metrics had no enumeration at all until they were diffed, and the notes had already been through several reviews.
 
+**The AGC's Event reasons are now enumerated for you** by `api-surface-since.sh`, in its `New Event reasons` section (Q780).
+An empty section there means none are new, because the scanner behind it refuses rather than shortening its list; a section reading `COULD NOT ENUMERATE` is the other answer and blocks the claim until it is fixed.
+Nothing enumerates the **GMC's** Event reasons (Q925), so those are still a hand extraction — and the trap below is what makes a hand extraction expensive.
+
 Two traps.
 **A rename reads as a removal** when the extraction is scoped to one directory: env vars first appeared to have 17 removals, all of which were code moving out of `cmd/`; re-running repo-wide showed zero.
 **Adjacent string arguments read as the same thing**: `recordEvent(obj, type, reason, action, …)` puts a reason and an action side by side, so `ProvisionWorker` and `ApplyAGCAutoscaler` both survived extraction as reasons until each call site was checked.
+That is the mistake the AGC scanner was written to stop making: it reads the reason argument's index off the callee's own declaration, because two recorders here are named `Event` and two `recordEvent`, with the reason at a different index in each.
 Always report "none removed" when it is true — operators are looking for exactly that.
 
 **Diff `docs/` as well, and link what is new from where it is actionable.** A new operator page is the strongest signal of a capability the notes forgot, and a heavily grown one shows where the release's real weight landed:
