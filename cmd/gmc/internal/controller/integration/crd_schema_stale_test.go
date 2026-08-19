@@ -38,8 +38,8 @@ func TestCRDSchemaStale_PrunedBoundaryFieldIsDetected(t *testing.T) {
 	env := &envtest.Environment{
 		CRDDirectoryPaths: []string{
 			"../../../config/crd/bases",
-			"../../../../agc/config/crd",
-			"../../../../../api/config/crd",
+			"testdata/agc-crd",
+			"testdata/crd",
 		},
 		ErrorIfCRDPathMissing: true,
 		Scheme:                testScheme,
