@@ -156,11 +156,14 @@ upgrade-toc-check: ## Fail when upgrade.md's Table of Contents has lost, gained,
 	scripts/docs/check-upgrade-toc.sh
 
 # The shipped PrometheusRule is an appliable artifact whose PromQL nothing parsed
-# (Q827) and whose docs drifted from it unnoticed (Q818). Both failures are
-# silent: a wrong expression never fires, and a documented-but-unshipped rule
-# sends on-call to a procedure for an alert that cannot exist.
+# (Q827) and whose docs drifted from it unnoticed (Q818). The two Grafana
+# dashboards beside it had their panel queries parsed by nothing either (Q910):
+# manifest-validate reads them with `jq empty`, which any query string satisfies.
+# Every failure is silent: a wrong rule expression never fires, a
+# documented-but-unshipped rule sends on-call to a procedure for an alert that
+# cannot exist, and a wrong panel query shows an error where a number should be.
 .PHONY: promql-check
-promql-check: ## Fail on unparseable PromQL, or alert rules that have drifted from their docs
+promql-check: ## Fail on unparseable PromQL in the rules or the dashboards, or alert rules that have drifted from their docs
 	scripts/manifest/check-promql.sh
 
 # Capability parity between the two acquisition tiers rested on a one-time seam

@@ -5,12 +5,20 @@
 // malformed expression merged and then silently never fired. That is the same
 // failure mode the alerts themselves exist to catch, arriving through the alerts.
 //
-// Three checks, because a rule file can be wrong in three ways that all read as
-// healthy:
+// Four checks, because the shipped monitoring artifacts can be wrong in four
+// ways that all read as healthy:
 //
-//	expr      every rule's expression parses as PromQL
-//	mirror    the alerting doc reproduces the shipped rules exactly
-//	runbook   every alert's runbook_url resolves to a runbook heading
+//	expr        every rule's expression parses as PromQL
+//	mirror      the alerting doc reproduces the shipped rules exactly
+//	runbook     every alert's runbook_url resolves to a runbook heading
+//	dashboard   every Grafana panel target's expr parses as PromQL
+//
+// The dashboard check is Q910. manifest-validate parses the dashboards with
+// `jq empty`, which asserts the JSON is well formed and says nothing about the
+// query strings inside it — `sum by ((((` is a valid JSON string. The dashboards
+// are appliable artifacts by the same argument as the rule file: their README
+// tells an operator to import them, and a panel whose query does not parse shows
+// an error where a number should be.
 //
 // The mirror check is why this is a Go program rather than promtool. promtool
 // validates expressions and nothing else, cannot read a PrometheusRule (it wants
@@ -25,6 +33,7 @@
 package main
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -62,12 +71,31 @@ type docGroups struct {
 	Groups []group `yaml:"groups"`
 }
 
+// panel is one Grafana panel. A row panel nests its children under `panels`
+// while collapsed and promotes them to siblings while expanded, so the walk
+// recurses rather than reading the top level only — a collapsed row would
+// otherwise hide every query under it.
+type panel struct {
+	Title   string   `json:"title"`
+	Panels  []panel  `json:"panels"`
+	Targets []target `json:"targets"`
+}
+
+type target struct {
+	RefID string `json:"refId"`
+	Expr  string `json:"expr"`
+}
+
+type dashboard struct {
+	Panels []panel `json:"panels"`
+}
+
 func main() {
-	if len(os.Args) != 4 {
-		fmt.Fprintln(os.Stderr, "usage: promqlcheck <prometheusrule.yaml> <observability-alerting.md> <runbook.md>")
+	if len(os.Args) < 4 {
+		fmt.Fprintln(os.Stderr, "usage: promqlcheck <prometheusrule.yaml> <observability-alerting.md> <runbook.md> [dashboard.json...]")
 		os.Exit(2)
 	}
-	findings, err := run(os.Args[1], os.Args[2], os.Args[3])
+	findings, targets, err := run(os.Args[1], os.Args[2], os.Args[3], os.Args[4:])
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "promqlcheck: %v\n", err)
 		os.Exit(2)
@@ -79,29 +107,33 @@ func main() {
 		fmt.Fprintf(os.Stderr, "promqlcheck: %d finding(s)\n", len(findings))
 		os.Exit(1)
 	}
-	fmt.Printf("promqlcheck: ok (%s)\n", os.Args[1])
+	// The dashboard target count is printed rather than merely tallied: it is
+	// what a reader checks the gate's reach against, and a walk that quietly
+	// stopped reaching panels reads as a pass otherwise.
+	fmt.Printf("promqlcheck: ok (%s, %d dashboard target(s))\n", os.Args[1], targets)
 }
 
-func run(rulePath, docPath, runbookPath string) ([]string, error) {
+// run returns the findings and the number of dashboard targets parsed.
+func run(rulePath, docPath, runbookPath string, dashboardPaths []string) ([]string, int, error) {
 	ruleRaw, err := os.ReadFile(rulePath)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	var shipped prometheusRule
 	if err := yaml.Unmarshal(ruleRaw, &shipped); err != nil {
-		return nil, fmt.Errorf("%s: %w", rulePath, err)
+		return nil, 0, fmt.Errorf("%s: %w", rulePath, err)
 	}
 	if len(shipped.Spec.Groups) == 0 {
-		return nil, fmt.Errorf("%s: no groups under .spec", rulePath)
+		return nil, 0, fmt.Errorf("%s: no groups under .spec", rulePath)
 	}
 
 	docRaw, err := os.ReadFile(docPath)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	runbookRaw, err := os.ReadFile(runbookPath)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 
 	var findings []string
@@ -109,11 +141,25 @@ func run(rulePath, docPath, runbookPath string) ([]string, error) {
 
 	documented, err := docBlocks(docRaw)
 	if err != nil {
-		return nil, fmt.Errorf("%s: %w", docPath, err)
+		return nil, 0, fmt.Errorf("%s: %w", docPath, err)
 	}
 	findings = append(findings, checkMirror(rulePath, docPath, shipped.Spec.Groups, documented)...)
 	findings = append(findings, checkRunbook(rulePath, runbookPath, shipped.Spec.Groups, runbookRaw)...)
-	return findings, nil
+
+	targets := 0
+	for _, path := range dashboardPaths {
+		raw, err := os.ReadFile(path)
+		if err != nil {
+			return nil, 0, err
+		}
+		f, n, err := checkDashboard(path, raw)
+		if err != nil {
+			return nil, 0, fmt.Errorf("%s: %w", path, err)
+		}
+		findings = append(findings, f...)
+		targets += n
+	}
+	return findings, targets, nil
 }
 
 // checkExprs parses every expression. A recording rule's expression is checked
@@ -130,6 +176,57 @@ func checkExprs(rulePath string, groups []group) []string {
 		}
 	}
 	return findings
+}
+
+// checkDashboard parses every panel target's expression, and asserts the walk
+// reached at least one. The count is the half that catches a restructured
+// dashboard: a panel tree this walk no longer reaches would otherwise report
+// clean by checking nothing, which is exactly the state Q910 found `jq empty`
+// in.
+//
+// Expressions are parsed verbatim. The shipped dashboards' Grafana variables sit
+// inside quoted label matchers (namespace=~"$namespace"), which is a valid label
+// value, so no interpolation is needed. A variable in syntactic position is not:
+// `[$__rate_interval]` fails as an unparseable duration. That boundary matches
+// the dashboards, whose 62 queries all use fixed windows; one that needs an
+// interval variable needs a substitution pass added here first.
+func checkDashboard(path string, raw []byte) ([]string, int, error) {
+	var d dashboard
+	if err := json.Unmarshal(raw, &d); err != nil {
+		return nil, 0, err
+	}
+
+	p := parser.NewParser(parser.Options{})
+	var findings []string
+	targets := 0
+	var walk func(where string, panels []panel)
+	walk = func(where string, panels []panel) {
+		for _, pan := range panels {
+			title := pan.Title
+			if where != "" {
+				title = where + "/" + title
+			}
+			for _, t := range pan.Targets {
+				targets++
+				if t.Expr == "" {
+					findings = append(findings, fmt.Sprintf("%s: panel %q target %q has no expr",
+						path, title, t.RefID))
+					continue
+				}
+				if _, err := p.ParseExpr(t.Expr); err != nil {
+					findings = append(findings, fmt.Sprintf("%s: panel %q target %q: expr does not parse: %v",
+						path, title, t.RefID, err))
+				}
+			}
+			walk(title, pan.Panels)
+		}
+	}
+	walk("", d.Panels)
+
+	if targets == 0 {
+		findings = append(findings, fmt.Sprintf("%s: no panel target found — the dashboard check is not exercising anything", path))
+	}
+	return findings, targets, nil
 }
 
 // fencedYAML matches the ```yaml blocks the alerting doc reproduces the rules in.
