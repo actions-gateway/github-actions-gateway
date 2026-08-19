@@ -362,6 +362,7 @@ The formatter declines 38 paragraphs across 8 files, spanning 90 source lines.
 "In-scope" excludes the generated docs, which `.mdreflow.yaml` skips.
 Re-derive both rather than quoting them: `make md-reflow-coverage` recomputes the percentage and `ARGS=-v` lists all 41, while `make md-reflow-explain` names each declined paragraph with a stable reason code.
 Neither number is this page's to hold, and the classification below is reproducible without re-diagnosing anything.
+Those figures were taken against v0.1.7 and the pin has since moved to v0.3.0, which splits sentences v0.1.7 joined, so re-derive before citing them rather than reading them as current.
 
 That figure reads lower than the 99.81% this section carried before, and the tree did not get worse: the measurement got wider.
 The 41 split two ways, and the split is the finding.
@@ -370,6 +371,8 @@ The other 21 sit in two MkDocs admonition bodies mdreflow never sees at all: an 
 A hand-derived count could not see the second group, because nothing named it.
 
 What remains is a small set of guards, each a correctness property rather than a defect, and `--explain` names which one fired.
+The set is a property of the pinned version, so read it off `tools/go.mod` rather than off this page: mdreflow carries twelve reason codes at v0.3.0, and three fire on this tree, measured 2026-08-18.
+They are `raw-html-decl-opener`, `deep-nesting` and `link-ref-def-shape`; the link guard below is a fourth, `possible-link-ref-def`, which no paragraph here currently trips.
 The one an author must not fight is the link guard: moving a break inside a link construct is where render changes come from, so mdreflow passes over any paragraph where a link's text or destination is left open at a line end:
 
 ```
@@ -382,6 +385,35 @@ b) here. Second one.                               → skipped
 
 Do not hand-wrap around it.
 A paragraph the formatter leaves alone is correctly formatted, and hand-joining to force one through is how a link ends up straddling a break in the first place.
+
+Two further causes carry no reason code at all, because nothing is declined.
+Both are the segmenter not seeing a sentence boundary, so no break is offered, the rest of the paragraph reflows normally, and `--explain` has nothing to report.
+There were three until v0.3.0, which started a new line for a sentence opening with inline code or emphasis where v0.1.7 had joined it onto the sentence before.
+
+The first is terminal punctuation sitting inside an inline span:
+
+```
+This is a [sentence.](https://example.com) Next one.   → stays joined
+And **bold.** After bold.                              → stays joined
+And `code.` After code.                                → stays joined
+And **bold**. After bold.                              → splits
+```
+
+Link text, bold, italic and inline code all behave that way, and moving the punctuation outside the closing delimiter is what makes the break appear.
+That one is a defect rather than a design choice, filed upstream as [jbeda/mdreflow#2](https://github.com/jbeda/mdreflow/issues/2) against the link spelling and still open; the other three spellings are the same bug.
+
+The second is by design: a new sentence must open with an uppercase letter, a digit, a quote or a bracket, or with inline code or emphasis the parse confirms.
+A sentence opening with a bare lowercase tool name qualifies as none of those, so it stays on the line above.
+
+```
+One sentence here. mdreflow refuses it.                → stays joined
+One sentence here. The formatter refuses it.           → splits
+```
+
+Both measured 2026-08-18 on the pinned v0.3.0, and both are shapes `--explain` cannot account for, alongside the admonition bodies above.
+So a line carrying two sentences in an otherwise sentence-per-line paragraph is likelier to be one of these than a hand-wrap that slipped past the gate.
+Hand-breaking is not the answer here any more than it is above: the next run joins the line straight back, measured on both shapes.
+The only lever an author has is the prose, moving the punctuation outside the closing delimiter or opening the sentence with a capital, and neither is worth forcing on a line that reads well as it stands.
 
 ### Coverage is not the check that matters
 
