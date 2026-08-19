@@ -183,6 +183,19 @@ jobs:
       - name: release pins are current (make release-pins-check)
         run: make release-pins-check
 
+  # Hold docs/releases/ to the release-body rules a machine can settle (Q920).
+  # It belongs beside release-links rather than in unit-test.yml for the reason
+  # em-dash gives: its only input is Markdown, which that workflow path-ignores.
+  # Its own job so a duplicate h1 reads apart from a link that does not resolve
+  # — and unlike release-links it is offline, so it needs no venv and no tags.
+  release-notes:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: release notes meet the mechanical rules (make release-notes-check)
+        run: make release-notes-check
+
   # Resolve the release notes' absolute links into the versioned site against a
   # local `mkdocs build`, not over the network — a gate that fetches URLs is a
   # gate that fails when a third party sneezes (Q636). `make release-links-check`

@@ -12,6 +12,12 @@
 # SCRIPTS_TESTS omits — the one whose symptom is a green `make scripts-test` that
 # never ran it. Reading the Makefile predicts these; only running the checker
 # measures them.
+#
+# The DOCS_GATES pair (rules 9 and 10, Q920) is asserted in three directions
+# rather than two. A subset assertion is satisfied by a list that is empty or
+# misspelled, so proving it goes red on a bad member says nothing about whether
+# it can be disarmed: the empty case must refuse as well, which is the defect
+# the rules themselves are about, one level up.
 # Runs under `make check` (via `make scripts-test`) and the CI shellcheck job.
 set -euo pipefail
 shopt -s inherit_errexit
@@ -46,6 +52,10 @@ SUITES='one/first-test one/second-test'
 printf "git_candidates '*.go' | select_present_files\n" >"$SCRIPTS/one/alpha.sh"
 printf "git_candidates '*.go' ':!:vendor/*' | select_present_files\n" >"$SCRIPTS/one/beta.sh"
 printf "git_candidates 'docs/*.md' | select_present_files\n" >"$SCRIPTS/one/wide.sh"
+# Scoped to prose that is not the backlog store, so the DOCS_GATES-completeness
+# rule fires on its own: `docs/development/*.md` reaches no docs/queue/ item, so
+# the QUEUE_GATES rules stay quiet and the red below has one cause.
+printf "git_candidates 'docs/development/*.md' | select_present_files\n" >"$SCRIPTS/one/prose.sh"
 
 fails=0
 
@@ -121,6 +131,9 @@ write_makefile "$FIXTURE_DIR/Makefile.wide" '' '' 'scripts/one/wide.sh'
 write_makefile "$FIXTURE_DIR/Makefile.opaque" '' '' 'true'
 write_makefile "$FIXTURE_DIR/Makefile.marked" '' '' 'true' \
 	'# queue-scope: none - beta reads no Markdown'
+write_makefile "$FIXTURE_DIR/Makefile.prose" '' '' 'scripts/one/prose.sh'
+write_makefile "$FIXTURE_DIR/Makefile.docs-marked" '' '' 'true' \
+	'# docs-scope: none - beta reads no Markdown'
 write_makefile "$FIXTURE_DIR/Makefile.ci-marked" '' '' 'true' \
 	'# ci-scope: none - beta is a local-only convenience'
 
@@ -156,7 +169,8 @@ expect_check() {
 	local name="$1" want_rc="$2"
 	shift 2
 	expect "$name" "$want_rc" --check --makefile "$MK" --doc "$DOC" \
-		--scripts-dir "$SCRIPTS" --suites "$SUITES" --workflows "$WF_ALL" "$@"
+		--scripts-dir "$SCRIPTS" --suites "$SUITES" --workflows "$WF_ALL" \
+		--docs 'alpha' "$@"
 }
 
 # The healthy fixture passes — without this the red cases below prove nothing.
@@ -193,19 +207,59 @@ assert_output queue-gates-not-subset 'heavy-one'
 # page-density-check both selected the file from the day each was written — so
 # the fixture gate is scoped the same way, through a `docs/*.md` pathspec.
 expect_check queue-gates-incomplete 1 --fast 'alpha beta' --heavy 'heavy-one' \
-	--queue 'alpha' --makefile "$FIXTURE_DIR/Makefile.wide"
+	--queue 'alpha' --docs 'alpha beta' --makefile "$FIXTURE_DIR/Makefile.wide"
 assert_output queue-gates-incomplete 'docs/queue/'
 assert_output queue-gates-incomplete beta
 expect_check queue-gates-complete 0 --fast 'alpha beta' --heavy 'heavy-one' \
-	--queue 'alpha beta' --makefile "$FIXTURE_DIR/Makefile.wide"
+	--queue 'alpha beta' --docs 'alpha beta' --makefile "$FIXTURE_DIR/Makefile.wide"
 
 # A gate running no scripts/ file has no pathspec to derive from, so it must say
 # which side it is on rather than being assumed out of scope.
 expect_check queue-scope-underivable 1 --fast 'alpha beta' --heavy 'heavy-one' \
-	--queue 'alpha' --makefile "$FIXTURE_DIR/Makefile.opaque"
+	--queue 'alpha' --docs 'alpha beta' --makefile "$FIXTURE_DIR/Makefile.opaque"
 assert_output queue-scope-underivable 'queue-scope'
 expect_check queue-scope-declared 0 --fast 'alpha beta' --heavy 'heavy-one' \
-	--queue 'alpha' --makefile "$FIXTURE_DIR/Makefile.marked"
+	--queue 'alpha' --docs 'alpha beta' --makefile "$FIXTURE_DIR/Makefile.marked"
+
+# DOCS_GATES must stay a subset of CHECK_FAST_GATES (rule 9). It was not:
+# release-notes-check sat in DOCS_GATES and in neither gate list, so
+# `make docs-gates` ran a gate `make check` did not, for the whole life of the
+# list — nothing passed it in to notice (Q920).
+expect_check docs-gates-not-subset 1 --fast 'alpha beta' --heavy 'heavy-one' \
+	--docs 'alpha heavy-one'
+assert_output docs-gates-not-subset 'heavy-one'
+
+# And the direction rule 9 cannot see (rule 10): a fast gate that selects a page
+# under docs/ while DOCS_GATES omits it. conflict-markers-check was exactly this
+# — it scans the whole tree — so the fixture gate is scoped to prose, and to
+# prose that is not the backlog store, so this red has one cause and not two.
+expect_check docs-gates-incomplete 1 --fast 'alpha beta' --heavy 'heavy-one' \
+	--docs 'alpha' --makefile "$FIXTURE_DIR/Makefile.prose"
+assert_output docs-gates-incomplete 'docs/'
+assert_output docs-gates-incomplete beta
+expect_check docs-gates-complete 0 --fast 'alpha beta' --heavy 'heavy-one' \
+	--docs 'alpha beta' --makefile "$FIXTURE_DIR/Makefile.prose"
+
+# A gate running no scripts/ file has no pathspec to derive from here either, so
+# it declares which side it is on rather than being assumed out of scope.
+expect_check docs-scope-underivable 1 --fast 'alpha beta' --heavy 'heavy-one' \
+	--docs 'alpha' --queue 'alpha beta' --makefile "$FIXTURE_DIR/Makefile.opaque"
+assert_output docs-scope-underivable 'docs-scope'
+expect_check docs-scope-declared 0 --fast 'alpha beta' --heavy 'heavy-one' \
+	--docs 'alpha' --queue 'alpha beta' --makefile "$FIXTURE_DIR/Makefile.docs-marked"
+
+# The half the two cases above cannot reach: both prove the rules fire on a list
+# that is wrong, and neither can prove they fire on a list that is not there. An
+# empty DOCS_GATES — a renamed variable, a dropped argument — satisfies rule 9
+# with no members to test, which is the disarmed-gate shape these rules exist to
+# catch. It must refuse rather than report agreement.
+expect docs-empty-refused 2 --check --makefile "$MK" --doc "$DOC" \
+	--scripts-dir "$SCRIPTS" --suites "$SUITES" --workflows "$WF_ALL" \
+	--fast 'alpha beta' --heavy 'heavy-one' --docs ''
+assert_output docs-empty-refused 'non-empty --docs'
+expect docs-absent-refused 2 --check --makefile "$MK" --doc "$DOC" \
+	--scripts-dir "$SCRIPTS" --suites "$SUITES" --workflows "$WF_ALL" \
+	--fast 'alpha beta' --heavy 'heavy-one'
 
 # Rule 8 (Q831): a gate can join CHECK_FAST_GATES and be run by no workflow,
 # which every rule above reports as healthy — `make check` enforces it locally
@@ -235,10 +289,12 @@ expect_check gate-in-ci-via-wrapper 0 --fast 'alpha beta' --heavy 'heavy-one' \
 # A gate that runs no scripts/ file has no indirect route to be covered by, so
 # an unwired one must say which side it is on rather than pass by default.
 expect_check ci-scope-underivable 1 --fast 'alpha beta' --heavy 'heavy-one' \
-	--makefile "$FIXTURE_DIR/Makefile.opaque" --workflows "$WF_NO_BETA" --queue 'alpha beta'
+	--makefile "$FIXTURE_DIR/Makefile.opaque" --workflows "$WF_NO_BETA" \
+	--queue 'alpha beta' --docs 'alpha beta'
 assert_output ci-scope-underivable 'ci-scope'
 expect_check ci-scope-declared 0 --fast 'alpha beta' --heavy 'heavy-one' \
-	--makefile "$FIXTURE_DIR/Makefile.ci-marked" --workflows "$WF_NO_BETA" --queue 'alpha beta'
+	--makefile "$FIXTURE_DIR/Makefile.ci-marked" --workflows "$WF_NO_BETA" \
+	--queue 'alpha beta' --docs 'alpha beta'
 
 # The doc has to keep naming both targets rather than re-transcribing the lists.
 expect_check doc-lost-pointer 1 --fast 'alpha beta' --heavy 'heavy-one' --doc "$STALE_DOC"

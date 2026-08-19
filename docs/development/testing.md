@@ -104,6 +104,8 @@ The gates with behaviour worth knowing have their own `### The … gate` section
 
 Two subset targets cut the wait when a change touches only one kind of file, and both are strict subsets of `make check` rather than a second opinion: `make queue-gates` for a backlog-only edit, and `make docs-gates` for prose.
 The prose one exists because those gates run at the very *end* of `make check`, so a docs slip costs a full ten-minute cycle to discover; running them when the prose is written costs seconds.
+`gate-lists-check` holds both lists to that claim in both directions: a member outside `CHECK_FAST_GATES` makes the target a second opinion, and a fast gate the list omits makes it report a green `make check` would not.
+`DOCS_GATES` was never passed in, and it had been failing the first half for the life of the list: `make docs-gates` ran `release-notes-check`, which was in neither gate list, so it tested something `make check` did not (Q920).
 
 **A shell edit needs `make shellcheck` on its own.** Neither subset target includes it.
 The gate is 37 s over all 210 scripts, against a whole fast fan-out to learn the same thing from `make check` (measured 2026-08-15, Q870).

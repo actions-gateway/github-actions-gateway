@@ -59,12 +59,22 @@
 #      check-queue-rules.sh without make). A gate that is deliberately local-only
 #      declares `# ci-scope: none` with its reason directly above its .PHONY,
 #      the same shape rule 7 uses.
+#   9. DOCS_GATES is a subset of CHECK_FAST_GATES, the claim its comment makes.
+#      Rule 4, one list over — and the list nothing was passing in:
+#      release-notes-check sat in DOCS_GATES and in neither gate list, so
+#      `make docs-gates` ran a gate `make check` did not (Q920).
+#  10. DOCS_GATES is complete, not only a subset: no fast gate outside it is one
+#      a change to a page under docs/ can fail. Rule 7's derivation one list
+#      over, reading the same pathspecs, and it inherits rule 7's blind spot —
+#      a gate that hardcodes the page it reads hands git nothing, so this
+#      cannot see it. Page-scoped docs gates are written that way, which is why
+#      the blind spot costs more here than it does on rule 7 (Q930).
 #
 # Usage:
 #   gate-list.sh --list        --fast '<names>' --heavy '<names>'
 #   gate-list.sh --list-suites --suites '<paths>'
 #   gate-list.sh --check --fast '<names>' --heavy '<names>' --queue '<names>' \
-#                        --suites '<paths>'
+#                        --docs '<names>' --suites '<paths>'
 # Options (for the test suite; all default to the real files):
 #   --makefile PATH    the Makefile to parse
 #   --doc PATH         the doc that must cite the list targets
@@ -96,6 +106,7 @@ MODE=""
 FAST=""
 HEAVY=""
 QUEUE=""
+DOCS=""
 SUITES=""
 
 # scripts/**/*-test.sh files that are deliberately not `make scripts-test`
@@ -122,6 +133,10 @@ while (($# > 0)); do
 		;;
 	--queue)
 		QUEUE="$2"
+		shift
+		;;
+	--docs)
+		DOCS="$2"
 		shift
 		;;
 	--suites)
@@ -167,6 +182,14 @@ elif [[ -z "$FAST" || -z "$HEAVY" ]]; then
 fi
 if [[ "$MODE" == "check" && -z "$SUITES" ]]; then
 	printf 'gate-list.sh: --check requires --suites\n' >&2
+	exit 2
+fi
+# An empty DOCS_GATES is the shape rule 9 cannot report: a renamed or mistyped
+# variable expands to nothing, and a subset assertion over no members passes.
+# Rule 10 would still go red, but only while some fast gate happens to hand git
+# a docs/ pathspec — a property of the tree, not an invariant. Refuse instead.
+if [[ "$MODE" == "check" && -z "$DOCS" ]]; then
+	printf 'gate-list.sh: --check requires a non-empty --docs\n' >&2
 	exit 2
 fi
 # Rule 8 reads this tree, and an empty read is indistinguishable from a tree
@@ -286,6 +309,16 @@ selects_queue_file() {
 	[[ -n "$QUEUE_FILE" ]] || return 1
 	listed="$(git ls-files -- "$1")" || return 1
 	grep -qx -- "$QUEUE_FILE" <<<"$listed"
+}
+
+# Whether a pathspec selects a page under docs/. Any tracked Markdown there
+# answers rule 10: unlike the queue store, docs/ is not homogeneous, so no
+# single file stands for the tree the way QUEUE_FILE stands for an item.
+# Command substitution rather than a pipe, for the reason above.
+selects_docs_page() {
+	local listed
+	listed="$(git ls-files -- "$1")" || return 1
+	grep -qE '^docs/.+\.md$' <<<"$listed"
 }
 
 # Whether the comment block directly above a target's .PHONY declares it out of
@@ -512,6 +545,42 @@ for gate in $FAST $HEAVY; do
 	elif [[ -n "$uncovered" ]]; then
 		fail "gate '$gate' runs in \`make check\` but not in CI: no workflow runs \`make $gate\`, and CI runs none of$uncovered
        run it from a workflow, or declare \`# ci-scope: none\` with the reason directly above its .PHONY"
+	fi
+done
+
+# 9. DOCS_GATES is the strict subset its comment claims — rule 4, one list over.
+for gate in $DOCS; do
+	if ! grep -qw -- "$gate" <<<"$FAST"; then
+		fail "DOCS_GATES member '$gate' is not in CHECK_FAST_GATES, so \`make docs-gates\` is a second opinion rather than a subset"
+	fi
+done
+
+# 10. The other direction on DOCS_GATES, rule 7's derivation over docs/ rather
+# than the backlog store: a fast gate left out of it must be one no change to a
+# page under docs/ can fail.
+docs_names="$(tr ' ' '\n' <<<"$DOCS" | grep -v '^$' || true)"
+for gate in $FAST; do
+	if grep -qx -- "$gate" <<<"$docs_names"; then
+		continue
+	fi
+	scanned=0
+	flagged=0
+	while IFS= read -r script; do
+		[[ -f "$script" ]] || continue
+		scanned=1
+		while IFS= read -r spec; do
+			[[ -n "$spec" ]] || continue
+			((flagged == 0)) || continue
+			if selects_docs_page "$spec"; then
+				flagged=1
+				fail "gate '$gate' selects pages under docs/ (pathspec '$spec' in $script) but DOCS_GATES omits it, so \`make docs-gates\` reports a green \`make check\` would not
+       add it to DOCS_GATES, or narrow the pathspec"
+			fi
+		done < <(selection_pathspecs "$script")
+	done < <(gate_scripts "$gate")
+	if ((scanned == 0)) && ! scope_none "$gate" docs-scope; then
+		fail "gate '$gate' runs no $SCRIPTS_DIR/ file, so whether a docs/ change can fail it is not derivable
+       add it to DOCS_GATES, or declare \`# docs-scope: none\` with the reason directly above its .PHONY"
 	fi
 done
 

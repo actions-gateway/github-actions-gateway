@@ -55,7 +55,8 @@ CHECK_FAST_GATES := roadmap-check \
                     semver-floor-sources-check template-library-check \
                     md-reflow-check comparison-stamps-check promql-check \
                     metric-tiers-check reason-tiers-check upgrade-toc-check \
-                    endpoint-parity-check
+                    endpoint-parity-check \
+                    release-notes-check
 
 CHECK_HEAVY_GATES := build-tags-check lint cover-check
 
@@ -104,12 +105,22 @@ QUEUE_GATES := queue-lint queue-rules-check roadmap-check plan-index-check \
 #   md-reflow-check      prose that is not sentence-per-line
 #   page-density-check   an admonition wall, or a stat tile repeated across pages
 #   release-pins-check   an install/upgrade page pinning a superseded release
+#   release-notes-check  a release note with a duplicate h1, a dead in-page anchor, or a `v`-prefixed chart version
 #   upgrade-toc-check    a heading added to upgrade.md that its own index never gained
+#   conflict-markers-check a marker survived an Edit-based conflict resolution
 # Every entry is also in CHECK_FAST_GATES, so like QUEUE_GATES this is a strict
-# subset of `make check` and never a second opinion.
+# subset of `make check` and never a second opinion. That claim went unchecked
+# for the life of the list and was false: release-notes-check was in neither gate
+# list, so `make docs-gates` ran a gate `make check` did not, and
+# conflict-markers-check scans the whole tree while the list omitted it — the
+# Q749 shape one rung over. `gate-lists-check` now holds this list to both
+# directions the way it holds QUEUE_GATES (Q920); what it still cannot see is a
+# gate that hardcodes the page it reads rather than asking git for a file set
+# (Q930).
 DOCS_GATES := doc-links plan-index-check no-plan-refs-check em-dash-check \
               md-reflow-check page-density-check release-pins-check \
-              release-notes-check upgrade-toc-check
+              release-notes-check upgrade-toc-check \
+              conflict-markers-check
 
 # Behavioural assertions for the scripts/ tree that shellcheck (a linter) can't
 # express — the tags-only release signing-identity regexp (Q124), the
