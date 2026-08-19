@@ -11,7 +11,8 @@
 # network. The download then necessarily ends at a digest mismatch — a pinned
 # cosign binary has no preimage to serve — and that is the signal: only
 # download-verified.sh reports a mismatch, so reaching it proves the helper
-# resolved, ran, and failed closed.
+# resolved, ran, and failed closed. uname is stubbed too, so the pin table is
+# asserted for every platform rather than only the one this test runs on (Q926).
 #
 # Runs under `make check` (via `make scripts-test`) and the CI shellcheck job.
 set -euo pipefail
@@ -23,8 +24,8 @@ SCRIPT="$REPO_ROOT/scripts/release/download-cosign.sh"
 
 FIXTURE_DIR="$REPO_ROOT/tmp/download-cosign-test.$$"
 STUB_DIR="$FIXTURE_DIR/bin"
-ARCH_STUB_DIR="$FIXTURE_DIR/bin-arch"
-mkdir -p "$STUB_DIR" "$ARCH_STUB_DIR"
+UNAME_STUB_DIR="$FIXTURE_DIR/bin-uname"
+mkdir -p "$STUB_DIR" "$UNAME_STUB_DIR"
 trap 'rm -rf "$FIXTURE_DIR"' EXIT INT TERM
 
 # Keep a stubbed failure from burning download-verified.sh's default retries.
@@ -84,18 +85,18 @@ printf 'stand-in for the cosign binary\n' > "$out"
 STUB
 chmod +x "$STUB_DIR/curl"
 
-# Stub uname for the architecture gate only, in its own directory so the other
-# cases still see the real host.
-cat > "$ARCH_STUB_DIR/uname" << 'STUB'
+# Stub uname in its own directory, so the cases that want the real host keep
+# it. $STUB_UNAME_S and $STUB_UNAME_M choose the platform it reports.
+cat > "$UNAME_STUB_DIR/uname" << 'STUB'
 #!/usr/bin/env bash
 set -euo pipefail
 if [[ "${1:-}" == "-m" ]]; then
-	echo ppc64le
+	echo "$STUB_UNAME_M"
 else
-	echo Linux
+	echo "$STUB_UNAME_S"
 fi
 STUB
-chmod +x "$ARCH_STUB_DIR/uname"
+chmod +x "$UNAME_STUB_DIR/uname"
 
 STUB_PATH="$STUB_DIR"
 out_text=""
@@ -135,6 +136,18 @@ assert_not_contains() {
 	fi
 }
 
+# The one URL the stub curl was asked for, so the assertion names the platform
+# the script resolved rather than the one it was told to use.
+assert_curl_url() {
+	local name="$1" want="$2" got
+	got="$(< "$CURL_LOG")"
+	if [[ "$got" == "$want" ]]; then
+		pass "$name"
+	else
+		fail "$name" "want $want, got ${got:-<no request>}"
+	fi
+}
+
 # --- argument validation ---------------------------------------------------
 
 run
@@ -148,7 +161,8 @@ run "$FIXTURE_DIR/cosign-unpinned" v0.0.0-not-pinned
 assert_rc 'version with no pinned digest rejected' 1
 assert_contains 'unpinned version names the pin table' 'no pinned SHA256'
 
-STUB_PATH="$ARCH_STUB_DIR"
+STUB_PATH="$UNAME_STUB_DIR"
+export STUB_UNAME_S=Linux STUB_UNAME_M=ppc64le
 run "$FIXTURE_DIR/cosign-badarch" "$version"
 assert_rc 'unmappable architecture rejected' 1
 assert_contains 'unmappable architecture is named' 'unsupported arch ppc64le'
@@ -165,17 +179,8 @@ run "$out_bin" "$version"
 assert_contains 'the download reaches download-verified.sh' 'SHA256 mismatch'
 assert_rc 'stubbed bytes fail the integrity check' 1
 
-# The Makefile's pin must have a digest for the platform running this test.
-assert_not_contains "COSIGN_VERSION $version has a digest for $platform" 'no pinned SHA256'
-
-want_url="https://github.com/sigstore/cosign/releases/download/$version/cosign-$platform"
-got_url="$(< "$CURL_LOG")"
-if [[ "$got_url" == "$want_url" ]]; then
-	pass 'requests the pinned release asset for this platform'
-else
-	fail 'requests the pinned release asset for this platform' \
-		"want $want_url, got ${got_url:-<no request>}"
-fi
+assert_curl_url 'the real uname resolves to the pinned release asset' \
+	"https://github.com/sigstore/cosign/releases/download/$version/cosign-$platform"
 
 # An unverified binary must never land at $(COSIGN): the Makefile would take it
 # for a built target and never download again.
@@ -184,6 +189,33 @@ if [[ -e "$out_bin" ]]; then
 else
 	pass 'a failed download leaves no binary behind'
 fi
+
+# --- every pinned platform, not just this host's ---------------------------
+#
+# The script reads its platform from uname, so an unstubbed run asserts one row
+# of the pin table. A COSIGN_VERSION bump adding only the linux digests would
+# pass CI on its ubuntu runners and break `make cosign` on every Mac, which is
+# where `make verify-release` is actually run (Q926). The platforms are spelled
+# out here rather than read back from the table: a table that lost one has to
+# fail this, and a derived list would follow it down.
+STUB_PATH="$UNAME_STUB_DIR:$STUB_DIR"
+for spec in \
+	'Darwin x86_64 darwin-amd64' \
+	'Darwin arm64 darwin-arm64' \
+	'Linux x86_64 linux-amd64' \
+	'Linux aarch64 linux-arm64'; do
+	read -r stub_s stub_m want_platform <<< "$spec"
+	export STUB_UNAME_S="$stub_s" STUB_UNAME_M="$stub_m"
+
+	: > "$CURL_LOG"
+	run "$FIXTURE_DIR/cosign-$want_platform" "$version"
+
+	assert_not_contains "COSIGN_VERSION $version has a digest for $want_platform" \
+		'no pinned SHA256'
+
+	assert_curl_url "requests the pinned $want_platform asset" \
+		"https://github.com/sigstore/cosign/releases/download/$version/cosign-$want_platform"
+done
 
 if ((fails > 0)); then
 	printf '\n%d assertion(s) failed\n' "$fails" >&2
