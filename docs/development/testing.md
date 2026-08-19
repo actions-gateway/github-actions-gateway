@@ -2069,7 +2069,9 @@ Nothing in `make check` or CI noticed; the v1.3.0-rc.4 cut did, and only because
 **So execute the script, even when its real work needs the network.** Stub the one command that reaches out (`curl`, `cosign`, `gcloud`) on `PATH` and assert on a message only the far side of the path can emit.
 [`download-cosign-test.sh`](../../scripts/release/download-cosign-test.sh) serves a fixture from a stub `curl` and asserts the run reaches `download-verified.sh`'s **digest-mismatch** error — the download cannot succeed (a pinned binary has no preimage to serve), but reaching a failure that only the helper reports proves the helper resolved and ran.
 A moved helper exits 127 instead, with no such message.
-Two further properties came free from running it: the pin table must carry a digest for the test host's platform, so a `COSIGN_VERSION` bump missing its digests now fails `make check` rather than a release cut; and the URL the stub recorded pins the platform mapping.
+Two further properties came free from running it: the pin table must carry a digest for every platform, so a `COSIGN_VERSION` bump missing its digests now fails `make check` rather than a release cut; and the URL the stub recorded pins the platform mapping.
+**Every** platform, because the script reads its own from `uname` and an unstubbed run therefore asserts one row of the table — the host's.
+CI runs on ubuntu, so a bump adding only the linux digests passed there and broke `make cosign` on every Mac, which is where `make verify-release` is actually run (Q926); stubbing `uname` alongside `curl` covers all four.
 
 The same reasoning covers the caller: [`verify-release-test.sh`](../../scripts/release/verify-release-test.sh) runs `verify-release.sh` against a stub `cosign` that logs its arguments, which is what makes the artifact list, the identity/issuer constraints on every check, and "one bad signature fails the run" assertable without a published release.
 
