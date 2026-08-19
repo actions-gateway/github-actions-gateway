@@ -3260,14 +3260,6 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>Q581 covered the teardown half (<code>e2e-stop.sh</code>, <code>delete.sh</code>) and split this out: bootstrap aborts loudly instead of stranding nodes, so it …</td>
 </tr>
 <tr>
-<td><a href="Q532/">Q532</a></td>
-<td><a href="../development/testing/#the-build-tag-gate">Enforce <code>BUILD_TAGS</code> ↔ <code>.golangci.yml</code> build-tags sync</a></td>
-<td><code>tests</code> <code>ci</code> <code>retro</code></td>
-<td>🔲</td>
-<td>S</td>
-<td>testing.md claims the vet-tags coverage assertion catches a tag missing from lint; it only checks go-vet-tags.sh's own list — <code>autoscaler</code> …</td>
-</tr>
-<tr>
 <td><a href="Q574/">Q574</a></td>
 <td><a href="../development/testing/#a-path-list-written-twice-the-trigger-and-the-filter">One gate for every path list the workflows write twice</a></td>
 <td><code>ci</code> <code>retro</code></td>
