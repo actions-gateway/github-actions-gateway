@@ -129,6 +129,9 @@ One gap can no longer be closed: mac-1's last row came from a snapshot taken par
 Rendered to [`charts/`](charts/) at 1× and `@2x` (for upload).
 Each is regenerable from the CSVs.
 
+One more is not committed yet: `authored_bands` draws the `band_*` split above, and the committed `git_metrics.csv` is the 2026-08-15 snapshot, which predates those columns.
+It renders on the next `compute_metrics.py` run and skips itself until then rather than drawing an empty axis.
+
 ### Overview: all three tokens/lines views together
 ![Tokens vs lines, cost per line, and the lines composition on one timeline](charts/tokens_overview.png) The three tokens-vs-lines views combined into one shared-timeline figure: **(1)** magnitude, tokens vs words authored on a log axis (gap = cost/word); **(2)** breakdown, what those words are; **(3)** cost, cumulative tokens ÷ word with the value at each weekly guide.
 Event lines run through all three panels (labelled along the bottom of panel 1).
@@ -385,8 +388,29 @@ Backfilled archived days are attributed to the Pro-era model (Sonnet 4.6).
 Drives the token-usage-by-model chart, which sums each (day, model) across machines.
 
 ### `git_metrics.csv` — recomputed each run
-Per-day (last commit of each day) cumulative `commits`, `tests` (count of `func Test*`), `go_code` (non-blank minus line-comment Go lines, code + tests), `go_test` (the test-file subset of `go_code`), `md` (non-blank Markdown), `yaml` (non-blank hand-written YAML — generated CRD/controller-gen YAML excluded), and `scripts` (non-blank shell, Python, CSS/JS/HTML, Makefile, Dockerfile).
-All exclude `vendor/`.
+Per-day (last commit of each day) cumulative `commits`, `tests` (count of `func Test*`), `go_code` (non-blank minus line-comment Go lines, code + tests), `go_test` (the test-file subset of `go_code`), `md` (non-blank Markdown), `yaml` (non-blank hand-written YAML), and `scripts` (non-blank shell, Python, CSS/JS/HTML, Makefile, Dockerfile).
+All exclude `vendor/`, at the repo root and inside every module.
+Generated output is credited to nobody: `zz_generated.*` Go and generated CRD/controller-gen YAML are both out.
+Go is matched by filename rather than by content, because a `controller-gen` content match also claims hand-written source that names the tool — `devtools/release/semverfloor/crdsurface.go` and the kubebuilder markers in several controllers.
+
+`band_product`, `band_machinery`, `band_project_mgmt`, `band_product_docs`, `band_machinery_docs` and `band_residual` are those same authored lines re-cut by what the work was **for** rather than what language it is in, so `go_code` no longer has to stand for both "built the product" and "built the tooling that checks it".
+They sum to `go_code + md + yaml + scripts` on every day; `go_test` is a subset of `go_code` and is not a band.
+
+| Band | Covers |
+|---|---|
+| `product` | `cmd/` `api/` `broker/` `githubapp/` `scaleset/` `deploy/` `charts/` `Dockerfile` |
+| `machinery` | `scripts/` `devtools/` `tools/` `.github/` `mk/` `hooks/` `test/` `testdata/` `updatecli.d/` `.claude/` `.githooks/`, plus the build and lint config at the repo root |
+| `project_mgmt` | `docs/queue/` `docs/plan/` `docs/postmortems/` `claude-usage/` |
+| `product_docs` | `docs/design/` `docs/operations/` `docs/releases/` `docs/reference/`, the site assets, and the published pages including `README.md` and `DESIGN.md` |
+| `machinery_docs` | `docs/development/` `CONTRIBUTING.md` `CLAUDE.md` `AGENTS.md` |
+| `residual` | Nothing, on every day of the series. A file no band claims lands here rather than diluting a neighbour, and the suite fails on one. |
+
+`claude-usage/` counts itself as project management.
+The tool is authored and tokens were spent on it, so excluding it would understate the total by exactly the part it can measure best.
+
+Vendored dependencies are in no band at all.
+They cost no tokens to produce, and at 13,282 of 14,929 tracked files they would erase every other band on a shared axis.
+The one number for them is `vendor_files` in `summary.json`.
 
 Also cumulative: `prs` (commits whose subject ends in `(#N)`, this repo's squash-merge signature) and `queue_closed` (Q anchors that have left `docs/STATUS.md`, counted on a row's *first* removal so a re-filed id can't book the same work twice; a work proxy rather than a completion ledger, since it catches a declined or pruned row too).
 
@@ -465,7 +489,7 @@ Merge-preserved because the hourly resolution exists only in the transcripts and
 The charts take percentiles from `pr_metrics.csv` instead, which holds every request individually.
 
 ### `summary.json`
-Totals split into `measured` / `estimated` / `combined` (summed from the persisted rows, so archival-safe), an `estimation` block documenting the per-commit method, a `sessions` block (bucket width, span, session-days, mean and peak concurrency, hours using Claude, session-hours, parallel share), per-model and per-machine (`by_host`) splits, an accurate HEAD working-tree snapshot, and full provenance — including which machine took the snapshot, which machines are on record, and the dates that break a series (the two plan upgrades and the docs reflow).
+Totals split into `measured` / `estimated` / `combined` (summed from the persisted rows, so archival-safe), an `estimation` block documenting the per-commit method, a `sessions` block (bucket width, span, session-days, mean and peak concurrency, hours using Claude, session-hours, parallel share), per-model and per-machine (`by_host`) splits, an accurate HEAD working-tree snapshot (including `band_files`, the per-band file census the `band_*` series are cut from, `go_generated`, and the `vendor_files` / `authored_files` pair), and full provenance — including which machine took the snapshot, which machines are on record, and the dates that break a series (the two plan upgrades and the docs reflow).
 
 ## Methodology & caveats
 
@@ -509,6 +533,7 @@ Totals split into `measured` / `estimated` / `combined` (summed from the persist
   Close enough at daily granularity, but they can disagree by a day at midnight boundaries.
 - **`go_code` is approximate in the daily series** (non-blank minus line comments, so block comments count as code).
   `summary.json`'s HEAD snapshot uses an exact comment-aware split; the two agree to within ~0.1%.
+  Both drop generated Go (2,204 lines at `d91669bec`, 1.9% of the figure before the change), which the series counted as authored until then.
 - **Messages are fuzzy.** The original post's "20k messages" came from a counter that can't be reconstructed from these logs; treat `assistant_msgs` / `user_msgs` as the well-defined replacements, not as the same quantity.
 
 ### A worked anomaly: the fresh-input regime change
