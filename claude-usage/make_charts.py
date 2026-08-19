@@ -25,7 +25,8 @@ Outputs PNGs (1x + @2x) to claude-usage/charts/:
     velocity             work shipped per day on reformat- and workflow-proof proxies
     velocity_quality     churn, PR cycle time, and code survival
     lines_vs_words       the same corpus in lines and in words, and each cost ratio
-    authored_bands       authored lines split by product vs the machinery around it
+    authored_bands       authored output split by product vs the machinery around
+                         it, in words and in lines
     rhythm_weekday       what the project does on each day of the week
     rhythm_hour          the same, by local hour of the day
 """
@@ -104,12 +105,16 @@ MODEL_HATCH = {
     "Sonnet 4.6": "", "Opus 4.7": "..", "Opus 4.8": "xx", "Opus 5": "--",
     "Fable 5": "\\\\", "Haiku 4.5": "++", "Other": "oo", "Unknown": "",
 }
-# The lines-authored breakdown, by what the work was *for* rather than what
-# language it is in: (label, colour, hatch, column). Maximally distinct OI hues,
-# each paired with its own hatch. Vendored code is in none of them — it costs no
-# tokens to produce, and at ~89% of the tracked tree it would erase the rest of
-# any shared axis. It appears once, as the context line under the chart.
-LINE_BANDS = [
+# The authored-output breakdown by what the work was *for* rather than what
+# language it is in: (label, colour, hatch, line column). Maximally distinct OI
+# hues, each paired with its own hatch. Vendored code is in none of them — it
+# costs no tokens to produce, and at ~89% of the tracked tree it would erase the
+# rest of any shared axis. It appears once, as the context line under the chart.
+#
+# Drawn in both units. A rewrap moves a line count and leaves a word count alone,
+# and words are the unit closest to a token, so the words panel is the one that
+# can be put against spend and the lines panel is what shows a reformat.
+TREE_BANDS = [
     ("Product",       OI["blue"],       "",   "band_product"),
     ("Machinery",     OI["vermillion"], "\\", "band_machinery"),
     ("Product docs",  OI["green"],      "/",  "band_product_docs"),
@@ -1424,69 +1429,90 @@ def chart_lines_vs_words():
 
 
 def chart_authored_bands():
-    """Authored lines split by what the work was for, not what language it is in.
+    """Authored output split by what the work was for, in both units.
 
     ``go_code`` answers "how much was written" and cannot answer "written for
     what": the shipped controllers and the gates that check them are one number in
-    it. These are the same authored lines re-cut by tree position, so the machinery
-    the project built for itself is visible as its own share rather than as product
-    growth.
+    it. Both panels are that corpus re-cut by tree position, so the machinery the
+    project built for itself reads as its own share rather than as product growth.
+
+    Words on top because they are the unit closest to a token and a rewrap cannot
+    move them, which is what lets this split be put against spend. Lines below
+    because they are what a reformat does move — the reflow marker crosses both,
+    and only the lower panel steps at it. The two are not each other converted:
+    the line bands subtract line comments and the word bands count comment text,
+    so each panel is the corpus its own headline column covers.
 
     Drawn only when the CSV carries the bands. The committed data is a dated
-    snapshot, so a checkout predating the split has the older columns and gets no
-    chart rather than an empty one.
+    snapshot, so a checkout predating the split gets no chart rather than an
+    empty one.
     """
     git = {r["date"]: r for r in load("git_metrics.csv")}
-    dates = [d for d in sorted(git) if any(git[d].get(col) for _, _, _, col in LINE_BANDS)]
+    dates = [d for d in sorted(git)
+             if any(git[d].get(f"{col}_words") for _, _, _, col in TREE_BANDS)]
     if not dates:
         return
     xs = [dparse(d) for d in dates]
-    stacks = [[int(git[d].get(col) or 0) / 1e3 for d in dates] for _, _, _, col in LINE_BANDS]
 
-    fig, ax = plt.subplots(figsize=(11, 6.2))
-    polys = ax.stackplot(xs, *stacks, colors=[c for _, c, _, _ in LINE_BANDS],
-                         alpha=0.28, zorder=2)
-    for poly, (_, col, hatch, _) in zip(polys, LINE_BANDS):
-        poly.set_hatch(hatch)
-        poly.set_edgecolor(darken(col))  # hatch draws in the edge colour
-        poly.set_linewidth(0.0)
-    cumtop = np.cumsum(np.array(stacks), axis=0)
-    running = 0.0
-    for i, (label, col, _, _) in enumerate(LINE_BANDS):
-        ax.plot(xs, cumtop[i], color=darken(col), lw=2.4, solid_capstyle="round", zorder=4)
-        mid = running + stacks[i][-1] / 2
-        running += stacks[i][-1]
-        ax.annotate(f"{label}  {stacks[i][-1]:.0f}k", (xs[-1], mid), xytext=(7, 0),
-                    textcoords="offset points", va="center", fontsize=9.5,
-                    fontweight="bold", color=darken(col))
+    fig, (aw, al) = plt.subplots(2, 1, figsize=(11, 8.4), sharex=True,
+                                 gridspec_kw=dict(height_ratios=[1, 1], hspace=0.16))
 
-    # By column, not by position: the ratio names two specific bands, and reading
-    # them off the stack order would follow any later reordering silently.
-    latest = {col: s[-1] for s, (_, _, _, col) in zip(stacks, LINE_BANDS)}
-    product = latest["band_product"]
-    machinery = latest["band_machinery"]
-    ax.set_title("What the lines were written for, not what language they are in",
-                 fontsize=14, fontweight="bold", loc="left")
-    ax.annotate(f"{machinery / product:.2f} lines of machinery per line of product",
-                (xs[-1], running), xytext=(-8, -14), textcoords="offset points",
-                ha="right", fontsize=11.5, fontweight="bold", color=GOLD,
-                path_effects=HALO, zorder=LABEL_Z)
-    ax.set_ylabel("authored lines (thousands)", fontsize=11)
-    ax.set_ylim(0, running * 1.06)
-    ax.set_xlim(xs[0], xs[-1])
-    ax.xaxis.set_major_formatter(mdates.DateFormatter("%b %-d"))
-    ax.xaxis.set_major_locator(mdates.DayLocator(interval=4))
-    plt.setp(ax.get_xticklabels(), rotation=45, ha="right", fontsize=8.5)
-    ax.grid(axis="y", alpha=0.22)
-    for s in ("top", "right"):
-        ax.spines[s].set_visible(False)
+    def draw(ax, suffix, unit):
+        """Stack the bands on ``ax`` and return ``{column: latest}`` plus the total."""
+        stacks = [[int(git[d].get(col + suffix) or 0) / 1e3 for d in dates]
+                  for _, _, _, col in TREE_BANDS]
+        polys = ax.stackplot(xs, *stacks, colors=[c for _, c, _, _ in TREE_BANDS],
+                             alpha=0.28, zorder=2)
+        for poly, (_, col, hatch, _) in zip(polys, TREE_BANDS):
+            poly.set_hatch(hatch)
+            poly.set_edgecolor(darken(col))  # hatch draws in the edge colour
+            poly.set_linewidth(0.0)
+        cumtop = np.cumsum(np.array(stacks), axis=0)
+        running = 0.0
+        for i, (label, col, _, _) in enumerate(TREE_BANDS):
+            ax.plot(xs, cumtop[i], color=darken(col), lw=2.4, solid_capstyle="round",
+                    zorder=4)
+            mid = running + stacks[i][-1] / 2
+            running += stacks[i][-1]
+            ax.annotate(f"{label}  {stacks[i][-1]:,.0f}k", (xs[-1], mid), xytext=(7, 0),
+                        textcoords="offset points", va="center", fontsize=9.5,
+                        fontweight="bold", color=darken(col))
+        ax.set_ylabel(f"{unit} authored (thousands)", fontsize=10.5)
+        ax.set_ylim(0, running * 1.06)
+        ax.set_xlim(xs[0], xs[-1])
+        ax.grid(axis="y", alpha=0.22)
+        for s in ("top", "right"):
+            ax.spines[s].set_visible(False)
+        # By column, not by stack position: the ratio names two specific bands, and
+        # reading them off the order would follow any later reordering silently.
+        latest = {col: s[-1] for s, (_, _, _, col) in zip(stacks, TREE_BANDS)}
+        return latest, running
 
-    reflow_marker((ax,), ax, y=0.02)
+    words, w_total = draw(aw, "_words", "words")
+    lines, l_total = draw(al, "", "lines")
+
+    for ax, latest, total, unit in ((aw, words, w_total, "words"),
+                                    (al, lines, l_total, "lines")):
+        ratio = latest["band_machinery"] / latest["band_product"]
+        ax.annotate(f"{ratio:.2f} {unit} of machinery per {unit[:-1]} of product",
+                    (xs[-1], total), xytext=(-8, -14), textcoords="offset points",
+                    ha="right", fontsize=11.5, fontweight="bold", color=GOLD,
+                    path_effects=HALO, zorder=LABEL_Z)
+
+    aw.set_title("What the work was for, in the unit a token is closest to",
+                 fontsize=13.5, fontweight="bold", loc="left")
+    al.set_title("The same split in lines — only this panel steps at the reflow",
+                 fontsize=13.5, fontweight="bold", loc="left")
+    al.xaxis.set_major_formatter(mdates.DateFormatter("%b %-d"))
+    al.xaxis.set_major_locator(mdates.DayLocator(interval=4))
+    plt.setp(al.get_xticklabels(), rotation=45, ha="right", fontsize=8.5)
+
+    reflow_marker((aw, al), al, y=0.03)
     head = summary().get("head_snapshot", {})
     vendor = head.get("vendor_files")
     context = (f"vendored dependencies ({vendor:,} of "
-               f"{vendor + head['authored_files']:,} tracked files) are in none of these bands: "
-               "they cost no tokens to produce"
+               f"{vendor + head['authored_files']:,} tracked files) are in none of these "
+               "bands: they cost no tokens to produce"
                if vendor else "vendored dependencies are in none of these bands")
     fig.text(0.012, 0.006,
              f"generated output excluded from every band · {context}",

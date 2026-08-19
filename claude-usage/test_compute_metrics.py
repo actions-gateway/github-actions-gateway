@@ -379,8 +379,8 @@ class QueueClosures(unittest.TestCase):
 
 
 class WordCounts(unittest.TestCase):
-    """``grep_word_count`` is the reformat-proof half: same text, unit that a rewrap
-    cannot move."""
+    """``grep_words_per_file`` is the reformat-proof half: same text, unit that a
+    rewrap cannot move."""
 
     def setUp(self):
         self._git = cm.git
@@ -388,16 +388,28 @@ class WordCounts(unittest.TestCase):
     def tearDown(self):
         cm.git = self._git
 
+    def words(self, out):
+        cm.git = lambda *a, **k: out
+        return cm.grep_words_per_file("rev", "x", ["*.md"])
+
     def test_a_rewrap_leaves_the_word_count_alone(self):
-        wrapped = "the quick brown\nfox jumps over\nthe lazy dog\n"
-        unwrapped = "the quick brown fox jumps over the lazy dog\n"
-        cm.git = lambda *a, **k: wrapped
-        before = cm.grep_word_count("rev", "x", ["*.md"])
-        cm.git = lambda *a, **k: unwrapped
-        after = cm.grep_word_count("rev", "x", ["*.md"])
+        wrapped = ("rev:docs/a.md:the quick brown\n"
+                   "rev:docs/a.md:fox jumps over\n"
+                   "rev:docs/a.md:the lazy dog\n")
+        unwrapped = "rev:docs/a.md:the quick brown fox jumps over the lazy dog\n"
+        before = self.words(wrapped)
+        after = self.words(unwrapped)
         self.assertEqual(before, after)
-        self.assertEqual(before, 9)
+        self.assertEqual(before, {"docs/a.md": 9})
         self.assertNotEqual(len(wrapped.splitlines()), len(unwrapped.splitlines()))
+
+    def test_words_stay_attributed_to_their_file(self):
+        """What the per-file shape buys: a band filter needs to know whose words
+        these are, and a corpus total cannot say."""
+        out = ("rev:docs/design/a.md:one two\n"
+               "rev:docs/queue/Q1.md:three four five\n")
+        self.assertEqual(self.words(out),
+                         {"docs/design/a.md": 2, "docs/queue/Q1.md": 3})
 
 
 class QueueFlow(unittest.TestCase):
@@ -780,6 +792,155 @@ class BandCensus(unittest.TestCase):
         self.assertGreater(counts["product"], 100)
         self.assertGreater(counts["machinery"], 100)
         self.assertGreater(counts["project_mgmt"], 100)
+
+
+class BandTotals(unittest.TestCase):
+    """The summing step, which is where a unit gets wired to the wrong corpus.
+
+    ``git_series`` calls this twice over different maps, so a test that only
+    exercised ``classify_path`` would pass with both units fed from the same one.
+    """
+
+    def test_maps_are_summed_across_all_four_languages(self):
+        got = cm.band_totals((
+            {"cmd/agc/main.go": 10},
+            {"docs/design/a.md": 3},
+            {"deploy/agc/x.yaml": 5},
+            {"scripts/ci/x.sh": 7},
+        ))
+        self.assertEqual(got["product"], 15)   # Go + YAML, both product
+        self.assertEqual(got["product_docs"], 3)
+        self.assertEqual(got["machinery"], 7)
+
+    def test_every_band_is_present_even_when_empty(self):
+        """A missing key would drop a column from the CSV row on a quiet day."""
+        got = cm.band_totals(({"cmd/agc/main.go": 1},))
+        self.assertEqual(sorted(got), sorted(cm.BAND_NAMES))
+        self.assertEqual(got["machinery_docs"], 0)
+
+    def test_the_same_path_in_two_maps_adds(self):
+        """Nothing overwrites: a corpus split across maps must accumulate."""
+        got = cm.band_totals(({"cmd/agc/main.go": 4}, {"cmd/agc/main.go": 6}))
+        self.assertEqual(got["product"], 10)
+
+    def test_an_unclassified_path_lands_in_residual_rather_than_raising(self):
+        got = cm.band_totals(({"newthing/main.go": 9},))
+        self.assertEqual(got["residual"], 9)
+        self.assertEqual(got["product"], 0)
+
+
+class BandUnits(unittest.TestCase):
+    """The bands exist in both units, and the two are not each other converted.
+
+    Lines are what a reflow moves; words are what a token is closest to. The CSV
+    carries both for the tree bands for the same reason it already does for the
+    language bands.
+    """
+
+    def test_every_band_has_a_column_in_both_units(self):
+        self.assertEqual(cm.BAND_COLUMNS, [f"band_{b}" for b in cm.BAND_NAMES])
+        self.assertEqual(cm.BAND_WORD_COLUMNS, [f"band_{b}_words" for b in cm.BAND_NAMES])
+        self.assertEqual(len(cm.BAND_COLUMNS), len(cm.BAND_WORD_COLUMNS))
+
+    def test_the_two_column_sets_are_disjoint(self):
+        """A `band_*` prefix match must not sweep up the word columns, which is how
+        a chart reading one unit would silently double-count."""
+        self.assertEqual(set(cm.BAND_COLUMNS) & set(cm.BAND_WORD_COLUMNS), set())
+
+
+class BandSeriesWiring(unittest.TestCase):
+    """``git_series`` sums each unit from its own corpus.
+
+    The defect this exists for is invisible to every other test here. Feed the word
+    bands from the line maps and the classification, the column names, and the
+    reconciliation against `go_code + md + yaml + scripts` all still look right,
+    because the same paths and the same ``classify_path`` are involved either way.
+    Only a row built from a corpus where the two units disagree can tell them
+    apart, so the fixtures below give each file a word count that is not a multiple
+    of its line count.
+    """
+
+    REV = "abc1234"
+    #       path                           non-blank  line-comments  words
+    GO = ("cmd/agc/main.go", 5, 2, 61)
+    MD = ("docs/development/testing.md", 7, 0, 113)
+    # Generated, and under a product directory, so it is banded as product by path
+    # and must still contribute nothing in either unit.
+    GEN = ("api/v2beta1/zz_generated.deepcopy.go", 40, 3, 400)
+
+    def setUp(self):
+        self._git = cm.git
+        cm.git = self.fake_git
+
+    def tearDown(self):
+        cm.git = self._git
+
+    def fake_git(self, *args):
+        if args[0] == "log":
+            if "docs/STATUS.md" in args:
+                return ""  # queue_flow: no backlog history in this fixture
+            return f"{self.REV}|2026-08-01 09|feat: add a thing (#1)\n"
+        if args[0] != "grep":
+            return ""
+        pattern = args[args.index("-E") + 1]
+        corpus = args[args.index("--") + 1]
+        files = {"*.go": [self.GO, self.GEN], "*.md": [self.MD]}.get(corpus, [])
+        if "-l" in args:  # grep_files_matching: nothing here is generated
+            return ""
+        if "-c" in args:
+            if pattern == "^func Test":
+                return ""
+            idx = 2 if pattern.startswith("^[[:space:]]*//") else 1
+            return "".join(f"{self.REV}:{f[0]}:{f[idx]}\n" for f in files if f[idx])
+        # grep_words_per_file: one line per file carrying that file's whole budget
+        return "".join(f"{self.REV}:{f[0]}:" + " ".join(["w"] * f[3]) + "\n"
+                       for f in files)
+
+    def row(self):
+        rows = cm.git_series()
+        self.assertEqual(list(rows), ["2026-08-01"])
+        return rows["2026-08-01"]
+
+    def test_each_band_carries_its_own_unit(self):
+        r = self.row()
+        self.assertEqual(r["band_product"], self.GO[1] - self.GO[2])       # 3 lines
+        self.assertEqual(r["band_product_words"], self.GO[3])              # 61 words
+        self.assertEqual(r["band_machinery_docs"], self.MD[1])             # 7 lines
+        self.assertEqual(r["band_machinery_docs_words"], self.MD[3])       # 113 words
+
+    def test_the_two_units_are_not_the_same_numbers(self):
+        """The assertion the wiring bug fails. Every other property survives it."""
+        r = self.row()
+        for b in cm.BAND_NAMES:
+            if r[f"band_{b}"]:
+                self.assertNotEqual(r[f"band_{b}"], r[f"band_{b}_words"], b)
+
+    def test_line_bands_reconcile_to_the_language_columns(self):
+        r = self.row()
+        self.assertEqual(sum(r[f"band_{b}"] for b in cm.BAND_NAMES),
+                         r["go_code"] + r["md"] + r["yaml"] + r["scripts"])
+
+    def test_word_bands_reconcile_to_the_headline_denominator(self):
+        r = self.row()
+        self.assertEqual(sum(r[f"band_{b}_words"] for b in cm.BAND_NAMES), r["words"])
+
+    def test_generated_go_is_dropped_from_both_units(self):
+        """It is 40 lines and 400 words under a product directory, so a unit that
+        forgot the filter would be dominated by it rather than slightly off."""
+        r = self.row()
+        self.assertEqual(r["band_product"], self.GO[1] - self.GO[2])
+        self.assertEqual(r["band_product_words"], self.GO[3])
+        self.assertEqual(r["go_code"], self.GO[1] - self.GO[2])
+        self.assertEqual(r["go_words"], self.GO[3])
+
+    def test_a_file_lands_in_the_band_its_path_names(self):
+        """Both fixtures are Markdown-or-Go under directories on opposite sides of
+        the product/machinery line, so a band that ignored paths would collapse
+        them together."""
+        r = self.row()
+        self.assertEqual(r["band_machinery"], 0)
+        self.assertEqual(r["band_residual"], 0)
+        self.assertEqual(r["band_residual_words"], 0)
 
 
 class HeadSnapshotBands(unittest.TestCase):

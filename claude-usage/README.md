@@ -129,8 +129,8 @@ One gap can no longer be closed: mac-1's last row came from a snapshot taken par
 Rendered to [`charts/`](charts/) at 1× and `@2x` (for upload).
 Each is regenerable from the CSVs.
 
-One more is not committed yet: `authored_bands` draws the `band_*` split above, and the committed `git_metrics.csv` is the 2026-08-15 snapshot, which predates those columns.
-It renders on the next `compute_metrics.py` run and skips itself until then rather than drawing an empty axis.
+One more is not committed yet: `authored_bands` draws the `band_*` split below in both units, words on top because that is the unit a token is closest to, and lines beneath where the reflow is visible as a step.
+The committed `git_metrics.csv` is the 2026-08-15 snapshot and predates those columns, so the chart renders on the next `compute_metrics.py` run and skips itself until then rather than drawing an empty axis.
 
 ### Overview: all three tokens/lines views together
 ![Tokens vs lines, cost per line, and the lines composition on one timeline](charts/tokens_overview.png) The three tokens-vs-lines views combined into one shared-timeline figure: **(1)** magnitude, tokens vs words authored on a log axis (gap = cost/word); **(2)** breakdown, what those words are; **(3)** cost, cumulative tokens ÷ word with the value at each weekly guide.
@@ -395,6 +395,24 @@ Go is matched by filename rather than by content, because a `controller-gen` con
 
 `band_product`, `band_machinery`, `band_project_mgmt`, `band_product_docs`, `band_machinery_docs` and `band_residual` are those same authored lines re-cut by what the work was **for** rather than what language it is in, so `go_code` no longer has to stand for both "built the product" and "built the tooling that checks it".
 They sum to `go_code + md + yaml + scripts` on every day; `go_test` is a subset of `go_code` and is not a band.
+
+Each has a `_words` twin (`band_product_words` and the rest) which sums to `words`.
+Both units are carried for the reason the language bands carry both: a rewrap moves a line count and leaves a word count alone, and a word is the unit closest to a token, so only the word bands can be put against spend.
+They are not the line bands converted: the line bands subtract line comments and the word bands count comment text, the same way `go_code` and `go_words` differ.
+
+**The two units rank the bands differently, which is the point of keeping both.** At `4af4baa96` the split is:
+
+| Band | Lines | Words | Words per line |
+|---|--:|--:|--:|
+| `product` | 109,142 (46.0%) | 826,109 (37.1%) | 7.6 |
+| `machinery` | 65,581 (27.6%) | 455,666 (20.5%) | 7.0 |
+| `project_mgmt` | 29,775 (12.6%) | 437,412 (19.7%) | 14.7 |
+| `product_docs` | 25,617 (10.8%) | 358,417 (16.1%) | 14.0 |
+| `machinery_docs` | 7,130 (3.0%) | 146,455 (6.6%) | 20.5 |
+
+Prose carries two to three times the words per line that code does, because docs are written sentence-per-line and code is not.
+So a line count understates every prose band against every code one: docs and project management are 26.4% of the tree in lines and 42.4% in words.
+Read the word column when comparing a band against token spend, and the line column only when comparing like with like.
 
 | Band | Covers |
 |---|---|
