@@ -1,0 +1,154 @@
+# Keep the cosign pin current across all three files that carry it: the
+# Makefile's COSIGN_VERSION, both `cosign-release` inputs in
+# .github/workflows/publish.yml, and the four per-platform SHA-256 digests in
+# scripts/release/download-cosign.sh. Run by .github/workflows/updatecli.yml.
+#
+# cosign was the last pinned tool nothing bumped (Q927). Dependabot cannot see a
+# Makefile variable or a shell `case` block, and Q903's check-cosign-pin.sh holds
+# the three copies to *each other* rather than to upstream, so three sites
+# agreeing on a stale version still agree.
+#
+# Two things make this manifest different from the other nine:
+#
+#   * The version appears inside each digest's case key ("<version> <os>-<arch>"),
+#     so each of the four targets rewrites the version and its digest in one
+#     substitution. Neither can land beside the other release's value.
+#   * The digests come from the release's *signed* checksums file, verified
+#     before any value is read out of it. scripts/updatecli/cosign-release-sha256.sh
+#     carries that reasoning; its test asserts the verification is real. The
+#     verifier is the pinned cosign in .build/, which updatecli.yml downloads
+#     with `make cosign` before applying, so the chain is anchored in the pin
+#     being replaced rather than in the release being fetched.
+name: 'Bump cosign version + its four per-platform release digests'
+
+scms:
+  workflow:
+    kind: github
+    spec:
+      owner: '{{ requiredEnv "UPDATECLI_OWNER" }}'
+      repository: '{{ requiredEnv "UPDATECLI_REPO" }}'
+      branch: main
+      username: '{{ requiredEnv "UPDATECLI_ACTOR" }}'
+      token: '{{ requiredEnv "UPDATECLI_GITHUB_TOKEN" }}'
+      user: 'github-actions[bot]'
+      email: '41898282+github-actions[bot]@users.noreply.github.com'
+
+actions:
+  pr:
+    kind: github/pullrequest
+    scmid: workflow
+    spec:
+      labels:
+        - dependencies
+
+sources:
+  cosignVersion:
+    name: 'Latest cosign release tag'
+    kind: githubrelease
+    spec:
+      owner: sigstore
+      repository: cosign
+      token: '{{ requiredEnv "UPDATECLI_GITHUB_TOKEN" }}'
+      versionfilter:
+        kind: semver
+  # One source per platform. Each re-verifies the checksums file: four Rekor
+  # lookups a week is a fair price for never reading a digest out of a blob whose
+  # signature this run has not checked.
+  shaDarwinAmd64:
+    name: 'Signed darwin-amd64 digest for the resolved version'
+    kind: shell
+    dependson:
+      - cosignVersion
+    spec:
+      command: 'scripts/updatecli/cosign-release-sha256.sh {{ source "cosignVersion" }} darwin-amd64'
+      environments:
+        - name: PATH
+        - name: HOME
+  shaDarwinArm64:
+    name: 'Signed darwin-arm64 digest for the resolved version'
+    kind: shell
+    dependson:
+      - cosignVersion
+    spec:
+      command: 'scripts/updatecli/cosign-release-sha256.sh {{ source "cosignVersion" }} darwin-arm64'
+      environments:
+        - name: PATH
+        - name: HOME
+  shaLinuxAmd64:
+    name: 'Signed linux-amd64 digest for the resolved version'
+    kind: shell
+    dependson:
+      - cosignVersion
+    spec:
+      command: 'scripts/updatecli/cosign-release-sha256.sh {{ source "cosignVersion" }} linux-amd64'
+      environments:
+        - name: PATH
+        - name: HOME
+  shaLinuxArm64:
+    name: 'Signed linux-arm64 digest for the resolved version'
+    kind: shell
+    dependson:
+      - cosignVersion
+    spec:
+      command: 'scripts/updatecli/cosign-release-sha256.sh {{ source "cosignVersion" }} linux-arm64'
+      environments:
+        - name: PATH
+        - name: HOME
+
+targets:
+  makefileVersion:
+    name: 'COSIGN_VERSION in the Makefile (the local verifier)'
+    kind: file
+    disablesourceinput: true
+    scmid: workflow
+    spec:
+      file: Makefile
+      matchpattern: '(COSIGN_VERSION \?= )v\d+\.\d+\.\d+'
+      replacepattern: '${1}{{ source "cosignVersion" }}'
+  publishRelease:
+    name: 'cosign-release in publish.yml (both signing steps)'
+    kind: file
+    disablesourceinput: true
+    scmid: workflow
+    spec:
+      file: .github/workflows/publish.yml
+      matchpattern: '(cosign-release: )v\d+\.\d+\.\d+'
+      replacepattern: '${1}{{ source "cosignVersion" }}'
+  # Version and digest move together: a key naming one release beside a digest
+  # from another would fail download-cosign.sh closed at the next `make cosign`.
+  pinDarwinAmd64:
+    name: 'darwin-amd64 digest in download-cosign.sh'
+    kind: file
+    disablesourceinput: true
+    scmid: workflow
+    spec:
+      file: scripts/release/download-cosign.sh
+      matchpattern: '"v\d+\.\d+\.\d+ darwin-amd64"\) echo "[0-9a-f]{64}"'
+      replacepattern: '"{{ source "cosignVersion" }} darwin-amd64") echo "{{ source "shaDarwinAmd64" }}"'
+  pinDarwinArm64:
+    name: 'darwin-arm64 digest in download-cosign.sh'
+    kind: file
+    disablesourceinput: true
+    scmid: workflow
+    spec:
+      file: scripts/release/download-cosign.sh
+      matchpattern: '"v\d+\.\d+\.\d+ darwin-arm64"\) echo "[0-9a-f]{64}"'
+      replacepattern: '"{{ source "cosignVersion" }} darwin-arm64") echo "{{ source "shaDarwinArm64" }}"'
+  pinLinuxAmd64:
+    name: 'linux-amd64 digest in download-cosign.sh'
+    kind: file
+    disablesourceinput: true
+    scmid: workflow
+    spec:
+      file: scripts/release/download-cosign.sh
+      matchpattern: '"v\d+\.\d+\.\d+ linux-amd64"\) echo "[0-9a-f]{64}"'
+      replacepattern: '"{{ source "cosignVersion" }} linux-amd64") echo "{{ source "shaLinuxAmd64" }}"'
+  pinLinuxArm64:
+    name: 'linux-arm64 digest in download-cosign.sh'
+    kind: file
+    disablesourceinput: true
+    scmid: workflow
+    spec:
+      file: scripts/release/download-cosign.sh
+      matchpattern: '"v\d+\.\d+\.\d+ linux-arm64"\) echo "[0-9a-f]{64}"'
+      replacepattern: '"{{ source "cosignVersion" }} linux-arm64") echo "{{ source "shaLinuxArm64" }}"'
