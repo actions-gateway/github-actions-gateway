@@ -7,7 +7,7 @@ require (
 	github.com/actions-gateway/github-actions-gateway/api v0.0.0-00010101000000-000000000000 // workspace-local
 	github.com/onsi/ginkgo/v2 v2.32.0
 	github.com/onsi/gomega v1.42.1
-	github.com/stretchr/testify v1.11.1
+	github.com/stretchr/testify v1.12.0
 	k8s.io/api v0.36.3
 	k8s.io/apimachinery v0.36.3
 	k8s.io/client-go v0.36.3
