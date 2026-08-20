@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q932/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q945/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>Nothing binds release-ladder's punted table to its rows' deferred status - GitHub Actions Gateway</title>
+        <title>Nothing records that make's database format differs by make version - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#nothing-binds-release-ladders-punted-table-to-its-rows-deferred-status" class="md-skip">
+        <a href="#nothing-records-that-makes-database-format-differs-by-make-version" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Nothing binds release-ladder's punted table to its rows' deferred status
+              Nothing records that make's database format differs by make version
             
           </span>
         </div>
@@ -2567,9 +2567,14 @@
   
 
 
-<h1 id="nothing-binds-release-ladders-punted-table-to-its-rows-deferred-status">Nothing binds release-ladder's punted table to its rows' deferred status<a class="headerlink" href="#nothing-binds-release-ladders-punted-table-to-its-rows-deferred-status" title="Permanent link">&para;</a></h1>
-<p>The table names each item punted past <code>v2.0.0</code>, and no gate reads it: <code>check-plan-index</code> binds <code>plan/README.md</code> Status cells to a row <em>existing</em>, never to its status.
-Q408 and Q564 sat in it for five days after reviving (Q843).</p>
+<h1 id="nothing-records-that-makes-database-format-differs-by-make-version">Nothing records that make's database format differs by make version<a class="headerlink" href="#nothing-records-that-makes-database-format-differs-by-make-version" title="Permanent link">&para;</a></h1>
+<p>A target-specific variable prints as a comment under the GNU make 3.81 macOS ships, and in rule position, <code>target: VAR := value</code>, under the 4.x CI runs.
+A gate parsing <code>make -p</code> therefore reads <code>TOOL_PKG</code>, <code>:=</code> and a package path as prerequisites on CI alone, so <code>make check</code> is correctly green locally over a database that cannot contain the defect.
+Measured on <a href="https://github.com/actions-gateway/github-actions-gateway/pull/1671">#1671</a>, run 32275796483: 24 failures in CI against a suite green on the dev box.
+<code>scripts/ci/check-tools.sh</code> registers make with no version floor and no version probe, and <code>docs/development/testing.md</code> names 3.81 only to explain why <code>make -j</code> is unused.
+<a href="https://github.com/actions-gateway/github-actions-gateway/pull/1673">#1673</a> has since built the floor mechanism and the rationale list a new floor joins, so this is now a registry row to fill rather than machinery to design.
+It already records a different local-vs-CI make divergence, a sub-make writing <code>Entering directory</code> onto stdout, so this is the second of a class rather than a one-off.
+Record the divergence and set the floor; take the <code>--database PATH --print-rules</code> seam in <code>scripts/ci/check-tool-pins.sh</code> as the pattern that makes such a gate testable where no one machine runs both makes.</p>
 
 
 
