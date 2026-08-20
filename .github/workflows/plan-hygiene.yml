@@ -15,10 +15,12 @@ on:
     branches: [main]
     paths:
       - 'docs/plan/README.md'
+      - 'docs/plan/release-ladder.md'
       - 'docs/queue/**'
       - '**.go'
       - 'scripts/docs/check-plan-index.sh'
       - 'scripts/docs/check-no-plan-refs-in-code.sh'
+      - 'scripts/docs/check-release-ladder.sh'
       - '.github/workflows/plan-hygiene.yml'
 
 # Cancel superseded runs on the same PR; pushes to main are never cancelled.
@@ -51,10 +53,12 @@ jobs:
           filters: |
             plan:
               - 'docs/plan/README.md'
+              - 'docs/plan/release-ladder.md'
               - 'docs/queue/**'
               - '**.go'
               - 'scripts/docs/check-plan-index.sh'
               - 'scripts/docs/check-no-plan-refs-in-code.sh'
+              - 'scripts/docs/check-release-ladder.sh'
               - '.github/workflows/plan-hygiene.yml'
       # A JS action reports failure only as an ::error:: annotation, so a rerun
       # that replaces the check run erases it — leaving a log that simply stops
@@ -74,6 +78,11 @@ jobs:
         run: scripts/docs/check-plan-index.sh
       - name: Go code does not reference plan-doc paths
         run: scripts/docs/check-no-plan-refs-in-code.sh
+      - name: release ladder's punted split matches the backlog
+        # The status half of check-plan-index above: that gate binds a cell to a
+        # row existing, never to its status, so release-ladder.md's punted table
+        # went on calling two revived items Deferred for five days (Q932).
+        run: scripts/docs/check-release-ladder.sh
 
   # Aggregate required-status gate. Mark THIS job's check context
   # (`plan-hygiene-gate`) required in the branch ruleset — never the path-gated

@@ -59,7 +59,8 @@ CHECK_FAST_GATES := roadmap-check \
                     endpoint-parity-check \
                     release-notes-check \
                     dashboard-render-check \
-                    tool-pin-check
+                    tool-pin-check \
+                    release-ladder-check
 
 CHECK_HEAVY_GATES := build-tags-check lint cover-check
 
@@ -74,6 +75,7 @@ CHECK_HEAVY_GATES := build-tags-check lint cover-check
 #   em-dash-check         an item's notes pushed the file over its baseline ceiling
 #   md-reflow-check       an item body written as one paragraph rather than one sentence per line
 #   page-density-check    an admonition run, or a stat tile repeated across pages
+#   release-ladder-check  an item revived or re-parked while release-ladder.md still sorts it the old way
 # Every entry is also in CHECK_FAST_GATES, so this is a strict subset of `make
 # check` and never a second opinion. Completeness is the half that had no
 # enforcement: em-dash-check scans `*.md` and page-density-check `docs/*.md`, both
@@ -92,7 +94,8 @@ CHECK_HEAVY_GATES := build-tags-check lint cover-check
 # through the migration and has nothing left to compare.
 QUEUE_GATES := queue-lint queue-rules-check roadmap-check plan-index-check \
                  conflict-markers-check doc-links em-dash-check md-reflow-check \
-                 page-density-check
+                 page-density-check \
+                 release-ladder-check
 
 # The gates a prose change can fail, for the same reason QUEUE_GATES exists one
 # rung over: they cost seconds each and they are what a docs change trips at the
@@ -111,6 +114,7 @@ QUEUE_GATES := queue-lint queue-rules-check roadmap-check plan-index-check \
 #   release-notes-check  a release note with a duplicate h1, a dead in-page anchor, or a `v`-prefixed chart version
 #   upgrade-toc-check    a heading added to upgrade.md that its own index never gained
 #   conflict-markers-check a marker survived an Edit-based conflict resolution
+#   release-ladder-check an edit to release-ladder.md's punted table or its stated counts
 # Every entry is also in CHECK_FAST_GATES, so like QUEUE_GATES this is a strict
 # subset of `make check` and never a second opinion. That claim went unchecked
 # for the life of the list and was false: release-notes-check was in neither gate
@@ -123,7 +127,8 @@ QUEUE_GATES := queue-lint queue-rules-check roadmap-check plan-index-check \
 DOCS_GATES := doc-links plan-index-check no-plan-refs-check em-dash-check \
               md-reflow-check page-density-check release-pins-check \
               release-notes-check upgrade-toc-check \
-              conflict-markers-check
+              conflict-markers-check \
+              release-ladder-check
 
 # Behavioural assertions for the scripts/ tree that shellcheck (a linter) can't
 # express — the tags-only release signing-identity regexp (Q124), the
@@ -240,4 +245,5 @@ SCRIPTS_TESTS := agent/claude-go-throttle-hook-test agent/local-throttle-test \
                  e2e/check-endpoint-parity-test \
                  manifest/check-dashboard-render-test \
                  ci/check-tool-pins-test \
-                 updatecli/cosign-release-sha256-test
+                 updatecli/cosign-release-sha256-test \
+                 docs/check-release-ladder-test
