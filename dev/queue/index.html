@@ -3867,6 +3867,14 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>S</td>
 <td><a href="../development/dependency-updates/#running-it-locally">dependency-updates.md</a> documents <code>updatecli diff</code> as the local dry run, but …</td>
 </tr>
+<tr>
+<td><a href="Q946/">Q946</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/CLAUDE.md"><code>git commit</code> with a pathspec resolves against the tree, not the commit</a></td>
+<td><code>docs</code> <code>debt</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>A pathspec matches the working tree and index, so <code>git commit -- &lt;path&gt;</code> fails <code>did not match any file(s) known to git</code> on a file that is …</td>
+</tr>
 </tbody>
 </table>
 
