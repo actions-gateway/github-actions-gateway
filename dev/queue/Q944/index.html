@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q927/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q944/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>cosign has no updatecli manifest, so its pin only moves by hand - GitHub Actions Gateway</title>
+        <title>No updatecli manifest can be dry-run before it runs unattended - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#cosign-has-no-updatecli-manifest-so-its-pin-only-moves-by-hand" class="md-skip">
+        <a href="#no-updatecli-manifest-can-be-dry-run-before-it-runs-unattended" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              cosign has no updatecli manifest, so its pin only moves by hand
+              No updatecli manifest can be dry-run before it runs unattended
             
           </span>
         </div>
@@ -2567,10 +2567,12 @@
   
 
 
-<h1 id="cosign-has-no-updatecli-manifest-so-its-pin-only-moves-by-hand">cosign has no updatecli manifest, so its pin only moves by hand<a class="headerlink" href="#cosign-has-no-updatecli-manifest-so-its-pin-only-moves-by-hand" title="Permanent link">&para;</a></h1>
-<p>kind, polaris, shellcheck and syft each have one; cosign does not, so the binary that signs and verifies every release is the one pin nothing keeps fresh.
-Q903's gate holds the copies to each other, which is a different property: three sites agreeing on a stale version still agree.
-The pattern the other four use does not transfer unchanged, because cosign's pin is four per-platform digests in a shell <code>case</code> block rather than one <code>SHA256:</code> field, so a manifest has to rewrite the block and resolve four digests — all four now asserted by <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/release/download-cosign-test.sh">download-cosign-test.sh</a>.</p>
+<h1 id="no-updatecli-manifest-can-be-dry-run-before-it-runs-unattended">No updatecli manifest can be dry-run before it runs unattended<a class="headerlink" href="#no-updatecli-manifest-can-be-dry-run-before-it-runs-unattended" title="Permanent link">&para;</a></h1>
+<p><a href="../../development/dependency-updates/#running-it-locally">dependency-updates.md</a> documents <code>updatecli diff</code> as the local dry run, but <code>updatecli</code> is in neither <code>check-tools.sh</code>'s registry nor <code>CONTRIBUTING.md</code>'s prerequisites, so <code>make doctor</code> passes without it and nobody has it.
+Both name it, only as the bumper of <em>other</em> tools' pins (checked against #1673, which reworked that registry), so a grep hit there is not this row being fixed.
+Ten manifests now ship unexercised: a <code>matchpattern</code> that stops matching is silent, and the doc's own "manifest rot" note says the tell is a long-stale pin with no PR.
+Register it as <code>optional</code>-tier, or gate the patterns another way.
+Found writing <code>updatecli.d/cosign.yaml</code>, where the patterns were checked by re-implementing the substitution in <code>python3</code> instead.</p>
 
 
 

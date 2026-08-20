@@ -2702,6 +2702,11 @@ This doc is the map of those channels: what is automated, by what, and where the
 <td><strong>updatecli</strong> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/updatecli.d/syft.yaml"><code>updatecli.d/syft.yaml</code></a>, weekly, rewriting both so the release-time and PR-time SBOM generators can't drift apart)</td>
 </tr>
 <tr>
+<td>cosign version + 4 per-platform digests (3 files)</td>
+<td><code>COSIGN_VERSION</code> in the root <code>Makefile</code>, both <code>cosign-release</code> inputs in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/publish.yml"><code>publish.yml</code></a>, and the digest table in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/release/download-cosign.sh"><code>scripts/release/download-cosign.sh</code></a></td>
+<td><strong>updatecli</strong> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/updatecli.d/cosign.yaml"><code>updatecli.d/cosign.yaml</code></a>, weekly, rewriting all three, which is what keeps <code>make cosign-pin-check</code> green through a bump. The digests come from the release's <strong>signed</strong> checksums file, verified before they are read; see the strategy note below)</td>
+</tr>
+<tr>
 <td>buildkit builder image digest (3 files)</td>
 <td><code>BUILDKIT_IMAGE</code> in <code>e2e-reusable.yml</code>, <code>security-scan.yml</code> <strong>and</strong> <code>publish.yml</code></td>
 <td><strong>updatecli</strong> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/updatecli.d/buildkit.yaml"><code>updatecli.d/buildkit.yaml</code></a>, weekly — rewrites all three, so they can't drift)</td>
@@ -2751,6 +2756,10 @@ They share a shape:</p>
 <li><strong>Fetch a published checksum</strong> — <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/updatecli/kind-linux-amd64-sha256.sh"><code>scripts/updatecli/kind-linux-amd64-sha256.sh</code></a> reads kind's per-binary <code>kind-linux-amd64.sha256sum</code> (the value a human would copy by hand).
      Cheap; preferred when the upstream publishes one.</li>
 <li><strong>Hash the bytes</strong> — <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/updatecli/sha256-of-url.sh"><code>scripts/updatecli/sha256-of-url.sh</code></a> downloads the asset and hashes it, for upstreams (e.g. shellcheck) that publish no checksum file.</li>
+<li><strong>Verify a signed checksum file.</strong> <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/updatecli/cosign-release-sha256.sh"><code>scripts/updatecli/cosign-release-sha256.sh</code></a> checks the sigstore signature on cosign's <code>cosign_checksums.txt</code> before reading a digest out of it, and prints nothing if it does not verify.
+     Reach for this where the pin is a trust anchor rather than a convenience.
+     Both cheaper strategies trust bytes fetched from the release, and a GitHub release asset stays mutable for an existing tag (Q126/Q127): tolerable for a linter, not for the binary that verifies every release this repo publishes.
+     The verifier is the <em>currently pinned</em> cosign, downloaded by a <code>make cosign</code> step in the workflow, so the chain is anchored in the pin being replaced rather than in the release being fetched.</li>
 <li><strong>File targets</strong> — regex-replace each pin in place and open one PR.</li>
 </ol>
 <p>Three exceptions to the <code>githubrelease</code> source.
@@ -2794,6 +2803,11 @@ Its source is the registry's own OCI tag list rather than GitHub releases: the h
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/updatecli.d/syft.yaml"><code>syft.yaml</code></a></td>
 <td><code>SYFT_VERSION</code> + <code>SYFT_SHA256</code> in two files</td>
 <td>published <code>syft_&lt;version&gt;_checksums.txt</code> line</td>
+</tr>
+<tr>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/updatecli.d/cosign.yaml"><code>cosign.yaml</code></a></td>
+<td><code>COSIGN_VERSION</code>, both <code>cosign-release</code> inputs, and the four per-platform digests in <code>download-cosign.sh</code></td>
+<td>signature-verified <code>cosign_checksums.txt</code> lines (one shell source per platform)</td>
 </tr>
 <tr>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/updatecli.d/buildkit.yaml"><code>buildkit.yaml</code></a></td>

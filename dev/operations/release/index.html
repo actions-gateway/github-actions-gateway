@@ -4557,6 +4557,8 @@ Two layers enforce that a signature can only ever be a tag signature:</p>
   The publish pipeline obtains cosign via the SHA-pinned <code>sigstore/cosign-installer</code> action (which performs its own signature verification); the <em>local</em> verify path (<code>make verify-release</code> → <code>scripts/release/download-cosign.sh</code>) pins the expected SHA256 per platform in-repo and refuses to install a binary whose bytes don't match.
   Bumping <code>COSIGN_VERSION</code> must add the new digests to that script (it fails closed on an unpinned version) — the same deliberate-pin discipline as <code>KIND_BINARY_SHA256</code> in <code>e2e-test.yml</code>.
   It must also carry the same version into publish.yml's <code>cosign-release</code>, which <code>make cosign-pin-check</code> enforces (Q903): a one-sided bump leaves <code>make verify-release</code> running a verifier the publish job never signed with, and cosign verifies across versions until it doesn't.
+  All three sites move together on the weekly <a href="../../development/dependency-updates/#the-manifests">updatecli</a> run rather than by hand (Q927), and the digests it writes come from the release's sigstore-signed <code>cosign_checksums.txt</code>, verified against a pinned identity by the cosign the repo already pins.
+  Automating the copy without automating the trust would pin whatever the releases CDN served.
   The <code>$(COSIGN)</code> make rule keys on the pinned version, so a bump re-downloads instead of serving whatever <code>.build/cosign</code> already holds (Q857).</li>
 </ul>
 

@@ -2740,14 +2740,6 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>Q889 retired it with the table; <code>queue.py lint</code> and <code>check-queue-rules.py</code> carry its rules now.</td>
 </tr>
 <tr>
-<td><a href="Q927/">Q927</a></td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/release/download-cosign.sh">cosign has no updatecli manifest, so its pin only moves by hand</a></td>
-<td><code>ci</code> <code>security</code> <code>debt</code></td>
-<td>🔲</td>
-<td>S</td>
-<td>kind, polaris, shellcheck and syft each have one; cosign does not, so the binary that signs and verifies every release is the one pin …</td>
-</tr>
-<tr>
 <td><a href="Q401/">Q401</a></td>
 <td><a href="../operations/node-shutdown-budgets/">File upstream k8s issue: delete-path probe results never reach <code>Ready</code></a></td>
 <td><code>docs</code></td>
@@ -3866,6 +3858,14 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>🔲</td>
 <td>S</td>
 <td>Reported by workers during the 2026-08-18 batch, each quoting the copy loaded into its own context.</td>
+</tr>
+<tr>
+<td><a href="Q944/">Q944</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/ci/check-tools.sh">No updatecli manifest can be dry-run before it runs unattended</a></td>
+<td><code>ci</code> <code>debt</code></td>
+<td>🔲</td>
+<td>S</td>
+<td><a href="../development/dependency-updates/#running-it-locally">dependency-updates.md</a> documents <code>updatecli diff</code> as the local dry run, but …</td>
 </tr>
 </tbody>
 </table>
