@@ -56,6 +56,21 @@ printf "git_candidates 'docs/*.md' | select_present_files\n" >"$SCRIPTS/one/wide
 # rule fires on its own: `docs/development/*.md` reaches no docs/queue/ item, so
 # the QUEUE_GATES rules stay quiet and the red below has one cause.
 printf "git_candidates 'docs/development/*.md' | select_present_files\n" >"$SCRIPTS/one/prose.sh"
+# The Q930 shapes: a gate whose subject is a constant hands git nothing, so the
+# pathspec derivation above sees none of these. Each names a real tracked path,
+# because the answer is resolved against this repo the way a pathspec is.
+# shellcheck disable=SC2016 # the body is the fixture's shell source, not an expansion
+printf 'STORE="${1:-docs/queue}"\n' >"$SCRIPTS/one/subject-queue.sh"
+# shellcheck disable=SC2016 # same: a literal ${1:-...} default is the shape under test
+printf 'PAGE="${1:-docs/development/testing.md}"\n' >"$SCRIPTS/one/subject-prose.sh"
+printf "DEFAULT_FILES=('docs/development/testing.md')\n" >"$SCRIPTS/one/subject-array.sh"
+# A script whose only path literals sit behind a command substitution. The
+# tokenizer cannot follow the quoting through one, and what fell out of the
+# attempt was `.` — which selects the whole tree and would report every gate in
+# every scope. It must yield nothing instead.
+# shellcheck disable=SC2016 # the command substitutions are the fixture's subject
+printf 'root="$(git rev-parse --show-toplevel)"\nn="$(awk \047$1 == "docs/queue" { print }\047 docs/roadmap.md)"\n' \
+	>"$SCRIPTS/one/subject-cmdsub.sh"
 
 fails=0
 
@@ -150,6 +165,16 @@ write_makefile "$FIXTURE_DIR/Makefile.ci-marked" '' '' 'true' \
 	'# ci-scope: none - beta is a local-only convenience'
 write_makefile "$FIXTURE_DIR/Makefile.mq-marked" '' '' 'scripts/one/beta.sh' \
 	'# merge-queue-scope: none - beta is advisory on the candidate merge'
+write_makefile "$FIXTURE_DIR/Makefile.subject-queue" '' '' 'scripts/one/subject-queue.sh'
+write_makefile "$FIXTURE_DIR/Makefile.subject-queue-marked" '' '' 'scripts/one/subject-queue.sh' \
+	'# queue-scope: none - beta reads the store path to name a file, not to check one'
+write_makefile "$FIXTURE_DIR/Makefile.subject-prose" '' '' 'scripts/one/subject-prose.sh'
+write_makefile "$FIXTURE_DIR/Makefile.subject-prose-marked" '' '' 'scripts/one/subject-prose.sh' \
+	'# docs-scope: none - beta names the page as an instrument, not a subject'
+write_makefile "$FIXTURE_DIR/Makefile.subject-array" '' '' 'scripts/one/subject-array.sh'
+write_makefile "$FIXTURE_DIR/Makefile.subject-cmdsub" '' '' 'scripts/one/subject-cmdsub.sh'
+write_makefile "$FIXTURE_DIR/Makefile.wide-marked" '' '' 'scripts/one/wide.sh' \
+	'# queue-scope: none - a declaration that must not silence a pathspec'
 
 # Workflow trees for rules 8 and 11. Every gate has to reach CI somehow, so the
 # default tree runs all three by name and the variants each remove one route.
@@ -261,6 +286,33 @@ assert_output queue-scope-underivable 'queue-scope'
 expect_check queue-scope-declared 0 --fast 'alpha beta' --heavy 'heavy-one' \
 	--queue 'alpha' --docs 'alpha beta' --makefile "$FIXTURE_DIR/Makefile.marked"
 
+# Rule 7's second derivation (Q930): a gate whose subject is a hardcoded literal
+# rather than a pathspec. Nothing in the tree is in this state — the only real
+# gate the derivation reaches declares itself out — so the fixture is the whole
+# assertion, and it has to go red on its own.
+expect_check queue-subject-incomplete 1 --fast 'alpha beta' --heavy 'heavy-one' \
+	--queue 'alpha' --docs 'alpha beta' --makefile "$FIXTURE_DIR/Makefile.subject-queue"
+assert_output queue-subject-incomplete 'as its subject'
+assert_output queue-subject-incomplete beta
+expect_check queue-subject-complete 0 --fast 'alpha beta' --heavy 'heavy-one' \
+	--queue 'alpha beta' --docs 'alpha beta' --makefile "$FIXTURE_DIR/Makefile.subject-queue"
+# A subject is weaker evidence than a pathspec, so it can be declared away.
+expect_check queue-subject-declared 0 --fast 'alpha beta' --heavy 'heavy-one' \
+	--queue 'alpha' --docs 'alpha beta' --makefile "$FIXTURE_DIR/Makefile.subject-queue-marked"
+
+# And the half that keeps Q749 intact: the same declaration must NOT silence a
+# real pathspec. Without this, adding the hatch would quietly hand every gate a
+# way out of the rule that caught em-dash-check and page-density-check.
+expect_check queue-pathspec-not-declarable 1 --fast 'alpha beta' --heavy 'heavy-one' \
+	--queue 'alpha' --docs 'alpha beta' --makefile "$FIXTURE_DIR/Makefile.wide-marked"
+assert_output queue-pathspec-not-declarable 'pathspec'
+
+# A path literal behind a command substitution is not a subject. The tokenizer
+# cannot follow the quoting through one and its fragments included `.`, which
+# selects the tree — so this fixture is green only while that guard holds.
+expect_check subject-cmdsub-ignored 0 --fast 'alpha beta' --heavy 'heavy-one' \
+	--queue 'alpha' --docs 'alpha' --makefile "$FIXTURE_DIR/Makefile.subject-cmdsub"
+
 # DOCS_GATES must stay a subset of CHECK_FAST_GATES (rule 9). It was not:
 # release-notes-check sat in DOCS_GATES and in neither gate list, so
 # `make docs-gates` ran a gate `make check` did not, for the whole life of the
@@ -287,6 +339,21 @@ expect_check docs-scope-underivable 1 --fast 'alpha beta' --heavy 'heavy-one' \
 assert_output docs-scope-underivable 'docs-scope'
 expect_check docs-scope-declared 0 --fast 'alpha beta' --heavy 'heavy-one' \
 	--docs 'alpha' --queue 'alpha beta' --makefile "$FIXTURE_DIR/Makefile.docs-marked"
+
+# Rule 10's second derivation, where it earns its keep: every page-scoped gate
+# in the tree hardcodes its page, and seven were invisible to rule 10 at once
+# (Q930). Both spellings a real gate uses — an argument default and an array.
+expect_check docs-subject-incomplete 1 --fast 'alpha beta' --heavy 'heavy-one' \
+	--docs 'alpha' --queue 'alpha beta' --makefile "$FIXTURE_DIR/Makefile.subject-prose"
+assert_output docs-subject-incomplete 'as its subject'
+assert_output docs-subject-incomplete beta
+expect_check docs-subject-complete 0 --fast 'alpha beta' --heavy 'heavy-one' \
+	--docs 'alpha beta' --queue 'alpha beta' --makefile "$FIXTURE_DIR/Makefile.subject-prose"
+expect_check docs-subject-array 1 --fast 'alpha beta' --heavy 'heavy-one' \
+	--docs 'alpha' --queue 'alpha beta' --makefile "$FIXTURE_DIR/Makefile.subject-array"
+assert_output docs-subject-array 'as its subject'
+expect_check docs-subject-declared 0 --fast 'alpha beta' --heavy 'heavy-one' \
+	--docs 'alpha' --queue 'alpha beta' --makefile "$FIXTURE_DIR/Makefile.subject-prose-marked"
 
 # The half the two cases above cannot reach: both prove the rules fire on a list
 # that is wrong, and neither can prove they fire on a list that is not there. An

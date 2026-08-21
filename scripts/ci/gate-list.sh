@@ -42,10 +42,15 @@
 #      selects a backlog item. Rule 4 alone let em-dash-check and
 #      page-density-check scan the file from the day each was written while the
 #      list called itself complete, so `make queue-gates` reported a green
-#      `make check` would not (Q749). The derivation is the pathspec git is
-#      handed, the same question the gate itself asks. A gate that runs no
-#      scripts/ file has no derivable file set and declares instead, with a
-#      `# queue-scope: none` comment directly above its .PHONY.
+#      `make check` would not (Q749). Two derivations, of different strength.
+#      The pathspec git is handed is the same question the gate itself asks, so
+#      a hit there is a failure outright. A subject the script hardcodes -- a
+#      literal assigned to a variable, which is how a page-scoped gate names the
+#      page it reads -- is weaker, because a script names its instruments the
+#      same way it names its subject, so a hit there can be declared away
+#      (Q930). A gate that runs no scripts/ file has no derivable file set and
+#      declares as well. Both declarations are one `# queue-scope: none` comment
+#      with its reason, directly above the gate's .PHONY.
 #   8. Every gate also runs in CI. A gate can join CHECK_FAST_GATES and be run
 #      by no workflow, and rules 1-7 all stay green: `make check` enforces it
 #      locally while every PR merges without it. comparison-stamps-check
@@ -64,11 +69,12 @@
 #      release-notes-check sat in DOCS_GATES and in neither gate list, so
 #      `make docs-gates` ran a gate `make check` did not (Q920).
 #  10. DOCS_GATES is complete, not only a subset: no fast gate outside it is one
-#      a change to a page under docs/ can fail. Rule 7's derivation one list
-#      over, reading the same pathspecs, and it inherits rule 7's blind spot —
-#      a gate that hardcodes the page it reads hands git nothing, so this
-#      cannot see it. Page-scoped docs gates are written that way, which is why
-#      the blind spot costs more here than it does on rule 7 (Q930).
+#      a change to a page under docs/ can fail. Rule 7's derivations one list
+#      over, both of them, and this is where the second one earns its keep: a
+#      page-scoped gate hands git nothing, so reading pathspecs alone left seven
+#      such gates invisible at once and `make docs-gates` green on prose edits
+#      to nine pages `make check` can fail (Q930). `# docs-scope: none` is the
+#      declaration, carrying the same two meanings rule 7's does.
 #  11. The workflow that covers a gate is one the merge queue evaluates. Rule 8
 #      asks whether some workflow runs the gate and stops there, so a gate whose
 #      only workflow triggers on `pull_request` alone satisfies it while never
@@ -307,6 +313,68 @@ selection_pathspecs() {
 				rest = substr(rest, RSTART + RLENGTH)
 				if (spec != "" && substr(spec, 1, 1) != ":") print spec
 			}
+		}
+	' "$1"
+}
+
+# The paths a script names as its own subject: a literal assigned to a variable,
+# directly, as a `${N:-...}` argument default, or as an array element. What a
+# gate hands git is the whole question for one that walks a tree and no question
+# at all for one whose subject is a constant, which is how every page-scoped
+# gate here is written -- rules 7 and 10 could see none of them (Q930).
+# Assignment operands only, the same line selection_pathspecs draws, and a line
+# carrying a command substitution is skipped whole: its quoting does not survive
+# this tokenizer, and one of the fragments that fell out was `.`, which selects
+# the entire tree. \047 is the single quote.
+default_subjects() {
+	awk '
+		function emit(tok,   v, i) {
+			if (tok ~ /^\$\{[0-9]+:-/) {
+				i = index(tok, ":-")
+				v = substr(tok, i + 2)
+				sub(/\}[^}]*$/, "", v)
+			} else {
+				v = tok
+			}
+			sub(/^\$\{?(repo_root|REPO_ROOT)\}?\//, "", v)
+			if (v ~ /\$/ || v ~ /:/ || v == "." || v == "..") return
+			if (v !~ /^[A-Za-z0-9_.][A-Za-z0-9_.\/*-]*$/) return
+			if (v !~ /[.\/]/) return
+			print v
+		}
+		function scan(line,   n, i, c, q, tok) {
+			n = length(line)
+			for (i = 1; i <= n; ) {
+				c = substr(line, i, 1)
+				if (c ~ /[ \t()]/) { i++; continue }
+				if (c == "#") return
+				if (c == "\047" || c == "\"") {
+					q = c; i++; tok = ""
+					while (i <= n && substr(line, i, 1) != q) { tok = tok substr(line, i, 1); i++ }
+					i++
+				} else {
+					tok = ""
+					while (i <= n && substr(line, i, 1) !~ /[ \t)]/) { tok = tok substr(line, i, 1); i++ }
+				}
+				emit(tok)
+			}
+		}
+		{
+			line = $0
+			sub(/^[ \t]*#.*$/, "", line)
+			if (in_array) {
+				if (line ~ /\)/) { sub(/\).*$/, "", line); in_array = 0 }
+				if (line !~ /\$\(/ && line !~ /`/) scan(line)
+				next
+			}
+			if (line ~ /\$\(/ || line ~ /`/) next
+			if (line !~ /^[ \t]*((local|declare|readonly|export)[ \t]+)?[A-Za-z_][A-Za-z0-9_]*\+?=/) next
+			sub(/^[^=]*=/, "", line)
+			if (line ~ /^\(/) {
+				sub(/^\(/, "", line)
+				if (line ~ /\)/) { sub(/\).*$/, "", line) } else { in_array = 1 }
+			}
+			scan(line)
 		}
 	' "$1"
 }
@@ -560,6 +628,10 @@ for gate in $FAST; do
 	if grep -qx -- "$gate" <<<"$queue_names"; then
 		continue
 	fi
+	declared=0
+	if scope_none "$gate" queue-scope; then
+		declared=1
+	fi
 	scanned=0
 	flagged=0
 	while IFS= read -r script; do
@@ -574,8 +646,18 @@ for gate in $FAST; do
        add it to QUEUE_GATES, or narrow the pathspec"
 			fi
 		done < <(selection_pathspecs "$script")
+		((declared == 0)) || continue
+		while IFS= read -r spec; do
+			[[ -n "$spec" ]] || continue
+			((flagged == 0)) || continue
+			if selects_queue_file "$spec"; then
+				flagged=1
+				fail "gate '$gate' takes $QUEUE_FILE as its subject (hardcoded '$spec' in $script) but QUEUE_GATES omits it, so \`make queue-gates\` reports a green \`make check\` would not
+       add it to QUEUE_GATES, or declare \`# queue-scope: none\` with the reason directly above its .PHONY"
+			fi
+		done < <(default_subjects "$script")
 	done < <(gate_scripts "$gate")
-	if ((scanned == 0)) && ! scope_none "$gate" queue-scope; then
+	if ((scanned == 0)) && ((declared == 0)); then
 		fail "gate '$gate' runs no $SCRIPTS_DIR/ file, so whether a backlog-only change can fail it is not derivable
        add it to QUEUE_GATES, or declare \`# queue-scope: none\` with the reason directly above its .PHONY"
 	fi
@@ -620,6 +702,10 @@ for gate in $FAST; do
 	if grep -qx -- "$gate" <<<"$docs_names"; then
 		continue
 	fi
+	declared=0
+	if scope_none "$gate" docs-scope; then
+		declared=1
+	fi
 	scanned=0
 	flagged=0
 	while IFS= read -r script; do
@@ -634,8 +720,18 @@ for gate in $FAST; do
        add it to DOCS_GATES, or narrow the pathspec"
 			fi
 		done < <(selection_pathspecs "$script")
+		((declared == 0)) || continue
+		while IFS= read -r spec; do
+			[[ -n "$spec" ]] || continue
+			((flagged == 0)) || continue
+			if selects_docs_page "$spec"; then
+				flagged=1
+				fail "gate '$gate' takes a page under docs/ as its subject (hardcoded '$spec' in $script) but DOCS_GATES omits it, so \`make docs-gates\` reports a green \`make check\` would not
+       add it to DOCS_GATES, or declare \`# docs-scope: none\` with the reason directly above its .PHONY"
+			fi
+		done < <(default_subjects "$script")
 	done < <(gate_scripts "$gate")
-	if ((scanned == 0)) && ! scope_none "$gate" docs-scope; then
+	if ((scanned == 0)) && ((declared == 0)); then
 		fail "gate '$gate' runs no $SCRIPTS_DIR/ file, so whether a docs/ change can fail it is not derivable
        add it to DOCS_GATES, or declare \`# docs-scope: none\` with the reason directly above its .PHONY"
 	fi

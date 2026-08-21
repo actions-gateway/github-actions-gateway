@@ -111,6 +111,9 @@ list-gates: ## List every gate `make check` runs, in order, with what each one c
 # testing.md still points at the list targets rather than re-transcribing them,
 # and that QUEUE_GATES and DOCS_GATES are each the complete subset of
 # CHECK_FAST_GATES their comments claim, in both directions.
+# queue-scope: none - the one docs/queue/ path this reads is a glob it hands git
+# to name any single item, so it can answer rule 7 for other gates. It reads the
+# filename and checks nothing in the file, so no backlog edit can fail it.
 .PHONY: gate-lists-check
 gate-lists-check: ## Fail when `make check`'s gate and suite lists disagree with their derived consumers
 	scripts/ci/gate-list.sh --check --fast '$(CHECK_FAST_GATES)' --heavy '$(CHECK_HEAVY_GATES)' --queue '$(QUEUE_GATES)' --docs '$(DOCS_GATES)' --suites '$(SCRIPTS_TESTS)'
