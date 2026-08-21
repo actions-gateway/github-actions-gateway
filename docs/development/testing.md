@@ -1007,8 +1007,10 @@ Where a derived path provably stays inside the module root, `DERIV_ALLOW` record
 The `cmd/gmc/test/e2e` lookups stay exempt as e2e files; the detector is what would catch them if that idiom were copied into a cached tier, which is the live risk given both sites sit in the tree today.
 
 **Its residual blind spot is `exec.Command` generally.** A test that shells out against the repo reads whatever the subprocess reads, and no path detector can see it.
-Measured over the cached tiers on the same date, the other four such tests all set `cmd.Dir` to a `t.TempDir()` they populate themselves, so they depend on nothing outside their own run.
-That is a judgement taken once, not a gate.
+Measured over the cached tiers on 2026-08-21, four such tests set `cmd.Dir` to a `t.TempDir()` they populate themselves, so they depend on nothing outside their own run.
+`TestGettingStarted_Executable` is the exception and the live case: it execs `scripts/docs/doc-blocks.sh` against the repo root, and caches correctly only because it also reads that script and the lib it sources, by hand, through `testdata/` symlinks.
+A hand-read is what the blind spot costs, since nothing fails when an author omits it, so this stays a judgement taken per test rather than a gate.
+Q953 is the detector.
 
 ### The claude-usage snapshot gate
 

@@ -20,6 +20,9 @@ import (
 const (
 	gettingStartedDoc = "testdata/getting-started.md"
 	docBlocksScript   = "testdata/doc-blocks.sh"
+	// doc-blocks.sh sources this on every invocation, so it is as much an input
+	// to the parse as the script itself.
+	docBlocksLib = "testdata/scripts-lib-common.sh"
 )
 
 // executedBlockFloor is the number of blocks THIS venue must run, and it is the
@@ -65,15 +68,23 @@ func TestGettingStarted_Executable(t *testing.T) {
 	doc, err := os.ReadFile(gettingStartedDoc)
 	require.NoError(t, err)
 
-	// Read the parser too, rather than only exec'ing it below. Exec is not a
-	// testlog read, so without this a change to doc-blocks.sh alone would replay
-	// a cached pass on any run that does not force -count=1 — and
-	// go-test-integration.sh forces it only under a -run filter. The read makes
-	// the script a real cache input, and doubles as the precondition check the
-	// exec would otherwise fail confusingly on.
-	parser, err := os.ReadFile(docBlocksScript)
-	require.NoError(t, err)
-	require.NotEmptyf(t, parser, "%s resolved to an empty file; the testdata symlink is broken", docBlocksScript)
+	// Read every file the parse depends on, rather than only exec'ing the script.
+	// Exec is not a testlog read, so without this a change to doc-blocks.sh or to
+	// the lib it sources would replay a cached pass on any run that does not
+	// force -count=1 — and go-test-integration.sh forces that only under a -run
+	// filter. Reading both makes them real cache inputs, and doubles as the
+	// precondition check the exec would otherwise fail confusingly on.
+	//
+	// This test is the case Q953 predicted: the first cached-tier test to shell
+	// out against the repo rather than against a temp dir it populated itself.
+	// The reads below are what keep it caching correctly; they are not a
+	// substitute for the detector that row asks for, which would catch the next
+	// one written without them.
+	for _, dep := range []string{docBlocksScript, docBlocksLib} {
+		content, readErr := os.ReadFile(dep)
+		require.NoError(t, readErr)
+		require.NotEmptyf(t, content, "%s resolved to an empty file; the testdata symlink is broken", dep)
+	}
 
 	kubectl := filepath.Join(os.Getenv("KUBEBUILDER_ASSETS"), "kubectl")
 	require.FileExistsf(t, kubectl, "envtest ships kubectl in its binary assets; KUBEBUILDER_ASSETS=%q", os.Getenv("KUBEBUILDER_ASSETS"))
