@@ -3676,14 +3676,6 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td><strong>Demand:</strong> a bandwidth-heavy runner group saturates a co-tenant's pool.</td>
 </tr>
 <tr>
-<td><a href="Q898/">Q898</a></td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/unit-test.yml">The other eight gates cannot say whether their heavy job ran</a></td>
-<td><code>ci</code> <code>debt</code></td>
-<td>🔲</td>
-<td>S</td>
-<td>Every <code>*-gate</code> counts a <code>skipped</code> need as a pass, so a docs-only PR later given code reads green while unit, integration and security never …</td>
-</tr>
-<tr>
 <td><a href="Q909/">Q909</a></td>
 <td><a href="../development/maintaining-backlog/">A queue-store edit passes every gate a session actually runs</a></td>
 <td><code>docs</code> <code>debt</code></td>
@@ -3810,14 +3802,6 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>🔲</td>
 <td></td>
 <td><code>git diff --quiet origin/main...$b</code> exits non-zero on a branch with no merge base, so the <code>session-worker</code> contention sweep reads …</td>
-</tr>
-<tr>
-<td><a href="Q935/">Q935</a></td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/docs/queue.py"><code>queue.py</code> cannot cite a path under a dot-directory such as <code>.github/</code></a></td>
-<td><code>ci</code> <code>debt</code></td>
-<td>🔲</td>
-<td>S</td>
-<td><code>scripts/docs/queue.py:498</code>'s citation regex opens with <code>\b</code>, and a leading <code>.</code> is not a word character, so the boundary never holds before …</td>
 </tr>
 <tr>
 <td><a href="Q937/">Q937</a></td>
