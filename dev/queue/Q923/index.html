@@ -23,7 +23,7 @@
     
     
       
-        <title>CI nolintlint calls two SA1019 directives unused, blocking every PR - GitHub Actions Gateway</title>
+        <title>The SA1019 Subjects exclusion matches nothing and is dead config - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#ci-nolintlint-calls-two-sa1019-directives-unused-blocking-every-pr" class="md-skip">
+        <a href="#the-sa1019-subjects-exclusion-matches-nothing-and-is-dead-config" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              CI nolintlint calls two SA1019 directives unused, blocking every PR
+              The SA1019 Subjects exclusion matches nothing and is dead config
             
           </span>
         </div>
@@ -2567,10 +2567,13 @@
   
 
 
-<h1 id="ci-nolintlint-calls-two-sa1019-directives-unused-blocking-every-pr">CI <code>nolintlint</code> calls two SA1019 directives unused, blocking every PR<a class="headerlink" href="#ci-nolintlint-calls-two-sa1019-directives-unused-blocking-every-pr" title="Permanent link">&para;</a></h1>
-<p><code>main</code> itself fails this gate (run 32172968731); 1638 only surfaced it.
-Deterministic, green locally.
-Lead: the <code>SA1019.*Subjects</code> exclusion still names <code>proxytrust_test.go</code>, renamed in #1137.</p>
+<h1 id="the-sa1019-subjects-exclusion-matches-nothing-and-is-dead-config">The SA1019 <code>Subjects</code> exclusion matches nothing and is dead config<a class="headerlink" href="#the-sa1019-subjects-exclusion-matches-nothing-and-is-dead-config" title="Permanent link">&para;</a></h1>
+<p><strong>The blocking defect this row was filed for is closed.</strong> It asserted that <code>main</code> itself failed <code>nolintlint</code> and that every PR was blocked; measured 2026-08-21 on <code>adffc8ba4</code>, <code>unit-test.yml</code>, which holds the <code>lint</code> job, is green on <code>main</code> across the twelve PRs that landed that day.
+The stale path the row named as the lead was corrected before then: the rule at <code>.golangci.yml:194</code> names <code>cmd/agc/internal/transport/trustpool_test.go</code>, which is the file's current name.
+What survives is smaller and the opposite shape.
+No <code>SA1019</code> directive remains anywhere in <code>cmd/agc/internal/transport/</code>, so the exclusion now excludes nothing, and its comment still explains a suppression that has no subject.
+Delete it, or restore the directive it was written for.
+<a href="../Q929/">Q929</a> owns the separate question of the lint gate returning two verdicts on one tree.</p>
 
 
 

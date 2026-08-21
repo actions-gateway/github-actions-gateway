@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q931/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q956/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>Make the e2e bake's type=gha cache real, or drop the dead config - GitHub Actions Gateway</title>
+        <title>Re-vendor queue.py for the citation window the worker contract assumes - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#make-the-e2e-bakes-typegha-cache-real-or-drop-the-dead-config" class="md-skip">
+        <a href="#re-vendor-queuepy-for-the-citation-window-the-worker-contract-assumes" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Make the e2e bake's type=gha cache real, or drop the dead config
+              Re-vendor queue.py for the citation window the worker contract assumes
             
           </span>
         </div>
@@ -2567,16 +2567,12 @@
   
 
 
-<h1 id="make-the-e2e-bakes-typegha-cache-real-or-drop-the-dead-config">Make the e2e bake's <code>type=gha</code> cache real, or drop the dead config<a class="headerlink" href="#make-the-e2e-bakes-typegha-cache-real-or-drop-the-dead-config" title="Permanent link">&para;</a></h1>
-<p><strong>Decided 2026-08-21: expose the token with <code>crazy-max/ghaction-github-runtime</code>, SHA-pinned.</strong> That is consistent with standing practice rather than a new exception, since six third-party actions are already pinned that way here (aquasecurity, dorny, hadolint, sigstore, updatecli, azure).
-The alternative, <code>docker/bake-action</code>, was rejected because it costs the backgrounded bake.
-Q900 measured the defect: a <code>run:</code> step sees no <code>ACTIONS_RUNTIME_TOKEN</code> or <code>ACTIONS_RESULTS_URL</code>, before <em>or</em> after <code>docker/setup-buildx-action</code> v4.2.0 (probe run 32186577410).
-Buildx v0.36.1 then drops both cache entries silently, which is why the bake is green and caches nothing.
-The control is <code>security-scan.yml</code>: its <code>docker/build-push-action</code> does hold the token, and emits an <code>importing cache manifest from gha:</code> vertex absent from all three e2e bakes read here.
-Nothing writes <code>scope=images</code>, so <code>deps</code> recompiles everywhere.
-102.6 s / 99.5 s / 99.4 s on e2e runs 32145897962, 32142595219, 32143847937; 78.2 s / 81.9 s / 82.0 s on three trivy shards of run 32186370352.
-<code>docs/plan/e2e-ci-speed-round-2.md:100</code> and the <code>cache-from</code> comment in <code>security-scan.yml</code> still assert the restore works; correct both in the same change.
-Sequence after PR 1674, the dependabot actions bump, which edits <code>e2e-reusable.yml</code> and <code>security-scan.yml</code> and was open when this was decided.</p>
+<h1 id="re-vendor-queuepy-for-the-citation-window-the-worker-contract-assumes">Re-vendor <code>queue.py</code> for the citation window the worker contract assumes<a class="headerlink" href="#re-vendor-queuepy-for-the-citation-window-the-worker-contract-assumes" title="Permanent link">&para;</a></h1>
+<p><code>session-worker</code>'s contract tells a worker that <code>queue.py lint</code> reports citation drift as an advisory note and that its <code>CITATION_WINDOW = 10</code> suppresses drift of ten lines or fewer outright, so the check can wait until after an edit.
+Measured 2026-08-21: this repo's vendored copy has no <code>CITATION_WINDOW</code> and no drift-window logic at all, because it predates upstream <code>f969655</code>, which added it.
+So a worker here follows an instruction about behaviour its own tool does not have.
+Re-vendoring picks it up, and <code>make vendored-skills-check</code> then needs its digest re-stamped in the same change.
+<a href="../Q955/">Q955</a> owns the detection half, that nothing asks whether the vendored files have moved upstream; this row is one measured instance of the drift that row cannot see.</p>
 
 
 

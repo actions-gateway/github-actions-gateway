@@ -2568,11 +2568,12 @@
 
 
 <h1 id="endpoint-parity-gate-startup-failure-has-an-unproven-root-cause">endpoint-parity gate startup failure has an unproven root cause<a class="headerlink" href="#endpoint-parity-gate-startup-failure-has-an-unproven-root-cause" title="Permanent link">&para;</a></h1>
-<p>The Q871 gate went red under <code>make check</code> on its own PR, then green once the fake's output moved from an inherited pipe to a file, and the causal link is unproven.
+<p><strong>Event:</strong> any e2e-venue gate goes flaky again.
+The failure now names which of three cases it hit and quotes the fake's own output, which is the evidence this row waits on and cannot manufacture.
+The Q871 gate went red under <code>make check</code> on its own PR, then green once the fake's output moved from an inherited pipe to a file, and the causal link is unproven.
 It never reproduced standalone: six concurrent gate runs and four under a live <code>make scripts-test</code> all passed.
 The mechanism fitting every observation is that the fake logs before it binds, while <code>scripts-test</code> is a nested <code>run-parallel</code> fan-out where 85 suites write into one outer pipe.
-The readiness bound also went 10s to 30s, which is a bound rather than a fix.
-Revive on any e2e-venue gate going flaky: the failure now names which of three cases it hit and quotes the fake's own output, which is the evidence this row waits on.</p>
+The readiness bound also went 10s to 30s, which is a bound rather than a fix.</p>
 
 
 
