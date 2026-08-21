@@ -495,8 +495,12 @@ def cmd_lint(args):
         # A `file.ext:N` pointer rots silently as the code moves. Warn rather
         # than fail, matching the table linter: a bare filename is genuinely
         # ambiguous about which directory it was written against.
+        # The lookbehind stands in for `\b`, which never holds before a
+        # leading `.`: under `\b` a `.github/` path matched from `github/`
+        # and resolved from neither base.
         for ref in re.findall(
-                r"\b([\w./-]+\.(?:go|py|sh|md|ya?ml|json|ts|js|rs|java)):(\d+)\b",
+                r"(?<![\w./-])([\w./-]+"
+                r"\.(?:go|py|sh|md|ya?ml|json|ts|js|rs|java)):(\d+)\b",
                 i.notes or ""):
             path, line = ref
             if any((base / path).exists() for base in (store.parent, store.parent.parent)):
