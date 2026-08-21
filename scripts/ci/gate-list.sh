@@ -69,6 +69,16 @@
 #      a gate that hardcodes the page it reads hands git nothing, so this
 #      cannot see it. Page-scoped docs gates are written that way, which is why
 #      the blind spot costs more here than it does on rule 7 (Q930).
+#  11. The workflow that covers a gate is one the merge queue evaluates. Rule 8
+#      asks whether some workflow runs the gate and stops there, so a gate whose
+#      only workflow triggers on `pull_request` alone satisfies it while never
+#      running on the queue's candidate merge — and the candidate is the only
+#      commit that carries the merge result (Q942). The tree-visible half of
+#      that question is the trigger: a workflow with no `merge_group` in its
+#      `on:` block provably never reports there. Whether the check it does
+#      report is *required*, and so blocking, is a repo-settings question this
+#      cannot read (Q943). A gate deliberately kept off the candidate merge
+#      declares `# merge-queue-scope: none`, the shape rules 7, 8 and 10 use.
 #
 # Usage:
 #   gate-list.sh --list        --fast '<names>' --heavy '<names>'
@@ -79,7 +89,7 @@
 #   --makefile PATH    the Makefile to parse
 #   --doc PATH         the doc that must cite the list targets
 #   --scripts-dir PATH the tree scanned for *-test.sh files
-#   --workflows PATH   the workflow tree rule 8 reads
+#   --workflows PATH   the workflow tree rules 8 and 11 read
 set -euo pipefail
 shopt -s inherit_errexit
 
@@ -335,28 +345,84 @@ scope_none() {
 	'
 }
 
-# The workflow tree with its comment lines blanked. Dropping them is what keeps
-# rule 8 honest: these files explain themselves in prose that names the very
-# targets and scripts the rule looks for, and a gate named in a comment gates
-# nothing. Anchoring to command position is the same discipline the go-throttle
-# and foreground-guard hooks apply to their own registries.
+# The named workflow files with their comment lines blanked. Dropping them is
+# what keeps rule 8 honest: these files explain themselves in prose that names
+# the very targets and scripts the rule looks for, and a gate named in a comment
+# gates nothing. Anchoring to command position is the same discipline the
+# go-throttle and foreground-guard hooks apply to their own registries.
+# Files rather than the tree, because rule 11 asks the same questions of the
+# merge-queue subset -- and an empty subset must read as no coverage rather than
+# as `cat` waiting on stdin.
 workflow_text() {
-	{ cat "$WORKFLOWS_DIR"/*.yml 2>/dev/null || true; } | awk '{ sub(/^[ \t]*#.*$/, ""); print }'
+	(($# > 0)) || return 0
+	{ cat "$@" 2>/dev/null || true; } | awk '{ sub(/^[ \t]*#.*$/, ""); print }'
 }
 
-# The make targets the workflows invoke, one per line.
+# The make targets a body of workflow text invokes, one per line.
 ci_make_targets() {
-	{ grep -oE '\bmake +(-[A-Za-z-]+ +)*[a-z0-9][a-z0-9-]*' <<<"$(workflow_text)" || true; } |
+	{ grep -oE '\bmake +(-[A-Za-z-]+ +)*[a-z0-9][a-z0-9-]*' <<<"$1" || true; } |
 		awk '{ print $NF }' | sort -u
 }
 
-# The scripts/ files CI runs by way of a make target it invokes.
+# The scripts/ files that text runs by way of a make target it invokes.
 ci_target_scripts() {
 	local target
 	while IFS= read -r target; do
 		[[ -n "$target" ]] || continue
 		gate_scripts "$target" scripts
-	done < <(ci_make_targets) | sort -u
+	done < <(ci_make_targets "$1") | sort -u
+}
+
+# The workflow files the merge queue evaluates: those whose `on:` block declares
+# `merge_group`. Comments come off every line first, for the reason
+# workflow_text drops them -- these files explain their own triggers in prose,
+# and a trigger named in a comment fires nothing. A blanked line does not close
+# the block, so a commented-out trigger inside it is skipped rather than read as
+# the end of `on:`.
+merge_queue_workflows() {
+	local wf
+	for wf in "$WORKFLOWS_DIR"/*.yml; do
+		[[ -f "$wf" ]] || continue
+		if awk '
+			{ line = $0; sub(/[ \t]*#.*$/, "", line) }
+			line ~ /^"?on"?:/ { in_on = 1; if (line ~ /merge_group/) found = 1; next }
+			in_on && line != "" && line ~ /^[^ \t]/ { in_on = 0 }
+			in_on && line ~ /^[ \t]+merge_group[ \t]*:/ { found = 1 }
+			END { exit(found ? 0 : 1) }
+		' "$wf"; then
+			printf '%s\n' "$wf"
+		fi
+	done
+}
+
+# How a body of CI coverage reaches a gate: `target` when it runs `make <gate>`,
+# `scripts` when it runs every scripts/ file the gate's recipe runs, `none` when
+# that recipe runs no scripts/ file to derive an answer from, and
+# `uncovered:<paths>` for the files it leaves out. Rules 8 and 11 ask this of
+# two different file sets and differ only in what they do with the answer.
+ci_coverage() {
+	local gate="$1" targets="$2" scripts="$3" text="$4"
+	local script uncovered="" scanned=0
+	if grep -qx -- "$gate" <<<"$targets"; then
+		printf 'target\n'
+		return 0
+	fi
+	while IFS= read -r script; do
+		[[ -n "$script" ]] || continue
+		scanned=1
+		# Run by another make target a workflow invokes, or invoked directly.
+		if grep -qxF -- "$script" <<<"$scripts" || grep -qF -- "$script" <<<"$text"; then
+			continue
+		fi
+		uncovered="$uncovered $script"
+	done < <(gate_scripts "$gate" scripts)
+	if ((scanned == 0)); then
+		printf 'none\n'
+	elif [[ -n "$uncovered" ]]; then
+		printf 'uncovered:%s\n' "$uncovered"
+	else
+		printf 'scripts\n'
+	fi
 }
 
 if [[ "$MODE" == "list-suites" ]]; then
@@ -518,34 +584,25 @@ done
 # 8. Every gate also runs in CI, so `make check` is not the only thing enforcing
 # it. A gate nobody wired gates nothing on a PR while every rule above stays
 # green — the failure reports as a clean gate list (Q831).
-ci_targets="$(ci_make_targets)"
-ci_scripts="$(ci_target_scripts)"
-ci_text="$(workflow_text)"
+ci_text="$(workflow_text "$WORKFLOWS_DIR"/*.yml)"
+ci_targets="$(ci_make_targets "$ci_text")"
+ci_scripts="$(ci_target_scripts "$ci_text")"
+declare -A ci_verdict=()
 for gate in $FAST $HEAVY; do
-	if grep -qx -- "$gate" <<<"$ci_targets"; then
-		continue
-	fi
 	if scope_none "$gate" ci-scope; then
 		continue
 	fi
-	uncovered=""
-	scanned=0
-	while IFS= read -r script; do
-		[[ -n "$script" ]] || continue
-		scanned=1
-		# Run by another make target a workflow invokes, or invoked directly.
-		if grep -qxF -- "$script" <<<"$ci_scripts" || grep -qF -- "$script" <<<"$ci_text"; then
-			continue
-		fi
-		uncovered="$uncovered $script"
-	done < <(gate_scripts "$gate" scripts)
-	if ((scanned == 0)); then
+	ci_verdict["$gate"]="$(ci_coverage "$gate" "$ci_targets" "$ci_scripts" "$ci_text")"
+	case "${ci_verdict["$gate"]}" in
+	none)
 		fail "gate '$gate' runs in \`make check\` but no workflow runs \`make $gate\`, and its recipe runs no scripts/ file to cover it another way — so it gates nothing on a PR
        run it from a workflow, or declare \`# ci-scope: none\` with the reason directly above its .PHONY"
-	elif [[ -n "$uncovered" ]]; then
-		fail "gate '$gate' runs in \`make check\` but not in CI: no workflow runs \`make $gate\`, and CI runs none of$uncovered
+		;;
+	uncovered:*)
+		fail "gate '$gate' runs in \`make check\` but not in CI: no workflow runs \`make $gate\`, and CI runs none of${ci_verdict["$gate"]#uncovered:}
        run it from a workflow, or declare \`# ci-scope: none\` with the reason directly above its .PHONY"
-	fi
+		;;
+	esac
 done
 
 # 9. DOCS_GATES is the strict subset its comment claims — rule 4, one list over.
@@ -582,6 +639,36 @@ for gate in $FAST; do
 		fail "gate '$gate' runs no $SCRIPTS_DIR/ file, so whether a docs/ change can fail it is not derivable
        add it to DOCS_GATES, or declare \`# docs-scope: none\` with the reason directly above its .PHONY"
 	fi
+done
+
+# 11. The workflow covering it is one the merge queue evaluates. Rule 8 stops at
+# `some workflow runs it`, which a `pull_request`-only workflow satisfies while
+# the queue's candidate merge — the one commit carrying the merge result — runs
+# nothing (Q942). Only gates rule 8 passed are asked: a gate no workflow runs at
+# all has one defect, not two.
+mq_workflows=()
+while IFS= read -r wf; do
+	[[ -n "$wf" ]] || continue
+	mq_workflows+=("$wf")
+done < <(merge_queue_workflows)
+mq_text="$(workflow_text "${mq_workflows[@]}")"
+mq_targets="$(ci_make_targets "$mq_text")"
+mq_scripts="$(ci_target_scripts "$mq_text")"
+for gate in $FAST $HEAVY; do
+	case "${ci_verdict["$gate"]-}" in
+	target | scripts) ;;
+	*) continue ;;
+	esac
+	if scope_none "$gate" merge-queue-scope; then
+		continue
+	fi
+	case "$(ci_coverage "$gate" "$mq_targets" "$mq_scripts" "$mq_text")" in
+	target | scripts) ;;
+	*)
+		fail "gate '$gate' runs in CI but in no workflow the merge queue evaluates: every workflow covering it triggers without \`merge_group\`, so the candidate merge is never held to it
+       add \`merge_group:\` to that workflow's \`on:\` block, or declare \`# merge-queue-scope: none\` with the reason directly above its .PHONY"
+		;;
+	esac
 done
 
 if ((fails > 0)); then

@@ -10,6 +10,9 @@ name: conflict-markers
 
 on:
   pull_request:
+  # Merge queue: also run on the candidate merge commit. A marker can arrive in
+  # the merge result itself, which no PR leg ever builds (Q942).
+  merge_group:
   push:
     branches: [main]
 
