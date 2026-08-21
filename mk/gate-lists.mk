@@ -118,20 +118,32 @@ QUEUE_GATES := queue-lint queue-rules-check roadmap-check plan-index-check \
 #   upgrade-toc-check    a heading added to upgrade.md that its own index never gained
 #   conflict-markers-check a marker survived an Edit-based conflict resolution
 #   release-ladder-check an edit to release-ladder.md's punted table or its stated counts
+#   roadmap-check        a roadmap or features.md bullet over its word cap, or naming an item that moved
+#   comparison-stamps-check an ARC-column verdict in why-gag.md left without a version and date
+#   promql-check         an alert renamed in observability-alerting.md or the runbook but not in the rule
+#   metric-tiers-check   a metric's tier edited in observability-metrics.md away from what the AGC emits
+#   reason-tiers-check   a reason edited in observability-metrics.md or troubleshooting.md the same way
+#   api-reference-check  docs/reference/api.md hand-edited away from what controller-gen renders
+#   gate-lists-check     testing.md stopping short of citing the list targets it must name
 # Every entry is also in CHECK_FAST_GATES, so like QUEUE_GATES this is a strict
 # subset of `make check` and never a second opinion. That claim went unchecked
 # for the life of the list and was false: release-notes-check was in neither gate
 # list, so `make docs-gates` ran a gate `make check` did not, and
 # conflict-markers-check scans the whole tree while the list omitted it — the
 # Q749 shape one rung over. `gate-lists-check` now holds this list to both
-# directions the way it holds QUEUE_GATES (Q920); what it still cannot see is a
-# gate that hardcodes the page it reads rather than asking git for a file set
-# (Q930).
+# directions the way it holds QUEUE_GATES (Q920). Since Q930 it also reads the
+# subject a gate hardcodes, not only the pathspecs it hands git: every
+# page-scoped gate here is written the second way, so the rule had been blind to
+# seven of them at once and `make docs-gates` was green on prose edits to nine
+# pages `make check` can fail.
 DOCS_GATES := doc-links plan-index-check no-plan-refs-check em-dash-check \
               md-reflow-check page-density-check release-pins-check \
               release-notes-check upgrade-toc-check \
               conflict-markers-check \
-              release-ladder-check
+              release-ladder-check \
+              roadmap-check comparison-stamps-check promql-check \
+              metric-tiers-check reason-tiers-check \
+              api-reference-check gate-lists-check
 
 # Behavioural assertions for the scripts/ tree that shellcheck (a linter) can't
 # express — the tags-only release signing-identity regexp (Q124), the
