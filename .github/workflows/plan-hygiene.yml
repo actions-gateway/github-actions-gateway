@@ -93,6 +93,33 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 2
     steps:
+      # `always()` above makes a skipped need a pass, by design — so a green
+      # gate reads the same whether the jobs it guards ran or never started, and
+      # the check UI has nowhere to say which (Q872 gave the two e2e lanes this;
+      # Q898 the rest). Ordered before the gate step so a failing gate still
+      # reports. Narration only: the required check is unchanged.
+      #
+      # Driven off `toJSON(needs)` rather than a hand-written env var per job, so
+      # a job added to `needs:` above appears here without a second edit — the
+      # kind of drift the gate lists themselves keep acquiring.
+      - name: say which gated jobs ran
+        env:
+          NEEDS: ${{ toJSON(needs) }}
+        run: |
+          set -euo pipefail
+          # Backticks inside the single-quoted jq programs are markdown code
+          # spans for the rendered summary, not command substitution.
+          # shellcheck disable=SC2016
+          {
+            printf -- '### %s: which gated jobs ran\n\n' "${GITHUB_WORKFLOW}"
+            printf -- '| job | result |\n| --- | --- |\n'
+            jq -r 'to_entries | .[] | select(.key != "changes")
+                   | "| `\(.key)` | \(.value.result) |"' <<<"${NEEDS}"
+            if jq -e 'to_entries | any(.key != "changes" and .value.result == "skipped")' \
+                >/dev/null <<<"${NEEDS}"; then
+              printf -- '\n%s\n' 'A `skipped` job is a path-skip, **not** a pass — this gate counts it as one so the required check can report. A green gate here is not a verdict on the skipped rows above.'
+            fi
+          } >> "${GITHUB_STEP_SUMMARY}"
       - name: require every gating job to have succeeded or skipped
         env:
           RESULTS: ${{ join(needs.*.result, ' ') }}

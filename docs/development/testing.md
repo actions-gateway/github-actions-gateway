@@ -2927,6 +2927,15 @@ gh run list --commit <sha> --limit 30               # which workflows actually r
 Read the output as a **checklist against the expected set above**, not as a pass/fail summary.
 A PR with zero rows, or with only the lightweight docs workflows listed, has not been tested — it just has nothing to fail.
 
+**Each gate now says this itself, in its job summary (Q872 for the two e2e lanes, Q898 for the other nine).** Every `<workflow>-gate` writes a `which gated jobs ran` table (one row per needed job and its result) before it evaluates the gate, so a skipped heavy job is legible on the run page instead of being assembled from `gh` by hand.
+When anything skipped, the table is followed by a line saying a `skipped` is a path-skip rather than a pass, which is the reading a green gate otherwise invites.
+The e2e pair says something else because their case is different: their heavy jobs are merge-group-only, so a green `e2e-gate` on a PR is not a verdict on e2e at all.
+The table is built from `toJSON(needs)` rather than a hand-written entry per job, so a job added to a gate's `needs:` appears in it with no second edit.
+It is narration and is ordered before the gate step so a failing gate still reports it, but it is not `continue-on-error`: a summary step that breaks fails its gate, on the same reasoning as the fail-closed half of Q363 above.
+
+**The summary does not replace the commands above, because it cannot see the hole they can.** It reports the jobs a gate *needs*; `gh run list --commit` reports what actually ran on that SHA.
+A job missing from `needs:` altogether (the Q845 case above) is absent from the summary for the same reason it is absent from the gate, so only the run list shows it.
+
 **Filter the runs by commit, not by branch.** `gh run list --branch <branch>` lists every run the branch has ever had, so after a rebase heal and force-push it still shows the superseded runs, and a success from the pre-rebase head reads as a success on the code you are about to merge.
 `--commit <sha>` is the flag that answers the question asked.
 Do not hand-roll the equivalent as a `--jq` filter on `headSha`: a malformed expression matches everything and exits 0, which produces a confident, wrong "the heavy gates ran".
