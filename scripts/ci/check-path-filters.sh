@@ -95,7 +95,7 @@ NARROW_FILTERS=(
 	'license-notices.yml:notices'     # vendor/ and the notices generator
 	'doc-links.yml:docs'              # tracked Markdown plus the docs-content checkers and the site build
 	'status-lint.yml:status'          # docs/queue/, docs/roadmap.md, and their linters
-	'plan-hygiene.yml:plan'           # the plan index plus any .go file (for plan-ref scanning)
+	'plan-hygiene.yml:plan'           # the whole docs/plan/ tree plus any .go file (for plan-ref scanning)
 	'autoscaler-drift.yml:autoscaler' # the CA/kwok pins, the kwok manifests, and the matcher under test
 	'autoscaler-drift.yml:karpenter'  # the Karpenter pins/recipe and its live test (Q479)
 )
