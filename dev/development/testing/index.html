@@ -4069,7 +4069,9 @@ The gates with behaviour worth knowing have their own <code>### The … gate</co
 <p>Two subset targets cut the wait when a change touches only one kind of file, and both are strict subsets of <code>make check</code> rather than a second opinion: <code>make queue-gates</code> for a backlog-only edit, and <code>make docs-gates</code> for prose.
 The prose one exists because those gates run at the very <em>end</em> of <code>make check</code>, so a docs slip costs a full ten-minute cycle to discover; running them when the prose is written costs seconds.
 <code>gate-lists-check</code> holds both lists to that claim in both directions: a member outside <code>CHECK_FAST_GATES</code> makes the target a second opinion, and a fast gate the list omits makes it report a green <code>make check</code> would not.
-<code>DOCS_GATES</code> was never passed in, and it had been failing the first half for the life of the list: <code>make docs-gates</code> ran <code>release-notes-check</code>, which was in neither gate list, so it tested something <code>make check</code> did not (Q920).</p>
+<code>DOCS_GATES</code> was never passed in, and it had been failing the first half for the life of the list: <code>make docs-gates</code> ran <code>release-notes-check</code>, which was in neither gate list, so it tested something <code>make check</code> did not (Q920).
+It was failing the second half too, and by more: the completeness rule read only the pathspecs a gate hands git, and every page-scoped gate here names its page as a constant instead, so seven were invisible at once and <code>make docs-gates</code> was green on prose edits to nine pages <code>make check</code> can fail (Q930).
+<code>roadmap-check</code>, <code>comparison-stamps-check</code>, <code>promql-check</code>, <code>metric-tiers-check</code>, <code>reason-tiers-check</code>, <code>api-reference-check</code> and <code>gate-lists-check</code> joined the list when the rule learned to read a hardcoded subject; the target runs 18 gates in about 4 seconds.</p>
 <p><strong>A shell edit needs <code>make shellcheck</code> on its own.</strong> Neither subset target includes it.
 The gate is 37 s over all 210 scripts, against a whole fast fan-out to learn the same thing from <code>make check</code> (measured 2026-08-15, Q870).
 What makes this worth its own call rather than trusting the eye: a <code># shellcheck disable=</code> directive covers <strong>only the next command</strong>, so one placed above a block of four silences the first and leaves three live, and the source reads as if the whole block is covered.</p>
@@ -4665,8 +4667,12 @@ It fails when:</p>
 <li><code>QUEUE_GATES</code> stops being a subset of <code>CHECK_FAST_GATES</code>, so <code>make queue-gates</code> — the seconds-long verify for a backlog-only edit — stays a strict subset of the full gate rather than a second opinion;</li>
 <li>a fast gate <em>outside</em> <code>QUEUE_GATES</code> selects a backlog item, which is the direction that had no enforcement: <code>em-dash-check</code> and <code>page-density-check</code> both scanned the backlog for as long as they had existed, while the comment above the variable called the list complete (Q749).
   It fired again when the rule was repointed at the store, on <code>page-density-check</code> against all 178 item pages.
-  Membership is derived from the pathspec each gate's script hands git, the same question the gate itself asks.
-  A gate whose recipe runs no <code>scripts/</code> file has no derivable file set and declares instead, with a <code># status-scope: none</code> comment and its reason directly above its <code>.PHONY</code>, as <code>md-reflow-check</code> does;</li>
+  Membership is derived two ways, of different strength.
+  The pathspec a gate's script hands git is the same question the gate itself asks, so a hit there fails outright and cannot be declared away.
+  A subject the script <strong>hardcodes</strong> is weaker evidence: a path literal assigned to a variable, which is how a page-scoped gate names the page it reads.
+  A script names its instruments that way too, so a hit there can be declared away with a reason (Q930).
+  <code>gate-lists-check</code> is the one gate that does: it assigns <code>docs/queue/Q*.md</code> only to name a single item for this rule to test other gates against, reads the filename and checks nothing in the file.
+  A gate whose recipe runs no <code>scripts/</code> file has no derivable file set and declares the same way, with a <code># status-scope: none</code> comment and its reason directly above its <code>.PHONY</code>, as <code>md-reflow-check</code> does;</li>
 <li>a gate runs in <code>make check</code> but in no workflow, so it gates nothing on a PR.
   <code>make check</code> is then the only thing enforcing it, and the failure reports as a clean gate list — every rule above stays green (Q831).
   <code>comparison-stamps-check</code> shipped that way, and by the time the rule was written five gates were unwired: <code>license-header-check</code>, <code>page-density-check</code>, <code>semver-floor-sources-check</code>, <code>md-reflow-check</code> and <code>promql-check</code>.
