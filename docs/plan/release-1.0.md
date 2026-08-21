@@ -155,7 +155,7 @@ These are **not** separate `1.0-gate` rows, but 1.0 may not tag until each is **
 Each leaves a documented security or release-integrity claim false if shipped silently — the exact failure the 1.0 bar exists to prevent — so "resolved" means a real fix *or* an honest docs caveat, not omission.
 
 - ~~**Unrestricted port-53 egress** ([Q105](../queue/README.md)): `builder.go` emits a port-53 egress rule with no `To` peer, so workers/proxy can resolve via any DNS server — a DNS-exfil channel that undercuts the per-tenant egress-IP isolation claim.~~ **Resolved:** all three per-tenant NetworkPolicies (workload, AGC, proxy) now confine port-53 egress to the cluster DNS service (`k8s-app: kube-dns` in `kube-system`); guarded by the authoring test `TestBuildNetworkPolicy_DNSEgressRestrictedToKubeDNS`.
-  See [05-security.md](../design/05-security.md) § DNS Exfiltration Side-Channel.
+  See [05-security.md § DNS exfiltration side-channel containment](../design/05-security.md#dns-exfiltration-side-channel-containment).
 - **Release-integrity siblings of [Q123](../queue/README.md)/[Q124](../queue/README.md)** — vendored deps are never hash-verified against `go.sum` ([Q126](../queue/README.md)), and the cosign binary in the signing pipeline is downloaded without a checksum (the cosign item in [Q127](../queue/README.md)).
   Both admit an unverified artifact into a signed release.
   Fix (re-vendor + `git diff --exit-code` CI gate; checksum-pin cosign as the `KIND_BINARY_SHA256` pattern does) or caveat.

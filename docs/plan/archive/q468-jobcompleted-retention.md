@@ -12,7 +12,7 @@ Scale set torn down; experiment closed.
 Three of the four are reclaimed unconditionally.
 The fourth — a `Running` worker whose job ended *while the AGC was down* — has no durable deadline of its own, and is reclaimed only if GitHub redelivers that job's terminal `JobCompleted` to the restarted AGC's **new** session, which stamps the pod and lets the reaper act.
 
-Whether GitHub does that is not something the AGC decides, and [Q438](q438-worker-lifetime-deadline.md) §3 established that it is not something reading settles either.
+Whether GitHub does that is not something the AGC decides, and [Q438 § 3](q438-worker-lifetime-deadline.md#3-message-retention--redelivery-undocumented-and-this-is-the-honest-answer) established that it is not something reading settles either.
 The published contract covers only the *within-session* acknowledgement loop: a client acknowledges with `DeleteMessage`, and messages it never acknowledged are redelivered on its next poll.
 That describes a client crashing mid-batch with its session still alive.
 It says nothing about how long the backend holds an unacknowledged message when **no session exists at all** for hours, which is exactly the Q435 replay path.

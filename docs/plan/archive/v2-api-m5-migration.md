@@ -1,7 +1,7 @@
 # Q165 — v2 API M5: migration tool + v1/v2 cutover (implementation plan)
 
-Closes the v2 API plan ([v2-api.md](../v2-api.md) § M5).
-Design source of truth: [appendix-h](../../design/appendix-h-v2-api-decomposition.md) §H.11 (fan-out), §H.12 (dual-read window), §H.17 (migration invariants).
+Closes the v2 API plan ([v2-api.md § M5](../v2-api.md#m5--migration-tool--v1v2-cutover)).
+Design source of truth: [appendix-h § H.11](../../design/appendix-h-v2-api-decomposition.md#h11-migration-v2-tool-assisted) (fan-out), [§H.12](../../design/appendix-h-v2-api-decomposition.md#h12-folding-in-the-grandfathered-label-value-alignment-q147) (dual-read window), [§H.17](../../design/appendix-h-v2-api-decomposition.md#h17-migration-correctness--the-fan-outs-untested-invariants) (migration invariants).
 
 **Goal.** Ship a one-shot tool that fans a `v1alpha1` tenant out to the `v2alpha1` object set, complete the v1/v2 dual-read window, and document the cutover — without weakening any security property or stranding any resource.
 

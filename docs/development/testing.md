@@ -965,7 +965,7 @@ In a two-week sample this pattern alone produced ~130 blocked poll attempts.
 
 Use the asynchronous mechanisms instead:
 
-- **PRs and CI** — the Auto-fix/PR-monitor path watches CI and pushes fixes on its own (see [parallel-dispatch.md](parallel-dispatch.md) § self-healing); let it.
+- **PRs and CI** — the Auto-fix/PR-monitor path watches CI and pushes fixes on its own (see [parallel-dispatch.md § The worker contract (self-healing)](parallel-dispatch.md#the-worker-contract-self-healing)); let it.
   If you need the current state right now, take **one** non-blocking snapshot (`gh pr checks <n>` without `--watch`, `gh run view <id>`) and move on — schedule a later re-check, don't spin.
 - **Long-running local work** — launch it as a background task (a background Bash run, or a background agent) and let the completion notification wake you, rather than blocking the foreground on it.
 

@@ -265,6 +265,6 @@ This shapes everything above and is the reason monetization stays out:
   Cheap, improves both humans and GEO.
 - **Public site launch** ([website.md](website.md)/Q129).
   Phase 0 prerequisite for any seeding.
-- **Under-claims not yet fixed**: five capabilities reach `features.md` and no other surface, including the ten-PR durability programme whose motivating incident was five worker pods burning 82 spot node-hours.
+- <a id="under-claims-not-yet-fixed"></a>**Under-claims not yet fixed**: five capabilities reach `features.md` and no other surface, including the ten-PR durability programme whose motivating incident was five worker pods burning 82 spot node-hours.
   That is a maturity claim backed by artifacts, in exactly the register where §2 concedes maturity.
   Listed in [competitive-analysis-2026-08](competitive-analysis-2026-08.md#under-claims-not-yet-fixed).

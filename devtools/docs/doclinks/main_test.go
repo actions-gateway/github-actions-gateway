@@ -215,6 +215,66 @@ func TestDeadReferenceIsReportedAtUseAndDefinition(t *testing.T) {
 	}
 }
 
+// Rule 3 (Q686): a bare `.md` link followed by a section citation in prose.
+//
+// Every green row is a control that moves the same `§` somewhere the rule must
+// not reach, so a uniformly-green suite would mean the detector never fires
+// rather than that the exclusions work. The code-span row is the one the tree
+// depends on: documentation-standards.md states this rule using the very form
+// it forbids, so a gate reading that page literally would fail the page that
+// defines the rule.
+func TestUnanchoredSectionReference(t *testing.T) {
+	target := "# Target\n\n## Some Heading\n\nbody\n"
+	tests := []struct {
+		name       string
+		body       string
+		wantBroken int
+	}{
+		{"bare link then a named section", "See [t.md](t.md) § Some Heading.\n", 1},
+		{"bare link then a numbered section", "See [t.md](t.md) §7.3 for detail.\n", 1},
+		{"no space before the mark", "See [t.md](t.md)§ Some Heading.\n", 1},
+		{"control: the anchored form is what the rule asks for", "See [t.md § Some Heading](t.md#some-heading).\n", 0},
+		{"control: a destination that already carries a fragment", "See [t.md](t.md#some-heading) § Some Heading.\n", 0},
+		{"control: the same text inside a code span", "Write it anchored, not `[t.md](t.md) § Some Heading`.\n", 0},
+		{"control: the same text inside a fence", "```\n[t.md](t.md) § Some Heading\n```\n", 0},
+		{"control: a section mark with no link before it", "See § Some Heading in t.md.\n", 0},
+		{"control: a link followed by ordinary prose", "See [t.md](t.md) for detail.\n", 0},
+		{"control: an external destination", "See [x](https://example.com/a.md) § Some Heading.\n", 0},
+		{"control: a non-Markdown destination", "See [x](script.sh) § Some Heading.\n", 0},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			broken, out := check(t, map[string]string{
+				"a.md": tt.body, "t.md": target, "script.sh": "#!/bin/sh\n",
+			})
+			if broken != tt.wantBroken {
+				t.Fatalf("broken = %d, want %d; output:\n%s", broken, tt.wantBroken, out)
+			}
+			if tt.wantBroken > 0 && !strings.Contains(out, "unanchored section reference") {
+				t.Errorf("finding does not name the rule:\n%s", out)
+			}
+		})
+	}
+}
+
+// The finding points at the fix rather than only naming the offence, and it
+// carries the line so a reader can go straight to it.
+func TestUnanchoredSectionReferenceFinding(t *testing.T) {
+	_, out := check(t, map[string]string{
+		"a.md": "intro\n\nSee [t.md](t.md) § Some Heading.\n",
+		"t.md": "# Target\n\n## Some Heading\n",
+	})
+	for _, want := range []string{
+		"a.md:3:",
+		"unanchored section reference: t.md",
+		"[page.md § Heading](page.md#heading)",
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("output missing %q:\n%s", want, out)
+		}
+	}
+}
+
 func TestOutputShape(t *testing.T) {
 	files := map[string]string{"a.md": "[x](missing.md)\n[y](also-missing.md)\n"}
 	root, existFile, mdFiles := fixture(t, files)

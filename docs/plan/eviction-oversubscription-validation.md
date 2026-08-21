@@ -515,7 +515,7 @@ The two specs agree on everything that decides recovery, and differ only in the 
    - Matching the `DisruptionTarget` **type** alone would have been wrong: the eviction API stamps the same condition with reason `EvictionByEvictionAPI`, so a type-only match would have silently recovered the drain path and pre-empted Q459's open decision.
      The `reason` is the whole discriminator.
 
-**What this cost the published claim, and how it was repaid.** The oversubscription argument in [01-executive-summary.md](../design/01-executive-summary.md) §"safe oversubscription" and in the README's problem statement rests on displaced work coming back by itself.
+**What this cost the published claim, and how it was repaid.** The oversubscription argument in [01-executive-summary.md § The Problem: Scheduling Fairness in a Shared Namespace](../design/01-executive-summary.md#the-problem-scheduling-fairness-in-a-shared-namespace) and in the README's problem statement rests on displaced work coming back by itself.
 The *packing* half was real and unaffected — guaranteed tiers do preempt their way in, which is what removes the need for reserved idle headroom.
 The *safety* half, as published, was not: a preempted job was left needing a manual re-run, exactly like a drained one.
 Both documents were corrected to say so on the day of the measurement.

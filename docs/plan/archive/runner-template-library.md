@@ -59,7 +59,7 @@ The main genericizing decision is what the shipped `workerImage` reference is; t
 
 ### Fold in: stale enforcement claim in 05-security.md
 
-[05-security.md](../../design/05-security.md) § "Pairing `privileged` with a sandbox runtime" still says the platform "cannot enforce" the pairing from the GMC.
+[05-security.md § Pairing `privileged` with a sandbox runtime](../../design/05-security.md#pairing-privileged-with-a-sandbox-runtime) still says the platform "cannot enforce" the pairing from the GMC.
 That predates the Q172 ladder, and a cluster-default `ClusterRunnerTemplate` *is* platform enforcement now.
 Fix alongside the library docs.
 
@@ -112,7 +112,7 @@ Beyond the criteria: the admission rule is now mechanical rather than aspiration
 ## Non-goals
 
 - Installing runtime handlers or `RuntimeClass` objects.
-  The controllers deliberately never do this ([kata-dind-workloads.md](../../operations/kata-dind-workloads.md) § "What GAG does and does not manage"); node pools, kata-deploy, and RuntimeClass registration remain cluster-admin prerequisites.
+  The controllers deliberately never do this ([kata-dind-workloads.md § Cluster setup — Kata runtime and RuntimeClass](../../operations/kata-dind-workloads.md#cluster-setup--kata-runtime-and-runtimeclass)); node pools, kata-deploy, and RuntimeClass registration remain cluster-admin prerequisites.
 - An isolation-profile enum modeled on `sizing.profile`.
   A profile can inject one field, but the Kata DinD shape is a whole pod spec (template-shaped, not transform-shaped).
 - Workload-named template aliases.

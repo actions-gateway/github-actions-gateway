@@ -15,7 +15,7 @@ while the param ConfigMap sits at exactly the name and namespace the binding ref
 Because `parameterNotFoundAction: Deny` resolves params *before* any per-object matching, this denies **every** matched write, class-naming or not — a total outage of the product's CRs, cluster-wide.
 
 Observed on Kubernetes 1.35.5 and 1.36.1.
-Prior sighting: [`q414-dind-tenant-fixture.md`](q414-dind-tenant-fixture.md) § Local-loop notes.
+Prior sighting: [`q414-dind-tenant-fixture.md` § Local-loop notes](q414-dind-tenant-fixture.md#local-loop-notes-not-product-defects).
 
 ## The trigger
 

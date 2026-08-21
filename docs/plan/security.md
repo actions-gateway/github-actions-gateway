@@ -168,7 +168,7 @@ Status legend: ✅ done, ⚠️ partial (residual accepted), ❌ open, ⓘ infor
   Anyone with `get pod` in the tenant namespace — or any sidecar, debug exec, or crash dump that captures `os.Environ()` — sees the private key.
   Not cross-tenant, but a much wider blast radius within the tenant than the design claims.
 - **Description:** `buildAGCDeployment` exposes the GitHub App private key via `env: GITHUB_APP_PRIVATE_KEY` sourced from a `secretKeyRef`.
-  The documented mitigation in [docs/design/05-security.md](../design/05-security.md) §5.2 ("AGC Token Compromise") is *"The AGC never saves plaintext keys to disk.
+  The documented mitigation in [docs/design/05-security.md § 5.2](../design/05-security.md#52-agc--proxy-level-threats-namespace-scoped) ("AGC Token Compromise") is *"The AGC never saves plaintext keys to disk.
   GitHub App private keys are mounted as read-only volumes with restrictive file permissions (0400)."* That is *not* what the code does.
   Env vars are visible to:
   - `kubectl describe pod` (any user with `get pod` on the namespace).
@@ -507,7 +507,7 @@ Status legend: ✅ done, ⚠️ partial (residual accepted), ❌ open, ⓘ infor
 - **Category:** OWASP A04:2025 — Insecure Design (TOCTOU)
 - **Description:** The check `count >= *rg.Spec.MaxWorkers` is followed by `Client.Create(ctx, pod)`.
   Between the two, the cache may be stale by multiple seconds; the AGC can exceed `MaxWorkers` under burst arrivals.
-  Not a direct security boundary, but `MaxWorkers` is part of the "Denial of Service via Resource Exhaustion" mitigation in [docs/design/05-security.md](../design/05-security.md) §5.2.
+  Not a direct security boundary, but `MaxWorkers` is part of the "Denial of Service via Resource Exhaustion" mitigation in [docs/design/05-security.md § 5.2](../design/05-security.md#52-agc--proxy-level-threats-namespace-scoped).
   A tenant that intentionally crafts a flurry of jobs gets more workers than the contract allows; downstream the `ResourceQuota` still caps actual resources, so the real-world impact is bounded.
 - **Mitigation:** Use a per-RunnerGroup in-process counter incremented before `Create` and decremented on pod completion / Create failure.
   Alternatively, rely solely on `ResourceQuota` and document that `MaxWorkers` is a soft ceiling.

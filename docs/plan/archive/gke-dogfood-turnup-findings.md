@@ -195,7 +195,7 @@ A classic-protocol topology cost (single-use recycle + many-acquirers fan-out), 
 
 **Honest bounds:** SSD quota caps `maxWorkers` ≈ 4 (can't prove no-wall at a *wide* pool), and 47 stale offline `ci-*` runner records (prior re-routes + this session's `maxListeners` changes) inflated the 409/422 conflict rate — cleaning them (mass runner-record delete) was **denied by the write-safety guard**, so a clean-namespace run was impossible in-session. re-route #5 (cleaner namespace, `maxListeners` 8, longer jobs) *recovered* to 5 sessions — consistent with the collapse being *provoked* by clutter + over-cranked `maxListeners` + short jobs, not purely inherent.
 **Verdict:** no completion- tax wall → **Q264 stays deferred**; fix the recycle slot-stranding seam (new Queue item) and re-benchmark on a fresh clean namespace before any Option E reconsideration.
-Full analysis + method + results table: [`q260-fanout-completion-reconciliation.md`](q260-fanout-completion-reconciliation.md) §7.
+Full analysis + method + results table: [`q260-fanout-completion-reconciliation.md` § 7](q260-fanout-completion-reconciliation.md#7-q265--fan-out-throughput-benchmark-2026-07-05-tax-wall-or-tuning).
 Evidence: AGC debug logs (`agc:e2e-cacd4c6`), reruns `28726094554`/`28726094563` (run 1, `02:52Z`) and `28725801848`/`28725801860` (run 2, `03:00Z`).
 
 **Re-route #7 — Q248 disk right-size (SSD ceiling GONE, no quota bump) + Q224/Q266 re-benchmark (2026-07-05).** Two goals in one turn-up: (1) lift the `maxWorkers ≈ 4` ceiling that re-route #6 attributed to the `SSD_TOTAL_GB = 500` quota, *without* a quota bump; (2) re-benchmark the fan-out matrix at the wider pool now that Q266 (#525) fixed the loser slot-stranding recycle.

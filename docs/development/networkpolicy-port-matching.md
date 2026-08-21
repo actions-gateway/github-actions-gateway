@@ -80,7 +80,7 @@ chain prerouting  { type filter hook prerouting  priority dstnat + 5; ... ip sad
 Priorities `srcnat - 5` (= 95) and `dstnat + 5` (= -95) place both hooks **after** the corresponding NAT chains.
 Packets enrolled in `@podips-v4` (any pod that is the subject of at least one NetworkPolicy) get NFQUEUE'd to userspace queue 101, where the kube-network-policies controller decides accept/drop based on the packet's *current* (post-DNAT) 5-tuple.
 
-This is the same class of failure as the `ipBlock: <ClusterIP>/32` rule PR #59 fixed for the proxy and which is already documented in [`kind-iteration.md`](kind-iteration.md) § "NetworkPolicy enforces after kube-proxy DNAT".
+This is the same class of failure as the `ipBlock: <ClusterIP>/32` rule PR #59 fixed for the proxy and which is already documented in [`kind-iteration.md` § NetworkPolicy enforces after kube-proxy DNAT](kind-iteration.md#networkpolicy-enforces-after-kube-proxy-dnat).
 The proxy case fixed the **IP** mismatch by switching to a PodSelector; the apiserver case has the analogous **port** mismatch and the fix is symmetric.
 
 ### Why does this happen in kind but presumably not in prod?

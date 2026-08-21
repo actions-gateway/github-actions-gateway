@@ -49,7 +49,7 @@ It never calls `waitForCompletion`, so it never observes `PodFailed`/`Evicted`, 
 
 An evicted scale-set worker today therefore gets no fast release **and no rerun**.
 The job fails and a human reruns it.
-Q264's transition plan listed eviction retry under "Reworked, carried over" ([archive/q264-scale-set-protocol-phases.md](archive/q264-scale-set-protocol-phases.md) §3); that port was designed, not implemented.
+Q264's transition plan listed eviction retry under "Reworked, carried over" ([archive/q264-scale-set-protocol-phases.md § 3](archive/q264-scale-set-protocol-phases.md#3-delta-from-todays-classic-machinery)); that port was designed, not implemented.
 
 ### The rerun target was unidentified on scale-set — resolved 2026-07-26
 
@@ -63,7 +63,7 @@ That was a gap in **GAG's model**, not in the wire.
 **What settled it.** The official Public-Preview `actions/scaleset` client — whose wire types this package deliberately mirrors — embeds `JobMessageBase` in `JobAvailable`, `JobAssigned`, `JobStarted`, and `JobCompleted` alike, and that base carries `ownerName`, `repositoryName`, `workflowRunId`, `jobWorkflowRef`, `jobDisplayName`, and `eventName` ([types.go](https://github.com/actions/scaleset/blob/main/types.go)).
 The identity was always on the wire; GAG simply did not decode it.
 
-Corroborating evidence from GAG's own live probe: Investigation E observed `scaleSetAssignTime` on a real `JobAssigned` from the dotcom broker-host backend ([archive/q264-scale-set-protocol-phases.md](archive/q264-scale-set-protocol-phases.md) §2a-3).
+Corroborating evidence from GAG's own live probe: Investigation E observed `scaleSetAssignTime` on a real `JobAssigned` from the dotcom broker-host backend ([archive/q264-scale-set-protocol-phases.md § 2a](archive/q264-scale-set-protocol-phases.md#2a-investigation-e--live-wire-probe-2026-07-04) to [§3](archive/q264-scale-set-protocol-phases.md#3-delta-from-todays-classic-machinery)).
 That is another `JobMessageBase` field this client did not model, so the raw body demonstrably *is* a `JobMessageBase` and not a narrower shape.
 
 **Measured live 2026-07-26 — the fields are on the wire.** A repo-scoped probe run against `actions-gateway/github-actions-gateway` observed a real `JobAssigned` from the dotcom broker-host backend carrying every field the port depends on:

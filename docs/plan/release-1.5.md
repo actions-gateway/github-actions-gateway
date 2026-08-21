@@ -51,7 +51,7 @@ It is now keyed on the gateway's GitHub binding and enforced cluster-wide from b
 `ProvisionScaleSetWorker` registered neither, and `v2beta1` is ScaleSet-only, so the tier every new tenant runs emitted both series empty.
 
 The blast radius was entirely downstream: two Appendix A SLOs, a severity-critical alert, four recording rules, both shipped Grafana dashboards, the runbook, and the cost-attribution guide all read blank.
-The failure mode is worst-case for a pre-adoption project: the first external operator to apply the shipped `PrometheusRule` sees a product that looks broken, and [go-to-market](go-to-market.md) §8 records that first impressions from cold traffic are one-shot.
+The failure mode is worst-case for a pre-adoption project: the first external operator to apply the shipped `PrometheusRule` sees a product that looks broken, and [go-to-market § 8](go-to-market.md#8-launch-sequence-phased) records that first impressions from cold traffic are one-shot.
 
 **How it was fixed.** Both observations moved onto the shared pod informer, which sees a scale-set worker pod and a classic one identically.
 The latency observation had been gated behind a registered waiter, the thing a fire-and-forget provision never creates, so the tier seam was the gate itself rather than a missing call site.
