@@ -2905,6 +2905,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#a-root-derived-at-runtime-carries-no--to-sweep-for" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        A root derived at runtime carries no .. to sweep for
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -4768,6 +4779,25 @@ That is incidental protection rather than a guarantee, which is why the fix belo
 <p><strong>The e2e tier is not exposed at all.</strong> <code>make e2e</code> runs <code>ginkgo run</code>, which compiles with <code>go test -c</code> and execs the binary itself, and a compiled binary run directly consults no test-result cache.
 Measured both ways on a throwaway module: <code>go test</code> twice reports <code>(cached)</code> on the second run, while <code>go test -c</code> plus two execs of the binary runs the test both times.
 The two <code>runtime.Caller</code> repo-root lookups in <code>cmd/gmc/test/e2e</code> are therefore correct as they stand.</p>
+<h4 id="a-root-derived-at-runtime-carries-no--to-sweep-for">A root derived at runtime carries no <code>..</code> to sweep for<a class="headerlink" href="#a-root-derived-at-runtime-carries-no--to-sweep-for" title="Permanent link">&para;</a></h4>
+<p>The gate above reads path <em>spellings</em>, so it sees nothing when a test computes its base directory at runtime and builds paths from that.
+<code>os.Getwd()</code> or <code>runtime.Caller(0)</code> walked up to a marker file leaves no <code>".."</code> anywhere in the source, and the reads it drives leave the module root exactly as a literal's would.</p>
+<p>Measured 2026-08-21 (Q936) on <code>cmd/probe/compat</code>, whose <code>TestNoPackageMainReachesHTTPTest</code> walks up from the test's working directory to the repo-root <code>go.work</code> and then runs <code>go list -deps</code> in every workspace module.
+A warm run, then a second reporting <code>(cached)</code>; adding <code>_ "net/http/httptest"</code> to <code>cmd/proxy</code>'s <code>package main</code> and running again still reported <code>(cached)</code> and exited 0, while <code>-count=1</code> over the same tree failed.
+So the one gate standing between a shipped binary and a linked test server was replaying a stale green.</p>
+<p><strong>The symlink fix does not reach this one.</strong> There is no path to rewrite: the assertion is a property of every module's import graph, and the reads that establish it happen inside <code>go list</code> subprocesses, which the testlog never records at all.
+Reading the same files from the test process would not help either, since they sit outside <code>cmd/probe</code> and the module-root rule drops them.</p>
+<p>So the fix is <code>-count=1</code>, over that package alone.
+<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/go/check-test-cache-inputs.py"><code>check-test-cache-inputs.py</code></a> names it in an <code>UNCACHED</code> map and <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/go/go-test.sh"><code>go-test.sh</code></a> reads that map (<code>--uncached-packages</code>) to build a second, forced pass, so the list and the gate cannot drift: an undeclared derivation fails the gate.
+The section above rejects per-package <code>-count=1</code> as the wrong granularity, and that still holds where it was measured: 101 s against 1 s cached, across seven packages that each had a free symlink available instead.
+Neither half applies here.
+<code>cmd/probe/compat</code> costs 2.4 s cold, it replays from cache in the main invocation so the forced pass pays that once, and no free fix exists at any price.</p>
+<p>The detector requires both halves of the shape, a runtime derivation <em>and</em> <code>filepath.Join</code>/<code>filepath.Dir</code>, because <code>runtime.Caller</code> on its own is the ordinary line-number idiom of a test helper and opens nothing.
+Where a derived path provably stays inside the module root, <code>DERIV_ALLOW</code> records that judgement instead, at no runtime cost.
+The <code>cmd/gmc/test/e2e</code> lookups stay exempt as e2e files; the detector is what would catch them if that idiom were copied into a cached tier, which is the live risk given both sites sit in the tree today.</p>
+<p><strong>Its residual blind spot is <code>exec.Command</code> generally.</strong> A test that shells out against the repo reads whatever the subprocess reads, and no path detector can see it.
+Measured over the cached tiers on the same date, the other four such tests all set <code>cmd.Dir</code> to a <code>t.TempDir()</code> they populate themselves, so they depend on nothing outside their own run.
+That is a judgement taken once, not a gate.</p>
 <h3 id="the-claude-usage-snapshot-gate">The claude-usage snapshot gate<a class="headerlink" href="#the-claude-usage-snapshot-gate" title="Permanent link">&para;</a></h3>
 <p><code>make claude-usage-test</code> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/agent/claude-usage-test.sh"><code>scripts/agent/claude-usage-test.sh</code></a>) runs the Python unit tests in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/claude-usage/README.md"><code>claude-usage/</code></a> — the only tests in the repo that aren't Go or bash.
 That module is the committed record of the project's Claude Code usage, and for days whose session transcripts have since been archived its CSVs are the <strong>only</strong> surviving copy, so <code>compute_metrics.py</code>'s merge rule (never revise a recorded day downward, never collapse two machines' shares of one day) is load-bearing.

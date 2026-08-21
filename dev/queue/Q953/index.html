@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q936/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q953/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>The test-cache-input gate cannot see a runtime.Caller-derived repo root - GitHub Actions Gateway</title>
+        <title>The test-cache-input gate cannot see a subprocess's reads - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#the-test-cache-input-gate-cannot-see-a-runtimecaller-derived-repo-root" class="md-skip">
+        <a href="#the-test-cache-input-gate-cannot-see-a-subprocesss-reads" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              The test-cache-input gate cannot see a runtime.Caller-derived repo root
+              The test-cache-input gate cannot see a subprocess's reads
             
           </span>
         </div>
@@ -2567,14 +2567,17 @@
   
 
 
-<h1 id="the-test-cache-input-gate-cannot-see-a-runtimecaller-derived-repo-root">The test-cache-input gate cannot see a runtime.Caller-derived repo root<a class="headerlink" href="#the-test-cache-input-gate-cannot-see-a-runtimecaller-derived-repo-root" title="Permanent link">&para;</a></h1>
-<p>The gate is a lexical sweep for a <code>"../x"</code> literal and for <code>filepath.Join("..", "x")</code>, so it is blind to a path built from a variable, and above all to the repo root a suite derives from <code>runtime.Caller(0)</code>.
-That shape is already in the tree, at <code>cmd/gmc/test/e2e/e2e_suite_test.go:317</code> and <code>cmd/gmc/test/e2e/migration_v1_to_v2_test.go:278</code>.</p>
-<p>Not exposed today: both sites sit behind <code>//go:build e2e</code>, and the e2e tier consults no test-result cache at all, because <code>ginkgo run</code> compiles with <code>go test -c</code> and execs the binary itself (measured, Q902).
-The gap is that Q902 widened the gate to the <code>integration</code> tier, which <em>is</em> cached, so the same idiom in an integration test would pass the gate silently while replaying a stale green.</p>
-<p>Fix is a detector that reads the shape rather than the spelling: flag <code>runtime.Caller</code> in a test file outside the e2e tier, or resolve paths through the AST instead of a regex.
-Measure first by grepping for the idiom under the cached tiers, and confirm it is genuinely absent before building anything, since a gate for a pattern nobody uses is cost without cover.
-Mechanism: <a href="../../development/testing/#the-out-of-module-test-read-gate">testing.md § The out-of-module test read gate</a>.</p>
+<h1 id="the-test-cache-input-gate-cannot-see-a-subprocesss-reads">The test-cache-input gate cannot see a subprocess's reads<a class="headerlink" href="#the-test-cache-input-gate-cannot-see-a-subprocesss-reads" title="Permanent link">&para;</a></h1>
+<p>Go's testlog records the <code>open</code>/<code>stat</code> calls the test process itself makes, so a test that shells out reads whatever the subprocess reads and keys on none of it.
+Neither detector in the gate can reach that: one sweeps path literals, the other the test's own root derivation, and both read only the test's source.
+The spelling is irrelevant, because the escaping read is not in the test at all.</p>
+<p>Measured 2026-08-21 while closing Q936: five cached-tier tests call <code>exec.Command</code>.
+Four (<code>cmd/worker/worker_test.go</code> and the three under <code>devtools/release/semverfloor/</code>) set <code>cmd.Dir</code> to a <code>t.TempDir()</code> they populate themselves, so they depend on nothing outside their own run and cache correctly.
+The fifth, <code>cmd/probe/compat</code>, is in <code>UNCACHED</code> and forced to <code>-count=1</code>, but for its <code>os.Getwd</code> walk rather than for the <code>go list</code> subprocesses that actually read the tree.</p>
+<p>So the hole is latent rather than live, and it opens the next time a test shells out against the repo: that test caches on its own source and replays a stale green forever.
+A detector would flag <code>exec.Command</code> in a cached-tier test unless <code>cmd.Dir</code> is a temp dir the test created, which is a dataflow question a lexical sweep answers badly.
+Separate from Q936, whose shape detector does not see a subprocess at all: fixing that one does not close this.
+Mechanism: <a href="../../development/testing/#a-root-derived-at-runtime-carries-no--to-sweep-for">testing.md § A root derived at runtime carries no <code>..</code> to sweep for</a>.</p>
 
 
 
