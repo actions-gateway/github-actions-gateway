@@ -2860,14 +2860,6 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>The <code>github-issue-filer</code> skill searches for duplicates when it files, so a "worth filing" said earlier has had no check at all.</td>
 </tr>
 <tr>
-<td><a href="Q742/">Q742</a></td>
-<td><a href="../development/documentation-standards/#enforcing-the-em-dash-rule">A whole-file em-dash ceiling lets two green PRs merge to a red <code>main</code></a></td>
-<td><code>ci</code> <code>bug</code></td>
-<td>🔲</td>
-<td>S</td>
-<td>Measured 2026-08-08 twice: testing.md 593 to 595 (#1340, #1342), caught; then CONTRIBUTING.md 48 to 50 (#1348, #1349), which broke <code>main</code>.</td>
-</tr>
-<tr>
 <td><a href="Q738/">Q738</a></td>
 <td><a href="../development/testing/#a-throwaway-load-harness-is-a-measuring-instrument-so-calibrate-it">Local load harnesses cannot reach a 2-core runner's contention</a></td>
 <td><code>tests</code> <code>retro</code></td>
@@ -3250,14 +3242,6 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>🔲</td>
 <td>S</td>
 <td>Q591 measured the <code>&lt;unknown&gt;</code> causes; the quota one needs its own repro.</td>
-</tr>
-<tr>
-<td><a href="Q736/">Q736</a></td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/Makefile">No zero-match guard on the test-integration <code>RUN=</code> filter</a></td>
-<td><code>ci</code> <code>tests</code></td>
-<td>🔲</td>
-<td>S</td>
-<td>Measured 2026-08-08: <code>go test -run &lt;nonsense&gt;</code> exits 0 printing <code>[no tests to run]</code>, so a mistyped <code>RUN=</code> reads as a pass.</td>
 </tr>
 <tr>
 <td><a href="Q344/">Q344</a></td>
@@ -3874,6 +3858,38 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>🔲</td>
 <td>S</td>
 <td>A pathspec matches the working tree and index, so <code>git commit -- &lt;path&gt;</code> fails <code>did not match any file(s) known to git</code> on a file that is …</td>
+</tr>
+<tr>
+<td><a href="Q949/">Q949</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/Makefile"><code>test-integration</code> runs the whole module; CI runs one package</a></td>
+<td><code>ci</code> <code>tests</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>Both module Makefiles pass <code>./...</code> to <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/go/go-test-integration.sh">go-test-integration.sh</a>, while …</td>
+</tr>
+<tr>
+<td><a href="Q950/">Q950</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/docs/em-dash-baseline.txt">19 em-dash ceilings overstate their file's count by 91 in total</a></td>
+<td><code>docs</code> <code>debt</code></td>
+<td>🔲</td>
+<td>XS</td>
+<td>The baseline documents itself as freezing each listed file at its current count, and 19 of its 228 entries no longer do: measured …</td>
+</tr>
+<tr>
+<td><a href="Q952/">Q952</a></td>
+<td><a href="../plan/make/">Line-numbered citations in <code>docs/plan/make.md</code> land on unrelated code</a></td>
+<td><code>docs</code> <code>debt</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>Measured 2026-08-21 over <code>docs/plan/</code>: 21 citations carry a <code>path:N</code> line anchor into a repo file, and 14 have a target that changed after …</td>
+</tr>
+<tr>
+<td><a href="Q954/">Q954</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/go/go-lint.sh"><code>compute_scope</code> reads <code>CI</code> ambiently and no test pins it</a></td>
+<td><code>ci</code> <code>debt</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>Measured 2026-08-21: four scripts branch on <code>${CI:-}</code> and no test in the repo sets or unsets it, so whichever branch the runner takes is …</td>
 </tr>
 </tbody>
 </table>

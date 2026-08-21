@@ -2992,8 +2992,19 @@ Neither half is optional, and neither substitutes for the other.</p>
 <h2 id="enforcing-the-em-dash-rule">Enforcing the em-dash rule<a class="headerlink" href="#enforcing-the-em-dash-rule" title="Permanent link">&para;</a></h2>
 <p><code>make em-dash-check</code> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/docs/check-em-dash.sh"><code>scripts/docs/check-em-dash.sh</code></a>) counts the dashes and fails the build.
 It runs inside <code>make check</code> and as its own job in the <code>doc-links</code> CI workflow.</p>
-<p><strong>A per-file ceiling is a per-PR check, so two PRs can merge jointly red.</strong> Each sits within its own ceiling on its own base, so per-PR CI never sees the merge result: measured twice on 2026-08-08, the second reaching <code>main</code> (<a href="../../queue/Q742/">Q742</a>).
-Whether the merge queue runs this gate on the candidate at all is the first thing to establish, and the fix is to ratchet on the diff rather than the file total.</p>
+<p><strong>The diff ratchet.</strong> A ceiling is a whole-file total, so a file sitting under its entry carries slack, and two PRs can each spend that same slack on the same base: per-PR CI sees two green diffs and <code>main</code> takes the sum.
+Measured twice on 2026-08-08, the second reaching <code>main</code> (Q742).
+So the gate measures the change as well as the total.
+Every Markdown file that differs from the <code>origin/main</code> merge-base is counted there too, and a file already above the rule may only lose em-dashes.
+A file inside the rule may still gain them, and a reduction is never a failure.</p>
+<p>The base is a merge-base rather than a parent commit, so it is the branch point on a PR, and inside the merge queue it is the tip the candidate was built on, which is the one view holding every queued change at once (Q743 put these gates on <code>merge_group</code> for that).
+The CI job takes <code>fetch-depth: 0</code> and fetches <code>refs/heads/main</code> to have that base.
+A clone without one degrades to the ceilings alone and says so on stderr.
+A caller that arranged a base sets <code>EM_DASH_REQUIRE_BASE=1</code> and the skip becomes a hard error instead, which is what the job does beside its fetch: a gate silently not checking what it claims is the defect this closes, so the run that is meant to ratchet must not report the ceilings as the whole verdict.
+That failure names itself a checkout fault and points at the job, because a reader who meets it in a red PR must not go looking at their own prose.
+Keying it on <code>CI</code> instead would read a variable the caller never set, and it fired inside the gate's own fixtures, whose repos have no <code>origin/main</code> by construction.</p>
+<p>One case stays outside the ratchet: a file <em>inside</em> the rule may legitimately gain, so two PRs can still push one across 3 per 1,000 between them, and only the run on the candidate sees that.
+<code>doc-links-gate</code> is not yet a required check (<a href="../../queue/Q943/">Q943</a>), so its verdict there is visible rather than binding.</p>
 <p><strong>What it does not count.</strong> A raw <code>grep -o '—' | wc -l</code> was the rule's only instrument before, and it counts four shapes where the dash is legitimate, which is most of why the rule was unmeasurable.
 The counter reads the parsed document instead (<a href="https://github.com/actions-gateway/github-actions-gateway/tree/main/devtools/docs/emdash"><code>devtools/docs/emdash</code></a>, over the goldmark layer Q612 built), and skips:</p>
 <table>
@@ -3382,7 +3393,7 @@ What exists today, and what's proposed:</p>
 <tr>
 <td><code>make em-dash-check</code>: em-dash density, code and titles excluded (Q654)</td>
 <td>1</td>
-<td>Wired (<code>make check</code>). Ratchets against a per-file baseline while <a href="../../queue/Q650/">Q650</a> clears the debt; see <a href="#enforcing-the-em-dash-rule">Enforcing the em-dash rule</a>.</td>
+<td>Wired (<code>make check</code>). Ratchets on the diff, over a per-file baseline while <a href="../../queue/Q650/">Q650</a> clears the debt; see <a href="#enforcing-the-em-dash-rule">Enforcing the em-dash rule</a>.</td>
 </tr>
 <tr>
 <td>Periodic docs-vs-code drift audit</td>

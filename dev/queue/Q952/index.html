@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q736/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q952/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>No zero-match guard on the test-integration RUN= filter - GitHub Actions Gateway</title>
+        <title>Line-numbered citations in docs/plan/make.md land on unrelated code - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#no-zero-match-guard-on-the-test-integration-run-filter" class="md-skip">
+        <a href="#line-numbered-citations-in-docsplanmakemd-land-on-unrelated-code" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              No zero-match guard on the test-integration RUN= filter
+              Line-numbered citations in docs/plan/make.md land on unrelated code
             
           </span>
         </div>
@@ -2567,9 +2567,16 @@
   
 
 
-<h1 id="no-zero-match-guard-on-the-test-integration-run-filter">No zero-match guard on the test-integration <code>RUN=</code> filter<a class="headerlink" href="#no-zero-match-guard-on-the-test-integration-run-filter" title="Permanent link">&para;</a></h1>
-<p>Measured 2026-08-08: <code>go test -run &lt;nonsense&gt;</code> exits 0 printing <code>[no tests to run]</code>, so a mistyped <code>RUN=</code> reads as a pass.
-<code>make test</code>/<code>make e2e</code> now fail on zero match (Q680/Q679); the two module targets need a shared wrapper to do the same.</p>
+<h1 id="line-numbered-citations-in-docsplanmakemd-land-on-unrelated-code">Line-numbered citations in <code>docs/plan/make.md</code> land on unrelated code<a class="headerlink" href="#line-numbered-citations-in-docsplanmakemd-land-on-unrelated-code" title="Permanent link">&para;</a></h1>
+<p>Measured 2026-08-21 over <code>docs/plan/</code>: 21 citations carry a <code>path:N</code> line anchor into a repo file, and 14 have a target that changed after the citing plan doc last did.
+All 14 are in <a href="../../plan/make/">make.md</a>, whose items are ✅ Done, so nothing re-bases them.
+Four checked by hand were all stale, and all four land on unrelated content: <code>cmd/agc/Makefile:7</code> is cited as <code>all: generate build test</code> and is now a <code>LOCALBIN</code> assignment (the target sits at line 25), <code>cmd/gmc/Makefile:16</code> likewise (line 39), <code>Makefile:31</code> is cited for a <code>-C cmd/agc</code> flag and is now <code>KIND_CLUSTER</code>, and <code>Makefile:118</code> is cited as the <code>setup-envtest</code> build and is now a comment about tool pins.
+Q830's class: a citation into live data rots unless the doc names its movement.
+The rot is by implementation here, which is the sharpest form of it.
+<code>make.md</code> §2.3 proposed deleting a <code>go install ...@release-0.23</code> from <code>cmd/gmc/Makefile:63‑64</code>; that landed, so the line the citation names is now the <code>test-integration</code> target and the code it describes exists nowhere in the file.
+Nothing gates it: <code>no-plan-refs-check</code> asserts the opposite direction, that code does not cite plan docs.
+A durable fix cites the target or symbol by name and drops the anchor, since a ✅ Done plan is a historical record that no one maintains; repointing the 14 buys one correct render and rots on the next edit to the cited file.
+PR #1677 shifts one of them by a further line, which is how it surfaced.</p>
 
 
 

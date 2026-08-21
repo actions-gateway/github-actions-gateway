@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q742/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q949/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>A whole-file em-dash ceiling lets two green PRs merge to a red main - GitHub Actions Gateway</title>
+        <title>test-integration runs the whole module; CI runs one package - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#a-whole-file-em-dash-ceiling-lets-two-green-prs-merge-to-a-red-main" class="md-skip">
+        <a href="#test-integration-runs-the-whole-module-ci-runs-one-package" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              A whole-file em-dash ceiling lets two green PRs merge to a red main
+              test-integration runs the whole module; CI runs one package
             
           </span>
         </div>
@@ -2567,10 +2567,12 @@
   
 
 
-<h1 id="a-whole-file-em-dash-ceiling-lets-two-green-prs-merge-to-a-red-main">A whole-file em-dash ceiling lets two green PRs merge to a red <code>main</code><a class="headerlink" href="#a-whole-file-em-dash-ceiling-lets-two-green-prs-merge-to-a-red-main" title="Permanent link">&para;</a></h1>
-<p>Measured 2026-08-08 twice: testing.md 593 to 595 (#1340, #1342), caught; then CONTRIBUTING.md 48 to 50 (#1348, #1349), which broke <code>main</code>.
-Each PR sits within its ceiling on its own base, so per-PR CI cannot see the merge result.
-Ratchet on the diff.</p>
+<h1 id="test-integration-runs-the-whole-module-ci-runs-one-package"><code>test-integration</code> runs the whole module; CI runs one package<a class="headerlink" href="#test-integration-runs-the-whole-module-ci-runs-one-package" title="Permanent link">&para;</a></h1>
+<p>Both module Makefiles pass <code>./...</code> to <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/go/go-test-integration.sh">go-test-integration.sh</a>, while <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/integration-test.yml">integration-test.yml</a> and the wrapper's own default pass <code>./internal/controller/integration/...</code>.
+Nothing is lost in CI: <code>go:build integration</code> files exist only in the integration package, so the extra packages are the module's unit tests re-run under <code>-race</code>, which <code>make test</code> already covers.
+The cost is local.
+Measured 2026-08-21 on <code>make -C cmd/gmc test-integration RUN=TestGMC_ApplyHelpers_NoSteadyStateChurn</code>: 13 packages reported an elapsed, 12 of them <code>[no tests to run]</code>, for 36.3s on top of the 21.5s the one selected test cost, plus every one of their <code>-race</code> compiles.
+Which way to settle it needs the intent: narrow the Makefiles to the wrapper's default so local and CI agree, or keep the wider set deliberately and say why in <a href="../../development/testing/#the-envtest-suite-budget">testing.md</a>.</p>
 
 
 
