@@ -77,7 +77,7 @@ Those decide real evaluations and no capability offsets them.
 ## Under-claims not yet fixed
 
 **The "nine" below never reconciled, and the list is the trustworthy half.** The headline said nine reach `features.md` and no other surface, then named five as addressed and listed five as remaining, which is ten.
-[go-to-market](go-to-market.md) §"Under-claims not yet fixed" already carried five rather than nine.
+[go-to-market § Under-claims not yet fixed](go-to-market.md#under-claims-not-yet-fixed) already carried five rather than nine.
 Re-derived on 2026-08-12 against each page's own vocabulary rather than against the words this list uses, which is what the first pass got wrong: **three of the five reached no marketing surface at all, `features.md` included**, so "reach `features.md` and no other" was wrong in that direction too; and item 4 was already on `README.md`, `docs/index.md` and `features.md` before the pass started.
 Q821 shipped items 1, 2 and 5 to `features.md` and `README.md`.
 Item 3 is the only one still outstanding, and item 4 never was.
@@ -100,7 +100,7 @@ Recorded so they are not re-proposed.
 All were generated as moat candidates and killed on review:
 
 - **Cross-tenant capacity arbitration** (a `SharedCapacityPool` CRD): a moat nobody asked for, L-sized, no demand evidence.
-- **Scheduled or priced intake windows**: off-peak and spot routing is a cost play for an audience [go-to-market](go-to-market.md) §1 explicitly disclaims.
+- **Scheduled or priced intake windows**: off-peak and spot routing is a cost play for an audience [go-to-market § 1](go-to-market.md#1-who-actually-has-this-problem-icp) explicitly disclaims.
 - **GitHub API budget instrumentation and throttling**: speculative instrumentation of a limit nobody has hit.
 - **Job provenance classification before the worker exists**: its own evidence deflated the premise, since the backend auto-assigns on dotcom.
 - **A signed per-job isolation record**: category-creating in theory, zero demand.
@@ -210,4 +210,4 @@ If those files are gone and a claim here needs re-verifying, the method section 
   Each surfaced a collision the individual rows do not state: closing untrusted-PR egress removes the `actions/cache` path that works today, and GPU plus Kata do not compose on managed cloud (not for want of nested virtualization, which A2/A3/G2 have, but because the Kata passthrough path needs BIOS and host-driver control a node pool does not expose).
   Both corrected a published claim in passing.
 
-**Nothing from the 2026-08-06 research is unactioned.** Findings that became work are on the Queue; findings that became positioning are in [go-to-market](go-to-market.md) §2 and §4.
+**Nothing from the 2026-08-06 research is unactioned.** Findings that became work are on the Queue; findings that became positioning are in [go-to-market § 2](go-to-market.md#2-competitive-landscape) and [§4](go-to-market.md#4-messaging-priority).

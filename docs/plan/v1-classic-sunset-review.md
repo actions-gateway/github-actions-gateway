@@ -71,7 +71,7 @@ The answer is **not binary** — it depends entirely on the concurrency class.
 | **Low / moderate concurrency** (2–3 distinct jobs in flight) | ✅ Yes, with tuning | Re-route #7 held the pool **stably at `maxListeners=12`**; re-route #5 landed **3/3** jobs that received a planID green and held them past the 15-min timeout. | Residuals were **capacity** (Q248 SSD ceiling) + cold cache — now fixed, and *not* topology. |
 | **High concurrent burst** (7+ distinct jobs, near `maxListeners`) | ❌ No — *reliably* | Re-route #8, **clean namespace**, all recycle/capacity/tax seams (Q259/Q266/Q267/Q248/Q265) resolved and quiet: **2/7 green, 5/7 wedged `in_progress` indefinitely**. | **GitHub-server-side fan-out distinct-delivery starvation** (see §4). |
 
-**The counter-case is strong and must be stated plainly:** classic is a *working* system for the individual and low/moderate-concurrency segment — which, per the go-to-market ICP ([go-to-market.md](go-to-market.md) §3: platform teams on shared multi-tenant Kubernetes, compliance/egress-driven self-hosting), is a large and arguably *primary* real workload.
+**The counter-case is strong and must be stated plainly:** classic is a *working* system for the individual and low/moderate-concurrency segment — which, per the go-to-market ICP ([go-to-market.md § 3](go-to-market.md#3-demand-evidence-the-receipts): platform teams on shared multi-tenant Kubernetes, compliance/egress-driven self-hosting), is a large and arguably *primary* real workload.
 Writing the whole thing off because it fails at reliable 7-way-concurrent-matrix throughput conflates "fails the hardest CI-matrix stress test" with "does not work."
 
 **But the ceiling is real and it is not a tuning artifact.** Re-route #8 is the decisive datum: on a pristine namespace with every AGC-side seam fixed, a ~7-job burst still stranded 5 jobs forever.
@@ -92,7 +92,7 @@ This is not "needs more fixes" — it is a wall (§4).
 
 ### 3.2 Performance / density — the story cuts both ways, and a common misread
 
-- **At rest, classic's density was a genuine GAG differentiator:** a ~12 KiB listener goroutine in one shared pod vs ARC's always-on listener pod (+ cluster IP) per scale set ([appendix-d-alternatives-considered.md](../design/appendix-d-alternatives-considered.md) §D.3; the earlier "~256 MiB .NET / ~4,000×" framing was retired by #781 — ARC's scale-set listener is Go, and the ratio's denominator was never measured).
+- **At rest, classic's density was a genuine GAG differentiator:** a ~12 KiB listener goroutine in one shared pod vs ARC's always-on listener pod (+ cluster IP) per scale set ([appendix-d-alternatives-considered.md § D.3](../design/appendix-d-alternatives-considered.md#d3-actions-runner-controller-arc); the earlier "~256 MiB .NET / ~4,000×" framing was retired by #781 — ARC's scale-set listener is Go, and the ratio's denominator was never measured).
 - **Correcting a tempting misread: scale-set does *not* serialize concurrency.** It is easy to conclude "one session per group ⇒ one job at a time."
   That is wrong.
   The scale-set listener **batch-acquires** and provisions **N workers in parallel**; concurrency is governed by `maxWorkers`/`priorityTiers` advertised as `X-ScaleSetMaxCapacity`, fully decoupled from the single session ([Q264 §2.3](archive/q264-scale-set-protocol-phases.md#23-batch-acquisition--the-call-that-kills-the-fan-out), live-confirmed §2b-1).
@@ -193,7 +193,7 @@ And stay honest that GAG's weaker flank versus ARC is *maturity* (pre-1.0, a Pub
 
 The go-to-market posture is **pre-adoption dogfooding**, and this is decision-load-bearing:
 
-- A `v1.0.0` tag exists and `v1.1.0-rc.*` are cut, **but** the public site is **not launched**, seed channels are **not started** ("gated on site + 1.0 install path"), and there are **no external deployers yet** — the goal is still "first handful" ([go-to-market.md](go-to-market.md) §8 Phase 0–1).
+- A `v1.0.0` tag exists and `v1.1.0-rc.*` are cut, **but** the public site is **not launched**, seed channels are **not started** ("gated on site + 1.0 install path"), and there are **no external deployers yet** — the goal is still "first handful" ([go-to-market.md § 8](go-to-market.md#8-launch-sequence-phased) Phase 0–1).
   GAG is Apache-2.0, **non-commercial**, deliberately donation-ready, revenue explicitly out of scope.
 - **Implication (this is the load-bearing turn):** the compat cost of retiring v1 is ~zero — no external user base holds classic or v1alpha1 in production, and none is expected to; new users should hop straight onto v2.
   That removes the "protect the v1 fallback" rationale **entirely** and *inverts* the risk.

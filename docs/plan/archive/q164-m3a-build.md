@@ -68,7 +68,7 @@ Cleanup = delete owned children (most are owner-ref GC; explicit best-effort del
 - Reaper / unschedulable / quota mirror the RunnerGroup helpers, filtering on the v2 worker-set label, reading tunables off RunnerSet.
 
 ## Status / parity checklist
-Tracked in [v2-api.md](../v2-api.md) § "Per-field / -condition parity checklist".
+Tracked in [v2-api.md § Per-field / -condition parity checklist](../v2-api.md#per-field---condition-parity-checklist-gates-m3a-exit).
 Close each row as implemented + tested.
 
 ## Testing

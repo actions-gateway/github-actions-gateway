@@ -27,13 +27,13 @@ Bypass the hook for a single commit with `git commit --no-verify`.
 | Unit tests | per-module `go test` (Go workspace — no root-level `./...`) | `make check` → `make test`; [`unit-test.yml`](../../.github/workflows/unit-test.yml) |
 | Python unit tests | `claude-usage/` usage-snapshot merge semantics (stdlib `unittest`) | `make check` → `make claude-usage-test`; `unit-test.yml` (`claude-usage-test` job) |
 | Integration tests | envtest, `integration` build tag, `cmd/agc` + `cmd/gmc` `internal/controller/integration/` | `make test-integration`; [`integration-test.yml`](../../.github/workflows/integration-test.yml) |
-| End-to-end tests | `kind` cluster, `e2e` build tag, cluster-only/fake-GitHub/live-GitHub (see [07-test-plan.md](../design/07-test-plan.md) §7.3) | `make e2e`; [`e2e-test.yml`](../../.github/workflows/e2e-test.yml) |
+| End-to-end tests | `kind` cluster, `e2e` build tag, cluster-only/fake-GitHub/live-GitHub (see [07-test-plan.md § 7.3](../design/07-test-plan.md#73-end-to-end-tests)) | `make e2e`; [`e2e-test.yml`](../../.github/workflows/e2e-test.yml) |
 | Linting / formatting | `gofmt -s`, `golangci-lint` (govet, staticcheck, ineffassign, unused) | `.githooks/pre-commit` (gofmt); `make check`; `unit-test.yml` |
 | Structural rules | `scripts/docs/lint-queue.sh` — the backlog store's format: frontmatter shape, rank shape, filename/id agreement, the 72-character title cap, targets that no longer resolve. Its sibling `check-queue-rules.sh` carries the three rules that are functions of what the branch changed | `.githooks/pre-commit` (also enforces isolated STATUS.md commits); `make check`; [`status-lint.yml`](../../.github/workflows/status-lint.yml) |
 | Vulnerability scan | `govulncheck` (symbol-reachable CVEs, per module) | `make vulncheck`; [`security-scan.yml`](../../.github/workflows/security-scan.yml) |
 | Image scan | `trivy` (OS + library CVEs, per image) | `make trivy-scan`; `security-scan.yml` |
 
-Real-CNI / kube-proxy / kubelet / TLS-over-tunnel behaviours are only observable at the e2e tier — see [testing.md](testing.md) and [07-test-plan.md](../design/07-test-plan.md) §7.3 for why unit and envtest tiers cannot prove them.
+Real-CNI / kube-proxy / kubelet / TLS-over-tunnel behaviours are only observable at the e2e tier — see [testing.md](testing.md) and [07-test-plan.md § 7.3](../design/07-test-plan.md#73-end-to-end-tests) for why unit and envtest tiers cannot prove them.
 
 ## Compress success, expand failure
 

@@ -2,7 +2,7 @@
 
 These woff2 files back the docs site's "GitHub-native" type pairing.
 They are served from our own origin so the site makes **no third-party font requests** — Material's Google Fonts loader is disabled via `theme.font: false` in [`mkdocs.yml`](../../../mkdocs.yml), and the `@font-face` + `--md-text-font`/ `--md-code-font` wiring lives in [`docs/stylesheets/extra.css`](../../stylesheets/extra.css).
-Background: [`docs/development/website.md`](../../development/website.md) § Fonts.
+Background: [`docs/development/website.md` § Fonts](../../development/website.md#fonts).
 
 | File | Family / role | Weight | Source |
 |---|---|---|---|

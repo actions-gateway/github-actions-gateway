@@ -161,7 +161,7 @@ The module-cache half (`/go/pkg/mod`) from the original plan was dropped because
 
 1. Pinned `# syntax=docker/dockerfile:1.7` at the top of each Dockerfile.
 2. Added `--mount=type=cache,target=/root/.cache/go-build` to the `go build` step in `cmd/gmc/Dockerfile`, `cmd/agc/Dockerfile`, `cmd/proxy/Dockerfile`, and `test/fakegithub/Dockerfile`.
-   (Those six per-image Dockerfiles were later consolidated into the root [Dockerfile](../../Dockerfile), and this cache mount replaced by a cacheable `deps` layer — see [e2e-ci-speed-round-2.md](e2e-ci-speed-round-2.md) §1–3.)
+   (Those six per-image Dockerfiles were later consolidated into the root [Dockerfile](../../Dockerfile), and this cache mount replaced by a cacheable `deps` layer — see [e2e-ci-speed-round-2.md § 1–3](e2e-ci-speed-round-2.md#13-one-dockerfile-one-shared-dependency-compile-).)
 
 ### Notes
 

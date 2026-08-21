@@ -187,7 +187,7 @@ Two consequences, both real:
 
 - **A cancelled job keeps burning a worker** for the remainder of its steps, up to `maxWorkerLifetime`.
   Cancelling a runaway job does not reclaim its capacity.
-- **[04-operational-flows.md](../../design/04-operational-flows.md) §4.2 step 7 overstates the Q385 relay.** It lists "cancelled run" among the terminations the wrapper's SIGTERM relay reaches.
+- **[04-operational-flows.md § 4.2](../../design/04-operational-flows.md#42-job-execution-flow-agc) step 7 overstates the Q385 relay.** It lists "cancelled run" among the terminations the wrapper's SIGTERM relay reaches.
   The relay does reach the engine whenever the *pod* is terminated — but on the cancel path nothing terminates the pod, so the relay never runs.
   [Q501](../../queue/Q501.md) carries the gap; the doc is corrected as part of this change.
 
@@ -221,7 +221,7 @@ ValidatingAdmissionPolicy 'gmc-priorityclass-allowlist-guard' … denied request
 failed to configure binding: no params found for policy binding with `Deny` parameterNotFoundAction
 ```
 
-with `gmc-priorityclass-allowlist` present in `gmc-system` and the binding pointing exactly at it — the shape [q444-vap-param-resolution.md](q444-vap-param-resolution.md) § Established by measurement records as findings 1 and 2.
+with `gmc-priorityclass-allowlist` present in `gmc-system` and the binding pointing exactly at it — the shape [q444-vap-param-resolution.md § Measurements](q444-vap-param-resolution.md#measurements) records as findings 1 and 2.
 Nothing here adds to that investigation: it has since established the trigger — deleting the `ValidatingAdmissionPolicyBinding` empties the paramKind's binding set and the apiserver never restarts the shared informer — which is consistent with what happened here, since the suite's `helm uninstall` teardown deletes exactly that object.
 
 Recovery was confirmed on 2026-07-28: `crictl stop` on the kube-apiserver container cleared it, verified by the container ID changing and its `ATTEMPT` going 0 → 1.

@@ -8,6 +8,12 @@
 //     resolved path is neither a present file nor a present directory.
 //  2. Dead anchors — a `#fragment` (same-page or cross-doc) matching no
 //     heading slug and no explicit `<a id="…">`/`<a name="…">` in the target.
+//  3. Unanchored section references — a bare `.md` file link followed in prose
+//     by `§`, which documentation-standards.md forbids because it renders like
+//     the anchored form and nothing checks it (Q686). Rule 2 is what makes it
+//     worth forbidding: move the section into the destination and every later
+//     rename is caught, where the prose form is verbatim the day it is written
+//     and silently wrong afterwards.
 //
 // Out of scope, deliberately: external URLs (http/https/mailto/tel and every
 // other scheme, which is what an autolink always is), links inside fenced or
@@ -33,6 +39,8 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+
+	"github.com/yuin/goldmark/ast"
 
 	"github.com/actions-gateway/github-actions-gateway/devtools/docs/markdown"
 )
@@ -144,7 +152,60 @@ func (c *checker) scan(file string) error {
 		}
 		c.links = append(c.links, link{src: file, line: l.Line, target: l.Destination})
 	}
+	c.checkSectionRefs(file, doc)
 	return nil
+}
+
+// sectionMark is the character the convention uses for a section citation. A
+// bare `[file.md](file.md) § Name` renders like the anchored form and rule 2
+// never sees the section, so it is the one cross-file reference that rots
+// silently.
+const sectionMark = "§"
+
+// checkSectionRefs reports a file link followed by a section citation in prose.
+//
+// Walked here rather than read off Document.Links: the rule is about what
+// *follows* a link, which is a relation between siblings that the package's
+// flat link list cannot express, and its doc comment names this as the case for
+// walking the AST directly.
+//
+// A code span carries its content as a source segment rather than as child
+// nodes, so `[testing.md](testing.md) § X` written as an example is not a Link
+// at all and never reaches here. That is what lets documentation-standards.md
+// state the rule using the very form it forbids, and the tests assert it.
+func (c *checker) checkSectionRefs(file string, doc *markdown.Document) {
+	_ = ast.Walk(doc.Root, func(n ast.Node, entering bool) (ast.WalkStatus, error) {
+		if !entering {
+			return ast.WalkContinue, nil
+		}
+		l, ok := n.(*ast.Link)
+		if !ok {
+			return ast.WalkContinue, nil
+		}
+		dest := string(l.Destination)
+		// Only a cross-file Markdown link can rot this way. One that already
+		// carries a fragment is the anchored form the convention asks for, and
+		// an external target is not this gate's to resolve.
+		if !strings.HasSuffix(dest, ".md") || strings.Contains(dest, "#") ||
+			schemeRE.MatchString(dest) {
+			return ast.WalkContinue, nil
+		}
+		next, ok := n.NextSibling().(*ast.Text)
+		if !ok {
+			return ast.WalkContinue, nil
+		}
+		if !strings.HasPrefix(strings.TrimLeft(string(next.Segment.Value(doc.Source)), " \t"), sectionMark) {
+			return ast.WalkContinue, nil
+		}
+		// The citation's own offset, which is on the link's line in every real
+		// instance and is reachable through the package's exported Line.
+		c.report(file, doc.Line(next.Segment.Start), "unanchored section reference: "+dest+
+			" followed by "+sectionMark+
+			" - cite the section in the destination, `[page.md "+sectionMark+
+			" Heading](page.md#heading)`, so a rename is caught"+
+			" (docs/development/documentation-standards.md#conventions)")
+		return ast.WalkContinue, nil
+	})
 }
 
 var (

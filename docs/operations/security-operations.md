@@ -431,7 +431,7 @@ Triage the report against this operator's needs:
   If your node-local-dns cache listens on a non-default address *outside* `169.254.0.0/16`, set `spec.proxy.managedNetworkPolicy: false` and supply your own DNS egress rule, or add an additive NetworkPolicy — see [Tenant egress posture & deliberate widening](#tenant-egress-posture--deliberate-widening).
 - **Findings that don't apply** (managed control plane hides the file, a check for a component you don't run) — record the justification alongside the cluster's onboarding ticket.
 
-The goal is **zero critical (`[FAIL]`) findings that this stack depends on** before the first production tenant (per [milestone-5.md](../plan/milestone-5.md) §3).
+The goal is **zero critical (`[FAIL]`) findings that this stack depends on** before the first production tenant (per [milestone-5.md § 3](../plan/milestone-5.md#3-posture-audit-kube-bench--polaris)).
 
 ## Job intake: bind every tenant to a GitHub runner group
 

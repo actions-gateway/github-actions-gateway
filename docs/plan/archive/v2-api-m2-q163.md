@@ -1,8 +1,8 @@
 # v2 API M2 (Q163) — EgressProxy reconciler + RunnerTemplate webhook
 
 Session-scoped implementation plan for **Q163 — v2 API M2: data-kind ("noun") reconcilers**.
-Parent plan: [v2-api.md](../v2-api.md) § "M2 — Data kinds (nouns)".
-Design source of truth: [appendix-h](../../design/appendix-h-v2-api-decomposition.md) §H.4, §H.7, §H.8.
+Parent plan: [v2-api.md § M2 — Data kinds (nouns)](../v2-api.md#m2--data-kinds-nouns).
+Design source of truth: [appendix-h § H.4](../../design/appendix-h-v2-api-decomposition.md#h4-spec-sketches), [§H.7](../../design/appendix-h-v2-api-decomposition.md#h7-reference-integrity--runtime-conditions-not-admission), [§H.8](../../design/appendix-h-v2-api-decomposition.md#h8-ownership-gc-and-deletion).
 
 **Scope:** M2 nouns only — same-namespace, no control kinds (`ActionsGateway` / `RunnerSet` reconcilers are M3a).
 Builds on M1 (Q149, #352): the `v2alpha1` (`actions-gateway.com`) types, CRDs, CEL, and status contract already exist.

@@ -21,7 +21,7 @@ The controllers configure `zap` (JSON) via `ctrl.SetLogger`, but the `slog` and 
 A JSON log pipeline cannot parse the majority of an AGC pod's lines.
 This is why F5's "structured JSON" promise (PR #151) is only half-effective — it is true only for the minority of lines that go through the manager's `ctrl.Log`.
 
-**Why it gates 1.0.** [release-1.0.md](../release-1.0.md) §D says the slog+zap mismatch is "recommended to resolve, gating only if it breaks log ingestion."
+**Why it gates 1.0.** [release-1.0.md § D](../release-1.0.md#d-production-operability--gating--recommended) says the slog+zap mismatch is "recommended to resolve, gating only if it breaks log ingestion."
 It *does* break ingestion: the busiest AGC code paths emit unparseable text.
 
 **Evidence (verified):**
@@ -54,7 +54,7 @@ After this, a single `--zap-log-level` / `LOG_LEVEL` governs the whole process a
 It strips GitHub token formats (`gh[pousr]_`, `github_pat_`), JWTs, the JSON values of sensitive keys (`access_token`, `refresh_token`, `token`, `encoded_jit_config`, `client_secret`, `private_key`, `password`, `secret`), and long opaque base64 blobs; redaction runs before capping so a secret straddling the cap boundary cannot survive in the tail.
 Applied at all sites: `runner_auth.go` (:248/:259), `github_registrar.go` (generate-jitconfig + deregister), `broker/client.go` (via `capBody`), and `cmd/probe/main.go`.
 `broker` reuses the helper rather than duplicating redaction (the `broker → githubapp` module edge already existed via `replace`; both are GitHub-domain libs and there is no standalone broker binary).
-Note added to [05-security.md](../../design/05-security.md) §5.2.
+Note added to [05-security.md § 5.2](../../design/05-security.md#52-agc--proxy-level-threats-namespace-scoped).
 
 No **direct** secret logging exists anywhere — tokens, keys, and PEM are never logged, and that posture must be preserved.
 But several error paths interpolate the upstream HTTP **response body** into an error that callers log.
@@ -109,7 +109,7 @@ Not addressed here (out of the hot-path scope, left as backlog): `jobID`/ `messa
 ## Theme E — Debugging blind spots (Q88)
 
 ✅ **Resolved** — debug diagnostics added to every previously-silent stuck/failed path.
-Operator-facing grep anchors documented in [observability.md](../../operations/observability.md) § Debug diagnostics.
+Operator-facing grep anchors documented in [observability-logging.md § Debug diagnostics for otherwise-silent paths](../../operations/observability-logging.md#debug-diagnostics-for-otherwise-silent-paths).
 
 - `provisioner/podwaiter.go` had **zero logs** — a session stuck waiting for pod completion (missed informer event, pod never terminal) produced no output; this is the single most likely "stuck session" cause.
   Debug logs now cover register/resolve/cancel in `WaitForCompletion` (`pod already terminal at registration`, `registered for pod completion`, `pod completion observed`, `pod wait cancelled before completion`), each carrying `namespace`/`name`.
