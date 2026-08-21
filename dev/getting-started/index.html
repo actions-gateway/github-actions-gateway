@@ -2809,6 +2809,7 @@ Already on v1?
 It installs the Gateway Manager Controller (GMC), its CustomResourceDefinitions (CRDs), RBAC, validating webhook, and admission policy.
 The GMC then provisions per-tenant Actions Gateway Controller (AGC) instances and proxy pools at runtime.
 They are not installed by the chart.</p>
+<!-- gag:verify id=gmc-helm-install mode=render teardown=none -->
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>helm<span class="w"> </span>install<span class="w"> </span>gag<span class="w"> </span>charts/actions-gateway<span class="w"> </span><span class="se">\</span>
 <a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="w">  </span>--namespace<span class="w"> </span>gmc-system<span class="w"> </span>--create-namespace<span class="w"> </span><span class="se">\</span>
 <a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="w">  </span>--set<span class="w"> </span>gmc.image.digest<span class="o">=</span>sha256:&lt;gmc&gt;<span class="w"> </span><span class="se">\</span>
@@ -2828,10 +2829,12 @@ To install an unreleased chart from a source checkout, substitute the local <cod
 <p>For the recommended <strong>v2</strong> path, also install the opt-in v2 CRDs.
 They ship separately (and are applied server-side, never <code>helm install</code>ed) because the CRDs are large enough that a Helm release Secret would exceed its 1 MiB limit.
 For the default <code>gmc-system</code> namespace, apply the pre-rendered, cosign-signed manifest attached to the release, no helm needed:</p>
+<!-- gag:verify id=crds-v2-release-asset mode=skip reason=names-a-release-asset-that-only-exists-after-a-tag -->
 <div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>kubectl<span class="w"> </span>apply<span class="w"> </span>--server-side<span class="w"> </span>-f<span class="w"> </span><span class="se">\</span>
 <a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="w">  </span>https://github.com/actions-gateway/github-actions-gateway/releases/download/vX.Y.Z/actions-gateway-crds-v2.yaml
 </code></pre></div>
 <p>If the GMC runs in a <strong>different namespace</strong>, render the chart for that namespace instead (<code>--server-side</code> also avoids the 256 KB client-side apply limit):</p>
+<!-- gag:verify id=crds-v2-oci-render mode=skip reason=pulls-a-remote-oci-chart -->
 <div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>helm<span class="w"> </span>template<span class="w"> </span>actions-gateway-crds-v2<span class="w"> </span><span class="se">\</span>
 <a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="w">  </span>oci://ghcr.io/actions-gateway/charts/actions-gateway-crds-v2<span class="w"> </span><span class="se">\</span>
 <a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="w">  </span>--namespace<span class="w"> </span>&lt;gmc-namespace&gt;<span class="w"> </span><span class="se">\</span>
@@ -2845,6 +2848,7 @@ See the <a href="https://github.com/actions-gateway/github-actions-gateway/blob/
 <h2 id="2-create-and-mark-the-tenant-namespace-and-set-its-quota">2. Create and mark the tenant namespace, and set its quota<a class="headerlink" href="#2-create-and-mark-the-tenant-namespace-and-set-its-quota" title="Permanent link">&para;</a></h2>
 <p>Create the tenant namespace and mark it as managed by the GMC.
 The marker label authorizes the GMC to stamp Pod Security Admission labels on it; the <code>namespace-psa-guard</code> admission policy denies the GMC any namespace that lacks it.</p>
+<!-- gag:verify id=tenant-namespace mode=run teardown=namespace -->
 <div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>kubectl<span class="w"> </span>create<span class="w"> </span>namespace<span class="w"> </span>team-a
 <a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>kubectl<span class="w"> </span>label<span class="w"> </span>namespace<span class="w"> </span>team-a<span class="w"> </span>actions-gateway.github.com/tenant<span class="o">=</span><span class="nb">true</span>
 </code></pre></div>
@@ -2856,6 +2860,7 @@ For the exact v2 namespace labels and the profile-guard admission policy, see <a
 <p>The namespace <code>ResourceQuota</code> (and any <code>LimitRange</code>) is <strong>platform-owned</strong>: the platform admin creates and manages it on the tenant namespace, and the gateway operates <em>within</em> it but never creates or mutates it.
 This is the real, tenant-uncontrollable cap on how much compute a tenant can consume.
 Apply it here, or via your GitOps / tenant-operator stack: Capsule, HNC, vCluster, kiosk.</p>
+<!-- gag:verify id=tenant-quota mode=apply needs=tenant-namespace teardown=object -->
 <div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">v1</span>
 <a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ResourceQuota</span>
 <a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="nt">metadata</span><span class="p">:</span>
@@ -2890,6 +2895,7 @@ See <a href="../operations/resourcequota-sizing/#only-constrain-keys-every-pod-d
 <p>The gateway reads remaining quota and reacts to exhaustion (it won't claim a job the quota can't place, and lock-cancels then reruns any job that loses headroom after the claim, see <a href="../why-gag/">why-gag</a>), but the quota itself is yours to size and own.</p>
 <h2 id="3-create-a-github-app-credential-secret">3. Create a GitHub App credential Secret<a class="headerlink" href="#3-create-a-github-app-credential-secret" title="Permanent link">&para;</a></h2>
 <p>Create this in the tenant's namespace:</p>
+<!-- gag:verify id=github-app-secret mode=apply needs=tenant-namespace teardown=object -->
 <div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">v1</span>
 <a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Secret</span>
 <a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="nt">metadata</span><span class="p">:</span>
@@ -2910,6 +2916,7 @@ The set below is feature-equivalent to the legacy v1 example, a proxied gateway 
 <p><strong>You can skip authoring the template.</strong> GAG ships three validated worker pod shapes; <code>kubectl apply -k deploy/templates/plain</code> gives you the baseline one, and a <code>RunnerSet</code> then points at it with <code>templateRef: { name: plain, kind: ClusterRunnerTemplate }</code> in place of the inline <code>RunnerTemplate</code> below.
 If your jobs build container images, start from <code>kata-dind</code> instead.
 See the <a href="../operations/runner-template-library/">runner template library</a>.</p>
+<!-- gag:verify id=v2-gateway-set mode=apply needs=tenant-namespace,github-app-secret teardown=object -->
 <div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">actions-gateway.com/v2beta1</span>
 <a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">EgressProxy</span>
 <a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="nt">metadata</span><span class="p">:</span>
@@ -2960,30 +2967,27 @@ See the <a href="../operations/runner-template-library/">runner template library
 <a id="__codelineno-6-48" name="__codelineno-6-48" href="#__codelineno-6-48"></a><span class="w">  </span><span class="c1"># `runs-on: [gpu, linux]`. The FIRST one is also this set's scale-set name at</span>
 <a id="__codelineno-6-49" name="__codelineno-6-49" href="#__codelineno-6-49"></a><span class="w">  </span><span class="c1"># GitHub, so it must be unique per gateway — and reordering renames the scale set.</span>
 <a id="__codelineno-6-50" name="__codelineno-6-50" href="#__codelineno-6-50"></a><span class="w">  </span><span class="nt">runnerLabels</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="s">"gpu"</span><span class="p p-Indicator">]</span>
-<a id="__codelineno-6-51" name="__codelineno-6-51" href="#__codelineno-6-51"></a><span class="w">  </span><span class="c1"># priorityClassName values must be on the platform-owned allowlist: a watched</span>
-<a id="__codelineno-6-52" name="__codelineno-6-52" href="#__codelineno-6-52"></a><span class="w">  </span><span class="c1"># PriorityClassAllowlist CR, grown without a GMC restart (the</span>
-<a id="__codelineno-6-53" name="__codelineno-6-53" href="#__codelineno-6-53"></a><span class="w">  </span><span class="c1"># --allowed-priority-classes flag remains the fail-safe baseline).</span>
-<a id="__codelineno-6-54" name="__codelineno-6-54" href="#__codelineno-6-54"></a><span class="w">  </span><span class="c1"># Preemption is set on the PriorityClass object, not here.</span>
-<a id="__codelineno-6-55" name="__codelineno-6-55" href="#__codelineno-6-55"></a><span class="w">  </span><span class="nt">priorityTiers</span><span class="p">:</span>
-<a id="__codelineno-6-56" name="__codelineno-6-56" href="#__codelineno-6-56"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">priorityClassName</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">runner-critical</span>
-<a id="__codelineno-6-57" name="__codelineno-6-57" href="#__codelineno-6-57"></a><span class="w">      </span><span class="nt">threshold</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">5</span>
-<a id="__codelineno-6-58" name="__codelineno-6-58" href="#__codelineno-6-58"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">priorityClassName</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">runner-standard</span>
-<a id="__codelineno-6-59" name="__codelineno-6-59" href="#__codelineno-6-59"></a><span class="w">      </span><span class="nt">threshold</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">20</span>
-<a id="__codelineno-6-60" name="__codelineno-6-60" href="#__codelineno-6-60"></a><span class="nn">---</span>
-<a id="__codelineno-6-61" name="__codelineno-6-61" href="#__codelineno-6-61"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">actions-gateway.com/v2beta1</span>
-<a id="__codelineno-6-62" name="__codelineno-6-62" href="#__codelineno-6-62"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">RunnerSet</span>
-<a id="__codelineno-6-63" name="__codelineno-6-63" href="#__codelineno-6-63"></a><span class="nt">metadata</span><span class="p">:</span>
-<a id="__codelineno-6-64" name="__codelineno-6-64" href="#__codelineno-6-64"></a><span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">linux</span>
-<a id="__codelineno-6-65" name="__codelineno-6-65" href="#__codelineno-6-65"></a><span class="w">  </span><span class="nt">namespace</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">team-a</span>
-<a id="__codelineno-6-66" name="__codelineno-6-66" href="#__codelineno-6-66"></a><span class="nt">spec</span><span class="p">:</span>
-<a id="__codelineno-6-67" name="__codelineno-6-67" href="#__codelineno-6-67"></a><span class="w">  </span><span class="nt">gatewayRef</span><span class="p">:</span><span class="w">  </span><span class="p p-Indicator">{</span><span class="nt"> name</span><span class="p">:</span><span class="w"> </span><span class="nv">team-a-gateway</span><span class="w"> </span><span class="p p-Indicator">}</span>
-<a id="__codelineno-6-68" name="__codelineno-6-68" href="#__codelineno-6-68"></a><span class="w">  </span><span class="nt">templateRef</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> name</span><span class="p">:</span><span class="w"> </span><span class="nv">default</span><span class="w"> </span><span class="p p-Indicator">}</span>
-<a id="__codelineno-6-69" name="__codelineno-6-69" href="#__codelineno-6-69"></a><span class="w">  </span><span class="nt">runnerLabels</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="s">"linux"</span><span class="p p-Indicator">]</span>
-<a id="__codelineno-6-70" name="__codelineno-6-70" href="#__codelineno-6-70"></a><span class="w">  </span><span class="nt">maxWorkers</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">30</span>
+<a id="__codelineno-6-51" name="__codelineno-6-51" href="#__codelineno-6-51"></a><span class="w">  </span><span class="c1"># Scheduling priority (priorityTiers) is deliberately not shown here: every</span>
+<a id="__codelineno-6-52" name="__codelineno-6-52" href="#__codelineno-6-52"></a><span class="w">  </span><span class="c1"># priorityClassName must already be on the platform-owned allowlist, which the</span>
+<a id="__codelineno-6-53" name="__codelineno-6-53" href="#__codelineno-6-53"></a><span class="w">  </span><span class="c1"># chart ships EMPTY, so a tier added at this point is rejected by admission.</span>
+<a id="__codelineno-6-54" name="__codelineno-6-54" href="#__codelineno-6-54"></a><span class="w">  </span><span class="c1"># See Security Operations for the allowlist and how to grow it.</span>
+<a id="__codelineno-6-55" name="__codelineno-6-55" href="#__codelineno-6-55"></a><span class="nn">---</span>
+<a id="__codelineno-6-56" name="__codelineno-6-56" href="#__codelineno-6-56"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">actions-gateway.com/v2beta1</span>
+<a id="__codelineno-6-57" name="__codelineno-6-57" href="#__codelineno-6-57"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">RunnerSet</span>
+<a id="__codelineno-6-58" name="__codelineno-6-58" href="#__codelineno-6-58"></a><span class="nt">metadata</span><span class="p">:</span>
+<a id="__codelineno-6-59" name="__codelineno-6-59" href="#__codelineno-6-59"></a><span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">linux</span>
+<a id="__codelineno-6-60" name="__codelineno-6-60" href="#__codelineno-6-60"></a><span class="w">  </span><span class="nt">namespace</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">team-a</span>
+<a id="__codelineno-6-61" name="__codelineno-6-61" href="#__codelineno-6-61"></a><span class="nt">spec</span><span class="p">:</span>
+<a id="__codelineno-6-62" name="__codelineno-6-62" href="#__codelineno-6-62"></a><span class="w">  </span><span class="nt">gatewayRef</span><span class="p">:</span><span class="w">  </span><span class="p p-Indicator">{</span><span class="nt"> name</span><span class="p">:</span><span class="w"> </span><span class="nv">team-a-gateway</span><span class="w"> </span><span class="p p-Indicator">}</span>
+<a id="__codelineno-6-63" name="__codelineno-6-63" href="#__codelineno-6-63"></a><span class="w">  </span><span class="nt">templateRef</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> name</span><span class="p">:</span><span class="w"> </span><span class="nv">default</span><span class="w"> </span><span class="p p-Indicator">}</span>
+<a id="__codelineno-6-64" name="__codelineno-6-64" href="#__codelineno-6-64"></a><span class="w">  </span><span class="nt">runnerLabels</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="s">"linux"</span><span class="p p-Indicator">]</span>
+<a id="__codelineno-6-65" name="__codelineno-6-65" href="#__codelineno-6-65"></a><span class="w">  </span><span class="nt">maxWorkers</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">30</span>
 </code></pre></div>
 <p>The GMC provisions the AGC, the proxy pool, RBAC, and network policies in <code>team-a</code> automatically.
 The <strong>namespace <code>ResourceQuota</code> is still platform-owned</strong> (Step 2).
 It is not a field on any of these CRs.</p>
+<p><strong>Scheduling priority is a platform prerequisite, not a tenant field.</strong> The chart ships <code>allowedPriorityClasses</code> empty, so a <code>RunnerSet</code> naming a <code>priorityClassName</code> in <code>priorityTiers</code> is refused by admission until the platform admin has pre-created the <code>PriorityClass</code> and allowlisted it.
+Add tiers after onboarding, once the class is allowlisted: <a href="../operations/security-operations/#priority-classes-the-allowed-priority-classes-allowlist">Priority classes — the <code>allowed-priority-classes</code> allowlist</a>.</p>
 <p><strong>The proxy is optional in v2.</strong> Drop the <code>EgressProxy</code> and the <code>defaultProxyRef</code> and traffic egresses <strong>directly</strong> to GitHub, still <code>NetworkPolicy</code>-restricted to DNS + the GitHub CIDR allowlist, but without a stable per-tenant egress IP to allow-list.
 That collapses the minimal onboarding to three objects.
 For the proxy-less flow, reusable/cluster-default templates, multiple gateways per namespace, the 52-character name cap, and workload-identity credentials, see <a href="../operations/tenant-onboarding/#v2-api-multiple-gateways-per-namespace">Tenant Onboarding — v2 API</a> and <a href="../design/appendix-h-v2-api-decomposition/">Appendix H — v2 API decomposition</a>.</p>
@@ -2996,6 +3000,7 @@ See <a href="../design/appendix-a-capacity-slos/">Appendix A — Capacity Target
 Use it only if you have a specific reason not to adopt v2 yet; if you are already on v1, <a href="../operations/migration-v1-to-v2/"><code>gag-migrate</code></a> moves you to v2 without changing how your jobs are acquired.</p>
 </div>
 <p>The v1 API expresses the whole gateway, proxy and all runner groups, in a single <code>ActionsGateway</code> CR:</p>
+<!-- gag:verify id=v1-gateway mode=apply needs=tenant-namespace,github-app-secret teardown=object -->
 <div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">actions-gateway.github.com/v1alpha1</span>
 <a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ActionsGateway</span>
 <a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="nt">metadata</span><span class="p">:</span>
@@ -3028,26 +3033,22 @@ Use it only if you have a specific reason not to adopt v2 yet; if you are alread
 <a id="__codelineno-7-30" name="__codelineno-7-30" href="#__codelineno-7-30"></a><span class="w">  </span><span class="nt">runnerGroups</span><span class="p">:</span>
 <a id="__codelineno-7-31" name="__codelineno-7-31" href="#__codelineno-7-31"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">runnerLabels</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="s">"gpu"</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="s">"self-hosted"</span><span class="p p-Indicator">]</span>
 <a id="__codelineno-7-32" name="__codelineno-7-32" href="#__codelineno-7-32"></a><span class="w">      </span><span class="nt">maxListeners</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">10</span>
-<a id="__codelineno-7-33" name="__codelineno-7-33" href="#__codelineno-7-33"></a><span class="w">      </span><span class="c1"># priorityClassName values must be on the GMC --allowed-priority-classes</span>
-<a id="__codelineno-7-34" name="__codelineno-7-34" href="#__codelineno-7-34"></a><span class="w">      </span><span class="c1"># allowlist (platform-owned); preemption is set on the PriorityClass object.</span>
-<a id="__codelineno-7-35" name="__codelineno-7-35" href="#__codelineno-7-35"></a><span class="w">      </span><span class="nt">priorityTiers</span><span class="p">:</span>
-<a id="__codelineno-7-36" name="__codelineno-7-36" href="#__codelineno-7-36"></a><span class="w">        </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">priorityClassName</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">runner-critical</span>
-<a id="__codelineno-7-37" name="__codelineno-7-37" href="#__codelineno-7-37"></a><span class="w">          </span><span class="nt">threshold</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">5</span>
-<a id="__codelineno-7-38" name="__codelineno-7-38" href="#__codelineno-7-38"></a><span class="w">        </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">priorityClassName</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">runner-standard</span>
-<a id="__codelineno-7-39" name="__codelineno-7-39" href="#__codelineno-7-39"></a><span class="w">          </span><span class="nt">threshold</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">20</span>
-<a id="__codelineno-7-40" name="__codelineno-7-40" href="#__codelineno-7-40"></a><span class="w">      </span><span class="nt">podTemplate</span><span class="p">:</span>
-<a id="__codelineno-7-41" name="__codelineno-7-41" href="#__codelineno-7-41"></a><span class="w">        </span><span class="nt">spec</span><span class="p">:</span>
-<a id="__codelineno-7-42" name="__codelineno-7-42" href="#__codelineno-7-42"></a><span class="w">          </span><span class="nt">containers</span><span class="p">:</span>
-<a id="__codelineno-7-43" name="__codelineno-7-43" href="#__codelineno-7-43"></a><span class="w">            </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">runner</span>
-<a id="__codelineno-7-44" name="__codelineno-7-44" href="#__codelineno-7-44"></a><span class="w">              </span><span class="nt">resources</span><span class="p">:</span>
-<a id="__codelineno-7-45" name="__codelineno-7-45" href="#__codelineno-7-45"></a><span class="w">                </span><span class="nt">limits</span><span class="p">:</span>
-<a id="__codelineno-7-46" name="__codelineno-7-46" href="#__codelineno-7-46"></a><span class="w">                  </span><span class="nt">nvidia.com/gpu</span><span class="p">:</span><span class="w"> </span><span class="s">"1"</span>
-<a id="__codelineno-7-47" name="__codelineno-7-47" href="#__codelineno-7-47"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">runnerLabels</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="s">"linux"</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="s">"self-hosted"</span><span class="p p-Indicator">]</span>
-<a id="__codelineno-7-48" name="__codelineno-7-48" href="#__codelineno-7-48"></a><span class="w">      </span><span class="nt">maxWorkers</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">30</span>
-<a id="__codelineno-7-49" name="__codelineno-7-49" href="#__codelineno-7-49"></a><span class="w">      </span><span class="nt">podTemplate</span><span class="p">:</span>
-<a id="__codelineno-7-50" name="__codelineno-7-50" href="#__codelineno-7-50"></a><span class="w">        </span><span class="nt">spec</span><span class="p">:</span>
-<a id="__codelineno-7-51" name="__codelineno-7-51" href="#__codelineno-7-51"></a><span class="w">          </span><span class="nt">containers</span><span class="p">:</span>
-<a id="__codelineno-7-52" name="__codelineno-7-52" href="#__codelineno-7-52"></a><span class="w">            </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">runner</span>
+<a id="__codelineno-7-33" name="__codelineno-7-33" href="#__codelineno-7-33"></a><span class="w">      </span><span class="c1"># No priorityTiers here, for the reason given in the v2 example above: the</span>
+<a id="__codelineno-7-34" name="__codelineno-7-34" href="#__codelineno-7-34"></a><span class="w">      </span><span class="c1"># platform allowlist ships empty, so a tier named at onboarding time is</span>
+<a id="__codelineno-7-35" name="__codelineno-7-35" href="#__codelineno-7-35"></a><span class="w">      </span><span class="c1"># refused by admission until the platform admin has allowlisted the class.</span>
+<a id="__codelineno-7-36" name="__codelineno-7-36" href="#__codelineno-7-36"></a><span class="w">      </span><span class="nt">podTemplate</span><span class="p">:</span>
+<a id="__codelineno-7-37" name="__codelineno-7-37" href="#__codelineno-7-37"></a><span class="w">        </span><span class="nt">spec</span><span class="p">:</span>
+<a id="__codelineno-7-38" name="__codelineno-7-38" href="#__codelineno-7-38"></a><span class="w">          </span><span class="nt">containers</span><span class="p">:</span>
+<a id="__codelineno-7-39" name="__codelineno-7-39" href="#__codelineno-7-39"></a><span class="w">            </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">runner</span>
+<a id="__codelineno-7-40" name="__codelineno-7-40" href="#__codelineno-7-40"></a><span class="w">              </span><span class="nt">resources</span><span class="p">:</span>
+<a id="__codelineno-7-41" name="__codelineno-7-41" href="#__codelineno-7-41"></a><span class="w">                </span><span class="nt">limits</span><span class="p">:</span>
+<a id="__codelineno-7-42" name="__codelineno-7-42" href="#__codelineno-7-42"></a><span class="w">                  </span><span class="nt">nvidia.com/gpu</span><span class="p">:</span><span class="w"> </span><span class="s">"1"</span>
+<a id="__codelineno-7-43" name="__codelineno-7-43" href="#__codelineno-7-43"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">runnerLabels</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="s">"linux"</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="s">"self-hosted"</span><span class="p p-Indicator">]</span>
+<a id="__codelineno-7-44" name="__codelineno-7-44" href="#__codelineno-7-44"></a><span class="w">      </span><span class="nt">maxWorkers</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">30</span>
+<a id="__codelineno-7-45" name="__codelineno-7-45" href="#__codelineno-7-45"></a><span class="w">      </span><span class="nt">podTemplate</span><span class="p">:</span>
+<a id="__codelineno-7-46" name="__codelineno-7-46" href="#__codelineno-7-46"></a><span class="w">        </span><span class="nt">spec</span><span class="p">:</span>
+<a id="__codelineno-7-47" name="__codelineno-7-47" href="#__codelineno-7-47"></a><span class="w">          </span><span class="nt">containers</span><span class="p">:</span>
+<a id="__codelineno-7-48" name="__codelineno-7-48" href="#__codelineno-7-48"></a><span class="w">            </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">runner</span>
 </code></pre></div>
 <p>The GMC will provision the AGC, proxy pool, RBAC, and network policies in <code>team-a</code> automatically.</p>
 <h2 id="rotating-github-app-credentials">Rotating GitHub App Credentials<a class="headerlink" href="#rotating-github-app-credentials" title="Permanent link">&para;</a></h2>
@@ -3062,6 +3063,7 @@ Use it only if you have a specific reason not to adopt v2 yet; if you are alread
    Use a distinct name from the old Secret:</p>
 </li>
 </ol>
+<!-- gag:verify id=github-app-secret-rotated mode=apply needs=tenant-namespace teardown=object -->
 <div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">v1</span>
 <a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Secret</span>
 <a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="nt">metadata</span><span class="p">:</span>
@@ -3079,6 +3081,7 @@ Use it only if you have a specific reason not to adopt v2 yet; if you are alread
 <ol>
 <li><strong>Update the <code>ActionsGateway</code> CR</strong> to reference the new Secret name:</li>
 </ol>
+<!-- gag:verify id=rotate-patch-ref mode=run needs=v1-gateway,github-app-secret-rotated teardown=none -->
 <div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>kubectl<span class="w"> </span>patch<span class="w"> </span>actionsgateway<span class="w"> </span>-n<span class="w"> </span>team-a<span class="w"> </span>team-a-gateway<span class="w"> </span><span class="se">\</span>
 <a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a><span class="w">  </span>--type<span class="o">=</span>merge<span class="w"> </span>-p<span class="w"> </span><span class="s1">'{"spec":{"gitHubAppRef":{"name":"my-github-app-v2"}}}'</span>
 </code></pre></div>
@@ -3087,6 +3090,7 @@ Use it only if you have a specific reason not to adopt v2 yet; if you are alread
 <ol>
 <li><strong>Confirm the rollout completed:</strong></li>
 </ol>
+<!-- gag:verify id=rotate-rollout-status mode=skip reason=needs-a-kubelet-to-roll-a-deployment -->
 <div class="highlight"><pre><span></span><code><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a>kubectl<span class="w"> </span>rollout<span class="w"> </span>status<span class="w"> </span>deploy/actions-gateway-controller<span class="w"> </span>-n<span class="w"> </span>team-a
 <a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="c1"># Optionally inspect rotation history:</span>
 <a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a>kubectl<span class="w"> </span>rollout<span class="w"> </span><span class="nb">history</span><span class="w"> </span>deploy/actions-gateway-controller<span class="w"> </span>-n<span class="w"> </span>team-a
@@ -3094,12 +3098,14 @@ Use it only if you have a specific reason not to adopt v2 yet; if you are alread
 <ol>
 <li><strong>Verify the new token is working:</strong></li>
 </ol>
+<!-- gag:verify id=rotate-verify-logs mode=skip reason=needs-a-running-agc-pod -->
 <div class="highlight"><pre><span></span><code><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a>kubectl<span class="w"> </span>logs<span class="w"> </span>-n<span class="w"> </span>team-a<span class="w"> </span>deploy/actions-gateway-controller<span class="w"> </span>--tail<span class="o">=</span><span class="m">20</span>
 <a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a><span class="c1"># Look for: "token refresh successful" or no token refresh errors</span>
 </code></pre></div>
 <ol>
 <li><strong>Delete the old Secret</strong> once the rollout is confirmed healthy:</li>
 </ol>
+<!-- gag:verify id=rotate-delete-old-secret mode=run needs=rotate-patch-ref teardown=none -->
 <div class="highlight"><pre><span></span><code><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a>kubectl<span class="w"> </span>delete<span class="w"> </span>secret<span class="w"> </span>my-github-app<span class="w"> </span>-n<span class="w"> </span>team-a
 </code></pre></div>
 <ol>
@@ -3113,6 +3119,7 @@ Creating a new Secret and updating the reference is the correct rotation path.</
 <p><strong>If the referenced Secret is deleted before you complete the rotation</strong>, the GMC sets a <code>CredentialUnavailable=True</code> condition on the <code>ActionsGateway</code> CR and stops reconciling child resources.
 Recreating the Secret (with the same name, or updating <code>gitHubAppRef.name</code>) clears the condition and resumes normal operation.
 To inspect the condition:</p>
+<!-- gag:verify id=credential-condition mode=run needs=v1-gateway teardown=none -->
 <div class="highlight"><pre><span></span><code><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a>kubectl<span class="w"> </span>get<span class="w"> </span>actionsgateway<span class="w"> </span>-n<span class="w"> </span>team-a<span class="w"> </span>team-a-gateway<span class="w"> </span>-o<span class="w"> </span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">'{.status.conditions}'</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>jq<span class="w"> </span>.
 </code></pre></div>
 

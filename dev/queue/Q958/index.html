@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q953/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q958/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>The test-cache-input gate cannot see a subprocess's reads - GitHub Actions Gateway</title>
+        <title>Reach the install doc's two kubelet-dependent blocks - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#the-test-cache-input-gate-cannot-see-a-subprocesss-reads" class="md-skip">
+        <a href="#reach-the-install-docs-two-kubelet-dependent-blocks" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              The test-cache-input gate cannot see a subprocess's reads
+              Reach the install doc's two kubelet-dependent blocks
             
           </span>
         </div>
@@ -2567,20 +2567,15 @@
   
 
 
-<h1 id="the-test-cache-input-gate-cannot-see-a-subprocesss-reads">The test-cache-input gate cannot see a subprocess's reads<a class="headerlink" href="#the-test-cache-input-gate-cannot-see-a-subprocesss-reads" title="Permanent link">&para;</a></h1>
-<p>Go's testlog records the <code>open</code>/<code>stat</code> calls the test process itself makes, so a test that shells out reads whatever the subprocess reads and keys on none of it.
-Neither detector in the gate can reach that: one sweeps path literals, the other the test's own root derivation, and both read only the test's source.
-The spelling is irrelevant, because the escaping read is not in the test at all.</p>
-<p>Measured 2026-08-21 while closing Q936: five cached-tier tests call <code>exec.Command</code>.
-Four (<code>cmd/worker/worker_test.go</code> and the three under <code>devtools/release/semverfloor/</code>) set <code>cmd.Dir</code> to a <code>t.TempDir()</code> they populate themselves, so they depend on nothing outside their own run and cache correctly.
-The fifth, <code>cmd/probe/compat</code>, is in <code>UNCACHED</code> and forced to <code>-count=1</code>, but for its <code>os.Getwd</code> walk rather than for the <code>go list</code> subprocesses that actually read the tree.</p>
-<p><strong>The hole went live the same day.</strong> Q958's <code>TestGettingStarted_Executable</code> is the sixth, and the first to shell out against the repo rather than a temp dir: it execs <code>scripts/docs/doc-blocks.sh</code>, which sources <code>scripts/lib/common.sh</code> and reads the tree from the repo root.
-It caches correctly only because the test also <code>os.ReadFile</code>s both, by hand, through <code>testdata/</code> symlinks.
-That is the workaround this row exists to replace, and it is one an author has to know to write: nothing failed when it was absent, which is the whole defect.
-A detector would flag <code>exec.Command</code> in a cached-tier test unless <code>cmd.Dir</code> is a temp dir the test created, which is a dataflow question a lexical sweep answers badly.
-The hand-read workaround is not a discriminator either: it is indistinguishable from an ordinary fixture read.
-Separate from Q936, whose shape detector does not see a subprocess at all: fixing that one does not close this.
-Mechanism: <a href="../../development/testing/#a-root-derived-at-runtime-carries-no--to-sweep-for">testing.md § A root derived at runtime carries no <code>..</code> to sweep for</a>.</p>
+<h1 id="reach-the-install-docs-two-kubelet-dependent-blocks">Reach the install doc's two kubelet-dependent blocks<a class="headerlink" href="#reach-the-install-docs-two-kubelet-dependent-blocks" title="Permanent link">&para;</a></h1>
+<p><code>TestGettingStarted_Executable</code> walks nine of <code>docs/getting-started.md</code>'s fourteen fenced blocks against the GMC envtest apiserver, and <code>make getting-started-render-check</code> renders the tenth.
+Four are declared <code>mode=skip</code> in the page itself, each with its reason, and two of those are worth reaching: <code>rotate-rollout-status</code> and <code>rotate-verify-logs</code>, the credential-rotation steps that run <code>kubectl rollout status</code> and <code>kubectl logs</code> against the AGC Deployment.
+There is no kubelet in envtest, so nothing rolls and no pod logs: a venue limit rather than anything wrong with the page.</p>
+<p>The obvious venue is a kind cluster, and the reason this is <code>M</code> rather than <code>S</code> is that a kind cluster alone does not settle it: block <code>github-app-secret</code> supplies a placeholder private key, so the AGC never authenticates and the rollout the doc tells the operator to wait for never completes.
+Reaching these two means substituting <code>test/fakegithub</code> for the doc's <code>githubURL</code>, and that substitution is the question to answer before building anything: a walk over text the gate has rewritten is weaker evidence than the doc's own bytes, and it is not obvious the two blocks are worth buying at that price.
+Settle that first, then pick the venue.
+Measured 2026-08-21: the e2e lane runs a median 14 min (n=11, 2.9-23.8) and is merge-group-only (Q675), against about a second for the envtest walk on a job already running.</p>
+<p>The other two skips stay skipped and need no item: <code>crds-v2-release-asset</code> names a release asset that exists only after a tag, and <code>crds-v2-oci-render</code> pulls a remote OCI chart.</p>
 
 
 
