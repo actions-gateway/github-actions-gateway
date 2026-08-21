@@ -28,6 +28,7 @@ REAL_BASH="$BASH"
 
 FIXTURE_DIR="$REPO_ROOT/tmp/check-tools-test.$$"
 STUB_DIR="$FIXTURE_DIR/bin"
+CMD_ERR="$FIXTURE_DIR/version-cmd.err"
 mkdir -p "$STUB_DIR"
 trap 'rm -rf "$FIXTURE_DIR"' EXIT INT TERM
 
@@ -35,6 +36,39 @@ fails=0
 
 pass() { printf 'ok   %-32s %s\n' "$1" "${2:-}"; }
 fail() { printf 'FAIL %-32s %s\n' "$1" "$2" >&2; fails=$((fails + 1)); }
+
+# evidence SUBJECT RC OUT [ERR] — one indented line of probe evidence, newlines
+# flattened so a report stays one line per subject. The two probes below run
+# against the real binaries, where a failure is rare and unreproducible by
+# hand; naming the subject alone cannot tell a binary that failed to run from
+# one that ran and answered without a version (Q951). ERR is appended labelled
+# when given, for a probe whose stderr is the whole story.
+evidence() {
+	local flat="${3//$'\n'/; }" err="${4-}"
+	flat="${flat:-<none>}"
+	if [[ -n "$err" ]]; then
+		flat+=" | stderr: ${err//$'\n'/; }"
+	fi
+	printf '       %s: rc=%s, output: %s\n' "$1" "$2" "$flat"
+}
+
+# tool_reports_version TOOL ARGS — run TOOL's declared version cmd and return 0
+# when its STDOUT carries a version-shaped number. Sets probe_rc, probe_out and
+# probe_err for the evidence line.
+#
+# stderr is captured to a file rather than merged into the match stream, and
+# that is load-bearing rather than tidiness: `[0-9]+(\.[0-9]+)+` matches an IPv4
+# address, so `dial tcp 10.96.0.1:443` in a connection error would score as a
+# version report — a kubectl that never reached a cluster reading as one that
+# answered. The assertions below pin it (Q951).
+tool_reports_version() {
+	local tool="$1" args="$2"
+	probe_rc=0
+	# shellcheck disable=SC2086  # the field is a literal argument list
+	probe_out="$("$tool" $args 2>"$CMD_ERR")" || probe_rc=$?
+	probe_err="$(cat "$CMD_ERR")"
+	printf '%s\n' "$probe_out" | grep -qE '[0-9]+(\.[0-9]+)+'
+}
 
 # --- the declared bash floor ------------------------------------------------
 #
@@ -162,17 +196,25 @@ fi
 # forever — so the version cmd field is checked against the real binaries
 # wherever the host has them.
 unprobed=''
+unprobed_detail=''
 checked=0
 while read -r tool _; do
 	command -v "$tool" >/dev/null 2>&1 || continue
 	checked=$((checked + 1))
-	tool_out="$("$CHECKER" "$tool" 2>&1)" || true
-	[[ "$tool_out" == *"no version reported"* ]] && unprobed+=" $tool"
+	tool_rc=0
+	tool_out="$("$CHECKER" "$tool" 2>&1)" || tool_rc=$?
+	if [[ "$tool_out" == *"no version reported"* ]]; then
+		unprobed+=" $tool"
+		unprobed_detail+="$(evidence "$tool" "$tool_rc" "$tool_out")"$'\n'
+	fi
 done < <(printf '%s\n' "$floors_out")
 if [[ -z "$unprobed" ]] && (( checked > 0 )); then
 	pass installed-floors-report-a-version "$checked probed"
 else
 	fail installed-floors-report-a-version "unprobed:${unprobed:-none}, checked=$checked"
+	if [[ -n "$unprobed_detail" ]]; then
+		printf '%s' "$unprobed_detail" >&2
+	fi
 fi
 
 # A declared version cmd must work whether or not the row also declares a floor
@@ -180,14 +222,15 @@ fi
 # a floor added later lands on a probe already known to answer. Unverified, that
 # is just a claim.
 bad_cmds=''
+bad_detail=''
 cmds_checked=0
 while IFS='|' read -r cmd_tool cmd_args; do
 	[[ -n "$cmd_args" ]] || continue
 	command -v "$cmd_tool" >/dev/null 2>&1 || continue
 	cmds_checked=$((cmds_checked + 1))
-	# shellcheck disable=SC2086  # the field is a literal argument list
-	if ! "$cmd_tool" $cmd_args 2>/dev/null | grep -qE '[0-9]+(\.[0-9]+)+'; then
+	if ! tool_reports_version "$cmd_tool" "$cmd_args"; then
 		bad_cmds+=" $cmd_tool"
+		bad_detail+="$(evidence "$cmd_tool $cmd_args" "$probe_rc" "$probe_out" "$probe_err")"$'\n'
 	fi
 done < <(awk '
 	/^tools_registry\(\) \{/ { inreg = 1; next }
@@ -198,7 +241,44 @@ if [[ -z "$bad_cmds" ]] && (( cmds_checked > 0 )); then
 	pass version-cmds-answer "$cmds_checked probed"
 else
 	fail version-cmds-answer "no version from:${bad_cmds:-none}, checked=$cmds_checked"
+	if [[ -n "$bad_detail" ]]; then
+		printf '%s' "$bad_detail" >&2
+	fi
 fi
+
+# The probe above matches stdout alone, and these two pin it against stub tools
+# rather than against the host's real binaries, which cannot be made to fail on
+# demand. Merging stderr back into the match stream turns the first case green
+# and nothing else in this suite would notice.
+#
+# version_stream_case NAME SCRIPT WANT — plant SCRIPT as a stub version cmd and
+# assert whether its stdout reports a version. WANT is `reports` or `silent`.
+version_stream_case() {
+	local name="$1" script="$2" want="$3" got
+	printf '%s\n' "$script" > "$STUB_DIR/versiontool"
+	chmod +x "$STUB_DIR/versiontool"
+	if tool_reports_version "$STUB_DIR/versiontool" ''; then
+		got=reports
+	else
+		got=silent
+	fi
+	if [[ "$got" == "$want" ]]; then
+		pass "$name" "rc=$probe_rc, $got"
+	else
+		fail "$name" "want $want, got $got (rc=$probe_rc, out='$probe_out', err='$probe_err')"
+	fi
+}
+
+# `[0-9]+(\.[0-9]+)+` matches 10.96.0.1, so this is a kubectl that never reached
+# a cluster scoring as one that answered.
+version_stream_case version-match-ignores-stderr '#!/bin/sh
+echo "Unable to connect to the server: dial tcp 10.96.0.1:443: i/o timeout" >&2
+exit 1' silent
+
+version_stream_case version-match-takes-stdout '#!/bin/sh
+echo "Client Version: v1.36.3"' reports
+
+rm -f "$STUB_DIR/versiontool"
 
 # --- floor resolution, driven against a fixture repo ------------------------
 #
