@@ -384,6 +384,13 @@ jobs:
         # should read as that, not as a suite's tail (Q904). Reads the resolved
         # make database twice; no toolchain, no network, well under a second.
         run: make tool-pin-check
+      - name: vendored skill files match their declared digests (make vendored-skills-check)
+        # This job for the same reason as the step above: every subject is under
+        # scripts/ (the four vendored files, the checker, and the manifest), so
+        # the `scripts` filter already names them. Named rather than left inside
+        # `make scripts-test` because a forked vendor should read as that (Q890).
+        # Hashes four files; no toolchain, no network.
+        run: make vendored-skills-check
   # Supply-chain integrity gate for the committed vendor trees (Q126). `go build
   # -mod=vendor` only checks vendor/modules.txt consistency, never that the
   # vendored source matches the go.sum hashes — so a tampered vendor/ edit would

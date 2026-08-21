@@ -104,6 +104,36 @@ Fires before reporting a gate result, diagnosing a failure, or writing a test or
 [testing.md § Diagnosing failures](testing.md#diagnosing-failures-measure-before-asserting-a-root-cause) keeps this repo's measured cases (which run, which PR, what the numbers were) for the rules the skill states in general.
 It is also the first of the four prose passes over a release note, where the claim being checked is one the project is about to publish: [release.md § The prose passes](../operations/release.md#the-prose-passes).
 
+## Vendored from the skills repo
+
+Four files are copied out of `karlkfi/claude-skills` and run here as ordinary repo tooling.
+[`scripts/ci/vendored-skills.tsv`](../../scripts/ci/vendored-skills.tsv) lists them with the upstream path and commit each came from.
+
+| Here | Upstream | Taken from |
+|---|---|---|
+| [`scripts/docs/queue.py`](../../scripts/docs/queue.py) | `session-backlog/scripts/queue.py` | `b0330e0f`, 2026-08-16 |
+| [`scripts/docs/rank-vectors.tsv`](../../scripts/docs/rank-vectors.tsv) | `session-backlog/scripts/rank-vectors.tsv` | `b0330e0f`, 2026-08-16 |
+| [`scripts/agent/pr-requeue-eligible.py`](../../scripts/agent/pr-requeue-eligible.py) | `session-worker/scripts/pr-requeue-eligible.py` | `8f65c5b6`, 2026-08-16 |
+| [`scripts/agent/pr-mergeability-watch.py`](../../scripts/agent/pr-mergeability-watch.py) | `session-orchestrator/scripts/pr-mergeability-watch.py` | `0d38df40`, 2026-08-15 |
+
+[Q889](../plan/q889-backlog-item-store.md) phase 1 took all four byte-identical, so that an upstream fix would land here as a clean overwrite.
+Nothing held them there, and nothing in the tree said they were vendored at all.
+
+**Measured 2026-08-21, and it is not the drift the backlog row assumed.** Each file as of the vendoring commit hashes to an upstream commit exactly, so phase 1 did what it claimed.
+Upstream has since taken 8 commits on `queue.py` and 1 to 2 on each of the others, and this repo took none until Q935 forked `queue.py` to fix its stale-citation pattern.
+So the fork ran one way for five days, in the direction nobody here controls.
+A clean overwrite is no longer available for `queue.py` in any case: it and its upstream now differ by 264 diff lines, which is a re-vendor rather than a patch.
+
+`make vendored-skills-check` asserts the half a local read can reach.
+Each file still hashes to the digest its row declares, so forking one moves the digest in the same diff and a reviewer sees it.
+`scripts/ci/check-vendored-skills.sh --report` separates an unmodified vendor from a declared fork, and `--update` is how a fork is declared.
+
+**Whether upstream has moved is still unasked, deliberately.** `karlkfi/claude-skills` is private, so a gate that fetched it would need a token this repo does not carry, and [a gate whose oracle is the network](testing.md#the-release-link-gate) fails when a third party sneezes.
+Comparing against a local clone would key the gate to one workstation's layout.
+So an upstream fix reaches this tree only when somebody looks, and the gate makes the looking cheap rather than automatic.
+
+Nothing derives the set, because nothing marks a file as vendored, so a fifth one adopted without a row is invisible to the gate.
+
 ## Keeping this page honest
 
 A skill can be renamed or retired upstream without anything here going red, because no gate reads the skill set.

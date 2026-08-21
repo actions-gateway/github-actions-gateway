@@ -126,6 +126,16 @@ gate-lists-check: ## Fail when `make check`'s gate and suite lists disagree with
 tool-pin-check: ## Assert every .build/ tool rule declares its version-pin prerequisite (Q904)
 	scripts/ci/check-tool-pins.sh
 
+# The vendored half: each file taken from karlkfi/claude-skills still hashes to
+# the digest scripts/ci/vendored-skills.tsv declares for it, so forking one is a
+# reviewable act rather than a hunk that reads like any other edit (Q890). It
+# cannot ask whether upstream has moved: that repo is private, and a gate whose
+# oracle is the network fails when a third party sneezes. `--report` names which
+# files are unmodified vendors and which carry a declared local edit.
+.PHONY: vendored-skills-check
+vendored-skills-check: ## Assert every file vendored from the skills repo matches its declared digest (Q890)
+	scripts/ci/check-vendored-skills.sh
+
 
 .PHONY: queue-gates
 queue-gates: ## Every gate a docs/queue/-only change can fail — the seconds-long verify for a backlog edit
