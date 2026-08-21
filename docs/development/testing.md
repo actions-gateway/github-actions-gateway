@@ -1329,6 +1329,11 @@ Each is a claim about state, and each has a cheap way of being wrong:
 - **A local gate that disagrees with CI indicts your toolchain before the tree.** Each tool rule in the Makefile names its pin file as a prerequisite (Q842), so a version bump now forces the rebuild, but that covers the pin moving and nothing else: a binary built by hand, or one whose rule has no pin file to depend on, still outlives its source.
   Measured 2026-08-14: an `.build/mdreflow` from 2026-08-09 survived #1462's v0.1.7 bump and reported four files as needing reflow against a tree CI read as clean.
   The verdict reached three merged PR descriptions and the opening instruction of a dispatched worker session before a CI job passing on the same commit forced the comparison.
+- **A green you already took is a claim about a tree that no longer exists, and a gate can change under you with no line of yours different.** Measured twice on 2026-08-21, both against the same change: [#1681](https://github.com/actions-gateway/github-actions-gateway/pull/1681) replaced `em-dash-check`'s whole-file ceiling with a diff ratchet, and two branches that had passed the old rule failed the new one after rebasing onto it.
+  Neither had edited the file whose count moved.
+  In one, a sentence well inside the file's ceiling took this page from 570 to 572, which a ceiling permits and a ratchet does not.
+  A contention sweep cannot see this: it answers which other branch edits your files, never which gate that judges your files just changed semantics.
+  So a rebase voids the gate result taken before it, and the cure is to re-run `make check` over the rebased tree and read the affected gates by name rather than transferring the earlier verdict.
 - **A completeness claim inherits the blind spots of the inventory behind it.** "Every capability reaches both acquisition tiers" was read off `features.md`'s tier badges and the parity table in [v2-ga.md](../plan/v2-ga.md), on 2026-08-13.
   Both were accurate.
   Both are hand-authored, so neither can show a gap nobody thought to record, which is the blind spot [Q776](https://github.com/actions-gateway/github-actions-gateway/blob/main/docs/queue/README.md)'s own row describes and which was cited in the same document that leaned on the badges.

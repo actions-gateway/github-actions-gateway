@@ -148,6 +148,11 @@ Three of those land differently:
   Measured 2026-08-19, a list telling the Q904 chip that nothing else in the batch touched `CHECK_FAST_GATES` was true when written and false within the hour, because Q899's worker added a gate its row never mentioned.
   That chip re-derived rather than trusting the relay and found a fourth hunk the dispatcher had missed, `unit-test.yml`'s `needs:` line, which a second PR adding a CI job conflicts with by construction.
   So name the files, say what the sweep covered, and tell the worker to re-take it before it edits and before it pushes.
+- **A contention list has a third silence, and it is the gates.** A sweep answers which other branch edits your files.
+  It cannot answer which gate that *judges* your files just changed semantics, and a merged gate change voids a worker's green with no line of its own diff different.
+  Measured twice on 2026-08-21, both against [#1681](https://github.com/actions-gateway/github-actions-gateway/pull/1681)'s em-dash ratchet: two branches that passed the old whole-file ceiling failed the new diff rule after rebasing, neither having edited the file whose count moved.
+  Both were caught only because the spawn prompt named the gates in each branch's blast radius and said to read them by name, so treat that list as a required field of the prompt rather than a courtesy.
+  Mechanism: [testing.md](testing.md#the-status-you-report-is-a-claim-too).
 
 **Keep the slash invocation**, and read the `<command-name>` marker it records as a set — `{"/dispatch-worker", "/session-worker"}` — because sessions dispatched before the skill was renamed carry the old spelling and stay valid.
 
