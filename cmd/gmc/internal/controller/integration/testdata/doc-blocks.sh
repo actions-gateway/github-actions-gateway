@@ -1,0 +1,1 @@
+../../../../../../scripts/docs/doc-blocks.sh

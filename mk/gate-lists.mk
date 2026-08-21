@@ -56,6 +56,7 @@ CHECK_FAST_GATES := roadmap-check \
                     codegen-check api-reference-check scripts-test claude-usage-test \
                     doc-links release-pins-check em-dash-check page-density-check \
                     script-docs-check queue-rules-check queue-lint \
+                    getting-started-check \
                     semver-floor-sources-check template-library-check \
                     md-reflow-check comparison-stamps-check promql-check \
                     metric-tiers-check reason-tiers-check upgrade-toc-check \
@@ -112,6 +113,7 @@ QUEUE_GATES := queue-lint queue-rules-check roadmap-check plan-index-check \
 #   plan-index-check     a plan doc left active with no Queue row citing it
 #   no-plan-refs-check   code or a workflow comment citing a plan path that moved
 #   em-dash-check        a file pushed over its baseline ceiling, or a new doc over the density rule
+#   getting-started-check an install-doc block that lost its gag:verify annotation, or dropped below the executed floor
 #   md-reflow-check      prose that is not sentence-per-line
 #   page-density-check   an admonition wall, or a stat tile repeated across pages
 #   release-pins-check   an install/upgrade page pinning a superseded release
@@ -138,6 +140,7 @@ QUEUE_GATES := queue-lint queue-rules-check roadmap-check plan-index-check \
 # seven of them at once and `make docs-gates` was green on prose edits to nine
 # pages `make check` can fail.
 DOCS_GATES := doc-links plan-index-check no-plan-refs-check em-dash-check \
+              getting-started-check \
               md-reflow-check page-density-check release-pins-check \
               release-notes-check upgrade-toc-check \
               conflict-markers-check \
@@ -263,4 +266,5 @@ SCRIPTS_TESTS := agent/claude-go-throttle-hook-test agent/local-throttle-test \
                  ci/check-tool-pins-test \
                  updatecli/cosign-release-sha256-test \
                  docs/check-release-ladder-test \
-                 ci/check-vendored-skills-test
+                 ci/check-vendored-skills-test \
+                 docs/doc-blocks-test

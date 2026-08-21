@@ -12,6 +12,15 @@ on:
   merge_group:
   push:
     branches: [main]
+    # This list is deliberately coarser than the `code` filter below, and since
+    # Q958 that costs one thing worth naming: docs/getting-started.md IS an input
+    # to this tier (TestGettingStarted_Executable executes its blocks), but a
+    # docs-only merge matches `**.md` here and never triggers this workflow, so
+    # the post-merge leg does not re-run the walk. Accepted rather than fixed:
+    # `paths-ignore` has no negation, an allowlist rewrite would risk dropping
+    # coverage elsewhere, and the queue already ran the walk on the candidate
+    # merge — the commit that carries the merge result, and this repo's
+    # authority on it (Q942). The PR and merge_group legs both cover the doc.
     paths-ignore:
       - '**.md'
       - 'docs/**'
@@ -79,6 +88,15 @@ jobs:
               # dogfood overlay exercises (Q554). Without this pattern a
               # library-only change skips its own gate and reports green.
               - 'deploy/templates/**'
+              # The install doc is INPUT to this tier for the same reason, one
+              # page over: TestGettingStarted_Executable applies its annotated
+              # blocks to a real apiserver (Q958). Absent this pattern a doc-only
+              # edit that broke a block skips the only thing that runs it and the
+              # gate reports green by not running — the Q429 shape.
+              - 'docs/getting-started.md'
+              # ...and the parser those blocks are extracted with. It lives
+              # outside scripts/lib/, so neither entry below reaches it.
+              - 'scripts/docs/doc-blocks.sh'
               - 'vendor/**'
               - 'go.work'
               - 'go.work.sum'

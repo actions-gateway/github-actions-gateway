@@ -542,6 +542,42 @@ Behaviour is asserted beside the packages in Go; the file-selection half is `scr
 It is not in `make check` (it needs the pinned Python venv, and `pages.yml` is already path-gated on the docs sources), so **run it yourself when a change adds a heading or a relative link under `docs/`**.
 What diverges, and how to write links that survive both: [website.md § The two link gates](website.md#the-two-link-gates).
 
+### The executable-install-doc gate
+
+`docs/getting-started.md` is the procedure an operator follows verbatim, and until Q958 nothing ran a line of it.
+The other docs gates hold it to link, anchor, density and prose rules, all of which a page can pass while every command on it is refused by the apiserver, and the e2e suite builds its tenant fixtures in Go rather than from the page.
+A CRD field renamed under the doc therefore left it rendering perfectly and failing on contact.
+
+Coverage is **opt-in per fenced block**, one HTML comment directly above the fence:
+
+```
+<!-- gag:verify id=tenant-namespace mode=run teardown=namespace -->
+```
+
+`mode` is `apply` (yaml, server-side applied and read back), `run` (sh, executed against the apiserver), `dry-run` (yaml, server-side dry-run), `render` (sh, `helm template` against an in-tree chart), or `skip`, which requires a `reason=`.
+The comment renders as nothing in MkDocs and on github.com, and `mdreflow` leaves it byte-for-byte.
+**An unannotated block is inert**: five of the page's fourteen blocks are illustrative or need bytes that exist only after a release is cut, so failing on them would make the gate noise.
+What stops a block quietly dropping out of coverage instead is a per-file floor of *executed* blocks, which counts declared skips at zero so a demotion to `mode=skip` cannot slip past it.
+
+The gate runs in three places off one parser, `scripts/docs/doc-blocks.sh`, so the verdicts cannot diverge:
+
+| | what it settles | where |
+| --- | --- | --- |
+| `make getting-started-check` | the annotations parse, ids are unique, every `needs=` names a block declared earlier, the floor holds | `make check` and `make docs-gates`; CI in `doc-links.yml` |
+| `make getting-started-render-check` | a `mode=render` block's chart still renders | CI in `manifest-validate.yml`'s `validate` job, which already has helm |
+| `TestGettingStarted_Executable` | the blocks are **executed** against a real apiserver | the GMC envtest integration suite |
+
+The venue is the existing GMC envtest suite rather than a kind cluster of its own, because that suite already stands up every CRD, the validating webhooks, the v2 conversion webhook and the CEL guardrails, so the walk costs **about a second on a job that is already running** against a median 14 min for the e2e lane (n=11 runs that actually ran, 2.9-23.8 min), which is merge-group-only anyway (Q675).
+Teardown is free there: the objects land in the tenant namespace the doc's own first step creates, one `t.Cleanup` retires them, and the apiserver is destroyed at suite end, so the walk is safe to run twice by construction.
+The test reads the doc and the parser through committed `testdata/` symlinks, because [a cached test's reads outside its module root are invisible to the test cache](#the-out-of-module-test-read-gate) and a subprocess's reads never reach the testlog at all.
+
+**What it cannot settle is anything needing a kubelet.** The two credential-rotation blocks that run `kubectl rollout status` and `kubectl logs` are declared `mode=skip` in the page with that reason; Q958 is the follow-on, and the question it has to answer first is whether substituting a fake GitHub for the doc's `githubURL` still counts as executing the doc.
+
+Its own failure mode is the one it exists to catch, so `scripts/docs/doc-blocks-test.sh` asserts a known-bad document goes **red** for each rule, paired with the good document that must stay green: a parser that stopped matching the annotation would report every page clean.
+
+It earned its keep on the first run.
+Both Step 4 examples were rejected with `priorityClassName "runner-critical" is not in the platform allowlist`: the chart ships `allowedPriorityClasses` empty, and the quickstart named tier classes it never told the operator to allowlist, so the page could not be followed to the end.
+
 ### The release-pin gate
 
 `make release-pins-check` (`scripts/docs/check-release-pins.sh`) fails when an install/upgrade page still pins a release older than the newest stable `vX.Y.Z` tag.

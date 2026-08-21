@@ -250,6 +250,24 @@ jobs:
       - name: gate lists agree (make gate-lists-check)
         run: make gate-lists-check
 
+  # Hold docs/getting-started.md's fenced blocks to their gag:verify annotations
+  # (Q958). It belongs here for the reason em-dash does — its inputs are a
+  # Markdown page and a checker under scripts/, both of which this workflow's
+  # filter covers and unit-test.yml path-ignores. Its own job so a block that
+  # lost its annotation reads apart from a dead link. Offline and tool-free: the
+  # blocks are actually EXECUTED against an apiserver by
+  # TestGettingStarted_Executable in integration-test.yml's gmc job, which is why
+  # docs/getting-started.md is in that workflow's `code` filter too.
+  getting-started:
+    needs: [changes]
+    if: needs.changes.outputs.docs == 'true' || github.event_name == 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: install-doc blocks keep their annotations (make getting-started-check)
+        run: make getting-started-check
+
   # Assert the install/upgrade pages name the newest stable tag. fetch-depth: 0
   # is load-bearing: the gate derives the current release from the tags, and a
   # shallow checkout has none — it would fall back to the remote, or skip.
@@ -324,6 +342,7 @@ jobs:
       - comparison-stamps
       - script-docs
       - gate-lists
+      - getting-started
       - release-pins
       - release-notes
       - release-links

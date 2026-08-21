@@ -26,6 +26,7 @@ It installs the Gateway Manager Controller (GMC), its CustomResourceDefinitions 
 The GMC then provisions per-tenant Actions Gateway Controller (AGC) instances and proxy pools at runtime.
 They are not installed by the chart.
 
+<!-- gag:verify id=gmc-helm-install mode=render teardown=none -->
 ```sh
 helm install gag charts/actions-gateway \
   --namespace gmc-system --create-namespace \
@@ -48,6 +49,7 @@ For the recommended **v2** path, also install the opt-in v2 CRDs.
 They ship separately (and are applied server-side, never `helm install`ed) because the CRDs are large enough that a Helm release Secret would exceed its 1 MiB limit.
 For the default `gmc-system` namespace, apply the pre-rendered, cosign-signed manifest attached to the release, no helm needed:
 
+<!-- gag:verify id=crds-v2-release-asset mode=skip reason=names-a-release-asset-that-only-exists-after-a-tag -->
 ```sh
 kubectl apply --server-side -f \
   https://github.com/actions-gateway/github-actions-gateway/releases/download/vX.Y.Z/actions-gateway-crds-v2.yaml
@@ -55,6 +57,7 @@ kubectl apply --server-side -f \
 
 If the GMC runs in a **different namespace**, render the chart for that namespace instead (`--server-side` also avoids the 256 KB client-side apply limit):
 
+<!-- gag:verify id=crds-v2-oci-render mode=skip reason=pulls-a-remote-oci-chart -->
 ```sh
 helm template actions-gateway-crds-v2 \
   oci://ghcr.io/actions-gateway/charts/actions-gateway-crds-v2 \
@@ -73,6 +76,7 @@ See the [chart README](../charts/actions-gateway-crds-v2/README.md).
 Create the tenant namespace and mark it as managed by the GMC.
 The marker label authorizes the GMC to stamp Pod Security Admission labels on it; the `namespace-psa-guard` admission policy denies the GMC any namespace that lacks it.
 
+<!-- gag:verify id=tenant-namespace mode=run teardown=namespace -->
 ```sh
 kubectl create namespace team-a
 kubectl label namespace team-a actions-gateway.github.com/tenant=true
@@ -86,6 +90,7 @@ The namespace `ResourceQuota` (and any `LimitRange`) is **platform-owned**: the 
 This is the real, tenant-uncontrollable cap on how much compute a tenant can consume.
 Apply it here, or via your GitOps / tenant-operator stack: Capsule, HNC, vCluster, kiosk.
 
+<!-- gag:verify id=tenant-quota mode=apply needs=tenant-namespace teardown=object -->
 ```yaml
 apiVersion: v1
 kind: ResourceQuota
@@ -126,6 +131,7 @@ The gateway reads remaining quota and reacts to exhaustion (it won't claim a job
 
 Create this in the tenant's namespace:
 
+<!-- gag:verify id=github-app-secret mode=apply needs=tenant-namespace teardown=object -->
 ```yaml
 apiVersion: v1
 kind: Secret
@@ -151,6 +157,7 @@ The set below is feature-equivalent to the legacy v1 example, a proxied gateway 
 If your jobs build container images, start from `kata-dind` instead.
 See the [runner template library](operations/runner-template-library.md).
 
+<!-- gag:verify id=v2-gateway-set mode=apply needs=tenant-namespace,github-app-secret teardown=object -->
 ```yaml
 apiVersion: actions-gateway.com/v2beta1
 kind: EgressProxy
@@ -202,15 +209,10 @@ spec:
   # `runs-on: [gpu, linux]`. The FIRST one is also this set's scale-set name at
   # GitHub, so it must be unique per gateway — and reordering renames the scale set.
   runnerLabels: ["gpu"]
-  # priorityClassName values must be on the platform-owned allowlist: a watched
-  # PriorityClassAllowlist CR, grown without a GMC restart (the
-  # --allowed-priority-classes flag remains the fail-safe baseline).
-  # Preemption is set on the PriorityClass object, not here.
-  priorityTiers:
-    - priorityClassName: runner-critical
-      threshold: 5
-    - priorityClassName: runner-standard
-      threshold: 20
+  # Scheduling priority (priorityTiers) is deliberately not shown here: every
+  # priorityClassName must already be on the platform-owned allowlist, which the
+  # chart ships EMPTY, so a tier added at this point is rejected by admission.
+  # See Security Operations for the allowlist and how to grow it.
 ---
 apiVersion: actions-gateway.com/v2beta1
 kind: RunnerSet
@@ -228,6 +230,9 @@ The GMC provisions the AGC, the proxy pool, RBAC, and network policies in `team-
 The **namespace `ResourceQuota` is still platform-owned** (Step 2).
 It is not a field on any of these CRs.
 
+**Scheduling priority is a platform prerequisite, not a tenant field.** The chart ships `allowedPriorityClasses` empty, so a `RunnerSet` naming a `priorityClassName` in `priorityTiers` is refused by admission until the platform admin has pre-created the `PriorityClass` and allowlisted it.
+Add tiers after onboarding, once the class is allowlisted: [Priority classes — the `allowed-priority-classes` allowlist](operations/security-operations.md#priority-classes-the-allowed-priority-classes-allowlist).
+
 **The proxy is optional in v2.** Drop the `EgressProxy` and the `defaultProxyRef` and traffic egresses **directly** to GitHub, still `NetworkPolicy`-restricted to DNS + the GitHub CIDR allowlist, but without a stable per-tenant egress IP to allow-list.
 That collapses the minimal onboarding to three objects.
 For the proxy-less flow, reusable/cluster-default templates, multiple gateways per namespace, the 52-character name cap, and workload-identity credentials, see [Tenant Onboarding — v2 API](operations/tenant-onboarding.md#v2-api-multiple-gateways-per-namespace) and [Appendix H — v2 API decomposition](design/appendix-h-v2-api-decomposition.md).
@@ -243,6 +248,7 @@ See [Appendix A — Capacity Targets & SLOs](design/appendix-a-capacity-slos.md)
 
 The v1 API expresses the whole gateway, proxy and all runner groups, in a single `ActionsGateway` CR:
 
+<!-- gag:verify id=v1-gateway mode=apply needs=tenant-namespace,github-app-secret teardown=object -->
 ```yaml
 apiVersion: actions-gateway.github.com/v1alpha1
 kind: ActionsGateway
@@ -276,13 +282,9 @@ spec:
   runnerGroups:
     - runnerLabels: ["gpu", "self-hosted"]
       maxListeners: 10
-      # priorityClassName values must be on the GMC --allowed-priority-classes
-      # allowlist (platform-owned); preemption is set on the PriorityClass object.
-      priorityTiers:
-        - priorityClassName: runner-critical
-          threshold: 5
-        - priorityClassName: runner-standard
-          threshold: 20
+      # No priorityTiers here, for the reason given in the v2 example above: the
+      # platform allowlist ships empty, so a tier named at onboarding time is
+      # refused by admission until the platform admin has allowlisted the class.
       podTemplate:
         spec:
           containers:
@@ -310,6 +312,7 @@ When your GitHub App private key expires or is compromised, follow these steps t
 2. **Create a new Secret** with the new key.
    Use a distinct name from the old Secret:
 
+   <!-- gag:verify id=github-app-secret-rotated mode=apply needs=tenant-namespace teardown=object -->
    ```yaml
    apiVersion: v1
    kind: Secret
@@ -328,6 +331,7 @@ When your GitHub App private key expires or is compromised, follow these steps t
 
 3. **Update the `ActionsGateway` CR** to reference the new Secret name:
 
+   <!-- gag:verify id=rotate-patch-ref mode=run needs=v1-gateway,github-app-secret-rotated teardown=none -->
    ```sh
    kubectl patch actionsgateway -n team-a team-a-gateway \
      --type=merge -p '{"spec":{"gitHubAppRef":{"name":"my-github-app-v2"}}}'
@@ -338,6 +342,7 @@ When your GitHub App private key expires or is compromised, follow these steps t
 
 4. **Confirm the rollout completed:**
 
+   <!-- gag:verify id=rotate-rollout-status mode=skip reason=needs-a-kubelet-to-roll-a-deployment -->
    ```sh
    kubectl rollout status deploy/actions-gateway-controller -n team-a
    # Optionally inspect rotation history:
@@ -346,6 +351,7 @@ When your GitHub App private key expires or is compromised, follow these steps t
 
 5. **Verify the new token is working:**
 
+   <!-- gag:verify id=rotate-verify-logs mode=skip reason=needs-a-running-agc-pod -->
    ```sh
    kubectl logs -n team-a deploy/actions-gateway-controller --tail=20
    # Look for: "token refresh successful" or no token refresh errors
@@ -353,6 +359,7 @@ When your GitHub App private key expires or is compromised, follow these steps t
 
 6. **Delete the old Secret** once the rollout is confirmed healthy:
 
+   <!-- gag:verify id=rotate-delete-old-secret mode=run needs=rotate-patch-ref teardown=none -->
    ```sh
    kubectl delete secret my-github-app -n team-a
    ```
@@ -369,6 +376,7 @@ Creating a new Secret and updating the reference is the correct rotation path.
 Recreating the Secret (with the same name, or updating `gitHubAppRef.name`) clears the condition and resumes normal operation.
 To inspect the condition:
 
+<!-- gag:verify id=credential-condition mode=run needs=v1-gateway teardown=none -->
 ```sh
 kubectl get actionsgateway -n team-a team-a-gateway -o jsonpath='{.status.conditions}' | jq .
 ```
