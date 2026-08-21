@@ -143,6 +143,11 @@ Three of those land differently:
   Measured across one batch: five overrides, each recorded with a reading, one of which caught a cross-PR contradiction nothing else would have.
   Since Q862 the denial says this itself, and fires on colliding **line ranges** rather than shared paths, so a warning that survives is one two edits can actually reach each other through.
   Saying it in the prompt is now reinforcement rather than the only place a worker hears it.
+- **A contention list has two silences, and a worker reads both as clearance.** The first is scope: a file you never swept is indistinguishable from one you swept and found clear, so close the list rather than ending it ("X and Y are contended, nothing else is open"), and say it covers direct paths only.
+  The second is time, and it is the one a stamp does not cover: the batch itself creates contention while it runs.
+  Measured 2026-08-19, a list telling the Q904 chip that nothing else in the batch touched `CHECK_FAST_GATES` was true when written and false within the hour, because Q899's worker added a gate its row never mentioned.
+  That chip re-derived rather than trusting the relay and found a fourth hunk the dispatcher had missed, `unit-test.yml`'s `needs:` line, which a second PR adding a CI job conflicts with by construction.
+  So name the files, say what the sweep covered, and tell the worker to re-take it before it edits and before it pushes.
 
 **Keep the slash invocation**, and read the `<command-name>` marker it records as a set — `{"/dispatch-worker", "/session-worker"}` — because sessions dispatched before the skill was renamed carry the old spelling and stay valid.
 
