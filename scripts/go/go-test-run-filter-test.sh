@@ -111,6 +111,23 @@ expect_argv() {
 	fi
 }
 
+# expect_argv_line NAME N NEEDLE WANT — as expect_argv, but against the Nth
+# recorded argv alone. go-test.sh makes several `go test` calls per run and the
+# forced -count=1 pass (Q936) is one of them, so a claim about the workspace
+# invocation has to name which call it means or the joined form answers for it.
+expect_argv_line() {
+	local name="$1" n="$2" needle="$3" want="$4" got=no line
+	line="$(sed -n "${n}p" "$ARGV_LOG")"
+	[[ "$line" == *"$needle"* ]] && got=yes
+	if [[ "$got" == "$want" ]]; then
+		printf 'ok   argv[%s]  %-25s %s %s\n' "$n" "$name" "$want" "$needle"
+	else
+		printf 'FAIL argv[%s]  %-25s want=%s got=%s for [%s] in:\n%s\n' \
+			"$n" "$name" "$want" "$got" "$needle" "$line" >&2
+		fails=$((fails + 1))
+	fi
+}
+
 # A RUN that selects something: the filter reaches `go test`, and -v -count=1
 # ride along so the run is uncached and its per-test markers are visible.
 run_gate matched matched RUN=TestSelected
@@ -138,13 +155,27 @@ fi
 run_gate empty matched RUN=TestOnlyInDevtools
 expect_status match-outside-workspace 0
 
-# Unfiltered runs are untouched — no -run, no forced -count=1, and the pre-existing
-# caching and progress behaviour intact. TEST_PROGRESS_INTERVAL=0 takes the plain
-# path, so the shim never has to stand in for the heartbeat renderer's build.
+# Unfiltered runs leave the workspace invocation untouched — no -run, no forced
+# -count=1 over the whole workspace, and the pre-existing caching and progress
+# behaviour intact. TEST_PROGRESS_INTERVAL=0 takes the plain path, so the shim
+# never has to stand in for the heartbeat renderer's build.
+# The -count=1 claim is scoped to that first invocation: since Q936 an unfiltered
+# run makes a second, targeted one that does force it, so the joined form would
+# report the pass below and say nothing about the workspace.
 run_gate matched matched TEST_PROGRESS_INTERVAL=0
 expect_status run-unset 0
 expect_argv run-unset '-run ' no
-expect_argv run-unset '-count=1' no
+expect_argv_line run-unset 1 '-count=1' no
+
+# ...and that second invocation is the forced pass over the packages go's test
+# cache cannot key a result for. Its package list is read from the gate that
+# owns it rather than written here, so a package entering or leaving UNCACHED
+# cannot leave this suite asserting a stale set (Q936).
+expect_argv_line run-unset 2 '-count=1' yes
+while IFS= read -r pkg; do
+	[[ -n "$pkg" ]] || continue
+	expect_argv_line run-unset 2 "./$pkg" yes
+done < <(scripts/go/check-test-cache-inputs.sh --uncached-packages)
 
 # The race gate takes the same filter, and the same guard.
 gate_flags=(--race)
