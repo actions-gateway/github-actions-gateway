@@ -40,9 +40,24 @@
 // the cleanup that lowers the entries; `-write-baseline` re-records them, and
 // the diff is the measurement of what it cleared.
 //
+// # The diff ratchet
+//
+// A ceiling is a whole-file total, so it is slack wherever a file sits under
+// its entry, and two changes can each spend that same slack on their own base
+// and merge to a total above it (Q742). The ratchet measures the change rather
+// than the total: with -base-dir holding the same files at the base revision, a
+// file may gain em-dashes only while it stays inside the density rule. One
+// already over the rule may only lose them.
+//
+// It never fails a reduction, and it holds under the merge queue's candidate
+// commit, where the base is main and the head carries every queued change at
+// once. That is the only view in which a jointly-red merge is visible before it
+// lands. A file with no copy under -base-dir is left to the ceiling check, so a
+// base the caller could not resolve degrades the gate rather than blocking it.
+//
 // Usage:
 //
-//	emdash -baseline <file> [-max-per-1000 <density>] <file.md>...
+//	emdash -baseline <file> [-base-dir <dir>] [-max-per-1000 <density>] <file.md>...
 //	emdash -report <file.md>...
 //	emdash -baseline <file> -write-baseline <file.md>...
 //
@@ -52,10 +67,13 @@ package main
 
 import (
 	"bufio"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
+	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
@@ -81,6 +99,7 @@ func main() {
 	flag.StringVar(&opts.baseline, "baseline", "", "file of `<count> <path>` ceilings for the files the rule has not reached yet")
 	flag.BoolVar(&opts.report, "report", false, "print every file's density, worst first, and exit 0")
 	flag.BoolVar(&opts.write, "write-baseline", false, "rewrite the baseline from the current counts instead of checking")
+	flag.StringVar(&opts.baseDir, "base-dir", "", "`directory` holding the same files at the base revision; enables the diff ratchet")
 	flag.Parse()
 
 	out := bufio.NewWriter(os.Stdout)
@@ -101,16 +120,20 @@ func main() {
 type options struct {
 	limit    float64
 	baseline string
+	baseDir  string
 	report   bool
 	write    bool
 }
 
-// count is one file's prose measurement.
+// count is one file's prose measurement. baseDashes is the same file's count
+// at the base revision, carried only when -base-dir held a copy of it.
 type count struct {
-	file    string
-	dashes  int
-	words   int
-	density float64
+	file       string
+	dashes     int
+	words      int
+	density    float64
+	baseDashes int
+	hasBase    bool
 }
 
 func run(opts options, files []string, out io.Writer, gha bool) (int, error) {
@@ -122,7 +145,16 @@ func run(opts options, files []string, out io.Writer, gha bool) (int, error) {
 			return 0, err
 		}
 		dashes, words := measure(markdown.Parse(src))
-		counts = append(counts, count{f, dashes, words, density(dashes, words)})
+		c := count{file: f, dashes: dashes, words: words, density: density(dashes, words)}
+		if opts.baseDir != "" {
+			if base, err := os.ReadFile(filepath.Join(opts.baseDir, f)); err == nil {
+				c.baseDashes, _ = measure(markdown.Parse(base))
+				c.hasBase = true
+			} else if !errors.Is(err, fs.ErrNotExist) {
+				return 0, err
+			}
+		}
+		counts = append(counts, c)
 		total.dashes += dashes
 		total.words += words
 	}
@@ -153,6 +185,15 @@ func run(opts options, files []string, out io.Writer, gha bool) (int, error) {
 
 	var over []count
 	for _, c := range counts {
+		// The diff ratchet runs first: it is the finding that names what the
+		// change did, and it catches a gain the ceiling below still permits.
+		if c.hasBase && c.dashes > c.baseDashes && overRule(c, opts.limit) {
+			report(out, gha, c.file, fmt.Sprintf(
+				"%d em-dashes, up from %d at the base revision, in a file already above %.1f per 1,000 - a file over the rule may only lose them",
+				c.dashes, c.baseDashes, opts.limit))
+			over = append(over, c)
+			continue
+		}
 		if ceiling, listed := ceilings[c.file]; listed {
 			if c.dashes > ceiling {
 				report(out, gha, c.file, fmt.Sprintf(
@@ -162,7 +203,7 @@ func run(opts options, files []string, out io.Writer, gha bool) (int, error) {
 			}
 			continue
 		}
-		if c.dashes > shortDocAllowance && c.density > opts.limit {
+		if overRule(c, opts.limit) {
 			report(out, gha, c.file, fmt.Sprintf(
 				"em-dash density %.1f per 1,000 prose words (%d in %d) is above %.1f - see docs/development/documentation-standards.md",
 				c.density, c.dashes, c.words, opts.limit))
@@ -231,7 +272,7 @@ func writeBaseline(name string, counts []count, limit float64) error {
 	sort.Slice(counts, func(i, j int) bool { return counts[i].file < counts[j].file })
 	kept := 0
 	for _, c := range counts {
-		if c.dashes <= shortDocAllowance || c.density <= limit {
+		if !overRule(c, limit) {
 			continue
 		}
 		fmt.Fprintf(&b, "%d %s\n", c.dashes, c.file)
@@ -251,6 +292,13 @@ const baselineHeader = `# Per-file em-dash ceilings for check-em-dash.sh (Q654).
 #
 # <em-dashes> <path>
 `
+
+// overRule reports whether a file breaches the density rule on its own, which
+// is both the verdict for an unlisted file and the condition the diff ratchet
+// gates on. A page under the allowance by count alone is never over it.
+func overRule(c count, limit float64) bool {
+	return c.dashes > shortDocAllowance && c.density > limit
+}
 
 func density(dashes, words int) float64 {
 	if words == 0 {

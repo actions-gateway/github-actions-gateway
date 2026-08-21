@@ -15,14 +15,27 @@
 # It walks the same file set as check-doc-links.sh: every present, non-vendored
 # Markdown file, tracked or untracked-and-not-gitignored, minus symlinks.
 #
+# On top of the ceilings it runs a diff ratchet (Q742): a whole-file ceiling is
+# slack wherever a file sits under it, and two PRs can each spend that same slack
+# on their own base and merge to a total above it, which per-PR CI never sees.
+# So the files that changed since the base revision are also measured there, and
+# a file already over the rule may only lose em-dashes. The base is the
+# `origin/main` merge-base, which under the merge queue resolves to the tip the
+# candidate commit was built on — the one view holding every queued change at
+# once. No base resolves in a shallow clone, and there the gate degrades to the
+# ceilings alone rather than blocking every PR; a caller that arranged a base and
+# wants the skip to be an error instead sets EM_DASH_REQUIRE_BASE=1.
+#
 # Usage:
 #   scripts/docs/check-em-dash.sh [--write] [--report]
 # Options (for the test suite; defaults to the real file):
 #   --baseline PATH   the per-file ceilings to check against
+#   --base REV        the revision to ratchet against, in place of the merge-base
 #
-# Exits non-zero when any file gains em-dashes above its baseline ceiling, or
-# when a file with no ceiling is over the rule. Findings print as
-# `file: message` (GitHub `::error::` annotations under CI).
+# Exits non-zero when any file gains em-dashes above its baseline ceiling, when a
+# changed file over the rule gains any, or when a file with no ceiling is over
+# the rule. Findings print as `file: message` (GitHub `::error::` annotations
+# under CI).
 
 set -euo pipefail
 shopt -s inherit_errexit
@@ -37,6 +50,7 @@ DEVTOOLS_DIR="$SCRIPT_DIR/../../devtools"
 
 BASELINE="$SCRIPT_DIR/em-dash-baseline.txt"
 MODE="check"
+BASE_REV=""
 
 while (($# > 0)); do
     case "$1" in
@@ -48,6 +62,10 @@ while (($# > 0)); do
         ;;
     --baseline)
         BASELINE="$2"
+        shift
+        ;;
+    --base)
+        BASE_REV="$2"
         shift
         ;;
     *)
@@ -83,6 +101,65 @@ if ((${#scan_files[@]} == 0)); then
     exit 0
 fi
 
+# resolve_base — print the revision the diff ratchet measures against, or
+# nothing when there is none. `--base` wins; otherwise the origin/main
+# merge-base, which is the branch point on a PR and the tip the candidate was
+# built on under the merge queue.
+#
+# A base equal to HEAD is still a base, not a reason to skip: the comparison
+# below runs against the worktree, so on `main` — or on a branch that has not
+# committed yet — it is what holds an uncommitted edit to the ratchet. A clean
+# tree there simply has nothing to extract.
+#
+# Fails open by default, the way scripts/go/go-lint.sh scopes itself: a clone
+# with no merge-base leaves the ceilings enforcing the rule, because a gate that
+# went red whenever its inputs were missing would be turned off.
+#
+# A caller that knows it arranged a base sets EM_DASH_REQUIRE_BASE=1, and the
+# skip becomes a hard error. Q742 is a gate that was silently not checking what
+# it claimed to, so the run that is supposed to ratchet must not report the
+# ceilings as the whole verdict when it could not. The doc-links workflow sets
+# it beside the fetch that provides the base.
+#
+# Deliberately not keyed on `CI`. That reads an ambient variable the caller did
+# not set, which made the gate behave one way under `make check` and another on
+# a runner, and it fired inside this gate's own fixtures, whose repos have no
+# origin/main on purpose (measured on PR #1681: 12 assertions red on the runner,
+# green locally). An explicit opt-in cannot be tripped by an environment.
+resolve_base() {
+    local base
+    if [[ -n "$BASE_REV" ]]; then
+        base="$(git rev-parse --verify --quiet "${BASE_REV}^{commit}")" ||
+            die "--base $BASE_REV does not resolve to a commit"
+    elif ! base="$(git merge-base HEAD origin/main 2>/dev/null)" || [[ -z "$base" ]]; then
+        [[ -z "${EM_DASH_REQUIRE_BASE:-}" ]] ||
+            die "the em-dash diff ratchet could not measure: this job set EM_DASH_REQUIRE_BASE but there is no origin/main merge-base to compare against. This is a checkout fault, not a prose finding - no file is over the limit. Fix the job (fetch-depth: 0 plus a refs/heads/main fetch), not the docs."
+        echo "check-em-dash: no origin/main merge-base - diff ratchet skipped, ceilings only" >&2
+        return 0
+    fi
+    printf '%s\n' "$base"
+}
+
+# extract_base REV DIR — write each changed Markdown file as REV had it into
+# DIR, under its repo-relative path. A path REV does not carry (added on this
+# branch, or a rename's destination) is left absent, and the counter reads that
+# as no base and leaves the file to its ceiling.
+#
+# Command substitution rather than `< <(...)` for the reason the file selection
+# above uses it: a failing `git diff` aborts the gate instead of quietly
+# reducing the ratchet to "nothing changed".
+extract_base() {
+    local rev="$1" dir="$2" changed f
+    changed="$(git diff --name-only --diff-filter=d "$rev" -- '*.md' ':!:**/vendor/**' ':!:vendor/**')"
+    [[ -n "$changed" ]] || return 0
+    while IFS= read -r f; do
+        [[ -n "$f" ]] || continue
+        [[ -f "$f" && ! -L "$f" ]] || continue
+        mkdir -p "$dir/$(dirname "$f")"
+        git show "$rev:$f" >"$dir/$f" 2>/dev/null || rm -f "$dir/$f"
+    done <<<"$changed"
+}
+
 # Built and exec'd rather than `go run` for the same reason check-doc-links.sh
 # is: the counter's exit status IS the gate's verdict, and `go run` prints its
 # own "exit status 1" line on top of the findings. devtools/ is outside the Go
@@ -107,6 +184,14 @@ write)
     if [[ -f "$BASELINE" ]]; then
         baseline_args=(-baseline "$BASELINE")
     fi
-    "$bin" "${baseline_args[@]}" "${scan_files[@]}"
+    base_args=()
+    base="$(resolve_base)"
+    if [[ -n "$base" ]]; then
+        base_dir="$(mktemp -d)"
+        trap 'rm -rf "$base_dir"' EXIT
+        extract_base "$base" "$base_dir"
+        base_args=(-base-dir "$base_dir")
+    fi
+    "$bin" "${baseline_args[@]}" "${base_args[@]}" "${scan_files[@]}"
     ;;
 esac

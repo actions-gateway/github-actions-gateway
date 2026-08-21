@@ -135,8 +135,21 @@ Neither half is optional, and neither substitutes for the other.
 `make em-dash-check` ([`scripts/docs/check-em-dash.sh`](../../scripts/docs/check-em-dash.sh)) counts the dashes and fails the build.
 It runs inside `make check` and as its own job in the `doc-links` CI workflow.
 
-**A per-file ceiling is a per-PR check, so two PRs can merge jointly red.** Each sits within its own ceiling on its own base, so per-PR CI never sees the merge result: measured twice on 2026-08-08, the second reaching `main` ([Q742](../queue/Q742.md)).
-Whether the merge queue runs this gate on the candidate at all is the first thing to establish, and the fix is to ratchet on the diff rather than the file total.
+**The diff ratchet.** A ceiling is a whole-file total, so a file sitting under its entry carries slack, and two PRs can each spend that same slack on the same base: per-PR CI sees two green diffs and `main` takes the sum.
+Measured twice on 2026-08-08, the second reaching `main` (Q742).
+So the gate measures the change as well as the total.
+Every Markdown file that differs from the `origin/main` merge-base is counted there too, and a file already above the rule may only lose em-dashes.
+A file inside the rule may still gain them, and a reduction is never a failure.
+
+The base is a merge-base rather than a parent commit, so it is the branch point on a PR, and inside the merge queue it is the tip the candidate was built on, which is the one view holding every queued change at once (Q743 put these gates on `merge_group` for that).
+The CI job takes `fetch-depth: 0` and fetches `refs/heads/main` to have that base.
+A clone without one degrades to the ceilings alone and says so on stderr.
+A caller that arranged a base sets `EM_DASH_REQUIRE_BASE=1` and the skip becomes a hard error instead, which is what the job does beside its fetch: a gate silently not checking what it claims is the defect this closes, so the run that is meant to ratchet must not report the ceilings as the whole verdict.
+That failure names itself a checkout fault and points at the job, because a reader who meets it in a red PR must not go looking at their own prose.
+Keying it on `CI` instead would read a variable the caller never set, and it fired inside the gate's own fixtures, whose repos have no `origin/main` by construction.
+
+One case stays outside the ratchet: a file *inside* the rule may legitimately gain, so two PRs can still push one across 3 per 1,000 between them, and only the run on the candidate sees that.
+`doc-links-gate` is not yet a required check ([Q943](../queue/Q943.md)), so its verdict there is visible rather than binding.
 
 **What it does not count.** A raw `grep -o '—' | wc -l` was the rule's only instrument before, and it counts four shapes where the dash is legitimate, which is most of why the rule was unmeasurable.
 The counter reads the parsed document instead ([`devtools/docs/emdash`](../../devtools/docs/emdash/), over the goldmark layer Q612 built), and skips:
@@ -487,7 +500,7 @@ What exists today, and what's proposed:
 | Per-change doc updates via the [doc-update-matrix](doc-update-matrix.md) | 1 | Convention, enforced in review (PR self-check). |
 | `make doc-links` — broken cross-file links + heading anchors, GitHub slugs (Q52) | 1, 2 | Wired (`make check`). The automated guard against link rot. |
 | `make docs-build` — the same links as the published site resolves them (Q560) | 1, 2 | Wired (`pages.yml` PR gate). Catches the site-only 404s `doc-links` cannot see. |
-| `make em-dash-check`: em-dash density, code and titles excluded (Q654) | 1 | Wired (`make check`). Ratchets against a per-file baseline while [Q650](../queue/Q650.md) clears the debt; see [Enforcing the em-dash rule](#enforcing-the-em-dash-rule). |
+| `make em-dash-check`: em-dash density, code and titles excluded (Q654) | 1 | Wired (`make check`). Ratchets on the diff, over a per-file baseline while [Q650](../queue/Q650.md) clears the debt; see [Enforcing the em-dash rule](#enforcing-the-em-dash-rule). |
 | Periodic docs-vs-code drift audit | 1 | **Proposed** — a recurring backstop for what the per-change rule misses. |
 | Reader questions (issues, support threads) logged as coverage gaps | 3 | **Proposed** — turns real confusion into Queue items. |
 

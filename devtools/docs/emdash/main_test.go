@@ -139,6 +139,84 @@ func TestWriteBaseline(t *testing.T) {
 	}
 }
 
+// The diff ratchet (Q742). A ceiling is a whole-file total, so it is slack
+// wherever the file sits under it, and two changes can each spend that slack on
+// the same base. Measuring the change instead: a file already over the rule may
+// only lose em-dashes, a file inside it may still gain, and a file with no copy
+// under -base-dir is left to its ceiling.
+//
+// The no-base row is the control on the first: that tree sits inside its
+// ceiling, so its red comes from the ratchet or from nothing. The last pair is
+// a file with no entry at all, where the density check reaches the same verdict
+// — they assert the ratchet does not suppress it.
+func TestDiffRatchet(t *testing.T) {
+	short := strings.Repeat("alpha beta gamma delta epsilon zeta eta theta ", 5)
+	long := strings.Repeat("alpha beta gamma delta. ", 200)
+	dashes := func(prose string, n int) string { return prose + strings.Repeat("x — y. ", n) + "\n" }
+
+	tests := []struct {
+		name       string
+		base, head string
+		ceiling    string
+		wantOver   int
+	}{
+		{"a gain inside a stale ceiling is caught", dashes(short, 5), dashes(short, 6), "9 ", 1},
+		{"control: no base copy leaves the same tree to its ceiling", "", dashes(short, 6), "9 ", 0},
+		{"a reduction is not a gain", dashes(short, 6), dashes(short, 5), "9 ", 0},
+		{"an unchanged file is not a gain", dashes(short, 6), dashes(short, 6), "9 ", 0},
+		{"a gain that stays inside the rule is allowed", dashes(long, 0), dashes(long, 2), "", 0},
+		{"a gain that crosses the rule is still caught", dashes(long, 0), dashes(long, 3), "", 1},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := t.TempDir()
+			doc := write(t, dir, "doc.md", tt.head)
+			baseDir := filepath.Join(dir, "base")
+			if tt.base != "" {
+				p := filepath.Join(baseDir, doc)
+				if err := os.MkdirAll(filepath.Dir(p), 0o700); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.WriteFile(p, []byte(tt.base), 0o600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			opts := options{limit: 3, baseDir: baseDir}
+			if tt.ceiling != "" {
+				opts.baseline = write(t, dir, "baseline.txt", tt.ceiling+doc+"\n")
+			}
+			if over := check(t, opts, doc); over != tt.wantOver {
+				t.Errorf("over = %d, want %d", over, tt.wantOver)
+			}
+		})
+	}
+}
+
+// The ratchet's finding names the base count, so a reader can tell it from the
+// ceiling's.
+func TestDiffRatchetFinding(t *testing.T) {
+	dir := t.TempDir()
+	body := strings.Repeat("alpha beta gamma delta epsilon zeta eta theta ", 5)
+	doc := write(t, dir, "doc.md", body+strings.Repeat("x — y. ", 6)+"\n")
+	baseDir := filepath.Join(dir, "base")
+	p := filepath.Join(baseDir, doc)
+	if err := os.MkdirAll(filepath.Dir(p), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(p, []byte(body+strings.Repeat("x — y. ", 5)+"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	bl := write(t, dir, "baseline.txt", "9 "+doc+"\n")
+
+	var out bytes.Buffer
+	if _, err := run(options{limit: 3, baseline: bl, baseDir: baseDir}, []string{doc}, &out, false); err != nil {
+		t.Fatal(err)
+	}
+	if want := "6 em-dashes, up from 5 at the base revision"; !strings.Contains(out.String(), want) {
+		t.Errorf("want a finding containing %q, got:\n%s", want, out.String())
+	}
+}
+
 func TestGitHubAnnotation(t *testing.T) {
 	dir := t.TempDir()
 	doc := write(t, dir, "doc.md", strings.Repeat("x — y. ", 6)+"\n")
