@@ -77,6 +77,12 @@ jobs:
               - 'cmd/agc/config/**'
               - 'cmd/gmc/config/**'
               - 'charts/**'
+              # The install doc's `mode=render` blocks name in-tree charts, and
+              # `make getting-started-render-check` (a step in `validate` below)
+              # renders them — so the doc and its parser are inputs to this gate
+              # as much as the charts are (Q958).
+              - 'docs/getting-started.md'
+              - 'scripts/docs/doc-blocks.sh'
               # The shipped runner template library, yamllint'd by this gate as
               # hand-authored YAML an operator applies directly (Q554).
               - 'deploy/templates/**'
@@ -178,6 +184,12 @@ jobs:
           mkdir -p "${KUBECONFORM_CACHE}"
           export PATH="${HOME}/.local/bin:${PATH}"  # pip --user yamllint
           make manifest-validate
+      # The helm half of the install-doc gate (Q958). It belongs in this job
+      # rather than a job of its own because it renders a chart, which is what
+      # this job already installs helm for; the offline half of the same gate
+      # runs in doc-links.yml, where `make check` can reach it tool-free.
+      - name: install-doc helm blocks render (make getting-started-render-check)
+        run: make getting-started-render-check
 
   # Parse the shipped PromQL — the rule file's expressions and both dashboards'
   # panel queries (Q910) — and reconcile the alert rules with the docs that

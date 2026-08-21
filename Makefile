@@ -148,6 +148,31 @@ queue-gates: ## Every gate a docs/queue/-only change can fail — the seconds-lo
 docs-gates: ## Every gate a prose change can fail — run it when the prose is written, not after the code gate
 	scripts/ci/run-parallel.sh $(foreach gate,$(DOCS_GATES),"$(gate):$(MAKE) $(gate)")
 
+# Executable-install-doc gate (Q958). docs/getting-started.md is the procedure an
+# operator follows verbatim and nothing ran a line of it: the other docs gates
+# hold it to link and prose rules, and the e2e suite builds its tenant fixtures
+# in Go, so a CRD field renamed under the page left it rendering perfectly and
+# failing on contact. Coverage is opt-in per fenced block, one `gag:verify` HTML
+# comment above the fence, and this target is the OFFLINE half: annotation
+# integrity plus the floor that stops a block quietly dropping out of coverage.
+# It needs no host tool beyond git, which is what lets it sit in CHECK_FAST_GATES
+# beside the other page-scoped gates. The blocks are actually EXECUTED against a
+# real apiserver by TestGettingStarted_Executable in the GMC envtest integration
+# suite, off the same parser — the venue costs seconds on a job already running
+# rather than a kind cluster of its own.
+.PHONY: getting-started-check
+getting-started-check: ## Fail if an install-doc block lost its gag:verify annotation, or the annotations are malformed
+	scripts/docs/doc-blocks.sh --check
+
+# The helm half of the same gate, split out because `make check` requires no
+# chart tooling and this is not where that changes: a `mode=render` block names a
+# chart in the checkout and this renders it, so a chart path the doc names that
+# no longer exists fails here rather than in an operator's terminal. Wired into
+# manifest-validate.yml, which already has helm.
+.PHONY: getting-started-render-check
+getting-started-render-check: ## Render the install doc's helm blocks against the in-tree charts (needs helm)
+	scripts/docs/doc-blocks.sh --check-render
+
 # Markdown link + anchor integrity gate (Q52). scripts/docs/check-doc-links.sh walks
 # every tracked, non-vendored Markdown file and fails on dead relative file
 # links or `#anchors` that match no GitHub heading slug / explicit <a id>. The
