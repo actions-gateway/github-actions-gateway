@@ -168,7 +168,8 @@ Install it once with `make hooks` (or `scripts/dev/setup.sh`); bypass a single c
 
 The em-dash part is there for *when* it fires rather than for coverage, since `make check` already runs it.
 It is the gate a docs change most often trips at the very end of a full run, after the heavy phases are paid for, and commit time is the first moment the answer is both cheap (410 ms warm) and unavoidable.
-It holds one branch to its own ceiling; two branches each sitting *at* a ceiling and merging over it is a property of the merge result, not of either commit, which is why the gate has to reach the merge queue as well (Q742, Q943).
+It holds one branch to its own ceiling, and a ceiling is a per-commit verdict: two branches each sitting *at* one and merging over it is a property of the merge result, not of either commit.
+The diff ratchet closed that (Q742) by failing the gain on the branch that made it, so the joint case no longer needs the queue to catch it; the queue's own run on the candidate stays advisory until `doc-links-gate` is required (Q943).
 
 #### Measuring the local gate: start from what is already recorded
 
