@@ -806,6 +806,13 @@ It fails when:
   A gate counts as wired when a workflow runs its own `make` target, or when every `scripts/` file its recipe runs is run by CI another way — through a different make target a workflow invokes (`manifest-validate` runs the three `chart-*-check` scripts) or invoked directly (`status-lint.yml` runs `lint-backlog.sh` without make).
   Workflow **comments are excluded** from that match: these files explain themselves in prose that names their own targets, so a gate merely mentioned would read as covered.
   A gate that is deliberately local-only declares `# ci-scope: none` with its reason directly above its `.PHONY`, the same shape the rule above uses;
+- a gate runs in CI but in no workflow the merge queue evaluates, so the candidate merge is never held to it (Q942).
+  The rule above stops at *some workflow runs it*, which a `pull_request`-only workflow satisfies while the queue builds and merges a commit that gate never saw.
+  Four gates sat that way when this was written, each alone in a workflow declaring no `merge_group`: `conflict-markers-check`, `metric-tiers-check`, `reason-tiers-check` and `endpoint-parity-check`.
+  The derivation is the one above, re-asked of the workflows whose `on:` block declares `merge_group`, with comments stripped for the same reason.
+  Only a gate that passed the rule above is asked: a gate no workflow runs at all has one defect, not two.
+  Whether the check a queue-evaluated workflow reports is *required*, and so blocking rather than advisory, is a repo-settings question this cannot read (Q943).
+  A gate deliberately kept off the candidate merge declares `# merge-queue-scope: none` with its reason directly above its `.PHONY`;
 - `SCRIPTS_TESTS` and the `scripts/**/*-test.sh` files on disk name different sets.
   A suite written but never listed is the failure worth catching: `make scripts-test` reports green having never run it, so the assertions it carries are disarmed while looking armed.
   The reverse, a listed suite with no file, fails the fan-out on a missing path.
@@ -2843,6 +2850,8 @@ Triggering on every PR and gating internally means the `gate` context always rep
 
 **The same pattern serves the merge queue's `merge_group` event.** The nine workflows behind required checks also trigger on `merge_group`, so their gate contexts report on the queue's candidate merge commit.
 `doc-links.yml` is the tenth: Q743 gave it the trigger and the `doc-links-gate` job, so the docs-content gates now run on the candidate merge.
+Q942 added the trigger to the four remaining workflows behind a `make check` gate — `conflict-markers.yml`, `metric-tiers.yml`, `reason-tiers.yml` and `endpoint-parity.yml` — bringing the count to 14 of 28, and `gate-lists-check` now fails a new gate that lands outside that set.
+Those four carry no `changes` job: `merge_group` takes no path filter, so each runs on every candidate rather than on the path subset its PR leg uses, which is the conservative side of a job that is a checkout plus one script.
 They do not yet **block** it — the queue arbitrates on the ruleset's required checks alone, and registering `doc-links-gate` is a repo-settings change that can only follow the workflow onto `main`, for the ordering reason [merge-queue.md](../plan/merge-queue.md) gives.
 Until it is registered a red docs gate on a candidate merge is visible and not binding.
 That is the queue analogue of the Pending-wedge above: a required check that never reports on the merge-group ref stalls the entry until `check_response_timeout_minutes` expires it.

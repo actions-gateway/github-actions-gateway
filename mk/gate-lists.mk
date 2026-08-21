@@ -41,6 +41,9 @@
 # `.github/workflows/` too: a gate listed here that no workflow runs is enforced
 # by `make check` alone, so it gates nothing on a PR. A gate that is
 # deliberately local-only says so with `# ci-scope: none` above its .PHONY.
+# Since Q942 the workflow that runs it must also declare `merge_group`, or the
+# queue's candidate merge — the commit that carries the merge result — is never
+# held to the gate; `# merge-queue-scope: none` is that rule's declaration.
 CHECK_FAST_GATES := roadmap-check \
                     plan-index-check no-plan-refs-check \
                     go-version-check license-header-check conflict-markers-check \

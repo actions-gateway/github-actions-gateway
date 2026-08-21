@@ -7,11 +7,11 @@
 # CHECK_HEAVY_GATES, a gate hand-wired into the fan-out line, a target declared
 # .PHONY twice, a QUEUE_GATES member outside CHECK_FAST_GATES, a fast gate that
 # selects a backlog item while QUEUE_GATES omits it, a gate whose file set is
-# neither derivable nor declared, a gate no workflow runs, a doc that
-# stopped pointing at the list targets, and a scripts/ suite on disk that
-# SCRIPTS_TESTS omits — the one whose symptom is a green `make scripts-test` that
-# never ran it. Reading the Makefile predicts these; only running the checker
-# measures them.
+# neither derivable nor declared, a gate no workflow runs, a gate whose only
+# workflow the merge queue never evaluates, a doc that stopped pointing at the
+# list targets, and a scripts/ suite on disk that SCRIPTS_TESTS omits — the one
+# whose symptom is a green `make scripts-test` that never ran it. Reading the
+# Makefile predicts these; only running the checker measures them.
 #
 # The DOCS_GATES pair (rules 9 and 10, Q920) is asserted in three directions
 # rather than two. A subset assertion is satisfied by a list that is empty or
@@ -122,6 +122,18 @@ assert_output() {
 	fi
 }
 
+# refute_output NAME PATTERN — the last checker run did NOT name PATTERN. Rule
+# 11 needs the negative half: a gate reported once and a gate reported twice for
+# one absence are both red, so only asserting the absence tells them apart.
+refute_output() {
+	if grep -q -- "$2" <<<"$LAST_OUT"; then
+		printf 'FAIL %-28s output names %s\n%s\n' "$1" "$2" "$LAST_OUT" >&2
+		fails=$((fails + 1))
+	else
+		printf 'ok   %-28s output does not name %s\n' "$1" "$2"
+	fi
+}
+
 MK="$FIXTURE_DIR/Makefile"
 write_makefile "$MK"
 # shellcheck disable=SC2016 # the suffix is make source text appended to the fan-out line
@@ -136,15 +148,28 @@ write_makefile "$FIXTURE_DIR/Makefile.docs-marked" '' '' 'true' \
 	'# docs-scope: none - beta reads no Markdown'
 write_makefile "$FIXTURE_DIR/Makefile.ci-marked" '' '' 'true' \
 	'# ci-scope: none - beta is a local-only convenience'
+write_makefile "$FIXTURE_DIR/Makefile.mq-marked" '' '' 'scripts/one/beta.sh' \
+	'# merge-queue-scope: none - beta is advisory on the candidate merge'
 
-# Workflow trees for rule 8. Every gate has to reach CI somehow, so the default
-# tree runs all three by name and the variants each remove one route.
-# write_workflow PATH BODY
+# Workflow trees for rules 8 and 11. Every gate has to reach CI somehow, so the
+# default tree runs all three by name and the variants each remove one route.
+# The default `on:` declares merge_group, so a case aimed at rule 8 cannot trip
+# rule 11 as well.
+# write_workflow PATH BODY [ON_BLOCK]
+MQ_ON='on:\n  pull_request:\n  merge_group:\n'
 write_workflow() {
 	local dir="$1"
 	mkdir -p "$dir"
-	printf 'jobs:\n  gate:\n    steps:\n%b' "$2" >"$dir/ci.yml"
+	printf '%bjobs:\n  gate:\n    steps:\n%b' "${3-$MQ_ON}" "$2" >"$dir/ci.yml"
 }
+
+# write_extra_workflow DIR NAME ON_BLOCK BODY — a second file in an existing
+# tree, so a case can split coverage between a workflow the merge queue
+# evaluates and one it does not.
+write_extra_workflow() {
+	printf '%bjobs:\n  gate:\n    steps:\n%b' "$3" "$4" >"$1/$2.yml"
+}
+
 WF_ALL="$FIXTURE_DIR/wf-all"
 write_workflow "$WF_ALL" '      - run: make alpha\n      - run: make beta\n      - run: make heavy-one\n'
 # beta reaches no workflow: the Q831 shape, green under every other rule.
@@ -161,6 +186,21 @@ write_workflow "$WF_SCRIPT" '      - run: scripts/one/beta.sh\n      - run: make
 # beta covered through another make target that runs its script.
 WF_WRAPPER="$FIXTURE_DIR/wf-wrapper"
 write_workflow "$WF_WRAPPER" '      - run: make wrapper\n      - run: make alpha\n      - run: make heavy-one\n'
+# beta covered only by a workflow the merge queue never evaluates: rule 8's
+# question is answered and the candidate merge is held to alpha and heavy-one
+# alone. Split across two files because that is the shape in the tree — four
+# gates each sat in a `pull_request`-only workflow of their own (Q942).
+WF_NO_MQ="$FIXTURE_DIR/wf-no-mq"
+write_workflow "$WF_NO_MQ" '      - run: make alpha\n      - run: make heavy-one\n'
+write_extra_workflow "$WF_NO_MQ" pr-only 'on:\n  pull_request:\n' '      - run: make beta\n'
+# The same tree with merge_group present only as a comment in that `on:` block.
+# These files explain their own triggers in prose, so a trigger the workflow
+# merely names must not count — the rule 8 shape one question over.
+WF_MQ_COMMENT="$FIXTURE_DIR/wf-mq-comment"
+write_workflow "$WF_MQ_COMMENT" '      - run: make alpha\n      - run: make heavy-one\n'
+write_extra_workflow "$WF_MQ_COMMENT" pr-only \
+	'on: # merge_group is not declared here (Q942)\n  pull_request:\n  # merge_group:\n' \
+	'      - run: make beta\n'
 
 # expect_check NAME WANT_RC ARGS... — a --check run over the healthy fixture,
 # with ARGS appended. The parser takes the last occurrence of an option, so a
@@ -295,6 +335,33 @@ assert_output ci-scope-underivable 'ci-scope'
 expect_check ci-scope-declared 0 --fast 'alpha beta' --heavy 'heavy-one' \
 	--makefile "$FIXTURE_DIR/Makefile.ci-marked" --workflows "$WF_NO_BETA" \
 	--queue 'alpha beta' --docs 'alpha beta'
+
+# Rule 11 (Q942): a gate whose only workflow the merge queue never evaluates.
+# Rule 8 reports it healthy — some workflow does run it — while the candidate
+# merge, the one commit that carries the merge result, is never held to it.
+# Four gates were in that state when this was written.
+expect_check gate-not-in-merge-queue 1 --fast 'alpha beta' --heavy 'heavy-one' \
+	--workflows "$WF_NO_MQ"
+assert_output gate-not-in-merge-queue beta
+assert_output gate-not-in-merge-queue 'merge queue'
+
+# merge_group named only in a comment inside the `on:` block is not a trigger.
+expect_check merge-group-comment-only 1 --fast 'alpha beta' --heavy 'heavy-one' \
+	--workflows "$WF_MQ_COMMENT"
+assert_output merge-group-comment-only beta
+assert_output merge-group-comment-only 'merge queue'
+
+# A gate deliberately kept off the candidate merge declares it, the shape rules
+# 7, 8 and 10 already use.
+expect_check merge-queue-scope-declared 0 --fast 'alpha beta' --heavy 'heavy-one' \
+	--workflows "$WF_NO_MQ" --makefile "$FIXTURE_DIR/Makefile.mq-marked"
+
+# A gate no workflow runs at all has one defect, not two. Both rules read the
+# same coverage question, so rule 11 has to stay quiet where rule 8 already
+# spoke — and only the absence distinguishes that from reporting it twice.
+expect_check gate-not-in-ci-reports-once 1 --fast 'alpha beta' --heavy 'heavy-one' \
+	--workflows "$WF_NO_BETA"
+refute_output gate-not-in-ci-reports-once 'merge queue'
 
 # The doc has to keep naming both targets rather than re-transcribing the lists.
 expect_check doc-lost-pointer 1 --fast 'alpha beta' --heavy 'heavy-one' --doc "$STALE_DOC"

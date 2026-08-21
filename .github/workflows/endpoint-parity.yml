@@ -29,6 +29,12 @@ on:
       - 'scripts/lib/**'
       - 'Makefile'
       - '.github/workflows/endpoint-parity.yml'
+  # Merge queue: also run on the candidate merge commit, which is the only one
+  # carrying the merge result. `merge_group` takes no path filter, so unlike the
+  # two lists either side this runs on every candidate; the job is a checkout
+  # plus one script, and a candidate the gate never sees is the defect this
+  # trigger closes (Q942).
+  merge_group:
   push:
     branches: [main]
     paths:
