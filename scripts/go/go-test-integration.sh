@@ -10,6 +10,11 @@
 #   <module-dir>  a go.work module holding an envtest suite: cmd/agc | cmd/gmc.
 #   Extra args are appended to `go test`; the package pattern defaults to
 #   ./internal/controller/integration/... when none is given.
+#   A `-run` filter that matches nothing FAILS the run: `go test -run` exits 0
+#   with "[no tests to run]", so a mistyped name otherwise reports a green suite
+#   — the knob's whole purpose inverted (Q680 on the unit tier, Q736 here). The
+#   wrapper forces the `-v -count=1` that guard reads, so a caller cannot
+#   disable it by omitting them.
 #
 # Env:
 #   KUBEBUILDER_ASSETS       required by envtest; the callers set it.
@@ -65,6 +70,22 @@ init_throttle
 
 args=("$@")
 ((${#args[@]} == 0)) && args=(./internal/controller/integration/...)
+
+# The `-run` filter, in both spellings `go test` accepts. -v emits the `=== RUN`
+# marker the zero-match guard at the bottom reads, and -count=1 keeps the run
+# uncached, since a replayed package prints none of them. Forced here rather
+# than at the call sites so the guard's precondition cannot drift away from it.
+run_filter=""
+for ((i = 0; i < ${#args[@]}; i++)); do
+	case "${args[i]}" in
+		-run) run_filter="${args[i + 1]-}" ;;
+		-run=*) run_filter="${args[i]#-run=}" ;;
+	esac
+done
+if [[ -n "$run_filter" ]]; then
+	[[ " ${args[*]} " == *" -count=1 "* ]] || args=(-count=1 "${args[@]}")
+	[[ " ${args[*]} " == *" -v "* ]] || args=(-v "${args[@]}")
+fi
 
 log="$REPO_ROOT/tmp/go-test-integration.$$.log"
 mkdir -p "$REPO_ROOT/tmp"
@@ -129,6 +150,16 @@ EOF
 	if [[ -n "${GITHUB_ACTIONS:-}" ]]; then
 		echo "::error title=integration suite over budget::the ${module} suite exceeded its ${INTEGRATION_TIMEOUT} -timeout budget. The test named in the panic is whichever one held the wall, not the cause (Q166/Q741)."
 	fi
+fi
+
+# The zero-match guard. `=== RUN` is the per-test marker -v emits, so its total
+# absence under a filter means the filter selected no test — which `go test`
+# alone reports as a pass. Only on an otherwise-green run: a suite that failed
+# has its own verdict, and relabelling it a missed filter sends the reader after
+# the wrong thing.
+if ((rc == 0)) && [[ -n "$run_filter" ]] && ! grep -q '^=== RUN ' "$log"; then
+	echo "==> RUN='$run_filter' matched no tests in $module — nothing ran" >&2
+	rc=1
 fi
 
 exit "$rc"

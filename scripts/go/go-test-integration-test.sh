@@ -1,14 +1,18 @@
 #!/usr/bin/env bash
 #
-# Assertions for the envtest suite budget wrapper (Q741).
+# Assertions for the envtest suite wrapper: the -timeout budget (Q741) and the
+# zero-match guard on the `-run` filter (Q736).
 #
-# The contract has two halves and both have to be pinned, because each fails
+# The budget has two halves and both have to be pinned, because each fails
 # silently in the shape of the other: a run that finishes inside its budget must
 # report the total and say nothing alarming, and a run that exceeds it must say
 # the SUITE ran out of time — naming the panic's test as a bystander, since that
 # misattribution is the whole reason the wrapper exists (Q166 spent two wrong
 # hypotheses on it). A banner that stopped firing and one that fires on every
 # green run are equally wrong, so every case asserts presence and absence.
+#
+# The guard is the same shape: it must fail a `-run` that selected nothing, and
+# stay silent on an unfiltered run, which prints no `=== RUN` either.
 #
 # `go test` is a PATH shim recording argv and replaying canned output at a
 # canned status: the wrapper's inputs are that output and that status, so no
@@ -43,6 +47,22 @@ running tests:
 
 goroutine 4711 [running]:
 FAIL	${pkg}	600.117s
+EOF
+
+# The RUN filter half. `matched` carries the `=== RUN` marker -v emits per test;
+# `filtered` is verbatim what `go test -run <nonsense> -v` prints — a warning, a
+# PASS, and an `ok` line carrying `[no tests to run]`, with no `=== RUN` anywhere
+# and exit 0.
+cat >"$WORK/out/matched" <<EOF
+=== RUN   TestSelected
+--- PASS: TestSelected (0.10s)
+PASS
+ok  	${pkg}	12.300s
+EOF
+cat >"$WORK/out/filtered" <<EOF
+testing: warning: no tests to run
+PASS
+ok  	${pkg}	0.312s [no tests to run]
 EOF
 
 cat >"$WORK/bin/go" <<EOF
@@ -187,8 +207,51 @@ run_gate fast 0 -- cmd/proxy
 expect_status unknown-module 2
 expect_argv unknown-module 'go test' no
 
+# --- the zero-match guard on `-run` (Q736) ------------------------------------
+# A filter that selects something: it reaches `go test`, and -v -count=1 ride
+# along so the run is uncached and its per-test markers are visible.
+run_gate matched 0 -- cmd/gmc -run TestSelected ./...
+expect_status run-matches 0
+expect_argv run-matches '-run TestSelected' yes
+expect_argv run-matches '-count=1' yes
+expect_argv run-matches ' -v ' yes
+expect_output run-matches stderr 'matched no tests' no
+
+# The defect Q736 names: `go test` reports success on a filter that matched
+# nothing, so the guard has to be the one to fail, and it has to say why.
+run_gate filtered 0 -- cmd/gmc -run TestNoSuchThing ./...
+expect_status run-matches-nothing 1
+expect_output run-matches-nothing stderr "RUN='TestNoSuchThing' matched no tests in cmd/gmc" yes
+
+# The other spelling `go test` accepts. A guard that only understood the
+# Makefiles' form would pass a direct invocation silently.
+run_gate filtered 0 -- cmd/agc -run=TestNoSuchThing ./...
+expect_status run-eq-matches-nothing 1
+expect_output run-eq-matches-nothing stderr 'matched no tests in cmd/agc' yes
+
+# The callers already pass -v -count=1; the wrapper must not double them.
+run_gate matched 0 -- cmd/gmc -run TestSelected -v -count=1 ./...
+expect_status run-flags-not-doubled 0
+expect_argv run-flags-not-doubled '-v -v' no
+expect_argv run-flags-not-doubled '-count=1 -count=1' no
+
+# Absence is half the contract. An unfiltered run prints no `=== RUN` either —
+# the tier is not verbose by default — so a guard that ignored the filter would
+# fail every ordinary run, and neither -v nor -count=1 may be forced onto one.
+run_gate fast 0
+expect_status no-run-filter 0
+expect_argv no-run-filter '-run' no
+expect_argv no-run-filter '-count=1' no
+expect_output no-run-filter stderr 'matched no tests' no
+
+# A filtered run whose tests actually failed keeps its own verdict: relabelling
+# a real failure as a missed filter sends the reader after the wrong thing.
+run_gate matched 1 -- cmd/gmc -run TestSelected ./...
+expect_status run-matches-and-fails 1
+expect_output run-matches-and-fails stderr 'matched no tests' no
+
 if ((fails > 0)); then
 	printf '\n%d assertion(s) failed\n' "$fails" >&2
 	exit 1
 fi
-printf '\nall integration suite budget assertions passed\n'
+printf '\nall integration suite budget and RUN= filter assertions passed\n'
