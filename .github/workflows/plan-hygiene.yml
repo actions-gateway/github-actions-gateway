@@ -14,8 +14,7 @@ on:
   push:
     branches: [main]
     paths:
-      - 'docs/plan/README.md'
-      - 'docs/plan/release-ladder.md'
+      - 'docs/plan/**'
       - 'docs/queue/**'
       - '**.go'
       - 'scripts/docs/check-plan-index.sh'
@@ -52,8 +51,7 @@ jobs:
         with:
           filters: |
             plan:
-              - 'docs/plan/README.md'
-              - 'docs/plan/release-ladder.md'
+              - 'docs/plan/**'
               - 'docs/queue/**'
               - '**.go'
               - 'scripts/docs/check-plan-index.sh'
