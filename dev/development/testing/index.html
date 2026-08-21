@@ -4662,6 +4662,13 @@ It fails when:</p>
   A gate counts as wired when a workflow runs its own <code>make</code> target, or when every <code>scripts/</code> file its recipe runs is run by CI another way — through a different make target a workflow invokes (<code>manifest-validate</code> runs the three <code>chart-*-check</code> scripts) or invoked directly (<code>status-lint.yml</code> runs <code>lint-backlog.sh</code> without make).
   Workflow <strong>comments are excluded</strong> from that match: these files explain themselves in prose that names their own targets, so a gate merely mentioned would read as covered.
   A gate that is deliberately local-only declares <code># ci-scope: none</code> with its reason directly above its <code>.PHONY</code>, the same shape the rule above uses;</li>
+<li>a gate runs in CI but in no workflow the merge queue evaluates, so the candidate merge is never held to it (Q942).
+  The rule above stops at <em>some workflow runs it</em>, which a <code>pull_request</code>-only workflow satisfies while the queue builds and merges a commit that gate never saw.
+  Four gates sat that way when this was written, each alone in a workflow declaring no <code>merge_group</code>: <code>conflict-markers-check</code>, <code>metric-tiers-check</code>, <code>reason-tiers-check</code> and <code>endpoint-parity-check</code>.
+  The derivation is the one above, re-asked of the workflows whose <code>on:</code> block declares <code>merge_group</code>, with comments stripped for the same reason.
+  Only a gate that passed the rule above is asked: a gate no workflow runs at all has one defect, not two.
+  Whether the check a queue-evaluated workflow reports is <em>required</em>, and so blocking rather than advisory, is a repo-settings question this cannot read (Q943).
+  A gate deliberately kept off the candidate merge declares <code># merge-queue-scope: none</code> with its reason directly above its <code>.PHONY</code>;</li>
 <li><code>SCRIPTS_TESTS</code> and the <code>scripts/**/*-test.sh</code> files on disk name different sets.
   A suite written but never listed is the failure worth catching: <code>make scripts-test</code> reports green having never run it, so the assertions it carries are disarmed while looking armed.
   The reverse, a listed suite with no file, fails the fan-out on a missing path.
@@ -6437,6 +6444,8 @@ Adding a job to one of these workflows means adding it to the gate's <code>needs
 Triggering on every PR and gating internally means the <code>gate</code> context always reports — green (all jobs skipped) on an unrelated PR, red when a real job fails — so it is safe to require.</p>
 <p><strong>The same pattern serves the merge queue's <code>merge_group</code> event.</strong> The nine workflows behind required checks also trigger on <code>merge_group</code>, so their gate contexts report on the queue's candidate merge commit.
 <code>doc-links.yml</code> is the tenth: Q743 gave it the trigger and the <code>doc-links-gate</code> job, so the docs-content gates now run on the candidate merge.
+Q942 added the trigger to the four remaining workflows behind a <code>make check</code> gate — <code>conflict-markers.yml</code>, <code>metric-tiers.yml</code>, <code>reason-tiers.yml</code> and <code>endpoint-parity.yml</code> — bringing the count to 14 of 28, and <code>gate-lists-check</code> now fails a new gate that lands outside that set.
+Those four carry no <code>changes</code> job: <code>merge_group</code> takes no path filter, so each runs on every candidate rather than on the path subset its PR leg uses, which is the conservative side of a job that is a checkout plus one script.
 They do not yet <strong>block</strong> it — the queue arbitrates on the ruleset's required checks alone, and registering <code>doc-links-gate</code> is a repo-settings change that can only follow the workflow onto <code>main</code>, for the ordering reason <a href="../../plan/merge-queue/">merge-queue.md</a> gives.
 Until it is registered a red docs gate on a candidate merge is visible and not binding.
 That is the queue analogue of the Pending-wedge above: a required check that never reports on the merge-group ref stalls the entry until <code>check_response_timeout_minutes</code> expires it.
