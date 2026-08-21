@@ -68,7 +68,7 @@ One spelling across the tiers, but two filters underneath:
 |---|---|---|---|
 | `make test`, `make test-race` | `go test -run` | the Go test-function name | **fails** |
 | `make e2e` | `ginkgo --focus` | the spec's full text | **fails** |
-| `make test-integration`, `make -C cmd/agc\|cmd/gmc test-integration` | `go test -run` | the Go test-function name | passes (Q736) |
+| `make test-integration`, `make -C cmd/agc\|cmd/gmc test-integration` | `go test -run` | the Go test-function name | **fails** |
 
 Both filters are regexes, so `RUN='TestMerge_'` selects a family and `RUN='provisions a worker pod'` selects one spec by its description.
 On `make e2e`, `RUN` composes with [`SUITE`](#end-to-end-tests): `SUITE` picks a labelled subset, `RUN` picks specs inside it.
@@ -80,7 +80,7 @@ make e2e SUITE=single-node RUN='E2E_GMC_ProxyServiceCreated'
 
 **A filter that matches nothing is a failure, not a pass.** Left alone, both tools report success on a miss: `go test -run` prints `[no tests to run]` and exits 0, and ginkgo exits 0 having run 0 specs.
 A mistyped name then reads exactly like the test passing, which is the knob's whole purpose inverted (Q680).
-`make test` therefore fails when no test ran in **any** module, and `make e2e` passes `--fail-on-empty`, which also catches a `SUITE` that selects nothing:
+`make test` therefore fails when no test ran in **any** module, the two `test-integration` targets fail when none ran in theirs (Q736), and `make e2e` passes `--fail-on-empty`, which also catches a `SUITE` that selects nothing:
 
 ```
 ==> RUN='TestNoSuchThingAnywhere' matched no tests in any module — nothing ran
@@ -923,7 +923,8 @@ Measured 2026-08-18 (Q902) on `cmd/gmc/internal/controller/integration`, whose `
 A warm run, then a second reporting `(cached)`; renaming the `spec.runnerGroup` property in that out-of-module CRD and running again still reported `(cached)` and exited 0, while `-count=1` over the same tree failed the test.
 So the tier caches, and an out-of-module CRD change replayed a stale green: the same defect as the unit tier, reached through the same fix.
 
-The exposed invocation is a direct `go test -tags integration`, or a bare [`go-test-integration.sh`](../../scripts/go/go-test-integration.sh), which deliberately does not force `-count=1` so an unchanged tree replays in seconds.
+The exposed invocation is a direct `go test -tags integration`, or a bare [`go-test-integration.sh`](../../scripts/go/go-test-integration.sh), which deliberately does not force `-count=1` on an unfiltered run so an unchanged tree replays in seconds.
+A `-run` filter does force it, because a replayed package prints none of the markers the [zero-match guard](#narrowing-a-run-with-run) reads.
 CI is not exposed: [`integration-test.yml`](../../.github/workflows/integration-test.yml) passes `-count=1`.
 Nor, in practice, is `make test-integration`, because its `manifests`/`generate` prerequisite rewrites an in-module CRD file byte-identically on every invocation and the recorded key is the `stat`.
 Measured on the same package: `(cached)`, then one `make -C cmd/gmc generate` against an otherwise unchanged tree, then a full re-run.
@@ -2147,9 +2148,16 @@ It is passed straight to `go test -run`, so the full regexp syntax works:
 make -C cmd/gmc test-integration RUN='TestCRD_ActionsGateway_LogLevel_DefaultsToInfo'
 ```
 
-The target adds `-v -count=1` alongside `-run`: a targeted run wants the test's output, and a cached `PASS` prints none.
-A name that matches nothing reports `no tests to run` and **passes**.
-Unlike `make test` and `make e2e`, these two targets have no zero-match guard yet (Q736), and neither falls back to running the module.
+[`go-test-integration.sh`](../../scripts/go/go-test-integration.sh) adds `-v -count=1` alongside `-run`: a targeted run wants the test's output, and a cached `PASS` prints none.
+Both ride on the wrapper rather than on the two Makefiles, because the same `-v` is what the zero-match guard reads.
+**A name that matches nothing fails the run** (Q736): `go test -run` prints `[no tests to run]` and exits 0, so the guard fails a filtered run whose output carries no `=== RUN` marker — the per-test line `-v` emits.
+
+```
+==> RUN='TestNoSuchThingAnywhere' matched no tests in cmd/gmc — nothing ran
+```
+
+Measured 2026-08-21 on `make -C cmd/gmc test-integration`: a nonsense `RUN=` exited 0 with every package reporting `[no tests to run]`, and exits 1 now.
+Neither target falls back to running the module.
 See [Narrowing a run with `RUN=`](#narrowing-a-run-with-run) for the cross-tier picture.
 
 Prefer `RUN=` over exporting `KUBEBUILDER_ASSETS` yourself.

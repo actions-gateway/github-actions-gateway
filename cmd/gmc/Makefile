@@ -59,11 +59,12 @@ test: deepcopy ## Run unit tests (no envtest required)
 # go-test-integration.sh owns -race, the `integration` tag and the -timeout
 # budget, so the budget is one number for both modules and both CI steps, and a
 # breach of it says the suite ran out of time rather than blaming whichever test
-# held the wall (Q741).
+# held the wall (Q741). It owns the RUN contract too: the -v -count=1 a filtered
+# run needs, and the failure when the filter selects nothing (Q736).
 .PHONY: test-integration
 test-integration: generate $(SETUP_ENVTEST) ## Run envtest-backed integration tests; RUN='TestName' narrows to matching tests
 	KUBEBUILDER_ASSETS="$(shell "$(SETUP_ENVTEST)" use $(ENVTEST_K8S_VERSION) --bin-dir "$(LOCALBIN)" -p path)" \
-		$(REPO_ROOT)/scripts/go/go-test-integration.sh cmd/gmc $(if $(RUN),-run '$(RUN)' -v -count=1) ./...
+		$(REPO_ROOT)/scripts/go/go-test-integration.sh cmd/gmc $(if $(RUN),-run '$(RUN)') ./...
 
 .PHONY: manifests
 manifests: $(CONTROLLER_GEN) ## Regenerate CRD/RBAC manifests from kubebuilder markers
