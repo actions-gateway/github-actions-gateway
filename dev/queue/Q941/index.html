@@ -23,7 +23,7 @@
     
     
       
-        <title>session-worker's contract is silent where four workers needed it - GitHub Actions Gateway</title>
+        <title>session-worker's contract has seven gaps workers hit independently - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#session-workers-contract-is-silent-where-four-workers-needed-it" class="md-skip">
+        <a href="#session-workers-contract-has-seven-gaps-workers-hit-independently" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              session-worker's contract is silent where four workers needed it
+              session-worker's contract has seven gaps workers hit independently
             
           </span>
         </div>
@@ -2567,10 +2567,15 @@
   
 
 
-<h1 id="session-workers-contract-is-silent-where-four-workers-needed-it"><code>session-worker</code>'s contract is silent where four workers needed it<a class="headerlink" href="#session-workers-contract-is-silent-where-four-workers-needed-it" title="Permanent link">&para;</a></h1>
+<h1 id="session-workers-contract-has-seven-gaps-workers-hit-independently"><code>session-worker</code>'s contract has seven gaps workers hit independently<a class="headerlink" href="#session-workers-contract-has-seven-gaps-workers-hit-independently" title="Permanent link">&para;</a></h1>
 <p>Reported by workers during the 2026-08-18 batch, each quoting the copy loaded into its own context.
-Four gaps: §4 says a per-item store commits the row with the code, contradicting CLAUDE.md's split-when-code-is-touched (Q889) — four workers hit this one independently and all followed the repo; §6 covers the post-<code>ready</code> window only "with no dispatcher", so a dispatcher awaiting a wake from an already-exited watcher is unhandled; nothing covers closing a second pre-existing row naming the same defect; nothing covers changing a shared script's output format, which no path-based sweep can see and the consuming side cannot detect either.
+Four gaps: §4 says a per-item store commits the row with the code, contradicting CLAUDE.md's split-when-code-is-touched (Q889), and four workers hit this one independently and all followed the repo; §6 covers the post-<code>ready</code> window only "with no dispatcher", so a dispatcher awaiting a wake from an already-exited watcher is unhandled; nothing covers closing a second pre-existing row naming the same defect; nothing covers changing a shared script's output format, which no path-based sweep can see and the consuming side cannot detect either.
 A fifth surfaced later: nothing says to check a pinned dependency's changelog when a row's asserted cause could have been retired by a version bump the repo already took, which is what settled Q835.
+Two more surfaced in the 2026-08-19 release-harness batch, and the first gap took its fifth and sixth sightings there.
+Sixth gap: nothing says whether a worker may add repo-wide verification machinery for an in-scope change.
+Q899's worker added <code>publish-digest-check</code> because <code>publish.yml</code> runs only on a <code>v*</code> tag, so no PR exercises it and a bad edit surfaces during a release; the dispatcher accepted it on the <code>check-cosign-pin.sh</code>/Q903 precedent.
+Seventh: nothing covers a change whose verification needs the network and cannot be gated locally.
+Q927's worker had to verify cosign's release signature live, and filed <a href="../Q944/">Q944</a> for the tooling gap it found doing so.
 The skill lives in <code>karlkfi/claude-skills</code>, so this needs a human to file upstream.
 The repo-side halves are documented in <a href="../../development/parallel-dispatch/">parallel-dispatch.md</a>.</p>
 
