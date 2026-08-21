@@ -2876,7 +2876,7 @@ The answer is <strong>not binary</strong> — it depends entirely on the concurr
 </tr>
 </tbody>
 </table>
-<p><strong>The counter-case is strong and must be stated plainly:</strong> classic is a <em>working</em> system for the individual and low/moderate-concurrency segment — which, per the go-to-market ICP (<a href="../go-to-market/">go-to-market.md</a> §3: platform teams on shared multi-tenant Kubernetes, compliance/egress-driven self-hosting), is a large and arguably <em>primary</em> real workload.
+<p><strong>The counter-case is strong and must be stated plainly:</strong> classic is a <em>working</em> system for the individual and low/moderate-concurrency segment — which, per the go-to-market ICP (<a href="../go-to-market/#3-demand-evidence-the-receipts">go-to-market.md § 3</a>: platform teams on shared multi-tenant Kubernetes, compliance/egress-driven self-hosting), is a large and arguably <em>primary</em> real workload.
 Writing the whole thing off because it fails at reliable 7-way-concurrent-matrix throughput conflates "fails the hardest CI-matrix stress test" with "does not work."</p>
 <p><strong>But the ceiling is real and it is not a tuning artifact.</strong> Re-route #8 is the decisive datum: on a pristine namespace with every AGC-side seam fixed, a ~7-job burst still stranded 5 jobs forever.
 This is not "needs more fixes" — it is a wall (§4).</p>
@@ -2893,7 +2893,7 @@ This is not "needs more fixes" — it is a wall (§4).</p>
 </ul>
 <h3 id="32-performance--density--the-story-cuts-both-ways-and-a-common-misread">3.2 Performance / density — the story cuts both ways, and a common misread<a class="headerlink" href="#32-performance--density--the-story-cuts-both-ways-and-a-common-misread" title="Permanent link">&para;</a></h3>
 <ul>
-<li><strong>At rest, classic's density was a genuine GAG differentiator:</strong> a ~12 KiB listener goroutine in one shared pod vs ARC's always-on listener pod (+ cluster IP) per scale set (<a href="../../design/appendix-d-alternatives-considered/">appendix-d-alternatives-considered.md</a> §D.3; the earlier "~256 MiB .NET / ~4,000×" framing was retired by #781 — ARC's scale-set listener is Go, and the ratio's denominator was never measured).</li>
+<li><strong>At rest, classic's density was a genuine GAG differentiator:</strong> a ~12 KiB listener goroutine in one shared pod vs ARC's always-on listener pod (+ cluster IP) per scale set (<a href="../../design/appendix-d-alternatives-considered/#d3-actions-runner-controller-arc">appendix-d-alternatives-considered.md § D.3</a>; the earlier "~256 MiB .NET / ~4,000×" framing was retired by #781 — ARC's scale-set listener is Go, and the ratio's denominator was never measured).</li>
 <li><strong>Correcting a tempting misread: scale-set does <em>not</em> serialize concurrency.</strong> It is easy to conclude "one session per group ⇒ one job at a time."
   That is wrong.
   The scale-set listener <strong>batch-acquires</strong> and provisions <strong>N workers in parallel</strong>; concurrency is governed by <code>maxWorkers</code>/<code>priorityTiers</code> advertised as <code>X-ScaleSetMaxCapacity</code>, fully decoupled from the single session (<a href="../archive/q264-scale-set-protocol-phases/#23-batch-acquisition--the-call-that-kills-the-fan-out">Q264 §2.3</a>, live-confirmed §2b-1).
@@ -2981,7 +2981,7 @@ And stay honest that GAG's weaker flank versus ARC is <em>maturity</em> (pre-1.0
 <h3 id="63-adoption-reality--the-fact-that-most-changes-the-risk-math">6.3 Adoption reality — the fact that most changes the risk math<a class="headerlink" href="#63-adoption-reality--the-fact-that-most-changes-the-risk-math" title="Permanent link">&para;</a></h3>
 <p>The go-to-market posture is <strong>pre-adoption dogfooding</strong>, and this is decision-load-bearing:</p>
 <ul>
-<li>A <code>v1.0.0</code> tag exists and <code>v1.1.0-rc.*</code> are cut, <strong>but</strong> the public site is <strong>not launched</strong>, seed channels are <strong>not started</strong> ("gated on site + 1.0 install path"), and there are <strong>no external deployers yet</strong> — the goal is still "first handful" (<a href="../go-to-market/">go-to-market.md</a> §8 Phase 0–1).
+<li>A <code>v1.0.0</code> tag exists and <code>v1.1.0-rc.*</code> are cut, <strong>but</strong> the public site is <strong>not launched</strong>, seed channels are <strong>not started</strong> ("gated on site + 1.0 install path"), and there are <strong>no external deployers yet</strong> — the goal is still "first handful" (<a href="../go-to-market/#8-launch-sequence-phased">go-to-market.md § 8</a> Phase 0–1).
   GAG is Apache-2.0, <strong>non-commercial</strong>, deliberately donation-ready, revenue explicitly out of scope.</li>
 <li><strong>Implication (this is the load-bearing turn):</strong> the compat cost of retiring v1 is ~zero — no external user base holds classic or v1alpha1 in production, and none is expected to; new users should hop straight onto v2.
   That removes the "protect the v1 fallback" rationale <strong>entirely</strong> and <em>inverts</em> the risk.

@@ -2736,7 +2736,7 @@ The defect is a kube-apiserver bug and is still unfixed upstream, but the produc
 <p>while the param ConfigMap sits at exactly the name and namespace the binding references.
 Because <code>parameterNotFoundAction: Deny</code> resolves params <em>before</em> any per-object matching, this denies <strong>every</strong> matched write, class-naming or not — a total outage of the product's CRs, cluster-wide.</p>
 <p>Observed on Kubernetes 1.35.5 and 1.36.1.
-Prior sighting: <a href="../q414-dind-tenant-fixture/"><code>q414-dind-tenant-fixture.md</code></a> § Local-loop notes.</p>
+Prior sighting: <a href="../q414-dind-tenant-fixture/#local-loop-notes-not-product-defects"><code>q414-dind-tenant-fixture.md</code> § Local-loop notes</a>.</p>
 <h2 id="the-trigger">The trigger<a class="headerlink" href="#the-trigger" title="Permanent link">&para;</a></h2>
 <p><strong>The param informer for a <code>paramKind</code> dies permanently, in that kube-apiserver process, the moment the set of <em>bindings</em> whose policy names that <code>paramKind</code> becomes empty for at least one policy-refresh tick (default 1s).</strong></p>
 <p>For us that set has exactly one member, so <code>helm uninstall</code> — which deletes the binding — is the trigger.

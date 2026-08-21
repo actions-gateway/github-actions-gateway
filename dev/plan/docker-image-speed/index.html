@@ -3239,7 +3239,7 @@ Go's content-addressed build cache then reuses compiled <code>.a</code> files fo
 <ol>
 <li>Pinned <code># syntax=docker/dockerfile:1.7</code> at the top of each Dockerfile.</li>
 <li>Added <code>--mount=type=cache,target=/root/.cache/go-build</code> to the <code>go build</code> step in <code>cmd/gmc/Dockerfile</code>, <code>cmd/agc/Dockerfile</code>, <code>cmd/proxy/Dockerfile</code>, and <code>test/fakegithub/Dockerfile</code>.
-   (Those six per-image Dockerfiles were later consolidated into the root <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/Dockerfile">Dockerfile</a>, and this cache mount replaced by a cacheable <code>deps</code> layer — see <a href="../e2e-ci-speed-round-2/">e2e-ci-speed-round-2.md</a> §1–3.)</li>
+   (Those six per-image Dockerfiles were later consolidated into the root <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/Dockerfile">Dockerfile</a>, and this cache mount replaced by a cacheable <code>deps</code> layer — see <a href="../e2e-ci-speed-round-2/#13-one-dockerfile-one-shared-dependency-compile-">e2e-ci-speed-round-2.md § 1–3</a>.)</li>
 </ol>
 <h3 id="notes">Notes<a class="headerlink" href="#notes" title="Permanent link">&para;</a></h3>
 <ul>

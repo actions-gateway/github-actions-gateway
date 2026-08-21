@@ -2829,7 +2829,7 @@ The main genericizing decision is what the shipped <code>workerImage</code> refe
 <li><code>privileged-dind</code> is framed everywhere as the fallback ("almost never the approach you actually need"), never the starting point.</li>
 </ul>
 <h3 id="fold-in-stale-enforcement-claim-in-05-securitymd">Fold in: stale enforcement claim in 05-security.md<a class="headerlink" href="#fold-in-stale-enforcement-claim-in-05-securitymd" title="Permanent link">&para;</a></h3>
-<p><a href="../../../design/05-security/">05-security.md</a> § "Pairing <code>privileged</code> with a sandbox runtime" still says the platform "cannot enforce" the pairing from the GMC.
+<p><a href="../../../design/05-security/#pairing-privileged-with-a-sandbox-runtime">05-security.md § Pairing <code>privileged</code> with a sandbox runtime</a> still says the platform "cannot enforce" the pairing from the GMC.
 That predates the Q172 ladder, and a cluster-default <code>ClusterRunnerTemplate</code> <em>is</em> platform enforcement now.
 Fix alongside the library docs.</p>
 <h2 id="what-implementation-changed">What implementation changed<a class="headerlink" href="#what-implementation-changed" title="Permanent link">&para;</a></h2>
@@ -2871,7 +2871,7 @@ It also makes the e2e overlays' <code>workerImage</code> patch mandatory rather 
 <h2 id="non-goals">Non-goals<a class="headerlink" href="#non-goals" title="Permanent link">&para;</a></h2>
 <ul>
 <li>Installing runtime handlers or <code>RuntimeClass</code> objects.
-  The controllers deliberately never do this (<a href="../../../operations/kata-dind-workloads/">kata-dind-workloads.md</a> § "What GAG does and does not manage"); node pools, kata-deploy, and RuntimeClass registration remain cluster-admin prerequisites.</li>
+  The controllers deliberately never do this (<a href="../../../operations/kata-dind-workloads/#cluster-setup--kata-runtime-and-runtimeclass">kata-dind-workloads.md § Cluster setup — Kata runtime and RuntimeClass</a>); node pools, kata-deploy, and RuntimeClass registration remain cluster-admin prerequisites.</li>
 <li>An isolation-profile enum modeled on <code>sizing.profile</code>.
   A profile can inject one field, but the Kata DinD shape is a whole pod spec (template-shaped, not transform-shaped).</li>
 <li>Workload-named template aliases.</li>

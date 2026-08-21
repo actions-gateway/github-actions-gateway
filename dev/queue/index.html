@@ -2668,6 +2668,14 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>Measured 2026-08-18: <code>c99129aa</code> passed <code>lint</code> in run 32145897225 and failed in 32172968731, <code>nolintlint</code> calling two staticcheck directives …</td>
 </tr>
 <tr>
+<td><a href="Q951/">Q951</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/ci/check-tools-test.sh"><code>version-cmds-answer</code> flakes on kubectl, and discards the evidence</a></td>
+<td><code>flake</code> <code>ci</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>Measured 2026-08-21 on an unmodified tree: <code>make check</code> failed <code>check-tools-test</code> with <code>no version from: kubectl, checked=5</code>, and the same …</td>
+</tr>
+<tr>
 <td><a href="Q820/">Q820</a></td>
 <td><a href="../plan/q820-scripts-test-temp-file-flake/"><code>git-merge-plan-index-test</code> dies on a temp-file error under the fan-out</a></td>
 <td><code>flake</code> <code>ci</code></td>
@@ -2978,14 +2986,6 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>🔲</td>
 <td>S</td>
 <td>Searches the backlog only, so "known and accepted" is invisible: Q692's session nearly filed the merge-driver gap this page already states.</td>
-</tr>
-<tr>
-<td><a href="Q686/">Q686</a></td>
-<td><a href="../development/documentation-standards/#conventions"><code>check-doc-links</code> is blind to a section named in prose</a></td>
-<td><code>docs</code> <code>ci</code> <code>retro</code></td>
-<td>🔲</td>
-<td>S</td>
-<td><code>[file.md](../file.md) § Heading</code> renders like the anchored form but nothing checks the section name: verbatim when written, silently wrong …</td>
 </tr>
 <tr>
 <td><a href="Q740/">Q740</a></td>
@@ -3330,14 +3330,6 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>🔲</td>
 <td>L</td>
 <td>Auditable, keyed to the tag, and supersedes Q879.</td>
-</tr>
-<tr>
-<td><a href="Q881/">Q881</a></td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/plan-hygiene.yml"><code>plan-hygiene</code> skips a PR that only adds a plan doc</a></td>
-<td><code>ci</code> <code>debt</code> <code>retro</code></td>
-<td>🔲</td>
-<td>S</td>
-<td>Its <code>plan</code> filter matches <code>docs/plan/README.md</code>, <code>docs/queue/**</code> and <code>**.go</code>, not <code>docs/plan/*.md</code>, so a PR adding only a plan doc skips …</td>
 </tr>
 <tr>
 <td><a href="Q883/">Q883</a></td>
@@ -3698,6 +3690,22 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>🔲</td>
 <td>S</td>
 <td>Measured 2026-08-18: <code>make docs-gates</code> runs neither <code>queue-lint</code> nor <code>queue-rules-check</code> (zero "queue" in its output), so a session that …</td>
+</tr>
+<tr>
+<td><a href="Q947/">Q947</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/status-lint.yml"><code>status-lint</code>'s filter omits the two wrapper scripts its jobs run</a></td>
+<td><code>ci</code> <code>debt</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>Both lists name <code>queue.py</code> and <code>check-queue-rules.py</code> but not <code>scripts/docs/lint-queue.sh</code> or <code>scripts/docs/check-queue-rules.sh</code>, which …</td>
+</tr>
+<tr>
+<td><a href="Q948/">Q948</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/ci/check-path-filters.sh">Nothing asserts a path filter covers the inputs its gated jobs read</a></td>
+<td><code>ci</code> <code>debt</code></td>
+<td>🔲</td>
+<td>M</td>
+<td>Every assertion runs pattern → repo: the registry is complete, workspace filters cover <code>go.work</code>, patterns pin live paths, duplicated lists …</td>
 </tr>
 <tr>
 <td><a href="Q797/">Q797</a></td>

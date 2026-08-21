@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q881/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q947/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>plan-hygiene skips a PR that only adds a plan doc - GitHub Actions Gateway</title>
+        <title>status-lint's filter omits the two wrapper scripts its jobs run - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#plan-hygiene-skips-a-pr-that-only-adds-a-plan-doc" class="md-skip">
+        <a href="#status-lints-filter-omits-the-two-wrapper-scripts-its-jobs-run" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              plan-hygiene skips a PR that only adds a plan doc
+              status-lint's filter omits the two wrapper scripts its jobs run
             
           </span>
         </div>
@@ -2567,8 +2567,10 @@
   
 
 
-<h1 id="plan-hygiene-skips-a-pr-that-only-adds-a-plan-doc"><code>plan-hygiene</code> skips a PR that only adds a plan doc<a class="headerlink" href="#plan-hygiene-skips-a-pr-that-only-adds-a-plan-doc" title="Permanent link">&para;</a></h1>
-<p>Its <code>plan</code> filter matches <code>docs/plan/README.md</code>, <code>docs/queue/**</code> and <code>**.go</code>, not <code>docs/plan/*.md</code>, so a PR adding only a plan doc skips the job that catches its missing row.</p>
+<h1 id="status-lints-filter-omits-the-two-wrapper-scripts-its-jobs-run"><code>status-lint</code>'s filter omits the two wrapper scripts its jobs run<a class="headerlink" href="#status-lints-filter-omits-the-two-wrapper-scripts-its-jobs-run" title="Permanent link">&para;</a></h1>
+<p>Both lists name <code>queue.py</code> and <code>check-queue-rules.py</code> but not <code>scripts/docs/lint-queue.sh</code> or <code>scripts/docs/check-queue-rules.sh</code>, which are what the jobs actually <code>run:</code>, so a change confined to a wrapper skips the workflow that gates it.
+<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/ci/check-path-filters.sh">check-path-filters.sh</a> cannot see it: assertion 3 reads pattern → disk, never disk → pattern.
+Measured 2026-08-21 by scanning every workflow's <code>run:</code> script paths against its own filter — the only two real hits, the other two being comment mentions of <code>check-path-filters.sh</code> in the e2e lanes.</p>
 
 
 

@@ -3513,7 +3513,7 @@ What is under test is the kubelet's behaviour on a preemption, which is worker-i
 <li>Matching the <code>DisruptionTarget</code> <strong>type</strong> alone would have been wrong: the eviction API stamps the same condition with reason <code>EvictionByEvictionAPI</code>, so a type-only match would have silently recovered the drain path and pre-empted Q459's open decision.
      The <code>reason</code> is the whole discriminator.</li>
 </ul>
-<p><strong>What this cost the published claim, and how it was repaid.</strong> The oversubscription argument in <a href="../../design/01-executive-summary/">01-executive-summary.md</a> §"safe oversubscription" and in the README's problem statement rests on displaced work coming back by itself.
+<p><strong>What this cost the published claim, and how it was repaid.</strong> The oversubscription argument in <a href="../../design/01-executive-summary/#the-problem-scheduling-fairness-in-a-shared-namespace">01-executive-summary.md § The Problem: Scheduling Fairness in a Shared Namespace</a> and in the README's problem statement rests on displaced work coming back by itself.
 The <em>packing</em> half was real and unaffected — guaranteed tiers do preempt their way in, which is what removes the need for reserved idle headroom.
 The <em>safety</em> half, as published, was not: a preempted job was left needing a manual re-run, exactly like a drained one.
 Both documents were corrected to say so on the day of the measurement.</p>

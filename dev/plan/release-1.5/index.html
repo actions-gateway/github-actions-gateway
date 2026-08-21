@@ -2860,7 +2860,7 @@ It is now keyed on the gateway's GitHub binding and enforced cluster-wide from b
 <p><code>waitForCompletion</code> and the pod waiter ran only inside <code>provision()</code> (<code>cmd/agc/internal/provisioner/provisioner.go:557</code> and <code>:583</code>).
 <code>ProvisionScaleSetWorker</code> registered neither, and <code>v2beta1</code> is ScaleSet-only, so the tier every new tenant runs emitted both series empty.</p>
 <p>The blast radius was entirely downstream: two Appendix A SLOs, a severity-critical alert, four recording rules, both shipped Grafana dashboards, the runbook, and the cost-attribution guide all read blank.
-The failure mode is worst-case for a pre-adoption project: the first external operator to apply the shipped <code>PrometheusRule</code> sees a product that looks broken, and <a href="../go-to-market/">go-to-market</a> §8 records that first impressions from cold traffic are one-shot.</p>
+The failure mode is worst-case for a pre-adoption project: the first external operator to apply the shipped <code>PrometheusRule</code> sees a product that looks broken, and <a href="../go-to-market/#8-launch-sequence-phased">go-to-market § 8</a> records that first impressions from cold traffic are one-shot.</p>
 <p><strong>How it was fixed.</strong> Both observations moved onto the shared pod informer, which sees a scale-set worker pod and a classic one identically.
 The latency observation had been gated behind a registered waiter, the thing a fire-and-forget provision never creates, so the tier seam was the gate itself rather than a missing call site.</p>
 <p>That made the span a decision rather than a detail, since the two tiers had no common "acquisition" moment to measure from.

@@ -3728,7 +3728,7 @@ Status legend: ✅ done, ⚠️ partial (residual accepted), ❌ open, ⓘ infor
   Anyone with <code>get pod</code> in the tenant namespace — or any sidecar, debug exec, or crash dump that captures <code>os.Environ()</code> — sees the private key.
   Not cross-tenant, but a much wider blast radius within the tenant than the design claims.</li>
 <li><strong>Description:</strong> <code>buildAGCDeployment</code> exposes the GitHub App private key via <code>env: GITHUB_APP_PRIVATE_KEY</code> sourced from a <code>secretKeyRef</code>.
-  The documented mitigation in <a href="../../design/05-security/">docs/design/05-security.md</a> §5.2 ("AGC Token Compromise") is <em>"The AGC never saves plaintext keys to disk.
+  The documented mitigation in <a href="../../design/05-security/#52-agc--proxy-level-threats-namespace-scoped">docs/design/05-security.md § 5.2</a> ("AGC Token Compromise") is <em>"The AGC never saves plaintext keys to disk.
   GitHub App private keys are mounted as read-only volumes with restrictive file permissions (0400)."</em> That is <em>not</em> what the code does.
   Env vars are visible to:</li>
 <li><code>kubectl describe pod</code> (any user with <code>get pod</code> on the namespace).</li>
@@ -4062,7 +4062,7 @@ Status legend: ✅ done, ⚠️ partial (residual accepted), ❌ open, ⓘ infor
 <li><strong>Category:</strong> OWASP A04:2025 — Insecure Design (TOCTOU)</li>
 <li><strong>Description:</strong> The check <code>count &gt;= *rg.Spec.MaxWorkers</code> is followed by <code>Client.Create(ctx, pod)</code>.
   Between the two, the cache may be stale by multiple seconds; the AGC can exceed <code>MaxWorkers</code> under burst arrivals.
-  Not a direct security boundary, but <code>MaxWorkers</code> is part of the "Denial of Service via Resource Exhaustion" mitigation in <a href="../../design/05-security/">docs/design/05-security.md</a> §5.2.
+  Not a direct security boundary, but <code>MaxWorkers</code> is part of the "Denial of Service via Resource Exhaustion" mitigation in <a href="../../design/05-security/#52-agc--proxy-level-threats-namespace-scoped">docs/design/05-security.md § 5.2</a>.
   A tenant that intentionally crafts a flurry of jobs gets more workers than the contract allows; downstream the <code>ResourceQuota</code> still caps actual resources, so the real-world impact is bounded.</li>
 <li><strong>Mitigation:</strong> Use a per-RunnerGroup in-process counter incremented before <code>Create</code> and decremented on pod completion / Create failure.
   Alternatively, rely solely on <code>ResourceQuota</code> and document that <code>MaxWorkers</code> is a soft ceiling.</li>

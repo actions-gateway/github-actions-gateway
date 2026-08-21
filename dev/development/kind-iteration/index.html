@@ -2822,7 +2822,7 @@
 
 <h1 id="agent-reference-kind-cluster-iteration">Agent reference: kind cluster iteration<a class="headerlink" href="#agent-reference-kind-cluster-iteration" title="Permanent link">&para;</a></h1>
 <p>Reference for iterating against a real kind cluster — when unit tests and envtest can't observe the behavior you need (real CNI, kube-proxy DNAT, kubelet image pulls, TLS-over-tunnel, etc.).
-The full kind e2e test design lives in <a href="../../design/07-test-plan/"><code>docs/design/07-test-plan.md</code></a> §7.3; this doc covers the operational reality of iterating fast against the cluster the suite stands up.</p>
+The full kind e2e test design lives in <a href="../../design/07-test-plan/#73-end-to-end-tests"><code>docs/design/07-test-plan.md</code> § 7.3</a>; this doc covers the operational reality of iterating fast against the cluster the suite stands up.</p>
 <h2 id="standing-up-the-cluster">Standing up the cluster<a class="headerlink" href="#standing-up-the-cluster" title="Permanent link">&para;</a></h2>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>make<span class="w"> </span>e2e-cluster<span class="w">          </span><span class="c1"># 3-node kind cluster + local OCI registry (idempotent)</span>
 <a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>make<span class="w"> </span>apply-cert-manager<span class="w">   </span><span class="c1"># cert-manager (the GMC webhook depends on it)</span>

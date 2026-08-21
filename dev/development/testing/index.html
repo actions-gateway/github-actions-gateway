@@ -4822,7 +4822,7 @@ A foreground poll pins the session doing nothing until it times out or is killed
 In a two-week sample this pattern alone produced ~130 blocked poll attempts.</p>
 <p>Use the asynchronous mechanisms instead:</p>
 <ul>
-<li><strong>PRs and CI</strong> — the Auto-fix/PR-monitor path watches CI and pushes fixes on its own (see <a href="../parallel-dispatch/">parallel-dispatch.md</a> § self-healing); let it.
+<li><strong>PRs and CI</strong> — the Auto-fix/PR-monitor path watches CI and pushes fixes on its own (see <a href="../parallel-dispatch/#the-worker-contract-self-healing">parallel-dispatch.md § The worker contract (self-healing)</a>); let it.
   If you need the current state right now, take <strong>one</strong> non-blocking snapshot (<code>gh pr checks &lt;n&gt;</code> without <code>--watch</code>, <code>gh run view &lt;id&gt;</code>) and move on — schedule a later re-check, don't spin.</li>
 <li><strong>Long-running local work</strong> — launch it as a background task (a background Bash run, or a background agent) and let the completion notification wake you, rather than blocking the foreground on it.</li>
 </ul>

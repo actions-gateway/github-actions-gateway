@@ -2789,7 +2789,7 @@ Bypass the hook for a single commit with <code>git commit --no-verify</code>.</p
 </tr>
 <tr>
 <td>End-to-end tests</td>
-<td><code>kind</code> cluster, <code>e2e</code> build tag, cluster-only/fake-GitHub/live-GitHub (see <a href="../../design/07-test-plan/">07-test-plan.md</a> §7.3)</td>
+<td><code>kind</code> cluster, <code>e2e</code> build tag, cluster-only/fake-GitHub/live-GitHub (see <a href="../../design/07-test-plan/#73-end-to-end-tests">07-test-plan.md § 7.3</a>)</td>
 <td><code>make e2e</code>; <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/e2e-test.yml"><code>e2e-test.yml</code></a></td>
 </tr>
 <tr>
@@ -2814,7 +2814,7 @@ Bypass the hook for a single commit with <code>git commit --no-verify</code>.</p
 </tr>
 </tbody>
 </table>
-<p>Real-CNI / kube-proxy / kubelet / TLS-over-tunnel behaviours are only observable at the e2e tier — see <a href="../testing/">testing.md</a> and <a href="../../design/07-test-plan/">07-test-plan.md</a> §7.3 for why unit and envtest tiers cannot prove them.</p>
+<p>Real-CNI / kube-proxy / kubelet / TLS-over-tunnel behaviours are only observable at the e2e tier — see <a href="../testing/">testing.md</a> and <a href="../../design/07-test-plan/#73-end-to-end-tests">07-test-plan.md § 7.3</a> for why unit and envtest tiers cannot prove them.</p>
 <h2 id="compress-success-expand-failure">Compress success, expand failure<a class="headerlink" href="#compress-success-expand-failure" title="Permanent link">&para;</a></h2>
 <p>Test output is non-verbose by default.
 <code>go test</code> without <code>-v</code> prints one <code>ok &lt;pkg&gt;</code> line per passing package and the <strong>full</strong> output of any package that fails — so passing runs stay quiet and failures keep all their detail.

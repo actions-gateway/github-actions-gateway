@@ -4336,7 +4336,7 @@ Those are the province of the <a href="https://www.cisecurity.org/benchmark/kube
   If your node-local-dns cache listens on a non-default address <em>outside</em> <code>169.254.0.0/16</code>, set <code>spec.proxy.managedNetworkPolicy: false</code> and supply your own DNS egress rule, or add an additive NetworkPolicy — see <a href="#tenant-egress-posture--deliberate-widening">Tenant egress posture &amp; deliberate widening</a>.</li>
 <li><strong>Findings that don't apply</strong> (managed control plane hides the file, a check for a component you don't run) — record the justification alongside the cluster's onboarding ticket.</li>
 </ul>
-<p>The goal is <strong>zero critical (<code>[FAIL]</code>) findings that this stack depends on</strong> before the first production tenant (per <a href="../../plan/milestone-5/">milestone-5.md</a> §3).</p>
+<p>The goal is <strong>zero critical (<code>[FAIL]</code>) findings that this stack depends on</strong> before the first production tenant (per <a href="../../plan/milestone-5/#3-posture-audit-kube-bench--polaris">milestone-5.md § 3</a>).</p>
 <h2 id="job-intake-bind-every-tenant-to-a-github-runner-group">Job intake: bind every tenant to a GitHub runner group<a class="headerlink" href="#job-intake-bind-every-tenant-to-a-github-runner-group" title="Permanent link">&para;</a></h2>
 <p>Everything else on this page bounds what a tenant's workers may reach.
 This bounds who may reach <em>them</em>, and it is the one control that lives at GitHub, outside anything the cluster can enforce.</p>

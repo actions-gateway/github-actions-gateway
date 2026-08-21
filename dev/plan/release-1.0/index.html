@@ -2855,7 +2855,7 @@ Most are cheap to wire; where a threshold applies, the deliverable is as much th
 Each leaves a documented security or release-integrity claim false if shipped silently — the exact failure the 1.0 bar exists to prevent — so "resolved" means a real fix <em>or</em> an honest docs caveat, not omission.</p>
 <ul>
 <li>~~<strong>Unrestricted port-53 egress</strong> (<a href="../../queue/">Q105</a>): <code>builder.go</code> emits a port-53 egress rule with no <code>To</code> peer, so workers/proxy can resolve via any DNS server — a DNS-exfil channel that undercuts the per-tenant egress-IP isolation claim.~~ <strong>Resolved:</strong> all three per-tenant NetworkPolicies (workload, AGC, proxy) now confine port-53 egress to the cluster DNS service (<code>k8s-app: kube-dns</code> in <code>kube-system</code>); guarded by the authoring test <code>TestBuildNetworkPolicy_DNSEgressRestrictedToKubeDNS</code>.
-  See <a href="../../design/05-security/">05-security.md</a> § DNS Exfiltration Side-Channel.</li>
+  See <a href="../../design/05-security/#dns-exfiltration-side-channel-containment">05-security.md § DNS exfiltration side-channel containment</a>.</li>
 <li><strong>Release-integrity siblings of <a href="../../queue/">Q123</a>/<a href="../../queue/">Q124</a></strong> — vendored deps are never hash-verified against <code>go.sum</code> (<a href="../../queue/">Q126</a>), and the cosign binary in the signing pipeline is downloaded without a checksum (the cosign item in <a href="../../queue/">Q127</a>).
   Both admit an unverified artifact into a signed release.
   Fix (re-vendor + <code>git diff --exit-code</code> CI gate; checksum-pin cosign as the <code>KIND_BINARY_SHA256</code> pattern does) or caveat.</li>

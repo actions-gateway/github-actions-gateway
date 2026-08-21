@@ -2760,7 +2760,7 @@ The destination the policy evaluator sees has already been DNAT-rewritten from <
 </code></pre></div>
 <p>Priorities <code>srcnat - 5</code> (= 95) and <code>dstnat + 5</code> (= -95) place both hooks <strong>after</strong> the corresponding NAT chains.
 Packets enrolled in <code>@podips-v4</code> (any pod that is the subject of at least one NetworkPolicy) get NFQUEUE'd to userspace queue 101, where the kube-network-policies controller decides accept/drop based on the packet's <em>current</em> (post-DNAT) 5-tuple.</p>
-<p>This is the same class of failure as the <code>ipBlock: &lt;ClusterIP&gt;/32</code> rule PR #59 fixed for the proxy and which is already documented in <a href="../kind-iteration/"><code>kind-iteration.md</code></a> § "NetworkPolicy enforces after kube-proxy DNAT".
+<p>This is the same class of failure as the <code>ipBlock: &lt;ClusterIP&gt;/32</code> rule PR #59 fixed for the proxy and which is already documented in <a href="../kind-iteration/#networkpolicy-enforces-after-kube-proxy-dnat"><code>kind-iteration.md</code> § NetworkPolicy enforces after kube-proxy DNAT</a>.
 The proxy case fixed the <strong>IP</strong> mismatch by switching to a PodSelector; the apiserver case has the analogous <strong>port</strong> mismatch and the fix is symmetric.</p>
 <h3 id="why-does-this-happen-in-kind-but-presumably-not-in-prod">Why does this happen in kind but presumably not in prod?<a class="headerlink" href="#why-does-this-happen-in-kind-but-presumably-not-in-prod" title="Permanent link">&para;</a></h3>
 <p>In kind, the <code>kubernetes</code> Service points to the apiserver running on the control-plane node at port <code>6443</code>:</p>

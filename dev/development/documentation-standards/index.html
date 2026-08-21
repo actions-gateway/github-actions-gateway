@@ -3221,7 +3221,7 @@ If the check does not fire on real cases, demote this to an observation rather t
 </tr>
 <tr>
 <td><strong>Anchor a cross-file section reference</strong></td>
-<td>Cite another file's section with an anchor, never as prose beside a bare file link. Write <code>[testing.md § A negative assertion must be able to fail for only one reason](testing.md#a-negative-assertion-must-be-able-to-fail-for-only-one-reason)</code>, not <code>[testing.md](testing.md) § A negative assertion...</code>. Both render alike and only the first is checked, for the reason the row above gives, so the prose form is verbatim the day it is written and silently wrong after any rename. Measured 2026-08-05: 11 such references in the tree against 1,051 anchored links; <a href="../../queue/Q686/">Q686</a> gates it.</td>
+<td>Cite another file's section with an anchor, never as prose beside a bare file link. Write <code>[testing.md § A negative assertion must be able to fail for only one reason](testing.md#a-negative-assertion-must-be-able-to-fail-for-only-one-reason)</code>, not <code>[testing.md](testing.md) § A negative assertion...</code>. Both render alike and only the first is checked, for the reason the row above gives, so the prose form is verbatim the day it is written and silently wrong after any rename. <code>make doc-links</code> now rejects it (Q686). Converting the 37 the tree carried found 5 whose section had moved or been renamed out of the target, one of them into a file that had been split in two: dead pointers no gate could see. A citable place that publishes no heading slug takes an explicit <code>&lt;a id&gt;</code>, which the anchor check resolves.</td>
 </tr>
 <tr>
 <td><strong>No links to <code>CLAUDE.md</code></strong></td>
@@ -3349,7 +3349,7 @@ Keep them current:</p>
 <li><strong>A backlog change gets its own commit when the change also touches code.</strong> The item is the <em>why</em> and the code the <em>what</em>; a reviewer should not have to separate them.
   Queue Notes have a hard 250-char cap (lint-enforced).
   Details: <a href="../maintaining-backlog/">maintaining-backlog.md</a>.</li>
-<li><strong>Links and anchors are checked, twice.</strong> <code>make doc-links</code> (in <code>make check</code>) fails on broken cross-file links and heading anchors as <strong>github.com</strong> resolves them; <code>make docs-build</code> re-checks them as the <strong>published site</strong> does.
+<li><strong>Links and anchors are checked, twice.</strong> <code>make doc-links</code> (in <code>make check</code>) fails on broken cross-file links and heading anchors as <strong>github.com</strong> resolves them, and on a section cited as prose beside a bare file link, which no anchor check can reach; <code>make docs-build</code> re-checks them as the <strong>published site</strong> does.
   The two sluggers disagree, so a link needs both verdicts — write headings and links that survive each per <a href="../website/#the-two-link-gates">website.md § The two link gates</a>.
   External URLs are out of scope for both — eyeball those.</li>
 </ul>
@@ -3381,7 +3381,7 @@ What exists today, and what's proposed:</p>
 <td>Convention, enforced in review (PR self-check).</td>
 </tr>
 <tr>
-<td><code>make doc-links</code> — broken cross-file links + heading anchors, GitHub slugs (Q52)</td>
+<td><code>make doc-links</code> — broken cross-file links + heading anchors, GitHub slugs (Q52); unanchored section references (Q686)</td>
 <td>1, 2</td>
 <td>Wired (<code>make check</code>). The automated guard against link rot.</td>
 </tr>

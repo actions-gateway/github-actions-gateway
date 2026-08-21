@@ -2673,7 +2673,7 @@ Queue Notes stay short; the evidence and fixes live here.</p>
 The controllers configure <code>zap</code> (JSON) via <code>ctrl.SetLogger</code>, but the <code>slog</code> and <code>zap</code> worlds are never bridged, so a single process emits <strong>mixed zap-JSON + stdlib-text on one stream</strong>.
 A JSON log pipeline cannot parse the majority of an AGC pod's lines.
 This is why F5's "structured JSON" promise (PR #151) is only half-effective — it is true only for the minority of lines that go through the manager's <code>ctrl.Log</code>.</p>
-<p><strong>Why it gates 1.0.</strong> <a href="../../release-1.0/">release-1.0.md</a> §D says the slog+zap mismatch is "recommended to resolve, gating only if it breaks log ingestion."
+<p><strong>Why it gates 1.0.</strong> <a href="../../release-1.0/#d-production-operability--gating--recommended">release-1.0.md § D</a> says the slog+zap mismatch is "recommended to resolve, gating only if it breaks log ingestion."
 It <em>does</em> break ingestion: the busiest AGC code paths emit unparseable text.</p>
 <p><strong>Evidence (verified):</strong></p>
 <ul>
@@ -2702,7 +2702,7 @@ It <em>does</em> break ingestion: the busiest AGC code paths emit unparseable te
 It strips GitHub token formats (<code>gh[pousr]_</code>, <code>github_pat_</code>), JWTs, the JSON values of sensitive keys (<code>access_token</code>, <code>refresh_token</code>, <code>token</code>, <code>encoded_jit_config</code>, <code>client_secret</code>, <code>private_key</code>, <code>password</code>, <code>secret</code>), and long opaque base64 blobs; redaction runs before capping so a secret straddling the cap boundary cannot survive in the tail.
 Applied at all sites: <code>runner_auth.go</code> (:248/:259), <code>github_registrar.go</code> (generate-jitconfig + deregister), <code>broker/client.go</code> (via <code>capBody</code>), and <code>cmd/probe/main.go</code>.
 <code>broker</code> reuses the helper rather than duplicating redaction (the <code>broker → githubapp</code> module edge already existed via <code>replace</code>; both are GitHub-domain libs and there is no standalone broker binary).
-Note added to <a href="../../../design/05-security/">05-security.md</a> §5.2.</p>
+Note added to <a href="../../../design/05-security/#52-agc--proxy-level-threats-namespace-scoped">05-security.md § 5.2</a>.</p>
 <p>No <strong>direct</strong> secret logging exists anywhere — tokens, keys, and PEM are never logged, and that posture must be preserved.
 But several error paths interpolate the upstream HTTP <strong>response body</strong> into an error that callers log.
 Two are <strong>uncapped</strong> and can carry credential material:</p>
@@ -2745,7 +2745,7 @@ Tracked under Q89.</p>
 <hr />
 <h2 id="theme-e--debugging-blind-spots-q88">Theme E — Debugging blind spots (Q88)<a class="headerlink" href="#theme-e--debugging-blind-spots-q88" title="Permanent link">&para;</a></h2>
 <p>✅ <strong>Resolved</strong> — debug diagnostics added to every previously-silent stuck/failed path.
-Operator-facing grep anchors documented in <a href="../../../operations/observability/">observability.md</a> § Debug diagnostics.</p>
+Operator-facing grep anchors documented in <a href="../../../operations/observability-logging/#debug-diagnostics-for-otherwise-silent-paths">observability-logging.md § Debug diagnostics for otherwise-silent paths</a>.</p>
 <ul>
 <li><code>provisioner/podwaiter.go</code> had <strong>zero logs</strong> — a session stuck waiting for pod completion (missed informer event, pod never terminal) produced no output; this is the single most likely "stuck session" cause.
   Debug logs now cover register/resolve/cancel in <code>WaitForCompletion</code> (<code>pod already terminal at registration</code>, <code>registered for pod completion</code>, <code>pod completion observed</code>, <code>pod wait cancelled before completion</code>), each carrying <code>namespace</code>/<code>name</code>.</li>

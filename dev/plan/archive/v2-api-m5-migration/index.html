@@ -2631,8 +2631,8 @@
 
 
 <h1 id="q165--v2-api-m5-migration-tool--v1v2-cutover-implementation-plan">Q165 — v2 API M5: migration tool + v1/v2 cutover (implementation plan)<a class="headerlink" href="#q165--v2-api-m5-migration-tool--v1v2-cutover-implementation-plan" title="Permanent link">&para;</a></h1>
-<p>Closes the v2 API plan (<a href="../../v2-api/">v2-api.md</a> § M5).
-Design source of truth: <a href="../../../design/appendix-h-v2-api-decomposition/">appendix-h</a> §H.11 (fan-out), §H.12 (dual-read window), §H.17 (migration invariants).</p>
+<p>Closes the v2 API plan (<a href="../../v2-api/#m5--migration-tool--v1v2-cutover">v2-api.md § M5</a>).
+Design source of truth: <a href="../../../design/appendix-h-v2-api-decomposition/#h11-migration-v2-tool-assisted">appendix-h § H.11</a> (fan-out), <a href="../../../design/appendix-h-v2-api-decomposition/#h12-folding-in-the-grandfathered-label-value-alignment-q147">§H.12</a> (dual-read window), <a href="../../../design/appendix-h-v2-api-decomposition/#h17-migration-correctness--the-fan-outs-untested-invariants">§H.17</a> (migration invariants).</p>
 <p><strong>Goal.</strong> Ship a one-shot tool that fans a <code>v1alpha1</code> tenant out to the <code>v2alpha1</code> object set, complete the v1/v2 dual-read window, and document the cutover — without weakening any security property or stranding any resource.</p>
 <h2 id="part-1--fan-out-migration-tool">Part 1 — fan-out migration tool<a class="headerlink" href="#part-1--fan-out-migration-tool" title="Permanent link">&para;</a></h2>
 <p>Core library <code>cmd/gmc/internal/migrate/</code> (pure, golden-tested) + thin CLI <code>cmd/gmc/migrate/</code> (<code>gag-migrate</code>).

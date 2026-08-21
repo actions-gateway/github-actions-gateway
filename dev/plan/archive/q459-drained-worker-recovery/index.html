@@ -2983,7 +2983,7 @@ The 5m02s to conclusion is GitHub's own cancellation grace lapsing, not the runn
 <ul>
 <li><strong>A cancelled job keeps burning a worker</strong> for the remainder of its steps, up to <code>maxWorkerLifetime</code>.
   Cancelling a runaway job does not reclaim its capacity.</li>
-<li><strong><a href="../../../design/04-operational-flows/">04-operational-flows.md</a> §4.2 step 7 overstates the Q385 relay.</strong> It lists "cancelled run" among the terminations the wrapper's SIGTERM relay reaches.
+<li><strong><a href="../../../design/04-operational-flows/#42-job-execution-flow-agc">04-operational-flows.md § 4.2</a> step 7 overstates the Q385 relay.</strong> It lists "cancelled run" among the terminations the wrapper's SIGTERM relay reaches.
   The relay does reach the engine whenever the <em>pod</em> is terminated — but on the cancel path nothing terminates the pod, so the relay never runs.
   <a href="../../../queue/Q501/">Q501</a> carries the gap; the doc is corrected as part of this change.</li>
 </ul>
@@ -3010,7 +3010,7 @@ A lingering worker from an earlier spec is no longer ambiguous, so no waiting fo
 <div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>ValidatingAdmissionPolicy 'gmc-priorityclass-allowlist-guard' … denied request:
 <a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>failed to configure binding: no params found for policy binding with `Deny` parameterNotFoundAction
 </code></pre></div>
-<p>with <code>gmc-priorityclass-allowlist</code> present in <code>gmc-system</code> and the binding pointing exactly at it — the shape <a href="../q444-vap-param-resolution/">q444-vap-param-resolution.md</a> § Established by measurement records as findings 1 and 2.
+<p>with <code>gmc-priorityclass-allowlist</code> present in <code>gmc-system</code> and the binding pointing exactly at it — the shape <a href="../q444-vap-param-resolution/#measurements">q444-vap-param-resolution.md § Measurements</a> records as findings 1 and 2.
 Nothing here adds to that investigation: it has since established the trigger — deleting the <code>ValidatingAdmissionPolicyBinding</code> empties the paramKind's binding set and the apiserver never restarts the shared informer — which is consistent with what happened here, since the suite's <code>helm uninstall</code> teardown deletes exactly that object.</p>
 <p>Recovery was confirmed on 2026-07-28: <code>crictl stop</code> on the kube-apiserver container cleared it, verified by the container ID changing and its <code>ATTEMPT</code> going 0 → 1.
 A <code>kubectl delete pod</code> of the static-pod <em>mirror</em> does <strong>not</strong> restart it and must not be mistaken for a restart — that plan records a conclusion drawn from exactly that non-restart and later withdrawn.</p>

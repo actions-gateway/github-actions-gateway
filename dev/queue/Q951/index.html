@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q686/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q951/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>check-doc-links is blind to a section named in prose - GitHub Actions Gateway</title>
+        <title>version-cmds-answer flakes on kubectl, and discards the evidence - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#check-doc-links-is-blind-to-a-section-named-in-prose" class="md-skip">
+        <a href="#version-cmds-answer-flakes-on-kubectl-and-discards-the-evidence" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              check-doc-links is blind to a section named in prose
+              version-cmds-answer flakes on kubectl, and discards the evidence
             
           </span>
         </div>
@@ -2567,9 +2567,11 @@
   
 
 
-<h1 id="check-doc-links-is-blind-to-a-section-named-in-prose"><code>check-doc-links</code> is blind to a section named in prose<a class="headerlink" href="#check-doc-links-is-blind-to-a-section-named-in-prose" title="Permanent link">&para;</a></h1>
-<p><code>[file.md](../file.md) § Heading</code> renders like the anchored form but nothing checks the section name: verbatim when written, silently wrong after a rename.
-39 in the tree vs 1,530 anchored, re-measured 2026-08-16.</p>
+<h1 id="version-cmds-answer-flakes-on-kubectl-and-discards-the-evidence"><code>version-cmds-answer</code> flakes on kubectl, and discards the evidence<a class="headerlink" href="#version-cmds-answer-flakes-on-kubectl-and-discards-the-evidence" title="Permanent link">&para;</a></h1>
+<p>Measured 2026-08-21 on an unmodified tree: <code>make check</code> failed <code>check-tools-test</code> with <code>no version from: kubectl, checked=5</code>, and the same test run alone passed <code>5 probed</code> immediately after.
+By hand the registry's own probe — <code>kubectl version --client</code> piped to the assertion's <code>grep -qE '[0-9]+(\.[0-9]+)+'</code> — exits 0 and prints <code>v1.36.3</code>, in and out of the sandbox.
+The only difference is that the failing run sat inside <code>run-parallel</code>'s 43-way fan-out, so saturation is the hypothesis and it is <strong>unverified</strong>.
+Whatever the cause, the assertion sends the probe's stderr to <code>/dev/null</code> and reports only the tool's name, so a failure carries nothing to diagnose it with; keeping stderr is worth doing even if the retry question stays open.</p>
 
 
 
