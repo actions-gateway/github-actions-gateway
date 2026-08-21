@@ -12,9 +12,15 @@
 #   ./internal/controller/integration/... when none is given.
 #   A `-run` filter that matches nothing FAILS the run: `go test -run` exits 0
 #   with "[no tests to run]", so a mistyped name otherwise reports a green suite
-#   — the knob's whole purpose inverted (Q680 on the unit tier, Q736 here). The
-#   wrapper forces the `-v -count=1` that guard reads, so a caller cannot
-#   disable it by omitting them.
+#   — the knob's whole purpose inverted (Q680 on the unit tier, Q736 here).
+#   WHEN A `-run` FILTER IS GIVEN the wrapper forces the `-v -count=1` that
+#   guard reads, so a caller cannot disable it by omitting them. Without one
+#   there is no filter to mismatch and neither is added, so a full-suite run is
+#   NEITHER verbose NOR uncached. Two consequences worth knowing before you read
+#   its log: `go test` prints no per-test lines, so a package reporting `ok`
+#   cannot tell you whether any particular test ran (grep for the name and you
+#   get nothing, from a run where it passed); and a cached package replays.
+#   For "did this test run", pass a `-run` filter, or `-v` explicitly.
 #
 # Env:
 #   KUBEBUILDER_ASSETS       required by envtest; the callers set it.
