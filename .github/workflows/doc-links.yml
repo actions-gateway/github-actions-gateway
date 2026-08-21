@@ -124,7 +124,8 @@ jobs:
   # fetch-depth: 0 and the explicit main fetch are what the Q742 diff ratchet
   # measures against. A default shallow checkout has no merge-base, and the gate
   # fails open to the ceilings there — a silent skip, which is the shape of the
-  # defect the ratchet exists to close, so under CI the gate refuses instead.
+  # defect the ratchet exists to close, so this job opts into the hard error via
+  # EM_DASH_REQUIRE_BASE below.
   # The fetch is written out rather than left to fetch-depth: 0 because the ref
   # this workflow is handed under merge_group is the queue's own branch, and
   # refs/heads/main is not implied by fetching that branch's history.
@@ -141,6 +142,11 @@ jobs:
         run: git fetch --no-tags origin +refs/heads/main:refs/remotes/origin/main
       - name: em-dash density (make em-dash-check)
         run: make em-dash-check
+        env:
+          # Turn the ratchet's fail-open into a hard error here, where the step
+          # above has provided the base. Keeps a broken fetch loud instead of
+          # silently reducing this job to the ceilings.
+          EM_DASH_REQUIRE_BASE: '1'
 
   # Enforce the admonition-wall and duplicate-stat-tile rules (Q831 wired it;
   # the gate itself predates that). Same file walk and the same reasoning as

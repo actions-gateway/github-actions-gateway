@@ -23,7 +23,8 @@
 # `origin/main` merge-base, which under the merge queue resolves to the tip the
 # candidate commit was built on — the one view holding every queued change at
 # once. No base resolves in a shallow clone, and there the gate degrades to the
-# ceilings alone rather than blocking every PR.
+# ceilings alone rather than blocking every PR; a caller that arranged a base and
+# wants the skip to be an error instead sets EM_DASH_REQUIRE_BASE=1.
 #
 # Usage:
 #   scripts/docs/check-em-dash.sh [--write] [--report]
@@ -110,23 +111,29 @@ fi
 # committed yet — it is what holds an uncommitted edit to the ratchet. A clean
 # tree there simply has nothing to extract.
 #
-# Fails open locally, the way scripts/go/go-lint.sh scopes itself: a clone with
-# no merge-base leaves the ceilings enforcing the rule, because a gate that went
-# red on every PR whenever its inputs were missing would be turned off.
+# Fails open by default, the way scripts/go/go-lint.sh scopes itself: a clone
+# with no merge-base leaves the ceilings enforcing the rule, because a gate that
+# went red whenever its inputs were missing would be turned off.
 #
-# Under CI it refuses instead. The whole of Q742 is a gate that was silently not
-# checking what it claimed to, so a run where the ratchet cannot measure has to
-# say so out loud rather than report the ceilings as the whole verdict. The
-# workflow fetches refs/heads/main for exactly this reason, and a red here means
-# that fetch is gone rather than that a PR did anything.
+# A caller that knows it arranged a base sets EM_DASH_REQUIRE_BASE=1, and the
+# skip becomes a hard error. Q742 is a gate that was silently not checking what
+# it claimed to, so the run that is supposed to ratchet must not report the
+# ceilings as the whole verdict when it could not. The doc-links workflow sets
+# it beside the fetch that provides the base.
+#
+# Deliberately not keyed on `CI`. That reads an ambient variable the caller did
+# not set, which made the gate behave one way under `make check` and another on
+# a runner, and it fired inside this gate's own fixtures, whose repos have no
+# origin/main on purpose (measured on PR #1681: 12 assertions red on the runner,
+# green locally). An explicit opt-in cannot be tripped by an environment.
 resolve_base() {
     local base
     if [[ -n "$BASE_REV" ]]; then
         base="$(git rev-parse --verify --quiet "${BASE_REV}^{commit}")" ||
             die "--base $BASE_REV does not resolve to a commit"
     elif ! base="$(git merge-base HEAD origin/main 2>/dev/null)" || [[ -z "$base" ]]; then
-        [[ -z "${CI:-}" ]] ||
-            die "no origin/main merge-base under CI, so the diff ratchet cannot run - the job needs fetch-depth: 0 and refs/heads/main"
+        [[ -z "${EM_DASH_REQUIRE_BASE:-}" ]] ||
+            die "the em-dash diff ratchet could not measure: this job set EM_DASH_REQUIRE_BASE but there is no origin/main merge-base to compare against. This is a checkout fault, not a prose finding - no file is over the limit. Fix the job (fetch-depth: 0 plus a refs/heads/main fetch), not the docs."
         echo "check-em-dash: no origin/main merge-base - diff ratchet skipped, ceilings only" >&2
         return 0
     fi

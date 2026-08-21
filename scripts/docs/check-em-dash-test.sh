@@ -71,16 +71,22 @@ prose_page() {
 }
 
 # run_gate NAME WANT [gha] — run the gate inside WORK against WORK/baseline.txt
-# and compare its exit status. GITHUB_ACTIONS is pinned rather than inherited:
-# it switches the findings between `file:` and `::error` annotations, and CI
-# sets it, so an assertion on either format would otherwise pass or fail on
-# where the suite runs rather than on what the gate did.
+# and compare its exit status. Every environment variable the gate reads is
+# pinned rather than inherited, because each of them makes an assertion pass or
+# fail on where the suite runs rather than on what the gate did:
+#   GITHUB_ACTIONS      switches findings between `file:` and `::error`
+#   EM_DASH_REQUIRE_BASE turns the no-base skip into a hard error, and every
+#                       fixture repo here is deliberately without a base
+# The second cost PR #1681 a red runner: the gate keyed on `CI` instead, which
+# no caller here sets and the runner sets for everything, so 12 assertions went
+# red on CI and green locally. Pin what the gate reads; a gate that reads an
+# ambient variable cannot be tested where that variable is ambient.
 run_gate() {
     local name="$1" want="$2" mode="${3:-plain}" got=0
     if [[ "$mode" == "gha" ]]; then
-        (cd "$WORK" && GITHUB_ACTIONS=true "$GATE" --baseline "$WORK/baseline.txt") >"$WORK/gate.out" 2>&1 || got=$?
+        (cd "$WORK" && env -u EM_DASH_REQUIRE_BASE GITHUB_ACTIONS=true "$GATE" --baseline "$WORK/baseline.txt") >"$WORK/gate.out" 2>&1 || got=$?
     else
-        (cd "$WORK" && env -u GITHUB_ACTIONS "$GATE" --baseline "$WORK/baseline.txt") >"$WORK/gate.out" 2>&1 || got=$?
+        (cd "$WORK" && env -u GITHUB_ACTIONS -u EM_DASH_REQUIRE_BASE "$GATE" --baseline "$WORK/baseline.txt") >"$WORK/gate.out" 2>&1 || got=$?
     fi
     if [[ "$got" == "$want" ]]; then
         printf 'ok   %s\n' "$name"
@@ -177,22 +183,41 @@ printf 'And — five.\n' >>"$WORK/a.md"
 run_gate 'control: with no base the ceiling alone passes the same tree' 0
 expect_out 'the skipped ratchet is announced, not silent' 'diff ratchet skipped'
 
-# Same tree, same missing base, under CI: the skip is the shape of the defect
-# Q742 is about, so there the gate refuses rather than reporting the ceilings as
-# the whole verdict.
+# Same tree, same missing base, with the caller opting in: the skip is the shape
+# of the defect Q742 is about, so a job that arranged a base refuses rather than
+# reporting the ceilings as the whole verdict.
 new_repo
 prose_page "$WORK/a.md" 'One — two — three — four.'
 printf '4 a.md\n' >"$WORK/baseline.txt"
 commit_all base
 printf 'And — five.\n' >>"$WORK/a.md"
-(cd "$WORK" && CI=true "$GATE" --baseline "$WORK/baseline.txt") >"$WORK/gate.out" 2>&1 && ci_rc=0 || ci_rc=$?
-if [[ "$ci_rc" == 1 ]]; then
-    printf 'ok   %s\n' 'under CI an unmeasurable ratchet fails rather than skipping'
+req_rc=0
+(cd "$WORK" && env -u GITHUB_ACTIONS EM_DASH_REQUIRE_BASE=1 "$GATE" --baseline "$WORK/baseline.txt") >"$WORK/gate.out" 2>&1 || req_rc=$?
+if [[ "$req_rc" == 1 ]]; then
+    printf 'ok   %s\n' 'EM_DASH_REQUIRE_BASE turns an unmeasurable ratchet into a failure'
 else
-    printf 'FAIL %s: want exit 1, got %s\n' 'under CI an unmeasurable ratchet fails rather than skipping' "$ci_rc"
+    printf 'FAIL %s: want exit 1, got %s\n' 'EM_DASH_REQUIRE_BASE turns an unmeasurable ratchet into a failure' "$req_rc"
     fails=$((fails + 1))
 fi
-expect_out 'the CI failure names the checkout depth it needs' 'fetch-depth: 0'
+expect_out 'the failure names the checkout fault, not the prose' 'checkout fault, not a prose finding'
+expect_out 'the failure points at the job rather than the docs' 'Fix the job'
+
+# The regression that cost PR #1681 a red runner. A runner sets CI=true for
+# every step, so a gate keyed on it refuses inside these fixtures, whose repos
+# have no origin/main by construction. Nothing ambient may reach that branch.
+new_repo
+prose_page "$WORK/a.md" 'One — two.'
+commit_all base
+amb_rc=0
+(cd "$WORK" && env -u GITHUB_ACTIONS -u EM_DASH_REQUIRE_BASE CI=true "$GATE" --baseline "$WORK/baseline.txt") >"$WORK/gate.out" 2>&1 || amb_rc=$?
+if [[ "$amb_rc" == 0 ]]; then
+    printf 'ok   %s\n' 'an ambient CI=true does not turn the skip into a failure'
+else
+    printf 'FAIL %s: want exit 0, got %s\n' 'an ambient CI=true does not turn the skip into a failure' "$amb_rc"
+    awk '{ print "    " $0 }' "$WORK/gate.out"
+    fails=$((fails + 1))
+fi
+expect_out 'it degrades to the ceilings instead' 'diff ratchet skipped'
 
 new_repo
 prose_page "$WORK/a.md" 'One — two — three — four.'
@@ -260,7 +285,7 @@ printf 'And — five.\n' >>"$WORK/a.md"
 commit_all 'the gain'
 set_base
 base_rc=0
-(cd "$WORK" && env -u GITHUB_ACTIONS "$GATE" --baseline "$WORK/baseline.txt" --base HEAD~1) >"$WORK/gate.out" 2>&1 || base_rc=$?
+(cd "$WORK" && env -u GITHUB_ACTIONS -u EM_DASH_REQUIRE_BASE "$GATE" --baseline "$WORK/baseline.txt" --base HEAD~1) >"$WORK/gate.out" 2>&1 || base_rc=$?
 if [[ "$base_rc" == 1 ]]; then
     printf 'ok   %s\n' '--base overrides a merge-base that has moved past the gain'
 else
@@ -270,7 +295,7 @@ fi
 expect_out 'the overridden base is the one reported against' 'up from 3 at the base revision'
 
 bogus_rc=0
-(cd "$WORK" && env -u GITHUB_ACTIONS "$GATE" --baseline "$WORK/baseline.txt" --base no-such-rev) >"$WORK/gate.out" 2>&1 || bogus_rc=$?
+(cd "$WORK" && env -u GITHUB_ACTIONS -u EM_DASH_REQUIRE_BASE "$GATE" --baseline "$WORK/baseline.txt" --base no-such-rev) >"$WORK/gate.out" 2>&1 || bogus_rc=$?
 if [[ "$bogus_rc" != 0 ]]; then
     printf 'ok   %s\n' 'a --base that does not resolve fails rather than degrading'
 else

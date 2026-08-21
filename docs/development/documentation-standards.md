@@ -143,7 +143,10 @@ A file inside the rule may still gain them, and a reduction is never a failure.
 
 The base is a merge-base rather than a parent commit, so it is the branch point on a PR, and inside the merge queue it is the tip the candidate was built on, which is the one view holding every queued change at once (Q743 put these gates on `merge_group` for that).
 The CI job takes `fetch-depth: 0` and fetches `refs/heads/main` to have that base.
-A clone without one degrades to the ceilings alone and says so on stderr; under CI the gate refuses instead, because a gate silently not checking what it claims is the defect this closes.
+A clone without one degrades to the ceilings alone and says so on stderr.
+A caller that arranged a base sets `EM_DASH_REQUIRE_BASE=1` and the skip becomes a hard error instead, which is what the job does beside its fetch: a gate silently not checking what it claims is the defect this closes, so the run that is meant to ratchet must not report the ceilings as the whole verdict.
+That failure names itself a checkout fault and points at the job, because a reader who meets it in a red PR must not go looking at their own prose.
+Keying it on `CI` instead would read a variable the caller never set, and it fired inside the gate's own fixtures, whose repos have no `origin/main` by construction.
 
 One case stays outside the ratchet: a file *inside* the rule may legitimately gain, so two PRs can still push one across 3 per 1,000 between them, and only the run on the candidate sees that.
 `doc-links-gate` is not yet a required check ([Q943](../queue/Q943.md)), so its verdict there is visible rather than binding.
