@@ -371,6 +371,7 @@ The local probe now runs first and the paginated timeline read stays behind the 
   `--confirm` fails closed either way, since no record is not `ELIGIBLE`; what is lost is diagnostic, on exactly the after-the-fact question the record exists for.
   The shell predecessor wrote a third verdict, `UNMEASURABLE`, for this; the Python treats a probe that could not run as never a verdict, which is defensible and is filed upstream as [claude-skills#129](https://github.com/karlkfi/claude-skills/issues/129) rather than patched here, because an unmodified vendor is what keeps the next fix a clean overwrite.
   Records accumulate and the last one governs, which keeps a refusal that short-circuited before probing from erasing the measurement an earlier one took.
+  That trade has an expiry, and [skills.md § Vendored from the skills repo](skills.md#vendored-from-the-skills-repo) records where it stands: this file is still an unmodified vendor and `make vendored-skills-check` holds it there, while `queue.py` has drifted 264 diff lines from its own upstream, so a fix there is a re-vendor rather than an overwrite (Q890).
 
 - **It is not a registry.** `tmp/` is gitignored and session-local; nothing reconciles it and no gate reads it.
   It is evidence for whoever asks, and it expires with the worktree.

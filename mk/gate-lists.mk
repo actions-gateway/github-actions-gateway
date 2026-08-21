@@ -63,7 +63,8 @@ CHECK_FAST_GATES := roadmap-check \
                     release-notes-check \
                     dashboard-render-check \
                     tool-pin-check \
-                    release-ladder-check
+                    release-ladder-check \
+                    vendored-skills-check
 
 CHECK_HEAVY_GATES := build-tags-check lint cover-check
 
@@ -261,4 +262,5 @@ SCRIPTS_TESTS := agent/claude-go-throttle-hook-test agent/local-throttle-test \
                  manifest/check-dashboard-render-test \
                  ci/check-tool-pins-test \
                  updatecli/cosign-release-sha256-test \
-                 docs/check-release-ladder-test
+                 docs/check-release-ladder-test \
+                 ci/check-vendored-skills-test

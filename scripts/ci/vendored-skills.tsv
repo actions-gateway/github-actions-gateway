@@ -1,0 +1,34 @@
+# vendored-skills.tsv — the files this repo vendors from karlkfi/claude-skills,
+# and the digests that hold them (Q890).
+#
+# Read by scripts/ci/check-vendored-skills.sh, which backs `make
+# vendored-skills-check`. One row per vendored file; `#` and blank lines are
+# ignored. Columns are tab-separated:
+#
+#   local_path        where the file lives here
+#   upstream_path     its path in karlkfi/claude-skills
+#   vendored_at       the upstream commit the file was taken from
+#   vendored_sha256   what the upstream file hashed to at that commit
+#   local_sha256      what the file in this tree must hash to now
+#
+# The two digests answer different questions. `vendored_sha256` records what
+# was adopted, so a re-vendor can diff upstream forward from a known point.
+# `local_sha256` is the one the gate asserts: a fork of a vendored file has to
+# be declared here to land, which is the hold Q890 asked for. Equal digests
+# mean an unmodified vendor; unequal means a declared local edit, and
+# `--report` names which is which.
+#
+# The gate is local by construction and cannot see upstream. karlkfi/claude-
+# skills is private, so a fetching gate needs a token this repo does not carry,
+# and testing.md § the doc-links oracle rules the network out of `make check`
+# anyway. Whether upstream has moved is therefore still unasked here; see
+# docs/development/parallel-dispatch.md § Vendored from the skills repo.
+#
+# Adding a fifth vendored file needs a row added by hand. Nothing derives this
+# set, because nothing in the tree marks a file as vendored.
+#
+# local_path	upstream_path	vendored_at	vendored_sha256	local_sha256
+scripts/docs/queue.py	session-backlog/scripts/queue.py	b0330e0f97f6a0446de7d5c85e93bd14ae7adf55	7dba5581e5417a163de667fedfc99855981c2717845a45f2141cf780c9f3d15a	bf7adbb93fa08e9ea76887970c5d9902437166a17e7909ebf4416239047e78ed
+scripts/docs/rank-vectors.tsv	session-backlog/scripts/rank-vectors.tsv	b0330e0f97f6a0446de7d5c85e93bd14ae7adf55	01df181a1179f53d5524f2fcefefb430c8a6fb54851b12dbcde33d574c3db705	01df181a1179f53d5524f2fcefefb430c8a6fb54851b12dbcde33d574c3db705
+scripts/agent/pr-requeue-eligible.py	session-worker/scripts/pr-requeue-eligible.py	8f65c5b686873e9decd293826ecfb4047aaf76e0	f3c90044be8512c73c9521d8347f9020f8c978d69be282fdbbab055250b6c081	f3c90044be8512c73c9521d8347f9020f8c978d69be282fdbbab055250b6c081
+scripts/agent/pr-mergeability-watch.py	session-orchestrator/scripts/pr-mergeability-watch.py	0d38df40fae08251110703b3c0471a74281a0451	08484ca39c178719171be4ad395e4097575e0a0ef8237ed26ca4c7e94f0e3e79	08484ca39c178719171be4ad395e4097575e0a0ef8237ed26ca4c7e94f0e3e79
