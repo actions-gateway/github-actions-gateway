@@ -351,6 +351,59 @@ else
     bad "lint: file:line note missing or it failed the store"
 fi
 
+# A leading `.` is not a word character, so a `\b` anchor never holds before
+# `.github/` and the path is captured a character in. Both directions matter:
+# the note must name the whole path, and a citation that does resolve must
+# still go quiet rather than warn on everything.
+S="$TMP/dotref"
+item "$S" Q1 a0 ready "The defect is at .github/workflows/nosuch.yml:12 today."
+rc=0
+python3 "$Q" --store "$S" lint >"$TMP/o" 2>"$TMP/e" || rc=$?
+if [[ $rc -eq 0 ]] && grep -q "cites \.github/workflows/nosuch\.yml:12" "$TMP/e"; then
+    ok "lint: a dot-directory citation warns with its leading dot intact"
+else
+    bad "lint: dot-directory citation note missing, or its path lost the dot"
+fi
+
+# The same anchor governs a `../` citation, which resolves from neither base
+# once its prefix survives.
+S="$TMP/dotdotref"
+item "$S" Q1 a0 ready "The defect is at ../nosuch/thing.go:7 today."
+rc=0
+python3 "$Q" --store "$S" lint >"$TMP/o" 2>"$TMP/e" || rc=$?
+if [[ $rc -eq 0 ]] && grep -q "cites \.\./nosuch/thing\.go:7" "$TMP/e"; then
+    ok "lint: a ../ citation warns with its prefix intact"
+else
+    bad "lint: ../ citation note missing, or its path lost the prefix"
+fi
+
+# The quiet half. The file has to exist under the store's parent for the
+# resolve branch to be the reason for the silence.
+S="$TMP/dotok"
+mkdir -p "$TMP/.github/workflows"
+: > "$TMP/.github/workflows/real.yml"
+item "$S" Q1 a0 ready "The defect is at .github/workflows/real.yml:12 today."
+rc=0
+python3 "$Q" --store "$S" lint >"$TMP/o" 2>"$TMP/e" || rc=$?
+if [[ $rc -eq 0 ]] && ! grep -q "real\.yml" "$TMP/e"; then
+    ok "lint: a dot-directory citation that resolves stays quiet"
+else
+    bad "lint: a resolving dot-directory citation warned or failed the store"
+fi
+
+# And the pattern must still want an extension it knows. The list is a
+# whitelist, so an unknown suffix and a bare colon-number both stay quiet;
+# broadening the alternation surfaces here rather than in the store.
+S="$TMP/notaref"
+item "$S" Q1 a0 ready "The window is 10:30 wide and nosuch/notes.txt:4 is not one."
+rc=0
+python3 "$Q" --store "$S" lint >"$TMP/o" 2>"$TMP/e" || rc=$?
+if [[ $rc -eq 0 ]] && ! grep -q "which does not" "$TMP/e"; then
+    ok "lint: a colon-number that is not a file reference stays quiet"
+else
+    bad "lint: a non-citation colon-number warned or failed the store"
+fi
+
 # --- metrics --------------------------------------------------------------
 # Needs real history, since it reads git rather than the files on disk.
 
