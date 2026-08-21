@@ -136,6 +136,85 @@ func read() { _, _ = os.ReadFile("../../outside.txt") }
 GO
 assert_gate "$d" 0 "an //go:build e2e file is skipped"
 
+# --- red: a root derived at runtime, which carries no ".." to sweep for -------
+# os.Getwd()/runtime.Caller(0) walked up to a marker file escapes the module
+# root with nothing lexical to match, and the reads it drives are dropped from
+# the cache key exactly as a literal's are (Q936).
+d="$(fixture getwd)"
+cat >"$d/mod/pkg/x_test.go" <<'GO'
+package pkg
+
+import (
+	"os"
+	"path/filepath"
+)
+
+func read() string {
+	dir, _ := os.Getwd()
+	for {
+		if _, err := os.Stat(filepath.Join(dir, "go.work")); err == nil {
+			return dir
+		}
+		dir = filepath.Dir(dir)
+	}
+}
+GO
+assert_gate "$d" 1 "a root derived from os.Getwd is caught"
+
+d="$(fixture caller)"
+cat >"$d/mod/pkg/x_test.go" <<'GO'
+package pkg
+
+import (
+	"path/filepath"
+	"runtime"
+)
+
+func root() string {
+	_, thisFile, _, _ := runtime.Caller(0)
+	return filepath.Join(filepath.Dir(thisFile), "..", "..")
+}
+GO
+assert_gate "$d" 1 "a root derived from runtime.Caller is caught"
+
+# --- green: runtime.Caller with no path construction --------------------------
+# Reporting a caller's line number is the ordinary test-helper idiom and reads
+# no file, so the detector requires the path-building half as well.
+d="$(fixture callerline)"
+cat >"$d/mod/pkg/x_test.go" <<'GO'
+package pkg
+
+import (
+	"fmt"
+	"runtime"
+)
+
+func fail(msg string) string {
+	_, file, line, _ := runtime.Caller(1)
+	return fmt.Sprintf("%s:%d: %s", file, line, msg)
+}
+GO
+assert_gate "$d" 0 "runtime.Caller without path construction passes"
+
+# --- green: the e2e tier is skipped for derivations too -----------------------
+d="$(fixture e2ederiv)"
+cat >"$d/mod/pkg/x_test.go" <<'GO'
+//go:build e2e
+
+package pkg
+
+import (
+	"path/filepath"
+	"runtime"
+)
+
+func root() string {
+	_, thisFile, _, _ := runtime.Caller(0)
+	return filepath.Join(filepath.Dir(thisFile), "..", "..")
+}
+GO
+assert_gate "$d" 0 "an //go:build e2e derivation is skipped"
+
 # --- this tree stays green, and its allowlist stays specific ------------------
 rc=0
 "$GATE" >/dev/null 2>&1 || rc=$?
@@ -149,6 +228,24 @@ fi
 allowed="$("$GATE" --list | grep -c .)"
 if [[ "$allowed" -gt 4 ]]; then
 	echo "FAIL: $allowed allowlisted escaping reads — each needs a reason, not a bulk exemption" >&2
+	fails=$((fails + 1))
+fi
+
+# The same guard for the derivation detector. Its exemptions cost real time
+# (-count=1 busts a whole package) or real coverage (DERIV_ALLOW asserts the
+# path stays in-module), so a list that grew would pass every case above while
+# exempting the tree.
+derivations="$("$GATE" --list-derivations | grep -c .)"
+if [[ "$derivations" -gt 3 ]]; then
+	echo "FAIL: $derivations runtime root derivations — each needs a judgement, not a bulk exemption" >&2
+	fails=$((fails + 1))
+fi
+
+# go-test.sh reads this list to build its forced -count=1 pass. An empty one
+# means that pass covers nothing, which is how the Q936 defect looked.
+uncached="$("$GATE" --uncached-packages | grep -c .)"
+if [[ "$uncached" -lt 1 || "$uncached" -gt 3 ]]; then
+	echo "FAIL: $uncached uncached package(s) — expected 1..3; go-test.sh forces -count=1 over exactly these" >&2
 	fails=$((fails + 1))
 fi
 

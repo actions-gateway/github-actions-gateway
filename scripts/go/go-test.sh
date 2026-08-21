@@ -9,6 +9,9 @@
 # Measured on the CI -race unit gate: 189s → 163s (Q17) — the 4-vCPU runner
 # was already near CPU-bound during the big compiles, so the win is the
 # removal of the serial inter-module barriers, not a multiple.
+# A second, forced `-count=1` pass covers the packages go's test cache cannot
+# key at all (see below); the out-of-module read gate names them.
+#
 # Backs `make test` and `make test-race`.
 #
 # Usage: scripts/go/go-test.sh [--race]
@@ -152,6 +155,30 @@ run_tests() {
 
 echo "==> go test ${race_flag:+$race_flag }${RUN:+-run $RUN }${patterns[*]}"
 run_tests "${patterns[@]}"
+
+# A second, forced pass over the packages `go test` cannot key a result for: a
+# test that derives its root at runtime, or whose reads happen in a subprocess
+# the testlog never sees. Measured 2026-08-21 (Q936) on cmd/probe/compat —
+# warm, `(cached)`, then an `_ "net/http/httptest"` import added to cmd/proxy's
+# package main still replayed `(cached)` and exited 0, while -count=1 failed.
+# The symlink fix does not reach these, because there is no path to rewrite.
+# The package list comes from the out-of-module read gate's own UNCACHED map, so
+# the two cannot drift: that gate fails when an undeclared one appears. The
+# packages replay from cache in the run above, so the cost here is their cold
+# run alone (cmd/probe/compat: ~2.4 s). A RUN= run already forces -count=1.
+if [[ -z "${RUN:-}" ]]; then
+	uncached=()
+	while IFS= read -r pkg; do
+		[[ -n "$pkg" ]] || continue
+		uncached+=("./$pkg")
+	done < <(scripts/go/check-test-cache-inputs.sh --uncached-packages)
+	if ((${#uncached[@]} > 0)); then
+		echo "==> go test -count=1 ${race_flag:+$race_flag }${uncached[*]}"
+		# shellcheck disable=SC2086  # flag strings and the throttle prefix word-split intentionally
+		$THROTTLE_PREFIX go test -trimpath $race_flag -timeout "$timeout" $p_flag $verbose_flag \
+			-count=1 "${uncached[@]}"
+	fi
+fi
 
 # The single invocation above resolves against go.work, which cannot reach a
 # module the workspace does not list, so those run separately with GOWORK=off.

@@ -942,6 +942,32 @@ That is incidental protection rather than a guarantee, which is why the fix belo
 Measured both ways on a throwaway module: `go test` twice reports `(cached)` on the second run, while `go test -c` plus two execs of the binary runs the test both times.
 The two `runtime.Caller` repo-root lookups in `cmd/gmc/test/e2e` are therefore correct as they stand.
 
+#### A root derived at runtime carries no `..` to sweep for
+
+The gate above reads path *spellings*, so it sees nothing when a test computes its base directory at runtime and builds paths from that.
+`os.Getwd()` or `runtime.Caller(0)` walked up to a marker file leaves no `".."` anywhere in the source, and the reads it drives leave the module root exactly as a literal's would.
+
+Measured 2026-08-21 (Q936) on `cmd/probe/compat`, whose `TestNoPackageMainReachesHTTPTest` walks up from the test's working directory to the repo-root `go.work` and then runs `go list -deps` in every workspace module.
+A warm run, then a second reporting `(cached)`; adding `_ "net/http/httptest"` to `cmd/proxy`'s `package main` and running again still reported `(cached)` and exited 0, while `-count=1` over the same tree failed.
+So the one gate standing between a shipped binary and a linked test server was replaying a stale green.
+
+**The symlink fix does not reach this one.** There is no path to rewrite: the assertion is a property of every module's import graph, and the reads that establish it happen inside `go list` subprocesses, which the testlog never records at all.
+Reading the same files from the test process would not help either, since they sit outside `cmd/probe` and the module-root rule drops them.
+
+So the fix is `-count=1`, over that package alone.
+[`check-test-cache-inputs.py`](../../scripts/go/check-test-cache-inputs.py) names it in an `UNCACHED` map and [`go-test.sh`](../../scripts/go/go-test.sh) reads that map (`--uncached-packages`) to build a second, forced pass, so the list and the gate cannot drift: an undeclared derivation fails the gate.
+The section above rejects per-package `-count=1` as the wrong granularity, and that still holds where it was measured: 101 s against 1 s cached, across seven packages that each had a free symlink available instead.
+Neither half applies here.
+`cmd/probe/compat` costs 2.4 s cold, it replays from cache in the main invocation so the forced pass pays that once, and no free fix exists at any price.
+
+The detector requires both halves of the shape, a runtime derivation *and* `filepath.Join`/`filepath.Dir`, because `runtime.Caller` on its own is the ordinary line-number idiom of a test helper and opens nothing.
+Where a derived path provably stays inside the module root, `DERIV_ALLOW` records that judgement instead, at no runtime cost.
+The `cmd/gmc/test/e2e` lookups stay exempt as e2e files; the detector is what would catch them if that idiom were copied into a cached tier, which is the live risk given both sites sit in the tree today.
+
+**Its residual blind spot is `exec.Command` generally.** A test that shells out against the repo reads whatever the subprocess reads, and no path detector can see it.
+Measured over the cached tiers on the same date, the other four such tests all set `cmd.Dir` to a `t.TempDir()` they populate themselves, so they depend on nothing outside their own run.
+That is a judgement taken once, not a gate.
+
 ### The claude-usage snapshot gate
 
 `make claude-usage-test` ([`scripts/agent/claude-usage-test.sh`](../../scripts/agent/claude-usage-test.sh)) runs the Python unit tests in [`claude-usage/`](../../claude-usage/README.md) — the only tests in the repo that aren't Go or bash.
