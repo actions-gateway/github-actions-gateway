@@ -23,7 +23,7 @@
     
     
       
-        <title>version-cmds-answer flakes on kubectl, and discards the evidence - GitHub Actions Gateway</title>
+        <title>version-cmds-answer flakes on kubectl, cause unverified - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#version-cmds-answer-flakes-on-kubectl-and-discards-the-evidence" class="md-skip">
+        <a href="#version-cmds-answer-flakes-on-kubectl-cause-unverified" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              version-cmds-answer flakes on kubectl, and discards the evidence
+              version-cmds-answer flakes on kubectl, cause unverified
             
           </span>
         </div>
@@ -2567,11 +2567,14 @@
   
 
 
-<h1 id="version-cmds-answer-flakes-on-kubectl-and-discards-the-evidence"><code>version-cmds-answer</code> flakes on kubectl, and discards the evidence<a class="headerlink" href="#version-cmds-answer-flakes-on-kubectl-and-discards-the-evidence" title="Permanent link">&para;</a></h1>
+<h1 id="version-cmds-answer-flakes-on-kubectl-cause-unverified"><code>version-cmds-answer</code> flakes on kubectl, cause unverified<a class="headerlink" href="#version-cmds-answer-flakes-on-kubectl-cause-unverified" title="Permanent link">&para;</a></h1>
+<p><strong>Event:</strong> <code>version-cmds-answer</code> or <code>installed-floors-report-a-version</code> fails on <code>main</code> again.</p>
 <p>Measured 2026-08-21 on an unmodified tree: <code>make check</code> failed <code>check-tools-test</code> with <code>no version from: kubectl, checked=5</code>, and the same test run alone passed <code>5 probed</code> immediately after.
-By hand the registry's own probe — <code>kubectl version --client</code> piped to the assertion's <code>grep -qE '[0-9]+(\.[0-9]+)+'</code> — exits 0 and prints <code>v1.36.3</code>, in and out of the sandbox.
-The only difference is that the failing run sat inside <code>run-parallel</code>'s 43-way fan-out, so saturation is the hypothesis and it is <strong>unverified</strong>.
-Whatever the cause, the assertion sends the probe's stderr to <code>/dev/null</code> and reports only the tool's name, so a failure carries nothing to diagnose it with; keeping stderr is worth doing even if the retry question stays open.</p>
+Both probes named the failing tool and nothing else, so the occurrence left nothing to diagnose it with.
+They now record each failing probe's exit status and combined output, which separates a binary that failed to run from one that ran and answered without a version.
+<strong>Still open:</strong> the cause.
+By hand the registry's probe for it, <code>kubectl version --client</code>, exits 0 and prints <code>v1.36.3</code> both in and out of the sandbox; the only difference in the failing run was sitting inside <code>run-parallel</code>'s 43-way fan-out, so saturation is the hypothesis and it stays <strong>unverified</strong>.
+Whether a retry belongs here is undecided, and settling it needs the evidence the next occurrence now carries.</p>
 
 
 

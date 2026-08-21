@@ -2669,11 +2669,11 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 </tr>
 <tr>
 <td><a href="Q951/">Q951</a></td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/ci/check-tools-test.sh"><code>version-cmds-answer</code> flakes on kubectl, and discards the evidence</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/ci/check-tools-test.sh"><code>version-cmds-answer</code> flakes on kubectl, cause unverified</a></td>
 <td><code>flake</code> <code>ci</code></td>
-<td>🔲</td>
+<td>💤</td>
 <td>S</td>
-<td>Measured 2026-08-21 on an unmodified tree: <code>make check</code> failed <code>check-tools-test</code> with <code>no version from: kubectl, checked=5</code>, and the same …</td>
+<td><strong>Event:</strong> <code>version-cmds-answer</code> or <code>installed-floors-report-a-version</code> fails on <code>main</code> again.</td>
 </tr>
 <tr>
 <td><a href="Q820/">Q820</a></td>
@@ -2834,14 +2834,6 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>🚫</td>
 <td>M</td>
 <td>Blocked by <a href="Q539/">Q539</a>.</td>
-</tr>
-<tr>
-<td><a href="Q890/">Q890</a></td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/docs/queue.py">Nothing keeps the four vendored files identical to upstream</a></td>
-<td><code>ci</code> <code>debt</code> <code>retro</code></td>
-<td>🔲</td>
-<td>S</td>
-<td>Phase 1 vendored <code>queue.py</code>, its rank vectors and two agent scripts byte-identical so an upstream fix lands as a clean overwrite; nothing …</td>
 </tr>
 <tr>
 <td><a href="Q918/">Q918</a></td>
@@ -3850,6 +3842,14 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>🔲</td>
 <td>S</td>
 <td>Go's testlog records the <code>open</code>/<code>stat</code> calls the test process itself makes, so a test that shells out reads whatever the subprocess reads …</td>
+</tr>
+<tr>
+<td><a href="Q955/">Q955</a></td>
+<td><a href="../development/skills/#vendored-from-the-skills-repo">Nothing asks whether the vendored skill files have moved upstream</a></td>
+<td><code>ci</code> <code>debt</code></td>
+<td>💤</td>
+<td>S</td>
+<td><strong>Decision:</strong> whether CI may hold a read token for the private <code>karlkfi/claude-skills</code>, or upstream drift stays a thing somebody looks at.</td>
 </tr>
 <tr>
 <td><a href="Q952/">Q952</a></td>

@@ -2716,6 +2716,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#vendored-from-the-skills-repo" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Vendored from the skills repo
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#keeping-this-page-honest" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2836,6 +2847,53 @@ Offered after a PR merges or a substantial task ends.</p>
 Fires before reporting a gate result, diagnosing a failure, or writing a test or gate.
 <a href="../testing/#diagnosing-failures-measure-before-asserting-a-root-cause">testing.md § Diagnosing failures</a> keeps this repo's measured cases (which run, which PR, what the numbers were) for the rules the skill states in general.
 It is also the first of the four prose passes over a release note, where the claim being checked is one the project is about to publish: <a href="../../operations/release/#the-prose-passes">release.md § The prose passes</a>.</p>
+<h2 id="vendored-from-the-skills-repo">Vendored from the skills repo<a class="headerlink" href="#vendored-from-the-skills-repo" title="Permanent link">&para;</a></h2>
+<p>Four files are copied out of <code>karlkfi/claude-skills</code> and run here as ordinary repo tooling.
+<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/ci/vendored-skills.tsv"><code>scripts/ci/vendored-skills.tsv</code></a> lists them with the upstream path and commit each came from.</p>
+<table>
+<thead>
+<tr>
+<th>Here</th>
+<th>Upstream</th>
+<th>Taken from</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/docs/queue.py"><code>scripts/docs/queue.py</code></a></td>
+<td><code>session-backlog/scripts/queue.py</code></td>
+<td><code>b0330e0f</code>, 2026-08-16</td>
+</tr>
+<tr>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/docs/rank-vectors.tsv"><code>scripts/docs/rank-vectors.tsv</code></a></td>
+<td><code>session-backlog/scripts/rank-vectors.tsv</code></td>
+<td><code>b0330e0f</code>, 2026-08-16</td>
+</tr>
+<tr>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/agent/pr-requeue-eligible.py"><code>scripts/agent/pr-requeue-eligible.py</code></a></td>
+<td><code>session-worker/scripts/pr-requeue-eligible.py</code></td>
+<td><code>8f65c5b6</code>, 2026-08-16</td>
+</tr>
+<tr>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/agent/pr-mergeability-watch.py"><code>scripts/agent/pr-mergeability-watch.py</code></a></td>
+<td><code>session-orchestrator/scripts/pr-mergeability-watch.py</code></td>
+<td><code>0d38df40</code>, 2026-08-15</td>
+</tr>
+</tbody>
+</table>
+<p><a href="../../plan/q889-backlog-item-store/">Q889</a> phase 1 took all four byte-identical, so that an upstream fix would land here as a clean overwrite.
+Nothing held them there, and nothing in the tree said they were vendored at all.</p>
+<p><strong>Measured 2026-08-21, and it is not the drift the backlog row assumed.</strong> Each file as of the vendoring commit hashes to an upstream commit exactly, so phase 1 did what it claimed.
+Upstream has since taken 8 commits on <code>queue.py</code> and 1 to 2 on each of the others, and this repo took none until Q935 forked <code>queue.py</code> to fix its stale-citation pattern.
+So the fork ran one way for five days, in the direction nobody here controls.
+A clean overwrite is no longer available for <code>queue.py</code> in any case: it and its upstream now differ by 264 diff lines, which is a re-vendor rather than a patch.</p>
+<p><code>make vendored-skills-check</code> asserts the half a local read can reach.
+Each file still hashes to the digest its row declares, so forking one moves the digest in the same diff and a reviewer sees it.
+<code>scripts/ci/check-vendored-skills.sh --report</code> separates an unmodified vendor from a declared fork, and <code>--update</code> is how a fork is declared.</p>
+<p><strong>Whether upstream has moved is still unasked, deliberately.</strong> <code>karlkfi/claude-skills</code> is private, so a gate that fetched it would need a token this repo does not carry, and <a href="../testing/#the-release-link-gate">a gate whose oracle is the network</a> fails when a third party sneezes.
+Comparing against a local clone would key the gate to one workstation's layout.
+So an upstream fix reaches this tree only when somebody looks, and the gate makes the looking cheap rather than automatic.</p>
+<p>Nothing derives the set, because nothing marks a file as vendored, so a fifth one adopted without a row is invisible to the gate.</p>
 <h2 id="keeping-this-page-honest">Keeping this page honest<a class="headerlink" href="#keeping-this-page-honest" title="Permanent link">&para;</a></h2>
 <p>A skill can be renamed or retired upstream without anything here going red, because no gate reads the skill set.
 Two names in this tree have already drifted that way: <code>backlog</code> became <code>session-backlog</code>, and <code>dispatch-worker</code> was retired in favour of <code>session-worker</code>.</p>

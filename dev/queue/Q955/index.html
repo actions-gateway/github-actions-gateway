@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q890/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q955/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>Nothing keeps the four vendored files identical to upstream - GitHub Actions Gateway</title>
+        <title>Nothing asks whether the vendored skill files have moved upstream - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#nothing-keeps-the-four-vendored-files-identical-to-upstream" class="md-skip">
+        <a href="#nothing-asks-whether-the-vendored-skill-files-have-moved-upstream" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Nothing keeps the four vendored files identical to upstream
+              Nothing asks whether the vendored skill files have moved upstream
             
           </span>
         </div>
@@ -2567,10 +2567,12 @@
   
 
 
-<h1 id="nothing-keeps-the-four-vendored-files-identical-to-upstream">Nothing keeps the four vendored files identical to upstream<a class="headerlink" href="#nothing-keeps-the-four-vendored-files-identical-to-upstream" title="Permanent link">&para;</a></h1>
-<p>Phase 1 vendored <code>queue.py</code>, its rank vectors and two agent scripts byte-identical so an upstream fix lands as a clean overwrite; nothing holds them there.
-The fork drifting both ways was the defect, unseen until asked.
-Needs a fetch or a digest.</p>
+<h1 id="nothing-asks-whether-the-vendored-skill-files-have-moved-upstream">Nothing asks whether the vendored skill files have moved upstream<a class="headerlink" href="#nothing-asks-whether-the-vendored-skill-files-have-moved-upstream" title="Permanent link">&para;</a></h1>
+<p><strong>Decision:</strong> whether CI may hold a read token for the private <code>karlkfi/claude-skills</code>, or upstream drift stays a thing somebody looks at.
+Q890 shipped the local half: <code>make vendored-skills-check</code> holds each vendored file to a declared digest, so a fork here is reviewable.
+It cannot ask the other question, and that is the residue rather than an oversight, which is why this is a separate row.
+The repo is private, so a fetching gate needs a token this repo does not carry, and a gate whose oracle is the network fails when a third party sneezes.
+Measured 2026-08-21: upstream took 8 commits on <code>queue.py</code> and 1 to 2 on each of the other three in the five days after Q889 vendored them, none of it visible here.</p>
 
 
 

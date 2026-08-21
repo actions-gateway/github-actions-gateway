@@ -3212,7 +3212,8 @@ The local probe now runs first and the paginated timeline read stays behind the 
 <p><strong>A <code>WAKE</code> refusal is recorded, a probe that could not run is not.</strong> So an absent record means either that the assessment never ran or that it ran and could not measure, and the file cannot tell you which.
   <code>--confirm</code> fails closed either way, since no record is not <code>ELIGIBLE</code>; what is lost is diagnostic, on exactly the after-the-fact question the record exists for.
   The shell predecessor wrote a third verdict, <code>UNMEASURABLE</code>, for this; the Python treats a probe that could not run as never a verdict, which is defensible and is filed upstream as <a href="https://github.com/karlkfi/claude-skills/issues/129">claude-skills#129</a> rather than patched here, because an unmodified vendor is what keeps the next fix a clean overwrite.
-  Records accumulate and the last one governs, which keeps a refusal that short-circuited before probing from erasing the measurement an earlier one took.</p>
+  Records accumulate and the last one governs, which keeps a refusal that short-circuited before probing from erasing the measurement an earlier one took.
+  That trade has an expiry, and <a href="../skills/#vendored-from-the-skills-repo">skills.md § Vendored from the skills repo</a> records where it stands: this file is still an unmodified vendor and <code>make vendored-skills-check</code> holds it there, while <code>queue.py</code> has drifted 264 diff lines from its own upstream, so a fix there is a re-vendor rather than an overwrite (Q890).</p>
 </li>
 <li>
 <p><strong>It is not a registry.</strong> <code>tmp/</code> is gitignored and session-local; nothing reconciles it and no gate reads it.
