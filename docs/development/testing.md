@@ -1273,7 +1273,7 @@ Each case below is the evidence for its rule, so the rule is still readable off 
 
 These shortcuts recur, and each produces confident-but-wrong diagnoses:
 
-- **Treating a reproduction you built as the mechanism.** [Q820](../queue/Q820.md)'s plan doc reproduced its signature line for line by racing a `rm -rf` against a live git in the same repository, then spent three rounds hunting a remover that exists nowhere in the suite or the fan-out around it.
+- **Treating a reproduction you built as the mechanism.** Q820's plan doc reproduced its signature line for line by racing a `rm -rf` against a live git in the same repository, then spent three rounds hunting a remover that exists nowhere in the suite or the fan-out around it.
   The trees were intact at the moment of failure, so there was never a remover to find.
   What refuted the whole family the first time it fired was a reading taken from the *failing* system: the state of the throwaway trees, ten lines of `ERR` trap.
   When the question is narrower than a root cause, break the operation deterministically rather than racing it.
@@ -1720,7 +1720,7 @@ Tracing what a suite's child processes actually do means interposing on libc wit
 
 Both were caught only by a load proof: a constructor in the interposed library that prints one line per process when an environment variable is set.
 Without it, "no anomalies logged" and "the library never loaded" are the same output — the general rule one section up, in the one place where the harness fails silently by default.
-Detail: [q820-scripts-test-temp-file-flake.md](../plan/q820-scripts-test-temp-file-flake.md).
+Detail: [q820-scripts-test-temp-file-flake.md](../plan/archive/q820-scripts-test-temp-file-flake.md).
 
 ### Extracting a call argument by name is wrong wherever two functions share one
 
@@ -1747,7 +1747,7 @@ Each was caught by comparing its output against values already documented elsewh
 The section above is about a scan that reads the wrong *argument*.
 This one is about a scan that reads the wrong *context*: an `awk` or `grep` pipeline that remembers which function, section, or block it is inside, and never clears that memory when the block ends.
 
-[Q820](../queue/Q820.md)'s instrumentation turned on which `git commit -qam` calls sit inside a function, because `set -o errtrace` is load-bearing only for those.
+Q820's instrumentation turned on which `git commit -qam` calls sit inside a function, because `set -o errtrace` is load-bearing only for those.
 The scan was:
 
 ```awk
@@ -2093,7 +2093,7 @@ git -C "$repo" config maintenance.auto false
 
 Git spawns `git maintenance run --auto --detach` from `commit`, `merge`, `fetch`, `am` and `pull` (measured on git 2.55.0; `init`, `add`, `clone`, `rebase` and `cherry-pick` do not).
 Detached, that process outlives the command that started it and runs while the next one writes to the same repo.
-It stays harmless until the fixture holds enough loose objects to cross `gc.auto` (default 6700), at which point it reaches `git repack -d -l --cruft`, whose prune removes an object fanout directory between the next command's `mkdir` and the `open` under it: `unable to create temporary file`, exit 128, green on rerun ([Q820](../queue/Q820.md)).
+It stays harmless until the fixture holds enough loose objects to cross `gc.auto` (default 6700), at which point it reaches `git repack -d -l --cruft`, whose prune removes an object fanout directory between the next command's `mkdir` and the `open` under it: `unable to create temporary file`, exit 128, green on rerun (Q820).
 
 Only one fixture in the repo has ever been large enough, because it copies the whole of `docs/queue/` — nine repacks per run.
 That is the reason to set the key everywhere rather than where a flake has been seen: the threshold is crossed by a fixture growing, not by a suite changing, so the suite that acquires the defect is not the one that was edited.
@@ -2106,7 +2106,7 @@ GIT_TRACE=1 git -C "$repo" commit -qam next >"$trace" 2>&1
 grep -q 'maintenance run' "$trace" && bad '...'
 ```
 
-The trace goes to a **file**, not stderr: a detached child has no stderr, which is what hid the mechanism for three rounds of [Q820](../queue/Q820.md).
+The trace goes to a **file**, not stderr: a detached child has no stderr, which is what hid the mechanism for three rounds of Q820.
 The three merge-driver suites carry that assertion; the rest carry the config call alone.
 
 To check the whole tier, run each suite with `GIT_TRACE` set to a per-suite path and count `run_command: git maintenance run` (each spawn writes three trace lines, so count that one).
