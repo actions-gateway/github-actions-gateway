@@ -65,7 +65,7 @@ The wrong flag had already merged into the record by then.
 ### Instrumenting is not fixing, so an unestablished mechanism does not block it
 
 "Make the smallest change" and "measure before asserting a root cause" both push back on a fix coded to a guessed mechanism, and they are right to.
-[Q820](../queue/Q820.md)'s row asserted that the repo was gone mid-merge; measurement disproved it, so a fix written to the row would have repaired a working path.
+Q820's row asserted that the repo was gone mid-merge; measurement disproved it, so a fix written to the row would have repaired a working path.
 
 Neither rule governs **instrumentation**.
 A probe added to a failing suite asserts no mechanism and changes no behaviour, and it is verifiable on its own terms: it either names the failing call or it does not.
