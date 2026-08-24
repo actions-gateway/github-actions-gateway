@@ -1,7 +1,7 @@
 # Q820 — `git-merge-plan-index-test` dies on a temp-file error under the parallel scripts-test runner
 
-[`scripts/docs/git-merge-plan-index-test.sh`](../../scripts/docs/git-merge-plan-index-test.sh) builds throwaway git repos under a `mktemp -d` and runs the [`docs/plan/README.md` merge driver](../../scripts/docs/git-merge-plan-index.sh) against them.
-Under [`make scripts-test`](../../scripts/ci/run-parallel.sh), which launches every `scripts/**/*-test.sh` suite at once, it occasionally died on a git temp-file error and passed on rerun with no code change.
+[`scripts/docs/git-merge-plan-index-test.sh`](../../../scripts/docs/git-merge-plan-index-test.sh) builds throwaway git repos under a `mktemp -d` and runs the [`docs/plan/README.md` merge driver](../../../scripts/docs/git-merge-plan-index.sh) against them.
+Under [`make scripts-test`](../../../scripts/ci/run-parallel.sh), which launches every `scripts/**/*-test.sh` suite at once, it occasionally died on a git temp-file error and passed on rerun with no code change.
 
 **Status: cause named and fixed 2026-08-18.** The remover was git itself.
 Every commit in a fixture repo spawned a **detached** `git maintenance run --auto`, and about nine per suite run went on to repack and prune, removing each object fanout directory they emptied.
@@ -137,16 +137,16 @@ Run the suite itself 16 to 32 wide in a loop, each copy redirecting to its own l
 That reproduced it at roughly 1 run in 100 to 300; the harness is a dozen lines and was not committed.
 Watch the syscalls with an interposer on `open`/`mkdir`/`rmdir`/`unlink`, remembering both instrumentation traps above.
 
-**Do not edit tracked docs while the loop runs.** The gate-agreement case copies the live `docs/plan/` and `docs/queue/` trees, so a plan file added without its [`docs/plan/README.md`](README.md) row fails that case's baseline with exit **1**, which is self-inflicted rather than this flake.
+**Do not edit tracked docs while the loop runs.** The gate-agreement case copies the live `docs/plan/` and `docs/queue/` trees, so a plan file added without its [`docs/plan/README.md`](../README.md) row fails that case's baseline with exit **1**, which is self-inflicted rather than this flake.
 
 ## If it recurs anyway
 
 The fix removes the only concurrent writer found in these repositories, so a recurrence means a different one.
 Capture, in order: the failing call from the `ERR` trap, the `Q820:` tree reading, the errno and which object, and whether a sibling suite failed in the same run.
-[Q826](../queue/Q826.md) is a sibling flake in [`git-merge-gate-lists-test.sh`](../../scripts/ci/git-merge-gate-lists-test.sh) with a different signature, and [Q822](../queue/Q822.md) tracks unrelated suites failing under concurrent load.
+[Q826](../../queue/Q826.md) is a sibling flake in [`git-merge-gate-lists-test.sh`](../../../scripts/ci/git-merge-gate-lists-test.sh) with a different signature, and [Q822](../../queue/Q822.md) tracks unrelated suites failing under concurrent load.
 
 **This mechanism does not reach Q826**, measured 2026-08-18 while sweeping the fix across the tier.
 That fixture holds about six objects against `gc.auto`'s default 6700, so its three detached maintenance runs return without repacking anything, and there is no prune to race — the trace shows the `maintenance run` line followed straight by the next suite command, where this suite's shows `git repack -d -l --cruft` under it.
-A merge driver exiting non-zero reproduces Q826's line verbatim, and [`merge-driver-common.sh`](../../scripts/lib/merge-driver-common.sh)'s `ERR` trap turns any internal failure into a fallback conflict, so the driver's own exit is where to look.
+A merge driver exiting non-zero reproduces Q826's line verbatim, and [`merge-driver-common.sh`](../../../scripts/lib/merge-driver-common.sh)'s `ERR` trap turns any internal failure into a fallback conflict, so the driver's own exit is where to look.
 
-The same fixture-repo defect existed wherever a suite commits in a throwaway repo; Q878 swept it, and every fixture repo in the tree now sets the key ([the rule](../development/testing.md#a-fixture-repo-must-not-run-background-git)).
+The same fixture-repo defect existed wherever a suite commits in a throwaway repo; Q878 swept it, and every fixture repo in the tree now sets the key ([the rule](../../development/testing.md#a-fixture-repo-must-not-run-background-git)).
