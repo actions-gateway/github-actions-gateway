@@ -2909,7 +2909,7 @@ Measuring it disproved the claim — <code>helm rollback</code> replays the targ
 The wrong flag had already merged into the record by then.</p>
 <h3 id="instrumenting-is-not-fixing-so-an-unestablished-mechanism-does-not-block-it">Instrumenting is not fixing, so an unestablished mechanism does not block it<a class="headerlink" href="#instrumenting-is-not-fixing-so-an-unestablished-mechanism-does-not-block-it" title="Permanent link">&para;</a></h3>
 <p>"Make the smallest change" and "measure before asserting a root cause" both push back on a fix coded to a guessed mechanism, and they are right to.
-<a href="../../queue/Q820/">Q820</a>'s row asserted that the repo was gone mid-merge; measurement disproved it, so a fix written to the row would have repaired a working path.</p>
+Q820's row asserted that the repo was gone mid-merge; measurement disproved it, so a fix written to the row would have repaired a working path.</p>
 <p>Neither rule governs <strong>instrumentation</strong>.
 A probe added to a failing suite asserts no mechanism and changes no behaviour, and it is verifiable on its own terms: it either names the failing call or it does not.
 Declining to add one until the mechanism is known is backwards, because the missing name is <em>why</em> the mechanism is unknown.</p>

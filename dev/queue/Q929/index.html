@@ -2570,6 +2570,10 @@
 <h1 id="the-lint-gate-returns-two-verdicts-on-one-tree">The lint gate returns two verdicts on one tree<a class="headerlink" href="#the-lint-gate-returns-two-verdicts-on-one-tree" title="Permanent link">&para;</a></h1>
 <p>Measured 2026-08-18: <code>c99129aa</code> passed <code>lint</code> in run 32145897225 and failed in 32172968731, <code>nolintlint</code> calling two staticcheck directives unused in only one.
 Same Go, cache key and scope. #1639 deleted the directives; the flake outlives them.</p>
+<p>Not recurred: <code>main</code> has taken 28 green <code>unit-test</code> runs and no failure at all since 2026-08-18T18:47Z (measured 2026-08-23).
+The two directives that exhibited it are gone and the tree now carries no <code>nolint:staticcheck</code> anywhere, so <code>nolintlint</code> has nothing staticcheck-shaped left to disagree about.
+The 79 remaining directives are gosec accepts and whether the same nondeterminism reaches those is <strong>unmeasured</strong>, which is also why the non-recurrence is weak evidence either way.
+Re-measure the surface before picking: the <code>M</code> was sized against a defect that currently has no way to express itself.</p>
 
 
 

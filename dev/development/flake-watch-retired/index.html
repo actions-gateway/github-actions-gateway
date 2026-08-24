@@ -2589,6 +2589,20 @@ A refuted row that was <a href="../maintaining-backlog/#repurposing-an-id-is-a-c
 </thead>
 <tbody>
 <tr>
+<td>Q820</td>
+<td><code>git-merge-plan-index-test</code> dies on a temp-file error under the fan-out</td>
+<td>#1635</td>
+<td>2026-08-23</td>
+<td>Soaked: 28 green <code>unit-test</code> runs since 2026-08-18 (bar ≥25, infra: the fan-out temp-file class Q596, Q642, Q690, Q703, Q752 and Q789 all retired under). <code>main</code> has not failed <code>unit-test</code> since 2026-08-18T18:47Z.</td>
+</tr>
+<tr>
+<td>Q863</td>
+<td>A <code>docker buildx</code> base-image pull has no retry, so one 403 fails a build</td>
+<td>#1620</td>
+<td>2026-08-23</td>
+<td>Soaked: 37 green <code>security-scan</code> runs since 2026-08-18 (bar ≥25, infra: the Q460 shape, same workflow and same registry-denial cause). <code>publish.yml</code>'s build gained the same retry in #1668.</td>
+</tr>
+<tr>
 <td>Q825</td>
 <td>The no-toolchain case flakes twice over: pipeline status, and a rebuild</td>
 <td>#1630</td>

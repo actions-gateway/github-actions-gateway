@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q863/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/plan/archive/q820-scripts-test-temp-file-flake/">
       
       
       
@@ -18,19 +18,19 @@
         
       
       
-      <link rel="icon" href="../../assets/favicon.svg">
+      <link rel="icon" href="../../../assets/favicon.svg">
       <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
     
     
       
-        <title>A docker buildx base-image pull has no retry, so one 403 fails a build - GitHub Actions Gateway</title>
+        <title>Q820 — git-merge-plan-index-test dies on a temp-file error under the parallel scripts-test runner - GitHub Actions Gateway</title>
       
     
     
-      <link rel="stylesheet" href="../../assets/stylesheets/main.484c7ddc.min.css">
+      <link rel="stylesheet" href="../../../assets/stylesheets/main.484c7ddc.min.css">
       
         
-        <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
+        <link rel="stylesheet" href="../../../assets/stylesheets/palette.ab4e12ef.min.css">
       
       
 
@@ -43,9 +43,9 @@
       
     
     
-      <link rel="stylesheet" href="../../stylesheets/extra.css">
+      <link rel="stylesheet" href="../../../stylesheets/extra.css">
     
-    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    <script>__md_scope=new URL("../../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
     
       
   
@@ -55,9 +55,9 @@
     
   
   
-  <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/IBMPlexSans-Regular.woff2">
-  <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/IBMPlexSans-Bold.woff2">
-  <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/MonaspaceNeon-Medium.woff2">
+  <link rel="preload" as="font" type="font/woff2" crossorigin href="../../../assets/fonts/IBMPlexSans-Regular.woff2">
+  <link rel="preload" as="font" type="font/woff2" crossorigin href="../../../assets/fonts/IBMPlexSans-Bold.woff2">
+  <link rel="preload" as="font" type="font/woff2" crossorigin href="../../../assets/fonts/MonaspaceNeon-Medium.woff2">
   
   <meta property="og:image" content="https://actions-gateway.com/devassets/social-preview.png">
   <meta property="og:image:width" content="1280">
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#a-docker-buildx-base-image-pull-has-no-retry-so-one-403-fails-a-build" class="md-skip">
+        <a href="#q820--git-merge-plan-index-test-dies-on-a-temp-file-error-under-the-parallel-scripts-test-runner" class="md-skip">
           Skip to content
         </a>
       
@@ -142,10 +142,10 @@
             <div class="md-banner__inner md-grid md-typeset">
               You're not viewing the latest release.
   <a href="https://actions-gateway.com/dev"><strong>Go to the current docs.</strong></a>
-    <a href="../">See the working backlog.</a>
+    <a href="../../../queue/">See the working backlog.</a>
 
             </div>
-            <script>var el=document.querySelector("[data-md-component=outdated]"),base=new URL("../.."),outdated=__md_get("__outdated",sessionStorage,base);!0===outdated&&el&&(el.hidden=!1)</script>
+            <script>var el=document.querySelector("[data-md-component=outdated]"),base=new URL("../../.."),outdated=__md_get("__outdated",sessionStorage,base);!0===outdated&&el&&(el.hidden=!1)</script>
           </aside>
         
       </div>
@@ -155,9 +155,9 @@
 
 <header class="md-header" data-md-component="header">
   <nav class="md-header__inner md-grid" aria-label="Header">
-    <a href="../.." title="GitHub Actions Gateway" class="md-header__button md-logo" aria-label="GitHub Actions Gateway" data-md-component="logo">
+    <a href="../../.." title="GitHub Actions Gateway" class="md-header__button md-logo" aria-label="GitHub Actions Gateway" data-md-component="logo">
       
-  <img src="../../assets/logo.svg" alt="logo">
+  <img src="../../../assets/logo.svg" alt="logo">
 
     </a>
     <label class="md-header__button md-icon" for="__drawer">
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              A docker buildx base-image pull has no retry, so one 403 fails a build
+              Q820 — git-merge-plan-index-test dies on a temp-file error under the parallel scripts-test runner
             
           </span>
         </div>
@@ -287,7 +287,7 @@
   
   
     <li class="md-tabs__item">
-      <a href="../.." class="md-tabs__link">
+      <a href="../../.." class="md-tabs__link">
         
   
   
@@ -306,7 +306,7 @@
   
   
     <li class="md-tabs__item">
-      <a href="../../why-gag/" class="md-tabs__link">
+      <a href="../../../why-gag/" class="md-tabs__link">
         
   
   
@@ -325,7 +325,7 @@
   
   
     <li class="md-tabs__item">
-      <a href="../../alternatives/" class="md-tabs__link">
+      <a href="../../../alternatives/" class="md-tabs__link">
         
   
   
@@ -344,7 +344,7 @@
   
   
     <li class="md-tabs__item">
-      <a href="../../features/" class="md-tabs__link">
+      <a href="../../../features/" class="md-tabs__link">
         
   
   
@@ -363,7 +363,7 @@
   
   
     <li class="md-tabs__item">
-      <a href="../../demo/" class="md-tabs__link">
+      <a href="../../../demo/" class="md-tabs__link">
         
   
   
@@ -382,7 +382,7 @@
   
   
     <li class="md-tabs__item">
-      <a href="../../getting-started/" class="md-tabs__link">
+      <a href="../../../getting-started/" class="md-tabs__link">
         
   
   
@@ -401,7 +401,7 @@
   
   
     <li class="md-tabs__item">
-      <a href="../../roadmap/" class="md-tabs__link">
+      <a href="../../../roadmap/" class="md-tabs__link">
         
   
   
@@ -422,7 +422,7 @@
     
     
       <li class="md-tabs__item">
-        <a href="../../design/" class="md-tabs__link">
+        <a href="../../../design/" class="md-tabs__link">
           
   
   
@@ -444,7 +444,7 @@
     
     
       <li class="md-tabs__item">
-        <a href="../../operations/" class="md-tabs__link">
+        <a href="../../../operations/" class="md-tabs__link">
           
   
   
@@ -466,7 +466,7 @@
     
     
       <li class="md-tabs__item">
-        <a href="../../reference/" class="md-tabs__link">
+        <a href="../../../reference/" class="md-tabs__link">
           
   
   
@@ -502,9 +502,9 @@
 
 <nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
   <label class="md-nav__title" for="__drawer">
-    <a href="../.." title="GitHub Actions Gateway" class="md-nav__button md-logo" aria-label="GitHub Actions Gateway" data-md-component="logo">
+    <a href="../../.." title="GitHub Actions Gateway" class="md-nav__button md-logo" aria-label="GitHub Actions Gateway" data-md-component="logo">
       
-  <img src="../../assets/logo.svg" alt="logo">
+  <img src="../../../assets/logo.svg" alt="logo">
 
     </a>
     GitHub Actions Gateway
@@ -531,7 +531,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../.." class="md-nav__link">
+      <a href="../../.." class="md-nav__link">
         
   
   
@@ -558,7 +558,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../why-gag/" class="md-nav__link">
+      <a href="../../../why-gag/" class="md-nav__link">
         
   
   
@@ -585,7 +585,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../alternatives/" class="md-nav__link">
+      <a href="../../../alternatives/" class="md-nav__link">
         
   
   
@@ -612,7 +612,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../features/" class="md-nav__link">
+      <a href="../../../features/" class="md-nav__link">
         
   
   
@@ -639,7 +639,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../demo/" class="md-nav__link">
+      <a href="../../../demo/" class="md-nav__link">
         
   
   
@@ -666,7 +666,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../getting-started/" class="md-nav__link">
+      <a href="../../../getting-started/" class="md-nav__link">
         
   
   
@@ -693,7 +693,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../roadmap/" class="md-nav__link">
+      <a href="../../../roadmap/" class="md-nav__link">
         
   
   
@@ -779,7 +779,7 @@
         
           
           <div class="md-nav__link md-nav__container">
-            <a href="../../design/" class="md-nav__link ">
+            <a href="../../../design/" class="md-nav__link ">
               
   
   
@@ -823,7 +823,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../design/01-executive-summary/" class="md-nav__link">
+      <a href="../../../design/01-executive-summary/" class="md-nav__link">
         
   
   
@@ -851,7 +851,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../design/02-architecture/" class="md-nav__link">
+      <a href="../../../design/02-architecture/" class="md-nav__link">
         
   
   
@@ -879,7 +879,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../design/network-architecture/" class="md-nav__link">
+      <a href="../../../design/network-architecture/" class="md-nav__link">
         
   
   
@@ -907,7 +907,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../design/03-api-contracts/" class="md-nav__link">
+      <a href="../../../design/03-api-contracts/" class="md-nav__link">
         
   
   
@@ -935,7 +935,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../design/04-operational-flows/" class="md-nav__link">
+      <a href="../../../design/04-operational-flows/" class="md-nav__link">
         
   
   
@@ -963,7 +963,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../design/05-security/" class="md-nav__link">
+      <a href="../../../design/05-security/" class="md-nav__link">
         
   
   
@@ -991,7 +991,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../design/06-implementation-phases/" class="md-nav__link">
+      <a href="../../../design/06-implementation-phases/" class="md-nav__link">
         
   
   
@@ -1019,7 +1019,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../design/07-test-plan/" class="md-nav__link">
+      <a href="../../../design/07-test-plan/" class="md-nav__link">
         
   
   
@@ -1047,7 +1047,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../design/08-glossary/" class="md-nav__link">
+      <a href="../../../design/08-glossary/" class="md-nav__link">
         
   
   
@@ -1075,7 +1075,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../design/appendix-a-capacity-slos/" class="md-nav__link">
+      <a href="../../../design/appendix-a-capacity-slos/" class="md-nav__link">
         
   
   
@@ -1103,7 +1103,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../design/appendix-b-worker-isolation/" class="md-nav__link">
+      <a href="../../../design/appendix-b-worker-isolation/" class="md-nav__link">
         
   
   
@@ -1131,7 +1131,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../design/appendix-c-ai-implementation/" class="md-nav__link">
+      <a href="../../../design/appendix-c-ai-implementation/" class="md-nav__link">
         
   
   
@@ -1159,7 +1159,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../design/appendix-d-alternatives-considered/" class="md-nav__link">
+      <a href="../../../design/appendix-d-alternatives-considered/" class="md-nav__link">
         
   
   
@@ -1187,7 +1187,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../design/appendix-e-capacity-planning/" class="md-nav__link">
+      <a href="../../../design/appendix-e-capacity-planning/" class="md-nav__link">
         
   
   
@@ -1215,7 +1215,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../design/appendix-f-cost-model/" class="md-nav__link">
+      <a href="../../../design/appendix-f-cost-model/" class="md-nav__link">
         
   
   
@@ -1243,7 +1243,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../design/appendix-g-future-enhancements/" class="md-nav__link">
+      <a href="../../../design/appendix-g-future-enhancements/" class="md-nav__link">
         
   
   
@@ -1271,7 +1271,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../design/appendix-h-v2-api-decomposition/" class="md-nav__link">
+      <a href="../../../design/appendix-h-v2-api-decomposition/" class="md-nav__link">
         
   
   
@@ -1299,7 +1299,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../design/github-protocol-dependencies/" class="md-nav__link">
+      <a href="../../../design/github-protocol-dependencies/" class="md-nav__link">
         
   
   
@@ -1411,7 +1411,7 @@
         
           
           <div class="md-nav__link md-nav__container">
-            <a href="../../operations/" class="md-nav__link ">
+            <a href="../../../operations/" class="md-nav__link ">
               
   
   
@@ -1455,7 +1455,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../operations/personas/" class="md-nav__link">
+      <a href="../../../operations/personas/" class="md-nav__link">
         
   
   
@@ -1483,7 +1483,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../operations/install/" class="md-nav__link">
+      <a href="../../../operations/install/" class="md-nav__link">
         
   
   
@@ -1511,7 +1511,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../operations/air-gapped-install/" class="md-nav__link">
+      <a href="../../../operations/air-gapped-install/" class="md-nav__link">
         
   
   
@@ -1539,7 +1539,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../operations/gitops/" class="md-nav__link">
+      <a href="../../../operations/gitops/" class="md-nav__link">
         
   
   
@@ -1567,7 +1567,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../operations/upgrade/" class="md-nav__link">
+      <a href="../../../operations/upgrade/" class="md-nav__link">
         
   
   
@@ -1595,7 +1595,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../operations/migration-from-arc/" class="md-nav__link">
+      <a href="../../../operations/migration-from-arc/" class="md-nav__link">
         
   
   
@@ -1623,7 +1623,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../operations/migration-v1-to-v2/" class="md-nav__link">
+      <a href="../../../operations/migration-v1-to-v2/" class="md-nav__link">
         
   
   
@@ -1651,7 +1651,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../operations/v1alpha1-deprecation/" class="md-nav__link">
+      <a href="../../../operations/v1alpha1-deprecation/" class="md-nav__link">
         
   
   
@@ -1679,7 +1679,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../operations/tenant-onboarding/" class="md-nav__link">
+      <a href="../../../operations/tenant-onboarding/" class="md-nav__link">
         
   
   
@@ -1707,7 +1707,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../operations/resourcequota-sizing/" class="md-nav__link">
+      <a href="../../../operations/resourcequota-sizing/" class="md-nav__link">
         
   
   
@@ -1735,7 +1735,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../operations/runner-template-library/" class="md-nav__link">
+      <a href="../../../operations/runner-template-library/" class="md-nav__link">
         
   
   
@@ -1763,7 +1763,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../operations/in-runner-image-builds/" class="md-nav__link">
+      <a href="../../../operations/in-runner-image-builds/" class="md-nav__link">
         
   
   
@@ -1791,7 +1791,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../operations/kata-dind-workloads/" class="md-nav__link">
+      <a href="../../../operations/kata-dind-workloads/" class="md-nav__link">
         
   
   
@@ -1819,7 +1819,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../operations/p2p-image-distribution/" class="md-nav__link">
+      <a href="../../../operations/p2p-image-distribution/" class="md-nav__link">
         
   
   
@@ -1847,7 +1847,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../operations/service-mesh-coexistence/" class="md-nav__link">
+      <a href="../../../operations/service-mesh-coexistence/" class="md-nav__link">
         
   
   
@@ -1941,7 +1941,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../operations/observability/" class="md-nav__link">
+      <a href="../../../operations/observability/" class="md-nav__link">
         
   
   
@@ -1969,7 +1969,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../operations/observability-metrics/" class="md-nav__link">
+      <a href="../../../operations/observability-metrics/" class="md-nav__link">
         
   
   
@@ -1997,7 +1997,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../operations/observability-metrics-access/" class="md-nav__link">
+      <a href="../../../operations/observability-metrics-access/" class="md-nav__link">
         
   
   
@@ -2025,7 +2025,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../operations/observability-alerting/" class="md-nav__link">
+      <a href="../../../operations/observability-alerting/" class="md-nav__link">
         
   
   
@@ -2053,7 +2053,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../operations/observability-dashboards/" class="md-nav__link">
+      <a href="../../../operations/observability-dashboards/" class="md-nav__link">
         
   
   
@@ -2081,7 +2081,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../operations/observability-logging/" class="md-nav__link">
+      <a href="../../../operations/observability-logging/" class="md-nav__link">
         
   
   
@@ -2117,7 +2117,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../operations/cost-attribution/" class="md-nav__link">
+      <a href="../../../operations/cost-attribution/" class="md-nav__link">
         
   
   
@@ -2145,7 +2145,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../operations/worker-rightsizing/" class="md-nav__link">
+      <a href="../../../operations/worker-rightsizing/" class="md-nav__link">
         
   
   
@@ -2173,7 +2173,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../operations/node-shutdown-budgets/" class="md-nav__link">
+      <a href="../../../operations/node-shutdown-budgets/" class="md-nav__link">
         
   
   
@@ -2201,7 +2201,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../operations/runbook/" class="md-nav__link">
+      <a href="../../../operations/runbook/" class="md-nav__link">
         
   
   
@@ -2229,7 +2229,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../operations/backup-restore/" class="md-nav__link">
+      <a href="../../../operations/backup-restore/" class="md-nav__link">
         
   
   
@@ -2257,7 +2257,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../operations/velero-backup-restore/" class="md-nav__link">
+      <a href="../../../operations/velero-backup-restore/" class="md-nav__link">
         
   
   
@@ -2285,7 +2285,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../operations/troubleshooting/" class="md-nav__link">
+      <a href="../../../operations/troubleshooting/" class="md-nav__link">
         
   
   
@@ -2313,7 +2313,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../operations/security-operations/" class="md-nav__link">
+      <a href="../../../operations/security-operations/" class="md-nav__link">
         
   
   
@@ -2341,7 +2341,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../operations/admission-policies/" class="md-nav__link">
+      <a href="../../../operations/admission-policies/" class="md-nav__link">
         
   
   
@@ -2369,7 +2369,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../operations/release/" class="md-nav__link">
+      <a href="../../../operations/release/" class="md-nav__link">
         
   
   
@@ -2397,7 +2397,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../operations/kata-ci-spike-runbook/" class="md-nav__link">
+      <a href="../../../operations/kata-ci-spike-runbook/" class="md-nav__link">
         
   
   
@@ -2457,7 +2457,7 @@
         
           
           <div class="md-nav__link md-nav__container">
-            <a href="../../reference/" class="md-nav__link ">
+            <a href="../../../reference/" class="md-nav__link ">
               
   
   
@@ -2501,7 +2501,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../reference/api/" class="md-nav__link">
+      <a href="../../../reference/api/" class="md-nav__link">
         
   
   
@@ -2549,6 +2549,113 @@
     
   
   
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#the-signature" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The signature
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-mechanism" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The mechanism
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-fix" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The fix
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#sightings" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Sightings
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#where-the-earlier-rounds-went-wrong" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Where the earlier rounds went wrong
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-stayed-ruled-out" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What stayed ruled out
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#neighbouring-defects-not-this-one" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Neighbouring defects, not this one
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#reproducing-if-it-recurs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Reproducing, if it recurs
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#if-it-recurs-anyway" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        If it recurs anyway
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
 </nav>
                   </div>
                 </div>
@@ -2567,19 +2674,180 @@
   
 
 
-<h1 id="a-docker-buildx-base-image-pull-has-no-retry-so-one-403-fails-a-build">A <code>docker buildx</code> base-image pull has no retry, so one 403 fails a build<a class="headerlink" href="#a-docker-buildx-base-image-pull-has-no-retry-so-one-403-fails-a-build" title="Permanent link">&para;</a></h1>
-<p><strong>Event:</strong> a <code>trivy</code> shard 403s on a base-image pull on <code>main</code> after the fix. → top of Queue, escalated.
-Mitigated by a second build attempt 30s later, and by <code>retry.sh</code> in the local mirror.
-<code>publish.yml</code>'s build is retried too now, through a resolver step so the retry's index digest is the only one anything signs.</p>
+<h1 id="q820--git-merge-plan-index-test-dies-on-a-temp-file-error-under-the-parallel-scripts-test-runner">Q820 — <code>git-merge-plan-index-test</code> dies on a temp-file error under the parallel scripts-test runner<a class="headerlink" href="#q820--git-merge-plan-index-test-dies-on-a-temp-file-error-under-the-parallel-scripts-test-runner" title="Permanent link">&para;</a></h1>
+<p><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/docs/git-merge-plan-index-test.sh"><code>scripts/docs/git-merge-plan-index-test.sh</code></a> builds throwaway git repos under a <code>mktemp -d</code> and runs the <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/docs/git-merge-plan-index.sh"><code>docs/plan/README.md</code> merge driver</a> against them.
+Under <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/ci/run-parallel.sh"><code>make scripts-test</code></a>, which launches every <code>scripts/**/*-test.sh</code> suite at once, it occasionally died on a git temp-file error and passed on rerun with no code change.</p>
+<p><strong>Status: cause named and fixed 2026-08-18.</strong> The remover was git itself.
+Every commit in a fixture repo spawned a <strong>detached</strong> <code>git maintenance run --auto</code>, and about nine per suite run went on to repack and prune, removing each object fanout directory they emptied.
+Detached, that gc outlives the command that spawned it and runs while the <em>next</em> command writes to the same repo.
+When it removed a fanout directory in the window between git's <code>mkdir</code> and the <code>open</code> beneath it, the write failed with <code>unable to create temporary file</code> and exit 128.</p>
+<p>Everything below was measured on macOS 15.5 (Darwin 25.5.0, arm64, 18 cores), git 2.55.0, bash 5.3.15, unless it names CI.</p>
+<h2 id="the-signature">The signature<a class="headerlink" href="#the-signature" title="Permanent link">&para;</a></h2>
+<p>Identical in sightings 1 to 3, and reproduced locally:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>[git-merge-plan-index-test] error: unable to create temporary file: No such file or directory
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>[git-merge-plan-index-test] error: docs/plan/README.md: failed to insert into database
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>[git-merge-plan-index-test] error: unable to index file 'docs/plan/README.md'
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>[git-merge-plan-index-test] fatal: updating files failed
+<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>[run-parallel] FAILED: git-merge-plan-index-test (exit 128)
+</code></pre></div>
+<p>A shorter variant loses the middle two lines and names the commit object instead of a blob:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>error: unable to create temporary file: Invalid argument
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>fatal: failed to write commit object
+</code></pre></div>
+<p>Both are the same fault; the difference is only which object the prune happened to race.</p>
+<h2 id="the-mechanism">The mechanism<a class="headerlink" href="#the-mechanism" title="Permanent link">&para;</a></h2>
+<p>Taken with a <code>DYLD_INSERT_LIBRARIES</code> interposer on <code>open</code>, <code>mkdir</code>, <code>rmdir</code> and <code>unlink</code>, writing to a file so a detached process is visible.
+Two pids, one repository, interleaved:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>pid=76221 unlink .git/objects/ca/657e4a4f73bf76…      gc prunes a packed loose object
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>pid=76221 rmdir  .git/objects/ca                       and removes the fanout it emptied
+<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>pid=76343 mkdir  .git/objects/cc            rc=0       the committing git creates its fanout
+<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>pid=76221 rmdir  .git/objects/cc                       gc removes it
+<a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>pid=76343 open   .git/objects/cc/tmp_obj_…  ENOENT     fatal
+</code></pre></div>
+<p>pid 76221 is a garbage collection: it writes <code>pack-*.mtimes</code>, <code>.bitmap</code> and <code>.promisor</code>, then unlinks the loose objects it packed and rmdirs each emptied fanout directory. git's ordinary path for a new fanout directory is <code>open</code> failing <code>ENOENT</code>, then <code>mkdir</code>, then a second <code>open</code>; four such sequences completed in pid 76343 moments earlier.
+The fifth lost the race.</p>
+<p>At the fatal <code>open</code> the interposer also recorded the working directory valid, <code>.git</code> present and <code>.git/objects</code> present, which is why nothing about the repository looked wrong.</p>
+<p><strong>Counts, from one clean suite run traced end to end:</strong> 64 processes spawned as <code>git maintenance run --auto --quiet --detach</code>, of which 9 reached <code>git repack -d -l --cruft --cruft-expiration=2.weeks.ago --quiet --write-midx</code>.
+So the gc is not rare; only the collision is.</p>
+<p><strong>Why the fan-out matters.</strong> The window is the microseconds between one process's <code>mkdir</code> and its own next <code>open</code>.
+Contention lengthens both the gc and the descheduled commit, which is why <code>make check</code> reproduces it and a quiet <code>make scripts-test</code> does not.</p>
+<h2 id="the-fix">The fix<a class="headerlink" href="#the-fix" title="Permanent link">&para;</a></h2>
+<p><code>plain_repo</code> and the gate-agreement repo now set <code>maintenance.auto false</code> on every fixture repo, which stops the spawn at source (measured: <code>gc.auto=0</code> also works; <code>maintenance.auto</code> is the knob that names the intent).
+A fixture repo has nothing to maintain, so the fix is to not start it.</p>
+<p>Verification:</p>
+<table>
+<thead>
+<tr>
+<th></th>
+<th>Before</th>
+<th>After</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>git maintenance run --auto … --detach</code> spawned per suite run</td>
+<td>64</td>
+<td>0</td>
+</tr>
+<tr>
+<td><code>git repack … --cruft</code> spawned per suite run</td>
+<td>9</td>
+<td>0</td>
+</tr>
+</tbody>
+</table>
+<p>The suite carries an assertion for it, written against behaviour rather than the config key that currently delivers it: a fixture commit under <code>GIT_TRACE=1</code> must spawn nothing matching <code>maintenance run</code>.
+Proved able to fail by deleting the mechanism: with the <code>no_auto_maintenance</code> call removed from <code>plain_repo</code>, it reports <code>FAIL a fixture commit spawned background maintenance: git maintenance run --auto --quiet --detach</code> and the suite exits 1.</p>
+<h2 id="sightings">Sightings<a class="headerlink" href="#sightings" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>#</th>
+<th>Date</th>
+<th>Where</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td>2026-08-12</td>
+<td>local, under <code>make check</code></td>
+<td>Host temp pressure suspected at the time</td>
+</tr>
+<tr>
+<td>2</td>
+<td>2026-08-14</td>
+<td>CI, PR #1511</td>
+<td>Ephemeral runner</td>
+</tr>
+<tr>
+<td>3</td>
+<td>2026-08-15</td>
+<td>CI, PR #1534, run <a href="https://github.com/actions-gateway/github-actions-gateway/actions/runs/31884780048">31884780048</a></td>
+<td>Ephemeral runner; green on rerun of the same commit</td>
+</tr>
+<tr>
+<td>4</td>
+<td>2026-08-15</td>
+<td>local, under <code>make check</code></td>
+<td>First sighting with the tree read. Every repository intact; <code>EINVAL</code>; commit object</td>
+</tr>
+<tr>
+<td>5</td>
+<td>2026-08-18</td>
+<td>local, reproduction harness</td>
+<td><code>EINVAL</code>, commit object, every repository intact</td>
+</tr>
+<tr>
+<td>6</td>
+<td>2026-08-18</td>
+<td>local, harness</td>
+<td><code>ENOENT</code>, blob: the CI signature, on macOS</td>
+</tr>
+<tr>
+<td>7</td>
+<td>2026-08-18</td>
+<td>local, harness, instrumented</td>
+<td>The syscall sequence above, naming the gc</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Reading sighting 3 costs a step-level look.</strong> The failing check is named <code>shellcheck</code> and shellcheck itself passed: the one that failed is the <code>scripts behavioural tests (make scripts-test)</code> step.
+<code>unit-test-gate</code> also reported failure because it aggregates the gating jobs' results.
+Read the step conclusions:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>gh<span class="w"> </span>api<span class="w"> </span>repos/actions-gateway/github-actions-gateway/actions/jobs/95012397955<span class="w"> </span>--jq<span class="w"> </span><span class="s1">'.steps[] | "\(.number) \(.conclusion) \(.name)"'</span>
+</code></pre></div>
+<h2 id="where-the-earlier-rounds-went-wrong">Where the earlier rounds went wrong<a class="headerlink" href="#where-the-earlier-rounds-went-wrong" title="Permanent link">&para;</a></h2>
+<p>Three readings in this file pointed away from the answer, and each is worth keeping.</p>
+<p><strong>The errno split was read as possibly two bugs.</strong> Sighting 4's <code>EINVAL</code> on a commit object against sightings 1 to 3's <code>ENOENT</code> on a blob looked like it might split by platform.
+Both variants reproduced on one macOS host, so it never did: it is one fault, and the errno only records which object lost the race.</p>
+<p><strong>"Every repository intact" was read as excluding a removal.</strong> It does exclude the family this file spent three rounds on, where something removes the repo or its <code>.git</code>.
+It does not exclude a remover that only takes <em>empty fanout directories</em>, which is what a prune does and what leaves every repository intact by construction.
+The reading was correct; the inference from it was too broad.</p>
+<p><strong>The remover was looked for outside git.</strong> Every candidate considered was a shell <code>rm -rf</code>: the suite's EXIT trap, <code>plain_repo</code>'s, a sibling suite's, the runner's <code>SIGTERM</code> path.
+The actual remover is a <code>git</code> process that the suite never invokes and that no line of the suite mentions, spawned by <code>git commit</code> itself.
+A trace that only watched shell removals would never have found it.</p>
+<p><strong>And the instrument that found it nearly reported a false negative twice.</strong> <code>/usr/bin/env</code> is SIP-<code>restricted</code>, so <code>#!/usr/bin/env bash</code> clears every <code>DYLD_*</code> variable before bash starts and the whole process tree runs uninstrumented; the suite has to be invoked as <code>"$(command -v bash)" &lt;script&gt;</code> instead.
+And a detached child has no stderr, so traces must go to a file or the one process that mattered writes into the void.
+Both were caught only by a load proof, a constructor that prints one line per process, because without it "no anomalies logged" and "the library never loaded" are the same output.</p>
+<h2 id="what-stayed-ruled-out">What stayed ruled out<a class="headerlink" href="#what-stayed-ruled-out" title="Permanent link">&para;</a></h2>
+<ul>
+<li><strong>A trap firing on a subshell exit is not the remover.</strong> Bash resets traps in subshells, so <code>trap 'rm -rf "$WORKDIR"' EXIT</code> cannot fire when a <code>$( )</code> helper or the <code>(cd "$repo" &amp;&amp; … --install)</code> subshell exits.</li>
+<li><strong>The tree was not already gone when the git command started.</strong> Every removal staged <em>before</em> a git command fails earlier and differently (<code>fatal: not a git repository</code>, <code>fatal: cannot change to …</code>), never with this signature, which is only reached after git has validated the repository.</li>
+<li><strong>No cross-suite path collision.</strong> Every scratch root under <code>scripts/</code> is a <code>mktemp -d</code> or a path under the gitignored <code>tmp/</code>; no script sets <code>TMPDIR</code> or <code>HOME</code>; 100 consecutive suite runs recorded 100 distinct workdirs.</li>
+<li><strong>The host filesystem does not fail under this churn.</strong> A git-free probe doing the same create-and-delete churn (16 processes, 153,600 file creations) had zero failures.
+  Its question is narrower than "the filesystem never fails", since it did not reproduce git's renames and fsyncs, but it kills the churn theory.</li>
+<li><strong><code>SIGTERM</code> from the runner.</strong> That path exits 143, and every Q820 sighting is 128.</li>
+</ul>
+<p><strong>Side finding worth keeping:</strong> git treats a repository whose <code>.git/objects</code> is missing as invalid and searches <em>upward</em> for an enclosing one, so a probe of this class placed inside the worktree silently operates on the real repository.
+Put throwaway repos under <code>mktemp -d</code>.</p>
+<h2 id="neighbouring-defects-not-this-one">Neighbouring defects, not this one<a class="headerlink" href="#neighbouring-defects-not-this-one" title="Permanent link">&para;</a></h2>
+<p><strong>A merge failure is reported as a conflict, with the message discarded.</strong> <code>run_merge</code> runs <code>git merge … &gt;/dev/null 2&gt;&amp;1</code>, so any non-conflict failure reaches the assertion as <code>merge reported a conflict (rc=…)</code> with nothing to read.
+Two <code>main</code> runs on 2026-08-18 (32131116724, 32131423171) failed that way at <code>rc=128</code> with no diagnosable output.
+Measured: an ordinary conflict exits <strong>1</strong> and a merge whose object write fails exits <strong>2</strong>, so <code>rc=128</code> is neither, and this suite cannot currently say what it was.
+Tracked separately; this fix does not touch it, and the abort path it fixes exits 128 from the <em>suite</em>, which is a different thing from the inner merge's 128.</p>
+<p><strong>Two exit statuses are noise once the machine is oversubscribed.</strong> 137 is the OOM killer and 143 a <code>SIGTERM</code> from outside; both appeared in the reproduction harness at high worker counts and neither is this flake.
+Q837 (shipped) labels them <code>KILLED</code> rather than as a gate failure and pins 128 as <code>FAILED</code>, so this signature is unchanged by it.</p>
+<h2 id="reproducing-if-it-recurs">Reproducing, if it recurs<a class="headerlink" href="#reproducing-if-it-recurs" title="Permanent link">&para;</a></h2>
+<p>Run the suite itself 16 to 32 wide in a loop, each copy redirecting to its own log, keeping only the logs of runs that exited non-zero, with a <code>make check</code> alongside it for contention.
+That reproduced it at roughly 1 run in 100 to 300; the harness is a dozen lines and was not committed.
+Watch the syscalls with an interposer on <code>open</code>/<code>mkdir</code>/<code>rmdir</code>/<code>unlink</code>, remembering both instrumentation traps above.</p>
+<p><strong>Do not edit tracked docs while the loop runs.</strong> The gate-agreement case copies the live <code>docs/plan/</code> and <code>docs/queue/</code> trees, so a plan file added without its <a href="../../"><code>docs/plan/README.md</code></a> row fails that case's baseline with exit <strong>1</strong>, which is self-inflicted rather than this flake.</p>
+<h2 id="if-it-recurs-anyway">If it recurs anyway<a class="headerlink" href="#if-it-recurs-anyway" title="Permanent link">&para;</a></h2>
+<p>The fix removes the only concurrent writer found in these repositories, so a recurrence means a different one.
+Capture, in order: the failing call from the <code>ERR</code> trap, the <code>Q820:</code> tree reading, the errno and which object, and whether a sibling suite failed in the same run.
+<a href="../../../queue/Q826/">Q826</a> is a sibling flake in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/ci/git-merge-gate-lists-test.sh"><code>git-merge-gate-lists-test.sh</code></a> with a different signature, and <a href="../../../queue/Q822/">Q822</a> tracks unrelated suites failing under concurrent load.</p>
+<p><strong>This mechanism does not reach Q826</strong>, measured 2026-08-18 while sweeping the fix across the tier.
+That fixture holds about six objects against <code>gc.auto</code>'s default 6700, so its three detached maintenance runs return without repacking anything, and there is no prune to race — the trace shows the <code>maintenance run</code> line followed straight by the next suite command, where this suite's shows <code>git repack -d -l --cruft</code> under it.
+A merge driver exiting non-zero reproduces Q826's line verbatim, and <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/lib/merge-driver-common.sh"><code>merge-driver-common.sh</code></a>'s <code>ERR</code> trap turns any internal failure into a fallback conflict, so the driver's own exit is where to look.</p>
+<p>The same fixture-repo defect existed wherever a suite commits in a throwaway repo; Q878 swept it, and every fixture repo in the tree now sets the key (<a href="../../../development/testing/#a-fixture-repo-must-not-run-background-git">the rule</a>).</p>
 
 
 
 
 
 
-
-  
-  
 
 
 
@@ -2658,12 +2926,12 @@ Mitigated by a second build attempt 30s later, and by <code>retry.sh</code> in t
     
       
       
-      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.tabs", "navigation.sections", "navigation.top", "navigation.tracking", "navigation.indexes", "navigation.footer", "toc.follow", "search.suggest", "search.highlight", "content.code.copy", "content.code.annotate", "content.tooltips"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"default": "stable", "provider": "mike"}}</script>
+      <script id="__config" type="application/json">{"annotate": null, "base": "../../..", "features": ["navigation.tabs", "navigation.sections", "navigation.top", "navigation.tracking", "navigation.indexes", "navigation.footer", "toc.follow", "search.suggest", "search.highlight", "content.code.copy", "content.code.annotate", "content.tooltips"], "search": "../../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"default": "stable", "provider": "mike"}}</script>
     
     
-      <script src="../../assets/javascripts/bundle.79ae519e.min.js"></script>
+      <script src="../../../assets/javascripts/bundle.79ae519e.min.js"></script>
       
-        <script src="../../javascripts/extra.js"></script>
+        <script src="../../../javascripts/extra.js"></script>
       
     
   </body>

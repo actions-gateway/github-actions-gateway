@@ -2668,14 +2668,6 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td><strong>Event:</strong> <code>version-cmds-answer</code> or <code>installed-floors-report-a-version</code> fails on <code>main</code> again.</td>
 </tr>
 <tr>
-<td><a href="Q820/">Q820</a></td>
-<td><a href="../plan/q820-scripts-test-temp-file-flake/"><code>git-merge-plan-index-test</code> dies on a temp-file error under the fan-out</a></td>
-<td><code>flake</code> <code>ci</code></td>
-<td>💤</td>
-<td>S</td>
-<td><strong>Event:</strong> the <code>unable to create temporary file</code> signature recurs on <code>main</code> after the fix.</td>
-</tr>
-<tr>
 <td><a href="Q408/">Q408</a></td>
 <td><a href="../plan/q408-untrusted-pr-egress/">Untrusted-PR egress posture for Kata workers</a></td>
 <td><code>security</code></td>
@@ -2708,12 +2700,108 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>Measured 2026-08-12 under 8 workers: <code>provisioner</code> eviction-window and <code>controller</code> 2m timeout failed in one window, all green on rerun.</td>
 </tr>
 <tr>
+<td><a href="Q740/">Q740</a></td>
+<td><a href="../operations/runner-template-library/">Ship a signed build-capable runner image for the DinD templates</a></td>
+<td><code>feature</code> <code>docs</code></td>
+<td>🔲</td>
+<td>M</td>
+<td>Q554 ships <code>kata-dind</code>/<code>privileged-dind</code> with an <code>example.invalid</code> <code>workerImage</code>: the runner needs a docker CLI and no image we publish has …</td>
+</tr>
+<tr>
 <td><a href="Q826/">Q826</a></td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/ci/git-merge-gate-lists-test.sh"><code>git-merge-gate-lists-test</code>'s real-rebase case fails under the fan-out</a></td>
 <td><code>flake</code> <code>ci</code> <code>tests</code></td>
+<td>💤</td>
+<td>S</td>
+<td><strong>Event:</strong> <code>git-merge-gate-lists-test</code> fails on <code>main</code> again.</td>
+</tr>
+<tr>
+<td><a href="Q793/">Q793</a></td>
+<td><a href="../plan/archive/q726-multi-label-runner-sets/#drift-detected-never-patched">Measure whether a scale-set labels <code>PATCH</code> is honoured, then reconcile</a></td>
+<td><code>feature</code> <code>tests</code></td>
+<td>🔲</td>
+<td>M</td>
+<td>Q726 registers labels at create only, so appending one to a live set needs a fresh scale set.</td>
+</tr>
+<tr>
+<td><a href="Q792/">Q792</a></td>
+<td><a href="../operations/troubleshooting/#worker-image-runner-version">Report the runner version a worker pod actually ran back to the AGC</a></td>
+<td><code>feature</code> <code>security</code></td>
+<td>🔲</td>
+<td>M</td>
+<td>Q715 judges the image <em>reference</em>, so a digest-only or custom tag reports <code>Unknown</code>; the wrapper reads the real version from …</td>
+</tr>
+<tr>
+<td><a href="Q795/">Q795</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/listener/session.go">Nothing clears a session-sourced <code>RunnerVersionTooOld</code> once fixed</a></td>
+<td><code>bug</code> <code>debt</code></td>
 <td>🔲</td>
 <td>S</td>
-<td>Seen once 2026-08-12 at load 101-111, 8 siblings, identical tree, passed standalone: `Could not apply ...</td>
+<td><code>session.go</code> is the only session-sourced writer and sets <code>True</code> alone; Q332's clear-on-recovery covered <code>Degraded</code>/<code>RateLimited</code>, not this.</td>
+</tr>
+<tr>
+<td><a href="Q727/">Q727</a></td>
+<td><a href="../plan/arc-parity/#the-collision-the-individual-rows-do-not-state">A non-privileged path for <code>container:</code> and <code>services:</code> steps</a></td>
+<td><code>feature</code> <code>1.6-gate</code></td>
+<td>🔲</td>
+<td>L</td>
+<td>ARC's <code>containerMode: kubernetes</code> runs them as separate pods with a provisioned volume.</td>
+</tr>
+<tr>
+<td><a href="Q717/">Q717</a></td>
+<td><a href="../plan/release-1.5/#candidates-not-yet-accepted">Fold the scale-up token bucket into the advertised capacity</a></td>
+<td><code>debt</code> <code>feature</code></td>
+<td>🔲</td>
+<td>M</td>
+<td><code>scaleUp.wait</code> runs after the claim, with the job holding its GitHub lock (the CRD godoc says so).</td>
+</tr>
+<tr>
+<td><a href="Q721/">Q721</a></td>
+<td><a href="../operations/troubleshooting/">Surface advertised capacity and withheld reasons in <code>RunnerSet</code> status</a></td>
+<td><code>feature</code> <code>docs</code></td>
+<td>🔲</td>
+<td>S</td>
+<td><code>adv.Withheld</code> reaches Prometheus only, so a tenant without metrics access cannot see why intake is throttled.</td>
+</tr>
+<tr>
+<td><a href="Q724/">Q724</a></td>
+<td><a href="../operations/personas/#budget-owner">Budget-owner cost and utilization dashboard</a></td>
+<td><code>feature</code> <code>docs</code></td>
+<td>🔲</td>
+<td>M</td>
+<td>Two dashboards serve two of the five documented personas.</td>
+</tr>
+<tr>
+<td><a href="Q720/">Q720</a></td>
+<td><a href="../design/03-api-contracts/">Publish the queue depth GitHub reports on every poll</a></td>
+<td><code>feature</code> <code>docs</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>Every poll carries <code>totalAvailableJobs</code>; the listener stores the struct and <code>Status()</code> exports only assigned plus running.</td>
+</tr>
+<tr>
+<td><a href="Q906/">Q906</a></td>
+<td><a href="../operations/runner-template-library/">Report workers that bind and never start on an ungated RunnerSet</a></td>
+<td><code>feature</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>Q714 made this visible only through <code>spec.capacityGate</code>, which is an intake decision and off by default, so an ungated set still says …</td>
+</tr>
+<tr>
+<td><a href="Q677/">Q677</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/listener/session.go"><code>CreateSession</code> sends a kind-unscoped runner name</a></td>
+<td><code>bug</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>It derives <code>&lt;CR name&gt;-&lt;index&gt;</code> for both kinds, but Q466 kind-scoped the <em>registered</em> name to <code>rs-&lt;set&gt;-&lt;index&gt;</code>, so a RunnerSet's …</td>
+</tr>
+<tr>
+<td><a href="Q344/">Q344</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scaleset/client.go">First-class <code>scaleset</code> list/prune for orphan scale sets</a></td>
+<td><code>feature</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>Measured 2026-08-06: 9 orphans across 2 repos, 5 unreferenced.</td>
 </tr>
 <tr>
 <td><a href="Q921/">Q921</a></td>
@@ -3004,14 +3092,6 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>Searches the backlog only, so "known and accepted" is invisible: Q692's session nearly filed the merge-driver gap this page already states.</td>
 </tr>
 <tr>
-<td><a href="Q740/">Q740</a></td>
-<td><a href="../operations/runner-template-library/">Ship a signed build-capable runner image for the DinD templates</a></td>
-<td><code>feature</code> <code>docs</code></td>
-<td>🔲</td>
-<td>M</td>
-<td>Q554 ships <code>kata-dind</code>/<code>privileged-dind</code> with an <code>example.invalid</code> <code>workerImage</code>: the runner needs a docker CLI and no image we publish has …</td>
-</tr>
-<tr>
 <td><a href="Q737/">Q737</a></td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/deploy/templates/README.md">Align the shipped DinD templates on one docker:NN-dind version</a></td>
 <td><code>docs</code> <code>debt</code></td>
@@ -3028,44 +3108,12 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td><code>isContextArg</code> keys on a first arg named <code>ctx</code>-ish or a <code>context.*</code> call, so <code>Client.Delete(c, pod)</code> is skipped silently: fail-open inside …</td>
 </tr>
 <tr>
-<td><a href="Q793/">Q793</a></td>
-<td><a href="../plan/archive/q726-multi-label-runner-sets/#drift-detected-never-patched">Measure whether a scale-set labels <code>PATCH</code> is honoured, then reconcile</a></td>
-<td><code>feature</code> <code>tests</code></td>
-<td>🔲</td>
-<td>M</td>
-<td>Q726 registers labels at create only, so appending one to a live set needs a fresh scale set.</td>
-</tr>
-<tr>
 <td><a href="Q794/">Q794</a></td>
 <td><a href="../operations/migration-v1-to-v2/"><code>gag-migrate</code> no longer needs to pin <code>acquisitionProtocol: Classic</code></a></td>
 <td><code>debt</code></td>
 <td>🔲</td>
 <td>S</td>
 <td>It writes Classic onto every set it emits, whose stated reason — keeping multi-label matching — Q726 removed.</td>
-</tr>
-<tr>
-<td><a href="Q792/">Q792</a></td>
-<td><a href="../operations/troubleshooting/#worker-image-runner-version">Report the runner version a worker pod actually ran back to the AGC</a></td>
-<td><code>feature</code> <code>security</code></td>
-<td>🔲</td>
-<td>M</td>
-<td>Q715 judges the image <em>reference</em>, so a digest-only or custom tag reports <code>Unknown</code>; the wrapper reads the real version from …</td>
-</tr>
-<tr>
-<td><a href="Q795/">Q795</a></td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/listener/session.go">Nothing clears a session-sourced <code>RunnerVersionTooOld</code> once fixed</a></td>
-<td><code>bug</code> <code>debt</code></td>
-<td>🔲</td>
-<td>S</td>
-<td><code>session.go</code> is the only session-sourced writer and sets <code>True</code> alone; Q332's clear-on-recovery covered <code>Degraded</code>/<code>RateLimited</code>, not this.</td>
-</tr>
-<tr>
-<td><a href="Q727/">Q727</a></td>
-<td><a href="../plan/arc-parity/#the-collision-the-individual-rows-do-not-state">A non-privileged path for <code>container:</code> and <code>services:</code> steps</a></td>
-<td><code>feature</code> <code>1.6-gate</code></td>
-<td>🔲</td>
-<td>L</td>
-<td>ARC's <code>containerMode: kubernetes</code> runs them as separate pods with a provisioned volume.</td>
 </tr>
 <tr>
 <td><a href="Q719/">Q719</a></td>
@@ -3076,14 +3124,6 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>Workers are storage-less and nothing validates a <code>ReadWriteMany</code> volume mounted into one.</td>
 </tr>
 <tr>
-<td><a href="Q717/">Q717</a></td>
-<td><a href="../plan/release-1.5/#candidates-not-yet-accepted">Fold the scale-up token bucket into the advertised capacity</a></td>
-<td><code>debt</code> <code>feature</code></td>
-<td>🔲</td>
-<td>M</td>
-<td><code>scaleUp.wait</code> runs after the claim, with the job holding its GitHub lock (the CRD godoc says so).</td>
-</tr>
-<tr>
 <td><a href="Q722/">Q722</a></td>
 <td><a href="../design/appendix-a-capacity-slos/">Re-measure per-session AGC memory against the scale-set listener</a></td>
 <td><code>tests</code> <code>docs</code></td>
@@ -3092,36 +3132,12 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>The ~12 KiB figure on four marketing surfaces comes from <code>mem_test.go</code>, which imports classic <code>agentpool</code>/<code>listener</code>, never …</td>
 </tr>
 <tr>
-<td><a href="Q721/">Q721</a></td>
-<td><a href="../operations/troubleshooting/">Surface advertised capacity and withheld reasons in <code>RunnerSet</code> status</a></td>
-<td><code>feature</code> <code>docs</code></td>
-<td>🔲</td>
-<td>S</td>
-<td><code>adv.Withheld</code> reaches Prometheus only, so a tenant without metrics access cannot see why intake is throttled.</td>
-</tr>
-<tr>
-<td><a href="Q724/">Q724</a></td>
-<td><a href="../operations/personas/#budget-owner">Budget-owner cost and utilization dashboard</a></td>
-<td><code>feature</code> <code>docs</code></td>
-<td>🔲</td>
-<td>M</td>
-<td>Two dashboards serve two of the five documented personas.</td>
-</tr>
-<tr>
 <td><a href="Q725/">Q725</a></td>
 <td><a href="../operations/personas/#security--compliance">Security and compliance dashboard for the audit persona</a></td>
 <td><code>feature</code> <code>security</code></td>
 <td>🚫</td>
 <td>M</td>
 <td>Blocked by <a href="Q564/">Q564</a>: the proxy emits counters, not a record per connection.</td>
-</tr>
-<tr>
-<td><a href="Q720/">Q720</a></td>
-<td><a href="../design/03-api-contracts/">Publish the queue depth GitHub reports on every poll</a></td>
-<td><code>feature</code> <code>docs</code></td>
-<td>🔲</td>
-<td>S</td>
-<td>Every poll carries <code>totalAvailableJobs</code>; the listener stores the struct and <code>Status()</code> exports only assigned plus running.</td>
 </tr>
 <tr>
 <td><a href="Q728/">Q728</a></td>
@@ -3138,14 +3154,6 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>🔲</td>
 <td>S</td>
 <td>The other three §3.2 deliverables shipped (21 alert rules, SLO recording rules, runbook links).</td>
-</tr>
-<tr>
-<td><a href="Q906/">Q906</a></td>
-<td><a href="../operations/runner-template-library/">Report workers that bind and never start on an ungated RunnerSet</a></td>
-<td><code>feature</code></td>
-<td>🔲</td>
-<td>S</td>
-<td>Q714 made this visible only through <code>spec.capacityGate</code>, which is an intake decision and off by default, so an ungated set still says …</td>
 </tr>
 <tr>
 <td><a href="Q657/">Q657</a></td>
@@ -3178,14 +3186,6 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>🔲</td>
 <td>M</td>
 <td><code>applyNamespacePSA</code> ×2, <code>tracingEnv</code> ×2, egress-stale eval ×2, roleRef-recreate appliers ×3, pod-scheduling copies ×2, <code>agc_vpa</code> re-inlines …</td>
-</tr>
-<tr>
-<td><a href="Q677/">Q677</a></td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/listener/session.go"><code>CreateSession</code> sends a kind-unscoped runner name</a></td>
-<td><code>bug</code></td>
-<td>🔲</td>
-<td>S</td>
-<td>It derives <code>&lt;CR name&gt;-&lt;index&gt;</code> for both kinds, but Q466 kind-scoped the <em>registered</em> name to <code>rs-&lt;set&gt;-&lt;index&gt;</code>, so a RunnerSet's …</td>
 </tr>
 <tr>
 <td><a href="Q525/">Q525</a></td>
@@ -3242,14 +3242,6 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>🔲</td>
 <td>S</td>
 <td>Q591 measured the <code>&lt;unknown&gt;</code> causes; the quota one needs its own repro.</td>
-</tr>
-<tr>
-<td><a href="Q344/">Q344</a></td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scaleset/client.go">First-class <code>scaleset</code> list/prune for orphan scale sets</a></td>
-<td><code>feature</code></td>
-<td>🔲</td>
-<td>S</td>
-<td>Measured 2026-08-06: 9 orphans across 2 repos, 5 unreferenced.</td>
 </tr>
 <tr>
 <td><a href="Q650/">Q650</a></td>
@@ -3748,14 +3740,6 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td><strong>Event:</strong> a <code>changes</code> job is abandoned on <code>main</code> outside a GitHub incident window.</td>
 </tr>
 <tr>
-<td><a href="Q863/">Q863</a></td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/security-scan.yml">A <code>docker buildx</code> base-image pull has no retry, so one 403 fails a build</a></td>
-<td><code>flake</code> <code>ci</code></td>
-<td>💤</td>
-<td>S</td>
-<td><strong>Event:</strong> a <code>trivy</code> shard 403s on a base-image pull on <code>main</code> after the fix.</td>
-</tr>
-<tr>
 <td><a href="Q897/">Q897</a></td>
 <td><a href="../plan/">The plan index still instructs archival against the deleted STATUS.md</a></td>
 <td><code>docs</code> <code>debt</code></td>
@@ -3890,6 +3874,14 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>🔲</td>
 <td>S</td>
 <td>Measured 2026-08-21: four scripts branch on <code>${CI:-}</code> and no test in the repo sets or unsets it, so whichever branch the runner takes is …</td>
+</tr>
+<tr>
+<td><a href="Q959/">Q959</a></td>
+<td>Queue metrics report zero completions because removals name no verb</td>
+<td><code>docs</code> <code>debt</code></td>
+<td>🔲</td>
+<td>S</td>
+<td><code>queue.py metrics</code> splits throughput from garbage collection by matching <code>complete\|prune\|merge\|defer</code> in the subject of the commit that …</td>
 </tr>
 </tbody>
 </table>

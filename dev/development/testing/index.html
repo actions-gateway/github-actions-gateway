@@ -5088,7 +5088,7 @@ What this section keeps is what each rule cost <em>here</em>: which run, which P
 Each case below is the evidence for its rule, so the rule is still readable off the case by a contributor who does not have the skill.</p>
 <p>These shortcuts recur, and each produces confident-but-wrong diagnoses:</p>
 <ul>
-<li><strong>Treating a reproduction you built as the mechanism.</strong> <a href="../../queue/Q820/">Q820</a>'s plan doc reproduced its signature line for line by racing a <code>rm -rf</code> against a live git in the same repository, then spent three rounds hunting a remover that exists nowhere in the suite or the fan-out around it.
+<li><strong>Treating a reproduction you built as the mechanism.</strong> Q820's plan doc reproduced its signature line for line by racing a <code>rm -rf</code> against a live git in the same repository, then spent three rounds hunting a remover that exists nowhere in the suite or the fan-out around it.
   The trees were intact at the moment of failure, so there was never a remover to find.
   What refuted the whole family the first time it fired was a reading taken from the <em>failing</em> system: the state of the throwaway trees, ten lines of <code>ERR</code> trap.
   When the question is narrower than a root cause, break the operation deterministically rather than racing it.
@@ -5458,7 +5458,7 @@ Nothing distinguished that from a fix that worked.</p>
 </ul>
 <p>Both were caught only by a load proof: a constructor in the interposed library that prints one line per process when an environment variable is set.
 Without it, "no anomalies logged" and "the library never loaded" are the same output — the general rule one section up, in the one place where the harness fails silently by default.
-Detail: <a href="../../plan/q820-scripts-test-temp-file-flake/">q820-scripts-test-temp-file-flake.md</a>.</p>
+Detail: <a href="../../plan/archive/q820-scripts-test-temp-file-flake/">q820-scripts-test-temp-file-flake.md</a>.</p>
 <h3 id="extracting-a-call-argument-by-name-is-wrong-wherever-two-functions-share-one">Extracting a call argument by name is wrong wherever two functions share one<a class="headerlink" href="#extracting-a-call-argument-by-name-is-wrong-wherever-two-functions-share-one" title="Permanent link">&para;</a></h3>
 <p>A scan that pulls an argument out of a call has to decide which argument, and the cheap way is a table keyed on the callee's name.
 That is correct exactly until two functions share a name and hold the argument at different indexes, which in a codebase with wrappers is the normal case rather than the exception.
@@ -5478,7 +5478,7 @@ Each was caught by comparing its output against values already documented elsewh
 <h3 id="a-scan-that-tracks-enclosing-scope-must-reset-it-or-the-tail-inherits-the-last-match">A scan that tracks enclosing scope must reset it, or the tail inherits the last match<a class="headerlink" href="#a-scan-that-tracks-enclosing-scope-must-reset-it-or-the-tail-inherits-the-last-match" title="Permanent link">&para;</a></h3>
 <p>The section above is about a scan that reads the wrong <em>argument</em>.
 This one is about a scan that reads the wrong <em>context</em>: an <code>awk</code> or <code>grep</code> pipeline that remembers which function, section, or block it is inside, and never clears that memory when the block ends.</p>
-<p><a href="../../queue/Q820/">Q820</a>'s instrumentation turned on which <code>git commit -qam</code> calls sit inside a function, because <code>set -o errtrace</code> is load-bearing only for those.
+<p>Q820's instrumentation turned on which <code>git commit -qam</code> calls sit inside a function, because <code>set -o errtrace</code> is load-bearing only for those.
 The scan was:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-24-1" name="__codelineno-24-1" href="#__codelineno-24-1"></a><span class="sr">/^[a-z_]+\(\) \{/</span> <span class="p">{</span> <span class="nx">fn</span> <span class="o">=</span> <span class="o">$</span><span class="mi">1</span> <span class="p">}</span>
 <a id="__codelineno-24-2" name="__codelineno-24-2" href="#__codelineno-24-2"></a><span class="sr">/commit -qam/</span>     <span class="p">{</span> <span class="kr">print</span> <span class="nb">NR</span><span class="p">,</span> <span class="p">(</span><span class="nx">fn</span> <span class="o">?</span> <span class="nx">fn</span> <span class="o">:</span> <span class="s2">"TOP-LEVEL"</span><span class="p">)</span> <span class="p">}</span>
@@ -5748,7 +5748,7 @@ Where none does, keep polling the signal, add the <em>other</em> real outcome as
 </code></pre></div>
 <p>Git spawns <code>git maintenance run --auto --detach</code> from <code>commit</code>, <code>merge</code>, <code>fetch</code>, <code>am</code> and <code>pull</code> (measured on git 2.55.0; <code>init</code>, <code>add</code>, <code>clone</code>, <code>rebase</code> and <code>cherry-pick</code> do not).
 Detached, that process outlives the command that started it and runs while the next one writes to the same repo.
-It stays harmless until the fixture holds enough loose objects to cross <code>gc.auto</code> (default 6700), at which point it reaches <code>git repack -d -l --cruft</code>, whose prune removes an object fanout directory between the next command's <code>mkdir</code> and the <code>open</code> under it: <code>unable to create temporary file</code>, exit 128, green on rerun (<a href="../../queue/Q820/">Q820</a>).</p>
+It stays harmless until the fixture holds enough loose objects to cross <code>gc.auto</code> (default 6700), at which point it reaches <code>git repack -d -l --cruft</code>, whose prune removes an object fanout directory between the next command's <code>mkdir</code> and the <code>open</code> under it: <code>unable to create temporary file</code>, exit 128, green on rerun (Q820).</p>
 <p>Only one fixture in the repo has ever been large enough, because it copies the whole of <code>docs/queue/</code> — nine repacks per run.
 That is the reason to set the key everywhere rather than where a flake has been seen: the threshold is crossed by a fixture growing, not by a suite changing, so the suite that acquires the defect is not the one that was edited.</p>
 <p><strong>Assert it on behaviour, never on the config key.</strong> A suite that sets the key and checks the key has tested its own setup.
@@ -5756,7 +5756,7 @@ Commit twice under <code>GIT_TRACE</code> pointed at a file, and require nothing
 <div class="highlight"><pre><span></span><code><a id="__codelineno-27-1" name="__codelineno-27-1" href="#__codelineno-27-1"></a><span class="nv">GIT_TRACE</span><span class="o">=</span><span class="m">1</span><span class="w"> </span>git<span class="w"> </span>-C<span class="w"> </span><span class="s2">"</span><span class="nv">$repo</span><span class="s2">"</span><span class="w"> </span>commit<span class="w"> </span>-qam<span class="w"> </span>next<span class="w"> </span>&gt;<span class="s2">"</span><span class="nv">$trace</span><span class="s2">"</span><span class="w"> </span><span class="m">2</span>&gt;<span class="p">&amp;</span><span class="m">1</span>
 <a id="__codelineno-27-2" name="__codelineno-27-2" href="#__codelineno-27-2"></a>grep<span class="w"> </span>-q<span class="w"> </span><span class="s1">'maintenance run'</span><span class="w"> </span><span class="s2">"</span><span class="nv">$trace</span><span class="s2">"</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span>bad<span class="w"> </span><span class="s1">'...'</span>
 </code></pre></div>
-<p>The trace goes to a <strong>file</strong>, not stderr: a detached child has no stderr, which is what hid the mechanism for three rounds of <a href="../../queue/Q820/">Q820</a>.
+<p>The trace goes to a <strong>file</strong>, not stderr: a detached child has no stderr, which is what hid the mechanism for three rounds of Q820.
 The three merge-driver suites carry that assertion; the rest carry the config call alone.</p>
 <p>To check the whole tier, run each suite with <code>GIT_TRACE</code> set to a per-suite path and count <code>run_command: git maintenance run</code> (each spawn writes three trace lines, so count that one).
 Before the Q878 sweep: 217 spawns across 17 of 88 suites.

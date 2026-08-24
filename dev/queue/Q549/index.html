@@ -2570,6 +2570,9 @@
 <h1 id="e2e_agc_scalesetdrainedworkerclaimandrerunlandunderchartrbac-times-out"><code>E2E_AGC_ScaleSetDrainedWorkerClaimAndRerunLandUnderChartRBAC</code> times out<a class="headerlink" href="#e2e_agc_scalesetdrainedworkerclaimandrerunlandunderchartrbac-times-out" title="Permanent link">&para;</a></h1>
 <p><strong>Event:</strong> the re-run wait fails on <code>main</code> in a shape neither mode covers (<a href="../../plan/q549-scaleset-rerun-flake/">triage</a>).
 A, AGC replaced mid-window, pinned; B, the claim lost, measured and fixed under Q809. → top of Queue, escalated.</p>
+<p>Soak measured 2026-08-23: 228 green <code>e2e-test</code> runs on the events that actually execute the suite (<code>merge_group</code> + push to <code>main</code>) since Q809's fix merged 2026-08-12T18:32Z, or 59 counting push-to-<code>main</code> alone.
+Both clear the ≥50 correctness bar, and nothing has recurred.
+Held rather than retired only because this is the one flake-watch row with a demonstrated post-fix recurrence; the next groom retires it absent a new sighting.</p>
 
 
 
