@@ -55,7 +55,7 @@ KARPENTER_CLUSTER=${KARPENTER_CLUSTER:-gag-karpenter}
 # the latest upstream release, and the resulting PR trips the drift gate's path
 # filter (Q529). Keep the assignment on one line in this exact shape — the
 # manifest matches it by regex.
-KARPENTER_VERSION=${KARPENTER_VERSION:-v1.14.0}
+KARPENTER_VERSION=${KARPENTER_VERSION:-v1.14.1}
 KWOK_VERSION=${KWOK_VERSION:-v0.8.0}
 
 KUBE_CONTEXT="kind-${KARPENTER_CLUSTER}"
