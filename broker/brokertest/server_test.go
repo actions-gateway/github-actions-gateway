@@ -116,12 +116,15 @@ func TestServer_SessionLifecycle(t *testing.T) {
 	}
 }
 
-// TestServer_ActiveSessionsForOwnerScoping pins what the owner filter can and
-// cannot separate. Name: a CR whose name extends another's owns its own bucket,
-// which is what lets two CRs in one namespace be asserted on independently. Kind:
-// nothing here separates it — the AGC derives ownerName from the bare CR name for
-// both kinds, so a same-named RunnerGroup and RunnerSet send byte-identical owners
-// (Q677). The second half flips red once the wire name is kind-scoped.
+// TestServer_ActiveSessionsForOwnerScoping pins what the owner filter separates.
+// Name: a stem that extends another's owns its own bucket, which is what lets two
+// CRs in one namespace be asserted on independently. Kind: separable since Q677 put
+// the registered runner name on the wire, so a RunnerSet owns "rs-<set>-<index>"
+// while its same-named RunnerGroup owns "<set>-<index>".
+//
+// The kind half is this file's regression cover for Q677 and was written to fail
+// before it: until the listener sent the registered name, both kinds emitted a
+// byte-identical owner and shared one bucket with nothing to read them apart.
 func TestServer_ActiveSessionsForOwnerScoping(t *testing.T) {
 	s := New()
 	defer s.Close()
@@ -136,12 +139,15 @@ func TestServer_ActiveSessionsForOwnerScoping(t *testing.T) {
 		t.Fatalf("ActiveSessionsForOwner(tenant-set) = %v, want [%s]", got, ext)
 	}
 
-	// A RunnerSet named "tenant" at index 0 sends the same ownerName its same-named
-	// RunnerGroup does, so both sessions land in one bucket with no kind to read.
-	rs, _ := postSession(t, s.URL, "tenant-0", "bearer-rs")
+	// A RunnerSet named "tenant" at index 0 now owns "rs-tenant-0", so it lands in
+	// its own bucket and leaves the same-named RunnerGroup's alone.
+	rs, _ := postSession(t, s.URL, "rs-tenant-0", "bearer-rs")
+	if got := s.ActiveSessionsForOwner("rs-tenant"); len(got) != 1 || got[0] != rs {
+		t.Fatalf("ActiveSessionsForOwner(rs-tenant) = %v, want [%s]: the RunnerSet owns its own bucket (Q677)", got, rs)
+	}
 	got := s.ActiveSessionsForOwner("tenant")
-	if len(got) != 2 || !slices.Contains(got, base) || !slices.Contains(got, rs) {
-		t.Fatalf("ActiveSessionsForOwner(tenant) = %v, want %s and %s in one bucket: ownerName is not kind-scoped (Q677)", got, base, rs)
+	if len(got) != 1 || !slices.Contains(got, base) {
+		t.Fatalf("ActiveSessionsForOwner(tenant) = %v, want only %s: a RunnerSet must no longer share the RunnerGroup's bucket (Q677)", got, base)
 	}
 }
 

@@ -152,10 +152,15 @@ type sessionState struct {
 // createSession calls CreateSession, handles non-retriable errors, and derives
 // the AES-256-CBC message key from the server's RSA-encrypted session key.
 func createSession(ctx context.Context, cfg Config, log *slog.Logger) (sessionState, error) {
-	agentName := fmt.Sprintf("%s-%d", cfg.Group, cfg.Agent.Index)
+	// The agent's own registered name, not a second derivation of it. The pool
+	// kind-scopes the registered name (rs-<set>-<index> for a RunnerSet, Q466) and
+	// re-deriving it here from cfg.Group produced the RunnerGroup form for both
+	// kinds, so a RunnerSet sent an agent.name/ownerName naming no runner GitHub
+	// had registered (Q677). The listener knows no Scheme, so the derivation
+	// belongs to the pool alone.
 	cctx, cancel := context.WithTimeout(ctx, cfg.controlPlaneTimeout())
 	defer cancel()
-	sess, err := cfg.Broker.CreateSession(cctx, cfg.Agent.AgentID, agentName, cfg.Agent.RunnerVersion)
+	sess, err := cfg.Broker.CreateSession(cctx, cfg.Agent.AgentID, cfg.Agent.Name, cfg.Agent.RunnerVersion)
 	if err != nil {
 		var vtooOld *broker.VersionTooOldError
 		if errors.As(err, &vtooOld) {

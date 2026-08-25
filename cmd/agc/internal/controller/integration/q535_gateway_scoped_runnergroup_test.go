@@ -127,10 +127,11 @@ func startAGC(t *testing.T, gatewayName string) {
 // waitForGroupSessions blocks until the broker stub holds exactly want active sessions
 // owned by the given RunnerGroup, and returns their IDs.
 //
-// A listener owns its session as "<owner>-<agentIndex>" where owner is the CR name,
-// for both kinds — the session ownerName is not kind-scoped the way Q466 made the
-// agent Secret and GitHub runner names (Q677). So this separates the two pools by
-// name but never by kind: the RunnerSet below must not share the RunnerGroup's name.
+// A listener owns its session as its own registered runner name, which is
+// kind-scoped: "<name>-<agentIndex>" for a RunnerGroup and "rs-<name>-<agentIndex>"
+// for a RunnerSet (Q466, carried onto the wire by Q677). So this separates the two
+// pools by kind as well as by name, and passing a RunnerGroup name here cannot
+// match a RunnerSet's sessions.
 func waitForGroupSessions(t *testing.T, group string, want int) []string {
 	t.Helper()
 	var got []string
@@ -153,7 +154,8 @@ func TestQ535_GatewayScopedAGCDeclinesV1RunnerGroups(t *testing.T) {
 	const ns = "q535-coexist"
 	// Distinct from other suites' names: the broker stub is shared and scopes session
 	// owners by CR name, so a name another test also uses would be counted here.
-	// setName differs from name because kind is not separable (see waitForGroupSessions).
+	// setName differs from name only to keep the two readable apart; since Q677 the
+	// owner filter separates them by kind anyway (see waitForGroupSessions).
 	const name = "q535-migrated"
 	const setName = "q535-set"
 	createNSForAGC(t, ns)

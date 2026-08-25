@@ -11,6 +11,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
@@ -121,7 +122,11 @@ func oauthStub() *httptest.Server {
 func makeAgent(t *testing.T, oauthSrvURL string) *agentpool.Agent {
 	t.Helper()
 	return &agentpool.Agent{
-		Index:         0,
+		Index: 0,
+		// The pool sets this from its own Scheme-scoped derivation; the listener only
+		// forwards it (Q677). Deliberately NOT "<Group>-<Index>", so a test asserting
+		// on the wire name fails if the listener ever re-derives one again.
+		Name:          "rs-test-rg-0",
 		AgentID:       42,
 		RunnerVersion: "2.327.1",
 		PrivateKey:    testRSAKey,
@@ -399,6 +404,78 @@ func TestListener_CreateSessionVersionTooOld(t *testing.T) {
 	assert.Equal(t, corev1.EventTypeWarning, ev.eventtype)
 	assert.Equal(t, "test-rg", ev.name)
 
+	closeHTTP(oauthSrv)
+	closeHTTP(brokerSrv)
+	goleak.VerifyNone(t)
+}
+
+// TestListener_CreateSessionSendsRegisteredAgentName pins Q677: the session's
+// agent.name and ownerName are the agent's own registered runner name, not a second
+// derivation from the CR name.
+//
+// The two diverge by kind. Q466 kind-scoped the registered name to "rs-<set>-<index>"
+// for a RunnerSet, while the listener re-derived "<CR name>-<index>" for both kinds,
+// so a RunnerSet named a runner GitHub had never registered. makeAgent's Name is
+// deliberately not "<Group>-<Index>", so this fails if the derivation ever returns.
+func TestListener_CreateSessionSendsRegisteredAgentName(t *testing.T) {
+	oauthSrv := oauthStub()
+
+	type sessionReq struct {
+		OwnerName string `json:"ownerName"`
+		Agent     struct {
+			ID   int64  `json:"id"`
+			Name string `json:"name"`
+		} `json:"agent"`
+	}
+	var mu sync.Mutex
+	var got sessionReq
+	seen := make(chan struct{}, 1)
+
+	mux := &brokerMux{}
+	mux.SetCreate(func(w http.ResponseWriter, r *http.Request) {
+		var body sessionReq
+		_ = json.NewDecoder(r.Body).Decode(&body)
+		mu.Lock()
+		got = body
+		mu.Unlock()
+		select {
+		case seen <- struct{}{}:
+		default:
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{"sessionId": "sess-1"})
+	})
+	mux.SetGetMessage(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusAccepted)
+	})
+	brokerSrv := httptest.NewServer(mux)
+
+	cfg := makeCfg(t, oauthSrv, brokerSrv)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	done := runAndWait(ctx, cfg)
+
+	select {
+	case <-seen:
+	case <-time.After(5 * time.Second):
+		t.Fatal("broker never received a CreateSession")
+	}
+
+	mu.Lock()
+	sent := got
+	mu.Unlock()
+
+	assert.Equal(t, cfg.Agent.Name, sent.Agent.Name,
+		"agent.name must be the agent's registered runner name")
+	assert.Equal(t, cfg.Agent.Name, sent.OwnerName,
+		"ownerName must be the agent's registered runner name")
+	assert.Equal(t, cfg.Agent.AgentID, sent.Agent.ID)
+	assert.NotEqual(t, fmt.Sprintf("%s-%d", cfg.Group, cfg.Agent.Index), sent.Agent.Name,
+		"the listener must not re-derive the name from the CR name (Q677)")
+
+	cancel()
+	<-done
 	closeHTTP(oauthSrv)
 	closeHTTP(brokerSrv)
 	goleak.VerifyNone(t)

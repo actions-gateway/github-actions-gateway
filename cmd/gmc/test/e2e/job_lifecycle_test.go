@@ -204,11 +204,13 @@ var _ = Describe("E2E_AGC_JobLifecycle", Ordered, func() {
 })
 
 // fakegithubActiveSessionsForOwner queries active sessions whose ownerName has
-// the given prefix. Session ownerName is "<runnerGroup>-<agentIndex>" and the
-// RunnerGroup name is "<agName>-<first runner label>", so passing "<agName>-"
-// scopes the result to one spec's ActionsGateway. fakegithub is shared across
-// parallel specs and tenants — an unfiltered sessions[0] can belong to another
-// spec's RunnerGroup, sending its enqueued job to the wrong tenant.
+// the given prefix. A session's ownerName is the listener's own registered runner
+// name, which is kind-scoped (Q677): "<runnerGroup>-<agentIndex>" for a RunnerGroup,
+// whose name is "<agName>-<first runner label>", so "<agName>-" scopes to one spec's
+// ActionsGateway; "rs-<runnerSet>-<agentIndex>" for a RunnerSet, so a RunnerSet spec
+// passes "rs-<runnerSet>-". fakegithub is shared across parallel specs and tenants —
+// an unfiltered sessions[0] can belong to another spec, sending its enqueued job to
+// the wrong tenant.
 func fakegithubActiveSessionsForOwner(g Gomega, ownerPrefix string) []string {
 	path := "/control/sessions"
 	if ownerPrefix != "" {

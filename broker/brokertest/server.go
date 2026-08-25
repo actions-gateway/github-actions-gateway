@@ -117,19 +117,19 @@ func (s *Server) RegisteredSessions() []string {
 }
 
 // ActiveSessionsForOwner returns the IDs of currently-active sessions owned by the
-// CR of the given name — a RunnerGroup or a RunnerSet. A listener owns its session
-// as "<CR name>-<agentIndex>", so a session matches when its ownerName is that name,
-// a "-", and a decimal index. The index segment is matched exactly rather than by
-// prefix, so a CR whose name extends this one ("<name>-set") keeps its own bucket.
-// Scoping by owner lets a test assert on only its own CR's sessions, immune to
-// sessions other tests left active on this shared stub — the global
-// RegisteredSessions/ActiveSessionCount counters accumulate across the whole package
-// and cause cross-test flakes when used for exact-count assertions.
+// runner name of the given stem. A listener owns its session as its own registered
+// runner name, so a session matches when its ownerName is that stem, a "-", and a
+// decimal index. The index segment is matched exactly rather than by prefix, so a
+// stem that extends this one ("<name>-set") keeps its own bucket. Scoping by owner
+// lets a test assert on only its own CR's sessions, immune to sessions other tests
+// left active on this shared stub — the global RegisteredSessions/ActiveSessionCount
+// counters accumulate across the whole package and cause cross-test flakes when used
+// for exact-count assertions.
 //
-// Kind is not separable here: the AGC derives the name from the bare CR name for
-// either kind, so a same-named RunnerGroup and RunnerSet send a byte-identical
-// ownerName and share one bucket. That is the production wire format, not a limit of
-// this stub — Q466 kind-scoped the registered runner name but not this one (Q677).
+// The stem is the registered name's, not the CR's, and the two differ by kind: pass
+// "<name>" for a RunnerGroup and "rs-<name>" for a RunnerSet, matching what Q466
+// kind-scoped and Q677 carried onto the wire. A same-named group and set are now
+// separable, which they were not before Q677.
 func (s *Server) ActiveSessionsForOwner(name string) []string {
 	prefix := name + "-"
 	ids := s.sessions.ActiveIDs(prefix)
@@ -486,8 +486,9 @@ func (s *Server) SetAcquireJobResponse(v any) {
 // a tenant's session creation. createSession maps the 401 to a NonRetriableError,
 // so the listener's permanent baseline exits without being auto-restarted —
 // letting a test drive the controller's baseline-revival path (Q137). An empty
-// prefix clears the override. The prefix is matched against ownerName
-// ("<CR name>-<agentIndex>"), so passing "<CR name>-" scopes it to one CR's pool.
+// prefix clears the override. The prefix is matched against ownerName, which is
+// the listener's registered runner name and so kind-scoped: pass "<name>-" for a
+// RunnerGroup and "rs-<name>-" for a RunnerSet (Q677) to scope it to one CR's pool.
 func (s *Server) FailCreateSessionForOwner(prefix string) {
 	s.mu.Lock()
 	s.failSessionOwner = prefix
@@ -517,9 +518,10 @@ func (s *Server) handleSession(w http.ResponseWriter, r *http.Request) {
 	case http.MethodPost:
 		bearer := brokerstub.Bearer(r)
 
-		// Parse ownerName ("<CR name>-<agentIndex>") so tests can scope session
-		// assertions to one CR via ActiveSessionsForOwner. Best-effort: a missing
-		// or unparsable body simply leaves the owner empty.
+		// Parse ownerName — the listener's registered runner name, kind-scoped as
+		// "<name>-<agentIndex>" or "rs-<name>-<agentIndex>" (Q677) — so tests can
+		// scope session assertions to one CR via ActiveSessionsForOwner.
+		// Best-effort: a missing or unparsable body simply leaves the owner empty.
 		var reqBody struct {
 			OwnerName string `json:"ownerName"`
 		}
