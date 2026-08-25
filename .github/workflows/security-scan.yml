@@ -220,7 +220,7 @@ jobs:
         run: |
           scripts/fetch/prepull-image-cached.sh \
             "${BUILDKIT_IMAGE}" /tmp/buildkit-image "${BUILDKIT_LOCAL_IMAGE}"
-      - uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4.2.0
+      - uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4.3.0
         with:
           # Pin the builder to the buildkit image pre-pulled above so the boot
           # uses the local cache instead of pulling from Docker Hub. See the
