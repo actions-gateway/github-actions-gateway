@@ -630,7 +630,7 @@
     },
     {
       "type": "stat",
-      "title": "Worker quota exceeded",
+      "title": "Quota exceeded",
       "datasource": { "type": "prometheus", "uid": "${datasource}" },
       "gridPos": { "h": 6, "w": 4, "x": 0, "y": 46 },
       "id": 51,
@@ -658,7 +658,7 @@
     },
     {
       "type": "stat",
-      "title": "Workers unschedulable",
+      "title": "Unschedulable",
       "datasource": { "type": "prometheus", "uid": "${datasource}" },
       "gridPos": { "h": 6, "w": 4, "x": 4, "y": 46 },
       "id": 52,
@@ -686,7 +686,7 @@
     },
     {
       "type": "stat",
-      "title": "Workers not starting",
+      "title": "Not starting",
       "datasource": { "type": "prometheus", "uid": "${datasource}" },
       "gridPos": { "h": 6, "w": 4, "x": 8, "y": 46 },
       "id": 84,
@@ -714,7 +714,7 @@
     },
     {
       "type": "stat",
-      "title": "Worker quota pressure",
+      "title": "Quota pressure",
       "datasource": { "type": "prometheus", "uid": "${datasource}" },
       "gridPos": { "h": 6, "w": 4, "x": 12, "y": 46 },
       "id": 53,
@@ -742,7 +742,7 @@
     },
     {
       "type": "stat",
-      "title": "Worker capacity declined",
+      "title": "Capacity declined",
       "datasource": { "type": "prometheus", "uid": "${datasource}" },
       "gridPos": { "h": 6, "w": 4, "x": 16, "y": 46 },
       "id": 55,
@@ -770,7 +770,7 @@
     },
     {
       "type": "timeseries",
-      "title": "Agent recycle errors",
+      "title": "Recycle errors",
       "datasource": { "type": "prometheus", "uid": "${datasource}" },
       "gridPos": { "h": 6, "w": 4, "x": 20, "y": 46 },
       "id": 54,
