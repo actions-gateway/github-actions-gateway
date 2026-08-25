@@ -116,6 +116,7 @@ ghcr.io/actions-gateway/agc:v1.2.3
 ghcr.io/actions-gateway/proxy:v1.2.3
 ghcr.io/actions-gateway/worker:v1.2.3
 ghcr.io/actions-gateway/wrapper:v1.2.3
+ghcr.io/actions-gateway/build-runner:v1.2.3
 ghcr.io/actions-gateway/charts/actions-gateway:1.2.3
 ghcr.io/actions-gateway/charts/actions-gateway-crds-v2:1.2.3'
 got_refs="$(awk '{print $NF}' "$COSIGN_LOG")"

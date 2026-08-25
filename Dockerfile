@@ -7,7 +7,7 @@
 # selected with `--target` (docker-bake.hcl for the e2e bake; the publish.yml
 # and security-scan.yml matrices for release and scanning):
 #
-#   gmc  agc  proxy  worker  wrapper  fakegithub
+#   gmc  agc  proxy  worker  wrapper  build-runner  fakegithub
 #
 # Why one file rather than six (the layout before this change): all six images
 # compile Go against the same workspace vendor/ tree, and BuildKit can only
@@ -24,6 +24,9 @@
 #     └─ src    + the first-party source
 #          ├─ build-gmc / build-agc / build-proxy / build-wrapper / build-fakegithub
 #          └─ final stages COPY just the binary onto a runtime base
+#
+# build-runner sits outside that graph: it is `worker` plus a Docker client
+# COPY'd from a pinned docker:<N>-cli, so it compiles nothing of its own.
 
 ########################  deps — the shared compile cache  ####################
 # golang:1.26 — pinned to the multi-arch manifest digest for cache stability.
@@ -277,6 +280,53 @@ COPY LICENSE NOTICE THIRD-PARTY-NOTICES /licenses/
 # nothing to pull but the binary.
 COPY --from=build-wrapper /wrapper /wrapper
 ENTRYPOINT ["/wrapper"]
+
+########################  build-runner  #######################################
+## The `worker` image plus a Docker client, for the Docker-in-Docker entries of
+## the runner template library (deploy/templates/{kata,privileged}-dind). Those
+## templates run a dockerd sidecar, which supplies the DAEMON and not the client;
+## neither the upstream actions-runner nor `worker` above ships one, so a job
+## landing on either takes the job and then dies on `docker: not found` mid-run.
+## Q740.
+##
+## The client comes from the docker-library `docker:<N>-cli` image, which carries
+## all three of the tools the library's decision table promises those entries
+## ("build container images, run `docker compose`, run a nested cluster"):
+## the CLI at /usr/local/bin/docker and the buildx + compose plugins under
+## /usr/local/libexec/docker/cli-plugins. Adds ~58 MB compressed.
+##
+## COPY-only, deliberately: those binaries are STATICALLY LINKED (measured on the
+## 29.7.2 x86_64 static release — `ELF 64-bit ... statically linked`), so they run
+## on this Ubuntu-based base despite being built against Alpine, and the arm64 leg
+## needs no QEMU. A `RUN apt-get install docker-ce-cli` would emulate instead, and
+## would unpin the version. Pinned to the multi-arch index digest like every other
+## base here; re-pin with:
+##   docker buildx imagetools inspect docker:29-cli
+## Check the plugin paths have not moved when bumping the major — they are set by
+## docker-library/docker's own Dockerfile, not by the CLI.
+FROM docker:29-cli@sha256:000bb62ff495f986c9f5578eb67cc2cb98b91138eda81d7762d5371eb8a497fe AS docker-cli
+
+## Everything else — ENTRYPOINT, PATH, USER runner, the pinned runner version and
+## the lockstep test over it — is inherited from `worker`, so this image runs
+## wherever that one does and the two can never disagree about the runner.
+FROM worker AS build-runner
+ARG REVISION="unknown"
+ARG VERSION="dev"
+## Re-stated, not inherited: LABEL values carry over from the base stage, so
+## without this the image would advertise itself as `worker`.
+LABEL org.opencontainers.image.source="https://github.com/actions-gateway/github-actions-gateway" \
+      org.opencontainers.image.revision="${REVISION}" \
+      org.opencontainers.image.version="${VERSION}" \
+      org.opencontainers.image.title="build-runner" \
+      org.opencontainers.image.description="Build-capable GitHub Actions runner — the worker image plus a Docker CLI, for the DinD runner templates" \
+      org.opencontainers.image.licenses="Apache-2.0"
+COPY --from=docker-cli /usr/local/bin/docker /usr/local/bin/docker
+COPY --from=docker-cli /usr/local/libexec/docker/cli-plugins/ /usr/local/libexec/docker/cli-plugins/
+## Attribution for those three binaries. A `COPY --from` takes only the paths it
+## names, so whatever docker:<N>-cli carried does not travel with them and this
+## image is the redistributor. Hand-maintained: THIRD-PARTY-NOTICES is generated
+## from vendor/ and covers only the Go modules linked into our own binaries.
+COPY THIRD-PARTY-NOTICES-DOCKER /licenses/
 
 ########################  fakegithub  #########################################
 # TEST-ONLY image: a fake GitHub API server used by the e2e suite, never

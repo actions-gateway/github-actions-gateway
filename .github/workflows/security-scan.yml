@@ -116,11 +116,11 @@ jobs:
 
   # Build each image, scan it, and generate its SBOM. One matrix leg per image
   # (a named stage of the root Dockerfile) so a finding points straight at the
-  # offending image and the six builds run in parallel. The SBOM is generated from the same build — a PR-time
-  # check so SBOM generation can't silently break before a release. It is
-  # uploaded as a build artifact only; SIGNING and attaching the SBOM as a cosign
-  # attestation to a PUBLISHED image happen in publish.yml (needs a registry push
-  # + OIDC), never on PRs.
+  # offending image and the seven builds run in parallel. The SBOM is generated
+  # from the same build, a PR-time check so SBOM generation can't silently break
+  # before a release. It is uploaded as a build artifact only; SIGNING and
+  # attaching the SBOM as a cosign attestation to a PUBLISHED image happen in
+  # publish.yml (needs a registry push + OIDC), never on PRs.
   #
   # exit-code per leg: the images we build FROM a minimal/distroless base
   # block the PR (exit-code 1) — their only packages are ones we chose, so a
@@ -183,15 +183,20 @@ jobs:
             # blocking: FROM scratch + the Go wrapper binary, no OS base CVEs
             # (unlike the worker leg's actions-runner base).
             exit-code: '1'
+          - name: build-runner
+            # report-only for the same reason as the worker leg: this image is
+            # `worker` plus a Docker client, so it inherits that leg's
+            # actions-runner base and its CVE floor.
+            exit-code: '0'
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Cache buildkit builder image
-        # All six shards of this matrix pre-pull the same ~200 MB builder image,
-        # so without a cache one run means six concurrent anonymous Docker Hub
+        # All seven shards of this matrix pre-pull the same ~200 MB builder image,
+        # so without a cache one run means seven concurrent anonymous Docker Hub
         # pulls — the rate-limit pressure that burned a shard's whole retry
         # budget on #895 (Q460). Keyed on the digest-pinned ref so an updatecli
-        # bump invalidates it; on a cold key the six shards all miss and race to
-        # save it, and the five losers log a benign "unable to reserve cache"
+        # bump invalidates it; on a cold key the seven shards all miss and race to
+        # save it, and the six losers log a benign "unable to reserve cache"
         # warning.
         id: buildkit-image-cache
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0

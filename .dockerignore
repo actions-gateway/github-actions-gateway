@@ -1,8 +1,9 @@
 # See https://docs.docker.com/engine/reference/builder/#dockerignore-file.
 #
-# Applied to every image — all six (gmc, agc, proxy, worker, wrapper,
-# fakegithub) are named stages of the root Dockerfile and share the repo-root
-# build context (see docker-bake.hcl, where _common sets context = ".").
+# Applied to every image — all seven (gmc, agc, proxy, worker, wrapper,
+# build-runner, fakegithub) are named stages of the root Dockerfile and share
+# the repo-root build context (see docker-bake.hcl, where _common sets
+# context = ".").
 #
 # Strategy: exclude everything, re-include only the Go source and module
 # manifests builds actually need. This keeps the layer-cache key tight —
@@ -39,9 +40,12 @@ tools/vendor/**
 # is generated from vendor/ by `make third-party-notices`. Each production
 # Dockerfile COPYs these three files; without the re-include the default-deny
 # `**` above hides them from the build context and the COPY fails.
+# THIRD-PARTY-NOTICES-DOCKER is hand-maintained and reaches only `build-runner`,
+# which is the one image redistributing binaries COPY'd out of another image.
 !LICENSE
 !NOTICE
 !THIRD-PARTY-NOTICES
+!THIRD-PARTY-NOTICES-DOCKER
 
 # If a build ever needs a non-.go file (an embedded asset, a config
 # template, etc.) re-include the specific path here. Do not blanket-include

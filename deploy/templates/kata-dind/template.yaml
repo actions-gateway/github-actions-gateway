@@ -43,9 +43,15 @@ spec:
   # ships — the sidecar below provides the daemon, not the client. Pointing at a
   # reserved .invalid host (RFC 2606) makes an unreplaced value fail loudly at
   # image pull instead of succeeding into a job that dies on "docker: not
-  # found". scripts/dogfood/e2e-runner/Dockerfile is a worked example of a
-  # build-capable runner image; docs/operations/in-runner-image-builds.md covers
-  # the alternatives.
+  # found".
+  #
+  # ghcr.io/actions-gateway/build-runner is the first-party image to point this
+  # at: the `worker` image plus the Docker CLI and the buildx and compose
+  # plugins, signed and SBOM-attested by the release pipeline. Pin it by digest
+  # from the release notes of the version you run. Build your own when the jobs
+  # need more than a Docker client: scripts/dogfood/e2e-runner/Dockerfile is a
+  # worked example, and docs/operations/in-runner-image-builds.md covers the
+  # daemonless alternatives.
   workerImage: example.invalid/build-capable-runner:replace-me
   podTemplate:
     spec:

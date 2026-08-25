@@ -35,6 +35,8 @@ spec:
   # REPLACE BEFORE USE — same requirement and same reasoning as ../kata-dind:
   # the runner container needs a Docker CLI on PATH, the sidecar supplies only
   # the daemon, and a reserved .invalid host fails at pull rather than mid-job.
+  # ghcr.io/actions-gateway/build-runner is the first-party image to point this
+  # at, pinned by digest from the release notes; ../kata-dind carries the rest.
   workerImage: example.invalid/build-capable-runner:replace-me
   podTemplate:
     spec:

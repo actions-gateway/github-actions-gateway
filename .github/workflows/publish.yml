@@ -1,6 +1,6 @@
 name: publish
 
-# Build, push, sign, and SBOM-attest the four first-party images on a release.
+# Build, push, sign, and SBOM-attest the six first-party images on a release.
 #
 # Images are MULTI-ARCH (linux/amd64 + linux/arm64, Q97): each push produces an
 # OCI image index, and the digest recorded everywhere (signature, run summary,
@@ -155,7 +155,7 @@ jobs:
       # Dockerfile, so a leg is selected by `target`, not by file. fakegithub is
       # a test fixture, not a published artifact, so its stage is absent here.
       matrix:
-        name: [gmc, agc, proxy, worker, wrapper]
+        name: [gmc, agc, proxy, worker, wrapper, build-runner]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Resolve publish tag
@@ -641,7 +641,7 @@ jobs:
             printf '## Container images\n\n'
             printf 'Pin these immutable multi-arch index digests (not the floating `%s` tag):\n\n' "${TAG}"
           } > "${notes}"
-          for name in gmc agc proxy worker wrapper; do
+          for name in gmc agc proxy worker wrapper build-runner; do
             image="${REGISTRY}/${OWNER}/${name}"
             # The index digest — the ref that serves both amd64 and arm64. For a
             # multi-arch tag, imagetools' top-level .Manifest is the index descriptor.

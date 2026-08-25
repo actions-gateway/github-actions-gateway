@@ -953,14 +953,14 @@ Navigation comes from section order and the danger banner, not from a ToC.
 **Watch the chart-version form.** Images are tagged `vX.Y.Z`, charts `X.Y.Z`.
 A copy-pasteable `helm` command with a `v` in it fails.
 
-**Curating the notes means adding the image digests by hand — after the tag.** The compose step in `publish.yml` writes the five index digests, the verify command, and a changelog, but it runs **only when the tag has no Release yet**.
+**Curating the notes means adding the image digests by hand — after the tag.** The compose step in `publish.yml` writes the six index digests, the verify command, and a changelog, but it runs **only when the tag has no Release yet**.
 A curated draft is exactly that condition, so the step logs `already exists; leaving its notes and flags untouched` and the digests never appear.
 They also cannot be written in advance: the images are built *from* the tag.
 
 So after `publish.yml` goes green, resolve them and amend the notes file:
 
 ```bash
-for img in gmc agc proxy worker wrapper; do
+for img in gmc agc proxy worker wrapper build-runner; do
   docker buildx imagetools inspect "ghcr.io/actions-gateway/${img}:vX.Y.Z" \
     --format '{{json .Manifest.Digest}}'
 done
@@ -1166,9 +1166,9 @@ A release is just a tag and a set of immutable, digest-addressed images — noth
 To roll an *installed* release back, re-pin the previous digests and `helm rollback`/`helm upgrade`; the procedure and post-rollback validation are in [upgrade.md](upgrade.md).
 A bad tag can be superseded by a higher patch release; do not retag an existing `vX.Y.Z` (it would break the digest↔tag binding consumers rely on).
 
-## The worker images: `wrapper` and `worker`
+## The worker images: `wrapper`, `worker`, and `build-runner`
 
-`publish.yml` builds and signs **two** worker-related images, both holding the same `cmd/worker` wrapper that feeds the job payload into `Runner.Worker`:
+`publish.yml` builds and signs **three** worker-related images, all holding the same `cmd/worker` wrapper that feeds the job payload into `Runner.Worker`:
 
 - **`ghcr.io/actions-gateway/wrapper`** — a ~2 MB `FROM scratch` image with just the wrapper binary.
   The GMC forwards it to every AGC (`WRAPPER_IMAGE`), whose provisioner injects it into each worker pod — as a read-only OCI image volume (K8s ≥ 1.33) or via an initContainer below that — so the runner container can be the **unmodified upstream `ghcr.io/actions/actions-runner`** (or any tenant `workerImage`).
@@ -1176,6 +1176,10 @@ A bad tag can be superseded by a higher patch release; do not retag an existing 
 - **`ghcr.io/actions-gateway/worker`** — the full upstream `actions-runner` + the wrapper as `ENTRYPOINT` (~520 MB).
   Kept as an optional batteries-included image; unnecessary once injection is enabled, since the runner image is the upstream one with the wrapper injected.
   Retiring it is tracked separately.
+- **`ghcr.io/actions-gateway/build-runner`**: the `worker` image plus a Docker client, the CLI, and the buildx and compose plugins, COPY'd from a digest-pinned `docker:<N>-cli` (~58 MB compressed).
+  It exists for the Docker-in-Docker entries of the [runner template library](runner-template-library.md), whose dockerd sidecar supplies the daemon and not the client.
+  A job landing on a runner with no `docker` binary takes the job and then dies on `docker: not found` mid-run.
+  Opted into per tenant via `workerImage`, exactly like `worker`, and pinned by digest from these notes.
 
 Only `wrapper` is digest-pinned in the chart (`wrapper.image.digest`, like `agc`/`proxy`), so a release must publish the `wrapper` image and pin its digest for the default install to run jobs.
 The `worker` image has no chart `image` block — it is the optional batteries-included image a tenant opts into via its per-RunnerGroup `workerImage`, not a chart-provisioned one — so nothing in the chart pins it.

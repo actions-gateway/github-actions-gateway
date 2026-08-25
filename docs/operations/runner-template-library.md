@@ -65,7 +65,18 @@ The v2 CRDs must be installed (the opt-in `actions-gateway-crds-v2` chart), and 
 **A build-capable runner image.** Both ship `spec.workerImage` set to `example.invalid/build-capable-runner:replace-me` and you must replace it.
 The runner container needs a Docker CLI on `PATH`; the sidecar supplies the daemon, not the client, and the stock `ghcr.io/actions/actions-runner` image ships neither.
 The reserved `.invalid` host is chosen so an unreplaced value fails at image pull rather than succeeding into a job that dies on `docker: not found` twenty minutes in.
-`scripts/dogfood/e2e-runner/Dockerfile` in this repo is a worked example.
+
+GAG publishes one you can use: **`ghcr.io/actions-gateway/build-runner`**, the [`worker` image](release.md#the-worker-images-wrapper-worker-and-build-runner) plus the Docker CLI and the buildx and compose plugins.
+It is built, keyless-signed, and SBOM-attested by the same release pipeline as every other first-party image, so `make verify-release` covers it.
+Pin it by digest, taken from the release notes of the version you are running:
+
+```yaml
+spec:
+  workerImage: ghcr.io/actions-gateway/build-runner@sha256:<digest from the release notes>
+```
+
+Build your own instead when your jobs need more than a Docker client: a language toolchain, a cloud CLI, your own root CA.
+`scripts/dogfood/e2e-runner/Dockerfile` in this repo is a worked example, and [In-runner image builds](in-runner-image-builds.md) covers the daemonless alternatives.
 
 **Watch the worker pod, not the `RunnerSet`, when you suspect an unreplaced image.** The pod reports the problem within seconds: it binds to a node and then sits Pending in `ImagePullBackOff`, with a `Failed` event naming the host it could not resolve.
 
