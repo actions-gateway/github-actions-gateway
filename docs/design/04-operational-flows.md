@@ -141,7 +141,7 @@ sequenceDiagram
    Detail: [Appendix H §H.7](appendix-h-v2-api-decomposition.md#h7-reference-integrity--runtime-conditions-not-admission).
 
    **A third signal, selected by nothing (Q714).** Both signals above ask whether a pod can be *placed*.
-   A worker pod that WAS placed and then could not be started, with the kubelet in `ImagePullBackOff` (what an unreplaced `workerImage` placeholder produces), answers neither, so it tripped no rung at all and every job delivered in its `pendingPodDeadline` window was claimed.
+   A worker pod that WAS placed and then could not be started, with the kubelet in `ImagePullBackOff` (a `workerImage` that does not pull), answers neither, so it tripped no rung at all and every job delivered in its `pendingPodDeadline` window was claimed.
    The gate now reads that too, as `PodsNotStarting`, and reads it on **every** cluster rather than under one value of `nodeAutoscaling`: §D.8's question is whether another actor is waiting on the pod to make capacity appear, and a bound pod is not a request for anything.
    The kubelet's backoff is the verdict, so the signal needs no scheduling grace of its own, which is also why the matcher takes `ImagePullBackOff` and refuses the pre-backoff `ErrImagePull`.
 

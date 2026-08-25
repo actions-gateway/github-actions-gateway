@@ -61,7 +61,11 @@ build_fixture() {
 			metadata:
 			  name: $entry
 			spec:
-			  workerImage: example.invalid/build-capable-runner:replace-me
+			  # No workerImage, as the shipped library entries have none: the AGC
+			  # gap-fills its default. The overlay patch below replaces that
+			  # absent member, which kustomize creates rather than rejecting, so
+			  # this fixture exercises the shape the real overlays depend on
+			  # instead of asserting it holds.
 			  podTemplate:
 			    spec:
 			      initContainers:

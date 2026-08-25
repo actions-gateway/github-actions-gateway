@@ -31,7 +31,7 @@ Workload names are rows in this table, not template names: "kind end-to-end test
 | Your jobs | Entry | What you get |
 |---|---|---|
 | Unit tests, lint, deploys, anything that does not build container images | `plain` | No Docker daemon, no elevated capabilities. The only entry that composes with GAG's security gap-fill rather than opting out of it. |
-| Build container images, run `docker compose`, run a nested cluster | `kata-dind` | A real Docker daemon inside a KVM micro-VM. An escape reaches a throwaway guest kernel, not your node. |
+| Build container images, run a nested cluster | `kata-dind` | A real Docker daemon inside a KVM micro-VM. An escape reaches a throwaway guest kernel, not your node. |
 | The same, where Kata is not an option (see below) | `privileged-dind` | The same daemon with no isolation. Trusted jobs only. |
 | Build images with no daemon at all | none of these | Rootless BuildKit or Kaniko run fine under `plain`. See [In-runner image builds](in-runner-image-builds.md). |
 
