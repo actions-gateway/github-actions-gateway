@@ -2691,6 +2691,13 @@ GAG serves GHES gateways, so this is a live failure mode here and not a footnote
 When one already exists it is reused untouched, labels included.
 GAG's <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scaleset/client.go"><code>UpdateRunnerScaleSet</code></a> exists but no production code calls it, and its behaviour against a scale set with a live session and assigned jobs is unknown.
 This plan therefore does not write labels to an existing scale set; see <a href="#drift-detected-never-patched">Drift</a>.</p>
+<blockquote>
+<p><strong>Measured since, and the answer is no</strong> — <a href="../q793-labels-patch/">Q793</a>, 2026-08-24.
+The Actions Service accepts a labels <code>PATCH</code>, answers 200, and discards it; a live session is undisturbed.
+The two paragraphs above are what was known on 2026-08-11 and are kept as written.
+What they call a deliberate omission is now a constraint: this plan's approach was right, and no later release can reconcile labels in place.
+<code>UpdateRunnerScaleSet</code> did gain a production caller after this was written — Q712's runner-group reconcile, which patches <code>runnerGroupId</code> and is unaffected.</p>
+</blockquote>
 <h2 id="approach">Approach<a class="headerlink" href="#approach" title="Permanent link">&para;</a></h2>
 <h3 id="runnerlabels0-is-the-scale-set-name"><code>runnerLabels[0]</code> is the scale-set name<a class="headerlink" href="#runnerlabels0-is-the-scale-set-name" title="Permanent link">&para;</a></h3>
 <p>The scale set keeps being named after the first declared label, and the whole list is registered as its labels.
@@ -2702,12 +2709,14 @@ That is a migration, not a relaxation, and this row does not need it.</p>
 That hazard already exists today for the single label, unguarded, and it is now documented rather than newly introduced.</p>
 <h3 id="drift-detected-never-patched">Drift: detected, never patched<a class="headerlink" href="#drift-detected-never-patched" title="Permanent link">&para;</a></h3>
 <p>Reusing a scale set by name means a label added to an existing RunnerSet never reaches GitHub.
-Because the <code>PATCH</code> path is unmeasured, this change does not attempt one.</p>
+Because the <code>PATCH</code> path is unmeasured, this change does not attempt one.
+(<a href="../q793-labels-patch/">Q793</a> has since measured it: a labels <code>PATCH</code> is discarded, so detection is not merely this plan's choice but the only option there is.)</p>
 <p>Instead the listener compares the label set the server actually returned, on create <em>and</em> on reuse, against the set the RunnerSet declares, and reports the difference.
 That single comparison covers both open failure modes at once, since a GHES appliance with the flag off and a scale set whose labels predate an edit are indistinguishable from the client's side and have the same remedy.</p>
 <p>The report is a new advisory condition, <code>RunnerLabelsIncomplete</code>, plus a <code>Warning</code> event naming the missing labels.
 It is advisory and stays out of <code>ImpairingConditionTypes</code>: the set is still serving every job that targets its name label, and rolling a configuration mismatch into the gateway's <code>RunnerSetsDegraded</code> summary would page for something that is not an outage.</p>
-<p>Measuring <code>PATCH</code>, and reconciling labels in place if it is honoured, is follow-up work, filed separately.</p>
+<p>Measuring <code>PATCH</code>, and reconciling labels in place if it is honoured, is follow-up work, filed separately.
+It came back not honoured (<a href="../q793-labels-patch/">Q793</a>), so nothing followed it.</p>
 <h3 id="uniqueness-moves-onto-the-name">Uniqueness moves onto the name<a class="headerlink" href="#uniqueness-moves-onto-the-name" title="Permanent link">&para;</a></h3>
 <p>The GMC webhook rejects two ScaleSet sets under one gateway that claim the same label, because the label <em>is</em> the scale-set name at GitHub.
 That check now compares <code>runnerLabels[0]</code> rather than requiring exactly one label; for a single-label set the two are the same expression, so its behaviour is unchanged.</p>
@@ -2724,7 +2733,8 @@ That check now compares <code>runnerLabels[0]</code> rather than requiring exact
 </ul>
 <p>Out, filed to the Queue instead:</p>
 <ul>
-<li>Measuring whether the Actions Service honours a labels <code>PATCH</code>, and reconciling in place if it does.</li>
+<li>Measuring whether the Actions Service honours a labels <code>PATCH</code>, and reconciling in place if it does.
+  (Measured in <a href="../q793-labels-patch/">Q793</a>: it does not, so the reconcile half was withdrawn rather than built.)</li>
 <li><code>gag-migrate</code> still writing <code>acquisitionProtocol: Classic</code> onto every set it emits.
   That is now conservative rather than necessary, but changing it silently flips a migrating tenant's protocol, which is a decision of its own.</li>
 </ul>
