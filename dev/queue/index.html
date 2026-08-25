@@ -4049,6 +4049,22 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>S</td>
 <td>Counted from source 2026-08-25 over the 99 <code>*-test.sh</code> files: 41 assign a repo-rooted <code>tmp/</code> path, 38 of those carry a <code>$$</code>, <code>$RANDOM</code> or …</td>
 </tr>
+<tr>
+<td><a href="Q996/">Q996</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/devtools/monitoring/promqlcheck/main.go">promql-check and dashboard-render-check guard less than they read as</a></td>
+<td><code>debt</code> <code>tests</code></td>
+<td>🔲</td>
+<td>S</td>
+<td><code>promql-check</code> mirrors each alert in <code>prometheusrule.yaml</code> against the copy <code>observability-alerting.md</code> reproduces, and compares a typed …</td>
+</tr>
+<tr>
+<td><a href="Q997/">Q997</a></td>
+<td><a href="../development/documentation-standards/">Prose that counts a set goes stale on an insertion nothing checks</a></td>
+<td><code>debt</code> <code>docs</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>An insertion falsifies neighbouring prose asserting a property of the set <strong>without touching that prose</strong>.</td>
+</tr>
 </tbody>
 </table>
 
