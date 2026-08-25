@@ -89,9 +89,10 @@ Grade any host inventory here with a general domain-shaped sweep.
 | `github.com` | checkout; `kubernetes-sigs/kind` release binary; cert-manager and metrics-server release manifests; the Go toolchain tarball (`actions/go-versions`, via `actions/setup-go`) | the managed GitHub rule |
 | `raw.githubusercontent.com` | the pinned Calico manifest (calico lane only) | the managed GitHub rule |
 | `get.helm.sh` | the helm binary, downloaded by `azure/setup-helm` | **`e2e-open-egress` only** |
-| Actions cache data plane | five cache restores, ~353 MB for the kind node image alone | **`e2e-open-egress` only** — the host is not visible in the job log and has not been measured |
+| Actions cache data plane | five cache restores, ~353 MB for the kind node image alone | **`e2e-open-egress` only** (the host is not visible in the job log and has not been measured) |
 | Actions service / `api.github.com` | runner control plane, job logs, `upload-artifact` | the managed GitHub rule |
 | `proxy.golang.org` | **nothing** — configured as `GOPROXY`, zero `go: downloading` lines in the run | — |
+| `sum.golang.org` | **nothing**: configured as `GOSUMDB`, covered by the same zero `go: downloading` count. Added by the same re-grade that added `gcr.io` above | — |
 
 Two coverage gaps in this measurement, both stated rather than papered over: the calico lane (`e2e-calico.yml`, nightly) was not the lane measured, so its `raw.githubusercontent.com` + `quay.io/calico/*` fetches are read from the workflow and the manifest rather than observed; and the live-GitHub specs were among the 11 skipped, so their real `api.github.com` traffic did not run.
 Both ride paths the managed GitHub rule already admits, so neither changes the design — but neither is measured.
