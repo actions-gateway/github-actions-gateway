@@ -81,11 +81,17 @@ The agent pool is the worked example and the one that got this wrong: identical 
 | Agent Secret | `agentpool-<name>-<index>` | `agentpool-rs-<name>-<index>` |
 | Selector label | `actions-gateway/runner-group` | `actions-gateway.com/runner-set` |
 | GitHub runner name | `<name>-<index>` | `rs-<name>-<index>` |
+| Broker session `agent.name`/`ownerName` | `<name>-<index>` | `rs-<name>-<index>` |
 
 Two rules follow.
 **The v1 spelling never moves** — v1 is the rollback target, so it has to keep finding the objects and registrations it already owns; v2 is the side that gets the discriminator.
 And **splitting the Kubernetes name is not enough on its own**: the GitHub runner name is unique per registration scope, so two pools sharing one take turns deregistering each other's live record through the 409-conflict path.
 Split every derived identity or none of them.
+
+**The last row is the one that got missed, and how it got missed is the reusable part.** Q466 split the three identities the agent pool derives, and the broker session's name is derived somewhere else: the listener built its own `<CR name>-<index>` from the CR name it was handed, so a `RunnerSet` sent GitHub a name matching no runner it had registered (Q677).
+An audit of the deriving package finds every site in that package and none outside it, so the question to ask is *who else spells this identity*, not *what does this package derive*.
+The repair is structural rather than a fourth copy of the rule: the derivation lives on the pool alone, the pool stamps the result on `agentpool.Agent.Name`, and every consumer forwards that field.
+A consumer that cannot see the `Scheme` must not be deriving a `Scheme`-dependent name at all.
 
 Renaming a derived object in a shipped release also has to carry the existing ones across, not orphan them.
 `agentpool.AdoptLegacyRunnerSetSecrets` is the pattern: on the first reconcile after the rename, copy each old-named object to its new name (preserving the payload, so no external registration is re-issued) and delete the original, gated on a check that the old name is not in use by the *other* kind.

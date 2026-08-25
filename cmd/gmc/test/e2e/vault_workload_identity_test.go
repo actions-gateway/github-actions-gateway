@@ -145,7 +145,8 @@ var _ = Describe("E2E_VaultWorkloadIdentity", Ordered, Label("vault-workload-ide
 		// installation token — which, with no PEM in the cluster, required a successful
 		// Vault login + transit sign. This is the keystone no-PEM round-trip assertion.
 		Eventually(func(g Gomega) {
-			sessions := fakegithubActiveSessionsForOwner(g, runnerSet+"-")
+			// "rs-" prefix: kind-scoped registered runner name (Q677).
+			sessions := fakegithubActiveSessionsForOwner(g, "rs-"+runnerSet+"-")
 			g.Expect(sessions).NotTo(BeEmpty(),
 				"no live broker session for RunnerSet %s — the AGC could not mint a token via Vault (no-PEM round-trip failed)", runnerSet)
 		}, 4*time.Minute, 2*time.Second).Should(Succeed())

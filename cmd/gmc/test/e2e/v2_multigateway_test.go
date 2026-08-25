@@ -236,7 +236,9 @@ func assertGatewayJobYieldsScopedWorker(ns, runnerSet, wantSA string) {
 	By(fmt.Sprintf("picking a live session owned by %s", runnerSet))
 	var session string
 	Eventually(func(g Gomega) {
-		sessions := fakegithubActiveSessionsForOwner(g, runnerSet+"-")
+		// "rs-" prefix: a RunnerSet listener owns its session as its registered
+		// runner name, which is kind-scoped (Q677).
+		sessions := fakegithubActiveSessionsForOwner(g, "rs-"+runnerSet+"-")
 		g.Expect(sessions).NotTo(BeEmpty(), "no live session for RunnerSet %s", runnerSet)
 		session = sessions[0]
 	}, 3*time.Minute, 2*time.Second).Should(Succeed())

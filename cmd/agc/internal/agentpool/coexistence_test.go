@@ -121,6 +121,20 @@ func TestCoexistence_SameNameGroupAndSetDoNotCollide(t *testing.T) {
 		assert.NotZero(t, registrar.AgentIDForName(fmt.Sprintf("%s-%d", testName, i)))
 	}
 
+	// A loaded Agent carries the name its own pool registered, which is what the
+	// listener puts on the wire (Q677). Asserted against the registrar rather than a
+	// literal, so this fails if Agent.Name and the registered record ever diverge —
+	// the divergence itself, not one spelling of it.
+	for i := range setAgents {
+		assert.Equal(t, registrar.AgentIDForName(setAgents[i].Name), setAgents[i].AgentID,
+			"a RunnerSet agent's Name must resolve to its own registered runner")
+		assert.Equal(t, registrar.AgentIDForName(groupAgents[i].Name), groupAgents[i].AgentID,
+			"a RunnerGroup agent's Name must resolve to its own registered runner")
+	}
+	assert.Equal(t, "rs-"+testName+"-0", setAgents[0].Name,
+		"the RunnerSet wire name is kind-scoped (Q466/Q677)")
+	assert.Equal(t, testName+"-0", groupAgents[0].Name)
+
 	// Rollback: the RunnerSet is torn down and v1 is left alone. Its agents survive.
 	require.NoError(t, setPool.DeleteAll(ctx, "tok"))
 	assert.ElementsMatch(t, []string{"agentpool-shared-name-0", "agentpool-shared-name-1"}, secretNames(t, c))

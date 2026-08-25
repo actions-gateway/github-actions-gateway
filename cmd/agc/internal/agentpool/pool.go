@@ -156,7 +156,14 @@ type RecycleMetrics interface {
 
 // Agent holds the credentials for one pre-registered runner agent.
 type Agent struct {
-	Index         int
+	Index int
+	// Name is the runner name registered with GitHub for this agent, as
+	// Pool.agentName derives it. Carried on the Agent so the listener sends the
+	// registered name on the wire rather than re-deriving it: the derivation is
+	// Scheme-dependent and the listener knows no Scheme, so a second copy of the
+	// rule drifted from this one and named no registered runner for a RunnerSet
+	// (Q677).
+	Name          string
 	AgentID       int64
 	Creds         *githubapp.RunnerCredentials
 	PrivateKey    crypto.Signer
@@ -625,7 +632,7 @@ func (p *Pool) reload(ctx context.Context) error {
 			}
 			return err
 		}
-		a, err := secretToAgent(*full)
+		a, err := p.secretToAgent(*full)
 		if err != nil {
 			continue
 		}
@@ -818,7 +825,7 @@ func (p *Pool) Recycle(ctx context.Context, a *Agent, token string) (*Agent, err
 		}
 	}
 
-	fresh, err := secretToAgent(*sec)
+	fresh, err := p.secretToAgent(*sec)
 	if err != nil {
 		return nil, fmt.Errorf("agentpool: recycle agent %d: %w", idx, err)
 	}
@@ -959,7 +966,10 @@ func hasOwnerRef(refs []metav1.OwnerReference, want metav1.OwnerReference) bool 
 	return false
 }
 
-func secretToAgent(s corev1.Secret) (*Agent, error) {
+// secretToAgent decodes an agent Secret. A method rather than a free function so
+// every decoded Agent carries the Scheme-derived registered Name (Q677); a caller
+// cannot construct one without it.
+func (p *Pool) secretToAgent(s corev1.Secret) (*Agent, error) {
 	idxStr := string(s.Data["agentIndex"])
 	if s.Labels != nil && s.Labels[labelAgentIndex] != "" {
 		idxStr = s.Labels[labelAgentIndex]
@@ -977,6 +987,7 @@ func secretToAgent(s corev1.Secret) (*Agent, error) {
 
 	return &Agent{
 		Index:   idx,
+		Name:    p.agentName(idx),
 		AgentID: agentID,
 		Creds: &githubapp.RunnerCredentials{
 			ClientID:         string(s.Data["clientId"]),

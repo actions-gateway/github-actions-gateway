@@ -377,7 +377,7 @@ That is cosmetic in the protocol (GitHub keys session conflicts on the agent, no
 Filed as Q538; the test works around it by naming its RunnerSet distinctly.
 
 Q538 later measured the production client and refuted the "cosmetic" reading above: the listener sends that same string as `agent.name`, so for a RunnerSet it names no runner GitHub has registered.
-The fake's own name scoping and doc were fixed there; the wire-name divergence carried to [Q677](../../queue/Q677.md).
+The fake's own name scoping and doc were fixed there; the wire-name divergence carried to Q677, which closed it by having the listener send the agent's own registered name.
 
 ### The teardown order is load-bearing and undocumented
 
