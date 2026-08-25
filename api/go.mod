@@ -3,8 +3,8 @@ module github.com/actions-gateway/github-actions-gateway/api
 go 1.26.6
 
 require (
-	k8s.io/api v0.36.3
-	k8s.io/apimachinery v0.36.3
+	k8s.io/api v0.36.4
+	k8s.io/apimachinery v0.36.4
 	sigs.k8s.io/controller-runtime v0.24.1
 )
 
