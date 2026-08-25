@@ -52,7 +52,7 @@ Bucket state stays in-process on each proxy pod; for accurate global limits a sh
 > **✅ Implemented (Q564).** The recorded demand this entry waited on arrived as [Q725](../queue/Q725.md), the audit-persona dashboard, so the enhancement was promoted to committed work and shipped.
 > It is retained here as a stub so existing cross-references resolve; the live design and operator docs are authoritative.
 
-An `EgressProxy` pool writes one structured line per **accepted** CONNECT (tenant namespace, destination host and port, bytes each way, tunnel duration) to the same stdout JSON stream the pool already logs to.
+An `EgressProxy` pool writes one structured line per **accepted** CONNECT (pool namespace, destination host and port, bytes each way, tunnel duration) to the same stdout JSON stream the pool already logs to.
 It is **off by default** and opted into per pool with `spec.auditLogging: Connections`; `Off` is the default and is what an unset field, an unrecognized value, and a proxy image older than the field all resolve to.
 
 Two deltas from the sketch this entry originally carried, both recorded so a reader is not left looking for what it described:
