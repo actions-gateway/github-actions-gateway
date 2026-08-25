@@ -2930,12 +2930,21 @@ The agent pool is the worked example and the one that got this wrong: identical 
 <td><code>&lt;name&gt;-&lt;index&gt;</code></td>
 <td><code>rs-&lt;name&gt;-&lt;index&gt;</code></td>
 </tr>
+<tr>
+<td>Broker session <code>agent.name</code>/<code>ownerName</code></td>
+<td><code>&lt;name&gt;-&lt;index&gt;</code></td>
+<td><code>rs-&lt;name&gt;-&lt;index&gt;</code></td>
+</tr>
 </tbody>
 </table>
 <p>Two rules follow.
 <strong>The v1 spelling never moves</strong> — v1 is the rollback target, so it has to keep finding the objects and registrations it already owns; v2 is the side that gets the discriminator.
 And <strong>splitting the Kubernetes name is not enough on its own</strong>: the GitHub runner name is unique per registration scope, so two pools sharing one take turns deregistering each other's live record through the 409-conflict path.
 Split every derived identity or none of them.</p>
+<p><strong>The last row is the one that got missed, and how it got missed is the reusable part.</strong> Q466 split the three identities the agent pool derives, and the broker session's name is derived somewhere else: the listener built its own <code>&lt;CR name&gt;-&lt;index&gt;</code> from the CR name it was handed, so a <code>RunnerSet</code> sent GitHub a name matching no runner it had registered (Q677).
+An audit of the deriving package finds every site in that package and none outside it, so the question to ask is <em>who else spells this identity</em>, not <em>what does this package derive</em>.
+The repair is structural rather than a fourth copy of the rule: the derivation lives on the pool alone, the pool stamps the result on <code>agentpool.Agent.Name</code>, and every consumer forwards that field.
+A consumer that cannot see the <code>Scheme</code> must not be deriving a <code>Scheme</code>-dependent name at all.</p>
 <p>Renaming a derived object in a shipped release also has to carry the existing ones across, not orphan them.
 <code>agentpool.AdoptLegacyRunnerSetSecrets</code> is the pattern: on the first reconcile after the rename, copy each old-named object to its new name (preserving the payload, so no external registration is re-issued) and delete the original, gated on a check that the old name is not in use by the <em>other</em> kind.</p>
 <h3 id="a-selector-a-coexisting-controller-also-matches-is-a-cross-wire-q582">A selector a coexisting controller also matches is a cross-wire (Q582)<a class="headerlink" href="#a-selector-a-coexisting-controller-also-matches-is-a-cross-wire-q582" title="Permanent link">&para;</a></h3>

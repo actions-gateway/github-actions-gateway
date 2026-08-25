@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q677/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q979/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>CreateSession sends a kind-unscoped runner name - GitHub Actions Gateway</title>
+        <title>Q466's rs- scoping is not injective, so kinds deregister each other - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#createsession-sends-a-kind-unscoped-runner-name" class="md-skip">
+        <a href="#q466s-rs--scoping-is-not-injective-so-kinds-deregister-each-other" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              CreateSession sends a kind-unscoped runner name
+              Q466's rs- scoping is not injective, so kinds deregister each other
             
           </span>
         </div>
@@ -2597,10 +2597,14 @@
   
 
 
-<h1 id="createsession-sends-a-kind-unscoped-runner-name"><code>CreateSession</code> sends a kind-unscoped runner name<a class="headerlink" href="#createsession-sends-a-kind-unscoped-runner-name" title="Permanent link">&para;</a></h1>
-<p>It derives <code>&lt;CR name&gt;-&lt;index&gt;</code> for both kinds, but Q466 kind-scoped the <em>registered</em> name to <code>rs-&lt;set&gt;-&lt;index&gt;</code>, so a RunnerSet's <code>agent.name</code>/<code>ownerName</code> name no registered runner.
-Broker reaction unmeasured; it validates <code>agent.id</code>.
-From Q538.</p>
+<h1 id="q466s-rs--scoping-is-not-injective-so-kinds-deregister-each-other">Q466's <code>rs-</code> scoping is not injective, so kinds deregister each other<a class="headerlink" href="#q466s-rs--scoping-is-not-injective-so-kinds-deregister-each-other" title="Permanent link">&para;</a></h1>
+<p>A RunnerGroup named <code>rs-foo</code> and a RunnerSet named <code>foo</code> derive the same registered runner name, <code>rs-foo-0</code>, and the same Secret name.
+<code>createAgent</code> registers before it writes the Secret, so the loser's 409 path resolves the incumbent's ID and <strong>deregisters its live GitHub record</strong> before failing.
+Measured against <code>StubRegistrar</code>: incumbent id 1001 destroyed and re-registered as 1002, <code>registerCalls</code> 1→3, <code>deregisterCalls</code> 0→1, and only then <code>secrets "agentpool-rs-foo-0" already exists</code>.
+The incumbent's Secret still holds agentId 1001, which no longer exists, so its listener cannot authorize; the other pool repeats this every reconcile.
+That is verbatim the loop <code>Pool.agentName</code>'s godoc says the discriminator exists to prevent.
+Nothing validates a CR name against the prefix.
+The registration damage never reaches the returned error, which is why a first reading of this called it a failed create.</p>
 
 
 

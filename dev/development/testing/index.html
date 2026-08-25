@@ -6107,9 +6107,10 @@ Picking a session from that global list — e.g. <code>RegisteredSessions()[len-
 <li><strong>Scope every session assertion and enqueue to your CR's owner.</strong> Use <code>ActiveSessionsForOwner("&lt;cr-name&gt;")</code> and <code>enqueueJobOnOwnerSession(...)</code> instead of the global accessors.
   A CR name is unique to one test, so owner-scoping returns exactly the sessions you created — never a sibling's.
   <code>enqueueJobOnOwnerSession</code> also retries until an owner session is present, so it is immune to the picked session having just idle-shut.
-  The filter matches <code>"&lt;cr-name&gt;-&lt;agentIndex&gt;"</code> with the index segment exact, so a sibling CR whose name <em>extends</em> yours keeps its own bucket.
-  It does <strong>not</strong> separate kinds: the AGC builds <code>ownerName</code> from the bare CR name for a RunnerGroup and a RunnerSet alike, so a same-named pair sends byte-identical owners and shares one bucket (Q677).
-  A test that runs both kinds must give them different names.</li>
+  The filter matches <code>"&lt;stem&gt;-&lt;agentIndex&gt;"</code> with the index segment exact, so a sibling whose stem <em>extends</em> yours keeps its own bucket.
+  The stem is the listener's <strong>registered runner name</strong>, not the CR name, and the two differ by kind: pass <code>"&lt;name&gt;"</code> for a RunnerGroup and <code>"rs-&lt;name&gt;"</code> for a RunnerSet (Q466's scoping, carried onto the wire by Q677).
+  Kinds are therefore separable, so a same-named RunnerGroup and RunnerSet no longer share one bucket.
+  Before Q677 they did, and a test running both kinds had to give them different names.</li>
 <li><strong>Wait on the condition, not the clock.</strong> Prefer the stub's channel-based waiters (<code>WaitForFirstPoll</code>, <code>WaitForSessionDelete</code>) over wall-clock sleeps; they return the instant the event happens.
   The timeout you pass is only a safety ceiling, not the expected latency — size it generously for a CPU-starved 2-vCPU CI runner (seconds of headroom, well inside the package's 5m test timeout), since raising a too-tight ceiling alone just moves a flake rather than fixing it.</li>
 </ul>

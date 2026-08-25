@@ -2714,6 +2714,14 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>Measured 2026-08-18: <code>c99129aa</code> passed <code>lint</code> in run 32145897225 and failed in 32172968731, <code>nolintlint</code> calling two staticcheck directives …</td>
 </tr>
 <tr>
+<td><a href="Q979/">Q979</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/agentpool/pool.go">Q466's <code>rs-</code> scoping is not injective, so kinds deregister each other</a></td>
+<td><code>bug</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>A RunnerGroup named <code>rs-foo</code> and a RunnerSet named <code>foo</code> derive the same registered runner name, <code>rs-foo-0</code>, and the same Secret name.</td>
+</tr>
+<tr>
 <td><a href="Q951/">Q951</a></td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/ci/check-tools-test.sh"><code>version-cmds-answer</code> flakes on kubectl, cause unverified</a></td>
 <td><code>flake</code> <code>ci</code></td>
@@ -2816,14 +2824,6 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>🔲</td>
 <td>S</td>
 <td><code>prev := meta.FindStatusCondition(...)</code> returns a pointer INTO the slice, and the <code>SetStatusCondition</code> below it overwrites that element, so …</td>
-</tr>
-<tr>
-<td><a href="Q677/">Q677</a></td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/listener/session.go"><code>CreateSession</code> sends a kind-unscoped runner name</a></td>
-<td><code>bug</code></td>
-<td>🔲</td>
-<td>S</td>
-<td>It derives <code>&lt;CR name&gt;-&lt;index&gt;</code> for both kinds, but Q466 kind-scoped the <em>registered</em> name to <code>rs-&lt;set&gt;-&lt;index&gt;</code>, so a RunnerSet's …</td>
 </tr>
 <tr>
 <td><a href="Q957/">Q957</a></td>
