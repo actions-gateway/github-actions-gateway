@@ -136,7 +136,7 @@ func WorkerRunnerVersionCondition(image string, generation int64) metav1.Conditi
 // does not refute a live session rejection, so WorkerRunnerVersionCondition's callers
 // defer to a session-sourced True. This is the reverse half: the listener's
 // VersionAccepted baseline clears a stale session-sourced True (Q795) and is dropped
-// when the live condition is anything else.
+// when a live condition stands whose reason is not the listener's own.
 //
 // The deference is one-directional by design, so this is not a symmetry. A
 // session-sourced True still overwrites an image reading, because an observed

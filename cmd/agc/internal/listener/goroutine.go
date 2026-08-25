@@ -96,8 +96,8 @@ func Run(ctx context.Context, cfg Config) error {
 	// True is fixed by upgrading the gateway — which restarts this process and clears
 	// every in-memory flag while the condition survives in the owner's status. The
 	// session reaching here is GitHub having accepted that version. The reconciler
-	// drops this push when the live condition is image-sourced (Q715), so the
-	// unconditional form cannot overwrite a worker-image verdict.
+	// drops this push when a live condition stands whose reason is not the listener's
+	// own, so the unconditional form cannot overwrite a worker-image verdict (Q715).
 	setCondition(cfg, v1alpha1.ConditionRunnerVersionTooOld, metav1.ConditionFalse,
 		v1alpha1.ReasonVersionAccepted, "GitHub accepted the runner version at session creation")
 

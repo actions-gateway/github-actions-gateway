@@ -489,8 +489,8 @@ const (
 	// session creation. It clears a ReasonVersionTooOld left by an earlier instance,
 	// which no restart clears on its own — the version is the AGC's own compile-time
 	// pin, so the fix is a gateway upgrade and the condition outlives it in status
-	// (Q795). It never overwrites the reconciler's image reading: the two producers
-	// own disjoint halves of this type, keyed by reason.
+	// (Q795). It never overwrites the reconciler's image reading: only the clear is
+	// arbitrated, and a session-sourced True still writes over an image verdict.
 	ReasonVersionAccepted = "VersionAccepted"
 	// ReasonWorkerImageBelowMinimum is the RunnerVersionTooOld=True reason when the
 	// worker image's tag declares an actions/runner version below the enforced

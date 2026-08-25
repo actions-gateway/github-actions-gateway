@@ -3985,7 +3985,7 @@ All are advisory (abnormal-is-`True`) and do not gate `Ready`.
 Both protocols publish the healthy state as well as the abnormal one, so a recovered condition does not sit stale until the process restarts.
 `Degraded=False/SessionAuthorized` and `RateLimited=False/PollingHealthy` appear on every healthy set of either kind once its listener starts.
 An abnormal condition then clears as soon as the session recovers, by paths that differ per tier: on the **classic** tier a successful poll clears `RateLimited` and an agent recycle clears `Degraded`, while the **`ScaleSet`** tier also clears on a queue-token refresh, which the classic protocol has no equivalent of.
-On the classic tier `RunnerVersionTooOld=False/VersionAccepted` joins that baseline, which is what clears a `VersionTooOld` after you upgrade the gateway; the reconciler's `workerImage` reading owns the same condition otherwise and the baseline never overwrites it.
+On the classic tier `RunnerVersionTooOld=False/VersionAccepted` joins that baseline, which is what clears a `VersionTooOld` after you upgrade the gateway; the baseline never overwrites the reconciler's `workerImage` reading, though a session-sourced `VersionTooOld` does write over it, so a rejection GitHub has actually made shows through a healthy image.
 Listener-pushed conditions and events are recorded on the `RunnerSet` on its next reconcile, so they can lag the incident by up to one reconcile interval.
 
 ---
