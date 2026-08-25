@@ -89,6 +89,14 @@ func fullRunnerSet(protocol string, labels ...string) *v2alpha1.RunnerSet {
 			PendingJobs:    0,
 			ProxyMode:      "Proxied",
 			TemplateSource: "TemplateRef",
+			// Q721's capacity accounting. The Slots: 0 entry is deliberate: the
+			// advertisement publishes an explicit zero for every rung it evaluated, so
+			// the round-trip has to carry that zero and not just a non-zero.
+			AdvertisedCapacity: ptrTo[int32](6),
+			WithheldCapacity: []v2alpha1.WithheldCapacity{
+				{Reason: "quota", Slots: 2},
+				{Reason: "capacity", Slots: 0},
+			},
 			// The sizing recommendation is carried here because the spoke↔hub
 			// conversion is a JSON round-trip: a field whose json tag is renamed on
 			// one version only is dropped silently rather than failing to compile.

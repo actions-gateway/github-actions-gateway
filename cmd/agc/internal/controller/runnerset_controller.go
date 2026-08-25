@@ -376,6 +376,7 @@ func (r *RunnerSetReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		rs.Status.ActiveSessions = 0
 		rs.Status.ActiveJobs = 0
 		rs.Status.PendingJobs = 0
+		clearAdvertisedCapacity(&rs)
 		rs.Status.ObservedGeneration = rs.Generation
 		if err := r.Status().Update(ctx, &rs); err != nil && !apierrors.IsConflict(err) {
 			return ctrl.Result{}, err
