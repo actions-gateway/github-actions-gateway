@@ -34,10 +34,6 @@ No pill means the item is on the near-term plan with no release decided for it y
   Untrusted PRs need an in-cluster pull-through registry mirror plus egress scoped to it, GitHub, and DNS.
   Phase 1 gates hosted-only egress; a measurement grades the posture before Phase 2 builds the mirrors.
 
-- **[Proxy-side audit logging](design/appendix-g-future-enhancements.md#g3-proxy-side-audit-logging)** <!-- q:Q564 --> A structured line per accepted CONNECT: tenant, host and port, bytes each way, duration.
-  The proxy emits counters only today, so per-tenant egress is reconstructable just from cluster flow logs.
-  Off by default, and the audit-persona dashboard depends on it.
-
 ## Exploring / longer-term
 
 Directions we expect to pursue as demand and validated evidence accumulate.

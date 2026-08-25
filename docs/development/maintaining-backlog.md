@@ -716,7 +716,7 @@ The failure mode it exists to catch is the comfortable one: leaving an item in t
 That is how the section came to advertise nine things as *actively being built* while they waited on demand, a prerequisite, or hardware nobody has.
 
 **A release commitment is the narrower claim, and the `X.Y-gate` label alone carries it.** The rule above read *"committed to a named release"* until 2026-08-18, which held only while every ungated item was also parked.
-Reviving [Q408](../queue/Q408.md) and [Q564](../queue/Q564.md) broke that: both revive triggers had fired, so rule 4 moved their bullets into near-term, and neither had a release to name.
+Reviving [Q408](../queue/Q408.md) and Q564 broke that: both revive triggers had fired, so rule 4 moved their bullets into near-term, and neither had a release to name.
 Both ways of restoring the stronger wording are worse than dropping it: invent a gate label, which publishes a promise nobody decided, or re-park a row whose trigger has fired, which misstates why it is parked (Q843).
 So near-term holds some items with a pill and some without, and the pill is the only place a release is claimed.
 

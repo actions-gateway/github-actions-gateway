@@ -47,12 +47,15 @@ Each waits on a real signal, and each carries a revive trigger on the backlog ra
 | An unbuilt prerequisite | [Q555](../queue/Q555.md) flaky-job retry, which needs a real job outcome |
 | Hardware nobody has yet | [Q765](../queue/Q765.md) GHES validation on a real appliance |
 
-**Two of the original seven are back.** [Q408](../queue/Q408.md) waited on an operator ask plus a measurement and [Q564](../queue/Q564.md) on recorded demand, and both triggers fired by 2026-08-13: the maintainer is the operator asking for untrusted-PR CI, and Q564's demand is [Q725](../queue/Q725.md), which had sat in the Queue the whole time.
+Q564 was the seventh, revived on the same 2026-08-13 evidence and since shipped, so it has left this accounting and six of the original seven remain in it.
+Its demand was [Q725](../queue/Q725.md), which had sat in the Queue the whole time.
+
+**One of the original six are back.** [Q408](../queue/Q408.md) waited on an operator ask plus a measurement, and its trigger fired by 2026-08-13: the maintainer is the operator asking for untrusted-PR CI.
 That is the trigger list working rather than a rule being bent, and it is what narrowed the rule above.
 
 The proxy cluster is the clearest case and the one most likely to be re-litigated.
 [release-1.4.md](release-1.4.md) shelved all four together with the reasoning that they are a coherent release theme, and recorded in the same breath that **none had demand recorded against it**.
-That still holds of the three left, and Q564 leaving on a recorded ask is the reasoning working rather than failing.
+That still holds of the three left, and Q564 leaving on a recorded ask, then shipping, is the reasoning working rather than failing.
 A theme with no demand is a theme, not a release.
 
 ## The rule this establishes
@@ -63,7 +66,7 @@ This is enforceable rather than aspirational: `roadmapcheck` already binds each 
 Parking an item moves the row to Deferred, which moves the bullet, which the gate checks.
 
 **Narrowed 2026-08-18.** This rule originally read *"committed to a named release"*, which is a stronger claim than the gate makes and than the ladder can keep.
-The two coincide only while every ungated item is also parked, and a revive trigger firing breaks that: [Q408](../queue/Q408.md) and [Q564](../queue/Q564.md) came back to the Queue on 2026-08-13 with their triggers fired, so rule 4 moved both bullets into near-term with no release to name.
+The two coincide only while every ungated item is also parked, and a revive trigger firing breaks that: [Q408](../queue/Q408.md) and Q564 came back to the Queue on 2026-08-13 with their triggers fired, so rule 4 moved both bullets into near-term with no release to name (Q564 has since shipped, taking its bullet off the roadmap).
 Restoring the stronger reading needs either an invented gate label, which publishes a commitment nobody made, or a re-parked row whose trigger has fired, which is the dishonesty this page exists to remove, pointed the other way.
 The release commitment is the narrower claim the `X.Y-gate` label carries on its own, so near-term holds both gated and ungated work (Q843).
 
