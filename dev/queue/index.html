@@ -2681,7 +2681,7 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td><code>security</code></td>
 <td>🔲</td>
 <td>L</td>
-<td>Phase 1 is built and awaits a green Kata e2e whose log names no non-GitHub non-registry host, then Phase 2 mirrors.</td>
+<td>Phase 1 validated 2026-08-24: four green self-hosted Kata runs name no non-GitHub non-registry host, graded against a Phase 0 control that …</td>
 </tr>
 <tr>
 <td><a href="Q564/">Q564</a></td>
@@ -2764,14 +2764,6 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td><code>adv.Withheld</code> reaches Prometheus only, so a tenant without metrics access cannot see why intake is throttled.</td>
 </tr>
 <tr>
-<td><a href="Q724/">Q724</a></td>
-<td><a href="../operations/personas/#budget-owner">Budget-owner cost and utilization dashboard</a></td>
-<td><code>feature</code> <code>docs</code></td>
-<td>🔲</td>
-<td>M</td>
-<td>Two dashboards serve two of the five documented personas.</td>
-</tr>
-<tr>
 <td><a href="Q720/">Q720</a></td>
 <td><a href="../design/03-api-contracts/">Publish the queue depth GitHub reports on every poll</a></td>
 <td><code>feature</code> <code>docs</code></td>
@@ -2810,14 +2802,6 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>🔲</td>
 <td>S</td>
 <td>16 suites carry <code>maintenance.auto false</code> with no assertion; a text query cannot check them, since one drives git from embedded Python.</td>
-</tr>
-<tr>
-<td><a href="Q931/">Q931</a></td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/e2e-reusable.yml">Make the e2e bake's <code>type=gha</code> cache real, or drop the dead config</a></td>
-<td><code>ci</code> <code>debt</code></td>
-<td>🔲</td>
-<td>M</td>
-<td><strong>Decided 2026-08-21: expose the token with <code>crazy-max/ghaction-github-runtime</code>, SHA-pinned.</strong> That is consistent with standing practice …</td>
 </tr>
 <tr>
 <td><a href="Q957/">Q957</a></td>
@@ -3884,12 +3868,28 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td><code>queue.py metrics</code> splits throughput from garbage collection by matching <code>complete\|prune\|merge\|defer</code> in the subject of the commit that …</td>
 </tr>
 <tr>
+<td><a href="Q961/">Q961</a></td>
+<td><a href="../operations/observability-dashboards/">Reconcile the dashboard doc's panel tables with the shipped JSON</a></td>
+<td><code>docs</code> <code>debt</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>The page documents each dashboard row by row, and both sections have drifted from the JSON they describe.</td>
+</tr>
+<tr>
 <td><a href="Q963/">Q963</a></td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/release/gen-third-party-notices.sh">Cover redistributed third-party binaries in THIRD-PARTY-NOTICES</a></td>
 <td><code>debt</code> <code>security</code></td>
 <td>🔲</td>
 <td>S</td>
 <td><code>gen-third-party-notices.sh</code> reads <code>vendor/</code>, so it covers Go modules only.</td>
+</tr>
+<tr>
+<td><a href="Q969/">Q969</a></td>
+<td><a href="../operations/observability-dashboards/#budget-dashboard">Withheld-capacity panel on the budget dashboard</a></td>
+<td><code>feature</code> <code>docs</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>Q724 shipped the budget dashboard reading one metric, <code>job_duration_seconds</code>, which is tier-neutral.</td>
 </tr>
 <tr>
 <td><a href="Q976/">Q976</a></td>

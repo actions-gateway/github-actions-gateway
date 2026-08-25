@@ -2897,8 +2897,9 @@ A control that exists but leaves no record is hard to evidence, which is why per
 <h3 id="budget-owner">Budget owner<a class="headerlink" href="#budget-owner" title="Permanent link">&para;</a></h3>
 <p>Owns the spend, and usually cannot read the cluster at all.</p>
 <p><strong>Needs, specifically:</strong> cost per tenant, in currency, from data they can defend in a planning conversation.
-<a href="../cost-attribution/">Cost attribution</a> maps tenant namespaces and <code>app.kubernetes.io/*</code> labels onto OpenCost and Kubecost allocation queries for exactly this.
-There is no dashboard for this persona yet; see the <a href="../../roadmap/">roadmap</a>.</p>
+<a href="../cost-attribution/">Cost attribution</a> maps tenant namespaces and <code>app.kubernetes.io/*</code> labels onto OpenCost and Kubecost allocation queries for exactly this, and the <a href="../observability-dashboards/#budget-dashboard">budget dashboard</a> is the GAG-native view beside it: worker pod-hours per tenant and per runner shape, priced by an hourly rate you supply.</p>
+<p><strong>The two are not redundant, and the difference is what makes either defensible.</strong> A cost tool reads a node price book and answers in real money; the dashboard reads the span GAG bills against and answers in pod-hours.
+Reconciling them is the check: a large divergence is usually oversized resource requests rather than a broken query.</p>
 <h3 id="maintainer">Maintainer<a class="headerlink" href="#maintainer" title="Permanent link">&para;</a></h3>
 <p>Internal to GAG itself: cutting releases, the publish pipeline, supply-chain attestations.
 See <a href="../release/">release.md</a>.

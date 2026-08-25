@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q931/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q969/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>Make the e2e bake's type=gha cache real, or drop the dead config - GitHub Actions Gateway</title>
+        <title>Withheld-capacity panel on the budget dashboard - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#make-the-e2e-bakes-typegha-cache-real-or-drop-the-dead-config" class="md-skip">
+        <a href="#withheld-capacity-panel-on-the-budget-dashboard" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Make the e2e bake's type=gha cache real, or drop the dead config
+              Withheld-capacity panel on the budget dashboard
             
           </span>
         </div>
@@ -2567,16 +2567,16 @@
   
 
 
-<h1 id="make-the-e2e-bakes-typegha-cache-real-or-drop-the-dead-config">Make the e2e bake's <code>type=gha</code> cache real, or drop the dead config<a class="headerlink" href="#make-the-e2e-bakes-typegha-cache-real-or-drop-the-dead-config" title="Permanent link">&para;</a></h1>
-<p><strong>Decided 2026-08-21: expose the token with <code>crazy-max/ghaction-github-runtime</code>, SHA-pinned.</strong> That is consistent with standing practice rather than a new exception, since six third-party actions are already pinned that way here (aquasecurity, dorny, hadolint, sigstore, updatecli, azure).
-The alternative, <code>docker/bake-action</code>, was rejected because it costs the backgrounded bake.
-Q900 measured the defect: a <code>run:</code> step sees no <code>ACTIONS_RUNTIME_TOKEN</code> or <code>ACTIONS_RESULTS_URL</code>, before <em>or</em> after <code>docker/setup-buildx-action</code> v4.2.0 (probe run 32186577410).
-Buildx v0.36.1 then drops both cache entries silently, which is why the bake is green and caches nothing.
-The control is <code>security-scan.yml</code>: its <code>docker/build-push-action</code> does hold the token, and emits an <code>importing cache manifest from gha:</code> vertex absent from all three e2e bakes read here.
-Nothing writes <code>scope=images</code>, so <code>deps</code> recompiles everywhere.
-102.6 s / 99.5 s / 99.4 s on e2e runs 32145897962, 32142595219, 32143847937; 78.2 s / 81.9 s / 82.0 s on three trivy shards of run 32186370352.
-<code>docs/plan/e2e-ci-speed-round-2.md:100</code> and the <code>cache-from</code> comment in <code>security-scan.yml</code> still assert the restore works; correct both in the same change.
-Sequence after PR 1674, the dependabot actions bump, which edits <code>e2e-reusable.yml</code> and <code>security-scan.yml</code> and was open when this was decided.</p>
+<h1 id="withheld-capacity-panel-on-the-budget-dashboard">Withheld-capacity panel on the budget dashboard<a class="headerlink" href="#withheld-capacity-panel-on-the-budget-dashboard" title="Permanent link">&para;</a></h1>
+<p>Q724 shipped the budget dashboard reading one metric, <code>job_duration_seconds</code>, which is tier-neutral.
+It answers what was spent and leaves one budget-owner question unanswered: spend held down by a throttle rather than by demand.</p>
+<p>The series for it are already on <code>main</code>, so this waits on nothing.
+<code>actions_gateway_scaleset_advertised_capacity</code> is the ceiling the AGC declared, and <code>actions_gateway_scaleset_capacity_withheld{reason}</code> is what each rung removed from it, the two summing to the configured ceiling.
+A Row 4 panel plotting withheld capacity by <code>reason</code> beside the ResourceQuota bars would say which rung is suppressing intake: <code>quota</code>, <code>capacity</code>, or the <code>scaleup</code> token bucket that Q717 is adding as a fourth reason value (a panel grouping by <code>reason</code> picks that up with no edit).</p>
+<p><strong>The design question to settle first is the tier split</strong>, which is why this is not a bolted-on target.
+Both series are scale-set only: on the classic tier the same ladder is per-delivered-job counters (<code>jobs_admission_rejected_total{reason}</code>) rather than a capacity integer.
+Every panel on the budget dashboard today is tier-neutral, so adding a scale-set-only row means either accepting a row that reads empty on a classic-only deploy, or unioning two metrics whose units differ (slots against jobs).
+Decide that before building.</p>
 
 
 

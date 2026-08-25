@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q724/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q961/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>Budget-owner cost and utilization dashboard - GitHub Actions Gateway</title>
+        <title>Reconcile the dashboard doc's panel tables with the shipped JSON - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#budget-owner-cost-and-utilization-dashboard" class="md-skip">
+        <a href="#reconcile-the-dashboard-docs-panel-tables-with-the-shipped-json" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Budget-owner cost and utilization dashboard
+              Reconcile the dashboard doc's panel tables with the shipped JSON
             
           </span>
         </div>
@@ -2567,10 +2567,18 @@
   
 
 
-<h1 id="budget-owner-cost-and-utilization-dashboard">Budget-owner cost and utilization dashboard<a class="headerlink" href="#budget-owner-cost-and-utilization-dashboard" title="Permanent link">&para;</a></h1>
-<p>Two dashboards serve two of the five documented personas.
-<code>cost-attribution.md</code> maps namespaces to OpenCost/Kubecost for the budget owner, with no dashboard on top.
-<code>job_duration_seconds</code> carries pod lifetime on both tiers, so the panels have data.</p>
+<h1 id="reconcile-the-dashboard-docs-panel-tables-with-the-shipped-json">Reconcile the dashboard doc's panel tables with the shipped JSON<a class="headerlink" href="#reconcile-the-dashboard-docs-panel-tables-with-the-shipped-json" title="Permanent link">&para;</a></h1>
+<p>The page documents each dashboard row by row, and both sections have drifted from the JSON they describe.
+Nothing compares them: <code>make promql-check</code> parses every panel expression out of the JSON (Q910) and never reads the prose, so a table that has lost a row, or gained a duplicate heading, is invisible to every gate.</p>
+<p>Measured 2026-08-24 on <code>main</code>, two instances:</p>
+<ul>
+<li>The tenant section numbers its nine rows 1, 2, 3, 4, 5, 6, 7, <strong>7</strong>, 8.
+  <code>grafana-dashboard-tenant.json</code> has nine correctly ordered rows, so <strong>Reliability Signals</strong> is Row 8 and <strong>Fan-out Safety</strong> is Row 9.</li>
+<li>The platform section's <strong>Pod creation p99 by namespace</strong> row has come out of the Cross-tenant Throughput table and is glued to the end of the Build Versions paragraph, where it renders as literal pipe-separated text mid-prose (line 175).
+  The panel is real and sits in the Cross-tenant Throughput row of <code>grafana-dashboard-platform.json</code>; only the table entry moved.</li>
+</ul>
+<p>One fix closes both: reconcile each section against its JSON.
+Worth considering as part of it whether the reconciliation should be a gate rather than a one-off, since the drift is silent and the panel titles are already machine-readable on both sides.</p>
 
 
 

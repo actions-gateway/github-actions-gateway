@@ -2990,12 +2990,15 @@ On a managed cloud they read real instance pricing automatically; on-prem or wit
 <p>This live data is the input to the <strong>showback vs chargeback</strong> choice in <a href="../../design/appendix-f-cost-model/#f3-tenant-cost-allocation">Appendix F §F.3</a>:</p>
 <ul>
 <li><strong>Showback:</strong> point a Grafana panel (or the Kubecost UI) at the per-namespace allocation so each team sees its own real spend next to the <a href="../observability-dashboards/#tenant-dashboard">tenant dashboard</a> throughput metrics.
-  No billing integration required.</li>
+  No billing integration required.
+  The shipped <a href="../observability-dashboards/#budget-dashboard">budget dashboard</a> is the no-cost-tool version of the same view: pod-hours and job counts per tenant and runner shape, priced by a rate you type in.
+  It needs only the per-tenant AGC scrape, so it works before OpenCost is installed and stays useful afterwards as the cross-check below.</li>
 <li><strong>Chargeback:</strong> export the per-namespace allocation on a schedule and feed it into your billing system, optionally applying a discount/overhead factor.
   The <code>app.kubernetes.io/instance</code> breakdown lets you bill by runner shape if a tenant runs both cheap CPU and expensive GPU groups.</li>
 </ul>
 <p>Cross-check the allocation against GAG's own metrics for a sanity test: <code>actions_gateway_job_duration_seconds</code> (per <code>namespace</code>, <code>runner_group</code>) × the runner shape's GPU/CPU node fraction should land in the same ballpark as the <code>runner</code>-component allocation for that tenant.
 The series is worker pod lifetime on both acquisition tiers, so it is directly comparable to a cost tool's own pod-hours.
+The <a href="../observability-dashboards/#budget-dashboard">budget dashboard</a>'s <strong>Worker pod-hours</strong> stat is that left-hand side already computed, over whatever window the time picker holds.
 A large divergence usually means oversized resource requests — the <a href="../../design/appendix-f-cost-model/#worker-resource-right-sizing">worker right-sizing lever</a> in Appendix F.</p>
 <hr />
 <p>← Back to <a href="../">Operations overview</a> · related: <a href="../observability/">Observability</a>, <a href="../../design/appendix-f-cost-model/">Appendix F — Cost model</a></p>
