@@ -59,6 +59,7 @@ func TestVocabularyIsDistinct(t *testing.T) {
 		"ConditionWorkerQuotaPressure":         apiconditions.ConditionWorkerQuotaPressure,
 		"ConditionWorkerQuotaExceeded":         apiconditions.ConditionWorkerQuotaExceeded,
 		"ConditionWorkersUnschedulable":        apiconditions.ConditionWorkersUnschedulable,
+		"ConditionWorkersNotStarting":          apiconditions.ConditionWorkersNotStarting,
 		"ConditionWorkerCapacityDeclined":      apiconditions.ConditionWorkerCapacityDeclined,
 		"ConditionRunnerSetsDegraded":          apiconditions.ConditionRunnerSetsDegraded,
 		"ConditionProxyQuotaPressure":          apiconditions.ConditionProxyQuotaPressure,

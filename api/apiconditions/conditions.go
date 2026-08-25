@@ -104,6 +104,29 @@ const (
 	// exhaustion — the two never double-report. It does NOT gate Ready, but it is the
 	// signal that a set's pendingJobs are climbing because capacity is not materializing.
 	ConditionWorkersUnschedulable = "WorkersUnschedulable"
+	// ConditionWorkersNotStarting is True when one or more of the RunnerSet's worker
+	// pods were placed on a node and then could not be started — the pod is bound and
+	// the kubelet is in backoff on a container image (Q906, abnormal-is-True). It is the
+	// sibling of ConditionWorkersUnschedulable and disjoint from it by construction: the
+	// two read opposite halves of PodScheduled, so a bound pod can never carry
+	// PodScheduled=False and neither condition can claim the other's pods. That is why
+	// the fact needs a condition of its own rather than widening WorkersUnschedulable,
+	// which would send an operator after a node, a taint, or a quota when the fix is an
+	// image.
+	//
+	// It reports and does not decide, exactly as WorkersUnschedulable does. The same
+	// fact ALSO reaches ConditionWorkerCapacityDeclined under reason PodsNotStarting
+	// (Q714), and the two are not redundant: that one is an intake decision, present
+	// only on a set that opted into spec.capacityGate.mode, so before this condition an
+	// ungated set — the default — published nothing at all between the kubelet's verdict
+	// and the reaper's WorkerPodStuckPending Event one full spec.pendingPodDeadline
+	// later.
+	//
+	// It is NOT in ImpairingConditionTypes. WorkerQuotaExceeded, a harder stall, is not
+	// either: advisory-and-not-impairing is this family's default and WorkersUnschedulable
+	// (Q157) is the one exception, so rolling this up would change every gateway's
+	// RunnerSetsDegraded summary for a signal the operator can already alert on directly.
+	ConditionWorkersNotStarting = "WorkersNotStarting"
 	// ConditionWorkerCapacityDeclined is True when the RunnerSet's capacity gate is
 	// currently refusing to take on jobs because the cluster cannot place this set's
 	// worker pods (Q405, abnormal-is-True). It is present ONLY on a set that opted in
@@ -290,6 +313,12 @@ const (
 	// resource) and are set inline by the reconciler, not fixed here.
 	ReasonPodsUnschedulable  = "PodsUnschedulable"
 	ReasonWorkersSchedulable = "WorkersSchedulable"
+	// ReasonWorkersStarting is the WorkersNotStarting=False reason (Q906): no worker pod
+	// is bound to a node with the kubelet in backoff on its image. ReasonPodsNotStarting
+	// raises it, shared with the WorkerCapacityDeclined condition that reads the same
+	// fact — the same sharing WorkersUnschedulable and the gate already do for
+	// ReasonPodsUnschedulable.
+	ReasonWorkersStarting = "WorkersStarting"
 	// ReasonCapacityAvailable is the WorkerCapacityDeclined=False reason (Q405): the
 	// gate is engaged and is not refusing intake. The True reasons name the SIGNAL the
 	// gate read, so the operator can tell which rung stopped their jobs —

@@ -39,6 +39,13 @@ func TestImpairingConditionTypes(t *testing.T) {
 		ConditionEgressUnattributed,
 		ConditionPossibleReapBlockingSidecar,
 		ConditionWorkerCapacityDeclined,
+		// Q906: the kubelet's startup verdict reports without deciding, like
+		// WorkersUnschedulable, but unlike it does not roll up. WorkerQuotaExceeded
+		// above is the precedent — a harder stall, also advisory-only — so
+		// WorkersUnschedulable (Q157) is the exception in this family rather than the
+		// rule, and adding a second rollup input would change every gateway's
+		// RunnerSetsDegraded for a signal an operator can alert on directly.
+		ConditionWorkersNotStarting,
 	} {
 		for _, imp := range ImpairingConditionTypes() {
 			if imp == c {

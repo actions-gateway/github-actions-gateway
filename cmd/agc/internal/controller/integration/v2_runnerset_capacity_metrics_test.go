@@ -12,8 +12,10 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/utils/ptr"
 )
 
@@ -27,6 +29,7 @@ const (
 	familyQuotaPressure = "actions_gateway_runnerset_worker_quota_pressure"
 	familyQuotaExceeded = "actions_gateway_runnerset_worker_quota_exceeded"
 	familyUnschedulable = "actions_gateway_runnerset_workers_unschedulable"
+	familyNotStarting   = "actions_gateway_runnerset_workers_not_starting"
 	familyDeclined      = "actions_gateway_runnerset_worker_capacity_declined"
 )
 
@@ -301,4 +304,78 @@ func TestV2_RunnerSet_CapacityGauges_DeclinedCarriesReason(t *testing.T) {
 	requireCapacityGauge(t, reg, familyUnschedulable, ns, setName, 0)
 	_, _, ok = declinedGauge(t, reg, ns, ungatedName)
 	require.False(t, ok, "the ungated set must still emit no %s series", familyDeclined)
+}
+
+// TestV2_RunnerSet_CapacityGauges_WorkersNotStarting is Q906: the kubelet's startup
+// verdict reaches its own gauge on a set that opted into NO capacity gate.
+//
+// The set here is deliberately ungated, which is the default and the case the condition
+// exists for. Before Q906 the same fact reached an operator only through the
+// capacity-gate family, which an ungated set does not emit at all — so this test's
+// assertion on familyDeclined being ABSENT is not incidental. It is the half that says
+// the observation is now published independently of the decision.
+//
+// The sibling family is the control: a bound pod is not a scheduling problem, so
+// familyUnschedulable must stay 0 for the whole window. If it moved, the two conditions
+// would be reporting the same pod and one of them would be wrong.
+func TestV2_RunnerSet_CapacityGauges_WorkersNotStarting(t *testing.T) {
+	const ns = "v2-rs-cap-gauge-notstarting"
+	const setName = "gauge-notstarting-set"
+	const image = "example.invalid/build-capable-runner:replace-me"
+	createNSForAGC(t, ns)
+
+	require.NoError(t, k8sClient.Create(ctx, newGatewayForSet("gw", ns, "")))
+	require.NoError(t, k8sClient.Create(ctx, newRunnerTemplate("tmpl", ns)))
+	rs := newRunnerSet(setName, ns, "gw")
+	// No spec.capacityGate at all: the default, and the whole point of this test.
+	rs.Spec.CompletedPodTTL = &metav1.Duration{Duration: time.Hour}
+	rs.Spec.PendingPodDeadline = &metav1.Duration{Duration: 30 * time.Second}
+	require.NoError(t, k8sClient.Create(ctx, rs))
+	t.Cleanup(func() {
+		_ = k8sClient.Delete(context.Background(), rs)
+		_ = k8sClient.Delete(context.Background(), newGatewayForSet("gw", ns, ""))
+		_ = k8sClient.Delete(context.Background(), &v2alpha1.RunnerTemplate{ObjectMeta: metav1.ObjectMeta{Name: "tmpl", Namespace: ns}})
+	})
+
+	startRunnerSetReconciler(t)
+	waitForSetReadyReason(t, ns, setName, metav1.ConditionTrue, v2alpha1.ReasonListenerActive)
+
+	reg := newCapacityGaugeRegistry(t)
+	require.Eventually(t, func() bool {
+		v, ok := runnerSetCapacityGauge(reg, familyNotStarting, ns, setName)
+		return ok && v == 0
+	}, 20*time.Second, 200*time.Millisecond,
+		"a healthy set must emit an explicit 0 on "+familyNotStarting+", not an absent series")
+
+	pod := createV2WorkerPod(t, ns, setName, "worker-gauge-notstarting")
+	markImagePullBackOff(t, pod, image)
+
+	require.Eventually(t, func() bool {
+		v, ok := runnerSetCapacityGauge(reg, familyNotStarting, ns, setName)
+		return ok && v == 1
+	}, 25*time.Second, 100*time.Millisecond,
+		"a worker pod the kubelet could not start must read 1 on "+familyNotStarting+
+			" even though this set has no capacity gate")
+
+	// The scheduler placed this pod, so its signal must not move.
+	requireCapacityGauge(t, reg, familyUnschedulable, ns, setName, 0)
+
+	// And the gate's family must be absent, not 0: its presence is what says a set has
+	// a capacity gate, and this one does not.
+	_, _, present := declinedGauge(t, reg, ns, setName)
+	require.False(t, present,
+		"%s must not be emitted for an ungated set; a 0 there reads as \"gate evaluated, capacity available\"",
+		familyDeclined)
+
+	// The condition the gauge mirrors carries the kubelet's own text, which names the
+	// image — the operator's whole remedy.
+	var got v2alpha1.RunnerSet
+	require.NoError(t, k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: setName}, &got))
+	c := meta.FindStatusCondition(got.Status.Conditions, v2alpha1.ConditionWorkersNotStarting)
+	require.NotNil(t, c)
+	require.Equal(t, metav1.ConditionTrue, c.Status)
+	require.Equal(t, v2alpha1.ReasonPodsNotStarting, c.Reason)
+	require.Contains(t, c.Message, image)
+	require.NotContains(t, c.Message, "job intake is gated",
+		"this condition reports and decides nothing; this set's intake is not gated")
 }

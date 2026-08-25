@@ -26,18 +26,27 @@ import (
 // Both reuse the owner-agnostic cores those v1 files now expose (evalWorkerQuotaFor,
 // countActiveWorkerPodsByLabel, evalWorkersUnschedulableForPods). Only the v2 sources
 // of the pod shape (the resolved RunnerTemplate) and the ceiling
-// (spec.priorityTiers/maxWorkers) differ. Neither condition gates Ready — they are
-// advisory capacity signals, mirroring v1.
+// (spec.priorityTiers/maxWorkers) differ.
+//
+// A third, v2-only, joins them: the kubelet's startup verdict (WorkersNotStarting,
+// Q906). That one is computed by the same shared core but published nowhere on v1,
+// because a RunnerGroup has no capacity gate for the fact to have reached first.
+//
+// None of them gates Ready — they are advisory capacity signals, mirroring v1.
 
 // applyWorkerCapacityConditions computes and merges the WorkerQuota ladder and the
-// WorkersUnschedulable condition onto the RunnerSet status, emitting a Warning Event
-// on a genuine WorkersUnschedulable False→True transition (never every reconcile).
-// It is called on both acquisition paths (classic and scale-set) after references
-// resolve, with the resolved worker template supplying the quota footprint and the
-// resolved gateway supplying the cluster facts the capacity gate depends on (Q470).
-// It returns the soonest re-check needed for a still-within-grace Pending worker pod
-// to cross its scheduling grace (0 = none), which the caller folds into RequeueAfter
-// so WorkersUnschedulable flips without waiting for a phase-changing Pod event (Q157).
+// WorkersUnschedulable and WorkersNotStarting conditions onto the RunnerSet status,
+// emitting a Warning Event on a genuine False→True transition of either signal (never
+// every reconcile). It is called on both acquisition paths (classic and scale-set)
+// after references resolve, with the resolved worker template supplying the quota
+// footprint and the resolved gateway supplying the cluster facts the capacity gate
+// depends on (Q470).
+//
+// It returns the soonest re-check any of those signals needs (0 = none), which the
+// caller folds into RequeueAfter. Two sources, because the Pod watch fires on phase
+// changes only and both signals move without one: a Pending pod crossing its
+// scheduling grace (Q157), and a bound pod that has yet to declare a startup verdict
+// either way (Q714, published unconditionally since Q906).
 func (r *RunnerSetReconciler) applyWorkerCapacityConditions(ctx context.Context, rs *v2alpha1.RunnerSet, tmpl *v2alpha1.RunnerTemplateSpec, gw *v2alpha1.ActionsGateway) time.Duration {
 	wq := r.evalRunnerSetWorkerQuota(ctx, rs, tmpl)
 	meta.SetStatusCondition(&rs.Status.Conditions, metav1.Condition{
@@ -68,8 +77,50 @@ func (r *RunnerSetReconciler) applyWorkerCapacityConditions(ctx context.Context,
 		r.recordEvent(rs, corev1.EventTypeWarning, "WorkersUnschedulable", "Reconcile", unsched.message)
 	}
 
+	r.applyWorkersNotStartingCondition(rs, unsched)
+
 	gateRecheck := r.applyCapacityGateCondition(ctx, rs, unsched, gw)
-	return soonest(unsched.requeueAfter, gateRecheck)
+	// startupRecheck is folded in HERE rather than only inside the gate (Q906). A bound
+	// worker pod that has not resolved either way is invisible to the Pod watch, and
+	// WorkersNotStarting is now published on every set — so on an ungated set, which is
+	// the default, nothing else would wake the reconciler to publish or clear it. The
+	// gate adds the same re-check on its own path; soonest makes the overlap free.
+	return soonest(soonest(unsched.requeueAfter, startupRecheck(unsched)), gateRecheck)
+}
+
+// applyWorkersNotStartingCondition publishes the kubelet's startup verdict as its own
+// advisory condition (Q906), emitting a Warning Event on a genuine False->True
+// transition and never every reconcile.
+//
+// Unconditional, unlike the capacity gate beside it: the fact is an observation, not a
+// decision, so it is reported whether or not the set opted into spec.capacityGate. That
+// is the whole point of the condition. Before it, the same evaluation reached an
+// operator only through WorkerCapacityDeclined/PodsNotStarting (Q714), which is present
+// only on a gated set, so the default set published nothing between the kubelet's
+// verdict and the reaper's WorkerPodStuckPending Event one pendingPodDeadline later.
+//
+// Set False rather than removed when clear, mirroring WorkersUnschedulable and NOT
+// WorkerCapacityDeclined: absence is meaningful for the gate (it says "this set has no
+// gate") and meaningless here, where every set is evaluated.
+func (r *RunnerSetReconciler) applyWorkersNotStartingCondition(rs *v2alpha1.RunnerSet, unsched workersUnschedulable) {
+	notStarting := len(unsched.notStartingPods) > 0
+	reason := v2alpha1.ReasonWorkersStarting
+	message := "no worker pod is bound to a node and failing to start"
+	if notStarting {
+		reason = v2alpha1.ReasonPodsNotStarting
+		message = notStartingObservation(unsched.notStartingPods)
+	}
+	was := meta.IsStatusConditionTrue(rs.Status.Conditions, v2alpha1.ConditionWorkersNotStarting)
+	meta.SetStatusCondition(&rs.Status.Conditions, metav1.Condition{
+		Type:               v2alpha1.ConditionWorkersNotStarting,
+		Status:             boolConditionStatus(notStarting),
+		Reason:             reason,
+		Message:            message,
+		ObservedGeneration: rs.Generation,
+	})
+	if notStarting && !was {
+		r.recordEvent(rs, corev1.EventTypeWarning, "WorkersNotStarting", "Reconcile", message)
+	}
 }
 
 // soonest returns the earliest non-zero of two re-check intervals (0 = none), so a
@@ -275,16 +326,26 @@ func startupRecheck(unsched workersUnschedulable) time.Duration {
 	return 0
 }
 
-// notStartingMessage renders the kubelet's startup verdict for the condition: how many
-// worker pods bound and failed to start, and each one's own waiting message, which is
-// what names the image that will not pull.
-func notStartingMessage(pods []notStartingPod) string {
+// notStartingObservation renders the kubelet's startup verdict as a plain observation:
+// how many worker pods bound and failed to start, and each one's own waiting message,
+// which is what names the image that will not pull.
+//
+// The observation and the intake decision are separate strings on purpose (Q906).
+// WorkersNotStarting reports this fact on every set and decides nothing, so its message
+// must not say intake is gated — on the default ungated set it is not.
+func notStartingObservation(pods []notStartingPod) string {
 	parts := make([]string, 0, len(pods))
 	for _, p := range pods {
 		parts = append(parts, fmt.Sprintf("%s (%s)", p.name, p.detail))
 	}
-	return fmt.Sprintf("job intake is gated: %d worker pod(s) were placed on a node but could not be started: %s",
+	return fmt.Sprintf("%d worker pod(s) were placed on a node but could not be started: %s",
 		len(pods), strings.Join(parts, "; "))
+}
+
+// notStartingMessage is the gated form: the same observation, prefixed with the
+// consequence only a set with a capacity gate has.
+func notStartingMessage(pods []notStartingPod) string {
+	return "job intake is gated: " + notStartingObservation(pods)
 }
 
 // gatewayNodeAutoscaling returns the gateway's effective node-autoscaling fact,
@@ -417,6 +478,7 @@ func (r *RunnerSetReconciler) clearWorkerCapacityConditions(rs *v2alpha1.RunnerS
 		{v2alpha1.ConditionWorkerQuotaPressure, "QuotaHeadroomSufficient"},
 		{v2alpha1.ConditionWorkerQuotaExceeded, "NoRejection"},
 		{v2alpha1.ConditionWorkersUnschedulable, v2alpha1.ReasonWorkersSchedulable},
+		{v2alpha1.ConditionWorkersNotStarting, v2alpha1.ReasonWorkersStarting},
 	} {
 		meta.SetStatusCondition(&rs.Status.Conditions, metav1.Condition{
 			Type:               c.condType,
