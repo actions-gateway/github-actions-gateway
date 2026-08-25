@@ -50,7 +50,7 @@ The apiserver attaches such a warning to every read and write of a deprecated AP
 
 ### Proxy egress audit record
 
-A proxy pool can write one structured line per **accepted** CONNECT, answering "which tenant reached which destination, when, and how much moved" without reconstructing it from cluster flow logs or GitHub's own audit log.
+A proxy pool can write one structured line per **accepted** CONNECT, answering "which destination did this pool reach, when, and how much moved" without reconstructing it from cluster flow logs or GitHub's own audit log.
 
 It is **off by default** and opted into per pool:
 

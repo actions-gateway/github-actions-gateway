@@ -1047,7 +1047,7 @@ And it is one line per connection: under real CI load it becomes the pool's domi
 **It is a rolling restart, not a hot reload.** The value is part of the pod template, so records begin once the pool's new pods are up.
 In-flight tunnels finish on the old pods within the termination grace period and produce no record, a gap of at most one drain that is worth knowing if you turn it on mid-incident.
 
-Turn it on when you need per-tenant egress evidence the counters cannot give: an incident where "which endpoint did this tenant reach at 14:02" is the question, or a compliance ask for per-tenant egress attribution.
+Turn it on when you need egress evidence the counters cannot give: an incident where "which endpoint did this pool reach at 14:02" is the question, or a compliance ask for per-tenant egress attribution, which an unshared pool satisfies and a shared one does not.
 Reach for it *before* the incident if the answer has to exist afterwards: it records forward, never backward.
 
 The record shape, the field meanings, and how to select the audit stream in a log pipeline are in [logging: proxy egress audit record](observability-logging.md#proxy-egress-audit-record); what a line deliberately never carries is in the [security design](../design/05-security.md#proxy-egress-audit-record).

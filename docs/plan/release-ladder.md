@@ -47,7 +47,7 @@ Each waits on a real signal, and each carries a revive trigger on the backlog ra
 | An unbuilt prerequisite | [Q555](../queue/Q555.md) flaky-job retry, which needs a real job outcome |
 | Hardware nobody has yet | [Q765](../queue/Q765.md) GHES validation on a real appliance |
 
-Q564 was the seventh, revived on the same 2026-08-13 evidence and since shipped, so it has left this accounting and six of the original seven remain in it.
+Q564 was the seventh, revived on the same 2026-08-13 evidence and since shipped, so it has left this accounting and six of the original seven remain in it, which is the set the sentence below counts against.
 Its demand was [Q725](../queue/Q725.md), which had sat in the Queue the whole time.
 
 **One of the original six are back.** [Q408](../queue/Q408.md) waited on an operator ask plus a measurement, and its trigger fired by 2026-08-13: the maintainer is the operator asking for untrusted-PR CI.

@@ -82,8 +82,8 @@ func truncateHost(host string) string { return truncateForLog(host, maxAuditHost
 // truncateLogError bounds an error for logging. See maxLoggedErrorLen.
 func truncateLogError(err error) string { return truncateForLog(err.Error(), maxLoggedErrorLen) }
 
-// logConnectAudit writes the per-connection egress record: which tenant reached
-// which destination, for how long, and how much moved each way.
+// logConnectAudit writes the per-connection egress record: which destination
+// this pool reached, for how long, and how much moved each way.
 //
 // What it deliberately does NOT carry is the point of the field list. The
 // record is built from the CONNECT authority and two byte counters only — no
