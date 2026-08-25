@@ -7,6 +7,7 @@ Directly-appliable reference observability artifacts for github-actions-gateway,
 | [`prometheusrule.yaml`](prometheusrule.yaml) | `monitoring.coreos.com/v1` PrometheusRule | The recommended alerting rules and SLO recording rules. |
 | [`grafana-dashboard-tenant.json`](grafana-dashboard-tenant.json) | Grafana dashboard | **Per-tenant** view (from a tenant's AGC + egress-proxy mTLS scrape): gateway health, pod-creation-latency SLO, job throughput, scale-set acquisition tier (the default protocol), tenant health conditions, egress proxy, and kube-state-metrics proxy/quota panels. |
 | [`grafana-dashboard-platform.json`](grafana-dashboard-platform.json) | Grafana dashboard | **Platform/fleet** view (from the GMC manager scrape): managed gateways, GMC reconcile health, the cross-tenant condition rollups (RunnerGroupsDegraded, EgressRulesStale, proxy quota), and the fleet's running build versions. |
+| [`grafana-dashboard-budget.json`](grafana-dashboard-budget.json) | Grafana dashboard | **Budget-owner** view (from the per-tenant AGC scrapes): worker pod-hours and job counts per tenant and runner shape, an operator-set hourly rate turning those into currency, and the zero-idle floor as a chart. |
 
 All PromQL references metrics the controllers actually emit — see the [Full Metrics Reference](../../docs/operations/observability-metrics.md#full-metrics-reference).
 The recording rules in `prometheusrule.yaml` back several dashboard panels (`actions_gateway:pod_creation_latency_seconds:p95` / `:p99`, `actions_gateway:job_duration_seconds:p50` / `:p95`, `actions_gateway:scaleset_provision_success_rate:rate5m`), so apply both together.
@@ -25,12 +26,16 @@ Each alert maps to an SLO target in [Appendix A — Capacity Targets & SLOs](../
 
 ## Grafana dashboards
 
-Two dashboards, split along the scrape boundary they read from:
+Three dashboards.
+The first two split along the scrape boundary they read from; the third splits by audience instead, reading the same tenant scrape as the first but answering a budget owner's question rather than an operator's:
 
 - **`grafana-dashboard-tenant.json`** — one tenant's detail, from that tenant's AGC + egress-proxy metrics (per-tenant mTLS scrape).
   Exposes `namespace` and `runner_group` template variables for filtering.
 - **`grafana-dashboard-platform.json`** — the fleet view, from the GMC manager metrics (one cluster-wide TLS scrape).
   Its Cross-tenant Throughput row also draws on the per-tenant scrapes and is empty without them.
+- **`grafana-dashboard-budget.json`**: spend and utilization per tenant, from the per-tenant AGC metrics.
+  Exposes `namespace`, `runner_group`, and a `rate` textbox holding the effective hourly rate for one worker slot.
+  Everything but the currency panels is rate-free, so an unset rate leaves pod-hours and job counts correct.
 
 Import either via **Dashboards → New → Import** (or provision it through a dashboard ConfigMap / the Grafana provisioning API).
 On import, pick the Prometheus data source that scrapes the gateway.
@@ -39,5 +44,5 @@ Some per-tenant Proxy/Quota panels query `kube_deployment_status_replicas_ready`
 
 ## Previewing / screenshotting
 
-To preview or screenshot these artifacts against a real Prometheus Operator + Grafana without a production cluster, use the reproducible harness in [`preview/`](preview/README.md): it stands up a throwaway kind cluster with the public `kube-prometheus-stack` chart, applies the artifacts above plus a synthetic `actions_gateway_*` metrics stream, and renders both dashboards to PNGs.
+To preview or screenshot these artifacts against a real Prometheus Operator + Grafana without a production cluster, use the reproducible harness in [`preview/`](preview/README.md): it stands up a throwaway kind cluster with the public `kube-prometheus-stack` chart, applies the artifacts above plus a synthetic `actions_gateway_*` metrics stream, and renders every dashboard to a PNG.
 Re-run it whenever a dashboard or the rules change.

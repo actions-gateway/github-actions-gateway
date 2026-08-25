@@ -178,11 +178,14 @@ This live data is the input to the **showback vs chargeback** choice in [Appendi
 
 - **Showback:** point a Grafana panel (or the Kubecost UI) at the per-namespace allocation so each team sees its own real spend next to the [tenant dashboard](observability-dashboards.md#tenant-dashboard) throughput metrics.
   No billing integration required.
+  The shipped [budget dashboard](observability-dashboards.md#budget-dashboard) is the no-cost-tool version of the same view: pod-hours and job counts per tenant and runner shape, priced by a rate you type in.
+  It needs only the per-tenant AGC scrape, so it works before OpenCost is installed and stays useful afterwards as the cross-check below.
 - **Chargeback:** export the per-namespace allocation on a schedule and feed it into your billing system, optionally applying a discount/overhead factor.
   The `app.kubernetes.io/instance` breakdown lets you bill by runner shape if a tenant runs both cheap CPU and expensive GPU groups.
 
 Cross-check the allocation against GAG's own metrics for a sanity test: `actions_gateway_job_duration_seconds` (per `namespace`, `runner_group`) × the runner shape's GPU/CPU node fraction should land in the same ballpark as the `runner`-component allocation for that tenant.
 The series is worker pod lifetime on both acquisition tiers, so it is directly comparable to a cost tool's own pod-hours.
+The [budget dashboard](observability-dashboards.md#budget-dashboard)'s **Worker pod-hours** stat is that left-hand side already computed, over whatever window the time picker holds.
 A large divergence usually means oversized resource requests — the [worker right-sizing lever](../design/appendix-f-cost-model.md#worker-resource-right-sizing) in Appendix F.
 
 ---

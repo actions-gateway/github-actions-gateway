@@ -76,8 +76,10 @@ A control that exists but leaves no record is hard to evidence, which is why per
 Owns the spend, and usually cannot read the cluster at all.
 
 **Needs, specifically:** cost per tenant, in currency, from data they can defend in a planning conversation.
-[Cost attribution](cost-attribution.md) maps tenant namespaces and `app.kubernetes.io/*` labels onto OpenCost and Kubecost allocation queries for exactly this.
-There is no dashboard for this persona yet; see the [roadmap](../roadmap.md).
+[Cost attribution](cost-attribution.md) maps tenant namespaces and `app.kubernetes.io/*` labels onto OpenCost and Kubecost allocation queries for exactly this, and the [budget dashboard](observability-dashboards.md#budget-dashboard) is the GAG-native view beside it: worker pod-hours per tenant and per runner shape, priced by an hourly rate you supply.
+
+**The two are not redundant, and the difference is what makes either defensible.** A cost tool reads a node price book and answers in real money; the dashboard reads the span GAG bills against and answers in pod-hours.
+Reconciling them is the check: a large divergence is usually oversized resource requests rather than a broken query.
 
 ### Maintainer
 

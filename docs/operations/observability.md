@@ -27,4 +27,4 @@ Observability is split by surface so you can read just the part you need without
 | [Grafana dashboards](observability-dashboards.md) | The bundled tenant and platform dashboards, panel by panel, and their template variables. |
 | [Logging & tracing](observability-logging.md) | Structured JSON logging, per-tenant log levels, debug diagnostics for otherwise-silent paths, and OpenTelemetry tracing (AGC). |
 
-The alert rules and both dashboards also ship as code under [`deploy/monitoring/`](../../deploy/monitoring/README.md) — a `PrometheusRule` plus two Grafana dashboards — so prefer applying those over hand-copying the YAML.
+The alert rules and the dashboards also ship as code under [`deploy/monitoring/`](../../deploy/monitoring/README.md) — a `PrometheusRule` plus three Grafana dashboards, one per audience — so prefer applying those over hand-copying the YAML.

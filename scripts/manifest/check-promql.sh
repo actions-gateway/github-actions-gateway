@@ -45,6 +45,7 @@ RUNBOOK="docs/operations/runbook.md"
 DASHBOARDS=(
     "deploy/monitoring/grafana-dashboard-tenant.json"
     "deploy/monitoring/grafana-dashboard-platform.json"
+    "deploy/monitoring/grafana-dashboard-budget.json"
 )
 
 if (($# >= 3)); then

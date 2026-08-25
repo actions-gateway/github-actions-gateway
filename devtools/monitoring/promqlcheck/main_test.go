@@ -262,6 +262,144 @@ func TestDashboardFindings(t *testing.T) {
 	}
 }
 
+// varDashboard exercises every position a variable reaches: a query variable
+// inside a label matcher, a textbox in scalar position, and a built-in range
+// variable in a range selector. Only the first parses verbatim.
+const varDashboard = `{
+  "title": "Vars",
+  "templating": {"list": [
+    {"name": "datasource", "type": "datasource"},
+    {"name": "namespace", "type": "query", "query": {"query": "label_values(up, namespace)"}},
+    {"name": "rate", "type": "textbox", "query": "0.096"}
+  ]},
+  "panels": [
+    {"title": "Spend", "targets": [
+      {"refId": "A", "expr": "sum(increase(thing_seconds_sum{namespace=~\"$namespace\"}[$__range])) / 3600 * $rate"}
+    ]}
+  ]
+}`
+
+func TestDashboardVariablesAreSubstituted(t *testing.T) {
+	findings, targets := runDashboard(t, varDashboard)
+	if len(findings) != 0 {
+		t.Fatalf("variable-bearing dashboard should be clean, got %v", findings)
+	}
+	if targets != 1 {
+		t.Fatalf("walk reached %d targets, want 1", targets)
+	}
+}
+
+// The substitution must not become a way for a malformed expression to pass: the
+// stand-in goes in, and what surrounds it still has to parse.
+//
+// Two things make the assertion real, and both were needed. It is on the error's
+// CONTENT, because an unsubstituted `$__range` also fails to parse and a test
+// accepting any error would pass with substitution removed entirely. And the
+// malformation is placed AFTER the variable: the parser reports its first error,
+// so a broken paren ahead of the variable is reported either way and the content
+// assertion cannot discriminate. Trailing parens put the variable first, so
+// removing the substitution changes the reported error to `'$'` and this fails.
+func TestSubstitutionStillParsesTheRest(t *testing.T) {
+	body := strings.Replace(varDashboard, `/ 3600 * $rate`, `/ 3600 * $rate))))`, 1)
+	// A needle that matches nothing leaves the fixture intact and the test
+	// asserting whatever the untouched fixture happens to satisfy. varDashboard
+	// is JSON in a raw string, so its quotes are backslash-escaped and a needle
+	// carrying bare ones silently no-ops.
+	if body == varDashboard {
+		t.Fatal("the needle did not match, so this test is running the unmodified fixture")
+	}
+	findings, _ := runDashboard(t, body)
+	for _, f := range findings {
+		if !strings.Contains(f, "expr does not parse") {
+			continue
+		}
+		if strings.Contains(f, "'$'") {
+			t.Fatalf("the parse reached a variable, so substitution did not run: %s", f)
+		}
+		return
+	}
+	t.Fatalf("a malformed expression around a substituted variable should still fail; got %v", findings)
+}
+
+// Grafana supplies the `__`-prefixed variables and no dashboard declares them, so
+// reporting one as undeclared names a cause that cannot be true and invites the
+// repair of inventing a templating entry to satisfy the gate. Both positions are
+// covered because they fail differently: inside a quoted matcher an unsubstituted
+// name still parses and only the finding misfires, while in scalar position it
+// reaches the parser and dies there.
+//
+// The body is built by concatenation rather than substituted into varDashboard.
+// That fixture is JSON inside a Go raw string, so its quotes are already
+// backslash-escaped and a needle written with bare quotes silently matches
+// nothing — leaving the test running the unmodified fixture and asserting
+// something another test already covers.
+func TestGrafanaBuiltinsAreNotReportedUndeclared(t *testing.T) {
+	for _, expr := range []string{
+		`rate(thing_total[$__interval]) * $__interval_ms / 1000`,
+		`sum(increase(thing_total[$__range])) / $__range_s`,
+		`sum(thing_total{from=\"$__from\",to=\"$__to\"})`,
+		`sum(up{job=\"$__interval_ms\"})`,
+		`sum(increase(thing_total[$__rate_interval]))`,
+	} {
+		t.Run(expr, func(t *testing.T) {
+			body := `{"title":"T","templating":{"list":[]},` +
+				`"panels":[{"title":"P","targets":[{"refId":"A","expr":"` + expr + `"}]}]}`
+			findings, targets := runDashboard(t, body)
+			if targets != 1 {
+				t.Fatalf("the walk reached %d targets, want 1 - the fixture did not build", targets)
+			}
+			if len(findings) != 0 {
+				t.Fatalf("a Grafana built-in should be clean, got %v", findings)
+			}
+		})
+	}
+}
+
+// interval is the type a dashboard reaches for when it wants a variable window,
+// and custom is its scalar sibling; both store a comma-separated option list that
+// Grafana defaults to the first of. constant is spelled two ways, a bare string
+// and an object carrying its own query key.
+func TestLiteralVariableTypesAreSubstituted(t *testing.T) {
+	for name, tc := range map[string]struct{ decl, expr string }{
+		"interval":        {`{"name":"iv","type":"interval","query":"1m,5m,1h"}`, `rate(thing_total[$iv])`},
+		"custom":          {`{"name":"cv","type":"custom","query":"0.096,0.048"}`, `sum(thing_total) * $cv`},
+		"constant object": {`{"name":"kv","type":"constant","query":{"query":"0.5"}}`, `sum(thing_total) * $kv`},
+	} {
+		t.Run(name, func(t *testing.T) {
+			body := `{"title":"T","templating":{"list":[` + tc.decl + `]},` +
+				`"panels":[{"title":"P","targets":[{"refId":"A","expr":"` + tc.expr + `"}]}]}`
+			findings, _ := runDashboard(t, body)
+			if len(findings) != 0 {
+				t.Fatalf("a declared literal variable should substitute, got %v", findings)
+			}
+		})
+	}
+}
+
+// A variable the dashboard declares nowhere is the defect the substitution could
+// otherwise hide. It is named rather than silently defaulted, because Grafana
+// renders an error for it and a gate that accepted it would report the dashboard
+// healthy.
+func TestUndeclaredVariableIsReported(t *testing.T) {
+	body := strings.Replace(varDashboard, "$rate", "$ratte", 1)
+	findings, _ := runDashboard(t, body)
+	for _, f := range findings {
+		if strings.Contains(f, `uses $ratte, which the dashboard declares no template variable for`) {
+			return
+		}
+	}
+	t.Fatalf("an undeclared variable should be named; got %v", findings)
+}
+
+// A dashboard that declares no templating at all is the shape both shipped
+// dashboards had before this pass existed, so it must stay clean.
+func TestDashboardWithNoTemplatingIsClean(t *testing.T) {
+	findings, _ := runDashboard(t, goodDashboard)
+	if len(findings) != 0 {
+		t.Fatalf("a dashboard with no templating should be clean, got %v", findings)
+	}
+}
+
 // Malformed JSON is an error rather than a finding: the file could not be read
 // at all, so reporting one unparseable query would understate it.
 func TestDashboardMalformedJSONErrors(t *testing.T) {
