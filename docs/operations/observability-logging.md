@@ -90,7 +90,7 @@ The fields:
 
 | Field | Meaning |
 |---|---|
-| `namespace` | The tenant namespace the proxy pool runs in, read from the downward API. Omitted entirely by a proxy run outside Kubernetes, never emitted empty |
+| `namespace` | The namespace the proxy **pool** runs in, read from the downward API. On a pool no other namespace references this is the consuming tenant; on one shared via `spec.sharing.allowedNamespaces` it names the pool, not the consumer, because a CONNECT carries no namespace. Omitted entirely by a proxy run outside Kubernetes, never emitted empty |
 | `event` | `connect`, the record kind |
 | `host` / `port` | The CONNECT destination. `host` is capped at 253 **bytes** (the longest legal DNS name) and gains a `…(truncated)` marker if cut, so a capped value never reads as a real destination. The cut lands on a rune boundary, so a raw-UTF-8 internationalized name is never left as a broken character. The same cap applies to every proxy log line carrying the destination (the denial, the dial failure, and the response-write failure), not only to the audit record |
 | `bytesToDestination` / `bytesFromDestination` | Bytes relayed each way, final at tunnel close |

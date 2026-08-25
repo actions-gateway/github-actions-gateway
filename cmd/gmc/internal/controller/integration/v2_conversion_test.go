@@ -151,3 +151,63 @@ func TestV2Conversion_EgressProxy_LogLevelRoundTrip(t *testing.T) {
 	require.NoError(t, k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: "proxy"}, &back))
 	assert.Equal(t, "info", back.Spec.LogLevel, "logLevel must survive the v2beta1→v2alpha1 conversion")
 }
+
+// TestV2Conversion_EgressProxy_AuditLoggingRoundTrip proves spec.auditLogging
+// (Q564) survives the identity conversion through the real apiserver in both
+// directions, and that the apiserver defaults it to Off. The default matters
+// more than the round-trip here: it is the security property, and the CRD is
+// the only place that applies it to a hand-applied CR. Mirrors the logLevel
+// test above, which is the precedent for a per-pool knob on this type.
+func TestV2Conversion_EgressProxy_AuditLoggingRoundTrip(t *testing.T) {
+	const ns = "v2-conv-ep-auditlog"
+	createNamespace(t, ns)
+
+	// A create that omits the field must be defaulted to Off by the apiserver,
+	// not left empty.
+	bare := &v2alpha1.EgressProxy{
+		ObjectMeta: metav1.ObjectMeta{Name: "bare", Namespace: ns},
+		Spec:       v2alpha1.EgressProxySpec{},
+	}
+	require.NoError(t, k8sClient.Create(ctx, bare))
+	t.Cleanup(func() { _ = k8sClient.Delete(ctx, bare) })
+	var defaulted v2alpha1.EgressProxy
+	require.NoError(t, k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: "bare"}, &defaulted))
+	assert.Equal(t, "Off", defaulted.Spec.AuditLogging,
+		"an EgressProxy that omits auditLogging must be defaulted to Off by the apiserver")
+
+	ep := &v2alpha1.EgressProxy{
+		ObjectMeta: metav1.ObjectMeta{Name: "proxy", Namespace: ns},
+		Spec:       v2alpha1.EgressProxySpec{AuditLogging: "Connections"},
+	}
+	require.NoError(t, k8sClient.Create(ctx, ep))
+	t.Cleanup(func() { _ = k8sClient.Delete(ctx, ep) })
+
+	var hub v2beta1.EgressProxy
+	require.NoError(t, k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: "proxy"}, &hub))
+	assert.Equal(t, "Connections", hub.Spec.AuditLogging,
+		"auditLogging must survive the v2alpha1→v2beta1 conversion")
+
+	hub.Spec.AuditLogging = "Off"
+	require.NoError(t, k8sClient.Update(ctx, &hub))
+	var back v2alpha1.EgressProxy
+	require.NoError(t, k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: "proxy"}, &back))
+	assert.Equal(t, "Off", back.Spec.AuditLogging,
+		"auditLogging must survive the v2beta1→v2alpha1 conversion")
+}
+
+// TestV2Conversion_EgressProxy_AuditLoggingRejectsUnknownMode: the enum is the
+// whole admission surface for this field, so an unknown mode must be refused
+// rather than reaching the proxy, where parseAuditMode would silently resolve it
+// to Off. Both halves are wanted: the proxy fails safe, and the apiserver says so.
+func TestV2Conversion_EgressProxy_AuditLoggingRejectsUnknownMode(t *testing.T) {
+	const ns = "v2-conv-ep-auditlog-enum"
+	createNamespace(t, ns)
+
+	bad := &v2alpha1.EgressProxy{
+		ObjectMeta: metav1.ObjectMeta{Name: "bad", Namespace: ns},
+		Spec:       v2alpha1.EgressProxySpec{AuditLogging: "Full"},
+	}
+	err := k8sClient.Create(ctx, bad)
+	require.Error(t, err, "an auditLogging value outside the enum must be rejected at admission")
+	assert.Contains(t, err.Error(), "auditLogging", "the rejection must name the offending field")
+}

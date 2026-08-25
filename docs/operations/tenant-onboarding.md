@@ -1029,6 +1029,13 @@ kubectl patch egressproxy -n <tenant-namespace> <name> \
 
 Only `Off` (the default) and `Connections` are accepted; admission rejects anything else.
 
+**Quote `Off` in a YAML manifest.** YAML reads a bare `Off` as the boolean false, so `auditLogging: Off` decodes to the string `false` and admission rejects it naming a value you never typed.
+Write `auditLogging: "Off"`, or leave the field out, which means the same thing.
+The `kubectl patch` above is JSON and is unaffected.
+
+**A shared pool attributes per pool, not per tenant.** If this pool is referenced from other namespaces via `spec.sharing.allowedNamespaces`, the record's `namespace` names the pool, not whichever consumer sent the request: a CONNECT carries no namespace and nothing else in the line identifies the caller.
+Give a tenant whose audit trail has to name them their own unshared pool.
+
 **Off is the default deliberately, and turning it on is a decision with two costs.** The record says where a tenant's traffic went, so retaining it is a choice about what the platform keeps and for how long.
 Agree that with the tenant rather than switching it on across a cluster.
 And it is one line per connection: under real CI load it becomes the pool's dominant log volume, so size the collector and its retention before flipping it.

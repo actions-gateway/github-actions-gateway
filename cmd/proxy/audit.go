@@ -90,10 +90,12 @@ func truncateLogError(err error) string { return truncateForLog(err.Error(), max
 // request header is read (Proxy-Authorization above all), no tunneled byte is
 // inspected, and nothing derived from the TLS session inside the tunnel is
 // available to it. The namespace comes from the downward API, not from the
-// request, so a worker cannot forge its own attribution. The client's source
-// IP is omitted: it is a pod IP that adds no attribution the namespace does not
-// already carry, and including it would turn the record into a per-worker
-// movement log.
+// request, so a worker cannot forge its own attribution. It names the POOL,
+// though, which is the consuming tenant only when no other namespace references
+// this pool (see Server.Namespace). The client's source IP is omitted: on an
+// unshared pool it adds no attribution the namespace does not already carry,
+// and including it would turn the record into a per-worker movement log. On a
+// shared pool that trade is open rather than settled.
 //
 // hostport is the raw CONNECT authority; a value that does not split is logged
 // whole as the host with no port, rather than dropped.

@@ -88,9 +88,15 @@ type Server struct {
 	// unrecognized PROXY_AUDIT_LOGGING resolves to — writes nothing per
 	// connection. See AuditMode for why it is opt-in.
 	AuditLogging AuditMode
-	// Namespace is the tenant namespace this pool runs in, read from the
-	// downward API and stamped on the audit record so the record attributes
-	// itself without the log collector's pod metadata. Empty omits the field.
+	// Namespace is the namespace THIS POOL runs in, read from the downward API
+	// and stamped on the audit record so the record attributes itself without
+	// the log collector's pod metadata. Empty omits the field.
+	//
+	// It is the consuming tenant only for a pool no other namespace references.
+	// EgressProxy.spec.sharing.allowedNamespaces lets one pool serve consumers
+	// elsewhere, and a CONNECT carries no namespace, so on a shared pool this
+	// names the pool rather than whoever sent the request. Attribution there is
+	// per pool, not per tenant.
 	Namespace string
 	// dnsResolver resolves CONNECT hostnames for the CIDR allowlist check; nil uses
 	// net.DefaultResolver. Injected in tests.
