@@ -141,6 +141,8 @@ type countingMetrics struct {
 	abandoned                    int
 	deferred                     map[string]int
 	completedResults             map[string]int
+	available                    int
+	availableWrites              int
 }
 
 func newCountingMetrics() *countingMetrics {
@@ -162,7 +164,21 @@ func (m *countingMetrics) SetDeferredJobs(byReason map[string]int) {
 		m.deferred[reason] = n
 	}
 }
+func (m *countingMetrics) SetAvailableJobs(n int) {
+	m.mu.Lock()
+	m.available = n
+	m.availableWrites++
+	m.mu.Unlock()
+}
 func (m *countingMetrics) IncJobsAbandoned(n int) { m.mu.Lock(); m.abandoned += n; m.mu.Unlock() }
+
+// availableJobs returns the latest queued-but-unassigned reading and how many times one
+// has been published — the count separates "never written" from "written as zero" (Q720).
+func (m *countingMetrics) availableJobs() (int, int) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.available, m.availableWrites
+}
 
 // abandonedCount returns how many assignments the listener has given up on because
 // GitHub stopped counting them (Q553).

@@ -234,8 +234,12 @@ func TestScaleSetMetrics_DeleteRunnerSet(t *testing.T) {
 	sm.SetCapacityWithheld("ns", "set", runnercore.AdmitReasonQuota, 4)
 	require.Equal(t, 1, testutil.CollectAndCount(sm.AdvertisedCapacity))
 
+	sm.RecorderFor("ns", "set").SetAvailableJobs(3)
+	require.Equal(t, 1, testutil.CollectAndCount(sm.AvailableJobs))
+
 	sm.DeleteRunnerSet("ns", "set")
 
 	assert.Zero(t, testutil.CollectAndCount(sm.AdvertisedCapacity))
 	assert.Zero(t, testutil.CollectAndCount(sm.CapacityWithheld))
+	assert.Zero(t, testutil.CollectAndCount(sm.AvailableJobs), "the demand gauge outlived the set it describes")
 }

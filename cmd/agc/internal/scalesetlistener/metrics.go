@@ -48,6 +48,21 @@ type Metrics struct {
 	// Every reason is published on every update, zero included, so a series never
 	// freezes at its last non-zero reading.
 	JobsDeferred *prometheus.GaugeVec
+	// AvailableJobs is the server-authoritative totalAvailableJobs from the most recent
+	// statistics reading: jobs GitHub holds queued for this scale set that it has not
+	// assigned to anyone. It is the demand signal the other series cannot supply — every
+	// one of them starts at assignment, so a set that is advertising no capacity looks
+	// idle on all of them while work piles up at GitHub. Read it against
+	// AdvertisedCapacity to answer "why is this job still queued": available jobs with a
+	// zero ceiling is the AGC withholding, and available jobs with a ceiling to spare is
+	// GitHub not delivering.
+	//
+	// Not refreshed on every poll. Statistics ride on queue messages and session
+	// responses, and a 202 (nothing to deliver) carries none, so the gauge holds its last
+	// reading across an idle stretch rather than tracking one. The readings are the
+	// every session open (the first and the re-create after a 404), every delivered
+	// message, and the assignment check's session refresh while jobs are deferred (Q720).
+	AvailableJobs *prometheus.GaugeVec
 	// JobsAbandonedTotal counts assignments the listener gave up on because the scale
 	// set stopped counting them as assigned — GitHub no longer holds the job, and no
 	// JobCompleted was ever delivered for it (Q553). It is the counterpart of
@@ -107,6 +122,11 @@ func NewMetrics(reg prometheus.Registerer) *Metrics {
 			Help: "Assigned jobs held for a later re-offer, by reason (name_conflict: the runner name will not register; ceiling: the set is at its worker ceiling); each is a queued workflow run with no worker (sets the JobProvisionStalled condition).",
 		}, []string{"namespace", "runner_set", "reason"}),
 
+		AvailableJobs: prometheus.NewGaugeVec(prometheus.GaugeOpts{
+			Name: "actions_gateway_scaleset_jobs_available",
+			Help: "Jobs GitHub holds queued for the scale set and has not assigned to anyone, from the most recent statistics reading; an empty poll carries no statistics, so this holds its last reading rather than refreshing every poll.",
+		}, []string{"namespace", "runner_set"}),
+
 		JobsAbandonedTotal: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: "actions_gateway_scaleset_jobs_abandoned_total",
 			Help: "Total assigned jobs the listener gave up on because the scale set no longer counts them as assigned (GitHub dropped the assignment without reporting the job complete); each is a workflow run that will never run.",
@@ -120,6 +140,7 @@ func NewMetrics(reg prometheus.Registerer) *Metrics {
 		m.AdvertisedCapacity,
 		m.CapacityWithheld,
 		m.JobsDeferred,
+		m.AvailableJobs,
 		m.JobsAbandonedTotal,
 	)
 	return m
@@ -161,6 +182,7 @@ func (m *Metrics) DeleteRunnerSet(namespace, runnerSet string) {
 	m.AdvertisedCapacity.Delete(labels)
 	m.CapacityWithheld.DeletePartialMatch(labels)
 	m.JobsDeferred.DeletePartialMatch(labels)
+	m.AvailableJobs.Delete(labels)
 }
 
 // RecorderFor returns a MetricsRecorder that records into m's vectors under the given
@@ -201,6 +223,10 @@ func (r *recorder) SetDeferredJobs(byReason map[string]int) {
 	for reason, n := range byReason {
 		r.m.JobsDeferred.WithLabelValues(r.namespace, r.runnerSet, reason).Set(float64(n))
 	}
+}
+
+func (r *recorder) SetAvailableJobs(n int) {
+	r.m.AvailableJobs.WithLabelValues(r.namespace, r.runnerSet).Set(float64(n))
 }
 
 func (r *recorder) IncJobsAbandoned(n int) {

@@ -368,6 +368,11 @@ type MetricsRecorder interface {
 	// reader never has to tell "not deferring for this reason" from a series that
 	// stopped being written.
 	SetDeferredJobs(byReason map[string]int)
+	// SetAvailableJobs publishes the server's totalAvailableJobs from the reading just
+	// taken: jobs GitHub holds queued for this scale set and has assigned to nobody
+	// (Q720). Unlike the counters it is not per-event — it is written wherever a
+	// statistics snapshot arrives, and an empty poll carries none.
+	SetAvailableJobs(n int)
 	// IncJobsAbandoned counts n assignments the Listener gave up on because the scale
 	// set no longer counts them as assigned (Q553). Each is a workflow run that will
 	// never run, so unlike the deferred gauge this is a loss, not backpressure.
@@ -687,6 +692,16 @@ func (l *Listener) Status() Status {
 	}
 }
 
+// setLastStats records a server-authoritative statistics snapshot and publishes the
+// gauge that rides on it. Every arrival goes through here, so what an operator scrapes
+// and what Status reports are the same reading rather than two that can drift.
+func (l *Listener) setLastStats(stats scaleset.RunnerScaleSetStatistic) {
+	l.mu.Lock()
+	l.lastStats = stats
+	l.mu.Unlock()
+	l.metricsSetAvailable(stats.TotalAvailableJobs)
+}
+
 // Start ensures the scale set and opens the session synchronously (so a caller fails
 // fast on an auth or registration error), then runs the poll loop in a goroutine and
 // returns a done channel closed when the loop exits (ctx cancellation or an
@@ -717,6 +732,15 @@ func (l *Listener) Start(ctx context.Context) (<-chan struct{}, error) {
 			l.surfaceUnauthorized("CreateSession", err)
 		}
 		return nil, fmt.Errorf("scalesetlistener: open session for %q: %w", l.cfg.ScaleSetName, err)
+	}
+
+	// The session response carries the same statistics a queue message does, and it is
+	// the only reading a set with nothing to deliver ever gets: without it the demand
+	// gauge would stay unpublished until the first message, which on a set that is
+	// advertising no capacity is exactly the state an operator is trying to diagnose
+	// (Q720).
+	if sess.Statistics != nil {
+		l.setLastStats(*sess.Statistics)
 	}
 
 	// Collect registration records no live worker claims before polling. Runs after the
@@ -1072,6 +1096,11 @@ func (l *Listener) handlePollError(ctx context.Context, ssID int, sess *scaleset
 		l.mu.Lock()
 		l.lastMessageID = 0
 		l.mu.Unlock()
+		// A re-created session answers with the same statistics a first one does, and a
+		// set that is withholding capacity gets no other reading (Q720).
+		if fresh.Statistics != nil {
+			l.setLastStats(*fresh.Statistics)
+		}
 		return true
 	case isRateLimited(err):
 		l.metricsIncPollError("rate_limited")
@@ -1205,9 +1234,7 @@ func (l *Listener) recordEvent(eventtype, reason, action, note string) {
 // (see advanceCursor — the message is not delete-acked).
 func (l *Listener) handleMessage(ctx context.Context, ssID int, sess *scaleset.RunnerScaleSetSession, msg *scaleset.RunnerScaleSetMessage) {
 	if msg.Statistics != nil {
-		l.mu.Lock()
-		l.lastStats = *msg.Statistics
-		l.mu.Unlock()
+		l.setLastStats(*msg.Statistics)
 	}
 	jobs, err := msg.Jobs()
 	if err != nil {
@@ -1397,9 +1424,7 @@ func (l *Listener) reconcileDeferred(ctx context.Context, ssID int, sess *scales
 		// The backend reported no statistics, which is not the same as reporting zero.
 		return
 	}
-	l.mu.Lock()
-	l.lastStats = *stats
-	l.mu.Unlock()
+	l.setLastStats(*stats)
 
 	if stats.TotalAssignedJobs > 0 {
 		l.lastZeroAssignedAt = time.Time{}
@@ -2307,6 +2332,13 @@ func (l *Listener) metricsIncProvisionError() {
 func (l *Listener) metricsSetDeferred(byReason map[string]int) {
 	if l.cfg.Metrics != nil {
 		l.cfg.Metrics.SetDeferredJobs(byReason)
+	}
+}
+
+// metricsSetAvailable publishes the server's queued-but-unassigned count (Q720).
+func (l *Listener) metricsSetAvailable(n int) {
+	if l.cfg.Metrics != nil {
+		l.cfg.Metrics.SetAvailableJobs(n)
 	}
 }
 
