@@ -2,6 +2,7 @@ package listener_test
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
@@ -27,6 +28,7 @@ func unrunWorkerMux(t *testing.T, srv *brokertest.Server, m *runnercore.Metrics,
 			Namespace: "default",
 			Agent: &agentpool.Agent{
 				Index:         idx,
+				Name:          fmt.Sprintf("test-rg-%d", idx),
 				AgentID:       42,
 				RunnerVersion: "2.335.1",
 				PrivateKey:    testRSAKey,

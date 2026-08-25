@@ -967,8 +967,10 @@ func hasOwnerRef(refs []metav1.OwnerReference, want metav1.OwnerReference) bool 
 }
 
 // secretToAgent decodes an agent Secret. A method rather than a free function so
-// every decoded Agent carries the Scheme-derived registered Name (Q677); a caller
-// cannot construct one without it.
+// every Agent this decode path yields carries the Scheme-derived registered Name
+// (Q677). Agent is an exported struct, so a hand-built literal can still omit Name —
+// several tests do; this binds only the production path, which is the one that
+// reaches the wire.
 func (p *Pool) secretToAgent(s corev1.Secret) (*Agent, error) {
 	idxStr := string(s.Data["agentIndex"])
 	if s.Labels != nil && s.Labels[labelAgentIndex] != "" {

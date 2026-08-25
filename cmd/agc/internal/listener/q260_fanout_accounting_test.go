@@ -30,6 +30,7 @@ func fanoutMux(t *testing.T, srv *brokertest.Server, maxListeners int32, m *runn
 	factory := func(idx int) listener.Config {
 		agent := &agentpool.Agent{
 			Index:         idx,
+			Name:          fmt.Sprintf("test-rg-%d", idx),
 			AgentID:       42,
 			RunnerVersion: "2.335.1",
 			PrivateKey:    testRSAKey,

@@ -21,6 +21,7 @@ package listener_test
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -56,6 +57,7 @@ func TestListener_Q266_FanoutLoserDefersRecycleUntilWinnerCompletes(t *testing.T
 	factory := func(idx int) listener.Config {
 		agent := &agentpool.Agent{
 			Index:         idx,
+			Name:          fmt.Sprintf("test-rg-%d", idx),
 			AgentID:       42,
 			RunnerVersion: "2.335.1",
 			PrivateKey:    testRSAKey,
