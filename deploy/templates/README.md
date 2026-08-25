@@ -42,11 +42,12 @@ kubectl apply -k deploy/templates/plain
 There is no aggregate kustomization that applies all three, and no entry carries the `actions-gateway.com/is-default-template` annotation.
 Choosing a cluster default stays an operator decision; the resolution ladder is `templateRef`, then the gateway default, then the cluster-default annotation.
 
-Two entries need edits before they will run a job:
+All three entries run a job as applied.
+What the DinD pair still need is cluster groundwork, not edits:
 
-- **`kata-dind` and `privileged-dind` ship `spec.workerImage` pointing at `example.invalid/build-capable-runner:replace-me`.** The runner container needs a Docker CLI on `PATH`, which the stock `ghcr.io/actions/actions-runner` image does not ship (the sidecar provides the daemon, not the client).
-  The reserved `.invalid` host makes an unreplaced value fail at image pull rather than succeed into a job that dies on `docker: not found`.
-  [`scripts/dogfood/e2e-runner/Dockerfile`](../../scripts/dogfood/e2e-runner/Dockerfile) is a worked example of a build-capable runner image.
+- **Neither DinD entry sets `spec.workerImage`**, so the AGC gap-fills its digest-pinned default.
+  That image installs the docker static bundle into `/usr/bin` and ships a buildx plugin, so the runner container already has the client the dockerd sidecar is the daemon for.
+  Set the field only when your jobs need more: `docker compose` or a CLI and buildx GAG pins itself (`ghcr.io/actions-gateway/build-runner`, pinned by digest from the release notes), or a toolchain of your own — [`scripts/dogfood/e2e-runner/Dockerfile`](../../scripts/dogfood/e2e-runner/Dockerfile) is a worked example.
 - **Both DinD entries need cluster prerequisites GAG deliberately never installs**: node pools, Kata runtime handlers, `RuntimeClass` objects, PSA labels.
   Each template's header comment lists its own; the operator doc collects them.
 

@@ -184,9 +184,17 @@ jobs:
             # (unlike the worker leg's actions-runner base).
             exit-code: '1'
           - name: build-runner
-            # report-only for the same reason as the worker leg: this image is
-            # `worker` plus a Docker client, so it inherits that leg's
-            # actions-runner base and its CVE floor.
+            # report-only for the same reason as the worker leg: it is FROM
+            # `worker`, so it inherits that leg's actions-runner base and its CVE
+            # floor, and gating on those would red-gate unrelated work.
+            #
+            # That reasoning covers the BASE and not the Docker CLI, buildx and
+            # compose binaries this image adds, which are ours to bump and are
+            # currently scanned report-only along with everything else. Splitting
+            # them into a blocking leg is Q976, which also carries the reason a
+            # bump would not arrive on its own: the dependabot 'docker' ecosystem
+            # the comment above cites is scoped to five directories that hold no
+            # Dockerfile, so nothing bumps this image's bases today.
             exit-code: '0'
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

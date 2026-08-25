@@ -29,12 +29,13 @@ Only the GMC image is pulled by the chart itself; the AGC, proxy, wrapper, and w
 > See [release.md § The worker images](release.md#the-worker-images-wrapper-worker-and-build-runner).
 
 > The worker default is the upstream digest-pinned `ghcr.io/actions/actions-runner`.
-> The project also publishes two first-party runner images: `ghcr.io/actions-gateway/worker`, and `ghcr.io/actions-gateway/build-runner` for the Docker-in-Docker [runner templates](runner-template-library.md).
+> The project also publishes two first-party runner images: `ghcr.io/actions-gateway/worker`, and `ghcr.io/actions-gateway/build-runner` for jobs needing `docker compose` or a Docker CLI and buildx GAG pins itself ([runner templates](runner-template-library.md)).
 > If a tenant uses either, mirror that ref instead.
 > Either way the worker image is set per tenant on the `RunnerGroup`, so it is configured during tenant onboarding, not at chart install.
 > See [release.md § The worker images](release.md#the-worker-images-wrapper-worker-and-build-runner).
 
-Copy the five image digests from the [release notes](https://github.com/actions-gateway/github-actions-gateway/releases) for the version you are installing.
+Copy the four chart-referenced image digests (`gmc`, `agc`, `proxy`, `wrapper`) from the [release notes](https://github.com/actions-gateway/github-actions-gateway/releases) for the version you are installing; that is the count the mirror loop below uses.
+The worker image is the fifth row of the table above and is chosen per tenant rather than by the chart, so mirror whichever ref your tenants set.
 Throughout this guide, replace `registry.internal/gag` with your private registry path.
 
 ---

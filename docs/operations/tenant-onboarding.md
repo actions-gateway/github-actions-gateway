@@ -510,7 +510,7 @@ USER runner   # keep the non-root UID 1001 the AGC expects
 ```
 
 A working reference you can copy and extend lives at [`scripts/dogfood/runner/Dockerfile`](../../scripts/dogfood/runner/Dockerfile) (built by [`scripts/dogfood/runner-build.sh`](../../scripts/dogfood/runner-build.sh)); it adds just enough to run a `make`-based Go CI.
-**It is a reference example, not an officially supported image** — GAG signs and CVE-scans only its five first-party images, so a runner image you ship (or copy from the example) is yours to pin by digest and scan.
+**It is a reference example, not an officially supported image** — GAG signs and CVE-scans only its six first-party images, so a runner image you ship (or copy from the example) is yours to pin by digest and scan.
 Keep the runner version in step with the default the AGC would otherwise inject.
 GitHub refuses to register a runner below its enforced minimum, currently `2.329.0`, and separately requires each new runner release be installed within 30 days of publication to keep executing jobs.
 

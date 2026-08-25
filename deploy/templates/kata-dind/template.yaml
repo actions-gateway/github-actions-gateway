@@ -38,21 +38,27 @@ kind: ClusterRunnerTemplate
 metadata:
   name: kata-dind
 spec:
-  # REPLACE BEFORE USE. The runner container needs a Docker CLI on PATH, which
-  # neither ghcr.io/actions/actions-runner nor the AGC's default worker image
-  # ships — the sidecar below provides the daemon, not the client. Pointing at a
-  # reserved .invalid host (RFC 2606) makes an unreplaced value fail loudly at
-  # image pull instead of succeeding into a job that dies on "docker: not
-  # found".
+  # workerImage is deliberately UNSET, so the AGC gap-fills its digest-pinned
+  # default (ghcr.io/actions/actions-runner, cmd/agc/names). That image installs
+  # the docker static bundle into /usr/bin and ships a buildx plugin, so the
+  # runner container already has the CLIENT this template's dockerd sidecar is
+  # the DAEMON for, and these entries run as applied.
   #
-  # ghcr.io/actions-gateway/build-runner is the first-party image to point this
-  # at: the `worker` image plus the Docker CLI and the buildx and compose
-  # plugins, signed and SBOM-attested by the release pipeline. Pin it by digest
-  # from the release notes of the version you run. Build your own when the jobs
-  # need more than a Docker client: scripts/dogfood/e2e-runner/Dockerfile is a
-  # worked example, and docs/operations/in-runner-image-builds.md covers the
-  # daemonless alternatives.
-  workerImage: example.invalid/build-capable-runner:replace-me
+  # Earlier revisions shipped an example.invalid placeholder here on the premise
+  # that no runner image had a docker CLI. That premise was wrong — measured
+  # against the base image's build history and the published worker SBOM, on
+  # every runner tag checked — so the placeholder was a hand-edit these templates
+  # never needed (Q740).
+  #
+  # Set it when your jobs need MORE than a Docker client:
+  #   - docker compose, or a CLI/buildx we pin rather than whichever the runner
+  #     release vendored -> ghcr.io/actions-gateway/build-runner, signed and
+  #     SBOM-attested by the release pipeline; pin it by digest from the release
+  #     notes of the version you run.
+  #   - a language toolchain, a cloud CLI, your own root CA -> build your own.
+  #     scripts/dogfood/e2e-runner/Dockerfile is a worked example, and
+  #     docs/operations/in-runner-image-builds.md covers the daemonless
+  #     alternatives.
   podTemplate:
     spec:
       runtimeClassName: kata

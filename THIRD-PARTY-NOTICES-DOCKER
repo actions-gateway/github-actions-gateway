@@ -18,7 +18,9 @@ text ships beside this file at /licenses/LICENSE):
 
   Docker CLI       https://github.com/docker/cli
   Docker buildx    https://github.com/docker/buildx     (ships no NOTICE file)
-  Docker compose   https://github.com/docker/compose
+  Docker compose   https://github.com/docker/compose  (ships as v5.x; the
+                   NOTICE reproduced below is the one that project publishes,
+                   whose first line still reads "Docker Compose V2")
 
 The NOTICE files those projects publish are reproduced verbatim below.
 

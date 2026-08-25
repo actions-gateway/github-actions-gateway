@@ -660,7 +660,7 @@ Almost always one of:
 
 | What you see | Fix |
 |---|---|
-| The image host is `example.invalid` | A template placeholder was never replaced. Both DinD templates ship one deliberately so an unreplaced value fails at pull rather than mid-job. Set a real `workerImage`, either `ghcr.io/actions-gateway/build-runner` or your own ([runner template library](runner-template-library.md)). |
+| The image host is `example.invalid` | A placeholder the 1.4 and 1.5 DinD templates shipped, left in place. Those templates no longer set `spec.workerImage` at all, because the AGC's default runner image already carries a Docker CLI. Re-apply the [template](runner-template-library.md), or set a real `workerImage` if the job needs `docker compose` or a toolchain of its own. |
 | `401`/`403` on the pull | The pull Secret is missing from this namespace, or is not referenced by the worker's ServiceAccount ([air-gapped install](air-gapped-install.md) step 5). |
 | `manifest unknown`, or a tag that does not exist | A typo in `workerImage`, or a digest that did not survive relocation into a mirror. |
 | The registry host does not resolve | Worker egress does not reach it; check the tenant's `EgressProxy` and any NetworkPolicy in the namespace. |
