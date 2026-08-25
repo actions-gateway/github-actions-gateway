@@ -472,6 +472,35 @@ func (c *Client) GetRunnerScaleSetByName(ctx context.Context, name string) (*Run
 	return &out.Value[0], nil
 }
 
+// ListRunnerScaleSets returns every scale set registered against the configured
+// scope, newest-first as the service orders them, or an empty slice when there are
+// none.
+//
+// It is the same route GetRunnerScaleSetByName uses with the name filter dropped;
+// measured 2026-08-24 against github.com, an unfiltered GET answers 200 with the full
+// {count, value} envelope rather than rejecting the missing filter (Q344).
+//
+// This is the only way to find a scale set whose name nobody recorded. A scale set
+// outlives the cluster that registered it, so an interrupted run, a deleted
+// ActionsGateway, or a renamed runnerLabels[0] each strand one that no RunnerSet
+// references and no by-name lookup can reach. Pair it with DeleteRunnerScaleSet to
+// prune.
+//
+// The service returns no paging cursor on this route and the client sends no page
+// parameter, so a scope holding more scale sets than one response carries would be
+// silently truncated. Whether such a limit exists is unmeasured: the scope this was
+// taken against held none.
+func (c *Client) ListRunnerScaleSets(ctx context.Context) ([]RunnerScaleSet, error) {
+	var out struct {
+		Count int              `json:"count"`
+		Value []RunnerScaleSet `json:"value"`
+	}
+	if err := c.svcCall(ctx, http.MethodGet, "/_apis/runtime/runnerscalesets", nil, &out); err != nil {
+		return nil, err
+	}
+	return out.Value, nil
+}
+
 // UpdateRunnerScaleSet applies a PATCH to the scale set with the given id.
 //
 // Labels are NOT patchable. Measured 2026-08-24 against github.com: a PATCH carrying

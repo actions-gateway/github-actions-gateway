@@ -2748,6 +2748,32 @@ This is the multi-record sibling of the empty-output rule in [Diagnosing failure
 
 The App private key stays in the macOS keychain and reaches the probe as a **file path**, never as an env-var value or a process argument ([github-app-credentials.md](github-app-credentials.md)).
 
+### Finding and pruning orphan scale sets
+
+A scale set outlives the cluster that registered it.
+An interrupted probe, a deleted `ActionsGateway`, or a renamed `runnerLabels[0]` each leave one registered at GitHub that no `RunnerSet` references, and deleting a `RunnerSet` never deletes its scale set.
+
+They are invisible to the ordinary tooling.
+Scale sets live on the Actions Service (`_apis/runtime/runnerscalesets`) behind the registration-token → `RemoteAuth` admin JWT, not on the REST API, so `gh api` cannot reach them at all, and [`e2e-github-cleanup.sh`](../../scripts/e2e/e2e-github-cleanup.sh), which clears runner *records* and workflow runs, does not cover them.
+Until Q344 nothing could list them either: `Client` could fetch a scale set by id or by name, and an orphan's name is the thing you do not have.
+
+`Client.ListRunnerScaleSets` is that missing route, and the probe's cleanup mode is the operator entry point:
+
+```bash
+# Report every scale set registered against the scope. Deletes nothing.
+GITHUB_APP_ID=… GITHUB_APP_INSTALLATION_ID=… GITHUB_APP_PRIVATE_KEY=/path/to/key.pem GITHUB_ORG_URL=https://github.com/<org>/<repo> PROBE_SCALESET_TEST=true PROBE_SCALESET_CLEANUP=true PROBE_SCALESET_DRY_RUN=true PROBE_SCALESET_NAME=no-such-set go run -C cmd/probe .
+```
+
+Each line carries the id, name, runner group, and labels, which is what an operator compares against the `RunnerSet`s the cluster declares.
+`PROBE_SCALESET_PRUNE_PREFIX=<prefix>` then deletes every scale set whose name starts with that prefix; drop `PROBE_SCALESET_DRY_RUN` to act.
+
+**Deciding which listed set is an orphan stays with the operator.** Nothing in the probe can see the cluster's `RunnerSet`s, so the sweep is opt-in by prefix rather than automatic, and a live tenant's scale set looks exactly like wreckage from here, the same hazard [`e2e-github-cleanup.sh`](../../scripts/e2e/e2e-github-cleanup.sh) carries.
+Run the dry run first.
+
+The scope is whatever `GITHUB_ORG_URL` names, and an org scope and a repo scope hold different sets, so a sweep has to visit each one an install has used.
+Measured 2026-08-24 across the org and both its repos: **0 registered**, so the 9 orphans this row was filed against in 2026-08-06 are gone.
+The listing was fired at a known positive first, a scale set deliberately left registered, which it reported as `count=1` before the prune removed it, because an empty scope and a broken list are the same output otherwise.
+
 ### The chart uninstall/reinstall gate (Q444/Q492)
 
 Every tier above starts from a cluster that has never had the chart installed, so nothing exercises the day-two operation an operator actually performs: `helm uninstall` followed by a reinstall.

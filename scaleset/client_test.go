@@ -633,3 +633,86 @@ func TestClient_RegistrationTokenScope(t *testing.T) {
 		t.Errorf("repo-scoped registration path not observed; calls: %v", srv.Calls())
 	}
 }
+
+// TestClient_ListRunnerScaleSets covers the list-all route (Q344): the only way to
+// reach a scale set whose name nobody recorded, which is exactly the state an orphan
+// is in.
+//
+// The stub answers the unfiltered GET the way github.com was measured to answer it on
+// 2026-08-24 — the full {count, value} envelope rather than a rejection — so this
+// asserts the client reads that envelope, not that the service produces it.
+func TestClient_ListRunnerScaleSets(t *testing.T) {
+	srv := scalesettest.New()
+	defer srv.Close()
+	ctx := testContext(t)
+	c := newClient(t, srv, nil)
+	if err := c.Connect(ctx); err != nil {
+		t.Fatalf("Connect: %v", err)
+	}
+
+	// Empty must be an empty slice and no error. A caller pruning orphans acts on
+	// this result, so "none registered" has to be distinguishable from a failure.
+	empty, err := c.ListRunnerScaleSets(ctx)
+	if err != nil {
+		t.Fatalf("ListRunnerScaleSets(empty) = _, %v; want no error", err)
+	}
+	if len(empty) != 0 {
+		t.Fatalf("ListRunnerScaleSets(empty) = %+v; want none", empty)
+	}
+
+	first, err := c.CreateRunnerScaleSet(ctx, scaleset.RunnerScaleSet{Name: "gag-a", RunnerGroupID: 7})
+	if err != nil {
+		t.Fatalf("Create first: %v", err)
+	}
+	second, err := c.CreateRunnerScaleSet(ctx, scaleset.RunnerScaleSet{
+		Name:          "gag-b",
+		RunnerGroupID: 9,
+		Labels:        []scaleset.Label{{Name: "gag-b", Type: "System"}, {Name: "gpu", Type: "System"}},
+	})
+	if err != nil {
+		t.Fatalf("Create second: %v", err)
+	}
+
+	all, err := c.ListRunnerScaleSets(ctx)
+	if err != nil {
+		t.Fatalf("ListRunnerScaleSets: %v", err)
+	}
+	if len(all) != 2 {
+		t.Fatalf("ListRunnerScaleSets = %+v; want both scale sets", all)
+	}
+	byID := map[int]scaleset.RunnerScaleSet{}
+	for _, ss := range all {
+		byID[ss.ID] = ss
+	}
+	if got, ok := byID[first.ID]; !ok || got.Name != "gag-a" || got.RunnerGroupID != 7 {
+		t.Errorf("first scale set = %+v, present=%v", got, ok)
+	}
+	// The labels matter: a caller deciding whether a scale set is referenced compares
+	// its labels against the RunnerSets it knows about, so a list that drops them
+	// cannot answer the question it exists for.
+	got, ok := byID[second.ID]
+	if !ok || got.Name != "gag-b" || got.RunnerGroupID != 9 {
+		t.Fatalf("second scale set = %+v, present=%v", got, ok)
+	}
+	if len(got.Labels) != 2 || got.Labels[0].Name != "gag-b" || got.Labels[1].Name != "gpu" {
+		t.Errorf("second scale set labels = %+v; want the declared pair in order", got.Labels)
+	}
+
+	// The name filter must survive the unfiltered route sharing its handler.
+	one, err := c.GetRunnerScaleSetByName(ctx, "gag-b")
+	if err != nil || one == nil || one.ID != second.ID {
+		t.Fatalf("GetRunnerScaleSetByName after list = %+v, %v", one, err)
+	}
+
+	// Prune: delete leaves the other listed, which is the loop an orphan sweep runs.
+	if err := c.DeleteRunnerScaleSet(ctx, first.ID); err != nil {
+		t.Fatalf("DeleteRunnerScaleSet: %v", err)
+	}
+	rest, err := c.ListRunnerScaleSets(ctx)
+	if err != nil {
+		t.Fatalf("ListRunnerScaleSets after delete: %v", err)
+	}
+	if len(rest) != 1 || rest[0].ID != second.ID {
+		t.Fatalf("ListRunnerScaleSets after delete = %+v; want only the survivor", rest)
+	}
+}

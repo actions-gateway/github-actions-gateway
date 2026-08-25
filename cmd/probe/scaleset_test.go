@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
@@ -493,10 +494,90 @@ func TestScalesetProbe_CleanupMode(t *testing.T) {
 	if err := p.run(context.Background()); err != nil {
 		t.Fatalf("run: %v", err)
 	}
-	requireCalls(t, srv, "get-scaleset name=gag-probe-scaleset", "delete-scaleset id=1")
+	// The unfiltered list, not a by-name lookup: cleanup reaches the named set through
+	// the listing so that the sets it is NOT deleting are reported too (Q344).
+	requireCalls(t, srv, "get-scaleset name=", "delete-scaleset id=1")
 	calls := srv.Calls()
 	if countCalls(calls, "create-scaleset") != 0 || countCalls(calls, "create-session") != 0 {
 		t.Errorf("cleanup mode must not create anything; got:\n%s", strings.Join(calls, "\n"))
+	}
+}
+
+// TestScalesetProbe_CleanupReportsSetsItDoesNotDelete is the orphan-visibility half.
+// An orphan's name is precisely what the operator does not have, so a cleanup that
+// only ever spoke about the name it was given could never surface one.
+func TestScalesetProbe_CleanupReportsSetsItDoesNotDelete(t *testing.T) {
+	srv := newScalesetStub(t)
+	srv.AddScaleSet("gag-probe-scaleset", 7)
+	stranded := srv.AddScaleSet("gag-forgotten-by-everyone", 7)
+
+	var log strings.Builder
+	p := newScalesetProbeLogging(t, srv, scalesetConfig{Cleanup: true}, &log)
+	if err := p.run(context.Background()); err != nil {
+		t.Fatalf("run: %v", err)
+	}
+
+	if !strings.Contains(log.String(), "gag-forgotten-by-everyone") {
+		t.Errorf("a scale set nobody can name was never reported, so cleanup cannot "+
+			"surface an orphan\n--- log ---\n%s", log.String())
+	}
+	if got := countCalls(srv.Calls(), "delete-scaleset"); got != 1 {
+		t.Errorf("delete count = %d; want only the named set deleted", got)
+	}
+	if slices.Contains(srv.Calls(), fmt.Sprintf("delete-scaleset id=%d", stranded)) {
+		t.Error("cleanup deleted a set it was not asked to; the sweep must be opt-in")
+	}
+}
+
+func TestScalesetProbe_CleanupPrunePrefix(t *testing.T) {
+	srv := newScalesetStub(t)
+	doomed := srv.AddScaleSet("gag-e2e-run-1", 7)
+	alsoDoomed := srv.AddScaleSet("gag-e2e-run-2", 7)
+	keep := srv.AddScaleSet("prod-linux", 7)
+
+	p := newScalesetProbeForTest(t, srv, scalesetConfig{
+		Cleanup: true, ScaleSetName: "no-such-set", PrunePrefix: "gag-e2e-",
+	})
+	if err := p.run(context.Background()); err != nil {
+		t.Fatalf("run: %v", err)
+	}
+
+	calls := srv.Calls()
+	requireCalls(t, srv,
+		fmt.Sprintf("delete-scaleset id=%d", doomed),
+		fmt.Sprintf("delete-scaleset id=%d", alsoDoomed))
+	if slices.Contains(calls, fmt.Sprintf("delete-scaleset id=%d", keep)) {
+		t.Errorf("prefix sweep deleted a non-matching scale set; got:\n%s",
+			strings.Join(calls, "\n"))
+	}
+	if got := countCalls(calls, "delete-scaleset"); got != 2 {
+		t.Errorf("delete count = %d; want exactly the two prefix matches", got)
+	}
+}
+
+// TestScalesetProbe_CleanupDryRun matters because the sweep is destructive against real
+// GitHub and a prefix is easy to get wrong. Dry run must still list, so it is usable as
+// the look-before-you-delete step rather than a mode that reports nothing.
+func TestScalesetProbe_CleanupDryRun(t *testing.T) {
+	srv := newScalesetStub(t)
+	srv.AddScaleSet("gag-e2e-run-1", 7)
+
+	var log strings.Builder
+	p := newScalesetProbeLogging(t, srv, scalesetConfig{
+		Cleanup: true, ScaleSetName: "no-such-set", PrunePrefix: "gag-e2e-", DryRun: true,
+	}, &log)
+	if err := p.run(context.Background()); err != nil {
+		t.Fatalf("run: %v", err)
+	}
+
+	if got := countCalls(srv.Calls(), "delete-scaleset"); got != 0 {
+		t.Errorf("dry run issued %d delete(s); want none", got)
+	}
+	if !strings.Contains(log.String(), "WOULD DELETE") {
+		t.Errorf("dry run did not name what it would delete\n--- log ---\n%s", log.String())
+	}
+	if !strings.Contains(log.String(), "gag-e2e-run-1") {
+		t.Errorf("dry run did not list the scale set\n--- log ---\n%s", log.String())
 	}
 }
 
