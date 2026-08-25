@@ -356,6 +356,7 @@ Weigh four things before turning it on across a fleet:
 | **What it costs** | One line per connection. Under real CI load it becomes the pool's dominant log volume; size the collector before enabling, not after. |
 | **What it cannot tell you** | On a pool shared via `spec.sharing.allowedNamespaces` the record names the **pool**, not the consuming tenant. See [what you must not assume](#what-you-must-not-assume). |
 | **What it never carries** | No request header, no tunneled byte, nothing from the TLS session. The proxy does not terminate or inspect it. Detail: [security design](../design/05-security.md#proxy-egress-audit-record). |
+| **What it does not change** | Enforcement. This is a logging setting: no value alters what the proxy forwards. Destination enforcement stays `destinationFQDNs`/`destinationCIDRs` plus the pod-egress policy. Unlike Pod Security Admission, `audit` here does **not** mean report-only-instead-of-enforce, and enabling it relaxes nothing. |
 
 Turning it on, and the field-by-field shape, are in [tenant onboarding](tenant-onboarding.md#per-pool-egress-audit-record) and the [logging reference](observability-logging.md#proxy-egress-audit-record).
 

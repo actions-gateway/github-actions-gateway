@@ -1029,6 +1029,10 @@ kubectl patch egressproxy -n <tenant-namespace> <name> \
 
 Only `Off` (the default) and `Connections` are accepted; admission rejects anything else.
 
+**It records; it does not enforce.** Neither value changes what the proxy forwards.
+If you know `audit` from Pod Security Admission, where it means *evaluate the policy but admit anyway*, that sense does not apply here: enabling this does not put the destination allowlist into report-only, and it relaxes nothing.
+Destination enforcement is `destinationFQDNs`/`destinationCIDRs` plus the pod-egress NetworkPolicy, unchanged either way.
+
 **Quote `Off` in a YAML manifest.** YAML reads a bare `Off` as the boolean false, so `kubectl apply` of `auditLogging: Off` sends a boolean and the apiserver rejects it as the wrong type for a string field, naming a value you never typed.
 Write `auditLogging: "Off"`, or leave the field out, which means the same thing.
 The `kubectl patch` above is JSON and is unaffected.
