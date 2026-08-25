@@ -485,7 +485,7 @@ type RunnerSetStatus struct {
 	// AdvertisedCapacity is the X-ScaleSetMaxCapacity this set most recently
 	// advertised: the total jobs GitHub may keep assigned to it at once, recomputed
 	// every long-poll from the admission ladder. Together with WithheldCapacity it
-	// answers "why is intake throttled?" from `kubectl describe` alone — the same
+	// answers "why is intake throttled?" from `kubectl describe` alone: the same
 	// accounting previously reachable only through Prometheus, which a tenant without
 	// metrics access cannot read (Q721).
 	//
@@ -507,7 +507,7 @@ type RunnerSetStatus struct {
 	// cluster cannot place my workers" without reading metrics or the AGC's logs
 	// (Q721). Every rung the poll evaluated appears, including the ones withholding
 	// nothing, so a reason absent from the list was not evaluated rather than not
-	// binding — the same explicit-zero contract the withheld gauge carries.
+	// binding. That is the same explicit-zero contract the withheld gauge carries.
 	//
 	// Empty on a classic-tier set and before the first poll, alongside a nil
 	// AdvertisedCapacity.
