@@ -62,7 +62,13 @@ func (s *stubTarget) CapacityDeclined(context.Context) (bool, string) {
 	return s.capacityDeclined, s.capacityDetail
 }
 func (s *stubTarget) DeclinedCapacity(context.Context, int32) (int32, bool) { return 0, false }
-func (s *stubTarget) RecordEvent(_, reason, _, _ string)                    { s.events = append(s.events, reason) }
+func (s *stubTarget) ScaleUpLimit(context.Context) *ScaleUpConfig {
+	if s.spec == nil {
+		return nil
+	}
+	return s.spec.ScaleUp
+}
+func (s *stubTarget) RecordEvent(_, reason, _, _ string) { s.events = append(s.events, reason) }
 func (s *stubTarget) Resolve(context.Context) (*ResolvedSpec, error) {
 	return s.spec, nil
 }
@@ -149,4 +155,51 @@ func TestProvisioner_ScaleUpDisabledCreatesImmediately(t *testing.T) {
 	}
 	assert.False(t, slept, "default-off scaleUp must never throttle")
 	assert.Equal(t, 0.0, testutil.ToFloat64(metrics.ScaleUpThrottled.WithLabelValues("team-a", "cpu")))
+}
+
+// TestProvisioner_ClassicTierChargesTheBucketOnceAtAdmit pins the Q717 split. The
+// classic tier takes its token in Admit's rate rung, before the job is claimed, and
+// the provisioning path no longer waits on the bucket at all — so a job that reaches
+// provision never blocks there with its GitHub lock held, and never pays twice.
+//
+// The double-charge is what a `slept` assertion alone would miss: a second token is
+// available here, so a leftover wait would take it without sleeping. The third admit
+// is the discriminator — it succeeds only if provision left the bucket alone.
+func TestProvisioner_ClassicTierChargesTheBucketOnceAtAdmit(t *testing.T) {
+	fc := fake.NewClientBuilder().WithScheme(clientgoscheme.Scheme).WithStatusSubresource(&corev1.Pod{}).Build()
+	p := NewProvisioner(fc, scaleUpTestMetrics(), nil)
+
+	var slept bool
+	p.scaleUp = scaleUpLimiter{
+		now: newFakeClock().now,
+		sleep: func(context.Context, time.Duration) error {
+			slept = true
+			return nil
+		},
+	}
+
+	target := &stubTarget{
+		key: client.ObjectKey{Namespace: "team-a", Name: "cpu"},
+		spec: &ResolvedSpec{
+			WorkerImage: "runner:test",
+			ScaleUp:     &ScaleUpConfig{MaxPerSecond: 1, Burst: 2},
+		},
+	}
+
+	ctx, cancel := context.WithCancelCause(context.Background())
+	defer cancel(nil)
+	p.Waiter = &cancellingWaiter{cancel: cancel, cause: context.Canceled}
+
+	// One token spent at admit, one left.
+	_, ok, _ := p.Admit(target)(ctx)
+	require.True(t, ok, "the first job is within the burst")
+
+	_, err := p.provision(ctx, target, "plan-1", []byte("{}"), "")
+	require.Error(t, err, "the cancelling waiter ends the job after the pod is created")
+	assert.False(t, slept, "the classic provisioning path must not wait on the token bucket")
+
+	// The surviving token proves provision did not charge a second one.
+	_, ok, reason := p.Admit(target)(context.Background())
+	assert.True(t, ok, "provision must leave the second burst token for the next job")
+	assert.Empty(t, reason)
 }

@@ -335,11 +335,12 @@ func (f *fakeTarget) Key() client.ObjectKey { return f.key }
 func (f *fakeTarget) OwnerRef() metav1.OwnerReference {
 	return metav1.OwnerReference{APIVersion: "actions-gateway.com/v2alpha1", Kind: "RunnerSet", Name: f.key.Name, UID: types.UID("uid-" + f.key.Name)}
 }
-func (f *fakeTarget) PodOwnerLabels() map[string]string                  { return f.labels }
-func (f *fakeTarget) Ceiling(context.Context) (int32, bool)              { return 0, false }
-func (f *fakeTarget) QuotaExhausted(context.Context) (bool, string)      { return false, "" }
-func (f *fakeTarget) QuotaCapacity(context.Context, int32) (int32, bool) { return 0, false }
-func (f *fakeTarget) CapacityDeclined(context.Context) (bool, string)    { return false, "" }
+func (f *fakeTarget) PodOwnerLabels() map[string]string                       { return f.labels }
+func (f *fakeTarget) Ceiling(context.Context) (int32, bool)                   { return 0, false }
+func (f *fakeTarget) ScaleUpLimit(context.Context) *provisioner.ScaleUpConfig { return nil }
+func (f *fakeTarget) QuotaExhausted(context.Context) (bool, string)           { return false, "" }
+func (f *fakeTarget) QuotaCapacity(context.Context, int32) (int32, bool)      { return 0, false }
+func (f *fakeTarget) CapacityDeclined(context.Context) (bool, string)         { return false, "" }
 func (f *fakeTarget) DeclinedCapacity(context.Context, int32) (int32, bool) {
 	return 0, false
 }

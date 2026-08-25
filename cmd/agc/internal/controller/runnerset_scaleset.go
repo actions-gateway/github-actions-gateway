@@ -388,8 +388,9 @@ func (r *RunnerSetReconciler) claimedRunnerNames(ctx context.Context, key types.
 // declining to claim, without spending a JIT runner record or a job lock to get there.
 //
 // provisioner.AdvertiseCapacity owns the rungs and their composition (the declared
-// ceiling, then live namespace-ResourceQuota headroom), so the two tiers cannot drift
-// apart the way they did while the quota rung was classic-only (Q443). This function
+// ceiling, then live namespace-ResourceQuota headroom, then placeability, then the
+// opt-in scale-up rate limit), so the two tiers cannot drift apart the way they did
+// while the quota rung was classic-only (Q443). This function
 // only supplies the no-ceiling default and publishes the resulting accounting.
 //
 // The provisioner's own ceilingCheck still backstops per pod, so a stale read never

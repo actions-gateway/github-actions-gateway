@@ -2,6 +2,8 @@ package provisioner
 
 import (
 	"context"
+	"sync"
+	"sync/atomic"
 	"testing"
 
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/runnercore"
@@ -19,9 +21,11 @@ type rungTarget struct {
 	quotaExhausted bool
 	declined       bool
 	declinedDetail string
+	scaleUp        *ScaleUpConfig
 	quotaCalls     int
 	declinedCalls  int
 	ceilingCalls   int
+	scaleUpCalls   int
 }
 
 func (s *rungTarget) Key() client.ObjectKey             { return client.ObjectKey{Namespace: "ns", Name: "s"} }
@@ -41,8 +45,12 @@ func (s *rungTarget) CapacityDeclined(context.Context) (bool, string) {
 	return s.declined, s.declinedDetail
 }
 func (s *rungTarget) DeclinedCapacity(context.Context, int32) (int32, bool) { return 0, false }
-func (s *rungTarget) RecordEvent(_, _, _, _ string)                         {}
-func (s *rungTarget) Resolve(context.Context) (*ResolvedSpec, error)        { return &ResolvedSpec{}, nil }
+func (s *rungTarget) ScaleUpLimit(context.Context) *ScaleUpConfig {
+	s.scaleUpCalls++
+	return s.scaleUp
+}
+func (s *rungTarget) RecordEvent(_, _, _, _ string)                  {}
+func (s *rungTarget) Resolve(context.Context) (*ResolvedSpec, error) { return &ResolvedSpec{}, nil }
 
 // TestAdmit_CapacityRung pins the Q405 rung's placement in the ladder and its
 // rejection reason. The ordering matters beyond tidiness: the capacity rung reserves
@@ -168,4 +176,228 @@ func TestAdmit_CapacityRungRereadsEveryDelivery(t *testing.T) {
 	assert.False(t, ok, "the gate must re-close on the next stuck pod")
 
 	assert.Equal(t, 3, target.declinedCalls, "the rung must be re-read on every delivery, never cached")
+}
+
+// TestAdmit_ScaleUpRung pins the Q717 rung: the classic tier charges the scale-up
+// token bucket BEFORE it claims the job, so a burst that outruns the bucket is left
+// queued at GitHub rather than claimed and then slept on with its job lock held.
+//
+// The rung takes its token rather than reading the bucket, which is what makes it
+// bind on the case spec.scaleUp exists for. An observing rung would let every
+// listener in a simultaneously-delivered burst see the same free token and claim
+// anyway — the second admit below is precisely that job, and it must be refused.
+func TestAdmit_ScaleUpRung(t *testing.T) {
+	ctx := context.Background()
+	p := NewProvisioner(nil, nil, nil)
+	p.scaleUp = scaleUpLimiter{now: newFakeClock().now}
+
+	target := &rungTarget{ceiling: 10, ceilingBounded: true, scaleUp: &ScaleUpConfig{MaxPerSecond: 1, Burst: 1}}
+	key := target.Key().String()
+	admit := p.Admit(target)
+
+	release, ok, reason := admit(ctx)
+	require.True(t, ok, "the first job is within the burst")
+	assert.Empty(t, reason)
+	require.NotNil(t, release)
+	require.Equal(t, int32(1), p.admission.reservedCount(key))
+
+	_, ok, reason = admit(ctx)
+	assert.False(t, ok, "the second job in the same instant has no token and must not be claimed")
+	assert.Equal(t, runnercore.AdmitReasonScaleUp, reason)
+
+	// The rate rung runs BEHIND the ceiling rung and hands its reservation straight
+	// back, so a throttled job costs no slot once the call returns. Ordering it ahead
+	// instead would spend a token on every ceiling refusal, which is the defect
+	// TestAdmit_CeilingRefusalDoesNotSpendAToken pins.
+	assert.Equal(t, int32(1), p.admission.reservedCount(key),
+		"a job refused by the rate rung must hand its ceiling reservation straight back")
+}
+
+// TestAdmit_ScaleUpRungDefaultOff pins the default-off contract on the classic tier:
+// an owner with no spec.scaleUp is never refused for rate, however many jobs arrive
+// at once.
+func TestAdmit_ScaleUpRungDefaultOff(t *testing.T) {
+	ctx := context.Background()
+	p := NewProvisioner(nil, nil, nil)
+	target := &rungTarget{} // scaleUp nil
+	admit := p.Admit(target)
+
+	for i := range 50 {
+		_, ok, reason := admit(ctx)
+		require.True(t, ok, "job %d must be admitted with no rate limit configured", i)
+		require.Empty(t, reason)
+	}
+	assert.Equal(t, 50, target.scaleUpCalls, "the rung is still re-read per job (Q117)")
+}
+
+// TestAdmit_ScaleUpRungOrder pins the rung's placement. The two observed rungs are
+// the ones that do not clear on their own, so they are reported in preference to a
+// rate refusal that the bucket will resolve within 1/maxPerSecond — and, more
+// sharply, a job refused for quota or capacity must not be charged a token it will
+// never spend.
+func TestAdmit_ScaleUpRungOrder(t *testing.T) {
+	ctx := context.Background()
+
+	for _, tt := range []struct {
+		name       string
+		target     rungTarget
+		wantReason string
+	}{
+		{
+			name:       "quota outranks an empty bucket",
+			target:     rungTarget{quotaExhausted: true, scaleUp: &ScaleUpConfig{MaxPerSecond: 1, Burst: 1}},
+			wantReason: runnercore.AdmitReasonQuota,
+		},
+		{
+			name:       "capacity outranks an empty bucket",
+			target:     rungTarget{declined: true, declinedDetail: "d", scaleUp: &ScaleUpConfig{MaxPerSecond: 1, Burst: 1}},
+			wantReason: runnercore.AdmitReasonCapacity,
+		},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			p := NewProvisioner(nil, nil, nil)
+			p.scaleUp = scaleUpLimiter{now: newFakeClock().now}
+			target := tt.target
+
+			// Drain the single burst token so the rate rung would refuse if reached.
+			require.True(t, p.scaleUp.allow(target.Key().String(), target.scaleUp))
+
+			_, ok, reason := p.Admit(&target)(ctx)
+			assert.False(t, ok)
+			assert.Equal(t, tt.wantReason, reason)
+			assert.Zero(t, target.scaleUpCalls, "a rung that refuses earlier must not charge a token")
+			assert.Zero(t, target.ceilingCalls, "nor take a reservation")
+		})
+	}
+}
+
+// TestAdmit_CeilingRefusalDoesNotSpendAToken pins the rung ORDER, which is the whole
+// reason the rate rung sits last. Its token is the only thing this ladder spends that
+// it cannot hand back: a reservation is refundable and a token taken is gone.
+//
+// Run the other way round — rate ahead of ceiling — a set sitting at its ceiling under
+// continued delivery spends a token per refusal. The bucket pins at zero, so a slot
+// freed by a finishing worker cannot be filled until a refill beats the refusal churn,
+// and every refusal past the burst reports reason="scaleup" for a set whose actual
+// limit is maxWorkers. That misattribution is the expensive half: the ledger says the
+// reason label names what to raise, so it sends an operator to raise maxPerSecond,
+// which feeds the churn faster.
+//
+// Found in review of the change that added the rung, with this exact shape.
+func TestAdmit_CeilingRefusalDoesNotSpendAToken(t *testing.T) {
+	ctx := context.Background()
+	p := NewProvisioner(nil, nil, nil)
+	p.scaleUp = scaleUpLimiter{now: newFakeClock().now}
+
+	// One slot, five tokens: the ceiling is what binds, and it binds first.
+	target := &rungTarget{ceiling: 1, ceilingBounded: true, scaleUp: &ScaleUpConfig{MaxPerSecond: 1, Burst: 5}}
+	admit := p.Admit(target)
+
+	release, ok, _ := admit(ctx)
+	require.True(t, ok, "the first job takes the only slot")
+
+	reasons := make([]string, 0, 10)
+	for range 10 {
+		_, _, reason := admit(ctx)
+		reasons = append(reasons, reason)
+	}
+	for i, reason := range reasons {
+		assert.Equal(t, runnercore.AdmitReasonCeiling, reason,
+			"delivery %d is refused by the ceiling, so it must be REPORTED as the ceiling", i)
+	}
+
+	free, limited := p.scaleUp.tokens(target.Key().String(), target.scaleUp)
+	require.True(t, limited)
+	assert.Equal(t, int32(4), free,
+		"only the admitted job spent a token: ceiling refusals must not drain the bucket")
+
+	// The property the drained bucket would have broken.
+	release()
+	_, ok, reason := admit(ctx)
+	assert.True(t, ok, "a freed ceiling slot must be immediately fillable; refused for %q", reason)
+}
+
+// concurrentTarget is a Target safe to drive from many goroutines at once. rungTarget
+// counts its calls in plain ints, which is a data race under concurrency and not worth
+// fixing there — no shipped test drives it that way. This one answers the same rungs
+// and counts nothing.
+type concurrentTarget struct {
+	ceiling int32
+	scaleUp *ScaleUpConfig
+}
+
+func (c *concurrentTarget) Key() client.ObjectKey {
+	return client.ObjectKey{Namespace: "ns", Name: "s"}
+}
+func (c *concurrentTarget) OwnerRef() metav1.OwnerReference   { return metav1.OwnerReference{} }
+func (c *concurrentTarget) PodOwnerLabels() map[string]string { return nil }
+func (c *concurrentTarget) Ceiling(context.Context) (int32, bool) {
+	return c.ceiling, true
+}
+func (c *concurrentTarget) QuotaExhausted(context.Context) (bool, string)      { return false, "" }
+func (c *concurrentTarget) QuotaCapacity(context.Context, int32) (int32, bool) { return 0, false }
+func (c *concurrentTarget) CapacityDeclined(context.Context) (bool, string)    { return false, "" }
+func (c *concurrentTarget) DeclinedCapacity(context.Context, int32) (int32, bool) {
+	return 0, false
+}
+func (c *concurrentTarget) ScaleUpLimit(context.Context) *ScaleUpConfig { return c.scaleUp }
+func (c *concurrentTarget) RecordEvent(_, _, _, _ string)               {}
+func (c *concurrentTarget) Resolve(context.Context) (*ResolvedSpec, error) {
+	return &ResolvedSpec{}, nil
+}
+
+// TestAdmit_RateRefusalRefundsUnderConcurrency is the one the sequential tests cannot
+// see. The rate rung takes a ceiling reservation and hands it back when the bucket is
+// empty, and the two rungs are reached by every listener at once during exactly the
+// burst spec.scaleUp exists to smooth — so the question is whether the reservation
+// count is still exact after a wave of admits and refusals interleave.
+//
+// The invariant is arithmetic rather than timing: however the goroutines interleave,
+// the gate must hold exactly one reservation per goroutine that was ADMITTED. A
+// refusal that forgot its refund leaks a slot and the count runs high; a double
+// refund would run it low.
+func TestAdmit_RateRefusalRefundsUnderConcurrency(t *testing.T) {
+	const goroutines = 200
+	const burst = 5
+
+	p := NewProvisioner(nil, nil, nil)
+	p.scaleUp = scaleUpLimiter{now: newFakeClock().now}
+	target := &concurrentTarget{ceiling: goroutines, scaleUp: &ScaleUpConfig{MaxPerSecond: 1, Burst: burst}}
+	admit := p.Admit(target)
+
+	var (
+		start    sync.WaitGroup
+		done     sync.WaitGroup
+		admitted atomic.Int32
+	)
+	start.Add(1)
+	for range goroutines {
+		done.Add(1)
+		go func() {
+			defer done.Done()
+			start.Wait()
+			if _, ok, _ := admit(context.Background()); ok {
+				admitted.Add(1)
+			}
+		}()
+	}
+	start.Done()
+	done.Wait()
+
+	// The bucket is the binding rung: the ceiling is wide enough for everyone.
+	require.Equal(t, int32(burst), admitted.Load(),
+		"the frozen clock refills nothing, so exactly the burst may be admitted")
+	assert.Equal(t, admitted.Load(), p.admission.reservedCount(target.Key().String()),
+		"the gate must hold exactly one reservation per admitted job: a refusal that "+
+			"skipped its refund leaks a slot, and a double refund loses one")
+
+	// A post-hoc check that the ceiling invariant held: this reads the SETTLED count,
+	// after done.Wait(), so it cannot observe a mid-flight excursion and nothing here
+	// would fail from one. The invariant it corresponds to — admit refuses at
+	// reserved >= limit, so the reserve-then-release churn inflates the count only
+	// WITHIN the ceiling, which is what makes Q977 a labelling artifact rather than an
+	// over-admission bug — is a property of the code, not something this assertion
+	// establishes.
+	assert.LessOrEqual(t, p.admission.reservedCount(target.Key().String()), target.ceiling,
+		"the settled reservation count must not exceed the declared ceiling")
 }

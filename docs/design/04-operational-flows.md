@@ -108,13 +108,20 @@ sequenceDiagram
    GitHub holds the connection for up to 50 seconds; returns `202 Accepted` if no job is queued.
 2. **Intercept:** GitHub responds with a `RunnerJobRequest` message containing `run_service_url`, `runner_request_id`, and `billing_owner_id` in the decoded body.
    2a.
-   **Admit (Q59, #784, Q405, Q406):** Before claiming the job, the goroutine consults the pre-acquisition admission gate, which asks three questions in order.
+   **Admit (Q59, #784, Q405, Q406, Q717):** Before claiming the job, the goroutine consults the pre-acquisition admission gate, which asks four questions in order.
    **Quota:** can the namespace `ResourceQuota` admit one more worker pod right now (`hard − used` against this owner's worker footprint)?
    **Capacity:** if the owner opted into a capacity gate, can the cluster currently *place* one more worker pod of this shape?
+   **Rate:** if the owner opted into `spec.scaleUp`, does its token bucket have a token for another pod creation?
    **Ceiling:** is the in-memory, per-RunnerGroup reservation counter below the worker ceiling (`maxWorkers` / the maximum `priorityTiers` threshold)?
-   A no from any of them **skips `acquirejob`**, increments `actions_gateway_jobs_admission_rejected_total{reason}` (`quota`, `capacity`, or `ceiling`), and resumes polling at step 1 — the job stays queued at GitHub and is redelivered to a sibling session with capacity, rather than acquired-then-dropped.
+   A no from any of them **skips `acquirejob`**, increments `actions_gateway_jobs_admission_rejected_total{reason}` (`quota`, `capacity`, `scaleup`, or `ceiling`), and resumes polling at step 1 — the job stays queued at GitHub and is redelivered to a sibling session with capacity, rather than acquired-then-dropped.
    When the gate admits, it reserves a slot held until the job completes (step 11), then proceeds to step 3.
    The two observed rungs fail open and reserve nothing, which is why they precede the ceiling; the reservation is fail-safe soft state (reset on AGC restart).
+   The rate rung reserves nothing either but *takes* its token, which is what lets it bind on a simultaneously-delivered burst where an observation could not: every listener would read the same free token and claim anyway.
+   It is ordered after the two observed rungs so a job refused for quota or placeability is never charged a token it will not spend, and so the reason reported is the one that will not clear on its own.
+
+   **Why the rate limit is a rung rather than a wait (Q717).** `spec.scaleUp` used to be waited on *after* the claim, at pod-creation time, which put it in exactly the position this gate exists to remove: a job that cannot be provisioned yet, holding a GitHub job lock while it waits.
+   A long ramp (a large burst at a low `maxPerSecond`) walks the tail of that burst past the lock's lifetime, and a job whose lock lapses is cancelled rather than redelivered, so the anti-stampede knob could destroy the jobs it was smoothing.
+   As a rung it withholds intake instead, and the classic provisioning path no longer touches the bucket at all: the token is charged once, before the claim.
    The provisioner's post-acquire ceiling check and quota-retry loop (step 6) remain the authoritative backstops.
 
    **Tier scope.** This *per-delivered-job* form of the gate is wired from `AdmitFor` (v1 `RunnerGroup`) and the classic branch of the v2 `RunnerSet` reconciler; `reconcileScaleSetListener` returns before it.
@@ -195,18 +202,21 @@ The advertised number is the **minimum** of the ladder's rungs, recomputed every
 | Ceiling (Q59) | the max `priorityTiers` threshold, else `maxWorkers`, else `10` | — (the `10` default *is* the fallback) |
 | Quota (#784, Q443) | this set's non-terminal worker pods **+** how many more the namespace `ResourceQuota` can admit | no bound (the ceiling stands) |
 | Capacity (Q405, Q406, Q512, Q714) | this set's non-terminal worker pods, while its capacity gate is declining — no room for one more; **plus one probe slot** while the gate is latched (`AwaitingProbe`) with no probe pod outstanding | no bound (gate `Off`, an unimplemented mode, nothing declining, or nothing readable) |
+| Rate (Q223, Q717) | this set's non-terminal worker pods **+** the whole tokens free in its `spec.scaleUp` bucket | no bound (`scaleUp` unset, or the pod count unreadable) |
 
 Three properties follow, and they are why this is not merely the classic gate in different clothing:
 
 * **Nothing is spent to discover the limit.** The classic gate declines a job that was already delivered; here the job is never assigned, so no single-use JIT runner record is consumed and no GitHub job lock is taken out on a pod that cannot be created.
 * **The quota rung is a total, not a delta.** Headroom answers "how many *more* fit"; the header wants "how many at once", so the set's own in-flight worker pods — already inside the quota's `used` — are added back.
   Deliberately the pod count and not GitHub's `totalAssignedJobs`: the two diverge across an assignment the AGC has not provisioned yet, and biasing low only delays a job where biasing high would reproduce the claim-and-stall.
+  The rate rung converts the same way and it is load-bearing there in a second sense: free tokens cap at `burst`, so advertising them directly would pin the set at `burst` assigned jobs forever and silently turn a *rate* limit into a lower *concurrency* ceiling.
+  Added to the in-flight count it does what the field says: the set jumps to `burst` on the first poll, then climbs at `maxPerSecond` per second until another rung binds.
 * **Recovery is a poll, not a job.** Classic re-decides per delivered job; this decides once per poll for the whole set, so restored headroom reopens assignment within one long-poll interval (~50s) rather than immediately.
 
 Because every rung can only *lower* the number, a rung that cannot read what it needs (no quota, an unreadable quota, an unresolved template) contributes no bound and the set advertises its declared ceiling — exactly the behavior that predates this rung.
 The provisioner's post-create ceiling check and quota-retry loop remain the backstops for the races an advertised integer cannot close (a sibling AGC, a stale `.status.used`).
 
-**What an operator sees.** `actions_gateway_scaleset_advertised_capacity` is the number most recently advertised, and `actions_gateway_scaleset_capacity_withheld{reason}` attributes the gap to the rung that took it (`quota`, `capacity`).
+**What an operator sees.** `actions_gateway_scaleset_advertised_capacity` is the number most recently advertised, and `actions_gateway_scaleset_capacity_withheld{reason}` attributes the gap to the rung that took it (`quota`, `capacity`, `scaleup`).
 The per-job `actions_gateway_jobs_admission_rejected_total` is structurally unreachable on this tier — there is no rejected job to count — so these two gauges are its counterpart, alongside the `WorkerQuotaPressure`/`WorkerQuotaExceeded` and `WorkerCapacityDeclined` conditions the set publishes.
 
 ---

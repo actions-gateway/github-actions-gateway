@@ -292,7 +292,7 @@ func NewMetrics() *Metrics {
 
 		ScaleUpThrottled: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: "actions_gateway_worker_scaleup_throttled_total",
-			Help: "Worker-pod creations delayed by the opt-in per-RunnerGroup scale-up rate limit (spec.scaleUp): the token bucket was empty so the acquired job waited for a token before its pod was created (Q223). Only non-zero when scaleUp is set; a sustained rate means the ramp is actively smoothing a cold-start burst on a shared egress path.",
+			Help: "Intake withheld by the opt-in per-owner scale-up rate limit (spec.scaleUp): the token bucket was empty (Q223, Q717). On the classic tier this counts a job the AGC declined to claim, rather than a job it claimed and then delayed. On the scale-set tier the rung is expressed as reduced advertised capacity instead, so this counts only a pod creation that still had to wait, which means the advertisement was stale. Only non-zero when scaleUp is set; a sustained classic rate means the ramp is actively smoothing a cold-start burst on a shared egress path.",
 		}, []string{"namespace", "runner_group"}),
 
 		WorkerPodsReaped: prometheus.NewCounterVec(prometheus.CounterOpts{
