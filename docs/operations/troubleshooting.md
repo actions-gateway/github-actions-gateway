@@ -3498,8 +3498,9 @@ The AGC is healthy — this is throttling, not a fault.
 > See [Jobs Failing Due to Namespace ResourceQuota Exhaustion](#jobs-failing-due-to-namespace-resourcequota-exhaustion).
 > The rest of this section is about `reason="ceiling"`.
 
-> **On a `ScaleSet` `RunnerSet` (the default tier)** the same throttling shows up as `actions_gateway_scaleset_advertised_capacity` sitting at the set's ceiling with all its slots in use — the ceiling is advertised to GitHub as `X-ScaleSetMaxCapacity`, so surplus jobs are never assigned rather than being delivered and declined.
-> There is no `reason="ceiling"` series there; read `advertised_capacity` against the running worker-pod count instead.
+> **On a `ScaleSet` `RunnerSet` (the default tier)** the same throttling shows up as the set advertising fewer slots than its ceiling: the ceiling is advertised to GitHub as `X-ScaleSetMaxCapacity`, so surplus jobs are never assigned rather than being delivered and declined.
+> There is no `reason="ceiling"` series there.
+> Read `status.advertisedCapacity` and `status.withheldCapacity` on the set, which need no metrics access: see [Why Is My `RunnerSet` Not Being Offered Jobs?](#why-is-my-runnerset-not-being-offered-jobs) below.
 > The resolutions below apply unchanged.
 
 **Cause.** This is the pre-acquisition admission gate working as designed (Q59).
@@ -3531,6 +3532,53 @@ kubectl get runnergroup <group> -n <namespace> \
   An AGC restart clears any stale in-memory reservation.
 
 ---
+
+## Why Is My `RunnerSet` Not Being Offered Jobs?
+
+**Symptoms.** Workflow jobs sit queued at GitHub, the `RunnerSet` is `Ready`, the AGC logs nothing alarming, and fewer worker pods are running than `maxWorkers` allows.
+Nothing is broken: something is deliberately withholding intake, and this is how to find out what.
+
+Applies to a `ScaleSet`-protocol `RunnerSet` (the default tier).
+A classic-tier set decides per delivered job instead and leaves both fields empty; for that tier read [Jobs Not Being Acquired Despite Queued Work](#jobs-not-being-acquired-despite-queued-work-capacity-gate-saturated) above.
+
+**Cause.** The set advertises one number to GitHub per long-poll, the total jobs GitHub may keep assigned to it, and GitHub assigns nothing beyond it.
+That number is the minimum of the admission ladder's rungs, so any rung can lower it.
+`status` carries both the number and the per-rung breakdown, so this needs no Prometheus access (Q721).
+
+**Diagnostics.**
+
+```sh
+# The advertised total, and which rung took each withheld slot.
+kubectl get runnerset -n <namespace> <name> \
+  -o jsonpath='{.status.advertisedCapacity}{"\n"}{range .status.withheldCapacity[*]}{.reason}{"\t"}{.slots}{"\n"}{end}'
+
+# The same, plus the conditions that explain two of the rungs.
+kubectl describe runnerset -n <namespace> <name>
+```
+
+A rung listed with `slots: 0` was evaluated and is not withholding anything.
+A rung **absent** from the list was not evaluated at all.
+That is a different statement, and for `quota` it means the AGC-wide `AGC_QUOTA_ADMISSION=false` kill switch is set.
+
+The entries sum to the set's declared ceiling minus `advertisedCapacity`, because the rungs compose as a minimum and each entry is its own marginal contribution.
+
+**Reading the result.**
+
+| `reason` | What is withholding | Where to look next |
+|---|---|---|
+| *(no entries, `advertisedCapacity` equals your ceiling)* | Nothing. The set is offering its full capacity and the queue is GitHub-side | Check the job's `runs-on` labels against `status.registeredLabels`, and whether the run is blocked by a workflow-level `concurrency:` group |
+| `quota` | The namespace `ResourceQuota` has no headroom for more worker pods | The `WorkerQuotaExceeded` condition names the binding resource; [namespace ResourceQuota exhaustion](#jobs-failing-due-to-namespace-resourcequota-exhaustion) |
+| `capacity` | The cluster cannot currently *place* another worker pod of this shape, and the set opted into `spec.capacityGate` | The `WorkerCapacityDeclined` condition names the signal that said so; [WorkerCapacityDeclined](#runnerset-reports-workercapacitydeclined-the-gateway-stopped-claiming-jobs) |
+| `scaleup` | The set's own `spec.scaleUp` creation-rate limit is ramping | Nothing, if the number is falling. This rung clears itself as the bucket refills, so a set climbing out of idle shows it withholding a lot and then less |
+
+**`advertisedCapacity: 0` is not the same as the field being absent.** Zero means the set is advertising zero: every slot withheld, and the `withheldCapacity` entries say by what.
+Absent means no advertisement has been made: a classic-tier set, a listener that has not completed its first poll, or a set whose references do not resolve (check `Ready`).
+
+**Resolution.** Act on the binding rung, not on the total.
+Raising `maxWorkers` while `quota` is withholding changes nothing, because the ceiling is not what is binding: the advertisement is already below it.
+
+**One caveat when reading it.** The value is recomputed every long-poll and published every reconcile, so it lags the live number by up to one reconcile and is a snapshot rather than a live feed.
+A set whose capacity is oscillating is better watched through `actions_gateway_scaleset_advertised_capacity` and `actions_gateway_scaleset_capacity_withheld`, which carry the same numbers at metric resolution ([observability: metrics](observability-metrics.md#scale-set-acquisition-tier-q264)).
 
 ## Worker Pod Fails to Start After Secure-by-Default SecurityContext
 
