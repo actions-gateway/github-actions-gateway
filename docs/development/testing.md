@@ -2737,6 +2737,7 @@ Investigation F is three phases around a state file rather than one run, because
 Its `arm` phase leaves the message under test deliberately unacknowledged; do not "tidy up" by acknowledging it, and do not leave a session behind between phases, or the next gap measures something shorter than it claims.
 
 All four register against the repo, not the org (E/F/G a scale set, H two plain JIT runners on the classic broker v2 flow the AGC's listener ships): this repo is public and the org's `Default` runner group sets `allows_public_repositories: false`, so an org-scoped registration never receives the job.
+Investigation I takes either scope, because it registers a scale set and then never waits for a job, so the runner-group policy that strands the other four does not reach it.
 Each has a dispatch-only fixture workflow ([`scaleset-probe.yml`](../../.github/workflows/scaleset-probe.yml), [`q468-retention-probe.yml`](../../.github/workflows/q468-retention-probe.yml), [`q583-replay-probe.yml`](../../.github/workflows/q583-replay-probe.yml), [`q645-abandoned-probe.yml`](../../.github/workflows/q645-abandoned-probe.yml)) that queues jobs on its label and never runs in normal CI.
 Dispatch the fixture *before* starting the probe — a job queued against a not-yet-registered label waits server-side and is assigned the moment the scale set appears.
 
