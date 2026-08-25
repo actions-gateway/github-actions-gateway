@@ -395,7 +395,11 @@ Two cautions on the instruments, both paid for:
 
 The budget is therefore sized for the canary rather than for the measurement.
 Even on a quiet machine the old 2m was marginal: at load 21 to 36, every binary uncached, the slowest package was `agc/internal/scalesetlistener` at 67.834s, or 56.5% of it, with `agc/internal/controller` down at 14.467s.
-5m leaves that 4.4x, and leaves the CI `coverage` job's `timeout-minutes: 15` room to still print Go's goroutine dump.
+5m leaves that 4.4x, and still trips early enough under the CI `coverage` job's `timeout-minutes: 15` for Go to print its goroutine dump.
+That job runs in 186s of its 900s, 6s of which is overhead, and the dump prints one budget after the *wedged binary itself* starts, which on that run was anywhere from 13s to 176s in: a 5m wedge prints near 320-480s of the 900, a 10m one near 620-780s.
+Both print, so the job deadline does not decide between 5m and 10m; it caps the budget from above, and the false red that 2m produced caps it from below.
+What picks 5m over 10m is margin: it already clears the floor at the 4.4x above, and holds at least twice 10m's margin to the deadline, 3.5x when the wedge lands in a late-starting package.
+A later start only widens that gap, and 10m's margin runs out entirely once a binary starts 294s into the run, where 5m still has 300s.
 Changing the flag costs one cold run: `-timeout` participates in Go's test cache key, verified by running one package at 5m (ran), again at 5m (cached), then at 2m (ran).
 A genuinely wedged test blocks forever and trips any finite value; what a larger number costs is the wait before that dump, and what a smaller one costs is a red gate that names a scheduling event as a hang.
 
