@@ -30,6 +30,21 @@
 #   check    Run coverage and fail if any module is below its baseline floor
 #            minus TOLERANCE. This is the gate CI and `make cover-check` run.
 #
+# The -timeout below is 5m, not Go's 10m default and not the 2m this used to
+# carry. It is a hang canary, and on this machine it was measuring scheduling
+# instead: `go test -timeout` is per-test-binary WALL clock, so a binary that is
+# not scheduled spends the budget doing nothing. Measured 2026-08-24, api/apinames
+# reported 37.983s and 0.645s across two runs at an identical 98.6% coverage, and
+# that package has no sleep, poll or TestMain to block on -- 58.9x on provably
+# identical work. 5m is ~3.6x the worst wall observed (84.084s, agc/internal/
+# controller) and leaves the most room under the coverage job's own
+# timeout-minutes: 15 for Go to print its goroutine dump. Measured on that job:
+# 186s total, 6s of it overhead. A wedge trips at the budget and the script
+# exits on the first failure, so 5m lands around 306s of 900s where 10m lands
+# around 606s -- both print, 5m with twice the margin.
+# Rationale and the numbers: docs/development/testing.md (§"The coverage budget
+# is wall clock, so it measures scheduling").
+#
 # A bare `go test` here is rewritten to carry the local-throttle prefix by the
 # Claude Code go-throttle hook, and the run also applies scripts/agent/local-throttle.sh
 # itself, so a manual run on a GUI dev machine stays desktop-safe; on CI/headless
@@ -153,7 +168,7 @@ run_coverage() {
 	# reads the same number either way.
 	echo "==> go test -coverprofile ${patterns[*]}" >&2
 	# shellcheck disable=SC2086  # flag strings and the throttle prefix word-split intentionally
-	$THROTTLE_PREFIX go test -trimpath -timeout 2m $p_flag $verbose_flag \
+	$THROTTLE_PREFIX go test -trimpath -timeout 5m $p_flag $verbose_flag \
 		-coverprofile="$profile" "${patterns[@]}" >&2 || {
 		echo "coverage: 'go test' failed (output above)" >&2
 		exit 1
@@ -169,7 +184,7 @@ run_coverage() {
 			cd "$dir"
 			export GOWORK=off
 			# shellcheck disable=SC2086  # flag strings and the throttle prefix word-split intentionally
-			$THROTTLE_PREFIX go test -trimpath -timeout 2m $p_flag $verbose_flag ./... >&2
+			$THROTTLE_PREFIX go test -trimpath -timeout 5m $p_flag $verbose_flag ./... >&2
 		) || {
 			echo "coverage: 'go test' failed in $dir (output above)" >&2
 			exit 1

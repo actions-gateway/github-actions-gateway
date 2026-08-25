@@ -341,6 +341,38 @@ What a fresh worktree still pays, and why it stays:
 - **Tool builds.** Each worktree builds its own `.build/golangci-lint` (~16 s with a warm build cache).
   Sharing tool binaries across worktrees would need version-keyed storage to avoid silently running a stale binary after a `tools/` dependency bump — complexity that isn't worth ~16 s per worktree.
 
+### The coverage budget is wall clock, so it measures scheduling
+
+`scripts/go/coverage.sh` runs every workspace package in one `go test` with a `-timeout` that Go applies **per test binary, as wall clock from the moment that binary starts**.
+A binary that is not scheduled spends the budget doing nothing, so the number gates contention as much as it gates test duration.
+
+The proof is a package with nothing to wait on.
+Measured 2026-08-24 across two `make cover-check` runs, `api/apinames` reported `37.983s` and `0.645s` at an identical `98.6%` coverage.
+It is `names.go` and a 350-line test of pure string manipulation, with no `time.Sleep`, `TestMain`, `Eventually`, `time.After` or `context.WithTimeout` anywhere in it.
+Identical coverage means identical work and there is nothing in the package that can block, so the 58.9x is the binary waiting to be scheduled.
+
+**This machine is oversubscribed by design, and every baseline taken on it has to be read that way.** `local-throttle.sh` reports `jobs` = physical cores minus 2 and `slots` = 2, so two heavy phases at 16 threads each put 32 threads on 18 cores before any sibling session exists.
+`serialize_heavy_build` records why `slots` moved from 1 to 2.
+So "at rest" here is roughly 1.8x, not 1.0x, and a baseline taken on a quiet box measures a configuration the gate never runs in.
+
+**Time the package by CPU, not by wall, when the question is whether it got slower.** Six runs of `cmd/agc/internal/controller` under `/usr/bin/time -p` the same day: wall spanned 7.97s to 79.64s, a 9.99x range, while user+sys held between 10.98s and 15.66s, a 1.43x range.
+Effective cores (CPU over elapsed) ran 0.15 to 1.26.
+Constant work, an order of magnitude of wall.
+
+Two cautions on the instruments, both paid for:
+
+- **A low CPU-to-wall ratio does not by itself mean starvation.** A controller suite full of timers and polls sits low at rest too, because it is genuinely waiting.
+  The ratio cannot separate *starved* from *sleeping*; a package with no waiting construct in it can.
+- **The load average sampled at a run's start does not predict that run.** Over the six runs above the correlation was negative (r = -0.62, n = 6, not significant), and the worst wall of the set landed at the *lowest* sampled load.
+  A one-minute average describes the minute before the run rather than the run, so do not tune a budget against it.
+
+The budget is therefore sized for the canary rather than for the measurement.
+Even on a quiet machine the old 2m was marginal: at load 21 to 36, every binary uncached, the slowest package was `agc/internal/scalesetlistener` at 67.834s, or 56.5% of it, with `agc/internal/controller` down at 14.467s.
+5m leaves that 4.4x, and leaves the most room under the CI `coverage` job's `timeout-minutes: 15` for Go to still print its goroutine dump: that job runs in 186s of its 900s, 6s of which is overhead, so a wedge at 5m ends the run near 306s where one at 10m ends it near 606s.
+Both print; 5m has twice the margin.
+Changing the flag costs one cold run: `-timeout` participates in Go's test cache key, verified by running one package at 5m (ran), again at 5m (cached), then at 2m (ran).
+A genuinely wedged test blocks forever and trips any finite value; what a larger number costs is the wait before that dump, and what a smaller one costs is a red gate that names a scheduling event as a hang.
+
 ### The race-detector unit gate
 
 The CI `unit-test` job runs the workspace unit tests under Go's race detector (`go test -race`), not plain `go test`.
