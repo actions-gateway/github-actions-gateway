@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q906/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q990/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>Report workers that bind and never start on an ungated RunnerSet - GitHub Actions Gateway</title>
+        <title>next-task tells the session to check for an open PR, and never checks - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#report-workers-that-bind-and-never-start-on-an-ungated-runnerset" class="md-skip">
+        <a href="#next-task-tells-the-session-to-check-for-an-open-pr-and-never-checks" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Report workers that bind and never start on an ungated RunnerSet
+              next-task tells the session to check for an open PR, and never checks
             
           </span>
         </div>
@@ -2597,10 +2597,13 @@
   
 
 
-<h1 id="report-workers-that-bind-and-never-start-on-an-ungated-runnerset">Report workers that bind and never start on an ungated RunnerSet<a class="headerlink" href="#report-workers-that-bind-and-never-start-on-an-ungated-runnerset" title="Permanent link">&para;</a></h1>
-<p>Q714 made this visible only through <code>spec.capacityGate</code>, which is an intake decision and off by default, so an ungated set still says nothing for <code>pendingPodDeadline</code> while its pods sit in <code>ImagePullBackOff</code>.
-<code>WorkersUnschedulable</code> is correctly silent (the scheduler said yes).
-Publish the observation as its own advisory condition, gate or no gate, mirroring how <code>WorkersUnschedulable</code> reports without deciding.</p>
+<h1 id="next-task-tells-the-session-to-check-for-an-open-pr-and-never-checks"><code>next-task</code> tells the session to check for an open PR, and never checks<a class="headerlink" href="#next-task-tells-the-session-to-check-for-an-open-pr-and-never-checks" title="Permanent link">&para;</a></h1>
+<p><code>cmd_next</code> prints "check for an open PR first" into the kickoff prompt, <code>next-task.sh</code>'s header says the session re-verifies the pick, and CLAUDE.md step 1 says it again.
+Three statements of the rule, no code that performs it, at the one chokepoint holding the ID.
+Measured 2026-08-25: a session worked Q564 end to end (28 files, +806/-44) against PR #1705, open and CLEAN since ~100 minutes before it started; the pre-push ref sweep caught it, four hours in, so nothing was pushed.
+Have <code>queue.py next</code> search open PRs for the ID and skip or flag a claimed item.
+Two constraints: it must fail loud, never silently pass, when <code>gh</code> is absent or offline, and it must stay off the <code>lint</code> path, which gates run with no network.
+A bare Q-ID typed by hand skips this entirely — that half is a <code>session-worker</code> skill amendment, chipped 2026-08-25.</p>
 
 
 

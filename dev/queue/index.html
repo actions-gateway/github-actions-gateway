@@ -2738,6 +2738,14 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>Phase 1 validated 2026-08-24: four green self-hosted Kata runs name no non-GitHub non-registry host, graded against a Phase 0 control that …</td>
 </tr>
 <tr>
+<td><a href="Q990/">Q990</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/docs/queue.py"><code>next-task</code> tells the session to check for an open PR, and never checks</a></td>
+<td><code>debt</code> <code>retro</code></td>
+<td>🔲</td>
+<td>M</td>
+<td><code>cmd_next</code> prints "check for an open PR first" into the kickoff prompt, <code>next-task.sh</code>'s header says the session re-verifies the pick, and …</td>
+</tr>
+<tr>
 <td><a href="Q822/">Q822</a></td>
 <td><a href="../development/testing/#resource-auto-throttle-on-gui-dev-machines">Three unrelated suites fail under concurrent load and pass on rerun</a></td>
 <td><code>flake</code> <code>ci</code> <code>tests</code></td>
@@ -2792,14 +2800,6 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>🔲</td>
 <td>S</td>
 <td>The two-tier rung parity Q443 exists to enforce is held by a prose comment in <code>admission.go</code> ("a rung added here must be added to Admit …</td>
-</tr>
-<tr>
-<td><a href="Q906/">Q906</a></td>
-<td><a href="../operations/runner-template-library/">Report workers that bind and never start on an ungated RunnerSet</a></td>
-<td><code>feature</code></td>
-<td>🔲</td>
-<td>S</td>
-<td>Q714 made this visible only through <code>spec.capacityGate</code>, which is an intake decision and off by default, so an ungated set still says …</td>
 </tr>
 <tr>
 <td><a href="Q960/">Q960</a></td>
@@ -3779,7 +3779,7 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 </tr>
 <tr>
 <td><a href="Q823/">Q823</a></td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/go/coverage.sh"><code>agc/internal/controller</code> swings 5x against a fixed 2m coverage budget</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/go/coverage.sh"><code>scalesetlistener</code> runs closest to the coverage budget, now 5m</a></td>
 <td><code>flake</code> <code>ci</code> <code>tests</code></td>
 <td>💤</td>
 <td>M</td>

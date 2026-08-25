@@ -2954,6 +2954,7 @@ Labelled by <code>runner_set</code> (not <code>runner_group</code>), so the <cod
 </tbody>
 </table>
 <p><strong>Row 5 — Tenant Health Conditions</strong></p>
+<p>Panel titles here drop the <code>Worker</code>/<code>Workers</code> prefix the row header already supplies: six panels share the 24-column row, and a 4-wide panel ellipsis-truncates anything longer in the rendered screenshot.</p>
 <table>
 <thead>
 <tr>
@@ -2964,37 +2965,42 @@ Labelled by <code>runner_set</code> (not <code>runner_group</code>), so the <cod
 </thead>
 <tbody>
 <tr>
-<td>Worker quota exceeded</td>
+<td>Quota exceeded</td>
 <td><code>max(actions_gateway_worker_quota_exceeded or actions_gateway_runnerset_worker_quota_exceeded)</code></td>
 <td>Stat (1 = red)</td>
 </tr>
 <tr>
-<td>Workers unschedulable</td>
+<td>Unschedulable</td>
 <td><code>max(actions_gateway_workers_unschedulable or actions_gateway_runnerset_workers_unschedulable)</code></td>
 <td>Stat (1 = red)</td>
 </tr>
 <tr>
-<td>Worker quota pressure</td>
+<td>Not starting</td>
+<td><code>max(actions_gateway_runnerset_workers_not_starting)</code></td>
+<td>Stat (1 = red)</td>
+</tr>
+<tr>
+<td>Quota pressure</td>
 <td><code>max(actions_gateway_worker_quota_pressure or actions_gateway_runnerset_worker_quota_pressure)</code></td>
 <td>Stat (1 = yellow)</td>
 </tr>
 <tr>
-<td>Worker capacity declined</td>
+<td>Capacity declined</td>
 <td><code>max by (reason) (actions_gateway_runnerset_worker_capacity_declined)</code></td>
 <td>Stat (1 = orange), reason shown beside the value</td>
 </tr>
 <tr>
-<td>Agent recycle errors</td>
+<td>Recycle errors</td>
 <td><code>rate(actions_gateway_agent_recycle_errors_total[5m])</code></td>
 <td>Time series</td>
 </tr>
 </tbody>
 </table>
 <blockquote>
-<p>The first three capacity panels union the v1 <code>RunnerGroup</code> family with its <code>actions_gateway_runnerset_*</code> v2 twin (Q319).
+<p>The quota and unschedulable panels union the v1 <code>RunnerGroup</code> family with its <code>actions_gateway_runnerset_*</code> v2 twin (Q319); <code>Not starting</code> and <code>Capacity declined</code> are v2-only and have no v1 family to union.
 The two families key on different labels — <code>runner_group</code> and <code>runner_set</code> — so <code>or</code> unions rather than overlaps them, and a panel that named only the v1 family would read a flat <code>0</code> on a v2-only deploy.
 To break either out per owner, replace <code>max(...)</code> with <code>max by (namespace, runner_set) (actions_gateway_runnerset_...)</code>.</p>
-<p><strong>Worker capacity declined has no v1 twin, and <code>No data</code> is a normal reading</strong> (Q643, Q658).
+<p><strong><code>Capacity declined</code> has no v1 twin, and <code>No data</code> is a normal reading</strong> (Q643, Q658).
 The <a href="../observability-metrics/">gauge</a> is emitted only for a <code>RunnerSet</code> that set <code>spec.capacityGate.mode</code>, so an empty panel means no set opted in, not that the query is broken.
 It groups by <code>reason</code> rather than reducing to a bare <code>0</code>/<code>1</code> because the value alone cannot separate a live decline from the latched <code>AwaitingProbe</code> state, and those call for different actions; exactly one series exists per gated set, so <code>max by (reason)</code> cannot double-count.
 The <code>1</code> is orange rather than red on purpose: a latched gate is <a href="../troubleshooting/#runnerset-reports-workercapacitydeclined-the-gateway-stopped-claiming-jobs">throttling intake, not failing</a>, and it can sit <code>True</code> indefinitely on an idle set whose shape stays unplaceable.</p>

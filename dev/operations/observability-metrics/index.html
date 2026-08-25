@@ -3303,6 +3303,12 @@ For SLO targets, see <a href="../../design/appendix-a-capacity-slos/">Appendix A
 <td><code>1</code> when <code>WorkersUnschedulable=True</code> on a v2 <code>RunnerSet</code> — the per-set twin of <code>actions_gateway_workers_unschedulable</code>: worker pods are stuck Pending past the scheduling grace because the scheduler can't place them (<strong>not</strong> quota). Page if sustained; the stuck pods and the scheduler verdict are named in the condition message.</td>
 </tr>
 <tr>
+<td><code>actions_gateway_runnerset_workers_not_starting</code></td>
+<td>Gauge</td>
+<td><code>namespace</code>, <code>runner_set</code></td>
+<td><code>1</code> when <code>WorkersNotStarting=True</code> on a v2 <code>RunnerSet</code> (Q906): one or more worker pods were placed on a node and the kubelet could not start them, almost always an image that will not pull. The sibling of <code>actions_gateway_runnerset_workers_unschedulable</code> and disjoint from it: that one is the scheduler saying no node can host the pod, this one is a pod already hosted whose container never ran, so the two can never both read <code>1</code> for the same pod. <strong>Emitted for every set</strong>, gated or not: it reports and decides nothing, which is what makes it the signal to alert on for a <code>workerImage</code> that will not pull, on any set rather than only one that opted into a capacity gate. A gated set ALSO reads <code>1</code> on <code>actions_gateway_runnerset_worker_capacity_declined{reason="PodsNotStarting"}</code>; that is the intake decision, this is the observation. Page if sustained; the pods and the kubelet's own text are in the condition message.</td>
+</tr>
+<tr>
 <td><code>actions_gateway_runnerset_worker_capacity_declined</code></td>
 <td>Gauge</td>
 <td><code>namespace</code>, <code>runner_set</code>, <code>reason</code></td>
@@ -3417,7 +3423,8 @@ The v1 and v2 series share one metric family; the <code>name</code> label distin
 The worker-capacity gauges below take the other route, and the note on them says why.</p>
 <p><code>github_egress_incomplete</code> is the exception among the proxy gauges: its condition exists only on the <code>EgressProxy</code> — v1 has no twin — so the family is emitted only on a v2 install (Q537).</p>
 <p><strong>Worker-capacity conditions on v2 <code>RunnerSet</code>s.</strong> The <code>WorkerQuotaPressure</code>, <code>WorkerQuotaExceeded</code>, and <code>WorkersUnschedulable</code> conditions are also set on a v2 <code>RunnerSet</code> (Q303) with the same semantics as the v1 <code>RunnerGroup</code>, so a stalled set surfaces the capacity blocker in <code>.status.conditions</code> instead of only a rising <code>pendingJobs</code> with <code>Ready=True</code>.
-Each has its own gauge — the <code>actions_gateway_runnerset_*</code> triplet above (Q319) — so a <code>RunnerSet</code> is alertable without scraping CRD conditions through kube-state-metrics.</p>
+<code>WorkersNotStarting</code> (Q906) joins them as a v2-only fourth: the kubelet's startup verdict, which the v1 <code>RunnerGroup</code> computes but does not publish.
+Each has its own gauge — the <code>actions_gateway_runnerset_*</code> set above (Q319, Q906) — so a <code>RunnerSet</code> is alertable without scraping CRD conditions through kube-state-metrics.</p>
 <p><strong><code>WorkerCapacityDeclined</code> is gauged too, and differs in two ways</strong> (Q643).
 It carries a <code>reason</code> label, because the value alone cannot separate a live decline from the latched <code>AwaitingProbe</code> state, and those call for different actions — one has stuck pods to inspect, the other has none and means intake is throttled to one probe job per <code>pendingPodDeadline</code> window.
 And it is emitted only for a set whose gate is on, because the reconciler <em>removes</em> the condition for an ungated set rather than publishing it <code>False</code>; the family follows the condition, so absence means "no gate here".
@@ -3882,6 +3889,11 @@ Neither binary acquires jobs, so neither has a tier.</p>
 <td>As above.</td>
 </tr>
 <tr>
+<td><code>actions_gateway_runnerset_workers_not_starting</code></td>
+<td>Both</td>
+<td>As above: the kubelet's startup verdict, read from the same shared capacity call on both tiers.</td>
+</tr>
+<tr>
 <td><code>actions_gateway_runnerset_worker_capacity_declined</code></td>
 <td>Both</td>
 <td>As above; emitted only for a set whose capacity gate is enabled.</td>
@@ -4255,6 +4267,11 @@ A <code>RunnerGroup</code> only ever acquires classically, so a reason no v2 pat
 <td>Both</td>
 <td>The cleared form of <code>PodsUnschedulable</code>, evaluated on both.</td>
 </tr>
+<tr>
+<td><code>WorkersStarting</code></td>
+<td>Both</td>
+<td>The cleared form of <code>PodsNotStarting</code>, evaluated on both from the same shared capacity call.</td>
+</tr>
 </tbody>
 </table>
 <h3 id="event-reasons">Event reasons<a class="headerlink" href="#event-reasons" title="Permanent link">&para;</a></h3>
@@ -4398,6 +4415,11 @@ Each also has a <a href="../troubleshooting/#job-lifecycle-events-on-a-runnergro
 <td><code>WorkerPodsReapedOnGatewayTeardown</code></td>
 <td>Both</td>
 <td>Teardown stops both tiers before deleting their worker pods.</td>
+</tr>
+<tr>
+<td><code>WorkersNotStarting</code></td>
+<td>Both</td>
+<td>The kubelet's startup verdict, recorded from the same shared capacity call and on every set, gated or not (Q906).</td>
 </tr>
 <tr>
 <td><code>WorkersUnschedulable</code></td>

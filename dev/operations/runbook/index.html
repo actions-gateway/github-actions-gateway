@@ -2549,6 +2549,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#actionsgatewayworkersnotstarting" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ActionsGatewayWorkersNotStarting
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#actionsgatewayegressrulesstale" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3405,6 +3416,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#actionsgatewayworkersnotstarting" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ActionsGatewayWorkersNotStarting
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#actionsgatewayegressrulesstale" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3874,6 +3896,16 @@ See <a href="../troubleshooting/#gmc-not-provisioning-tenant-resources">GMC Not 
 <h3 id="actionsgatewayworkersunschedulable">ActionsGatewayWorkersUnschedulable<a class="headerlink" href="#actionsgatewayworkersunschedulable" title="Permanent link">&para;</a></h3>
 <p><strong>Page.</strong> Worker pods are stuck <code>Pending</code> past the scheduling grace because the scheduler cannot place them (no matching node / affinity / taints — not quota); capacity is not materializing.
 See <a href="../troubleshooting/#runnergroup-reports-workersunschedulable">RunnerGroup Reports WorkersUnschedulable</a> and <a href="../troubleshooting/#worker-pods-stuck-pending">Worker Pods Stuck Pending</a>.</p>
+<h3 id="actionsgatewayworkersnotstarting">ActionsGatewayWorkersNotStarting<a class="headerlink" href="#actionsgatewayworkersnotstarting" title="Permanent link">&para;</a></h3>
+<p><strong>Page.</strong> Worker pods were placed on a node and the kubelet could not start them, almost always a <code>workerImage</code> that will not pull.
+The <code>RunnerSet</code>'s <code>WorkersNotStarting</code> condition message carries the kubelet's own text, which names the image, so read that before anything else:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>kubectl<span class="w"> </span>get<span class="w"> </span>runnerset<span class="w"> </span>&lt;set&gt;<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="w">  </span>-o<span class="w"> </span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">'{.status.conditions[?(@.type=="WorkersNotStarting")].message}'</span>
+</code></pre></div>
+<p>Distinct from <code>ActionsGatewayWorkersUnschedulable</code>, and the two can never fire for the same pod: that one is the scheduler refusing to place a pod, this one is a pod already placed whose container never ran.
+Chasing nodes, taints or quota here wastes the window.
+Without <code>spec.capacityGate</code> nothing throttles intake, so each further job the set acquires repeats the cycle and spends a single-use runner registration on every one.
+See <a href="../troubleshooting/#the-reason-is-podsnotstarting-the-image-will-not-pull">The Reason Is <code>PodsNotStarting</code>: the Image Will Not Pull</a>.</p>
 <h3 id="actionsgatewayegressrulesstale">ActionsGatewayEgressRulesStale<a class="headerlink" href="#actionsgatewayegressrulesstale" title="Permanent link">&para;</a></h3>
 <p><strong>Page.</strong> The gateway's GitHub egress IP-range allowlist has not refreshed within the staleness window; the proxy <code>NetworkPolicy</code> may drift from GitHub's published ranges.
 See <a href="../troubleshooting/#actionsgateway-reports-egressrulesstale">ActionsGateway Reports EgressRulesStale</a>.</p>
@@ -3994,18 +4026,18 @@ The CR is the source of truth; deleting it cascades to the resources the GMC own
 <ol>
 <li>Generate a new private key from the GitHub App settings page and download the <code>.pem</code> file.</li>
 <li>Create a new Secret with the new key:
-   <div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>kubectl<span class="w"> </span>create<span class="w"> </span>secret<span class="w"> </span>generic<span class="w"> </span>&lt;new-secret-name&gt;<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="w">  </span>--from-literal<span class="o">=</span><span class="nv">appId</span><span class="o">=</span>&lt;appId&gt;<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="w">  </span>--from-literal<span class="o">=</span><span class="nv">installationId</span><span class="o">=</span>&lt;installationId&gt;<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="w">  </span>--from-file<span class="o">=</span><span class="nv">privateKey</span><span class="o">=</span>&lt;path-to-new-key.pem&gt;<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="w">  </span>-n<span class="w"> </span>&lt;namespace&gt;
+   <div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>kubectl<span class="w"> </span>create<span class="w"> </span>secret<span class="w"> </span>generic<span class="w"> </span>&lt;new-secret-name&gt;<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="w">  </span>--from-literal<span class="o">=</span><span class="nv">appId</span><span class="o">=</span>&lt;appId&gt;<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="w">  </span>--from-literal<span class="o">=</span><span class="nv">installationId</span><span class="o">=</span>&lt;installationId&gt;<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="w">  </span>--from-file<span class="o">=</span><span class="nv">privateKey</span><span class="o">=</span>&lt;path-to-new-key.pem&gt;<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a><span class="w">  </span>-n<span class="w"> </span>&lt;namespace&gt;
 </code></pre></div></li>
 <li>Update the <code>ActionsGateway</code> CR to reference the new Secret:
-   <div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>kubectl<span class="w"> </span>patch<span class="w"> </span>actionsgateway<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>&lt;name&gt;<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="w">  </span>--type<span class="o">=</span>merge<span class="w"> </span>-p<span class="w"> </span><span class="s1">'{"spec":{"gitHubAppRef":{"name":"&lt;new-secret-name&gt;"}}}'</span>
+   <div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>kubectl<span class="w"> </span>patch<span class="w"> </span>actionsgateway<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>&lt;name&gt;<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="w">  </span>--type<span class="o">=</span>merge<span class="w"> </span>-p<span class="w"> </span><span class="s1">'{"spec":{"gitHubAppRef":{"name":"&lt;new-secret-name&gt;"}}}'</span>
 </code></pre></div></li>
 <li>Confirm the AGC Deployment has rolled and the new pod is healthy:
-   <div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>kubectl<span class="w"> </span>rollout<span class="w"> </span>status<span class="w"> </span>deploy/actions-gateway-controller<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;
+   <div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>kubectl<span class="w"> </span>rollout<span class="w"> </span>status<span class="w"> </span>deploy/actions-gateway-controller<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;
 </code></pre></div></li>
 <li>Confirm <code>actions_gateway_token_refresh_errors_total</code> is no longer incrementing.</li>
 <li>Delete the old Secret once confirmed healthy, and delete the downloaded <code>.pem</code> file from disk (<code>shred -u &lt;path&gt;</code> on Linux, <code>rm -P &lt;path&gt;</code> on macOS) — the key now lives only in the Kubernetes Secret.</li>

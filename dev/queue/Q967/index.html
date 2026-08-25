@@ -2599,7 +2599,7 @@
 
 <h1 id="golangci-lint-runtimeout-cannot-fire-under-the-job-budget-above-it"><code>golangci-lint</code> <code>run.timeout</code> cannot fire under the job budget above it<a class="headerlink" href="#golangci-lint-runtimeout-cannot-fire-under-the-job-budget-above-it" title="Permanent link">&para;</a></h1>
 <p>Measured 2026-08-24: <code>.golangci.yml</code> sets <code>run.timeout: 10m</code> as "a canary for a genuinely wedged analysis", and <code>unit-test.yml</code>'s <code>lint</code> job sets <code>timeout-minutes: 10</code> for the whole job.
-The job also does checkout, <code>setup-go</code>, a cache restore, the linter build and six <code>make</code> steps after <code>make lint</code>, so the job budget is always spent first and the canary never fires on CI.
+The job also does checkout, <code>setup-go</code>, a cache restore, the linter build and seven <code>make</code> steps after <code>make lint</code>, so the job budget is always spent first and the canary never fires on CI.
 What a wedged analysis produces there is a killed job with no linter diagnostic.</p>
 <p>Same class as <a href="../Q823/">Q823</a>: an inner wall-clock budget chosen without reference to the outer one.
 Either raise the job or lower <code>run.timeout</code> so the inner limit is reachable; the comment explaining the 5m-to-10m raise stays true either way.</p>

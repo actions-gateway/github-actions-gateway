@@ -23,7 +23,7 @@
     
     
       
-        <title>agc/internal/controller swings 5x against a fixed 2m coverage budget - GitHub Actions Gateway</title>
+        <title>scalesetlistener runs closest to the coverage budget, now 5m - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#agcinternalcontroller-swings-5x-against-a-fixed-2m-coverage-budget" class="md-skip">
+        <a href="#scalesetlistener-runs-closest-to-the-coverage-budget-now-5m" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              agc/internal/controller swings 5x against a fixed 2m coverage budget
+              scalesetlistener runs closest to the coverage budget, now 5m
             
           </span>
         </div>
@@ -2597,7 +2597,7 @@
   
 
 
-<h1 id="agcinternalcontroller-swings-5x-against-a-fixed-2m-coverage-budget"><code>agc/internal/controller</code> swings 5x against a fixed 2m coverage budget<a class="headerlink" href="#agcinternalcontroller-swings-5x-against-a-fixed-2m-coverage-budget" title="Permanent link">&para;</a></h1>
+<h1 id="scalesetlistener-runs-closest-to-the-coverage-budget-now-5m"><code>scalesetlistener</code> runs closest to the coverage budget, now 5m<a class="headerlink" href="#scalesetlistener-runs-closest-to-the-coverage-budget-now-5m" title="Permanent link">&para;</a></h1>
 <p><strong>Event:</strong> a package trips the coverage gate's <code>-timeout</code> on <code>main</code> after the raise to 5m.</p>
 <p>Fixed 2026-08-24 by raising the budget 2m to 5m, on a measurement that reframed the row twice.</p>
 <p>The swing is not duration, it is scheduling: <code>go test -timeout</code> is per-binary wall clock, so a binary that is not scheduled spends the budget doing nothing.

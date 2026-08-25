@@ -3325,6 +3325,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="A throwaway probe needs a positive control before its silence means anything">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#a-control-that-only-rules-out-zero-is-not-a-control" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        A control that only rules out zero is not a control
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
         
           <li class="md-nav__item">
@@ -4408,7 +4425,11 @@ Constant work, an order of magnitude of wall.</p>
 </ul>
 <p>The budget is therefore sized for the canary rather than for the measurement.
 Even on a quiet machine the old 2m was marginal: at load 21 to 36, every binary uncached, the slowest package was <code>agc/internal/scalesetlistener</code> at 67.834s, or 56.5% of it, with <code>agc/internal/controller</code> down at 14.467s.
-5m leaves that 4.4x, and leaves the CI <code>coverage</code> job's <code>timeout-minutes: 15</code> room to still print Go's goroutine dump.
+5m leaves that 4.4x, and still trips early enough under the CI <code>coverage</code> job's <code>timeout-minutes: 15</code> for Go to print its goroutine dump.
+That job runs in 186s of its 900s, 6s of which is overhead, and the dump prints one budget after the <em>wedged binary itself</em> starts, which on that run was anywhere from 13s to 176s in: a 5m wedge prints near 320-480s of the 900, a 10m one near 620-780s.
+Both print, so the job deadline does not decide between 5m and 10m; it caps the budget from above, and the false red that 2m produced caps it from below.
+What picks 5m over 10m is margin: it already clears the floor at the 4.4x above, and holds at least twice 10m's margin to the deadline, 3.5x when the wedge lands in a late-starting package.
+A later start only widens that gap, and 10m's margin runs out entirely once a binary starts 294s into the run, where 5m still has 300s.
 Changing the flag costs one cold run: <code>-timeout</code> participates in Go's test cache key, verified by running one package at 5m (ran), again at 5m (cached), then at 2m (ran).
 A genuinely wedged test blocks forever and trips any finite value; what a larger number costs is the wait before that dump, and what a smaller one costs is a red gate that names a scheduling event as a hang.</p>
 <h3 id="the-race-detector-unit-gate">The race-detector unit gate<a class="headerlink" href="#the-race-detector-unit-gate" title="Permanent link">&para;</a></h3>
@@ -5321,11 +5342,16 @@ Each is a claim about state, and each has a cheap way of being wrong:</p>
   In one, a sentence well inside the file's ceiling took this page from 570 to 572, which a ceiling permits and a ratchet does not.
   A contention sweep cannot see this: it answers which other branch edits your files, never which gate that judges your files just changed semantics.
   So a rebase voids the gate result taken before it, and the cure is to re-run <code>make check</code> over the rebased tree and read the affected gates by name rather than transferring the earlier verdict.</li>
-<li>
-<p><strong>A completeness claim inherits the blind spots of the inventory behind it.</strong> "Every capability reaches both acquisition tiers" was read off <code>features.md</code>'s tier badges and the parity table in <a href="../../plan/v2-ga/">v2-ga.md</a>, on 2026-08-13.
+<li><strong>A completeness claim inherits the blind spots of the inventory behind it.</strong> "Every capability reaches both acquisition tiers" was read off <code>features.md</code>'s tier badges and the parity table in <a href="../../plan/v2-ga/">v2-ga.md</a>, on 2026-08-13.
   Both were accurate.
   Both are hand-authored, so neither can show a gap nobody thought to record, which is the blind spot <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/docs/queue/README.md">Q776</a>'s own row describes and which was cited in the same document that leaned on the badges.
-  Q844 was sitting in it: restart-safe disruption recovery is classic-only, and the marketing surface claimed it for both tiers with no badge at all.</p>
+  Q844 was sitting in it: restart-safe disruption recovery is classic-only, and the marketing surface claimed it for both tiers with no badge at all.</li>
+<li>
+<p><strong>A test name asserting completeness is checked by nothing.</strong> <code>TestLogging_OverLengthAuthorityIsBoundedOnEveryPath</code> drove the deny and dial-failure paths, which log the authority whole, and not the accepted path, which is the only one that splits it into host and port, and the only one the feature under test added.
+  The cap covered the host alone, so a zero-padded port dialed the real port and logged 200,210 bytes for a 200,015-byte authority, on the default transport-only pool with no allowlist configured (Q564).
+  The name was accurate when written: the path set it quantified over was complete, and then the change being tested added a member.
+  A <code>grep</code> sweep at least reconciles against a baseline; a name quantifies over a set nothing recounts.
+  Where a test name says <em>every</em>, <em>all</em>, or <em>any</em>, enumerate the set in the test body and assert its size, so adding a member fails the test that claims to cover it rather than silently widening what the name promises.</p>
 </li>
 <li>
 <p><strong>An explanation offered to the user is a claim, and this repo has usually already written the answer down.</strong> Four went wrong across the 1.5 release cycle in one session, and three were caught by the user asking a follow-up rather than by any check.
@@ -5603,6 +5629,30 @@ Nothing distinguished that from a fix that worked.</p>
 <li><strong>When the harness cannot be made to work, verify the layer you actually changed.</strong> The hook applies each pattern as <code>re.search(pattern, command)</code>; asserting that step directly is honest and sufficient, as long as you say which layer the evidence covers — and then confirm end-to-end in the smallest possible way (re-running the exact command that had been denied).</li>
 </ul>
 <p><code>scripts/agent/foreground-guard-patterns-test.sh</code> is the durable form of that probe, controls included.</p>
+<h4 id="a-control-that-only-rules-out-zero-is-not-a-control">A control that only rules out zero is not a control<a class="headerlink" href="#a-control-that-only-rules-out-zero-is-not-a-control" title="Permanent link">&para;</a></h4>
+<p>Both rules above ask for a <em>named</em> case: one site you know must change, one pattern you know must fire.
+The failure mode neither names is the cheap substitute: <code>assert count &gt; 0</code>, which reads as having a control while ruling out only the case that was never in play.</p>
+<p>Three probes on 2026-08-25 carried one, and all three passed while returning a wrong number:</p>
+<ul>
+<li>A fan-out probe asserted <code>(( peak_distinct &gt; 0 ))</code> and returned 94, a figure wrong on two independent counts.
+  The matcher had silently dropped a directory, and argv inheritance made the count independent of what it was counting either way.
+  <code>&gt;= 90</code> would also have passed.</li>
+<li>A census probe asserted that its two result sets differed in size and returned 1 against a true 41, passing as <code>1 &gt; 0</code>.</li>
+<li>The third asserted a non-empty match set over a tree that was nine hours stale, which is a question about the matcher and not about the tree.</li>
+</ul>
+<p>Name the member instead.
+"The five <code>scripts/e2e/</code> suites must appear in the matched set" fails loudly on a matcher that cannot see them; "more than zero suites matched" cannot fail on anything short of a total outage.
+The general form is that a control has to encode an expectation the broken probe cannot satisfy, which is the same demand as knowing the sign of a difference before you take it, one level down.</p>
+<p>A control can clear that bar and still measure the wrong thing, by varying more than one input.
+Two PRs were compared on 2026-08-25 to explain why one read <code>BLOCKED</code>: <code>reviewDecision</code> was empty on both and their check sets were byte-identical, so the difference was attributed to the remaining input, draft status.
+The base branch was the other difference, in the same <code>gh pr view</code> output.
+The same PR read <code>CLEAN</code> while still a draft once it was rebased onto <code>main</code>, which refuted the conclusion and left the cause unestablished.</p>
+<p>Note which way the error ran: having a control raised confidence in a reading that was wrong, and the reading was relayed onward as measured <em>because</em> it came with one.
+So both halves are load-bearing.
+A control must be able to fail, and it must vary one thing.</p>
+<p>That census probe reproduced the Q571 regex verbatim: a character class excluding a preceding <code>/</code>, so every <code>$REPO_ROOT/tmp/…</code> was skipped and only the rare bare <code>tmp/…</code> survived.
+The trap two sections up, in a different tool, in a session that had the section open.
+Treat a path-matching pattern's treatment of its own leading separator as a thing to test rather than a thing to read.</p>
 <h3 id="a-syscall-level-probe-of-a-scripts-suite-has-two-silent-ways-to-measure-nothing">A syscall-level probe of a <code>scripts/</code> suite has two silent ways to measure nothing<a class="headerlink" href="#a-syscall-level-probe-of-a-scripts-suite-has-two-silent-ways-to-measure-nothing" title="Permanent link">&para;</a></h3>
 <p>Tracing what a suite's child processes actually do means interposing on libc with <code>DYLD_INSERT_LIBRARIES</code>, and two mechanics here make that report a clean negative while observing nothing at all.</p>
 <ul>
