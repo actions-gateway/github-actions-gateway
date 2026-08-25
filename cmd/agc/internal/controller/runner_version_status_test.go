@@ -170,3 +170,168 @@ func TestRunnerGroupRunnerVersionStatus(t *testing.T) {
 		assert.Nil(t, meta.FindStatusCondition(rg.Status.Conditions, v1alpha1.ConditionRunnerVersionTooOld))
 	})
 }
+
+// TestRunnerVersionClearArbitration covers the session half of the two-producer
+// split on RunnerVersionTooOld (Q795). The image half — a healthy image reading not
+// overwriting a session-sourced True — is pinned by the two subtests above.
+//
+// Each case drives one drain plus the image reading that follows it in the same
+// reconcile, because the interesting behaviour is the interaction: drainConditions
+// runs at reconcile step 2 and setRunnerVersionStatus well after it, so a push the
+// drain merges is still open to being overwritten before the status write.
+func TestRunnerVersionClearArbitration(t *testing.T) {
+	prov := &provisioner.Provisioner{}
+
+	clear := metav1.Condition{
+		Type:    v2alpha1.ConditionRunnerVersionTooOld,
+		Status:  metav1.ConditionFalse,
+		Reason:  v2alpha1.ReasonVersionAccepted,
+		Message: "GitHub accepted the runner version at session creation",
+	}
+
+	newSet := func() (*RunnerSetReconciler, *v2alpha1.RunnerSet) {
+		r := &RunnerSetReconciler{
+			Provisioner: prov,
+			Recorder:    events.NewFakeRecorder(16),
+			conditionCh: make(chan conditionUpdate, 8),
+		}
+		rs := &v2alpha1.RunnerSet{ObjectMeta: metav1.ObjectMeta{Name: "set", Namespace: "ns", Generation: 1}}
+		return r, rs
+	}
+	push := func(r *RunnerSetReconciler, cond metav1.Condition) {
+		r.conditionCh <- conditionUpdate{namespace: "ns", name: "set", condition: cond}
+	}
+
+	// The defect Q795 names: agent.version is the AGC's compile-time pin, so the fix
+	// for a session-sourced True is a gateway upgrade — which restarts the process
+	// and leaves the condition behind in status with nothing to clear it.
+	t.Run("clears a stale session-sourced VersionTooOld", func(t *testing.T) {
+		r, rs := newSet()
+		meta.SetStatusCondition(&rs.Status.Conditions, metav1.Condition{
+			Type:    v2alpha1.ConditionRunnerVersionTooOld,
+			Status:  metav1.ConditionTrue,
+			Reason:  v2alpha1.ReasonVersionTooOld,
+			Message: "GitHub rejected the session",
+		})
+
+		push(r, clear)
+		r.drainConditions(rs)
+
+		cond := versionCondition(rs.Status.Conditions)
+		require.NotNil(t, cond)
+		assert.Equal(t, metav1.ConditionFalse, cond.Status)
+		assert.Equal(t, v2alpha1.ReasonVersionAccepted, cond.Reason)
+
+		// With the session claim released, the image reading takes the type back.
+		r.setRunnerVersionStatus(rs, &v2alpha1.RunnerTemplateSpec{WorkerImage: names.DefaultWorkerImage})
+		cond = versionCondition(rs.Status.Conditions)
+		require.NotNil(t, cond)
+		assert.Equal(t, v2alpha1.ReasonWorkerImageCurrent, cond.Reason,
+			"the reconciler resumes ownership once no session-sourced claim stands")
+	})
+
+	// The Q795 trap: an unconditional clear would drop a live Q715 warning.
+	//
+	// The drain is where it has to be refused, not the image reading. On a reconcile
+	// that reaches setRunnerVersionStatus the merged clear is overwritten in memory
+	// before any status write, so it is invisible; the reconcile paths that write
+	// status EARLIER are where a merged clear persists (the unresolved-references
+	// branch is one, covered by the envtest). And pendingConditions re-applies a push
+	// the live status never reflects on every later reconcile, so it stays live
+	// indefinitely rather than being spent once.
+	t.Run("does not overwrite an image-sourced verdict", func(t *testing.T) {
+		r, rs := newSet()
+		r.setRunnerVersionStatus(rs, &v2alpha1.RunnerTemplateSpec{WorkerImage: staleImage})
+		require.Equal(t, v2alpha1.ReasonWorkerImageBelowMinimum, versionCondition(rs.Status.Conditions).Reason)
+
+		push(r, clear)
+		r.drainConditions(rs)
+
+		cond := versionCondition(rs.Status.Conditions)
+		require.NotNil(t, cond)
+		assert.Equal(t, metav1.ConditionTrue, cond.Status)
+		assert.Equal(t, v2alpha1.ReasonWorkerImageBelowMinimum, cond.Reason)
+	})
+
+	// The refusal above is not enough on its own, which is the part that only shows up
+	// over several reconciles. A listener push arriving before the set's first image
+	// reading is legitimately merged — nothing stands to defer to — and pendingConditions
+	// retains it, because that retry loop is built for types the reconciler never
+	// re-derives. This type it does re-derive, so the image reading supersedes the push
+	// on the same pass and the retained copy is then re-applied on every reconcile
+	// afterwards, landing wherever status is written before the image reading runs.
+	t.Run("does not re-apply a push the image reading has superseded", func(t *testing.T) {
+		r, rs := newSet()
+
+		// First push, no condition standing yet: merged and retained.
+		push(r, clear)
+		r.drainConditions(rs)
+		require.Equal(t, v2alpha1.ReasonVersionAccepted, versionCondition(rs.Status.Conditions).Reason)
+
+		// The image reading takes the type over in the same reconcile, as it would
+		// before any status write.
+		r.setRunnerVersionStatus(rs, &v2alpha1.RunnerTemplateSpec{WorkerImage: staleImage})
+		require.Equal(t, v2alpha1.ReasonWorkerImageBelowMinimum, versionCondition(rs.Status.Conditions).Reason)
+
+		// Later reconciles, with nothing further pushed. The retained copy must be
+		// dropped rather than re-applied — the assertion is taken straight after the
+		// drain, which is the state a reconcile returning early would persist.
+		for i := range 4 {
+			r.drainConditions(rs)
+			cond := versionCondition(rs.Status.Conditions)
+			require.NotNil(t, cond)
+			assert.Equal(t, metav1.ConditionTrue, cond.Status, "reconcile %d", i+2)
+			assert.Equal(t, v2alpha1.ReasonWorkerImageBelowMinimum, cond.Reason, "reconcile %d", i+2)
+			r.setRunnerVersionStatus(rs, &v2alpha1.RunnerTemplateSpec{WorkerImage: staleImage})
+		}
+	})
+
+	// A healthy image reading is still image-sourced: the listener owns only the
+	// session-sourced half, so it must not restate a verdict the reconciler derived.
+	t.Run("does not overwrite a healthy image-sourced verdict", func(t *testing.T) {
+		r, rs := newSet()
+		r.setRunnerVersionStatus(rs, &v2alpha1.RunnerTemplateSpec{WorkerImage: names.DefaultWorkerImage})
+		require.Equal(t, v2alpha1.ReasonWorkerImageCurrent, versionCondition(rs.Status.Conditions).Reason)
+
+		push(r, clear)
+		r.drainConditions(rs)
+
+		assert.Equal(t, v2alpha1.ReasonWorkerImageCurrent, versionCondition(rs.Status.Conditions).Reason)
+	})
+
+	// With no condition of the type at all there is nothing to defer to, so the
+	// baseline lands — the state a fresh set reaches before its first reconcile
+	// publishes an image reading.
+	t.Run("lands when no condition stands", func(t *testing.T) {
+		r, rs := newSet()
+
+		push(r, clear)
+		r.drainConditions(rs)
+
+		cond := versionCondition(rs.Status.Conditions)
+		require.NotNil(t, cond)
+		assert.Equal(t, v2alpha1.ReasonVersionAccepted, cond.Reason)
+	})
+
+	// The listener's other two baselines are unaffected: the arbitration is keyed to
+	// RunnerVersionTooOld/VersionAccepted, and Q332's pair has a single producer.
+	t.Run("leaves the Q332 baselines alone", func(t *testing.T) {
+		r, rs := newSet()
+		meta.SetStatusCondition(&rs.Status.Conditions, metav1.Condition{
+			Type:   v2alpha1.ConditionDegraded,
+			Status: metav1.ConditionTrue,
+			Reason: v2alpha1.ReasonSessionUnauthorized,
+		})
+
+		push(r, metav1.Condition{
+			Type:   v2alpha1.ConditionDegraded,
+			Status: metav1.ConditionFalse,
+			Reason: v2alpha1.ReasonSessionAuthorized,
+		})
+		r.drainConditions(rs)
+
+		cond := meta.FindStatusCondition(rs.Status.Conditions, v2alpha1.ConditionDegraded)
+		require.NotNil(t, cond)
+		assert.Equal(t, metav1.ConditionFalse, cond.Status)
+	})
+}

@@ -114,3 +114,128 @@ func TestV2_Classic_WorkerImageCurrent_DoesNotWarn(t *testing.T) {
 
 	waitForRunnerVersionCondition(t, ns, "set", metav1.ConditionFalse, v2alpha1.ReasonWorkerImageCurrent)
 }
+
+// Q795 against the real apiserver. RunnerVersionTooOld has two producers reporting
+// different facts through one type, and the tests above cover only the image half.
+// These cover the session half's arbitration: the reconcile path has to clear a
+// stale session-sourced True while leaving an image-sourced verdict alone, and both
+// verdicts have to survive the status write rather than merely the merge.
+//
+// The unit tests drive drainConditions directly; only these prove the refusal holds
+// through a real reconcile, where pendingConditions re-applies an unpersisted push
+// on every pass and the image reading runs after the drain in the same one.
+
+// TestV2_SessionVersionClear_ClearsStaleSessionSourcedTooOld is the defect Q795
+// names. agent.version is the AGC's compile-time pin, so an operator fixes a
+// session-sourced rejection by upgrading the gateway — which restarts the process
+// and drops every in-memory flag, while the condition lives on in status. Before
+// this the classic listener set True and nothing ever set it back.
+func TestV2_SessionVersionClear_ClearsStaleSessionSourcedTooOld(t *testing.T) {
+	const ns = "v2-rs-version-clear"
+	createNSForAGC(t, ns)
+	r := startRunnerSetReconciler(t)
+
+	require.NoError(t, k8sClient.Create(ctx, newGatewayForSet("gw", ns, "")))
+	require.NoError(t, k8sClient.Create(ctx, templateWithWorkerImage("tmpl", ns, names.DefaultWorkerImage)))
+	rs := newRunnerSet("set", ns, "gw")
+	require.NoError(t, k8sClient.Create(ctx, rs))
+	t.Cleanup(func() {
+		_ = k8sClient.Delete(context.Background(), rs)
+		_ = k8sClient.Delete(context.Background(), &v2alpha1.ActionsGateway{ObjectMeta: metav1.ObjectMeta{Name: "gw", Namespace: ns}})
+		_ = k8sClient.Delete(context.Background(), &v2alpha1.RunnerTemplate{ObjectMeta: metav1.ObjectMeta{Name: "tmpl", Namespace: ns}})
+	})
+
+	// The listener rejecting a session, as a previous instance would have left it.
+	r.SetConditionForTest(ns, "set", metav1.Condition{
+		Type:    v2alpha1.ConditionRunnerVersionTooOld,
+		Status:  metav1.ConditionTrue,
+		Reason:  v2alpha1.ReasonVersionTooOld,
+		Message: "GitHub rejected the session: runner version too old",
+	})
+	// Observed as True first, so the convergence below is a clear rather than a state
+	// the set was already in. The image reading is healthy here and defers to it
+	// (TestRunnerSetRunnerVersionStatus pins that half), so before Q795 this was the
+	// terminal state: nothing in the system wrote this condition again.
+	waitForRunnerVersionCondition(t, ns, "set", metav1.ConditionTrue, v2alpha1.ReasonVersionTooOld)
+
+	// The upgraded gateway's listener establishes a session and publishes the
+	// baseline; the reconciler then resumes ownership from its image reading.
+	//
+	// Pushed explicitly rather than waited for. This namespace runs a real classic
+	// listener, so its own baseline clears the condition too — that is the fix
+	// working end to end — but it fires once per goroutine spawn, and racing a seed
+	// against a spawn makes the test's timing decide whether it proves anything.
+	r.SetConditionForTest(ns, "set", metav1.Condition{
+		Type:    v2alpha1.ConditionRunnerVersionTooOld,
+		Status:  metav1.ConditionFalse,
+		Reason:  v2alpha1.ReasonVersionAccepted,
+		Message: "GitHub accepted the runner version at session creation",
+	})
+	waitForRunnerVersionCondition(t, ns, "set", metav1.ConditionFalse, v2alpha1.ReasonWorkerImageCurrent)
+}
+
+// TestV2_SessionVersionClear_LeavesImageSourcedVerdict is the Q795 trap: an
+// unconditional clear would drop a live Q715 warning.
+//
+// It has to be driven with the template deleted, and that is the finding rather than
+// a test convenience. On a fully resolved set the drained clear never reaches the
+// apiserver whatever the drain does, because setRunnerVersionStatus re-derives the
+// verdict later in the same reconcile and overwrites it in memory first. The reconcile
+// paths that write status BEFORE that point are where a merged clear persists, and the
+// unresolved-references path is one: it stops the listeners, writes Ready=False with a
+// <Ref>NotFound reason, and returns, carrying whatever the drain left on this
+// condition. A tenant deleting or renaming a RunnerTemplate lands exactly there.
+//
+// pendingConditions then makes it permanent rather than momentary: a push the live
+// status never reflects is re-applied on every subsequent reconcile, so each pass
+// through this path re-wipes the verdict.
+func TestV2_SessionVersionClear_LeavesImageSourcedVerdict(t *testing.T) {
+	const ns = "v2-rs-version-image-wins"
+	createNSForAGC(t, ns)
+	r := startRunnerSetReconciler(t)
+
+	require.NoError(t, k8sClient.Create(ctx, newGatewayForSet("gw", ns, "")))
+	tmpl := templateWithWorkerImage("tmpl", ns, "ghcr.io/actions/actions-runner:2.320.0")
+	require.NoError(t, k8sClient.Create(ctx, tmpl))
+	rs := newRunnerSet("set", ns, "gw")
+	require.NoError(t, k8sClient.Create(ctx, rs))
+	t.Cleanup(func() {
+		_ = k8sClient.Delete(context.Background(), rs)
+		_ = k8sClient.Delete(context.Background(), &v2alpha1.ActionsGateway{ObjectMeta: metav1.ObjectMeta{Name: "gw", Namespace: ns}})
+		_ = k8sClient.Delete(context.Background(), tmpl)
+	})
+
+	waitForRunnerVersionCondition(t, ns, "set", metav1.ConditionTrue, v2alpha1.ReasonWorkerImageBelowMinimum)
+
+	// The template vanishes: every later reconcile now returns from the unresolved
+	// branch, ahead of the image reading that would otherwise restate the verdict.
+	require.NoError(t, k8sClient.Delete(ctx, tmpl))
+	waitForSetReadyReason(t, ns, "set", metav1.ConditionFalse, v2alpha1.ReasonTemplateDeleted)
+
+	r.SetConditionForTest(ns, "set", metav1.Condition{
+		Type:    v2alpha1.ConditionRunnerVersionTooOld,
+		Status:  metav1.ConditionFalse,
+		Reason:  v2alpha1.ReasonVersionAccepted,
+		Message: "GitHub accepted the runner version at session creation",
+	})
+
+	// Over a window, not once: pendingConditions re-applies an unrefused push every
+	// reconcile, so a single read just after the push could miss the wipe.
+	requireRunnerVersionConditionHolds(t, ns, "set", metav1.ConditionTrue, v2alpha1.ReasonWorkerImageBelowMinimum)
+}
+
+// requireRunnerVersionConditionHolds fails if the condition ever leaves the given
+// verdict during the window. A single read after a push cannot tell a refused push
+// from one that was merged and has not been overwritten yet.
+func requireRunnerVersionConditionHolds(t *testing.T, ns, name string, wantStatus metav1.ConditionStatus, wantReason string) {
+	t.Helper()
+	require.Never(t, func() bool {
+		var rs v2alpha1.RunnerSet
+		if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: name}, &rs); err != nil {
+			return false
+		}
+		c := meta.FindStatusCondition(rs.Status.Conditions, v2alpha1.ConditionRunnerVersionTooOld)
+		return c == nil || c.Status != wantStatus || c.Reason != wantReason
+	}, 3*time.Second, 100*time.Millisecond,
+		"RunnerSet %s must hold RunnerVersionTooOld=%s/%s", name, wantStatus, wantReason)
+}

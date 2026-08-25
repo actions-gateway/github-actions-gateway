@@ -331,6 +331,7 @@ A `RunnerGroup` only ever acquires classically, so a reason no v2 path writes is
 | `TemplateNotFound` | Both | As above. |
 | `TokenUnavailable` | Classic only | The classic arm fetches an installation token at reconcile to manage the agent pool, so a token failure lands in status there. The scale-set arm hands the token manager to its listener instead and reports a failure to reach GitHub as `NoActiveSessions`. |
 | `Unauthorized` | Both | The `Degraded=True` reason both listeners push when session creation is rejected as unauthorized. |
+| `VersionAccepted` | Classic only | The `RunnerVersionTooOld=False` baseline the classic listener publishes once GitHub accepts `agent.version`, clearing a `VersionTooOld` an earlier instance left behind (Q795). The scale-set protocol sends no runner version, so it has nothing to accept. Never overwrites the reconciler's image reading. |
 | `VersionTooOld` | Classic only | GitHub rejecting `agent.version` at session creation, which only the classic protocol sends. The scale-set tier reports the same condition *type* from the reconciler's own reading of the worker image, under `WorkerImageBelowMinimum` (Q715). |
 | `WorkerCeilingReached` | Scale-set only | Assignments waiting because the set is at its worker ceiling. The classic tier refuses the claim instead, counted by `actions_gateway_jobs_admission_rejected_total{reason="ceiling"}`. |
 | `WorkerImageBelowMinimum` | Both | The reconciler's own reading of the effective worker image, which asks GitHub nothing and so reports on both tiers (Q715). |

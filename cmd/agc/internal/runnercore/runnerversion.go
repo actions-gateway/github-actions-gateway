@@ -126,3 +126,45 @@ func WorkerRunnerVersionCondition(image string, generation int64) metav1.Conditi
 		image, version, names.MinRunnerVersion)
 	return cond
 }
+
+// DropListenerCondition reports whether a listener-pushed condition must be
+// discarded rather than merged into the owner's status.
+//
+// RunnerVersionTooOld has two producers reporting different facts through one type:
+// the classic listener, on GitHub rejecting agent.version at session creation, and
+// the reconciler's own reading of the worker image (Q715). Neither refutes the
+// other, so neither may write over it. WorkerRunnerVersionCondition's callers
+// already hold the image half — a healthy image reading defers to a session-sourced
+// True. This is the session half: the listener's VersionAccepted baseline clears a
+// stale session-sourced True (Q795) and is dropped when the live condition is
+// image-sourced.
+//
+// Callers apply it in two places, and both are needed. At the drain it refuses a fresh
+// push. In the pendingConditions retry it drops a retained one the image reading has
+// since superseded: that retry is built for types the reconciler never re-derives, and
+// this type it re-derives every reconcile, so a push merged when nothing stood to
+// defer to would otherwise be re-applied for the owner's lifetime.
+//
+// Neither is cosmetic. A reconcile that reaches the image reading overwrites a merged
+// clear in memory before writing status, so it never surfaces; the paths that write
+// status EARLIER do surface it, the unresolved-references branch above all, where a
+// tenant deleting a RunnerTemplate would see the image verdict wiped.
+func DropListenerCondition(prev *metav1.Condition, pushed metav1.Condition) bool {
+	if pushed.Type != apiconditions.ConditionRunnerVersionTooOld ||
+		pushed.Reason != apiconditions.ReasonVersionAccepted {
+		return false
+	}
+	return prev != nil && isImageSourcedRunnerVersion(prev.Reason)
+}
+
+// isImageSourcedRunnerVersion reports whether reason is one the reconciler's worker
+// image reading publishes, as opposed to the listener's session-sourced pair.
+func isImageSourcedRunnerVersion(reason string) bool {
+	switch reason {
+	case apiconditions.ReasonWorkerImageBelowMinimum,
+		apiconditions.ReasonWorkerImageCurrent,
+		apiconditions.ReasonWorkerImageVersionUnknown:
+		return true
+	}
+	return false
+}

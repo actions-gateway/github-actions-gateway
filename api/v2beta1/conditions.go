@@ -101,6 +101,7 @@ const (
 	ReasonRefreshPending          = apiconditions.ReasonRefreshPending
 	ReasonSustainedRateLimit      = apiconditions.ReasonSustainedRateLimit
 	ReasonVersionTooOld           = apiconditions.ReasonVersionTooOld
+	ReasonVersionAccepted         = apiconditions.ReasonVersionAccepted
 	ReasonSessionUnauthorized     = apiconditions.ReasonSessionUnauthorized
 	ReasonPollingHealthy          = apiconditions.ReasonPollingHealthy
 	ReasonSessionAuthorized       = apiconditions.ReasonSessionAuthorized

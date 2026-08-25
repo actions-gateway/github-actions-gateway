@@ -91,6 +91,15 @@ func Run(ctx context.Context, cfg Config) error {
 		v1alpha1.ReasonSessionAuthorized, "listener session established")
 	setCondition(cfg, v1alpha1.ConditionRateLimited, metav1.ConditionFalse,
 		v1alpha1.ReasonPollingHealthy, "message polling healthy")
+	// RunnerVersionTooOld joins the baseline for the same reason and needs it more
+	// (Q795): agent.version is the AGC's own compile-time pin, so a session-sourced
+	// True is fixed by upgrading the gateway — which restarts this process and clears
+	// every in-memory flag while the condition survives in the owner's status. The
+	// session reaching here is GitHub having accepted that version. The reconciler
+	// drops this push when the live condition is image-sourced (Q715), so the
+	// unconditional form cannot overwrite a worker-image verdict.
+	setCondition(cfg, v1alpha1.ConditionRunnerVersionTooOld, metav1.ConditionFalse,
+		v1alpha1.ReasonVersionAccepted, "GitHub accepted the runner version at session creation")
 
 	// 3. Poll loop.
 	consecutiveEmpty := 0
