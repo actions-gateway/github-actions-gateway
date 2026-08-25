@@ -86,7 +86,8 @@ Status legend: ✅ done, ⚠️ partial (residual accepted), ❌ open, ⓘ infor
 ### Out of scope, flagged separately
 
 - ~~Image-digest pinning for `AGC_IMAGE` / `PROXY_IMAGE`.~~ **Done 2026-06-04** — GMC rejects non-`@sha256:` references at startup (Q24); `--allow-floating-image-tags` opt-out for dev/test.
-- ~~CI supply-chain scanning (govulncheck + trivy).~~ **Done (Q23)** — `security-scan.yml` runs `govulncheck` across all modules and `trivy` over all five images; the four distroless images block on fixable HIGH/CRITICAL, the upstream-based worker image is report-only with base bumps automated via the dependabot `docker` ecosystem (Q70).
+- ~~CI supply-chain scanning (govulncheck + trivy).~~ **Done (Q23)** — `security-scan.yml` runs `govulncheck` across all modules and `trivy` over all seven images; five block on fixable HIGH/CRITICAL, and the two built on the upstream actions-runner (`worker`, `build-runner`) are report-only.
+  The dependabot `docker` ecosystem that was to keep those bases current reaches no Dockerfile (Q70, corrected by Q976).
   See [testing.md § Security scanning](../development/testing.md#security-scanning).
 - ~~SBOM + image signing of published images.~~ **Done (Q28)** — addresses OWASP A08:2025 (Software & Data Integrity / supply chain).
   On a `v*` tag publish, [`publish.yml`](../../.github/workflows/publish.yml) builds and pushes the six first-party images (gmc, agc, proxy, worker, wrapper, build-runner) to GHCR, generates an SPDX-JSON SBOM per image with `syft`, signs each image **keyless** with `cosign` (sigstore/Fulcio via GitHub Actions OIDC — `id-token: write`, **no long-lived key and no stored signing secret**, secure-by-default: no secrets-as-config), and attaches the SBOM as a keyless `cosign attest` attestation.

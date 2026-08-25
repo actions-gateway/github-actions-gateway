@@ -225,8 +225,10 @@ Kyverno, OPA Gatekeeper) — the GMC does not enforce this itself because regist
 
 #### CI scans every image on every PR
 
-The gateway's own CI runs two supply-chain gates on every PR (`security-scan.yml`): `govulncheck` across all Go modules and `trivy` image scans of all five built images — see [testing.md § Security scanning](../development/testing.md#security-scanning).
-The four images built from a minimal/distroless base block on fixable HIGH/CRITICAL findings; the default worker image (built `FROM` the upstream actions-runner) is scanned report-only because its CVEs live in upstream components, with base bumps automated via dependabot.
+The gateway's own CI runs two supply-chain gates on every PR (`security-scan.yml`): `govulncheck` across all Go modules and `trivy` image scans of all seven built images — see [testing.md § Security scanning](../development/testing.md#security-scanning).
+The five images built from a minimal/distroless or scratch base block on fixable HIGH/CRITICAL findings.
+The two built `FROM` the upstream actions-runner (the default worker image and `build-runner`) are scanned report-only, because their CVEs live in upstream components that cannot be fixed without forking the runner.
+That report-only posture assumes the base is kept current, and today nothing does so automatically: the dependabot `docker` ecosystem is scoped to directories that hold no Dockerfile, tracked in [Q976](../queue/Q976.md).
 Tenants supplying their own `WorkerImage` are still expected to scan it themselves.
 `imagePullPolicy: IfNotPresent` (digest) or `Always` (tag) ensures the kubelet does not serve a stale, possibly tampered local copy.
 

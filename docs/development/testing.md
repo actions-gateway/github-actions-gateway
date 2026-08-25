@@ -2881,7 +2881,7 @@ Jitter is what de-correlates concurrent callers; the cap and the finite attempt 
 [`scripts/fetch/pull-image-with-retry-test.sh`](../../scripts/fetch/pull-image-with-retry-test.sh) (under `make scripts-test`) asserts the schedule: the doubling, the cap, that the jitter actually varies, and that the total budget stays inside 300s.
 
 **Prefer removing the pull outright where a cache can.** [`prepull-image-cached.sh`](../../scripts/fetch/prepull-image-cached.sh) (`<image-ref> <cache-dir> <local-tag>`) is the single-image sibling of `prepull-manifest-images.sh`: restore the image from an `actions/cache` tarball, or pull it once (retried) and save it.
-The `trivy` job uses it because its six shards otherwise pull the same ~200 MB builder image concurrently on every run; the single-pull sites (e2e, publish) keep the plain retried pull.
+The `trivy` job uses it because its seven shards otherwise pull the same ~200 MB builder image concurrently on every run; the single-pull sites (e2e, publish) keep the plain retried pull.
 
 One constraint drives its shape, and it is easy to get wrong: **`docker load` cannot restore a manifest digest.** A saved-and-reloaded image comes back with its `RepoTags` but no `RepoDigests`, so a digest-pinned `name:tag@sha256:…` ref never resolves from the cache and the consumer silently pulls from the registry anyway — a cache that looks like it works and does nothing.
 The cached image is therefore re-exposed under a local-only tag (`BUILDKIT_LOCAL_IMAGE`) and the consumer points at that.

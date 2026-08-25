@@ -655,7 +655,7 @@ It asserts each digest matches the registry **and** is a multi-arch index, becau
 ### 5. Cut the GitHub Release
 
 **`publish.yml` creates the GitHub Release itself** (Q293) — no manual step.
-The `chart-publish` job's "Compose and create the GitHub Release" step writes the body with the five `name@sha256:…` **index digests**, the `make verify-release VERSION=vX.Y.Z` command, and a generated changelog (previous-tag compare link), and sets `--prerelease` from the tag (0.x or a `-rc`/`-alpha`/`-beta` suffix ⇒ prerelease; a stable `≥1.0.0` tag ⇒ latest).
+The `chart-publish` job's "Compose and create the GitHub Release" step writes the body with the six `name@sha256:…` **index digests**, the `make verify-release VERSION=vX.Y.Z` command, and a generated changelog (previous-tag compare link), and sets `--prerelease` from the tag (0.x or a `-rc`/`-alpha`/`-beta` suffix ⇒ prerelease; a stable `≥1.0.0` tag ⇒ latest).
 So the default flow for this step is: **nothing — verify the auto-created Release looks right.**
 
 The step only creates a Release when the tag has **none yet**, so it never clobbers curated notes.

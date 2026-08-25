@@ -79,7 +79,7 @@ patches:
       # mid-run rather than at image pull. `op: replace` against an absent
       # member is not an error here either: kustomize creates it (measured on
       # kubectl v1.36.3 / kustomize v5.8.1, the pair check-template-library.sh
-      # pins). Keep the assertion in the e2e lane, not in the pull.
+      # pins). Nothing asserts this today; Q980 carries it.
       - op: replace
         path: /spec/workerImage
         value: ghcr.io/actions-gateway/dogfood-e2e-runner:2.335.1-2
