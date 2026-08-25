@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
@@ -70,11 +71,58 @@ func TestDetectRunnerVersionErrors(t *testing.T) {
 	})
 }
 
-// TestLogRunnerVersionNeverFails pins the contract that matters at runtime: detection
-// is diagnostic, so nothing about it may cost a job.
-func TestLogRunnerVersionNeverFails(t *testing.T) {
+// TestReportRunnerVersionNeverFails pins the contract that matters at runtime:
+// detection and hand-back are diagnostic, so nothing about either may cost a job.
+// The unwritable path is the case the wrapper actually meets in the field — a pod
+// spec naming a directory the runner user cannot write.
+func TestReportRunnerVersionNeverFails(t *testing.T) {
 	assert.NotPanics(t, func() {
-		logRunnerVersion(t.TempDir())
-		logRunnerVersion(writeDeps(t, realDepsShape))
+		reportRunnerVersion(t.TempDir())
+		reportRunnerVersion(writeDeps(t, realDepsShape))
+
+		t.Setenv(terminationLogEnv, filepath.Join(t.TempDir(), "no-such-dir", "termination-log"))
+		reportRunnerVersion(writeDeps(t, realDepsShape))
 	})
+}
+
+// TestReportRunnerVersionWritesTheReport is the Q792 hand-back: the version reaches
+// the termination message as JSON the AGC can parse, not as a bare string.
+func TestReportRunnerVersionWritesTheReport(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "termination-log")
+	t.Setenv(terminationLogEnv, path)
+
+	reportRunnerVersion(writeDeps(t, realDepsShape))
+
+	raw, err := os.ReadFile(path)
+	require.NoError(t, err)
+	var got workerReport
+	require.NoError(t, json.Unmarshal(raw, &got))
+	assert.Equal(t, "2.335.1", got.RunnerVersion)
+}
+
+// TestReportRunnerVersionOptsOutWithoutThePath keeps the wrapper runnable outside a
+// GAG-provisioned pod: no path, no write, no error. An older AGC that does not set
+// the variable is the same case.
+func TestReportRunnerVersionOptsOutWithoutThePath(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv(terminationLogEnv, "")
+
+	reportRunnerVersion(writeDeps(t, realDepsShape))
+
+	entries, err := os.ReadDir(dir)
+	require.NoError(t, err)
+	assert.Empty(t, entries, "no path configured must mean no file written anywhere")
+}
+
+// TestReportRunnerVersionWritesNothingWhenUndetected pins the failure direction: a
+// version the wrapper could not read must leave NO report, so the AGC reads absence
+// rather than an empty string it might render as a version.
+func TestReportRunnerVersionWritesNothingWhenUndetected(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "termination-log")
+	t.Setenv(terminationLogEnv, path)
+
+	reportRunnerVersion(t.TempDir()) // no deps.json: detection fails
+
+	_, err := os.Stat(path)
+	assert.True(t, os.IsNotExist(err), "an undetected version must write no report at all")
 }
