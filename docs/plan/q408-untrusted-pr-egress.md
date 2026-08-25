@@ -50,6 +50,8 @@ gh api repos/:owner/:repo/actions/jobs/91602337821/logs > tmp/q408/run.log
 ```
 
 then extract hosts (`grep -oE 'https?://[a-zA-Z0-9._-]+'`) and image pulls (`grep -oE 'Pulling from [a-zA-Z0-9/_.-]*'`).
+That host extraction is scheme-prefixed and is now known to be incomplete in both halves of the inventory: see the note in [§2.2](#22-the-inventory) and the general sweep in [§2.5](#25-phase-1-validation-graded-2026-08-24).
+It is kept here as the method of record for what Phase 0 actually ran, not as the method to reuse.
 
 ### 2.2 The inventory
 
@@ -77,7 +79,8 @@ So the hypothesised second client is, as installed, not a client at all.
 **The `gcr.io` row was added later, and the reason is a defect in this section's own method.** [§2.1](#21-the-measurement) extracts hosts with `grep -oE 'https?://…'`, which is scheme-prefixed; buildkit names its base images without a scheme (`load metadata for gcr.io/distroless/static:nonroot@sha256:…`), so no `gcr.io` fetch could ever appear in a host list built that way.
 The refs were in the Phase 0 log the whole time: re-running a schemeless extraction over that same log (job 91602337821) returns six `gcr.io` lines, so this is a missed reading rather than a change in behaviour.
 It is the same blind spot [§2.4](#24-phase-1-decisions-resolved-2026-08-05) already records for `GHA_CACHE`, where buildkit's log likewise names no host.
-Grade a registry inventory with a schemeless pattern as well ([§2.5](#25-phase-1-validation-graded-2026-08-24) does).
+The class is not registry-specific, and scoping the lesson to registries is how [§2.5](#25-phase-1-validation-graded-2026-08-24) first missed `sum.golang.org` on the non-registry side: a config value like `GOSUMDB='sum.golang.org'` carries neither a scheme nor a trailing slash, so both a `https?://` pattern and a registry-ref-shaped one skip it.
+Grade any host inventory here with a general domain-shaped sweep.
 
 **Non-registry HTTP(S).** Every hostname the job log names, excluding in-cluster addresses and hosts that only appear in printed prose:
 
@@ -136,7 +139,8 @@ Variant identification follows [§2.1](#21-the-measurement).
 `E2E_VARIANT` defaults to `kata`, the label `gag-ci-e2e` is the shared base label rather than a variant discriminator, and `docker info` corroborates: Alpine on kernel 6.18.35 reporting **5 CPUs / 13.88 GiB**, a micro-VM sized from pod limits rather than the **c2-standard-8** (8 vCPU) e2e node that a non-Kata dind sidecar would report.
 The overlay patches image, `nodeSelector`, tolerations and `storageClassName`, but not resource limits, so that CPU count discriminates rather than coincides.
 
-**The gating fires.** On all four self-hosted runs `GHA_CACHE` evaluates to the empty string, `type=gha` never reaches buildx, and no `actions/cache` step executes.
+**The gating fires.** On all four self-hosted runs `GHA_CACHE` evaluates to the empty string, against `GHA_CACHE: true` on the Phase 0 control, and no `actions/cache` step executes.
+(A `type=gha` count is not evidence either way: buildx does not echo its cache arguments, so the control returns 0 for it too.)
 (`azure/setup-helm` and `actions/cache` still appear once each as `Download action repository`: the runner pre-fetches every referenced action regardless of its `if:`, from GitHub, and neither ever runs.)
 
 **The residual is gone, and the probe can prove a negative.** The same probe run against the Phase 0 hosted-lane control (job 91602337821) fires on both signals, so the zeros below are an absence rather than a query that never matched:
@@ -149,13 +153,14 @@ The overlay patches image, `nodeSelector`, tolerations and `storageClassName`, b
 The Actions cache **data plane host** is still not directly observable, since [§2.2](#22-the-inventory) recorded that the host never appears in the job log.
 So the cache's *effect* (`Cache restored` / `Cache not found`) is the observable used, and it is absent.
 
-**Every non-GitHub, non-registry host the four logs name, and its disposition:**
+**Every non-GitHub, non-registry host the four logs name, and its disposition.** Taken with a general domain-shaped sweep rather than a scheme-prefixed or registry-shaped one, for the reason [§2.2](#22-the-inventory)'s note gives:
 
 | Host | Fetched? | Evidence |
 |---|---|---|
 | `docs.docker.com` | **no**, printed prose | dockerd advisory text: "more information:", "Learn more at:" |
 | `proxy.golang.org` | **no**, config value only | printed as `GOPROXY='https://proxy.golang.org,direct'`; the `go: downloading` count is **0** in all four, so `vendor/` closes Go exactly as [§2.3](#23-what-the-measurement-changes) item 4 predicted |
 | `kind.sigs.k8s.io` | **no**, printed prose | kind CLI footer ("Have a question…", "Not sure what to do next?") |
+| `sum.golang.org` | **no**, config value only | printed as `GOSUMDB='sum.golang.org'` in the same `go env` block, three lines below `GOPROXY`; the same `go: downloading` count of **0** covers it |
 | `registry.invalid` | **no**, fails to resolve | the deliberate negative probe of [§2.2](#22-the-inventory) |
 
 In-cluster addresses (`fakegithub.e2e-infra.svc.cluster.local`, `gmc-controller-manager-metrics-service.gmc-system.svc.cluster.local`, `127.0.0.1`, `0.0.0.0`, `kubernetes.default.svc`) are excluded as they were in Phase 0.
@@ -163,7 +168,7 @@ In-cluster addresses (`fakegithub.e2e-infra.svc.cluster.local`, `gmc-controller-
 **Verdict: PASS.** No non-GitHub, non-registry host is fetched on the self-hosted Kata lane.
 
 **One correction to the design, from the same grading.** The registry upstreams actually contacted are **five**, not four: `docker.io`, `ghcr.io`, `quay.io`, `registry.k8s.io`, and **`gcr.io`** (buildkit's `distroless/static` base).
-What the log proves for `gcr.io` is a *resolution*, not a layer transfer: buildkit prints `load metadata for gcr.io/distroless/static@sha256:…` and `resolve … done`, with no separate download lines.
+What the log proves for `gcr.io` is a *resolution*, not a layer transfer: buildkit prints `load metadata for gcr.io/distroless/static:nonroot@sha256:…` and `resolve … done`, with no separate download lines.
 That is still a registry API call to a fifth host, so a policy admitting only the four would fail it, and the digest pin means the reachability rather than the bytes is what matters here.
 [§3.1](#31-the-mirror--one-pull-through-cache-per-upstream), [§3.2](#32-wiring-the-clients) and Phase 2 are updated accordingly.
 Left uncorrected, Phase 2 would have built four mirror instances and Phase 4's tight policy would then have failed at the image bake, the one step that no cache and no `kind load` can cover.
@@ -176,7 +181,15 @@ for j in 95052533561 94783222823 93334887820 93288542407 91602337821; do
 done
 ```
 
-then grade each log for scheme-prefixed hosts (`https?://([a-zA-Z0-9._-]+)`) **and** schemeless registry refs (`([a-z0-9][a-z0-9.-]*\.[a-z]{2,}(?::[0-9]+)?)/`), with `91602337821` as the control that must fire on `get.helm.sh` and `Cache restored`.
+then grade each log with a **general domain-shaped sweep**, not a scheme-prefixed one and not a registry-ref-shaped one:
+
+```python
+dom = re.compile(r'(?<![A-Za-z0-9._-])((?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+[a-z]{2,})(?![A-Za-z0-9-])', re.I)
+```
+
+Read every hit rather than counting them.
+Most are Kubernetes API groups, Go identifiers or filenames, and separating a fetch from printed prose needs the surrounding line (`Pulling from`, `load metadata for`, `GOPROXY=`), never the hostname alone.
+Use `91602337821` as the control: it must fire on `get.helm.sh` and `Cache restored`, and a sweep that cannot make it fire is not measuring the self-hosted zeros either.
 
 **Two coverage gaps, stated rather than papered over.** The calico lane is still unmeasured on the self-hosted path (`e2e-calico.yml` is nightly and hosted), so its `raw.githubusercontent.com` and `quay.io/calico/*` fetches remain read from the workflow rather than observed.
 The live-GitHub specs also remain among the skipped, so their real `api.github.com` traffic still has not run.
@@ -262,10 +275,10 @@ Any backend meeting the same four tests can substitute — Dragonfly is the sche
 
 ## 4. Phases
 
-Each phase is a separate PR; 1, 3 and 4 need live dogfood sessions (prod-guarded — deliberate, operator-driven runs).
+Each phase is a separate PR; 1, 3 and 4 need live dogfood sessions (prod-guarded: deliberate, operator-driven runs).
 
 - **Phase 0 — measured egress inventory. ✅ Done (2026-08-03).** Read off a green Kata dogfood run that had already happened rather than booking a new one; [§2](#2-the-gap--what-an-e2e-job-actually-fetches-at-job-time-phase-0) is the deliverable, and [§2.3](#23-what-the-measurement-changes) is what it cost the design.
-- **Phase 1: shrink the non-registry residual to GitHub. ✅ Done (implemented 2026-08-05, validated 2026-08-24).** New phase, forced by Phase 0.
+- **Phase 1 — shrink the non-registry residual to GitHub. ✅ Done (implemented 2026-08-05, validated 2026-08-24).** New phase, forced by Phase 0.
   The [§2.4](#24-phase-1-decisions-resolved-2026-08-05) decisions are resolved: `e2e-reusable.yml` gates `azure/setup-helm`, every `actions/cache` step, and `GHA_CACHE` to `runner.environment == 'github-hosted'`.
   Validated by grading four green self-hosted Kata runs against a Phase 0 control ([§2.5](#25-phase-1-validation-graded-2026-08-24)), and no dogfood session was booked because the qualifying runs had already happened.
   The grading also corrected the upstream set from four to five.
