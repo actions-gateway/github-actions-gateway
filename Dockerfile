@@ -46,8 +46,9 @@ ARG TARGETOS TARGETARCH
 # this stage is a HIT on any run that did not change vendor/, wherever such a
 # cache is actually wired up. The hosted e2e lane wires one: the bake exports
 # `type=gha,scope=images` (docker-bake.hcl's GHA_CACHE comment) and
-# security-scan.yml's trivy shards read that scope. Actions caches are
-# branch-scoped, so the hit lands once a main-branch run has written it.
+# security-scan.yml's trivy shards read that scope. Actions caches are scoped
+# to the writing ref, and a PR run reads only its own scope plus the base and
+# default branches, so the hit lands once a push to main has written it.
 # Dependencies live in the workspace vendor/ at the repo root; `go build`
 # auto-selects -mod=vendor when go.work and vendor/ are both present.
 ENV GOCACHE=/gocache \
