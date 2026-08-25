@@ -11,7 +11,7 @@ This is a **development/verification tool only.** It applies nothing to a real c
 
 1. Creates a local [kind](https://kind.sigs.k8s.io/) cluster (or reuses one).
 2. Installs the public [`kube-prometheus-stack`](https://github.com/prometheus-community/helm-charts/tree/main/charts/kube-prometheus-stack) Helm chart with [`values.yaml`](values.yaml) — Prometheus Operator, Prometheus, Grafana (with the image-renderer), and kube-state-metrics.
-3. Applies the **real** artifacts: the `PrometheusRule` from `../prometheusrule.yaml` and both dashboards (`../grafana-dashboard-tenant.json`, `../grafana-dashboard-platform.json`), imported via the Grafana dashboard sidecar.
+3. Applies the **real** artifacts: the `PrometheusRule` from `../prometheusrule.yaml` and every `../grafana-dashboard-*.json`, imported via the Grafana dashboard sidecar.
 4. Deploys [`workload.yaml`](workload.yaml): a synthetic `actions_gateway_*` metrics exporter ([`exporter.py`](exporter.py), stdlib-only — counters and histograms grow over time so `rate()` and `histogram_quantile()` behave like a live system) plus a dummy `actions-gateway-proxy` Deployment/HPA/ResourceQuota so the kube-state-metrics Proxy & Quota panels populate.
 5. Renders each dashboard to a PNG via Grafana's `/render` endpoint.
 
@@ -25,7 +25,10 @@ cd deploy/monitoring/preview
 ./render.sh down     # delete the throwaway cluster
 ```
 
-Writes one PNG per dashboard into `OUT_DIR` (default `.`): `actions-gateway-tenant.png` and `actions-gateway-platform.png`.
+Writes one PNG per dashboard into `OUT_DIR` (default `.`): `actions-gateway-tenant.png`, `actions-gateway-platform.png`, and `actions-gateway-budget.png`.
+
+The apply step globs `../grafana-dashboard-*.json`, but the render step walks the `DASH_UIDS` array in [`render.sh`](render.sh).
+A new dashboard therefore needs its uid added there, or it is imported and never shot, and the screenshot gate then fails on a PNG the harness was never asked to produce.
 
 ### Promoting a render into the docs
 
@@ -35,6 +38,7 @@ A dashboard change that skips this step leaves the published screenshot showing 
 ```sh
 cp actions-gateway-tenant.png ../../../docs/assets/grafana-dashboard-tenant.png
 cp actions-gateway-platform.png ../../../docs/assets/grafana-dashboard-platform.png
+cp actions-gateway-budget.png ../../../docs/assets/grafana-dashboard-budget.png
 ```
 
 Copy only the dashboards you actually changed.

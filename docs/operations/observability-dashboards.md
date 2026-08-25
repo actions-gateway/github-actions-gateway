@@ -1,19 +1,23 @@
 # Grafana Dashboards
 
-> **Audience:** Platform engineer, Tenant operator
+> **Audience:** Platform engineer, Tenant operator, Budget owner
 
 Part of the [Observability](observability.md) guide.
 The panels below query the [Metrics reference](observability-metrics.md) and the [SLO recording rules](observability-alerting.md#slo-recording-rules); the scrape wiring they depend on is in [Accessing metrics](observability-metrics-access.md).
 
-> **Import as code.** Two reference dashboards ship under [`deploy/monitoring/`](../../deploy/monitoring/README.md): import them into Grafana (**Dashboards → New → Import**) or provision them, rather than rebuilding the panels by hand.
-> They split along the scrape boundary each reads from; the layouts below document what each contains.
+> **Import as code.** Three reference dashboards ship under [`deploy/monitoring/`](../../deploy/monitoring/README.md): import them into Grafana (**Dashboards → New → Import**) or provision them, rather than rebuilding the panels by hand.
+> The layouts below document what each contains.
 
 | Dashboard | Source scrape | Audience |
 | --- | --- | --- |
 | [`grafana-dashboard-tenant.json`](../../deploy/monitoring/grafana-dashboard-tenant.json) | a tenant's AGC + egress proxy (per-tenant mTLS) | operator of one tenant's runners |
 | [`grafana-dashboard-platform.json`](../../deploy/monitoring/grafana-dashboard-platform.json) | the GMC manager (one cluster-wide TLS scrape) | Platform engineer running the GMC / the fleet |
+| [`grafana-dashboard-budget.json`](../../deploy/monitoring/grafana-dashboard-budget.json) | a tenant's AGC (per-tenant mTLS) | Budget owner paying for the fleet |
 
-The split mirrors how the metrics are exposed (see [Accessing metrics](observability-metrics-access.md#how-to-access-metrics)): a platform operator scrapes the single GMC endpoint and cannot necessarily reach every tenant's mTLS metrics port, so the fleet rollups the GMC exports (`managed_gateways`, `runnergroups_degraded`, `egress_rules_stale`, the proxy-quota gauges) get their own dashboard.
+The first two split along the scrape boundary each reads from, which mirrors how the metrics are exposed (see [Accessing metrics](observability-metrics-access.md#how-to-access-metrics)): a platform operator scrapes the single GMC endpoint and cannot necessarily reach every tenant's mTLS metrics port, so the fleet rollups the GMC exports (`managed_gateways`, `runnergroups_degraded`, `egress_rules_stale`, the proxy-quota gauges) get their own dashboard.
+
+The **budget** dashboard splits on a different axis: it reads the same tenant scrape as the tenant dashboard, and exists because the question is different rather than the data.
+A budget owner is asking what each tenant consumed and what it cost, which is one metric read across every namespace at once, not the health of any one of them.
 
 > The screenshots below are rendered against a real Prometheus with synthetic data by the reproducible harness in [`deploy/monitoring/preview/`](../../deploy/monitoring/preview/README.md); regenerate them there whenever a dashboard changes.
 
@@ -170,16 +174,89 @@ The fleet's version spread during a staggered upgrade, and the answer to which t
 The GMC comes from this dashboard's own scrape; `agc` and `proxy` need the per-tenant scrapes, so a platform-only Prometheus shows one bar.
 `actions_gateway_build_info` carries no `namespace` label, so `$namespace` does not filter this row. | Pod creation p99 by namespace | `actions_gateway:pod_creation_latency_seconds:p99` | Time series, both acquisition tiers |
 
+## Budget dashboard
+
+![The budget-owner Grafana dashboard rendered against a live Prometheus: a spend-summary stat row, spend-by-tenant bars and burn rate, pod-hours and job counts by runner shape, and the zero-idle-compute row contrasting worker consumption with the always-on proxy floor.](../assets/grafana-dashboard-budget.png)
+
+For the [budget owner](personas.md#budget-owner), who owns the spend and usually cannot read the cluster at all.
+Filtered by `$namespace` and `$runner_group`, and priced by a `$rate` textbox.
+
+Every panel reads one metric: `actions_gateway_job_duration_seconds`.
+That series is worker pod wall time (creation to the last container finishing) on **both** acquisition tiers, which is the span [Appendix F §F.1](../design/appendix-f-cost-model.md#worker-pod-dominant-cost) bills against.
+A pod that never started a container is not observed, because it occupied no node time.
+
+**The rate is the operator's, not ours.** Appendix F's formula is `(job_duration_seconds / 3600) × hourly_node_rate × resource_fraction`, and `$rate` is that trailing pair collapsed into one number: the effective hourly cost of **one worker slot**. The shipped default, `0.096`, is §F.1's own CPU example: an `m6i.4xlarge` at $0.768/hr with the pod requesting an eighth of it.
+Its GPU example works out at $4.10/hr, so the two differ by more than 40×.
+
+That spread is why the shape-level panels stay in pod-hours: one currency figure spanning a tenant's GPU and CPU shapes is an average of two rates that are nothing like each other.
+To read one shape's spend, pin `$runner_group` and set `$rate` to that shape's slot rate.
+For per-tenant currency computed from a real node price book rather than a typed constant, use [Cost attribution](cost-attribution.md); this dashboard is the GAG-native cross-check for it, not a replacement.
+
+**Row 1 — Spend Summary (selected time range)**
+
+Every panel here uses `$__range`, so the time picker *is* the billing window: switch it to 30 days and the numbers are a month's.
+
+| Panel | Query | Visualization |
+|-------|-------|---------------|
+| Estimated spend | `sum(increase(actions_gateway_job_duration_seconds_sum[$__range])) / 3600 * $rate` | Stat. Currency only as far as `$rate` is right for the selection |
+| Worker pod-hours | `sum(increase(actions_gateway_job_duration_seconds_sum[$__range])) / 3600` | Stat, the measured quantity with no rate applied. This is the number to reconcile against a cost tool's own pod-hours |
+| Jobs completed | `sum(increase(actions_gateway_job_duration_seconds_count[$__range]))` | Stat |
+| Mean job duration | pod-hours ÷ jobs | Stat. `No data` when the range holds no completed job, since the divisor is zero |
+
+**Row 2 — Spend by Tenant**
+
+| Panel | Query | Visualization |
+|-------|-------|---------------|
+| Estimated spend by tenant | `sum by (namespace) (increase(actions_gateway_job_duration_seconds_sum[$__range])) / 3600 * $rate` | Bar chart, **instant**. Namespace is tenant, which is why this lines up with an `aggregate=namespace` allocation report with no extra wiring |
+| Spend rate per hour by tenant | `sum by (namespace) (rate(actions_gateway_job_duration_seconds_sum[5m])) * $rate` | Time series. Pod-seconds per second is pod-hours per hour, so this is a live burn rate. The histogram attributes a pod's whole lifetime at completion, so the series is a trailing average and is lumpy over windows near the job duration itself |
+| Share of fleet worker pod-hours | tenant pod-hours ÷ `scalar(...)` of the unfiltered total | Bar gauge, `percent`. The denominator is deliberately **unfiltered**, so filtering to one tenant shows its share of everything rather than 100% of itself. Rate-free |
+
+**Row 3 — Spend by Runner Shape**
+
+Split by `runner_group`, which on the scale-set tier carries the **`RunnerSet`** name rather than a `RunnerGroup` one: the pod-side reading takes whichever owner label the pod carries, so one label key covers both tiers (Q713).
+A shape here is therefore whatever provisioned the worker, on either protocol.
+
+| Panel | Query | Visualization |
+|-------|-------|---------------|
+| Worker pod-hours by shape | `sum by (namespace, runner_group) (increase(actions_gateway_job_duration_seconds_sum[$__range])) / 3600` | Bar chart. Hours rather than currency, per the rate spread above |
+| Jobs completed by shape | the `…_count` counterpart | Bar chart. Beside the pod-hours bars it separates the two ways a shape's spend grows: more jobs, or slower jobs |
+| Mean job duration by shape | `rate(…_sum[5m]) / rate(…_count[5m])`, both `sum by (namespace, runner_group)` | Time series. A shape drifting upward buys less for the same money; a large divergence from a cost tool's pod-hours for that shape usually means oversized resource requests ([right-sizing](../design/appendix-f-cost-model.md#worker-resource-right-sizing)) |
+
+**Row 4 — Zero Idle Compute (the always-on floor)**
+
+The row that answers "what am I paying for when nobody is running CI?".
+
+> **The comparison panels run instant queries**, which is where this dashboard departs from its two neighbours.
+> A bar chart or bar gauge here reduces the whole range to one number per tenant or per shape, so a range query would plot one bar per scrape and the comparison the panel exists to make would be unreadable.
+> The time-series panels stay range queries, because a trend is what they are for.
+
+| Panel | Query | Visualization |
+|-------|-------|---------------|
+| Worker consumption vs. the always-on floor | `sum by (namespace) (rate(actions_gateway_job_duration_seconds_sum[5m]))` against `kube_deployment_status_replicas_ready{deployment="actions-gateway-proxy"}` | Time series, two series on one panel deliberately. Over a quiet weekend the worker line collapses toward zero while the proxy line stays flat, and that flat line is the entire idle floor. An Actions Runner Controller (ARC) scale set holding `minRunners > 0` would show a worker line that never reaches zero. Needs kube-state-metrics |
+| Jobs completed per hour | `sum by (namespace) (rate(actions_gateway_job_duration_seconds_count[5m])) * 3600` | Time series showing the volume that drives the worker line beside it |
+| ResourceQuota headroom | `kube_resourcequota{type="used"}` and its `type="hard"` counterpart | Bar gauge, a used bar beside its cap. A tenant pinned at its quota is one whose spend is held down by the cap rather than by demand, which is a budget conversation rather than an incident. Needs kube-state-metrics |
+
 ## Dashboard Variables
 
 The dashboards ship with these template variables already wired:
 
-- `$namespace` — `label_values({__name__=~"actions_gateway_active_sessions|actions_gateway_scaleset_jobs_assigned_total"}, namespace)` — filters to a single tenant (both dashboards).
+- `$namespace` (`label_values({__name__=~"actions_gateway_active_sessions|actions_gateway_scaleset_jobs_assigned_total"}, namespace)`) filters to a single tenant, on the tenant and platform dashboards.
   The union of the classic and scale-set series is deliberate: a scale-set-only deploy emits no `active_sessions`, so keying the variable on that alone would leave the dashboard blank.
-- `$runner_group` — `label_values(actions_gateway_active_sessions{namespace="$namespace"}, runner_group)` — filters to a specific RunnerGroup on the classic-tier panels (tenant dashboard).
+- `$runner_group` (`label_values(actions_gateway_active_sessions{namespace="$namespace"}, runner_group)`) filters to a specific RunnerGroup on the classic-tier panels of the tenant dashboard.
   The `runner_set`-labelled panels are not filtered by it; `$runner_set` is their variable.
-- `$runner_set` — `label_values(actions_gateway_runnerset_worker_quota_pressure{namespace="$namespace"}, runner_set)` — filters to a specific `RunnerSet` on the scale-set and v2 capacity panels (tenant dashboard).
+- `$runner_set` (`label_values(actions_gateway_runnerset_worker_quota_pressure{namespace="$namespace"}, runner_set)`) filters to a specific `RunnerSet` on the scale-set and v2 capacity panels of the tenant dashboard.
   It reads its label values from the Q319 capacity gauges rather than the `scaleset_*` series on purpose: those gauges are emitted for **every** `RunnerSet`, while `scaleset_*` exists only for `ScaleSet`-protocol sets, so keying on the latter would hide a `Classic` set from the dropdown entirely.
+
+The budget dashboard declares its own set, because it reads a different metric from every panel and its dropdowns have to match that metric exactly:
+
+- `$namespace` (`label_values(actions_gateway_job_duration_seconds_count, namespace)`) is keyed on the series the panels actually read, so the dropdown cannot offer a tenant with no cost data or hide one that has some.
+  It needs no classic/scale-set union: the duration series is emitted from the pod informer and covers both tiers already.
+- `$runner_group` (`label_values(actions_gateway_job_duration_seconds_count{namespace=~"$namespace"}, runner_group)`) is the runner shape, listing `RunnerGroup` and `RunnerSet` names together for the reason the Row 3 note gives.
+- `$rate` is a **textbox**, not a query: the effective hourly cost of one worker slot, which is a fact about your contract and not something the cluster knows.
+  Only the currency panels read it, so leaving the default in place still leaves every pod-hour and job count correct.
+
+> **A textbox variable in a panel query needs the PromQL gate to know about it.** `make promql-check` parses every panel expression, and a Grafana variable in syntactic position (`[$__range]`, `* $rate`) is not valid PromQL.
+> The checker substitutes from the dashboard's own `templating.list` before parsing, so a variable the dashboard never declares is reported by name rather than passing as a parse error nobody reads.
 
 ---
 

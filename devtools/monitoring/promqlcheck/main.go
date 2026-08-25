@@ -86,8 +86,20 @@ type target struct {
 	Expr  string `json:"expr"`
 }
 
+// templateVar is one entry under templating.list. Query is a RawMessage because
+// Grafana spells it two ways: an object for a query variable, a bare string for a
+// textbox or constant, and only the second carries a value worth substituting.
+type templateVar struct {
+	Name  string          `json:"name"`
+	Type  string          `json:"type"`
+	Query json.RawMessage `json:"query"`
+}
+
 type dashboard struct {
-	Panels []panel `json:"panels"`
+	Panels     []panel `json:"panels"`
+	Templating struct {
+		List []templateVar `json:"list"`
+	} `json:"templating"`
 }
 
 func main() {
@@ -184,17 +196,16 @@ func checkExprs(rulePath string, groups []group) []string {
 // clean by checking nothing, which is exactly the state Q910 found `jq empty`
 // in.
 //
-// Expressions are parsed verbatim. The shipped dashboards' Grafana variables sit
-// inside quoted label matchers (namespace=~"$namespace"), which is a valid label
-// value, so no interpolation is needed. A variable in syntactic position is not:
-// `[$__rate_interval]` fails as an unparseable duration. That boundary matches
-// the dashboards, whose 62 queries all use fixed windows; one that needs an
-// interval variable needs a substitution pass added here first.
+// Expressions are substituted before parsing. A query variable sits inside a
+// quoted label matcher (namespace=~"$namespace"), which is a valid label value
+// and is left as written; a variable in syntactic position is not, so
+// `[$__range]` and `* $rate` are resolved by substituteVars first.
 func checkDashboard(path string, raw []byte) ([]string, int, error) {
 	var d dashboard
 	if err := json.Unmarshal(raw, &d); err != nil {
 		return nil, 0, err
 	}
+	vars, declared := dashboardVars(d)
 
 	p := parser.NewParser(parser.Options{})
 	var findings []string
@@ -213,7 +224,12 @@ func checkDashboard(path string, raw []byte) ([]string, int, error) {
 						path, title, t.RefID))
 					continue
 				}
-				if _, err := p.ParseExpr(t.Expr); err != nil {
+				expr, unknown := substituteVars(t.Expr, vars, declared)
+				for _, name := range unknown {
+					findings = append(findings, fmt.Sprintf("%s: panel %q target %q: uses $%s, which the dashboard declares no template variable for",
+						path, title, t.RefID, name))
+				}
+				if _, err := p.ParseExpr(expr); err != nil {
 					findings = append(findings, fmt.Sprintf("%s: panel %q target %q: expr does not parse: %v",
 						path, title, t.RefID, err))
 				}
@@ -227,6 +243,71 @@ func checkDashboard(path string, raw []byte) ([]string, int, error) {
 		findings = append(findings, fmt.Sprintf("%s: no panel target found — the dashboard check is not exercising anything", path))
 	}
 	return findings, targets, nil
+}
+
+// grafanaVar matches one variable reference in either spelling Grafana accepts.
+var grafanaVar = regexp.MustCompile(`\$(?:\{(\w+)\}|(\w+))`)
+
+// builtinVars are Grafana's own interval and range variables. Each expands to a
+// duration at render time and is only ever written in a range selector, which is
+// syntactic position, so each needs a stand-in to parse. The value is arbitrary:
+// the check is that the surrounding expression is well formed, not that the
+// window is a particular length.
+var builtinVars = map[string]string{
+	"__range":         "5m",
+	"__interval":      "5m",
+	"__rate_interval": "5m",
+}
+
+// dashboardVars returns the substitutions a dashboard's own templating declares,
+// and the set of every name it declares at all.
+//
+// The two differ, and the gap is the point: a textbox or constant carries a
+// literal that reaches scalar position and must be substituted, while a query
+// variable resolves to a label value and parses as written. Both are declared, so
+// both are exempt from the undeclared-variable finding; only the first is
+// rewritten.
+func dashboardVars(d dashboard) (map[string]string, map[string]bool) {
+	vars := make(map[string]string, len(builtinVars))
+	for k, v := range builtinVars {
+		vars[k] = v
+	}
+	declared := make(map[string]bool, len(d.Templating.List))
+	for _, v := range d.Templating.List {
+		declared[v.Name] = true
+		if v.Type != "textbox" && v.Type != "constant" {
+			continue
+		}
+		var literal string
+		if json.Unmarshal(v.Query, &literal) == nil && literal != "" {
+			vars[v.Name] = literal
+		}
+	}
+	return vars, declared
+}
+
+// substituteVars rewrites the variable references in expr with parse-valid
+// stand-ins, and returns the names the dashboard declares nowhere.
+//
+// An unknown name is returned rather than substituted, so the expression still
+// reaches the parser carrying it and fails there too. Substituting a default for
+// one would let a panel referencing a variable that does not exist parse clean
+// and then render an error, which is the state this whole check exists to catch.
+func substituteVars(expr string, vars map[string]string, declared map[string]bool) (string, []string) {
+	var unknown []string
+	seen := map[string]bool{}
+	out := grafanaVar.ReplaceAllStringFunc(expr, func(m string) string {
+		name := strings.Trim(m[1:], "{}")
+		if v, ok := vars[name]; ok {
+			return v
+		}
+		if !declared[name] && !seen[name] {
+			seen[name] = true
+			unknown = append(unknown, name)
+		}
+		return m
+	})
+	return out, unknown
 }
 
 // fencedYAML matches the ```yaml blocks the alerting doc reproduces the rules in.

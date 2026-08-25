@@ -46,7 +46,7 @@ TO="${TO:-now}"
 readonly CHART="prometheus-community/kube-prometheus-stack"
 # Dashboard uid -> output PNG basename. Keep in sync with the uids in the
 # ../grafana-dashboard-*.json files.
-readonly DASH_UIDS=("actions-gateway-tenant" "actions-gateway-platform")
+readonly DASH_UIDS=("actions-gateway-tenant" "actions-gateway-platform" "actions-gateway-budget")
 
 PF_PID=""
 

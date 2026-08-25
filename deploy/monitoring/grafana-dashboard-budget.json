@@ -1,0 +1,369 @@
+{
+  "__inputs": [],
+  "__requires": [],
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": { "type": "grafana", "uid": "-- Grafana --" },
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      }
+    ]
+  },
+  "description": "Budget-owner reference dashboard for github-actions-gateway (Q724). Sourced from the per-tenant AGC scrapes: actions_gateway_job_duration_seconds is worker pod wall time on both acquisition tiers, which is the span appendix-f-cost-model.md bills against. Panels report pod-hours and job counts exactly; currency is pod-hours multiplied by the $rate variable, an effective hourly rate for one worker slot that the operator sets. For authoritative per-tenant dollars from a node price book, see docs/operations/cost-attribution.md. See docs/operations/observability-dashboards.md.",
+  "editable": true,
+  "graphTooltip": 1,
+  "links": [],
+  "refresh": "",
+  "schemaVersion": 39,
+  "tags": ["actions-gateway"],
+  "templating": {
+    "list": [
+      {
+        "current": {},
+        "hide": 0,
+        "includeAll": false,
+        "label": "Data source",
+        "name": "datasource",
+        "options": [],
+        "query": "prometheus",
+        "refresh": 1,
+        "regex": "",
+        "type": "datasource"
+      },
+      {
+        "current": {},
+        "datasource": { "type": "prometheus", "uid": "${datasource}" },
+        "definition": "label_values(actions_gateway_job_duration_seconds_count, namespace)",
+        "hide": 0,
+        "includeAll": true,
+        "label": "Namespace",
+        "multi": true,
+        "name": "namespace",
+        "query": {
+          "query": "label_values(actions_gateway_job_duration_seconds_count, namespace)",
+          "refId": "namespace"
+        },
+        "refresh": 2,
+        "sort": 1,
+        "type": "query"
+      },
+      {
+        "current": {},
+        "datasource": { "type": "prometheus", "uid": "${datasource}" },
+        "definition": "label_values(actions_gateway_job_duration_seconds_count{namespace=~\"$namespace\"}, runner_group)",
+        "hide": 0,
+        "includeAll": true,
+        "label": "Runner shape",
+        "multi": true,
+        "name": "runner_group",
+        "query": {
+          "query": "label_values(actions_gateway_job_duration_seconds_count{namespace=~\"$namespace\"}, runner_group)",
+          "refId": "runner_group"
+        },
+        "refresh": 2,
+        "sort": 1,
+        "type": "query"
+      },
+      {
+        "current": { "text": "0.096", "value": "0.096" },
+        "hide": 0,
+        "label": "Rate per worker-hour",
+        "name": "rate",
+        "options": [],
+        "query": "0.096",
+        "skipUrlSync": false,
+        "type": "textbox"
+      }
+    ]
+  },
+  "time": { "from": "now-7d", "to": "now" },
+  "timezone": "",
+  "title": "Actions Gateway — Budget",
+  "uid": "actions-gateway-budget",
+  "version": 1,
+  "weekStart": "",
+  "panels": [
+    {
+      "type": "row",
+      "title": "Spend Summary (selected time range)",
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 },
+      "id": 1,
+      "panels": []
+    },
+    {
+      "type": "stat",
+      "title": "Estimated spend",
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "gridPos": { "h": 6, "w": 6, "x": 0, "y": 1 },
+      "id": 2,
+      "description": "Worker pod-hours over the selected range multiplied by $rate, in the currency $rate is denominated in. Trustworthy to the extent the selection holds one runner shape: appendix-f-cost-model.md §F.1 prices a CPU slot at $0.096/hr and a GPU slot at $4.10/hr, so a mixed selection at one rate is an average, not a bill. Pin $runner_group to read one shape. The authoritative figure comes from a node price book — see cost-attribution.md.",
+      "fieldConfig": { "defaults": { "unit": "short", "decimals": 2, "color": { "mode": "fixed", "fixedColor": "green" } }, "overrides": [] },
+      "options": { "colorMode": "value", "graphMode": "area", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false } },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "expr": "sum(increase(actions_gateway_job_duration_seconds_sum{namespace=~\"$namespace\", runner_group=~\"$runner_group\"}[$__range])) / 3600 * $rate",
+          "legendFormat": "spend",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "type": "stat",
+      "title": "Worker pod-hours",
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "gridPos": { "h": 6, "w": 6, "x": 6, "y": 1 },
+      "id": 3,
+      "description": "The measured quantity, with no rate applied. Worker pod wall time from creation to the last container finishing, summed over the range and divided by 3600. This is what the bill is proportional to, and the number to reconcile against a cost tool's own pod-hours.",
+      "fieldConfig": { "defaults": { "unit": "short", "decimals": 1, "color": { "mode": "fixed", "fixedColor": "blue" } }, "overrides": [] },
+      "options": { "colorMode": "value", "graphMode": "area", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false } },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "expr": "sum(increase(actions_gateway_job_duration_seconds_sum{namespace=~\"$namespace\", runner_group=~\"$runner_group\"}[$__range])) / 3600",
+          "legendFormat": "pod-hours",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "type": "stat",
+      "title": "Jobs completed",
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "gridPos": { "h": 6, "w": 6, "x": 12, "y": 1 },
+      "id": 4,
+      "description": "Worker pods observed to completion over the range, from the histogram's count. A pod that never started a container is not counted: it occupied no node time and ran no job to time.",
+      "fieldConfig": { "defaults": { "unit": "short", "decimals": 0, "color": { "mode": "fixed", "fixedColor": "text" } }, "overrides": [] },
+      "options": { "colorMode": "value", "graphMode": "area", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false } },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "expr": "sum(increase(actions_gateway_job_duration_seconds_count{namespace=~\"$namespace\", runner_group=~\"$runner_group\"}[$__range]))",
+          "legendFormat": "jobs",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "type": "stat",
+      "title": "Mean job duration",
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "gridPos": { "h": 6, "w": 6, "x": 18, "y": 1 },
+      "id": 5,
+      "description": "Pod-hours divided by jobs. The right-sizing lever: a mean that rises while job count holds steady is jobs getting slower, and the same spend buying less. No data when the range holds no completed job, since the divisor is then zero.",
+      "fieldConfig": { "defaults": { "unit": "s", "color": { "mode": "fixed", "fixedColor": "text" } }, "overrides": [] },
+      "options": { "colorMode": "value", "graphMode": "area", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false } },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "expr": "sum(increase(actions_gateway_job_duration_seconds_sum{namespace=~\"$namespace\", runner_group=~\"$runner_group\"}[$__range])) / sum(increase(actions_gateway_job_duration_seconds_count{namespace=~\"$namespace\", runner_group=~\"$runner_group\"}[$__range]))",
+          "legendFormat": "mean",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "type": "row",
+      "title": "Spend by Tenant",
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 7 },
+      "id": 10,
+      "panels": []
+    },
+    {
+      "type": "barchart",
+      "title": "Estimated spend by tenant",
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "gridPos": { "h": 7, "w": 8, "x": 0, "y": 8 },
+      "id": 11,
+      "description": "One bar per tenant namespace over the selected range. Namespace is tenant here — GAG places a tenant's workers, proxy pool and AGC in one namespace — which is why this lines up with an OpenCost or Kubecost aggregate=namespace report with no extra wiring. The query is instant: this bar chart compares tenants to each other over the whole range, so each needs a single value rather than one bar per scrape.",
+      "fieldConfig": { "defaults": { "unit": "short", "decimals": 2 }, "overrides": [] },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "expr": "sum by (namespace) (increase(actions_gateway_job_duration_seconds_sum{namespace=~\"$namespace\", runner_group=~\"$runner_group\"}[$__range])) / 3600 * $rate",
+          "instant": true,
+          "legendFormat": "{{namespace}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Spend rate per hour by tenant",
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "gridPos": { "h": 7, "w": 8, "x": 8, "y": 8 },
+      "id": 12,
+      "description": "Currency per hour: pod-seconds consumed per second is pod-hours per hour, so the rate of the duration sum multiplied by $rate is a live burn rate. The histogram attributes a pod's whole lifetime at the moment it completes, so this series is a trailing average and is lumpy over windows near the job duration itself.",
+      "fieldConfig": { "defaults": { "unit": "short", "decimals": 2, "custom": { "fillOpacity": 10 } }, "overrides": [] },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "expr": "sum by (namespace) (rate(actions_gateway_job_duration_seconds_sum{namespace=~\"$namespace\", runner_group=~\"$runner_group\"}[5m])) * $rate",
+          "legendFormat": "{{namespace}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "type": "bargauge",
+      "title": "Share of fleet worker pod-hours",
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "gridPos": { "h": 7, "w": 8, "x": 16, "y": 8 },
+      "id": 13,
+      "description": "Each selected tenant's share of the whole fleet's worker pod-hours. The denominator is deliberately unfiltered, so filtering to one tenant shows its share of everything rather than 100% of itself — which is the number a chargeback conversation is about. Rate-free, so it holds whatever $rate is set to.",
+      "fieldConfig": { "defaults": { "unit": "percent", "decimals": 1, "min": 0, "max": 100 }, "overrides": [] },
+      "options": { "displayMode": "gradient", "orientation": "horizontal" },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "expr": "100 * sum by (namespace) (increase(actions_gateway_job_duration_seconds_sum{namespace=~\"$namespace\", runner_group=~\"$runner_group\"}[$__range])) / scalar(sum(increase(actions_gateway_job_duration_seconds_sum[$__range])))",
+          "instant": true,
+          "legendFormat": "{{namespace}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "type": "row",
+      "title": "Spend by Runner Shape",
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 15 },
+      "id": 20,
+      "panels": []
+    },
+    {
+      "type": "barchart",
+      "title": "Worker pod-hours by shape",
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "gridPos": { "h": 7, "w": 8, "x": 0, "y": 16 },
+      "id": 21,
+      "description": "Pod-hours split by tenant and runner shape, deliberately in hours rather than currency: shapes differ in effective hourly rate by more than an order of magnitude (§F.1 prices a CPU slot at $0.096/hr against a GPU slot at $4.10/hr), so one bar chart in one currency across shapes would be wrong. Read a shape's cost by pinning $runner_group and $rate together.",
+      "fieldConfig": { "defaults": { "unit": "short", "decimals": 1 }, "overrides": [] },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "expr": "sum by (namespace, runner_group) (increase(actions_gateway_job_duration_seconds_sum{namespace=~\"$namespace\", runner_group=~\"$runner_group\"}[$__range])) / 3600",
+          "instant": true,
+          "legendFormat": "{{namespace}}/{{runner_group}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "type": "barchart",
+      "title": "Jobs completed by shape",
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "gridPos": { "h": 7, "w": 8, "x": 8, "y": 16 },
+      "id": 22,
+      "description": "Job volume per shape over the range. Beside the pod-hours bars it separates the two ways a shape's spend grows: more jobs, or slower jobs.",
+      "fieldConfig": { "defaults": { "unit": "short", "decimals": 0 }, "overrides": [] },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "expr": "sum by (namespace, runner_group) (increase(actions_gateway_job_duration_seconds_count{namespace=~\"$namespace\", runner_group=~\"$runner_group\"}[$__range]))",
+          "instant": true,
+          "legendFormat": "{{namespace}}/{{runner_group}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Mean job duration by shape",
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "gridPos": { "h": 7, "w": 8, "x": 16, "y": 16 },
+      "id": 23,
+      "description": "Mean worker pod lifetime per shape over time. A shape drifting upward is spending more for the same job count, and is the entry point to the worker right-sizing lever in appendix-f-cost-model.md. A large divergence from a cost tool's pod-hours for the same shape usually means oversized resource requests.",
+      "fieldConfig": { "defaults": { "unit": "s", "custom": { "fillOpacity": 10 } }, "overrides": [] },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "expr": "sum by (namespace, runner_group) (rate(actions_gateway_job_duration_seconds_sum{namespace=~\"$namespace\", runner_group=~\"$runner_group\"}[5m])) / sum by (namespace, runner_group) (rate(actions_gateway_job_duration_seconds_count{namespace=~\"$namespace\", runner_group=~\"$runner_group\"}[5m]))",
+          "legendFormat": "{{namespace}}/{{runner_group}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "type": "row",
+      "title": "Zero Idle Compute (the always-on floor)",
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 23 },
+      "id": 30,
+      "panels": []
+    },
+    {
+      "type": "timeseries",
+      "title": "Worker consumption vs. the always-on floor",
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "gridPos": { "h": 7, "w": 12, "x": 0, "y": 24 },
+      "id": 31,
+      "description": "The property the cost model claims, made visible: mean concurrent worker pods against the proxy pool's ready replicas. Over a quiet weekend the worker series collapses toward zero while the proxy line stays flat, and that flat line is the whole idle floor. An ARC scale set holding minRunners > 0 would show a worker line that never reaches zero. The proxy series needs kube-state-metrics.",
+      "fieldConfig": { "defaults": { "unit": "short", "decimals": 1, "custom": { "fillOpacity": 10 } }, "overrides": [] },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "expr": "sum by (namespace) (rate(actions_gateway_job_duration_seconds_sum{namespace=~\"$namespace\", runner_group=~\"$runner_group\"}[5m]))",
+          "legendFormat": "worker pods (mean concurrent) {{namespace}}",
+          "refId": "A"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "expr": "sum by (namespace) (kube_deployment_status_replicas_ready{namespace=~\"$namespace\", deployment=\"actions-gateway-proxy\"})",
+          "legendFormat": "proxy replicas {{namespace}}",
+          "refId": "B"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Jobs completed per hour",
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "gridPos": { "h": 7, "w": 6, "x": 12, "y": 24 },
+      "id": 32,
+      "description": "The volume driving the worker line beside it. Spend that rises with this is the system working; spend that rises without it is jobs getting slower or shapes getting bigger.",
+      "fieldConfig": { "defaults": { "unit": "short", "decimals": 0, "custom": { "fillOpacity": 10 } }, "overrides": [] },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "expr": "sum by (namespace) (rate(actions_gateway_job_duration_seconds_count{namespace=~\"$namespace\", runner_group=~\"$runner_group\"}[5m])) * 3600",
+          "legendFormat": "{{namespace}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "type": "bargauge",
+      "title": "ResourceQuota headroom",
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "gridPos": { "h": 7, "w": 6, "x": 18, "y": 24 },
+      "id": 33,
+      "description": "What the tenant is using against the cap the platform set, as a used bar beside its cap. A tenant pinned at its quota is one whose spend is being held down by the cap rather than by demand, which is a budget conversation rather than an incident. Requires kube-state-metrics.",
+      "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] },
+      "options": { "displayMode": "gradient", "orientation": "horizontal" },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "expr": "kube_resourcequota{namespace=~\"$namespace\", type=\"used\"}",
+          "instant": true,
+          "legendFormat": "{{namespace}} {{resource}} used",
+          "refId": "A"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "expr": "kube_resourcequota{namespace=~\"$namespace\", type=\"hard\"}",
+          "instant": true,
+          "legendFormat": "{{namespace}} {{resource}} cap",
+          "refId": "B"
+        }
+      ]
+    }
+  ]
+}
