@@ -1557,7 +1557,7 @@ Three causes, all seen here, and only one of them is the directive's fault:
   Undiagnosed.
 
 **The surface is every directive, not the ones a past failure named.** Measured 2026-08-24 over the first-party tree: 117 directive sites, 104 of them naming `gosec` and 5 `staticcheck`, the rest `revive`, `dupl`, `errcheck`, `noctx` and `forbidigo`.
-That the class reaches `gosec` is a measurement rather than an inference.
+That the class reaches `gosec` is a measurement rather than an inference, for the class as a whole; it establishes the first cause above, and carries to the third only by `nolintlint`'s unused check being linter-agnostic.
 Adding a `G101` exclusion at `api/apiconditions/conditions.go:40` takes that package from `0 issues` to a `nolintlint` red naming the directive on that line, and removing it takes it back.
 
 **A directive naming a disabled linter is inert, not an error**, because the nolint filter drops the candidate outright when the named linter is not in the enable list (golangci-lint 2.12.2, `pkg/result/processors/nolint_filter.go`).
