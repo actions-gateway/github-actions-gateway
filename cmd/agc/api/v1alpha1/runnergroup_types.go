@@ -172,8 +172,8 @@ type RunnerGroupSpec struct {
 // limit (Q223): a token bucket where MaxPerSecond is the sustained refill rate and
 // Burst is the bucket depth (the largest instantaneous batch before throttling
 // engages). An empty bucket withholds intake rather than delaying an acquired job:
-// the AGC declines to claim the next job, leaving it queued at GitHub for
-// redelivery, so no job ever waits for a token while holding a GitHub job lock.
+// the AGC declines to claim the next job, leaving it queued at GitHub for redelivery,
+// so no job ever waits for a token while holding a GitHub job lock.
 type ScaleUpRateLimit struct {
 	// MaxPerSecond is the sustained rate, in worker pods created per second, once
 	// the initial burst is spent. Required when scaleUp is set.
