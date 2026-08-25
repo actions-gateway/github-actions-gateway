@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"log/slog"
 	"net/url"
+	"sort"
+	"sync"
 	"time"
 
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/provisioner"
@@ -91,6 +93,45 @@ type scaleSetListenerHandle struct {
 	// group is read once, at registration, so without this a live listener holds the
 	// old boundary until the AGC restarts (Q712).
 	runnerGroup string
+	// capacity carries the most recent advertisement from the listener's poll loop to
+	// the reconcile that publishes it on status (Q721). It hangs off the handle so it
+	// is freed with the listener it belongs to, by the delete this map already does on
+	// stop; a map of its own would need its own teardown and could outlive the set.
+	capacity *capacityRecord
+}
+
+// capacityRecord is the one-value handoff from a listener's poll loop, which computes
+// the capacity advertisement, to the reconcile goroutine, which writes it to status.
+// The two run concurrently and at different cadences, so the value is guarded and only
+// ever the latest one is kept: status reports the set's current intake, not a history.
+//
+// The zero value is ready to use and reports ok=false until the first poll, which is
+// what keeps status.advertisedCapacity nil rather than a fabricated zero on a listener
+// that has started but not yet polled.
+type capacityRecord struct {
+	mu   sync.Mutex
+	adv  provisioner.CapacityAdvertisement
+	seen bool
+}
+
+// record stores the advertisement this poll produced, replacing any earlier one.
+func (c *capacityRecord) record(adv provisioner.CapacityAdvertisement) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.adv, c.seen = adv, true
+}
+
+// last returns the most recent advertisement and whether one has been made at all. A
+// nil receiver reports ok=false, so a caller holding a handle from before this field
+// existed (or a test building one by hand) reads "not yet advertised" rather than
+// panicking.
+func (c *capacityRecord) last() (provisioner.CapacityAdvertisement, bool) {
+	if c == nil {
+		return provisioner.CapacityAdvertisement{}, false
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.adv, c.seen
 }
 
 // scaleSetClientFor returns the scale-set client of the listener running for key, or
@@ -162,6 +203,7 @@ func (r *RunnerSetReconciler) reconcileScaleSetListener(ctx context.Context, log
 		rs.Status.ActiveSessions = 0
 		rs.Status.ActiveJobs = podCounts.active
 		rs.Status.PendingJobs = podCounts.pending
+		clearAdvertisedCapacity(rs)
 		rs.Status.ObservedGeneration = rs.Generation
 		if uerr := r.Status().Update(ctx, rs); uerr != nil && !apierrors.IsConflict(uerr) {
 			return ctrl.Result{}, uerr
@@ -174,6 +216,7 @@ func (r *RunnerSetReconciler) reconcileScaleSetListener(ctx context.Context, log
 	rs.Status.ActiveSessions = 1
 	rs.Status.ActiveJobs = podCounts.active
 	rs.Status.PendingJobs = podCounts.pending
+	applyAdvertisedCapacity(rs, handle.capacity)
 	rs.Status.ObservedGeneration = rs.Generation
 	r.setReadyCondition(rs, true, v2alpha1.ReasonListenerActive,
 		fmt.Sprintf("references resolved (template via %s); scale-set listener active (scaleSetID %d, %d job(s) assigned)",
@@ -249,6 +292,10 @@ func (r *RunnerSetReconciler) ensureScaleSetListener(ctx context.Context, log *s
 		ev:   r.eventRecorder(),
 	}
 
+	// Allocated before the listener so its Capacity closure can record into it from
+	// the first poll, and stored on the handle below so the reconcile can read it.
+	capacity := &capacityRecord{}
+
 	l, err := scalesetlistener.New(scalesetlistener.Config{
 		Client:       ssClient,
 		ScaleSetName: scaleSetName,
@@ -299,7 +346,7 @@ func (r *RunnerSetReconciler) ensureScaleSetListener(ctx context.Context, log *s
 		// Per-RunnerSet ConfigMap persisting the concluded-job guards, so a hard-killed
 		// AGC does not replay an assignment it concluded but had not yet deleted (Q606).
 		Guards:   r.scaleSetGuardStore(rs),
-		Capacity: r.scaleSetCapacityFunc(key, target),
+		Capacity: r.scaleSetCapacityFunc(key, target, capacity),
 		// Per-RunnerSet Prometheus recorder over the scale-set tier's counters
 		// (Q264 P4 observability). Nil ScaleSetMetrics yields a nil recorder, which
 		// the listener treats as metrics-disabled.
@@ -334,6 +381,7 @@ func (r *RunnerSetReconciler) ensureScaleSetListener(ctx context.Context, log *s
 	}
 	h := &scaleSetListenerHandle{
 		listener: l, client: ssClient, cancel: cancel, done: done, runnerGroup: runnerGroup,
+		capacity: capacity,
 	}
 	r.scaleSetListeners[key] = h
 	return h, nil
@@ -395,7 +443,7 @@ func (r *RunnerSetReconciler) claimedRunnerNames(ctx context.Context, key types.
 //
 // The provisioner's own ceilingCheck still backstops per pod, so a stale read never
 // over-provisions.
-func (r *RunnerSetReconciler) scaleSetCapacityFunc(key types.NamespacedName, target *runnerSetTarget) scalesetlistener.CapacityFunc {
+func (r *RunnerSetReconciler) scaleSetCapacityFunc(key types.NamespacedName, target *runnerSetTarget, rec *capacityRecord) scalesetlistener.CapacityFunc {
 	advertise := r.Provisioner.AdvertiseCapacity(target, defaultScaleSetMaxCapacity)
 	return func(ctx context.Context) int {
 		adv := advertise(ctx)
@@ -403,6 +451,11 @@ func (r *RunnerSetReconciler) scaleSetCapacityFunc(key types.NamespacedName, tar
 		for reason, slots := range adv.Withheld {
 			r.ScaleSetMetrics.SetCapacityWithheld(key.Namespace, key.Name, reason, slots)
 		}
+		// The same accounting on status, for a tenant who cannot read Prometheus (Q721).
+		// Recorded here rather than published here: status belongs to the reconcile
+		// goroutine, and a poll that wrote it directly would race every other status
+		// write on the object.
+		rec.record(adv)
 		return int(adv.Total)
 	}
 }
@@ -552,4 +605,46 @@ func scaleSetNameOf(rs *v2alpha1.RunnerSet) string {
 		return ""
 	}
 	return rs.Spec.RunnerLabels[0]
+}
+
+// applyAdvertisedCapacity publishes the listener's most recent capacity advertisement
+// on status, so a tenant can read why intake is throttled without Prometheus (Q721).
+//
+// Before the first poll it leaves both fields at their zero values rather than writing
+// an advertisement of 0, which would read as "intake fully withheld" — the opposite of
+// "not yet advertised", and the reason advertisedCapacity is a pointer.
+//
+// The reasons are sorted so the rendered list is stable across reconciles: the
+// advertisement carries them in a map, and an unsorted write would reorder the list on
+// every reconcile, producing a status update (and a watch event) whenever Go's map
+// iteration order changed rather than when the capacity did.
+func applyAdvertisedCapacity(rs *v2alpha1.RunnerSet, rec *capacityRecord) {
+	adv, ok := rec.last()
+	if !ok {
+		return
+	}
+	total := adv.Total
+	rs.Status.AdvertisedCapacity = &total
+
+	reasons := make([]string, 0, len(adv.Withheld))
+	for reason := range adv.Withheld {
+		reasons = append(reasons, reason)
+	}
+	sort.Strings(reasons)
+
+	withheld := make([]v2alpha1.WithheldCapacity, 0, len(reasons))
+	for _, reason := range reasons {
+		withheld = append(withheld, v2alpha1.WithheldCapacity{Reason: reason, Slots: adv.Withheld[reason]})
+	}
+	rs.Status.WithheldCapacity = withheld
+}
+
+// clearAdvertisedCapacity drops the published advertisement, for the paths that stop
+// (or never start) a listener: an unresolved reference, a failed listener start, and
+// gateway teardown. It is the capacity twin of zeroing activeSessions there — a set
+// with no session advertises nothing, and leaving the last advertisement behind would
+// report withheld slots against intake that no longer exists.
+func clearAdvertisedCapacity(rs *v2alpha1.RunnerSet) {
+	rs.Status.AdvertisedCapacity = nil
+	rs.Status.WithheldCapacity = nil
 }

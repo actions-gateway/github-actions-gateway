@@ -898,6 +898,8 @@ _Appears in:_
 | `activeSessions` _integer_ | ActiveSessions is the number of currently open long-poll sessions. |  | Optional: \{\} |
 | `activeJobs` _integer_ | ActiveJobs is the number of worker pods currently in the Running phase (a job is actively executing). Derived from the worker pod phase count during each reconcile; see also PendingJobs. |  | Optional: \{\} |
 | `pendingJobs` _integer_ | PendingJobs is the number of worker pods currently in the Pending phase (a job has been acquired and a pod spawned, but the pod is not yet running — waiting on scheduling, image pull, or node readiness). Pods that remain Pending past spec.pendingPodDeadline are deleted by the controller; a sustained non-zero count warrants checking events and scheduling constraints. |  | Optional: \{\} |
+| `advertisedCapacity` _integer_ | AdvertisedCapacity is the X-ScaleSetMaxCapacity this set most recently advertised: the total jobs GitHub may keep assigned to it at once, recomputed every long-poll from the admission ladder. Together with WithheldCapacity it answers "why is intake throttled?" from `kubectl describe` alone — the same accounting previously reachable only through Prometheus, which a tenant without metrics access cannot read (Q721).<br />A pointer because zero is a meaningful advertisement (intake fully withheld) and has to be distinguishable from "no advertisement": nil on a classic-tier set, which decides per delivered job and never states a capacity, and on a scale-set set whose listener has not polled yet.<br />Lags the live value by up to one reconcile, because the advertisement is recomputed per poll and published per reconcile. It is an observation of intake, never an input: setting it does not change what the listener advertises. |  | Optional: \{\} |
+| `withheldCapacity` _[WithheldCapacity](#withheldcapacity) array_ | WithheldCapacity attributes the gap between the declared worker ceiling and AdvertisedCapacity to the rung of the admission ladder that took each slot, so a tenant can tell "my own maxWorkers" from "the namespace ResourceQuota" from "the cluster cannot place my workers" without reading metrics or the AGC's logs (Q721). Every rung the poll evaluated appears, including the ones withholding nothing, so a reason absent from the list was not evaluated rather than not binding — the same explicit-zero contract the withheld gauge carries.<br />Empty on a classic-tier set and before the first poll, alongside a nil AdvertisedCapacity. |  | Optional: \{\} |
 | `proxyMode` _string_ | ProxyMode records how this runner set's worker egress reaches GitHub: "Proxied" (through the resolved EgressProxy, with stable per-tenant egress IPs) or "Direct" (no proxyRef/defaultProxyRef, still NetworkPolicy-restricted to GitHub + DNS but without per-tenant IP attribution). Explicit so "no proxy" is an auditable state, not an inferred absence (§H.10). Paired with the advisory EgressUnattributed condition when Direct. |  | Enum: [Proxied Direct]<br />Optional: \{\} |
 | `templateSource` _string_ | TemplateSource records which rung of the template-resolution chain supplied this runner set's worker pod shape (Q172, §H.4): "TemplateRef" (its own spec.templateRef), "GatewayDefault" (the gateway's spec.defaultTemplateRef, inherited because templateRef was unset), or "ClusterDefault" (the single cluster-default ClusterRunnerTemplate, resolved because neither was set). Explicit so an operator can audit whether a set runs on an explicit template or a default without inspecting the gateway and cluster state. Empty until the references resolve. |  | Enum: [TemplateRef GatewayDefault ClusterDefault]<br />Optional: \{\} |
 | `sizingProfileState` _string_ | SizingProfileState reports whether the opt-in sizing profile (spec.sizing.profile) is actuating: "Active" — derived values are applied at pod build; "AwaitingSamples" — a history-based profile (Binpack / Throughput) is selected but not every template container has a confident recommendation yet, so pods provision with the template's static values until the history accumulates (whole-pod fallback, keeping QoS predictable). Empty when no profile (or Static) is selected. Explicit so "is the profile live yet" is auditable status, not something to infer from pod specs (the proxyMode precedent). |  | Enum: [Active AwaitingSamples]<br />Optional: \{\} |
@@ -1114,6 +1116,26 @@ _Appears in:_
 | `keyName` _string_ | KeyName is the name of the Vault transit key that signs the App JWT. The key must be an RSA key (GitHub App keys are RSA); transit signs it as RS256 (pkcs1v15 + sha2-256). |  | MaxLength: 255<br />MinLength: 1 |
 | `auth` _[VaultKubernetesAuth](#vaultkubernetesauth)_ | Auth configures how the AGC authenticates to Vault (Vault Kubernetes auth in the MVP). |  |  |
 | `networkPolicy` _[EgressPeer](#egresspeer)_ | NetworkPolicy optionally tells the GMC how to reach Vault as a NetworkPolicy egress peer (Q202). On a policy-enforcing CNI the per-tenant AGC NetworkPolicy default-denies egress (DNS + GitHub + the kube API server); Vault is not otherwise expressible as a peer because Address is an opaque URL, so set this and the GMC emits a scoped AGC→Vault egress rule on the Vault API port (parsed from Address). Leave it unset on a non- enforcing CNI (e.g. kindnet) or when the egress rule is managed out of band — the rule is a strict tightening that is only ever added, never a broaden-to-all-egress. Set on a GitHubApp gateway it has no effect (no Vault egress is emitted for the possession model).<br />The value is a shared EgressPeer (Q204): the selector/CIDR peer the GMC scopes the rule to. Its Port is left unset for Vault (the port is derived from Address); set it only to override that derived port. |  | Optional: \{\} |
+
+
+#### WithheldCapacity
+
+
+
+WithheldCapacity is one admission-ladder rung's contribution to the gap between a
+runner set's declared worker ceiling and the capacity it advertises (Q721). The
+entries sum to ceiling - advertisedCapacity, because the rungs compose as a min()
+and each entry is its own marginal contribution.
+
+
+
+_Appears in:_
+- [RunnerSetStatus](#runnersetstatus)
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `reason` _string_ | Reason names the rung, matching the `reason` label on actions_gateway_scaleset_capacity_withheld so the status view and the metric read the same vocabulary: "quota" is namespace-ResourceQuota headroom, "capacity" the opt-in placeability gate, "scaleup" the opt-in creation-rate limit.<br />Deliberately not an enum. The ladder is designed to grow a rung at a time, and every rung must land in both acquisition tiers at once, so a closed enum would couple each new rung to a CRD change for no validation benefit: this field is controller-written status that a tenant cannot author. |  |  |
+| `slots` _integer_ | Slots is the number of worker slots this rung removed from the advertisement. Zero means the rung was evaluated and did not bind, which is a different statement from the reason being absent. |  |  |
 
 
 #### WorkerSizing
