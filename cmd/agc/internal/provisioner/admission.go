@@ -117,6 +117,19 @@ func (p *Provisioner) AdmitFor(snapshot *v1alpha1.RunnerGroup) runnercore.AdmitF
 // reasons in the right priority: ceiling needs someone to act, the rate rung clears
 // itself.
 //
+// The order costs one bounded artifact, which is the cheaper side of the trade and is
+// recorded so the next reader does not file it as a bug (Q977). A job reserves before
+// the rate rung refuses it, so inside that window a concurrent delivery can read an
+// inflated count and be told "ceiling" while the set is really ramp-limited. It is
+// transient, self-correcting within the same call stack, spends no token and no
+// throughput, and cannot over-admit: admit refuses at reserved >= limit, so the churn
+// inflates the count only WITHIN the ceiling. It needs ceiling-many Admit calls inside
+// one sub-microsecond window, so it concentrates on a small maxWorkers with many
+// listeners. The obvious repair — a non-binding tokens() peek ahead of the ceiling —
+// was measured and rejected: it removes the transient and makes the both-bound case
+// report "scaleup" persistently, for every delivery while a small set sits at its
+// ceiling with an empty bucket, trading a rare transient for a common systematic one.
+//
 // Without the quota rung, quota exhaustion is handled one layer down by
 // createPodWithQuotaRetry — which holds the GitHub job lock across up to
 // maxQuotaRetries × quotaRetryDelay (150s of a ~10-minute lock at the defaults) and,

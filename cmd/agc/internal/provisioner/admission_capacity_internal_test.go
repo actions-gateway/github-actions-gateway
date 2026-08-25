@@ -205,8 +205,10 @@ func TestAdmit_ScaleUpRung(t *testing.T) {
 	assert.False(t, ok, "the second job in the same instant has no token and must not be claimed")
 	assert.Equal(t, runnercore.AdmitReasonScaleUp, reason)
 
-	// The rate rung sits ahead of the ceiling rung precisely so a refusal here costs
-	// no reservation: refusing after one would leak a slot on every throttled job.
+	// The rate rung runs BEHIND the ceiling rung and hands its reservation straight
+	// back, so a throttled job costs no slot once the call returns. Ordering it ahead
+	// instead would spend a token on every ceiling refusal, which is the defect
+	// TestAdmit_CeilingRefusalDoesNotSpendAToken pins.
 	assert.Equal(t, int32(1), p.admission.reservedCount(key),
 		"a job refused by the rate rung must hand its ceiling reservation straight back")
 }
@@ -388,4 +390,12 @@ func TestAdmit_RateRefusalRefundsUnderConcurrency(t *testing.T) {
 	assert.Equal(t, admitted.Load(), p.admission.reservedCount(target.Key().String()),
 		"the gate must hold exactly one reservation per admitted job: a refusal that "+
 			"skipped its refund leaks a slot, and a double refund loses one")
+
+	// The stronger invariant, and the one that bounds Q977's labelling artifact: the
+	// count never exceeds the ceiling even mid-flight, because admit refuses at
+	// reserved >= limit. So the reserve-then-release churn can inflate the count only
+	// WITHIN the ceiling, never past it — a transient can mislabel a refusal, and
+	// cannot over-admit.
+	assert.LessOrEqual(t, p.admission.reservedCount(target.Key().String()), target.ceiling,
+		"the reservation count must never exceed the declared ceiling")
 }
