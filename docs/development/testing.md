@@ -1537,6 +1537,29 @@ The hang was that new call re-asking an unroutable fake for its whole retry wind
 
 Two corollaries, with the repo's numbers: **time the package alone before believing "under load"**, where 240 s under the gate and 1.6 s standalone is the load story and 240 s both ways is not; and **a pre-existing test can hang on new code**, so what matters is whether its fixture reaches the new path, not that the test predates the change.
 
+### A `directive is unused` red is about the linter's silence, not the directive
+
+`nolintlint` runs with `allow-unused: false` (`.golangci.yml`), so a `//nolint:<linter>` directive that suppressed nothing fails the build.
+The directive is never the subject: golangci-lint reports it exactly when **no issue from that linter reached the nolint filter for that line**, so what has to be diagnosed is why the linter went quiet.
+
+Three causes, all seen here, and only one of them is the directive's fault:
+
+- **A config exclusion silenced it.** In golangci-lint 2.12.2, `NewExclusionRules` is registered ahead of `NewNolintFilter` in `pkg/lint/runner.go`, so `linters.exclusions.rules` strips the issue before the directive can match it: an exclusion and a directive covering the same line cannot coexist.
+  Measured 2026-08-24 by restoring the two `//nolint:staticcheck` directives #1639 dropped from `cmd/agc/internal/transport/trustpool_test.go` while leaving that file's `SA1019.*Subjects` exclusion in place: 2 `nolintlint` issues, on a tree that lints clean without them.
+  Pick one suppression per line; adding the other is the failure, not the fix.
+- **A stale analysis cache.** Q516: an entry keyed on a deleted worktree path reported `G204` *and* `directive //nolint:gosec … is unused` on the same two lines.
+  [Build and lint caches across worktrees](#build-and-lint-caches-across-worktrees) has the mechanism and the one-line recovery.
+- **The linter stopped emitting, with nothing else changing.** Q929: one commit, two CI verdicts, same Go, cache key and scope.
+  Undiagnosed.
+
+**The surface is every directive, not the ones a past failure named.** Measured 2026-08-24 over the first-party tree: 117 directive sites, 104 of them naming `gosec` and 5 `staticcheck`, the rest `revive`, `dupl`, `errcheck`, `noctx` and `forbidigo`.
+That the class reaches `gosec` is a measurement rather than an inference.
+Adding a `G101` exclusion at `api/apiconditions/conditions.go:40` takes that package from `0 issues` to a `nolintlint` red naming the directive on that line, and removing it takes it back.
+
+**A directive naming a disabled linter is inert, not an error**, because the nolint filter drops the candidate outright when the named linter is not in the enable list (`pkg/result/processors/nolint_filter.go`).
+That is why the five `//nolint:revive,staticcheck` dot-imports under `cmd/gmc/test/utils/` stand on their `staticcheck` half alone: `revive` is not enabled, so only `staticcheck` has to fire.
+It is also why counting the surface needs the comma form: a grep for the literal `nolint:staticcheck` returns nothing on a tree that holds five of them, which is how Q929 came to be filed asserting the staticcheck surface was empty.
+
 ### A flake that passed on rerun has two logs — diff them
 
 GitHub keeps each attempt separately, so one run ID yields both a failing and a passing log over the same test on the same commit:
