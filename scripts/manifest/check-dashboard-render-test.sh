@@ -61,6 +61,8 @@ render() {  # render <repo> <name> <content>
 newrepo() {  # newrepo <dir> -> a repo with one dashboard and its render
     local r="$1"
     git init -q -b main "$r"
+    # Q820: no detached maintenance racing the next command in a fixture repo.
+    git -C "$r" config maintenance.auto false
     git -C "$r" config user.email t@e.com
     git -C "$r" config user.name T
     dashboard "$r" platform "A panel." ""

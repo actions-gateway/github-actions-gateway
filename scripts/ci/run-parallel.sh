@@ -24,6 +24,13 @@
 # its slowest member, so that block is the only place a gate's cost is legible
 # (Q819).
 #
+# RUN_PARALLEL_GIT_TRACE_DIR — when set to an absolute, existing directory, each
+# child runs under GIT_TRACE=$dir/<label>.trace. `make scripts-test` sets it so
+# check-fixture-maintenance.sh can hold every suite to the no-background-git
+# invariant off the run that already happens (Q921). The variable reaches one
+# level only; GIT_TRACE itself cascades, so every git a child runs at any depth
+# lands in that child's one file.
+#
 # Example:
 #   scripts/ci/run-parallel.sh \
 #     "cert-manager:make apply-cert-manager" \
@@ -73,6 +80,21 @@ for spec in "$@"; do
     # the suppression would be wider than the line it covers.
     (
         started="$(date +%s)"
+        # Opt-in per-child git trace, so a fan-out can measure what git its
+        # children spawned without running them a second time (Q921). One file
+        # per label, because a shared one interleaves under concurrency. The
+        # caller's dir must be absolute: git 2.55.0 answers a relative GIT_TRACE
+        # with `unknown trace value` and traces to stderr, which this runner
+        # labels and merges into the gate's own output.
+        if [[ -n "${RUN_PARALLEL_GIT_TRACE_DIR:-}" ]]; then
+            export GIT_TRACE="$RUN_PARALLEL_GIT_TRACE_DIR/$label.trace"
+            # Not inherited past this child: a nested fan-out would re-point
+            # GIT_TRACE at its own labels, so a suite's git would land under a
+            # name that is not a suite and its own file would never be written.
+            # GIT_TRACE itself still cascades, which is what keeps every git a
+            # suite runs, at any depth, in that suite's one file.
+            unset RUN_PARALLEL_GIT_TRACE_DIR
+        fi
         rc=0
         bash -c "$cmd" 2>&1 | awk -v label="[$label]" '{ print label, $0; fflush() }' || rc=$?
         printf '%s\t%s\n' "$(( $(date +%s) - started ))" "$label" > "$timings/$idx" || true

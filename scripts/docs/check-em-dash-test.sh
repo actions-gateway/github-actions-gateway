@@ -42,6 +42,8 @@ new_repo() {
     WORK="$(mktemp -d)"
     workdirs+=("$WORK")
     git -C "$WORK" init -q
+    # Q820: no detached maintenance racing the next command in a fixture repo.
+    git -C "$WORK" config maintenance.auto false
     : >"$WORK/baseline.txt"
 }
 
