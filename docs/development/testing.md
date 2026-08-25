@@ -1544,8 +1544,12 @@ The directive is never the subject: golangci-lint reports it exactly when **no i
 
 Three causes, all seen here, and only one of them is the directive's fault:
 
-- **A config exclusion silenced it.** In golangci-lint 2.12.2, `NewExclusionRules` is registered ahead of `NewNolintFilter` in `pkg/lint/runner.go`, so `linters.exclusions.rules` strips the issue before the directive can match it: an exclusion and a directive covering the same line cannot coexist.
-  Measured 2026-08-24 by restoring the two `//nolint:staticcheck` directives #1639 dropped from `cmd/agc/internal/transport/trustpool_test.go` while leaving that file's `SA1019.*Subjects` exclusion in place: 2 `nolintlint` issues, on a tree that lints clean without them.
+- **A config exclusion silenced it.** An exclusion and a directive covering the same line cannot coexist: the exclusion strips the issue before the directive can match it.
+  Measured 2026-08-24 on `cmd/agc/internal/transport/trustpool_test.go`, restoring the two `//nolint:staticcheck` directives #1639 dropped and varying only the config.
+  With that file's `SA1019.*Subjects` exclusion in place: 2 `nolintlint` issues.
+  With the exclusion removed and the same directives present: `0 issues`.
+  The exclusion is the only difference, which also rules out staticcheck having been quiet on its own: the third cause below.
+  In golangci-lint 2.12.2 the ordering that produces it is `NewExclusionRules` registered ahead of `NewNolintFilter` in `pkg/lint/runner.go`, but the pair of runs is the instrument and the source read only corroborates it.
   Pick one suppression per line; adding the other is the failure, not the fix.
 - **A stale analysis cache.** Q516: an entry keyed on a deleted worktree path reported `G204` *and* `directive //nolint:gosec … is unused` on the same two lines.
   [Build and lint caches across worktrees](#build-and-lint-caches-across-worktrees) has the mechanism and the one-line recovery.
@@ -1556,9 +1560,11 @@ Three causes, all seen here, and only one of them is the directive's fault:
 That the class reaches `gosec` is a measurement rather than an inference.
 Adding a `G101` exclusion at `api/apiconditions/conditions.go:40` takes that package from `0 issues` to a `nolintlint` red naming the directive on that line, and removing it takes it back.
 
-**A directive naming a disabled linter is inert, not an error**, because the nolint filter drops the candidate outright when the named linter is not in the enable list (`pkg/result/processors/nolint_filter.go`).
-That is why the five `//nolint:revive,staticcheck` dot-imports under `cmd/gmc/test/utils/` stand on their `staticcheck` half alone: `revive` is not enabled, so only `staticcheck` has to fire.
-It is also why counting the surface needs the comma form: a grep for the literal `nolint:staticcheck` returns nothing on a tree that holds five of them, which is how Q929 came to be filed asserting the staticcheck surface was empty.
+**A directive naming a disabled linter is inert, not an error**, because the nolint filter drops the candidate outright when the named linter is not in the enable list (golangci-lint 2.12.2, `pkg/result/processors/nolint_filter.go`).
+`cmd/gmc/test/utils/` measures it in one command: the package carries two `//nolint:revive` and five `//nolint:revive,staticcheck`, `revive` appears nowhere in `.golangci.yml`, and the package lints `0 issues`.
+So the revive-only pair is inert rather than unused, and the five comma-form directives stand on their `staticcheck` half alone.
+It is also why counting the surface needs the comma form: a grep for the literal `nolint:staticcheck` returns nothing **first-party** on a tree that holds five of them, which is how Q929 came to be filed asserting the staticcheck surface was empty.
+Scope the grep as well as its pattern: unscoped, that same query returns dozens of hits, every one of them under a `vendor/` tree and none of them yours.
 
 ### A flake that passed on rerun has two logs — diff them
 
