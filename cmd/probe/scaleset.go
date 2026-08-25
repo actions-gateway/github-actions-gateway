@@ -186,11 +186,17 @@ func parseScalesetConfig(getenv func(string) string) (scalesetConfig, error) {
 // the response", while these lines answer "what did GitHub actually send" —
 // including the 202s GetMessage reports as (nil, nil) and the rate-limit headers
 // (U4) no typed return carries.
-type wireLog struct{ log *slog.Logger }
+// tag names the investigation the line belongs to. Four scenarios share this
+// observer, so a hardcoded letter attributes every one of their wire lines to
+// whichever scenario happened to write the helper.
+type wireLog struct {
+	log *slog.Logger
+	tag string
+}
 
 // ObserveResponse implements scaleset.ResponseObserver.
 func (w wireLog) ObserveResponse(info scaleset.ResponseInfo) {
-	w.log.Info("INVESTIGATION-E: wire",
+	w.log.Info("INVESTIGATION-"+w.tag+": wire",
 		"op", info.Op,
 		"method", info.Method,
 		"host", info.Host,
@@ -249,7 +255,7 @@ func newScalesetProbe(logger *slog.Logger, cfg scalesetConfig, provider githubap
 		APIBase:       apiBase,
 		HTTPClient:    hc,
 		PollClient:    pollClient,
-		Observer:      wireLog{log: logger},
+		Observer:      wireLog{log: logger, tag: "E"},
 	})
 	if err != nil {
 		return nil, err

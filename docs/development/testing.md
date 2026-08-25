@@ -2758,7 +2758,14 @@ They are operator-run, never CI-run: they need live App credentials and, in one 
 The Q583 fix rests on both, and the `DeleteMessage` wire shape is the P2-surfaced P4 unknown Q264 left open. | [q583-restart-replay.md](../plan/archive/q583-restart-replay.md) | | Investigation H | `PROBE_ABANDONED_TEST=true` | What does the run service do with a completion for an acquired-but-never-run assignment?
 **Answered 2026-08-04 across four arms** (`PROBE_ABANDONED_RESULT` selects; `none` sends nothing): `abandoned` and `canceled` conclude the run `success` in one second (a false green), `failed` is refused 401, and silence gets an honest run+job `cancelled` at the ~15-minute unstarted-job horizon — so the listener reports nothing (Q676).
 `PROBE_ABANDONED_FORCECANCEL=true` adds the Q683 remedy arm, **answered 2026-08-05: a standalone REST force-cancel in the told-nothing state concludes run and job `cancelled` in ~1 s and unpins the runner record**, so the provisioner now ships it.
-`PROBE_ABANDONED_RERUN_CHECK=true` adds a `rerun-failed-jobs` measurement after a concluded-run verdict. | [q645-abandoned-completion.md](../plan/q645-abandoned-completion.md) |
+`PROBE_ABANDONED_RERUN_CHECK=true` adds a `rerun-failed-jobs` measurement after a concluded-run verdict. | [q645-abandoned-completion.md](../plan/q645-abandoned-completion.md) | | Investigation I | `PROBE_LABELPATCH_TEST=true` | Does the Actions Service honour a scale-set **labels** `PATCH`?
+Q726 registers labels at create and never rewrites them, and whether it could was the unknown that decided report-vs-reconcile.
+**Answered 2026-08-24: no**.
+A labels `PATCH` answers 200, stores nothing, and returns the *stored* set rather than an echo, and a live session is undisturbed.
+Five arms, gated on a create-arm control that stops the run when a backend drops extra labels at create and would make every `PATCH` verdict unreadable. | [q793-labels-patch.md](../plan/archive/q793-labels-patch.md) |
+
+Investigation I is one run against one throwaway scale set, with no job and no wall clock, which makes it the cheapest of the five to re-run against a future GitHub.
+Its verdicts come from an independent `GET` rather than the `PATCH` response, because a service echoing its input is byte-identical to one that stored it, and reading the response instead is exactly what its `LabelPatchEcho` unit case fails on.
 
 Investigation G is one run, three session generations, so it needs no state file and no multi-hour gap.
 Its `DeleteMessage` verdict turns on **whether the wire deleted anything**, not on the client's error: a 404/410 completes an ack (for a listener, a message already gone is nothing left to do) but deletes nothing, and a backend that does not serve the endpoint answers 404 too.
@@ -2768,6 +2775,7 @@ Investigation F is three phases around a state file rather than one run, because
 Its `arm` phase leaves the message under test deliberately unacknowledged; do not "tidy up" by acknowledging it, and do not leave a session behind between phases, or the next gap measures something shorter than it claims.
 
 All four register against the repo, not the org (E/F/G a scale set, H two plain JIT runners on the classic broker v2 flow the AGC's listener ships): this repo is public and the org's `Default` runner group sets `allows_public_repositories: false`, so an org-scoped registration never receives the job.
+Investigation I takes either scope, because it registers a scale set and then never waits for a job, so the runner-group policy that strands the other four does not reach it.
 Each has a dispatch-only fixture workflow ([`scaleset-probe.yml`](../../.github/workflows/scaleset-probe.yml), [`q468-retention-probe.yml`](../../.github/workflows/q468-retention-probe.yml), [`q583-replay-probe.yml`](../../.github/workflows/q583-replay-probe.yml), [`q645-abandoned-probe.yml`](../../.github/workflows/q645-abandoned-probe.yml)) that queues jobs on its label and never runs in normal CI.
 Dispatch the fixture *before* starting the probe — a job queued against a not-yet-registered label waits server-side and is assigned the moment the scale set appears.
 

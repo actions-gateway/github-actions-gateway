@@ -183,6 +183,10 @@ type Stub struct {
 	// dropExtraScaleSetLabels makes a create keep only the scale set's name label
 	// while set, without erroring — see DropExtraScaleSetLabels.
 	dropExtraScaleSetLabels bool
+	// labelPatchMode is what a labels PATCH does to the stored set — see
+	// LabelPatchMode. The zero value is LabelPatchIgnore, which is both what this
+	// stub modelled before Q793 and what Q793 measured github.com to do.
+	labelPatchMode LabelPatchMode
 	// runnerGroups, when non-nil, is the set of runner groups the installation has,
 	// by name → id; any other name resolves empty. Nil resolves every name — see
 	// SetRunnerGroups.
@@ -628,6 +632,38 @@ func (s *Stub) DropExtraScaleSetLabels(on bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.dropExtraScaleSetLabels = on
+}
+
+// LabelPatchMode is what a labels PATCH does to the stored label set. Investigation I
+// measured github.com on 2026-08-24: LabelPatchIgnore, and not even an echo — the
+// response carries the stored set (Q793). The other modes stay because a test states
+// which backend it is modelling rather than inheriting one, and because the probe's
+// own verdict logic has to be exercised against the answers github.com does not give.
+type LabelPatchMode int
+
+const (
+	// LabelPatchIgnore takes the name and group from the patch and drops its labels,
+	// answering 200. The stored set is unchanged and the response carries no labels.
+	LabelPatchIgnore LabelPatchMode = iota
+	// LabelPatchHonour stores the patched label set and returns it.
+	LabelPatchHonour
+	// LabelPatchEcho returns the labels the patch asked for while storing none of
+	// them — a service echoing its input. It is indistinguishable from
+	// LabelPatchHonour to a caller that reads the PATCH response, and the reason a
+	// verdict has to come from an independent GET.
+	LabelPatchEcho
+	// LabelPatchAdditive merges the patched labels into the stored set without ever
+	// removing one, so an append lands and a retraction silently does not.
+	LabelPatchAdditive
+	// LabelPatchRefuse answers 400.
+	LabelPatchRefuse
+)
+
+// SetLabelPatchMode selects what a labels PATCH does to the stored set.
+func (s *Stub) SetLabelPatchMode(m LabelPatchMode) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.labelPatchMode = m
 }
 
 // SetScaleSetLabels records the System labels a scale set carries, for a set put there
@@ -1145,7 +1181,10 @@ func (s *Stub) handleGetScaleSet(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"message":"not found"}`, http.StatusNotFound)
 		return
 	}
-	_ = json.NewEncoder(w).Encode(scaleset.RunnerScaleSet{ID: ss.id, Name: ss.name, RunnerGroupID: ss.groupID})
+	// Labels, like the by-name route: a caller reading a set back to see which
+	// labels it carries reaches this route by id whenever it already holds one.
+	_ = json.NewEncoder(w).Encode(scaleset.RunnerScaleSet{
+		ID: ss.id, Name: ss.name, RunnerGroupID: ss.groupID, Labels: ss.labels})
 }
 
 func (s *Stub) handlePatchScaleSet(w http.ResponseWriter, r *http.Request) {
@@ -1169,7 +1208,38 @@ func (s *Stub) handlePatchScaleSet(w http.ResponseWriter, r *http.Request) {
 	if patch.RunnerGroupID != 0 {
 		ss.groupID = patch.RunnerGroupID
 	}
-	_ = json.NewEncoder(w).Encode(scaleset.RunnerScaleSet{ID: ss.id, Name: ss.name, RunnerGroupID: ss.groupID})
+	out := scaleset.RunnerScaleSet{ID: ss.id, Name: ss.name, RunnerGroupID: ss.groupID}
+	switch s.labelPatchMode {
+	case LabelPatchRefuse:
+		http.Error(w, `{"message":"labels are not patchable"}`, http.StatusBadRequest)
+		return
+	case LabelPatchHonour:
+		if patch.Labels != nil {
+			ss.labels = patch.Labels
+		}
+		out.Labels = ss.labels
+	case LabelPatchAdditive:
+		for _, lbl := range patch.Labels {
+			if !hasScaleSetLabel(ss.labels, lbl.Name) {
+				ss.labels = append(ss.labels, lbl)
+			}
+		}
+		out.Labels = ss.labels
+	case LabelPatchEcho:
+		out.Labels = patch.Labels
+	case LabelPatchIgnore:
+	}
+	_ = json.NewEncoder(w).Encode(out)
+}
+
+// hasScaleSetLabel reports whether labels already carries name.
+func hasScaleSetLabel(labels []scaleset.Label, name string) bool {
+	for _, l := range labels {
+		if l.Name == name {
+			return true
+		}
+	}
+	return false
 }
 
 func (s *Stub) handleDeleteScaleSet(w http.ResponseWriter, r *http.Request) {

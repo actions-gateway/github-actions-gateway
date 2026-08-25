@@ -493,6 +493,10 @@ func (r *RunnerSetReconciler) stopScaleSetListener(key types.NamespacedName) {
 // nothing re-registers and the new label never reaches GitHub. Re-deriving the verdict
 // here catches the second the reconcile after the edit.
 //
+// Reporting is the whole remedy because there is no other one: a labels PATCH is
+// accepted and discarded (Q793), so the divergence cannot be corrected in place at any
+// point in the listener's life.
+//
 // Advisory: it never gates Ready. The set still serves every job targeting the labels
 // that did register, and a job targeting one that did not simply stays queued at GitHub,
 // which is a configuration mismatch for the operator to fix rather than an outage.
@@ -521,7 +525,8 @@ func (r *RunnerSetReconciler) applyRunnerLabelsCondition(rs *v2alpha1.RunnerSet,
 		status, reason = metav1.ConditionTrue, v2alpha1.ReasonLabelsNotRegistered
 		msg = fmt.Sprintf(
 			"scale set %q does not carry runnerLabel(s) %v (registered: %v); jobs whose runs-on names them stay queued at GitHub. "+
-				"Labels are registered when the scale set is created and not reconciled after, and on GitHub Enterprise Server "+
+				"Labels are fixed when the scale set is created and cannot be changed afterwards (the Actions Service accepts a "+
+				"labels PATCH and discards it, measured 2026-08-24), and on GitHub Enterprise Server "+
 				"below 3.21 the appliance drops all but the name label unless a site admin enables "+
 				"DistributedTask.AllowRunnerScaleSetCustomLabels. See docs/operations/troubleshooting.md",
 			scaleSetNameOf(rs), missing, registered)

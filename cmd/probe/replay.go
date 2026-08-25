@@ -248,7 +248,7 @@ type staged struct {
 // wire logger. Arguments as newScalesetProbe.
 func newReplayProbe(logger *slog.Logger, cfg replayConfig, provider githubapp.TokenProvider,
 	apiBase string, hc, pollClient *http.Client) (*replayProbe, error) {
-	deletes := &deleteObserver{inner: wireLog{log: logger}}
+	deletes := &deleteObserver{inner: wireLog{log: logger, tag: "G"}}
 	client, err := scaleset.New(scaleset.Config{
 		TokenProvider: provider,
 		ConfigURL:     cfg.ConfigURL,

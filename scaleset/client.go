@@ -473,6 +473,13 @@ func (c *Client) GetRunnerScaleSetByName(ctx context.Context, name string) (*Run
 }
 
 // UpdateRunnerScaleSet applies a PATCH to the scale set with the given id.
+//
+// Labels are NOT patchable. Measured 2026-08-24 against github.com: a PATCH carrying
+// a labels array answers 200, stores none of it, and returns the STORED label set
+// rather than the requested one — so a caller cannot even detect the discard from the
+// response. A scale set's labels are fixed at create; changing them needs a new scale
+// set (Q793). Name and runnerGroupId are honoured, which is what the Q712 runner-group
+// reconcile in the AGC listener relies on.
 func (c *Client) UpdateRunnerScaleSet(ctx context.Context, id int, patch RunnerScaleSet) (*RunnerScaleSet, error) {
 	var out RunnerScaleSet
 	if err := c.svcCall(ctx, http.MethodPatch,
