@@ -2,6 +2,7 @@ package main
 
 import (
 	"net"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -48,7 +49,15 @@ const (
 	// capping only the attribute halves the fix. Sized well above any real
 	// net.OpError so a genuine diagnostic is never cut.
 	maxLoggedErrorLen = 512
-	// auditTruncatedSuffix marks a value cut by either cap.
+	// maxAuditPortLen caps a logged port. The authority is host:port and the
+	// record is the one site that SPLITS it, so a cap on the host alone leaves
+	// this half unbounded: Go's port parser ignores leading zeros without
+	// saturating, so a zero-padded port dials the real port and carries
+	// arbitrary length into the record. Measured at 200,210 bytes for one
+	// 200,015-byte authority before this cap existed. Five digits holds every
+	// value a port can take.
+	maxAuditPortLen = 5
+	// auditTruncatedSuffix marks a value cut by any cap.
 	auditTruncatedSuffix = "…(truncated)"
 )
 
@@ -73,14 +82,27 @@ func truncateForLog(s string, maxBytes int) string {
 	return strings.ToValidUTF8(s[:maxBytes], "") + auditTruncatedSuffix
 }
 
-// truncateHost bounds a tenant-supplied CONNECT authority for logging. Every
-// site in handleConnect that logs the authority goes through it — one policy
-// for one field, so a reader of the security docs does not have to work out
-// which log line is covered. See maxAuditHostLen.
+// truncateHost bounds a tenant-supplied CONNECT authority for logging. The
+// three sites that log the authority WHOLE go through it. The audit record is
+// the fourth and splits it first, so it caps each half: truncateHost for the
+// host, auditPort for the port. One policy for one field, so a reader of the
+// security docs does not have to work out which log line is covered.
+// See maxAuditHostLen.
 func truncateHost(host string) string { return truncateForLog(host, maxAuditHostLen) }
 
 // truncateLogError bounds an error for logging. See maxLoggedErrorLen.
 func truncateLogError(err error) string { return truncateForLog(err.Error(), maxLoggedErrorLen) }
+
+// auditPort bounds the port half of the authority. An accepted CONNECT parsed
+// its port to dial, so the canonical decimal form is both available and more
+// useful to an auditor than a zero-padded original; anything that does not
+// parse falls back to the cap. See maxAuditPortLen.
+func auditPort(port string) string {
+	if n, err := strconv.Atoi(port); err == nil && n >= 0 && n <= 65535 {
+		return strconv.Itoa(n)
+	}
+	return truncateForLog(port, maxAuditPortLen)
+}
 
 // logConnectAudit writes the per-connection egress record: which destination
 // this pool reached, for how long, and how much moved each way.
@@ -111,7 +133,7 @@ func (s *Server) logConnectAudit(hostport string, bytesToDestination, bytesFromD
 	attrs = append(attrs,
 		"event", auditEventConnect,
 		"host", truncateHost(host),
-		"port", port,
+		"port", auditPort(port),
 		"bytesToDestination", bytesToDestination,
 		"bytesFromDestination", bytesFromDestination,
 		"durationSeconds", dur.Seconds(),

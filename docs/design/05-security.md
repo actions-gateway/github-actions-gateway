@@ -329,8 +329,9 @@ The record is written at **info**, so it never depends on raising a pool to `deb
 **The authority is capped wherever it is logged, not only in the record.** It is tenant-controlled text and `http.Server` admits a request line up to `MaxHeaderBytes` (1 MiB by default), so an uncapped log site is a volume amplifier a worker drives on demand: measured at 400,167 bytes written for one 200,000-byte authority, because the dial-failure path logged it twice (the `host` attribute, and the dial error, which embeds the address).
 The GMC-built configuration is where that bites.
 `matchesHostSuffix` is a bare suffix test with no length bound, so junk ending in an allowlisted suffix **passes** the allowlist and reaches the dial, where the line is at error level.
-All four sites in `handleConnect` that log the authority therefore go through one cap: the denial, the dial failure, the response-write failure, and the record.
-The dial error is bounded separately, since capping only the `host` attribute would leave half the volume in place.
+All four sites in `handleConnect` that log the authority are therefore bounded: the denial, the dial failure, and the response-write failure log it whole and share one cap; the record splits it first and caps each half.
+Splitting is why the record needs both: a cap on the host alone leaves the port unbounded, and Go's port parser ignores leading zeros without saturating, so a zero-padded port dials the real port and carries arbitrary length into the line.
+The dial error is bounded separately too, since capping only the `host` attribute would leave half that volume in place.
 One policy for one field, so a reader here does not have to work out which log line it covers.
 
 **A shared pool attributes per pool, not per tenant.** `spec.sharing.allowedNamespaces` lets one pool serve consumers in other namespaces, and a CONNECT carries no namespace, so the downward-API value names the pool rather than whoever sent the request.

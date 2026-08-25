@@ -369,6 +369,43 @@ func TestLogging_OverLengthAuthorityIsBoundedOnEveryPath(t *testing.T) {
 			"an over-length authority must not reach the log stream unbounded (got %d bytes for a %d-byte authority)", got, junkLen)
 	})
 
+	// The ACCEPTED path is the one this PR adds and the only one that SPLITS the
+	// authority, so it is the only place a cap on the host alone can leak. Go's
+	// port parser ignores leading zeros without saturating, so a zero-padded port
+	// dials the real port and carries arbitrary length into the record.
+	t.Run("accepted CONNECT with a zero-padded port", func(t *testing.T) {
+		echoAddr := startEchoServer(t)
+		echoHost, echoPort, err := net.SplitHostPort(echoAddr)
+		require.NoError(t, err)
+		padded := net.JoinHostPort(echoHost, strings.Repeat("0", 200000)+echoPort)
+
+		srv, sink := newAuditServer(t, AuditConnections)
+		handlerDone := make(chan struct{})
+		ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			defer close(handlerDone)
+			srv.handleConnect(w, r)
+		}))
+		t.Cleanup(ts.Close)
+
+		conn, err := net.Dial("tcp", ts.Listener.Addr().String())
+		require.NoError(t, err)
+		defer func() { _ = conn.Close() }()
+		_, _ = fmt.Fprintf(conn, "CONNECT %s HTTP/1.1\r\nHost: h\r\n\r\n", padded)
+		resp, err := http.ReadResponse(bufio.NewReader(conn), nil)
+		require.NoError(t, err)
+		require.Equal(t, http.StatusOK, resp.StatusCode,
+			"precondition: the padded port must DIAL, so the accepted path is what runs")
+		_ = conn.Close()
+		<-handlerDone
+
+		require.Len(t, sink.records(t), 1, "precondition: an accepted CONNECT must record")
+		sink.mu.Lock()
+		got := sink.buf.Len()
+		sink.mu.Unlock()
+		assert.Less(t, got, 4096,
+			"the authority is host:port; capping only the host leaves the record unbounded (got %d bytes)", got)
+	})
+
 	t.Run("denied destination", func(t *testing.T) {
 		srv, sink := newAuditServer(t, AuditOff)
 		srv.AllowedHostSuffixes = []string{"example.invalid"}
