@@ -321,8 +321,9 @@ type GuardStore interface {
 // to the current assigned count means "no more".
 //
 // It is the scale-set expression of the whole admission ladder — the declared worker
-// ceiling (maxWorkers/priorityTiers) bounded by live namespace-ResourceQuota headroom
-// (Q443) — evaluated once per poll rather than once per delivered job. Every rung the
+// ceiling (maxWorkers/priorityTiers), bounded by live namespace-ResourceQuota headroom
+// (Q443), the owner's opt-in capacity gate (Q405), and its opt-in scale-up rate limit
+// (Q717) — evaluated once per poll rather than once per delivered job. Every rung the
 // classic tier's Provisioner.Admit walks must be represented here too; see
 // provisioner.AdvertiseCapacity, which is what the reconciler wires in.
 //

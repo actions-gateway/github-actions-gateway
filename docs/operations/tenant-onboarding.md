@@ -398,7 +398,7 @@ It is bounded by in-flight work, owner-ref'd to its RunnerSet so it is garbage-c
 It is **off by default** — omit it and provisioning stays immediate (GAG's zero-idle default).
 It is **not** the same as `maxWorkers`: `maxWorkers` caps how *many* worker pods run at once (a ceiling), while `scaleUp` caps how *fast* they start (a ramp).
 Reach for it only when a burst of simultaneously-acquired jobs stampedes a shared, rate-sensitive **egress** path — a NAT/SNAT gateway, a stateful firewall's connection-tracking table, or a site-to-site VPN — where the *onset* of connections (not the steady-state count) is what causes damage.
-It deliberately delays already-claimed jobs, trading time-to-pickup for a gentler ramp.
+It deliberately defers work, trading time-to-pickup for a gentler ramp.
 
 ```yaml
   runnerGroups:
@@ -412,9 +412,10 @@ It deliberately delays already-claimed jobs, trading time-to-pickup for a gentle
 - `maxPerSecond` (required, ≥1): the sustained pod-creation rate once the burst is spent.
 - `burst` (optional, ≥1): the largest instantaneous batch before throttling engages; **defaults to `maxPerSecond`** (one second's worth) when omitted.
 
-When the bucket is empty an acquired job **waits** for a token before its pod is created — holding its GitHub job lock (renewed in the background), so it composes with the namespace-quota retry backoff rather than dropping the job.
-Each throttled creation increments `actions_gateway_worker_scaleup_throttled_total{namespace, runner_group}`; a sustained non-zero rate means the ramp is actively smoothing a burst (see [observability: metrics](observability.md)).
-Set `maxPerSecond` low enough to protect the shared resource but high enough that already-claimed jobs are not held long — a very low rate against a large burst can hold locks for the ramp's full duration.
+When the bucket is empty the AGC **withholds intake** rather than delaying a job it has already taken on: it declines to claim the next job, leaving it queued at GitHub for redelivery, and no job ever waits for a token while holding a GitHub job lock (Q717).
+That is what makes a low `maxPerSecond` safe against a large burst — the ramp defers *unclaimed* jobs, so nothing sits on a lock for the ramp's duration and no job is cancelled by a lock lapsing part-way through.
+Each withheld job increments `actions_gateway_worker_scaleup_throttled_total{namespace, runner_group}`; a sustained non-zero rate means the ramp is actively smoothing a burst (see [observability: metrics](observability.md)).
+Set `maxPerSecond` high enough that jobs are picked up promptly once the burst passes: the cost of a low rate is now time-to-pickup rather than a held lock.
 
 **Pick the right tool for the stampede.** A scale-up rate limit is the wrong fix for some bursts:
 
@@ -428,6 +429,7 @@ Set `maxPerSecond` low enough to protect the shared resource but high enough tha
 It coexists with the cluster autoscaler / Karpenter: bounding pod-admission rate eases the node-scale-up burst they react to, and they keep their own independent rate controls.
 
 > **v2 (`RunnerSet`)** carries the same `spec.scaleUp` field with identical semantics.
+> A `ScaleSet`-protocol set expresses it as a smaller advertised capacity per long-poll rather than as a per-job refusal, so GitHub never assigns the jobs in the first place; the ramp is the same and the accounting appears as `actions_gateway_scaleset_capacity_withheld{reason="scaleup"}`.
 
 **Optional — refuse jobs the cluster can't place (`capacityGate`, v2 only, opt-in, default-off).** A `RunnerSet` accepts an optional `spec.capacityGate` that adds a *placeability* rung to the pre-claim admission gate.
 Without it, a set whose worker shape has become unplaceable — a drained node pool, a changed taint, spot capacity gone — keeps taking on jobs, and each one spends a single-use runner registration, holds the GitHub job lock until `pendingPodDeadline`, and ends as a **cancelled** workflow run.

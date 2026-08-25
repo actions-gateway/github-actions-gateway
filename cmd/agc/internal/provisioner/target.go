@@ -198,6 +198,18 @@ type Target interface {
 	// readable) and the caller keeps whatever the earlier rungs left.
 	DeclinedCapacity(ctx context.Context, max int32) (limit int32, bounded bool)
 
+	// ScaleUpLimit returns the owner's opt-in worker-pod creation-rate limit (Q223),
+	// re-read from the fresh spec on every call so a spec edit takes effect on the
+	// next job or poll without an AGC restart (Q117). It is the cheap counterpart of
+	// Resolve's ScaleUp field, on the same footing as Ceiling: the rate rung of the
+	// admission ladder runs per delivered job and per long-poll, where the full
+	// Resolve path (template and proxy chains) is far too expensive.
+	//
+	// Fail-open by contract like the other observed rungs: nil means the owner
+	// declared no limit (the default), or could not be read, and the rate rung does
+	// not bind.
+	ScaleUpLimit(ctx context.Context) *ScaleUpConfig
+
 	// Resolve returns the current, fully-resolved provisioning inputs, re-read on
 	// every acquired job. A non-nil error means a required reference no longer
 	// resolves (v2: missing RunnerTemplate/EgressProxy); the provisioner fails the

@@ -562,24 +562,12 @@ func (p *Provisioner) provision(ctx context.Context, target Target, planID strin
 		return "", err
 	}
 
-	// 4. Scale-up rate limit (Q223): when the owner opts in via spec.scaleUp, wait
-	// for a token before creating the pod so a burst of simultaneously-acquired jobs
-	// ramps up in waves instead of all at once (default-off is a no-op). A ctx
-	// cancellation here (AGC shutdown, or the renew loop tearing the job down on a
-	// lost lock) abandons the job without a pod — same shape as a quota-retry
-	// cancellation — after cleaning up the staged Secret.
-	if err = traceStep(ctx, "scaleUpRateLimit", func(ctx context.Context) error {
-		throttled, wErr := p.scaleUp.wait(ctx, key.String(), spec.ScaleUp)
-		if throttled && p.Metrics != nil {
-			p.Metrics.ScaleUpThrottled.WithLabelValues(key.Namespace, key.Name).Inc()
-		}
-		return wErr
-	}); err != nil {
-		_ = p.deleteSecret(ctx, key.Namespace, secretName)
-		return "", err
-	}
-
-	// 5. Build and create the pod (with quota retry).
+	// 4. Build and create the pod (with quota retry).
+	//
+	// No scale-up wait here (Q223, Q717): this tier charges its token BEFORE the claim,
+	// in Admit's rate rung, so a job that reaches this point already holds one. Waiting
+	// again would both double-charge the bucket and put the job back in the position
+	// the rung exists to remove — blocked with its GitHub lock held.
 	if err = traceStep(ctx, "createPod", func(ctx context.Context) error {
 		pod := p.buildPod(target, spec, podName, secretName, priorityClass, meta)
 		return p.createPodWithQuotaRetry(ctx, target, pod, spec.MaxQuotaRetries, spec.QuotaRetryDelay, log)
@@ -590,7 +578,7 @@ func (p *Provisioner) provision(ctx context.Context, target Target, planID strin
 	// Per-pod hot-path line; podName is on the logger context. Debug (Q87, Theme D).
 	log.Debug("worker pod created", "priorityClass", priorityClass)
 
-	// 6. Watch for pod completion (event-driven when a Waiter is wired; poll fallback otherwise).
+	// 5. Watch for pod completion (event-driven when a Waiter is wired; poll fallback otherwise).
 	var outcome PodOutcome
 	if err = traceStep(ctx, "waitForCompletion", func(ctx context.Context) error {
 		var wErr error
@@ -620,7 +608,7 @@ func (p *Provisioner) provision(ctx context.Context, target Target, planID strin
 		"externallyDeleted", outcome.ExternallyDeleted,
 		"deletedBeforeStart", outcome.DeletedBeforeStart, "duration", duration)
 
-	// 7. Disruption recovery. Started here because this goroutine owns the pod and
+	// 6. Disruption recovery. Started here because this goroutine owns the pod and
 	// still holds the payload's identity; the scale-set tier, which has neither,
 	// recovers from the owning reconciler instead (RecoverEvictedScaleSetWorkers).
 	// The recovery itself outlives this goroutine on handleEviction's own bounded
@@ -680,7 +668,7 @@ func (p *Provisioner) provision(ctx context.Context, target Target, planID strin
 		result = broker.TaskResultSucceeded
 	}
 
-	// 8. Cleanup. The job Secret is always deleted here. The pod is deleted
+	// 7. Cleanup. The job Secret is always deleted here. The pod is deleted
 	// immediately only when the owner's completedPodTTL is zero; otherwise the
 	// owner's reconciler reaper deletes it once the TTL elapses — the reaper is
 	// also the restart-safe backstop for pods no goroutine watches.
@@ -827,6 +815,13 @@ func (p *Provisioner) ProvisionScaleSetWorker(ctx context.Context, target Target
 	// bucket so a burst of scale-set assignments ramps up in waves (default-off is a
 	// no-op). A ctx cancellation abandons this assignment; the scale-set listener
 	// re-drives it on its next poll.
+	//
+	// This tier keeps the wait where the classic tier dropped it (Q717), because it
+	// has no per-job decision point to charge the token at: it states a capacity once
+	// per long-poll, and AdvertiseCapacity's rate rung already bounds assignments by
+	// what the bucket can absorb. So this is the backstop behind that advertisement —
+	// the same relationship ceilingCheck has with the admission gate — and reaching a
+	// non-zero wait here means a stale advertisement, not a ramp.
 	throttled, wErr := p.scaleUp.wait(ctx, key.String(), spec.ScaleUp)
 	if throttled && p.Metrics != nil {
 		p.Metrics.ScaleUpThrottled.WithLabelValues(key.Namespace, key.Name).Inc()

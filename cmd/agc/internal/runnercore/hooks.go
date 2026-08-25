@@ -55,9 +55,16 @@ type AdmitFunc func(ctx context.Context) (release func(), ok bool, reason string
 // raise the namespace ResourceQuota (see the owner's WorkerQuotaExceeded condition
 // for the binding resource); capacity → the cluster cannot place this owner's
 // worker shape at all (see its WorkerCapacityDeclined condition for which signal
-// said so), so restore the capacity or relax the shape.
+// said so), so restore the capacity or relax the shape; scaleup → the owner's own
+// spec.scaleUp token bucket is empty, so raise maxPerSecond/burst or accept the
+// ramp.
+//
+// scaleup is the one that clears on its own: the bucket refills at maxPerSecond, so
+// a steady stream of these is the rate limit working rather than a stall. The other
+// three clear only when something changes.
 const (
 	AdmitReasonCeiling  = "ceiling"
 	AdmitReasonQuota    = "quota"
 	AdmitReasonCapacity = "capacity"
+	AdmitReasonScaleUp  = "scaleup"
 )

@@ -17,10 +17,14 @@ import (
 // opted in.
 //
 // It complements — does not replace — the admissionGate / ceilingCheck, which cap
-// the concurrent pod COUNT: this caps the creation RATE. When the bucket is empty,
-// an acquired job waits (holding its Q59 admission slot and its GitHub job lock,
-// which the renew loop keeps alive) until a token frees, composing with the
-// namespace-quota retry wait rather than adding a new state machine.
+// the concurrent pod COUNT: this caps the creation RATE.
+//
+// Both acquisition tiers charge the bucket before the job is committed to, so an
+// empty bucket refuses intake rather than blocking a job that already holds a GitHub
+// lock (Q717). The classic tier takes its token in Admit's rate rung, before the
+// claim, via allow; the scale-set tier has no per-job decision point, so it reads the
+// bucket per long-poll via tokens and folds the answer into the advertised capacity,
+// leaving wait as the pod-creation backstop behind it.
 //
 // The per-key limiter is soft state, lost on AGC restart (fail-safe: a restart
 // simply resets the bucket to full burst). The zero value is ready to use.
@@ -127,4 +131,57 @@ func (l *scaleUpLimiter) wait(ctx context.Context, key string, cfg *ScaleUpConfi
 		return true, serr
 	}
 	return true, nil
+}
+
+// allow takes one token for key under cfg without blocking, reporting whether a
+// worker pod may be created now. It is the pre-claim form of wait: the classic
+// tier's admission ladder calls it BEFORE the job is claimed from GitHub, so a job
+// the bucket cannot admit is left queued for redelivery instead of claimed and then
+// slept on while its GitHub lock runs down (Q717).
+//
+// It takes the token rather than observing one, because an observation cannot bind
+// on the case the bucket exists for: every listener in a simultaneously-delivered
+// burst would see the same free token, admit, and claim. AllowN decides under the
+// limiter's own lock, which is the rate-limit counterpart of the admission gate's
+// reservation counter.
+//
+// A token taken here is spent. A job that goes on to fail its acquire does not
+// return it, because the admission gate's release runs on job COMPLETION too and
+// refunding there would turn the rate limit into a second concurrency ceiling. The
+// cost is one pod of under-provisioning per lost acquire, which the bucket refills
+// at MaxPerSecond — under-provisioning being the safe direction for a knob whose
+// whole purpose is to create pods more slowly.
+//
+// cfg==nil (or a disabled config) is a no-op returning true, so an opted-out owner
+// pays nothing.
+func (l *scaleUpLimiter) allow(key string, cfg *ScaleUpConfig) bool {
+	lim := l.limiterFor(key, cfg)
+	if lim == nil {
+		return true
+	}
+	return lim.AllowN(l.nowFn(), 1)
+}
+
+// tokens reports the whole tokens free in key's bucket under cfg, and whether a
+// bucket applies at all. It observes without taking: the scale-set tier states a
+// capacity per long-poll rather than deciding per job, so the advertisement reads
+// the bucket and the token is taken later, at pod creation, by wait.
+//
+// A fractional token cannot create a pod, so the count truncates — the advertisement
+// is bias-low by construction, like the quota and placeability rungs, because
+// under-advertising only delays jobs while over-advertising reproduces the
+// claim-and-stall the rung exists to stop.
+//
+// limited=false means the owner declared no rate limit, and the caller keeps
+// whatever the earlier rungs left.
+func (l *scaleUpLimiter) tokens(key string, cfg *ScaleUpConfig) (free int32, limited bool) {
+	lim := l.limiterFor(key, cfg)
+	if lim == nil {
+		return 0, false
+	}
+	t := lim.TokensAt(l.nowFn())
+	if t <= 0 {
+		return 0, true
+	}
+	return int32(t), true
 }
