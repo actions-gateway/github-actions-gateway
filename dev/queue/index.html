@@ -2786,20 +2786,28 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>ARC's <code>containerMode: kubernetes</code> runs them as separate pods with a provisioned volume.</td>
 </tr>
 <tr>
-<td><a href="Q717/">Q717</a></td>
-<td><a href="../plan/release-1.5/#candidates-not-yet-accepted">Fold the scale-up token bucket into the advertised capacity</a></td>
-<td><code>debt</code> <code>feature</code></td>
-<td>🔲</td>
-<td>M</td>
-<td><code>scaleUp.wait</code> runs after the claim, with the job holding its GitHub lock (the CRD godoc says so).</td>
-</tr>
-<tr>
 <td><a href="Q721/">Q721</a></td>
 <td><a href="../operations/troubleshooting/">Surface advertised capacity and withheld reasons in <code>RunnerSet</code> status</a></td>
 <td><code>feature</code> <code>docs</code></td>
 <td>🔲</td>
 <td>S</td>
 <td><code>adv.Withheld</code> reaches Prometheus only, so a tenant without metrics access cannot see why intake is throttled.</td>
+</tr>
+<tr>
+<td><a href="Q972/">Q972</a></td>
+<td>Refund the scale-up token when a deduped listener loses the race</td>
+<td><code>debt</code></td>
+<td>🔲</td>
+<td>S</td>
+<td><code>Admit</code> takes a <code>spec.scaleUp</code> token before the claim (Q717), and the Q260 dedup loser returns from <code>listener/job.go</code> without ever creating …</td>
+</tr>
+<tr>
+<td><a href="Q973/">Q973</a></td>
+<td>Gate that every admission rung exists in both acquisition tiers</td>
+<td><code>tests</code> <code>debt</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>The two-tier rung parity Q443 exists to enforce is held by a prose comment in <code>admission.go</code> ("a rung added here must be added to Admit …</td>
 </tr>
 <tr>
 <td><a href="Q906/">Q906</a></td>
@@ -2826,12 +2834,36 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td><code>prev := meta.FindStatusCondition(...)</code> returns a pointer INTO the slice, and the <code>SetStatusCondition</code> below it overwrites that element, so …</td>
 </tr>
 <tr>
+<td><a href="Q977/">Q977</a></td>
+<td>Rate-limited refusal can transiently report <code>reason=ceiling</code></td>
+<td><code>debt</code></td>
+<td>🔲</td>
+<td>S</td>
+<td><code>Admit</code> reserves before the scale-up rung refuses (Q717), so inside the reserve-to-release window a concurrent delivery reads an inflated …</td>
+</tr>
+<tr>
+<td><a href="Q987/">Q987</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/CLAUDE.md">Point live <code>lint-backlog.sh</code> references at <code>lint-queue.sh</code></a></td>
+<td><code>docs</code></td>
+<td>🔲</td>
+<td>S</td>
+<td><code>scripts/docs/lint-backlog.sh</code> retired with the table (Q889) and the store's lint is <code>scripts/docs/lint-queue.sh</code> behind <code>make queue-lint</code> …</td>
+</tr>
+<tr>
 <td><a href="Q957/">Q957</a></td>
 <td><a href="../development/parallel-dispatch/">Withdraw a dispatch chip once its session has run</a></td>
 <td><code>docs</code> <code>debt</code> <code>retro</code></td>
 <td>🔲</td>
 <td>S</td>
 <td>A spawned chip stays pending until someone starts or dismisses it, so a closed batch leaves one live invitation per worker to redo work …</td>
+</tr>
+<tr>
+<td><a href="Q989/">Q989</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/go/coverage.sh"><code>cover-check</code> tolerance flips the verdict on a fixed coverage number</a></td>
+<td><code>flake</code> <code>debt</code></td>
+<td>🔲</td>
+<td>S</td>
+<td><code>effective_tolerance</code> is <code>max(COVERAGE_TOLERANCE, COVERAGE_TOLERANCE_STMT * 100 / NSTMT)</code>, so the pass bound moves with the module's …</td>
 </tr>
 <tr>
 <td><a href="Q958/">Q958</a></td>

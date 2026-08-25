@@ -1674,6 +1674,17 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
+  <a href="#non-breaking-specscaleup-now-withholds-intake-instead-of-delaying-jobs-it-has-already-claimed" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Non-breaking: spec.scaleUp now withholds intake instead of delaying jobs it has already claimed
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#non-breaking-job_duration_seconds-now-measures-worker-pod-lifetime-the-classic-tier-span-shrinks" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3322,6 +3333,17 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
+  <a href="#non-breaking-specscaleup-now-withholds-intake-instead-of-delaying-jobs-it-has-already-claimed" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Non-breaking: spec.scaleUp now withholds intake instead of delaying jobs it has already claimed
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#non-breaking-job_duration_seconds-now-measures-worker-pod-lifetime-the-classic-tier-span-shrinks" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3960,6 +3982,7 @@ For <strong>initial installation</strong> of the GMC, see <a href="../install/">
 <ul>
 <li><a href="#pre-upgrade-validation-checklist">Pre-Upgrade Validation Checklist</a></li>
 <li><a href="#migration-notes">Migration Notes</a></li>
+<li><a href="#non-breaking-specscaleup-now-withholds-intake-instead-of-delaying-jobs-it-has-already-claimed">Non-breaking: <code>spec.scaleUp</code> now withholds intake instead of delaying jobs it has already claimed</a></li>
 <li><a href="#non-breaking-job_duration_seconds-now-measures-worker-pod-lifetime-the-classic-tier-span-shrinks">Non-breaking: job_duration_seconds now measures worker pod lifetime (the classic-tier span shrinks)</a></li>
 <li><a href="#non-breaking-deleting-a-cancelled-runs-worker-no-longer-re-queues-the-job">Non-breaking: deleting a cancelled run's worker no longer re-queues the job</a></li>
 <li><a href="#non-breaking-an-abandoned-run-is-force-cancelled-and-re-run-automatically-on-both-acquisition-tiers">Non-breaking: an abandoned run is force-cancelled and re-run automatically, on both acquisition tiers</a></li>
@@ -4032,6 +4055,37 @@ For <strong>initial installation</strong> of the GMC, see <a href="../install/">
 - Behavior changes that require configuration updates before the new binary takes effect.</p>
 <hr />
 <h2 id="migration-notes">Migration Notes<a class="headerlink" href="#migration-notes" title="Permanent link">&para;</a></h2>
+<h3 id="non-breaking-specscaleup-now-withholds-intake-instead-of-delaying-jobs-it-has-already-claimed">Non-breaking: <code>spec.scaleUp</code> now withholds intake instead of delaying jobs it has already claimed<a class="headerlink" href="#non-breaking-specscaleup-now-withholds-intake-instead-of-delaying-jobs-it-has-already-claimed" title="Permanent link">&para;</a></h3>
+<p><strong>Who is affected:</strong> every runner group or runner set that sets <code>spec.scaleUp</code>.
+It is off by default, so a tenant that never configured a ramp sees nothing.</p>
+<p><strong>What changed.</strong> The scale-up token bucket became a rung of the pre-acquisition admission ladder (Q717).
+It used to be waited on <em>after</em> the job was claimed, at pod-creation time, which meant a throttled job sat on a GitHub job lock for the length of its wait.
+A lock that lapses cancels the job rather than redelivering it, so a large burst at a low <code>maxPerSecond</code> could destroy the jobs the ramp was smoothing.</p>
+<table>
+<thead>
+<tr>
+<th></th>
+<th>Behaviour when the bucket is empty</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Before</td>
+<td>The job was claimed, then slept until a token freed, holding its GitHub job lock throughout</td>
+</tr>
+<tr>
+<td>Now</td>
+<td>The job is not claimed at all: it stays queued at GitHub for redelivery, and no lock is spent</td>
+</tr>
+</tbody>
+</table>
+<p>The ramp itself is unchanged: the same <code>maxPerSecond</code> and <code>burst</code> produce the same pod-creation rate.
+A <code>ScaleSet</code>-protocol set expresses the rung as a smaller advertised capacity per long-poll, so GitHub never assigns the excess in the first place.</p>
+<p><strong>What to expect at upgrade.</strong> Time-to-pickup for a throttled job is now a GitHub redelivery interval rather than the remainder of the ramp, so individual jobs may be picked up later while none is at risk of being cancelled by a lapsed lock.
+<code>actions_gateway_worker_scaleup_throttled_total</code> keeps its name and now counts withheld intake rather than delayed creations.
+On the scale-set tier it stays a pod-creation measure and falls close to zero, because the advertisement withholds the work before it is assigned; a non-zero rate there now means the advertisement was stale rather than that the ramp is engaging.</p>
+<p><strong>Action required:</strong> none, but two new label values appear on existing series and any exhaustive <code>reason</code> selector should be widened: <code>actions_gateway_jobs_admission_rejected_total{reason="scaleup"}</code> and <code>actions_gateway_scaleset_capacity_withheld{reason="scaleup"}</code>.
+If you lowered <code>maxPerSecond</code> to protect a shared egress path and then raised it again because claimed jobs were being held, the original value is now safe to restore.</p>
 <h3 id="non-breaking-job_duration_seconds-now-measures-worker-pod-lifetime-the-classic-tier-span-shrinks">Non-breaking: <code>job_duration_seconds</code> now measures worker pod lifetime (the classic-tier span shrinks)<a class="headerlink" href="#non-breaking-job_duration_seconds-now-measures-worker-pod-lifetime-the-classic-tier-span-shrinks" title="Permanent link">&para;</a></h3>
 <p><strong>Who is affected:</strong> every tenant on the classic acquisition tier that has a dashboard, an alert, or a cost figure reading <code>actions_gateway_job_duration_seconds</code>.
 Scale-set tenants are affected in the other direction: the series was empty there before and now reports.</p>
