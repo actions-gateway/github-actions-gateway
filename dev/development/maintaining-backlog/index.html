@@ -2704,10 +2704,12 @@ What holds the rules for them is the tooling below, which is in-tree and runs in
 <li><strong>There is no <code>**Next ID:**</code> counter line.</strong> IDs are claimed instead, with <code>make queue-id TITLE="…"</code>, which takes a <code>refs/queue-ids/QN</code> ref on the remote.
   A shared mutable counter handed concurrent sessions the same ID and conflicted on the same line by construction, forcing a renumber (<a href="../queue-id-allocation/#why-the-counter-had-to-go">Q382</a>).
   Allocation also runs <a href="#search-before-you-file">the duplicate search</a>, which is the part of "search before you file" a mechanism can carry; reading the candidates it prints is the part that is on you.</li>
-<li><strong>The notes cap is hard, and counted as the text is written</strong>: ≤ 250 characters, where an em dash costs one.
-  Past 200 characters the item must link a doc — a sibling item's link doesn't count, since siblings are capped too.
-  The same cap applies to a deferred item's trigger.
-  <strong>A title is at most 72 characters</strong>, because it renders whole in every index row and in <code>queue.py next</code>'s kickoff prompt, which is the one field with nowhere to overflow.
+<li><strong>The title is capped and the body is not</strong>, because their homes differ.
+  <strong>A title is at most 72 characters</strong>, enforced as <code>TITLE_MAX</code>, because it renders whole in every index row and in <code>queue.py next</code>'s kickoff prompt, which is the one field with nowhere to overflow.
+  A row's body has no cap at all, so an item can hold its full context and a finding never has to be trimmed to fit.
+  What the rendered table does instead is <em>truncate</em>: <code>summarize()</code> shows the first sentence, or a clean cut at 140 characters, because a table rendering every note whole is squeezed by its own longest row.
+  So the constraint on a note is that its <strong>first sentence carries the point</strong>, not that the note is short, and a row too long to skim wants a linked doc for the same reason a long function wants a name.
+  This is the one rule the store inverted when rows became files, and the docs said otherwise for long enough to cost real evidence: five sessions trimmed rows to a 250-character cap nothing enforces, losing detail each time.
   The table capped notes and never capped titles at all, so adopting the store imposed a constraint this backlog had never been held to: 62 of 173 titles were over, the longest at 130, and all 62 were rewritten by hand rather than truncated.</li>
 <li><strong>An item never cites a count of the backlog.</strong> "42 Queue rows", "60 parked" and friends go stale on the next filing — the file they measure is the one thing guaranteed to change under them, often the same day.
   State the <em>shape</em> instead ("the Queue is read top-down; the parked rows are only grepped on a trigger"), and put any dated figure in the linked plan doc, where a point-in-time measurement belongs.
