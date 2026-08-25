@@ -8483,7 +8483,10 @@ On a <code>Classic</code>-protocol set the listener goroutines push the same con
 </tbody>
 </table>
 <p>All are advisory (abnormal-is-<code>True</code>) and do not gate <code>Ready</code>.
-The two protocols differ in recovery behaviour: the <strong>classic</strong> listener only sets the abnormal state (a stale <code>True</code> can outlive the episode until the goroutine restarts), while the <strong><code>ScaleSet</code></strong> listener also publishes the healthy state — <code>Degraded=False/SessionAuthorized</code> and <code>RateLimited=False/PollingHealthy</code> appear on every healthy <code>ScaleSet</code> set once its listener starts — and clears an abnormal condition as soon as the session recovers (a successful poll, token refresh, or session re-create).
+Both protocols publish the healthy state as well as the abnormal one, so a recovered condition does not sit stale until the process restarts.
+<code>Degraded=False/SessionAuthorized</code> and <code>RateLimited=False/PollingHealthy</code> appear on every healthy set of either kind once its listener starts.
+An abnormal condition then clears as soon as the session recovers, by paths that differ per tier: on the <strong>classic</strong> tier a successful poll clears <code>RateLimited</code> and an agent recycle clears <code>Degraded</code>, while the <strong><code>ScaleSet</code></strong> tier also clears on a queue-token refresh, which the classic protocol has no equivalent of.
+On the classic tier <code>RunnerVersionTooOld=False/VersionAccepted</code> joins that baseline, which is what clears a <code>VersionTooOld</code> after you upgrade the gateway; the reconciler's <code>workerImage</code> reading owns the same condition otherwise and the baseline never overwrites it.
 Listener-pushed conditions and events are recorded on the <code>RunnerSet</code> on its next reconcile, so they can lag the incident by up to one reconcile interval.</p>
 <hr />
 <h2 id="runnerset-stuck-readyfalse-with-runnergroupnotfound"><code>RunnerSet</code> Stuck <code>Ready=False</code> With <code>RunnerGroupNotFound</code><a class="headerlink" href="#runnerset-stuck-readyfalse-with-runnergroupnotfound" title="Permanent link">&para;</a></h2>

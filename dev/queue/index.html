@@ -2732,14 +2732,6 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>Q715 judges the image <em>reference</em>, so a digest-only or custom tag reports <code>Unknown</code>; the wrapper reads the real version from …</td>
 </tr>
 <tr>
-<td><a href="Q795/">Q795</a></td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/listener/session.go">Nothing clears a session-sourced <code>RunnerVersionTooOld</code> once fixed</a></td>
-<td><code>bug</code> <code>debt</code></td>
-<td>🔲</td>
-<td>S</td>
-<td><code>session.go</code> is the only session-sourced writer and sets <code>True</code> alone; Q332's clear-on-recovery covered <code>Degraded</code>/<code>RateLimited</code>, not this.</td>
-</tr>
-<tr>
 <td><a href="Q727/">Q727</a></td>
 <td><a href="../plan/arc-parity/#the-collision-the-individual-rows-do-not-state">A non-privileged path for <code>container:</code> and <code>services:</code> steps</a></td>
 <td><code>feature</code> <code>1.6-gate</code></td>
@@ -2778,6 +2770,14 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>🔲</td>
 <td>M</td>
 <td><code>actions_gateway_scaleset_jobs_available</code> (Q720) reads GitHub's queued-but-unassigned count off the statistics that ride on session …</td>
+</tr>
+<tr>
+<td><a href="Q962/">Q962</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/controller/runnerset_controller.go">Condition transition Events fire once per object, never on a later flip</a></td>
+<td><code>bug</code></td>
+<td>🔲</td>
+<td>S</td>
+<td><code>prev := meta.FindStatusCondition(...)</code> returns a pointer INTO the slice, and the <code>SetStatusCondition</code> below it overwrites that element, so …</td>
 </tr>
 <tr>
 <td><a href="Q677/">Q677</a></td>

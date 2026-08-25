@@ -4191,6 +4191,11 @@ A <code>RunnerGroup</code> only ever acquires classically, so a reason no v2 pat
 <td>The <code>Degraded=True</code> reason both listeners push when session creation is rejected as unauthorized.</td>
 </tr>
 <tr>
+<td><code>VersionAccepted</code></td>
+<td>Classic only</td>
+<td>The <code>RunnerVersionTooOld=False</code> baseline the classic listener publishes once GitHub accepts <code>agent.version</code>, clearing a <code>VersionTooOld</code> an earlier instance left behind (Q795). The scale-set protocol sends no runner version, so it has nothing to accept. Never overwrites the reconciler's image reading.</td>
+</tr>
+<tr>
 <td><code>VersionTooOld</code></td>
 <td>Classic only</td>
 <td>GitHub rejecting <code>agent.version</code> at session creation, which only the classic protocol sends. The scale-set tier reports the same condition <em>type</em> from the reconciler's own reading of the worker image, under <code>WorkerImageBelowMinimum</code> (Q715).</td>

@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q795/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q962/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>Nothing clears a session-sourced RunnerVersionTooOld once fixed - GitHub Actions Gateway</title>
+        <title>Condition transition Events fire once per object, never on a later flip - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#nothing-clears-a-session-sourced-runnerversiontooold-once-fixed" class="md-skip">
+        <a href="#condition-transition-events-fire-once-per-object-never-on-a-later-flip" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Nothing clears a session-sourced RunnerVersionTooOld once fixed
+              Condition transition Events fire once per object, never on a later flip
             
           </span>
         </div>
@@ -2567,9 +2567,11 @@
   
 
 
-<h1 id="nothing-clears-a-session-sourced-runnerversiontooold-once-fixed">Nothing clears a session-sourced <code>RunnerVersionTooOld</code> once fixed<a class="headerlink" href="#nothing-clears-a-session-sourced-runnerversiontooold-once-fixed" title="Permanent link">&para;</a></h1>
-<p><code>session.go</code> is the only session-sourced writer and sets <code>True</code> alone; Q332's clear-on-recovery covered <code>Degraded</code>/<code>RateLimited</code>, not this.
-The listener exits non-retriably, and Q715's image reading defers rather than overwriting.</p>
+<h1 id="condition-transition-events-fire-once-per-object-never-on-a-later-flip">Condition transition Events fire once per object, never on a later flip<a class="headerlink" href="#condition-transition-events-fire-once-per-object-never-on-a-later-flip" title="Permanent link">&para;</a></h1>
+<p><code>prev := meta.FindStatusCondition(...)</code> returns a pointer INTO the slice, and the <code>SetStatusCondition</code> below it overwrites that element, so the <code>prev.Status != status</code> guard reads the value just written.
+Measured: <code>Ready</code> True→False→True emits 1 Event, not 3; a <code>workerImage</code> downgrade to below-minimum emits 0.
+Six sites share the shape (<code>runnerset_controller.go</code> 836/905/936, <code>runnergroup_controller.go</code> 717/743, <code>runnerset_capacity.go</code> 117); fix by copying <code>prev</code> by value.
+Found while measuring Q795.</p>
 
 
 
