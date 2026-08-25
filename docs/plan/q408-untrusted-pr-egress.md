@@ -1,8 +1,9 @@
 # Untrusted-PR Egress Posture for Kata Workers — Q408
 
-> **Status (2026-08-05): Phase 1 implemented; its live validation run is next.** Phase 0 (2026-08-03) measured the job-time egress inventory ([§2](#2-the-gap--what-an-e2e-job-actually-fetches-at-job-time-phase-0)) and re-sequenced Phases 1–4.
+> **Status (2026-08-24): Phase 1 validated: the non-registry residual is measured gone.
+> Phase 2 (mirror manifests) is next.** Phase 0 (2026-08-03) measured the job-time egress inventory ([§2](#2-the-gap--what-an-e2e-job-actually-fetches-at-job-time-phase-0)) and re-sequenced Phases 1–4.
 > Phase 1's workflow change gates `azure/setup-helm` (`get.helm.sh`), every `actions/cache` step, and the bake's `GHA_CACHE` to the hosted lane, per the resolved [§2.4](#24-phase-1-decisions-resolved-2026-08-05) decisions.
-> After the validation run: Phase 2 (mirror manifests).
+> [§2.5](#25-phase-1-validation-graded-2026-08-24) grades four green self-hosted runs against it: no non-GitHub, non-registry host is fetched, and the graded inventory adds a **fifth** registry upstream, `gcr.io`, that Phase 0's host extraction was structurally unable to see.
 
 Design and phased plan for the posture named in [Appendix G.14](../design/appendix-g-future-enhancements.md#g14-kata-e2e-untrusted-pr-posture--tight-egress--in-cluster-pull-through-mirror) and on the [public roadmap](../roadmap.md#exploring--longer-term): make the Kata worker variant safe for **untrusted / external-contributor pull-request CI** by removing the workers' direct registry egress.
 Concretely: an in-cluster **registry pull-through mirror** (the container-image sibling of the Athens Go-module cache, Q244), job-side wiring so every image pull rides it, and the deletion of the e2e tenant's additive open-egress NetworkPolicy.
@@ -49,6 +50,8 @@ gh api repos/:owner/:repo/actions/jobs/91602337821/logs > tmp/q408/run.log
 ```
 
 then extract hosts (`grep -oE 'https?://[a-zA-Z0-9._-]+'`) and image pulls (`grep -oE 'Pulling from [a-zA-Z0-9/_.-]*'`).
+That host extraction is scheme-prefixed and is now known to be incomplete in both halves of the inventory: see the note in [§2.2](#22-the-inventory) and the general sweep in [§2.5](#25-phase-1-validation-graded-2026-08-24).
+It is kept here as the method of record for what Phase 0 actually ran, not as the method to reuse.
 
 ### 2.2 The inventory
 
@@ -67,10 +70,17 @@ Upstream hosts for the three pinned manifests were read from the manifests thems
 | `quay.io/jetstack/cert-manager-{controller,webhook,cainjector}:v1.20.2` | inner dockerd | cache hit |
 | `registry.k8s.io/metrics-server/metrics-server:v0.8.1` | inner dockerd | cache hit |
 | `quay.io/calico/{node,cni,kube-controllers}:v3.31.5` | inner dockerd | calico lane only; not exercised here |
+| `gcr.io/distroless/static:nonroot@sha256:d29e…` | **buildkit** (image bake; base layer of `gmc`, `agc`, `proxy`, `fakegithub`) | **resolved** against `gcr.io` (`load metadata`, `resolve`); added by [§2.5](#25-phase-1-validation-graded-2026-08-24), see the note below |
 
 **The inner kind cluster's containerd made zero upstream pulls.** Everything it needs is either `kind load`ed from the runner's Docker daemon (kind node image, cert-manager, metrics-server, calico) or served from the in-job local registry on `127.0.0.1:5000` (the six baked images, curl, Vault).
 The one registry resolution kind's containerd attempted was `registry.invalid`, a deliberate negative probe.
 So the hypothesised second client is, as installed, not a client at all.
+
+**The `gcr.io` row was added later, and the reason is a defect in this section's own method.** [§2.1](#21-the-measurement) extracts hosts with `grep -oE 'https?://…'`, which is scheme-prefixed; buildkit names its base images without a scheme (`load metadata for gcr.io/distroless/static:nonroot@sha256:…`), so no `gcr.io` fetch could ever appear in a host list built that way.
+The refs were in the Phase 0 log the whole time: re-running a schemeless extraction over that same log (job 91602337821) returns six `gcr.io` lines, so this is a missed reading rather than a change in behaviour.
+It is the same blind spot [§2.4](#24-phase-1-decisions-resolved-2026-08-05) already records for `GHA_CACHE`, where buildkit's log likewise names no host.
+The class is not registry-specific, and scoping the lesson to registries is how [§2.5](#25-phase-1-validation-graded-2026-08-24) first missed `sum.golang.org` on the non-registry side: a config value like `GOSUMDB='sum.golang.org'` carries neither a scheme nor a trailing slash, so both a `https?://` pattern and a registry-ref-shaped one skip it.
+Grade any host inventory here with a general domain-shaped sweep.
 
 **Non-registry HTTP(S).** Every hostname the job log names, excluding in-cluster addresses and hosts that only appear in printed prose:
 
@@ -79,9 +89,10 @@ So the hypothesised second client is, as installed, not a client at all.
 | `github.com` | checkout; `kubernetes-sigs/kind` release binary; cert-manager and metrics-server release manifests; the Go toolchain tarball (`actions/go-versions`, via `actions/setup-go`) | the managed GitHub rule |
 | `raw.githubusercontent.com` | the pinned Calico manifest (calico lane only) | the managed GitHub rule |
 | `get.helm.sh` | the helm binary, downloaded by `azure/setup-helm` | **`e2e-open-egress` only** |
-| Actions cache data plane | five cache restores, ~353 MB for the kind node image alone | **`e2e-open-egress` only** — the host is not visible in the job log and has not been measured |
+| Actions cache data plane | five cache restores, ~353 MB for the kind node image alone | **`e2e-open-egress` only** (the host is not visible in the job log and has not been measured) |
 | Actions service / `api.github.com` | runner control plane, job logs, `upload-artifact` | the managed GitHub rule |
 | `proxy.golang.org` | **nothing** — configured as `GOPROXY`, zero `go: downloading` lines in the run | — |
+| `sum.golang.org` | **nothing**: configured as `GOSUMDB`, covered by the same zero `go: downloading` count. Added by the same re-grade that added `gcr.io` above | — |
 
 Two coverage gaps in this measurement, both stated rather than papered over: the calico lane (`e2e-calico.yml`, nightly) was not the lane measured, so its `raw.githubusercontent.com` + `quay.io/calico/*` fetches are read from the workflow and the manifest rather than observed; and the live-GitHub specs were among the 11 skipped, so their real `api.github.com` traffic did not run.
 Both ride paths the managed GitHub rule already admits, so neither changes the design — but neither is measured.
@@ -112,12 +123,85 @@ Both ride paths the managed GitHub rule already admits, so neither changes the d
   Interim cost per self-hosted run: the cold pulls and a cold bake, against a measured 21-minute warm run inside a 50-minute timeout.
   The per-PR hosted lane is unchanged.
 
+### 2.5 Phase 1 validation: graded (2026-08-24)
+
+Phase 1's success condition is the row's: *a green Kata e2e whose log names no non-GitHub, non-registry host.* Graded below from the logs, not argued from the workflow.
+
+**No new dogfood run was booked.** Four green `workflow_dispatch` runs of `e2e-test.yml` already post-date the Phase 1 merge (`939a72cde`, #1297, 2026-08-05), and all four routed to the dogfood scale set:
+
+| Run | Job | Date | Runner |
+|---|---|---|---|
+| [31901350050](https://github.com/actions-gateway/github-actions-gateway/actions/runs/31901350050) | 95052533561 | 2026-08-15 | `gag-ci-e2e-76fff41e-…` |
+| [31805454168](https://github.com/actions-gateway/github-actions-gateway/actions/runs/31805454168) | 94783222823 | 2026-08-14 | `gag-ci-e2e-c235a0e1-…` |
+| [31348513226](https://github.com/actions-gateway/github-actions-gateway/actions/runs/31348513226) | 93334887820 | 2026-08-10 | `gag-ci-e2e-c6acc505-…` |
+| [31330763470](https://github.com/actions-gateway/github-actions-gateway/actions/runs/31330763470) | 93288542407 | 2026-08-09 | `gag-ci-e2e-9ee5b77a-…` |
+
+Variant identification follows [§2.1](#21-the-measurement).
+`E2E_VARIANT` defaults to `kata`, the label `gag-ci-e2e` is the shared base label rather than a variant discriminator, and `docker info` corroborates: Alpine on kernel 6.18.35 reporting **5 CPUs / 13.88 GiB**, a micro-VM sized from pod limits rather than the **c2-standard-8** (8 vCPU) e2e node that a non-Kata dind sidecar would report.
+The overlay patches image, `nodeSelector`, tolerations and `storageClassName`, but not resource limits, so that CPU count discriminates rather than coincides.
+
+**The gating fires.** On all four self-hosted runs `GHA_CACHE` evaluates to the empty string, against `GHA_CACHE: true` on the Phase 0 control, and no `actions/cache` step executes.
+(A `type=gha` count is not evidence either way: buildx does not echo its cache arguments, so the control returns 0 for it too.)
+(`azure/setup-helm` and `actions/cache` still appear once each as `Download action repository`: the runner pre-fetches every referenced action regardless of its `if:`, from GitHub, and neither ever runs.)
+
+**The residual is gone, and the probe can prove a negative.** The same probe run against the Phase 0 hosted-lane control (job 91602337821) fires on both signals, so the zeros below are an absence rather than a query that never matched:
+
+| Log | `get.helm.sh` | `Cache restored` |
+|---|---|---|
+| Phase 0 control (hosted lane) | 2 | 10 |
+| All four self-hosted runs | **0** | **0** |
+
+The Actions cache **data plane host** is still not directly observable, since [§2.2](#22-the-inventory) recorded that the host never appears in the job log.
+So the cache's *effect* (`Cache restored` / `Cache not found`) is the observable used, and it is absent.
+
+**Every non-GitHub, non-registry host the four logs name, and its disposition.** Taken with a general domain-shaped sweep rather than a scheme-prefixed or registry-shaped one, for the reason [§2.2](#22-the-inventory)'s note gives:
+
+| Host | Fetched? | Evidence |
+|---|---|---|
+| `docs.docker.com` | **no**, printed prose | dockerd advisory text: "more information:", "Learn more at:" |
+| `proxy.golang.org` | **no**, config value only | printed as `GOPROXY='https://proxy.golang.org,direct'`; the `go: downloading` count is **0** in all four, so `vendor/` closes Go exactly as [§2.3](#23-what-the-measurement-changes) item 4 predicted |
+| `kind.sigs.k8s.io` | **no**, printed prose | kind CLI footer ("Have a question…", "Not sure what to do next?") |
+| `sum.golang.org` | **no**, config value only | printed as `GOSUMDB='sum.golang.org'` in the same `go env` block, three lines below `GOPROXY`; the same `go: downloading` count of **0** covers it |
+| `registry.invalid` | **no**, fails to resolve | the deliberate negative probe of [§2.2](#22-the-inventory) |
+
+In-cluster addresses (`fakegithub.e2e-infra.svc.cluster.local`, `gmc-controller-manager-metrics-service.gmc-system.svc.cluster.local`, `127.0.0.1`, `0.0.0.0`, `kubernetes.default.svc`) are excluded as they were in Phase 0.
+
+**Verdict: PASS.** No non-GitHub, non-registry host is fetched on the self-hosted Kata lane.
+
+**One correction to the design, from the same grading.** The registry upstreams actually contacted are **five**, not four: `docker.io`, `ghcr.io`, `quay.io`, `registry.k8s.io`, and **`gcr.io`** (buildkit's `distroless/static` base).
+What the log proves for `gcr.io` is a *resolution*, not a layer transfer: buildkit prints `load metadata for gcr.io/distroless/static:nonroot@sha256:…` and `resolve … done`, with no separate download lines.
+That is still a registry API call to a fifth host, so a policy admitting only the four would fail it, and the digest pin means the reachability rather than the bytes is what matters here.
+[§3.1](#31-the-mirror--one-pull-through-cache-per-upstream), [§3.2](#32-wiring-the-clients) and Phase 2 are updated accordingly.
+Left uncorrected, Phase 2 would have built four mirror instances and Phase 4's tight policy would then have failed at the image bake, the one step that no cache and no `kind load` can cover.
+
+**Reproduce:**
+
+```bash
+for j in 95052533561 94783222823 93334887820 93288542407 91602337821; do
+  gh api "repos/:owner/:repo/actions/jobs/$j/logs" > "tmp/q408/job-$j.log"
+done
+```
+
+then grade each log with a **general domain-shaped sweep**, not a scheme-prefixed one and not a registry-ref-shaped one:
+
+```python
+dom = re.compile(r'(?<![A-Za-z0-9._-])((?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+[a-z]{2,})(?![A-Za-z0-9-])', re.I)
+```
+
+Read every hit rather than counting them.
+Most are Kubernetes API groups, Go identifiers or filenames, and separating a fetch from printed prose needs the surrounding line (`Pulling from`, `load metadata for`, `GOPROXY=`), never the hostname alone.
+Use `91602337821` as the control: it must fire on `get.helm.sh` and `Cache restored`, and a sweep that cannot make it fire is not measuring the self-hosted zeros either.
+
+**Two coverage gaps, stated rather than papered over.** The calico lane is still unmeasured on the self-hosted path (`e2e-calico.yml` is nightly and hosted), so its `raw.githubusercontent.com` and `quay.io/calico/*` fetches remain read from the workflow rather than observed.
+The live-GitHub specs also remain among the skipped, so their real `api.github.com` traffic still has not run.
+Both ride paths the managed GitHub rule already admits, so neither changes the design, and neither is measured.
+
 ## 3. Design
 
 ### 3.1 The mirror — one pull-through cache per upstream
 
 [CNCF Distribution](https://github.com/distribution/distribution) (`registry:3`, digest-pinned at Phase 2) in **pull-through cache mode** (`proxy.remoteurl`).
-Proxy mode supports exactly one upstream per instance, so the deployment is one Deployment + ClusterIP Service per upstream host — `mirror-docker-io`, `mirror-ghcr-io`, `mirror-quay-io`, `mirror-registry-k8s-io`, the set fixed by the Phase 0 measurement ([§2.2](#22-the-inventory)).
+Proxy mode supports exactly one upstream per instance, so the deployment is one Deployment + ClusterIP Service per upstream host: `mirror-docker-io`, `mirror-ghcr-io`, `mirror-quay-io`, `mirror-registry-k8s-io`, `mirror-gcr-io`, the set fixed by the [§2.2](#22-the-inventory) inventory as corrected by the [§2.5](#25-phase-1-validation-graded-2026-08-24) grading.
 Properties that make it the right tool:
 
 - **Read-only by construction.** A registry in proxy mode rejects pushes — untrusted code cannot use the mirror as a drop box.
@@ -142,12 +226,14 @@ Cosign signatures key on the manifest digest, not the pull location, so verifica
 
 ### 3.2 Wiring the clients
 
-Four upstreams need a mirror instance, per the [§2.2](#22-the-inventory) inventory: `docker.io`, `ghcr.io`, `quay.io`, `registry.k8s.io`.
+Five upstreams need a mirror instance, per the [§2.2](#22-the-inventory) inventory as corrected by [§2.5](#25-phase-1-validation-graded-2026-08-24): `docker.io`, `ghcr.io`, `quay.io`, `registry.k8s.io`, `gcr.io`.
 
 - **Inner dockerd** (Kata overlay dind sidecar `args`): add `--registry-mirror=http://mirror-docker-io.<ns>.svc.cluster.local:5000`.
   This transparently covers every Docker-Hub pull, implicit or explicit.
   `dockerd` mirrors **only** Docker Hub, and the measured job makes non-Hub docker-client pulls — `ghcr.io/actions-gateway/gmc`, and on a cold cache the `quay.io` and `registry.k8s.io` prepulls.
   Those refs are rewritten to the mirror address (`mirror-ghcr-io:5000/owner/img`) at their call sites, which pull-through mode serves natively.
+- **buildkit** (the image bake): resolves `gcr.io/distroless/static:nonroot` for four of the six baked images, and takes neither dockerd's `--registry-mirror` nor a rewritten docker-client ref, because the ref is in `Dockerfile`.
+  The tight lane points it at `mirror-gcr-io` via a build arg or a buildkitd registry-mirror config, and this is the only client whose fetch no cache and no `kind load` can cover ([§2.5](#25-phase-1-validation-graded-2026-08-24)).
 - **helm's OCI client** (`chart-released-upgrade-check.sh`): `helm pull oci://ghcr.io/<owner>/charts/…` takes neither of the above.
   The script already parameterises the ref (`RELEASED_CHART_OCI`), so the tight lane points it at `mirror-ghcr-io:5000/<owner>/charts` with `--plain-http`.
 - **Inner kind containerd** (`test/kind-config-*.yaml`): nothing required.
@@ -190,14 +276,14 @@ Any backend meeting the same four tests can substitute — Dragonfly is the sche
 
 ## 4. Phases
 
-Each phase is a separate PR; 1, 3 and 4 need live dogfood sessions (prod-guarded — deliberate, operator-driven runs).
+Each phase is a separate PR; 1, 3 and 4 need live dogfood sessions (prod-guarded: deliberate, operator-driven runs).
 
 - **Phase 0 — measured egress inventory. ✅ Done (2026-08-03).** Read off a green Kata dogfood run that had already happened rather than booking a new one; [§2](#2-the-gap--what-an-e2e-job-actually-fetches-at-job-time-phase-0) is the deliverable, and [§2.3](#23-what-the-measurement-changes) is what it cost the design.
-- **Phase 1 — shrink the non-registry residual to GitHub.
-  Implemented (2026-08-05); validation pending.** New phase, forced by Phase 0.
+- **Phase 1 — shrink the non-registry residual to GitHub. ✅ Done (implemented 2026-08-05, validated 2026-08-24).** New phase, forced by Phase 0.
   The [§2.4](#24-phase-1-decisions-resolved-2026-08-05) decisions are resolved: `e2e-reusable.yml` gates `azure/setup-helm`, every `actions/cache` step, and `GHA_CACHE` to `runner.environment == 'github-hosted'`.
-  Validation still to run (operator-driven dogfood session): a green Kata e2e run with open egress still present, and the run log naming no non-GitHub, non-registry host.
-- **Phase 2 — mirror manifests.** `deploy/registry-mirror/` (Athens-shaped: base, persistent overlay, README, NetworkPolicies), one instance per §2.2 upstream — `docker.io`, `ghcr.io`, `quay.io`, `registry.k8s.io` — applied from the e2e setup path.
+  Validated by grading four green self-hosted Kata runs against a Phase 0 control ([§2.5](#25-phase-1-validation-graded-2026-08-24)), and no dogfood session was booked because the qualifying runs had already happened.
+  The grading also corrected the upstream set from four to five.
+- **Phase 2 — mirror manifests.** `deploy/registry-mirror/` (Athens-shaped: base, persistent overlay, README, NetworkPolicies), one instance per upstream (`docker.io`, `ghcr.io`, `quay.io`, `registry.k8s.io`, `gcr.io`, the fifth added by [§2.5](#25-phase-1-validation-graded-2026-08-24)), applied from the e2e setup path.
   Validation: apply to the dogfood cluster; `curl` the mirror's `/v2/` and pull one image through each instance from a debug pod.
 - **Phase 3 — wiring.** dockerd `--registry-mirror` in the Kata overlay; non-Hub docker-client refs rewritten; helm's OCI ref pointed at the ghcr mirror.
   Validation: a green Kata e2e run **with open egress still present**, with the mirror access logs proving the pulls rode the mirror (hit counts > 0 per instance) — wiring proven before enforcement changes.
