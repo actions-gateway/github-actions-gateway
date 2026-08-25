@@ -471,6 +471,20 @@ The set serves every job targeting the labels that did register, and the ones th
 Like the v1 rollup it is advisory — it does **not** gate `Ready`, since the gateway's own AGC control plane can be healthy while one tenant's set is impaired.
 The GMC watches bound `RunnerSet`s (predicated on a change to a set's impaired signature, dropping high-frequency `activeSessions`/ `pendingJobs` churn) so a child's health change refreshes the parent promptly.
 
+**Observed runner version on the `RunnerSet` (Q792).** Q715 judges the worker image *reference* against GitHub's enforced minimum, so a digest-only or custom tag reports `WorkerImageVersionUnknown`: the reference declares no version and the AGC asks GitHub nothing.
+The injected wrapper has always read the real version from the runner's own dependency manifest, and only logged it.
+It now hands that back on the pod's termination message, and the reconciler publishes the last one it saw as `status.observedRunnerVersion`.
+
+The harvest hangs off the reap walk, which already lists exactly the set's worker pods and already switches on terminal phases, so it costs no extra `List`.
+It fires for every terminal pod the walk sees, reaped that pass or not, so the observation does not depend on reap timing.
+Newest wins, because a set whose `workerImage` changed has pods of both versions retained at once; and the field is sticky, because once every terminal pod has aged past `completedPodTTL` the walk sees no reports at all and clearing would flap the field on the reap cycle for an answer that is a property of the image rather than of which pods are retained.
+
+**It is a self-report and deliberately not verdict-bearing**, which is the whole design question rather than a caveat on it.
+The runner container runs the tenant's image and the job's own steps run inside it, so anything there can rewrite the report before the container terminates and kubelet reads whatever is last.
+Nothing inside the container can do better: a shared `emptyDir`, the manifest file itself, and a `shareProcessNamespace` sidecar reading `/proc/<pid>/root` are all tenant-writable, and an init container cannot see the runner image at all.
+So `RunnerVersionTooOld` keeps reporting `WorkerImageVersionUnknown` rather than turning a tenant-controlled value into a verdict, on the same argument that already makes `Unknown` not `False`: reporting "current" for an image nothing has checked would be worse than saying so.
+The attestable form reads the image from the registry before the container runs, which also covers the digest-only case and needs no pod; it is [Q988](../queue/Q988.md), and it is a registry-integration feature rather than a status field.
+
 **Advertised capacity on the `RunnerSet` (Q721).** The scale-set tier states its whole admission ladder as one integer per long-poll (`X-ScaleSetMaxCapacity`, [operational flows](04-operational-flows.md#the-ladder-as-an-integer-scale-set-tier-q443)), and until Q721 that number and its per-rung breakdown reached Prometheus alone.
 That makes the answer to "why is my intake throttled?" available to whoever can query metrics, which is the platform operator, and not to the tenant who owns the `RunnerSet`: the party whose `maxWorkers` or workflow shape is usually the thing to change.
 So the reconciler publishes the same accounting on `status.advertisedCapacity` and `status.withheldCapacity`, readable with `kubectl describe`.

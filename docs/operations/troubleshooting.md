@@ -1946,8 +1946,15 @@ Only the reference is read, so a tag that is not a runner version reports `Unkno
 
 - **`WorkerImageBelowMinimum`**: build or pull a `workerImage` on runner `2.329.0` or later and update the spec.
   Prefer both a tag and a digest (`myrepo/runner:2.335.1@sha256:…`): the digest is what pins the image, and the tag is what makes the version checkable.
-- **`WorkerImageVersionUnknown`**: either re-tag with the runner version the image ships, or read the version out of a worker pod directly.
-  The injected wrapper logs it once per pod, from the runner's own dependency manifest rather than from the tag:
+- **`WorkerImageVersionUnknown`**: either re-tag with the runner version the image ships, or read what a worker actually ran.
+  The injected wrapper reads the version from the runner's own dependency manifest rather than from the tag, and hands it back on the pod's termination message, so a `RunnerSet` carries the last one it saw (Q792):
+
+```bash
+kubectl get runnerset <name> -n <namespace> -o jsonpath='{.status.observedRunnerVersion}'; echo
+```
+
+Empty means no worker pod has terminated and reported yet, or the wrapper could not detect a version.
+The per-pod log line is the same answer for a pod that is still running, and names the reason when detection failed:
 
 ```bash
 kubectl logs -n <namespace> <worker-pod> -c runner | grep "runner version"
@@ -1955,6 +1962,11 @@ kubectl logs -n <namespace> <worker-pod> -c runner | grep "runner version"
 ```
 
 `runner version not detected` in that log means the image does not carry `bin/Runner.Listener.deps.json` where the runner layout puts it: it is not `actions/runner`-derived, or the runner lives somewhere `RUNNER_HOME_DIR` does not point at.
+
+> **`observedRunnerVersion` is a self-report, and the condition deliberately does not move for it.** The runner container runs your image and your job's own steps run inside it, so anything in that container can rewrite the report before the container terminates.
+> It answers *what does this image say it ships* for an operator debugging their own image, which is what the `Unknown` case needs.
+> It is not evidence against a hostile image, so `RunnerVersionTooOld` keeps reporting `WorkerImageVersionUnknown` rather than turning a tenant-controlled value into a verdict.
+> Reporting "current" for an image nothing has checked would be worse than saying so, which is the same reason `Unknown` is not `False`.
 
 ```bash
 # The verdict and its message for one set
