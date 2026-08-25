@@ -15,6 +15,8 @@
 //	PROXY_METRICS_CLIENT_CA_FILE - Path to CA that scraper client certs are verified against
 //	PROXY_ALLOWED_HOST_SUFFIXES  - Comma-separated CONNECT destination allowlist by DNS host suffix (Q242 G.1); empty ⇒ transport-only (NetworkPolicy is the gate)
 //	PROXY_ALLOWED_CIDRS          - Comma-separated CONNECT destination allowlist by IP range (CIDR); empty ⇒ no CIDR allowance
+//	PROXY_AUDIT_LOGGING          - Per-connection egress audit record: Off (default) or Connections; anything unrecognized is Off (Q564 G.3)
+//	POD_NAMESPACE                - Pool namespace stamped on the audit record; downward-API supplied, empty omits the field
 package main
 
 import (
@@ -110,13 +112,21 @@ func run(log *slog.Logger) error {
 		return fmt.Errorf("parse PROXY_ALLOWED_CIDRS: %w", err)
 	}
 	srv.AllowedCIDRs = cidrs
+
+	// Per-connection egress audit (Q564 G.3). Absent env ⇒ Off, so a proxy the
+	// GMC has not opted in — and one run standalone — records nothing per
+	// connection. The namespace comes from the downward API, never the request.
+	srv.AuditLogging = parseAuditMode(os.Getenv("PROXY_AUDIT_LOGGING"))
+	srv.Namespace = os.Getenv("POD_NAMESPACE")
+
 	srv.ShutdownDrainTimeout = drainTimeout
 	srv.ShutdownLinger = shutdownLinger
 
 	tlsEnabled := srv.TLSCertFile != "" && srv.TLSKeyFile != ""
 	metricsMTLS := srv.MetricsTLSCertFile != "" && srv.MetricsTLSKeyFile != "" && srv.MetricsClientCAFile != ""
 	log.Info("proxy starting", "proxyPort", proxyPort, "healthPort", healthPort,
-		"metricsPort", metricsPort, "tls", tlsEnabled, "metricsMTLS", metricsMTLS)
+		"metricsPort", metricsPort, "tls", tlsEnabled, "metricsMTLS", metricsMTLS,
+		"auditLogging", string(srv.AuditLogging))
 	// Every rollout, node drain, eviction, and scale-down delivers SIGTERM here.
 	// Without a handler the default action terminates the process outright and
 	// every in-flight CONNECT tunnel dies with it, cutting live CI egress

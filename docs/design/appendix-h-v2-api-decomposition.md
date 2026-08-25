@@ -185,6 +185,20 @@ type EgressProxySpec struct {
     // +kubebuilder:default=info
     LogLevel string `json:"logLevel,omitempty"`
 
+    // AuditLogging is the per-pool egress audit record (Q564, appendix G.3):
+    // Off (default) writes none; Connections writes one structured line per
+    // ACCEPTED CONNECT at tunnel close (namespace, destination host and port,
+    // bytes each way, duration), and nothing from the request headers or the
+    // tunneled bytes. Off by default is the security requirement, not a
+    // convenience: the record is data about a tenant's egress. An enum rather
+    // than a bool because what gets recorded is a policy that can grow a kind of
+    // record that is not per-connection. Threaded as PROXY_AUDIT_LOGGING plus a
+    // downward-API POD_NAMESPACE, injected only when non-Off so an unopted pool's
+    // pod template is unchanged; changing it rolls the pool.
+    // +kubebuilder:validation:Enum=Off;Connections
+    // +kubebuilder:default=Off
+    AuditLogging string `json:"auditLogging,omitempty"`
+
     // EgressPolicyMode is TENANT INTENT for how the GMC expresses the GitHub egress
     // allowlist: CIDR (default; standard NetworkPolicy + 24h IPRangeReconcile, works on
     // every CNI) or FQDN (by hostname, via a CNI-native DNS-aware policy). For FQDN

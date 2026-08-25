@@ -586,3 +586,69 @@ func TestV2_EgressProxy_UnmanagedAutoscalingLifecycle(t *testing.T) {
 		return k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: name}, &got) != nil
 	}, 10*time.Second, 100*time.Millisecond, "flipping managedAutoscaling to false should delete the managed HPA")
 }
+
+// TestV2_EgressProxy_AuditLoggingChange_RollsProxy verifies the per-pool egress
+// audit knob (Q564) end to end through the reconciler: a pool that has not opted
+// in carries NO audit env at all — not PROXY_AUDIT_LOGGING=Off, absent — so
+// upgrading the GMC does not roll every existing pool, and flipping the field to
+// Connections updates the pod template with both the mode and the downward-API
+// namespace the record is stamped from. Mirrors TestV2_EgressProxy_LogLevelChange_RollsProxy.
+func TestV2_EgressProxy_AuditLoggingChange_RollsProxy(t *testing.T) {
+	const ns = "v2-ep-auditlog"
+	createNamespace(t, ns)
+	startEgressProxyReconciler(t, nil)
+
+	ep := &gmcv2alpha1.EgressProxy{
+		ObjectMeta: metav1.ObjectMeta{Name: egressProxyName, Namespace: ns},
+		Spec:       gmcv2alpha1.EgressProxySpec{},
+	}
+	require.NoError(t, k8sClient.Create(ctx, ep))
+	t.Cleanup(func() { _ = k8sClient.Delete(ctx, ep) })
+
+	name := proxyChildName(egressProxyName)
+	var dep appsv1.Deployment
+	require.Eventually(t, func() bool {
+		return k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: name}, &dep) == nil
+	}, 10*time.Second, 100*time.Millisecond, "proxy Deployment should be created")
+
+	env := containerEnv(t, dep)
+	assert.NotContains(t, env, "PROXY_AUDIT_LOGGING",
+		"a pool defaulted to Off must carry no audit env, so upgrading the GMC rolls no existing pool")
+	assert.NotContains(t, env, "POD_NAMESPACE",
+		"the downward-API namespace rides with the audit opt-in, not on its own")
+
+	require.Eventually(t, func() bool {
+		var fetched gmcv2alpha1.EgressProxy
+		if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: egressProxyName}, &fetched); err != nil {
+			return false
+		}
+		fetched.Spec.AuditLogging = "Connections"
+		return k8sClient.Update(ctx, &fetched) == nil
+	}, 5*time.Second, 25*time.Millisecond, "update EgressProxy spec.auditLogging to Connections")
+
+	require.Eventually(t, func() bool {
+		var got appsv1.Deployment
+		if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: name}, &got); err != nil {
+			return false
+		}
+		return containerEnv(t, got)["PROXY_AUDIT_LOGGING"] == "Connections"
+	}, 10*time.Second, 100*time.Millisecond,
+		"proxy Deployment must roll to PROXY_AUDIT_LOGGING=Connections")
+
+	// The namespace must arrive by downward API rather than a formatted-in value:
+	// the record names the namespace the pod actually runs in, and a field ref is
+	// the one form a template substitution cannot get wrong.
+	var rolled appsv1.Deployment
+	require.NoError(t, k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: name}, &rolled))
+	var podNS *corev1.EnvVar
+	for i, e := range rolled.Spec.Template.Spec.Containers[0].Env {
+		if e.Name == "POD_NAMESPACE" {
+			podNS = &rolled.Spec.Template.Spec.Containers[0].Env[i]
+		}
+	}
+	require.NotNil(t, podNS, "opting in must inject POD_NAMESPACE")
+	assert.Empty(t, podNS.Value, "POD_NAMESPACE must not be a literal")
+	require.NotNil(t, podNS.ValueFrom, "POD_NAMESPACE must come from the downward API")
+	require.NotNil(t, podNS.ValueFrom.FieldRef)
+	assert.Equal(t, "metadata.namespace", podNS.ValueFrom.FieldRef.FieldPath)
+}

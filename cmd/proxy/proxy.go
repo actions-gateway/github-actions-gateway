@@ -82,6 +82,22 @@ type Server struct {
 	// allowed host suffix or resolve into an allowed CIDR, else it is refused 403.
 	AllowedHostSuffixes []string
 	AllowedCIDRs        []*net.IPNet
+
+	// AuditLogging selects the per-connection egress record this proxy writes
+	// (Q564, design appendix G.3). AuditOff — the default, and what an unset or
+	// unrecognized PROXY_AUDIT_LOGGING resolves to — writes nothing per
+	// connection. See AuditMode for why it is opt-in.
+	AuditLogging AuditMode
+	// Namespace is the namespace THIS POOL runs in, read from the downward API
+	// and stamped on the audit record so the record attributes itself without
+	// the log collector's pod metadata. Empty omits the field.
+	//
+	// It is the consuming tenant only for a pool no other namespace references.
+	// EgressProxy.spec.sharing.allowedNamespaces lets one pool serve consumers
+	// elsewhere, and a CONNECT carries no namespace, so on a shared pool this
+	// names the pool rather than whoever sent the request. Attribution there is
+	// per pool, not per tenant.
+	Namespace string
 	// dnsResolver resolves CONNECT hostnames for the CIDR allowlist check; nil uses
 	// net.DefaultResolver. Injected in tests.
 	dnsResolver ipResolver
@@ -693,7 +709,7 @@ func (s *Server) handleConnect(w http.ResponseWriter, r *http.Request) {
 	dialAddr, allowed := s.checkDestination(r.Context(), r.Host)
 	if !allowed {
 		s.connectDenied.WithLabelValues().Inc()
-		s.logger().Warn("CONNECT destination not allowed", "host", r.Host)
+		s.logger().Warn("CONNECT destination not allowed", "host", truncateHost(r.Host))
 		http.Error(w, "destination not allowed", http.StatusForbidden)
 		return
 	}
@@ -701,7 +717,7 @@ func (s *Server) handleConnect(w http.ResponseWriter, r *http.Request) {
 	upstream, err := net.DialTimeout("tcp", dialAddr, dialTimeout)
 	if err != nil {
 		s.dialErrors.WithLabelValues().Inc()
-		s.logger().Error("upstream dial failed", "host", r.Host, "error", err)
+		s.logger().Error("upstream dial failed", "host", truncateHost(r.Host), "error", truncateLogError(err))
 		http.Error(w, "upstream unavailable", http.StatusBadGateway)
 		return
 	}
@@ -735,7 +751,7 @@ func (s *Server) handleConnect(w http.ResponseWriter, r *http.Request) {
 		// tunneling a connection whose CONNECT-200 reply never landed would
 		// dirty the metrics and immediately die in io.Copy. Bail before either.
 		// The deferred conn.Close()/upstream.Close() handle cleanup.
-		s.logger().Debug("CONNECT response write failed", "host", r.Host, "error", err)
+		s.logger().Debug("CONNECT response write failed", "host", truncateHost(r.Host), "error", truncateLogError(err))
 		return
 	}
 
@@ -754,6 +770,10 @@ func (s *Server) handleConnect(w http.ResponseWriter, r *http.Request) {
 	hardDeadline := time.Now().Add(maxLifetime)
 
 	start := time.Now()
+	// Under AuditConnections this also spans the far relay's unwind, because the
+	// audit path below waits for it before returning. Sub-millisecond, but it
+	// means the histogram is not byte-identical between the two modes — noted
+	// here so a later latency hunt does not read the shift as a regression.
 	defer func() {
 		s.tunnelDuration.WithLabelValues().Observe(time.Since(start).Seconds())
 	}()
@@ -761,17 +781,37 @@ func (s *Server) handleConnect(w http.ResponseWriter, r *http.Request) {
 	clientSrc := &idleDeadlineConn{Conn: conn, idle: idleTimeout, hardDeadline: hardDeadline}
 	upstreamSrc := &idleDeadlineConn{Conn: upstream, idle: idleTimeout, hardDeadline: hardDeadline}
 
+	// Per-direction byte counters for the audit record. Each relay stores its
+	// own exactly once, and the receives below order both stores before the
+	// read; atomic keeps that ordering self-evident rather than resting on the
+	// channel.
+	var bytesToDestination, bytesFromDestination atomic.Int64
+
 	done := make(chan struct{}, 2)
-	relay := func(dst, src net.Conn) {
+	relay := func(dst, src net.Conn, n *atomic.Int64) {
 		defer func() { done <- struct{}{} }()
-		_, _ = io.Copy(dst, src)
+		copied, _ := io.Copy(dst, src)
+		n.Store(copied)
 		if tc, ok := dst.(*net.TCPConn); ok {
 			_ = tc.CloseWrite()
 		}
 	}
-	go relay(upstream, clientSrc)
-	go relay(conn, upstreamSrc)
+	go relay(upstream, clientSrc, &bytesToDestination)
+	go relay(conn, upstreamSrc, &bytesFromDestination)
 	<-done
+
+	if s.AuditLogging == AuditConnections {
+		// Close both ends so the far relay unwinds and its counter is final
+		// before the record is written. The deferred Closes do exactly this,
+		// but they run after the body returns — too late to be read here. Both
+		// relays are then guaranteed to send, so the second receive cannot
+		// block: io.Copy returns once its conn is closed, and the per-direction
+		// read deadline bounds it even if it did not.
+		_ = conn.Close()
+		_ = upstream.Close()
+		<-done
+		s.logConnectAudit(r.Host, bytesToDestination.Load(), bytesFromDestination.Load(), time.Since(start))
+	}
 }
 
 // idleDeadlineConn refreshes the underlying conn's read deadline on every

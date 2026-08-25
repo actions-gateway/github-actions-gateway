@@ -40,6 +40,11 @@ const (
 	proxyContainerName        = "proxy"
 	egressProxyResourceSuffix = "-proxy"
 	egressProxyTLSSuffix      = "-proxy-tls"
+
+	// auditLoggingOff is the EgressProxy.spec.auditLogging value that emits no
+	// per-connection record — the CRD default, and the only one that injects no
+	// audit env onto the proxy container.
+	auditLoggingOff = "Off"
 )
 
 // proxyResourceName is the name shared by an EgressProxy's Deployment, Service,
@@ -187,6 +192,30 @@ func proxyAllowlistEnv(ep *gmcv2alpha1.EgressProxy, gitHubHosts []string) []core
 		env = append(env, corev1.EnvVar{Name: "PROXY_ALLOWED_CIDRS", Value: strings.Join(ep.Spec.DestinationCIDRs, ",")})
 	}
 	return env
+}
+
+// proxyAuditEnv returns the per-connection egress audit env (Q564, design G.3)
+// for the proxy container, or nil when the pool has not opted in.
+//
+// Injected only when spec.auditLogging is a non-Off value, for the same reason
+// proxyAllowlistEnv is conditional: a pool that has not opted in keeps a
+// byte-for-byte unchanged pod template, so upgrading the GMC does not roll every
+// proxy pool in the cluster. The proxy binary defaults to Off with the variable
+// absent, so the off-by-default guarantee holds at both ends independently.
+//
+// POD_NAMESPACE rides along from the downward API rather than being formatted in
+// here: the record must name the namespace the pod actually runs in, and the
+// downward API is the one source a template substitution cannot get wrong.
+func proxyAuditEnv(ep *gmcv2alpha1.EgressProxy) []corev1.EnvVar {
+	if ep.Spec.AuditLogging == "" || ep.Spec.AuditLogging == auditLoggingOff {
+		return nil
+	}
+	return []corev1.EnvVar{
+		{Name: "PROXY_AUDIT_LOGGING", Value: ep.Spec.AuditLogging},
+		{Name: "POD_NAMESPACE", ValueFrom: &corev1.EnvVarSource{
+			FieldRef: &corev1.ObjectFieldSelector{FieldPath: "metadata.namespace"},
+		}},
+	}
 }
 
 // proxyHostSuffix normalizes an FQDN-policy entry into the bare host suffix the
@@ -393,7 +422,7 @@ func buildEgressProxyDeployment(ep *gmcv2alpha1.EgressProxy, proxyImage string, 
 							// change here reaches the pod template, which is what
 							// rolls the pool so the new level takes effect.
 							{Name: "LOG_LEVEL", Value: logLevelOrDefault(ep.Spec.LogLevel)},
-						}, proxyAllowlistEnv(ep, gitHubHosts)...),
+						}, append(proxyAllowlistEnv(ep, gitHubHosts), proxyAuditEnv(ep)...)...),
 						VolumeMounts: []corev1.VolumeMount{
 							{
 								Name:      proxyTLSVolumeName,

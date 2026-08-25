@@ -49,16 +49,20 @@ Bucket state stays in-process on each proxy pod; for accurate global limits a sh
 
 ## G.3. Proxy-Side Audit Logging
 
-**Current behavior.** The proxy emits Prometheus counters (`actions_gateway_proxy_connections_active`, `actions_gateway_proxy_connections_total`, `actions_gateway_proxy_dial_errors_total`) but no per-connection log.
+> **✅ Implemented (Q564).** The recorded demand this entry waited on arrived as [Q725](../queue/Q725.md), the audit-persona dashboard, so the enhancement was promoted to committed work and shipped.
+> It is retained here as a stub so existing cross-references resolve; the live design and operator docs are authoritative.
 
-**Gap.** Audit trails for "which tenant talked to which GitHub endpoint at what time" are reconstructable today only via cluster-wide flow logs or GitHub's own audit log.
-Operators investigating an incident have no per-tenant per-destination view at the proxy layer.
+An `EgressProxy` pool writes one structured line per **accepted** CONNECT (pool namespace, destination host and port, bytes each way, tunnel duration) to the same stdout JSON stream the pool already logs to.
+It is **off by default** and opted into per pool with `spec.auditLogging: Connections`; `Off` is the default and is what an unset field, an unrecognized value, and a proxy image older than the field all resolve to.
 
-**What "added" would look like.** A structured log line per accepted CONNECT (tenant namespace, target host, target port, bytes in, bytes out, duration).
-Off by default; enabled per-tenant via a `spec.proxy.auditLogging: true` field.
-Output to stdout for log collectors to scrape.
+Two deltas from the sketch this entry originally carried, both recorded so a reader is not left looking for what it described:
 
-**What would trigger building it.** Compliance ask for per-tenant egress audit, or a recurring class of incident where the missing log delays root cause.
+- **The field is `EgressProxy.spec.auditLogging`, not `spec.proxy.auditLogging`.** The inline `ActionsGateway.spec.proxy` this entry predates was decomposed into the standalone `EgressProxy` kind (§H.4), and a proxy pool is what the record attributes.
+- **It is a string enum, not a bool.** What gets recorded is a policy, so the [API design rules](../development/api-review.md#prefer-a-string-enum-to-a-bool) put it on an enum whose values name the method: `Connections` today, with room for a kind of record that is not per-connection.
+
+- Field contract and what the record deliberately omits: [05-security.md § Proxy egress audit record](05-security.md#proxy-egress-audit-record).
+- Record shape and how to select it: [observability-logging.md § Proxy egress audit record](../operations/observability-logging.md#proxy-egress-audit-record).
+- Turning it on: [tenant-onboarding.md § Per-pool egress audit record](../operations/tenant-onboarding.md#per-pool-egress-audit-record).
 
 ---
 

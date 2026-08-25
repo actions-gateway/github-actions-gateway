@@ -283,6 +283,7 @@ func TestEgressProxyConversion_RoundTrip(t *testing.T) {
 			DestinationFQDNs: []string{"example.com"},
 			DestinationCIDRs: []string{"10.0.0.0/8"},
 			LogLevel:         "debug",
+			AuditLogging:     "Connections",
 		},
 		Status: v2alpha1.EgressProxyStatus{
 			Conditions: []metav1.Condition{{Type: "Ready", Status: metav1.ConditionTrue, Reason: "OK", LastTransitionTime: fixedTime}},

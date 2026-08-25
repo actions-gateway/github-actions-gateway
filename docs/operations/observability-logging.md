@@ -48,6 +48,62 @@ Admission **rejections** (reserved-namespace, cross-namespace `gitHubAppRef`, pr
 **API server warnings** (e.g. the [`v1alpha1`](upgrade.md#non-breaking-v1alpha1-is-deprecated-and-the-apiserver-now-warns) and [`v2alpha1`](upgrade.md#non-breaking-v2alpha1-is-deprecated-and-the-apiserver-now-warns) deprecation warnings) are logged at info, **deduplicated to one line per unique message per process** in both controllers.
 The apiserver attaches such a warning to every read and write of a deprecated API version, so without dedup a set reconciling under churn would drown the log in repeats; expect the first occurrence only, not one per API call.
 
+### Proxy egress audit record
+
+A proxy pool can write one structured line per **accepted** CONNECT, answering "which destination did this pool reach, when, and how much moved" without reconstructing it from cluster flow logs or GitHub's own audit log.
+
+It is **off by default** and opted into per pool:
+
+```yaml
+apiVersion: actions-gateway.com/v2beta1
+kind: EgressProxy
+metadata:
+  name: shared
+  namespace: team-a
+spec:
+  auditLogging: Connections   # Off (default) writes no per-connection record
+```
+
+Flipping it rolls the proxy pool, since the value is part of the pod template, so the records start once the new pods are up rather than on the write.
+See [tenant onboarding: per-pool egress audit record](tenant-onboarding.md#per-pool-egress-audit-record) for when to turn it on and what it costs.
+
+A record looks like this (one JSON object per line, on the same stdout stream as everything else the pool logs):
+
+```json
+{
+  "time": "2026-08-24T19:58:03.114Z",
+  "level": "INFO",
+  "msg": "egress audit",
+  "namespace": "team-a",
+  "event": "connect",
+  "host": "api.github.com",
+  "port": "443",
+  "bytesToDestination": 4182,
+  "bytesFromDestination": 91744,
+  "durationSeconds": 12.406
+}
+```
+
+Selecting the audit stream: filter on `msg == "egress audit"`, then on `event` to pick a record kind.
+`connect` is the only one today, and a later kind reuses the message rather than inventing a second one.
+The fields:
+
+| Field | Meaning |
+|---|---|
+| `namespace` | The namespace the proxy **pool** runs in, read from the downward API. On a pool no other namespace references this is the consuming tenant; on one shared via `spec.sharing.allowedNamespaces` it names the pool, not the consumer, because a CONNECT carries no namespace. Omitted entirely by a proxy run outside Kubernetes, never emitted empty |
+| `event` | `connect`, the record kind |
+| `host` / `port` | The CONNECT destination. `host` is capped at 253 **bytes** (the longest legal DNS name) and gains a `…(truncated)` marker if cut, so a capped value never reads as a real destination. The cut lands on a rune boundary, so a raw-UTF-8 internationalized name is never left as a broken character. The same cap applies to every proxy log line carrying the destination (the denial, the dial failure, and the response-write failure), not only to the audit record |
+| `bytesToDestination` / `bytesFromDestination` | Bytes relayed each way, final at tunnel close |
+| `durationSeconds` | How long the tunnel was open |
+
+Three properties worth knowing before you build on it:
+
+- **Accepted CONNECTs only.** A refused destination and a failed upstream dial are not in this stream; they are the existing `CONNECT destination not allowed` warn and `upstream dial failed` error lines, and the `actions_gateway_proxy_connect_denied_total` / `actions_gateway_proxy_dial_errors_total` counters.
+- **Written at info.** An audit record never depends on raising the pool to `debug`, and raising it to `debug` never adds a field to the record.
+- **One line per connection.** Under load that is the pool's dominant log volume, which is the cost the opt-in is asking you to accept, so size the pipeline before turning it on.
+
+What the record deliberately does *not* carry, and why, is in the [security design](../design/05-security.md#proxy-egress-audit-record).
+
 ### What never appears in logs
 
 Ship AGC and proxy logs to a shared aggregator without a scrubbing pipeline in front: **credential material is redacted before a log line is emitted**, not by the log stack afterward.

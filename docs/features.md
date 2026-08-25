@@ -85,6 +85,7 @@ No tier badge means both tiers, and a gate removes the badge when the gap closes
 - **[Alerting and SLOs](operations/observability-alerting.md)**: ready-to-apply alert rules as code.
 - **[Grafana dashboards](operations/observability-dashboards.md)**: a tenant dashboard and a platform dashboard, both as code.
 - **[Logging and tracing](operations/observability-logging.md)**: structured logs and OpenTelemetry tracing across the four tiers.
+- **[Per-pool egress audit record](operations/observability-logging.md#proxy-egress-audit-record)** <span class="gag-v2-badge">v2</span> <span class="gag-maturity-badge">beta</span> <span class="gag-new-badge">new in 1.6</span>: one structured line per accepted CONNECT (namespace, destination, bytes each way, duration), off by default, since retaining where a tenant went is a decision.
 
 ## Install and day-2 operations
 

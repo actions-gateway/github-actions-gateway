@@ -6,7 +6,7 @@ The first audit (2026-05) and its W/C/H/M/L workstreams live in [security.md](se
 
 > **Status: Complete.** Every High/Medium finding is resolved (Q121–Q130).
 > The proxy destination-allowlist / SSRF revisit that this audit deferred shipped as Q242 (Appendix G §G.1), though as an *opt-in, platform-gated* control — the default posture is unchanged, so the finding's disposition below still reads "accepted by design" for a stock install.
-> The remaining deferral is the worker trivy-leg flip ([Q70](../queue/Q70.md)); the residual proxy hardening this audit argued for — a connection cap and per-connection audit trail — is now tracked as live Queue rows ([Q564](../queue/Q564.md), [Q565](../queue/Q565.md)).
+> The remaining deferral is the worker trivy-leg flip ([Q70](../queue/Q70.md)); the residual proxy hardening this audit argued for — a connection cap and per-connection audit trail — is now tracked as live Queue rows (Q564, [Q565](../queue/Q565.md)).
 > Info-level / accepted-by-design items are documented in place.
 > No active work remains on this audit.
 

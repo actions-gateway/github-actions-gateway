@@ -1017,6 +1017,41 @@ Check the resolution any time with `kubectl get vpa <gateway>-agc -o yaml`; the 
 
 The GMC's own control plane has the same opt-in at the chart level — the `vpa.enabled` value in [install.md](install.md#key-values-an-operator-sets).
 
+### Per-pool egress audit record
+
+A proxy pool can record one structured line per accepted CONNECT: which destination a tenant's workers reached, when, and how many bytes moved each way.
+It is **off by default** and turned on per pool:
+
+```sh
+kubectl patch egressproxy -n <tenant-namespace> <name> \
+  --type merge -p '{"spec":{"auditLogging":"Connections"}}'
+```
+
+Only `Off` (the default) and `Connections` are accepted; admission rejects anything else.
+
+**It records; it does not enforce.** Neither value changes what the proxy forwards.
+If you know `audit` from Pod Security Admission, where it means *evaluate the policy but admit anyway*, that sense does not apply here: enabling this does not put the destination allowlist into report-only, and it relaxes nothing.
+Destination enforcement is `destinationFQDNs`/`destinationCIDRs` plus the pod-egress NetworkPolicy, unchanged either way.
+
+**Quote `Off` in a YAML manifest.** YAML reads a bare `Off` as the boolean false, so `kubectl apply` of `auditLogging: Off` sends a boolean and the apiserver rejects it as the wrong type for a string field, naming a value you never typed.
+Write `auditLogging: "Off"`, or leave the field out, which means the same thing.
+The `kubectl patch` above is JSON and is unaffected.
+
+**A shared pool attributes per pool, not per tenant.** If this pool is referenced from other namespaces via `spec.sharing.allowedNamespaces`, the record's `namespace` names the pool, not whichever consumer sent the request: a CONNECT carries no namespace and nothing else in the line identifies the caller.
+Give a tenant whose audit trail has to name them their own unshared pool.
+
+**Off is the default deliberately, and turning it on is a decision with two costs.** The record says where a tenant's traffic went, so retaining it is a choice about what the platform keeps and for how long.
+Agree that with the tenant rather than switching it on across a cluster.
+And it is one line per connection: under real CI load it becomes the pool's dominant log volume, so size the collector and its retention before flipping it.
+
+**It is a rolling restart, not a hot reload.** The value is part of the pod template, so records begin once the pool's new pods are up.
+In-flight tunnels finish on the old pods within the termination grace period and produce no record, a gap of at most one drain that is worth knowing if you turn it on mid-incident.
+
+Turn it on when you need egress evidence the counters cannot give: an incident where "which endpoint did this pool reach at 14:02" is the question, or a compliance ask for per-tenant egress attribution, which an unshared pool satisfies and a shared one does not.
+Reach for it *before* the incident if the answer has to exist afterwards: it records forward, never backward.
+
+The record shape, the field meanings, and how to select the audit stream in a log pipeline are in [logging: proxy egress audit record](observability-logging.md#proxy-egress-audit-record); what a line deliberately never carries is in the [security design](../design/05-security.md#proxy-egress-audit-record).
+
 ### Workload-identity credentials (external signer)
 
 `spec.credentials` is a discriminated union (keyed by `credentials.type`) with two members.
