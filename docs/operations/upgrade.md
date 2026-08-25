@@ -13,6 +13,7 @@ The three independently versioned components — GMC, AGC, and worker image — 
 
 - [Pre-Upgrade Validation Checklist](#pre-upgrade-validation-checklist)
 - [Migration Notes](#migration-notes)
+  - [Non-breaking: `spec.scaleUp` now withholds intake instead of delaying jobs it has already claimed](#non-breaking-specscaleup-now-withholds-intake-instead-of-delaying-jobs-it-has-already-claimed)
   - [Non-breaking: job_duration_seconds now measures worker pod lifetime (the classic-tier span shrinks)](#non-breaking-job_duration_seconds-now-measures-worker-pod-lifetime-the-classic-tier-span-shrinks)
   - [Non-breaking: deleting a cancelled run's worker no longer re-queues the job](#non-breaking-deleting-a-cancelled-runs-worker-no-longer-re-queues-the-job)
   - [Non-breaking: an abandoned run is force-cancelled and re-run automatically, on both acquisition tiers](#non-breaking-an-abandoned-run-is-force-cancelled-and-re-run-automatically-on-both-acquisition-tiers)
@@ -91,6 +92,30 @@ Also check the release notes for the new version before upgrading, particularly:
 ---
 
 ## Migration Notes
+
+### Non-breaking: `spec.scaleUp` now withholds intake instead of delaying jobs it has already claimed
+
+**Who is affected:** every runner group or runner set that sets `spec.scaleUp`.
+It is off by default, so a tenant that never configured a ramp sees nothing.
+
+**What changed.** The scale-up token bucket became a rung of the pre-acquisition admission ladder (Q717).
+It used to be waited on *after* the job was claimed, at pod-creation time, which meant a throttled job sat on a GitHub job lock for the length of its wait.
+A lock that lapses cancels the job rather than redelivering it, so a large burst at a low `maxPerSecond` could destroy the jobs the ramp was smoothing.
+
+| | Behaviour when the bucket is empty |
+| --- | --- |
+| Before | The job was claimed, then slept until a token freed, holding its GitHub job lock throughout |
+| Now | The job is not claimed at all: it stays queued at GitHub for redelivery, and no lock is spent |
+
+The ramp itself is unchanged: the same `maxPerSecond` and `burst` produce the same pod-creation rate.
+A `ScaleSet`-protocol set expresses the rung as a smaller advertised capacity per long-poll, so GitHub never assigns the excess in the first place.
+
+**What to expect at upgrade.** Time-to-pickup for a throttled job is now a GitHub redelivery interval rather than the remainder of the ramp, so individual jobs may be picked up later while none is at risk of being cancelled by a lapsed lock.
+`actions_gateway_worker_scaleup_throttled_total` keeps its name and now counts withheld intake rather than delayed creations.
+On the scale-set tier it stays a pod-creation measure and falls close to zero, because the advertisement withholds the work before it is assigned; a non-zero rate there now means the advertisement was stale rather than that the ramp is engaging.
+
+**Action required:** none, but two new label values appear on existing series and any exhaustive `reason` selector should be widened: `actions_gateway_jobs_admission_rejected_total{reason="scaleup"}` and `actions_gateway_scaleset_capacity_withheld{reason="scaleup"}`.
+If you lowered `maxPerSecond` to protect a shared egress path and then raised it again because claimed jobs were being held, the original value is now safe to restore.
 
 ### Non-breaking: `job_duration_seconds` now measures worker pod lifetime (the classic-tier span shrinks)
 

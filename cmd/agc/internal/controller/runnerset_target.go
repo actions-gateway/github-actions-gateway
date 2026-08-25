@@ -248,6 +248,18 @@ func (t *runnerSetTarget) DeclinedCapacity(ctx context.Context, max int32) (int3
 	return limit, true
 }
 
+// ScaleUpLimit reads the rate limit from the fresh RunnerSet spec, so the rate rung
+// of the admission ladder honours a spec.scaleUp edit on the next delivered job or
+// long-poll without an AGC restart (Q117). Fail-open like Ceiling: an unreadable set
+// yields nil, which leaves the rung unbound rather than starving the set.
+func (t *runnerSetTarget) ScaleUpLimit(ctx context.Context) *provisioner.ScaleUpConfig {
+	rs := &v2alpha1.RunnerSet{}
+	if err := t.client.Get(ctx, t.key, rs); err != nil {
+		return nil
+	}
+	return scaleUpConfigFromV2(rs.Spec.ScaleUp)
+}
+
 // capacityGateCondition returns the set's WorkerCapacityDeclined condition when the
 // gate is enabled and currently True, else nil. The shared read for both forms of
 // the placeability rung, folding in every fail-open step they have in common: an

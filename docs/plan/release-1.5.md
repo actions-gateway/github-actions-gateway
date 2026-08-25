@@ -406,6 +406,8 @@ Held here so the reasoning is not lost, not committed to the release:
 
 - **Fold the scale-up token bucket into the advertised capacity.** The bucket is waited on at `provisioner.go:532` and `:793`, after the claim, with the job holding its GitHub lock, which the CRD godoc states outright (`api/v2beta1/runnerset_types.go:394-400`).
   Expressing free tokens as a fourth `min()` rung in `AdvertiseCapacity` would make the anti-stampede claim structurally honest.
+  **Accepted and shipped in 1.6** (Q717): the rung landed in both tiers, and the classic tier drops its post-claim wait entirely because it takes the token in `Admit` instead.
+  The advertisement rung converts free tokens to a total with the set's own in-flight pods, without which a `burst`-deep bucket would have pinned the set at `burst` assigned jobs and turned a rate limit into a lower concurrency ceiling.
 
 *(Multi-label runner sets were held here too, and were accepted on 2026-08-09: the row is Q726, now labelled `1.5-gate`, and the gap inventory it belongs to is [arc-parity.md](arc-parity.md).)*
 

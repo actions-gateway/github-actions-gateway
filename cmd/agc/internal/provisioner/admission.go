@@ -91,17 +91,23 @@ func (p *Provisioner) AdmitFor(snapshot *v1alpha1.RunnerGroup) runnercore.AdmitF
 }
 
 // Admit returns an AdmitFunc bound to the given Target that gates job acquisition
-// on three independent rungs, all re-read on every delivered job so spec and cluster
+// on four independent rungs, all re-read on every delivered job so spec and cluster
 // changes take effect without an AGC restart (Q117):
 //
 //  1. Observed namespace-ResourceQuota headroom (#784) — Target.QuotaExhausted.
 //  2. Observed placeability, opt-in per owner (Q405) — Target.CapacityDeclined.
-//  3. The owner's declared worker ceiling (Q59) — Target.Ceiling, counted against
+//  3. The owner's opt-in worker-pod creation-rate limit (Q223) — Target.ScaleUpLimit,
+//     taken from the in-memory token bucket.
+//  4. The owner's declared worker ceiling (Q59) — Target.Ceiling, counted against
 //     the in-memory reservation gate.
 //
 // The two observed rungs come first and reserve nothing: a job we decline for quota
-// or capacity was never counted against the ceiling, so the reservation arithmetic is
-// untouched. Without the quota rung, quota exhaustion is handled one layer down by
+// or capacity was never counted against the ceiling or charged a rate-limit token, so
+// neither piece of arithmetic is touched. They are also the two that do not clear on
+// their own, which is why they are reported in preference to the transient rate rung
+// when more than one would refuse.
+//
+// Without the quota rung, quota exhaustion is handled one layer down by
 // createPodWithQuotaRetry — which holds the GitHub job lock across up to
 // maxQuotaRetries × quotaRetryDelay (150s of a ~10-minute lock at the defaults) and,
 // on budget exhaustion, drops the job *with the lock held*: precisely the failure the
@@ -133,6 +139,22 @@ func (p *Provisioner) AdmitFor(snapshot *v1alpha1.RunnerGroup) runnercore.AdmitF
 // AdvertiseCapacity, and a rung added to one without the other ships to one tier
 // (Q443).
 //
+// # Why the rate limit is a rung and not a wait
+//
+// The token bucket used to be waited on AFTER the claim, at pod-creation time, which
+// put spec.scaleUp in exactly the position Q59 built this gate to remove: a job that
+// cannot be provisioned yet, holding its GitHub job lock while it waits. A long ramp
+// — a burst of N jobs at a low maxPerSecond — walks the tail of that burst past the
+// lock's lifetime, and a job whose lock lapses is cancelled rather than redelivered.
+// As a rung it refuses instead, and the job stays queued at GitHub for redelivery
+// with no lock spent (Q717).
+//
+// The rung TAKES its token rather than reading the bucket, because an observation
+// cannot bind on the stampede the bucket exists to smooth: every listener in a
+// simultaneously-delivered burst would see the same free token and claim anyway.
+// Taking it here is also what makes it the single spend point on this tier — the
+// classic provisioning path no longer waits on the bucket at all.
+//
 // The returned AdmitFunc is safe for concurrent use across the owner's listeners.
 // v1 wires it via AdmitFor; the v2 RunnerSet controller wires it directly with a
 // RunnerSet-backed Target.
@@ -154,6 +176,16 @@ func (p *Provisioner) Admit(target Target) runnercore.AdmitFunc {
 			// WorkerCapacityDeclined condition as the operator-facing signals.
 			p.logForKey(target.Key()).Debug("job admission deferred: the cluster cannot place another worker pod for this owner", "detail", detail)
 			return nil, false, runnercore.AdmitReasonCapacity
+		}
+		if !p.scaleUp.allow(key, target.ScaleUpLimit(ctx)) {
+			// Per-delivery and high-volume while a set ramps: Debug, with the metric's
+			// reason label as the operator-facing signal. Self-clearing — the bucket
+			// refills at maxPerSecond — so unlike the rungs above it needs no condition.
+			p.logForKey(target.Key()).Debug("job admission deferred: the scale-up rate limit has no token for another worker pod")
+			if p.Metrics != nil {
+				p.Metrics.ScaleUpThrottled.WithLabelValues(target.Key().Namespace, target.Key().Name).Inc()
+			}
+			return nil, false, runnercore.AdmitReasonScaleUp
 		}
 		limit, bounded := target.Ceiling(ctx)
 		release, ok = p.admission.admit(key, limit, bounded)
@@ -206,11 +238,24 @@ type CapacityAdvertisement struct {
 //  3. Observed placeability, opt-in per owner (Q405) — Target.DeclinedCapacity,
 //     which bounds the total at the owner's own in-flight worker pods while the
 //     cluster cannot place another one.
+//  4. The owner's opt-in worker-pod creation-rate limit (Q223) — Target.ScaleUpLimit
+//     against the in-memory token bucket, converted from free tokens to a total by
+//     the owner's own in-flight worker pods.
 //
-// Unlike the classic rung this reserves nothing and costs no claim: jobs beyond the
-// advertised total stay queued at GitHub, so a quota-blocked job is never assigned in
-// the first place. The trade is granularity — the decision is per poll for the whole
-// set rather than per job, so recovery from a stale read is one poll interval.
+// That conversion on rung 4 is the whole of it, and skipping it inverts the field's
+// meaning. The advertisement bounds totalAssignedJobs, so free tokens ARE a delta —
+// how many more pods may be created now — and advertising the delta directly caps the
+// set at burst forever: the bucket refills to at most burst, so a set with burst 10
+// and maxWorkers 100 would sit at 10 assigned jobs and never climb, turning a rate
+// limit into a second, lower concurrency ceiling. Added to the in-flight count it
+// does what spec.scaleUp says instead — the set jumps to burst on the first poll and
+// then climbs at maxPerSecond per second until some other rung binds (Q717).
+//
+// Unlike the classic rungs this reserves nothing and takes no token, and costs no
+// claim: jobs beyond the advertised total stay queued at GitHub, so a quota-blocked
+// job is never assigned in the first place. The trade is granularity — the decision
+// is per poll for the whole set rather than per job, so recovery from a stale read is
+// one poll interval.
 func (p *Provisioner) AdvertiseCapacity(target Target, unboundedDefault int32) func(ctx context.Context) CapacityAdvertisement {
 	return func(ctx context.Context) CapacityAdvertisement {
 		ceiling, bounded := target.Ceiling(ctx)
@@ -246,6 +291,25 @@ func (p *Provisioner) AdvertiseCapacity(target Target, unboundedDefault int32) f
 			p.logForKey(target.Key()).Debug("advertising reduced scale-set capacity: the cluster cannot place another worker pod for this set",
 				"ceiling", adv.Ceiling, "advertised", adv.Total)
 		}
+
+		// Rung 4 — the owner's opt-in scale-up rate limit (Q223). Always evaluated for
+		// the same reason as rung 3: "no rate limit" is a per-owner spec state the
+		// Target answers, so a set that opts in mid-flight starts binding on the next
+		// poll and one that opts out publishes an explicit zero rather than freezing
+		// its last non-zero reading.
+		//
+		// No ScaleUpThrottled increment here, for the reason no rung above has one: this
+		// tier states rungs as gauges, and the withheld gauge already says how many
+		// slots the bucket took. A counter ticking once per long-poll would measure the
+		// poll interval rather than the throttling, and would not be comparable with the
+		// per-job count the classic tier keeps under the same name. On this tier that
+		// counter stays what it has always been — a pod creation that actually waited,
+		// which now means the advertisement was stale.
+		rateLimit, rateBounded := p.scaleUpCapacity(ctx, target, adv.Total)
+		if adv.withhold(runnercore.AdmitReasonScaleUp, rateLimit, rateBounded) {
+			p.logForKey(target.Key()).Debug("advertising reduced scale-set capacity: the scale-up token bucket is below the worker ceiling",
+				"ceiling", adv.Ceiling, "advertised", adv.Total)
+		}
 		return adv
 	}
 }
@@ -275,4 +339,35 @@ func (a *CapacityAdvertisement) withhold(reason string, limit int32, bounded boo
 	a.Withheld[reason] = a.Total - limit
 	a.Total = limit
 	return true
+}
+
+// scaleUpCapacity is the integer form of the scale-up rate rung: the total worker
+// pods this owner may have assigned given its token bucket, never above max.
+//
+// It reads the bucket without taking a token — the take happens later, at pod
+// creation, because this tier states a capacity per long-poll and has no per-job
+// decision point to charge. The delta the bucket answers with (free tokens: how many
+// more pods may be created NOW) becomes a total by adding the owner's own in-flight
+// worker pods, which are the creations the bucket has already been charged for.
+//
+// bounded=false when the owner declared no rate limit, or when the pod count could
+// not be read: fail-open like every other observed rung, since a set whose pods it
+// cannot list must not be starved of assignments. The count is only taken for an
+// owner that actually opted in, so the default-off path costs one cache-free spec
+// read and no List at all.
+func (p *Provisioner) scaleUpCapacity(ctx context.Context, target Target, max int32) (limit int32, bounded bool) {
+	key := target.Key()
+	free, limited := p.scaleUp.tokens(key.String(), target.ScaleUpLimit(ctx))
+	if !limited {
+		return 0, false
+	}
+	active, err := p.activePodCount(ctx, key.Namespace, target.PodOwnerLabels())
+	if err != nil {
+		return 0, false
+	}
+	limit = active + free
+	if limit > max {
+		limit = max
+	}
+	return limit, true
 }

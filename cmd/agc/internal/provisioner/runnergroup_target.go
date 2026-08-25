@@ -106,6 +106,14 @@ func (t *runnerGroupTarget) DeclinedCapacity(context.Context, int32) (int32, boo
 	return 0, false
 }
 
+// ScaleUpLimit reads the rate limit from the fresh RunnerGroup spec, so the rate
+// rung of the admission ladder honours a spec.scaleUp edit on the next delivered job
+// without an AGC restart (Q117) — the same property current() gives every other
+// per-job read here.
+func (t *runnerGroupTarget) ScaleUpLimit(ctx context.Context) *ScaleUpConfig {
+	return scaleUpConfigFromV1(t.current(ctx).Spec.ScaleUp)
+}
+
 func (t *runnerGroupTarget) Resolve(ctx context.Context) (*ResolvedSpec, error) {
 	rg := t.current(ctx)
 	p := t.p

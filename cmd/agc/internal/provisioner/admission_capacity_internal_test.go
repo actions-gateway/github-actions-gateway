@@ -19,9 +19,11 @@ type rungTarget struct {
 	quotaExhausted bool
 	declined       bool
 	declinedDetail string
+	scaleUp        *ScaleUpConfig
 	quotaCalls     int
 	declinedCalls  int
 	ceilingCalls   int
+	scaleUpCalls   int
 }
 
 func (s *rungTarget) Key() client.ObjectKey             { return client.ObjectKey{Namespace: "ns", Name: "s"} }
@@ -41,8 +43,12 @@ func (s *rungTarget) CapacityDeclined(context.Context) (bool, string) {
 	return s.declined, s.declinedDetail
 }
 func (s *rungTarget) DeclinedCapacity(context.Context, int32) (int32, bool) { return 0, false }
-func (s *rungTarget) RecordEvent(_, _, _, _ string)                         {}
-func (s *rungTarget) Resolve(context.Context) (*ResolvedSpec, error)        { return &ResolvedSpec{}, nil }
+func (s *rungTarget) ScaleUpLimit(context.Context) *ScaleUpConfig {
+	s.scaleUpCalls++
+	return s.scaleUp
+}
+func (s *rungTarget) RecordEvent(_, _, _, _ string)                  {}
+func (s *rungTarget) Resolve(context.Context) (*ResolvedSpec, error) { return &ResolvedSpec{}, nil }
 
 // TestAdmit_CapacityRung pins the Q405 rung's placement in the ladder and its
 // rejection reason. The ordering matters beyond tidiness: the capacity rung reserves
@@ -168,4 +174,95 @@ func TestAdmit_CapacityRungRereadsEveryDelivery(t *testing.T) {
 	assert.False(t, ok, "the gate must re-close on the next stuck pod")
 
 	assert.Equal(t, 3, target.declinedCalls, "the rung must be re-read on every delivery, never cached")
+}
+
+// TestAdmit_ScaleUpRung pins the Q717 rung: the classic tier charges the scale-up
+// token bucket BEFORE it claims the job, so a burst that outruns the bucket is left
+// queued at GitHub rather than claimed and then slept on with its job lock held.
+//
+// The rung takes its token rather than reading the bucket, which is what makes it
+// bind on the case spec.scaleUp exists for. An observing rung would let every
+// listener in a simultaneously-delivered burst see the same free token and claim
+// anyway — the second admit below is precisely that job, and it must be refused.
+func TestAdmit_ScaleUpRung(t *testing.T) {
+	ctx := context.Background()
+	p := NewProvisioner(nil, nil, nil)
+	p.scaleUp = scaleUpLimiter{now: newFakeClock().now}
+
+	target := &rungTarget{ceiling: 10, ceilingBounded: true, scaleUp: &ScaleUpConfig{MaxPerSecond: 1, Burst: 1}}
+	key := target.Key().String()
+	admit := p.Admit(target)
+
+	release, ok, reason := admit(ctx)
+	require.True(t, ok, "the first job is within the burst")
+	assert.Empty(t, reason)
+	require.NotNil(t, release)
+	require.Equal(t, int32(1), p.admission.reservedCount(key))
+
+	_, ok, reason = admit(ctx)
+	assert.False(t, ok, "the second job in the same instant has no token and must not be claimed")
+	assert.Equal(t, runnercore.AdmitReasonScaleUp, reason)
+
+	// The rate rung sits ahead of the ceiling rung precisely so a refusal here costs
+	// no reservation: refusing after one would leak a slot on every throttled job.
+	assert.Equal(t, int32(1), p.admission.reservedCount(key),
+		"a job refused by the rate rung must not have taken a ceiling reservation")
+	assert.Equal(t, 1, target.ceilingCalls, "the ceiling rung is never reached by a rate refusal")
+}
+
+// TestAdmit_ScaleUpRungDefaultOff pins the default-off contract on the classic tier:
+// an owner with no spec.scaleUp is never refused for rate, however many jobs arrive
+// at once.
+func TestAdmit_ScaleUpRungDefaultOff(t *testing.T) {
+	ctx := context.Background()
+	p := NewProvisioner(nil, nil, nil)
+	target := &rungTarget{} // scaleUp nil
+	admit := p.Admit(target)
+
+	for i := range 50 {
+		_, ok, reason := admit(ctx)
+		require.True(t, ok, "job %d must be admitted with no rate limit configured", i)
+		require.Empty(t, reason)
+	}
+	assert.Equal(t, 50, target.scaleUpCalls, "the rung is still re-read per job (Q117)")
+}
+
+// TestAdmit_ScaleUpRungOrder pins the rung's placement. The two observed rungs are
+// the ones that do not clear on their own, so they are reported in preference to a
+// rate refusal that the bucket will resolve within 1/maxPerSecond — and, more
+// sharply, a job refused for quota or capacity must not be charged a token it will
+// never spend.
+func TestAdmit_ScaleUpRungOrder(t *testing.T) {
+	ctx := context.Background()
+
+	for _, tt := range []struct {
+		name       string
+		target     rungTarget
+		wantReason string
+	}{
+		{
+			name:       "quota outranks an empty bucket",
+			target:     rungTarget{quotaExhausted: true, scaleUp: &ScaleUpConfig{MaxPerSecond: 1, Burst: 1}},
+			wantReason: runnercore.AdmitReasonQuota,
+		},
+		{
+			name:       "capacity outranks an empty bucket",
+			target:     rungTarget{declined: true, declinedDetail: "d", scaleUp: &ScaleUpConfig{MaxPerSecond: 1, Burst: 1}},
+			wantReason: runnercore.AdmitReasonCapacity,
+		},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			p := NewProvisioner(nil, nil, nil)
+			p.scaleUp = scaleUpLimiter{now: newFakeClock().now}
+			target := tt.target
+
+			// Drain the single burst token so the rate rung would refuse if reached.
+			require.True(t, p.scaleUp.allow(target.Key().String(), target.scaleUp))
+
+			_, ok, reason := p.Admit(&target)(ctx)
+			assert.False(t, ok)
+			assert.Equal(t, tt.wantReason, reason)
+			assert.Zero(t, target.scaleUpCalls, "a rung that refuses earlier must not charge a token")
+		})
+	}
 }
