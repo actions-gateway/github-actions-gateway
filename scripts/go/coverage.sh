@@ -37,11 +37,15 @@
 # reported 37.983s and 0.645s across two runs at an identical 98.6% coverage, and
 # that package has no sleep, poll or TestMain to block on -- 58.9x on provably
 # identical work. 5m is ~3.6x the worst wall observed (84.084s, agc/internal/
-# controller) and leaves the most room under the coverage job's own
+# controller) and still trips early enough under the coverage job's own
 # timeout-minutes: 15 for Go to print its goroutine dump. Measured on that job:
-# 186s total, 6s of it overhead. A wedge trips at the budget and the script
-# exits on the first failure, so 5m lands around 306s of 900s where 10m lands
-# around 606s -- both print, 5m with twice the margin.
+# 186s total, 6s of it overhead, test binaries starting between 13s and 176s in.
+# The dump prints one budget after the wedged binary starts, so 5m lands around
+# 320-480s of 900 and 10m around 620-780s. Both print, so the job deadline does
+# not decide between them: it caps the budget from above and the false red 2m
+# produced caps it from below. What picks 5m over 10m is margin -- it clears
+# that floor at the 3.6x above and holds at least twice 10m's, and a later
+# start only widens that: 10m prints nothing once a binary starts 294s in.
 # Rationale and the numbers: docs/development/testing.md (§"The coverage budget
 # is wall clock, so it measures scheduling").
 #
