@@ -750,7 +750,11 @@ class BandCensus(unittest.TestCase):
 
     # Tracked, non-vendor, and deliberately in no band: none of them is authored
     # text, so none contributes a line to any series.
-    KNOWN_RESIDUAL = {"THIRD-PARTY-NOTICES", "go.work.sum", "tmp/.gitkeep"}
+    # THIRD-PARTY-NOTICES-DOCKER sits beside its generated sibling rather than in a
+    # band: both are upstream notice text reproduced verbatim, so banding either as
+    # product_docs would credit the census with prose nobody here wrote.
+    KNOWN_RESIDUAL = {"THIRD-PARTY-NOTICES", "THIRD-PARTY-NOTICES-DOCKER",
+                      "go.work.sum", "tmp/.gitkeep"}
 
     def setUp(self):
         self.tracked = [f for f in cm.git("ls-files").splitlines() if f]

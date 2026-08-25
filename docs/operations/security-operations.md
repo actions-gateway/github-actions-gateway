@@ -1297,7 +1297,7 @@ Each of the four production images therefore ships its license attribution under
 
 ## Image provenance: signature & SBOM verification
 
-The five first-party images (`gmc`, `agc`, `proxy`, `worker`, `wrapper`) are published to GHCR by the [`publish.yml`](../../.github/workflows/publish.yml) workflow on every `v*` release tag (the maintainer-facing cut-a-release procedure is in [release.md](release.md)).
+The six first-party images (`gmc`, `agc`, `proxy`, `worker`, `wrapper`, `build-runner`) are published to GHCR by the [`publish.yml`](../../.github/workflows/publish.yml) workflow on every `v*` release tag (the maintainer-facing cut-a-release procedure is in [release.md](release.md)).
 Each one is:
 
 - **Multi-arch** (`linux/amd64` + `linux/arm64`): the published ref is an OCI image **index**; the digest you pin at install time is the index digest, and the kubelet resolves the node's per-arch manifest from it at pull time.

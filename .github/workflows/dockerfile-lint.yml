@@ -32,8 +32,9 @@ jobs:
       fail-fast: false
       matrix:
         # The root Dockerfile holds every first-party image as a named stage
-        # (gmc, agc, proxy, worker, wrapper, fakegithub); hadolint lints the
-        # whole file in one leg. The dogfood runner image is built separately.
+        # (gmc, agc, proxy, worker, wrapper, build-runner, fakegithub); hadolint
+        # lints the whole file in one leg. The dogfood runner image is built
+        # separately.
         dockerfile:
           - Dockerfile
           - scripts/dogfood/runner/Dockerfile

@@ -1,0 +1,56 @@
+THIRD-PARTY-NOTICES-DOCKER
+==========================
+
+Attribution for the Docker client components the `build-runner` image
+redistributes: the Docker CLI, and the buildx and compose CLI plugins. All three
+are copied out of the docker-library `docker:<N>-cli` image, whose exact tag and
+digest are pinned in the `build-runner` stage of the root Dockerfile. A
+`COPY --from` takes only the named paths, so any attribution that image carried
+does not travel with them; this file is it.
+
+This is NOT covered by THIRD-PARTY-NOTICES, which is generated from the
+committed vendor/ tree and so scopes to the Go modules statically linked into
+this project's own binaries. Update this file by hand when the pinned
+docker:<N>-cli major moves and a component's license or notice changes.
+
+Components, all licensed Apache-2.0 (the same license as this project; its full
+text ships beside this file at /licenses/LICENSE):
+
+  Docker CLI       https://github.com/docker/cli
+  Docker buildx    https://github.com/docker/buildx     (ships no NOTICE file)
+  Docker compose   https://github.com/docker/compose  (ships as v5.x; the
+                   NOTICE reproduced below is the one that project publishes,
+                   whose first line still reads "Docker Compose V2")
+
+The NOTICE files those projects publish are reproduced verbatim below.
+
+================================================================================
+NOTICE — https://github.com/docker/cli
+================================================================================
+Docker
+Copyright 2012-2017 Docker, Inc.
+
+This product includes software developed at Docker, Inc. (https://www.docker.com).
+
+This product contains software (https://github.com/creack/pty) developed
+by Keith Rarick, licensed under the MIT License.
+
+The following is courtesy of our legal counsel:
+
+
+Use and transfer of Docker may be subject to certain restrictions by the
+United States and other governments.
+It is your responsibility to ensure that your use and/or transfer does not
+violate applicable laws.
+
+For more information, see https://www.bis.doc.gov
+
+See also https://www.apache.org/dev/crypto.html and/or seek legal counsel.
+
+================================================================================
+NOTICE — https://github.com/docker/compose
+================================================================================
+Docker Compose V2
+Copyright 2020 Docker Compose authors
+
+This product includes software developed at Docker, Inc. (https://www.docker.com).

@@ -225,8 +225,10 @@ Kyverno, OPA Gatekeeper) — the GMC does not enforce this itself because regist
 
 #### CI scans every image on every PR
 
-The gateway's own CI runs two supply-chain gates on every PR (`security-scan.yml`): `govulncheck` across all Go modules and `trivy` image scans of all five built images — see [testing.md § Security scanning](../development/testing.md#security-scanning).
-The four images built from a minimal/distroless base block on fixable HIGH/CRITICAL findings; the default worker image (built `FROM` the upstream actions-runner) is scanned report-only because its CVEs live in upstream components, with base bumps automated via dependabot.
+The gateway's own CI runs two supply-chain gates on every PR (`security-scan.yml`): `govulncheck` across all Go modules and `trivy` image scans of all seven built images — see [testing.md § Security scanning](../development/testing.md#security-scanning).
+The five images built from a minimal/distroless or scratch base block on fixable HIGH/CRITICAL findings.
+The two built `FROM` the upstream actions-runner (the default worker image and `build-runner`) are scanned report-only, because their CVEs live in upstream components that cannot be fixed without forking the runner.
+That report-only posture assumes the base is kept current, and today nothing does so automatically: the dependabot `docker` ecosystem is scoped to directories that hold no Dockerfile, tracked in [Q976](../queue/Q976.md).
 Tenants supplying their own `WorkerImage` are still expected to scan it themselves.
 `imagePullPolicy: IfNotPresent` (digest) or `Always` (tag) ensures the kubelet does not serve a stale, possibly tampered local copy.
 
@@ -239,9 +241,9 @@ The AGC/proxy/wrapper images are *additionally* re-checked by the GMC at startup
 
 #### Released images are signed, SBOM'd, and provenance-attested
 
-All five first-party images additionally carry `org.opencontainers.image.*` provenance labels (`source`/`revision`/`version`/`title`/`description`, with `revision`/`version` stamped from the build's git SHA via `docker-bake.hcl`) so SBOM scanners can trace an image back to its commit, and their Go binaries are compiled with `-trimpath -ldflags=-buildid=` for path-free, reproducible output (a reproducible-build input).
+All six first-party images additionally carry `org.opencontainers.image.*` provenance labels (`source`/`revision`/`version`/`title`/`description`, with `revision`/`version` stamped from the build's git SHA via `docker-bake.hcl`) so SBOM scanners can trace an image back to its commit, and their Go binaries are compiled with `-trimpath -ldflags=-buildid=` for path-free, reproducible output (a reproducible-build input).
 
-On a `v*` release tag, `publish.yml` pushes those five images to GHCR as **multi-arch OCI indexes** (`linux/amd64` + `linux/arm64`; the Go builder stages cross-compile on `$BUILDPLATFORM`, and the digest operators pin is the index digest) and **signs each one keyless with `cosign`** (sigstore/Fulcio via GitHub Actions OIDC — no long-lived signing key, no stored secret), recursively over the index and every per-arch manifest, and attaches an SPDX-JSON SBOM **per architecture** as a cosign attestation on that architecture's manifest, so a downstream operator can `cosign verify` the publish-workflow identity before deploying and enforce it cluster-wide via an admission policy.
+On a `v*` release tag, `publish.yml` pushes those six images to GHCR as **multi-arch OCI indexes** (`linux/amd64` + `linux/arm64`; the Go builder stages cross-compile on `$BUILDPLATFORM`, and the digest operators pin is the index digest) and **signs each one keyless with `cosign`** (sigstore/Fulcio via GitHub Actions OIDC — no long-lived signing key, no stored secret), recursively over the index and every per-arch manifest, and attaches an SPDX-JSON SBOM **per architecture** as a cosign attestation on that architecture's manifest, so a downstream operator can `cosign verify` the publish-workflow identity before deploying and enforce it cluster-wide via an admission policy.
 
 Each image also carries a signed **SLSA build-provenance attestation** (`actions/attest-build-provenance`, Q103) on the index digest via the same keyless Fulcio/Rekor path — authenticated provenance recording the workflow, repo, commit, and trigger (**SLSA Build L2**; buildx's unsigned default provenance is disabled in favour of it, and full Build L3 would require an isolated reusable-workflow builder).
 The PR-time `security-scan.yml` already generates each SBOM as a build artifact so that path can't silently break.

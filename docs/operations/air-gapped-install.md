@@ -26,14 +26,16 @@ Only the GMC image is pulled by the chart itself; the AGC, proxy, wrapper, and w
 
 > The **wrapper** is on by default: the chart always sets `WRAPPER_IMAGE`, and the GMC rejects a floating wrapper tag at startup exactly as it does for `agc`/`proxy`, so you must mirror it and pin `wrapper.image.digest` like the others.
 > It is a tiny (~2 MB) `FROM scratch` image the AGC injects into each worker pod, letting the runner container be the unmodified upstream `actions-runner`.
-> See [release.md § The worker images](release.md#the-worker-images-wrapper-and-worker).
+> See [release.md § The worker images](release.md#the-worker-images-wrapper-worker-and-build-runner).
 
 > The worker default is the upstream digest-pinned `ghcr.io/actions/actions-runner`.
-> The project also publishes a first-party `ghcr.io/actions-gateway/worker`; if a tenant uses it, mirror that ref instead.
+> The project also publishes two first-party runner images: `ghcr.io/actions-gateway/worker`, and `ghcr.io/actions-gateway/build-runner` for jobs needing `docker compose` or a Docker CLI and buildx GAG pins itself ([runner templates](runner-template-library.md)).
+> If a tenant uses either, mirror that ref instead.
 > Either way the worker image is set per tenant on the `RunnerGroup`, so it is configured during tenant onboarding, not at chart install.
-> See [release.md § The worker images](release.md#the-worker-images-wrapper-and-worker).
+> See [release.md § The worker images](release.md#the-worker-images-wrapper-worker-and-build-runner).
 
-Copy the five image digests from the [release notes](https://github.com/actions-gateway/github-actions-gateway/releases) for the version you are installing.
+Copy the four chart-referenced image digests (`gmc`, `agc`, `proxy`, `wrapper`) from the [release notes](https://github.com/actions-gateway/github-actions-gateway/releases) for the version you are installing; that is the count the mirror loop below uses.
+The worker image is the fifth row of the table above and is chosen per tenant rather than by the chart, so mirror whichever ref your tenants set.
 Throughout this guide, replace `registry.internal/gag` with your private registry path.
 
 ---

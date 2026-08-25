@@ -6,8 +6,8 @@
 # The same load-or-pull-and-save shape as prepull-manifest-images.sh, for the
 # single-image case where the ref is known up front rather than extracted from a
 # manifest. Written for the buildkit builder image (Q460): the security-scan
-# trivy job runs six matrix shards, each of which otherwise pulls the same
-# ~200 MB image from Docker Hub at the same moment — six concurrent anonymous
+# trivy job runs seven matrix shards, each of which otherwise pulls the same
+# ~200 MB image from Docker Hub at the same moment — seven concurrent anonymous
 # pulls per run, which is the rate-limit pressure that flaked #895.
 #
 # WHY A LOCAL TAG. `docker load` cannot restore a manifest digest: an image saved

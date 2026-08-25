@@ -7,7 +7,7 @@
 # selected with `--target` (docker-bake.hcl for the e2e bake; the publish.yml
 # and security-scan.yml matrices for release and scanning):
 #
-#   gmc  agc  proxy  worker  wrapper  fakegithub
+#   gmc  agc  proxy  worker  wrapper  build-runner  fakegithub
 #
 # Why one file rather than six (the layout before this change): all six images
 # compile Go against the same workspace vendor/ tree, and BuildKit can only
@@ -24,6 +24,9 @@
 #     └─ src    + the first-party source
 #          ├─ build-gmc / build-agc / build-proxy / build-wrapper / build-fakegithub
 #          └─ final stages COPY just the binary onto a runtime base
+#
+# build-runner sits outside that graph: it is `worker` plus a Docker client
+# COPY'd from a pinned docker:<N>-cli, so it compiles nothing of its own.
 
 ########################  deps — the shared compile cache  ####################
 # golang:1.26 — pinned to the multi-arch manifest digest for cache stability.
@@ -277,6 +280,66 @@ COPY LICENSE NOTICE THIRD-PARTY-NOTICES /licenses/
 # nothing to pull but the binary.
 COPY --from=build-wrapper /wrapper /wrapper
 ENTRYPOINT ["/wrapper"]
+
+########################  build-runner  #######################################
+## The `worker` image with its Docker tooling replaced by a pinned, current set
+## (Q740).
+##
+## READ THIS BEFORE ASSUMING WHAT IT IS FOR. ghcr.io/actions/actions-runner
+## installs the docker static bundle into /usr/bin and copies a buildx plugin to
+## /usr/local/lib/docker/cli-plugins — measured from the base image's own build
+## history and from this repo's published worker SBOM, on every tag checked
+## (2.328.0, 2.331.0, 2.335.1, latest). A Docker-in-Docker job on the stock runner
+## therefore does not fail for want of a client, and the runner template library's
+## DinD entries set no workerImage at all.
+##
+## What this image adds is narrower:
+##   - docker compose, which the runner base ships in no form;
+##   - a CLI and buildx pinned and bumped here, rather than whichever versions the
+##     runner release vendored (base 29.4.3 / buildx 0.34.1 against 29.7.2 /
+##     0.36.1 at this pin).
+## ~58 MB compressed.
+##
+## THE PLUGIN DESTINATION IS LOAD-BEARING. docker/cli searches its plugin dirs in
+## order and /usr/local/lib/docker/cli-plugins precedes /usr/local/libexec/...
+## (defaultSystemPluginDirs, cli-plugins/manager/manager_unix.go). Writing there
+## overwrites the base's plugin, leaving exactly one buildx; writing to libexec
+## instead leaves the base's older one winning and the pinned buildx never
+## executing. The CLI needs no such care: the base's PATH puts /usr/local/bin
+## ahead of /usr/bin.
+##
+## COPY-only, deliberately: those binaries are STATICALLY LINKED (measured on the
+## 29.7.2 x86_64 static release, `ELF 64-bit ... statically linked`), so they run
+## on this Ubuntu-based base despite being built against Alpine, and the arm64 leg
+## needs no QEMU. A `RUN apt-get install docker-ce-cli` would emulate instead, and
+## would unpin the version. Pinned to the multi-arch index digest like every other
+## base here; nothing bumps it automatically (see Q976), so re-pin by hand with:
+##   docker buildx imagetools inspect docker:29-cli
+## Re-check the source plugin paths when bumping the major: they are set by
+## docker-library/docker's own Dockerfile, not by the CLI.
+FROM docker:29-cli@sha256:000bb62ff495f986c9f5578eb67cc2cb98b91138eda81d7762d5371eb8a497fe AS docker-cli
+
+## Everything else — ENTRYPOINT, PATH, USER runner, the pinned runner version and
+## the lockstep test over it — is inherited from `worker`, so this image runs
+## wherever that one does and the two can never disagree about the runner.
+FROM worker AS build-runner
+ARG REVISION="unknown"
+ARG VERSION="dev"
+## Re-stated, not inherited: LABEL values carry over from the base stage, so
+## without this the image would advertise itself as `worker`.
+LABEL org.opencontainers.image.source="https://github.com/actions-gateway/github-actions-gateway" \
+      org.opencontainers.image.revision="${REVISION}" \
+      org.opencontainers.image.version="${VERSION}" \
+      org.opencontainers.image.title="build-runner" \
+      org.opencontainers.image.description="GitHub Actions runner with a pinned Docker CLI, buildx and compose" \
+      org.opencontainers.image.licenses="Apache-2.0"
+COPY --from=docker-cli /usr/local/bin/docker /usr/local/bin/docker
+COPY --from=docker-cli /usr/local/libexec/docker/cli-plugins/ /usr/local/lib/docker/cli-plugins/
+## Attribution for those three binaries. A `COPY --from` takes only the paths it
+## names, so whatever docker:<N>-cli carried does not travel with them and this
+## image is the redistributor. Hand-maintained: THIRD-PARTY-NOTICES is generated
+## from vendor/ and covers only the Go modules linked into our own binaries.
+COPY THIRD-PARTY-NOTICES-DOCKER /licenses/
 
 ########################  fakegithub  #########################################
 # TEST-ONLY image: a fake GitHub API server used by the e2e suite, never

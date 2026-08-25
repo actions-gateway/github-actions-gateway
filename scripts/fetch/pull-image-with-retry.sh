@@ -9,8 +9,8 @@
 # image; equivalent to `curl --retry` for the steps that go through `docker pull`.
 #
 # Backoff is EXPONENTIAL WITH JITTER, not fixed (Q460). The security-scan trivy
-# job pre-pulls the same buildkit image from six matrix shards at once, so a Hub
-# brown-out fails all six inside the same second. The former fixed 5s delay was
+# job pre-pulls the same buildkit image from seven matrix shards at once, so a Hub
+# brown-out fails all seven inside the same second. The former fixed 5s delay was
 # wrong on both counts: it retried the six shards in lockstep — six synchronised
 # requests per round against an IP-shared anonymous rate limit, which is itself
 # what the limit responds to — and it exhausted the whole budget in ~95s, shorter

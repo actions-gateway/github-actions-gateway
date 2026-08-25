@@ -31,7 +31,7 @@ Workload names are rows in this table, not template names: "kind end-to-end test
 | Your jobs | Entry | What you get |
 |---|---|---|
 | Unit tests, lint, deploys, anything that does not build container images | `plain` | No Docker daemon, no elevated capabilities. The only entry that composes with GAG's security gap-fill rather than opting out of it. |
-| Build container images, run `docker compose`, run a nested cluster | `kata-dind` | A real Docker daemon inside a KVM micro-VM. An escape reaches a throwaway guest kernel, not your node. |
+| Build container images, run a nested cluster | `kata-dind` | A real Docker daemon inside a KVM micro-VM. An escape reaches a throwaway guest kernel, not your node. |
 | The same, where Kata is not an option (see below) | `privileged-dind` | The same daemon with no isolation. Trusted jobs only. |
 | Build images with no daemon at all | none of these | Rootless BuildKit or Kaniko run fine under `plain`. See [In-runner image builds](in-runner-image-builds.md). |
 
@@ -62,12 +62,23 @@ The v2 CRDs must be installed (the opt-in `actions-gateway-crds-v2` chart), and 
 
 ### `kata-dind` and `privileged-dind`
 
-**A build-capable runner image.** Both ship `spec.workerImage` set to `example.invalid/build-capable-runner:replace-me` and you must replace it.
-The runner container needs a Docker CLI on `PATH`; the sidecar supplies the daemon, not the client, and the stock `ghcr.io/actions/actions-runner` image ships neither.
-The reserved `.invalid` host is chosen so an unreplaced value fails at image pull rather than succeeding into a job that dies on `docker: not found` twenty minutes in.
-`scripts/dogfood/e2e-runner/Dockerfile` in this repo is a worked example.
+**No runner image of your own, unless your jobs need one.** Neither DinD entry sets `spec.workerImage`, so the AGC gap-fills its digest-pinned default.
+That image installs the Docker static bundle into `/usr/bin` and ships a buildx plugin, so the runner container already has the *client* that the entry's dockerd sidecar is the *daemon* for.
+Both entries run a job as applied.
 
-**Watch the worker pod, not the `RunnerSet`, when you suspect an unreplaced image.** The pod reports the problem within seconds: it binds to a node and then sits Pending in `ImagePullBackOff`, with a `Failed` event naming the host it could not resolve.
+Set `spec.workerImage` when your jobs need more than that:
+
+| What you need | Point it at |
+|---|---|
+| `docker compose`, or a CLI and buildx GAG pins and bumps itself rather than whichever versions the runner release vendored | **`ghcr.io/actions-gateway/build-runner`** — the [`worker` image](release.md#the-worker-images-wrapper-worker-and-build-runner) with that tooling replaced. Keyless-signed and SBOM-attested by the same release pipeline as every other first-party image, so `make verify-release` covers it. Pin it by digest from the release notes of the version you are running. |
+| A language toolchain, a cloud CLI, your own root CA | An image you build. `scripts/dogfood/e2e-runner/Dockerfile` in this repo is a worked example, and [In-runner image builds](in-runner-image-builds.md) covers the daemonless alternatives. |
+
+```yaml
+spec:
+  workerImage: ghcr.io/actions-gateway/build-runner@sha256:<digest from the release notes>
+```
+
+**If you do set `spec.workerImage`, watch the worker pod when it will not pull.** The pod reports the problem within seconds: it binds to a node and then sits Pending in `ImagePullBackOff`, with a `Failed` event naming the host it could not resolve.
 
 ```bash
 kubectl get pods -n team-a -l actions-gateway.com/runner-set=linux

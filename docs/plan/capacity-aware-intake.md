@@ -725,7 +725,9 @@ Both API versions share this, since `RunnerSetReconciler` reuses `evalWorkersUns
 The pod is then reaped at `pendingPodDeadline` (default 10m) with a `WorkerPodStuckPending` Warning, which `E2E_AGC_StuckPendingPodReaped` already exercises on the same `.invalid` shape.
 Recovery does not loop tightly: the abandoned-run sweeper waits for capacity that an unpullable image never returns and expires after 30m.
 
-**Why this matters beyond intake.** Both 1.4 DinD templates ship that placeholder and require the operator to replace it, so this is the failure a first-time user of the library hits, not a corner case.
+**Why this mattered beyond intake.** Both 1.4 DinD templates shipped that placeholder and required the operator to replace it, so this was the failure a first-time user of the library hit, not a corner case.
+Q740 retired the placeholder, because the runner base carries a Docker client and the entries now set no `workerImage` at all.
+That removes this particular first-run failure without changing anything measured above: the pod shape, the conditions, and the reap are properties of an image that will not pull, whatever named it.
 [`runner-template-library.md`](../operations/runner-template-library.md) and [`kata-dind-workloads.md`](../operations/kata-dind-workloads.md) now describe the real split: the pod says `ImagePullBackOff` within seconds, while the `RunnerSet` stays quiet until the deadline.
 Closing Q714 changes what an operator watches, so it must update both.
 

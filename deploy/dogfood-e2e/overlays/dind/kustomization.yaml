@@ -54,8 +54,9 @@ patches:
       kind: ClusterRunnerTemplate
       name: privileged-dind
     patch: |
-      # Build-capable runner image (scripts/dogfood/e2e-runner/Dockerfile). The
-      # library ships an .invalid placeholder so this patch is mandatory.
+      # Build-capable runner image (scripts/dogfood/e2e-runner/Dockerfile).
+      # Load-bearing and unenforced by the base, same as ../kata: dropping this
+      # op gap-fills the default runner, which lacks helm/kubectl/jq.
       - op: replace
         path: /spec/workerImage
         value: ghcr.io/actions-gateway/dogfood-e2e-runner:2.335.1-2

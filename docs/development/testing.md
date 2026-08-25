@@ -2881,7 +2881,7 @@ Jitter is what de-correlates concurrent callers; the cap and the finite attempt 
 [`scripts/fetch/pull-image-with-retry-test.sh`](../../scripts/fetch/pull-image-with-retry-test.sh) (under `make scripts-test`) asserts the schedule: the doubling, the cap, that the jitter actually varies, and that the total budget stays inside 300s.
 
 **Prefer removing the pull outright where a cache can.** [`prepull-image-cached.sh`](../../scripts/fetch/prepull-image-cached.sh) (`<image-ref> <cache-dir> <local-tag>`) is the single-image sibling of `prepull-manifest-images.sh`: restore the image from an `actions/cache` tarball, or pull it once (retried) and save it.
-The `trivy` job uses it because its six shards otherwise pull the same ~200 MB builder image concurrently on every run; the single-pull sites (e2e, publish) keep the plain retried pull.
+The `trivy` job uses it because its seven shards otherwise pull the same ~200 MB builder image concurrently on every run; the single-pull sites (e2e, publish) keep the plain retried pull.
 
 One constraint drives its shape, and it is easy to get wrong: **`docker load` cannot restore a manifest digest.** A saved-and-reloaded image comes back with its `RepoTags` but no `RepoDigests`, so a digest-pinned `name:tag@sha256:…` ref never resolves from the cache and the consumer silently pulls from the registry anyway — a cache that looks like it works and does nothing.
 The cached image is therefore re-exposed under a local-only tag (`BUILDKIT_LOCAL_IMAGE`) and the consumer points at that.
@@ -3146,7 +3146,7 @@ make vulncheck
 
 A finding usually means bumping the Go toolchain (`go` directive in `go.work` + every `go.mod`, kept in lockstep) for a stdlib CVE, or `go get`-ing the fixed dependency version for a module CVE.
 
-**trivy** — builds each of the six images and scans it for fixable HIGH/CRITICAL CVEs in OS packages and bundled libraries.
+**trivy** — builds each of the seven images and scans it for fixable HIGH/CRITICAL CVEs in OS packages and bundled libraries.
 Run it locally (requires `trivy` and `docker` on `PATH`) with:
 
 ```
@@ -3159,7 +3159,7 @@ Runner-base CVEs are reduced by bumping the pinned tag — automated via the `do
 
 The same `trivy` job also generates an **SBOM** (Software Bill of Materials, SPDX-JSON, via [`syft`](https://github.com/anchore/syft)) for each image it builds and uploads it as a `sbom-<image>.spdx.json` build artifact.
 This runs on every code PR purely so the SBOM-generation path can't silently break before a release — it does **not** sign or publish anything.
-On a `v*` release tag, the separate [`publish.yml`](../../.github/workflows/publish.yml) workflow pushes the five first-party images (`gmc`, `agc`, `proxy`, `worker`, `wrapper`) to GHCR, regenerates each SBOM for the pushed image, signs every image **keyless** with [`cosign`](https://docs.sigstore.dev/) (sigstore/Fulcio via GitHub Actions OIDC — no signing key or stored secret), and attaches the SBOM as a keyless cosign attestation.
+On a `v*` release tag, the separate [`publish.yml`](../../.github/workflows/publish.yml) workflow pushes the six first-party images (`gmc`, `agc`, `proxy`, `worker`, `wrapper`, `build-runner`) to GHCR, regenerates each SBOM for the pushed image, signs every image **keyless** with [`cosign`](https://docs.sigstore.dev/) (sigstore/Fulcio via GitHub Actions OIDC — no signing key or stored secret), and attaches the SBOM as a keyless cosign attestation.
 Operator-facing verification (`cosign verify`, SBOM retrieval) is documented in [security-operations.md § Image provenance](../operations/security-operations.md#image-provenance-signature--sbom-verification).
 The signing/attestation steps run only on publish, so PR CI does not exercise them.
 
