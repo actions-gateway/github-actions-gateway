@@ -1434,6 +1434,11 @@ Each is a claim about state, and each has a cheap way of being wrong:
   Both were accurate.
   Both are hand-authored, so neither can show a gap nobody thought to record, which is the blind spot [Q776](https://github.com/actions-gateway/github-actions-gateway/blob/main/docs/queue/README.md)'s own row describes and which was cited in the same document that leaned on the badges.
   Q844 was sitting in it: restart-safe disruption recovery is classic-only, and the marketing surface claimed it for both tiers with no badge at all.
+- **A test name asserting completeness is checked by nothing.** `TestLogging_OverLengthAuthorityIsBoundedOnEveryPath` drove the deny and dial-failure paths, which log the authority whole, and not the accepted path, which is the only one that splits it into host and port, and the only one the feature under test added.
+  The cap covered the host alone, so a zero-padded port dialed the real port and logged 200,210 bytes for a 200,015-byte authority, on the default transport-only pool with no allowlist configured (Q564).
+  The name was accurate when written: the path set it quantified over was complete, and then the change being tested added a member.
+  A `grep` sweep at least reconciles against a baseline; a name quantifies over a set nothing recounts.
+  Where a test name says *every*, *all*, or *any*, enumerate the set in the test body and assert its size, so adding a member fails the test that claims to cover it rather than silently widening what the name promises.
 
 - **An explanation offered to the user is a claim, and this repo has usually already written the answer down.** Four went wrong across the 1.5 release cycle in one session, and three were caught by the user asking a follow-up rather than by any check.
   A sentinel event was called a defect when it was [Q630's reconciliation working as designed](../operations/release.md#run-it-detached-the-sentinel-reports-it-back), documented in the previous release's plan doc.
@@ -1794,6 +1799,36 @@ Nothing distinguished that from a fix that worked.
 - **When the harness cannot be made to work, verify the layer you actually changed.** The hook applies each pattern as `re.search(pattern, command)`; asserting that step directly is honest and sufficient, as long as you say which layer the evidence covers — and then confirm end-to-end in the smallest possible way (re-running the exact command that had been denied).
 
 `scripts/agent/foreground-guard-patterns-test.sh` is the durable form of that probe, controls included.
+
+#### A control that only rules out zero is not a control
+
+Both rules above ask for a *named* case: one site you know must change, one pattern you know must fire.
+The failure mode neither names is the cheap substitute: `assert count > 0`, which reads as having a control while ruling out only the case that was never in play.
+
+Three probes on 2026-08-25 carried one, and all three passed while returning a wrong number:
+
+- A fan-out probe asserted `(( peak_distinct > 0 ))` and returned 94, a figure wrong on two independent counts.
+  The matcher had silently dropped a directory, and argv inheritance made the count independent of what it was counting either way.
+  `>= 90` would also have passed.
+- A census probe asserted that its two result sets differed in size and returned 1 against a true 41, passing as `1 > 0`.
+- The third asserted a non-empty match set over a tree that was nine hours stale, which is a question about the matcher and not about the tree.
+
+Name the member instead.
+"The five `scripts/e2e/` suites must appear in the matched set" fails loudly on a matcher that cannot see them; "more than zero suites matched" cannot fail on anything short of a total outage.
+The general form is that a control has to encode an expectation the broken probe cannot satisfy, which is the same demand as knowing the sign of a difference before you take it, one level down.
+
+A control can clear that bar and still measure the wrong thing, by varying more than one input.
+Two PRs were compared on 2026-08-25 to explain why one read `BLOCKED`: `reviewDecision` was empty on both and their check sets were byte-identical, so the difference was attributed to the remaining input, draft status.
+The base branch was the other difference, in the same `gh pr view` output.
+The same PR read `CLEAN` while still a draft once it was rebased onto `main`, which refuted the conclusion and left the cause unestablished.
+
+Note which way the error ran: having a control raised confidence in a reading that was wrong, and the reading was relayed onward as measured *because* it came with one.
+So both halves are load-bearing.
+A control must be able to fail, and it must vary one thing.
+
+That census probe reproduced the Q571 regex verbatim: a character class excluding a preceding `/`, so every `$REPO_ROOT/tmp/…` was skipped and only the rare bare `tmp/…` survived.
+The trap two sections up, in a different tool, in a session that had the section open.
+Treat a path-matching pattern's treatment of its own leading separator as a thing to test rather than a thing to read.
 
 ### A syscall-level probe of a `scripts/` suite has two silent ways to measure nothing
 
