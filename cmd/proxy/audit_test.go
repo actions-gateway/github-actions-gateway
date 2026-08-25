@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -14,6 +15,7 @@ import (
 	"sync"
 	"testing"
 	"time"
+	"unicode/utf8"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -322,4 +324,92 @@ func TestAudit_UnsplittableAuthorityIsLoggedWhole(t *testing.T) {
 	assert.Equal(t, float64(3), recs[0]["bytesToDestination"])
 	assert.Equal(t, float64(4), recs[0]["bytesFromDestination"])
 	assert.Equal(t, float64(2), recs[0]["durationSeconds"])
+}
+
+// TestLogging_OverLengthAuthorityIsBoundedOnEveryPath is the reachability test
+// behind the cap. The CONNECT authority is tenant-controlled and http.Server
+// admits a request line up to MaxHeaderBytes, so an uncapped log site is a
+// log-volume amplifier a worker drives on demand.
+//
+// The dial-failure path is the one that matters in the GMC-built configuration:
+// with an allowlist injected, matchesHostSuffix does a bare strings.HasSuffix
+// with no length bound, so junk+".github.com" PASSES the allowlist and reaches
+// the dial. The deny path is only reachable for a host that fails the match.
+// Both the host attr and the dial error must be bounded — the error embeds the
+// same authority, so capping only the attr halves the fix.
+func TestLogging_OverLengthAuthorityIsBoundedOnEveryPath(t *testing.T) {
+	t.Cleanup(func() { goleak.VerifyNone(t) })
+
+	const junkLen = 200000
+	junkHost := strings.Repeat("a", junkLen) + ".github.com"
+
+	t.Run("dial failure under an allowlist that the junk host passes", func(t *testing.T) {
+		srv, sink := newAuditServer(t, AuditOff)
+		srv.AllowedHostSuffixes = []string{"github.com"}
+		srv.DialTimeout = 100 * time.Millisecond
+
+		require.True(t, matchesHostSuffix(junkHost, srv.AllowedHostSuffixes),
+			"precondition: the junk host must PASS the allowlist, else this exercises the deny path")
+
+		ts := httptest.NewServer(http.HandlerFunc(srv.handleConnect))
+		t.Cleanup(ts.Close)
+		conn, err := net.Dial("tcp", ts.Listener.Addr().String())
+		require.NoError(t, err)
+		defer func() { _ = conn.Close() }()
+		_, _ = fmt.Fprintf(conn, "CONNECT %s:443 HTTP/1.1\r\nHost: h\r\n\r\n", junkHost)
+		resp, err := http.ReadResponse(bufio.NewReader(conn), nil)
+		require.NoError(t, err)
+		require.Equal(t, http.StatusBadGateway, resp.StatusCode,
+			"precondition: the request must reach the dial, not be refused")
+
+		sink.mu.Lock()
+		got := sink.buf.Len()
+		sink.mu.Unlock()
+		assert.Less(t, got, 4096,
+			"an over-length authority must not reach the log stream unbounded (got %d bytes for a %d-byte authority)", got, junkLen)
+	})
+
+	t.Run("denied destination", func(t *testing.T) {
+		srv, sink := newAuditServer(t, AuditOff)
+		srv.AllowedHostSuffixes = []string{"example.invalid"}
+
+		ts := httptest.NewServer(http.HandlerFunc(srv.handleConnect))
+		t.Cleanup(ts.Close)
+		conn, err := net.Dial("tcp", ts.Listener.Addr().String())
+		require.NoError(t, err)
+		defer func() { _ = conn.Close() }()
+		_, _ = fmt.Fprintf(conn, "CONNECT %s:443 HTTP/1.1\r\nHost: h\r\n\r\n", junkHost)
+		resp, err := http.ReadResponse(bufio.NewReader(conn), nil)
+		require.NoError(t, err)
+		require.Equal(t, http.StatusForbidden, resp.StatusCode)
+
+		sink.mu.Lock()
+		got := sink.buf.Len()
+		sink.mu.Unlock()
+		assert.Less(t, got, 4096, "got %d bytes", got)
+	})
+}
+
+// TestTruncateForLog_CutsOnARuneBoundary: maxAuditHostLen is a byte cap, and an
+// IDN authority sent as raw UTF-8 can put a multi-byte rune across it. Emitting
+// the partial rune would render as U+FFFD in the JSON stream.
+func TestTruncateForLog_CutsOnARuneBoundary(t *testing.T) {
+	// "é" is two bytes, so a cap of 3 lands mid-rune on the second one.
+	got := truncateForLog("éé", 3)
+	body := strings.TrimSuffix(got, auditTruncatedSuffix)
+	assert.True(t, utf8.ValidString(body), "truncated body must stay valid UTF-8, got %q", body)
+	assert.Equal(t, "é", body, "the partial rune is dropped, not emitted")
+
+	// The whole-rune case is untouched.
+	assert.Equal(t, "éé", truncateForLog("éé", 4))
+}
+
+func TestTruncateLogError_IsBounded(t *testing.T) {
+	short := errors.New("dial tcp: connection refused")
+	assert.Equal(t, short.Error(), truncateLogError(short), "a real diagnostic is never cut")
+
+	long := errors.New(strings.Repeat("x", maxLoggedErrorLen*3))
+	got := truncateLogError(long)
+	assert.True(t, strings.HasSuffix(got, auditTruncatedSuffix))
+	assert.Equal(t, maxLoggedErrorLen, len(strings.TrimSuffix(got, auditTruncatedSuffix)))
 }

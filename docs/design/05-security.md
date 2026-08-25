@@ -314,13 +314,20 @@ Neither relies on the other, so a GMC newer than the proxy image, which is the s
 | In the record | Why it is safe to write down |
 |---|---|
 | Tenant namespace | From the downward API, never the request, so a worker cannot forge its own attribution |
-| Destination host and port | The CONNECT authority; already the hard gate's input, and the whole point of the record. Capped at the longest legal DNS name, because the authority is tenant-controlled text and `http.Server` admits a request line far longer |
+| Destination host and port | The CONNECT authority; already the hard gate's input, and the whole point of the record. Capped at the longest legal DNS name (see the amplifier note below) |
 | Bytes to and from the destination | Counts taken from the relay, never content |
 | Tunnel duration | A number |
 
 Not in it, and unreachable from the code path that writes it: **any request header** (`Proxy-Authorization` above all), the tunneled bytes, and anything from the TLS session inside the tunnel, which the proxy never terminates or inspects.
 The client's source IP is omitted deliberately: it is a pod IP that adds no attribution the namespace does not already carry, and including it would turn an egress record into a per-worker movement log.
 The record is written at **info**, so it never depends on raising a pool to `debug`, and raising a pool to `debug` never adds a field to it.
+
+**The authority is capped wherever it is logged, not only in the record.** It is tenant-controlled text and `http.Server` admits a request line up to `MaxHeaderBytes` (1 MiB by default), so an uncapped log site is a volume amplifier a worker drives on demand: measured at 400,167 bytes written for one 200,000-byte authority, because the dial-failure path logged it twice (the `host` attribute, and the dial error, which embeds the address).
+The GMC-built configuration is where that bites.
+`matchesHostSuffix` is a bare suffix test with no length bound, so junk ending in an allowlisted suffix **passes** the allowlist and reaches the dial, where the line is at error level.
+All four sites in `handleConnect` that log the authority therefore go through one cap: the denial, the dial failure, the response-write failure, and the record.
+The dial error is bounded separately, since capping only the `host` attribute would leave half the volume in place.
+One policy for one field, so a reader here does not have to work out which log line it covers.
 
 Only **accepted** CONNECTs produce a record.
 A refusal and a failed dial already have their warn/error line and their counter (`actions_gateway_proxy_connect_denied_total`, `actions_gateway_proxy_dial_errors_total`); recording them here would double-count a connection that carried no egress.

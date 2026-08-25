@@ -711,7 +711,7 @@ func (s *Server) handleConnect(w http.ResponseWriter, r *http.Request) {
 	upstream, err := net.DialTimeout("tcp", dialAddr, dialTimeout)
 	if err != nil {
 		s.dialErrors.WithLabelValues().Inc()
-		s.logger().Error("upstream dial failed", "host", r.Host, "error", err)
+		s.logger().Error("upstream dial failed", "host", truncateHost(r.Host), "error", truncateLogError(err))
 		http.Error(w, "upstream unavailable", http.StatusBadGateway)
 		return
 	}
@@ -745,7 +745,7 @@ func (s *Server) handleConnect(w http.ResponseWriter, r *http.Request) {
 		// tunneling a connection whose CONNECT-200 reply never landed would
 		// dirty the metrics and immediately die in io.Copy. Bail before either.
 		// The deferred conn.Close()/upstream.Close() handle cleanup.
-		s.logger().Debug("CONNECT response write failed", "host", r.Host, "error", err)
+		s.logger().Debug("CONNECT response write failed", "host", truncateHost(r.Host), "error", truncateLogError(err))
 		return
 	}
 
@@ -764,6 +764,10 @@ func (s *Server) handleConnect(w http.ResponseWriter, r *http.Request) {
 	hardDeadline := time.Now().Add(maxLifetime)
 
 	start := time.Now()
+	// Under AuditConnections this also spans the far relay's unwind, because the
+	// audit path below waits for it before returning. Sub-millisecond, but it
+	// means the histogram is not byte-identical between the two modes — noted
+	// here so a later latency hunt does not read the shift as a regression.
 	defer func() {
 		s.tunnelDuration.WithLabelValues().Observe(time.Since(start).Seconds())
 	}()

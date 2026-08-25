@@ -34,13 +34,21 @@ const (
 	auditMsg = "egress audit"
 	// auditEventConnect marks the per-CONNECT record.
 	auditEventConnect = "connect"
-	// maxAuditHostLen caps the logged CONNECT host at the longest legal DNS
-	// name. The CONNECT authority is tenant-controlled text and http.Server
-	// admits a request line up to MaxHeaderBytes (1 MiB by default), so an
-	// uncapped host is a log-volume amplifier a worker can drive. Truncation is
-	// marked so a capped value never reads as the real destination.
+	// maxAuditHostLen caps a logged CONNECT host at the longest legal DNS name,
+	// in BYTES. The authority is tenant-controlled text and http.Server admits a
+	// request line up to MaxHeaderBytes (1 MiB by default), so an uncapped host
+	// is a log-volume amplifier a worker drives on demand: measured at 400,167
+	// bytes written for one 200,000-byte authority before this cap covered every
+	// site. Truncation is marked so a capped value never reads as the real
+	// destination.
 	maxAuditHostLen = 253
-	// auditTruncatedSuffix marks a host cut by maxAuditHostLen.
+	// maxLoggedErrorLen caps an error string reaching a log line. A dial error
+	// embeds the address it failed on, so the same tenant-controlled authority
+	// reaches the stream through the error value as well as the host attribute —
+	// capping only the attribute halves the fix. Sized well above any real
+	// net.OpError so a genuine diagnostic is never cut.
+	maxLoggedErrorLen = 512
+	// auditTruncatedSuffix marks a value cut by either cap.
 	auditTruncatedSuffix = "…(truncated)"
 )
 
@@ -55,14 +63,24 @@ func parseAuditMode(s string) AuditMode {
 	return AuditOff
 }
 
-// truncateHost bounds a tenant-supplied CONNECT host for logging. See
-// maxAuditHostLen.
-func truncateHost(host string) string {
-	if len(host) <= maxAuditHostLen {
-		return host
+// truncateForLog bounds a tenant-influenced value at max BYTES. A cut can land
+// mid-rune, which the JSON encoder would render as U+FFFD, so the partial rune
+// is dropped rather than emitted.
+func truncateForLog(s string, maxBytes int) string {
+	if len(s) <= maxBytes {
+		return s
 	}
-	return host[:maxAuditHostLen] + auditTruncatedSuffix
+	return strings.ToValidUTF8(s[:maxBytes], "") + auditTruncatedSuffix
 }
+
+// truncateHost bounds a tenant-supplied CONNECT authority for logging. Every
+// site in handleConnect that logs the authority goes through it — one policy
+// for one field, so a reader of the security docs does not have to work out
+// which log line is covered. See maxAuditHostLen.
+func truncateHost(host string) string { return truncateForLog(host, maxAuditHostLen) }
+
+// truncateLogError bounds an error for logging. See maxLoggedErrorLen.
+func truncateLogError(err error) string { return truncateForLog(err.Error(), maxLoggedErrorLen) }
 
 // logConnectAudit writes the per-connection egress record: which tenant reached
 // which destination, for how long, and how much moved each way.
