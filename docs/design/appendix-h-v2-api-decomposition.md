@@ -471,6 +471,19 @@ The set serves every job targeting the labels that did register, and the ones th
 Like the v1 rollup it is advisory — it does **not** gate `Ready`, since the gateway's own AGC control plane can be healthy while one tenant's set is impaired.
 The GMC watches bound `RunnerSet`s (predicated on a change to a set's impaired signature, dropping high-frequency `activeSessions`/ `pendingJobs` churn) so a child's health change refreshes the parent promptly.
 
+**Advertised capacity on the `RunnerSet` (Q721).** The scale-set tier states its whole admission ladder as one integer per long-poll (`X-ScaleSetMaxCapacity`, [operational flows](04-operational-flows.md#the-ladder-as-an-integer-scale-set-tier-q443)), and until Q721 that number and its per-rung breakdown reached Prometheus alone.
+That makes the answer to "why is my intake throttled?" available to whoever can query metrics, which is the platform operator, and not to the tenant who owns the `RunnerSet`: the party whose `maxWorkers` or workflow shape is usually the thing to change.
+So the reconciler publishes the same accounting on `status.advertisedCapacity` and `status.withheldCapacity`, readable with `kubectl describe`.
+
+`advertisedCapacity` is a **pointer** because zero is a real advertisement, intake fully withheld, and has to be distinguishable from "nothing advertised yet", which is what a classic-tier set and a listener that has not polled both report.
+`withheldCapacity` is a `listType=map` keyed on `reason`, carrying every rung the poll *evaluated* including the ones withholding nothing, so an absent reason means not-evaluated rather than not-binding: the same explicit-zero contract the withheld gauge carries, for the same reason (the two are indistinguishable in an absent series and one of them is a bug).
+Its `reason` is deliberately **not** a CRD enum.
+The ladder is designed to grow a rung at a time and every rung must land in both acquisition tiers at once, so a closed enum would couple each new rung to a CRD change; the field is controller-written status a tenant cannot author, so validation buys nothing against anybody.
+
+Two properties keep it from costing what high-frequency status usually costs.
+The value is recomputed per poll but published per reconcile, on a status write that already happens unconditionally, so it adds no API writes and lags the live number by at most one reconcile.
+And the GMC's rollup watch is unaffected: `runnerSetImpairmentChanged` derives its signature from `status.conditions` alone, an allowlist rather than a list of fields to ignore, so an update carrying only a new advertisement is dropped without anyone having to remember to exclude it.
+
 **Measured sizing recommendation on the `RunnerSet` (Q359 Phase 2).** The AGC's usage sampler aggregates per-job CPU/memory peaks per worker container (Phase 1's metrics), and the `RunnerSet` reconciler surfaces the derived per-container recommendation in `status.sizingRecommendation`: recommended `requests` (p95 of per-job peaks), a recommended memory `limit` (observed max × headroom, never a CPU limit), the observed p95/max, a `sampleCount` confidence signal, and the window start.
 The field is **advisory and doubly load-bearing as the aggregate store**: the sampler re-seeds its in-memory histograms from it on AGC restart (95% of the persisted mass at the p95, the rest at the max — exactly preserving the two statistics the recommendation uses), so the observation window survives control-plane rollouts with no separate backing store.
 The reconciler never overwrites the field with an empty snapshot (a warming-up sampler must not wipe the store).

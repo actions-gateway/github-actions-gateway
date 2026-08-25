@@ -480,6 +480,41 @@ type RunnerSetStatus struct {
 	// +optional
 	PendingJobs int32 `json:"pendingJobs,omitempty"`
 
+	// AdvertisedCapacity is the X-ScaleSetMaxCapacity this set most recently
+	// advertised: the total jobs GitHub may keep assigned to it at once, recomputed
+	// every long-poll from the admission ladder. Together with WithheldCapacity it
+	// answers "why is intake throttled?" from `kubectl describe` alone — the same
+	// accounting previously reachable only through Prometheus, which a tenant without
+	// metrics access cannot read (Q721).
+	//
+	// A pointer because zero is a meaningful advertisement (intake fully withheld) and
+	// has to be distinguishable from "no advertisement": nil on a classic-tier set,
+	// which decides per delivered job and never states a capacity, and on a scale-set
+	// set whose listener has not polled yet.
+	//
+	// Lags the live value by up to one reconcile, because the advertisement is
+	// recomputed per poll and published per reconcile. It is an observation of intake,
+	// never an input: setting it does not change what the listener advertises.
+	//
+	// +optional
+	AdvertisedCapacity *int32 `json:"advertisedCapacity,omitempty"`
+
+	// WithheldCapacity attributes the gap between the declared worker ceiling and
+	// AdvertisedCapacity to the rung of the admission ladder that took each slot, so a
+	// tenant can tell "my own maxWorkers" from "the namespace ResourceQuota" from "the
+	// cluster cannot place my workers" without reading metrics or the AGC's logs
+	// (Q721). Every rung the poll evaluated appears, including the ones withholding
+	// nothing, so a reason absent from the list was not evaluated rather than not
+	// binding — the same explicit-zero contract the withheld gauge carries.
+	//
+	// Empty on a classic-tier set and before the first poll, alongside a nil
+	// AdvertisedCapacity.
+	//
+	// +optional
+	// +listType=map
+	// +listMapKey=reason
+	WithheldCapacity []WithheldCapacity `json:"withheldCapacity,omitempty"`
+
 	// ProxyMode records how this runner set's worker egress reaches GitHub:
 	// "Proxied" (through the resolved EgressProxy, with stable per-tenant egress IPs)
 	// or "Direct" (no proxyRef/defaultProxyRef, still NetworkPolicy-restricted to
@@ -534,6 +569,29 @@ type RunnerSetStatus struct {
 	//
 	// +optional
 	ObservedGeneration int64 `json:"observedGeneration,omitempty"`
+}
+
+// WithheldCapacity is one admission-ladder rung's contribution to the gap between a
+// runner set's declared worker ceiling and the capacity it advertises (Q721). The
+// entries sum to ceiling - advertisedCapacity, because the rungs compose as a min()
+// and each entry is its own marginal contribution.
+type WithheldCapacity struct {
+	// Reason names the rung, matching the `reason` label on
+	// actions_gateway_scaleset_capacity_withheld so the status view and the metric
+	// read the same vocabulary: "quota" is namespace-ResourceQuota headroom,
+	// "capacity" the opt-in placeability gate, "scaleup" the opt-in creation-rate
+	// limit.
+	//
+	// Deliberately not an enum. The ladder is designed to grow a rung at a time, and
+	// every rung must land in both acquisition tiers at once, so a closed enum would
+	// couple each new rung to a CRD change for no validation benefit: this field is
+	// controller-written status that a tenant cannot author.
+	Reason string `json:"reason"`
+
+	// Slots is the number of worker slots this rung removed from the advertisement.
+	// Zero means the rung was evaluated and did not bind, which is a different
+	// statement from the reason being absent.
+	Slots int32 `json:"slots"`
 }
 
 // ContainerSizingRecommendation is the measured-usage-derived resource

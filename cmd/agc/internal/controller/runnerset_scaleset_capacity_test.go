@@ -169,7 +169,7 @@ func TestScaleSetCapacityFunc(t *testing.T) {
 		// 2 cpu free ⇒ 4 workers of 500m, against a declared ceiling of 8.
 		r, sm, target := capacityReconciler(t, ns, rsObj("set", ns, max8), gwObj("gw", ns, ""), tmplObj("tmpl", ns), quotaRS(ns, "4", "2"))
 
-		assert.Equal(t, 4, r.scaleSetCapacityFunc(key, target)(ctx))
+		assert.Equal(t, 4, r.scaleSetCapacityFunc(key, target, &capacityRecord{})(ctx))
 		assert.Equal(t, float64(4), testutil.ToFloat64(sm.AdvertisedCapacity.WithLabelValues(ns, "set")))
 		assert.Equal(t, float64(4), testutil.ToFloat64(sm.CapacityWithheld.WithLabelValues(ns, "set", runnercore.AdmitReasonQuota)))
 	})
@@ -177,7 +177,7 @@ func TestScaleSetCapacityFunc(t *testing.T) {
 	t.Run("ample quota leaves the ceiling in charge", func(t *testing.T) {
 		r, sm, target := capacityReconciler(t, ns, rsObj("set", ns, max8), gwObj("gw", ns, ""), tmplObj("tmpl", ns), quotaRS(ns, "100", "0"))
 
-		assert.Equal(t, 8, r.scaleSetCapacityFunc(key, target)(ctx))
+		assert.Equal(t, 8, r.scaleSetCapacityFunc(key, target, &capacityRecord{})(ctx))
 		assert.Equal(t, float64(0), testutil.ToFloat64(sm.CapacityWithheld.WithLabelValues(ns, "set", runnercore.AdmitReasonQuota)),
 			"a rung that did not bind must publish an explicit zero, not go stale")
 	})
@@ -185,20 +185,20 @@ func TestScaleSetCapacityFunc(t *testing.T) {
 	t.Run("no quota and no ceiling falls back to the default", func(t *testing.T) {
 		r, _, target := capacityReconciler(t, ns, rsObj("set", ns, nil), gwObj("gw", ns, ""), tmplObj("tmpl", ns))
 
-		assert.Equal(t, defaultScaleSetMaxCapacity, r.scaleSetCapacityFunc(key, target)(ctx))
+		assert.Equal(t, defaultScaleSetMaxCapacity, r.scaleSetCapacityFunc(key, target, &capacityRecord{})(ctx))
 	})
 
 	t.Run("an exhausted quota advertises zero", func(t *testing.T) {
 		r, _, target := capacityReconciler(t, ns, rsObj("set", ns, max8), gwObj("gw", ns, ""), tmplObj("tmpl", ns), quotaRS(ns, "2", "2"))
 
-		assert.Zero(t, r.scaleSetCapacityFunc(key, target)(ctx), "GitHub must assign nothing while no worker pod can be created")
+		assert.Zero(t, r.scaleSetCapacityFunc(key, target, &capacityRecord{})(ctx), "GitHub must assign nothing while no worker pod can be created")
 	})
 
 	t.Run("the quota opt-out restores ceiling-only behaviour", func(t *testing.T) {
 		r, _, target := capacityReconciler(t, ns, rsObj("set", ns, max8), gwObj("gw", ns, ""), tmplObj("tmpl", ns), quotaRS(ns, "2", "2"))
 		r.Provisioner.DisableQuotaAdmission = true
 
-		assert.Equal(t, 8, r.scaleSetCapacityFunc(key, target)(ctx), "AGC_QUOTA_ADMISSION=false must opt out on both tiers")
+		assert.Equal(t, 8, r.scaleSetCapacityFunc(key, target, &capacityRecord{})(ctx), "AGC_QUOTA_ADMISSION=false must opt out on both tiers")
 	})
 }
 
@@ -214,7 +214,7 @@ func TestScaleSetCapacityFunc_RecoversWhenHeadroomReturns(t *testing.T) {
 	r, _, target := capacityReconciler(t, ns,
 		rsObj("set", ns, func(rs *v2alpha1.RunnerSet) { rs.Spec.MaxWorkers = ptr.To(int32(8)) }),
 		gwObj("gw", ns, ""), tmplObj("tmpl", ns), quotaRS(ns, "4", "4"))
-	capacity := r.scaleSetCapacityFunc(key, target)
+	capacity := r.scaleSetCapacityFunc(key, target, &capacityRecord{})
 
 	require.Zero(t, capacity(ctx))
 
