@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q720/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q960/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>Publish the queue depth GitHub reports on every poll - GitHub Actions Gateway</title>
+        <title>Refresh the scale-set demand gauge while the set advertises no capacity - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#publish-the-queue-depth-github-reports-on-every-poll" class="md-skip">
+        <a href="#refresh-the-scale-set-demand-gauge-while-the-set-advertises-no-capacity" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Publish the queue depth GitHub reports on every poll
+              Refresh the scale-set demand gauge while the set advertises no capacity
             
           </span>
         </div>
@@ -2567,9 +2567,13 @@
   
 
 
-<h1 id="publish-the-queue-depth-github-reports-on-every-poll">Publish the queue depth GitHub reports on every poll<a class="headerlink" href="#publish-the-queue-depth-github-reports-on-every-poll" title="Permanent link">&para;</a></h1>
-<p>Every poll carries <code>totalAvailableJobs</code>; the listener stores the struct and <code>Status()</code> exports only assigned plus running.
-Export it as a gauge so an operator can answer why a job sits queued, the top demand signal.</p>
+<h1 id="refresh-the-scale-set-demand-gauge-while-the-set-advertises-no-capacity">Refresh the scale-set demand gauge while the set advertises no capacity<a class="headerlink" href="#refresh-the-scale-set-demand-gauge-while-the-set-advertises-no-capacity" title="Permanent link">&para;</a></h1>
+<p><code>actions_gateway_scaleset_jobs_available</code> (Q720) reads GitHub's queued-but-unassigned count off the statistics that ride on session responses and queue messages.
+An empty poll answers 202 and carries none, so a set advertising <code>0</code> capacity takes no reading at all: GitHub assigns nothing, no message is delivered, and the assignment check that would refresh it is gated on <code>len(l.deferred) != 0</code>, which a job blocked before assignment never enters.
+Measured 2026-08-24 against the stub with capacity 0 and five jobs queued: one write, at session open, holding <code>0</code> for the whole run.
+That is the state the gauge exists to explain — the AGC withholding while work stacks up — so today it reads a stale zero exactly when an operator needs the number, and no alert can be built on it.
+The fix is a paced statistics reading on the empty-poll path, but it is not free: <code>RefreshSession</code> is a GitHub call per interval per scale set, on every idle set rather than only a backed-up one, and §3.5's rate-limit budget is what decides the pacing.
+Settle that before coding; the honest interim is the caveat now carried in the metric's <code>Help</code> string and its <a href="../../operations/observability-metrics/#scale-set-acquisition-tier-q264">operator row</a>.</p>
 
 
 

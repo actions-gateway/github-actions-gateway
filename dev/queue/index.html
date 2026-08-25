@@ -2764,20 +2764,20 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td><code>adv.Withheld</code> reaches Prometheus only, so a tenant without metrics access cannot see why intake is throttled.</td>
 </tr>
 <tr>
-<td><a href="Q720/">Q720</a></td>
-<td><a href="../design/03-api-contracts/">Publish the queue depth GitHub reports on every poll</a></td>
-<td><code>feature</code> <code>docs</code></td>
-<td>🔲</td>
-<td>S</td>
-<td>Every poll carries <code>totalAvailableJobs</code>; the listener stores the struct and <code>Status()</code> exports only assigned plus running.</td>
-</tr>
-<tr>
 <td><a href="Q906/">Q906</a></td>
 <td><a href="../operations/runner-template-library/">Report workers that bind and never start on an ungated RunnerSet</a></td>
 <td><code>feature</code></td>
 <td>🔲</td>
 <td>S</td>
 <td>Q714 made this visible only through <code>spec.capacityGate</code>, which is an intake decision and off by default, so an ungated set still says …</td>
+</tr>
+<tr>
+<td><a href="Q960/">Q960</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/scalesetlistener/listener.go">Refresh the scale-set demand gauge while the set advertises no capacity</a></td>
+<td><code>feature</code></td>
+<td>🔲</td>
+<td>M</td>
+<td><code>actions_gateway_scaleset_jobs_available</code> (Q720) reads GitHub's queued-but-unassigned count off the statistics that ride on session …</td>
 </tr>
 <tr>
 <td><a href="Q677/">Q677</a></td>

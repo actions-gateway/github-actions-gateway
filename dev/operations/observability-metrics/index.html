@@ -3469,6 +3469,12 @@ During the P4 dogfood validation (the Q224 fan-out acceptance gate) the counters
 <td><code>namespace</code>, <code>runner_set</code>, <code>reason</code></td>
 <td>Slots the named rung removed from the declared ceiling on that same poll — <code>advertised_capacity</code> plus the sum of these equals the ceiling. <code>reason="quota"</code> is namespace-<code>ResourceQuota</code> headroom; <code>reason="capacity"</code> is the opt-in capacity gate, which bounds the total at the set's own in-flight workers while the cluster cannot place another (Q405) — plus one probe slot per <code>pendingPodDeadline</code> window while the gate is latched (<code>AwaitingProbe</code>, Q512), so under a sustained decline expect this series to <em>hold</em> near the ceiling across reap cycles rather than sawtooth back to <code>0</code>. Every evaluated rung publishes a value each poll, <strong>including an explicit <code>0</code></strong>, so a series never sits frozen at its last non-zero reading — the capacity rung publishes its zero even with the gate <code>Off</code>, because the gate is per-set spec rather than a rung the AGC skips. Nothing is published for a rung an operator has turned off AGC-wide (<code>AGC_QUOTA_ADMISSION=false</code>).</td>
 </tr>
+<tr>
+<td><code>actions_gateway_scaleset_jobs_available</code></td>
+<td>Gauge</td>
+<td><code>namespace</code>, <code>runner_set</code></td>
+<td>Jobs GitHub is holding queued for the scale set and has assigned to nobody: the demand signal every other series on this tier is blind to, because they all begin at assignment. Read it against <code>…_advertised_capacity</code> to answer <em>why is this job still queued</em>: demand with a ceiling to spare means GitHub has not delivered yet, demand against a <code>0</code> ceiling means the AGC is withholding and <code>…_capacity_withheld</code> says which rung. <strong>It is a last-reading gauge, not a per-poll one.</strong> Statistics ride on queue messages and session responses; an empty poll (HTTP 202) carries none, so the value holds until the next reading rather than tracking continuously. The readings are every session open, every delivered message, and, while jobs are deferred, the once-a-minute assignment check. <strong>A set advertising <code>0</code> capacity gets none of those</strong>, so this series sits at whatever it last read (typically <code>0</code> from the session open) for as long as the withholding lasts: do not alert on it, and do not read a <code>0</code> as <em>no queued demand</em> unless <code>…_advertised_capacity</code> is above zero (Q720, Q960). Dropped when the <code>RunnerSet</code> is deleted.</td>
+</tr>
 </tbody>
 </table>
 <blockquote>
@@ -3744,6 +3750,11 @@ Neither binary acquires jobs, so neither has a tier.</p>
 <td><code>actions_gateway_scaleset_capacity_withheld</code></td>
 <td>Scale-set only</td>
 <td>The per-rung breakdown behind that integer, same reason.</td>
+</tr>
+<tr>
+<td><code>actions_gateway_scaleset_jobs_available</code></td>
+<td>Scale-set only</td>
+<td>GitHub reports it in the runner-scale-set session statistics, a payload the classic many-acquirers protocol has no equivalent of; a Classic set learns of a job only when one is delivered to it.</td>
 </tr>
 <tr>
 <td><code>actions_gateway_token_refreshes_total</code></td>
