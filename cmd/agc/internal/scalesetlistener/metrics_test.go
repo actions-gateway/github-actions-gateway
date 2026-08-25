@@ -27,6 +27,10 @@ func TestMetricsRecorderIncrements(t *testing.T) {
 	// on every call, so a reason that stopped holding jobs reads zero rather than
 	// freezing at its last non-zero value.
 	rec.SetDeferredJobs(map[string]int{DeferReasonNameConflict: 1, DeferReasonCeiling: 3})
+	// Likewise a gauge, and one whose zero is load-bearing: "GitHub is holding nothing
+	// for this set" is the reading that clears a queued-job investigation (Q720).
+	rec.SetAvailableJobs(7)
+	rec.SetAvailableJobs(0)
 
 	if got := testutil.ToFloat64(m.JobsAssignedTotal.WithLabelValues("tenant-a", "set-1")); got != 2 {
 		t.Errorf("JobsAssignedTotal = %v, want 2", got)
@@ -48,6 +52,10 @@ func TestMetricsRecorderIncrements(t *testing.T) {
 	}
 	if got := testutil.ToFloat64(m.JobsDeferred.WithLabelValues("tenant-a", "set-1", DeferReasonCeiling)); got != 3 {
 		t.Errorf("JobsDeferred{reason=ceiling} = %v, want 3", got)
+	}
+
+	if got := testutil.ToFloat64(m.AvailableJobs.WithLabelValues("tenant-a", "set-1")); got != 0 {
+		t.Errorf("AvailableJobs = %v, want 0 (the latest reading, not the peak)", got)
 	}
 
 	// A second RunnerSet's recorder writes an independent series.
