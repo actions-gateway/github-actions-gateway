@@ -391,11 +391,13 @@ func TestAdmit_RateRefusalRefundsUnderConcurrency(t *testing.T) {
 		"the gate must hold exactly one reservation per admitted job: a refusal that "+
 			"skipped its refund leaks a slot, and a double refund loses one")
 
-	// The stronger invariant, and the one that bounds Q977's labelling artifact: the
-	// count never exceeds the ceiling even mid-flight, because admit refuses at
-	// reserved >= limit. So the reserve-then-release churn can inflate the count only
-	// WITHIN the ceiling, never past it — a transient can mislabel a refusal, and
-	// cannot over-admit.
+	// A post-hoc check that the ceiling invariant held: this reads the SETTLED count,
+	// after done.Wait(), so it cannot observe a mid-flight excursion and nothing here
+	// would fail from one. The invariant it corresponds to — admit refuses at
+	// reserved >= limit, so the reserve-then-release churn inflates the count only
+	// WITHIN the ceiling, which is what makes Q977 a labelling artifact rather than an
+	// over-admission bug — is a property of the code, not something this assertion
+	// establishes.
 	assert.LessOrEqual(t, p.admission.reservedCount(target.Key().String()), target.ceiling,
-		"the reservation count must never exceed the declared ceiling")
+		"the settled reservation count must not exceed the declared ceiling")
 }
