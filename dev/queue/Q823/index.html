@@ -1394,6 +1394,8 @@
       
         
       
+        
+      
     
     
     
@@ -1763,6 +1765,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../../operations/worker-shared-storage/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Shared worker storage (RWX)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../../operations/in-runner-image-builds/" class="md-nav__link">
         
   
@@ -1902,10 +1932,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9_17" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9_18" >
         
           
-          <label class="md-nav__link" for="__nav_9_17" id="__nav_9_17_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_9_18" id="__nav_9_18_label" tabindex="0">
             
   
   
@@ -1923,8 +1953,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_9_17_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_9_17">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_9_18_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9_18">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -2568,9 +2598,20 @@
 
 
 <h1 id="agcinternalcontroller-swings-5x-against-a-fixed-2m-coverage-budget"><code>agc/internal/controller</code> swings 5x against a fixed 2m coverage budget<a class="headerlink" href="#agcinternalcontroller-swings-5x-against-a-fixed-2m-coverage-budget" title="Permanent link">&para;</a></h1>
-<p>Measured 2026-08-12, same package instrumented: one cover-check panicked at the 2m budget, the next ran 21.951s; an uninstrumented run took 120.895s.
-A 5x swing under concurrent load, not a fixed overrun.
-Needs an at-rest baseline before a fix.</p>
+<p><strong>Event:</strong> a package trips the coverage gate's <code>-timeout</code> on <code>main</code> after the raise to 5m.</p>
+<p>Fixed 2026-08-24 by raising the budget 2m to 5m, on a measurement that reframed the row twice.</p>
+<p>The swing is not duration, it is scheduling: <code>go test -timeout</code> is per-binary wall clock, so a binary that is not scheduled spends the budget doing nothing.
+<code>api/apinames</code> reported 37.983s and 0.645s across two <code>cover-check</code> runs at an identical 98.6% coverage, and that package has no sleep, poll or <code>TestMain</code> to block on.
+Six timed runs of the named package held CPU inside 1.43x while wall spanned 9.99x.</p>
+<p>The row also named one package where 58 were measured: <code>agc/internal/scalesetlistener</code> peaked at 81.57s against the same budget, and at a 1.29x swing it sits closer to the wall more often than <code>controller</code> does at 3.26x.
+Twelve packages were at or above a quarter of the budget.
+One budget covers all of them, which is why this stayed one row.</p>
+<p>The at-rest baseline this row asked for, taken 2026-08-24 at load 21 to 36 on 18 cores with every binary uncached: <code>scalesetlistener</code> 67.834s, <code>proxy</code> 45.991s, <code>controller</code> 14.467s, 58 packages measured.
+So the worst package held only 1.8x headroom under the old 2m even on a quiet machine, which justifies the raise on its own, with no starvation argument needed.
+The named package was never the one at risk.
+<a href="../../development/testing/#the-coverage-budget-is-wall-clock-so-it-measures-scheduling">Mechanism, the numbers, and what the instruments could not settle</a>.</p>
+<p>Sized <code>S</code> against one package and a fixed overrun; it was neither.
+<a href="../Q966/">Q966</a> owns whether the machine-wide concurrency is set right.</p>
 
 
 

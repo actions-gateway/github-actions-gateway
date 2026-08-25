@@ -1394,6 +1394,8 @@
       
         
       
+        
+      
     
     
     
@@ -1763,6 +1765,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../../operations/worker-shared-storage/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Shared worker storage (RWX)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../../operations/in-runner-image-builds/" class="md-nav__link">
         
   
@@ -1902,10 +1932,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9_17" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9_18" >
         
           
-          <label class="md-nav__link" for="__nav_9_17" id="__nav_9_17_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_9_18" id="__nav_9_18_label" tabindex="0">
             
   
   
@@ -1923,8 +1953,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_9_17_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_9_17">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_9_18_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9_18">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -2736,6 +2766,11 @@ This doc is the map of those channels: what is automated, by what, and where the
 <td><code>KARPENTER_VERSION</code> in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/e2e/karpenter-cluster.sh"><code>scripts/e2e/karpenter-cluster.sh</code></a></td>
 <td><strong>updatecli</strong> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/updatecli.d/karpenter.yaml"><code>updatecli.d/karpenter.yaml</code></a>, weekly — the <strong>latest</strong> upstream release, minor or patch: Karpenter is not released per Kubernetes minor, so there is no minor for the kind bump to own. <strong>No auto-merge</strong>: the PR edits <code>scripts/e2e/karpenter-cluster.sh</code>, which is the <a href="../testing/#its-cadence-the-version-bump-not-a-clock">drift gate's</a> path filter, so it exists to run that gate against the new release)</td>
 </tr>
+<tr>
+<td>csi-driver-nfs + the NFS server image (shared-storage harness)</td>
+<td><code>CSI_DRIVER_NFS_VERSION</code> in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/e2e/rwx-storage-cluster.sh"><code>scripts/e2e/rwx-storage-cluster.sh</code></a>, and the digest-pinned image in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/test/rwx-storage/nfs-server.yaml"><code>test/rwx-storage/nfs-server.yaml</code></a></td>
+<td><strong>manual</strong>, per <a href="#deliberately-manual-pins">Deliberately manual pins</a>. Nothing runs this harness on a schedule, so a bump is only meaningful when someone runs <code>make test-rwx-storage</code> in the same change</td>
+</tr>
 </tbody>
 </table>
 <p>Dependabot config: <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/dependabot.yml"><code>.github/dependabot.yml</code></a>.
@@ -2866,6 +2901,10 @@ Their PRs exist so the <a href="../testing/#its-cadence-the-version-bump-not-a-c
   Review and bump it by hand in the kind updatecli PR when the Kubernetes version should move.</li>
 <li><strong><code>CA_VERSION</code>'s Kubernetes minor, and <code>KWOK_VERSION</code></strong> (both copies — its twin in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/e2e/karpenter-cluster.sh"><code>scripts/e2e/karpenter-cluster.sh</code></a> is kept the same), in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/e2e/autoscaler-cluster.sh"><code>scripts/e2e/autoscaler-cluster.sh</code></a> — the cluster-autoscaler and kwok releases behind the <a href="../testing/#the-live-autoscaler-drift-gate">live-autoscaler drift gate</a>. cluster-autoscaler ships one release series per Kubernetes minor and the harness runs kind's <em>default</em> node image, so the minor is not this pin's to choose: it follows <code>KIND_NODE_IMAGE</code>'s and moves by hand, in the kind bump PR, with <code>make test-autoscaler</code> run in the same change.
   Only the <strong>patch</strong> inside that minor is automated (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/updatecli.d/cluster-autoscaler.yaml"><code>cluster-autoscaler.yaml</code></a>) — the version move is what triggers the gate, so patch releases that no one pinned used to go untested until the next minor came round (Q483).</li>
+<li><strong><code>CSI_DRIVER_NFS_VERSION</code></strong> in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/e2e/rwx-storage-cluster.sh"><code>scripts/e2e/rwx-storage-cluster.sh</code></a>, and the digest-pinned NFS server image in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/test/rwx-storage/nfs-server.yaml"><code>test/rwx-storage/nfs-server.yaml</code></a>: the storage backend behind the <a href="../testing/#the-shared-worker-storage-validation">shared worker storage validation</a>.
+  Deliberately off the cadence rather than pending automation: unlike the autoscaler harnesses, this one detects nothing about upstream.
+  It answers whether GAG's worker pod shape mounts an RWX volume, and the driver is scaffolding for that question rather than its subject.
+  A bump is worth taking when the worker pod's volume or security handling changes, and only alongside a <code>make test-rwx-storage</code> run in the same PR.</li>
 </ul>
 
 

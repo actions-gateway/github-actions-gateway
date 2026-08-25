@@ -1394,6 +1394,8 @@
       
         
       
+        
+      
     
     
     
@@ -1763,6 +1765,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../operations/worker-shared-storage/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Shared worker storage (RWX)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../operations/in-runner-image-builds/" class="md-nav__link">
         
   
@@ -1902,10 +1932,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9_17" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9_18" >
         
           
-          <label class="md-nav__link" for="__nav_9_17" id="__nav_9_17_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_9_18" id="__nav_9_18_label" tabindex="0">
             
   
   
@@ -1923,8 +1953,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_9_17_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_9_17">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_9_18_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9_18">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -2787,7 +2817,7 @@ A plan with only deferred residuals is ✅, not ⚠️ — see <a href="../devel
 <tr>
 <td><a href="caching-and-worker-storage/">caching-and-worker-storage.md</a></td>
 <td>The umbrella goal for the three caches routinely conflated as one (image pulls, <code>actions/cache</code>, build layers) plus RWX job storage: why closing untrusted-PR egress removes the cache that works today, why one backend can still serve several content classes, and why the read-only mirror contract cannot cover a writable job cache</td>
-<td>ⓘ Ongoing goal doc, nothing built. States that <code>actions/cache</code> already works and the roadmap said otherwise; reframes <a href="../queue/Q215/">Q215</a>'s isolation review as the design, and widens <a href="../queue/Q539/">Q539</a>/<a href="../queue/Q540/">Q540</a> to grade the contract per content class</td>
+<td>ⓘ Ongoing goal doc. The RWX storage half closed 2026-08-24 (Q719); every cache half is unbuilt. States that <code>actions/cache</code> already works and the roadmap said otherwise; reframes <a href="../queue/Q215/">Q215</a>'s isolation review as the design, and widens <a href="../queue/Q539/">Q539</a>/<a href="../queue/Q540/">Q540</a> to grade the contract per content class</td>
 </tr>
 <tr>
 <td><a href="gpu-and-accelerated-ci/">gpu-and-accelerated-ci.md</a></td>
@@ -2797,12 +2827,12 @@ A plan with only deferred residuals is ✅, not ⚠️ — see <a href="../devel
 <tr>
 <td><a href="release-ladder/">release-ladder.md</a></td>
 <td>The map between the individual release plans: how many releases stand between here and <code>v2.0.0</code>, what each carries, why 1.6 exists rather than folding into 1.5, and what is deliberately punted past 2.0 with the signal each waits on</td>
-<td>ⓘ Ongoing goal doc. Shape decided 2026-08-09: 1.5 → 1.6 → 2.0. Establishes what the roadmap's near-term section means, applied 2026-08-09 (seven items parked to Deferred, <a href="../queue/Q719/">Q719</a> and <a href="../queue/Q727/">Q727</a> gated to 1.6) and narrowed 2026-08-18 to "not waiting on an outside signal" once two revive triggers fired</td>
+<td>ⓘ Ongoing goal doc. Shape decided 2026-08-09: 1.5 → 1.6 → 2.0. Establishes what the roadmap's near-term section means, applied 2026-08-09 (seven items parked to Deferred, Q719 and <a href="../queue/Q727/">Q727</a> gated to 1.6; Q719 closed 2026-08-24) and narrowed 2026-08-18 to "not waiting on an outside signal" once two revive triggers fired</td>
 </tr>
 <tr>
 <td><a href="arc-parity/">arc-parity.md</a></td>
-<td>The umbrella goal for the short list where a team on ARC cannot migrate without editing workflows or losing a capability: the measured gap inventory, what is deliberately never parity, and why <code>containerMode</code> waits on RWX storage</td>
-<td>ⓘ Ongoing goal doc. Q712 and Q726 both closed 2026-08-11; <a href="../queue/Q727/">Q727</a> is sequenced behind <a href="../queue/Q719/">Q719</a>, and <a href="../queue/Q765/">Q765</a> needs an appliance</td>
+<td>The umbrella goal for the short list where a team on ARC cannot migrate without editing workflows or losing a capability: the measured gap inventory, what is deliberately never parity, and why <code>containerMode</code> waited on RWX storage</td>
+<td>ⓘ Ongoing goal doc. Q712 and Q726 closed 2026-08-11 and Q719 closed 2026-08-24, unblocking <a href="../queue/Q727/">Q727</a>; <a href="../queue/Q765/">Q765</a> needs an appliance</td>
 </tr>
 <tr>
 <td><a href="q408-untrusted-pr-egress/">q408-untrusted-pr-egress.md</a></td>

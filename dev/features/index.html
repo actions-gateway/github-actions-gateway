@@ -1524,6 +1524,8 @@
       
         
       
+        
+      
     
     
     
@@ -1893,6 +1895,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../operations/worker-shared-storage/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Shared worker storage (RWX)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../operations/in-runner-image-builds/" class="md-nav__link">
         
   
@@ -2032,10 +2062,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9_17" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9_18" >
         
           
-          <label class="md-nav__link" for="__nav_9_17" id="__nav_9_17_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_9_18" id="__nav_9_18_label" tabindex="0">
             
   
   
@@ -2053,8 +2083,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_9_17_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_9_17">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_9_18_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9_18">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -2843,6 +2873,8 @@ A capability listed under <code>dev</code> but not under a numbered release has 
 <li><strong><a href="../design/05-security/">Secure-by-default hardening</a></strong>: Pod Security Admission per namespace, default-deny NetworkPolicies, and credentials kept out of environment variables, all reconciled rather than opt-in.</li>
 <li><strong><a href="../operations/runner-template-library/">Runner template library</a></strong>: three shipped worker pod shapes (<code>plain</code>, <code>kata-dind</code>, <code>privileged-dind</code>), each applied with one <code>kubectl apply -k</code>, so a tenant starts from a validated template instead of transcribing a capability set by hand.
   Only templates CI exercises may ship, and a gate enforces it.</li>
+<li><strong><a href="../operations/worker-shared-storage/">Shared worker storage</a></strong> <span class="gag-new-badge">new in 1.6</span>: a validated reference architecture for a <code>ReadWriteMany</code> volume several jobs mount to pass files, with its <code>fsGroup</code> requirement measured.
+  The classes it was exercised against are named; a harness validates yours.</li>
 <li><strong><a href="../operations/kata-dind-workloads/">Kata micro-VM workers</a></strong>: validated on nested virtualization, and the default for GAG's own end-to-end CI, which builds a <code>kind</code> cluster inside an unprivileged worker pod.</li>
 <li><strong><a href="../operations/in-runner-image-builds/">In-runner image builds</a></strong>: a decision table mapping BuildKit rootless, Kaniko, Sysbox, Kata, and privileged Docker-in-Docker to the right <code>securityProfile</code> and PSA level.</li>
 <li><strong><a href="../operations/release/">Signed images, SBOM, and SLSA provenance</a></strong>: every published image is keyless-signed and carries both a Software Bill of Materials (SBOM) attestation and a Supply-chain Levels for Software Artifacts (SLSA) build-provenance attestation.</li>

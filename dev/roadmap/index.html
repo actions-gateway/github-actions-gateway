@@ -1482,6 +1482,8 @@
       
         
       
+        
+      
     
     
     
@@ -1851,6 +1853,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../operations/worker-shared-storage/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Shared worker storage (RWX)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../operations/in-runner-image-builds/" class="md-nav__link">
         
   
@@ -1990,10 +2020,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9_17" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9_18" >
         
           
-          <label class="md-nav__link" for="__nav_9_17" id="__nav_9_17_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_9_18" id="__nav_9_18_label" tabindex="0">
             
   
   
@@ -2011,8 +2041,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_9_17_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_9_17">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_9_18_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9_18">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -2717,13 +2747,9 @@ The pill is read from the backlog rather than typed here, so it cannot outlive t
 No pill means the item is on the near-term plan with no release decided for it yet.</p>
 <ul>
 <li>
-<p><strong><a href="../operations/">Persistent and shared worker storage</a></strong> <span class="gag-release-chip" title="Blocks the 1.6 release">1.6</span> <!-- q:Q719 --> Workers are storage-less by design and nothing validates a <code>ReadWriteMany</code> volume mounted into one, so the stance is undocumented rather than decided. <code>ReadWriteMany</code> is how jobs share files and what ARC's <code>containerMode: kubernetes</code> depends on, so it also matters to anyone migrating off that mode.
-  Validation and a reference architecture come before any API.</p>
-</li>
-<li>
 <p><strong><a href="../plan/arc-parity/#the-collision-the-individual-rows-do-not-state">A non-privileged path for <code>container:</code> and <code>services:</code> steps</a></strong> <span class="gag-release-chip" title="Blocks the 1.6 release">1.6</span> <!-- q:Q727 --> ARC runs these as separate pods on a shared volume under <code>containerMode: kubernetes</code>.
   One worker pod per job means the path here is Docker-in-Docker, unprivileged only under Kata.
-  Sequenced behind the <code>ReadWriteMany</code> validation above, which it depends on; documenting Kata Docker-in-Docker as the permanent answer is a valid outcome.</p>
+  Its <code>ReadWriteMany</code> dependency is closed: <a href="../operations/worker-shared-storage/">shared worker storage</a> is validated and documented. Documenting Kata Docker-in-Docker as the permanent answer is still a valid outcome.</p>
 </li>
 <li>
 <p><strong><a href="../plan/q408-untrusted-pr-egress/">CI for untrusted pull requests on Kata workers</a></strong> <!-- q:Q408 --> <a href="../operations/kata-dind-workloads/">Kata workers</a> are validated for <em>trusted</em> CI only: the micro-VM bounds the guest kernel, the runner's egress stays permissive.

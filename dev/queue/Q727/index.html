@@ -1394,6 +1394,8 @@
       
         
       
+        
+      
     
     
     
@@ -1763,6 +1765,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../../operations/worker-shared-storage/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Shared worker storage (RWX)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../../operations/in-runner-image-builds/" class="md-nav__link">
         
   
@@ -1902,10 +1932,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9_17" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9_18" >
         
           
-          <label class="md-nav__link" for="__nav_9_17" id="__nav_9_17_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_9_18" id="__nav_9_18_label" tabindex="0">
             
   
   
@@ -1923,8 +1953,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_9_17_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_9_17">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_9_18_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9_18">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -2570,7 +2600,7 @@
 <h1 id="a-non-privileged-path-for-container-and-services-steps">A non-privileged path for <code>container:</code> and <code>services:</code> steps<a class="headerlink" href="#a-non-privileged-path-for-container-and-services-steps" title="Permanent link">&para;</a></h1>
 <p>ARC's <code>containerMode: kubernetes</code> runs them as separate pods with a provisioned volume.
 GAG runs one worker pod per job, so the path is DinD, unprivileged only under Kata.
-<strong>Blocked on <a href="../Q719/">Q719</a>:</strong> it needs RWX, which nothing validates yet.</p>
+Unblocked 2026-08-24: Q719 validated RWX and wrote <a href="../../operations/worker-shared-storage/">worker-shared-storage.md</a>, so the volume half is settled and this is the pod-per-step model alone.</p>
 
 
 

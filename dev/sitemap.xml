@@ -341,6 +341,10 @@
          <lastmod>2026-08-25</lastmod>
     </url>
     <url>
+         <loc>https://actions-gateway.com/dev/operations/worker-shared-storage/</loc>
+         <lastmod>2026-08-25</lastmod>
+    </url>
+    <url>
          <loc>https://actions-gateway.com/dev/operations/examples/policies/</loc>
          <lastmod>2026-08-25</lastmod>
     </url>
@@ -1277,10 +1281,6 @@
          <lastmod>2026-08-25</lastmod>
     </url>
     <url>
-         <loc>https://actions-gateway.com/dev/queue/Q719/</loc>
-         <lastmod>2026-08-25</lastmod>
-    </url>
-    <url>
          <loc>https://actions-gateway.com/dev/queue/Q721/</loc>
          <lastmod>2026-08-25</lastmod>
     </url>
@@ -1605,7 +1605,27 @@
          <lastmod>2026-08-25</lastmod>
     </url>
     <url>
+         <loc>https://actions-gateway.com/dev/queue/Q966/</loc>
+         <lastmod>2026-08-25</lastmod>
+    </url>
+    <url>
+         <loc>https://actions-gateway.com/dev/queue/Q967/</loc>
+         <lastmod>2026-08-25</lastmod>
+    </url>
+    <url>
+         <loc>https://actions-gateway.com/dev/queue/Q968/</loc>
+         <lastmod>2026-08-25</lastmod>
+    </url>
+    <url>
          <loc>https://actions-gateway.com/dev/queue/Q969/</loc>
+         <lastmod>2026-08-25</lastmod>
+    </url>
+    <url>
+         <loc>https://actions-gateway.com/dev/queue/Q970/</loc>
+         <lastmod>2026-08-25</lastmod>
+    </url>
+    <url>
+         <loc>https://actions-gateway.com/dev/queue/Q974/</loc>
          <lastmod>2026-08-25</lastmod>
     </url>
     <url>

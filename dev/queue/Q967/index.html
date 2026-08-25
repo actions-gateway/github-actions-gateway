@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q719/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q967/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>Validate RWX worker storage, and put it in the reference architecture - GitHub Actions Gateway</title>
+        <title>golangci-lint run.timeout cannot fire under the job budget above it - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#validate-rwx-worker-storage-and-put-it-in-the-reference-architecture" class="md-skip">
+        <a href="#golangci-lint-runtimeout-cannot-fire-under-the-job-budget-above-it" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Validate RWX worker storage, and put it in the reference architecture
+              golangci-lint run.timeout cannot fire under the job budget above it
             
           </span>
         </div>
@@ -1394,6 +1394,8 @@
       
         
       
+        
+      
     
     
     
@@ -1763,6 +1765,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../../operations/worker-shared-storage/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Shared worker storage (RWX)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../../operations/in-runner-image-builds/" class="md-nav__link">
         
   
@@ -1902,10 +1932,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9_17" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9_18" >
         
           
-          <label class="md-nav__link" for="__nav_9_17" id="__nav_9_17_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_9_18" id="__nav_9_18_label" tabindex="0">
             
   
   
@@ -1923,8 +1953,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_9_17_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_9_17">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_9_18_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9_18">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -2567,10 +2597,12 @@
   
 
 
-<h1 id="validate-rwx-worker-storage-and-put-it-in-the-reference-architecture">Validate RWX worker storage, and put it in the reference architecture<a class="headerlink" href="#validate-rwx-worker-storage-and-put-it-in-the-reference-architecture" title="Permanent link">&para;</a></h1>
-<p>Workers are storage-less and nothing validates a <code>ReadWriteMany</code> volume mounted into one.
-RWX is how jobs share files, and what ARC's <code>containerMode: kubernetes</code> needs, so it is also a migration blocker.
-<strong>Unblocks <a href="../Q727/">Q727</a>.</strong></p>
+<h1 id="golangci-lint-runtimeout-cannot-fire-under-the-job-budget-above-it"><code>golangci-lint</code> <code>run.timeout</code> cannot fire under the job budget above it<a class="headerlink" href="#golangci-lint-runtimeout-cannot-fire-under-the-job-budget-above-it" title="Permanent link">&para;</a></h1>
+<p>Measured 2026-08-24: <code>.golangci.yml</code> sets <code>run.timeout: 10m</code> as "a canary for a genuinely wedged analysis", and <code>unit-test.yml</code>'s <code>lint</code> job sets <code>timeout-minutes: 10</code> for the whole job.
+The job also does checkout, <code>setup-go</code>, a cache restore, the linter build and six <code>make</code> steps after <code>make lint</code>, so the job budget is always spent first and the canary never fires on CI.
+What a wedged analysis produces there is a killed job with no linter diagnostic.</p>
+<p>Same class as <a href="../Q823/">Q823</a>: an inner wall-clock budget chosen without reference to the outer one.
+Either raise the job or lower <code>run.timeout</code> so the inner limit is reachable; the comment explaining the 5m-to-10m raise stays true either way.</p>
 
 
 

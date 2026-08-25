@@ -1394,6 +1394,8 @@
       
         
       
+        
+      
     
     
     
@@ -1763,6 +1765,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../../operations/worker-shared-storage/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Shared worker storage (RWX)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../../operations/in-runner-image-builds/" class="md-nav__link">
         
   
@@ -1902,10 +1932,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9_17" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9_18" >
         
           
-          <label class="md-nav__link" for="__nav_9_17" id="__nav_9_17_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_9_18" id="__nav_9_18_label" tabindex="0">
             
   
   
@@ -1923,8 +1953,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_9_17_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_9_17">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_9_18_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9_18">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -2664,6 +2694,17 @@
         
       </ul>
     </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-coverage-budget-is-wall-clock-so-it-measures-scheduling" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The coverage budget is wall clock, so it measures scheduling
+      
+    </span>
+  </a>
   
 </li>
         
@@ -3708,6 +3749,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#the-shared-worker-storage-validation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The shared worker storage validation
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#end-to-end-tests" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -4302,6 +4354,31 @@ Q343 concluded from that there was "no supported knob to share test results acro
 <li><strong>Tool builds.</strong> Each worktree builds its own <code>.build/golangci-lint</code> (~16 s with a warm build cache).
   Sharing tool binaries across worktrees would need version-keyed storage to avoid silently running a stale binary after a <code>tools/</code> dependency bump — complexity that isn't worth ~16 s per worktree.</li>
 </ul>
+<h3 id="the-coverage-budget-is-wall-clock-so-it-measures-scheduling">The coverage budget is wall clock, so it measures scheduling<a class="headerlink" href="#the-coverage-budget-is-wall-clock-so-it-measures-scheduling" title="Permanent link">&para;</a></h3>
+<p><code>scripts/go/coverage.sh</code> runs every workspace package in one <code>go test</code> with a <code>-timeout</code> that Go applies <strong>per test binary, as wall clock from the moment that binary starts</strong>.
+A binary that is not scheduled spends the budget doing nothing, so the number gates contention as much as it gates test duration.</p>
+<p>The proof is a package with nothing to wait on.
+Measured 2026-08-24 across two <code>make cover-check</code> runs, <code>api/apinames</code> reported <code>37.983s</code> and <code>0.645s</code> at an identical <code>98.6%</code> coverage.
+It is <code>names.go</code> and a 350-line test of pure string manipulation, with no <code>time.Sleep</code>, <code>TestMain</code>, <code>Eventually</code>, <code>time.After</code> or <code>context.WithTimeout</code> anywhere in it.
+Identical coverage means identical work and there is nothing in the package that can block, so the 58.9x is the binary waiting to be scheduled.</p>
+<p><strong>This machine is oversubscribed by design, and every baseline taken on it has to be read that way.</strong> <code>local-throttle.sh</code> reports <code>jobs</code> = physical cores minus 2 and <code>slots</code> = 2, so two heavy phases at 16 threads each put 32 threads on 18 cores before any sibling session exists.
+<code>serialize_heavy_build</code> records why <code>slots</code> moved from 1 to 2.
+So "at rest" here is roughly 1.8x, not 1.0x, and a baseline taken on a quiet box measures a configuration the gate never runs in.</p>
+<p><strong>Time the package by CPU, not by wall, when the question is whether it got slower.</strong> Six runs of <code>cmd/agc/internal/controller</code> under <code>/usr/bin/time -p</code> the same day: wall spanned 7.97s to 79.64s, a 9.99x range, while user+sys held between 10.98s and 15.66s, a 1.43x range.
+Effective cores (CPU over elapsed) ran 0.15 to 1.26.
+Constant work, an order of magnitude of wall.</p>
+<p>Two cautions on the instruments, both paid for:</p>
+<ul>
+<li><strong>A low CPU-to-wall ratio does not by itself mean starvation.</strong> A controller suite full of timers and polls sits low at rest too, because it is genuinely waiting.
+  The ratio cannot separate <em>starved</em> from <em>sleeping</em>; a package with no waiting construct in it can.</li>
+<li><strong>The load average sampled at a run's start does not predict that run.</strong> Over the six runs above the correlation was negative (r = -0.62, n = 6, not significant), and the worst wall of the set landed at the <em>lowest</em> sampled load.
+  A one-minute average describes the minute before the run rather than the run, so do not tune a budget against it.</li>
+</ul>
+<p>The budget is therefore sized for the canary rather than for the measurement.
+Even on a quiet machine the old 2m was marginal: at load 21 to 36, every binary uncached, the slowest package was <code>agc/internal/scalesetlistener</code> at 67.834s, or 56.5% of it, with <code>agc/internal/controller</code> down at 14.467s.
+5m leaves that 4.4x, and leaves the CI <code>coverage</code> job's <code>timeout-minutes: 15</code> room to still print Go's goroutine dump.
+Changing the flag costs one cold run: <code>-timeout</code> participates in Go's test cache key, verified by running one package at 5m (ran), again at 5m (cached), then at 2m (ran).
+A genuinely wedged test blocks forever and trips any finite value; what a larger number costs is the wait before that dump, and what a smaller one costs is a red gate that names a scheduling event as a hang.</p>
 <h3 id="the-race-detector-unit-gate">The race-detector unit gate<a class="headerlink" href="#the-race-detector-unit-gate" title="Permanent link">&para;</a></h3>
 <p>The CI <code>unit-test</code> job runs the workspace unit tests under Go's race detector (<code>go test -race</code>), not plain <code>go test</code>.
 The multiplexing core — agentpool, listener/mux, broker, token — is where data races hide, and plain <code>go test</code> never flags them; <code>-race</code> is pass/fail (a detected race fails the job).
@@ -6145,6 +6222,28 @@ There are now two version-move triggers and they divide cleanly: <strong>updatec
   On a cluster-autoscaler bump that step is the entire PR: nothing else in it needs testing.</li>
 </ul>
 <p>What each arm measured on first run, and the findings that outlived them, are in <a href="../../plan/capacity-aware-intake/#9c-the-live-autoscaler-harness-and-what-it-measured-q474">the plan §9c</a> (cluster-autoscaler) and <a href="../../plan/capacity-aware-intake/#9i-the-karpenter-arm-of-the-drift-gate-and-what-it-measured-q479">§9i</a> (Karpenter — including the recorder-generation premise it corrected).</p>
+<h2 id="the-shared-worker-storage-validation">The shared worker storage validation<a class="headerlink" href="#the-shared-worker-storage-validation" title="Permanent link">&para;</a></h2>
+<p>A second live tier exists for the opposite reason to the drift gate above: not that upstream can change under us, but that nothing short of a real cluster can observe the property at all.</p>
+<p>Workers are storage-less and the AGC provisions no volume of its own, so a shared <code>ReadWriteMany</code> volume is entirely a tenant <code>podTemplate</code> concern (Q719).
+Whether such a pod actually mounts one, and whether two workers on two nodes see one filesystem, belongs to a kubelet, a CSI driver and two nodes. envtest has none of the three, and a unit test asserting the pod spec says the right thing is exactly the shape that ships a reference architecture nobody has run.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-35-1" name="__codelineno-35-1" href="#__codelineno-35-1"></a>make<span class="w"> </span>rwx-storage-cluster<span class="w">    </span><span class="c1"># kind, csi-driver-nfs + an in-cluster NFS server</span>
+<a id="__codelineno-35-2" name="__codelineno-35-2" href="#__codelineno-35-2"></a>make<span class="w"> </span>test-rwx-storage<span class="w">       </span><span class="c1"># the validation</span>
+<a id="__codelineno-35-3" name="__codelineno-35-3" href="#__codelineno-35-3"></a>make<span class="w"> </span>rwx-storage-cluster-delete
+</code></pre></div>
+<p>The harness (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/e2e/rwx-storage-cluster.sh"><code>scripts/e2e/rwx-storage-cluster.sh</code></a>) is a three-node kind cluster whose two workers are what makes the assertion mean anything: two pods on one kubelet share a local directory, which an RWO volume also satisfies.
+It binds one throwaway claim before declaring itself ready, because a <code>StorageClass</code> that applies cleanly has proven nothing.
+The mount happens at provisioning time, so a wrong share path surfaces there rather than at apply.</p>
+<p>The test (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/provisioner/worker_shared_storage_live_test.go"><code>worker_shared_storage_live_test.go</code></a>, build tag <code>rwxstorage</code>) runs the pod the provisioner really builds, on both nodes, and requires them to exchange files through one claim.
+Its second case is the control that gives the first one meaning, and it is the measurement behind the operator doc's one hard requirement: <strong>without <code>fsGroup</code> the runner's write is refused</strong>, because a freshly provisioned volume's root belongs to root and the AGC gap-fills <code>runAsUser: 1001</code>.
+If that case ever passes, <code>fsGroup</code> has stopped being load-bearing and <a href="../../operations/worker-shared-storage/">worker-shared-storage.md</a> is telling operators to set a field that does nothing.</p>
+<p>Two things to know before reading a result:</p>
+<ul>
+<li><strong>Point it at your own class with <code>RWX_STORAGE_CLASS</code>.</strong> The default is the harness's <code>gag-rwx-nfs</code>; anything else the cluster offers works, which is how a cloud filesystem gets validated rather than assumed.
+  What has been exercised is the table in <a href="../../operations/worker-shared-storage/#what-this-has-been-exercised-against">worker-shared-storage.md § What this has been exercised against</a>, and that table is the only claim this repo makes about a storage class.</li>
+<li><strong>It fails rather than skips when the cluster is absent.</strong> The file compiles only under its build tag, so reaching it means someone asked for the check, and a validation that skips itself validates nothing.</li>
+</ul>
+<p>The fast half is <code>worker_shared_storage_test.go</code>, which is in <code>make check</code>: it pins that a tenant's claim survives the provisioner's own volume injection, and that <code>fsGroup</code> survives <code>applySecurityDefaults</code> on every profile.
+Both were confirmed able to fail by deleting the mechanism, an append turned into an assignment and an unconditional <code>fsGroup</code> stamp, rather than by watching them pass.</p>
 <h2 id="end-to-end-tests">End-to-end tests<a class="headerlink" href="#end-to-end-tests" title="Permanent link">&para;</a></h2>
 <p>E2E tests run on a local <code>kind</code> cluster, are gated by the <code>//go:build e2e</code> tag, and live under <code>cmd/gmc/test/e2e/</code>.
 They split into three tiers (see <a href="../../design/07-test-plan/#73-end-to-end-tests">design §7.3</a>):</p>
@@ -6154,19 +6253,19 @@ They split into three tiers (see <a href="../../design/07-test-plan/#73-end-to-e
 <li><strong>live-GitHub</strong> — real GitHub workflow dispatch (requires App credentials).</li>
 </ul>
 <p>Typical local run:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-35-1" name="__codelineno-35-1" href="#__codelineno-35-1"></a>make<span class="w"> </span>e2e-cluster<span class="w">        </span><span class="c1"># one-time: create the kind cluster</span>
-<a id="__codelineno-35-2" name="__codelineno-35-2" href="#__codelineno-35-2"></a>make<span class="w"> </span>e2e-images<span class="w">         </span><span class="c1"># builds gmc/agc/proxy/worker/fakegithub, loads into kind</span>
-<a id="__codelineno-35-3" name="__codelineno-35-3" href="#__codelineno-35-3"></a>make<span class="w"> </span>e2e<span class="w">                </span><span class="c1"># runs cluster-only + fake-GitHub</span>
-<a id="__codelineno-35-4" name="__codelineno-35-4" href="#__codelineno-35-4"></a>make<span class="w"> </span>e2e-clean<span class="w">          </span><span class="c1"># tear down when done</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-36-1" name="__codelineno-36-1" href="#__codelineno-36-1"></a>make<span class="w"> </span>e2e-cluster<span class="w">        </span><span class="c1"># one-time: create the kind cluster</span>
+<a id="__codelineno-36-2" name="__codelineno-36-2" href="#__codelineno-36-2"></a>make<span class="w"> </span>e2e-images<span class="w">         </span><span class="c1"># builds gmc/agc/proxy/worker/fakegithub, loads into kind</span>
+<a id="__codelineno-36-3" name="__codelineno-36-3" href="#__codelineno-36-3"></a>make<span class="w"> </span>e2e<span class="w">                </span><span class="c1"># runs cluster-only + fake-GitHub</span>
+<a id="__codelineno-36-4" name="__codelineno-36-4" href="#__codelineno-36-4"></a>make<span class="w"> </span>e2e-clean<span class="w">          </span><span class="c1"># tear down when done</span>
 </code></pre></div>
 <p>For iterating against a single spec without re-creating the cluster, see <a href="../kind-iteration/">kind-iteration.md</a>.
 It also covers pointing AGC at fakegithub vs. real GitHub via the <code>AGC_EXTRA_*</code> env vars and using <code>E2E_SKIP_TEARDOWN=true</code> to keep state between runs.</p>
 <h3 id="questions-about-spec-selection-are-answerable-without-a-cluster">Questions about spec selection are answerable without a cluster<a class="headerlink" href="#questions-about-spec-selection-are-answerable-without-a-cluster" title="Permanent link">&para;</a></h3>
 <p><code>ginkgo run --dry-run</code> walks the spec tree and reports what <em>would</em> run, executing no node: no <code>BeforeSuite</code>, no cluster, no images.
 It still compiles the suite under the <code>e2e</code> tag and still applies <code>--focus</code>, <code>--label-filter</code>, <code>--fail-on-empty</code> and the rest, so anything whose answer is "which specs does this select, and what does the suite do about it" is a seconds-long question rather than a tier:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-36-1" name="__codelineno-36-1" href="#__codelineno-36-1"></a>make<span class="w"> </span>ginkgo
-<a id="__codelineno-36-2" name="__codelineno-36-2" href="#__codelineno-36-2"></a><span class="o">(</span><span class="nb">cd</span><span class="w"> </span>cmd/gmc<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span>../../.build/ginkgo<span class="w"> </span>run<span class="w"> </span>--tags<span class="w"> </span>e2e<span class="w"> </span>--dry-run<span class="w"> </span>--fail-on-empty<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-36-3" name="__codelineno-36-3" href="#__codelineno-36-3"></a><span class="w">    </span>--focus<span class="w"> </span><span class="s1">'E2E_GMC_ProxyServiceCreated'</span><span class="w"> </span>./test/e2e/...<span class="o">)</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-37-1" name="__codelineno-37-1" href="#__codelineno-37-1"></a>make<span class="w"> </span>ginkgo
+<a id="__codelineno-37-2" name="__codelineno-37-2" href="#__codelineno-37-2"></a><span class="o">(</span><span class="nb">cd</span><span class="w"> </span>cmd/gmc<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span>../../.build/ginkgo<span class="w"> </span>run<span class="w"> </span>--tags<span class="w"> </span>e2e<span class="w"> </span>--dry-run<span class="w"> </span>--fail-on-empty<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-37-3" name="__codelineno-37-3" href="#__codelineno-37-3"></a><span class="w">    </span>--focus<span class="w"> </span><span class="s1">'E2E_GMC_ProxyServiceCreated'</span><span class="w"> </span>./test/e2e/...<span class="o">)</span>
 </code></pre></div>
 <p>Measured 2026-08-08 while wiring <code>RUN=</code> onto <code>make e2e</code> (Q679): a real spec name gave <code>Ran 1 of 74 Specs</code> / <code>SUCCESS!</code> and exit 0, a nonsense one gave <code>Ran 0 of 74 Specs</code> / <code>FAIL! - Detected no specs ran and --fail-on-empty is set</code> and exit 1, in 13 seconds total.
 That settled both directions of a filter's behaviour against the actual suite, ahead of CI, with no cluster standing.</p>
@@ -6194,11 +6293,11 @@ Worked example, including the owner-prefix filter that made one such drop safe: 
 The specs here wait minutes for a Deployment, a condition, or a NetworkPolicy to settle, so a timeout's failure message is a bare "never became ready" — and by the time anyone reads it in CI the namespace is gone.
 Seven suites shipped that way, which is what made Q664 undiagnosable and Q666 the fix.</p>
 <p>So a suite that creates a namespace hooks the failure before teardown:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-37-1" name="__codelineno-37-1" href="#__codelineno-37-1"></a><span class="nx">AfterEach</span><span class="p">(</span><span class="kd">func</span><span class="p">()</span><span class="w"> </span><span class="p">{</span>
-<a id="__codelineno-37-2" name="__codelineno-37-2" href="#__codelineno-37-2"></a><span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="nx">CurrentSpecReport</span><span class="p">().</span><span class="nx">Failed</span><span class="p">()</span><span class="w"> </span><span class="p">{</span>
-<a id="__codelineno-37-3" name="__codelineno-37-3" href="#__codelineno-37-3"></a><span class="w">        </span><span class="nx">utils</span><span class="p">.</span><span class="nx">DumpProvisioningDiagnostics</span><span class="p">(</span><span class="nx">gmcNamespace</span><span class="p">,</span><span class="w"> </span><span class="nx">managerDeployment</span><span class="p">,</span><span class="w"> </span><span class="nx">tenantNS</span><span class="p">)</span>
-<a id="__codelineno-37-4" name="__codelineno-37-4" href="#__codelineno-37-4"></a><span class="w">    </span><span class="p">}</span>
-<a id="__codelineno-37-5" name="__codelineno-37-5" href="#__codelineno-37-5"></a><span class="p">})</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-38-1" name="__codelineno-38-1" href="#__codelineno-38-1"></a><span class="nx">AfterEach</span><span class="p">(</span><span class="kd">func</span><span class="p">()</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-38-2" name="__codelineno-38-2" href="#__codelineno-38-2"></a><span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="nx">CurrentSpecReport</span><span class="p">().</span><span class="nx">Failed</span><span class="p">()</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-38-3" name="__codelineno-38-3" href="#__codelineno-38-3"></a><span class="w">        </span><span class="nx">utils</span><span class="p">.</span><span class="nx">DumpProvisioningDiagnostics</span><span class="p">(</span><span class="nx">gmcNamespace</span><span class="p">,</span><span class="w"> </span><span class="nx">managerDeployment</span><span class="p">,</span><span class="w"> </span><span class="nx">tenantNS</span><span class="p">)</span>
+<a id="__codelineno-38-4" name="__codelineno-38-4" href="#__codelineno-38-4"></a><span class="w">    </span><span class="p">}</span>
+<a id="__codelineno-38-5" name="__codelineno-38-5" href="#__codelineno-38-5"></a><span class="p">})</span>
 </code></pre></div>
 <p>Two dumps exist, both in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/test/utils/diagnostics.go"><code>cmd/gmc/test/utils/diagnostics.go</code></a>.
 Pick by what the suite is waiting on:</p>
@@ -6236,7 +6335,7 @@ Putting the dump in a <code>DeferCleanup</code> gives up that ordering: cleanups
 <h3 id="watching-an-e2e-run-in-progress">Watching an e2e run in progress<a class="headerlink" href="#watching-an-e2e-run-in-progress" title="Permanent link">&para;</a></h3>
 <p>At <code>--procs 6</code> Ginkgo's own output is close to silent: it suppresses spec-start entirely in parallel mode, prints a passing spec as a bare <code>•</code>, and two measured CI runs went 98 s and 78 s between any output.
 <code>make e2e</code> therefore runs <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/e2e/progress-watch.sh"><code>scripts/e2e/progress-watch.sh</code></a> alongside the suite, which prints one line per 30 s:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-38-1" name="__codelineno-38-1" href="#__codelineno-38-1"></a>[e2e t+04:12] 31/73 specs | 29 ok, 1 failed, 1 skipped | running: E2E_GMC_Isolation cross... (3m58s), E2E_AGC_WorkerDrain a dr... (2m01s)
+<div class="highlight"><pre><span></span><code><a id="__codelineno-39-1" name="__codelineno-39-1" href="#__codelineno-39-1"></a>[e2e t+04:12] 31/73 specs | 29 ok, 1 failed, 1 skipped | running: E2E_GMC_Isolation cross... (3m58s), E2E_AGC_WorkerDrain a dr... (2m01s)
 </code></pre></div>
 <p>The suite appends spec start/end events to <code>E2E_PROGRESS_FILE</code> (default <code>tmp/e2e-progress.jsonl</code>) and the watcher renders them.
 The two halves are split that way because <strong>Ginkgo intercepts spec stdout</strong>: anything a spec or a <code>ReportAfterEach</code> prints is captured and replayed when the spec ends, so the suite cannot narrate its own progress — only write a file something outside it reads.</p>
@@ -6345,7 +6444,7 @@ Convert before you reason about a latency that spans both.</p>
 <p><strong>Stop a live-GitHub run with SIGTERM, never <code>kill -9</code>.</strong> Ginkgo runs its <code>AfterAll</code> on SIGTERM, which deletes the <code>ActionsGateway</code> CR while the tenant's AGC is still up — the only window in which the <code>agentpool-cleanup</code> finalizer can deregister that tenant's runners from the org.
 Kill the process outright and the namespace wedges in <code>Terminating</code> on a finalizer whose controller has already gone with it, and force-removing that finalizer strands the runner registrations: they keep accepting job assignments, so the <em>next</em> run's job goes <code>in_progress</code> against a runner that no longer exists and no worker pod is ever provisioned (observed 2026-07-29).</p>
 <p>If it has already happened, clear the GitHub side with:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-39-1" name="__codelineno-39-1" href="#__codelineno-39-1"></a>make<span class="w"> </span>e2e-github-cleanup
+<div class="highlight"><pre><span></span><code><a id="__codelineno-40-1" name="__codelineno-40-1" href="#__codelineno-40-1"></a>make<span class="w"> </span>e2e-github-cleanup
 </code></pre></div>
 <p>It deregisters the suite's runners from the fixture repo and cancels any run still in flight there — a job assigned to a runner that no longer exists never completes on its own, and the preflight blocks on it either way.
 It reads <code>GITHUB_E2E_ORG</code>/<code>GITHUB_E2E_REPO</code>, confirms before acting, and takes <code>ARGS='--dry-run'</code> to report without changing anything.
@@ -6413,8 +6512,8 @@ An interrupted probe, a deleted <code>ActionsGateway</code>, or a renamed <code>
 Scale sets live on the Actions Service (<code>_apis/runtime/runnerscalesets</code>) behind the registration-token → <code>RemoteAuth</code> admin JWT, not on the REST API, so <code>gh api</code> cannot reach them at all, and <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/e2e/e2e-github-cleanup.sh"><code>e2e-github-cleanup.sh</code></a>, which clears runner <em>records</em> and workflow runs, does not cover them.
 Until Q344 nothing could list them either: <code>Client</code> could fetch a scale set by id or by name, and an orphan's name is the thing you do not have.</p>
 <p><code>Client.ListRunnerScaleSets</code> is that missing route, and the probe's cleanup mode is the operator entry point:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-40-1" name="__codelineno-40-1" href="#__codelineno-40-1"></a><span class="c1"># Report every scale set registered against the scope. Deletes nothing.</span>
-<a id="__codelineno-40-2" name="__codelineno-40-2" href="#__codelineno-40-2"></a><span class="nv">GITHUB_APP_ID</span><span class="o">=</span>…<span class="w"> </span><span class="nv">GITHUB_APP_INSTALLATION_ID</span><span class="o">=</span>…<span class="w"> </span><span class="nv">GITHUB_APP_PRIVATE_KEY</span><span class="o">=</span>/path/to/key.pem<span class="w"> </span><span class="nv">GITHUB_ORG_URL</span><span class="o">=</span>https://github.com/&lt;org&gt;/&lt;repo&gt;<span class="w"> </span><span class="nv">PROBE_SCALESET_TEST</span><span class="o">=</span><span class="nb">true</span><span class="w"> </span><span class="nv">PROBE_SCALESET_CLEANUP</span><span class="o">=</span><span class="nb">true</span><span class="w"> </span><span class="nv">PROBE_SCALESET_DRY_RUN</span><span class="o">=</span><span class="nb">true</span><span class="w"> </span><span class="nv">PROBE_SCALESET_NAME</span><span class="o">=</span>no-such-set<span class="w"> </span>go<span class="w"> </span>run<span class="w"> </span>-C<span class="w"> </span>cmd/probe<span class="w"> </span>.
+<div class="highlight"><pre><span></span><code><a id="__codelineno-41-1" name="__codelineno-41-1" href="#__codelineno-41-1"></a><span class="c1"># Report every scale set registered against the scope. Deletes nothing.</span>
+<a id="__codelineno-41-2" name="__codelineno-41-2" href="#__codelineno-41-2"></a><span class="nv">GITHUB_APP_ID</span><span class="o">=</span>…<span class="w"> </span><span class="nv">GITHUB_APP_INSTALLATION_ID</span><span class="o">=</span>…<span class="w"> </span><span class="nv">GITHUB_APP_PRIVATE_KEY</span><span class="o">=</span>/path/to/key.pem<span class="w"> </span><span class="nv">GITHUB_ORG_URL</span><span class="o">=</span>https://github.com/&lt;org&gt;/&lt;repo&gt;<span class="w"> </span><span class="nv">PROBE_SCALESET_TEST</span><span class="o">=</span><span class="nb">true</span><span class="w"> </span><span class="nv">PROBE_SCALESET_CLEANUP</span><span class="o">=</span><span class="nb">true</span><span class="w"> </span><span class="nv">PROBE_SCALESET_DRY_RUN</span><span class="o">=</span><span class="nb">true</span><span class="w"> </span><span class="nv">PROBE_SCALESET_NAME</span><span class="o">=</span>no-such-set<span class="w"> </span>go<span class="w"> </span>run<span class="w"> </span>-C<span class="w"> </span>cmd/probe<span class="w"> </span>.
 </code></pre></div>
 <p>Each line carries the id, name, runner group, and labels, which is what an operator compares against the <code>RunnerSet</code>s the cluster declares.
 <code>PROBE_SCALESET_PRUNE_PREFIX=&lt;prefix&gt;</code> then deletes every scale set whose name starts with that prefix; drop <code>PROBE_SCALESET_DRY_RUN</code> to act.</p>
@@ -6428,7 +6527,7 @@ The listing was fired at a known positive first, a scale set deliberately left r
 That gap hid <strong>Q444</strong> — an apiserver that stops resolving the PriorityClass guard's parameter and denies <strong>every</strong> <code>runnergroups</code>/<code>runnersets</code>/<code>runnertemplates</code> write cluster-wide.</p>
 <p><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/e2e/chart-reinstall-check.sh"><code>scripts/e2e/chart-reinstall-check.sh</code></a> closes it.
 It runs against a cluster that already has the release installed, captures the release's own values, cycles <code>helm uninstall</code> -&gt; <code>helm install</code>, and probes admission — printing a diagnostic dump (policy, binding, <code>paramRef</code> target, the param object's existence and UID) that separates a broken manifest from a broken apiserver.</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-41-1" name="__codelineno-41-1" href="#__codelineno-41-1"></a>make<span class="w"> </span>chart-reinstall-check<span class="w"> </span><span class="nv">KIND_CLUSTER</span><span class="o">=</span>actions-gateway-e2e
+<div class="highlight"><pre><span></span><code><a id="__codelineno-42-1" name="__codelineno-42-1" href="#__codelineno-42-1"></a>make<span class="w"> </span>chart-reinstall-check<span class="w"> </span><span class="nv">KIND_CLUSTER</span><span class="o">=</span>actions-gateway-e2e
 </code></pre></div>
 <p>It ran as a <strong>reproducer, not a gate</strong>, while Q444 was open — the defect was unfixed, so wiring it in would have pinned every run red.
 <strong>Q492 made it a gate</strong>: the guard's <code>paramKind</code> moved from a <code>ConfigMap</code> to the cluster-scoped <code>PriorityClassAllowlist</code> CRD, for which the apiserver allocates a fresh dynamic informer per context rather than tearing down a shared one, so the cycle is now expected to pass.
@@ -6473,7 +6572,7 @@ That ambiguity is why the deterministic reproducer below exists alongside it.</p
 <p>Arm 1 vs arm 2 isolates the trigger to the empty-set transition.
 <strong>Arm 3 vs arm 2</strong> — the byte-identical transition one GVK apart — is the measured evidence that moving the <code>paramKind</code> to a CRD is a fix rather than an inference from reading the apiserver source.
 Arm 3 runs before arm 2 so a pass cannot be attributed to contamination.</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-42-1" name="__codelineno-42-1" href="#__codelineno-42-1"></a><span class="nv">KUBE_CONTEXT</span><span class="o">=</span>kind-q444-lab<span class="w"> </span>scripts/e2e/vap-param-informer-check.sh
+<div class="highlight"><pre><span></span><code><a id="__codelineno-43-1" name="__codelineno-43-1" href="#__codelineno-43-1"></a><span class="nv">KUBE_CONTEXT</span><span class="o">=</span>kind-q444-lab<span class="w"> </span>scripts/e2e/vap-param-informer-check.sh
 </code></pre></div>
 <p><strong>Disposable clusters only</strong> — arm 2 permanently breaks ConfigMap param resolution for the target apiserver process, and the script refuses a non-<code>kind-</code> context unless <code>ALLOW_NON_KIND=1</code>.
 It stays out of CI for that reason, and because it pins an <em>upstream</em> defect our own code no longer depends on; re-run it by hand on a new Kubernetes minor to confirm arm 3 still holds.
@@ -6504,7 +6603,7 @@ Against a cluster that already has the release installed, it captures the releas
 </tbody>
 </table>
 <p>It also asserts a pre-existing RunnerGroup survives with its <strong>UID</strong> intact (an upgrade that recreated CRs would destroy tenant state), that the validating webhook still denies an <code>ActionsGateway</code> in a reserved namespace at every step, and that upgrading back to the real chart <strong>removes</strong> both markers — so the cluster is left as it was found.</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-43-1" name="__codelineno-43-1" href="#__codelineno-43-1"></a>make<span class="w"> </span>chart-upgrade-check<span class="w"> </span><span class="nv">KIND_CLUSTER</span><span class="o">=</span>actions-gateway-e2e
+<div class="highlight"><pre><span></span><code><a id="__codelineno-44-1" name="__codelineno-44-1" href="#__codelineno-44-1"></a>make<span class="w"> </span>chart-upgrade-check<span class="w"> </span><span class="nv">KIND_CLUSTER</span><span class="o">=</span>actions-gateway-e2e
 </code></pre></div>
 <p>Like the reinstall gate above, this one is wired into CI: <code>e2e-reusable.yml</code> runs it after the Ginkgo suite, which leaves the release up under <code>E2E_SKIP_TEARDOWN</code>, and before the reinstall gate (which destroys the release).
 It runs only on the kindnet leg — <code>helm upgrade</code> semantics are CNI-independent, so <code>e2e-calico.yml</code> passes <code>chart_upgrade_check: false</code> and the calico leg pays nothing for it.
@@ -6551,7 +6650,7 @@ A new release re-points the gate automatically — nothing to bump.
 Two deliberate consequences: a stable tag whose chart publish failed <strong>fails this gate loudly</strong> at <code>helm pull</code> (operators can't install that release either — fix the publish, see <a href="../../operations/release/">release.md</a>); and a repo with no stable tag yet (a fresh fork) <strong>skips cleanly</strong>.
 The chart package and the released GMC image must be publicly pullable from GHCR (they are — see release.md's one-time setup); both pulls are retried.
 Override <code>RELEASED_TAG</code> / <code>RELEASED_CHART_OCI</code> to test a specific tag or registry.</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-44-1" name="__codelineno-44-1" href="#__codelineno-44-1"></a>make<span class="w"> </span>chart-released-upgrade-check<span class="w"> </span><span class="nv">KIND_CLUSTER</span><span class="o">=</span>actions-gateway-e2e
+<div class="highlight"><pre><span></span><code><a id="__codelineno-45-1" name="__codelineno-45-1" href="#__codelineno-45-1"></a>make<span class="w"> </span>chart-released-upgrade-check<span class="w"> </span><span class="nv">KIND_CLUSTER</span><span class="o">=</span>actions-gateway-e2e
 </code></pre></div>
 <p>Wired into <code>e2e-reusable.yml</code> <strong>last</strong> among the chart checks — it uninstalls the live release and leaves the cluster on a fresh released→HEAD release, which would invalidate the other checks' baseline.
 Kindnet leg only (<code>e2e-calico.yml</code> passes <code>released_upgrade_check: false</code>): the property is pure Helm semantics, CNI-independent.</p>
@@ -6648,9 +6747,9 @@ For any Go / CRD / chart change you should see runs for <code>build</code>, <cod
 <p><strong><code>e2e</code> and <code>e2e-calico</code> are not on that list, by design (Q675).</strong> Both lanes are merge-group-only, so on a pull request their heavy jobs are <em>always</em> skipped and only the <code>e2e-gate</code> / <code>e2e-calico-gate</code> contexts report.
 An absent e2e run on a PR is therefore the expected state and not a symptom: do not close/reopen chasing one, and do not read the green gate as evidence the suite ran.
 The e2e verdict for a change arrives on its queue entry; to get one earlier, run <code>make e2e</code> locally or dispatch the workflow.</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-45-1" name="__codelineno-45-1" href="#__codelineno-45-1"></a>gh<span class="w"> </span>pr<span class="w"> </span>view<span class="w"> </span>&lt;n&gt;<span class="w"> </span>--json<span class="w"> </span>headRefOid<span class="w"> </span>--jq<span class="w"> </span>.headRefOid<span class="w">   </span><span class="c1"># the SHA every check must be attached to</span>
-<a id="__codelineno-45-2" name="__codelineno-45-2" href="#__codelineno-45-2"></a>gh<span class="w"> </span>pr<span class="w"> </span>checks<span class="w"> </span>&lt;n&gt;<span class="w">                                    </span><span class="c1"># are the expected gates PRESENT — not merely un-red?</span>
-<a id="__codelineno-45-3" name="__codelineno-45-3" href="#__codelineno-45-3"></a>gh<span class="w"> </span>run<span class="w"> </span>list<span class="w"> </span>--commit<span class="w"> </span>&lt;sha&gt;<span class="w"> </span>--limit<span class="w"> </span><span class="m">30</span><span class="w">               </span><span class="c1"># which workflows actually ran, for THAT commit only</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-46-1" name="__codelineno-46-1" href="#__codelineno-46-1"></a>gh<span class="w"> </span>pr<span class="w"> </span>view<span class="w"> </span>&lt;n&gt;<span class="w"> </span>--json<span class="w"> </span>headRefOid<span class="w"> </span>--jq<span class="w"> </span>.headRefOid<span class="w">   </span><span class="c1"># the SHA every check must be attached to</span>
+<a id="__codelineno-46-2" name="__codelineno-46-2" href="#__codelineno-46-2"></a>gh<span class="w"> </span>pr<span class="w"> </span>checks<span class="w"> </span>&lt;n&gt;<span class="w">                                    </span><span class="c1"># are the expected gates PRESENT — not merely un-red?</span>
+<a id="__codelineno-46-3" name="__codelineno-46-3" href="#__codelineno-46-3"></a>gh<span class="w"> </span>run<span class="w"> </span>list<span class="w"> </span>--commit<span class="w"> </span>&lt;sha&gt;<span class="w"> </span>--limit<span class="w"> </span><span class="m">30</span><span class="w">               </span><span class="c1"># which workflows actually ran, for THAT commit only</span>
 </code></pre></div>
 <p>Read the output as a <strong>checklist against the expected set above</strong>, not as a pass/fail summary.
 A PR with zero rows, or with only the lightweight docs workflows listed, has not been tested — it just has nothing to fail.</p>
@@ -6674,8 +6773,8 @@ The watcher's <code>ready</code> event already means checks concluded, so it is 
 <p><strong>A skipped job does not mean its steps did not run — resolve the step's owning job, not its file.</strong> <code>gh pr checks</code> reports <em>job</em> names, and a <code>make</code> target's home is a job, not a workflow file: grepping <code>unit-test.yml</code> for <code>scripts-test</code> finds it, but that step lives in the same file's <strong><code>shellcheck</code></strong> job, so a skipped <code>unit-test</code> says nothing about whether the scripts tests ran.
 Reading the workflow source to answer "did my test run?" gives the wrong answer in exactly the case you are checking.
 Resolve it from the run:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-46-1" name="__codelineno-46-1" href="#__codelineno-46-1"></a>gh<span class="w"> </span>run<span class="w"> </span>view<span class="w"> </span>&lt;run-id&gt;<span class="w"> </span>--json<span class="w"> </span><span class="nb">jobs</span><span class="w"> </span>--jq<span class="w"> </span><span class="s1">'.jobs[] | [.name, .conclusion] | @tsv'</span><span class="w">   </span><span class="c1"># which jobs, which verdict</span>
-<a id="__codelineno-46-2" name="__codelineno-46-2" href="#__codelineno-46-2"></a>gh<span class="w"> </span>run<span class="w"> </span>view<span class="w"> </span>&lt;run-id&gt;<span class="w"> </span>--log<span class="w"> </span>--job<span class="w"> </span>&lt;job-id&gt;<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span><span class="s1">'&lt;an assertion you expect&gt;'</span><span class="w">    </span><span class="c1"># did it actually execute</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-47-1" name="__codelineno-47-1" href="#__codelineno-47-1"></a>gh<span class="w"> </span>run<span class="w"> </span>view<span class="w"> </span>&lt;run-id&gt;<span class="w"> </span>--json<span class="w"> </span><span class="nb">jobs</span><span class="w"> </span>--jq<span class="w"> </span><span class="s1">'.jobs[] | [.name, .conclusion] | @tsv'</span><span class="w">   </span><span class="c1"># which jobs, which verdict</span>
+<a id="__codelineno-47-2" name="__codelineno-47-2" href="#__codelineno-47-2"></a>gh<span class="w"> </span>run<span class="w"> </span>view<span class="w"> </span>&lt;run-id&gt;<span class="w"> </span>--log<span class="w"> </span>--job<span class="w"> </span>&lt;job-id&gt;<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span><span class="s1">'&lt;an assertion you expect&gt;'</span><span class="w">    </span><span class="c1"># did it actually execute</span>
 </code></pre></div>
 <p>The grepped log line is the proof the assertion ran; the job's conclusion only proves nothing in it failed — and a job that ran nothing also fails nothing.</p>
 <p><strong>Absence of checks is not green (Q383).</strong> There are two distinct ways a PR ends up under-tested, and they need different fixes:</p>
@@ -6823,12 +6922,12 @@ All three have local equivalents so you can reproduce a CI verdict before pushin
 <p><strong>govulncheck</strong> — scans each workspace module for vulnerabilities reachable from our code (Go stdlib + dependency CVEs).
 It is symbol-precise: a CVE in a dependency only fails the gate if our code actually calls the affected path.
 Run it locally with:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-47-1" name="__codelineno-47-1" href="#__codelineno-47-1"></a>make vulncheck
+<div class="highlight"><pre><span></span><code><a id="__codelineno-48-1" name="__codelineno-48-1" href="#__codelineno-48-1"></a>make vulncheck
 </code></pre></div>
 <p>A finding usually means bumping the Go toolchain (<code>go</code> directive in <code>go.work</code> + every <code>go.mod</code>, kept in lockstep) for a stdlib CVE, or <code>go get</code>-ing the fixed dependency version for a module CVE.</p>
 <p><strong>trivy</strong> — builds each of the seven images and scans it for fixable HIGH/CRITICAL CVEs in OS packages and bundled libraries.
 Run it locally (requires <code>trivy</code> and <code>docker</code> on <code>PATH</code>) with:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-48-1" name="__codelineno-48-1" href="#__codelineno-48-1"></a>make trivy-scan
+<div class="highlight"><pre><span></span><code><a id="__codelineno-49-1" name="__codelineno-49-1" href="#__codelineno-49-1"></a>make trivy-scan
 </code></pre></div>
 <p>The five images we build from a minimal/distroless or scratch base (<code>gmc</code>, <code>agc</code>, <code>proxy</code>, <code>fakegithub</code>, and the <code>FROM scratch</code> <code>wrapper</code>) <strong>block</strong> the gate — every package in them is one we chose, so a finding is actionable by bumping a dependency or the base digest.
 The <code>worker</code> image is built <code>FROM</code> the upstream <code>ghcr.io/actions/actions-runner</code> and inherits CVEs in the bundled node20 runtime and the runner's own Go binaries that we cannot fix without forking the runner; its leg is the sole <strong>report-only</strong> one (findings printed, never blocks).
@@ -6842,7 +6941,7 @@ The signing/attestation steps run only on publish, so PR CI does not exercise th
 The gate <strong>fails on <code>danger</code> findings only</strong> (privileged container, host namespace, dangerous capabilities, missing <code>securityContext</code>, a floating <code>:latest</code> image tag) — a real posture regression in the chart cannot merge — while <code>warning</code>s are reported for visibility.
 False-positive warnings against a Helm-packaged operator chart are tuned to <code>ignore</code> in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/charts/actions-gateway/polaris.yaml"><code>charts/actions-gateway/polaris.yaml</code></a> (via <code>--merge-config</code>, so every default <code>danger</code> check stays active), each with a justifying comment.
 Run it locally (requires <code>helm</code> and <code>polaris</code> on <code>PATH</code>) with:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-49-1" name="__codelineno-49-1" href="#__codelineno-49-1"></a>make polaris-scan
+<div class="highlight"><pre><span></span><code><a id="__codelineno-50-1" name="__codelineno-50-1" href="#__codelineno-50-1"></a>make polaris-scan
 </code></pre></div>
 <p>This <code>polaris</code> job is path-gated on the chart (and <code>Makefile</code>).
 The operator-facing writeup — including the manual <code>kube-bench</code> CIS scan that complements polaris at the live-cluster layer — is in <a href="../../operations/security-operations/#posture-scanning-preventive">security-operations.md</a>.</p>
@@ -6851,7 +6950,7 @@ The operator-facing writeup — including the manual <code>kube-bench</code> CIS
 <p>The <code>manifest-validate.yml</code> workflow checks that the <strong>shipped install artifact</strong> — the <a href="https://github.com/actions-gateway/github-actions-gateway/tree/main/charts/actions-gateway"><code>actions-gateway</code> Helm chart</a>, the sole install path (Q142) — is well-formed and schema-valid, so a malformed RBAC/CRD/policy file cannot merge silently.
 It is independent of the security gates above (validity, not posture) and path-gated on the manifests, the chart, and the <code>Makefile</code>.
 Run the exact gate locally (requires <code>yamllint</code>, <code>kubeconform</code>, and <code>helm</code> on <code>PATH</code>) with:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-50-1" name="__codelineno-50-1" href="#__codelineno-50-1"></a>make manifest-validate
+<div class="highlight"><pre><span></span><code><a id="__codelineno-51-1" name="__codelineno-51-1" href="#__codelineno-51-1"></a>make manifest-validate
 </code></pre></div>
 <p>It first runs the chart CRD/RBAC drift gates (<code>make chart-crds-check</code> + <code>make chart-rbac-check</code>: the chart's CRD templates and <code>manager-role</code> rules are generated from the controller-gen sources under <code>cmd/*/config/</code>, so a marker change that isn't propagated fails here), then runs two layers over <code>cmd/*/config/**</code> and <a href="https://github.com/actions-gateway/github-actions-gateway/tree/main/charts/actions-gateway"><code>charts/actions-gateway</code></a>:</p>
 <ul>

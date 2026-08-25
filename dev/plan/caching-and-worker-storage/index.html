@@ -1394,6 +1394,8 @@
       
         
       
+        
+      
     
     
     
@@ -1763,6 +1765,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../../operations/worker-shared-storage/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Shared worker storage (RWX)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../../operations/in-runner-image-builds/" class="md-nav__link">
         
   
@@ -1902,10 +1932,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9_17" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9_18" >
         
           
-          <label class="md-nav__link" for="__nav_9_17" id="__nav_9_17_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_9_18" id="__nav_9_18_label" tabindex="0">
             
   
   
@@ -1923,8 +1953,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_9_17_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_9_17">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_9_18_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9_18">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -2715,7 +2745,9 @@
 
 <h1 id="caching-and-worker-storage">Caching and Worker Storage<a class="headerlink" href="#caching-and-worker-storage" title="Permanent link">&para;</a></h1>
 <blockquote>
-<p><strong>Status: goal stated 2026-08-07, nothing built.</strong> This is a map and a definition of done, not a design.
+<p><strong>Status: goal stated 2026-08-07; one of its seven definition-of-done items closed 2026-08-24.</strong> This is a map and a definition of done, not a design.
+The storage half is the one that closed (Q719, item 5): see <a href="../../operations/worker-shared-storage/">worker-shared-storage.md</a>.
+Every cache half is still unbuilt.
 The image-pull half already has a design in <a href="../q408-untrusted-pr-egress/">q408-untrusted-pr-egress.md</a> and is not restated here.
 The job-cache and storage halves have no design yet, and the first thing this document does is establish that they are three different problems.</p>
 </blockquote>
@@ -2775,8 +2807,8 @@ Do not read this table as three deployments.</p>
 <tr>
 <td><strong>Shared job storage</strong></td>
 <td>A <code>ReadWriteMany</code> volume several jobs mount to pass files</td>
-<td>Unvalidated. Also what ARC's <code>containerMode: kubernetes</code> needs, so it is a migration blocker</td>
-<td><a href="../../queue/Q719/">Q719</a></td>
+<td>Validated 2026-08-24 and documented as a reference architecture: <a href="../../operations/worker-shared-storage/">worker-shared-storage.md</a>. Also what ARC's <code>containerMode: kubernetes</code> needs</td>
+<td>Closed (Q719)</td>
 </tr>
 </tbody>
 </table>
@@ -2836,8 +2868,10 @@ It should be scoped as "what cache can an untrusted job be given", and the stora
 <li>Cache entries written by an untrusted fork pull request cannot be read by a trusted job of the same tenant, or that boundary is explicitly declared absent with a reason.</li>
 <li>The write path is contracted, not incidental: whatever endpoint accepts a cache save states what it accepts, from whom, and what it refuses, in the same form <a href="../q408-untrusted-pr-egress/#35-the-mirror-role-is-a-contract">q408 §3.5</a> states the read path.
    Four properties for the mirror, its own set for this.</li>
-<li>A <code>ReadWriteMany</code> volume is mounted into a worker in a validated reference architecture, and the storage classes it has been exercised against are named.
-   Failing that, the stance that workers stay storage-less is written down as a decision with its migration consequence for ARC's <code>containerMode: kubernetes</code>.</li>
+<li>✅ <strong>Closed 2026-08-24 (Q719).</strong> A <code>ReadWriteMany</code> volume is mounted into a worker in a validated reference architecture, and the storage classes it has been exercised against are named: <a href="../../operations/worker-shared-storage/">worker-shared-storage.md</a>.
+   Both halves landed rather than one instead of the other.
+   The stance is written down (workers stay storage-less; a shared volume is a tenant <code>podTemplate</code> concern GAG never provisions), with its migration consequence for ARC's <code>containerMode: kubernetes</code>, and <code>make test-rwx-storage</code> is what keeps the reference architecture a measurement.
+   One class has been exercised, <code>gag-rwx-nfs</code> over csi-driver-nfs v4.13.4; every cloud filesystem is explicitly unvalidated, and the harness takes the class to test in <code>RWX_STORAGE_CLASS</code> so an operator can close that on their own.</li>
 <li>The cost claim is measured, not asserted: egress bytes and restore latency with and without the local cache, on one real workload.</li>
 </ol>
 <h2 id="explicitly-out-of-scope">Explicitly out of scope<a class="headerlink" href="#explicitly-out-of-scope" title="Permanent link">&para;</a></h2>
@@ -2861,8 +2895,8 @@ ARC has none either, so this is not a reason to prefer ARC; GitLab Runner and th
 <p>Do not claim a local cache, a shared build cache, or persistent worker storage.
 Do not repeat that <code>actions/cache</code> has no home.</p>
 <h2 id="deliverables">Deliverables<a class="headerlink" href="#deliverables" title="Permanent link">&para;</a></h2>
-<p>Shipped: per-tenant egress that admits the Actions cache data plane; the registry-mirror contract and the Athens pattern it derives from.</p>
-<p>Open, with rows: <a href="../../queue/Q408/">Q408</a> (mirror design and phases), <a href="../../queue/Q539/">Q539</a> (Dragonfly as the mirror backend), <a href="../../queue/Q540/">Q540</a> (composed node-layer and guest-layer stack), <a href="../../queue/Q215/">Q215</a> (job and build-layer cache, blocked on the isolation review this document reframes as the design), <a href="../../queue/Q719/">Q719</a> (RWX validation and the reference-architecture stance), <a href="../../queue/Q268/">Q268</a> (warm worker pool, the competing lever for the latency half of the same complaint).</p>
+<p>Shipped: per-tenant egress that admits the Actions cache data plane; the registry-mirror contract and the Athens pattern it derives from; the RWX validation and the reference-architecture stance (Q719, <a href="../../operations/worker-shared-storage/">worker-shared-storage.md</a>).</p>
+<p>Open, with rows: <a href="../../queue/Q408/">Q408</a> (mirror design and phases), <a href="../../queue/Q539/">Q539</a> (Dragonfly as the mirror backend), <a href="../../queue/Q540/">Q540</a> (composed node-layer and guest-layer stack), <a href="../../queue/Q215/">Q215</a> (job and build-layer cache, blocked on the isolation review this document reframes as the design), <a href="../../queue/Q268/">Q268</a> (warm worker pool, the competing lever for the latency half of the same complaint).</p>
 <p><strong>Scope note for Q539 and Q540.</strong> Both are currently written as image-only validations.
 Because the candidate backend is a general file distributor, both should also answer whether <em>one</em> deployment serves the artifact class as well, and at what cost to the §3.5 contract.
 Answering it there is nearly free while the deployment is already stood up, and expensive later.

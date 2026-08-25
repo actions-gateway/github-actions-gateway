@@ -1485,6 +1485,8 @@
       
         
       
+        
+      
     
     
     
@@ -1854,6 +1856,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../../operations/worker-shared-storage/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Shared worker storage (RWX)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../../operations/in-runner-image-builds/" class="md-nav__link">
         
   
@@ -1993,10 +2023,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9_17" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9_18" >
         
           
-          <label class="md-nav__link" for="__nav_9_17" id="__nav_9_17_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_9_18" id="__nav_9_18_label" tabindex="0">
             
   
   
@@ -2014,8 +2044,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_9_17_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_9_17">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_9_18_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9_18">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -2902,7 +2932,8 @@ Ginkgo earns its place in e2e specifically — a shared expensive cluster fixtur
   Cancel the reconciler's context (simulating SIGTERM).
   Assert the AGC issues <code>DELETE /sessions/{id}</code> for every registered session before the context fully unwinds, confirmed by the fake broker.
   Assert no goroutine leak via <code>goleak.VerifyNone</code>.</li>
-<li><strong>Worker-pod reaper</strong> — Verify the RunnerGroup reconciler's reaper against a real apiserver: a worker pod advanced to a terminal phase via the status subresource is deleted once <code>completedPodTTL</code> elapses, driven by the real Pod watch and the reconciler's <code>RequeueAfter</code> timer (<code>TestAGC_Reaper_CompletedPodDeletedAfterTTL</code>); a pod that never schedules (envtest has no scheduler, so every pod is genuinely Pending) is deleted once <code>pendingPodDeadline</code> elapses, while a fresh Pending pod within the deadline survives (<code>TestAGC_Reaper_StuckPendingPodDeletedAfterDeadline</code>); and a pod created through the real provisioner path carries a controller <code>OwnerReference</code> to its RunnerGroup with the apiserver-assigned UID (<code>TestAGC_Reaper_WorkerPodHasOwnerRef</code>).
+<li>
+<p><strong>Worker-pod reaper</strong> — Verify the RunnerGroup reconciler's reaper against a real apiserver: a worker pod advanced to a terminal phase via the status subresource is deleted once <code>completedPodTTL</code> elapses, driven by the real Pod watch and the reconciler's <code>RequeueAfter</code> timer (<code>TestAGC_Reaper_CompletedPodDeletedAfterTTL</code>); a pod that never schedules (envtest has no scheduler, so every pod is genuinely Pending) is deleted once <code>pendingPodDeadline</code> elapses, while a fresh Pending pod within the deadline survives (<code>TestAGC_Reaper_StuckPendingPodDeletedAfterDeadline</code>); and a pod created through the real provisioner path carries a controller <code>OwnerReference</code> to its RunnerGroup with the apiserver-assigned UID (<code>TestAGC_Reaper_WorkerPodHasOwnerRef</code>).
   The ownerRef <em>cascade</em> is not provable in envtest — there is no kube-controller-manager, so no GC controller runs — which is why the cascade hook is asserted here and the operational cleanup behaviour at cluster-only.
   The Running arm is proven on the v2 side (<code>TestV2_RunnerSet_OrphanedRunningPodReaped</code>): a worker pod driven to <code>Running</code> and stamped <code>actions-gateway.com/job-completed-at</code> past the five-minute grace is deleted, while one stamped inside the grace and one with no stamp at all (its job is still assigned) both survive (Q420).
   The grace is a constant, so the test back-dates the stamp rather than waiting it out.
@@ -2911,7 +2942,16 @@ Ginkgo earns its place in e2e specifically — a shared expensive cluster fixtur
   It ran live across two rungs of one armed experiment and answered the question in the permissive direction: redelivery to a fresh session confirmed at a <strong>29-second</strong> gap on 2026-07-28, and again at a <strong>13 h 3 m</strong> gap on 2026-07-29 — past the 12 h <code>maxWorkerLifetime</code> beyond which no unstamped <code>Running</code> worker survives for redelivery to help, so the fake's never-expiring queue log is a sound assumption over the range that matters (Q468).
   It is a lower bound observed once, not a contract: <code>LOST</code> was never reached, so nothing here licenses deriving a timeout from it.
   See <a href="../../plan/archive/q468-jobcompleted-retention/">the plan doc</a>.
-  <strong>The lifetime cap that closes that residual</strong> is measured by two more tests (Q438): <code>TestV2_RunnerSet_ScaleSet_WorkerCarriesLifetimeDeadline</code> asserts a worker created through the real scale-set provisioning path carries the RunnerSet's <code>maxWorkerLifetime</code> as its <code>activeDeadlineSeconds</code> — against a real apiserver, so a defaulting bug producing an invalid deadline fails admission rather than a struct comparison; and <code>TestV2_RunnerSet_RestartReclaimsWorkerKilledByLifetimeCap</code> stages the same unstamped <code>Running</code> orphan the test above proves is retained forever, drives it to the <code>Failed</code>/<code>DeadlineExceeded</code> state a kubelet leaves behind, and asserts a restarted AGC reclaims it under <code>reason="lifetime_exceeded"</code> while a still-<code>Running</code> control survives. envtest runs no kubelet, so the kill itself is staged and everything downstream of it is the code under test.</li>
+  <strong>The lifetime cap that closes that residual</strong> is measured by two more tests (Q438): <code>TestV2_RunnerSet_ScaleSet_WorkerCarriesLifetimeDeadline</code> asserts a worker created through the real scale-set provisioning path carries the RunnerSet's <code>maxWorkerLifetime</code> as its <code>activeDeadlineSeconds</code> — against a real apiserver, so a defaulting bug producing an invalid deadline fails admission rather than a struct comparison; and <code>TestV2_RunnerSet_RestartReclaimsWorkerKilledByLifetimeCap</code> stages the same unstamped <code>Running</code> orphan the test above proves is retained forever, drives it to the <code>Failed</code>/<code>DeadlineExceeded</code> state a kubelet leaves behind, and asserts a restarted AGC reclaims it under <code>reason="lifetime_exceeded"</code> while a still-<code>Running</code> control survives. envtest runs no kubelet, so the kill itself is staged and everything downstream of it is the code under test.</p>
+</li>
+<li>
+<p><strong>Shared worker storage (Q719).</strong> Workers are storage-less and the provisioner provisions no volume of its own, so a <code>ReadWriteMany</code> volume several jobs pass files through is entirely a tenant <code>podTemplate</code> concern.
+  That splits the criteria across three tiers by what each can observe, and none of them subsumes another.
+  Unit (<code>worker_shared_storage_test.go</code>) pins that the tenant's claim reference survives the provisioner's own volume injection and that <code>fsGroup</code> survives <code>applySecurityDefaults</code> on every profile, with <code>TestBuildPod_NoFSGroupIsLeftUnset</code> as the control that the field is the tenant's rather than something GAG stamps. envtest (<code>q719_shared_storage_test.go</code>) adds the only thing a fake client cannot fail on: the <code>RunnerTemplate</code> CustomResourceDefinition is 1.2 MB of generated OpenAPI wrapping a full <code>PodTemplateSpec</code>, and a property it fails to publish is pruned on write, so the tenant applies a claim reference and the apiserver stores a template without one, silently.
+  Neither can mount anything, which needs a kubelet, a Container Storage Interface (CSI) driver and two nodes: <code>make test-rwx-storage</code> runs the pod the provisioner really builds on both nodes of a kind cluster and requires them to exchange files through one claim, with a control asserting that <strong>without</strong> <code>fsGroup</code> the runner's write is refused.
+  That control is the measurement behind the reference architecture's one hard requirement, and it is what a design-time argument would have got wrong: a freshly provisioned volume's root belongs to root, and the gap-filled UID 1001 is neither root nor in a group that owns it.
+  See <a href="../../operations/worker-shared-storage/">worker-shared-storage.md</a> and <a href="../../development/testing/#the-shared-worker-storage-validation">testing.md</a>.</p>
+</li>
 </ul>
 <hr />
 <h2 id="73-end-to-end-tests">7.3. End-to-End Tests<a class="headerlink" href="#73-end-to-end-tests" title="Permanent link">&para;</a></h2>
