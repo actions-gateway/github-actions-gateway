@@ -344,19 +344,23 @@ What a fresh worktree still pays, and why it stays:
 ### The fast gates fan out past the heavy-build semaphore
 
 `serialize_heavy_build` bounds how many heavy phases run at once across sessions, and the fast gates are outside it.
-`make scripts-test` calls [`run-parallel.sh`](../../scripts/ci/run-parallel.sh), which launches every command with `&` and then waits; there is no cap in it, and no `scripts/ci/` script takes the lock.
+`make scripts-test` calls [`run-parallel.sh`](../../scripts/ci/run-parallel.sh), which launches every spec with `&` into a pid list and then waits.
+There is no cap in it, and none of the suites it launches takes the lock: only `scripts/go/{go-test,go-lint,go-vet-tags,coverage,go-test-integration}.sh` call `serialize_heavy_build`, and the suites that exercise them either source the script without invoking `main` or set `GAG_HEAVY_BUILD_LOCK_HELD=1`.
 
-Measured 2026-08-24 by sampling live processes during a real run, not by reading the loop: 93 distinct suite scripts running at once, peaking at 221 processes, against the 96 suites the gate list names.
-The distinct count sat flat at 92 or 93 from the first sample while the process count decayed from 221, which is what launching everything at once looks like; a capped runner plateaus at its cap instead.
-
-So on an 18-core box a session in its fast gates is at ~93-way fan-out with no machine-wide bound, next to a sibling whose heavy phase holds one of two lock slots and gets no protection from it.
+`SCRIPTS_TESTS` holds 96, so all 96 start at once by construction.
+That is a property of the runner rather than a measurement, and no sampling improves on it.
+So a session in its fast gates has no machine-wide bound while a sibling's heavy phase holds one of two lock slots.
 That is the contention [Q822](../queue/Q822.md) suspected.
 
-**What this does not show is that the fan-out causes any suite to fail.** No reproduction here connects it to `provisioner`'s eviction window or to any other red, and the two are separate claims: one is a property of the runner, the other needs a failure traced to it.
-Capping is also not free, because `run-parallel.sh` backs [`docs-gates`](#the-make-check-pre-review-gate) and `queue-gates` too, where running 19 short commands at once is the point.
+**Do not try to count the live suites with `pgrep -f`.** A forked subshell inherits the parent's full argv, and `run-parallel.sh`'s argv names every suite path, so a snapshot matches the parent and each live subshell with all 96 paths on every line.
+Measured 2026-08-25 during a real run: 201 matching processes, 88 of whose own command lines held more than one suite path, 94 distinct paths across all lines, and 94 distinct paths inside a single process's argv.
+An extraction over full command lines therefore returns ~94 whether one suite is live or ninety, and returns it flat from the first sample, so neither the count nor its flatness carries any information.
+Switching from matching processes to distinct paths does **not** fix it, which is the trap: both readings are taken off the same inherited argv.
+Process counts stay citable as process counts; a distinct-suite count taken this way does not.
 
-Counting this needs distinct script paths rather than matching processes.
-A first pass counted processes and reported 234 against ~96 suites, a ratio that says only that a wrapper and its script were counted twice.
+**What none of this shows is that the fan-out causes any suite to fail.** No reproduction connects it to `provisioner`'s eviction window or to any other red, and the two are separate claims: one is a property of the runner, the other needs a failure traced to it.
+Capping is also not free, because the same runner backs `make check` itself at 45 gates, with `scripts-test` nested inside as one of them, plus `docs-gates` at 19 and `queue-gates` at 10.
+A cap nests, so `check` would take a slot and open another capped runner beneath it.
 
 ### The coverage budget is wall clock, so it measures scheduling
 
