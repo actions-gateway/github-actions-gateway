@@ -2770,14 +2770,6 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/ci/run-parallel-test.sh"><code>run-parallel-test.sh:184</code></a> asserts <code>^\[run-parallel\] +[01]s +quick$</code>, and line 180 sets the …</td>
 </tr>
 <tr>
-<td><a href="Q792/">Q792</a></td>
-<td><a href="../operations/troubleshooting/#worker-image-runner-version">Report the runner version a worker pod actually ran back to the AGC</a></td>
-<td><code>feature</code> <code>security</code></td>
-<td>🔲</td>
-<td>M</td>
-<td>Q715 judges the image <em>reference</em>, so a digest-only or custom tag reports <code>Unknown</code>; the wrapper reads the real version from …</td>
-</tr>
-<tr>
 <td><a href="Q727/">Q727</a></td>
 <td><a href="../plan/arc-parity/#the-collision-the-individual-rows-do-not-state">A non-privileged path for <code>container:</code> and <code>services:</code> steps</a></td>
 <td><code>feature</code> <code>1.6-gate</code></td>
@@ -2826,12 +2818,28 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td><code>Admit</code> reserves before the scale-up rung refuses (Q717), so inside the reserve-to-release window a concurrent delivery reads an inflated …</td>
 </tr>
 <tr>
+<td><a href="Q994/">Q994</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/runnercore/runnerversion.go">Nothing pins the listener's <code>RunnerVersionTooOld</code> reason set</a></td>
+<td><code>tests</code> <code>ci</code></td>
+<td>🔲</td>
+<td>M</td>
+<td>Two sites decide which reasons the classic listener owns on this condition type, at different widths, and neither is derived from what the …</td>
+</tr>
+<tr>
 <td><a href="Q987/">Q987</a></td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/CLAUDE.md">Point live <code>lint-backlog.sh</code> references at <code>lint-queue.sh</code></a></td>
 <td><code>docs</code></td>
 <td>🔲</td>
 <td>S</td>
 <td><code>scripts/docs/lint-backlog.sh</code> retired with the table (Q889) and the store's lint is <code>scripts/docs/lint-queue.sh</code> behind <code>make queue-lint</code> …</td>
+</tr>
+<tr>
+<td><a href="Q988/">Q988</a></td>
+<td><a href="../operations/troubleshooting/#worker-image-runner-version">Read the worker runner version from the registry, not the container</a></td>
+<td><code>feature</code> <code>security</code></td>
+<td>🔲</td>
+<td>L</td>
+<td>Q792 ships the version as a self-report: the wrapper writes it, the tenant owns the image and the filesystem, and workflow steps run in …</td>
 </tr>
 <tr>
 <td><a href="Q957/">Q957</a></td>
@@ -2848,6 +2856,14 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>🔲</td>
 <td>S</td>
 <td><code>effective_tolerance</code> is <code>max(COVERAGE_TOLERANCE, COVERAGE_TOLERANCE_STMT * 100 / NSTMT)</code>, so the pass bound moves with the module's …</td>
+</tr>
+<tr>
+<td><a href="Q992/">Q992</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/go/coverage.sh"><code>cover-check</code> replays a stale pass over the uncacheable package</a></td>
+<td><code>ci</code> <code>tests</code></td>
+<td>🔲</td>
+<td>S</td>
+<td><code>go-test.sh</code> runs a second <code>-count=1</code> pass over the <code>UNCACHED</code> list that …</td>
 </tr>
 <tr>
 <td><a href="Q958/">Q958</a></td>

@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q792/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q994/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>Report the runner version a worker pod actually ran back to the AGC - GitHub Actions Gateway</title>
+        <title>Nothing pins the listener's RunnerVersionTooOld reason set - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#report-the-runner-version-a-worker-pod-actually-ran-back-to-the-agc" class="md-skip">
+        <a href="#nothing-pins-the-listeners-runnerversiontooold-reason-set" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Report the runner version a worker pod actually ran back to the AGC
+              Nothing pins the listener's RunnerVersionTooOld reason set
             
           </span>
         </div>
@@ -2597,9 +2597,40 @@
   
 
 
-<h1 id="report-the-runner-version-a-worker-pod-actually-ran-back-to-the-agc">Report the runner version a worker pod actually ran back to the AGC<a class="headerlink" href="#report-the-runner-version-a-worker-pod-actually-ran-back-to-the-agc" title="Permanent link">&para;</a></h1>
-<p>Q715 judges the image <em>reference</em>, so a digest-only or custom tag reports <code>Unknown</code>; the wrapper reads the real version from <code>Runner.Listener.deps.json</code> and only logs it.
-Needs a channel out of the worker (termination message) and a status field.</p>
+<h1 id="nothing-pins-the-listeners-runnerversiontooold-reason-set">Nothing pins the listener's <code>RunnerVersionTooOld</code> reason set<a class="headerlink" href="#nothing-pins-the-listeners-runnerversiontooold-reason-set" title="Permanent link">&para;</a></h1>
+<p>Two sites decide which reasons the classic listener owns on this condition type, at different widths, and neither is derived from what the listener emits.
+<code>isSessionSourcedRunnerVersion</code> in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/runnercore/runnerversion.go"><code>runnerversion.go</code></a> switches on <code>VersionTooOld</code>/<code>VersionAccepted</code> and gates whether the listener's clear is dropped.
+<code>setRunnerVersionStatus</code> in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/controller/runnerset_controller.go"><code>runnerset_controller.go</code></a> and <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/controller/runnergroup_controller.go"><code>runnergroup_controller.go</code></a> compares <code>prev.Reason</code> against <code>ReasonVersionTooOld</code> alone, not through the switch, and gates whether the image reading defers.
+The listener emits its two from <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/listener/session.go"><code>session.go</code></a> and <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/listener/goroutine.go"><code>goroutine.go</code></a>.</p>
+<p>The two widths coincide today only by accident of arithmetic.
+<code>VersionAccepted</code> is only ever pushed <code>False</code>, so restricted to a live <code>True</code> the listener owns exactly one reason and both sites agree on <code>{VersionTooOld}</code>.
+A second <code>True</code>-capable listener reason ends that.</p>
+<p>Measured 2026-08-25 with a stand-in reason <code>VersionRejectedByPolicy</code>, probing each path directly.
+<code>DropListenerCondition</code> returns <code>true</code> for it, identically to <code>WorkerImageBelowMinimum</code>, so the listener's clear is refused.
+<code>setRunnerVersionStatus</code> does not defer either, so the image reading overwrites the live <code>True</code> with <code>False</code>/<code>WorkerImageCurrent</code>.
+The godoc's "merely stays stale … rather than a wipe" is true of the drain in isolation, and the second site is not in that argument: a rejection GitHub actually made is gone from status, which is the failure direction the switch's polarity was chosen to forbid.
+Stale-forever is the narrower case, reached only where no reconcile gets as far as the image reading (<code>template == nil</code>, or no provisioner).</p>
+<p><strong>Updating the switch does not fix this</strong>, which is the trap, because it is what the godoc sends a reader to do.
+Measured the same day by adding the stand-in reason to the switch and re-probing: the drain is repaired (<code>DropListenerCondition</code> returns <code>false</code>, the clear lands) and the image reading still returns <code>False</code>/<code>WorkerImageCurrent</code>.
+The wipe is unchanged, because <code>setRunnerVersionStatus</code> never consults the switch.</p>
+<p>Four prose sites now describe the guard by ownership role, since <a href="https://github.com/actions-gateway/github-actions-gateway/pull/1717">#1717</a> landed.
+<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/api/v1alpha1/conditions.go"><code>conditions.go</code></a>, <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/listener/goroutine.go"><code>goroutine.go</code></a>, <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/runnercore/runnerversion.go"><code>runnerversion.go</code></a> and <a href="../../design/02-architecture/"><code>02-architecture.md</code></a> each say the clear is dropped when a live condition stands whose reason is not the listener's own, and the last pins the cardinality outright ("the listener's own two").
+A forgotten listener reason <em>is</em> the listener's own, so all four read as kept while the code drops, and they go false together.
+That wording is correct for the reason set as it stands, and naming the set by role is what buys it: add a reason and a membership entry together and the three role-only sites stay true.
+The fourth does not, because it pins the count: a third listener reason falsifies "two" whatever the membership sites say, so it needs an edit of its own.
+Dropping the count from that sentence would fold it back into the pairing permanently.
+The gate below pins membership and cannot see a stale count, so that one stays a prose obligation.</p>
+<p>Nothing gates either site.
+<code>isSessionSourcedRunnerVersion</code> has one call site and no other reference in Go or shell.
+<code>conditions_parity_test.go</code> asserts constant aliasing across <code>v1alpha1</code>/<code>v2alpha1</code>/<code>v2beta1</code>, not membership.
+<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/docs/check-reason-tiers.sh"><code>check-reason-tiers.sh</code></a> reconciles emitted reasons against the ledger and the runbook, as its own godoc says, and never against either site.
+The only future-reason test is <code>WorkerImageSomeFutureReason</code> in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/controller/runner_version_status_test.go"><code>runner_version_status_test.go</code></a>, an unknown <em>image</em> reason whose assertion would be wrong for a listener one.</p>
+<p><strong>This is a gate row, not a prose row, and it must pin both sites.</strong> A gate reconciling only the switch against the listener's emitted reasons passes while the wipe stays live, so it would close this row with the defect intact.
+Collapsing the two into one membership site is the better shape: have <code>setRunnerVersionStatus</code> call <code>isSessionSourcedRunnerVersion</code> on a <code>True</code> condition, leaving a single place a gate has to pin.
+The assertion must go red when a reason emitted on <code>RunnerVersionTooOld</code> from <code>internal/listener</code> is absent from the membership the reconcilers honour.
+Two controls must stay green: today's tree, where the listener's two reasons are honoured by both sites; and adding a fourth <code>WorkerImage*</code> reason, which must stay <em>out</em> of the session set, since enumerating the image half is the failure direction the polarity already rejects.
+<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/devtools/docs/reasontiers/main.go"><code>devtools/docs/reasontiers</code></a> is the nearest seam, already resolving each reason argument from source and classifying it by tier directory, but it does not pair a reason to its condition type today and that pairing is the work.
+A new gate registers in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/mk/gate-lists.mk"><code>mk/gate-lists.mk</code></a>, which the <code>gatelists</code> merge driver merges as a set; <code>reason-tiers-check</code> is already an entry there to model.</p>
 
 
 
