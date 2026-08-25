@@ -1,7 +1,7 @@
 # ARC Feature Parity
 
-> **Status: goal stated 2026-08-09.
-> One deliverable gates 1.5, one is admitted to 1.5, two are sequenced behind it.** This is a map and a definition of done, not a design.
+> **Status: goal stated 2026-08-09; two criteria closed in 1.5, one gates 1.6, one is satisfied in its fallback form.** This is a map and a definition of done, not a design.
+> [Q727](../queue/Q727.md) is the only row a scheduled release can still close, and it is the [1.6 gate](release-1.6.md).
 > The inventory below is only as good as its last measurement against a real ARC release, which is why every row carries a version and a date.
 
 ## Why this is a goal, and why "parity" is the wrong word for most of it
@@ -55,7 +55,10 @@ ARC parity is done when all of the following hold:
    The first label names the scale set, which is the ARC scale-set name carried across.
 2. **Repository-scoped targeting is expressible.** ✅ Closed by Q712 (2026-08-11): `RunnerSet.spec.runnerGroup`, inheriting `ActionsGateway.spec.defaultRunnerGroup`, binds a set to a named GitHub runner group rather than the installation default, and fails the set closed rather than falling back to it.
 3. **`container:` and `services:` steps run without privilege**, or the docs state plainly and permanently that Docker-in-Docker under Kata is the supported answer and why (Q727 resolves either way; a documented decline is a valid outcome).
-4. **The GHES claims carry evidence.** Either a real-appliance validation, or the two capabilities keep their untested marker and the comparison says so (Q765).
+   **Sequenced 2026-08-25:** Q727 is `L` with no plan doc, so neither answer has been costed, and the [1.6 plan](release-1.6.md#the-gating-row-q727-and-why-the-decision-comes-after-the-plan-doc) makes the phased plan doc the first deliverable and the decision an output of it rather than an input.
+   Either outcome has to name the population with no Kata available: GKE Autopilot, AMD and Arm node families, and AWS fleets outside the selected Intel families, where a decline means `privileged-dind` for a workload ARC ran with no privilege at all.
+4. **The GHES claims carry evidence.** Either a real-appliance validation, or the two capabilities keep their untested marker and the comparison says so (Q765). ✅ Satisfied in the fallback form, verified 2026-08-25: [features.md](../features.md) marks both capabilities untested against real hardware, [why-gag.md](../why-gag.md) repeats it, and [alternatives.md](../alternatives.md) awards the row to ARC.
+   Q765 stays deferred because its trigger is an appliance becoming reachable, which no release can decide.
 
 Criteria 3 and 4 can both be satisfied by a decision rather than a build.
 That is deliberate: parity is about removing surprises for a migrating team, and a documented "we do not do this, here is the alternative" removes the surprise as well as a feature does.

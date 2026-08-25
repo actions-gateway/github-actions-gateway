@@ -16,7 +16,8 @@ That is a page telling adopters nine things are in progress when they are waitin
 |---|---|---|
 | **1.4** | Shipped scope: cross-namespace proxy sharing, the runner template library, v2 capacity gauges, the v1alpha1 apiserver warning, and the abandoned-run recovery | [release-1.4.md](release-1.4.md) |
 | **1.5** | Q712 runner-group binding, Q713 default-tier latency series, and Q726 multi-label runner sets, all shipped, plus the marketing reconciliation | [release-1.5.md](release-1.5.md) |
-| **1.6** | The ARC-parity ports: Q719's RWX storage validation, shipped 2026-08-24 ([worker-shared-storage.md](../operations/worker-shared-storage.md)), then [Q727](../queue/Q727.md) the non-privileged `container:` path | release-1.6.md, written when 1.5 tags |
+| **1.6** | The ARC-parity ports: Q719's RWX storage validation, shipped 2026-08-24 ([worker-shared-storage.md](../operations/worker-shared-storage.md)), then [Q727](../queue/Q727.md) the non-privileged `container:` path | [release-1.6.md](release-1.6.md) |
+| **1.7** | Untrusted-PR CI on Kata: [Q408](../queue/Q408.md) Phases 2 to 5, the in-cluster registry pull-through mirror and the tight egress policy that let the docs stop saying "trusted CI only" ([secure-multi-tenant-oss-ci.md](secure-multi-tenant-oss-ci.md)) | release-1.7.md, written when 1.6 tags |
 | **2.0** | v2 GA graduation and the three coupled removals: `v1alpha1`, `v2alpha1`, and classic acquisition | [v2-ga.md](v2-ga.md) |
 
 ## Why 1.6 exists rather than folding into 1.5
@@ -33,8 +34,11 @@ The soak argument is unchanged and still favours a separate minor.
 `v2-ga.md` Phase 1 requires no incompatible `v2beta1` shape change across at least two minors of real use; 1.4 and 1.5 are those two, so 1.6 lands the ports without restarting the clock.
 
 Q719 has landed, so the rung now has contents.
-If Q727 slips on demand, what 1.6 carries is one `M` item, which is a thin minor rather than an empty one, and that is the call to make when 1.5 tags.
-That is the honest reading of a ladder whose middle rung exists to carry two specific items.
+
+**Settled 2026-08-25, when 1.5 had tagged and the call came due.** The question this section framed, whether a rung resting on one item is worth cutting, turned out not to be the question.
+`semver-floor.sh v1.5.0` reports the floor at MINOR off nine merged changes that alter the shipped artifact, so 1.6 is forced whatever Q727 does, and the ladder's worry about a thin minor was about a release that no longer exists.
+What Q727 decides is the release's *theme*, not whether there is one.
+[release-1.6.md](release-1.6.md) carries the measurement and the scope.
 
 ## What is punted past `v2.0.0`
 
@@ -79,7 +83,10 @@ Deferred is not a graveyard here, it is a trigger list, and every row in it name
 
 That does not make 1.6 a decided release.
 The labels encode the target, and the reading above still governs: if both items slip on demand, the labels come off rather than an empty tag being cut.
-`release-1.6.md` gets written when 1.5 tags, on the same evidence the other release plans use.
+[release-1.6.md](release-1.6.md) was written on 2026-08-25, when 1.5 had tagged, on the same evidence the other release plans use.
+
+**1.7 was added on the same day, and it is a re-theme rather than a new rung.** Untrusted-PR CI on Kata ([Q408](../queue/Q408.md), [secure-multi-tenant-oss-ci.md](secure-multi-tenant-oss-ci.md)) was weighed for 1.6 and moved out: it is a threat-model deliverable, where the ARC ports are migration blockers, and Kata already makes Docker-in-Docker unprivileged, so neither axis advances the other.
+Q408 takes the `1.7-gate` label, which publishes that commitment the same way the 1.6 labels did.
 
 The one hard constraint the ladder encoded — Q726 landing before `v2.0.0`, since 2.0 removes the `v2alpha1` escape hatch its godoc pointed at — is satisfied: it landed in 1.5.
 Its `1.5-gate` label is what enforces that, a release earlier than strictly required.
