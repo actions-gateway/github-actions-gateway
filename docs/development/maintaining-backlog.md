@@ -33,10 +33,12 @@ What holds the rules for them is the tooling below, which is in-tree and runs in
 - **There is no `**Next ID:**` counter line.** IDs are claimed instead, with `make queue-id TITLE="…"`, which takes a `refs/queue-ids/QN` ref on the remote.
   A shared mutable counter handed concurrent sessions the same ID and conflicted on the same line by construction, forcing a renumber ([Q382](queue-id-allocation.md#why-the-counter-had-to-go)).
   Allocation also runs [the duplicate search](#search-before-you-file), which is the part of "search before you file" a mechanism can carry; reading the candidates it prints is the part that is on you.
-- **The notes cap is hard, and counted as the text is written**: ≤ 250 characters, where an em dash costs one.
-  Past 200 characters the item must link a doc — a sibling item's link doesn't count, since siblings are capped too.
-  The same cap applies to a deferred item's trigger.
-  **A title is at most 72 characters**, because it renders whole in every index row and in `queue.py next`'s kickoff prompt, which is the one field with nowhere to overflow.
+- **The title is capped and the body is not**, because their homes differ.
+  **A title is at most 72 characters**, enforced as `TITLE_MAX`, because it renders whole in every index row and in `queue.py next`'s kickoff prompt, which is the one field with nowhere to overflow.
+  A row's body has no cap at all, so an item can hold its full context and a finding never has to be trimmed to fit.
+  What the rendered table does instead is *truncate*: `summarize()` shows the first sentence, or a clean cut at 140 characters, because a table rendering every note whole is squeezed by its own longest row.
+  So the constraint on a note is that its **first sentence carries the point**, not that the note is short, and a row too long to skim wants a linked doc for the same reason a long function wants a name.
+  This is the one rule the store inverted when rows became files, and the docs said otherwise for long enough to cost real evidence: five sessions trimmed rows to a 250-character cap nothing enforces, losing detail each time.
   The table capped notes and never capped titles at all, so adopting the store imposed a constraint this backlog had never been held to: 62 of 173 titles were over, the longest at 130, and all 62 were rewritten by hand rather than truncated.
 - **An item never cites a count of the backlog.** "42 Queue rows", "60 parked" and friends go stale on the next filing — the file they measure is the one thing guaranteed to change under them, often the same day.
   State the *shape* instead ("the Queue is read top-down; the parked rows are only grepped on a trigger"), and put any dated figure in the linked plan doc, where a point-in-time measurement belongs.
