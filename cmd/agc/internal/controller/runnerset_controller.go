@@ -449,7 +449,8 @@ func (r *RunnerSetReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	// pendingPodDeadline). Runs before the token fetch so cleanup keeps working
 	// during a GitHub outage. podCounts is the pod phase snapshot used to
 	// populate status.activeJobs/pendingJobs.
-	reapAfter, podCounts, err := r.reapWorkerPods(ctx, log, &rs)
+	var observed observedRunner
+	reapAfter, podCounts, err := r.reapWorkerPods(ctx, log, &rs, &observed)
 	if err != nil {
 		return ctrl.Result{}, err
 	}
@@ -460,7 +461,7 @@ func (r *RunnerSetReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	// live. Classic (deprecated; the default is ScaleSet as of P5) and an unset field
 	// both fall through to the unchanged classic path below.
 	if rs.Spec.AcquisitionProtocol == v2alpha1.AcquisitionProtocolScaleSet {
-		return r.reconcileScaleSetListener(ctx, log, &rs, refs, reapAfter, podCounts)
+		return r.reconcileScaleSetListener(ctx, log, &rs, refs, reapAfter, podCounts, observed)
 	}
 
 	// 4. Installation token for agent management. Process-wide (one GitHub App per
@@ -517,6 +518,7 @@ func (r *RunnerSetReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	rs.Status.ActiveSessions = active
 	rs.Status.ActiveJobs = podCounts.active
 	rs.Status.PendingJobs = podCounts.pending
+	applyObservedRunnerVersion(&rs, observed)
 	rs.Status.ObservedGeneration = rs.Generation
 	// A listener-start failure surfaces as Ready=False/ListenerStartFailed rather than
 	// slipping through as the benign NoActiveSessions state (Q308).
@@ -980,7 +982,7 @@ func (r *RunnerSetReconciler) provisionerTarget(rs *v2alpha1.RunnerSet) *runnerS
 // job's completion), mirroring the RunnerGroup reaper but filtering on LabelRunnerSet and
 // reading the RunnerSet's tunables. It returns the time until the earliest retained
 // pod becomes due (0 = none) and a pod phase count for status.activeJobs/pendingJobs.
-func (r *RunnerSetReconciler) reapWorkerPods(ctx context.Context, log *slog.Logger, rs *v2alpha1.RunnerSet) (time.Duration, workerPodCounts, error) {
+func (r *RunnerSetReconciler) reapWorkerPods(ctx context.Context, log *slog.Logger, rs *v2alpha1.RunnerSet, observed *observedRunner) (time.Duration, workerPodCounts, error) {
 	return reapWorkerPodsByLabel(ctx, r.Client, r.nowFunc()(), rs.Namespace, rs.Name,
 		provisioner.LabelRunnerSet,
 		provisioner.CompletedPodTTLOrDefault(rs.Spec.CompletedPodTTL),
@@ -1020,6 +1022,8 @@ func (r *RunnerSetReconciler) reapWorkerPods(ctx context.Context, log *slog.Logg
 			},
 			deregisterRunner: r.deregisterScaleSetRunner(rs, log),
 			recoverAbandoned: r.recoverAbandonedRun(rs),
+			// v2 only: v1 is terminal and grows no status field for this (Q792).
+			observeWorkerReport: observed.observe,
 		})
 }
 

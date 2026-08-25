@@ -100,7 +100,7 @@ func TestRunnerSetReaper_DeregistersReapedWorkersRunnerRecord(t *testing.T) {
 		key: {client: newReapScaleSetClient(t, srv)},
 	}
 
-	_, _, err := r.reapWorkerPods(context.Background(), slog.Default(), rs)
+	_, _, err := r.reapWorkerPods(context.Background(), slog.Default(), rs, &observedRunner{})
 	require.NoError(t, err)
 
 	ctx := context.Background()
@@ -146,7 +146,7 @@ func TestRunnerSetReaper_DeregisterIsSkippedWithoutAListener(t *testing.T) {
 		Recorder: events.NewFakeRecorder(8),
 	}
 
-	_, _, err := r.reapWorkerPods(context.Background(), slog.Default(), rs)
+	_, _, err := r.reapWorkerPods(context.Background(), slog.Default(), rs, &observedRunner{})
 	require.NoError(t, err)
 	assert.Error(t, c.Get(context.Background(),
 		types.NamespacedName{Namespace: ns, Name: "worker-1"}, &corev1.Pod{}),

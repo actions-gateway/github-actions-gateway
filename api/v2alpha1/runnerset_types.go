@@ -588,6 +588,30 @@ type RunnerSetStatus struct {
 	// +listMapKey=reason
 	WithheldCapacity []WithheldCapacity `json:"withheldCapacity,omitempty"`
 
+	// ObservedRunnerVersion is the actions/runner version a worker pod of this set
+	// reported actually running, read from the runner's own dependency manifest by the
+	// injected wrapper and handed back on the pod's termination message (Q792). It
+	// answers what the image ships for a reference the AGC cannot read a version from
+	// at all: a digest-only or custom tag, which is the case
+	// RunnerVersionTooOld reports as WorkerImageVersionUnknown.
+	//
+	// It is a SELF-REPORT, not an attestation, and must not be read as a security
+	// verdict. The runner container runs the tenant's image and the job's own steps
+	// run inside it, so anything in that container can rewrite the report before the
+	// container terminates. It is a diagnostic for an operator debugging their own
+	// image, and it deliberately does NOT move the RunnerVersionTooOld condition,
+	// which keeps saying Unknown rather than trusting a value the tenant controls.
+	// Q988 is the attestable form, read from the registry before the container runs.
+	//
+	// Sticky and newest-wins: the latest report seen from a terminal worker pod
+	// survives that pod being reaped, because the answer is a property of the image
+	// the set runs rather than of which pods happen to be retained. Empty until a
+	// worker pod has terminated and reported, and on any image whose wrapper could not
+	// detect a version, where absence is the honest answer.
+	//
+	// +optional
+	ObservedRunnerVersion string `json:"observedRunnerVersion,omitempty"`
+
 	// ProxyMode records how this runner set's worker egress reaches GitHub:
 	// "Proxied" (through the resolved EgressProxy, with stable per-tenant egress IPs)
 	// or "Direct" (no proxyRef/defaultProxyRef, still NetworkPolicy-restricted to

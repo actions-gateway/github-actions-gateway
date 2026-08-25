@@ -114,7 +114,7 @@ func TestRunnerSetReaper_AbandonedRunRecoveryFiresOnPendingDeadline(t *testing.T
 		Provisioner: p,
 	}
 
-	_, _, err := r.reapWorkerPods(context.Background(), slog.Default(), rs)
+	_, _, err := r.reapWorkerPods(context.Background(), slog.Default(), rs, &observedRunner{})
 	require.NoError(t, err)
 
 	require.Eventually(t, func() bool { return len(spy.seen()) > 0 }, 5*time.Second, 10*time.Millisecond,
@@ -155,7 +155,7 @@ func TestRunnerSetReaper_AbandonedRunRecoverySkipsClassicWorkers(t *testing.T) {
 		Provisioner: p,
 	}
 
-	_, _, err := r.reapWorkerPods(context.Background(), slog.Default(), rs)
+	_, _, err := r.reapWorkerPods(context.Background(), slog.Default(), rs, &observedRunner{})
 	require.NoError(t, err)
 
 	// The reap itself still happened, so an empty spy is a decision rather than an

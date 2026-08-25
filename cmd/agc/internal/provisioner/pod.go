@@ -193,6 +193,25 @@ func (p *Provisioner) buildPod(target Target, spec *ResolvedSpec, podName, secre
 		Value: payloadMountPath,
 	})
 
+	// Tell the wrapper where to hand its report back, and pin the path rather than
+	// relying on the kubelet default so the two sides cannot drift (Q792). A template
+	// that already set terminationMessagePath keeps it: the tenant may be reading the
+	// message for their own purposes, and the wrapper writes wherever this points.
+	//
+	// The policy stays File. FallbackToLogsOnError would substitute the container's
+	// log tail when the file is empty AND the container failed, which would hand the
+	// reader arbitrary log output in the place a structured report is expected.
+	if c.TerminationMessagePath == "" {
+		c.TerminationMessagePath = corev1.TerminationMessagePathDefault
+	}
+	if c.TerminationMessagePolicy == "" {
+		c.TerminationMessagePolicy = corev1.TerminationMessageReadFile
+	}
+	c.Env = append(c.Env, corev1.EnvVar{
+		Name:  "WORKER_TERMINATION_LOG",
+		Value: c.TerminationMessagePath,
+	})
+
 	// Project the per-tenant egress-proxy CA cert into the runner container.
 	// Cert only — Items restricts the projection to tls.crt so the private key
 	// never reaches the worker pod. Mount mode 0o444 + the PodSpec FSGroup keep

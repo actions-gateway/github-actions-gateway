@@ -139,7 +139,11 @@ func writeWorkerReport(path string, report workerReport) {
 			"bytes", len(payload), "cap", maxTerminationMessageBytes)
 		return
 	}
-	if err := os.WriteFile(path, payload, 0o644); err != nil {
+	// 0600: the mode applies only if the file does not already exist (kubelet creates
+	// it), and kubelet reads it as root either way, so the narrower mode costs nothing
+	// and keeps a stray report out of reach of anything else running as another user
+	// in the pod.
+	if err := os.WriteFile(path, payload, 0o600); err != nil {
 		slog.Warn("runner version not handed back: termination message not written",
 			"path", path, "error", err)
 	}
