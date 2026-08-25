@@ -102,10 +102,12 @@ func TestReportRunnerVersionWritesTheReport(t *testing.T) {
 	assert.JSONEq(t, `{"runnerVersion":"2.335.1"}`, string(raw))
 }
 
-// TestReportRunnerVersionOptsOutWithoutThePath keeps the wrapper runnable outside a
-// GAG-provisioned pod: no path, no write, no error. An older AGC that does not set
-// the variable is the same case.
-func TestReportRunnerVersionOptsOutWithoutThePath(t *testing.T) {
+// TestWriteWorkerReportOptsOutWithoutThePath keeps the wrapper runnable outside a
+// GAG-provisioned pod: no path, no write, no error. An older AGC that does not set the
+// variable is the same case. Named for writeWorkerReport because that is what it
+// exercises; the env-var plumbing that reaches it is covered by
+// TestReportRunnerVersionWritesTheReport.
+func TestWriteWorkerReportOptsOutWithoutThePath(t *testing.T) {
 	// Asserted on the RETURN rather than on the filesystem. With no path there is no
 	// file anywhere to look for, so watching a directory cannot tell "declined to
 	// write" from "wrote somewhere this test does not know about" — two earlier
