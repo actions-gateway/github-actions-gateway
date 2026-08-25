@@ -61,6 +61,19 @@
 //	                             recovery depends on (reportRunIdentity). Grep the
 //	                             output for "run identity present" or "GAP".
 //	PROBE_SCALESET_NAME        - Scale set name (default gag-probe-scaleset).
+//	PROBE_SCALESET_CLEANUP     - "true" to skip the scenario and instead LIST every
+//	                             scale set registered against the scope, then delete
+//	                             the one named by PROBE_SCALESET_NAME. The listing is
+//	                             the only way to see a scale set whose name nobody
+//	                             recorded, which is the state every orphan is in
+//	                             (Q344).
+//	PROBE_SCALESET_PRUNE_PREFIX - With CLEANUP, also delete every scale set whose name
+//	                             starts with this. The orphan sweep: an orphan's name
+//	                             is the thing the operator does not have. Which listed
+//	                             sets are orphans is the operator's call — nothing here
+//	                             can see the cluster's RunnerSets.
+//	PROBE_SCALESET_DRY_RUN     - With CLEANUP, report what would be deleted and delete
+//	                             nothing. The listing runs either way.
 //
 // Everything the probe creates is deleted on exit. Tokens and the JIT config
 // blob are never logged — only their lengths / top-level JSON keys.
@@ -113,8 +126,16 @@ type scalesetConfig struct {
 	// Cleanup makes the probe only look up the scale set by name and delete
 	// it — the recovery path for a scale set leaked by an interrupted run
 	// (observed live: the admin JWT expired during a long hold, 401-ing the
-	// deferred deletes).
+	// deferred deletes). It first lists every scale set in the scope, which is
+	// the only way to see one whose name nobody recorded (Q344).
 	Cleanup bool
+	// PrunePrefix, when set, extends Cleanup to delete every scale set whose
+	// name starts with it, not just the one named exactly. This is the orphan
+	// sweep: an orphan's name is the thing the operator does not have.
+	PrunePrefix string
+	// DryRun reports what Cleanup would delete and deletes nothing. The listing
+	// is unconditional, so a bare Cleanup is already a safe way to look.
+	DryRun bool
 }
 
 // parseScalesetConfig reads and validates the scale-set scenario environment
@@ -174,6 +195,8 @@ func parseScalesetConfig(getenv func(string) string) (scalesetConfig, error) {
 		}
 	}
 	cfg.Cleanup = getenv("PROBE_SCALESET_CLEANUP") == "true"
+	cfg.PrunePrefix = getenv("PROBE_SCALESET_PRUNE_PREFIX")
+	cfg.DryRun = getenv("PROBE_SCALESET_DRY_RUN") == "true"
 	return cfg, nil
 }
 
@@ -275,21 +298,55 @@ func runScalesetProbe(ctx context.Context, logger *slog.Logger, cfg scalesetConf
 	return p.run(ctx)
 }
 
-// cleanupOnly looks the scale set up by name and deletes it — recovery for a
-// leaked scale set from an interrupted or 401-ed run.
+// cleanupOnly reports every scale set registered against the scope, then deletes the
+// ones this run is asked to prune — recovery for a scale set leaked by an interrupted
+// or 401-ed run.
+//
+// The listing comes first and is unconditional, because a leaked scale set outlives
+// the cluster that made it and an operator chasing one usually cannot name it: a
+// deleted ActionsGateway, a renamed runnerLabels[0], or an interrupted probe each
+// strand a scale set that no by-name lookup reaches (Q344). Deciding which of the
+// listed sets is an orphan is the operator's call — nothing here can see the cluster's
+// RunnerSets — so the sweep is opt-in by prefix rather than automatic.
+//
+// Destructive against real GitHub. PROBE_SCALESET_DRY_RUN=true reports and deletes
+// nothing.
 func (p *scalesetProbe) cleanupOnly(ctx context.Context) error {
-	ss, err := p.client.GetRunnerScaleSetByName(ctx, p.cfg.ScaleSetName)
+	all, err := p.client.ListRunnerScaleSets(ctx)
 	if err != nil {
-		return fmt.Errorf("lookup scale set %q: %w", p.cfg.ScaleSetName, err)
+		return fmt.Errorf("list scale sets: %w", err)
 	}
-	if ss == nil {
-		p.log.Info("INVESTIGATION-E: cleanup — no scale set with that name", "name", p.cfg.ScaleSetName)
+	p.log.Info("INVESTIGATION-E: cleanup — scale sets registered against this scope",
+		"count", len(all))
+	for _, ss := range all {
+		p.log.Info("INVESTIGATION-E: cleanup — registered scale set",
+			"id", ss.ID, "name", ss.Name, "runnerGroupId", ss.RunnerGroupID,
+			"labels", labelNames(ss.Labels))
+	}
+
+	targets := make([]scaleset.RunnerScaleSet, 0, len(all))
+	for _, ss := range all {
+		if ss.Name == p.cfg.ScaleSetName ||
+			(p.cfg.PrunePrefix != "" && strings.HasPrefix(ss.Name, p.cfg.PrunePrefix)) {
+			targets = append(targets, ss)
+		}
+	}
+	if len(targets) == 0 {
+		p.log.Info("INVESTIGATION-E: cleanup — nothing matched",
+			"name", p.cfg.ScaleSetName, "prunePrefix", p.cfg.PrunePrefix)
 		return nil
 	}
-	if err := p.client.DeleteRunnerScaleSet(ctx, ss.ID); err != nil {
-		return fmt.Errorf("delete scale set %d: %w", ss.ID, err)
+	for _, ss := range targets {
+		if p.cfg.DryRun {
+			p.log.Info("INVESTIGATION-E: cleanup — WOULD DELETE (dry run)",
+				"id", ss.ID, "name", ss.Name)
+			continue
+		}
+		if err := p.client.DeleteRunnerScaleSet(ctx, ss.ID); err != nil {
+			return fmt.Errorf("delete scale set %d (%q): %w", ss.ID, ss.Name, err)
+		}
+		p.log.Info("INVESTIGATION-E: cleanup — scale set deleted", "id", ss.ID, "name", ss.Name)
 	}
-	p.log.Info("INVESTIGATION-E: cleanup — scale set deleted", "id", ss.ID, "name", ss.Name)
 	return nil
 }
 

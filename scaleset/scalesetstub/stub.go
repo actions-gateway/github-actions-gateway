@@ -1159,11 +1159,21 @@ func (s *Stub) handleGetScaleSetByName(w http.ResponseWriter, r *http.Request) {
 	if !s.requireAdmin(w, r) {
 		return
 	}
-	var match []scaleset.RunnerScaleSet
-	for _, ss := range s.scaleSets {
-		if ss.name == name {
-			match = append(match, scaleset.RunnerScaleSet{ID: ss.id, Name: ss.name, RunnerGroupID: ss.groupID, Labels: ss.labels})
+	// No name filter lists every scale set in the scope, which is the route
+	// ListRunnerScaleSets uses; measured against github.com 2026-08-24 (Q344).
+	// Ordered by id so a list assertion does not depend on map iteration order.
+	ids := make([]int, 0, len(s.scaleSets))
+	for id := range s.scaleSets {
+		ids = append(ids, id)
+	}
+	sort.Ints(ids)
+	match := []scaleset.RunnerScaleSet{}
+	for _, id := range ids {
+		ss := s.scaleSets[id]
+		if name != "" && ss.name != name {
+			continue
 		}
+		match = append(match, scaleset.RunnerScaleSet{ID: ss.id, Name: ss.name, RunnerGroupID: ss.groupID, Labels: ss.labels})
 	}
 	_ = json.NewEncoder(w).Encode(map[string]any{"count": len(match), "value": match})
 }
