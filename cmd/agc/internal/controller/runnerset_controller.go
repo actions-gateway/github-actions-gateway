@@ -758,6 +758,10 @@ func (r *RunnerSetReconciler) drainConditions(rs *v2alpha1.RunnerSet) {
 		select {
 		case upd := <-r.conditionCh:
 			if upd.namespace == rs.Namespace && upd.name == rs.Name {
+				prev := meta.FindStatusCondition(rs.Status.Conditions, upd.condition.Type)
+				if runnercore.DropListenerCondition(prev, upd.condition) {
+					continue // refused: neither merged nor retained
+				}
 				meta.SetStatusCondition(&rs.Status.Conditions, upd.condition)
 				r.pendingConds.retain(key, upd.condition)
 			} else {

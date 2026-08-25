@@ -484,6 +484,14 @@ const (
 	// ReasonVersionTooOld is the RunnerVersionTooOld=True reason when GitHub itself
 	// rejected the session as too old (classic tier only).
 	ReasonVersionTooOld = "VersionTooOld"
+	// ReasonVersionAccepted is the RunnerVersionTooOld=False reason the classic
+	// listener publishes as its healthy baseline: GitHub accepted agent.version at
+	// session creation. It clears a ReasonVersionTooOld left by an earlier instance,
+	// which no restart clears on its own — the version is the AGC's own compile-time
+	// pin, so the fix is a gateway upgrade and the condition outlives it in status
+	// (Q795). It never overwrites the reconciler's image reading: the two producers
+	// own disjoint halves of this type, keyed by reason.
+	ReasonVersionAccepted = "VersionAccepted"
 	// ReasonWorkerImageBelowMinimum is the RunnerVersionTooOld=True reason when the
 	// worker image's tag declares an actions/runner version below the enforced
 	// registration minimum (agc/names.MinRunnerVersion).

@@ -644,6 +644,10 @@ func (r *RunnerGroupReconciler) drainConditions(rg *v1alpha1.RunnerGroup) {
 		select {
 		case upd := <-r.conditionCh:
 			if upd.namespace == rg.Namespace && upd.name == rg.Name {
+				prev := meta.FindStatusCondition(rg.Status.Conditions, upd.condition.Type)
+				if runnercore.DropListenerCondition(prev, upd.condition) {
+					continue // refused: neither merged nor retained
+				}
 				r.mergeCondition(rg, upd.condition)
 				r.pendingConds.retain(key, upd.condition)
 			} else {

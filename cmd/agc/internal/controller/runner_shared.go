@@ -142,9 +142,20 @@ func (p *pendingConditions) apply(key types.NamespacedName, conds *[]metav1.Cond
 	defer p.mu.Unlock()
 	byType := p.m[key]
 	for t, cond := range byType {
-		if cur := meta.FindStatusCondition(*conds, t); cur != nil &&
+		cur := meta.FindStatusCondition(*conds, t)
+		if cur != nil &&
 			cur.Status == cond.Status && cur.Reason == cond.Reason && cur.Message == cond.Message {
 			delete(byType, t) // live status reflects it: persisted, stop retrying
+			continue
+		}
+		// A retained push the reconciler's own writer has since superseded is spent,
+		// not unpersisted (Q795). RunnerVersionTooOld is re-derived every reconcile, so
+		// a listener push that lost to the image reading would otherwise be re-applied
+		// forever — and land on any reconcile that writes status before the image
+		// reading runs, wiping the verdict there. The retry loop assumes a type the
+		// reconciler never re-derives; this is the exception.
+		if runnercore.DropListenerCondition(cur, cond) {
+			delete(byType, t)
 			continue
 		}
 		meta.SetStatusCondition(conds, cond) // not yet persisted: re-apply for this reconcile

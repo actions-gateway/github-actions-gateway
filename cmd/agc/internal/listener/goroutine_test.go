@@ -384,7 +384,13 @@ func TestListener_CreateSessionVersionTooOld(t *testing.T) {
 
 	err := listener.Run(ctx, cfg)
 	assert.Error(t, err)
-	assert.True(t, conds.Has("RunnerVersionTooOld"), "expected RunnerVersionTooOld condition")
+	// latest, not Has: since Q795 the goroutine also publishes this type as a
+	// False/VersionAccepted baseline, so Has could no longer tell the rejection
+	// from the healthy start.
+	rv, ok := conds.latest(v1alpha1.ConditionRunnerVersionTooOld)
+	require.True(t, ok, "expected RunnerVersionTooOld condition")
+	assert.Equal(t, metav1.ConditionTrue, rv.Status)
+	assert.Equal(t, v1alpha1.ReasonVersionTooOld, rv.Reason)
 
 	// The non-retriable session failure also surfaces as a Warning Event on the
 	// owner, complementing the condition (Q170).
@@ -393,6 +399,44 @@ func TestListener_CreateSessionVersionTooOld(t *testing.T) {
 	assert.Equal(t, corev1.EventTypeWarning, ev.eventtype)
 	assert.Equal(t, "test-rg", ev.name)
 
+	closeHTTP(oauthSrv)
+	closeHTTP(brokerSrv)
+	goleak.VerifyNone(t)
+}
+
+// TestListener_RunnerVersionAcceptedBaseline pins the Q795 fix: the goroutine
+// publishes RunnerVersionTooOld=False/VersionAccepted alongside the Q332 pair once a
+// session is established.
+//
+// Nothing else clears a session-sourced True. agent.version is the AGC's own
+// compile-time pin, so the operator's fix is a gateway upgrade — which restarts this
+// process, dropping every in-memory flag, while the condition persists in the
+// owner's status. Q332's baseline covered Degraded and RateLimited only.
+func TestListener_RunnerVersionAcceptedBaseline(t *testing.T) {
+	oauthSrv := oauthStub()
+	mux := &brokerMux{}
+	mux.SetGetMessage(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusAccepted) // healthy poll, no job queued
+	})
+	brokerSrv := httptest.NewServer(mux)
+
+	conds := &condRecorder{}
+	cfg := makeCfg(t, oauthSrv, brokerSrv)
+	cfg.Conditions = conds
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	done := runAndWait(ctx, cfg)
+
+	require.Eventually(t, func() bool {
+		rv, ok := conds.latest(v1alpha1.ConditionRunnerVersionTooOld)
+		return ok && rv.Status == metav1.ConditionFalse && rv.Reason == v1alpha1.ReasonVersionAccepted
+	}, 4*time.Second, 20*time.Millisecond,
+		"expected RunnerVersionTooOld=False/VersionAccepted on the healthy baseline")
+
+	cancel()
+	<-done
 	closeHTTP(oauthSrv)
 	closeHTTP(brokerSrv)
 	goleak.VerifyNone(t)
@@ -753,7 +797,12 @@ func TestListener_RateLimitedConditionClearsOnRecovery(t *testing.T) {
 			return false
 		}
 		dg, ok := conds.latest(v1alpha1.ConditionDegraded)
-		return ok && dg.Status == metav1.ConditionFalse && dg.Reason == v1alpha1.ReasonSessionAuthorized
+		if !ok || dg.Status != metav1.ConditionFalse || dg.Reason != v1alpha1.ReasonSessionAuthorized {
+			return false
+		}
+		// Q795 joined RunnerVersionTooOld to the same baseline.
+		rv, ok := conds.latest(v1alpha1.ConditionRunnerVersionTooOld)
+		return ok && rv.Status == metav1.ConditionFalse && rv.Reason == v1alpha1.ReasonVersionAccepted
 	}, 4*time.Second, 20*time.Millisecond, "expected healthy baseline conditions on start")
 
 	// Sustained 429 past 10 minutes trips RateLimited=True/SustainedRateLimit.

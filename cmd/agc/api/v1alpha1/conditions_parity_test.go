@@ -24,6 +24,7 @@ func TestListenerVocabularyParityWithV2(t *testing.T) {
 		{"ConditionRunnerVersionTooOld", ConditionRunnerVersionTooOld, v2alpha1.ConditionRunnerVersionTooOld, v2beta1.ConditionRunnerVersionTooOld},
 		{"ReasonSustainedRateLimit", ReasonSustainedRateLimit, v2alpha1.ReasonSustainedRateLimit, v2beta1.ReasonSustainedRateLimit},
 		{"ReasonVersionTooOld", ReasonVersionTooOld, v2alpha1.ReasonVersionTooOld, v2beta1.ReasonVersionTooOld},
+		{"ReasonVersionAccepted", ReasonVersionAccepted, v2alpha1.ReasonVersionAccepted, v2beta1.ReasonVersionAccepted},
 		{"ReasonWorkerImageBelowMinimum", ReasonWorkerImageBelowMinimum, v2alpha1.ReasonWorkerImageBelowMinimum, v2beta1.ReasonWorkerImageBelowMinimum},
 		{"ReasonWorkerImageCurrent", ReasonWorkerImageCurrent, v2alpha1.ReasonWorkerImageCurrent, v2beta1.ReasonWorkerImageCurrent},
 		{"ReasonWorkerImageVersionUnknown", ReasonWorkerImageVersionUnknown, v2alpha1.ReasonWorkerImageVersionUnknown, v2beta1.ReasonWorkerImageVersionUnknown},

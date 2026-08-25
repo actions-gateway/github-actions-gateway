@@ -3982,7 +3982,10 @@ On a `Classic`-protocol set the listener goroutines push the same conditions the
 | `Degraded=True` | `Unauthorized` | A session call was rejected as unauthorized — the GitHub App / agent credentials are invalid or revoked. On a `ScaleSet` set this covers session create *and* the queue-token refresh, and a `SessionUnauthorized` Warning event names the rejected call. |
 
 All are advisory (abnormal-is-`True`) and do not gate `Ready`.
-The two protocols differ in recovery behaviour: the **classic** listener only sets the abnormal state (a stale `True` can outlive the episode until the goroutine restarts), while the **`ScaleSet`** listener also publishes the healthy state — `Degraded=False/SessionAuthorized` and `RateLimited=False/PollingHealthy` appear on every healthy `ScaleSet` set once its listener starts — and clears an abnormal condition as soon as the session recovers (a successful poll, token refresh, or session re-create).
+Both protocols publish the healthy state as well as the abnormal one, so a recovered condition does not sit stale until the process restarts.
+`Degraded=False/SessionAuthorized` and `RateLimited=False/PollingHealthy` appear on every healthy set of either kind once its listener starts.
+An abnormal condition then clears as soon as the session recovers, by paths that differ per tier: on the **classic** tier a successful poll clears `RateLimited` and an agent recycle clears `Degraded`, while the **`ScaleSet`** tier also clears on a queue-token refresh, which the classic protocol has no equivalent of.
+On the classic tier `RunnerVersionTooOld=False/VersionAccepted` joins that baseline, which is what clears a `VersionTooOld` after you upgrade the gateway; the reconciler's `workerImage` reading owns the same condition otherwise and the baseline never overwrites it.
 Listener-pushed conditions and events are recorded on the `RunnerSet` on its next reconcile, so they can lag the incident by up to one reconcile interval.
 
 ---

@@ -126,3 +126,57 @@ func WorkerRunnerVersionCondition(image string, generation int64) metav1.Conditi
 		image, version, names.MinRunnerVersion)
 	return cond
 }
+
+// DropListenerCondition reports whether a listener-pushed condition must be
+// discarded rather than merged into the owner's status.
+//
+// RunnerVersionTooOld has two producers reporting different facts through one type:
+// the classic listener, on GitHub rejecting agent.version at session creation, and
+// the reconciler's own reading of the worker image (Q715). A healthy image reading
+// does not refute a live session rejection, so WorkerRunnerVersionCondition's callers
+// defer to a session-sourced True. This is the reverse half: the listener's
+// VersionAccepted baseline clears a stale session-sourced True (Q795) and is dropped
+// when the live condition is anything else.
+//
+// The deference is one-directional by design, so this is not a symmetry. A
+// session-sourced True still overwrites an image reading, because an observed
+// rejection outranks a prediction; only the CLEAR is arbitrated.
+//
+// Callers apply it in two roles, and both are needed. At either drain it refuses a
+// fresh push. In the pendingConditions retry it drops a retained one the image reading has
+// since superseded: that retry is built for types the reconciler never re-derives, and
+// this type it re-derives every reconcile, so a push merged when nothing stood to
+// defer to would otherwise be re-applied for the owner's lifetime.
+//
+// Neither is cosmetic. A reconcile that reaches the image reading overwrites a merged
+// clear in memory before writing status, so it never surfaces; the paths that write
+// status EARLIER do surface it, the unresolved-references branch above all, where a
+// tenant deleting a RunnerTemplate would see the image verdict wiped.
+func DropListenerCondition(prev *metav1.Condition, pushed metav1.Condition) bool {
+	if pushed.Type != apiconditions.ConditionRunnerVersionTooOld ||
+		pushed.Reason != apiconditions.ReasonVersionAccepted {
+		return false
+	}
+	return prev != nil && !isSessionSourcedRunnerVersion(prev.Reason)
+}
+
+// isSessionSourcedRunnerVersion reports whether reason is one the classic listener
+// publishes on RunnerVersionTooOld, as opposed to the reconciler's image reading.
+//
+// The SESSION set is the closed one, deliberately, because the two sets fail in
+// opposite directions. Enumerating the image reasons instead would let a fourth
+// WorkerImage* reason added later fall through as not-image-sourced, so the listener
+// baseline would overwrite a live verdict and no test or gate would go red —
+// reason-tiers-check reconciles emitted reasons against the operator docs, not
+// against this switch. Enumerating the session reasons makes the same omission
+// conservative: an unrecognized reason is treated as the reconciler's, so the clear
+// is dropped and the condition merely stays stale, which is the pre-Q795 behaviour
+// rather than a wipe. This set is also the one far less likely to grow: the listener
+// owns exactly two reasons on this type, and both are declared beside it.
+func isSessionSourcedRunnerVersion(reason string) bool {
+	switch reason {
+	case apiconditions.ReasonVersionTooOld, apiconditions.ReasonVersionAccepted:
+		return true
+	}
+	return false
+}
