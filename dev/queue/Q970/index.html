@@ -2598,12 +2598,16 @@
 
 
 <h1 id="run-parallel-test-asserts-a-one-second-ceiling-on-an-instant-command"><code>run-parallel-test</code> asserts a one-second ceiling on an instant command<a class="headerlink" href="#run-parallel-test-asserts-a-one-second-ceiling-on-an-instant-command" title="Permanent link">&para;</a></h1>
-<p><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/ci/run-parallel-test.sh"><code>run-parallel-test.sh:184</code></a> asserts <code>^\[run-parallel\] +[01]s +quick$</code> against a command that is literally <code>true</code>, so the assertion holds only while spawn plus the fan-out's own measurement overhead stays under a second.
-The generator is permanent and not specific to any one machine: any loaded host trips it, a CI runner under a busy queue included, and the failure then reads as a defect in <code>run-parallel.sh</code> rather than in the bound.
-Measured 2026-08-24 with ~18 sessions live: it failed inside <code>make check</code> alongside <code>claude-go-throttle-hook-test</code> (throttle probe killed) and <code>queue-test</code>, and all three passed on individual rerun with no code change.
-Local only so far; <code>scripts-test</code> was green in CI on the same tree, so this has not been observed on a runner.
-The neighbouring <code>want_order</code> at line 189 rests on the same timing and is a second latent instance.
-Also a contention datum for <a href="../Q822/">Q822</a>, whose cause is still unproven, but the assertion is a defect on its own terms and one fix does not close both.</p>
+<p><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/ci/run-parallel-test.sh"><code>run-parallel-test.sh:184</code></a> asserts <code>^\[run-parallel\] +[01]s +quick$</code>, and line 180 sets the fan-out up as <code>rp "quick:true" "slow:sleep 2"</code>, so the command under that bound is literally <code>true</code>. <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/ci/run-parallel.sh"><code>run-parallel.sh</code></a> captures <code>started="$(date +%s)"</code> inside the child subshell (line 82) and writes <code>$(( $(date +%s) - started ))</code> (line 100), so the bounded span covers a <code>date</code> fork, the <code>bash -c</code> fork/exec, the <code>awk</code> fork/exec, pipeline teardown and a second <code>date</code>, integer-floored at both ends.
+The assertion therefore encodes that four forks never take a second.
+<strong>Its intent is that the label appears in the timing block at all</strong> — the test's own name is <code>a fast command is reported too</code> — so the seconds are incidental and the whole replacement is <code>^\[run-parallel\] +[0-9]+s +quick$</code>, not a larger ceiling.
+<code>want_order</code> at line 189 is a second latent instance and needs a <strong>different</strong> fix in kind: an ordering claim cannot rest on a command with no duration floor, so it needs a real duration on both sides or the claim has to go.
+Measured 2026-08-24 with ~18 sessions live: it failed inside <code>make check</code> beside <code>claude-go-throttle-hook-test</code> (throttle probe killed) and <code>queue-test</code>, all three passing on individual rerun with no code change.
+<strong>Not observed on a runner, and no docs-only PR can show otherwise:</strong> <code>make scripts-test</code> runs in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/unit-test.yml">unit-test.yml</a>'s path-gated <code>shellcheck</code> job, which skips on a docs-only diff, so the runner evidence is the push-to-main runs (32836906076, <code>ubuntu-latest</code>, success) rather than any PR's green.
+The fix touches <code>scripts/ci/</code>, so that job <strong>does</strong> run on the fixing PR: read it there rather than assuming this gap persists.
+Deliberately not labelled <code>flake</code>: the fix is deterministic and the defect was never seen on <code>main</code>, so the flake-watch trigger (<em>recurs on main after the fix</em>) could never fire or be falsified, and completion should delete this row rather than park it.
+It keeps its rank beside the flake rows anyway, because it fails <code>make check</code> locally today and that is what the position is for.
+Also a contention datum for <a href="../Q822/">Q822</a>, whose cause is still unproven; one fix does not close both.</p>
 
 
 
