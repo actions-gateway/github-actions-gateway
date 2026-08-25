@@ -248,26 +248,43 @@ func checkDashboard(path string, raw []byte) ([]string, int, error) {
 // grafanaVar matches one variable reference in either spelling Grafana accepts.
 var grafanaVar = regexp.MustCompile(`\$(?:\{(\w+)\}|(\w+))`)
 
-// builtinDurations are the Grafana built-ins that expand to a duration. Each is
-// written in a range selector, which is syntactic position, so each needs a
-// stand-in to parse. The value is arbitrary: the check is that the surrounding
-// expression is well formed, not that the window is a particular length.
+// builtinVars are the Grafana built-ins, with a stand-in of the right PromQL
+// shape for each. Values are arbitrary within that shape: the check is that the
+// surrounding expression is well formed, not that the window is a particular
+// length.
 //
-// Every other `__`-prefixed name is a built-in too — `$__interval_ms`, `$__from`,
-// `$__to` and friends expand to a number, and appear in idioms like
-// `rate(x[$__interval]) * $__interval_ms / 1000`. They parse where they are
-// written, so they need no stand-in; what they need is exemption from the
-// undeclared-variable finding, since Grafana supplies them and no dashboard
-// declares them in templating.list.
-var builtinDurations = map[string]string{
+// The shape is what matters, and it is not uniform. The interval family expands
+// to a duration and is written in a range selector; the rest expand to a number
+// and are written in scalar position, as in `rate(x[$__interval]) *
+// $__interval_ms / 1000`. A number where a duration belongs does not parse and
+// nor does the reverse, so one stand-in cannot serve both.
+//
+// Substituting the numeric ones is not merely cosmetic. Exempting them from the
+// undeclared-variable finding is enough only where they sit inside a quoted
+// matcher; in scalar position, which is the only place `$__interval_ms` and
+// `$__range_s` are ever written, an unsubstituted name reaches the parser and
+// fails there instead.
+var builtinVars = map[string]string{
 	"__range":         "5m",
 	"__interval":      "5m",
 	"__rate_interval": "5m",
+	"__range_s":       "300",
+	"__range_ms":      "300000",
+	"__interval_ms":   "300000",
+	"__from":          "0",
+	"__to":            "0",
 }
 
 // isBuiltin reports whether name is supplied by Grafana rather than by the
 // dashboard. The `__` prefix is Grafana's own reserved namespace, so this stays
-// correct as they add more, which a fixed list would not.
+// correct as they add more, which the map above would not.
+//
+// The two work together: builtinVars carries a stand-in for every built-in whose
+// shape is known, and this exempts the rest from the undeclared-variable finding,
+// which would otherwise name a cause that cannot be true and invite the repair of
+// inventing a templating entry. One not in the map still fails to parse in
+// syntactic position, which is honest — its shape is unknown, and a guessed
+// stand-in of the wrong shape would fail anyway.
 func isBuiltin(name string) bool { return strings.HasPrefix(name, "__") }
 
 // dashboardVars returns the substitutions a dashboard's own templating declares,
@@ -283,8 +300,8 @@ func isBuiltin(name string) bool { return strings.HasPrefix(name, "__") }
 // `custom`'s are comma-separated option lists, and Grafana defaults to the first,
 // so that is what stands in.
 func dashboardVars(d dashboard) (map[string]string, map[string]bool) {
-	vars := make(map[string]string, len(builtinDurations))
-	for k, v := range builtinDurations {
+	vars := make(map[string]string, len(builtinVars))
+	for k, v := range builtinVars {
 		vars[k] = v
 	}
 	declared := make(map[string]bool, len(d.Templating.List))

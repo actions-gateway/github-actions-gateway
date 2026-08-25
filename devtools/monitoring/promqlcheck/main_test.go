@@ -301,6 +301,13 @@ func TestDashboardVariablesAreSubstituted(t *testing.T) {
 // removing the substitution changes the reported error to `'$'` and this fails.
 func TestSubstitutionStillParsesTheRest(t *testing.T) {
 	body := strings.Replace(varDashboard, `/ 3600 * $rate`, `/ 3600 * $rate))))`, 1)
+	// A needle that matches nothing leaves the fixture intact and the test
+	// asserting whatever the untouched fixture happens to satisfy. varDashboard
+	// is JSON in a raw string, so its quotes are backslash-escaped and a needle
+	// carrying bare ones silently no-ops.
+	if body == varDashboard {
+		t.Fatal("the needle did not match, so this test is running the unmodified fixture")
+	}
 	findings, _ := runDashboard(t, body)
 	for _, f := range findings {
 		if !strings.Contains(f, "expr does not parse") {
@@ -316,19 +323,31 @@ func TestSubstitutionStillParsesTheRest(t *testing.T) {
 
 // Grafana supplies the `__`-prefixed variables and no dashboard declares them, so
 // reporting one as undeclared names a cause that cannot be true and invites the
-// repair of inventing a templating entry to satisfy the gate. The numeric ones
-// need no stand-in: they parse where they are written.
+// repair of inventing a templating entry to satisfy the gate. Both positions are
+// covered because they fail differently: inside a quoted matcher an unsubstituted
+// name still parses and only the finding misfires, while in scalar position it
+// reaches the parser and dies there.
+//
+// The body is built by concatenation rather than substituted into varDashboard.
+// That fixture is JSON inside a Go raw string, so its quotes are already
+// backslash-escaped and a needle written with bare quotes silently matches
+// nothing — leaving the test running the unmodified fixture and asserting
+// something another test already covers.
 func TestGrafanaBuiltinsAreNotReportedUndeclared(t *testing.T) {
 	for _, expr := range []string{
 		`rate(thing_total[$__interval]) * $__interval_ms / 1000`,
-		`sum(thing_total{from="$__from",to="$__to"})`,
 		`sum(increase(thing_total[$__range])) / $__range_s`,
+		`sum(thing_total{from=\"$__from\",to=\"$__to\"})`,
+		`sum(up{job=\"$__interval_ms\"})`,
+		`sum(increase(thing_total[$__rate_interval]))`,
 	} {
 		t.Run(expr, func(t *testing.T) {
-			body := strings.Replace(varDashboard,
-				`sum(increase(thing_seconds_sum{namespace=~"$namespace"}[$__range])) / 3600 * $rate`,
-				strings.ReplaceAll(expr, `"`, `"`), 1)
-			findings, _ := runDashboard(t, body)
+			body := `{"title":"T","templating":{"list":[]},` +
+				`"panels":[{"title":"P","targets":[{"refId":"A","expr":"` + expr + `"}]}]}`
+			findings, targets := runDashboard(t, body)
+			if targets != 1 {
+				t.Fatalf("the walk reached %d targets, want 1 - the fixture did not build", targets)
+			}
 			if len(findings) != 0 {
 				t.Fatalf("a Grafana built-in should be clean, got %v", findings)
 			}
