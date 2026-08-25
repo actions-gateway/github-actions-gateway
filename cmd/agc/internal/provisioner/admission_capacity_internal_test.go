@@ -2,6 +2,8 @@ package provisioner
 
 import (
 	"context"
+	"sync"
+	"sync/atomic"
 	"testing"
 
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/runnercore"
@@ -311,4 +313,79 @@ func TestAdmit_CeilingRefusalDoesNotSpendAToken(t *testing.T) {
 	release()
 	_, ok, reason := admit(ctx)
 	assert.True(t, ok, "a freed ceiling slot must be immediately fillable; refused for %q", reason)
+}
+
+// concurrentTarget is a Target safe to drive from many goroutines at once. rungTarget
+// counts its calls in plain ints, which is a data race under concurrency and not worth
+// fixing there — no shipped test drives it that way. This one answers the same rungs
+// and counts nothing.
+type concurrentTarget struct {
+	ceiling int32
+	scaleUp *ScaleUpConfig
+}
+
+func (c *concurrentTarget) Key() client.ObjectKey {
+	return client.ObjectKey{Namespace: "ns", Name: "s"}
+}
+func (c *concurrentTarget) OwnerRef() metav1.OwnerReference   { return metav1.OwnerReference{} }
+func (c *concurrentTarget) PodOwnerLabels() map[string]string { return nil }
+func (c *concurrentTarget) Ceiling(context.Context) (int32, bool) {
+	return c.ceiling, true
+}
+func (c *concurrentTarget) QuotaExhausted(context.Context) (bool, string)      { return false, "" }
+func (c *concurrentTarget) QuotaCapacity(context.Context, int32) (int32, bool) { return 0, false }
+func (c *concurrentTarget) CapacityDeclined(context.Context) (bool, string)    { return false, "" }
+func (c *concurrentTarget) DeclinedCapacity(context.Context, int32) (int32, bool) {
+	return 0, false
+}
+func (c *concurrentTarget) ScaleUpLimit(context.Context) *ScaleUpConfig { return c.scaleUp }
+func (c *concurrentTarget) RecordEvent(_, _, _, _ string)               {}
+func (c *concurrentTarget) Resolve(context.Context) (*ResolvedSpec, error) {
+	return &ResolvedSpec{}, nil
+}
+
+// TestAdmit_RateRefusalRefundsUnderConcurrency is the one the sequential tests cannot
+// see. The rate rung takes a ceiling reservation and hands it back when the bucket is
+// empty, and the two rungs are reached by every listener at once during exactly the
+// burst spec.scaleUp exists to smooth — so the question is whether the reservation
+// count is still exact after a wave of admits and refusals interleave.
+//
+// The invariant is arithmetic rather than timing: however the goroutines interleave,
+// the gate must hold exactly one reservation per goroutine that was ADMITTED. A
+// refusal that forgot its refund leaks a slot and the count runs high; a double
+// refund would run it low.
+func TestAdmit_RateRefusalRefundsUnderConcurrency(t *testing.T) {
+	const goroutines = 200
+	const burst = 5
+
+	p := NewProvisioner(nil, nil, nil)
+	p.scaleUp = scaleUpLimiter{now: newFakeClock().now}
+	target := &concurrentTarget{ceiling: goroutines, scaleUp: &ScaleUpConfig{MaxPerSecond: 1, Burst: burst}}
+	admit := p.Admit(target)
+
+	var (
+		start    sync.WaitGroup
+		done     sync.WaitGroup
+		admitted atomic.Int32
+	)
+	start.Add(1)
+	for range goroutines {
+		done.Add(1)
+		go func() {
+			defer done.Done()
+			start.Wait()
+			if _, ok, _ := admit(context.Background()); ok {
+				admitted.Add(1)
+			}
+		}()
+	}
+	start.Done()
+	done.Wait()
+
+	// The bucket is the binding rung: the ceiling is wide enough for everyone.
+	require.Equal(t, int32(burst), admitted.Load(),
+		"the frozen clock refills nothing, so exactly the burst may be admitted")
+	assert.Equal(t, admitted.Load(), p.admission.reservedCount(target.Key().String()),
+		"the gate must hold exactly one reservation per admitted job: a refusal that "+
+			"skipped its refund leaks a slot, and a double refund loses one")
 }
