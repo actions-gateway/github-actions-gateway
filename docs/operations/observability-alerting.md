@@ -202,6 +202,18 @@ groups:
           summary: "Worker pods unschedulable for {{ $labels.runner_group }}{{ $labels.runner_set }} in {{ $labels.namespace }}"
           description: "Worker pods are stuck Pending past the scheduling grace because the scheduler can't place them (no matching node / affinity / taints — not quota). Capacity is not materializing; acquired jobs will not start."
 
+      # Page: worker pods bound to a node and the kubelet cannot start them (Q906)
+      - alert: ActionsGatewayWorkersNotStarting
+        expr: |
+          actions_gateway_runnerset_workers_not_starting == 1
+        for: 10m
+        labels:
+          severity: critical
+        annotations:
+          runbook_url: "https://actions-gateway.com/operations/runbook/#actionsgatewayworkersnotstarting"
+          summary: "Worker pods will not start for {{ $labels.runner_set }} in {{ $labels.namespace }}"
+          description: "Worker pods were placed on a node and the kubelet could not start them — almost always a workerImage that will not pull. The RunnerSet's WorkersNotStarting condition message carries the kubelet's own text, which names the image. Acquired jobs will not start, and without spec.capacityGate nothing throttles intake."
+
       # Page: the GitHub egress IP-range allowlist has gone stale (Q157)
       - alert: ActionsGatewayEgressRulesStale
         expr: |

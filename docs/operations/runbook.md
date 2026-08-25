@@ -174,6 +174,21 @@ See [GMC Not Provisioning Tenant Resources](troubleshooting.md#gmc-not-provision
 **Page.** Worker pods are stuck `Pending` past the scheduling grace because the scheduler cannot place them (no matching node / affinity / taints — not quota); capacity is not materializing.
 See [RunnerGroup Reports WorkersUnschedulable](troubleshooting.md#runnergroup-reports-workersunschedulable) and [Worker Pods Stuck Pending](troubleshooting.md#worker-pods-stuck-pending).
 
+### ActionsGatewayWorkersNotStarting
+
+**Page.** Worker pods were placed on a node and the kubelet could not start them, almost always a `workerImage` that will not pull.
+The `RunnerSet`'s `WorkersNotStarting` condition message carries the kubelet's own text, which names the image, so read that before anything else:
+
+```bash
+kubectl get runnerset <set> -n <namespace> \
+  -o jsonpath='{.status.conditions[?(@.type=="WorkersNotStarting")].message}'
+```
+
+Distinct from `ActionsGatewayWorkersUnschedulable`, and the two can never fire for the same pod: that one is the scheduler refusing to place a pod, this one is a pod already placed whose container never ran.
+Chasing nodes, taints or quota here wastes the window.
+Without `spec.capacityGate` nothing throttles intake, so each further job the set acquires repeats the cycle and spends a single-use runner registration on every one.
+See [The Reason Is `PodsNotStarting`: the Image Will Not Pull](troubleshooting.md#the-reason-is-podsnotstarting-the-image-will-not-pull).
+
 ### ActionsGatewayEgressRulesStale
 
 **Page.** The gateway's GitHub egress IP-range allowlist has not refreshed within the staleness window; the proxy `NetworkPolicy` may drift from GitHub's published ranges.

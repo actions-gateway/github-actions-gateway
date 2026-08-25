@@ -632,7 +632,7 @@
       "type": "stat",
       "title": "Worker quota exceeded",
       "datasource": { "type": "prometheus", "uid": "${datasource}" },
-      "gridPos": { "h": 6, "w": 5, "x": 0, "y": 46 },
+      "gridPos": { "h": 6, "w": 4, "x": 0, "y": 46 },
       "id": 51,
       "description": "1 when WorkerQuotaExceeded=True: the namespace ResourceQuota cannot admit another worker pod.",
       "fieldConfig": {
@@ -660,7 +660,7 @@
       "type": "stat",
       "title": "Workers unschedulable",
       "datasource": { "type": "prometheus", "uid": "${datasource}" },
-      "gridPos": { "h": 6, "w": 5, "x": 5, "y": 46 },
+      "gridPos": { "h": 6, "w": 4, "x": 4, "y": 46 },
       "id": 52,
       "description": "1 when WorkersUnschedulable=True: worker pods are stuck Pending because the scheduler cannot place them.",
       "fieldConfig": {
@@ -686,9 +686,37 @@
     },
     {
       "type": "stat",
+      "title": "Workers not starting",
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "gridPos": { "h": 6, "w": 4, "x": 8, "y": 46 },
+      "id": 84,
+      "description": "1 when WorkersNotStarting=True: worker pods were placed on a node and the kubelet could not start them, almost always an image that will not pull. Disjoint from Workers unschedulable, which is the scheduler refusing to place a pod at all.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": { "mode": "thresholds" },
+          "mappings": [
+            { "type": "value", "options": { "0": { "text": "OK", "color": "green" }, "1": { "text": "NOT STARTING", "color": "red" } } }
+          ],
+          "thresholds": { "mode": "absolute", "steps": [ { "color": "green", "value": null }, { "color": "red", "value": 1 } ] }
+        },
+        "overrides": []
+      },
+      "options": { "colorMode": "background", "graphMode": "none", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false } },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "expr": "max(actions_gateway_runnerset_workers_not_starting{namespace=~\"$namespace\", runner_set=~\"$runner_set\"})",
+          "legendFormat": "workers not starting",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "type": "stat",
       "title": "Worker quota pressure",
       "datasource": { "type": "prometheus", "uid": "${datasource}" },
-      "gridPos": { "h": 6, "w": 5, "x": 10, "y": 46 },
+      "gridPos": { "h": 6, "w": 4, "x": 12, "y": 46 },
       "id": 53,
       "description": "1 when WorkerQuotaPressure=True: workers cannot scale to the configured ceiling within the ResourceQuota headroom.",
       "fieldConfig": {
@@ -716,7 +744,7 @@
       "type": "stat",
       "title": "Worker capacity declined",
       "datasource": { "type": "prometheus", "uid": "${datasource}" },
-      "gridPos": { "h": 6, "w": 5, "x": 15, "y": 46 },
+      "gridPos": { "h": 6, "w": 4, "x": 16, "y": 46 },
       "id": 55,
       "description": "1 when WorkerCapacityDeclined=True: the opt-in capacity gate is refusing job intake. Present only for a RunnerSet that enables a gate, so 'No data' means no gate rather than a fault. The reason is shown alongside the value because it is what separates the latched AwaitingProbe state — intake throttled to one probe job per deadline window, which outlives the stuck pod that Workers unschedulable reports — from a live decline.",
       "fieldConfig": {

@@ -78,6 +78,7 @@ Labelled by `runner_set` (not `runner_group`), so the `$runner_group` variable d
 |-------|-------|---------------|
 | Worker quota exceeded | `max(actions_gateway_worker_quota_exceeded or actions_gateway_runnerset_worker_quota_exceeded)` | Stat (1 = red) |
 | Workers unschedulable | `max(actions_gateway_workers_unschedulable or actions_gateway_runnerset_workers_unschedulable)` | Stat (1 = red) |
+| Workers not starting | `max(actions_gateway_runnerset_workers_not_starting)` | Stat (1 = red) |
 | Worker quota pressure | `max(actions_gateway_worker_quota_pressure or actions_gateway_runnerset_worker_quota_pressure)` | Stat (1 = yellow) |
 | Worker capacity declined | `max by (reason) (actions_gateway_runnerset_worker_capacity_declined)` | Stat (1 = orange), reason shown beside the value |
 | Agent recycle errors | `rate(actions_gateway_agent_recycle_errors_total[5m])` | Time series |
