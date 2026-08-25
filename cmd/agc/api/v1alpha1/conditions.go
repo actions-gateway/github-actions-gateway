@@ -72,8 +72,8 @@ const (
 	// behind, which nothing else does — the version is the AGC's own compile-time
 	// pin, so the fix is a gateway upgrade and the condition survives it in status
 	// (Q795), the same stale-forever shape Q332 closed for Degraded/RateLimited.
-	// The reconciler drops it unless the live condition is session-sourced, so it
-	// never overwrites a Q715 verdict.
+	// The reconciler drops it when a live condition stands whose reason is not the
+	// listener's own, so it never overwrites a Q715 verdict.
 	ReasonVersionAccepted = "VersionAccepted"
 	// The reconciler's own reading of the worker image (Q715), published every
 	// reconcile without asking GitHub: ReasonWorkerImageBelowMinimum is

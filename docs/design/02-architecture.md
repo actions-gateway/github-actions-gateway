@@ -644,8 +644,10 @@ The injected wrapper logs it from the runner's own dependency manifest at worker
 The two producers therefore report different facts through one condition type, keyed by reason, and only the clear is arbitrated.
 A healthy image reading does not refute a live session rejection, so it defers to a `True` carrying `VersionTooOld`.
 That deference is not reciprocated: a session-sourced `True` writes over an image verdict, because an observed rejection outranks a prediction.
-In the other direction the classic listener publishes `False`/`VersionAccepted` as its session-start baseline: `agent.version` is the AGC's own compile-time pin, so the operator's fix for a rejection is a gateway upgrade, and that restarts the process while the condition survives in status with nothing else to clear it.
-The reconciler drops that baseline unless the live condition carries one of the listener's own two reasons.
+That leaves the clear.
+The classic listener publishes `False`/`VersionAccepted` as its session-start baseline: `agent.version` is the AGC's own compile-time pin, so the operator's fix for a rejection is a gateway upgrade, and that restarts the process while the condition survives in status with nothing else to clear it.
+The reconciler drops that baseline when a live condition stands whose reason is not one of the listener's own two.
+With no condition of the type at all there is nothing to defer to, so the baseline lands.
 Enumerating the session half rather than the `WorkerImage*` half is what makes a reason added later fail safe: an unrecognized one counts as the reconciler's, so the clear is dropped and the condition merely stays stale.
 It drops it at the drain rather than relying on the image reading to overwrite it, and drops a retained copy the image reading has already superseded.
 A reconcile that reaches the image reading overwrites a merged clear in memory before writing status, so it never surfaces; the reconcile paths that write status earlier do surface it, and one of those is the unresolved-references branch a tenant reaches by deleting a `RunnerTemplate`, where the clear would replace the image verdict.
