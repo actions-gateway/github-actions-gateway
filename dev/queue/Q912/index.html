@@ -23,7 +23,7 @@
     
     
       
-        <title>endpoint-parity gate startup failure has an unproven root cause - GitHub Actions Gateway</title>
+        <title>endpoint-parity startup: the inherited-pipe mechanism is not this one - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#endpoint-parity-gate-startup-failure-has-an-unproven-root-cause" class="md-skip">
+        <a href="#endpoint-parity-startup-the-inherited-pipe-mechanism-is-not-this-one" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              endpoint-parity gate startup failure has an unproven root cause
+              endpoint-parity startup: the inherited-pipe mechanism is not this one
             
           </span>
         </div>
@@ -2567,13 +2567,19 @@
   
 
 
-<h1 id="endpoint-parity-gate-startup-failure-has-an-unproven-root-cause">endpoint-parity gate startup failure has an unproven root cause<a class="headerlink" href="#endpoint-parity-gate-startup-failure-has-an-unproven-root-cause" title="Permanent link">&para;</a></h1>
-<p><strong>Event:</strong> any e2e-venue gate goes flaky again.
-The failure now names which of three cases it hit and quotes the fake's own output, which is the evidence this row waits on and cannot manufacture.
-The Q871 gate went red under <code>make check</code> on its own PR, then green once the fake's output moved from an inherited pipe to a file, and the causal link is unproven.
-It never reproduced standalone: six concurrent gate runs and four under a live <code>make scripts-test</code> all passed.
-The mechanism fitting every observation is that the fake logs before it binds, while <code>scripts-test</code> is a nested <code>run-parallel</code> fan-out where 85 suites write into one outer pipe.
-The readiness bound also went 10s to 30s, which is a bound rather than a fix.</p>
+<h1 id="endpoint-parity-startup-the-inherited-pipe-mechanism-is-not-this-one">endpoint-parity startup: the inherited-pipe mechanism is not this one<a class="headerlink" href="#endpoint-parity-startup-the-inherited-pipe-mechanism-is-not-this-one" title="Permanent link">&para;</a></h1>
+<p>The trigger fired 2026-08-24 under <code>make check</code> on an unrelated branch, so this row is ready with evidence rather than deferred waiting for it.
+Both instances went red in one run: <code>endpoint-parity-check</code> at the top level of the fan-out, and <code>check-endpoint-parity-test</code> inside <code>scripts-test</code>.
+The top-level one reported <code>fakegithub was still running after 30s and never accepted on http://127.0.0.1:56220</code>.</p>
+<p>Two findings, neither resting on what the fake did or did not write.
+The recurrence is <strong>after</strong> the pipe-to-file change this row credits: <code>cmd.Stdout = logFile</code> landed 2026-08-18 in #1627 and the row was filed from that PR's retro, so the child's fds have been a private <code>*os.File</code> throughout, and an inherited-pipe write is not this occurrence's mechanism.
+And the top-level gate is not under <code>scripts-test</code>, so the 85-suite nested fan-out this row blames was not in play for it either.
+What is left is contention past the 30s bound: 45 gates and 90 suites concurrent on one host.
+A second worker hit the same failure independently in the same window on a different port (55916 against 56220), with concurrent envtest also running on that host, which is a confound worth recording because it makes starvation more plausible and is unrecoverable once a session ends.</p>
+<p>The failure also printed <code>(the fake wrote nothing, so it had not reached its first log line)</code>, and that clause <strong>cannot</strong> carry its own conclusion — a blocked write and a write that never happened look identical from outside.
+That wording is <code>childLog</code>'s, in <code>devtools/e2e/endpointparity/probe.go</code>, so every future reader of this failure inherits the same over-claim; correcting it to state the observation rather than the inference is the cheapest part of this row.
+Raising <code>readyTimeout</code> again is a bound rather than a fix; establish whether the child is scheduled at all before it binds.
+The suite instance reported only <code>expected rc=0, got rc=2</code> because its shipped-tree case drops the checker's stderr, which is why only one of the two yielded any diagnosis.</p>
 
 
 

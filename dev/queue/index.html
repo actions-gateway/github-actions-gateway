@@ -2652,6 +2652,14 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 </thead>
 <tbody>
 <tr>
+<td><a href="Q912/">Q912</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/test/fakegithub/main.go">endpoint-parity startup: the inherited-pipe mechanism is not this one</a></td>
+<td><code>ci</code> <code>flake</code> <code>debt</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>The trigger fired 2026-08-24 under <code>make check</code> on an unrelated branch, so this row is ready with evidence rather than deferred waiting for …</td>
+</tr>
+<tr>
 <td><a href="Q982/">Q982</a></td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/lib/common.sh">printf into grep -q under pipefail falsifies a value that is present</a></td>
 <td><code>flake</code> <code>tests</code></td>
@@ -2794,14 +2802,6 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>🔲</td>
 <td>S</td>
 <td>Measured 2026-08-06: 9 orphans across 2 repos, 5 unreferenced.</td>
-</tr>
-<tr>
-<td><a href="Q921/">Q921</a></td>
-<td><a href="../development/testing/#a-fixture-repo-must-not-run-background-git">Gate the fixture-repo <code>maintenance.auto</code> invariant so it cannot regress</a></td>
-<td><code>tests</code> <code>ci</code></td>
-<td>🔲</td>
-<td>S</td>
-<td>16 suites carry <code>maintenance.auto false</code> with no assertion; a text query cannot check them, since one drives git from embedded Python.</td>
 </tr>
 <tr>
 <td><a href="Q957/">Q957</a></td>
@@ -3746,14 +3746,6 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>🔲</td>
 <td>M</td>
 <td>Q865 gated one page, because widening it was a larger change than that row held.</td>
-</tr>
-<tr>
-<td><a href="Q912/">Q912</a></td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/test/fakegithub/main.go">endpoint-parity gate startup failure has an unproven root cause</a></td>
-<td><code>ci</code> <code>debt</code> <code>retro</code></td>
-<td>💤</td>
-<td>S</td>
-<td><strong>Event:</strong> any e2e-venue gate goes flaky again.</td>
 </tr>
 <tr>
 <td><a href="Q913/">Q913</a></td>
