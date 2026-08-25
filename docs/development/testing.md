@@ -341,6 +341,23 @@ What a fresh worktree still pays, and why it stays:
 - **Tool builds.** Each worktree builds its own `.build/golangci-lint` (~16 s with a warm build cache).
   Sharing tool binaries across worktrees would need version-keyed storage to avoid silently running a stale binary after a `tools/` dependency bump — complexity that isn't worth ~16 s per worktree.
 
+### The fast gates fan out past the heavy-build semaphore
+
+`serialize_heavy_build` bounds how many heavy phases run at once across sessions, and the fast gates are outside it.
+`make scripts-test` calls [`run-parallel.sh`](../../scripts/ci/run-parallel.sh), which launches every command with `&` and then waits; there is no cap in it, and no `scripts/ci/` script takes the lock.
+
+Measured 2026-08-24 by sampling live processes during a real run, not by reading the loop: 93 distinct suite scripts running at once, peaking at 221 processes, against the 96 suites the gate list names.
+The distinct count sat flat at 92 or 93 from the first sample while the process count decayed from 221, which is what launching everything at once looks like; a capped runner plateaus at its cap instead.
+
+So on an 18-core box a session in its fast gates is at ~93-way fan-out with no machine-wide bound, next to a sibling whose heavy phase holds one of two lock slots and gets no protection from it.
+That is the contention [Q822](../queue/Q822.md) suspected.
+
+**What this does not show is that the fan-out causes any suite to fail.** No reproduction here connects it to `provisioner`'s eviction window or to any other red, and the two are separate claims: one is a property of the runner, the other needs a failure traced to it.
+Capping is also not free, because `run-parallel.sh` backs [`docs-gates`](#the-make-check-pre-review-gate) and `queue-gates` too, where running 19 short commands at once is the point.
+
+Counting this needs distinct script paths rather than matching processes.
+A first pass counted processes and reported 234 against ~96 suites, a ratio that says only that a wrapper and its script were counted twice.
+
 ### The coverage budget is wall clock, so it measures scheduling
 
 `scripts/go/coverage.sh` runs every workspace package in one `go test` with a `-timeout` that Go applies **per test binary, as wall clock from the moment that binary starts**.
