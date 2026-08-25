@@ -237,8 +237,8 @@ func TestRunnerSetUnschedulableGrace_Default(t *testing.T) {
 
 // --- apply / clear ---------------------------------------------------------
 
-// TestApplyWorkerCapacityConditions_SetsAllThree: applying under an exhausted quota +
-// an unschedulable pod sets all three conditions, emits one Warning Event on the
+// TestApplyWorkerCapacityConditions_SetsAllFour: applying under an exhausted quota +
+// an unschedulable pod sets all four conditions, emits one Warning Event on the
 // False→True unschedulable transition, and returns no re-check (pod already past grace).
 func TestApplyWorkerCapacityConditions_SetsAllFour(t *testing.T) {
 	now := time.Now()
