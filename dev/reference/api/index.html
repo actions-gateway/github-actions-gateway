@@ -3053,6 +3053,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#withheldcapacity" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        WithheldCapacity
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#workersizing" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3573,6 +3584,17 @@
     <span class="md-ellipsis">
       
         VaultSigner
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#withheldcapacity" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        WithheldCapacity
       
     </span>
   </a>
@@ -5116,6 +5138,18 @@ missing object.</p>
 <td>Optional: {}</td>
 </tr>
 <tr>
+<td><code>advertisedCapacity</code> <em>integer</em></td>
+<td>AdvertisedCapacity is the X-ScaleSetMaxCapacity this set most recently advertised: the total jobs GitHub may keep assigned to it at once, recomputed every long-poll from the admission ladder. Together with WithheldCapacity it answers "why is intake throttled?" from <code>kubectl describe</code> alone: the same accounting previously reachable only through Prometheus, which a tenant without metrics access cannot read (Q721).<br />A pointer because zero is a meaningful advertisement (intake fully withheld) and has to be distinguishable from "no advertisement": nil on a classic-tier set, which decides per delivered job and never states a capacity, and on a scale-set set whose listener has not polled yet.<br />Lags the live value by up to one reconcile, because the advertisement is recomputed per poll and published per reconcile. It is an observation of intake, never an input: setting it does not change what the listener advertises.</td>
+<td></td>
+<td>Optional: {}</td>
+</tr>
+<tr>
+<td><code>withheldCapacity</code> <em><a href="#withheldcapacity">WithheldCapacity</a> array</em></td>
+<td>WithheldCapacity attributes the gap between the declared worker ceiling and AdvertisedCapacity to the rung of the admission ladder that took each slot, so a tenant can tell "my own maxWorkers" from "the namespace ResourceQuota" from "the cluster cannot place my workers" without reading metrics or the AGC's logs (Q721). Every rung the poll evaluated appears, including the ones withholding nothing, so a reason absent from the list was not evaluated rather than not binding. That is the same explicit-zero contract the withheld gauge carries.<br />Empty on a classic-tier set and before the first poll, alongside a nil AdvertisedCapacity.</td>
+<td></td>
+<td>Optional: {}</td>
+</tr>
+<tr>
 <td><code>proxyMode</code> <em>string</em></td>
 <td>ProxyMode records how this runner set's worker egress reaches GitHub: "Proxied" (through the resolved EgressProxy, with stable per-tenant egress IPs) or "Direct" (no proxyRef/defaultProxyRef, still NetworkPolicy-restricted to GitHub + DNS but without per-tenant IP attribution). Explicit so "no proxy" is an auditable state, not an inferred absence (§H.10). Paired with the advisory EgressUnattributed condition when Direct.</td>
 <td></td>
@@ -5487,6 +5521,37 @@ not stored in a Secret.</p>
 <td>NetworkPolicy optionally tells the GMC how to reach Vault as a NetworkPolicy egress peer (Q202). On a policy-enforcing CNI the per-tenant AGC NetworkPolicy default-denies egress (DNS + GitHub + the kube API server); Vault is not otherwise expressible as a peer because Address is an opaque URL, so set this and the GMC emits a scoped AGC→Vault egress rule on the Vault API port (parsed from Address). Leave it unset on a non- enforcing CNI (e.g. kindnet) or when the egress rule is managed out of band — the rule is a strict tightening that is only ever added, never a broaden-to-all-egress. Set on a GitHubApp gateway it has no effect (no Vault egress is emitted for the possession model).<br />The value is a shared EgressPeer (Q204): the selector/CIDR peer the GMC scopes the rule to. Its Port is left unset for Vault (the port is derived from Address); set it only to override that derived port.</td>
 <td></td>
 <td>Optional: {}</td>
+</tr>
+</tbody>
+</table>
+<h4 id="withheldcapacity">WithheldCapacity<a class="headerlink" href="#withheldcapacity" title="Permanent link">&para;</a></h4>
+<p>WithheldCapacity is one admission-ladder rung's contribution to the gap between a
+runner set's declared worker ceiling and the capacity it advertises (Q721). The
+entries sum to ceiling - advertisedCapacity, because the rungs compose as a min()
+and each entry is its own marginal contribution.</p>
+<p><em>Appears in:</em>
+- <a href="#runnersetstatus">RunnerSetStatus</a></p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+<th>Default</th>
+<th>Validation</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>reason</code> <em>string</em></td>
+<td>Reason names the rung, matching the <code>reason</code> label on actions_gateway_scaleset_capacity_withheld so the status view and the metric read the same vocabulary: "quota" is namespace-ResourceQuota headroom, "capacity" the opt-in placeability gate, "scaleup" the opt-in creation-rate limit.<br />Deliberately not an enum. The ladder is designed to grow a rung at a time, and every rung must land in both acquisition tiers at once, so a closed enum would couple each new rung to a CRD change for no validation benefit: this field is controller-written status that a tenant cannot author.</td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td><code>slots</code> <em>integer</em></td>
+<td>Slots is the number of worker slots this rung removed from the advertisement. Zero means the rung was evaluated and did not bind, which is a different statement from the reason being absent.</td>
+<td></td>
+<td></td>
 </tr>
 </tbody>
 </table>
