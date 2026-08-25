@@ -2758,6 +2758,11 @@ A plan with only deferred residuals is ✅, not ⚠️ — see <a href="../devel
 <td>✅ Shipped as <code>v1.5.0</code> on 2026-08-15, validated on <code>rc.3</code>. All four gate items landed 2026-08-11 (Q713 in #1390, Q712 in #1391, Q715 in #1392, Q726 in #1393), taking the floor to MINOR, and the <a href="release-1.5/#in-scope-reconcile-the-marketing-surfaces">marketing reconciliation</a> closed 2026-08-12 (Q801, Q821). Q776 closed the last one: the <a href="../operations/observability-metrics/#acquisition-tier-reach">acquisition-tier ledger</a> carries all 53 <code>actions_gateway_*</code> series with the tier that emits each, <code>make metric-tiers-check</code> holds it to the source in both directions, and the re-walk it required found two classic-only series on no list plus one that reached no operator doc. Only the release-candidate dogfood validation in <a href="../operations/release/">release.md</a> remains, which needs the actual RC image and so is deliberately not a Queue row</td>
 </tr>
 <tr>
+<td><a href="release-1.6/">release-1.6.md</a></td>
+<td>The 1.6 release gate: the last <a href="arc-parity/">ARC parity</a> row a scheduled release can close (Q727, the non-privileged <code>container:</code> path), the nine merged changes the release already carries, and why untrusted-PR CI moved to 1.7</td>
+<td>❌ Open. Scope decided 2026-08-25. <code>semver-floor.sh v1.5.0</code> already reports MINOR off merged work, so the bump is not in question. <a href="../queue/Q727/">Q727</a> is the sole <code>1.6-gate</code> row and resolves through a plan doc first, which decides whether parity criterion 3 closes as a build or as a documented decline; Q719 closed 2026-08-24 and settled the storage half. Criterion 4 needs no work: <a href="../queue/Q765/">Q765</a>'s appliance trigger has not fired and the untested markers that satisfy its fallback are intact</td>
+</tr>
+<tr>
 <td><a href="v2-ga/">v2-ga.md</a></td>
 <td>The last graduation rung (<code>v2beta1</code> → <code>v2</code>) and the <code>v2.0.0</code> release that executes the three coupled removals: soak criteria, the graduation hop, removal sequencing, docs</td>
 <td>💤 Parked — every phase is event-gated, so no Queue row remains: the soak and the hop start after <code>v1.3.0</code> ships (<a href="../queue/Q413/">Q413</a>), Phase 3's removals ride <a href="../queue/Q273/">Q273</a>/<a href="../queue/Q264/">Q264</a>, and the Phase 2 alias decision is <a href="../queue/Q452/">Q452</a></td>
@@ -2827,7 +2832,7 @@ A plan with only deferred residuals is ✅, not ⚠️ — see <a href="../devel
 <tr>
 <td><a href="release-ladder/">release-ladder.md</a></td>
 <td>The map between the individual release plans: how many releases stand between here and <code>v2.0.0</code>, what each carries, why 1.6 exists rather than folding into 1.5, and what is deliberately punted past 2.0 with the signal each waits on</td>
-<td>ⓘ Ongoing goal doc. Shape decided 2026-08-09: 1.5 → 1.6 → 2.0. Establishes what the roadmap's near-term section means, applied 2026-08-09 (seven items parked to Deferred, Q719 and <a href="../queue/Q727/">Q727</a> gated to 1.6; Q719 closed 2026-08-24) and narrowed 2026-08-18 to "not waiting on an outside signal" once two revive triggers fired</td>
+<td>ⓘ Ongoing goal doc. Shape decided 2026-08-09 as 1.5 → 1.6 → 2.0, and re-themed 2026-08-25 to 1.5 → 1.6 → 1.7 → 2.0 when untrusted-PR CI moved off the 1.6 rung (<a href="release-1.6/">release-1.6.md</a>). Establishes what the roadmap's near-term section means, applied 2026-08-09 (seven items parked to Deferred, Q719 and <a href="../queue/Q727/">Q727</a> gated to 1.6; Q719 closed 2026-08-24) and narrowed 2026-08-18 to "not waiting on an outside signal" once two revive triggers fired</td>
 </tr>
 <tr>
 <td><a href="arc-parity/">arc-parity.md</a></td>

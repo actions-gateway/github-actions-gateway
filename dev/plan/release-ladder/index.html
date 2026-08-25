@@ -2703,7 +2703,12 @@ Neither answered <strong>"how many more releases before <code>v2.0.0</code>, and
 <tr>
 <td><strong>1.6</strong></td>
 <td>The ARC-parity ports: Q719's RWX storage validation, shipped 2026-08-24 (<a href="../../operations/worker-shared-storage/">worker-shared-storage.md</a>), then <a href="../../queue/Q727/">Q727</a> the non-privileged <code>container:</code> path</td>
-<td>release-1.6.md, written when 1.5 tags</td>
+<td><a href="../release-1.6/">release-1.6.md</a></td>
+</tr>
+<tr>
+<td><strong>1.7</strong></td>
+<td>Untrusted-PR CI on Kata: <a href="../../queue/Q408/">Q408</a> Phases 2 to 5, the in-cluster registry pull-through mirror and the tight egress policy that let the docs stop saying "trusted CI only" (<a href="../secure-multi-tenant-oss-ci/">secure-multi-tenant-oss-ci.md</a>)</td>
+<td>release-1.7.md, written when 1.6 tags</td>
 </tr>
 <tr>
 <td><strong>2.0</strong></td>
@@ -2721,9 +2726,11 @@ What justifies it is Q719 and <a href="../../queue/Q727/">Q727</a>, which are th
 Q719 closed on 2026-08-24, which settles the dependency and leaves 1.6 resting on Q727 alone.</p>
 <p>The soak argument is unchanged and still favours a separate minor.
 <code>v2-ga.md</code> Phase 1 requires no incompatible <code>v2beta1</code> shape change across at least two minors of real use; 1.4 and 1.5 are those two, so 1.6 lands the ports without restarting the clock.</p>
-<p>Q719 has landed, so the rung now has contents.
-If Q727 slips on demand, what 1.6 carries is one <code>M</code> item, which is a thin minor rather than an empty one, and that is the call to make when 1.5 tags.
-That is the honest reading of a ladder whose middle rung exists to carry two specific items.</p>
+<p>Q719 has landed, so the rung now has contents.</p>
+<p><strong>Settled 2026-08-25, when 1.5 had tagged and the call came due.</strong> The question this section framed, whether a rung resting on one item is worth cutting, turned out not to be the question.
+<code>semver-floor.sh v1.5.0</code> reports the floor at MINOR off nine merged changes that alter the shipped artifact, so 1.6 is forced whatever Q727 does, and the ladder's worry about a thin minor was about a release that no longer exists.
+What Q727 decides is the release's <em>theme</em>, not whether there is one.
+<a href="../release-1.6/">release-1.6.md</a> carries the measurement and the scope.</p>
 <h2 id="what-is-punted-past-v200">What is punted past <code>v2.0.0</code><a class="headerlink" href="#what-is-punted-past-v200" title="Permanent link">&para;</a></h2>
 <p>Not scheduled, and that is a decision rather than an oversight.
 Each waits on a real signal, and each carries a revive trigger on the backlog rather than a release:</p>
@@ -2771,7 +2778,9 @@ Deferred is not a graveyard here, it is a trigger list, and every row in it name
 <p><strong>Applied 2026-08-09.</strong> The seven punted items moved to Deferred with the triggers this page names (five of them still are), and Q719 and <a href="../../queue/Q727/">Q727</a> took the <code>1.6-gate</code> label, which is what publishes the commitment where an adopter reads it.</p>
 <p>That does not make 1.6 a decided release.
 The labels encode the target, and the reading above still governs: if both items slip on demand, the labels come off rather than an empty tag being cut.
-<code>release-1.6.md</code> gets written when 1.5 tags, on the same evidence the other release plans use.</p>
+<a href="../release-1.6/">release-1.6.md</a> was written on 2026-08-25, when 1.5 had tagged, on the same evidence the other release plans use.</p>
+<p><strong>1.7 was added on the same day, and it is a re-theme rather than a new rung.</strong> Untrusted-PR CI on Kata (<a href="../../queue/Q408/">Q408</a>, <a href="../secure-multi-tenant-oss-ci/">secure-multi-tenant-oss-ci.md</a>) was weighed for 1.6 and moved out: it is a threat-model deliverable, where the ARC ports are migration blockers, and Kata already makes Docker-in-Docker unprivileged, so neither axis advances the other.
+Q408 takes the <code>1.7-gate</code> label, which publishes that commitment the same way the 1.6 labels did.</p>
 <p>The one hard constraint the ladder encoded — Q726 landing before <code>v2.0.0</code>, since 2.0 removes the <code>v2alpha1</code> escape hatch its godoc pointed at — is satisfied: it landed in 1.5.
 Its <code>1.5-gate</code> label is what enforces that, a release earlier than strictly required.</p>
 
