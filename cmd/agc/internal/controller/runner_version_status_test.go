@@ -313,6 +313,28 @@ func TestRunnerVersionClearArbitration(t *testing.T) {
 		assert.Equal(t, v2alpha1.ReasonVersionAccepted, cond.Reason)
 	})
 
+	// The polarity of the reason check, pinned as behaviour rather than as a list.
+	// A reason neither producer declares today stands in for one added later: it must
+	// be treated as the reconciler's, so the clear is DROPPED and the condition merely
+	// stays stale. Enumerating the image reasons instead would merge here and wipe a
+	// live verdict, which is the failure direction this test exists to forbid.
+	t.Run("an unrecognized reason is treated as the reconciler's", func(t *testing.T) {
+		r, rs := newSet()
+		meta.SetStatusCondition(&rs.Status.Conditions, metav1.Condition{
+			Type:   v2alpha1.ConditionRunnerVersionTooOld,
+			Status: metav1.ConditionTrue,
+			Reason: "WorkerImageSomeFutureReason",
+		})
+
+		push(r, clear)
+		r.drainConditions(rs)
+
+		cond := versionCondition(rs.Status.Conditions)
+		require.NotNil(t, cond)
+		assert.Equal(t, "WorkerImageSomeFutureReason", cond.Reason,
+			"an unknown reason must not be overwritten by the listener baseline")
+	})
+
 	// The listener's other two baselines are unaffected: the arbitration is keyed to
 	// RunnerVersionTooOld/VersionAccepted, and Q332's pair has a single producer.
 	t.Run("leaves the Q332 baselines alone", func(t *testing.T) {
@@ -334,4 +356,57 @@ func TestRunnerVersionClearArbitration(t *testing.T) {
 		require.NotNil(t, cond)
 		assert.Equal(t, metav1.ConditionFalse, cond.Status)
 	})
+}
+
+// TestRunnerGroupRunnerVersionClearArbitration is the RunnerGroup half of the
+// arbitration, and the half that matters most: the classic tier is the only producer
+// of a session-sourced RunnerVersionTooOld, and a RunnerGroup reconcile has its own
+// early-status-write path (setCredentialUnavailable returns before the image reading
+// runs), so a merged clear would persist there.
+//
+// Added after review found the RunnerGroup drain guard had no coverage at all — the
+// whole controller suite stayed green with it deleted, because the arbitration tests
+// above drive RunnerSetReconciler only.
+func TestRunnerGroupRunnerVersionClearArbitration(t *testing.T) {
+	r := &RunnerGroupReconciler{
+		Provisioner: &provisioner.Provisioner{},
+		conditionCh: make(chan conditionUpdate, 8),
+	}
+	rg := &v1alpha1.RunnerGroup{
+		ObjectMeta: metav1.ObjectMeta{Name: "group", Namespace: "ns", Generation: 1},
+		Spec:       v1alpha1.RunnerGroupSpec{WorkerImage: staleImage},
+	}
+	r.setRunnerVersionStatus(rg)
+	require.Equal(t, v1alpha1.ReasonWorkerImageBelowMinimum,
+		meta.FindStatusCondition(rg.Status.Conditions, v1alpha1.ConditionRunnerVersionTooOld).Reason)
+
+	r.conditionCh <- conditionUpdate{namespace: "ns", name: "group", condition: metav1.Condition{
+		Type:    v1alpha1.ConditionRunnerVersionTooOld,
+		Status:  metav1.ConditionFalse,
+		Reason:  v1alpha1.ReasonVersionAccepted,
+		Message: "GitHub accepted the runner version at session creation",
+	}}
+	r.drainConditions(rg)
+
+	cond := meta.FindStatusCondition(rg.Status.Conditions, v1alpha1.ConditionRunnerVersionTooOld)
+	require.NotNil(t, cond)
+	assert.Equal(t, metav1.ConditionTrue, cond.Status)
+	assert.Equal(t, v1alpha1.ReasonWorkerImageBelowMinimum, cond.Reason)
+
+	// The clear must still land when the live condition is session-sourced, or the
+	// guard would be refusing everything rather than only an image-sourced overwrite.
+	rg2 := &v1alpha1.RunnerGroup{ObjectMeta: metav1.ObjectMeta{Name: "group", Namespace: "ns"}}
+	meta.SetStatusCondition(&rg2.Status.Conditions, metav1.Condition{
+		Type:   v1alpha1.ConditionRunnerVersionTooOld,
+		Status: metav1.ConditionTrue,
+		Reason: v1alpha1.ReasonVersionTooOld,
+	})
+	r.conditionCh <- conditionUpdate{namespace: "ns", name: "group", condition: metav1.Condition{
+		Type:   v1alpha1.ConditionRunnerVersionTooOld,
+		Status: metav1.ConditionFalse,
+		Reason: v1alpha1.ReasonVersionAccepted,
+	}}
+	r.drainConditions(rg2)
+	assert.Equal(t, v1alpha1.ReasonVersionAccepted,
+		meta.FindStatusCondition(rg2.Status.Conditions, v1alpha1.ConditionRunnerVersionTooOld).Reason)
 }
