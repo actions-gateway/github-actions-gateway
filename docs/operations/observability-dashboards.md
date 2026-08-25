@@ -180,6 +180,7 @@ The GMC comes from this dashboard's own scrape; `agc` and `proxy` need the per-t
 
 For the [budget owner](personas.md#budget-owner), who owns the spend and usually cannot read the cluster at all.
 Filtered by `$namespace` and `$runner_group`, and priced by a `$rate` textbox.
+It ships with auto-refresh **off**, where the other two use `30s`: the default window is seven days, and a spend figure over that range does not change meaningfully between two thirty-second polls.
 
 Every panel reads one metric: `actions_gateway_job_duration_seconds`.
 That series is worker pod wall time (creation to the last container finishing) on **both** acquisition tiers, which is the span [Appendix F §F.1](../design/appendix-f-cost-model.md#worker-pod-dominant-cost) bills against.
@@ -205,6 +206,10 @@ Every panel here uses `$__range`, so the time picker *is* the billing window: sw
 
 **Row 2 — Spend by Tenant**
 
+> **The comparison panels run instant queries**, which is where this dashboard departs from its two neighbours.
+> They are both panels in this row, both bar charts in Row 3, and the bar gauge in Row 4: each reduces the whole range to one number per tenant or per resource, so a range query would plot one bar per scrape and the comparison the panel exists to make would be unreadable.
+> The time-series panels stay range queries, because a trend is what they are for.
+
 | Panel | Query | Visualization |
 |-------|-------|---------------|
 | Estimated spend by tenant | `sum by (namespace) (increase(actions_gateway_job_duration_seconds_sum[$__range])) / 3600 * $rate` | Bar chart, **instant**. Namespace is tenant, which is why this lines up with an `aggregate=namespace` allocation report with no extra wiring |
@@ -218,23 +223,19 @@ A shape here is therefore whatever provisioned the worker, on either protocol.
 
 | Panel | Query | Visualization |
 |-------|-------|---------------|
-| Worker pod-hours by shape | `sum by (namespace, runner_group) (increase(actions_gateway_job_duration_seconds_sum[$__range])) / 3600` | Bar chart. Hours rather than currency, per the rate spread above |
-| Jobs completed by shape | the `…_count` counterpart | Bar chart. Beside the pod-hours bars it separates the two ways a shape's spend grows: more jobs, or slower jobs |
+| Worker pod-hours by shape | `sum by (namespace, runner_group) (increase(actions_gateway_job_duration_seconds_sum[$__range])) / 3600` | Bar chart, **instant**. Hours rather than currency, per the rate spread above |
+| Jobs completed by shape | the `…_count` counterpart | Bar chart, **instant**. Beside the pod-hours bars it separates the two ways a shape's spend grows: more jobs, or slower jobs |
 | Mean job duration by shape | `rate(…_sum[5m]) / rate(…_count[5m])`, both `sum by (namespace, runner_group)` | Time series. A shape drifting upward buys less for the same money; a large divergence from a cost tool's pod-hours for that shape usually means oversized resource requests ([right-sizing](../design/appendix-f-cost-model.md#worker-resource-right-sizing)) |
 
 **Row 4 — Zero Idle Compute (the always-on floor)**
 
 The row that answers "what am I paying for when nobody is running CI?".
 
-> **The comparison panels run instant queries**, which is where this dashboard departs from its two neighbours.
-> A bar chart or bar gauge here reduces the whole range to one number per tenant or per shape, so a range query would plot one bar per scrape and the comparison the panel exists to make would be unreadable.
-> The time-series panels stay range queries, because a trend is what they are for.
-
 | Panel | Query | Visualization |
 |-------|-------|---------------|
-| Worker consumption vs. the always-on floor | `sum by (namespace) (rate(actions_gateway_job_duration_seconds_sum[5m]))` against `kube_deployment_status_replicas_ready{deployment="actions-gateway-proxy"}` | Time series, two series on one panel deliberately. Over a quiet weekend the worker line collapses toward zero while the proxy line stays flat, and that flat line is the entire idle floor. An Actions Runner Controller (ARC) scale set holding `minRunners > 0` would show a worker line that never reaches zero. Needs kube-state-metrics |
+| Worker consumption vs. the always-on floor | `sum by (namespace) (rate(actions_gateway_job_duration_seconds_sum[5m]))` against `kube_deployment_status_replicas_ready{deployment="actions-gateway-proxy"}` | Time series, two series on one panel deliberately. Over a quiet weekend the worker line collapses toward zero while the proxy line stays flat, and that flat line is the entire idle floor. An Actions Runner Controller (ARC) scale set holding `minRunners > 0` would show a worker line that never reaches zero. The worker series comes from the duration histogram, which attributes a pod's whole lifetime at completion, so it is a trailing average over the rate window rather than a live pod count: it will not equal the pod count behind the quota panel beside it. Needs kube-state-metrics |
 | Jobs completed per hour | `sum by (namespace) (rate(actions_gateway_job_duration_seconds_count[5m])) * 3600` | Time series showing the volume that drives the worker line beside it |
-| ResourceQuota headroom | `kube_resourcequota{type="used"}` and its `type="hard"` counterpart | Bar gauge, a used bar beside its cap. A tenant pinned at its quota is one whose spend is held down by the cap rather than by demand, which is a budget conversation rather than an incident. Needs kube-state-metrics |
+| ResourceQuota headroom | `100 * kube_resourcequota{type="used"} / ignoring(type) kube_resourcequota{type="hard"}` | Bar gauge, `percent`, one bar per quota object and resource. A tenant sitting near 100% is one whose spend is held down by the cap rather than by demand, which is a budget conversation rather than an incident. The join is `ignoring(type)` rather than `on(namespace, resource)`, which errors on a namespace holding two `ResourceQuota` objects; it also keeps the `resourcequota` label, which is why the legend names it. Over quota reads above 100% and clips the bar full and red. Needs kube-state-metrics |
 
 ## Dashboard Variables
 

@@ -291,15 +291,70 @@ func TestDashboardVariablesAreSubstituted(t *testing.T) {
 
 // The substitution must not become a way for a malformed expression to pass: the
 // stand-in goes in, and what surrounds it still has to parse.
+//
+// Two things make the assertion real, and both were needed. It is on the error's
+// CONTENT, because an unsubstituted `$__range` also fails to parse and a test
+// accepting any error would pass with substitution removed entirely. And the
+// malformation is placed AFTER the variable: the parser reports its first error,
+// so a broken paren ahead of the variable is reported either way and the content
+// assertion cannot discriminate. Trailing parens put the variable first, so
+// removing the substitution changes the reported error to `'$'` and this fails.
 func TestSubstitutionStillParsesTheRest(t *testing.T) {
-	body := strings.Replace(varDashboard, "sum(increase(", "sum by ((((increase(", 1)
+	body := strings.Replace(varDashboard, `/ 3600 * $rate`, `/ 3600 * $rate))))`, 1)
 	findings, _ := runDashboard(t, body)
 	for _, f := range findings {
-		if strings.Contains(f, "expr does not parse") {
-			return
+		if !strings.Contains(f, "expr does not parse") {
+			continue
 		}
+		if strings.Contains(f, "'$'") {
+			t.Fatalf("the parse reached a variable, so substitution did not run: %s", f)
+		}
+		return
 	}
 	t.Fatalf("a malformed expression around a substituted variable should still fail; got %v", findings)
+}
+
+// Grafana supplies the `__`-prefixed variables and no dashboard declares them, so
+// reporting one as undeclared names a cause that cannot be true and invites the
+// repair of inventing a templating entry to satisfy the gate. The numeric ones
+// need no stand-in: they parse where they are written.
+func TestGrafanaBuiltinsAreNotReportedUndeclared(t *testing.T) {
+	for _, expr := range []string{
+		`rate(thing_total[$__interval]) * $__interval_ms / 1000`,
+		`sum(thing_total{from="$__from",to="$__to"})`,
+		`sum(increase(thing_total[$__range])) / $__range_s`,
+	} {
+		t.Run(expr, func(t *testing.T) {
+			body := strings.Replace(varDashboard,
+				`sum(increase(thing_seconds_sum{namespace=~"$namespace"}[$__range])) / 3600 * $rate`,
+				strings.ReplaceAll(expr, `"`, `"`), 1)
+			findings, _ := runDashboard(t, body)
+			if len(findings) != 0 {
+				t.Fatalf("a Grafana built-in should be clean, got %v", findings)
+			}
+		})
+	}
+}
+
+// interval is the type a dashboard reaches for when it wants a variable window,
+// and custom is its scalar sibling; both store a comma-separated option list that
+// Grafana defaults to the first of. constant is spelled two ways, a bare string
+// and an object carrying its own query key.
+func TestLiteralVariableTypesAreSubstituted(t *testing.T) {
+	for name, tc := range map[string]struct{ decl, expr string }{
+		"interval":        {`{"name":"iv","type":"interval","query":"1m,5m,1h"}`, `rate(thing_total[$iv])`},
+		"custom":          {`{"name":"cv","type":"custom","query":"0.096,0.048"}`, `sum(thing_total) * $cv`},
+		"constant object": {`{"name":"kv","type":"constant","query":{"query":"0.5"}}`, `sum(thing_total) * $kv`},
+	} {
+		t.Run(name, func(t *testing.T) {
+			body := `{"title":"T","templating":{"list":[` + tc.decl + `]},` +
+				`"panels":[{"title":"P","targets":[{"refId":"A","expr":"` + tc.expr + `"}]}]}`
+			findings, _ := runDashboard(t, body)
+			if len(findings) != 0 {
+				t.Fatalf("a declared literal variable should substitute, got %v", findings)
+			}
+		})
+	}
 }
 
 // A variable the dashboard declares nowhere is the defect the substitution could

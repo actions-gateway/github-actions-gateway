@@ -303,9 +303,9 @@
       "type": "timeseries",
       "title": "Worker consumption vs. the always-on floor",
       "datasource": { "type": "prometheus", "uid": "${datasource}" },
-      "gridPos": { "h": 7, "w": 12, "x": 0, "y": 24 },
+      "gridPos": { "h": 7, "w": 10, "x": 0, "y": 24 },
       "id": 31,
-      "description": "The property the cost model claims, made visible: mean concurrent worker pods against the proxy pool's ready replicas. Over a quiet weekend the worker series collapses toward zero while the proxy line stays flat, and that flat line is the whole idle floor. An ARC scale set holding minRunners > 0 would show a worker line that never reaches zero. The proxy series needs kube-state-metrics.",
+      "description": "The property the cost model claims, made visible: mean concurrent worker pods against the proxy pool's ready replicas. Over a quiet weekend the worker series collapses toward zero while the proxy line stays flat, and that flat line is the whole idle floor. An ARC scale set holding minRunners > 0 would show a worker line that never reaches zero. The worker series is derived from the duration histogram, which attributes a pod's whole lifetime at the moment it completes, so it is a trailing average over the rate window rather than an instantaneous pod count: do not expect it to equal the live pod count in the quota panel beside it. The proxy series needs kube-state-metrics.",
       "fieldConfig": { "defaults": { "unit": "short", "decimals": 1, "custom": { "fillOpacity": 10 } }, "overrides": [] },
       "targets": [
         {
@@ -326,7 +326,7 @@
       "type": "timeseries",
       "title": "Jobs completed per hour",
       "datasource": { "type": "prometheus", "uid": "${datasource}" },
-      "gridPos": { "h": 7, "w": 6, "x": 12, "y": 24 },
+      "gridPos": { "h": 7, "w": 6, "x": 10, "y": 24 },
       "id": 32,
       "description": "The volume driving the worker line beside it. Spend that rises with this is the system working; spend that rises without it is jobs getting slower or shapes getting bigger.",
       "fieldConfig": { "defaults": { "unit": "short", "decimals": 0, "custom": { "fillOpacity": 10 } }, "overrides": [] },
@@ -343,25 +343,18 @@
       "type": "bargauge",
       "title": "ResourceQuota headroom",
       "datasource": { "type": "prometheus", "uid": "${datasource}" },
-      "gridPos": { "h": 7, "w": 6, "x": 18, "y": 24 },
+      "gridPos": { "h": 7, "w": 8, "x": 16, "y": 24 },
       "id": 33,
-      "description": "What the tenant is using against the cap the platform set, as a used bar beside its cap. A tenant pinned at its quota is one whose spend is being held down by the cap rather than by demand, which is a budget conversation rather than an incident. Requires kube-state-metrics.",
-      "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] },
+      "description": "Each quota'd resource as a percentage of its cap, so one bar answers how much room is left. A tenant pinned near 100% is one whose spend is being held down by the cap rather than by demand, which is a budget conversation rather than an incident. It is a ratio rather than a used bar beside a cap bar because the resources are in different units: pods, cores and bytes on one linear axis leave the byte bar full and every other bar invisible. Matched with ignoring(type) rather than on(namespace, resource), which errors on a namespace holding two ResourceQuota objects. Requires kube-state-metrics.",
+      "fieldConfig": { "defaults": { "unit": "percent", "decimals": 1, "min": 0, "max": 100, "thresholds": { "mode": "absolute", "steps": [ { "color": "green", "value": null }, { "color": "yellow", "value": 75 }, { "color": "red", "value": 90 } ] }, "color": { "mode": "thresholds" } }, "overrides": [] },
       "options": { "displayMode": "gradient", "orientation": "horizontal" },
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "${datasource}" },
-          "expr": "kube_resourcequota{namespace=~\"$namespace\", type=\"used\"}",
+          "expr": "100 * kube_resourcequota{namespace=~\"$namespace\", type=\"used\"} / ignoring(type) kube_resourcequota{namespace=~\"$namespace\", type=\"hard\"}",
           "instant": true,
-          "legendFormat": "{{namespace}} {{resource}} used",
+          "legendFormat": "{{namespace}} {{resource}} ({{resourcequota}})",
           "refId": "A"
-        },
-        {
-          "datasource": { "type": "prometheus", "uid": "${datasource}" },
-          "expr": "kube_resourcequota{namespace=~\"$namespace\", type=\"hard\"}",
-          "instant": true,
-          "legendFormat": "{{namespace}} {{resource}} cap",
-          "refId": "B"
         }
       ]
     }

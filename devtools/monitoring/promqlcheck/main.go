@@ -248,42 +248,84 @@ func checkDashboard(path string, raw []byte) ([]string, int, error) {
 // grafanaVar matches one variable reference in either spelling Grafana accepts.
 var grafanaVar = regexp.MustCompile(`\$(?:\{(\w+)\}|(\w+))`)
 
-// builtinVars are Grafana's own interval and range variables. Each expands to a
-// duration at render time and is only ever written in a range selector, which is
-// syntactic position, so each needs a stand-in to parse. The value is arbitrary:
-// the check is that the surrounding expression is well formed, not that the
-// window is a particular length.
-var builtinVars = map[string]string{
+// builtinDurations are the Grafana built-ins that expand to a duration. Each is
+// written in a range selector, which is syntactic position, so each needs a
+// stand-in to parse. The value is arbitrary: the check is that the surrounding
+// expression is well formed, not that the window is a particular length.
+//
+// Every other `__`-prefixed name is a built-in too — `$__interval_ms`, `$__from`,
+// `$__to` and friends expand to a number, and appear in idioms like
+// `rate(x[$__interval]) * $__interval_ms / 1000`. They parse where they are
+// written, so they need no stand-in; what they need is exemption from the
+// undeclared-variable finding, since Grafana supplies them and no dashboard
+// declares them in templating.list.
+var builtinDurations = map[string]string{
 	"__range":         "5m",
 	"__interval":      "5m",
 	"__rate_interval": "5m",
 }
 
+// isBuiltin reports whether name is supplied by Grafana rather than by the
+// dashboard. The `__` prefix is Grafana's own reserved namespace, so this stays
+// correct as they add more, which a fixed list would not.
+func isBuiltin(name string) bool { return strings.HasPrefix(name, "__") }
+
 // dashboardVars returns the substitutions a dashboard's own templating declares,
 // and the set of every name it declares at all.
 //
-// The two differ, and the gap is the point: a textbox or constant carries a
-// literal that reaches scalar position and must be substituted, while a query
-// variable resolves to a label value and parses as written. Both are declared, so
-// both are exempt from the undeclared-variable finding; only the first is
-// rewritten.
+// The two differ, and the gap is the point: the literal-valued types reach scalar
+// or range position and must be substituted, while a query variable resolves to a
+// label value and parses as written. Both are declared, so both are exempt from
+// the undeclared-variable finding; only the first is rewritten.
+//
+// `interval` is the one worth naming: it exists to fill a range selector, so it is
+// what a dashboard needing a variable window reaches for first. Its value and
+// `custom`'s are comma-separated option lists, and Grafana defaults to the first,
+// so that is what stands in.
 func dashboardVars(d dashboard) (map[string]string, map[string]bool) {
-	vars := make(map[string]string, len(builtinVars))
-	for k, v := range builtinVars {
+	vars := make(map[string]string, len(builtinDurations))
+	for k, v := range builtinDurations {
 		vars[k] = v
 	}
 	declared := make(map[string]bool, len(d.Templating.List))
 	for _, v := range d.Templating.List {
 		declared[v.Name] = true
-		if v.Type != "textbox" && v.Type != "constant" {
+		if !literalVarTypes[v.Type] {
 			continue
 		}
-		var literal string
-		if json.Unmarshal(v.Query, &literal) == nil && literal != "" {
+		if literal := firstOption(v.Query); literal != "" {
 			vars[v.Name] = literal
 		}
 	}
 	return vars, declared
+}
+
+// literalVarTypes are the templating types whose value is a literal the
+// expression needs, rather than a label value it already parses as.
+var literalVarTypes = map[string]bool{
+	"textbox":  true,
+	"constant": true,
+	"custom":   true,
+	"interval": true,
+}
+
+// firstOption reads a template variable's default out of the two shapes Grafana
+// writes it in — a bare string, or an object carrying its own `query` key — and
+// takes the first entry of a comma-separated option list, which is what Grafana
+// selects when nothing else is stored.
+func firstOption(raw json.RawMessage) string {
+	var literal string
+	if json.Unmarshal(raw, &literal) != nil {
+		var obj struct {
+			Query string `json:"query"`
+		}
+		if json.Unmarshal(raw, &obj) != nil {
+			return ""
+		}
+		literal = obj.Query
+	}
+	first, _, _ := strings.Cut(literal, ",")
+	return strings.TrimSpace(first)
 }
 
 // substituteVars rewrites the variable references in expr with parse-valid
@@ -293,6 +335,13 @@ func dashboardVars(d dashboard) (map[string]string, map[string]bool) {
 // reaches the parser carrying it and fails there too. Substituting a default for
 // one would let a panel referencing a variable that does not exist parse clean
 // and then render an error, which is the state this whole check exists to catch.
+//
+// The match runs over the raw expression with no position awareness, so what it
+// detects is "a $word here we could not attribute" rather than strictly an
+// undeclared variable: a literal `$` inside a quoted label value is reported too.
+// That is the intended trade. A misspelled variable lands inside a quoted matcher
+// (namespace=~"$namespaec"), which is precisely where the check has to reach, and
+// making it position-aware would exempt the case it exists for.
 func substituteVars(expr string, vars map[string]string, declared map[string]bool) (string, []string) {
 	var unknown []string
 	seen := map[string]bool{}
@@ -301,7 +350,7 @@ func substituteVars(expr string, vars map[string]string, declared map[string]boo
 		if v, ok := vars[name]; ok {
 			return v
 		}
-		if !declared[name] && !seen[name] {
+		if !declared[name] && !isBuiltin(name) && !seen[name] {
 			seen[name] = true
 			unknown = append(unknown, name)
 		}
