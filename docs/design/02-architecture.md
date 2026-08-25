@@ -641,10 +641,12 @@ Two versions are in play and they answer different questions.
 The worker image's runner version is what will execute the job, and is the one this condition reports.
 The injected wrapper logs it from the runner's own dependency manifest at worker startup, which is the only reading that holds for an image whose tag says nothing.
 
-The two producers therefore own disjoint halves of one condition type, keyed by reason, and neither writes over the other.
+The two producers therefore report different facts through one condition type, keyed by reason, and only the clear is arbitrated.
 A healthy image reading does not refute a live session rejection, so it defers to a `True` carrying `VersionTooOld`.
+That deference is not reciprocated: a session-sourced `True` writes over an image verdict, because an observed rejection outranks a prediction.
 In the other direction the classic listener publishes `False`/`VersionAccepted` as its session-start baseline: `agent.version` is the AGC's own compile-time pin, so the operator's fix for a rejection is a gateway upgrade, and that restarts the process while the condition survives in status with nothing else to clear it.
-The reconciler drops that baseline when the live condition carries a `WorkerImage*` reason.
+The reconciler drops that baseline unless the live condition carries one of the listener's own two reasons.
+Enumerating the session half rather than the `WorkerImage*` half is what makes a reason added later fail safe: an unrecognized one counts as the reconciler's, so the clear is dropped and the condition merely stays stale.
 It drops it at the drain rather than relying on the image reading to overwrite it, and drops a retained copy the image reading has already superseded.
 A reconcile that reaches the image reading overwrites a merged clear in memory before writing status, so it never surfaces; the reconcile paths that write status earlier do surface it, and one of those is the unresolved-references branch a tenant reaches by deleting a `RunnerTemplate`, where the clear would replace the image verdict.
 The second drop is what makes that bounded: the reconciler's retry for an unpersisted listener push assumes a condition it never re-derives, and this one it re-derives every reconcile, so a push merged before the set's first image reading would otherwise be re-applied for the set's lifetime.
