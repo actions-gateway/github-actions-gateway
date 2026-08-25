@@ -1,0 +1,10 @@
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+# Two schedulable workers, because the property under test is cross-node sharing.
+# A single-node cluster would bind two pods to the same kubelet and the same
+# local mount, which any RWO volume also satisfies — the assertion would pass
+# against a storage class that cannot do what the reference architecture claims.
+nodes:
+  - role: control-plane
+  - role: worker
+  - role: worker

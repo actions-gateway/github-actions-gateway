@@ -1,0 +1,14 @@
+# The preflight claim rwx-storage-cluster.sh binds before declaring the cluster
+# ready. Deleted immediately afterwards; it exists only to move the provisioning
+# failure from a test timeout to the script that caused it.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: rwx-preflight
+  namespace: gag-rwx-storage
+spec:
+  accessModes: [ReadWriteMany]
+  storageClassName: gag-rwx-nfs
+  resources:
+    requests:
+      storage: 1Gi

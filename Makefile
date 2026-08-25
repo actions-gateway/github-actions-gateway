@@ -1149,6 +1149,35 @@ karpenter-cluster-delete: ## Delete the live-Karpenter kind cluster (no-op if it
 		echo "==> kind cluster $(KARPENTER_CLUSTER) does not exist"; \
 	fi
 
+##@ Live shared storage
+
+# GAG's workers are storage-less and the AGC provisions no volume of its own, so
+# a shared ReadWriteMany volume is entirely a tenant podTemplate concern — and
+# nothing in the fast tiers can observe whether such a pod actually mounts one.
+# Whether it does belongs to a kubelet, a CSI driver and two nodes. These targets
+# supply all three in a throwaway kind cluster and run the pod the provisioner
+# really builds through it (Q719).
+# Detail: docs/development/testing.md § The shared worker storage validation.
+RWX_STORAGE_CLUSTER ?= gag-rwx
+
+.PHONY: rwx-storage-cluster
+rwx-storage-cluster: ## Create the kind cluster with a real ReadWriteMany storage class (no-op if it exists)
+	RWX_STORAGE_CLUSTER=$(RWX_STORAGE_CLUSTER) KIND_NODE_IMAGE=$(KIND_NODE_IMAGE) \
+		scripts/e2e/rwx-storage-cluster.sh
+
+.PHONY: test-rwx-storage
+test-rwx-storage: ## Assert workers share one RWX volume across nodes (needs rwx-storage-cluster)
+	RWX_STORAGE_CLUSTER=$(RWX_STORAGE_CLUSTER) $(MAKE) -C cmd/agc test-rwx-storage
+
+.PHONY: rwx-storage-cluster-delete
+rwx-storage-cluster-delete: ## Delete the shared-storage kind cluster (no-op if it does not exist)
+	@if kind get clusters 2>/dev/null | grep -qx $(RWX_STORAGE_CLUSTER); then \
+		echo "==> deleting kind cluster $(RWX_STORAGE_CLUSTER)"; \
+		kind delete cluster --name $(RWX_STORAGE_CLUSTER); \
+	else \
+		echo "==> kind cluster $(RWX_STORAGE_CLUSTER) does not exist"; \
+	fi
+
 ##@ Tools
 
 .PHONY: tools

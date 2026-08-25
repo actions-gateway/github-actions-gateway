@@ -2497,6 +2497,36 @@ Two consequences to plan for:
 
 What each arm measured on first run, and the findings that outlived them, are in [the plan §9c](../plan/capacity-aware-intake.md#9c-the-live-autoscaler-harness-and-what-it-measured-q474) (cluster-autoscaler) and [§9i](../plan/capacity-aware-intake.md#9i-the-karpenter-arm-of-the-drift-gate-and-what-it-measured-q479) (Karpenter — including the recorder-generation premise it corrected).
 
+## The shared worker storage validation
+
+A second live tier exists for the opposite reason to the drift gate above: not that upstream can change under us, but that nothing short of a real cluster can observe the property at all.
+
+Workers are storage-less and the AGC provisions no volume of its own, so a shared `ReadWriteMany` volume is entirely a tenant `podTemplate` concern (Q719).
+Whether such a pod actually mounts one, and whether two workers on two nodes see one filesystem, belongs to a kubelet, a CSI driver and two nodes. envtest has none of the three, and a unit test asserting the pod spec says the right thing is exactly the shape that ships a reference architecture nobody has run.
+
+```bash
+make rwx-storage-cluster    # kind, csi-driver-nfs + an in-cluster NFS server
+make test-rwx-storage       # the validation
+make rwx-storage-cluster-delete
+```
+
+The harness ([`scripts/e2e/rwx-storage-cluster.sh`](../../scripts/e2e/rwx-storage-cluster.sh)) is a three-node kind cluster whose two workers are what makes the assertion mean anything: two pods on one kubelet share a local directory, which an RWO volume also satisfies.
+It binds one throwaway claim before declaring itself ready, because a `StorageClass` that applies cleanly has proven nothing.
+The mount happens at provisioning time, so a wrong share path surfaces there rather than at apply.
+
+The test ([`worker_shared_storage_live_test.go`](../../cmd/agc/internal/provisioner/worker_shared_storage_live_test.go), build tag `rwxstorage`) runs the pod the provisioner really builds, on both nodes, and requires them to exchange files through one claim.
+Its second case is the control that gives the first one meaning, and it is the measurement behind the operator doc's one hard requirement: **without `fsGroup` the runner's write is refused**, because a freshly provisioned volume's root belongs to root and the AGC gap-fills `runAsUser: 1001`.
+If that case ever passes, `fsGroup` has stopped being load-bearing and [worker-shared-storage.md](../operations/worker-shared-storage.md) is telling operators to set a field that does nothing.
+
+Two things to know before reading a result:
+
+- **Point it at your own class with `RWX_STORAGE_CLASS`.** The default is the harness's `gag-rwx-nfs`; anything else the cluster offers works, which is how a cloud filesystem gets validated rather than assumed.
+  What has been exercised is the table in [worker-shared-storage.md § What this has been exercised against](../operations/worker-shared-storage.md#what-this-has-been-exercised-against), and that table is the only claim this repo makes about a storage class.
+- **It fails rather than skips when the cluster is absent.** The file compiles only under its build tag, so reaching it means someone asked for the check, and a validation that skips itself validates nothing.
+
+The fast half is `worker_shared_storage_test.go`, which is in `make check`: it pins that a tenant's claim survives the provisioner's own volume injection, and that `fsGroup` survives `applySecurityDefaults` on every profile.
+Both were confirmed able to fail by deleting the mechanism, an append turned into an assignment and an unconditional `fsGroup` stamp, rather than by watching them pass.
+
 ## End-to-end tests
 
 E2E tests run on a local `kind` cluster, are gated by the `//go:build e2e` tag, and live under `cmd/gmc/test/e2e/`.

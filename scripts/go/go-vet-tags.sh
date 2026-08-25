@@ -55,7 +55,7 @@ source "$REPO_ROOT/scripts/lib/common.sh"
 # which reads its own copy. GOOS/GOARCH/go1.x constraints do NOT belong here,
 # because they are environment-controlled, and forcing e.g. `linux` on a darwin
 # host would build files for the wrong platform.
-BUILD_TAGS="integration,e2e,load,autoscaler,karpenter"
+BUILD_TAGS="integration,e2e,load,autoscaler,karpenter,rwxstorage"
 
 # The golangci-lint config whose run.build-tags must name the same tags. Both
 # gates build the tagged trees, and each reads its own list.

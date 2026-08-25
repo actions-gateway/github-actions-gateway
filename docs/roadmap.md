@@ -26,12 +26,9 @@ The pill is read from the backlog rather than typed here, so it cannot outlive t
 No pill means the item is on the near-term plan with no release decided for it yet.
 
 
-- **[Persistent and shared worker storage](operations/README.md)** <!-- q:Q719 --> Workers are storage-less by design and nothing validates a `ReadWriteMany` volume mounted into one, so the stance is undocumented rather than decided. `ReadWriteMany` is how jobs share files and what ARC's `containerMode: kubernetes` depends on, so it also matters to anyone migrating off that mode.
-  Validation and a reference architecture come before any API.
-
 - **[A non-privileged path for `container:` and `services:` steps](plan/arc-parity.md#the-collision-the-individual-rows-do-not-state)** <!-- q:Q727 --> ARC runs these as separate pods on a shared volume under `containerMode: kubernetes`.
   One worker pod per job means the path here is Docker-in-Docker, unprivileged only under Kata.
-  Sequenced behind the `ReadWriteMany` validation above, which it depends on; documenting Kata Docker-in-Docker as the permanent answer is a valid outcome.
+  Its `ReadWriteMany` dependency is closed: [shared worker storage](operations/worker-shared-storage.md) is validated and documented. Documenting Kata Docker-in-Docker as the permanent answer is still a valid outcome.
 
 - **[CI for untrusted pull requests on Kata workers](plan/q408-untrusted-pr-egress.md)** <!-- q:Q408 --> [Kata workers](operations/kata-dind-workloads.md) are validated for *trusted* CI only: the micro-VM bounds the guest kernel, the runner's egress stays permissive.
   Untrusted PRs need an in-cluster pull-through registry mirror plus egress scoped to it, GitHub, and DNS.

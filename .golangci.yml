@@ -35,6 +35,7 @@ run:
     - load
     - autoscaler
     - karpenter
+    - rwxstorage
 linters:
   default: none
   enable:

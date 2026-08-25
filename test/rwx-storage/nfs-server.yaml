@@ -1,0 +1,56 @@
+# An in-cluster NFS server, so the harness needs no cloud filesystem to exercise
+# ReadWriteMany. Kubernetes' own e2e image, pinned by digest.
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: gag-rwx-storage
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: nfs-server
+  namespace: gag-rwx-storage
+spec:
+  selector:
+    app: nfs-server
+  ports:
+    - name: tcp-2049
+      port: 2049
+      protocol: TCP
+    - name: tcp-20048
+      port: 20048
+      protocol: TCP
+    - name: tcp-111
+      port: 111
+      protocol: TCP
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nfs-server
+  namespace: gag-rwx-storage
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: nfs-server
+  template:
+    metadata:
+      labels:
+        app: nfs-server
+    spec:
+      containers:
+        - name: nfs-server
+          image: registry.k8s.io/e2e-test-images/volume/nfs:1.4@sha256:c3e380bb5a92095288b4dd586a250c560612afbabf53fb2a057e99fff75f038f
+          # rpc.nfsd needs the kernel's nfsd module and CAP_SYS_ADMIN to export.
+          # This is the harness's storage appliance, not a workload GAG ships.
+          securityContext:
+            privileged: true
+          ports:
+            - containerPort: 2049
+              protocol: TCP
+            - containerPort: 20048
+              protocol: TCP
+            - containerPort: 111
+              protocol: TCP

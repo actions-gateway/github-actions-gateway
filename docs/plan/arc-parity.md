@@ -23,7 +23,7 @@ Measured against ARC `gha-runner-scale-set` 0.14.2 (released 2026-05-22) and the
 
 | Gap | Why it blocks a migration | Row | Release |
 |---|---|---|---|
-| **`containerMode: kubernetes`** | Runs `container:` and `services:` steps as separate pods on a provisioned volume. GAG runs one worker pod per job, so that path is Docker-in-Docker under Kata rather than a non-privileged pod-per-step model | [Q727](../queue/Q727.md) | after 1.5 |
+| **`containerMode: kubernetes`** | Runs `container:` and `services:` steps as separate pods on a provisioned volume. GAG runs one worker pod per job, so that path is Docker-in-Docker under Kata rather than a non-privileged pod-per-step model. The shared-volume half is closed: [worker-shared-storage.md](../operations/worker-shared-storage.md) | [Q727](../queue/Q727.md) | 1.6 |
 | **GHES validated on a real appliance** | GAG serves GitHub Enterprise Server (GHES) gateways and marks both of its GHES capabilities untested against real hardware, so an enterprise evaluator has no evidence either way | [Q765](../queue/Q765.md) | unscheduled, needs an appliance |
 
 ## What is deliberately not parity
@@ -38,14 +38,14 @@ That closes with adoption and time, not with a deliverable.
 
 ## The collision the individual rows do not state
 
-**Q727 cannot start before [Q719](../queue/Q719.md).** ARC's `containerMode: kubernetes` depends on a `ReadWriteMany` volume, and GAG's workers are storage-less by design with nothing validating an RWX volume mounted into one.
-So the stance on persistent worker storage is undocumented rather than decided, and Q727 would be designing on top of an unvalidated substrate.
+**Q727 could not start before Q719, and Q719 closed on 2026-08-24.** ARC's `containerMode: kubernetes` depends on a `ReadWriteMany` volume, and GAG's workers are storage-less by design.
+Until Q719 nothing validated an RWX volume mounted into a worker, so the stance on persistent worker storage was undocumented rather than decided and Q727 would have been designing on top of an unvalidated substrate.
 
-Sequencing follows: Q719 validates RWX and writes the reference architecture, then Q727 designs the pod-per-step path against it.
-Attempting Q727 first means either building the storage validation inside it, which hides an M-sized piece of work inside an L-sized one, or guessing.
+That substrate now exists: [worker-shared-storage.md](../operations/worker-shared-storage.md) is the reference architecture, and `make test-rwx-storage` runs the pod the provisioner really builds across two nodes against a live class ([testing.md § The shared worker storage validation](../development/testing.md#the-shared-worker-storage-validation)).
+Q727 designs the pod-per-step path against it.
 
-This is also why Q727 is not admitted to 1.5.
-Q719 is itself unscheduled.
+What that leaves Q727 is the pod-per-step model itself, not the storage under it.
+Two properties the validation established shape the design: the volume half is an ordinary namespaced claim a tenant already controls, and the runner's write depends on `fsGroup` matching the gap-filled UID, so any pod-per-step path has to carry that field to every pod it creates.
 
 ## Definition of done
 
