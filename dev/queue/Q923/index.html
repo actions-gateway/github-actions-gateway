@@ -2572,7 +2572,10 @@
 The stale path the row named as the lead was corrected before then: the rule at <code>.golangci.yml:194</code> names <code>cmd/agc/internal/transport/trustpool_test.go</code>, which is the file's current name.
 What survives is smaller and the opposite shape.
 No <code>SA1019</code> directive remains anywhere in <code>cmd/agc/internal/transport/</code>, so the exclusion now excludes nothing, and its comment still explains a suppression that has no subject.
-Delete it, or restore the directive it was written for.
+Delete it, or swap it for the directive it was written for, never both.
+Measured 2026-08-24: restoring the two <code>//nolint:staticcheck</code> directives while the exclusion still stands fails <code>nolintlint</code> with 2 issues, because <a href="../../development/testing/#a-directive-is-unused-red-is-about-the-linters-silence-not-the-directive">exclusion rules are applied before the nolint filter</a>.
+The same file carries a stale count in the <code>nolintlint</code> settings comment at <code>.golangci.yml:78</code>, "71 of 79 are justified gosec accepts"; measured 2026-08-24 it is 104 of 117 first-party sites.
+Fix it in the same edit, since this row already opens that file.
 <a href="../Q929/">Q929</a> owns the separate question of the lint gate returning two verdicts on one tree.</p>
 
 

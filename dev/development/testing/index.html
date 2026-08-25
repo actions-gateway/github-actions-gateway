@@ -3155,6 +3155,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#a-directive-is-unused-red-is-about-the-linters-silence-not-the-directive" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        A directive is unused red is about the linter's silence, not the directive
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#a-flake-that-passed-on-rerun-has-two-logs--diff-them" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -5320,6 +5331,31 @@ Q822 and Q823 both name <code>provisioner</code> timing out under concurrent loa
 Measured 2026-08-14 closing Q811: the panic named a pre-existing claim-retry test, whose fixture drove the very arm the change had just added a GitHub call to.
 The hang was that new call re-asking an unroutable fake for its whole retry window, not the load.</p>
 <p>Two corollaries, with the repo's numbers: <strong>time the package alone before believing "under load"</strong>, where 240 s under the gate and 1.6 s standalone is the load story and 240 s both ways is not; and <strong>a pre-existing test can hang on new code</strong>, so what matters is whether its fixture reaches the new path, not that the test predates the change.</p>
+<h3 id="a-directive-is-unused-red-is-about-the-linters-silence-not-the-directive">A <code>directive is unused</code> red is about the linter's silence, not the directive<a class="headerlink" href="#a-directive-is-unused-red-is-about-the-linters-silence-not-the-directive" title="Permanent link">&para;</a></h3>
+<p><code>nolintlint</code> runs with <code>allow-unused: false</code> (<code>.golangci.yml</code>), so a <code>//nolint:&lt;linter&gt;</code> directive that suppressed nothing fails the build.
+The directive is never the subject: golangci-lint reports it exactly when <strong>no issue from that linter reached the nolint filter for that line</strong>, so what has to be diagnosed is why the linter went quiet.</p>
+<p>Three causes, all seen here, and only one of them is the directive's fault:</p>
+<ul>
+<li><strong>A config exclusion silenced it.</strong> An exclusion and a directive covering the same line cannot coexist: the exclusion strips the issue before the directive can match it.
+  Measured 2026-08-24 on <code>cmd/agc/internal/transport/trustpool_test.go</code>, restoring the two <code>//nolint:staticcheck</code> directives #1639 dropped and varying only the config.
+  With that file's <code>SA1019.*Subjects</code> exclusion in place: 2 <code>nolintlint</code> issues.
+  With the exclusion removed and the same directives present: <code>0 issues</code>.
+  The exclusion is the only difference, which also rules out staticcheck having been quiet on its own: the third cause below.
+  In golangci-lint 2.12.2 the ordering that produces it is <code>NewExclusionRules</code> registered ahead of <code>NewNolintFilter</code> in <code>pkg/lint/runner.go</code>, but the pair of runs is the instrument and the source read only corroborates it.
+  Pick one suppression per line; adding the other is the failure, not the fix.</li>
+<li><strong>A stale analysis cache.</strong> Q516: an entry keyed on a deleted worktree path reported <code>G204</code> <em>and</em> <code>directive //nolint:gosec … is unused</code> on the same two lines.
+  <a href="#build-and-lint-caches-across-worktrees">Build and lint caches across worktrees</a> has the mechanism and the one-line recovery.</li>
+<li><strong>The linter stopped emitting, with nothing else changing.</strong> Q929: one commit, two CI verdicts, same Go, cache key and scope.
+  Undiagnosed.</li>
+</ul>
+<p><strong>The surface is every directive, not the ones a past failure named.</strong> Measured 2026-08-24 over the first-party tree: 117 directive sites, 104 of them naming <code>gosec</code> and 5 <code>staticcheck</code>, the rest <code>revive</code>, <code>dupl</code>, <code>errcheck</code>, <code>noctx</code> and <code>forbidigo</code>.
+That the class reaches <code>gosec</code> is a measurement rather than an inference, for the class as a whole; it establishes the first cause above, and carries to the third only by <code>nolintlint</code>'s unused check being linter-agnostic.
+Adding a <code>G101</code> exclusion at <code>api/apiconditions/conditions.go:40</code> takes that package from <code>0 issues</code> to a <code>nolintlint</code> red naming the directive on that line, and removing it takes it back.</p>
+<p><strong>A directive naming a disabled linter is inert, not an error</strong>, because the nolint filter drops the candidate outright when the named linter is not in the enable list (golangci-lint 2.12.2, <code>pkg/result/processors/nolint_filter.go</code>).
+<code>cmd/gmc/test/utils/</code> measures it in one command: the package carries two <code>//nolint:revive</code> and five <code>//nolint:revive,staticcheck</code>, <code>revive</code> appears nowhere in <code>.golangci.yml</code>, and the package lints <code>0 issues</code>.
+So the revive-only pair is inert rather than unused, and the five comma-form directives stand on their <code>staticcheck</code> half alone.
+It is also why counting the surface needs the comma form: a grep for the literal <code>nolint:staticcheck</code> returns nothing <strong>first-party</strong> on a tree that holds five of them, which is how Q929 came to be filed asserting the staticcheck surface was empty.
+Scope the grep as well as its pattern: unscoped, that same query returns dozens of hits, every one of them under a <code>vendor/</code> tree and none of them yours.</p>
 <h3 id="a-flake-that-passed-on-rerun-has-two-logs--diff-them">A flake that passed on rerun has two logs — diff them<a class="headerlink" href="#a-flake-that-passed-on-rerun-has-two-logs--diff-them" title="Permanent link">&para;</a></h3>
 <p>GitHub keeps each attempt separately, so one run ID yields both a failing and a passing log over the same test on the same commit:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-22-1" name="__codelineno-22-1" href="#__codelineno-22-1"></a>gh<span class="w"> </span>run<span class="w"> </span>view<span class="w"> </span>&lt;run-id&gt;<span class="w"> </span>--attempt<span class="w"> </span><span class="m">1</span><span class="w"> </span>--job<span class="w"> </span>&lt;job-id&gt;<span class="w"> </span>--log

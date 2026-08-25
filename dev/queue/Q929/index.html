@@ -2570,10 +2570,23 @@
 <h1 id="the-lint-gate-returns-two-verdicts-on-one-tree">The lint gate returns two verdicts on one tree<a class="headerlink" href="#the-lint-gate-returns-two-verdicts-on-one-tree" title="Permanent link">&para;</a></h1>
 <p>Measured 2026-08-18: <code>c99129aa</code> passed <code>lint</code> in run 32145897225 and failed in 32172968731, <code>nolintlint</code> calling two staticcheck directives unused in only one.
 Same Go, cache key and scope. #1639 deleted the directives; the flake outlives them.</p>
-<p>Not recurred: <code>main</code> has taken 28 green <code>unit-test</code> runs and no failure at all since 2026-08-18T18:47Z (measured 2026-08-23).
-The two directives that exhibited it are gone and the tree now carries no <code>nolint:staticcheck</code> anywhere, so <code>nolintlint</code> has nothing staticcheck-shaped left to disagree about.
-The 79 remaining directives are gosec accepts and whether the same nondeterminism reaches those is <strong>unmeasured</strong>, which is also why the non-recurrence is weak evidence either way.
-Re-measure the surface before picking: the <code>M</code> was sized against a defect that currently has no way to express itself.</p>
+<p><strong>Do not retire this as "the defect has no way to express itself": that read was wrong.</strong> Re-measured 2026-08-24: 117 first-party directive sites, 104 naming <code>gosec</code> and 5 <code>staticcheck</code>.
+The earlier count matched the literal <code>nolint:staticcheck</code> and so missed the five <code>//nolint:revive,staticcheck</code> dot-imports under <code>cmd/gmc/test/utils/</code>.
+Those five are what keep the staticcheck surface alive, and they are a plain count.</p>
+<p>The <code>gosec</code> half is a measurement plus one inference, and the join matters.
+Measured: silencing <code>G101</code> at <code>api/apiconditions/conditions.go:40</code> takes that package from <code>0 issues</code> to a <code>nolintlint</code> red naming the directive, and removing the exclusion takes it back.
+That silence was induced by a config exclusion, which is cause #1 and not this row's.
+Inferred: that the <em>nondeterministic</em> silence lands the same way, which rests on <code>nolintlint</code>'s unused check being linter-agnostic rather than on a reproduction.
+Whether the CI silence is staticcheck-specific is therefore still open, and it is the question that could still retire this row.
+<a href="../../development/testing/#a-directive-is-unused-red-is-about-the-linters-silence-not-the-directive">Mechanism and the three known causes</a>.</p>
+<p>Not reproduced at rest: six local full sweeps on 2026-08-24, three cold analyzer cache and three warm, all <code>0 issues</code>.
+CI soak re-counted the same day: 28 <code>unit-test</code> runs on <code>main</code> <em>after</em> run 32172968731, the failure named above.
+A <code>&gt;=</code> on its 18:47Z timestamp returns 29 and includes that failure.
+Of the 28, 25 succeeded and 3 were cancelled, none failed, newest 2026-08-21 (docs-only merges are path-gated out).
+Read 25 against the <a href="../../development/maintaining-backlog/#retiring-a-flake-watch-row">soak floors</a>, where it lands on the infra bar.
+Those runs did exercise all 117 surviving directives, so they are evidence about the surviving surface; what they cannot speak to is the original mechanism, since #1639 deleted the two sites that exhibited it.
+The <code>M</code> stands.
+Lead, unverified: <code>unit-test.yml</code>'s analyzer cache carries a <code>restore-keys</code> fallback, so a run's cache is some earlier run's rather than a cold one.</p>
 
 
 
