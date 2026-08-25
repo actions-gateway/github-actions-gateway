@@ -195,7 +195,7 @@ func TestV2_RunnerSet_CapacityGate_ElasticClusterDiscriminatesByReporter(t *test
 	// End to end: the closed gate refuses a delivered job rather than claiming it.
 	// maxWorkers is 3 against two in-flight pods, so the ceiling rung cannot be what
 	// refused — which is what makes the reason label meaningful here.
-	id := enqueueJobOnOwnerSession(15*time.Second, setName, nil, broker.RunnerJobRequestBody{})
+	id := enqueueJobOnSetSession(15*time.Second, setName, nil, broker.RunnerJobRequestBody{})
 	require.NotEmpty(t, id, "a session for %s should be active", setName)
 
 	require.Eventually(t, func() bool {
@@ -253,7 +253,7 @@ func TestV2_RunnerSet_CapacityGate_FixedClusterSkipsAcquire(t *testing.T) {
 	markUnschedulable(t, pod, "0/3 nodes are available: 3 node(s) had untolerated taint {dedicated: gpu}")
 	waitForCapacityDeclined(t, rec.Client, ns, setName, v2alpha1.ReasonPodsUnschedulable, 25*time.Second)
 
-	id := enqueueJobOnOwnerSession(15*time.Second, setName, nil, broker.RunnerJobRequestBody{})
+	id := enqueueJobOnSetSession(15*time.Second, setName, nil, broker.RunnerJobRequestBody{})
 	require.NotEmpty(t, id, "a session for %s should be active", setName)
 
 	require.Eventually(t, func() bool {
@@ -441,7 +441,7 @@ func TestV2_RunnerSet_CapacityGate_WorkerThatCannotStartSkipsAcquire(t *testing.
 	require.Contains(t, declined.Message, image,
 		"the condition must name the image, which is the operator's whole remedy")
 
-	id := enqueueJobOnOwnerSession(15*time.Second, setName, nil, broker.RunnerJobRequestBody{})
+	id := enqueueJobOnSetSession(15*time.Second, setName, nil, broker.RunnerJobRequestBody{})
 	require.NotEmpty(t, id, "a session for %s should be active", setName)
 
 	require.Eventually(t, func() bool {

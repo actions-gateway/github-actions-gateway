@@ -486,8 +486,9 @@ func (s *Server) SetAcquireJobResponse(v any) {
 // a tenant's session creation. createSession maps the 401 to a NonRetriableError,
 // so the listener's permanent baseline exits without being auto-restarted —
 // letting a test drive the controller's baseline-revival path (Q137). An empty
-// prefix clears the override. The prefix is matched against ownerName
-// ("<CR name>-<agentIndex>"), so passing "<CR name>-" scopes it to one CR's pool.
+// prefix clears the override. The prefix is matched against ownerName, which is
+// the listener's registered runner name and so kind-scoped: pass "<name>-" for a
+// RunnerGroup and "rs-<name>-" for a RunnerSet (Q677) to scope it to one CR's pool.
 func (s *Server) FailCreateSessionForOwner(prefix string) {
 	s.mu.Lock()
 	s.failSessionOwner = prefix
@@ -517,9 +518,10 @@ func (s *Server) handleSession(w http.ResponseWriter, r *http.Request) {
 	case http.MethodPost:
 		bearer := brokerstub.Bearer(r)
 
-		// Parse ownerName ("<CR name>-<agentIndex>") so tests can scope session
-		// assertions to one CR via ActiveSessionsForOwner. Best-effort: a missing
-		// or unparsable body simply leaves the owner empty.
+		// Parse ownerName — the listener's registered runner name, kind-scoped as
+		// "<name>-<agentIndex>" or "rs-<name>-<agentIndex>" (Q677) — so tests can
+		// scope session assertions to one CR via ActiveSessionsForOwner.
+		// Best-effort: a missing or unparsable body simply leaves the owner empty.
 		var reqBody struct {
 			OwnerName string `json:"ownerName"`
 		}

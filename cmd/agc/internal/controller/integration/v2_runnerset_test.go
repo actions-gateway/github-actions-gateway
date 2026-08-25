@@ -338,7 +338,7 @@ func TestV2_RunnerSet_DirectEgress_WorkerHasNoProxy(t *testing.T) {
 
 	startRunnerSetReconciler(t)
 
-	id := enqueueJobOnOwnerSession(15*time.Second, "direct-worker-set", nil, broker.RunnerJobRequestBody{})
+	id := enqueueJobOnSetSession(15*time.Second, "direct-worker-set", nil, broker.RunnerJobRequestBody{})
 	require.NotEmpty(t, id, "a session for direct-worker-set should register")
 
 	var pod corev1.Pod
@@ -460,7 +460,7 @@ func TestV2_RunnerSet_ProvisionsWorkerPod(t *testing.T) {
 
 	// A session registers; enqueue a job on it, then the provisioner creates a
 	// worker pod for the RunnerSet.
-	id := enqueueJobOnOwnerSession(15*time.Second, "worker-set", nil, broker.RunnerJobRequestBody{})
+	id := enqueueJobOnSetSession(15*time.Second, "worker-set", nil, broker.RunnerJobRequestBody{})
 	require.NotEmpty(t, id, "a session for worker-set should register")
 
 	var pod corev1.Pod

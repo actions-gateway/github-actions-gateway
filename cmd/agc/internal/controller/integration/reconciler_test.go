@@ -72,6 +72,18 @@ func enqueueJobWhenSessionAvailable(timeout time.Duration, alreadySeen map[strin
 // returns its ID (or "" on timeout). Unlike enqueueJobWhenSessionAvailable it scopes
 // to one RunnerGroup's owner, so it never enqueues onto a session another test left
 // active on the shared stub.
+// enqueueJobOnSetSession is enqueueJobOnOwnerSession for a v2 RunnerSet. A
+// RunnerSet's listener owns its session as its registered runner name, which is
+// kind-scoped to "rs-<set>-<index>" (Q466/Q677), so the owner stem is not the bare
+// CR name. Separate helper rather than a prefix at each call site: passing the bare
+// name matches nothing and the failure reads as "no session was ever created",
+// which is what it looked like when Q677 first landed.
+func enqueueJobOnSetSession(timeout time.Duration, set string, alreadySeen map[string]bool, payload broker.RunnerJobRequestBody) string {
+	return enqueueJobOnOwnerSession(timeout, "rs-"+set, alreadySeen, payload)
+}
+
+// enqueueJobOnOwnerSession takes the OWNER STEM, not the CR name. They coincide for
+// a RunnerGroup and differ for a RunnerSet; use enqueueJobOnSetSession for one.
 func enqueueJobOnOwnerSession(timeout time.Duration, group string, alreadySeen map[string]bool, payload broker.RunnerJobRequestBody) string {
 	deadline := time.Now().Add(timeout)
 	for time.Now().Before(deadline) {

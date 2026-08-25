@@ -400,7 +400,7 @@ func waitForSizingOverride(t *testing.T, ns, name string, wantStatus metav1.Cond
 // applySizingProfile actually produced, since the transform runs at pod build.
 func workerPodFor(t *testing.T, ns, set string) corev1.Pod {
 	t.Helper()
-	id := enqueueJobOnOwnerSession(15*time.Second, set, nil, broker.RunnerJobRequestBody{})
+	id := enqueueJobOnSetSession(15*time.Second, set, nil, broker.RunnerJobRequestBody{})
 	require.NotEmpty(t, id, "a session for %s should register", set)
 	var pod corev1.Pod
 	require.Eventually(t, func() bool {
