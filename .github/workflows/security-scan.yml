@@ -255,6 +255,9 @@ jobs:
           # no cache-to so these scan builds never evict the e2e build cache.
           # One scope, not one per image: every target shares the Dockerfile's
           # `deps` stage, so the bake exports that warm Go build cache once.
+          # The bake is this scope's only writer, and it writes only while
+          # e2e-reusable.yml exposes the Actions runtime to it: with no writer
+          # the import finds nothing to restore and every shard recompiles `deps`.
           cache-from: type=gha,scope=images
       - name: back off before rebuilding ${{ matrix.name }}
         if: steps.build.outcome == 'failure'

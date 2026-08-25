@@ -47,11 +47,13 @@ ARG TARGETOS TARGETARCH
 # docker/setup-buildx-action boots a fresh builder on every run. A plain
 # directory is part of the layer, so a layer cache carries it between runs and
 # this stage is a HIT on any run that did not change vendor/, wherever such a
-# cache is actually wired up. CI has none: the e2e bake's type=gha cache is
-# inert from a `run:` step (docker-bake.hcl's GHA_CACHE comment, Q931), so this
-# stage recompiles every run. Dependencies live in the workspace vendor/ at
-# the repo root; `go build` auto-selects -mod=vendor when go.work and vendor/
-# are both present.
+# cache is actually wired up. The hosted e2e lane wires one: the bake exports
+# `type=gha,scope=images` (docker-bake.hcl's GHA_CACHE comment) and
+# security-scan.yml's trivy shards read that scope. Actions caches are scoped
+# to the writing ref, and a PR run reads only its own scope plus the base and
+# default branches, so the hit lands once a push to main has written it.
+# Dependencies live in the workspace vendor/ at the repo root; `go build`
+# auto-selects -mod=vendor when go.work and vendor/ are both present.
 ENV GOCACHE=/gocache \
     CGO_ENABLED=0 \
     GOOS=$TARGETOS \

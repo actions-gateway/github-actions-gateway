@@ -433,6 +433,22 @@ jobs:
           echo "==> disk available to the build"
           df -h /
 
+      - name: Expose the Actions runtime to the bake
+        # buildx's type=gha backend reads ACTIONS_RUNTIME_TOKEN and
+        # ACTIONS_RESULTS_URL, which the runner injects into action processes
+        # only: docker/setup-buildx-action exports no environment of its own, so
+        # the `run:` step below sees neither and buildx drops both cache entries
+        # silently (exit 0, no import or export vertex, no warning). This action
+        # re-exports every ACTIONS_* variable through GITHUB_ENV so the bake can
+        # reach the cache data plane. It must run before the bake step, not
+        # beside it: GITHUB_ENV applies to subsequent steps only.
+        #
+        # Hosted-only, matching GHA_CACHE and every actions/cache step above —
+        # the Kata untrusted-PR posture keeps the self-hosted lane's non-registry
+        # fetches GitHub-only (Q408), so that lane never reaches this data plane.
+        if: runner.environment == 'github-hosted'
+        uses: crazy-max/ghaction-github-runtime@04d248b84655b509d8c44dc1d6f990c879747487 # v4.0.0
+
       - name: Build images while the kind cluster and cert-manager come up
         # The image build is the long pole on a cold cache (~8 min). It depends
         # only on the registry (already up), not the cluster, so run it in the
