@@ -414,9 +414,20 @@ path-filters-check: ## Fail if a CI path filter misses a go.work module or names
 	scripts/ci/check-path-filters.sh
 
 
+# The trace dir turns this run into the measurement behind
+# check-fixture-maintenance.sh, so the no-background-git invariant costs no
+# second pass over the suites (Q921). Absolute, because git rejects a relative
+# GIT_TRACE and falls back to stderr; emptied first, so a spawn from a previous
+# run cannot redden a clean one.
+SCRIPTS_TEST_TRACE_DIR := $(CURDIR)/tmp/scripts-test-traces
+
 .PHONY: scripts-test
 scripts-test: ## Run every scripts/ behavioural suite; `make list-script-tests` names them
-	scripts/ci/run-parallel.sh $(foreach suite,$(SCRIPTS_TESTS),"$(notdir $(suite)):scripts/$(suite).sh")
+	rm -rf $(SCRIPTS_TEST_TRACE_DIR)
+	mkdir -p $(SCRIPTS_TEST_TRACE_DIR)
+	RUN_PARALLEL_GIT_TRACE_DIR=$(SCRIPTS_TEST_TRACE_DIR) \
+		scripts/ci/run-parallel.sh $(foreach suite,$(SCRIPTS_TESTS),"$(notdir $(suite)):scripts/$(suite).sh")
+	scripts/ci/check-fixture-maintenance.sh $(SCRIPTS_TEST_TRACE_DIR)
 
 .PHONY: list-script-tests
 list-script-tests: ## List every scripts/ suite `make scripts-test` runs, grouped by directory

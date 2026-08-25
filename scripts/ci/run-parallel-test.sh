@@ -209,6 +209,80 @@ want 'a killed command still reports its seconds' '^\[run-parallel\] +[1-9][0-9]
 rp "absent-timed:this-command-does-not-exist-q819"
 want 'a missing command still appears in the timing' '^\[run-parallel\] +[0-9]+s +absent-timed$'
 
+# RUN_PARALLEL_GIT_TRACE_DIR gives each child its own GIT_TRACE, so a fan-out
+# doubles as the measurement behind check-fixture-maintenance.sh (Q921). Both
+# directions: unset must leave GIT_TRACE alone, because the trace is opt-in and a
+# child that inherits one silently is a behaviour change to every gate. The file
+# is named for the label, which is what makes a finding attributable to a suite.
+TRACE_DIR="$REPO_ROOT/tmp/run-parallel-test-traces.$$"
+rm -rf "$TRACE_DIR"
+mkdir -p "$TRACE_DIR"
+trap 'rm -rf "$TRACE_DIR"' EXIT
+
+rc=0
+out="$(RUN_PARALLEL_GIT_TRACE_DIR="$TRACE_DIR" "$RP" \
+	"alpha:git rev-parse --show-toplevel" "beta:git rev-parse --show-toplevel" 2>&1)" || rc=$?
+want_rc 'a traced fan-out still reports its own verdict' 0
+for label in alpha beta; do
+	if [[ -s "$TRACE_DIR/$label.trace" ]]; then
+		printf 'ok   %-42s\n' "GIT_TRACE reaches the $label child"
+	else
+		printf 'FAIL %-42s no trace at %s\n' "GIT_TRACE reaches the $label child" \
+			"$TRACE_DIR/$label.trace" >&2
+		fails=$((fails + 1))
+	fi
+done
+if grep -q 'rev-parse' "$TRACE_DIR/alpha.trace" 2>/dev/null; then
+	printf 'ok   %-42s\n' 'the trace records the child'"'"'s own git'
+else
+	printf 'FAIL %-42s alpha.trace does not record the git it ran\n' \
+		'the trace records the child'"'"'s own git' >&2
+	fails=$((fails + 1))
+fi
+
+# The dir is not inherited past one level. A nested fan-out that re-pointed
+# GIT_TRACE at its own labels would file a suite's git under a name that is not a
+# suite and never write the suite's own file at all, so the outer trace must
+# survive the inner run (measured before the fix: the git landed in inner.trace
+# and suite-x.trace was never created).
+rm -rf "$TRACE_DIR"
+mkdir -p "$TRACE_DIR"
+rc=0
+out="$(RUN_PARALLEL_GIT_TRACE_DIR="$TRACE_DIR" "$RP" \
+	"outer:$RP 'inner:git rev-parse --show-toplevel'" 2>&1)" || rc=$?
+want_rc 'a nested fan-out still reports its verdict' 0
+if [[ -s "$TRACE_DIR/outer.trace" ]] && grep -q 'rev-parse' "$TRACE_DIR/outer.trace"; then
+	printf 'ok   %-42s\n' "a nested run's git stays in the outer trace"
+else
+	printf 'FAIL %-42s outer.trace missing or empty of the nested git\n' \
+		"a nested run's git stays in the outer trace" >&2
+	fails=$((fails + 1))
+fi
+if [[ -e "$TRACE_DIR/inner.trace" ]]; then
+	printf 'FAIL %-42s the inner label claimed a trace of its own\n' \
+		'a nested fan-out writes no trace of its own' >&2
+	fails=$((fails + 1))
+else
+	printf 'ok   %-42s\n' 'a nested fan-out writes no trace of its own'
+fi
+
+# Unset: the runner writes nothing and changes nothing. GIT_TRACE is asserted
+# unchanged rather than empty, because this suite runs as a traced child of
+# `make scripts-test` and inherits one there — asserting empty would pass
+# standalone and fail under the gate, which is how this case was found.
+rm -rf "$TRACE_DIR"
+mkdir -p "$TRACE_DIR"
+rp "gamma:printf 'GIT_TRACE=[%s]\\n' \"\${GIT_TRACE:-}\""
+want 'an untraced child inherits GIT_TRACE unchanged' \
+	"^\\[gamma\\] GIT_TRACE=\\[${GIT_TRACE:-}\\]$"
+if [[ -z "$(ls -A "$TRACE_DIR")" ]]; then
+	printf 'ok   %-42s\n' 'no trace dir set writes no trace'
+else
+	printf 'FAIL %-42s wrote %s\n' 'no trace dir set writes no trace' \
+		"$(ls -A "$TRACE_DIR")" >&2
+	fails=$((fails + 1))
+fi
+
 if (( fails > 0 )); then
 	echo "run-parallel-test: $fails failure(s)" >&2
 	exit 1

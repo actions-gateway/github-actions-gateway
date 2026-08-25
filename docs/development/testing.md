@@ -2107,12 +2107,21 @@ grep -q 'maintenance run' "$trace" && bad '...'
 ```
 
 The trace goes to a **file**, not stderr: a detached child has no stderr, which is what hid the mechanism for three rounds of Q820.
-The three merge-driver suites carry that assertion; the rest carry the config call alone.
+The four merge-driver suites carry that assertion inline; every other suite is covered by the tier gate below.
 
-To check the whole tier, run each suite with `GIT_TRACE` set to a per-suite path and count `run_command: git maintenance run` (each spawn writes three trace lines, so count that one).
-Before the Q878 sweep: 217 spawns across 17 of 88 suites.
-After: zero.
+**The whole tier is gated, off the run that already happens** ([check-fixture-maintenance.sh](../../scripts/ci/check-fixture-maintenance.sh), Q921).
+`make scripts-test` sets `RUN_PARALLEL_GIT_TRACE_DIR`, so [run-parallel.sh](../../scripts/ci/run-parallel.sh) gives each child its own `GIT_TRACE` file named for its label; the gate then counts `run_command: git maintenance run` per file (each spawn writes three trace lines, so that is the one to count) and fails naming the suite.
+Measuring the existing run is what makes the gate affordable: `scripts-test` is `make check`'s slowest fast gate, and a second pass over it for one assertion would double that.
 A text search for `git init` cannot answer this — one suite drives git from embedded Python through an args list, and no query for a command string will ever see it.
+
+The gate **refuses** with rc 2 on a missing trace directory, on one holding no traces, and on traces recording no git at all.
+A loop over an empty directory counts zero spawns and exits 0, which is indistinguishable from a clean tier and is exactly what this gate looks like once its wiring comes undone.
+
+**A sweep holds for about a day; only the gate holds.** Before the Q878 sweep: 217 spawns across 17 of 88 suites; after it, zero.
+Q921 measured the tier again on 2026-08-24 and found 98 spawns across four suites, every one of them a regression the sweep could not have prevented.
+Three (`api-surface-since-test`, `check-dashboard-render-test`, `reconcile-queue-rows-test`) were added on 2026-08-19, the day after it.
+The fourth, `check-em-dash-test`, predates the sweep but committed nothing then; its fixture gained a commit path on 2026-08-21 (#1681), which is what turned a repo that could not spawn into one that did.
+That is the shape the section opens with: the suite that acquires the defect is not the one anybody was looking at.
 
 ### Testing a `main`-shaped script: the entry-point seam, and the errexit trap
 

@@ -43,6 +43,8 @@ newrepo() {
     local r="$1"
     mkdir -p "$r"
     git init -q -b main "$r"
+    # Q820: no detached maintenance racing the next command in a fixture repo.
+    git -C "$r" config maintenance.auto false
     git -C "$r" config user.email t@e.com
     git -C "$r" config user.name T
     item "$r" Q1
@@ -201,6 +203,7 @@ expect 2 "$r" "settled: a branch that never merged refuses" "no resolution of th
 r="$TMP/unmerged"
 mkdir -p "$r"
 git init -q -b main "$r"
+git -C "$r" config maintenance.auto false
 git -C "$r" config user.email t@e.com
 git -C "$r" config user.name T
 item "$r" Q1
