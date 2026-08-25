@@ -1029,7 +1029,7 @@ kubectl patch egressproxy -n <tenant-namespace> <name> \
 
 Only `Off` (the default) and `Connections` are accepted; admission rejects anything else.
 
-**Quote `Off` in a YAML manifest.** YAML reads a bare `Off` as the boolean false, so `auditLogging: Off` decodes to the string `false` and admission rejects it naming a value you never typed.
+**Quote `Off` in a YAML manifest.** YAML reads a bare `Off` as the boolean false, so `kubectl apply` of `auditLogging: Off` sends a boolean and the apiserver rejects it as the wrong type for a string field, naming a value you never typed.
 Write `auditLogging: "Off"`, or leave the field out, which means the same thing.
 The `kubectl patch` above is JSON and is unaffected.
 

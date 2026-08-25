@@ -25,6 +25,7 @@ Two detection substrates are used:
 - [Prometheus abuse alerts](#prometheus-abuse-alerts)
 - [Audit-log abuse detections](#audit-log-abuse-detections)
   - [API server audit policy (sample)](#api-server-audit-policy-sample)
+- [Per-connection egress audit](#per-connection-egress-audit)
 - [Response playbooks](#response-playbooks)
   - [Suspected compromised AGC (tenant-scoped)](#suspected-compromised-agc-tenant-scoped)
   - [Suspected compromised GMC (cluster-scoped, Tier-0)](#suspected-compromised-gmc-cluster-scoped-tier-0)
@@ -54,7 +55,7 @@ Two detection substrates are used:
 |---|---|---|---|
 | **Eviction-Retry API Misuse** ([§5.2](../design/05-security.md#52-agc--proxy-level-threats-namespace-scoped)) — compromised AGC looping `rerun-failed-jobs` | `eviction_retries_total{cause="eviction"}` rate climbs without matching node pressure; `eviction_retries_exhausted_total` increments. Split by the `tier` label to see which acquisition path is issuing the re-runs (Q417); the alert below aggregates over it, so it fires either way. **Scope the query to `cause="eviction"`** — the same counter records legitimate `preemption` recoveries, which are the expected steady state under a preempting `priorityTiers` floor and would otherwise read as abuse (Q497) | Metric | Ticket → Page on sustained climb |
 | **Proxy Pool Exhaustion / slowloris** ([§5.2](../design/05-security.md#52-agc--proxy-level-threats-namespace-scoped), M-17/M-18) | `proxy_connections_active` pinned near capacity; `proxy_tunnel_duration_seconds` mass in the 6h bucket | Metric | Page |
-| **Server-Side Request Forgery (SSRF) / destination probing via proxy** ([§5.2](../design/05-security.md#52-agc--proxy-level-threats-namespace-scoped), M-2/M-12) | `proxy_connect_denied_total` rate rising — every increment is an explicit allowlist denial (a workload reaching for an off-allowlist destination), so this is the precise signal; corroborate with a `proxy_dial_errors_total` spike | Metric | Ticket |
+| **Server-Side Request Forgery (SSRF) / destination probing via proxy** ([§5.2](../design/05-security.md#52-agc--proxy-level-threats-namespace-scoped), M-2/M-12) | `proxy_connect_denied_total` rate rising — every increment is an explicit allowlist denial (a workload reaching for an off-allowlist destination), so this is the precise signal; corroborate with a `proxy_dial_errors_total` spike. The counter says a probe happened, not what it reached: [per-connection egress audit](#per-connection-egress-audit) names the destination, but only on a pool that had it enabled before the incident | Metric (+ optional log) | Ticket |
 | **DoS via Resource Exhaustion** ([§5.2](../design/05-security.md#52-agc--proxy-level-threats-namespace-scoped)) — rogue workflow exhausting tenant quota | `kube_resourcequota` used/hard ratio sustained at 1.0 | Metric (kube-state-metrics) | Ticket |
 | **`ActionsGateway` CR in reserved namespace / spec probing** ([§5.1](../design/05-security.md#51-gmc-level-threats-cluster-scoped)) | Admission webhook `403` rejection rate | Metric (controller-runtime) | Ticket |
 | **Cross-Tenant GitHub App Credential Leakage / key compromise** ([§5.1](../design/05-security.md#51-gmc-level-threats-cluster-scoped)) | `token_refresh_errors_total` spike (key revoked out-of-band, or a forged token rejected) | Metric | Page |
@@ -337,6 +338,26 @@ Alert on: any `list`/`watch`; a `get` rate well above the reconcile cadence; or 
 `kube-system`).
 For the GMC write rule, a `responseStatus.code` of `403` is a VAP block — investigate the binary that attempted it.
 For AGC reads, filter by each AGC user string and alert on `verb == "list"` (the legit path is metadata-only) or a `get` on a Secret name the AGC does not own.
+
+---
+
+## Per-connection egress audit
+
+The audit policy above is a detective control on what a controller asks the **apiserver**.
+It says nothing about where a tenant's workers went, which is a different question with a different substrate: the proxy's per-connection egress record (`EgressProxy.spec.auditLogging: Connections`).
+
+**It is off by default and records forward, never backward.** Enabling it during an incident tells you nothing about the traffic that caused the incident, so the decision to enable is one you make before you need it: the same shape as the apiserver audit policy, and worth taking at the same time.
+
+Weigh four things before turning it on across a fleet:
+
+| | |
+|---|---|
+| **What it retains** | One line per accepted CONNECT naming the destination host and port. That is a record of where a tenant's traffic went, so retention and access are a policy decision, not a default. |
+| **What it costs** | One line per connection. Under real CI load it becomes the pool's dominant log volume; size the collector before enabling, not after. |
+| **What it cannot tell you** | On a pool shared via `spec.sharing.allowedNamespaces` the record names the **pool**, not the consuming tenant. See [what you must not assume](#what-you-must-not-assume). |
+| **What it never carries** | No request header, no tunneled byte, nothing from the TLS session. The proxy does not terminate or inspect it. Detail: [security design](../design/05-security.md#proxy-egress-audit-record). |
+
+Turning it on, and the field-by-field shape, are in [tenant onboarding](tenant-onboarding.md#per-pool-egress-audit-record) and the [logging reference](observability-logging.md#proxy-egress-audit-record).
 
 ---
 
@@ -833,6 +854,7 @@ Omitting it means the referrer's own namespace, which is what every pre-existing
 
 **A shared proxy is a shared egress identity.** Every namespace using the pool leaves GitHub from the same addresses, so per-tenant egress attribution no longer holds between them.
 Share a proxy between tenants you are willing to treat as one for attribution purposes; give mutually-distrusting tenants their own pools.
+The same limit reaches the [per-connection egress audit](#per-connection-egress-audit) record, which carries the pool's namespace rather than the consumer's: a CONNECT names no namespace, so on a shared pool the record says which destination was reached but not by whom.
 
 **Only the public certificate crosses the boundary.** The GMC copies the proxy's certificate into each granted namespace as a ConfigMap named `proxy-share-<provider-namespace>-<proxy-name>`.
 The private key stays in the provider namespace.
