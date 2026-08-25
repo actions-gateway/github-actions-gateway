@@ -985,8 +985,10 @@ ScaleUpRateLimit configures the opt-in per-RunnerSet worker-pod creation-rate
 limit (Q223): a token bucket where MaxPerSecond is the sustained refill rate and
 Burst is the bucket depth (the largest instantaneous batch before throttling
 engages). An empty bucket withholds intake rather than delaying an acquired job:
-the AGC declines to claim the next job, leaving it queued at GitHub for
-redelivery, so no job ever waits for a token while holding a GitHub job lock.
+on the classic acquisition tier the AGC declines to claim the next job, leaving it
+queued at GitHub for redelivery, and on the ScaleSet tier it advertises less
+capacity so GitHub assigns less. A ScaleSet worker can still wait briefly at pod
+creation when an advertisement was stale; the classic tier never waits at all.
 
 
 

@@ -96,16 +96,26 @@ func (p *Provisioner) AdmitFor(snapshot *v1alpha1.RunnerGroup) runnercore.AdmitF
 //
 //  1. Observed namespace-ResourceQuota headroom (#784) — Target.QuotaExhausted.
 //  2. Observed placeability, opt-in per owner (Q405) — Target.CapacityDeclined.
-//  3. The owner's opt-in worker-pod creation-rate limit (Q223) — Target.ScaleUpLimit,
-//     taken from the in-memory token bucket.
-//  4. The owner's declared worker ceiling (Q59) — Target.Ceiling, counted against
+//  3. The owner's declared worker ceiling (Q59) — Target.Ceiling, counted against
 //     the in-memory reservation gate.
+//  4. The owner's opt-in worker-pod creation-rate limit (Q223) — Target.ScaleUpLimit,
+//     taken from the in-memory token bucket.
 //
 // The two observed rungs come first and reserve nothing: a job we decline for quota
 // or capacity was never counted against the ceiling or charged a rate-limit token, so
-// neither piece of arithmetic is touched. They are also the two that do not clear on
-// their own, which is why they are reported in preference to the transient rate rung
-// when more than one would refuse.
+// neither piece of arithmetic is touched.
+//
+// The rate rung comes LAST, behind the ceiling, because its token is the only thing
+// this ladder spends that it cannot hand back. A reservation is refundable — the rate
+// rung releases one when it refuses — while a token taken from the bucket is gone. Run
+// the other way round, a set sitting at its ceiling under continued delivery spends a
+// token per refusal, pinning the bucket at zero: maxPerSecond stops being the ramp rate
+// and becomes a function of delivery churn, a freed ceiling slot cannot be filled until
+// a refill wins against that churn, and every refusal past the burst reports
+// reason="scaleup" for a set whose actual limit is maxWorkers — sending an operator to
+// raise maxPerSecond, which feeds the churn faster. Ordering it last also puts the
+// reasons in the right priority: ceiling needs someone to act, the rate rung clears
+// itself.
 //
 // Without the quota rung, quota exhaustion is handled one layer down by
 // createPodWithQuotaRetry — which holds the GitHub job lock across up to
@@ -177,7 +187,16 @@ func (p *Provisioner) Admit(target Target) runnercore.AdmitFunc {
 			p.logForKey(target.Key()).Debug("job admission deferred: the cluster cannot place another worker pod for this owner", "detail", detail)
 			return nil, false, runnercore.AdmitReasonCapacity
 		}
+		limit, bounded := target.Ceiling(ctx)
+		release, ok = p.admission.admit(key, limit, bounded)
+		if !ok {
+			return nil, false, runnercore.AdmitReasonCeiling
+		}
 		if !p.scaleUp.allow(key, target.ScaleUpLimit(ctx)) {
+			// Hand the reservation straight back: this job takes no slot. The closure is
+			// idempotent, so this nets to zero and the later release the caller would
+			// have made is not owed.
+			release()
 			// Per-delivery and high-volume while a set ramps: Debug, with the metric's
 			// reason label as the operator-facing signal. Self-clearing — the bucket
 			// refills at maxPerSecond — so unlike the rungs above it needs no condition.
@@ -186,11 +205,6 @@ func (p *Provisioner) Admit(target Target) runnercore.AdmitFunc {
 				p.Metrics.ScaleUpThrottled.WithLabelValues(target.Key().Namespace, target.Key().Name).Inc()
 			}
 			return nil, false, runnercore.AdmitReasonScaleUp
-		}
-		limit, bounded := target.Ceiling(ctx)
-		release, ok = p.admission.admit(key, limit, bounded)
-		if !ok {
-			return nil, false, runnercore.AdmitReasonCeiling
 		}
 		return release, true, ""
 	}

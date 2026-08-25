@@ -206,8 +206,7 @@ func TestAdmit_ScaleUpRung(t *testing.T) {
 	// The rate rung sits ahead of the ceiling rung precisely so a refusal here costs
 	// no reservation: refusing after one would leak a slot on every throttled job.
 	assert.Equal(t, int32(1), p.admission.reservedCount(key),
-		"a job refused by the rate rung must not have taken a ceiling reservation")
-	assert.Equal(t, 1, target.ceilingCalls, "the ceiling rung is never reached by a rate refusal")
+		"a job refused by the rate rung must hand its ceiling reservation straight back")
 }
 
 // TestAdmit_ScaleUpRungDefaultOff pins the default-off contract on the classic tier:
@@ -263,6 +262,53 @@ func TestAdmit_ScaleUpRungOrder(t *testing.T) {
 			assert.False(t, ok)
 			assert.Equal(t, tt.wantReason, reason)
 			assert.Zero(t, target.scaleUpCalls, "a rung that refuses earlier must not charge a token")
+			assert.Zero(t, target.ceilingCalls, "nor take a reservation")
 		})
 	}
+}
+
+// TestAdmit_CeilingRefusalDoesNotSpendAToken pins the rung ORDER, which is the whole
+// reason the rate rung sits last. Its token is the only thing this ladder spends that
+// it cannot hand back: a reservation is refundable and a token taken is gone.
+//
+// Run the other way round — rate ahead of ceiling — a set sitting at its ceiling under
+// continued delivery spends a token per refusal. The bucket pins at zero, so a slot
+// freed by a finishing worker cannot be filled until a refill beats the refusal churn,
+// and every refusal past the burst reports reason="scaleup" for a set whose actual
+// limit is maxWorkers. That misattribution is the expensive half: the ledger says the
+// reason label names what to raise, so it sends an operator to raise maxPerSecond,
+// which feeds the churn faster.
+//
+// Found in review of the change that added the rung, with this exact shape.
+func TestAdmit_CeilingRefusalDoesNotSpendAToken(t *testing.T) {
+	ctx := context.Background()
+	p := NewProvisioner(nil, nil, nil)
+	p.scaleUp = scaleUpLimiter{now: newFakeClock().now}
+
+	// One slot, five tokens: the ceiling is what binds, and it binds first.
+	target := &rungTarget{ceiling: 1, ceilingBounded: true, scaleUp: &ScaleUpConfig{MaxPerSecond: 1, Burst: 5}}
+	admit := p.Admit(target)
+
+	release, ok, _ := admit(ctx)
+	require.True(t, ok, "the first job takes the only slot")
+
+	reasons := make([]string, 0, 10)
+	for range 10 {
+		_, _, reason := admit(ctx)
+		reasons = append(reasons, reason)
+	}
+	for i, reason := range reasons {
+		assert.Equal(t, runnercore.AdmitReasonCeiling, reason,
+			"delivery %d is refused by the ceiling, so it must be REPORTED as the ceiling", i)
+	}
+
+	free, limited := p.scaleUp.tokens(target.Key().String(), target.scaleUp)
+	require.True(t, limited)
+	assert.Equal(t, int32(4), free,
+		"only the admitted job spent a token: ceiling refusals must not drain the bucket")
+
+	// The property the drained bucket would have broken.
+	release()
+	_, ok, reason := admit(ctx)
+	assert.True(t, ok, "a freed ceiling slot must be immediately fillable; refused for %q", reason)
 }
