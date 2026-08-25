@@ -2698,6 +2698,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#the-fast-gates-fan-out-past-the-heavy-build-semaphore" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The fast gates fan out past the heavy-build semaphore
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#the-coverage-budget-is-wall-clock-so-it-measures-scheduling" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -4354,6 +4365,27 @@ Q343 concluded from that there was "no supported knob to share test results acro
 <li><strong>Tool builds.</strong> Each worktree builds its own <code>.build/golangci-lint</code> (~16 s with a warm build cache).
   Sharing tool binaries across worktrees would need version-keyed storage to avoid silently running a stale binary after a <code>tools/</code> dependency bump — complexity that isn't worth ~16 s per worktree.</li>
 </ul>
+<h3 id="the-fast-gates-fan-out-past-the-heavy-build-semaphore">The fast gates fan out past the heavy-build semaphore<a class="headerlink" href="#the-fast-gates-fan-out-past-the-heavy-build-semaphore" title="Permanent link">&para;</a></h3>
+<p><code>serialize_heavy_build</code> bounds how many heavy phases run at once across sessions, and the fast gates are outside it.
+<code>make scripts-test</code> calls <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/ci/run-parallel.sh"><code>run-parallel.sh</code></a>, which launches every spec with <code>&amp;</code> into a pid list and then waits.
+There is no cap in it, and <code>SCRIPTS_TESTS</code> holds 97, so all 97 start at once by construction.
+That is a property of the runner rather than a measurement, and no sampling improves on it.
+So a session in its fast gates has no machine-wide bound while a sibling's heavy phase holds one of two lock slots.
+That is the contention <a href="../../queue/Q822/">Q822</a> suspected.</p>
+<p><strong>What it does not show is that the fan-out causes any suite to fail.</strong> No reproduction connects it to <code>provisioner</code>'s eviction window or to any other red, and the two are separate claims: one is a property of the runner, the other needs a failure traced to it.</p>
+<p><strong>No suite in the fan-out takes the lock, but only one of the two reasons is structural.</strong> Five scripts call <code>serialize_heavy_build</code>, and in <code>go-lint.sh</code>, <code>go-vet-tags.sh</code> and <code>coverage.sh</code> the call sits inside <code>main()</code>, so sourcing them cannot take it.
+In <code>go-test.sh</code> and <code>go-test-integration.sh</code> it sits at top level, where sourcing takes the lock immediately, and only their suites' <code>GAG_HEAVY_BUILD_LOCK_HELD=1</code> keeps them out.
+So a future suite that sources either of those without the sentinel puts a lock-taker inside the fan-out, which is the thing this paragraph exists to rule out.</p>
+<p><strong>Do not try to count the live suites with <code>pgrep -f</code>.</strong> A forked subshell inherits the parent's full argv, and <code>run-parallel.sh</code>'s argv names every suite path, so a snapshot matches the parent and each live subshell with every path on every line.
+Measured 2026-08-25: 201 matching processes, 88 of whose own command lines held more than one suite path, and the same distinct-path count across all lines as inside a single process's argv.
+The figure that probe produced was wrong twice over, which is why it is not quoted here.
+The argv inheritance makes any such count independent of how many suites are live; and the probe's own <code>scripts/[a-z]+/</code> pattern silently dropped the five suites under <code>scripts/e2e/</code>, because <code>[a-z]+</code> cannot match <code>e2e</code>.
+A matcher that omits a directory returns a plausible number rather than an error.
+An extraction over full command lines therefore returns the list's size whether one suite is live or all of them, and returns it flat from the first sample, so neither the count nor its flatness carries information.
+Switching from matching processes to distinct paths does <strong>not</strong> fix it, which is the trap: both readings come off the same inherited argv.
+Process counts stay citable as process counts; a distinct-suite count taken this way does not.</p>
+<p>Capping is not free either, because the same runner backs <code>make check</code> itself at 45 gates, with <code>scripts-test</code> nested inside as one of them, plus <code>docs-gates</code> at 19 and <code>queue-gates</code> at 10.
+A cap nests, so <code>check</code> would take a slot and open another capped runner beneath it.</p>
 <h3 id="the-coverage-budget-is-wall-clock-so-it-measures-scheduling">The coverage budget is wall clock, so it measures scheduling<a class="headerlink" href="#the-coverage-budget-is-wall-clock-so-it-measures-scheduling" title="Permanent link">&para;</a></h3>
 <p><code>scripts/go/coverage.sh</code> runs every workspace package in one <code>go test</code> with a <code>-timeout</code> that Go applies <strong>per test binary, as wall clock from the moment that binary starts</strong>.
 A binary that is not scheduled spends the budget doing nothing, so the number gates contention as much as it gates test duration.</p>

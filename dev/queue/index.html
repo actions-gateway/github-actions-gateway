@@ -3993,6 +3993,14 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>XS</td>
 <td>It describes "the four production images (<code>cmd/{agc,gmc,proxy,worker}/Dockerfile</code>)" and "all five Dockerfiles", two lines above its own …</td>
 </tr>
+<tr>
+<td><a href="Q991/">Q991</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/docs/check-script-docs-test.sh">Three suites share a fixture path and delete each other's</a></td>
+<td><code>tests</code> <code>ci</code> <code>debt</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>Counted from source 2026-08-25 over the 99 <code>*-test.sh</code> files: 41 assign a repo-rooted <code>tmp/</code> path, 38 of those carry a <code>$$</code>, <code>$RANDOM</code> or …</td>
+</tr>
 </tbody>
 </table>
 

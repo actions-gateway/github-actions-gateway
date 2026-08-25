@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q822/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q991/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>Three unrelated suites fail under concurrent load and pass on rerun - GitHub Actions Gateway</title>
+        <title>Three suites share a fixture path and delete each other's - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#three-unrelated-suites-fail-under-concurrent-load-and-pass-on-rerun" class="md-skip">
+        <a href="#three-suites-share-a-fixture-path-and-delete-each-others" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Three unrelated suites fail under concurrent load and pass on rerun
+              Three suites share a fixture path and delete each other's
             
           </span>
         </div>
@@ -2597,18 +2597,20 @@
   
 
 
-<h1 id="three-unrelated-suites-fail-under-concurrent-load-and-pass-on-rerun">Three unrelated suites fail under concurrent load and pass on rerun<a class="headerlink" href="#three-unrelated-suites-fail-under-concurrent-load-and-pass-on-rerun" title="Permanent link">&para;</a></h1>
-<p>Measured 2026-08-12 under 8 workers: <code>provisioner</code> eviction-window and <code>controller</code> 2m timeout failed in one window, all green on rerun.
-A third suite failed with them and has since been deleted with the piped-gate hook.</p>
-<p><strong>The fan-out half is settled and the row's scope was wrong.</strong> <code>run-parallel.sh</code> launches every spec with <code>&amp;</code> into a pid list and then waits, with no cap anywhere in it, and <code>SCRIPTS_TESTS</code> holds 97.
-So <code>make scripts-test</code> starts all 97 at once by construction: a property of the runner, not a sampling result.
-No suite in the fan-out takes <code>serialize_heavy_build</code>, so a session in its fast gates gets no machine-wide bound while a sibling's heavy phase holds one of two lock slots.
-<a href="../../development/testing/#the-fast-gates-fan-out-past-the-heavy-build-semaphore">What that does and does not establish</a>.</p>
-<p>Two corrections before this is implemented as written.
-The <code>controller</code> 2m timeout is covered by the raise to 5m Q823 shipped, which is itself in flake watch pending recurrence, so only <code>provisioner</code> still sits under this row.
-And nothing here reproduces a suite failing <em>because of</em> the fan-out: a property of the runner and a failure traced to it are separate claims, and only the first is in hand.</p>
-<p>Capping is a machine-wide throughput decision of the same kind as <a href="../Q966/">Q966</a> and wants the same hands.
-The same runner backs <code>check</code> itself at 45 gates, with <code>scripts-test</code> nested inside as one of them, plus <code>docs-gates</code> at 19 and <code>queue-gates</code> at 10, so a cap nests and would cost the largest caller most.</p>
+<h1 id="three-suites-share-a-fixture-path-and-delete-each-others">Three suites share a fixture path and delete each other's<a class="headerlink" href="#three-suites-share-a-fixture-path-and-delete-each-others" title="Permanent link">&para;</a></h1>
+<p>Counted from source 2026-08-25 over the 99 <code>*-test.sh</code> files: 41 assign a repo-rooted <code>tmp/</code> path, 38 of those carry a <code>$$</code>, <code>$RANDOM</code> or <code>$BASHPID</code> uniquifier, and <strong>3 carry none</strong>.
+Those 3 both <code>rm -rf</code> the path at startup and register <code>trap '... rm -rf ...' EXIT</code>.
+(48 suites call <code>mktemp</code> somewhere; the two counts overlap, so neither partitions the set on its own.)
+All three are under <code>scripts/docs/</code>: <code>check-script-docs-test.sh</code>, <code>check-comparison-stamps-test.sh</code>, <code>check-page-density-test.sh</code>.
+The trap fires on a kill as well as on a clean exit, so a killed run can delete a live one's.
+Observed once: a <code>make check</code> went red on <code>check-script-docs-test</code> with four assertions failing <code>cd: .../clean: No such file or directory</code> after a separate <code>make scripts-test</code> in the same worktree was killed; the same tree passed on a re-run alone.
+<strong>Assert any recount still contains that suite.</strong> The first census here returned 37 sites and excluded <code>check-script-docs-test.sh</code> itself, because skipping files that mention <code>mktemp</code> looked like hygiene and dropped the one site with direct evidence behind it.</p>
+<p><strong>The fix is the repo's own convention, not <code>mktemp</code>.</strong> 38 suites already keep the path under <code>tmp/</code> and append <code>.$$</code>, which is a per-PID directory and a one-token change (the convention dates to <code>c619c431c</code>, 2026-08-11).
+That keeps what <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/CLAUDE.md">CLAUDE.md</a>'s temp-file rule asks for and <code>mktemp</code> in host <code>/tmp</code> gives up: the fixture persists and stays citable in a PR.
+<code>check-script-docs-test.sh:22</code> records the fixed path as deliberate, so whatever lands must keep the fixture inside the tree.</p>
+<p><strong>Not <a href="../Q822/">Q822</a>'s mechanism.</strong> Its suites are the Go <code>provisioner</code> and <code>controller</code> ones under 8 workers, a different failure entirely.
+Two suites in one run cannot collide here either, since the three names are distinct; what bites is one worktree running the suites twice.
+But that is conventional rather than structural, and the first name reused turns the fan-out into a reproducible cause of suite failure, which is the causal link Q822 records as missing.</p>
 
 
 
