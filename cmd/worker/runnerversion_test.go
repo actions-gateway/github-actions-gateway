@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
@@ -95,23 +94,31 @@ func TestReportRunnerVersionWritesTheReport(t *testing.T) {
 
 	raw, err := os.ReadFile(path)
 	require.NoError(t, err)
-	var got workerReport
-	require.NoError(t, json.Unmarshal(raw, &got))
-	assert.Equal(t, "2.335.1", got.RunnerVersion)
+
+	// Pin the LITERAL key, not a round-trip through this package's own struct. The
+	// AGC parses these bytes with its own copy of the type (the two are deliberately
+	// not shared, so a mismatch surfaces as an unset field rather than a build
+	// error), which makes this assertion the only thing holding the wire contract.
+	assert.JSONEq(t, `{"runnerVersion":"2.335.1"}`, string(raw))
 }
 
 // TestReportRunnerVersionOptsOutWithoutThePath keeps the wrapper runnable outside a
 // GAG-provisioned pod: no path, no write, no error. An older AGC that does not set
 // the variable is the same case.
 func TestReportRunnerVersionOptsOutWithoutThePath(t *testing.T) {
-	dir := t.TempDir()
-	t.Setenv(terminationLogEnv, "")
+	// Asserted on the RETURN rather than on the filesystem. With no path there is no
+	// file anywhere to look for, so watching a directory cannot tell "declined to
+	// write" from "wrote somewhere this test does not know about" — two earlier
+	// versions of this test made exactly that mistake and passed with the opt-out
+	// fully broken.
+	assert.False(t, writeWorkerReport("", workerReport{RunnerVersion: "2.335.1"}),
+		"no path configured must mean no report is written")
 
-	reportRunnerVersion(writeDeps(t, realDepsShape))
-
-	entries, err := os.ReadDir(dir)
-	require.NoError(t, err)
-	assert.Empty(t, entries, "no path configured must mean no file written anywhere")
+	// The positive case, so the assertion above is a discrimination rather than a
+	// function that always reports false.
+	path := filepath.Join(t.TempDir(), "termination-log")
+	assert.True(t, writeWorkerReport(path, workerReport{RunnerVersion: "2.335.1"}),
+		"a configured path must be written")
 }
 
 // TestReportRunnerVersionWritesNothingWhenUndetected pins the failure direction: a

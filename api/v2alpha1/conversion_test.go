@@ -92,7 +92,11 @@ func fullRunnerSet(protocol string, labels ...string) *v2alpha1.RunnerSet {
 			// Q721's capacity accounting. The Slots: 0 entry is deliberate: the
 			// advertisement publishes an explicit zero for every rung it evaluated, so
 			// the round-trip has to carry that zero and not just a non-zero.
-			AdvertisedCapacity: ptrTo[int32](6),
+			// Q792's self-reported runner version, here for the same reason as the
+			// capacity fields: a status field on one version only is dropped silently
+			// by the JSON round-trip, and v2-api-sync-check exempts this file.
+			ObservedRunnerVersion: "2.335.1",
+			AdvertisedCapacity:    ptrTo[int32](6),
 			WithheldCapacity: []v2alpha1.WithheldCapacity{
 				{Reason: "quota", Slots: 2},
 				{Reason: "capacity", Slots: 0},

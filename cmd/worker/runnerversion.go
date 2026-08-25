@@ -114,7 +114,7 @@ func reportRunnerVersion(runnerHome string) {
 		return
 	}
 	slog.Info("runner version detected", "version", version)
-	writeWorkerReport(os.Getenv(terminationLogEnv), workerReport{RunnerVersion: version})
+	_ = writeWorkerReport(os.Getenv(terminationLogEnv), workerReport{RunnerVersion: version})
 }
 
 // writeWorkerReport hands the report back to the AGC through the container's
@@ -125,19 +125,22 @@ func reportRunnerVersion(runnerHome string) {
 // the whole of a scale-set worker's life, and a report the AGC never receives is
 // worse than one written before the job ran, which is the same instant the version
 // was true at.
-func writeWorkerReport(path string, report workerReport) {
+// Returns whether a report was actually written, which is the only way the opt-out is
+// observable: with no path there is no file anywhere to look for, so a test that
+// watches the filesystem cannot tell "declined to write" from "wrote somewhere else".
+func writeWorkerReport(path string, report workerReport) (wrote bool) {
 	if path == "" {
-		return
+		return false
 	}
 	payload, err := json.Marshal(report)
 	if err != nil {
 		slog.Warn("runner version not handed back: report could not be encoded", "error", err)
-		return
+		return false
 	}
 	if len(payload) > maxTerminationMessageBytes {
 		slog.Warn("runner version not handed back: report exceeds the termination-message cap",
 			"bytes", len(payload), "cap", maxTerminationMessageBytes)
-		return
+		return false
 	}
 	// 0600: the mode applies only if the file does not already exist (kubelet creates
 	// it), and kubelet reads it as root either way, so the narrower mode costs nothing
@@ -146,5 +149,7 @@ func writeWorkerReport(path string, report workerReport) {
 	if err := os.WriteFile(path, payload, 0o600); err != nil {
 		slog.Warn("runner version not handed back: termination message not written",
 			"path", path, "error", err)
+		return false
 	}
+	return true
 }

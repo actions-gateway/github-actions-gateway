@@ -198,9 +198,12 @@ func (p *Provisioner) buildPod(target Target, spec *ResolvedSpec, podName, secre
 	// that already set terminationMessagePath keeps it: the tenant may be reading the
 	// message for their own purposes, and the wrapper writes wherever this points.
 	//
-	// The policy stays File. FallbackToLogsOnError would substitute the container's
-	// log tail when the file is empty AND the container failed, which would hand the
-	// reader arbitrary log output in the place a structured report is expected.
+	// The policy is gap-filled to File, and an explicit tenant policy wins: this only
+	// sets what the template left unset. Where the template does choose
+	// FallbackToLogsOnError, kubelet substitutes the container's log tail when the file
+	// is empty AND the container failed, so the AGC can be handed arbitrary log output
+	// where a structured report is expected. It parses that as an absent report rather
+	// than trusting it, which is the same fail-quiet path any unparseable message takes.
 	if c.TerminationMessagePath == "" {
 		c.TerminationMessagePath = corev1.TerminationMessagePathDefault
 	}
