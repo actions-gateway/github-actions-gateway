@@ -3558,7 +3558,7 @@ kubectl get runnerset -n <namespace> <name> \
 kubectl describe runnerset -n <namespace> <name>
 ```
 
-A rung listed with `slots: 0` was evaluated and is not withholding anything.
+A rung listed with `slots: 0` was evaluated and is not withholding anything, which is the ordinary state: every rung the poll evaluated publishes a value, so a healthy set carries an entry per rung with `slots: 0` rather than an empty list.
 A rung **absent** from the list was not evaluated at all.
 That is a different statement, and for `quota` it means the AGC-wide `AGC_QUOTA_ADMISSION=false` kill switch is set.
 
@@ -3568,7 +3568,7 @@ The entries sum to the set's declared ceiling minus `advertisedCapacity`, becaus
 
 | `reason` | What is withholding | Where to look next |
 |---|---|---|
-| *(no entries, `advertisedCapacity` equals your ceiling)* | Nothing. The set is offering its full capacity and the queue is GitHub-side | Check the job's `runs-on` labels against `status.registeredLabels`, and whether the run is blocked by a workflow-level `concurrency:` group |
+| *(every entry `slots: 0`, `advertisedCapacity` equals your ceiling)* | Nothing. The set is offering its full capacity and the queue is GitHub-side | The `RunnerLabelsIncomplete` condition, which names the labels that did and did not register at GitHub, and whether the run is blocked by a workflow-level `concurrency:` group |
 | `quota` | The namespace `ResourceQuota` has no headroom for more worker pods | The `WorkerQuotaExceeded` condition names the binding resource; [namespace ResourceQuota exhaustion](#jobs-failing-due-to-namespace-resourcequota-exhaustion) |
 | `capacity` | The cluster cannot currently *place* another worker pod of this shape, and the set opted into `spec.capacityGate` | The `WorkerCapacityDeclined` condition names the signal that said so; [WorkerCapacityDeclined](#runnerset-reports-workercapacitydeclined-the-gateway-stopped-claiming-jobs) |
 | `scaleup` | The set's own `spec.scaleUp` creation-rate limit is ramping | Nothing, if the number is falling. This rung clears itself as the bucket refills, so a set climbing out of idle shows it withholding a lot and then less |
