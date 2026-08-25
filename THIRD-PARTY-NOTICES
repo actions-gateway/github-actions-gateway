@@ -8631,7 +8631,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 
 ================================================================================
-Module: k8s.io/api (v0.36.3)
+Module: k8s.io/api (v0.36.4)
 License file: k8s.io/api/LICENSE
 ================================================================================
 
@@ -9047,7 +9047,7 @@ License file: k8s.io/apiextensions-apiserver/LICENSE
    limitations under the License.
 
 ================================================================================
-Module: k8s.io/apimachinery (v0.36.3)
+Module: k8s.io/apimachinery (v0.36.4)
 License file: k8s.io/apimachinery/LICENSE
 ================================================================================
 
@@ -9255,7 +9255,7 @@ License file: k8s.io/apimachinery/LICENSE
    limitations under the License.
 
 ================================================================================
-Module: k8s.io/apimachinery (v0.36.3)
+Module: k8s.io/apimachinery (v0.36.4)
 License file: k8s.io/apimachinery/third_party/forked/golang/LICENSE
 ================================================================================
 
@@ -11236,7 +11236,7 @@ License file: k8s.io/metrics/LICENSE
    limitations under the License.
 
 ================================================================================
-Module: k8s.io/streaming (v0.36.3)
+Module: k8s.io/streaming (v0.36.4)
 License file: k8s.io/streaming/LICENSE
 ================================================================================
 
