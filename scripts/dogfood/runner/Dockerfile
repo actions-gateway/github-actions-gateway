@@ -5,8 +5,8 @@
 #
 # Build-capable dogfood runner image (Q239). This is NOT a released, signed
 # artifact — it is a dev convenience that lets the GKE dogfood run THIS repo's
-# own make-based CI green. publish.yml builds and signs only the five product
-# images (gmc/agc/proxy/worker/wrapper); this one is built ad hoc by
+# own make-based CI green. publish.yml builds and signs only the six product
+# images (gmc/agc/proxy/worker/wrapper/build-runner); this one is built ad hoc by
 # scripts/dogfood/runner-build.sh and pushed to GHCR for the dogfood tenant to
 # pin as its RunnerTemplate workerImage. The Q235 wrapper is still injected on
 # top of it at provision time, exactly as it is on the bare upstream default.
@@ -46,7 +46,7 @@ FROM ghcr.io/actions/actions-runner:2.335.1@sha256:08c30b0a7105f64bddfc485d2487a
 USER root
 # Unpinned apt versions are deliberate here: this is a dev/reference image that
 # tracks the base distro's current toolchain, not a reproducible release artifact
-# (the five signed images carry no apt layer at all). Pinning would rot against the
+# (the six signed images carry no apt layer at all). Pinning would rot against the
 # base's moving package index for no supply-chain gain on a non-shipped image.
 # The ignore directive must sit immediately above RUN for hadolint to honor it.
 # hadolint ignore=DL3008

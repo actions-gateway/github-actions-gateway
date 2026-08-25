@@ -617,7 +617,7 @@ jobs:
           # Have publish.yml write the whole Release (Q293) instead of leaving a
           # minimal, wrong-flag one for a maintainer to fix by hand. The pipeline
           # already holds every piece of data:
-          #   - the five immutable multi-arch INDEX digests operators pin to,
+          #   - the six immutable multi-arch INDEX digests operators pin to,
           #     resolved straight from the just-pushed tag (never the floating tag
           #     after the fact) — same ref the "Record published digest" summary
           #     bullets carry;
