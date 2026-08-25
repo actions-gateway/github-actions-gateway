@@ -78,22 +78,31 @@ spec:
   workerImage: ghcr.io/actions-gateway/build-runner@sha256:<digest from the release notes>
 ```
 
-**If you do set `spec.workerImage`, watch the worker pod when it will not pull.** The pod reports the problem within seconds: it binds to a node and then sits Pending in `ImagePullBackOff`, with a `Failed` event naming the host it could not resolve.
+**If you do set `spec.workerImage` and it will not pull, the `RunnerSet` reports it within seconds, whatever your capacity gate is set to.** `WorkersNotStarting=True` with `reason: PodsNotStarting`, and the condition message carries the kubelet's own text, which names the image:
+
+```bash
+kubectl get runnerset linux -n team-a -o jsonpath='{.status.conditions[?(@.type=="WorkersNotStarting")].message}'
+```
+
+The gauge `actions_gateway_runnerset_workers_not_starting` reads `1` for the same window, so this is alertable rather than something you have to go and look for.
+
+`WorkersUnschedulable` will not tell you, and that is correct rather than a gap: a pod that cannot pull its image still scheduled perfectly well, so that condition stays False and `actions_gateway_runnerset_workers_unschedulable` stays 0 for the whole window.
+It is reporting the scheduler's verdict, and the scheduler said yes.
+The two conditions read opposite halves of `PodScheduled` and can never claim each other's pods, which is why the kubelet's verdict has a condition of its own.
+
+The worker pod says the same thing first-hand, and is where you look for the `Failed` event naming the host it could not resolve:
 
 ```bash
 kubectl get pods -n team-a -l actions-gateway.com/runner-set=linux
 ```
 
-`WorkersUnschedulable` will not tell you: a pod that cannot pull its image still scheduled perfectly well, so that condition stays False and `actions_gateway_runnerset_workers_unschedulable` stays 0 for the whole window.
-It is reporting the scheduler's verdict, and the scheduler said yes.
+**What changes with the capacity gate is the *consequence*, not whether you are told.**
 
-**What the `RunnerSet` says depends on whether you opted into the capacity gate.**
-
-With `spec.capacityGate.mode: Observe`, the set reports `WorkerCapacityDeclined=True` with `reason: PodsNotStarting` within seconds of the kubelet backing off, the condition message carries the image it could not pull, and the gateway **stops claiming jobs** for this set rather than repeating the cycle per job ([troubleshooting](troubleshooting.md#the-reason-is-podsnotstarting-the-image-will-not-pull)).
+With `spec.capacityGate.mode: Observe`, the set additionally reports `WorkerCapacityDeclined=True` with the same `reason: PodsNotStarting`, and the gateway **stops claiming jobs** for this set rather than repeating the cycle per job ([troubleshooting](troubleshooting.md#the-reason-is-podsnotstarting-the-image-will-not-pull)).
 Intake is throttled to one probe job per `pendingPodDeadline` window, not stopped, so the set recovers on its own once the image pulls.
+`WorkersNotStarting` is the observation and `WorkerCapacityDeclined` is the intake decision, so a gated set carries both and only the second one says intake is gated.
 
-Without it (the default) the first `RunnerSet`-level signal is the `WorkerPodStuckPending` Warning event the reaper emits when it deletes the pod at `spec.pendingPodDeadline`, 10 minutes after the pod was created unless you lower that field.
-Until then the pod holds a concurrency slot, and each further job the set acquires starts the same cycle again, spending a single-use runner registration on every one.
+Without the gate (the default) nothing throttles intake: the pod holds a concurrency slot until the reaper deletes it at `spec.pendingPodDeadline` with a `WorkerPodStuckPending` Warning event, 10 minutes after the pod was created unless you lower that field, and each further job the set acquires starts the same cycle again, spending a single-use runner registration on every one.
 
 **A namespace at PSA `privileged`, plus GAG's three gates.** Both entries need capabilities that Pod Security Standards `baseline` forbids, and PSA has no Kata-aware level in between.
 Tenants cannot self-elevate: the namespace needs all four settings in one object.

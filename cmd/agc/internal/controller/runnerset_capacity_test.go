@@ -237,10 +237,10 @@ func TestRunnerSetUnschedulableGrace_Default(t *testing.T) {
 
 // --- apply / clear ---------------------------------------------------------
 
-// TestApplyWorkerCapacityConditions_SetsAllThree: applying under an exhausted quota +
-// an unschedulable pod sets all three conditions, emits one Warning Event on the
+// TestApplyWorkerCapacityConditions_SetsAllFour: applying under an exhausted quota +
+// an unschedulable pod sets all four conditions, emits one Warning Event on the
 // False→True unschedulable transition, and returns no re-check (pod already past grace).
-func TestApplyWorkerCapacityConditions_SetsAllThree(t *testing.T) {
+func TestApplyWorkerCapacityConditions_SetsAllFour(t *testing.T) {
 	now := time.Now()
 	rs := rsObj("set", "ns", func(r *v2alpha1.RunnerSet) {
 		r.Spec.MaxWorkers = ptr.To(int32(3))
@@ -265,6 +265,13 @@ func TestApplyWorkerCapacityConditions_SetsAllThree(t *testing.T) {
 	pressure := meta.FindStatusCondition(rs.Status.Conditions, v2alpha1.ConditionWorkerQuotaPressure)
 	require.NotNil(t, pressure)
 	assert.Equal(t, metav1.ConditionFalse, pressure.Status, "superseded by exceeded")
+	// Q906's condition is published on every apply, and this pod is a scheduling
+	// problem rather than a startup one, so it must read False here. The two are
+	// disjoint by construction: an unschedulable pod is never bound.
+	notStarting := meta.FindStatusCondition(rs.Status.Conditions, v2alpha1.ConditionWorkersNotStarting)
+	require.NotNil(t, notStarting)
+	assert.Equal(t, metav1.ConditionFalse, notStarting.Status)
+	assert.Equal(t, v2alpha1.ReasonWorkersStarting, notStarting.Reason)
 
 	select {
 	case ev := <-rec.Events:
@@ -297,7 +304,7 @@ func TestApplyWorkerCapacityConditions_NoEventWhenStable(t *testing.T) {
 	}
 }
 
-// TestClearWorkerCapacityConditions: clearing sets all three to False with benign reasons.
+// TestClearWorkerCapacityConditions: clearing sets all four to False with benign reasons.
 func TestClearWorkerCapacityConditions(t *testing.T) {
 	rs := rsObj("set", "ns", nil)
 	r := capReconciler(t, time.Now())
@@ -306,9 +313,157 @@ func TestClearWorkerCapacityConditions(t *testing.T) {
 		v2alpha1.ConditionWorkerQuotaPressure,
 		v2alpha1.ConditionWorkerQuotaExceeded,
 		v2alpha1.ConditionWorkersUnschedulable,
+		v2alpha1.ConditionWorkersNotStarting,
 	} {
 		c := meta.FindStatusCondition(rs.Status.Conditions, ct)
 		require.NotNil(t, c, ct)
 		assert.Equal(t, metav1.ConditionFalse, c.Status, ct)
 	}
+}
+
+// The Q906 condition: the kubelet's startup verdict, reported on a set that opted into
+// no capacity gate at all. Q714 already computed this fact on every reconcile and
+// published it only through WorkerCapacityDeclined, which a default set does not carry
+// — so an ungated set said nothing between the kubelet's verdict and the reaper's
+// WorkerPodStuckPending Event one full pendingPodDeadline later.
+
+// TestWorkersNotStarting_UngatedSetReportsIt is that case end to end.
+func TestWorkersNotStarting_UngatedSetReportsIt(t *testing.T) {
+	now := time.Now()
+	pod := capBackingOff(capWorkerPod("ns", "set", "worker-backoff", corev1.PodPending,
+		now.Add(-time.Minute), corev1.ConditionTrue, "", ""),
+		"ImagePullBackOff", `Back-off pulling image "example.invalid/build-capable-runner:replace-me"`)
+	// No gateOn(...): spec.capacityGate is unset, which is the default.
+	rs := rsObj("set", "ns", nil)
+	rec := events.NewFakeRecorder(16)
+	r := capReconciler(t, now, pod)
+	r.Recorder = rec
+
+	r.applyWorkerCapacityConditions(context.Background(), rs, capTemplate(""), nil)
+
+	c := meta.FindStatusCondition(rs.Status.Conditions, v2alpha1.ConditionWorkersNotStarting)
+	require.NotNil(t, c)
+	assert.Equal(t, metav1.ConditionTrue, c.Status)
+	assert.Equal(t, v2alpha1.ReasonPodsNotStarting, c.Reason)
+	assert.Contains(t, c.Message, "worker-backoff")
+	assert.Contains(t, c.Message, "example.invalid",
+		"the kubelet's own message names the image, which is the operator's whole remedy")
+	assert.NotContains(t, c.Message, "job intake is gated",
+		"this condition reports and decides nothing; on an ungated set intake is not gated")
+
+	// The gate's condition must be absent, not False: its presence is what says a set
+	// has a gate at all, and this set has none.
+	assert.Nil(t, meta.FindStatusCondition(rs.Status.Conditions, v2alpha1.ConditionWorkerCapacityDeclined))
+
+	// The sibling stays silent — a bound pod is not a scheduling problem.
+	unsched := meta.FindStatusCondition(rs.Status.Conditions, v2alpha1.ConditionWorkersUnschedulable)
+	require.NotNil(t, unsched)
+	assert.Equal(t, metav1.ConditionFalse, unsched.Status)
+
+	select {
+	case ev := <-rec.Events:
+		assert.Contains(t, ev, "WorkersNotStarting")
+	default:
+		t.Fatal("expected a Warning Event on the WorkersNotStarting False→True transition")
+	}
+}
+
+// TestWorkersNotStarting_UngatedSetSchedulesTheStartupRecheck is the half that makes the
+// condition arrive at all rather than ten minutes late.
+//
+// A pod that has BOUND but not yet declared itself either way changes no phase when it
+// enters backoff, and the Pod watch drops updates that change no phase — so nothing
+// wakes the reconciler between the pod's creation and its pendingPodDeadline reap. The
+// gate schedules that re-check on its own path; before Q906 that was the only place it
+// was scheduled, so an ungated set never got one.
+func TestWorkersNotStarting_UngatedSetSchedulesTheStartupRecheck(t *testing.T) {
+	now := time.Now()
+	// Bound (PodScheduled=True), Pending, and no container status at all: the kubelet
+	// has not reached a verdict yet. This is the only state that needs the re-check.
+	pod := capWorkerPod("ns", "set", "worker-undecided", corev1.PodPending,
+		now.Add(-time.Second), corev1.ConditionTrue, "", "")
+	rs := rsObj("set", "ns", nil)
+	r := capReconciler(t, now, pod)
+
+	requeue := r.applyWorkerCapacityConditions(context.Background(), rs, capTemplate(""), nil)
+
+	assert.Equal(t, startupVerdictRecheck, requeue,
+		"an ungated set must still come back for a bound worker pod that has not declared itself")
+
+	c := meta.FindStatusCondition(rs.Status.Conditions, v2alpha1.ConditionWorkersNotStarting)
+	require.NotNil(t, c)
+	assert.Equal(t, metav1.ConditionFalse, c.Status, "no verdict yet is not a verdict of not-starting")
+}
+
+// TestWorkersNotStarting_ClearsWhenTheWorkerStarts: a pod that ran clears the condition,
+// so a recovered set does not sit on a stale alarm.
+func TestWorkersNotStarting_ClearsWhenTheWorkerStarts(t *testing.T) {
+	now := time.Now()
+	backoff := capBackingOff(capWorkerPod("ns", "set", "worker-backoff", corev1.PodPending,
+		now.Add(-time.Minute), corev1.ConditionTrue, "", ""), "ImagePullBackOff", "Back-off pulling image")
+	rs := rsObj("set", "ns", nil)
+	rec := events.NewFakeRecorder(16)
+	r := capReconciler(t, now, backoff)
+	r.Recorder = rec
+	r.applyWorkerCapacityConditions(context.Background(), rs, capTemplate(""), nil)
+	require.True(t, meta.IsStatusConditionTrue(rs.Status.Conditions, v2alpha1.ConditionWorkersNotStarting))
+	<-rec.Events // drain the first-transition Event
+
+	// Same set, and the pod is now running.
+	running := capStarted(capWorkerPod("ns", "set", "worker-backoff", corev1.PodRunning,
+		now.Add(-time.Minute), corev1.ConditionTrue, "", ""), now)
+	r2 := capReconciler(t, now, running)
+	r2.Recorder = rec
+	r2.applyWorkerCapacityConditions(context.Background(), rs, capTemplate(""), nil)
+
+	c := meta.FindStatusCondition(rs.Status.Conditions, v2alpha1.ConditionWorkersNotStarting)
+	require.NotNil(t, c)
+	assert.Equal(t, metav1.ConditionFalse, c.Status)
+	assert.Equal(t, v2alpha1.ReasonWorkersStarting, c.Reason)
+}
+
+// TestWorkersNotStarting_NoEventWhenStable: transition-only, like its sibling.
+func TestWorkersNotStarting_NoEventWhenStable(t *testing.T) {
+	now := time.Now()
+	pod := capBackingOff(capWorkerPod("ns", "set", "worker-backoff", corev1.PodPending,
+		now.Add(-time.Minute), corev1.ConditionTrue, "", ""), "ImagePullBackOff", "Back-off pulling image")
+	rs := rsObj("set", "ns", nil)
+	rec := events.NewFakeRecorder(16)
+	r := capReconciler(t, now, pod)
+	r.Recorder = rec
+
+	r.applyWorkerCapacityConditions(context.Background(), rs, capTemplate(""), nil)
+	<-rec.Events
+	r.applyWorkerCapacityConditions(context.Background(), rs, capTemplate(""), nil)
+	select {
+	case ev := <-rec.Events:
+		t.Fatalf("no Event expected while the condition stays True, got %q", ev)
+	default:
+	}
+}
+
+// TestWorkersNotStarting_GatedSetReportsBothWithoutContradiction: on a set that DID opt
+// in, the observation and the intake decision both publish, and only the gate's message
+// says intake is gated.
+func TestWorkersNotStarting_GatedSetReportsBothWithoutContradiction(t *testing.T) {
+	now := time.Now()
+	pod := capBackingOff(capWorkerPod("ns", "set", "worker-backoff", corev1.PodPending,
+		now.Add(-time.Minute), corev1.ConditionTrue, "", ""), "ImagePullBackOff", "Back-off pulling image")
+	rs := rsObj("set", "ns", gateOn(v2alpha1.CapacityGateModeObserve))
+	r := capReconciler(t, now, pod)
+
+	r.applyWorkerCapacityConditions(context.Background(), rs, capTemplate(""), gwElastic())
+
+	obs := meta.FindStatusCondition(rs.Status.Conditions, v2alpha1.ConditionWorkersNotStarting)
+	require.NotNil(t, obs)
+	assert.Equal(t, metav1.ConditionTrue, obs.Status)
+	assert.NotContains(t, obs.Message, "job intake is gated")
+
+	gate := meta.FindStatusCondition(rs.Status.Conditions, v2alpha1.ConditionWorkerCapacityDeclined)
+	require.NotNil(t, gate)
+	assert.Equal(t, metav1.ConditionTrue, gate.Status)
+	assert.Equal(t, v2alpha1.ReasonPodsNotStarting, gate.Reason)
+	assert.Contains(t, gate.Message, "job intake is gated")
+	assert.Contains(t, gate.Message, obs.Message,
+		"the gated message is the observation with the consequence prefixed, so the two cannot drift")
 }

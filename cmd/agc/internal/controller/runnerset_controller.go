@@ -523,19 +523,21 @@ func (r *RunnerSetReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	ready, reason, msg := readyConditionForListeners(active, startErr, refs.templateSource)
 	r.setReadyCondition(&rs, ready, reason, msg)
 
-	// Worker-capacity conditions (Q303): the two-tier WorkerQuota ladder and
-	// WorkersUnschedulable, so a stall shows as a condition rather than only rising
-	// pendingJobs with Ready=True. Advisory — neither gates Ready. unschedRequeue folds
-	// into the requeue so WorkersUnschedulable flips when a Pending pod crosses its grace.
-	unschedRequeue := r.applyWorkerCapacityConditions(ctx, &rs, refs.template, refs.gateway)
+	// Worker-capacity conditions (Q303, Q906): the two-tier WorkerQuota ladder,
+	// WorkersUnschedulable, and WorkersNotStarting, so a stall shows as a condition
+	// rather than only rising pendingJobs with Ready=True. All advisory — none gates
+	// Ready. capacityRequeue folds into the requeue below and carries two deadlines:
+	// the scheduling grace, after which WorkersUnschedulable can flip, and the shorter
+	// startup re-check for a bound pod that has not yet declared itself either way.
+	capacityRequeue := r.applyWorkerCapacityConditions(ctx, &rs, refs.template, refs.gateway)
 
 	if err := r.Status().Update(ctx, &rs); err != nil {
 		return ctrl.Result{}, err
 	}
 
 	requeueAfter := reapAfter
-	if unschedRequeue > 0 && (requeueAfter <= 0 || unschedRequeue < requeueAfter) {
-		requeueAfter = unschedRequeue
+	if capacityRequeue > 0 && (requeueAfter <= 0 || capacityRequeue < requeueAfter) {
+		requeueAfter = capacityRequeue
 	}
 	if rs.Spec.MaxListeners > 0 && mux.ActiveCount() < rs.Spec.MaxListeners {
 		if interval := r.baselineRecheckInterval(); requeueAfter <= 0 || interval < requeueAfter {

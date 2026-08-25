@@ -28,7 +28,7 @@ import (
 // to .status.conditions (1 when True, 0 otherwise).
 //
 // WorkerCapacityDeclined (Q643) is the one condition whose value alone does not say
-// what an operator needs to know, so its family differs from the other three in two
+// what an operator needs to know, so its family differs from the other four in two
 // ways. It carries a reason label, because the latched AwaitingProbe state (Q512) is a
 // True the operator must be able to tell apart from a live decline — it means intake is
 // throttled to one probe job per deadline window rather than gated on present evidence,
@@ -44,6 +44,7 @@ type runnerSetCapacityCollector struct {
 	pressure      *prometheus.Desc
 	exceeded      *prometheus.Desc
 	unschedulable *prometheus.Desc
+	notStarting   *prometheus.Desc
 	declined      *prometheus.Desc
 }
 
@@ -67,6 +68,11 @@ func NewRunnerSetCapacityCollector(reader client.Reader) prometheus.Collector {
 			"1 when the RunnerSet WorkersUnschedulable condition is True (worker pods are Pending and cannot be scheduled for a non-quota reason), else 0.",
 			[]string{"namespace", "runner_set"}, nil,
 		),
+		notStarting: prometheus.NewDesc(
+			"actions_gateway_runnerset_workers_not_starting",
+			"1 when the RunnerSet WorkersNotStarting condition is True (worker pods were placed on a node and the kubelet could not start them, typically an image that will not pull), else 0.",
+			[]string{"namespace", "runner_set"}, nil,
+		),
 		declined: prometheus.NewDesc(
 			"actions_gateway_runnerset_worker_capacity_declined",
 			"1 when the RunnerSet WorkerCapacityDeclined condition is True (the opt-in capacity gate is refusing job intake), else 0. The reason label carries the condition's current reason, which is what distinguishes the latched AwaitingProbe state from a live decline. Emitted only for a set whose capacity gate is enabled.",
@@ -79,6 +85,7 @@ func (c *runnerSetCapacityCollector) Describe(ch chan<- *prometheus.Desc) {
 	ch <- c.pressure
 	ch <- c.exceeded
 	ch <- c.unschedulable
+	ch <- c.notStarting
 	ch <- c.declined
 }
 
@@ -101,6 +108,8 @@ func (c *runnerSetCapacityCollector) Collect(ch chan<- prometheus.Metric) {
 			conditionGaugeValue(rs.Status.Conditions, v2alpha1.ConditionWorkerQuotaExceeded), rs.Namespace, rs.Name)
 		ch <- prometheus.MustNewConstMetric(c.unschedulable, prometheus.GaugeValue,
 			conditionGaugeValue(rs.Status.Conditions, v2alpha1.ConditionWorkersUnschedulable), rs.Namespace, rs.Name)
+		ch <- prometheus.MustNewConstMetric(c.notStarting, prometheus.GaugeValue,
+			conditionGaugeValue(rs.Status.Conditions, v2alpha1.ConditionWorkersNotStarting), rs.Namespace, rs.Name)
 		if gate := meta.FindStatusCondition(rs.Status.Conditions, v2alpha1.ConditionWorkerCapacityDeclined); gate != nil {
 			ch <- prometheus.MustNewConstMetric(c.declined, prometheus.GaugeValue,
 				conditionGaugeValue(rs.Status.Conditions, v2alpha1.ConditionWorkerCapacityDeclined),

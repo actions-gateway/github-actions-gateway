@@ -28,6 +28,7 @@ const (
 	ConditionWorkerQuotaPressure         = apiconditions.ConditionWorkerQuotaPressure
 	ConditionWorkerQuotaExceeded         = apiconditions.ConditionWorkerQuotaExceeded
 	ConditionWorkersUnschedulable        = apiconditions.ConditionWorkersUnschedulable
+	ConditionWorkersNotStarting          = apiconditions.ConditionWorkersNotStarting
 	ConditionWorkerCapacityDeclined      = apiconditions.ConditionWorkerCapacityDeclined
 	ConditionRunnerSetsDegraded          = apiconditions.ConditionRunnerSetsDegraded
 	ConditionProxyQuotaPressure          = apiconditions.ConditionProxyQuotaPressure
@@ -87,6 +88,7 @@ const (
 	ReasonNoReapBlockingSidecar   = apiconditions.ReasonNoReapBlockingSidecar
 	ReasonPodsUnschedulable       = apiconditions.ReasonPodsUnschedulable
 	ReasonWorkersSchedulable      = apiconditions.ReasonWorkersSchedulable
+	ReasonWorkersStarting         = apiconditions.ReasonWorkersStarting
 	ReasonCapacityAvailable       = apiconditions.ReasonCapacityAvailable
 	ReasonScaleUpDeclined         = apiconditions.ReasonScaleUpDeclined
 	ReasonPodsNotStarting         = apiconditions.ReasonPodsNotStarting

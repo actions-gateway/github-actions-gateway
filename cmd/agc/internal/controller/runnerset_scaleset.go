@@ -224,18 +224,19 @@ func (r *RunnerSetReconciler) reconcileScaleSetListener(ctx context.Context, log
 
 	r.applyRunnerLabelsCondition(rs, st.RegisteredLabels)
 
-	// Worker-capacity conditions (Q303), identical to the classic path: the ScaleSet
-	// tier provisions the same worker pods (one per assigned job), so a namespace-quota
-	// or scheduling stall must surface here too rather than hiding behind rising
-	// pendingJobs with Ready=True.
-	unschedRequeue := r.applyWorkerCapacityConditions(ctx, rs, refs.template, refs.gateway)
+	// Worker-capacity conditions (Q303, Q906), identical to the classic path: the
+	// ScaleSet tier provisions the same worker pods (one per assigned job), so a
+	// namespace-quota, scheduling, or image-pull stall must surface here too rather
+	// than hiding behind rising pendingJobs with Ready=True. capacityRequeue carries
+	// the same two deadlines the classic call site describes.
+	capacityRequeue := r.applyWorkerCapacityConditions(ctx, rs, refs.template, refs.gateway)
 
 	if err := r.Status().Update(ctx, rs); err != nil && !apierrors.IsConflict(err) {
 		return ctrl.Result{}, err
 	}
 	requeueAfter := reapAfter
-	if unschedRequeue > 0 && (requeueAfter <= 0 || unschedRequeue < requeueAfter) {
-		requeueAfter = unschedRequeue
+	if capacityRequeue > 0 && (requeueAfter <= 0 || capacityRequeue < requeueAfter) {
+		requeueAfter = capacityRequeue
 	}
 	return ctrl.Result{RequeueAfter: requeueAfter}, nil
 }

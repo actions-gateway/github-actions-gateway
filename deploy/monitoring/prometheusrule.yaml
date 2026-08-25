@@ -179,6 +179,32 @@ spec:
             summary: "Worker pods unschedulable for {{ $labels.runner_group }}{{ $labels.runner_set }} in {{ $labels.namespace }}"
             description: "Worker pods are stuck Pending past the scheduling grace because the scheduler can't place them (no matching node / affinity / taints — not quota). Capacity is not materializing; acquired jobs will not start."
 
+        # Page: worker pods bound to a node and the kubelet cannot start them (Q906)
+        #
+        # Disjoint from ActionsGatewayWorkersUnschedulable above by construction: the
+        # two conditions read opposite halves of PodScheduled, so a pod counted here
+        # scheduled perfectly well and can never be counted there. Separate alerts
+        # because the remedies do not overlap — that one sends an operator after a
+        # node, a taint or a quota, this one after an image.
+        #
+        # No v1 twin in the expression: the condition is v2 RunnerSet-only.
+        #
+        # `for` is 10m to match the sibling rather than the kubelet, which reaches
+        # ImagePullBackOff in about two seconds. The signal is trustworthy long before
+        # that, but a shorter window would page on a registry blip that the next pull
+        # clears; 10m is also under the default pendingPodDeadline, so the alert fires
+        # while the evidence pod is still there to inspect.
+        - alert: ActionsGatewayWorkersNotStarting
+          expr: |
+            actions_gateway_runnerset_workers_not_starting == 1
+          for: 10m
+          labels:
+            severity: critical
+          annotations:
+            runbook_url: "https://actions-gateway.com/operations/runbook/#actionsgatewayworkersnotstarting"
+            summary: "Worker pods will not start for {{ $labels.runner_set }} in {{ $labels.namespace }}"
+            description: "Worker pods were placed on a node and the kubelet could not start them — almost always a workerImage that will not pull. The RunnerSet's WorkersNotStarting condition message carries the kubelet's own text, which names the image. Acquired jobs will not start, and without spec.capacityGate nothing throttles intake."
+
         # Page: the GitHub egress IP-range allowlist has gone stale (Q157)
         - alert: ActionsGatewayEgressRulesStale
           expr: |

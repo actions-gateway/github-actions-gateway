@@ -186,6 +186,7 @@ def render():
         L.append(f'actions_gateway_runnerset_worker_quota_pressure{{namespace="{ns}",runner_set="{rs}"}} 0')
         L.append(f'actions_gateway_runnerset_worker_quota_exceeded{{namespace="{ns}",runner_set="{rs}"}} 0')
         L.append(f'actions_gateway_runnerset_workers_unschedulable{{namespace="{ns}",runner_set="{rs}"}} 0')
+        L.append(f'actions_gateway_runnerset_workers_not_starting{{namespace="{ns}",runner_set="{rs}"}} 0')
         # Scale-set reaps carry the CR name on both runner_group and runner_set, which
         # is what joins them to the runner_set-labelled gauges above (Q514/Q651).
         # orphaned_running is the scale-set-specific reason: a worker that registered

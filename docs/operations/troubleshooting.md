@@ -645,7 +645,15 @@ This reason is not about placement at all, which is why it reads the same on a f
 The worker pod **was** scheduled, it has a node, and then the kubelet could not start its container, so it sits `Pending` in `ImagePullBackOff` until the reaper deletes it at `pendingPodDeadline`.
 No node anyone adds changes that, so the gate refuses intake wherever it sees it.
 
-Look at the pod, not the set: it reports the problem within seconds, while the `RunnerSet` reported nothing at all before Q714.
+Since Q906 the `RunnerSet` reports it within seconds too, on **every** set rather than only a gated one, as the advisory `WorkersNotStarting` condition with this same `PodsNotStarting` reason:
+
+```sh
+kubectl get runnerset -n <namespace> <runner-set> \
+  -o jsonpath='{.status.conditions[?(@.type=="WorkersNotStarting")].message}'
+```
+
+That condition reports and decides nothing; `WorkerCapacityDeclined` below is the intake decision, and only a set that opted into `spec.capacityGate` carries it.
+The pod is still where the first-hand evidence is:
 
 ```sh
 kubectl get pods -n <namespace> -l actions-gateway.com/runner-set=<runner-set> \
@@ -668,7 +676,7 @@ Almost always one of:
 The gate reads the kubelet's **backoff**, not its first failed pull: a single `ErrImagePull` from a registry blip is ignored, and the next attempt clears it.
 So a `PodsNotStarting` decline means the kubelet has already tried, failed, and scheduled a retry.
 
-Once the image pulls, the next worker pod starts and the condition clears on the following reconcile, with no restart and no change to the set.
+Once the image pulls, the next worker pod starts and both conditions clear on the following reconcile, with no restart and no change to the set.
 
 ### A Cluster-Wide Verdict Closes Every Set at Once
 
@@ -1989,6 +1997,7 @@ An event is recorded on the owner's next reconcile, so it can trail the underlyi
 | `WorkerCeilingReached` | Normal | Scale-set jobs are waiting because the set is already running as many workers as its spec allows; they are re-offered until capacity frees. Expected backpressure, hence Normal. Also sets the advisory `JobProvisionStalled` condition, whose message names the job ids. Once per episode. | [Scale-Set Jobs Waiting at the Worker Ceiling](#scale-set-jobs-waiting-at-the-worker-ceiling-workerceilingreached) |
 | `AssignmentAbandoned` | Warning | The listener gave up on assigned jobs it was holding, because the scale set reported no assigned jobs at all on two consecutive readings — GitHub is no longer holding them, and never reported them complete. Each is a workflow run that will not run. Clears `JobProvisionStalled` and steps `…_jobs_abandoned_total`. | [Scale-Set Assignments Abandoned](#scale-set-assignments-abandoned-assignmentabandoned) |
 | `OrphanedWorkerRecovered` | Warning | A scale-set worker pod for an unconcluded job was already gone when this AGC process started, so the disruption happened while nothing was watching and its cause was lost with the pod (Q844). The run is re-run through the shared per-run retry budget as `cause="vanished"`. Expected after an AGC restart that overlapped a node drain or a preemption; a steady trickle with no restarts is not. | [Evicted Worker Pods Exhausting Retry Budget](#evicted-worker-pods-exhausting-retry-budget) |
+| `WorkersNotStarting` | Warning | One or more worker pods were placed on a node and the kubelet could not start them, sitting in `ImagePullBackOff` on the container image (Q906). Recorded on every `RunnerSet` on the False→True transition, whether or not the set opted into `spec.capacityGate`; the note carries the kubelet's own text, which names the image. Also sets the advisory `WorkersNotStarting` condition and reads `1` on `actions_gateway_runnerset_workers_not_starting`. | [The reason is `PodsNotStarting`: the image will not pull](#the-reason-is-podsnotstarting-the-image-will-not-pull) |
 | `AgentDeregistrationFailed` | Warning | A `RunnerGroup`/`RunnerSet` is being deleted and its agent Secrets could not be deregistered at GitHub, so the delete is retried and the finalizer is still held. The named error is the API server's or GitHub's. Usually a revoked or expired App credential: the pool cleanup proceeds without deregistration when no token can be fetched, so this reports the delete itself failing. | [GitHub App Secret Misconfiguration](#github-app-secret-misconfiguration) |
 
 **Diagnostics.**

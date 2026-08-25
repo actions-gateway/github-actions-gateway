@@ -165,6 +165,7 @@ kubectl apply -k deploy/templates/kata-dind
 Then point a `RunnerSet` at it with `templateRef.kind: ClusterRunnerTemplate`.
 It runs jobs as applied: the template leaves `spec.workerImage` unset, and the AGC's digest-pinned default runner image already carries a Docker CLI and buildx, which is the client the dind sidecar is the daemon for.
 Set `spec.workerImage` only if your jobs need `docker compose` (`ghcr.io/actions-gateway/build-runner`, pinned by digest from the release notes) or a toolchain of your own.
+If the image you set will not pull, the worker pod shows `ImagePullBackOff` within seconds and the `RunnerSet` reports `WorkersNotStarting`/`PodsNotStarting` in the same window, gate or no gate; a set that opted into `spec.capacityGate` additionally reports `WorkerCapacityDeclined` and stops claiming jobs.
 The [runner template library](runner-template-library.md) covers both, the supported way to patch the base, and [what to watch when the placeholder is left in place](runner-template-library.md#kata-dind-and-privileged-dind).
 
 The rest of this section is what that template contains and why, for reading rather than retyping.
