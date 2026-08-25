@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/plan/security-audit-2026-06/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q986/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>Security Audit 2 — June 2026 - GitHub Actions Gateway</title>
+        <title>Egress audit record carries no identifier for who made the connection - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#security-audit-2--june-2026" class="md-skip">
+        <a href="#egress-audit-record-carries-no-identifier-for-who-made-the-connection" class="md-skip">
           Skip to content
         </a>
       
@@ -142,7 +142,7 @@
             <div class="md-banner__inner md-grid md-typeset">
               You're not viewing the latest release.
   <a href="https://actions-gateway.com/dev"><strong>Go to the current docs.</strong></a>
-    <a href="../../queue/">See the working backlog.</a>
+    <a href="../">See the working backlog.</a>
 
             </div>
             <script>var el=document.querySelector("[data-md-component=outdated]"),base=new URL("../.."),outdated=__md_get("__outdated",sessionStorage,base);!0===outdated&&el&&(el.hidden=!1)</script>
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Security Audit 2 — June 2026
+              Egress audit record carries no identifier for who made the connection
             
           </span>
         </div>
@@ -2579,163 +2579,6 @@
     
   
   
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      Table of contents
-    </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#table-of-contents" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Table of Contents
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#disposition-of-all-findings" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Disposition of all findings
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#queued-findings-detail" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Queued findings (detail)
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Queued findings (detail)">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#q128--worker-pods-lack-ingress-networkpolicy-high--resolved" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Q128 — Worker pods lack ingress NetworkPolicy (High) — RESOLVED
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#q121--gmc-secret-rbac-is-cluster-wide-docs-claim-name-scoped-high--resolved" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Q121 — GMC Secret RBAC is cluster-wide; docs claim name-scoped (High) — RESOLVED
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#q122--gmc-workload-writes-are-cluster-wide-docs-claim-confinement-high--resolved" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Q122 — GMC workload writes are cluster-wide; docs claim confinement (High) — RESOLVED
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#q123--sha-pin-github-actions-publishyml-first-high--resolved" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Q123 — SHA-pin GitHub Actions; publish.yml first (High) — RESOLVED
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#q124--make-verify-release-accepts-branch-identities-medium--resolved" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Q124 — make verify-release accepts branch identities (Medium) — RESOLVED
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#q125--gmc-teardown-fail-open-medium--resolved" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Q125 — GMC teardown fail-open (Medium) — RESOLVED
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#q126--ci-gate-vendor-contents-vs-gosum-medium--resolved" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Q126 — CI gate: vendor contents vs go.sum (Medium) — RESOLVED
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#q127-hardening-batch-items" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Q127 hardening-batch items
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#verified-strengths" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Verified strengths
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#coverage-notes" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Coverage notes
-      
-    </span>
-  </a>
-  
-</li>
-      
-    </ul>
-  
 </nav>
                   </div>
                 </div>
@@ -2754,261 +2597,24 @@
   
 
 
-<h1 id="security-audit-2--june-2026">Security Audit 2 — June 2026<a class="headerlink" href="#security-audit-2--june-2026" title="Permanent link">&para;</a></h1>
-<p>Second full security audit, performed 2026-06-12.
-Four parallel review tracks — GMC tenant isolation &amp; provisioning, proxy/broker/probe network trust boundaries, CI/CD supply chain, and AGC credential/crypto handling — plus <code>make vulncheck</code> (govulncheck: clean across all 8 modules).
-The first audit (2026-05) and its W/C/H/M/L workstreams live in <a href="../security/">security.md</a>; this doc records only the second audit's findings and their disposition.</p>
-<blockquote>
-<p><strong>Status: Complete.</strong> Every High/Medium finding is resolved (Q121–Q130).
-The proxy destination-allowlist / SSRF revisit that this audit deferred shipped as Q242 (Appendix G §G.1), though as an <em>opt-in, platform-gated</em> control — the default posture is unchanged, so the finding's disposition below still reads "accepted by design" for a stock install.
-The remaining deferral is the worker trivy-leg flip (<a href="../../queue/Q70/">Q70</a>); the residual proxy hardening this audit argued for — a connection cap and per-connection audit trail — is now tracked as live Queue rows (Q564, <a href="../../queue/Q565/">Q565</a>).
-Info-level / accepted-by-design items are documented in place.
-No active work remains on this audit.</p>
-</blockquote>
-<p><strong>Method note:</strong> each track read the claimed security properties in <code>docs/design/05-security.md</code> / <code>02-architecture.md</code> / <code>network-architecture.md</code> first, then verified the code implements them.
-The recurring theme in the new findings is <em>claim-vs-code mismatch</em>: documented isolation properties that are client-side hygiene or unimplemented at the authorization layer.</p>
-<h2 id="table-of-contents">Table of Contents<a class="headerlink" href="#table-of-contents" title="Permanent link">&para;</a></h2>
-<ul>
-<li><a href="#disposition-of-all-findings">Disposition of all findings</a></li>
-<li><a href="#queued-findings-detail">Queued findings (detail)</a></li>
-<li><a href="#q127-hardening-batch-items">Q127 hardening-batch items</a></li>
-<li><a href="#verified-strengths">Verified strengths</a></li>
-<li><a href="#coverage-notes">Coverage notes</a></li>
-</ul>
-<h2 id="disposition-of-all-findings">Disposition of all findings<a class="headerlink" href="#disposition-of-all-findings" title="Permanent link">&para;</a></h2>
-<table>
-<thead>
-<tr>
-<th>Finding</th>
-<th>Severity</th>
-<th>Disposition</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>GMC ClusterRole grants cluster-wide Secret read/write; docs claim name-scoped</td>
-<td>High</td>
-<td><strong>Resolved (Q121):</strong> Secret <em>writes</em> confined to tenant-marked namespaces by the new <code>gmc-tenant-resource-guard</code> VAP; Secret <em>reads</em> cannot be VAP/RBAC-confined (admission does not run on read verbs) so <code>05-security.md</code> now states the read scope honestly with its compensating controls. Claim == reality. (Q29 audit policy is the detective half for reads.)</td>
-</tr>
-<tr>
-<td>GMC workload writes cluster-wide; docs claim CR-namespace confinement</td>
-<td>High</td>
-<td><strong>Resolved (Q122):</strong> all workload <code>create</code>/<code>update</code>/<code>delete</code> confined to tenant-marked namespaces by the <code>gmc-tenant-resource-guard</code> VAP; <code>05-security.md</code> / <code>02-architecture.md</code> updated to match.</td>
-</tr>
-<tr>
-<td>Worker pods have no ingress NetworkPolicy (default-allow ingress)</td>
-<td>High</td>
-<td><strong>Resolved (Q128)</strong> — workload NP now declares <code>policyTypes: [Ingress, Egress]</code> with an empty ingress rule set (default-deny)</td>
-</tr>
-<tr>
-<td>No GitHub Actions SHA-pinned; publish.yml runs tag-pinned actions with <code>id-token: write</code></td>
-<td>High</td>
-<td><strong>Resolved (Q123)</strong> — every <code>uses:</code> SHA-pinned, syft version-pinned, Dependabot <code>github-actions</code> ecosystem bumps the pins</td>
-</tr>
-<tr>
-<td><code>make verify-release</code> accepts <code>refs/heads/.*</code> signing identities</td>
-<td>Medium</td>
-<td><strong>Resolved (Q124)</strong> — identity regexp anchored tags-only (<code>@refs/tags/v.*$</code>); publish.yml refuses non-tag refs; regexp guarded by <code>scripts/release/verify-release-test.sh</code></td>
-</tr>
-<tr>
-<td>GMC teardown fail-open (<code>deleteIfExists</code> swallows errors, finalizer removed)</td>
-<td>Medium</td>
-<td><strong>Resolved (Q125):</strong> <code>deleteIfExists</code> returns its error (NotFound = success); <code>reconcileDelete</code> collects delete errors, emits a <code>TeardownIncomplete</code> event, and requeues without removing the finalizer until every delete is confirmed gone. Fail-closed and idempotent.</td>
-</tr>
-<tr>
-<td>Vendored deps never integrity-checked against go.sum in CI</td>
-<td>Medium</td>
-<td><strong>New → Q126</strong></td>
-</tr>
-<tr>
-<td>8 smaller hardening items (see below)</td>
-<td>Low</td>
-<td><strong>Resolved (Q127):</strong> all eight addressed (item 5's cosign leg landed earlier via Q126); the single optional sub-item of #8 (non-HTTPS <code>GITHUB_API_BASE_URL</code> guard) is carved out to its own Queue item. See <a href="#q127-hardening-batch-items">Q127 batch detail</a>.</td>
-</tr>
-<tr>
-<td>DNS egress allows port 53 to any destination</td>
-<td>Medium</td>
-<td><strong>Fixed (Q105)</strong> — port-53 egress confined to cluster DNS (<code>k8s-app: kube-dns</code> in <code>kube-system</code>) across all three per-tenant NetworkPolicies</td>
-</tr>
-<tr>
-<td>Proxy has no app-layer destination allowlist / connection cap</td>
-<td>Medium</td>
-<td>Still accepted by design <strong>in the default posture</strong> — security.md M-2. Q242 shipped Appendix G §G.1 as an <em>opt-in, platform-gated</em> allowlist (<code>actions_gateway_proxy_connect_denied_total</code> makes each denial an SSRF signal), so operators who want the app-layer gate now have it; left unconfigured the proxy is transport-only and the pod-egress NetworkPolicy remains the hard gate. This audit's metadata-service/SSRF framing is what carried that control. The connection-cap half remains open as <a href="../../queue/Q565/">Q565</a></td>
-</tr>
-<tr>
-<td>ResourceQuota is optional and tenant-controlled</td>
-<td>Medium</td>
-<td><strong>Resolved (Q130, 2026-06-14):</strong> the tenant-authored <code>spec.namespaceQuota</code> was removed; the <code>ResourceQuota</code> is now platform-owned (the platform admin must provision it on the namespace), so it is no longer tenant-controlled. The remaining per-cluster proxy HPA-max concern was resolved (Q82) by a non-blocking <code>ProxyQuotaPressure</code> status condition that correlates the proxy pool's configured <code>maxReplicas</code> footprint against the platform-owned quota — see <a href="../../design/05-security/">05-security.md</a>.</td>
-</tr>
-<tr>
-<td>No SLSA provenance attestation</td>
-<td>Info</td>
-<td>Known — Q103</td>
-</tr>
-<tr>
-<td>Worker trivy leg report-only</td>
-<td>Info</td>
-<td>Known — <a href="../../queue/Q70/">Q70</a></td>
-</tr>
-<tr>
-<td>ServiceMonitor <code>insecureSkipVerify</code></td>
-<td>Low</td>
-<td>Known — Q104</td>
-</tr>
-<tr>
-<td>Library agent-key-type default Ed25519</td>
-<td>Low</td>
-<td>Known — Q109</td>
-</tr>
-<tr>
-<td>Docs claim CRD CEL rejects reserved podTemplate fields; no such rules (runtime overwrite layer does exist and holds)</td>
-<td>Info</td>
-<td>Docs-honesty — fold into Q99</td>
-</tr>
-<tr>
-<td><code>GITHUB_API_BASE_URL</code> env override of token exchange</td>
-<td>Low</td>
-<td>Residual of M-14 fix (<code>--allow-agc-extra-env</code> default-off); guard option listed under Q127</td>
-</tr>
-<tr>
-<td>Missing explicit <code>permissions:</code> on read-only workflows</td>
-<td>Info</td>
-<td>Repo default verified read-only; declare-in-file is a nice-to-have, not queued</td>
-</tr>
-<tr>
-<td>GHCR version tags mutable + re-dispatchable</td>
-<td>Info</td>
-<td>Mitigated by digest-pin consumption + Q124 fix; revisit if GHCR ships tag immutability</td>
-</tr>
-</tbody>
-</table>
-<h2 id="queued-findings-detail">Queued findings (detail)<a class="headerlink" href="#queued-findings-detail" title="Permanent link">&para;</a></h2>
-<h3 id="q128--worker-pods-lack-ingress-networkpolicy-high--resolved">Q128 — Worker pods lack ingress NetworkPolicy (High) — RESOLVED<a class="headerlink" href="#q128--worker-pods-lack-ingress-networkpolicy-high--resolved" title="Permanent link">&para;</a></h3>
-<p><code>buildWorkloadNetworkPolicy</code> (<code>cmd/gmc/internal/controller/builder.go</code>) set <code>PolicyTypes: [Egress]</code> only; the AGC and proxy policies declared ingress but nothing selected worker pods (<code>actions-gateway/component: workload</code>) for ingress, so they were default-allow.
-Any pod in the cluster could connect to a worker running untrusted job code; combined with the unrestricted port-53 egress (Q105), two malicious workflows in different tenants could form a cross-tenant channel.
-Contradicted the "fully isolated within the tenant's namespace" claim (<code>02-architecture.md:7</code>).</p>
-<p><strong>Resolution:</strong> the workload NP now declares <code>policyTypes: [Ingress, Egress]</code> with an empty ingress rule set (default-deny — workers accept no inbound by design; they are outbound-only, dialing the proxy and AGC).
-The AGC pod is also selected by the workload NP but its own <code>buildAGCNetworkPolicy</code> additively re-admits the monitoring metrics scrape, so default-deny costs it nothing. kubelet liveness/readiness probes originate from the node and are not subject to NetworkPolicy, so health checks are unaffected.
-Guarded by the spec-level authoring test <code>TestBuildWorkloadNetworkPolicy_DefaultDenyIngress</code> (the reliable CI gate — kindnet does not enforce ingress policy) and the e2e <code>WorkloadNPSpec</code> assertion; the <a href="../../design/network-architecture/#how-to-validate-network-isolation">network-architecture.md validation section</a> adds a manual runtime probe for policy-enforcing CNIs.</p>
-<h3 id="q121--gmc-secret-rbac-is-cluster-wide-docs-claim-name-scoped-high--resolved">Q121 — GMC Secret RBAC is cluster-wide; docs claim name-scoped (High) — RESOLVED<a class="headerlink" href="#q121--gmc-secret-rbac-is-cluster-wide-docs-claim-name-scoped-high--resolved" title="Permanent link">&para;</a></h3>
-<p><strong>Resolution.</strong> Secret <em>writes</em> (<code>create</code>/<code>update</code>) are now confined to namespaces carrying <code>actions-gateway.github.com/tenant=true</code> by the new <code>gmc-tenant-resource-guard</code> ValidatingAdmissionPolicy (<code>cmd/gmc/config/admission-policy/tenant-resource-guard.yaml</code>, shipped by the chart, applied by <code>make deploy</code>).
-Secret <em>reads</em> (<code>get</code>/<code>list</code>/<code>watch</code>) cannot be confined at the authorization layer — admission never runs on read verbs, <code>resourceNames</code> cannot scope <code>list</code>/<code>watch</code>, and tenant Secret names are dynamic so <code>get</code> cannot be name-scoped either — so <code>05-security.md</code> §5.1 now states the read scope honestly (cluster-wide) alongside its compensating controls (metadata-only informer, cache-bypassed reads of only the named credential Secret, the write-confinement VAP, and the Q29 detective audit policy).
-Claim now equals reality in both directions.
-Guarded by <code>TestGMC_TenantResourceGuard_ConfinesWritesToMarkedNamespaces</code> (envtest).</p>
-<p>Original finding:</p>
-<p><code>cmd/gmc/config/rbac/role.yaml:38-47</code> grants <code>secrets: create,get,list,update,watch</code> with no <code>resourceNames</code>, bound by a ClusterRoleBinding.
-<code>05-security.md:13-16</code> claims "no cluster-wide Secret read", metadata-only list, and "<code>get</code> on specific names only".
-The metadata-only watch (<code>WatchesMetadata</code>) and cache bypass (<code>DisableFor[*corev1.Secret]</code>) are client-side hygiene — RBAC lets a compromised GMC <code>get</code>/<code>list</code> full <code>.data</code> of every Secret in the cluster and <code>create</code>/<code>update</code> Secrets anywhere.
-The first audit's §GMC-1 residual ("metadata only") understated this (corrected 2026-06-12).
-<strong>Fix:</strong> ValidatingAdmissionPolicy confining GMC Secret reads/writes to tenant-marked namespaces (the <code>namespace-psa-guard</code> pattern), per-namespace Roles at onboarding, or correct the docs so operators don't rely on a non-existent property.
-Q29's audit-policy sample is the detective complement either way.
-<em>Interim (2026-06-12): the inaccurate claims in <code>05-security.md</code> are struck through with corrections in place; restoring clean prose there is part of resolving this item.</em></p>
-<h3 id="q122--gmc-workload-writes-are-cluster-wide-docs-claim-confinement-high--resolved">Q122 — GMC workload writes are cluster-wide; docs claim confinement (High) — RESOLVED<a class="headerlink" href="#q122--gmc-workload-writes-are-cluster-wide-docs-claim-confinement-high--resolved" title="Permanent link">&para;</a></h3>
-<p><strong>Resolution.</strong> All workload <code>create</code>/<code>update</code>/<code>delete</code> (deployments, services, serviceaccounts, networkpolicies, rolebindings, roles, HPAs, PDBs, runnergroups) are now confined to tenant-marked namespaces by the <code>gmc-tenant-resource-guard</code> ValidatingAdmissionPolicy (the same policy that handles the Q121 Secret-write path, keyed on the existing <code>actions-gateway.github.com/tenant=true</code> marker via <code>namespaceObject</code>).
-A compromised GMC can no longer create a Deployment or RoleBinding in <code>kube-system</code>.
-<code>05-security.md</code> and <code>02-architecture.md</code> updated so the confinement claims are true.
-Guarded by <code>TestGMC_TenantResourceGuard_ConfinesWritesToMarkedNamespaces</code> (envtest, covers both Secret and Deployment kinds).
-(<code>resourcequotas</code> write was already dropped by Q130.)</p>
-<p>Original finding:</p>
-<p><code>role.yaml:84-158</code>: deployments, rolebindings, networkpolicies, services, serviceaccounts, resourcequotas, HPAs, PDBs — all verbs, all namespaces.
-<code>05-security.md:13</code> and <code>02-architecture.md:66</code> claim writes are "limited to namespaces where an <code>ActionsGateway</code> CR exists"; nothing enforces that.
-A compromised GMC can create a Deployment or RoleBinding in <code>kube-system</code>.
-<strong>Fix:</strong> extend the <code>namespace-psa-guard</code> VAP approach — deny GMC-SA writes of these kinds in namespaces lacking the tenant marker label — and/or update the docs.
-<em>Interim (2026-06-12): the claims in <code>05-security.md</code> and <code>02-architecture.md</code> are struck through with corrections in place pending resolution.</em> <strong>Resolved (Q122 + Q130).</strong> The <code>gmc-tenant-resource-guard</code> ValidatingAdmissionPolicy now denies GMC-SA <code>CREATE</code>/<code>UPDATE</code>/<code>DELETE</code> of every workload kind — secrets, serviceaccounts, services, deployments, networkpolicies, horizontalpodautoscalers, poddisruptionbudgets, rolebindings, roles (plus the <code>RunnerGroup</code>/<code>RunnerSet</code> CRs) — in namespaces lacking the tenant marker label, so a compromised GMC can no longer write into <code>kube-system</code>.
-<code>resourcequotas</code> was dropped from the GMC entirely (Q130 — the <code>ResourceQuota</code> is platform-owned).
-<code>05-security.md</code> / <code>02-architecture.md</code> updated to match.
-Claim == reality.</p>
-<h3 id="q123--sha-pin-github-actions-publishyml-first-high--resolved">Q123 — SHA-pin GitHub Actions; publish.yml first (High) — RESOLVED<a class="headerlink" href="#q123--sha-pin-github-actions-publishyml-first-high--resolved" title="Permanent link">&para;</a></h3>
-<p>Every <code>uses:</code> in <code>.github/workflows/</code> was tag-pinned; <code>anchore/sbom-action/download-syft@v0</code> floated a whole major.
-The publish job holds <code>packages: write</code> + <code>id-token: write</code>: a hijacked action tag executes inside the job whose ambient OIDC identity <em>is</em> the release trust root — it could push and <strong>keyless-sign malicious images as the legitimate publish identity</strong>, which <code>make verify-release</code> would accept.</p>
-<p><strong>Resolution:</strong> every <code>uses:</code> across all ten workflow files is pinned to a full 40-char commit SHA with a trailing <code># vX.Y.Z</code> comment (publish.yml first).
-Runtime tool downloads in the publish path are version-pinned too: <code>cosign</code> already via <code>cosign-installer</code> <code>cosign-release</code>, and <code>syft</code> now via an explicit <code>syft-version</code> input on <code>download-syft</code> (the action is SHA-pinned, but syft is a runtime download).
-Dependabot already declared the <code>github-actions</code> ecosystem (<code>.github/dependabot.yml</code>); Dependabot natively bumps SHA pins and their <code># vX.Y.Z</code> comments, so the pins don't rot.
-Policy
-+ bump procedure documented in <a href="../../operations/release/#supply-chain-integrity-of-the-pipeline-itself">release.md § Supply-chain integrity of the pipeline</a>; This writeup credited <code>actionlint</code> (CI <code>lint</code>) with keeping SHA-pinned <code>uses:</code> lint-clean; no job ran it until Q579 added the <code>actionlint</code> job, which checks that every <code>uses:</code> carries a well-formed ref but not that the ref is a SHA.</p>
-<h3 id="q124--make-verify-release-accepts-branch-identities-medium--resolved">Q124 — <code>make verify-release</code> accepts branch identities (Medium) — RESOLVED<a class="headerlink" href="#q124--make-verify-release-accepts-branch-identities-medium--resolved" title="Permanent link">&para;</a></h3>
-<p><code>scripts/release/verify-release.sh</code> (post-#209 home of the recipe; was <code>Makefile:511</code>) matched <code>publish\.yml@refs/(tags|heads)/.*$</code>; the documented identity (<code>security-operations.md</code>, <code>release.md</code>) is tags-only.
-<code>publish.yml</code> is <code>workflow_dispatch</code>-able from any ref with an arbitrary <code>tag</code> input and runs the workflow file <em>from that ref</em>: repo-write could dispatch from a scratch branch, overwrite a released GHCR version tag, and still pass verification.</p>
-<p><strong>Resolution:</strong> the identity regexp is anchored tags-only — <code>@refs/tags/v.*$</code> — and factored into <code>release_identity_regexp</code> in <code>scripts/lib/common.sh</code> so it has a single source of truth.
-Defense in depth: both <code>publish.yml</code> jobs' "Resolve publish tag" step now refuse any <code>GITHUB_REF</code> that isn't <code>refs/tags/…</code>, so a branch <code>workflow_dispatch</code> can't even reach the sign step.
-<code>scripts/release/verify-release-test.sh</code> (run by <code>make check</code> and the CI shellcheck job) asserts the regexp accepts <code>refs/tags/vX.Y.Z</code> and rejects <code>refs/heads/…</code>.</p>
-<h3 id="q125--gmc-teardown-fail-open-medium--resolved">Q125 — GMC teardown fail-open (Medium) — RESOLVED<a class="headerlink" href="#q125--gmc-teardown-fail-open-medium--resolved" title="Permanent link">&para;</a></h3>
-<p><strong>Resolution.</strong> <code>deleteIfExists</code> now returns its error (a NotFound is success — the desired teardown end state).
-<code>reconcileDelete</code> collects the errors across every teardown delete; if any are non-nil it emits a <code>TeardownIncomplete</code> Warning event and returns the joined error to requeue <strong>without removing the finalizer</strong>, so a transient API (or admission/RBAC) failure can no longer orphan a live, credentialed AGC Deployment + RoleBinding.
-The finalizer is removed only once every delete is confirmed gone.
-The path is idempotent: repeated passes re-list RunnerGroups (gone → skip) and re-issue deletes (NotFound → success), converging to clean.
-Operator-facing symptom documented in <code>troubleshooting.md</code>.
-Guarded by <code>TestReconcileDelete_FailClosedOnDeleteError</code> and <code>TestReconcileDelete_CleanTeardownRemovesFinalizer</code> (unit, fake client + interceptor).</p>
-<p>Original finding:</p>
-<p><code>reconcileDelete</code> (<code>actionsgateway_controller.go:222-272</code>) error-checks RunnerGroup deletion, but the AGC Deployment, proxy resources, NetworkPolicies, RoleBinding, and ServiceAccounts go through <code>deleteIfExists</code> (<code>:274-280</code>), which logs and discards non-NotFound errors; the finalizer is then removed unconditionally.
-A transient API failure orphans a live credentialed AGC Deployment + RoleBinding after tenant offboarding, with no retry and only a log line.
-<strong>Fix:</strong> collect <code>deleteIfExists</code> errors and requeue without removing the finalizer until every delete succeeds or is NotFound.</p>
-<h3 id="q126--ci-gate-vendor-contents-vs-gosum-medium--resolved">Q126 — CI gate: vendor contents vs go.sum (Medium) — RESOLVED<a class="headerlink" href="#q126--ci-gate-vendor-contents-vs-gosum-medium--resolved" title="Permanent link">&para;</a></h3>
-<p><strong>Resolution.</strong> New <code>vendor-check</code> job in <code>unit-test.yml</code> (single source of truth <code>make vendor-check</code> → <code>scripts/go/vendor-check.sh</code>) re-runs the workspace-vendor flow — <code>go work vendor</code> plus <code>cd tools &amp;&amp; GOWORK=off go mod vendor</code>, both of which re-fetch every module verified against <code>go.sum</code> — and fails on <code>git diff --exit-code vendor/ tools/vendor/</code>.
-Gated on a dedicated <code>vendor</code> paths-filter (go.mod/go.sum/go.work/vendor trees), narrower than <code>code</code> so a pure-<code>.go</code> edit doesn't trigger the network re-vendor.
-A Dependabot <code>go.mod</code> bump fails the gate until a follow-up vendor sync lands — the intended signal (the gate asserts the committed tree is self-consistent), documented in <code>scripts/go/vendor-check.sh</code> and <code>docs/development/go-workspaces.md</code>.
-Sibling of the license-notices drift gate and of Q94/Q111.</p>
-<p>Original finding:</p>
-<p>With <code>-mod=vendor</code>, the Go toolchain checks only <code>vendor/modules.txt</code> consistency — never the hashes in <code>go.sum</code>.
-No CI step re-vendors and diffs, so a malicious edit inside a large vendor diff compiles into the signed release binaries unchecked (the license-notices job checks license drift only).
-Sibling of Q94 (go.sum tidiness) and Q111 (Dependabot vendor sync), which don't cover integrity.
-<strong>Fix:</strong> CI job running <code>go work vendor</code> (re-fetches with go.sum verification) + <code>git diff --exit-code vendor/ tools/vendor/</code>.</p>
-<h2 id="q127-hardening-batch-items">Q127 hardening-batch items<a class="headerlink" href="#q127-hardening-batch-items" title="Permanent link">&para;</a></h2>
-<p>Small items, one Queue row; fix opportunistically or as one PR.
-<strong>All eight RESOLVED in the Q127 PR</strong> except the one optional sub-item carved out below.</p>
-<ol>
-<li><strong><code>namespace-psa-guard</code> hardcodes the GMC SA username</strong> — <strong>RESOLVED.</strong> The Helm chart is the sole install path (Q142) and both admission-policy templates already parameterize the username from <code>.Release.Namespace</code> + the <code>serviceAccountName</code> helper, so a GMC installed anywhere is covered.
-   Added a render-level drift guard in <code>scripts/manifest/manifest-validate.sh</code> (renders under a non-default <code>--namespace</code> and asserts the policy matchConditions bind to the rendered GMC ServiceAccount, never a hardcoded <code>gmc-system</code> identity), and clarified that the raw <code>config/admission-policy/*.yaml</code> is the codegen/envtest fixture, not the deployed artifact.</li>
-<li><strong>No ActionsGateway-singleton guard per namespace</strong> — <strong>RESOLVED.</strong> The validating webhook's <code>ValidateCreate</code> now lists existing <code>ActionsGateway</code>s in the namespace (via the manager's uncached API reader) and rejects a second one, fail-closed.
-   Covered by an envtest admission-through-apiserver test.</li>
-<li><strong><code>proxy.noProxyCIDRs</code> unvalidated</strong> — <strong>RESOLVED.</strong> The webhook now rejects any <code>noProxyCIDRs</code> entry that would route the tenant's GitHub traffic around the proxy — a hostname NO_PROXY-matching the configured <code>gitHubURL</code> host or the public GitHub domains (github.com, githubusercontent.com, ghcr.io, …) — so <code>["github.com"]</code> no longer silently bypasses the proxy.
-   The check is surgical, not "CIDRs only": NO_PROXY domain suffixes for <em>internal</em> destinations (<code>svc.cluster.local</code> and friends — which the GMC default and the e2e rely on) stay valid, as do CIDRs and bare IPs.
-   A CIDR/IP covering GitHub's rotating ranges is intentionally not blocked (an in-tree blocklist would rot); that residual is documented.
-   Unit + envtest coverage; CRD field godoc, <code>03-api-contracts.md</code>, troubleshooting, and onboarding updated.</li>
-<li><strong>CONNECT listener lacks explicit <code>MinVersion</code></strong> — <strong>RESOLVED.</strong> The CONNECT listener's <code>tls.Config</code> now pins <code>MinVersion: tls.VersionTLS12</code> (matching the metrics listener).
-   Guarded by <code>TestProxy_TLS_RejectsBelowTLS12</code>.</li>
-<li><strong>Tool downloads not checksum-verified</strong> — <strong>RESOLVED.</strong></li>
-<li><strong>cosign</strong> (done earlier, Q126 PR): <code>scripts/release/download-cosign.sh</code> pins the SHA256 per (version, platform) and fails closed.</li>
-<li><strong>kubeconform / shellcheck / polaris</strong> (this PR): each CI install step now verifies the downloaded tarball against a pinned in-repo SHA256 (<code>sha256sum -c</code>), failing closed; bump the digest with the version.</li>
-<li><strong>kustomize: N/A</strong> — no longer downloaded in CI.
-     The Helm chart is the sole install path (Q142); <code>manifest-validate.yml</code> renders with <code>helm</code> only.</li>
-<li><strong>Release images assemble from GHA BuildKit cache</strong> — <strong>RESOLVED.</strong> <code>publish.yml</code> tag builds now set <code>no-cache: true</code> (was <code>cache-from: type=gha</code>), so every layer of a signed release builds from the tagged source, not a PR-populated cache.
-   The <code>moby/buildkit:buildx-stable-1</code> builder image is digest-pinned.</li>
-<li><strong>AGC egress allows any destination on 443/6443</strong> — <strong>RESOLVED (documented residual).</strong> Portable scoping is impossible: kube-proxy DNATs the <code>kubernetes</code> Service ClusterIP to provider-specific apiserver IPs before NetworkPolicy is evaluated, so a precise <code>ipBlock</code> is non-portable and a wrong one severs apiserver access (the PR #59 trap), so any-destination stays the secure default.
-   <code>05-security.md</code> §5.2 documents the residual honestly with its compensating controls.
-   <strong>Follow-up delivered (Q145):</strong> a first-class opt-in — the GMC <code>--apiserver-cidrs</code> flag / Helm <code>apiServerCIDRs</code> value — now lets an operator scope the AGC NetworkPolicy's 443/6443 rule to a stable apiserver CIDR set via <code>ipBlock</code>.
-   It is opt-in tightening only: empty preserves the any-destination default, so clusters with unpredictable post-DNAT apiserver IPs are unaffected.</li>
-<li><strong>Privileged-profile webhook incoherence</strong> — <strong>RESOLVED.</strong> <code>validateRunnerGroups</code> is now profile-aware: a <code>privileged: true</code> worker container is admitted only under <code>securityProfile: privileged</code> (which stamps the namespace PSA to match), and is still rejected under the default <code>baseline</code>/<code>restricted</code> — secure by default.
-   <code>05-security.md</code> §5.3 documents PSA as the enforcement backstop for the direct RunnerGroup path.
-   Unit + envtest coverage.</li>
-<li><strong>Follow-up CLOSED (Q133):</strong> create-time <code>securityProfile: privileged</code> was a self-granted escalation — a tenant owns the CR and only <em>downgrades</em> were webhook-gated, so any tenant who could create an <code>ActionsGateway</code> could stamp their namespace PSA to <code>privileged</code>.
-     The webhook now gates privileged eligibility (create AND update) behind a platform-applied namespace label <code>actions-gateway.github.com/privileged-profile=allowed</code>, fail-closed: absent the label privileged is rejected, and the tenant cannot self-grant it (they don't own namespace labels).
-     Unit + envtest coverage; <code>05-security.md</code> §5.3, tenant-onboarding, and troubleshooting updated.</li>
-<li><strong>Optional hardening CARVED OUT:</strong> refusing non-HTTPS <code>GITHUB_API_BASE_URL</code> overrides (<code>githubapp/auth.go</code>).
-     Production already blocks this env entirely via <code>--allow-agc-extra-env</code> (default-off), so the marginal value is small, while a clean implementation needs a dev-mode escape plumbed through the recently-stabilized e2e gate (the fakegithub base URL is a cluster-DNS <code>http://…svc.cluster.local</code>).
-     Deferred to its own Queue item to avoid destabilizing e2e for low gain — see the Q127 PR description.</li>
-</ol>
-<h2 id="verified-strengths">Verified strengths<a class="headerlink" href="#verified-strengths" title="Permanent link">&para;</a></h2>
-<p>Recorded so the next audit can diff against them:</p>
-<ul>
-<li>Credentials file-mounted, never env vars (GitHub App key 0440 + fsGroup; JIT config via per-job Secret volume, deleted on cleanup); <code>InsecureSkipVerify</code> in tests only; credential-bearing bodies routed through <code>githubapp.SanitizeBody</code>.</li>
-<li>Broker AES-CBC unpadding constant-time with a single error sentinel (M-3 fix holding); no untrusted deserialization beyond JSON-to-struct.</li>
-<li>Proxy: CONNECT passthrough (no TLS termination), slowloris/idle/lifetime caps (M-17/M-18 holding), h2-smuggling avoided (<code>http/1.1</code> forced), mTLS metrics with fail-fast cert loading, <code>readyz</code> gating.</li>
-<li>GMC: two-layer Secret cache isolation as designed (client-side); <code>agc-tenant-role</code> bind-not-escalate pattern; <code>namespace-psa-guard</code> VAP reads the marker from <code>oldObject</code> with <code>failurePolicy: Fail</code>; PSA-stamping is step 0 and fail-closed; securityProfile downgrade guard; cross-namespace <code>gitHubAppRef</code> rejected; image digest pinning enforced at startup; worker pod labels built fresh (tenants can't spoof NP selectors); floor invariants overwritten post-merge; collision-safe name truncation.</li>
-<li>Supply chain: no <code>pull_request_target</code>, no script injection, privileged jobs least-privilege, base images digest-pinned, distroless/nonroot COPY-only runtimes, offline vendored builds, keyless signing over digests with per-arch SBOM attestation, chart fail-closed on missing digests, <code>replace</code> directives point only to in-repo siblings, no curl-pipe-shell anywhere.</li>
-</ul>
-<h2 id="coverage-notes">Coverage notes<a class="headerlink" href="#coverage-notes" title="Permanent link">&para;</a></h2>
-<ul>
-<li>The AGC-internal track's agent report was lost; its critical ground (TLS verification, JIT credential flow, token log hygiene, base-URL override) was re-covered directly, but <strong>goroutine-level session-state race analysis in <code>cmd/agc</code> got lighter coverage</strong> than other areas.
-  A targeted <code>-race</code> pass or follow-up review would close it.</li>
-<li><code>trivy</code> was not run locally (not installed); CI <code>security-scan.yml</code> covers it (worker leg report-only — Q70).</li>
-</ul>
+<h1 id="egress-audit-record-carries-no-identifier-for-who-made-the-connection">Egress audit record carries no identifier for who made the connection<a class="headerlink" href="#egress-audit-record-carries-no-identifier-for-who-made-the-connection" title="Permanent link">&para;</a></h1>
+<p>Its seven fields name the pool, the destination, and the byte counts, and nothing about the caller.
+Two gaps fall out of that one absence.
+<strong>Tenant:</strong> <code>namespace</code> is the downward-API pool namespace, so on a pool shared via <code>spec.sharing.allowedNamespaces</code> a record cannot say which consumer reached a destination.
+<strong>Job:</strong> no field ties a connection to a job on ANY pool, so <a href="../../plan/secure-multi-tenant-oss-ci/">secure-multi-tenant-oss-ci.md</a> Definition of Done #5, "which host each job reached", is unmet even unshared.
+Both need a per-connection source identifier first, which Q564 declined: the client IP on every record is a per-worker movement log nothing has weighed.
+Neither closes on that alone: tenant needs IP to namespace, job needs IP to pod to the AGC's mapping.
+Matters for <a href="../Q725/">Q725</a>.
+Distinct from <a href="../Q567/">Q567</a>, bandwidth isolation rather than attribution.</p>
 
 
 
 
 
 
+
+  
+  
 
 
 

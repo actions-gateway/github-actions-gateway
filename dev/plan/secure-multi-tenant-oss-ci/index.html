@@ -2781,7 +2781,7 @@ This milestone adds an adversary that model does not carry: <strong>a contributo
 <tr>
 <td>Evidence</td>
 <td>Per-tenant egress audit records</td>
-<td><strong>Open.</strong> The proxy emits counters only, so per-tenant egress is reconstructable today only from cluster flow logs. Row: Q564</td>
+<td><strong>Partly shipped, opt-in (Q564).</strong> <code>EgressProxy.spec.auditLogging: Connections</code> writes one structured line per accepted CONNECT: namespace, destination host and port, bytes each way, duration. Off by default: the record is data about a tenant's egress, so retaining it is the platform's decision. It does not meet Definition of Done #5 yet, on either dimension: it attributes per POOL, so the per-tenant half holds only on an unshared pool, and no field ties a connection to a job, so "which host each job reached" is unmet even unshared (<a href="../../queue/Q986/">Q986</a>). See <a href="../../operations/observability-logging/#proxy-egress-audit-record">observability-logging.md</a></td>
 </tr>
 <tr>
 <td>Transport to the proxy</td>
@@ -2831,8 +2831,8 @@ Untrusted pull requests need the egress work tracked in Q408 before we would rec
 <p>Do not claim untrusted-PR readiness until the definition of done above is met.
 The claim is checkable and a wrong one costs more than the feature is worth.</p>
 <h2 id="deliverables">Deliverables<a class="headerlink" href="#deliverables" title="Permanent link">&para;</a></h2>
-<p>Shipped: Kata validation, the pod isolation floor, default-deny NetworkPolicy, per-tenant proxy pools.</p>
-<p>Open, with rows: Q408 (egress posture and mirror design), Q539 (Kata plus Dragonfly as the mirror backend), Q540 (composed node-layer plus guest-layer stack), Q564 (proxy-side audit logging), Q566 (TLS on the proxy hop), Q567 (per-group proxy pool), Q215 (cache backend, blocked on the cross-tenant isolation review this document scopes).</p>
+<p>Shipped: Kata validation, the pod isolation floor, default-deny NetworkPolicy, per-tenant proxy pools, the opt-in per-pool egress audit record (Q564, which does not satisfy Definition of Done #5 on either dimension: see the Evidence row).</p>
+<p>Open, with rows: Q408 (egress posture and mirror design), Q539 (Kata plus Dragonfly as the mirror backend), Q540 (composed node-layer plus guest-layer stack), Q566 (TLS on the proxy hop), Q567 (per-group proxy pool), Q986 (the record names nobody who made the connection, which is both residuals on Definition of Done #5: tenant on a shared pool, job on any pool), Q215 (cache backend, blocked on the cross-tenant isolation review this document scopes).</p>
 <h2 id="gaps-with-no-row-yet">Gaps with no row yet<a class="headerlink" href="#gaps-with-no-row-yet" title="Permanent link">&para;</a></h2>
 <p>Surfaced by drawing the whole picture, and each needs a decision before it needs a row:</p>
 <ol>

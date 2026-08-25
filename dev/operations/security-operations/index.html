@@ -2528,6 +2528,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#per-connection-egress-audit" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Per-connection egress audit
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#response-playbooks" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3369,6 +3380,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#per-connection-egress-audit" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Per-connection egress audit
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#response-playbooks" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3912,6 +3934,7 @@ Each row of <a href="../../design/05-security/#51-gmc-level-threats-cluster-scop
 <li><a href="#prometheus-abuse-alerts">Prometheus abuse alerts</a></li>
 <li><a href="#audit-log-abuse-detections">Audit-log abuse detections</a></li>
 <li><a href="#api-server-audit-policy-sample">API server audit policy (sample)</a></li>
+<li><a href="#per-connection-egress-audit">Per-connection egress audit</a></li>
 <li><a href="#response-playbooks">Response playbooks</a></li>
 <li><a href="#suspected-compromised-agc-tenant-scoped">Suspected compromised AGC (tenant-scoped)</a></li>
 <li><a href="#suspected-compromised-gmc-cluster-scoped-tier-0">Suspected compromised GMC (cluster-scoped, Tier-0)</a></li>
@@ -3960,8 +3983,8 @@ Each row of <a href="../../design/05-security/#51-gmc-level-threats-cluster-scop
 </tr>
 <tr>
 <td><strong>Server-Side Request Forgery (SSRF) / destination probing via proxy</strong> (<a href="../../design/05-security/#52-agc--proxy-level-threats-namespace-scoped">§5.2</a>, M-2/M-12)</td>
-<td><code>proxy_connect_denied_total</code> rate rising — every increment is an explicit allowlist denial (a workload reaching for an off-allowlist destination), so this is the precise signal; corroborate with a <code>proxy_dial_errors_total</code> spike</td>
-<td>Metric</td>
+<td><code>proxy_connect_denied_total</code> rate rising — every increment is an explicit allowlist denial (a workload reaching for an off-allowlist destination), so this is the precise signal; corroborate with a <code>proxy_dial_errors_total</code> spike. The counter says a probe happened, not what it reached: <a href="#per-connection-egress-audit">per-connection egress audit</a> names the destination, but only on a pool that had it enabled before the incident</td>
+<td>Metric (+ optional log)</td>
 <td>Ticket</td>
 </tr>
 <tr>
@@ -4285,6 +4308,43 @@ Alert on: any <code>list</code>/<code>watch</code>; a <code>get</code> rate well
 <code>kube-system</code>).
 For the GMC write rule, a <code>responseStatus.code</code> of <code>403</code> is a VAP block — investigate the binary that attempted it.
 For AGC reads, filter by each AGC user string and alert on <code>verb == "list"</code> (the legit path is metadata-only) or a <code>get</code> on a Secret name the AGC does not own.</p>
+<hr />
+<h2 id="per-connection-egress-audit">Per-connection egress audit<a class="headerlink" href="#per-connection-egress-audit" title="Permanent link">&para;</a></h2>
+<p>The audit policy above is a detective control on what a controller asks the <strong>apiserver</strong>.
+It says nothing about where a tenant's workers went, which is a different question with a different substrate: the proxy's per-connection egress record (<code>EgressProxy.spec.auditLogging: Connections</code>).</p>
+<p><strong>It is off by default and records forward, never backward.</strong> Enabling it during an incident tells you nothing about the traffic that caused the incident, so the decision to enable is one you make before you need it: the same shape as the apiserver audit policy, and worth taking at the same time.</p>
+<p>Weigh four things before turning it on across a fleet:</p>
+<table>
+<thead>
+<tr>
+<th></th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>What it retains</strong></td>
+<td>One line per accepted CONNECT naming the destination host and port. That is a record of where a tenant's traffic went, so retention and access are a policy decision, not a default.</td>
+</tr>
+<tr>
+<td><strong>What it costs</strong></td>
+<td>One line per connection. Under real CI load it becomes the pool's dominant log volume; size the collector before enabling, not after.</td>
+</tr>
+<tr>
+<td><strong>What it cannot tell you</strong></td>
+<td>On a pool shared via <code>spec.sharing.allowedNamespaces</code> the record names the <strong>pool</strong>, not the consuming tenant. See <a href="#what-you-must-not-assume">what you must not assume</a>.</td>
+</tr>
+<tr>
+<td><strong>What it never carries</strong></td>
+<td>No request header, no tunneled byte, nothing from the TLS session. The proxy does not terminate or inspect it. Detail: <a href="../../design/05-security/#proxy-egress-audit-record">security design</a>.</td>
+</tr>
+<tr>
+<td><strong>What it does not change</strong></td>
+<td>Enforcement. This is a logging setting: no value alters what the proxy forwards. Destination enforcement stays <code>destinationFQDNs</code>/<code>destinationCIDRs</code> plus the pod-egress policy. Unlike Pod Security Admission, <code>audit</code> here does <strong>not</strong> mean report-only-instead-of-enforce, and enabling it relaxes nothing.</td>
+</tr>
+</tbody>
+</table>
+<p>Turning it on, and the field-by-field shape, are in <a href="../tenant-onboarding/#per-pool-egress-audit-record">tenant onboarding</a> and the <a href="../observability-logging/#proxy-egress-audit-record">logging reference</a>.</p>
 <hr />
 <h2 id="response-playbooks">Response playbooks<a class="headerlink" href="#response-playbooks" title="Permanent link">&para;</a></h2>
 <p>For the full credential-rotation procedure see <a href="../runbook/#github-app-key-compromise">runbook.md § GitHub App Key Compromise</a>.
@@ -4737,7 +4797,8 @@ The proxy owner lists the namespaces permitted to use it:</p>
 Omitting it means the referrer's own namespace, which is what every pre-existing manifest does, so nothing changes for them.</p>
 <h3 id="what-you-must-not-assume">What you must not assume<a class="headerlink" href="#what-you-must-not-assume" title="Permanent link">&para;</a></h3>
 <p><strong>A shared proxy is a shared egress identity.</strong> Every namespace using the pool leaves GitHub from the same addresses, so per-tenant egress attribution no longer holds between them.
-Share a proxy between tenants you are willing to treat as one for attribution purposes; give mutually-distrusting tenants their own pools.</p>
+Share a proxy between tenants you are willing to treat as one for attribution purposes; give mutually-distrusting tenants their own pools.
+The same limit reaches the <a href="#per-connection-egress-audit">per-connection egress audit</a> record, which carries the pool's namespace rather than the consumer's: a CONNECT names no namespace, so on a shared pool the record says which destination was reached but not by whom.</p>
 <p><strong>Only the public certificate crosses the boundary.</strong> The GMC copies the proxy's certificate into each granted namespace as a ConfigMap named <code>proxy-share-&lt;provider-namespace&gt;-&lt;proxy-name&gt;</code>.
 The private key stays in the provider namespace.
 That ConfigMap is GMC-owned: do not edit or delete it, and do not create one by hand expecting it to grant access, since the GMC reconciles it back.</p>

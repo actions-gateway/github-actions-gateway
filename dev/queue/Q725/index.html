@@ -2598,7 +2598,8 @@
 
 
 <h1 id="security-and-compliance-dashboard-for-the-audit-persona">Security and compliance dashboard for the audit persona<a class="headerlink" href="#security-and-compliance-dashboard-for-the-audit-persona" title="Permanent link">&para;</a></h1>
-<p>Blocked by <a href="../Q564/">Q564</a>: the proxy emits counters, not a record per connection.
+<p>The proxy's opt-in per-connection audit record (Q564) attributes per pool, so it is per tenant on an unshared pool (the default) only.
+Its seven fields carry no consumer identifier, so on a shared pool nothing keyed on the consumer can find that consumer's traffic: it is filed under the pool (<a href="../Q986/">Q986</a>).
 The Security persona needs evidence produced unprompted: per-tenant egress attribution, admission rejections, abuse signals.</p>
 
 

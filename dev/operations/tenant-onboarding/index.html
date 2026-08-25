@@ -2035,6 +2035,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#per-pool-egress-audit-record" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Per-pool egress audit record
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#workload-identity-credentials-external-signer" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3240,6 +3251,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#per-pool-egress-audit-record" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Per-pool egress audit record
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#workload-identity-credentials-external-signer" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -4316,6 +4338,29 @@ Setting the field without it does <strong>not</strong> break the gateway — see
 Check the resolution any time with <code>kubectl get vpa &lt;gateway&gt;-agc -o yaml</code>; the GMC also emits a Normal Event naming the derived bounds when the autoscaler is first created.</p>
 <p><strong>Checking it took effect.</strong> <code>kubectl describe actionsgateway &lt;gateway&gt;</code> shows an <code>AGCAutoscalingUnavailable</code> condition: <code>False</code>/<code>AGCAutoscalingActive</code> when the autoscaler is in place, <code>False</code>/<code>AGCAutoscalingDisabled</code> when you have not opted in, <code>True</code>/<code>VPACRDNotInstalled</code> when the prerequisite is missing.</p>
 <p>The GMC's own control plane has the same opt-in at the chart level — the <code>vpa.enabled</code> value in <a href="../install/#key-values-an-operator-sets">install.md</a>.</p>
+<h3 id="per-pool-egress-audit-record">Per-pool egress audit record<a class="headerlink" href="#per-pool-egress-audit-record" title="Permanent link">&para;</a></h3>
+<p>A proxy pool can record one structured line per accepted CONNECT: which destination a tenant's workers reached, when, and how many bytes moved each way.
+It is <strong>off by default</strong> and turned on per pool:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-33-1" name="__codelineno-33-1" href="#__codelineno-33-1"></a>kubectl<span class="w"> </span>patch<span class="w"> </span>egressproxy<span class="w"> </span>-n<span class="w"> </span>&lt;tenant-namespace&gt;<span class="w"> </span>&lt;name&gt;<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-33-2" name="__codelineno-33-2" href="#__codelineno-33-2"></a><span class="w">  </span>--type<span class="w"> </span>merge<span class="w"> </span>-p<span class="w"> </span><span class="s1">'{"spec":{"auditLogging":"Connections"}}'</span>
+</code></pre></div>
+<p>Only <code>Off</code> (the default) and <code>Connections</code> are accepted; admission rejects anything else.</p>
+<p><strong>It records; it does not enforce.</strong> Neither value changes what the proxy forwards.
+If you know <code>audit</code> from Pod Security Admission, where it means <em>evaluate the policy but admit anyway</em>, that sense does not apply here: enabling this does not put the destination allowlist into report-only, and it relaxes nothing.
+Destination enforcement is <code>destinationFQDNs</code>/<code>destinationCIDRs</code> plus the pod-egress NetworkPolicy, unchanged either way.</p>
+<p><strong>Quote <code>Off</code> in a YAML manifest.</strong> YAML reads a bare <code>Off</code> as the boolean false, so <code>kubectl apply</code> of <code>auditLogging: Off</code> sends a boolean and the apiserver rejects it as the wrong type for a string field, naming a value you never typed.
+Write <code>auditLogging: "Off"</code>, or leave the field out, which means the same thing.
+The <code>kubectl patch</code> above is JSON and is unaffected.</p>
+<p><strong>A shared pool attributes per pool, not per tenant.</strong> If this pool is referenced from other namespaces via <code>spec.sharing.allowedNamespaces</code>, the record's <code>namespace</code> names the pool, not whichever consumer sent the request: a CONNECT carries no namespace and nothing else in the line identifies the caller.
+Give a tenant whose audit trail has to name them their own unshared pool.</p>
+<p><strong>Off is the default deliberately, and turning it on is a decision with two costs.</strong> The record says where a tenant's traffic went, so retaining it is a choice about what the platform keeps and for how long.
+Agree that with the tenant rather than switching it on across a cluster.
+And it is one line per connection: under real CI load it becomes the pool's dominant log volume, so size the collector and its retention before flipping it.</p>
+<p><strong>It is a rolling restart, not a hot reload.</strong> The value is part of the pod template, so records begin once the pool's new pods are up.
+In-flight tunnels finish on the old pods within the termination grace period and produce no record, a gap of at most one drain that is worth knowing if you turn it on mid-incident.</p>
+<p>Turn it on when you need egress evidence the counters cannot give: an incident where "which endpoint did this pool reach at 14:02" is the question, or a compliance ask for per-tenant egress attribution, which an unshared pool satisfies and a shared one does not.
+Reach for it <em>before</em> the incident if the answer has to exist afterwards: it records forward, never backward.</p>
+<p>The record shape, the field meanings, and how to select the audit stream in a log pipeline are in <a href="../observability-logging/#proxy-egress-audit-record">logging: proxy egress audit record</a>; what a line deliberately never carries is in the <a href="../../design/05-security/#proxy-egress-audit-record">security design</a>.</p>
 <h3 id="workload-identity-credentials-external-signer">Workload-identity credentials (external signer)<a class="headerlink" href="#workload-identity-credentials-external-signer" title="Permanent link">&para;</a></h3>
 <p><code>spec.credentials</code> is a discriminated union (keyed by <code>credentials.type</code>) with two members.
 The default, <code>GitHubApp</code> (every example above), is the <strong>possession model</strong>: the App's RSA private key lives in a namespace <code>Secret</code> (<a href="#step-1-create-the-github-app-secret">Step 1</a>) and the AGC signs the App JWT in-process.
@@ -4324,36 +4369,36 @@ Use it when policy forbids a long-lived signing key at rest in the cluster and y
 See <a href="../../design/05-security/#57-workload-identity-the-no-pem-delegation-model">security §5.7</a> for the trust model.</p>
 <p>There is <strong>no <code>githubApp</code> Secret</strong> for this method — you do not run <a href="#step-1-create-the-github-app-secret">Step 1</a>.
 Instead you put the non-secret App identity (<code>appId</code>/<code>installationId</code>) inline and reference a Vault transit key:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-33-1" name="__codelineno-33-1" href="#__codelineno-33-1"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">actions-gateway.com/v2beta1</span>
-<a id="__codelineno-33-2" name="__codelineno-33-2" href="#__codelineno-33-2"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ActionsGateway</span>
-<a id="__codelineno-33-3" name="__codelineno-33-3" href="#__codelineno-33-3"></a><span class="nt">metadata</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> name</span><span class="p">:</span><span class="w"> </span><span class="nv">acme</span><span class="p p-Indicator">,</span><span class="nt"> namespace</span><span class="p">:</span><span class="w"> </span><span class="nv">team-a</span><span class="w"> </span><span class="p p-Indicator">}</span>
-<a id="__codelineno-33-4" name="__codelineno-33-4" href="#__codelineno-33-4"></a><span class="nt">spec</span><span class="p">:</span>
-<a id="__codelineno-33-5" name="__codelineno-33-5" href="#__codelineno-33-5"></a><span class="w">  </span><span class="nt">credentials</span><span class="p">:</span>
-<a id="__codelineno-33-6" name="__codelineno-33-6" href="#__codelineno-33-6"></a><span class="w">    </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">WorkloadIdentity</span><span class="w">          </span><span class="c1"># the no-PEM delegation member</span>
-<a id="__codelineno-33-7" name="__codelineno-33-7" href="#__codelineno-33-7"></a><span class="w">    </span><span class="nt">workloadIdentity</span><span class="p">:</span>
-<a id="__codelineno-33-8" name="__codelineno-33-8" href="#__codelineno-33-8"></a><span class="w">      </span><span class="nt">appId</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">12345</span><span class="w">                  </span><span class="c1"># non-secret; the JWT issuer</span>
-<a id="__codelineno-33-9" name="__codelineno-33-9" href="#__codelineno-33-9"></a><span class="w">      </span><span class="nt">installationId</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">67890</span><span class="w">         </span><span class="c1"># non-secret</span>
-<a id="__codelineno-33-10" name="__codelineno-33-10" href="#__codelineno-33-10"></a><span class="w">      </span><span class="nt">signer</span><span class="p">:</span>
-<a id="__codelineno-33-11" name="__codelineno-33-11" href="#__codelineno-33-11"></a><span class="w">        </span><span class="nt">provider</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Vault</span><span class="w">             </span><span class="c1"># HashiCorp Vault transit (cloud KMS providers follow)</span>
-<a id="__codelineno-33-12" name="__codelineno-33-12" href="#__codelineno-33-12"></a><span class="w">        </span><span class="nt">vault</span><span class="p">:</span>
-<a id="__codelineno-33-13" name="__codelineno-33-13" href="#__codelineno-33-13"></a><span class="w">          </span><span class="nt">address</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">https://vault.vault.svc:8200</span><span class="w">   </span><span class="c1"># HTTPS required (dev/test plaintext is an explicit AGC opt-in)</span>
-<a id="__codelineno-33-14" name="__codelineno-33-14" href="#__codelineno-33-14"></a><span class="w">          </span><span class="nt">keyName</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">github-app</span><span class="w">       </span><span class="c1"># the RSA transit key Vault signs with (signed as RS256)</span>
-<a id="__codelineno-33-15" name="__codelineno-33-15" href="#__codelineno-33-15"></a><span class="w">          </span><span class="nt">transitMount</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">transit</span><span class="w">     </span><span class="c1"># optional; defaults to "transit"</span>
-<a id="__codelineno-33-16" name="__codelineno-33-16" href="#__codelineno-33-16"></a><span class="w">          </span><span class="nt">auth</span><span class="p">:</span>
-<a id="__codelineno-33-17" name="__codelineno-33-17" href="#__codelineno-33-17"></a><span class="w">            </span><span class="nt">role</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">agc-acme</span><span class="w">          </span><span class="c1"># the Vault Kubernetes-auth role bound to this gateway's AGC ServiceAccount</span>
-<a id="__codelineno-33-18" name="__codelineno-33-18" href="#__codelineno-33-18"></a><span class="w">            </span><span class="nt">mount</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">kubernetes</span><span class="w">       </span><span class="c1"># optional; defaults to "kubernetes"</span>
-<a id="__codelineno-33-19" name="__codelineno-33-19" href="#__codelineno-33-19"></a><span class="w">          </span><span class="c1"># Optional (Q202): on a policy-enforcing CNI, identify Vault as a NetworkPolicy</span>
-<a id="__codelineno-33-20" name="__codelineno-33-20" href="#__codelineno-33-20"></a><span class="w">          </span><span class="c1"># egress peer so the GMC opens a scoped AGC→Vault egress rule automatically.</span>
-<a id="__codelineno-33-21" name="__codelineno-33-21" href="#__codelineno-33-21"></a><span class="w">          </span><span class="c1"># Set exactly one form — a pod/namespace selector (in-cluster Vault) OR a cidr</span>
-<a id="__codelineno-33-22" name="__codelineno-33-22" href="#__codelineno-33-22"></a><span class="w">          </span><span class="c1"># (external Vault). Omit on a non-enforcing CNI (kindnet) or to manage it by hand.</span>
-<a id="__codelineno-33-23" name="__codelineno-33-23" href="#__codelineno-33-23"></a><span class="w">          </span><span class="nt">networkPolicy</span><span class="p">:</span>
-<a id="__codelineno-33-24" name="__codelineno-33-24" href="#__codelineno-33-24"></a><span class="w">            </span><span class="nt">namespaceSelector</span><span class="p">:</span>
-<a id="__codelineno-33-25" name="__codelineno-33-25" href="#__codelineno-33-25"></a><span class="w">              </span><span class="nt">matchLabels</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> kubernetes.io/metadata.name</span><span class="p">:</span><span class="w"> </span><span class="nv">vault</span><span class="w"> </span><span class="p p-Indicator">}</span>
-<a id="__codelineno-33-26" name="__codelineno-33-26" href="#__codelineno-33-26"></a><span class="w">            </span><span class="nt">podSelector</span><span class="p">:</span>
-<a id="__codelineno-33-27" name="__codelineno-33-27" href="#__codelineno-33-27"></a><span class="w">              </span><span class="nt">matchLabels</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> app.kubernetes.io/name</span><span class="p">:</span><span class="w"> </span><span class="nv">vault</span><span class="w"> </span><span class="p p-Indicator">}</span>
-<a id="__codelineno-33-28" name="__codelineno-33-28" href="#__codelineno-33-28"></a><span class="w">            </span><span class="c1"># external Vault instead: cidr: 10.0.5.7/32</span>
-<a id="__codelineno-33-29" name="__codelineno-33-29" href="#__codelineno-33-29"></a><span class="w">            </span><span class="c1"># port: 8200            # optional override; default is the port from `address`</span>
-<a id="__codelineno-33-30" name="__codelineno-33-30" href="#__codelineno-33-30"></a><span class="w">  </span><span class="nt">githubURL</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">https://github.com/acme</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-34-1" name="__codelineno-34-1" href="#__codelineno-34-1"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">actions-gateway.com/v2beta1</span>
+<a id="__codelineno-34-2" name="__codelineno-34-2" href="#__codelineno-34-2"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ActionsGateway</span>
+<a id="__codelineno-34-3" name="__codelineno-34-3" href="#__codelineno-34-3"></a><span class="nt">metadata</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> name</span><span class="p">:</span><span class="w"> </span><span class="nv">acme</span><span class="p p-Indicator">,</span><span class="nt"> namespace</span><span class="p">:</span><span class="w"> </span><span class="nv">team-a</span><span class="w"> </span><span class="p p-Indicator">}</span>
+<a id="__codelineno-34-4" name="__codelineno-34-4" href="#__codelineno-34-4"></a><span class="nt">spec</span><span class="p">:</span>
+<a id="__codelineno-34-5" name="__codelineno-34-5" href="#__codelineno-34-5"></a><span class="w">  </span><span class="nt">credentials</span><span class="p">:</span>
+<a id="__codelineno-34-6" name="__codelineno-34-6" href="#__codelineno-34-6"></a><span class="w">    </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">WorkloadIdentity</span><span class="w">          </span><span class="c1"># the no-PEM delegation member</span>
+<a id="__codelineno-34-7" name="__codelineno-34-7" href="#__codelineno-34-7"></a><span class="w">    </span><span class="nt">workloadIdentity</span><span class="p">:</span>
+<a id="__codelineno-34-8" name="__codelineno-34-8" href="#__codelineno-34-8"></a><span class="w">      </span><span class="nt">appId</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">12345</span><span class="w">                  </span><span class="c1"># non-secret; the JWT issuer</span>
+<a id="__codelineno-34-9" name="__codelineno-34-9" href="#__codelineno-34-9"></a><span class="w">      </span><span class="nt">installationId</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">67890</span><span class="w">         </span><span class="c1"># non-secret</span>
+<a id="__codelineno-34-10" name="__codelineno-34-10" href="#__codelineno-34-10"></a><span class="w">      </span><span class="nt">signer</span><span class="p">:</span>
+<a id="__codelineno-34-11" name="__codelineno-34-11" href="#__codelineno-34-11"></a><span class="w">        </span><span class="nt">provider</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Vault</span><span class="w">             </span><span class="c1"># HashiCorp Vault transit (cloud KMS providers follow)</span>
+<a id="__codelineno-34-12" name="__codelineno-34-12" href="#__codelineno-34-12"></a><span class="w">        </span><span class="nt">vault</span><span class="p">:</span>
+<a id="__codelineno-34-13" name="__codelineno-34-13" href="#__codelineno-34-13"></a><span class="w">          </span><span class="nt">address</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">https://vault.vault.svc:8200</span><span class="w">   </span><span class="c1"># HTTPS required (dev/test plaintext is an explicit AGC opt-in)</span>
+<a id="__codelineno-34-14" name="__codelineno-34-14" href="#__codelineno-34-14"></a><span class="w">          </span><span class="nt">keyName</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">github-app</span><span class="w">       </span><span class="c1"># the RSA transit key Vault signs with (signed as RS256)</span>
+<a id="__codelineno-34-15" name="__codelineno-34-15" href="#__codelineno-34-15"></a><span class="w">          </span><span class="nt">transitMount</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">transit</span><span class="w">     </span><span class="c1"># optional; defaults to "transit"</span>
+<a id="__codelineno-34-16" name="__codelineno-34-16" href="#__codelineno-34-16"></a><span class="w">          </span><span class="nt">auth</span><span class="p">:</span>
+<a id="__codelineno-34-17" name="__codelineno-34-17" href="#__codelineno-34-17"></a><span class="w">            </span><span class="nt">role</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">agc-acme</span><span class="w">          </span><span class="c1"># the Vault Kubernetes-auth role bound to this gateway's AGC ServiceAccount</span>
+<a id="__codelineno-34-18" name="__codelineno-34-18" href="#__codelineno-34-18"></a><span class="w">            </span><span class="nt">mount</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">kubernetes</span><span class="w">       </span><span class="c1"># optional; defaults to "kubernetes"</span>
+<a id="__codelineno-34-19" name="__codelineno-34-19" href="#__codelineno-34-19"></a><span class="w">          </span><span class="c1"># Optional (Q202): on a policy-enforcing CNI, identify Vault as a NetworkPolicy</span>
+<a id="__codelineno-34-20" name="__codelineno-34-20" href="#__codelineno-34-20"></a><span class="w">          </span><span class="c1"># egress peer so the GMC opens a scoped AGC→Vault egress rule automatically.</span>
+<a id="__codelineno-34-21" name="__codelineno-34-21" href="#__codelineno-34-21"></a><span class="w">          </span><span class="c1"># Set exactly one form — a pod/namespace selector (in-cluster Vault) OR a cidr</span>
+<a id="__codelineno-34-22" name="__codelineno-34-22" href="#__codelineno-34-22"></a><span class="w">          </span><span class="c1"># (external Vault). Omit on a non-enforcing CNI (kindnet) or to manage it by hand.</span>
+<a id="__codelineno-34-23" name="__codelineno-34-23" href="#__codelineno-34-23"></a><span class="w">          </span><span class="nt">networkPolicy</span><span class="p">:</span>
+<a id="__codelineno-34-24" name="__codelineno-34-24" href="#__codelineno-34-24"></a><span class="w">            </span><span class="nt">namespaceSelector</span><span class="p">:</span>
+<a id="__codelineno-34-25" name="__codelineno-34-25" href="#__codelineno-34-25"></a><span class="w">              </span><span class="nt">matchLabels</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> kubernetes.io/metadata.name</span><span class="p">:</span><span class="w"> </span><span class="nv">vault</span><span class="w"> </span><span class="p p-Indicator">}</span>
+<a id="__codelineno-34-26" name="__codelineno-34-26" href="#__codelineno-34-26"></a><span class="w">            </span><span class="nt">podSelector</span><span class="p">:</span>
+<a id="__codelineno-34-27" name="__codelineno-34-27" href="#__codelineno-34-27"></a><span class="w">              </span><span class="nt">matchLabels</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> app.kubernetes.io/name</span><span class="p">:</span><span class="w"> </span><span class="nv">vault</span><span class="w"> </span><span class="p p-Indicator">}</span>
+<a id="__codelineno-34-28" name="__codelineno-34-28" href="#__codelineno-34-28"></a><span class="w">            </span><span class="c1"># external Vault instead: cidr: 10.0.5.7/32</span>
+<a id="__codelineno-34-29" name="__codelineno-34-29" href="#__codelineno-34-29"></a><span class="w">            </span><span class="c1"># port: 8200            # optional override; default is the port from `address`</span>
+<a id="__codelineno-34-30" name="__codelineno-34-30" href="#__codelineno-34-30"></a><span class="w">  </span><span class="nt">githubURL</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">https://github.com/acme</span>
 </code></pre></div>
 <p>Operator prerequisites in Vault (configured out of band, once per gateway):</p>
 <ul>

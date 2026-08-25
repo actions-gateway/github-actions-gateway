@@ -2210,6 +2210,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#proxy-egress-audit-record" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Proxy egress audit record
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#what-never-appears-in-logs" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2750,6 +2761,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#proxy-egress-audit-record" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Proxy egress audit record
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#what-never-appears-in-logs" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2890,6 +2912,73 @@ On the scale-set tier those lines also carry <code>jobID</code> and <code>runID<
 <p>Admission <strong>rejections</strong> (reserved-namespace, cross-namespace <code>gitHubAppRef</code>, privileged container, disallowed PriorityClass, silent securityProfile downgrade) are logged server-side at <strong>info</strong> — they need no debug flag — as <code>ActionsGateway admission denied</code> with the <code>operation</code>, <code>namespace</code>, <code>name</code>, and <code>reason</code> fields, giving an audit trail of denied attempts.</p>
 <p><strong>API server warnings</strong> (e.g. the <a href="../upgrade/#non-breaking-v1alpha1-is-deprecated-and-the-apiserver-now-warns"><code>v1alpha1</code></a> and <a href="../upgrade/#non-breaking-v2alpha1-is-deprecated-and-the-apiserver-now-warns"><code>v2alpha1</code></a> deprecation warnings) are logged at info, <strong>deduplicated to one line per unique message per process</strong> in both controllers.
 The apiserver attaches such a warning to every read and write of a deprecated API version, so without dedup a set reconciling under churn would drown the log in repeats; expect the first occurrence only, not one per API call.</p>
+<h3 id="proxy-egress-audit-record">Proxy egress audit record<a class="headerlink" href="#proxy-egress-audit-record" title="Permanent link">&para;</a></h3>
+<p>A proxy pool can write one structured line per <strong>accepted</strong> CONNECT, answering "which destination did this pool reach, when, and how much moved" without reconstructing it from cluster flow logs or GitHub's own audit log.</p>
+<p>It is <strong>off by default</strong> and opted into per pool:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">actions-gateway.com/v2beta1</span>
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">EgressProxy</span>
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="nt">metadata</span><span class="p">:</span>
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">shared</span>
+<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="w">  </span><span class="nt">namespace</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">team-a</span>
+<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="nt">spec</span><span class="p">:</span>
+<a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="w">  </span><span class="nt">auditLogging</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Connections</span><span class="w">   </span><span class="c1"># Off (default) writes no per-connection record</span>
+</code></pre></div>
+<p>Flipping it rolls the proxy pool, since the value is part of the pod template, so the records start once the new pods are up rather than on the write.
+See <a href="../tenant-onboarding/#per-pool-egress-audit-record">tenant onboarding: per-pool egress audit record</a> for when to turn it on and what it costs.</p>
+<p>A record looks like this (one JSON object per line, on the same stdout stream as everything else the pool logs):</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="p">{</span>
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="w">  </span><span class="nt">"time"</span><span class="p">:</span><span class="w"> </span><span class="s2">"2026-08-24T19:58:03.114Z"</span><span class="p">,</span>
+<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="w">  </span><span class="nt">"level"</span><span class="p">:</span><span class="w"> </span><span class="s2">"INFO"</span><span class="p">,</span>
+<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="w">  </span><span class="nt">"msg"</span><span class="p">:</span><span class="w"> </span><span class="s2">"egress audit"</span><span class="p">,</span>
+<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="w">  </span><span class="nt">"namespace"</span><span class="p">:</span><span class="w"> </span><span class="s2">"team-a"</span><span class="p">,</span>
+<a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="w">  </span><span class="nt">"event"</span><span class="p">:</span><span class="w"> </span><span class="s2">"connect"</span><span class="p">,</span>
+<a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="w">  </span><span class="nt">"host"</span><span class="p">:</span><span class="w"> </span><span class="s2">"api.github.com"</span><span class="p">,</span>
+<a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a><span class="w">  </span><span class="nt">"port"</span><span class="p">:</span><span class="w"> </span><span class="s2">"443"</span><span class="p">,</span>
+<a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a><span class="w">  </span><span class="nt">"bytesToDestination"</span><span class="p">:</span><span class="w"> </span><span class="mi">4182</span><span class="p">,</span>
+<a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a><span class="w">  </span><span class="nt">"bytesFromDestination"</span><span class="p">:</span><span class="w"> </span><span class="mi">91744</span><span class="p">,</span>
+<a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a><span class="w">  </span><span class="nt">"durationSeconds"</span><span class="p">:</span><span class="w"> </span><span class="mf">12.406</span>
+<a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a><span class="p">}</span>
+</code></pre></div>
+<p>Selecting the audit stream: filter on <code>msg == "egress audit"</code>, then on <code>event</code> to pick a record kind.
+<code>connect</code> is the only one today, and a later kind reuses the message rather than inventing a second one.
+The fields:</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>namespace</code></td>
+<td>The namespace the proxy <strong>pool</strong> runs in, read from the downward API. On a pool no other namespace references this is the consuming tenant; on one shared via <code>spec.sharing.allowedNamespaces</code> it names the pool, not the consumer, because a CONNECT carries no namespace. Omitted entirely by a proxy run outside Kubernetes, never emitted empty</td>
+</tr>
+<tr>
+<td><code>event</code></td>
+<td><code>connect</code>, the record kind</td>
+</tr>
+<tr>
+<td><code>host</code> / <code>port</code></td>
+<td>The CONNECT destination. <code>host</code> is capped at 253 <strong>bytes</strong> (the longest legal DNS name) and gains a <code>…(truncated)</code> marker if cut, so a capped value never reads as a real destination. The cut lands on a rune boundary, so a raw-UTF-8 internationalized name is never left as a broken character. The same cap applies to every proxy log line carrying the destination (the denial, the dial failure, and the response-write failure), not only to the audit record</td>
+</tr>
+<tr>
+<td><code>bytesToDestination</code> / <code>bytesFromDestination</code></td>
+<td>Bytes relayed each way, final at tunnel close</td>
+</tr>
+<tr>
+<td><code>durationSeconds</code></td>
+<td>How long the tunnel was open</td>
+</tr>
+</tbody>
+</table>
+<p>Three properties worth knowing before you build on it:</p>
+<ul>
+<li><strong>Accepted CONNECTs only.</strong> A refused destination and a failed upstream dial are not in this stream; they are the existing <code>CONNECT destination not allowed</code> warn and <code>upstream dial failed</code> error lines, and the <code>actions_gateway_proxy_connect_denied_total</code> / <code>actions_gateway_proxy_dial_errors_total</code> counters.</li>
+<li><strong>Written at info.</strong> An audit record never depends on raising the pool to <code>debug</code>, and raising it to <code>debug</code> never adds a field to the record.</li>
+<li><strong>One line per connection.</strong> Under load that is the pool's dominant log volume, which is the cost the opt-in is asking you to accept, so size the pipeline before turning it on.</li>
+</ul>
+<p>What the record deliberately does <em>not</em> carry, and why, is in the <a href="../../design/05-security/#proxy-egress-audit-record">security design</a>.</p>
 <h3 id="what-never-appears-in-logs">What never appears in logs<a class="headerlink" href="#what-never-appears-in-logs" title="Permanent link">&para;</a></h3>
 <p>Ship AGC and proxy logs to a shared aggregator without a scrubbing pipeline in front: <strong>credential material is redacted before a log line is emitted</strong>, not by the log stack afterward.</p>
 <p>Every GitHub response body — broker and runner-scale-set protocol alike — passes through a single redaction path before it can reach a log line or an error message.
@@ -2949,22 +3038,22 @@ Tracing turns on as soon as an OTLP endpoint is configured:</p>
 <p>On shutdown the AGC flushes buffered spans (5 s budget) before exiting.</p>
 <h3 id="enabling-tracing-on-gmc-managed-agcs">Enabling tracing on GMC-managed AGCs<a class="headerlink" href="#enabling-tracing-on-gmc-managed-agcs" title="Permanent link">&para;</a></h3>
 <p>The GMC builds the AGC Deployment, so for a GMC-provisioned tenant you do <strong>not</strong> set these env vars by hand — you declare tracing on the <code>ActionsGateway</code> CR and the GMC translates <code>spec.tracing</code> into the standard <code>OTEL_*</code> env on the AGC Deployment:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">actions-gateway.github.com/v1alpha1</span>
-<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ActionsGateway</span>
-<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="nt">metadata</span><span class="p">:</span>
-<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">team-a</span>
-<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="w">  </span><span class="nt">namespace</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">team-a</span>
-<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="nt">spec</span><span class="p">:</span>
-<a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="w">  </span><span class="nt">gitHubAppRef</span><span class="p">:</span>
-<a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a><span class="w">    </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">team-a-github-app</span>
-<a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a><span class="w">  </span><span class="nt">gitHubURL</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">https://github.com/team-a-org</span>
-<a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a><span class="w">  </span><span class="nt">tracing</span><span class="p">:</span>
-<a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a><span class="w">    </span><span class="nt">endpoint</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">https://otel-collector.observability:4317</span><span class="w">  </span><span class="c1"># enables tracing</span>
-<a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a><span class="w">    </span><span class="nt">sampler</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">parentbased_traceidratio</span><span class="w">                    </span><span class="c1"># optional</span>
-<a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a><span class="w">    </span><span class="nt">samplerArg</span><span class="p">:</span><span class="w"> </span><span class="s">"0.1"</span><span class="w">                                     </span><span class="c1"># optional — 10% of traces</span>
-<a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a><span class="w">    </span><span class="nt">resourceAttributes</span><span class="p">:</span><span class="w">                                   </span><span class="c1"># optional</span>
-<a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a><span class="w">      </span><span class="nt">deployment.environment</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">prod</span>
-<a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a><span class="w">    </span><span class="c1"># insecure: true   # only for a plaintext in-cluster collector; TLS is the default</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">actions-gateway.github.com/v1alpha1</span>
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ActionsGateway</span>
+<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="nt">metadata</span><span class="p">:</span>
+<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">team-a</span>
+<a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="w">  </span><span class="nt">namespace</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">team-a</span>
+<a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="nt">spec</span><span class="p">:</span>
+<a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="w">  </span><span class="nt">gitHubAppRef</span><span class="p">:</span>
+<a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a><span class="w">    </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">team-a-github-app</span>
+<a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a><span class="w">  </span><span class="nt">gitHubURL</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">https://github.com/team-a-org</span>
+<a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a><span class="w">  </span><span class="nt">tracing</span><span class="p">:</span>
+<a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a><span class="w">    </span><span class="nt">endpoint</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">https://otel-collector.observability:4317</span><span class="w">  </span><span class="c1"># enables tracing</span>
+<a id="__codelineno-2-12" name="__codelineno-2-12" href="#__codelineno-2-12"></a><span class="w">    </span><span class="nt">sampler</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">parentbased_traceidratio</span><span class="w">                    </span><span class="c1"># optional</span>
+<a id="__codelineno-2-13" name="__codelineno-2-13" href="#__codelineno-2-13"></a><span class="w">    </span><span class="nt">samplerArg</span><span class="p">:</span><span class="w"> </span><span class="s">"0.1"</span><span class="w">                                     </span><span class="c1"># optional — 10% of traces</span>
+<a id="__codelineno-2-14" name="__codelineno-2-14" href="#__codelineno-2-14"></a><span class="w">    </span><span class="nt">resourceAttributes</span><span class="p">:</span><span class="w">                                   </span><span class="c1"># optional</span>
+<a id="__codelineno-2-15" name="__codelineno-2-15" href="#__codelineno-2-15"></a><span class="w">      </span><span class="nt">deployment.environment</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">prod</span>
+<a id="__codelineno-2-16" name="__codelineno-2-16" href="#__codelineno-2-16"></a><span class="w">    </span><span class="c1"># insecure: true   # only for a plaintext in-cluster collector; TLS is the default</span>
 </code></pre></div>
 <table>
 <thead>

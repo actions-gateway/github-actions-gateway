@@ -2738,14 +2738,6 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>Phase 1 validated 2026-08-24: four green self-hosted Kata runs name no non-GitHub non-registry host, graded against a Phase 0 control that …</td>
 </tr>
 <tr>
-<td><a href="Q564/">Q564</a></td>
-<td><a href="../design/appendix-g-future-enhancements/#g3-proxy-side-audit-logging">Proxy-side audit logging</a></td>
-<td><code>security</code> <code>feature</code></td>
-<td>🔲</td>
-<td>M</td>
-<td>The proxy emits counters only today, so nothing carries a per-connection egress record.</td>
-</tr>
-<tr>
 <td><a href="Q822/">Q822</a></td>
 <td><a href="../development/testing/#resource-auto-throttle-on-gui-dev-machines">Three unrelated suites fail under concurrent load and pass on rerun</a></td>
 <td><code>flake</code> <code>ci</code> <code>tests</code></td>
@@ -3157,9 +3149,9 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td><a href="Q725/">Q725</a></td>
 <td><a href="../operations/personas/#security--compliance">Security and compliance dashboard for the audit persona</a></td>
 <td><code>feature</code> <code>security</code></td>
-<td>🚫</td>
+<td>🔲</td>
 <td>M</td>
-<td>Blocked by <a href="Q564/">Q564</a>: the proxy emits counters, not a record per connection.</td>
+<td>The proxy's opt-in per-connection audit record (Q564) attributes per pool, so it is per tenant on an unshared pool (the default) only.</td>
 </tr>
 <tr>
 <td><a href="Q728/">Q728</a></td>
@@ -3384,6 +3376,46 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>🔲</td>
 <td>M</td>
 <td>Q889 deleted the Progress table, whose ✅ rows were 21 active plans' only backlog reference, and rekeyed <code>plan-index-check</code> invariant 1.</td>
+</tr>
+<tr>
+<td><a href="Q964/">Q964</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/claude-usage/compute_metrics.py">head_snapshot crashes on a tracked file absent from the working tree</a></td>
+<td><code>debt</code></td>
+<td>🔲</td>
+<td>S</td>
+<td><code>head_snapshot</code> lists files with <code>git ls-files</code> (the index) and then opens each, so any unstaged deletion of a tracked <code>.md</code>/<code>.go</code>/<code>.yaml</code> …</td>
+</tr>
+<tr>
+<td><a href="Q965/">Q965</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/docs/check-release-ladder.sh">The release-ladder gate cannot express a revived count of one</a></td>
+<td><code>debt</code></td>
+<td>🔲</td>
+<td>S</td>
+<td><code>back_word</code> matches the literal <code>**N of the original M are back.**</code>, so a page down to a single revived item can only say "One ...</td>
+</tr>
+<tr>
+<td><a href="Q978/">Q978</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/api/v2beta1/egressproxy_types.go">EgressProxy logLevel godoc cites debug lines that do not exist</a></td>
+<td><code>debt</code> <code>docs</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>The godoc says "per-CONNECT debug lines dominate log volume under load", but <code>handleConnect</code> has one <code>Debug</code> call and it fires only when …</td>
+</tr>
+<tr>
+<td><a href="Q985/">Q985</a></td>
+<td><a href="../development/api-review/#prefer-a-string-enum-to-a-bool">A bare Off enum value decodes as a YAML boolean</a></td>
+<td><code>docs</code> <code>debt</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>YAML reads bare <code>Off</code>/<code>On</code>/<code>Yes</code>/<code>No</code> as booleans, so an operator writing <code>auditLogging: Off</code> in a manifest has admission reject a value …</td>
+</tr>
+<tr>
+<td><a href="Q986/">Q986</a></td>
+<td><a href="../operations/observability-logging/#proxy-egress-audit-record">Egress audit record carries no identifier for who made the connection</a></td>
+<td><code>security</code> <code>feature</code></td>
+<td>🔲</td>
+<td>M</td>
+<td>Its seven fields name the pool, the destination, and the byte counts, and nothing about the caller.</td>
 </tr>
 <tr>
 <td><a href="Q501/">Q501</a></td>

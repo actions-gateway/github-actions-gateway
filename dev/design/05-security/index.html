@@ -1201,6 +1201,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#proxy-egress-audit-record" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Proxy egress audit record
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#cross-tenant-pod-preemption-via-priorityclass" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3204,6 +3215,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#proxy-egress-audit-record" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Proxy egress audit record
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#cross-tenant-pod-preemption-via-priorityclass" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3814,6 +3836,59 @@ The residual is honestly stated: a compromised worker (malicious dependency, job
 Enforcement is dual-surface from one source of truth — CIDR <code>ipBlock</code> / FQDN <code>toFQDNs</code> on the pod-egress policy (the hard gate; fail-closed if the CNI can't enforce an FQDN rule, same as Q208) <strong>and</strong> the proxy CONNECT allowlist as defense-in-depth (with resolve-and-dial-the-validated-IP closing the DNS-rebinding window on the CIDR path; denials counted on <code>actions_gateway_proxy_connect_denied_total</code>).</p>
 <p>The admin footgun (a too-broad suffix/CIDR — <code>*.googleapis.com</code>, a CDN, the IMDS endpoint) is bounded by guidance, not code: the docs <strong>lead with an in-cluster caching mirror</strong> as the recommended path and reserve the allowlist for what a mirror genuinely can't proxy.
 See <a href="../network-architecture/#worker-egress-to-allowlisted-non-github-destinations-opt-in-q242-g1">network-architecture.md § Worker egress to allowlisted non-GitHub destinations</a>, <a href="../../operations/security-operations/#worker-egress-destinations-the-egress-allowlist">security-operations.md § Worker egress destinations</a>, and the <a href="../../plan/archive/q242-g1-proxy-destination-allowlist/">Q242 plan</a> for the full trade-off record.</p>
+<h3 id="proxy-egress-audit-record">Proxy egress audit record<a class="headerlink" href="#proxy-egress-audit-record" title="Permanent link">&para;</a></h3>
+<p>The proxy's per-connection record (<code>EgressProxy.spec.auditLogging: Connections</code>, Q564 / <a href="../appendix-g-future-enhancements/#g3-proxy-side-audit-logging">appendix G.3</a>) is the one place the platform deliberately writes down where a tenant's workers went.
+That makes both halves of it a security decision: whether it runs at all, and what a line is allowed to carry.</p>
+<p><strong>It is not the per-tenant audit attribution claimed elsewhere in this design.</strong> That property is a source-IP one at GitHub's end: GitHub's own audit log groups by source IP, and a per-tenant egress IP is what keeps a tenant's activity separable there (<a href="../../plan/q243-egress-ip-reference-arch/">q243 reference architecture</a>).
+This record is a line on the pool's own stdout, keyed on <code>msg == "egress audit"</code>, and it is off unless enabled.
+The two are easy to conflate because a shared pool breaks both, for unrelated reasons: one because every consumer leaves from the same addresses, the other because a CONNECT carries no namespace.</p>
+<p><strong>It is off by default, and that is a requirement rather than a convenience.</strong> A record naming the destination a tenant reached and when is data the platform must choose to retain, for a period it has decided on and in a pipeline it has sized, so it is opted into per pool.
+The default holds at two independent points: the CRD defaults the field to <code>Off</code> and the GMC injects no audit environment for an <code>Off</code> (or unset) pool, and the proxy binary treats an absent, empty, or unrecognized <code>PROXY_AUDIT_LOGGING</code> as <code>Off</code>.
+Neither relies on the other, so a GMC newer than the proxy image, which is the shape a rolling upgrade produces, can only under-record.</p>
+<p><strong>What a line carries is bounded by construction, not by redaction.</strong> The record is built from the CONNECT authority and two byte counters, so there is nothing to redact:</p>
+<table>
+<thead>
+<tr>
+<th>In the record</th>
+<th>Why it is safe to write down</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Pool namespace</td>
+<td>From the downward API, never the request, so a worker cannot forge its own attribution. It is the consuming tenant's namespace only on an unshared pool (see the sharing caveat below)</td>
+</tr>
+<tr>
+<td>Destination host and port</td>
+<td>The CONNECT authority; already the hard gate's input, and the whole point of the record. Capped at the longest legal DNS name (see the amplifier note below)</td>
+</tr>
+<tr>
+<td>Bytes to and from the destination</td>
+<td>Counts taken from the relay, never content</td>
+</tr>
+<tr>
+<td>Tunnel duration</td>
+<td>A number</td>
+</tr>
+</tbody>
+</table>
+<p>Not in it, and unreachable from the code path that writes it: <strong>any request header</strong> (<code>Proxy-Authorization</code> above all), the tunneled bytes, and anything from the TLS session inside the tunnel, which the proxy never terminates or inspects.
+The client's source IP is omitted deliberately: on an unshared pool it is a pod IP that adds no attribution the namespace does not already carry, and including it would turn an egress record into a per-worker movement log.
+The record is written at <strong>info</strong>, so it never depends on raising a pool to <code>debug</code>, and raising a pool to <code>debug</code> never adds a field to it.</p>
+<p><strong>The authority is capped wherever it is logged, not only in the record.</strong> It is tenant-controlled text and <code>http.Server</code> admits a request line up to <code>MaxHeaderBytes</code> (1 MiB by default), so an uncapped log site is a volume amplifier a worker drives on demand: measured at 400,167 bytes written for one 200,000-byte authority, because the dial-failure path logged it twice (the <code>host</code> attribute, and the dial error, which embeds the address).
+The GMC-built configuration is where that bites.
+<code>matchesHostSuffix</code> is a bare suffix test with no length bound, so junk ending in an allowlisted suffix <strong>passes</strong> the allowlist and reaches the dial, where the line is at error level.
+All four sites in <code>handleConnect</code> that log the authority are therefore bounded: the denial, the dial failure, and the response-write failure log it whole and share one cap; the record splits it first and caps each half.
+Splitting is why the record needs both: a cap on the host alone leaves the port unbounded, and Go's port parser ignores leading zeros without saturating, so a zero-padded port dials the real port and carries arbitrary length into the line.
+The dial error is bounded separately too, since capping only the <code>host</code> attribute would leave half that volume in place.
+One policy for one field, so a reader here does not have to work out which log line it covers.</p>
+<p><strong>A shared pool attributes per pool, not per tenant.</strong> <code>spec.sharing.allowedNamespaces</code> lets one pool serve consumers in other namespaces, and a CONNECT carries no namespace, so the downward-API value names the pool rather than whoever sent the request.
+The record is still un-forgeable and still says which destination was reached; what it cannot do on a shared pool is say by whom.
+Nothing is added to close that here: the only field that would is the client's source IP, and adding it to every record is the movement-log trade above, which no measurement settles.
+A pool whose audit trail has to name the tenant should not be shared.</p>
+<p>Only <strong>accepted</strong> CONNECTs produce a record.
+A refusal and a failed dial already have their warn/error line and their counter (<code>actions_gateway_proxy_connect_denied_total</code>, <code>actions_gateway_proxy_dial_errors_total</code>); recording them here would double-count a connection that carried no egress.</p>
+<p>See <a href="../../operations/observability-logging/#proxy-egress-audit-record">observability-logging.md § Proxy egress audit record</a> for the shape, and <a href="../../operations/tenant-onboarding/#per-pool-egress-audit-record">tenant-onboarding.md § Per-pool egress audit record</a> for turning it on.</p>
 <h3 id="cross-tenant-pod-preemption-via-priorityclass">Cross-tenant pod preemption via PriorityClass<a class="headerlink" href="#cross-tenant-pod-preemption-via-priorityclass" title="Permanent link">&para;</a></h3>
 <p>A <strong>cluster-scoped</strong> <code>PriorityClass</code> carries a priority value and a <code>preemptionPolicy</code> (Kubernetes default <code>PreemptLowerPriority</code>), so an unvalidated tenant-chosen class would let a tenant name a high-priority, preempting class and have the scheduler <strong>evict other tenants' running worker pods</strong> — and their egress proxies — to schedule its own, defeating per-tenant isolation.</p>
 <p>A tenant can reach a worker pod's <code>priorityClassName</code> by <strong>two</strong> routes, and the allowlist gates both — on every tenant-authored kind that carries them:</p>
