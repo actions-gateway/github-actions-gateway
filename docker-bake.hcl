@@ -38,9 +38,10 @@ variable "VERSION" {
 // GHA_CACHE controls GitHub Actions cache export/import. Empty by default. The
 // type=gha backend needs ACTIONS_RUNTIME_TOKEN and ACTIONS_RESULTS_URL, which
 // the runner injects into action processes only: docker/setup-buildx-action
-// exports no environment of its own, so a `run:` caller must re-export them
-// into GITHUB_ENV first — e2e-reusable.yml does that with
-// crazy-max/ghaction-github-runtime immediately before the bake. Without them
+// v4.2.0 exports no environment of its own (measured 2026-08-18 on a hosted
+// runner), so a `run:` caller must re-export them into GITHUB_ENV first:
+// e2e-reusable.yml does that with crazy-max/ghaction-github-runtime
+// immediately before the bake. Without them
 // buildx drops both entries silently (measured on buildx v0.36.1 / buildkit
 // v0.30.0: exit 0, no import or export vertex, no warning), so set this only
 // where the runtime is exposed.
