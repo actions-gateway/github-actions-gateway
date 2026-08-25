@@ -127,7 +127,7 @@ func (s *Server) RegisteredSessions() []string {
 // for exact-count assertions.
 //
 // The stem is the registered name's, not the CR's, and the two differ by kind: pass
-// "<set>" for a RunnerGroup and "rs-<set>" for a RunnerSet, matching what Q466
+// "<name>" for a RunnerGroup and "rs-<name>" for a RunnerSet, matching what Q466
 // kind-scoped and Q677 carried onto the wire. A same-named group and set are now
 // separable, which they were not before Q677.
 func (s *Server) ActiveSessionsForOwner(name string) []string {

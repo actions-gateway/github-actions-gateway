@@ -1045,9 +1045,10 @@ func pooled(msgs []message) []message {
 //
 // Scoped to one owner so a shared fakegithub never moves another tenant's work,
 // and because an owner's own sessions are the only ones that can deliver it:
-// ownerName is "<group>-<agentIndex>", stable across recycles, so the session
-// that replaced the stranded one sweeps its predecessor's queue on its
-// next poll.
+// ownerName is the listener's registered runner name, kind-scoped as
+// "<name>-<agentIndex>" or "rs-<name>-<agentIndex>" (Q677) and stable across
+// recycles either way, so the session that replaced the stranded one sweeps its
+// predecessor's queue on its next poll.
 func (s *server) sweepStaleQueuesLocked(owner string, now time.Time) {
 	if owner == "" || s.sessionQueueGrace <= 0 {
 		return
