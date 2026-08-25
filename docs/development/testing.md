@@ -3075,7 +3075,10 @@ Both halves are measured (2026-08-25): run 32805101179 wrote the scope, emitting
 Grade a restore on that vertex rather than on a `CACHED` count: the bake shows 73 cached vertices even with the cache cold, because six targets in one buildkit invocation share `deps` intra-bake.
 The bake runs from a `run:` step, so it reaches that data plane only because the step before it re-exports the Actions runtime into `GITHUB_ENV` (Q931).
 That scope has one writer and seven readers: the bake itself on the next run, and the six `security-scan.yml` trivy shards, which import it read-only.
-Actions caches are branch-scoped, so a scope written on a feature branch is unreadable from any other branch, and the shards only benefit once a main-branch run has written it (measured 2026-08-25: a concurrent shard on a sibling branch missed 48 s after the index landed, with byte-identical `deps` inputs).
+Actions caches are scoped to the writing **ref**, and a run may read only its own scope plus the default branch's.
+That is narrower than "branch-scoped" in the way that matters here: a `pull_request` run's ref is `refs/pull/<n>/merge`, so it cannot read a scope written by a `workflow_dispatch` on the same PR's branch ref, and neither can a sibling branch.
+Measured 2026-08-25 on both sides: a shard on a sibling branch missed 48 s after the index landed with byte-identical `deps` inputs, and PR 1697's own shards still compiled `deps` in 81.5 s while 65 buildx entries sat on its branch ref.
+So the shards go warm only once a `push` to main has written the scope, which `e2e-test.yml` does, since its `e2e` job runs on `push` to `main` as well as in the merge queue.
 **Watch the size.** The exported scope was 1.40 GiB across 80 entries on 2026-08-25, inside a repo total of 3.05 GiB against GitHub's 10 GiB per-repo limit, and every push to main, merge-queue candidate and dispatch writes it again.
 That pool is shared with the `actions/cache` pre-pulls above, whose whole job is keeping this lane off registry.k8s.io and quay.io under rate limits, and evicting one of those surfaces as a registry-pull flake attributed to the registry rather than as a cache miss.
 Re-check with `gh cache list` if e2e pull flakes rise.
