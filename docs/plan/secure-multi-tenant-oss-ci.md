@@ -98,9 +98,9 @@ The claim is checkable and a wrong one costs more than the feature is worth.
 
 ## Deliverables
 
-Shipped: Kata validation, the pod isolation floor, default-deny NetworkPolicy, per-tenant proxy pools, the opt-in per-pool egress audit record (Q564, per-tenant on an unshared pool only).
+Shipped: Kata validation, the pod isolation floor, default-deny NetworkPolicy, per-tenant proxy pools, the opt-in per-pool egress audit record (Q564, which does not satisfy Definition of Done #5 on either dimension: see the Evidence row).
 
-Open, with rows: Q408 (egress posture and mirror design), Q539 (Kata plus Dragonfly as the mirror backend), Q540 (composed node-layer plus guest-layer stack), Q566 (TLS on the proxy hop), Q567 (per-group proxy pool), Q986 (per-tenant attribution on a shared pool, the residual on Definition of Done #5), Q215 (cache backend, blocked on the cross-tenant isolation review this document scopes).
+Open, with rows: Q408 (egress posture and mirror design), Q539 (Kata plus Dragonfly as the mirror backend), Q540 (composed node-layer plus guest-layer stack), Q566 (TLS on the proxy hop), Q567 (per-group proxy pool), Q986 (the record names nobody who made the connection, which is both residuals on Definition of Done #5: tenant on a shared pool, job on any pool), Q215 (cache backend, blocked on the cross-tenant isolation review this document scopes).
 
 ## Gaps with no row yet
 

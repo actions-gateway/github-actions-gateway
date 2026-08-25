@@ -55,7 +55,9 @@ const (
 	// saturating, so a zero-padded port dials the real port and carries
 	// arbitrary length into the record. Measured at 200,210 bytes for one
 	// 200,015-byte authority before this cap existed. Five digits holds every
-	// value a port can take.
+	// NUMERIC port; the cap is what a non-numeric one falls back to, which in
+	// practice is a service name net.Dial resolves through /etc/services, so a
+	// literal "submission" logs truncated and marked rather than whole.
 	maxAuditPortLen = 5
 	// auditTruncatedSuffix marks a value cut by any cap.
 	auditTruncatedSuffix = "…(truncated)"
