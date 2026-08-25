@@ -3775,6 +3775,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#finding-and-pruning-orphan-scale-sets" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Finding and pruning orphan scale sets
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#the-chart-uninstallreinstall-gate-q444q492" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -6395,12 +6406,29 @@ GitHub splits job state across records that can disagree: Investigation H's firs
 Before trusting a quiet window, enumerate the records the question spans (the run and its jobs at minimum) and watch them all.
 This is the multi-record sibling of the empty-output rule in <a href="#diagnosing-failures-measure-before-asserting-a-root-cause">Diagnosing failures</a>: silence is evidence of absence only once every place the signal could appear has been read.</p>
 <p>The App private key stays in the macOS keychain and reaches the probe as a <strong>file path</strong>, never as an env-var value or a process argument (<a href="../github-app-credentials/">github-app-credentials.md</a>).</p>
+<h3 id="finding-and-pruning-orphan-scale-sets">Finding and pruning orphan scale sets<a class="headerlink" href="#finding-and-pruning-orphan-scale-sets" title="Permanent link">&para;</a></h3>
+<p>A scale set outlives the cluster that registered it.
+An interrupted probe, a deleted <code>ActionsGateway</code>, or a renamed <code>runnerLabels[0]</code> each leave one registered at GitHub that no <code>RunnerSet</code> references, and deleting a <code>RunnerSet</code> never deletes its scale set.</p>
+<p>They are invisible to the ordinary tooling.
+Scale sets live on the Actions Service (<code>_apis/runtime/runnerscalesets</code>) behind the registration-token → <code>RemoteAuth</code> admin JWT, not on the REST API, so <code>gh api</code> cannot reach them at all, and <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/e2e/e2e-github-cleanup.sh"><code>e2e-github-cleanup.sh</code></a>, which clears runner <em>records</em> and workflow runs, does not cover them.
+Until Q344 nothing could list them either: <code>Client</code> could fetch a scale set by id or by name, and an orphan's name is the thing you do not have.</p>
+<p><code>Client.ListRunnerScaleSets</code> is that missing route, and the probe's cleanup mode is the operator entry point:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-40-1" name="__codelineno-40-1" href="#__codelineno-40-1"></a><span class="c1"># Report every scale set registered against the scope. Deletes nothing.</span>
+<a id="__codelineno-40-2" name="__codelineno-40-2" href="#__codelineno-40-2"></a><span class="nv">GITHUB_APP_ID</span><span class="o">=</span>…<span class="w"> </span><span class="nv">GITHUB_APP_INSTALLATION_ID</span><span class="o">=</span>…<span class="w"> </span><span class="nv">GITHUB_APP_PRIVATE_KEY</span><span class="o">=</span>/path/to/key.pem<span class="w"> </span><span class="nv">GITHUB_ORG_URL</span><span class="o">=</span>https://github.com/&lt;org&gt;/&lt;repo&gt;<span class="w"> </span><span class="nv">PROBE_SCALESET_TEST</span><span class="o">=</span><span class="nb">true</span><span class="w"> </span><span class="nv">PROBE_SCALESET_CLEANUP</span><span class="o">=</span><span class="nb">true</span><span class="w"> </span><span class="nv">PROBE_SCALESET_DRY_RUN</span><span class="o">=</span><span class="nb">true</span><span class="w"> </span><span class="nv">PROBE_SCALESET_NAME</span><span class="o">=</span>no-such-set<span class="w"> </span>go<span class="w"> </span>run<span class="w"> </span>-C<span class="w"> </span>cmd/probe<span class="w"> </span>.
+</code></pre></div>
+<p>Each line carries the id, name, runner group, and labels, which is what an operator compares against the <code>RunnerSet</code>s the cluster declares.
+<code>PROBE_SCALESET_PRUNE_PREFIX=&lt;prefix&gt;</code> then deletes every scale set whose name starts with that prefix; drop <code>PROBE_SCALESET_DRY_RUN</code> to act.</p>
+<p><strong>Deciding which listed set is an orphan stays with the operator.</strong> Nothing in the probe can see the cluster's <code>RunnerSet</code>s, so the sweep is opt-in by prefix rather than automatic, and a live tenant's scale set looks exactly like wreckage from here, the same hazard <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/e2e/e2e-github-cleanup.sh"><code>e2e-github-cleanup.sh</code></a> carries.
+Run the dry run first.</p>
+<p>The scope is whatever <code>GITHUB_ORG_URL</code> names, and an org scope and a repo scope hold different sets, so a sweep has to visit each one an install has used.
+Measured 2026-08-24 across the org and both its repos: <strong>0 registered</strong>, so the 9 orphans this row was filed against in 2026-08-06 are gone.
+The listing was fired at a known positive first, a scale set deliberately left registered, which it reported as <code>count=1</code> before the prune removed it, because an empty scope and a broken list are the same output otherwise.</p>
 <h3 id="the-chart-uninstallreinstall-gate-q444q492">The chart uninstall/reinstall gate (Q444/Q492)<a class="headerlink" href="#the-chart-uninstallreinstall-gate-q444q492" title="Permanent link">&para;</a></h3>
 <p>Every tier above starts from a cluster that has never had the chart installed, so nothing exercises the day-two operation an operator actually performs: <code>helm uninstall</code> followed by a reinstall.
 That gap hid <strong>Q444</strong> — an apiserver that stops resolving the PriorityClass guard's parameter and denies <strong>every</strong> <code>runnergroups</code>/<code>runnersets</code>/<code>runnertemplates</code> write cluster-wide.</p>
 <p><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/e2e/chart-reinstall-check.sh"><code>scripts/e2e/chart-reinstall-check.sh</code></a> closes it.
 It runs against a cluster that already has the release installed, captures the release's own values, cycles <code>helm uninstall</code> -&gt; <code>helm install</code>, and probes admission — printing a diagnostic dump (policy, binding, <code>paramRef</code> target, the param object's existence and UID) that separates a broken manifest from a broken apiserver.</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-40-1" name="__codelineno-40-1" href="#__codelineno-40-1"></a>make<span class="w"> </span>chart-reinstall-check<span class="w"> </span><span class="nv">KIND_CLUSTER</span><span class="o">=</span>actions-gateway-e2e
+<div class="highlight"><pre><span></span><code><a id="__codelineno-41-1" name="__codelineno-41-1" href="#__codelineno-41-1"></a>make<span class="w"> </span>chart-reinstall-check<span class="w"> </span><span class="nv">KIND_CLUSTER</span><span class="o">=</span>actions-gateway-e2e
 </code></pre></div>
 <p>It ran as a <strong>reproducer, not a gate</strong>, while Q444 was open — the defect was unfixed, so wiring it in would have pinned every run red.
 <strong>Q492 made it a gate</strong>: the guard's <code>paramKind</code> moved from a <code>ConfigMap</code> to the cluster-scoped <code>PriorityClassAllowlist</code> CRD, for which the apiserver allocates a fresh dynamic informer per context rather than tearing down a shared one, so the cycle is now expected to pass.
@@ -6445,7 +6473,7 @@ That ambiguity is why the deterministic reproducer below exists alongside it.</p
 <p>Arm 1 vs arm 2 isolates the trigger to the empty-set transition.
 <strong>Arm 3 vs arm 2</strong> — the byte-identical transition one GVK apart — is the measured evidence that moving the <code>paramKind</code> to a CRD is a fix rather than an inference from reading the apiserver source.
 Arm 3 runs before arm 2 so a pass cannot be attributed to contamination.</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-41-1" name="__codelineno-41-1" href="#__codelineno-41-1"></a><span class="nv">KUBE_CONTEXT</span><span class="o">=</span>kind-q444-lab<span class="w"> </span>scripts/e2e/vap-param-informer-check.sh
+<div class="highlight"><pre><span></span><code><a id="__codelineno-42-1" name="__codelineno-42-1" href="#__codelineno-42-1"></a><span class="nv">KUBE_CONTEXT</span><span class="o">=</span>kind-q444-lab<span class="w"> </span>scripts/e2e/vap-param-informer-check.sh
 </code></pre></div>
 <p><strong>Disposable clusters only</strong> — arm 2 permanently breaks ConfigMap param resolution for the target apiserver process, and the script refuses a non-<code>kind-</code> context unless <code>ALLOW_NON_KIND=1</code>.
 It stays out of CI for that reason, and because it pins an <em>upstream</em> defect our own code no longer depends on; re-run it by hand on a new Kubernetes minor to confirm arm 3 still holds.
@@ -6476,7 +6504,7 @@ Against a cluster that already has the release installed, it captures the releas
 </tbody>
 </table>
 <p>It also asserts a pre-existing RunnerGroup survives with its <strong>UID</strong> intact (an upgrade that recreated CRs would destroy tenant state), that the validating webhook still denies an <code>ActionsGateway</code> in a reserved namespace at every step, and that upgrading back to the real chart <strong>removes</strong> both markers — so the cluster is left as it was found.</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-42-1" name="__codelineno-42-1" href="#__codelineno-42-1"></a>make<span class="w"> </span>chart-upgrade-check<span class="w"> </span><span class="nv">KIND_CLUSTER</span><span class="o">=</span>actions-gateway-e2e
+<div class="highlight"><pre><span></span><code><a id="__codelineno-43-1" name="__codelineno-43-1" href="#__codelineno-43-1"></a>make<span class="w"> </span>chart-upgrade-check<span class="w"> </span><span class="nv">KIND_CLUSTER</span><span class="o">=</span>actions-gateway-e2e
 </code></pre></div>
 <p>Like the reinstall gate above, this one is wired into CI: <code>e2e-reusable.yml</code> runs it after the Ginkgo suite, which leaves the release up under <code>E2E_SKIP_TEARDOWN</code>, and before the reinstall gate (which destroys the release).
 It runs only on the kindnet leg — <code>helm upgrade</code> semantics are CNI-independent, so <code>e2e-calico.yml</code> passes <code>chart_upgrade_check: false</code> and the calico leg pays nothing for it.
@@ -6523,7 +6551,7 @@ A new release re-points the gate automatically — nothing to bump.
 Two deliberate consequences: a stable tag whose chart publish failed <strong>fails this gate loudly</strong> at <code>helm pull</code> (operators can't install that release either — fix the publish, see <a href="../../operations/release/">release.md</a>); and a repo with no stable tag yet (a fresh fork) <strong>skips cleanly</strong>.
 The chart package and the released GMC image must be publicly pullable from GHCR (they are — see release.md's one-time setup); both pulls are retried.
 Override <code>RELEASED_TAG</code> / <code>RELEASED_CHART_OCI</code> to test a specific tag or registry.</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-43-1" name="__codelineno-43-1" href="#__codelineno-43-1"></a>make<span class="w"> </span>chart-released-upgrade-check<span class="w"> </span><span class="nv">KIND_CLUSTER</span><span class="o">=</span>actions-gateway-e2e
+<div class="highlight"><pre><span></span><code><a id="__codelineno-44-1" name="__codelineno-44-1" href="#__codelineno-44-1"></a>make<span class="w"> </span>chart-released-upgrade-check<span class="w"> </span><span class="nv">KIND_CLUSTER</span><span class="o">=</span>actions-gateway-e2e
 </code></pre></div>
 <p>Wired into <code>e2e-reusable.yml</code> <strong>last</strong> among the chart checks — it uninstalls the live release and leaves the cluster on a fresh released→HEAD release, which would invalidate the other checks' baseline.
 Kindnet leg only (<code>e2e-calico.yml</code> passes <code>released_upgrade_check: false</code>): the property is pure Helm semantics, CNI-independent.</p>
@@ -6620,9 +6648,9 @@ For any Go / CRD / chart change you should see runs for <code>build</code>, <cod
 <p><strong><code>e2e</code> and <code>e2e-calico</code> are not on that list, by design (Q675).</strong> Both lanes are merge-group-only, so on a pull request their heavy jobs are <em>always</em> skipped and only the <code>e2e-gate</code> / <code>e2e-calico-gate</code> contexts report.
 An absent e2e run on a PR is therefore the expected state and not a symptom: do not close/reopen chasing one, and do not read the green gate as evidence the suite ran.
 The e2e verdict for a change arrives on its queue entry; to get one earlier, run <code>make e2e</code> locally or dispatch the workflow.</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-44-1" name="__codelineno-44-1" href="#__codelineno-44-1"></a>gh<span class="w"> </span>pr<span class="w"> </span>view<span class="w"> </span>&lt;n&gt;<span class="w"> </span>--json<span class="w"> </span>headRefOid<span class="w"> </span>--jq<span class="w"> </span>.headRefOid<span class="w">   </span><span class="c1"># the SHA every check must be attached to</span>
-<a id="__codelineno-44-2" name="__codelineno-44-2" href="#__codelineno-44-2"></a>gh<span class="w"> </span>pr<span class="w"> </span>checks<span class="w"> </span>&lt;n&gt;<span class="w">                                    </span><span class="c1"># are the expected gates PRESENT — not merely un-red?</span>
-<a id="__codelineno-44-3" name="__codelineno-44-3" href="#__codelineno-44-3"></a>gh<span class="w"> </span>run<span class="w"> </span>list<span class="w"> </span>--commit<span class="w"> </span>&lt;sha&gt;<span class="w"> </span>--limit<span class="w"> </span><span class="m">30</span><span class="w">               </span><span class="c1"># which workflows actually ran, for THAT commit only</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-45-1" name="__codelineno-45-1" href="#__codelineno-45-1"></a>gh<span class="w"> </span>pr<span class="w"> </span>view<span class="w"> </span>&lt;n&gt;<span class="w"> </span>--json<span class="w"> </span>headRefOid<span class="w"> </span>--jq<span class="w"> </span>.headRefOid<span class="w">   </span><span class="c1"># the SHA every check must be attached to</span>
+<a id="__codelineno-45-2" name="__codelineno-45-2" href="#__codelineno-45-2"></a>gh<span class="w"> </span>pr<span class="w"> </span>checks<span class="w"> </span>&lt;n&gt;<span class="w">                                    </span><span class="c1"># are the expected gates PRESENT — not merely un-red?</span>
+<a id="__codelineno-45-3" name="__codelineno-45-3" href="#__codelineno-45-3"></a>gh<span class="w"> </span>run<span class="w"> </span>list<span class="w"> </span>--commit<span class="w"> </span>&lt;sha&gt;<span class="w"> </span>--limit<span class="w"> </span><span class="m">30</span><span class="w">               </span><span class="c1"># which workflows actually ran, for THAT commit only</span>
 </code></pre></div>
 <p>Read the output as a <strong>checklist against the expected set above</strong>, not as a pass/fail summary.
 A PR with zero rows, or with only the lightweight docs workflows listed, has not been tested — it just has nothing to fail.</p>
@@ -6646,8 +6674,8 @@ The watcher's <code>ready</code> event already means checks concluded, so it is 
 <p><strong>A skipped job does not mean its steps did not run — resolve the step's owning job, not its file.</strong> <code>gh pr checks</code> reports <em>job</em> names, and a <code>make</code> target's home is a job, not a workflow file: grepping <code>unit-test.yml</code> for <code>scripts-test</code> finds it, but that step lives in the same file's <strong><code>shellcheck</code></strong> job, so a skipped <code>unit-test</code> says nothing about whether the scripts tests ran.
 Reading the workflow source to answer "did my test run?" gives the wrong answer in exactly the case you are checking.
 Resolve it from the run:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-45-1" name="__codelineno-45-1" href="#__codelineno-45-1"></a>gh<span class="w"> </span>run<span class="w"> </span>view<span class="w"> </span>&lt;run-id&gt;<span class="w"> </span>--json<span class="w"> </span><span class="nb">jobs</span><span class="w"> </span>--jq<span class="w"> </span><span class="s1">'.jobs[] | [.name, .conclusion] | @tsv'</span><span class="w">   </span><span class="c1"># which jobs, which verdict</span>
-<a id="__codelineno-45-2" name="__codelineno-45-2" href="#__codelineno-45-2"></a>gh<span class="w"> </span>run<span class="w"> </span>view<span class="w"> </span>&lt;run-id&gt;<span class="w"> </span>--log<span class="w"> </span>--job<span class="w"> </span>&lt;job-id&gt;<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span><span class="s1">'&lt;an assertion you expect&gt;'</span><span class="w">    </span><span class="c1"># did it actually execute</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-46-1" name="__codelineno-46-1" href="#__codelineno-46-1"></a>gh<span class="w"> </span>run<span class="w"> </span>view<span class="w"> </span>&lt;run-id&gt;<span class="w"> </span>--json<span class="w"> </span><span class="nb">jobs</span><span class="w"> </span>--jq<span class="w"> </span><span class="s1">'.jobs[] | [.name, .conclusion] | @tsv'</span><span class="w">   </span><span class="c1"># which jobs, which verdict</span>
+<a id="__codelineno-46-2" name="__codelineno-46-2" href="#__codelineno-46-2"></a>gh<span class="w"> </span>run<span class="w"> </span>view<span class="w"> </span>&lt;run-id&gt;<span class="w"> </span>--log<span class="w"> </span>--job<span class="w"> </span>&lt;job-id&gt;<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span><span class="s1">'&lt;an assertion you expect&gt;'</span><span class="w">    </span><span class="c1"># did it actually execute</span>
 </code></pre></div>
 <p>The grepped log line is the proof the assertion ran; the job's conclusion only proves nothing in it failed — and a job that ran nothing also fails nothing.</p>
 <p><strong>Absence of checks is not green (Q383).</strong> There are two distinct ways a PR ends up under-tested, and they need different fixes:</p>
@@ -6795,12 +6823,12 @@ All three have local equivalents so you can reproduce a CI verdict before pushin
 <p><strong>govulncheck</strong> — scans each workspace module for vulnerabilities reachable from our code (Go stdlib + dependency CVEs).
 It is symbol-precise: a CVE in a dependency only fails the gate if our code actually calls the affected path.
 Run it locally with:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-46-1" name="__codelineno-46-1" href="#__codelineno-46-1"></a>make vulncheck
+<div class="highlight"><pre><span></span><code><a id="__codelineno-47-1" name="__codelineno-47-1" href="#__codelineno-47-1"></a>make vulncheck
 </code></pre></div>
 <p>A finding usually means bumping the Go toolchain (<code>go</code> directive in <code>go.work</code> + every <code>go.mod</code>, kept in lockstep) for a stdlib CVE, or <code>go get</code>-ing the fixed dependency version for a module CVE.</p>
 <p><strong>trivy</strong> — builds each of the seven images and scans it for fixable HIGH/CRITICAL CVEs in OS packages and bundled libraries.
 Run it locally (requires <code>trivy</code> and <code>docker</code> on <code>PATH</code>) with:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-47-1" name="__codelineno-47-1" href="#__codelineno-47-1"></a>make trivy-scan
+<div class="highlight"><pre><span></span><code><a id="__codelineno-48-1" name="__codelineno-48-1" href="#__codelineno-48-1"></a>make trivy-scan
 </code></pre></div>
 <p>The five images we build from a minimal/distroless or scratch base (<code>gmc</code>, <code>agc</code>, <code>proxy</code>, <code>fakegithub</code>, and the <code>FROM scratch</code> <code>wrapper</code>) <strong>block</strong> the gate — every package in them is one we chose, so a finding is actionable by bumping a dependency or the base digest.
 The <code>worker</code> image is built <code>FROM</code> the upstream <code>ghcr.io/actions/actions-runner</code> and inherits CVEs in the bundled node20 runtime and the runner's own Go binaries that we cannot fix without forking the runner; its leg is the sole <strong>report-only</strong> one (findings printed, never blocks).
@@ -6814,7 +6842,7 @@ The signing/attestation steps run only on publish, so PR CI does not exercise th
 The gate <strong>fails on <code>danger</code> findings only</strong> (privileged container, host namespace, dangerous capabilities, missing <code>securityContext</code>, a floating <code>:latest</code> image tag) — a real posture regression in the chart cannot merge — while <code>warning</code>s are reported for visibility.
 False-positive warnings against a Helm-packaged operator chart are tuned to <code>ignore</code> in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/charts/actions-gateway/polaris.yaml"><code>charts/actions-gateway/polaris.yaml</code></a> (via <code>--merge-config</code>, so every default <code>danger</code> check stays active), each with a justifying comment.
 Run it locally (requires <code>helm</code> and <code>polaris</code> on <code>PATH</code>) with:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-48-1" name="__codelineno-48-1" href="#__codelineno-48-1"></a>make polaris-scan
+<div class="highlight"><pre><span></span><code><a id="__codelineno-49-1" name="__codelineno-49-1" href="#__codelineno-49-1"></a>make polaris-scan
 </code></pre></div>
 <p>This <code>polaris</code> job is path-gated on the chart (and <code>Makefile</code>).
 The operator-facing writeup — including the manual <code>kube-bench</code> CIS scan that complements polaris at the live-cluster layer — is in <a href="../../operations/security-operations/#posture-scanning-preventive">security-operations.md</a>.</p>
@@ -6823,7 +6851,7 @@ The operator-facing writeup — including the manual <code>kube-bench</code> CIS
 <p>The <code>manifest-validate.yml</code> workflow checks that the <strong>shipped install artifact</strong> — the <a href="https://github.com/actions-gateway/github-actions-gateway/tree/main/charts/actions-gateway"><code>actions-gateway</code> Helm chart</a>, the sole install path (Q142) — is well-formed and schema-valid, so a malformed RBAC/CRD/policy file cannot merge silently.
 It is independent of the security gates above (validity, not posture) and path-gated on the manifests, the chart, and the <code>Makefile</code>.
 Run the exact gate locally (requires <code>yamllint</code>, <code>kubeconform</code>, and <code>helm</code> on <code>PATH</code>) with:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-49-1" name="__codelineno-49-1" href="#__codelineno-49-1"></a>make manifest-validate
+<div class="highlight"><pre><span></span><code><a id="__codelineno-50-1" name="__codelineno-50-1" href="#__codelineno-50-1"></a>make manifest-validate
 </code></pre></div>
 <p>It first runs the chart CRD/RBAC drift gates (<code>make chart-crds-check</code> + <code>make chart-rbac-check</code>: the chart's CRD templates and <code>manager-role</code> rules are generated from the controller-gen sources under <code>cmd/*/config/</code>, so a marker change that isn't propagated fails here), then runs two layers over <code>cmd/*/config/**</code> and <a href="https://github.com/actions-gateway/github-actions-gateway/tree/main/charts/actions-gateway"><code>charts/actions-gateway</code></a>:</p>
 <ul>
