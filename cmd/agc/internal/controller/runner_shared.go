@@ -303,6 +303,13 @@ type reapHooks struct {
 	// classic the goroutine that owns the pod performs the same recovery from the
 	// informer's delete event. Best-effort and non-blocking; it owns its own logging.
 	recoverAbandoned func(ctx context.Context, pod *corev1.Pod)
+	// observeWorkerReport reads the wrapper's hand-back off a terminal worker pod
+	// before the reap can remove it (Q792). Called for every terminal pod the walk
+	// sees, reaped this pass or not, so the observation does not depend on reap
+	// timing. Only the v2 reconciler wires it; v1 is terminal (Q273/Q264) and grows
+	// no status field for it. Best-effort and non-blocking: it owns its own parsing
+	// and never changes whether a pod is reaped.
+	observeWorkerReport func(pod *corev1.Pod)
 }
 
 // reapTarget binds a reap to one owning CR: which worker pods it selects, where it
@@ -458,6 +465,9 @@ func reapWorkerPodsByLabel(
 			due = completedAt.Add(completedJobRunningGrace)
 			reason = reapReasonOrphanedRunning
 		case corev1.PodSucceeded, corev1.PodFailed, corev1.PodUnknown:
+			if target.hooks.observeWorkerReport != nil {
+				target.hooks.observeWorkerReport(pod)
+			}
 			due = provisioner.PodTerminalTime(pod).Add(ttl)
 			reason = reapReasonCompletedTTL
 			// A pod the kubelet killed for exceeding activeDeadlineSeconds is

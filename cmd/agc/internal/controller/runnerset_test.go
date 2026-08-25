@@ -475,7 +475,7 @@ func TestRunnerSetReaper_DeletesExpiredPods(t *testing.T) {
 	c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(rs, terminal, running).Build()
 	r := &RunnerSetReconciler{Client: c, Log: slog.Default()}
 
-	_, counts, err := r.reapWorkerPods(context.Background(), slog.Default(), rs)
+	_, counts, err := r.reapWorkerPods(context.Background(), slog.Default(), rs, &observedRunner{})
 	require.NoError(t, err)
 
 	// The terminal pod is reaped; the running pod is left alone.
@@ -545,7 +545,7 @@ func TestRunnerSetReaper_ReapsOrphanedRunningPods(t *testing.T) {
 		Recorder: rec,
 	}
 
-	next, counts, err := r.reapWorkerPods(context.Background(), slog.Default(), rs)
+	next, counts, err := r.reapWorkerPods(context.Background(), slog.Default(), rs, &observedRunner{})
 	require.NoError(t, err)
 
 	ctx := context.Background()

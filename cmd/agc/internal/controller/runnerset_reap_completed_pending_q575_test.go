@@ -67,7 +67,7 @@ func TestRunnerSetReaper_ReapsCompletedPendingPods(t *testing.T) {
 		Recorder: rec,
 	}
 
-	_, counts, err := r.reapWorkerPods(context.Background(), slog.Default(), rs)
+	_, counts, err := r.reapWorkerPods(context.Background(), slog.Default(), rs, &observedRunner{})
 	require.NoError(t, err)
 
 	ctx := context.Background()
@@ -144,7 +144,7 @@ func TestRunnerSetReaper_CompletedPendingReapIsAttributedToTheAGC(t *testing.T) 
 		Recorder: events.NewFakeRecorder(8),
 	}
 
-	_, _, err := r.reapWorkerPods(context.Background(), slog.Default(), rs)
+	_, _, err := r.reapWorkerPods(context.Background(), slog.Default(), rs, &observedRunner{})
 	require.NoError(t, err)
 
 	var got corev1.Pod

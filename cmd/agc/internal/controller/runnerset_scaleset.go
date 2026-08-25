@@ -165,7 +165,7 @@ func (r *RunnerSetReconciler) scaleSetListenerRunnerGroup(key types.NamespacedNa
 // only after references have resolved and worker pods have been reaped, so it receives
 // the reap result and pod counts to fold into the requeue and status like the classic
 // path does. It never touches the classic pool/multiplexer.
-func (r *RunnerSetReconciler) reconcileScaleSetListener(ctx context.Context, log *slog.Logger, rs *v2alpha1.RunnerSet, refs *resolvedRefs, reapAfter time.Duration, podCounts workerPodCounts) (ctrl.Result, error) {
+func (r *RunnerSetReconciler) reconcileScaleSetListener(ctx context.Context, log *slog.Logger, rs *v2alpha1.RunnerSet, refs *resolvedRefs, reapAfter time.Duration, podCounts workerPodCounts, observed observedRunner) (ctrl.Result, error) {
 	key := types.NamespacedName{Namespace: rs.Namespace, Name: rs.Name}
 
 	handle, err := r.ensureScaleSetListener(ctx, log, key, rs, refs)
@@ -217,6 +217,7 @@ func (r *RunnerSetReconciler) reconcileScaleSetListener(ctx context.Context, log
 	rs.Status.ActiveJobs = podCounts.active
 	rs.Status.PendingJobs = podCounts.pending
 	applyAdvertisedCapacity(rs, handle.capacity)
+	applyObservedRunnerVersion(rs, observed)
 	rs.Status.ObservedGeneration = rs.Generation
 	r.setReadyCondition(rs, true, v2alpha1.ReasonListenerActive,
 		fmt.Sprintf("references resolved (template via %s); scale-set listener active (scaleSetID %d, %d job(s) assigned)",

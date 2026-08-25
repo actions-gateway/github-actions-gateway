@@ -66,7 +66,7 @@ func TestRunnerSetReaper_LifetimeExceededIsDistinctFromCompletedTTL(t *testing.T
 		Recorder: rec,
 	}
 
-	_, _, err := r.reapWorkerPods(context.Background(), slog.Default(), rs)
+	_, _, err := r.reapWorkerPods(context.Background(), slog.Default(), rs, &observedRunner{})
 	require.NoError(t, err)
 
 	ctx := context.Background()
