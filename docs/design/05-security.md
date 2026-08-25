@@ -300,6 +300,33 @@ Enforcement is dual-surface from one source of truth — CIDR `ipBlock` / FQDN `
 The admin footgun (a too-broad suffix/CIDR — `*.googleapis.com`, a CDN, the IMDS endpoint) is bounded by guidance, not code: the docs **lead with an in-cluster caching mirror** as the recommended path and reserve the allowlist for what a mirror genuinely can't proxy.
 See [network-architecture.md § Worker egress to allowlisted non-GitHub destinations](network-architecture.md#worker-egress-to-allowlisted-non-github-destinations-opt-in-q242-g1), [security-operations.md § Worker egress destinations](../operations/security-operations.md#worker-egress-destinations-the-egress-allowlist), and the [Q242 plan](../plan/archive/q242-g1-proxy-destination-allowlist.md) for the full trade-off record.
 
+### Proxy egress audit record
+
+The proxy's per-connection record (`EgressProxy.spec.auditLogging: Connections`, Q564 / [appendix G.3](appendix-g-future-enhancements.md#g3-proxy-side-audit-logging)) is the one place the platform deliberately writes down where a tenant's workers went.
+That makes both halves of it a security decision: whether it runs at all, and what a line is allowed to carry.
+
+**It is off by default, and that is a requirement rather than a convenience.** A record naming the destination a tenant reached and when is data the platform must choose to retain, for a period it has decided on and in a pipeline it has sized, so it is opted into per pool.
+The default holds at two independent points: the CRD defaults the field to `Off` and the GMC injects no audit environment for an `Off` (or unset) pool, and the proxy binary treats an absent, empty, or unrecognized `PROXY_AUDIT_LOGGING` as `Off`.
+Neither relies on the other, so a GMC newer than the proxy image, which is the shape a rolling upgrade produces, can only under-record.
+
+**What a line carries is bounded by construction, not by redaction.** The record is built from the CONNECT authority and two byte counters, so there is nothing to redact:
+
+| In the record | Why it is safe to write down |
+|---|---|
+| Tenant namespace | From the downward API, never the request, so a worker cannot forge its own attribution |
+| Destination host and port | The CONNECT authority; already the hard gate's input, and the whole point of the record. Capped at the longest legal DNS name, because the authority is tenant-controlled text and `http.Server` admits a request line far longer |
+| Bytes to and from the destination | Counts taken from the relay, never content |
+| Tunnel duration | A number |
+
+Not in it, and unreachable from the code path that writes it: **any request header** (`Proxy-Authorization` above all), the tunneled bytes, and anything from the TLS session inside the tunnel, which the proxy never terminates or inspects.
+The client's source IP is omitted deliberately: it is a pod IP that adds no attribution the namespace does not already carry, and including it would turn an egress record into a per-worker movement log.
+The record is written at **info**, so it never depends on raising a pool to `debug`, and raising a pool to `debug` never adds a field to it.
+
+Only **accepted** CONNECTs produce a record.
+A refusal and a failed dial already have their warn/error line and their counter (`actions_gateway_proxy_connect_denied_total`, `actions_gateway_proxy_dial_errors_total`); recording them here would double-count a connection that carried no egress.
+
+See [observability-logging.md § Proxy egress audit record](../operations/observability-logging.md#proxy-egress-audit-record) for the shape, and [tenant-onboarding.md § Per-pool egress audit record](../operations/tenant-onboarding.md#per-pool-egress-audit-record) for turning it on.
+
 ### Cross-tenant pod preemption via PriorityClass
 
 A **cluster-scoped** `PriorityClass` carries a priority value and a `preemptionPolicy` (Kubernetes default `PreemptLowerPriority`), so an unvalidated tenant-chosen class would let a tenant name a high-priority, preempting class and have the scheduler **evict other tenants' running worker pods** — and their egress proxies — to schedule its own, defeating per-tenant isolation.

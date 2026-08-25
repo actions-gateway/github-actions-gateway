@@ -407,3 +407,84 @@ func TestProxyAllowlistEnv_CIDRsOnlyStillEmitsHostSuffixes(t *testing.T) {
 	assert.Equal(t, "PROXY_ALLOWED_CIDRS", env[1].Name)
 	assert.Equal(t, "10.0.0.0/8", env[1].Value)
 }
+
+// TestProxyAuditEnv_NilWhenOff is the security control on the GMC side: a pool
+// that has not opted in gets no audit env, so its pod template is byte-for-byte
+// what it was before this field existed and a GMC upgrade rolls nothing. The
+// empty case is the pre-defaulting one — a hand-built object, or a stored object
+// written before the field — and must land on Off with the enum default.
+func TestProxyAuditEnv_NilWhenOff(t *testing.T) {
+	assert.Nil(t, proxyAuditEnv(newEP("shared", "team-a", nil)), "unset must inject nothing")
+	assert.Nil(t, proxyAuditEnv(newEP("shared", "team-a", func(ep *gmcv2alpha1.EgressProxy) {
+		ep.Spec.AuditLogging = "Off"
+	})), "explicit Off must inject nothing")
+}
+
+// TestProxyAuditEnv_ConnectionsInjectsModeAndNamespace pins both halves of the
+// opt-in: the mode the proxy parses, and the namespace it stamps on the record.
+// The namespace must come from the downward API rather than a formatted value —
+// the record's attribution is only trustworthy if the pod supplies it.
+func TestProxyAuditEnv_ConnectionsInjectsModeAndNamespace(t *testing.T) {
+	ep := newEP("shared", "team-a", func(ep *gmcv2alpha1.EgressProxy) {
+		ep.Spec.AuditLogging = "Connections"
+	})
+	env := proxyAuditEnv(ep)
+	require.Len(t, env, 2)
+
+	assert.Equal(t, "PROXY_AUDIT_LOGGING", env[0].Name)
+	assert.Equal(t, "Connections", env[0].Value)
+
+	assert.Equal(t, "POD_NAMESPACE", env[1].Name)
+	assert.Empty(t, env[1].Value, "the namespace must not be a formatted literal")
+	require.NotNil(t, env[1].ValueFrom)
+	require.NotNil(t, env[1].ValueFrom.FieldRef)
+	assert.Equal(t, "metadata.namespace", env[1].ValueFrom.FieldRef.FieldPath)
+}
+
+// TestEgressProxyDeployment_AuditEnvReachesTheContainer closes the gap between
+// the helper and the pod template: proxyAuditEnv can be correct and still not be
+// wired in, and only the assembled Deployment says which.
+func TestEgressProxyDeployment_AuditEnvReachesTheContainer(t *testing.T) {
+	envNames := func(ep *gmcv2alpha1.EgressProxy) map[string]corev1.EnvVar {
+		dep := buildEgressProxyDeployment(ep, "proxy:test", nil)
+		require.Len(t, dep.Spec.Template.Spec.Containers, 1)
+		out := map[string]corev1.EnvVar{}
+		for _, e := range dep.Spec.Template.Spec.Containers[0].Env {
+			out[e.Name] = e
+		}
+		return out
+	}
+
+	off := envNames(newEP("shared", "team-a", nil))
+	assert.NotContains(t, off, "PROXY_AUDIT_LOGGING")
+	assert.NotContains(t, off, "POD_NAMESPACE")
+
+	on := envNames(newEP("shared", "team-a", func(ep *gmcv2alpha1.EgressProxy) {
+		ep.Spec.AuditLogging = "Connections"
+	}))
+	require.Contains(t, on, "PROXY_AUDIT_LOGGING")
+	assert.Equal(t, "Connections", on["PROXY_AUDIT_LOGGING"].Value)
+	require.Contains(t, on, "POD_NAMESPACE")
+	// The allowlist env is independent of the audit env: neither may displace
+	// the other when both are appended to the same base slice.
+	assert.Contains(t, on, "LOG_LEVEL")
+	assert.Contains(t, on, "PROXY_TLS_CERT_FILE")
+}
+
+// TestEgressProxyDeployment_AuditAndAllowlistEnvCoexist asserts the append does
+// not drop either optional block when a pool opts into both.
+func TestEgressProxyDeployment_AuditAndAllowlistEnvCoexist(t *testing.T) {
+	ep := newEP("shared", "team-a", func(ep *gmcv2alpha1.EgressProxy) {
+		ep.Spec.AuditLogging = "Connections"
+		ep.Spec.DestinationCIDRs = []string{"10.0.0.0/8"}
+	})
+	dep := buildEgressProxyDeployment(ep, "proxy:test", nil)
+	names := map[string]bool{}
+	for _, e := range dep.Spec.Template.Spec.Containers[0].Env {
+		names[e.Name] = true
+	}
+	assert.True(t, names["PROXY_ALLOWED_HOST_SUFFIXES"])
+	assert.True(t, names["PROXY_ALLOWED_CIDRS"])
+	assert.True(t, names["PROXY_AUDIT_LOGGING"])
+	assert.True(t, names["POD_NAMESPACE"])
+}

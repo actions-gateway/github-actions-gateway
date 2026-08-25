@@ -98,6 +98,28 @@ spec:
               so any number of RunnerSets can point at one pool (§H.4, §H.5). Reconciled by the
               GMC, which owns the proxy Deployment/Service/HPA/PDB (the reconciler lands in M2).
             properties:
+              auditLogging:
+                default: "Off"
+                description: |-
+                  AuditLogging selects the per-connection egress audit record this proxy pool
+                  writes to its log stream. Off (the default) writes none. Connections writes
+                  one structured line per ACCEPTED CONNECT, at tunnel close, carrying the
+                  tenant namespace, the destination host and port, the bytes transferred each
+                  way, and the tunnel duration. It carries nothing from the request headers
+                  or the tunneled bytes, which the proxy never inspects.
+
+                  It is opt-in per pool because the record is data about a tenant's egress:
+                  which destination their workers reached and when. Turning it on is a
+                  deliberate decision to retain that, and to size the log pipeline for one
+                  line per connection. Off is what an unset field, an unrecognized value, and
+                  a proxy image older than this field all resolve to.
+
+                  Changing it is a rolling restart of the pool, not a hot reload, the same as
+                  logLevel. Design appendix G.3 / Q564.
+                enum:
+                - "Off"
+                - Connections
+                type: string
               destinationCIDRs:
                 description: |-
                   DestinationCIDRs lists EXTRA, non-GitHub IP ranges the proxy may forward to
@@ -1677,6 +1699,28 @@ spec:
               so any number of RunnerSets can point at one pool (§H.4, §H.5). Reconciled by the
               GMC, which owns the proxy Deployment/Service/HPA/PDB (the reconciler lands in M2).
             properties:
+              auditLogging:
+                default: "Off"
+                description: |-
+                  AuditLogging selects the per-connection egress audit record this proxy pool
+                  writes to its log stream. Off (the default) writes none. Connections writes
+                  one structured line per ACCEPTED CONNECT, at tunnel close, carrying the
+                  tenant namespace, the destination host and port, the bytes transferred each
+                  way, and the tunnel duration. It carries nothing from the request headers
+                  or the tunneled bytes, which the proxy never inspects.
+
+                  It is opt-in per pool because the record is data about a tenant's egress:
+                  which destination their workers reached and when. Turning it on is a
+                  deliberate decision to retain that, and to size the log pipeline for one
+                  line per connection. Off is what an unset field, an unrecognized value, and
+                  a proxy image older than this field all resolve to.
+
+                  Changing it is a rolling restart of the pool, not a hot reload, the same as
+                  logLevel. Design appendix G.3 / Q564.
+                enum:
+                - "Off"
+                - Connections
+                type: string
               destinationCIDRs:
                 description: |-
                   DestinationCIDRs lists EXTRA, non-GitHub IP ranges the proxy may forward to

@@ -129,6 +129,27 @@ type EgressProxySpec struct {
 	// +kubebuilder:default=info
 	LogLevel string `json:"logLevel,omitempty"`
 
+	// AuditLogging selects the per-connection egress audit record this proxy pool
+	// writes to its log stream. Off (the default) writes none. Connections writes
+	// one structured line per ACCEPTED CONNECT, at tunnel close, carrying the
+	// tenant namespace, the destination host and port, the bytes transferred each
+	// way, and the tunnel duration. It carries nothing from the request headers
+	// or the tunneled bytes, which the proxy never inspects.
+	//
+	// It is opt-in per pool because the record is data about a tenant's egress:
+	// which destination their workers reached and when. Turning it on is a
+	// deliberate decision to retain that, and to size the log pipeline for one
+	// line per connection. Off is what an unset field, an unrecognized value, and
+	// a proxy image older than this field all resolve to.
+	//
+	// Changing it is a rolling restart of the pool, not a hot reload, the same as
+	// logLevel. Design appendix G.3 / Q564.
+	//
+	// +optional
+	// +kubebuilder:validation:Enum=Off;Connections
+	// +kubebuilder:default=Off
+	AuditLogging string `json:"auditLogging,omitempty"`
+
 	// NoProxyCIDRs lists destinations excluded from the per-tenant egress proxy
 	// (appended to NO_PROXY). Entries may be CIDR prefixes, bare IPs, or NO_PROXY
 	// domain suffixes for internal destinations. Never list GitHub here — an entry
