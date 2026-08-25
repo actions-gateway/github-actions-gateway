@@ -305,6 +305,10 @@ See [network-architecture.md § Worker egress to allowlisted non-GitHub destinat
 The proxy's per-connection record (`EgressProxy.spec.auditLogging: Connections`, Q564 / [appendix G.3](appendix-g-future-enhancements.md#g3-proxy-side-audit-logging)) is the one place the platform deliberately writes down where a tenant's workers went.
 That makes both halves of it a security decision: whether it runs at all, and what a line is allowed to carry.
 
+**It is not the per-tenant audit attribution claimed elsewhere in this design.** That property is a source-IP one at GitHub's end: GitHub's own audit log groups by source IP, and a per-tenant egress IP is what keeps a tenant's activity separable there ([q243 reference architecture](../plan/q243-egress-ip-reference-arch.md)).
+This record is a line on the pool's own stdout, keyed on `msg == "egress audit"`, and it is off unless enabled.
+The two are easy to conflate because a shared pool breaks both, for unrelated reasons: one because every consumer leaves from the same addresses, the other because a CONNECT carries no namespace.
+
 **It is off by default, and that is a requirement rather than a convenience.** A record naming the destination a tenant reached and when is data the platform must choose to retain, for a period it has decided on and in a pipeline it has sized, so it is opted into per pool.
 The default holds at two independent points: the CRD defaults the field to `Off` and the GMC injects no audit environment for an `Off` (or unset) pool, and the proxy binary treats an absent, empty, or unrecognized `PROXY_AUDIT_LOGGING` as `Off`.
 Neither relies on the other, so a GMC newer than the proxy image, which is the shape a rolling upgrade produces, can only under-record.

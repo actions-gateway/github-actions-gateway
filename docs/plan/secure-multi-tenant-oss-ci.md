@@ -53,7 +53,7 @@ What changes:
 | Network egress | Default-deny NetworkPolicy, per-tenant proxy pool, in-cluster pull-through mirror, egress scoped to mirror plus GitHub plus DNS | **Open.** Design and phases in [q408-untrusted-pr-egress.md](q408-untrusted-pr-egress.md); validations are Q539 and Q540 |
 | Node metadata | The link-local DNS allowance is scoped to port 53, so no rule admits the metadata address on any port it serves | **Shipped and asserted (Q716).** Q226 measured HTTP 200 from inside a Kata guest, because Kata bounds the guest kernel and not the pod's network identity. `TestBuildNetworkPolicy_DeniesCloudMetadataServer` pins the authored policy on every PR; `E2E_V2_DirectEgress_MetadataServerBlocked` proves a real CNI enforces it on the Calico lane. Needs a policy-enforcing CNI: without one, Workload Identity is the only control |
 | Cross-job cache | none in-cluster | **This posture removes the cache that works.** `actions/cache` reaches its Azure-blob store through the default egress allowlist today; closing egress to GitHub plus mirror plus DNS takes it away, so an in-cluster cache stops being an optimisation and becomes the only cache an untrusted job can have. Q215 is blocked on that review, which [caching-and-worker-storage.md](caching-and-worker-storage.md) reframes as the design |
-| Evidence | Per-pool egress audit records | **Shipped, opt-in (Q564).** `EgressProxy.spec.auditLogging: Connections` writes one structured line per accepted CONNECT: namespace, destination host and port, bytes each way, duration. Off by default: the record is data about a tenant's egress, so retaining it is the platform's decision. See [observability-logging.md](../operations/observability-logging.md#proxy-egress-audit-record) |
+| Evidence | Per-tenant egress audit records | **Partly shipped, opt-in (Q564).** `EgressProxy.spec.auditLogging: Connections` writes one structured line per accepted CONNECT: namespace, destination host and port, bytes each way, duration. Off by default: the record is data about a tenant's egress, so retaining it is the platform's decision. It attributes per POOL, so it meets the per-tenant requirement of Definition of Done #5 only on an unshared pool; on a shared one no field names the consumer ([Q986](../queue/Q986.md)). See [observability-logging.md](../operations/observability-logging.md#proxy-egress-audit-record) |
 | Transport to the proxy | TLS on the AGC-to-proxy and worker-to-proxy hop | **Open.** The CONNECT target is cleartext on that hop and readable by an eBPF tap, though the tunnelled payload stays TLS to GitHub. Row: Q566 |
 | Noisy-neighbour containment | Per-runner-group proxy pool | **Open.** One pool per gateway today, so a bandwidth-heavy group can saturate a co-tenant's. Row: Q567 |
 
@@ -98,9 +98,9 @@ The claim is checkable and a wrong one costs more than the feature is worth.
 
 ## Deliverables
 
-Shipped: Kata validation, the pod isolation floor, default-deny NetworkPolicy, per-tenant proxy pools, the opt-in per-pool egress audit record (Q564).
+Shipped: Kata validation, the pod isolation floor, default-deny NetworkPolicy, per-tenant proxy pools, the opt-in per-pool egress audit record (Q564, per-tenant on an unshared pool only).
 
-Open, with rows: Q408 (egress posture and mirror design), Q539 (Kata plus Dragonfly as the mirror backend), Q540 (composed node-layer plus guest-layer stack), Q566 (TLS on the proxy hop), Q567 (per-group proxy pool), Q215 (cache backend, blocked on the cross-tenant isolation review this document scopes).
+Open, with rows: Q408 (egress posture and mirror design), Q539 (Kata plus Dragonfly as the mirror backend), Q540 (composed node-layer plus guest-layer stack), Q566 (TLS on the proxy hop), Q567 (per-group proxy pool), Q986 (per-tenant attribution on a shared pool, the residual on Definition of Done #5), Q215 (cache backend, blocked on the cross-tenant isolation review this document scopes).
 
 ## Gaps with no row yet
 
