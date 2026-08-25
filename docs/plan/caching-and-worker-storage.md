@@ -1,6 +1,8 @@
 # Caching and Worker Storage
 
-> **Status: goal stated 2026-08-07, nothing built.** This is a map and a definition of done, not a design.
+> **Status: goal stated 2026-08-07; one of its seven definition-of-done items closed 2026-08-24.** This is a map and a definition of done, not a design.
+> The storage half is the one that closed (Q719, item 5): see [worker-shared-storage.md](../operations/worker-shared-storage.md).
+> Every cache half is still unbuilt.
 > The image-pull half already has a design in [q408-untrusted-pr-egress.md](q408-untrusted-pr-egress.md) and is not restated here.
 > The job-cache and storage halves have no design yet, and the first thing this document does is establish that they are three different problems.
 
@@ -32,7 +34,7 @@ Alongside them, and not a cache at all:
 
 | | What it is | State | Row |
 |---|---|---|---|
-| **Shared job storage** | A `ReadWriteMany` volume several jobs mount to pass files | Unvalidated. Also what ARC's `containerMode: kubernetes` needs, so it is a migration blocker | [Q719](../queue/Q719.md) |
+| **Shared job storage** | A `ReadWriteMany` volume several jobs mount to pass files | Validated 2026-08-24 and documented as a reference architecture: [worker-shared-storage.md](../operations/worker-shared-storage.md). Also what ARC's `containerMode: kubernetes` needs | Closed (Q719) |
 
 ### `actions/cache` works today, and the roadmap says otherwise
 
@@ -107,9 +109,11 @@ Each demonstrated rather than argued:
 4. Cache entries written by an untrusted fork pull request cannot be read by a trusted job of the same tenant, or that boundary is explicitly declared absent with a reason.
 5. The write path is contracted, not incidental: whatever endpoint accepts a cache save states what it accepts, from whom, and what it refuses, in the same form [q408 §3.5](q408-untrusted-pr-egress.md#35-the-mirror-role-is-a-contract) states the read path.
    Four properties for the mirror, its own set for this.
-5. A `ReadWriteMany` volume is mounted into a worker in a validated reference architecture, and the storage classes it has been exercised against are named.
-   Failing that, the stance that workers stay storage-less is written down as a decision with its migration consequence for ARC's `containerMode: kubernetes`.
-6. The cost claim is measured, not asserted: egress bytes and restore latency with and without the local cache, on one real workload.
+6. ✅ **Closed 2026-08-24 (Q719).** A `ReadWriteMany` volume is mounted into a worker in a validated reference architecture, and the storage classes it has been exercised against are named: [worker-shared-storage.md](../operations/worker-shared-storage.md).
+   Both halves landed rather than one instead of the other.
+   The stance is written down (workers stay storage-less; a shared volume is a tenant `podTemplate` concern GAG never provisions), with its migration consequence for ARC's `containerMode: kubernetes`, and `make test-rwx-storage` is what keeps the reference architecture a measurement.
+   One class has been exercised, `gag-rwx-nfs` over csi-driver-nfs v4.13.4; every cloud filesystem is explicitly unvalidated, and the harness takes the class to test in `RWX_STORAGE_CLASS` so an operator can close that on their own.
+7. The cost claim is measured, not asserted: egress bytes and restore latency with and without the local cache, on one real workload.
 
 ## Explicitly out of scope
 
@@ -135,9 +139,9 @@ Do not repeat that `actions/cache` has no home.
 
 ## Deliverables
 
-Shipped: per-tenant egress that admits the Actions cache data plane; the registry-mirror contract and the Athens pattern it derives from.
+Shipped: per-tenant egress that admits the Actions cache data plane; the registry-mirror contract and the Athens pattern it derives from; the RWX validation and the reference-architecture stance (Q719, [worker-shared-storage.md](../operations/worker-shared-storage.md)).
 
-Open, with rows: [Q408](../queue/Q408.md) (mirror design and phases), [Q539](../queue/Q539.md) (Dragonfly as the mirror backend), [Q540](../queue/Q540.md) (composed node-layer and guest-layer stack), [Q215](../queue/Q215.md) (job and build-layer cache, blocked on the isolation review this document reframes as the design), [Q719](../queue/Q719.md) (RWX validation and the reference-architecture stance), [Q268](../queue/Q268.md) (warm worker pool, the competing lever for the latency half of the same complaint).
+Open, with rows: [Q408](../queue/Q408.md) (mirror design and phases), [Q539](../queue/Q539.md) (Dragonfly as the mirror backend), [Q540](../queue/Q540.md) (composed node-layer and guest-layer stack), [Q215](../queue/Q215.md) (job and build-layer cache, blocked on the isolation review this document reframes as the design), [Q268](../queue/Q268.md) (warm worker pool, the competing lever for the latency half of the same complaint).
 
 **Scope note for Q539 and Q540.** Both are currently written as image-only validations.
 Because the candidate backend is a general file distributor, both should also answer whether *one* deployment serves the artifact class as well, and at what cost to the §3.5 contract.

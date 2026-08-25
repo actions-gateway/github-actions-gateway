@@ -64,6 +64,18 @@ test-autoscaler: ## Assert the autoscaler matcher against a live cluster-autosca
 test-karpenter: ## Assert the autoscaler matcher against a live Karpenter (needs `make karpenter-cluster`)
 	go test -v -count=1 -timeout 15m -tags karpenter -run 'TestLiveKarpenter' ./internal/controller/...
 
+# The shared worker storage validation (Q719). Runs against the kind cluster
+# `make rwx-storage-cluster` stands up, and fails rather than skips when that
+# cluster is absent — a validation that skips itself validates nothing.
+#
+# No -race: this test drives a cluster and asserts on pod outcomes; the code
+# under test is the pod builder, and the concurrency core it would instrument is
+# not on this path. -count=1 because the answer is the cluster's, not the build
+# cache's. The timeout covers two cases at up to 5m of pod waiting each.
+.PHONY: test-rwx-storage
+test-rwx-storage: ## Assert workers share one RWX volume across nodes (needs `make rwx-storage-cluster`)
+	go test -v -count=1 -timeout 15m -tags rwxstorage -run 'TestLiveRWX' ./internal/provisioner/...
+
 ##@ Load test
 
 # The in-process AGC load harness (Q13, cmd/agc/test/load). It needs no cluster

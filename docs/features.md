@@ -62,6 +62,8 @@ No tier badge means both tiers, and a gate removes the badge when the gap closes
 - **[Secure-by-default hardening](design/05-security.md)**: Pod Security Admission per namespace, default-deny NetworkPolicies, and credentials kept out of environment variables, all reconciled rather than opt-in.
 - **[Runner template library](operations/runner-template-library.md)**: three shipped worker pod shapes (`plain`, `kata-dind`, `privileged-dind`), each applied with one `kubectl apply -k`, so a tenant starts from a validated template instead of transcribing a capability set by hand.
   Only templates CI exercises may ship, and a gate enforces it.
+- **[Shared worker storage](operations/worker-shared-storage.md)** <span class="gag-new-badge">new in 1.6</span>: a validated reference architecture for a `ReadWriteMany` volume several jobs mount to pass files, with its `fsGroup` requirement measured.
+  The classes it was exercised against are named; a harness validates yours.
 - **[Kata micro-VM workers](operations/kata-dind-workloads.md)**: validated on nested virtualization, and the default for GAG's own end-to-end CI, which builds a `kind` cluster inside an unprivileged worker pod.
 - **[In-runner image builds](operations/in-runner-image-builds.md)**: a decision table mapping BuildKit rootless, Kaniko, Sysbox, Kata, and privileged Docker-in-Docker to the right `securityProfile` and PSA level.
 - **[Signed images, SBOM, and SLSA provenance](operations/release.md)**: every published image is keyless-signed and carries both a Software Bill of Materials (SBOM) attestation and a Supply-chain Levels for Software Artifacts (SLSA) build-provenance attestation.
