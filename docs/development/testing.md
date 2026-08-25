@@ -2720,7 +2720,14 @@ They are operator-run, never CI-run: they need live App credentials and, in one 
 The Q583 fix rests on both, and the `DeleteMessage` wire shape is the P2-surfaced P4 unknown Q264 left open. | [q583-restart-replay.md](../plan/archive/q583-restart-replay.md) | | Investigation H | `PROBE_ABANDONED_TEST=true` | What does the run service do with a completion for an acquired-but-never-run assignment?
 **Answered 2026-08-04 across four arms** (`PROBE_ABANDONED_RESULT` selects; `none` sends nothing): `abandoned` and `canceled` conclude the run `success` in one second (a false green), `failed` is refused 401, and silence gets an honest run+job `cancelled` at the ~15-minute unstarted-job horizon — so the listener reports nothing (Q676).
 `PROBE_ABANDONED_FORCECANCEL=true` adds the Q683 remedy arm, **answered 2026-08-05: a standalone REST force-cancel in the told-nothing state concludes run and job `cancelled` in ~1 s and unpins the runner record**, so the provisioner now ships it.
-`PROBE_ABANDONED_RERUN_CHECK=true` adds a `rerun-failed-jobs` measurement after a concluded-run verdict. | [q645-abandoned-completion.md](../plan/q645-abandoned-completion.md) |
+`PROBE_ABANDONED_RERUN_CHECK=true` adds a `rerun-failed-jobs` measurement after a concluded-run verdict. | [q645-abandoned-completion.md](../plan/q645-abandoned-completion.md) | | Investigation I | `PROBE_LABELPATCH_TEST=true` | Does the Actions Service honour a scale-set **labels** `PATCH`?
+Q726 registers labels at create and never rewrites them, and whether it could was the unknown that decided report-vs-reconcile.
+**Answered 2026-08-24: no**.
+A labels `PATCH` answers 200, stores nothing, and returns the *stored* set rather than an echo, and a live session is undisturbed.
+Five arms, gated on a create-arm control that stops the run when a backend drops extra labels at create and would make every `PATCH` verdict unreadable. | [q793-labels-patch.md](../plan/archive/q793-labels-patch.md) |
+
+Investigation I is one run against one throwaway scale set, with no job and no wall clock, which makes it the cheapest of the five to re-run against a future GitHub.
+Its verdicts come from an independent `GET` rather than the `PATCH` response, because a service echoing its input is byte-identical to one that stored it, and reading the response instead is exactly what its `LabelPatchEcho` unit case fails on.
 
 Investigation G is one run, three session generations, so it needs no state file and no multi-hour gap.
 Its `DeleteMessage` verdict turns on **whether the wire deleted anything**, not on the client's error: a 404/410 completes an ack (for a listener, a message already gone is nothing left to do) but deletes nothing, and a backend that does not serve the endpoint answers 404 too.

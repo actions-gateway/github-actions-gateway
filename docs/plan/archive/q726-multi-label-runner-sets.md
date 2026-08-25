@@ -30,6 +30,12 @@ When one already exists it is reused untouched, labels included.
 GAG's [`UpdateRunnerScaleSet`](../../../scaleset/client.go) exists but no production code calls it, and its behaviour against a scale set with a live session and assigned jobs is unknown.
 This plan therefore does not write labels to an existing scale set; see [Drift](#drift-detected-never-patched).
 
+> **Measured since, and the answer is no** — [Q793](q793-labels-patch.md), 2026-08-24.
+> The Actions Service accepts a labels `PATCH`, answers 200, and discards it; a live session is undisturbed.
+> The two paragraphs above are what was known on 2026-08-11 and are kept as written.
+> What they call a deliberate omission is now a constraint: this plan's approach was right, and no later release can reconcile labels in place.
+> `UpdateRunnerScaleSet` did gain a production caller after this was written — Q712's runner-group reconcile, which patches `runnerGroupId` and is unaffected.
+
 ## Approach
 
 ### `runnerLabels[0]` is the scale-set name
@@ -48,6 +54,7 @@ That hazard already exists today for the single label, unguarded, and it is now 
 
 Reusing a scale set by name means a label added to an existing RunnerSet never reaches GitHub.
 Because the `PATCH` path is unmeasured, this change does not attempt one.
+([Q793](q793-labels-patch.md) has since measured it: a labels `PATCH` is discarded, so detection is not merely this plan's choice but the only option there is.)
 
 Instead the listener compares the label set the server actually returned, on create *and* on reuse, against the set the RunnerSet declares, and reports the difference.
 That single comparison covers both open failure modes at once, since a GHES appliance with the flag off and a scale set whose labels predate an edit are indistinguishable from the client's side and have the same remedy.
@@ -56,6 +63,7 @@ The report is a new advisory condition, `RunnerLabelsIncomplete`, plus a `Warnin
 It is advisory and stays out of `ImpairingConditionTypes`: the set is still serving every job that targets its name label, and rolling a configuration mismatch into the gateway's `RunnerSetsDegraded` summary would page for something that is not an outage.
 
 Measuring `PATCH`, and reconciling labels in place if it is honoured, is follow-up work, filed separately.
+It came back not honoured ([Q793](q793-labels-patch.md)), so nothing followed it.
 
 ### Uniqueness moves onto the name
 
@@ -78,6 +86,7 @@ In:
 Out, filed to the Queue instead:
 
 - Measuring whether the Actions Service honours a labels `PATCH`, and reconciling in place if it does.
+  (Measured in [Q793](q793-labels-patch.md): it does not, so the reconcile half was withdrawn rather than built.)
 - `gag-migrate` still writing `acquisitionProtocol: Classic` onto every set it emits.
   That is now conservative rather than necessary, but changing it silently flips a migrating tenant's protocol, which is a decision of its own.
 

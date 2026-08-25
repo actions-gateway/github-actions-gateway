@@ -274,7 +274,7 @@ func newRetentionProbe(logger *slog.Logger, cfg retentionConfig, provider github
 		APIBase:       apiBase,
 		HTTPClient:    hc,
 		PollClient:    pollClient,
-		Observer:      wireLog{log: logger},
+		Observer:      wireLog{log: logger, tag: "F"},
 	})
 	if err != nil {
 		return nil, err

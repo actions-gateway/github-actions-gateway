@@ -2320,6 +2320,7 @@ Two ways in, and the condition message says which labels are affected either way
 
 - **A label was appended to a live runner set.** The AGC finds an existing scale set by its name, the set's first `runnerLabel`, and reuses it untouched, so labels added afterwards are never registered.
   Nothing errors; the new label simply matches nothing.
+  A scale set's labels cannot be changed after it is created, so this one is fixed by replacing the scale set rather than by editing it.
 - **GitHub Enterprise Server below 3.21.** Multiple labels per scale set need `DistributedTask.AllowRunnerScaleSetCustomLabels`, which is off by default on 3.18–3.20 and on by default from 3.21.
   With it off the appliance keeps only the name label and **discards the rest without an error**, so the create looks entirely successful.
 
@@ -2335,7 +2336,8 @@ Two ways in, and the condition message says which labels are affected either way
 
     Upstream documents the flag for 3.18 and later only, so on 3.17 and earlier treat multi-label as unavailable and declare one label per set until the appliance is upgraded.
 
-- **Otherwise, give the set a new scale set.** Labels are registered when the scale set is created and are not reconciled afterwards, and the AGC finds the scale set by name.
+- **Otherwise, give the set a new scale set.** Labels are fixed when the scale set is created, and the AGC finds the scale set by name.
+  There is no in-place fix to wait for: the Actions Service accepts a labels `PATCH`, discards it, and answers 200 (measured 2026-08-24, [Q793](../plan/archive/q793-labels-patch.md)).
   So neither editing `spec.runnerLabels` nor deleting and re-creating the `RunnerSet` under the same first label will add them: the second re-adopts the same scale set with the same old labels.
 
     Two ways out, and both cost the old scale set:

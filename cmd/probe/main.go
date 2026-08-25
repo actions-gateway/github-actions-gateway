@@ -25,6 +25,9 @@
 // Set PROBE_SCALESET_TEST=true to run Investigation E (Q264) instead — the
 // runner-scale-set message-queue protocol scenario, which has its own smaller
 // environment contract. See scaleset.go.
+//
+// Set PROBE_LABELPATCH_TEST=true to run Investigation I (Q793) — whether the
+// Actions Service honours a scale-set labels PATCH. See labelpatch.go.
 package main
 
 import (
@@ -139,6 +142,26 @@ func run(logger *slog.Logger) error {
 		ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 		defer stop()
 		return runAbandonedProbe(ctx, logger, hCfg, provider, "https://api.github.com")
+	}
+
+	// ── Investigation I (Q793): is a labels PATCH honoured? ─────────────────
+	// One run, one throwaway scale set, five arms. See labelpatch.go.
+	if os.Getenv("PROBE_LABELPATCH_TEST") == "true" {
+		iCfg, err := parseLabelPatchConfig(os.Getenv)
+		if err != nil {
+			return err
+		}
+		provider, err := githubapp.NewInstallationTokenProvider(githubapp.Credentials{
+			AppID:          iCfg.AppID,
+			PrivateKeyPEM:  iCfg.PrivateKeyPEM,
+			InstallationID: iCfg.InstallationID,
+		}, nil, false)
+		if err != nil {
+			return fmt.Errorf("create token provider: %w", err)
+		}
+		ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+		defer stop()
+		return runLabelPatchProbe(ctx, logger, iCfg, provider, "https://api.github.com")
 	}
 
 	// ── 1. Read credentials from environment ────────────────────────────────
