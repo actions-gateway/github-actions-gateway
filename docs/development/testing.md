@@ -368,7 +368,8 @@ Two cautions on the instruments, both paid for:
 
 The budget is therefore sized for the canary rather than for the measurement.
 Even on a quiet machine the old 2m was marginal: at load 21 to 36, every binary uncached, the slowest package was `agc/internal/scalesetlistener` at 67.834s, or 56.5% of it, with `agc/internal/controller` down at 14.467s.
-5m leaves that 4.4x, and leaves the CI `coverage` job's `timeout-minutes: 15` room to still print Go's goroutine dump.
+5m leaves that 4.4x, and leaves the most room under the CI `coverage` job's `timeout-minutes: 15` for Go to still print its goroutine dump: that job runs in 186s of its 900s, 6s of which is overhead, so a wedge at 5m ends the run near 306s where one at 10m ends it near 606s.
+Both print; 5m has twice the margin.
 Changing the flag costs one cold run: `-timeout` participates in Go's test cache key, verified by running one package at 5m (ran), again at 5m (cached), then at 2m (ran).
 A genuinely wedged test blocks forever and trips any finite value; what a larger number costs is the wait before that dump, and what a smaller one costs is a red gate that names a scheduling event as a hang.
 
