@@ -81,10 +81,12 @@ func (r *RunnerSetReconciler) applyWorkerCapacityConditions(ctx context.Context,
 
 	gateRecheck := r.applyCapacityGateCondition(ctx, rs, unsched, gw)
 	// startupRecheck is folded in HERE rather than only inside the gate (Q906). A bound
-	// worker pod that has not resolved either way is invisible to the Pod watch, and
-	// WorkersNotStarting is now published on every set — so on an ungated set, which is
-	// the default, nothing else would wake the reconciler to publish or clear it. The
-	// gate adds the same re-check on its own path; soonest makes the overlap free.
+	// worker pod that has not resolved either way changes no phase, and the Pod watch
+	// drops phase-less updates, so on an ungated set — the default — this is what comes
+	// back to publish or clear WorkersNotStarting. The classic path also has a baseline
+	// re-check, but only while its listener pool is short of MaxListeners, and the
+	// scale-set path has none at all; neither is a substitute. The gate adds the same
+	// re-check on its own path; soonest makes the overlap free.
 	return soonest(soonest(unsched.requeueAfter, startupRecheck(unsched)), gateRecheck)
 }
 

@@ -40,11 +40,18 @@ func TestImpairingConditionTypes(t *testing.T) {
 		ConditionPossibleReapBlockingSidecar,
 		ConditionWorkerCapacityDeclined,
 		// Q906: the kubelet's startup verdict reports without deciding, like
-		// WorkersUnschedulable, but unlike it does not roll up. WorkerQuotaExceeded
-		// above is the precedent — a harder stall, also advisory-only — so
-		// WorkersUnschedulable (Q157) is the exception in this family rather than the
-		// rule, and adding a second rollup input would change every gateway's
-		// RunnerSetsDegraded for a signal an operator can alert on directly.
+		// WorkersUnschedulable, but unlike it does not roll up.
+		//
+		// The settling argument is ConditionWorkerCapacityDeclined one line above:
+		// under reason PodsNotStarting that condition is this identical fact, and it
+		// is not impairing. Rolling up the ungated twin while the gated one stays out
+		// would make a set degraded at the gateway precisely BECAUSE its operator did
+		// not opt into spec.capacityGate, and undegraded the moment they did.
+		//
+		// (The WorkerQuotaExceeded precedent is weaker than it looks and should not be
+		// leaned on: read the impairing list and the organizing principle is closer to
+		// fault-versus-saturation than to advisory-versus-deciding, which would put an
+		// image that will not pull on the same side as RunnerVersionTooOld.)
 		ConditionWorkersNotStarting,
 	} {
 		for _, imp := range ImpairingConditionTypes() {
