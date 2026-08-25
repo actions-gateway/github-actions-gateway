@@ -2652,6 +2652,14 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 </thead>
 <tbody>
 <tr>
+<td><a href="Q982/">Q982</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/lib/common.sh">printf into grep -q under pipefail falsifies a value that is present</a></td>
+<td><code>flake</code> <code>tests</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>grep exits on the match and closes the pipe, printf takes SIGPIPE, and the dead pipeline reads as no-match, so only a PRESENT value is …</td>
+</tr>
+<tr>
 <td><a href="Q929/">Q929</a></td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/go/go-lint.sh">The lint gate returns two verdicts on one tree</a></td>
 <td><code>flake</code> <code>ci</code></td>
@@ -2698,14 +2706,6 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>🔲</td>
 <td>M</td>
 <td>Measured 2026-08-12 under 8 workers: <code>provisioner</code> eviction-window and <code>controller</code> 2m timeout failed in one window, all green on rerun.</td>
-</tr>
-<tr>
-<td><a href="Q740/">Q740</a></td>
-<td><a href="../operations/runner-template-library/">Ship a signed build-capable runner image for the DinD templates</a></td>
-<td><code>feature</code> <code>docs</code></td>
-<td>🔲</td>
-<td>M</td>
-<td>Q554 ships <code>kata-dind</code>/<code>privileged-dind</code> with an <code>example.invalid</code> <code>workerImage</code>: the runner needs a docker CLI and no image we publish has …</td>
 </tr>
 <tr>
 <td><a href="Q826/">Q826</a></td>
@@ -3882,6 +3882,38 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>🔲</td>
 <td>S</td>
 <td><code>queue.py metrics</code> splits throughput from garbage collection by matching <code>complete\|prune\|merge\|defer</code> in the subject of the commit that …</td>
+</tr>
+<tr>
+<td><a href="Q963/">Q963</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/release/gen-third-party-notices.sh">Cover redistributed third-party binaries in THIRD-PARTY-NOTICES</a></td>
+<td><code>debt</code> <code>security</code></td>
+<td>🔲</td>
+<td>S</td>
+<td><code>gen-third-party-notices.sh</code> reads <code>vendor/</code>, so it covers Go modules only.</td>
+</tr>
+<tr>
+<td><a href="Q976/">Q976</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/dependabot.yml">Repoint the dependabot docker ecosystem at the real Dockerfile</a></td>
+<td><code>debt</code> <code>security</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>The <code>docker</code> ecosystem lists five directories holding no Dockerfile; #870 consolidated the only one to <code>/</code>, and the last bump was #643 on …</td>
+</tr>
+<tr>
+<td><a href="Q980/">Q980</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/deploy/dogfood-e2e/overlays/kata/kustomization.yaml">Assert the dogfood e2e overlays supply their own workerImage</a></td>
+<td><code>tests</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>Q740 removed the library's <code>.invalid</code> placeholder, so an overlay that lost its <code>workerImage</code> patch now gap-fills the default runner instead …</td>
+</tr>
+<tr>
+<td><a href="Q981/">Q981</a></td>
+<td><a href="../development/building/">building.md still names the per-module Dockerfiles #870 removed</a></td>
+<td><code>docs</code></td>
+<td>🔲</td>
+<td>XS</td>
+<td>It describes "the four production images (<code>cmd/{agc,gmc,proxy,worker}/Dockerfile</code>)" and "all five Dockerfiles", two lines above its own …</td>
 </tr>
 </tbody>
 </table>

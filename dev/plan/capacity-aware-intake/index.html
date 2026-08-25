@@ -3703,7 +3703,9 @@ A pod running the exact placeholder the 1.4 DinD templates ship, <code>example.i
 Both API versions share this, since <code>RunnerSetReconciler</code> reuses <code>evalWorkersUnschedulableForPods</code> and <code>PendingPodDeadlineOrDefault</code>.</p>
 <p>The pod is then reaped at <code>pendingPodDeadline</code> (default 10m) with a <code>WorkerPodStuckPending</code> Warning, which <code>E2E_AGC_StuckPendingPodReaped</code> already exercises on the same <code>.invalid</code> shape.
 Recovery does not loop tightly: the abandoned-run sweeper waits for capacity that an unpullable image never returns and expires after 30m.</p>
-<p><strong>Why this matters beyond intake.</strong> Both 1.4 DinD templates ship that placeholder and require the operator to replace it, so this is the failure a first-time user of the library hits, not a corner case.
+<p><strong>Why this mattered beyond intake.</strong> Both 1.4 DinD templates shipped that placeholder and required the operator to replace it, so this was the failure a first-time user of the library hit, not a corner case.
+Q740 retired the placeholder, because the runner base carries a Docker client and the entries now set no <code>workerImage</code> at all.
+That removes this particular first-run failure without changing anything measured above: the pod shape, the conditions, and the reap are properties of an image that will not pull, whatever named it.
 <a href="../../operations/runner-template-library/"><code>runner-template-library.md</code></a> and <a href="../../operations/kata-dind-workloads/"><code>kata-dind-workloads.md</code></a> now describe the real split: the pod says <code>ImagePullBackOff</code> within seconds, while the <code>RunnerSet</code> stays quiet until the deadline.
 Closing Q714 changes what an operator watches, so it must update both.</p>
 <h2 id="9k-the-kubelets-startup-verdict-q714">9k. The kubelet's startup verdict (Q714)<a class="headerlink" href="#9k-the-kubelets-startup-verdict-q714" title="Permanent link">&para;</a></h2>

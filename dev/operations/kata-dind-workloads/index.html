@@ -3090,7 +3090,9 @@ Note GKE preinstalls <code>gvisor</code> and <code>confidential-linked-runner</c
 <p>The shipped <code>kata-dind</code> library entry is this section, complete and CI-exercised:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>kubectl<span class="w"> </span>apply<span class="w"> </span>-k<span class="w"> </span>deploy/templates/kata-dind
 </code></pre></div>
-<p>Then set <code>spec.workerImage</code> on it to a build-capable runner image (it ships an <code>example.invalid</code> placeholder so an unreplaced value fails at pull rather than mid-job, visible on the worker pod as <code>ImagePullBackOff</code> within seconds, and on the <code>RunnerSet</code> too as <code>WorkerCapacityDeclined</code>/<code>PodsNotStarting</code> if the set opted into <code>spec.capacityGate</code>; otherwise not until <code>spec.pendingPodDeadline</code> elapses), and point a <code>RunnerSet</code> at it with <code>templateRef.kind: ClusterRunnerTemplate</code>.
+<p>Then point a <code>RunnerSet</code> at it with <code>templateRef.kind: ClusterRunnerTemplate</code>.
+It runs jobs as applied: the template leaves <code>spec.workerImage</code> unset, and the AGC's digest-pinned default runner image already carries a Docker CLI and buildx, which is the client the dind sidecar is the daemon for.
+Set <code>spec.workerImage</code> only if your jobs need <code>docker compose</code> (<code>ghcr.io/actions-gateway/build-runner</code>, pinned by digest from the release notes) or a toolchain of your own.
 The <a href="../runner-template-library/">runner template library</a> covers both, the supported way to patch the base, and <a href="../runner-template-library/#kata-dind-and-privileged-dind">what to watch when the placeholder is left in place</a>.</p>
 <p>The rest of this section is what that template contains and why, for reading rather than retyping.</p>
 <p>Kata is selected by <code>runtimeClassName</code> on the worker <code>podTemplate</code>.

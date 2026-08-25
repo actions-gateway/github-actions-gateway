@@ -5158,7 +5158,7 @@ Each of the four production images therefore ships its license attribution under
 </ul>
 <hr />
 <h2 id="image-provenance-signature--sbom-verification">Image provenance: signature &amp; SBOM verification<a class="headerlink" href="#image-provenance-signature--sbom-verification" title="Permanent link">&para;</a></h2>
-<p>The five first-party images (<code>gmc</code>, <code>agc</code>, <code>proxy</code>, <code>worker</code>, <code>wrapper</code>) are published to GHCR by the <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/publish.yml"><code>publish.yml</code></a> workflow on every <code>v*</code> release tag (the maintainer-facing cut-a-release procedure is in <a href="../release/">release.md</a>).
+<p>The six first-party images (<code>gmc</code>, <code>agc</code>, <code>proxy</code>, <code>worker</code>, <code>wrapper</code>, <code>build-runner</code>) are published to GHCR by the <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/publish.yml"><code>publish.yml</code></a> workflow on every <code>v*</code> release tag (the maintainer-facing cut-a-release procedure is in <a href="../release/">release.md</a>).
 Each one is:</p>
 <ul>
 <li><strong>Multi-arch</strong> (<code>linux/amd64</code> + <code>linux/arm64</code>): the published ref is an OCI image <strong>index</strong>; the digest you pin at install time is the index digest, and the kubelet resolves the node's per-arch manifest from it at pull time.</li>

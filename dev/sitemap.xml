@@ -2,1626 +2,1642 @@
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
     <url>
          <loc>https://actions-gateway.com/dev/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/alternatives/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/demo/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/features/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/getting-started/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/roadmap/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/why-gag/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/assets/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/assets/fonts/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/design/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/design/01-executive-summary/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/design/02-architecture/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/design/03-api-contracts/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/design/04-operational-flows/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/design/05-security/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/design/06-implementation-phases/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/design/07-test-plan/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/design/08-glossary/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/design/appendix-a-capacity-slos/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/design/appendix-b-worker-isolation/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/design/appendix-c-ai-implementation/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/design/appendix-d-alternatives-considered/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/design/appendix-e-capacity-planning/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/design/appendix-f-cost-model/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/design/appendix-g-future-enhancements/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/design/appendix-h-v2-api-decomposition/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/design/github-protocol-dependencies/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/design/network-architecture/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/development/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/development/api-review/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/development/backpressure/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/development/bash-style/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/development/broker-compatibility/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/development/building/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/development/code-generation/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/development/dependency-updates/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/development/doc-update-matrix/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/development/documentation-standards/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/development/flake-watch-retired/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/development/github-app-credentials/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/development/go-workspaces/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/development/kind-iteration/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/development/kubernetes-conventions/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/development/local-kind-demo/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/development/maintaining-backlog/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/development/networkpolicy-port-matching/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/development/parallel-dispatch/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/development/queue-id-allocation/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/development/skills/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/development/technical-debt/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/development/testing/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/development/website/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/operations/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/operations/admission-policies/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/operations/air-gapped-install/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/operations/backup-restore/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/operations/cost-attribution/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/operations/gitops/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/operations/in-runner-image-builds/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/operations/install/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/operations/kata-ci-spike-runbook/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/operations/kata-dind-workloads/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/operations/migration-from-arc/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/operations/migration-v1-to-v2/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/operations/node-shutdown-budgets/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/operations/observability-alerting/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/operations/observability-dashboards/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/operations/observability-logging/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/operations/observability-metrics-access/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/operations/observability-metrics/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/operations/observability/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/operations/p2p-image-distribution/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/operations/personas/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/operations/release/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/operations/resourcequota-sizing/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/operations/runbook/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/operations/runner-template-library/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/operations/security-operations/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/operations/service-mesh-coexistence/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/operations/tenant-onboarding/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/operations/troubleshooting/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/operations/upgrade/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/operations/v1alpha1-deprecation/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/operations/velero-backup-restore/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/operations/worker-rightsizing/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/operations/examples/policies/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/plan/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/plan/arc-parity/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/plan/caching-and-worker-storage/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/plan/capacity-aware-intake/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/plan/ci-wait-time-analysis/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/plan/competitive-analysis-2026-08/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/plan/coverage-to-75-per-module/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/plan/docker-image-speed/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/plan/docs-page-boundaries/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/plan/docs-six-layer-audit/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/plan/docs/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/plan/dogfood-runner-rightsizing/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/plan/e2e-ci-speed-round-2/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/plan/e2e-tests-speed/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/plan/ecosystem-integration-landscape/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/plan/eviction-oversubscription-validation/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/plan/gke-dogfood/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/plan/go-to-market/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/plan/gpu-and-accelerated-ci/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/plan/make/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/plan/markdown-gates-parser/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/plan/merge-queue/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/plan/milestone-1-tests/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/plan/milestone-1/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/plan/milestone-2/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/plan/milestone-3/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/plan/milestone-4/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/plan/milestone-5/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/plan/q224-fanout-dispatch-lever-spike/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/plan/q243-egress-ip-reference-arch/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/plan/q243-q245-q230-live-validation-campaign/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/plan/q245-fqdn-intent-backend-split/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/plan/q264-scale-set-protocol/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/plan/q273-v2-front-door/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/plan/q300-gmc-kindnet-e2e-flake/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/plan/q408-untrusted-pr-egress/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/plan/q501-cancel-relay/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/plan/q511-live-github-run-isolation/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/plan/q549-scaleset-rerun-flake/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/plan/q645-abandoned-completion/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/plan/q710-overlong-paragraphs/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/plan/q889-backlog-item-store/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/plan/release-1.0/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/plan/release-1.3/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/plan/release-1.4/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/plan/release-1.5/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/plan/release-ladder/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/plan/runner-sizing-profiles/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/plan/scaleset-eviction-recovery/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/plan/secure-multi-tenant-oss-ci/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/plan/security-audit-2026-06/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/plan/security/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/plan/structural-debt-audit-2026-07/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/plan/test-progress-visibility/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/plan/v1-classic-sunset-review/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/plan/v2-api-gap-analysis/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/plan/v2-api/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/plan/v2-ga/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/plan/v2beta1/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/plan/website/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/plan/worker-egress-proxy/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/plan/archive/acquire-admission-control/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/plan/archive/backlog-dev-site-page/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/plan/archive/claude-md-hook-rule-retirement/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/plan/archive/competitive-analysis/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/plan/archive/drop-kustomize/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/plan/archive/e2e-progress-visibility/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/plan/archive/gaps/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/plan/archive/gke-dogfood-turnup-findings/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/plan/archive/go-best-practices/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/plan/archive/integration-tests-speed/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/plan/archive/k8s-best-practices/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/plan/archive/kata-on-gke/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/plan/archive/local-gate-throughput/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/plan/archive/logging-audit/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/plan/archive/milestone-2-tests/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/plan/archive/milestone-3-tests/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/plan/archive/milestone-4-tests/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/plan/archive/platform-owned-quota/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/plan/archive/q114-jit-agent-selfheal/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/plan/archive/q12-helm-chart/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/plan/archive/q121-q122-q125-gmc-confinement/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/plan/archive/q132-priorityclass-allowlist/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/plan/archive/q134-session-registration-flake/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/plan/archive/q138-bounded-http-clients/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/plan/archive/q143-single-source-webhook-roles/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/plan/archive/q145-apiserver-cidr-allowlist/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/plan/archive/q156-failure-conditions/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/plan/archive/q164-m3a-build/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/plan/archive/q168-direct-egress/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/plan/archive/q170-job-lifecycle-events/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/plan/archive/q172-optional-templateref/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/plan/archive/q182-audit-policy-install/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/plan/archive/q187-air-gapped-install/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/plan/archive/q197-workload-identity-signer/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/plan/archive/q201-workload-identity-provisioning/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/plan/archive/q205-label-metric-naming-audit/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/plan/archive/q208-fqdn-egress/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/plan/archive/q220-service-mesh-validation/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/plan/archive/q222-agc-sigterm-teardown-race/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/plan/archive/q223-worker-scaleup-rate-limit/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/plan/archive/q235-worker-wrapper-injection/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/plan/archive/q237-docs-quality-audit/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/plan/archive/q242-g1-proxy-destination-allowlist/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/plan/archive/q246-release-asset-timeout-live-diagnosis/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/plan/archive/q260-fanout-completion-reconciliation/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/plan/archive/q260-planid-dedup-refix/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/plan/archive/q264-scale-set-protocol-phases/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/plan/archive/q284-podscheduling-surface/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/plan/archive/q291-e2e-calico-egress-github-flake/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/plan/archive/q311-scaleset-monitoring-surface/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/plan/archive/q365-shared-foundation-out-of-v1-files/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/plan/archive/q409-arc-to-v2-front-door/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/plan/archive/q414-dind-tenant-fixture/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/plan/archive/q415-migrate-dogfood-validation/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/plan/archive/q435-restart-orphan-reclaim/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/plan/archive/q436-session-recycle-strands-job/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/plan/archive/q438-worker-lifetime-deadline/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/plan/archive/q444-vap-param-resolution/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/plan/archive/q459-drained-worker-recovery/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/plan/archive/q468-jobcompleted-retention/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/plan/archive/q497-preemption-recovery/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/plan/archive/q506-ghes-endpoint-audit/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/plan/archive/q507-released-tag-upgrade-gate/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/plan/archive/q51-metrics-reconcile/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/plan/archive/q528-scaleset-acquisition-e2e/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/plan/archive/q536-ghes-private-ca-trust/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/plan/archive/q547-gateway-teardown-worker-reap/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/plan/archive/q550-runner-registration-leak/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/plan/archive/q56-namespace-patch-vap/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/plan/archive/q575-absent-job-payload-secret/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/plan/archive/q583-restart-replay/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/plan/archive/q603-settle-delete-gap/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/plan/archive/q64-pod-informer-waiter/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/plan/archive/q69-authenticated-metrics/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/plan/archive/q72-metrics-scrape-wiring/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/plan/archive/q726-multi-label-runner-sets/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/plan/archive/q74-v2beta1-conversion-webhook/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/plan/archive/q766-scaleset-abandoned-recovery/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/plan/archive/q820-scripts-test-temp-file-flake/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/plan/archive/q844-owed-rerun-tombstone/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/plan/archive/q850-reason-tier-ledger/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/plan/archive/q95-worker-pod-lifecycle/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/plan/archive/q97-multiarch-images/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/plan/archive/quota-pressure-conditions/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/plan/archive/release-decision-support/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/plan/archive/release-friction-reduction/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/plan/archive/rename-agc-to-controller/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/plan/archive/required-status-checks/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/plan/archive/runner-template-library/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/plan/archive/scripts-directory-regrouping/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/plan/archive/unit-tests-speed/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/plan/archive/v2-api-m2-q163/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/plan/archive/v2-api-m4-cross-namespace-sharing/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/plan/archive/v2-api-m5-migration/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/plan/archive/velocity-proxies/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/plan/archive/velocity-v2/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/plan/archive/versioned-docs/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/plan/archive/worker-sidecar-reap-warning/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/postmortems/2026-08-06-q710-split-changed-a-sentence-meaning/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/postmortems/2026-08-14-stale-tool-binary-reported-a-clean-tree-as-broken/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/postmortems/2026-08-14-the-sentinel-published-a-previous-runs-verdict/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/postmortems/2026-08-15-rc2-tagged-a-stale-commit/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/queue/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/queue/Q11/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/queue/Q15/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/queue/Q169/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/queue/Q174/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/queue/Q198/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/queue/Q203/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/queue/Q214/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/queue/Q215/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/queue/Q216/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/queue/Q217/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/queue/Q264/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/queue/Q268/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/queue/Q272/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/queue/Q273/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/queue/Q275/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/queue/Q300/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/queue/Q310/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/queue/Q344/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/queue/Q351/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/queue/Q354/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/queue/Q361/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/queue/Q372/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/queue/Q397/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/queue/Q401/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/queue/Q402/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/queue/Q407/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/queue/Q408/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/queue/Q413/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/queue/Q416/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/queue/Q418/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/queue/Q424/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/queue/Q448/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/queue/Q452/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/queue/Q501/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/queue/Q522/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/queue/Q523/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/queue/Q525/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/queue/Q530/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/queue/Q531/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/queue/Q539/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/queue/Q540/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/queue/Q541/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/queue/Q549/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/queue/Q555/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/queue/Q564/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/queue/Q565/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/queue/Q566/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/queue/Q567/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/queue/Q568/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/queue/Q573/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/queue/Q574/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/queue/Q586/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/queue/Q637/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/queue/Q650/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/queue/Q657/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/queue/Q662/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/queue/Q672/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/queue/Q677/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/queue/Q678/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/queue/Q682/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/queue/Q693/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/queue/Q698/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/queue/Q70/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/queue/Q701/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/queue/Q707/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/queue/Q710/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/queue/Q711/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/queue/Q717/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/queue/Q718/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/queue/Q719/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/queue/Q720/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/queue/Q721/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/queue/Q722/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/queue/Q724/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/queue/Q725/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/queue/Q727/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/queue/Q728/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/queue/Q734/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/queue/Q735/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/queue/Q737/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/queue/Q738/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/queue/Q739/</loc>
-         <lastmod>2026-08-24</lastmod>
-    </url>
-    <url>
-         <loc>https://actions-gateway.com/dev/queue/Q740/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/queue/Q747/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/queue/Q757/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/queue/Q759/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/queue/Q765/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/queue/Q774/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/queue/Q775/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/queue/Q783/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/queue/Q792/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/queue/Q793/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/queue/Q794/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/queue/Q795/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/queue/Q797/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/queue/Q804/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/queue/Q813/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/queue/Q822/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/queue/Q823/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/queue/Q826/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/queue/Q830/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/queue/Q832/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/queue/Q838/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/queue/Q841/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/queue/Q846/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/queue/Q848/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/queue/Q856/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/queue/Q861/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/queue/Q879/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/queue/Q880/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/queue/Q883/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/queue/Q888/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/queue/Q891/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/queue/Q893/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/queue/Q894/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/queue/Q897/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/queue/Q905/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/queue/Q906/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/queue/Q908/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/queue/Q909/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/queue/Q911/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/queue/Q912/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/queue/Q913/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/queue/Q918/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/queue/Q921/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/queue/Q922/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/queue/Q923/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/queue/Q924/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/queue/Q928/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/queue/Q929/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/queue/Q931/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/queue/Q933/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/queue/Q934/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/queue/Q937/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/queue/Q939/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/queue/Q940/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/queue/Q941/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/queue/Q943/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/queue/Q944/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/queue/Q945/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/queue/Q946/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/queue/Q947/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/queue/Q948/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/queue/Q949/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/queue/Q950/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/queue/Q951/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/queue/Q952/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/queue/Q953/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/queue/Q954/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/queue/Q955/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/queue/Q956/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/queue/Q957/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/queue/Q958/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/queue/Q959/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
+    </url>
+    <url>
+         <loc>https://actions-gateway.com/dev/queue/Q963/</loc>
+         <lastmod>2026-08-25</lastmod>
+    </url>
+    <url>
+         <loc>https://actions-gateway.com/dev/queue/Q976/</loc>
+         <lastmod>2026-08-25</lastmod>
+    </url>
+    <url>
+         <loc>https://actions-gateway.com/dev/queue/Q980/</loc>
+         <lastmod>2026-08-25</lastmod>
+    </url>
+    <url>
+         <loc>https://actions-gateway.com/dev/queue/Q981/</loc>
+         <lastmod>2026-08-25</lastmod>
+    </url>
+    <url>
+         <loc>https://actions-gateway.com/dev/queue/Q982/</loc>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/reference/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/reference/api/</loc>
-         <lastmod>2026-08-24</lastmod>
+         <lastmod>2026-08-25</lastmod>
     </url>
 </urlset>

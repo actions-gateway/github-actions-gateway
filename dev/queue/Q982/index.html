@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q740/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q982/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>Ship a signed build-capable runner image for the DinD templates - GitHub Actions Gateway</title>
+        <title>printf into grep -q under pipefail falsifies a value that is present - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#ship-a-signed-build-capable-runner-image-for-the-dind-templates" class="md-skip">
+        <a href="#printf-into-grep--q-under-pipefail-falsifies-a-value-that-is-present" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Ship a signed build-capable runner image for the DinD templates
+              printf into grep -q under pipefail falsifies a value that is present
             
           </span>
         </div>
@@ -2567,9 +2567,9 @@
   
 
 
-<h1 id="ship-a-signed-build-capable-runner-image-for-the-dind-templates">Ship a signed build-capable runner image for the DinD templates<a class="headerlink" href="#ship-a-signed-build-capable-runner-image-for-the-dind-templates" title="Permanent link">&para;</a></h1>
-<p>Q554 ships <code>kata-dind</code>/<code>privileged-dind</code> with an <code>example.invalid</code> <code>workerImage</code>: the runner needs a docker CLI and no image we publish has one.
-Ship actions-runner + CLI + buildx, signed, SBOM, digest-pinned, and drop the placeholder.</p>
+<h1 id="printf-into-grep--q-under-pipefail-falsifies-a-value-that-is-present">printf into grep -q under pipefail falsifies a value that is present<a class="headerlink" href="#printf-into-grep--q-under-pipefail-falsifies-a-value-that-is-present" title="Permanent link">&para;</a></h1>
+<p>grep exits on the match and closes the pipe, printf takes SIGPIPE, and the dead pipeline reads as no-match, so only a PRESENT value is falsified.
+Sites: check-template-library.sh 334/338/372/374; common.sh:384 inverts it.</p>
 
 
 

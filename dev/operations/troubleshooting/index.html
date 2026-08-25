@@ -5630,7 +5630,7 @@ No node anyone adds changes that, so the gate refuses intake wherever it sees it
 <tbody>
 <tr>
 <td>The image host is <code>example.invalid</code></td>
-<td>A template placeholder was never replaced. Both DinD templates ship one deliberately so an unreplaced value fails at pull rather than mid-job. Set a real <code>workerImage</code> (<a href="../runner-template-library/">runner template library</a>).</td>
+<td>A placeholder the 1.4 and 1.5 DinD templates shipped, left in place. Those templates no longer set <code>spec.workerImage</code> at all, because the AGC's default runner image already carries a Docker CLI. Re-apply the <a href="../runner-template-library/">template</a>, or set a real <code>workerImage</code> if the job needs <code>docker compose</code> or a toolchain of its own.</td>
 </tr>
 <tr>
 <td><code>401</code>/<code>403</code> on the pull</td>

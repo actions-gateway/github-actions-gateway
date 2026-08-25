@@ -10,13 +10,9 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/operations/air-gapped-install/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q980/">
       
       
-        <link rel="prev" href="../install/">
-      
-      
-        <link rel="next" href="../gitops/">
       
       
         
@@ -27,7 +23,7 @@
     
     
       
-        <title>Air-gapped install - GitHub Actions Gateway</title>
+        <title>Assert the dogfood e2e overlays supply their own workerImage - GitHub Actions Gateway</title>
       
     
     
@@ -122,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#air-gapped--private-registry-install" class="md-skip">
+        <a href="#assert-the-dogfood-e2e-overlays-supply-their-own-workerimage" class="md-skip">
           Skip to content
         </a>
       
@@ -146,7 +142,7 @@
             <div class="md-banner__inner md-grid md-typeset">
               You're not viewing the latest release.
   <a href="https://actions-gateway.com/dev"><strong>Go to the current docs.</strong></a>
-    <a href="../../queue/">See the working backlog.</a>
+    <a href="../">See the working backlog.</a>
 
             </div>
             <script>var el=document.querySelector("[data-md-component=outdated]"),base=new URL("../.."),outdated=__md_get("__outdated",sessionStorage,base);!0===outdated&&el&&(el.hidden=!1)</script>
@@ -178,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Air-gapped install
+              Assert the dogfood e2e overlays supply their own workerImage
             
           </span>
         </div>
@@ -444,13 +440,11 @@
   
   
   
-    
-  
   
     
     
-      <li class="md-tabs__item md-tabs__item--active">
-        <a href="../" class="md-tabs__link">
+      <li class="md-tabs__item">
+        <a href="../../operations/" class="md-tabs__link">
           
   
   
@@ -1337,8 +1331,6 @@
       
   
   
-    
-  
   
   
     
@@ -1406,23 +1398,20 @@
     
     
       
-        
-        
-      
       
         
       
     
     
-    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9" checked>
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9" >
         
           
           <div class="md-nav__link md-nav__container">
-            <a href="../" class="md-nav__link ">
+            <a href="../../operations/" class="md-nav__link ">
               
   
   
@@ -1440,13 +1429,13 @@
             </a>
             
               
-              <label class="md-nav__link " for="__nav_9" id="__nav_9_label" tabindex="">
+              <label class="md-nav__link " for="__nav_9" id="__nav_9_label" tabindex="0">
                 <span class="md-nav__icon md-icon"></span>
               </label>
             
           </div>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_9_label" aria-expanded="true">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_9_label" aria-expanded="false">
           <label class="md-nav__title" for="__nav_9">
             <span class="md-nav__icon md-icon"></span>
             
@@ -1466,7 +1455,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../personas/" class="md-nav__link">
+      <a href="../../operations/personas/" class="md-nav__link">
         
   
   
@@ -1494,7 +1483,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../install/" class="md-nav__link">
+      <a href="../../operations/install/" class="md-nav__link">
         
   
   
@@ -1519,37 +1508,10 @@
                 
   
   
-    
   
   
-  
-    <li class="md-nav__item md-nav__item--active">
-      
-      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
-      
-      
-        
-      
-      
-        <label class="md-nav__link md-nav__link--active" for="__toc">
-          
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Air-gapped install
-  
-
-    
-  </span>
-  
-  
-
-          <span class="md-nav__icon md-icon"></span>
-        </label>
-      
-      <a href="./" class="md-nav__link md-nav__link--active">
+    <li class="md-nav__item">
+      <a href="../../operations/air-gapped-install/" class="md-nav__link">
         
   
   
@@ -1565,125 +1527,6 @@
   
 
       </a>
-      
-        
-
-<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
-  
-  
-  
-    
-  
-  
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      Table of contents
-    </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#what-you-relocate" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        What you relocate
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#1-mirror-the-images-preserving-digests" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        1. Mirror the images (preserving digests)
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#2-relocate-the-helm-chart" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        2. Relocate the Helm chart
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#3-create-the-image-pull-secret-the-secure-pattern" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        3. Create the image-pull Secret (the secure pattern)
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#4-install-the-chart-with-the-overrides" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        4. Install the chart with the overrides
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#5-wire-pull-secrets-for-the-runtime-workloads-agc--proxy--worker" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        5. Wire pull Secrets for the runtime workloads (AGC / proxy / worker)
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#6-point-the-worker-image-at-the-mirror" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        6. Point the worker image at the mirror
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#7-verify" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        7. Verify
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#next-steps" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Next steps
-      
-    </span>
-  </a>
-  
-</li>
-      
-    </ul>
-  
-</nav>
-      
     </li>
   
 
@@ -1696,7 +1539,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../gitops/" class="md-nav__link">
+      <a href="../../operations/gitops/" class="md-nav__link">
         
   
   
@@ -1724,7 +1567,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../upgrade/" class="md-nav__link">
+      <a href="../../operations/upgrade/" class="md-nav__link">
         
   
   
@@ -1752,7 +1595,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../migration-from-arc/" class="md-nav__link">
+      <a href="../../operations/migration-from-arc/" class="md-nav__link">
         
   
   
@@ -1780,7 +1623,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../migration-v1-to-v2/" class="md-nav__link">
+      <a href="../../operations/migration-v1-to-v2/" class="md-nav__link">
         
   
   
@@ -1808,7 +1651,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../v1alpha1-deprecation/" class="md-nav__link">
+      <a href="../../operations/v1alpha1-deprecation/" class="md-nav__link">
         
   
   
@@ -1836,7 +1679,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../tenant-onboarding/" class="md-nav__link">
+      <a href="../../operations/tenant-onboarding/" class="md-nav__link">
         
   
   
@@ -1864,7 +1707,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../resourcequota-sizing/" class="md-nav__link">
+      <a href="../../operations/resourcequota-sizing/" class="md-nav__link">
         
   
   
@@ -1892,7 +1735,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../runner-template-library/" class="md-nav__link">
+      <a href="../../operations/runner-template-library/" class="md-nav__link">
         
   
   
@@ -1920,7 +1763,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../in-runner-image-builds/" class="md-nav__link">
+      <a href="../../operations/in-runner-image-builds/" class="md-nav__link">
         
   
   
@@ -1948,7 +1791,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../kata-dind-workloads/" class="md-nav__link">
+      <a href="../../operations/kata-dind-workloads/" class="md-nav__link">
         
   
   
@@ -1976,7 +1819,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../p2p-image-distribution/" class="md-nav__link">
+      <a href="../../operations/p2p-image-distribution/" class="md-nav__link">
         
   
   
@@ -2004,7 +1847,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../service-mesh-coexistence/" class="md-nav__link">
+      <a href="../../operations/service-mesh-coexistence/" class="md-nav__link">
         
   
   
@@ -2052,20 +1895,17 @@
       
       
         
-          
-          
-        
       
     
     
-    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--nested">
       
         
         
         <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9_17" >
         
           
-          <label class="md-nav__link" for="__nav_9_17" id="__nav_9_17_label" tabindex="">
+          <label class="md-nav__link" for="__nav_9_17" id="__nav_9_17_label" tabindex="0">
             
   
   
@@ -2101,7 +1941,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../observability/" class="md-nav__link">
+      <a href="../../operations/observability/" class="md-nav__link">
         
   
   
@@ -2129,7 +1969,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../observability-metrics/" class="md-nav__link">
+      <a href="../../operations/observability-metrics/" class="md-nav__link">
         
   
   
@@ -2157,7 +1997,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../observability-metrics-access/" class="md-nav__link">
+      <a href="../../operations/observability-metrics-access/" class="md-nav__link">
         
   
   
@@ -2185,7 +2025,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../observability-alerting/" class="md-nav__link">
+      <a href="../../operations/observability-alerting/" class="md-nav__link">
         
   
   
@@ -2213,7 +2053,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../observability-dashboards/" class="md-nav__link">
+      <a href="../../operations/observability-dashboards/" class="md-nav__link">
         
   
   
@@ -2241,7 +2081,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../observability-logging/" class="md-nav__link">
+      <a href="../../operations/observability-logging/" class="md-nav__link">
         
   
   
@@ -2277,7 +2117,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../cost-attribution/" class="md-nav__link">
+      <a href="../../operations/cost-attribution/" class="md-nav__link">
         
   
   
@@ -2305,7 +2145,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../worker-rightsizing/" class="md-nav__link">
+      <a href="../../operations/worker-rightsizing/" class="md-nav__link">
         
   
   
@@ -2333,7 +2173,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../node-shutdown-budgets/" class="md-nav__link">
+      <a href="../../operations/node-shutdown-budgets/" class="md-nav__link">
         
   
   
@@ -2361,7 +2201,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../runbook/" class="md-nav__link">
+      <a href="../../operations/runbook/" class="md-nav__link">
         
   
   
@@ -2389,7 +2229,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../backup-restore/" class="md-nav__link">
+      <a href="../../operations/backup-restore/" class="md-nav__link">
         
   
   
@@ -2417,7 +2257,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../velero-backup-restore/" class="md-nav__link">
+      <a href="../../operations/velero-backup-restore/" class="md-nav__link">
         
   
   
@@ -2445,7 +2285,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../troubleshooting/" class="md-nav__link">
+      <a href="../../operations/troubleshooting/" class="md-nav__link">
         
   
   
@@ -2473,7 +2313,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../security-operations/" class="md-nav__link">
+      <a href="../../operations/security-operations/" class="md-nav__link">
         
   
   
@@ -2501,7 +2341,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../admission-policies/" class="md-nav__link">
+      <a href="../../operations/admission-policies/" class="md-nav__link">
         
   
   
@@ -2529,7 +2369,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../release/" class="md-nav__link">
+      <a href="../../operations/release/" class="md-nav__link">
         
   
   
@@ -2557,7 +2397,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../kata-ci-spike-runbook/" class="md-nav__link">
+      <a href="../../operations/kata-ci-spike-runbook/" class="md-nav__link">
         
   
   
@@ -2709,113 +2549,6 @@
     
   
   
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      Table of contents
-    </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#what-you-relocate" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        What you relocate
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#1-mirror-the-images-preserving-digests" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        1. Mirror the images (preserving digests)
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#2-relocate-the-helm-chart" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        2. Relocate the Helm chart
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#3-create-the-image-pull-secret-the-secure-pattern" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        3. Create the image-pull Secret (the secure pattern)
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#4-install-the-chart-with-the-overrides" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        4. Install the chart with the overrides
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#5-wire-pull-secrets-for-the-runtime-workloads-agc--proxy--worker" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        5. Wire pull Secrets for the runtime workloads (AGC / proxy / worker)
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#6-point-the-worker-image-at-the-mirror" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        6. Point the worker image at the mirror
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#7-verify" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        7. Verify
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#next-steps" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Next steps
-      
-    </span>
-  </a>
-  
-</li>
-      
-    </ul>
-  
 </nav>
                   </div>
                 </div>
@@ -2834,238 +2567,19 @@
   
 
 
-<h1 id="air-gapped--private-registry-install">Air-gapped / private-registry install<a class="headerlink" href="#air-gapped--private-registry-install" title="Permanent link">&para;</a></h1>
-<blockquote>
-<p><strong>Audience:</strong> Platform engineer</p>
-</blockquote>
-<p>This guide installs the Gateway Manager Controller (GMC) on a cluster that <strong>cannot pull from GitHub Container Registry (GHCR)</strong> — an air-gapped or egress-restricted environment.
-The default <a href="../install/">install</a> pulls every image (and the Helm chart) straight from <code>ghcr.io</code>; here you instead <strong>relocate</strong> them to a private registry, point the chart at that registry, and authenticate the pulls.
-Read <a href="../install/">install.md</a> first — this guide only covers the deltas for a private-registry install.</p>
-<p>The secure-by-default posture is unchanged: <strong>all images stay pinned by digest</strong> (relocation is content-addressed, so digests do not change) and registry credentials are <strong>never</strong> committed to <code>values.yaml</code>.</p>
-<hr />
-<h2 id="what-you-relocate">What you relocate<a class="headerlink" href="#what-you-relocate" title="Permanent link">&para;</a></h2>
-<p>GAG references five images plus the OCI Helm chart.
-Only the GMC image is pulled by the chart itself; the AGC, proxy, wrapper, and worker images are pulled by pods the GMC and AGC provision <strong>at runtime</strong>.</p>
-<table>
-<thead>
-<tr>
-<th>Image</th>
-<th>Public ref</th>
-<th>Pulled by</th>
-<th>Where you point it at the mirror</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><strong>GMC</strong></td>
-<td><code>ghcr.io/actions-gateway/gmc</code></td>
-<td>the chart's GMC Deployment</td>
-<td><code>gmc.image.repository</code> + <code>gmc.image.digest</code> (chart value)</td>
-</tr>
-<tr>
-<td><strong>AGC</strong></td>
-<td><code>ghcr.io/actions-gateway/agc</code></td>
-<td>per-tenant AGC Deployments (GMC-provisioned)</td>
-<td><code>agc.image.repository</code> + <code>agc.image.digest</code> (chart value; GMC injects it as <code>AGC_IMAGE</code>)</td>
-</tr>
-<tr>
-<td><strong>Proxy</strong></td>
-<td><code>ghcr.io/actions-gateway/proxy</code></td>
-<td>per-tenant egress-proxy pools (GMC-provisioned)</td>
-<td><code>proxy.image.repository</code> + <code>proxy.image.digest</code> (chart value; GMC injects it as <code>PROXY_IMAGE</code>)</td>
-</tr>
-<tr>
-<td><strong>Wrapper</strong></td>
-<td><code>ghcr.io/actions-gateway/wrapper</code></td>
-<td>worker pods (init container the AGC injects, or a read-only image volume)</td>
-<td><code>wrapper.image.repository</code> + <code>wrapper.image.digest</code> (chart value; GMC injects it as <code>WRAPPER_IMAGE</code>, forwarded to each AGC)</td>
-</tr>
-<tr>
-<td><strong>Worker</strong></td>
-<td><code>ghcr.io/actions/actions-runner</code> (default)</td>
-<td>worker pods (AGC-provisioned)</td>
-<td><code>RunnerGroup.spec.workerImage</code> per tenant — <strong>not</strong> a chart value</td>
-</tr>
-<tr>
-<td><strong>Helm chart</strong></td>
-<td><code>oci://ghcr.io/actions-gateway/charts/actions-gateway</code></td>
-<td><code>helm install</code></td>
-<td>the <code>oci://</code> ref you pass to <code>helm</code></td>
-</tr>
-</tbody>
-</table>
-<blockquote>
-<p>The <strong>wrapper</strong> is on by default: the chart always sets <code>WRAPPER_IMAGE</code>, and the GMC rejects a floating wrapper tag at startup exactly as it does for <code>agc</code>/<code>proxy</code>, so you must mirror it and pin <code>wrapper.image.digest</code> like the others.
-It is a tiny (~2 MB) <code>FROM scratch</code> image the AGC injects into each worker pod, letting the runner container be the unmodified upstream <code>actions-runner</code>.
-See <a href="../release/#the-worker-images-wrapper-worker-and-build-runner">release.md § The worker images</a>.</p>
-<p>The worker default is the upstream digest-pinned <code>ghcr.io/actions/actions-runner</code>.
-The project also publishes two first-party runner images: <code>ghcr.io/actions-gateway/worker</code>, and <code>ghcr.io/actions-gateway/build-runner</code> for jobs needing <code>docker compose</code> or a Docker CLI and buildx GAG pins itself (<a href="../runner-template-library/">runner templates</a>).
-If a tenant uses either, mirror that ref instead.
-Either way the worker image is set per tenant on the <code>RunnerGroup</code>, so it is configured during tenant onboarding, not at chart install.
-See <a href="../release/#the-worker-images-wrapper-worker-and-build-runner">release.md § The worker images</a>.</p>
-</blockquote>
-<p>Copy the four chart-referenced image digests (<code>gmc</code>, <code>agc</code>, <code>proxy</code>, <code>wrapper</code>) from the <a href="https://github.com/actions-gateway/github-actions-gateway/releases">release notes</a> for the version you are installing; that is the count the mirror loop below uses.
-The worker image is the fifth row of the table above and is chosen per tenant rather than by the chart, so mirror whichever ref your tenants set.
-Throughout this guide, replace <code>registry.internal/gag</code> with your private registry path.</p>
-<hr />
-<h2 id="1-mirror-the-images-preserving-digests">1. Mirror the images (preserving digests)<a class="headerlink" href="#1-mirror-the-images-preserving-digests" title="Permanent link">&para;</a></h2>
-<p>Copy each image from GHCR to your private registry <strong>by digest</strong>, so the mirrored copy is byte-identical and the same <code>sha256:</code> digest pins it on both sides.
-Run this from a host that can reach <em>both</em> registries (a bastion / jump host), then move the registry behind the air gap — or pull to a tarball and <code>load</code> on the inside.</p>
-<p>Use whichever tool you already have.
-<a href="https://docs.sigstore.dev/cosign/working_with_other_artifacts/"><code>cosign copy</code></a> carries the cosign signature and SBOM/provenance attestations along with the image, so prefer it when you want to keep verifying provenance after relocation:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="c1"># Replace &lt;gmc&gt;/&lt;agc&gt;/&lt;proxy&gt;/&lt;wrapper&gt; with the digests from the release notes,</span>
-<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="c1"># and X.Y.Z with the release version.</span>
-<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="k">for</span><span class="w"> </span>img<span class="w"> </span><span class="k">in</span><span class="w"> </span>gmc<span class="w"> </span>agc<span class="w"> </span>proxy<span class="w"> </span>wrapper<span class="p">;</span><span class="w"> </span><span class="k">do</span>
-<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="w">  </span>cosign<span class="w"> </span>copy<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="w">    </span>ghcr.io/actions-gateway/<span class="nv">$img</span>:X.Y.Z<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="w">    </span>registry.internal/gag/<span class="nv">$img</span>:X.Y.Z
-<a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="k">done</span>
-<a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>
-<a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a><span class="c1"># Worker (upstream runner image — has no GAG cosign signature):</span>
-<a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>crane<span class="w"> </span>copy<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a><span class="w">  </span>ghcr.io/actions/actions-runner:2.335.1<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a><span class="w">  </span>registry.internal/gag/actions-runner:2.335.1
-</code></pre></div>
-<p><code>crane copy</code> or <code>skopeo copy --all</code> (use <code>--all</code> to carry the full multi-arch OCI index, not just one platform) are equivalent for the copy itself; they do not relocate the cosign signature, so use <code>cosign copy</code> for the signed GAG images if you intend to re-verify provenance from the mirror.</p>
-<p><strong>Verify the digest is preserved</strong> — it must match the release notes:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>crane<span class="w"> </span>digest<span class="w"> </span>registry.internal/gag/gmc:X.Y.Z
-<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="c1"># Expected: sha256:&lt;gmc&gt;  (identical to the public digest)</span>
-</code></pre></div>
-<blockquote>
-<p>Tarball variant (no shared-network bastion): <code>crane pull … out.tar</code> on the outside, transfer the tarball across the gap, <code>crane push out.tar registry.internal/gag/gmc:X.Y.Z</code> on the inside.
-The digest is preserved.</p>
-</blockquote>
-<hr />
-<h2 id="2-relocate-the-helm-chart">2. Relocate the Helm chart<a class="headerlink" href="#2-relocate-the-helm-chart" title="Permanent link">&para;</a></h2>
-<p>The chart is an OCI artifact.
-If your cluster cannot reach <code>ghcr.io</code>, mirror it too (skip this if you install from a <a href="../install/#install">source checkout</a> — the <code>charts/actions-gateway</code> path needs no registry):</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>oras<span class="w"> </span>cp<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="w">  </span>ghcr.io/actions-gateway/charts/actions-gateway:X.Y.Z<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="w">  </span>registry.internal/gag/charts/actions-gateway:X.Y.Z
-</code></pre></div>
-<p><code>helm pull oci://ghcr.io/actions-gateway/charts/actions-gateway --version X.Y.Z</code> followed by <code>helm push</code> to the internal registry is an equivalent two-step.
-If you use the opt-in v2 CRD chart (<code>actions-gateway-crds-v2</code>), relocate it the same way.</p>
-<hr />
-<h2 id="3-create-the-image-pull-secret-the-secure-pattern">3. Create the image-pull Secret (the secure pattern)<a class="headerlink" href="#3-create-the-image-pull-secret-the-secure-pattern" title="Permanent link">&para;</a></h2>
-<p>The private registry requires authentication.
-Create a <code>kubernetes.io/dockerconfigjson</code> Secret <strong>from a credentials file</strong> — never embed registry credentials in <code>values.yaml</code> (it gets committed to Git) or pass them on a command line (they leak into shell history and process listings).</p>
-<p>Write a Docker config file containing a <strong>scoped, read-only</strong> registry token, <code>chmod 600</code> it, create the Secret from it, then delete the file:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="nb">umask</span><span class="w"> </span><span class="m">077</span>
-<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="c1"># Use a robot/read-only pull token, not a human admin credential.</span>
-<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>cat<span class="w"> </span>&gt;<span class="w"> </span>dockerconfig.json<span class="w"> </span><span class="s">&lt;&lt;'EOF'</span>
-<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="s">{ "auths": { "registry.internal": { "auth": "&lt;base64 user:token&gt;" } } }</span>
-<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="s">EOF</span>
-<a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a>
-<a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a>kubectl<span class="w"> </span>create<span class="w"> </span>secret<span class="w"> </span>docker-registry<span class="w"> </span>private-registry<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a><span class="w">  </span>--namespace<span class="w"> </span>gmc-system<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a><span class="w">  </span>--from-file<span class="o">=</span>.dockerconfigjson<span class="o">=</span>dockerconfig.json
-<a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a>
-<a id="__codelineno-3-11" name="__codelineno-3-11" href="#__codelineno-3-11"></a>shred<span class="w"> </span>-u<span class="w"> </span>dockerconfig.json<span class="w">   </span><span class="c1"># or: rm -P / rm -f</span>
-</code></pre></div>
-<p><code>kubectl create secret docker-registry</code> also accepts <code>--docker-server/-username/-password</code> flags, but those place the password in your shell history and the process table — prefer the <code>--from-file</code> form above.</p>
-<p>You will create this Secret in <strong><code>gmc-system</code></strong> (for the GMC pull, this step) and in <strong>each tenant namespace</strong> (for the AGC/proxy/worker pulls, <a href="#5-wire-pull-secrets-for-the-runtime-workloads-agc--proxy--worker">step 5</a>).</p>
-<hr />
-<h2 id="4-install-the-chart-with-the-overrides">4. Install the chart with the overrides<a class="headerlink" href="#4-install-the-chart-with-the-overrides" title="Permanent link">&para;</a></h2>
-<p>Install from the relocated chart, overriding each image <code>repository</code> to the mirror, keeping the <code>digest</code> from the release notes, and referencing the pull Secret:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>helm<span class="w"> </span>install<span class="w"> </span>gag<span class="w"> </span>oci://registry.internal/gag/charts/actions-gateway<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="w">  </span>--version<span class="w"> </span>X.Y.Z<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="w">  </span>--namespace<span class="w"> </span>gmc-system<span class="w"> </span>--create-namespace<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="w">  </span>--set<span class="w"> </span>gmc.image.repository<span class="o">=</span>registry.internal/gag/gmc<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a><span class="w">  </span>--set<span class="w"> </span>gmc.image.digest<span class="o">=</span>sha256:&lt;gmc&gt;<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a><span class="w">  </span>--set<span class="w"> </span>agc.image.repository<span class="o">=</span>registry.internal/gag/agc<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a><span class="w">  </span>--set<span class="w"> </span>agc.image.digest<span class="o">=</span>sha256:&lt;agc&gt;<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a><span class="w">  </span>--set<span class="w"> </span>proxy.image.repository<span class="o">=</span>registry.internal/gag/proxy<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a><span class="w">  </span>--set<span class="w"> </span>proxy.image.digest<span class="o">=</span>sha256:&lt;proxy&gt;<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-4-10" name="__codelineno-4-10" href="#__codelineno-4-10"></a><span class="w">  </span>--set<span class="w"> </span>wrapper.image.repository<span class="o">=</span>registry.internal/gag/wrapper<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-4-11" name="__codelineno-4-11" href="#__codelineno-4-11"></a><span class="w">  </span>--set<span class="w"> </span>wrapper.image.digest<span class="o">=</span>sha256:&lt;wrapper&gt;<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-4-12" name="__codelineno-4-12" href="#__codelineno-4-12"></a><span class="w">  </span>--set<span class="w"> </span><span class="s1">'imagePullSecrets[0].name=private-registry'</span>
-</code></pre></div>
-<ul>
-<li><code>imagePullSecrets</code> is attached to the <strong>GMC pod only</strong> — that is the one workload this chart runs.</li>
-<li><code>agc.image.*</code> / <code>proxy.image.*</code> / <code>wrapper.image.*</code> set the references the GMC <strong>injects</strong> into the gateways it provisions — the AGC and proxy pods, and the wrapper init container in every worker pod; relocating the repository here is enough for the GMC to pull them from the mirror.
-  Their <em>pull Secret</em> is wired separately in <a href="#5-wire-pull-secrets-for-the-runtime-workloads-agc--proxy--worker">step 5</a>.</li>
-<li>Digest pinning is unchanged — <code>gmc.image.digest</code> is still mandatory (rendering fails without it) and the GMC still rejects floating AGC/proxy/wrapper tags at startup.
-  Do <strong>not</strong> reach for <code>allowFloatingImageTags</code>; relocation keeps the digest.</li>
-</ul>
-<blockquote>
-<p>Many <code>--set</code> flags are easier to manage in a values file.
-Put the <code>repository</code>/<code>digest</code>/<code>imagePullSecrets</code> overrides in <code>air-gapped-values.yaml</code> and <code>helm install … -f air-gapped-values.yaml</code>.
-The pull Secret is referenced by <strong>name</strong> there — its credentials still live only in the Secret from step 3, never in this file.</p>
-</blockquote>
-<hr />
-<h2 id="5-wire-pull-secrets-for-the-runtime-workloads-agc--proxy--worker">5. Wire pull Secrets for the runtime workloads (AGC / proxy / worker)<a class="headerlink" href="#5-wire-pull-secrets-for-the-runtime-workloads-agc--proxy--worker" title="Permanent link">&para;</a></h2>
-<p>The AGC, proxy, and worker pods are created by the GMC/AGC at runtime, so the chart cannot attach <code>imagePullSecrets</code> to them.
-Use the standard Kubernetes mechanism: an <code>imagePullSecrets</code> reference on a <strong>ServiceAccount</strong> is auto-injected into every pod that uses that SA.
-All the relevant ServiceAccounts live in the <strong>tenant namespace</strong>.</p>
-<p>For each tenant namespace, first create the pull Secret there (repeat step 3 with <code>--namespace &lt;tenant-ns&gt;</code>), then patch the ServiceAccounts:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="nv">TENANT_NS</span><span class="o">=</span>team-a
-<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>
-<a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="c1"># AGC pods run as the fixed AGC ServiceAccount "actions-gateway-controller"</span>
-<a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="c1"># (one per tenant namespace; the name is not derived from the gateway name).</span>
-<a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a>kubectl<span class="w"> </span>patch<span class="w"> </span>serviceaccount<span class="w"> </span>actions-gateway-controller<span class="w"> </span>-n<span class="w"> </span><span class="s2">"</span><span class="nv">$TENANT_NS</span><span class="s2">"</span><span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a><span class="w">  </span>-p<span class="w"> </span><span class="s1">'{"imagePullSecrets":[{"name":"private-registry"}]}'</span>
-<a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a>
-<a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a><span class="c1"># Worker pods run as "actions-gateway-worker" — this SA also pulls the injected</span>
-<a id="__codelineno-5-9" name="__codelineno-5-9" href="#__codelineno-5-9"></a><span class="c1"># wrapper init container, so no separate wrapper Secret/SA is needed.</span>
-<a id="__codelineno-5-10" name="__codelineno-5-10" href="#__codelineno-5-10"></a>kubectl<span class="w"> </span>patch<span class="w"> </span>serviceaccount<span class="w"> </span>actions-gateway-worker<span class="w"> </span>-n<span class="w"> </span><span class="s2">"</span><span class="nv">$TENANT_NS</span><span class="s2">"</span><span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-5-11" name="__codelineno-5-11" href="#__codelineno-5-11"></a><span class="w">  </span>-p<span class="w"> </span><span class="s1">'{"imagePullSecrets":[{"name":"private-registry"}]}'</span>
-<a id="__codelineno-5-12" name="__codelineno-5-12" href="#__codelineno-5-12"></a>
-<a id="__codelineno-5-13" name="__codelineno-5-13" href="#__codelineno-5-13"></a><span class="c1"># Proxy pods run as the namespace "default" ServiceAccount.</span>
-<a id="__codelineno-5-14" name="__codelineno-5-14" href="#__codelineno-5-14"></a>kubectl<span class="w"> </span>patch<span class="w"> </span>serviceaccount<span class="w"> </span>default<span class="w"> </span>-n<span class="w"> </span><span class="s2">"</span><span class="nv">$TENANT_NS</span><span class="s2">"</span><span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-5-15" name="__codelineno-5-15" href="#__codelineno-5-15"></a><span class="w">  </span>-p<span class="w"> </span><span class="s1">'{"imagePullSecrets":[{"name":"private-registry"}]}'</span>
-</code></pre></div>
-<p>The GMC creates the <code>actions-gateway-controller</code> and <code>actions-gateway-worker</code> ServiceAccounts when it reconciles the <code>ActionsGateway</code> CR; create the gateway first, then patch.
-The patch <strong>survives GMC reconciliation</strong> — the GMC only manages those SAs' labels and owner reference, never their <code>imagePullSecrets</code> — and it never touches the <code>default</code> SA at all.</p>
-<blockquote>
-<p>Alternative: if your registry is reachable by the cluster but only needs auth, a cluster-wide approach (e.g. a <code>default</code>-SA mutating policy, or a registry pull-through cache that injects credentials) also works.
-The per-SA patch above is the no-extra-tooling baseline.</p>
-</blockquote>
-<hr />
-<h2 id="6-point-the-worker-image-at-the-mirror">6. Point the worker image at the mirror<a class="headerlink" href="#6-point-the-worker-image-at-the-mirror" title="Permanent link">&para;</a></h2>
-<p>The worker image is <strong>not</strong> a chart value — it is set per tenant.
-When onboarding a tenant (see <a href="../tenant-onboarding/">tenant-onboarding.md</a>), set the mirrored, digest-pinned worker reference on the <code>RunnerGroup</code>:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">actions-gateway.github.com/v1alpha1</span>
-<a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">RunnerGroup</span>
-<a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="nt">spec</span><span class="p">:</span>
-<a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="w">  </span><span class="c1"># Mirror of ghcr.io/actions/actions-runner, digest preserved.</span>
-<a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a><span class="w">  </span><span class="nt">workerImage</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">registry.internal/gag/actions-runner:2.335.1@sha256:08c30b0a7105f64bddfc485d2487a22aa03932a791402393352fdf674bda2c29</span>
-</code></pre></div>
-<p>Keep the <code>@sha256:</code> digest — it must match the upstream image you mirrored in step 1.
-The worker SA patched in step 5 supplies the pull credentials.</p>
-<hr />
-<h2 id="7-verify">7. Verify<a class="headerlink" href="#7-verify" title="Permanent link">&para;</a></h2>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="c1"># GMC pulls from the mirror and is Running (no ImagePullBackOff).</span>
-<a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>kubectl<span class="w"> </span>get<span class="w"> </span>pods<span class="w"> </span>-n<span class="w"> </span>gmc-system<span class="w"> </span>-l<span class="w"> </span>app.kubernetes.io/name<span class="o">=</span>actions-gateway
-<a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a>kubectl<span class="w"> </span>get<span class="w"> </span>pod<span class="w"> </span>-n<span class="w"> </span>gmc-system<span class="w"> </span>-l<span class="w"> </span>app.kubernetes.io/name<span class="o">=</span>actions-gateway<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a><span class="w">  </span>-o<span class="w"> </span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">'{.items[0].spec.containers[0].image}{"\n"}'</span>
-<a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a><span class="c1"># Expected: registry.internal/gag/gmc@sha256:&lt;gmc&gt;</span>
-<a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a>
-<a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a><span class="c1"># The GMC injects the mirrored AGC/proxy refs into provisioned gateways.</span>
-<a id="__codelineno-7-8" name="__codelineno-7-8" href="#__codelineno-7-8"></a>kubectl<span class="w"> </span>get<span class="w"> </span>deploy<span class="w"> </span>-n<span class="w"> </span>gmc-system<span class="w"> </span>gmc-controller-manager<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-7-9" name="__codelineno-7-9" href="#__codelineno-7-9"></a><span class="w">  </span>-o<span class="w"> </span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">'{range .spec.template.spec.containers[0].env[?(@.name=="AGC_IMAGE")]}{.value}{"\n"}{end}'</span>
-<a id="__codelineno-7-10" name="__codelineno-7-10" href="#__codelineno-7-10"></a><span class="c1"># Expected: registry.internal/gag/agc@sha256:&lt;agc&gt;</span>
-<a id="__codelineno-7-11" name="__codelineno-7-11" href="#__codelineno-7-11"></a>
-<a id="__codelineno-7-12" name="__codelineno-7-12" href="#__codelineno-7-12"></a><span class="c1"># After creating a tenant gateway: its AGC / proxy / worker pods (and the</span>
-<a id="__codelineno-7-13" name="__codelineno-7-13" href="#__codelineno-7-13"></a><span class="c1"># injected wrapper init container) pull from the mirror with no ImagePullBackOff.</span>
-<a id="__codelineno-7-14" name="__codelineno-7-14" href="#__codelineno-7-14"></a>kubectl<span class="w"> </span>get<span class="w"> </span>pods<span class="w"> </span>-n<span class="w"> </span>team-a
-</code></pre></div>
-<p>Then continue the standard <a href="../install/#verify-a-healthy-install">healthy-install verification</a>.
-If a pod shows <code>ImagePullBackOff</code>, <code>kubectl describe pod</code> it: a 401/403 means the pull Secret is missing from that namespace or not referenced by the pod's ServiceAccount (step 5); a "manifest unknown" means the digest was not preserved during relocation (step 1).</p>
-<hr />
-<h2 id="next-steps">Next steps<a class="headerlink" href="#next-steps" title="Permanent link">&para;</a></h2>
-<ul>
-<li><a href="../install/">install.md</a> — the full install reference these deltas build on.</li>
-<li><a href="../tenant-onboarding/">tenant-onboarding.md</a> — onboard a tenant, where the worker image and tenant-namespace pull Secret are configured.</li>
-<li><a href="../release/">release.md</a> — published image/chart digests, signatures, and the worker-image distinction.</li>
-</ul>
-<hr />
-<p>← <a href="../">Back to Operations</a></p>
+<h1 id="assert-the-dogfood-e2e-overlays-supply-their-own-workerimage">Assert the dogfood e2e overlays supply their own workerImage<a class="headerlink" href="#assert-the-dogfood-e2e-overlays-supply-their-own-workerimage" title="Permanent link">&para;</a></h1>
+<p>Q740 removed the library's <code>.invalid</code> placeholder, so an overlay that lost its <code>workerImage</code> patch now gap-fills the default runner instead of failing at pull.
+That image has no helm, kubectl or jq, so the suite would die mid-run.
+Nothing checks it.</p>
 
 
 
 
 
 
+
+  
+  
 
 
 
@@ -3092,44 +2606,6 @@ If a pod shows <code>ImagePullBackOff</code>, <code>kubectl describe pod</code> 
       
         <footer class="md-footer">
   
-    
-      
-      <nav class="md-footer__inner md-grid" aria-label="Footer" >
-        
-          
-          <a href="../install/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Install">
-            <div class="md-footer__button md-icon">
-              
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
-            </div>
-            <div class="md-footer__title">
-              <span class="md-footer__direction">
-                Previous
-              </span>
-              <div class="md-ellipsis">
-                Install
-              </div>
-            </div>
-          </a>
-        
-        
-          
-          <a href="../gitops/" class="md-footer__link md-footer__link--next" aria-label="Next: GitOps install (Argo CD / Flux)">
-            <div class="md-footer__title">
-              <span class="md-footer__direction">
-                Next
-              </span>
-              <div class="md-ellipsis">
-                GitOps install (Argo CD / Flux)
-              </div>
-            </div>
-            <div class="md-footer__button md-icon">
-              
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M4 11v2h12l-5.5 5.5 1.42 1.42L19.84 12l-7.92-7.92L10.5 5.5 16 11z"/></svg>
-            </div>
-          </a>
-        
-      </nav>
     
   
   <div class="md-footer-meta md-typeset">
