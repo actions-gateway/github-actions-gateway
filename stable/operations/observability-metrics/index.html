@@ -3583,7 +3583,7 @@ See the <a href="../worker-rightsizing/#step-0--read-the-built-in-recommendation
 </tbody>
 </table>
 <h3 id="proxy-metrics">Proxy metrics<a class="headerlink" href="#proxy-metrics" title="Permanent link">&para;</a></h3>
-<p>The per-tenant egress proxy exposes its own metrics on <code>:8443</code> over <strong>mutual TLS</strong> — the same posture as the AGC (see <a href="../observability-metrics-access/#scraping-per-tenant-agc-and-proxy-metrics-mtls">Scraping per-tenant AGC and proxy metrics (mTLS)</a>), and restricted by the L-8 NetworkPolicy (see <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.6.0/docs/plan/security.md">security.md L-8</a>).
+<p>The per-tenant egress proxy exposes its own metrics on <code>:8443</code> over <strong>mutual TLS</strong> — the same posture as the AGC (see <a href="../observability-metrics-access/#scraping-per-tenant-agc-and-proxy-metrics-mtls">Scraping per-tenant AGC and proxy metrics (mTLS)</a>), and restricted by the L-8 NetworkPolicy (see <a href="../../plan/security/">security.md L-8</a>).
 The proxy's <code>:8081</code> port serves only the plaintext health probes (<code>/healthz</code>, <code>/readyz</code>), not metrics.
 Each proxy is a separate scrape target; these metrics carry no intrinsic <code>namespace</code> label.
 The GMC-generated per-tenant proxy <code>ServiceMonitor</code> stamps one via a relabeling (<code>namespace</code> ← the scrape target's namespace, which is the tenant's namespace), so the tenant Grafana dashboard's proxy panels filter by <code>$namespace</code> for per-tenant attribution.
@@ -3636,7 +3636,7 @@ Absent if you scrape without that relabeling.</p>
 <hr />
 <h2 id="acquisition-tier-reach">Acquisition-tier reach<a class="headerlink" href="#acquisition-tier-reach" title="Permanent link">&para;</a></h2>
 <p>Which acquisition tier emits each AGC series, so a flat zero can be read as <em>this tier does not emit it</em> rather than <em>nothing happened</em>.
-Every <code>actions_gateway_*</code> metric the AGC defines is listed; the <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.6.0/docs/development/testing.md#the-make-check-pre-review-gate">gate</a> fails when one is added without a row here, and when a row calls a series single-tier that the source emits from the tier it excludes.</p>
+Every <code>actions_gateway_*</code> metric the AGC defines is listed; the <a href="../../development/testing/#the-make-check-pre-review-gate">gate</a> fails when one is added without a row here, and when a row calls a series single-tier that the source emits from the tier it excludes.</p>
 <p>Four values, and no others:</p>
 <ul>
 <li><strong>Both</strong> is the parity claim: the series populates on a <code>Classic</code> and a <code>ScaleSet</code> set alike.</li>
@@ -3644,7 +3644,7 @@ Every <code>actions_gateway_*</code> metric the AGC defines is listed; the <a hr
 <li><strong>Tier-neutral</strong> is a series with no acquisition tier at all.</li>
 </ul>
 <p>A <strong>Classic only</strong> series is not a gap by itself.
-Most are artifacts of the many-acquirers and JIT-agent models the scale-set protocol removes, so they disappear <em>with</em> classic at <code>v2.0.0</code> rather than being ported; <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.6.0/docs/plan/v2-ga.md#capability-parity-is-a-precondition-of-the-removal">v2-ga.md</a> is where that judgement is recorded and where the removal is gated on it.
+Most are artifacts of the many-acquirers and JIT-agent models the scale-set protocol removes, so they disappear <em>with</em> classic at <code>v2.0.0</code> rather than being ported; <a href="../../plan/v2-ga/#capability-parity-is-a-precondition-of-the-removal">v2-ga.md</a> is where that judgement is recorded and where the removal is gated on it.
 What the row must never be is silent: a capability that reaches only the tier every new tenant is <em>not</em> on is the failure this table exists to make visible.</p>
 <p>The GMC and proxy series above are not listed.
 Neither binary acquires jobs, so neither has a tier.</p>
@@ -3943,7 +3943,7 @@ Neither binary acquires jobs, so neither has a tier.</p>
 <p>A series can be <strong>Both</strong> while one of its label values is not.
 <code>actions_gateway_eviction_retries_total</code> populates on either tier, and <code>cause="vanished"</code> only ever comes from a scale-set set, so a query filtered to that value reads a permanent zero on classic, and the row above says the opposite.</p>
 <p>Each row here records one such exception.
-The <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.6.0/docs/development/testing.md#the-make-check-pre-review-gate">gate</a> derives the values each series emits from the AGC source and fails when one it can prove single-tier has no row, when a row is refuted by where the source names its value, and when the <code>Help</code> text an operator scrapes off <code>/metrics</code> has fallen behind the vocabulary the code emits.</p>
+The <a href="../../development/testing/#the-make-check-pre-review-gate">gate</a> derives the values each series emits from the AGC source and fails when one it can prove single-tier has no row, when a row is refuted by where the source names its value, and when the <code>Help</code> text an operator scrapes off <code>/metrics</code> has fallen behind the vocabulary the code emits.</p>
 <p>Only the two single-tier answers appear here: a value that reaches both tiers needs no row, and the <code>tier</code> label is the axis itself rather than a value on it.
 Where the file layout cannot prove the claim, because the value is named in a file both tiers run and a guard is what keeps one of them away from it, the row cites the guard, and the gate holds that citation to a real source file.</p>
 <table>

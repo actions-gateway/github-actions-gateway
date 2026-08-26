@@ -3044,7 +3044,7 @@
 <p>This appendix is a practical guide for operators and tenant teams deciding how to structure their <code>RunnerGroup</code>s, size their <code>maxListeners</code> counts, and plan for growth.
 The raw constraint numbers live in <a href="../03-api-contracts/#35-github-api-rate-limit-budget">§3.5</a> and <a href="../appendix-a-capacity-slos/">Appendix A</a>; this appendix explains how to reason about them in practice.</p>
 <blockquote>
-<p><strong>Milestone 1 protocol findings</strong> (see <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.6.0/docs/plan/milestone-1.md#8-investigation-findings">docs/plan/milestone-1.md §8</a>):</p>
+<p><strong>Milestone 1 protocol findings</strong> (see <a href="../../plan/milestone-1/#8-investigation-findings">docs/plan/milestone-1.md §8</a>):</p>
 <p><em>Session reuse confirmed</em> (Investigation C) — a session remains live after <code>acquirejob</code>; goroutines loop without a delete→create cycle.
 The steady-state cost remains <strong>one session per RunnerGroup</strong>.</p>
 <p><em>One session per registered runner agent enforced</em> (Investigation D) — <code>POST /sessions</code> returns 409 if the agentId already has a session.

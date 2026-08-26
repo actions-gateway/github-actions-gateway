@@ -3857,7 +3857,7 @@ For <strong>abuse and compromise</strong> detection (eviction-retry loops, proxy
 - HPA metric unknown — autoscaling broken; proxy may not handle burst load.</p>
 <hr />
 <h2 id="alert-rule-reference">Alert Rule Reference<a class="headerlink" href="#alert-rule-reference" title="Permanent link">&para;</a></h2>
-<p>Every alert shipped in the reference <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.6.0/deploy/monitoring/prometheusrule.yaml"><code>PrometheusRule</code></a> (reproduced in <a href="../observability-alerting/#recommended-alert-rules">Recommended Alert Rules</a>) carries a <code>runbook_url</code> annotation that resolves to the matching entry below, so on-call lands on a response procedure rather than just the alert's <code>summary</code>/<code>description</code>.
+<p>Every alert shipped in the reference <a href="../../deploy/monitoring/prometheusrule.yaml"><code>PrometheusRule</code></a> (reproduced in <a href="../observability-alerting/#recommended-alert-rules">Recommended Alert Rules</a>) carries a <code>runbook_url</code> annotation that resolves to the matching entry below, so on-call lands on a response procedure rather than just the alert's <code>summary</code>/<code>description</code>.
 Severity classes follow <a href="#page-worthy-vs-ticket-worthy">Page-Worthy vs. Ticket-Worthy</a>.</p>
 <h3 id="actionsgatewaynoactivesessions">ActionsGatewayNoActiveSessions<a class="headerlink" href="#actionsgatewaynoactivesessions" title="Permanent link">&para;</a></h3>
 <p><strong>Page.</strong> The AGC has no open long-poll sessions, so no jobs are acquired and the queue backs up indefinitely.

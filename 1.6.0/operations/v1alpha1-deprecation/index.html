@@ -2954,7 +2954,7 @@ They are <strong>not</strong> part of the <code>v2.0.0</code> bundle above.</p>
 <p>Two consequences worth stating plainly:</p>
 <ul>
 <li><strong><code>v3.0.0</code> is not scheduled and carries no date</strong>, exactly as <code>v2.0.0</code> carries none.
-  It is gated on <code>v2beta1</code>'s retirement, which is gated in turn on the <code>v2</code> GA soak (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.6.0/docs/plan/v2-ga.md">v2 GA plan</a>).
+  It is gated on <code>v2beta1</code>'s retirement, which is gated in turn on the <code>v2</code> GA soak (<a href="../../plan/v2-ga/">v2 GA plan</a>).
   The commitment here is a floor — <em>not before</em> <code>v3.0.0</code> — and the removal still gets its own one-release-ahead announcement.</li>
 <li><strong>Whether the GA <code>v2</code> version defines the two values at all is a separate, open question</strong>, settled by the graduation hop rather than by this notice.
   <code>v2</code> is a new version, so it is free to omit them; if it does, an operator on <code>v2</code> simply cannot set them, while an operator on <code>v2beta1</code> still can until <code>v3.0.0</code>.
@@ -3010,7 +3010,7 @@ Point it at the per-<code>RunnerGroup</code> field or the metric instead.</p>
 <p>Neither field is carried into v2.
 <code>v2beta1</code> replaces <code>SecretReference</code> with the name-only <code>LocalSecretReference</code>, which has no <code>namespace</code> at all, and <code>ActionsGatewayStatus</code> simply omits <code>activeSessions</code>.
 So migrating with <a href="../migration-v1-to-v2/"><code>gag-migrate</code></a> needs no action for either: there is nothing to carry across.</p>
-<p>They stay in <code>v1alpha1</code> rather than being deleted now because <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.6.0/docs/development/api-review.md#removal-needs-a-version-increment-not-a-promise">removing a field from a served version is a breaking change</a>.
+<p>They stay in <code>v1alpha1</code> rather than being deleted now because <a href="../../development/api-review/#removal-needs-a-version-increment-not-a-promise">removing a field from a served version is a breaking change</a>.
 The removal is the version's own, at <code>v2.0.0</code>.</p>
 <h2 id="why-v2-what-the-decomposition-buys">Why v2 (what the decomposition buys)<a class="headerlink" href="#why-v2-what-the-decomposition-buys" title="Permanent link">&para;</a></h2>
 <ul>

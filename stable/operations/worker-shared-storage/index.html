@@ -2861,7 +2861,7 @@ Pod-level <code>fsGroup</code> is what fixes it: the kubelet adds the group to t
 <p>Nothing else has been exercised, and that is the honest state.
 Amazon EFS, Google Cloud Filestore, Azure Files, CephFS and Longhorn all advertise RWX and all should work, but "should" is what this page exists to avoid asserting.
 Treat them as unvalidated until someone runs the harness against one.
-<code>make test-rwx-storage</code> takes the class to test in <code>RWX_STORAGE_CLASS</code>, so validating your own is one run: <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.6.0/docs/development/testing.md#the-shared-worker-storage-validation">testing.md § The shared worker storage validation</a>.</p>
+<code>make test-rwx-storage</code> takes the class to test in <code>RWX_STORAGE_CLASS</code>, so validating your own is one run: <a href="../../development/testing/#the-shared-worker-storage-validation">testing.md § The shared worker storage validation</a>.</p>
 <p>The failure mode a wrong class produces is not subtle.
 A <code>ReadWriteOnce</code> class either refuses the claim outright or binds it to one node, at which point the second worker is unschedulable and its job never starts.</p>
 <h2 id="coming-from-arcs-containermode-kubernetes">Coming from ARC's <code>containerMode: kubernetes</code><a class="headerlink" href="#coming-from-arcs-containermode-kubernetes" title="Permanent link">&para;</a></h2>
