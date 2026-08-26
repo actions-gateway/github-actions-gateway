@@ -160,6 +160,31 @@ The gate was stopped in pre-flight, before it scaled a node, when the decision w
 **Superseded 2026-08-26.** #1725, #1726 and #1674 merged, and `check-artifact-unchanged.sh v1.6.0-rc.1 origin/main` exits 1 on 11 files of the released surface, all `go.mod`/`go.sum` across `broker`, `cmd/agc`, `cmd/proxy`, `cmd/worker`, `githubapp` and `scaleset`.
 The tag stays published and immutable; the next candidate is `rc.2`.
 
+### `v1.6.0-rc.2`, tagged at `24d8b0d5f`
+
+Cut 2026-08-26 from `origin/main`, with the tag's commit compared against the target before the push rather than after it.
+
+**`main` green.** `check-gates-green.sh` reports 0 gates not green and 7 path-skipped.
+The verdict relies on **`f174e70ae`**, where `e2e-test`, `e2e-calico`, `integration-test`, `license-notices`, `manifest-validate`, `plan-hygiene` and `security-scan` ran in full alongside `unit-test`, `lint`, `coverage`, `tidy-check` and `vendor-check`.
+That is the commit that last moved the released surface, and `check-artifact-unchanged.sh f174e70ae 24d8b0d5f` exits 0 across the 4 files merged since, so nothing this tag ships is unvalidated.
+`make check` is green on a branch cut from the target.
+
+**Version.** `semver-floor.sh v1.5.0` reports **FLOOR: MINOR** over 165 commits, 14 of them touching the released surface.
+
+**API surface review: ship as-is**, carried over from `rc.1` after re-derivation rather than assumed.
+The dependency bumps moved `api/go.mod` and `api/go.sum` and no wire declaration, so `api-surface-since.sh v1.5.0` reports the same six fields, four condition reasons and one Event reason.
+
+**Publish verified by content**, not by green jobs: `draft: false`, `prerelease: true`, `immutable: true`, 9 assets, and all 8 signatures verified.
+The discriminating check is the provenance, whose signer URI ends `publish.yml@refs/tags/v1.6.0-rc.2` and whose `sourceRepositoryDigest` equals `24d8b0d5f`.
+Re-run against a wrong signer workflow it exits 1, so the pass discriminates rather than merely exiting 0.
+
+**Dogfood validation: PASSED**, 2026-08-26, on the tag itself.
+The e2e matrix is green at 75 passed, 0 failed and 13 skipped (run `33018548757`), covering cross-tenant network isolation, worker preemption and recovery, a drained worker that must trigger no rerun, a ceiling-held job cancelled rather than redelivered, the v1 to v2 migration dry run, and Vault workload identity with no PEM Secret.
+Both sizing profiles actuated on real workers: `NodeShare` on `ci-e2e` and `Throughput` on `ci` each report `sizingProfileState=Active`, the latter at `sampleCounts=[211]`.
+The signed v2 CRD artifact verifies and applies, with all five CRDs established.
+Cluster preflight passed with two warnings that are properties of the dogfood cluster rather than the candidate: no cert-manager and no metrics-server.
+The cluster returned to 0 nodes, confirmed by asking it after the `e2e` pool's autoscale lag rather than by reading the teardown's own line.
+
 ### Two claims the notes review should have caught
 
 Both were taken from this document's own table rather than measured, which is the failure mode CLAUDE.md names for a row's asserted mechanism.
