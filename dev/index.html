@@ -2848,6 +2848,7 @@ Each cell there carries the chart version and the date it was read at, so read t
 <li>Live-validated on GKE, 2026-07-13</li>
 <li><a href="design/network-architecture/#per-tenant-egress-ip-the-source-ip-mechanism">Stable IP needs a gateway or cloud NAT under it</a></li>
 <li><a href="operations/security-operations/#sharing-an-egress-proxy-across-namespaces">Share a pool across namespaces, by consent</a></li>
+<li><a href="operations/observability-logging/#proxy-egress-audit-record">Per-connection audit record, opt-in</a></li>
 <li>v2: proxy optional</li>
 </ul>
 </li>
@@ -2869,6 +2870,7 @@ Each cell there carries the chart version and the date it was read at, so read t
 <li>Prometheus per tenant + group</li>
 <li>Grafana dashboards + alerts, as code</li>
 <li>Job counts in <code>kubectl get</code></li>
+<li>Why intake is throttled, in <code>kubectl describe</code></li>
 <li>K8s Events on job transitions</li>
 <li>Cross-tenant fleet rollups for platform admins</li>
 </ul>

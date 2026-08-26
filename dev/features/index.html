@@ -2832,6 +2832,9 @@ A capability listed under <code>dev</code> but not under a numbered release has 
 <li><strong><a href="../operations/troubleshooting/#runnerset-reports-workercapacitydeclined-the-gateway-stopped-claiming-jobs">Capacity gate for unplaceable workers</a></strong>: opt-in.
   Stop claiming jobs while the cluster cannot place the worker shape, instead of claiming and cancelling them.
   Off by default.</li>
+<li><strong><a href="../operations/troubleshooting/#the-reason-is-podsnotstarting-the-image-will-not-pull">Gate for workers that bind and never start</a></strong> <span class="gag-v2-badge">v2</span> <span class="gag-new-badge">new in 1.6</span>: opt-in.
+  Stop claiming jobs while bound workers never reach running, so an image that will not pull cannot quietly absorb the set's capacity.
+  Reported whether or not the gate is on.</li>
 <li><strong><a href="../design/04-operational-flows/">Fast, honest ending for an abandoned run</a></strong>: a run whose worker is removed before it started is force-cancelled in about a second, measured live, then re-run automatically once capacity returns.</li>
 <li><strong><a href="../design/02-architecture/">Priority tiers per runner set</a></strong>: reserve a guaranteed floor of slots for expensive runner types so cheap CPU jobs cannot starve critical GPU work.</li>
 <li><strong><a href="../operations/tenant-onboarding/#step-2-create-the-actionsgateway-resource">Worker scale-up rate limiting</a></strong>: opt-in token bucket capping how <em>fast</em> workers start, distinct from the count ceiling, to smooth cold-start stampedes on shared egress.</li>
@@ -2895,6 +2898,8 @@ A capability listed under <code>dev</code> but not under a numbered release has 
 <li><strong><a href="../operations/observability-metrics-access/">Scraping setup</a></strong>: wiring the mutual-TLS metrics endpoints into your Prometheus.</li>
 <li><strong><a href="../operations/observability-alerting/">Alerting and SLOs</a></strong>: ready-to-apply alert rules as code.</li>
 <li><strong><a href="../operations/observability-dashboards/">Grafana dashboards</a></strong>: a tenant dashboard and a platform dashboard, both as code.</li>
+<li><strong><a href="../operations/troubleshooting/#why-is-my-runnerset-not-being-offered-jobs">Why a set is not being offered jobs</a></strong> <span class="gag-v2-badge">v2</span> <span class="gag-new-badge">new in 1.6</span>: <code>RunnerSet</code> status carries the capacity advertised to GitHub and the ladder rung that withheld each slot.
+  Readable from <code>kubectl describe</code>, so answering it no longer needs metrics access.</li>
 <li><strong><a href="../operations/observability-logging/">Logging and tracing</a></strong>: structured logs and OpenTelemetry tracing across the four tiers.</li>
 <li><strong><a href="../operations/observability-logging/#proxy-egress-audit-record">Per-pool egress audit record</a></strong> <span class="gag-v2-badge">v2</span> <span class="gag-maturity-badge">beta</span> <span class="gag-new-badge">new in 1.6</span>: one structured line per accepted CONNECT (namespace, destination, bytes each way, duration), off by default, since retaining where a tenant went is a decision.</li>
 </ul>
@@ -2907,6 +2912,8 @@ A capability listed under <code>dev</code> but not under a numbered release has 
 <li><strong><a href="../operations/upgrade/">Upgrade and rollback</a></strong>: versioned upgrade procedures and the rollback path for each release.</li>
 <li><strong><a href="../operations/troubleshooting/#gmc-exits-at-startup-an-installed-crd-schema-is-older-than-the-gmc">Stale-CRD startup check</a></strong> <span class="gag-new-badge">new in 1.5</span>: the manager refuses to start when an installed CRD no longer declares a field that bounds tenant access, so a skipped CRD apply cannot leave <code>runnerGroup</code> accepted and silently pruned.</li>
 <li><strong><a href="../operations/troubleshooting/#worker-image-runner-version">Runner-version drift warning</a></strong> <span class="gag-new-badge">new in 1.5</span>: a worker image below GitHub's enforced minimum is reported before GitHub enforces it, and an image whose reference names no version says so rather than passing.</li>
+<li><strong><a href="../operations/troubleshooting/#worker-image-runner-version">Observed runner version</a></strong> <span class="gag-v2-badge">v2</span> <span class="gag-new-badge">new in 1.6</span>: the runner version a worker pod actually ran, for images whose tag the gateway cannot read a version from.
+  A self-report from the tenant's own container, not an attestation.</li>
 <li><strong><a href="../operations/backup-restore/">Backup and restore</a></strong>: backup posture and a recovery runbook, with a <a href="../operations/velero-backup-restore/">Velero-specific how-to</a>.</li>
 <li><strong><a href="../operations/troubleshooting/">Troubleshooting</a></strong>: symptom to diagnosis to remediation, organised by observable failure mode.</li>
 <li><strong><a href="../operations/runbook/">Production runbook</a></strong>: the operational procedures the platform team needs on call.</li>

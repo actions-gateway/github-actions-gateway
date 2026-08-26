@@ -2685,6 +2685,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#two-claims-the-notes-review-should-have-caught" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Two claims the notes review should have caught
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -2921,7 +2932,17 @@ The godoc disclaims that reading explicitly, so the collision is handled in pros
 <p><strong>Publish verified by content</strong>, not by green jobs: <code>draft: false</code>, <code>immutable: true</code>, 9 assets, and all 8 signatures verified.
 The discriminating check is the provenance, whose signer URI ends <code>publish.yml@refs/tags/v1.6.0-rc.1</code> and whose <code>sourceRepositoryDigest</code> equals <code>fe06ec682</code>.
 Re-run against a wrong signer workflow it exits 1, so the pass discriminates rather than merely exiting 0.</p>
-<p><strong>Dogfood validation:</strong> not yet run.</p>
+<p><strong>Dogfood validation:</strong> never run.
+The gate was stopped in pre-flight, before it scaled a node, when the decision was taken to merge the open dependency bumps first.</p>
+<p><strong>Superseded 2026-08-26.</strong> #1725, #1726 and #1674 merged, and <code>check-artifact-unchanged.sh v1.6.0-rc.1 origin/main</code> exits 1 on 11 files of the released surface, all <code>go.mod</code>/<code>go.sum</code> across <code>broker</code>, <code>cmd/agc</code>, <code>cmd/proxy</code>, <code>cmd/worker</code>, <code>githubapp</code> and <code>scaleset</code>.
+The tag stays published and immutable; the next candidate is <code>rc.2</code>.</p>
+<h3 id="two-claims-the-notes-review-should-have-caught">Two claims the notes review should have caught<a class="headerlink" href="#two-claims-the-notes-review-should-have-caught" title="Permanent link">&para;</a></h3>
+<p>Both were taken from this document's own table rather than measured, which is the failure mode CLAUDE.md names for a row's asserted mechanism.</p>
+<p><code>Q344</code> was described as "new operator tooling in a published image".
+Its only caller is <code>cmd/probe</code>, which the publish matrix (<code>gmc agc proxy worker wrapper build-runner</code>) does not build and no release asset carries; it runs from a source checkout.
+It is a maintainer diagnostic, and the notes no longer list it as a feature.</p>
+<p><code>Q793</code> was described by its investigation half, the probe that measured the labels <code>PATCH</code>.
+Its operator-facing half is the AGC message telling an operator that a scale set's labels are fixed at creation, which is what the notes now say.</p>
 <h2 id="critical-path">Critical path<a class="headerlink" href="#critical-path" title="Permanent link">&para;</a></h2>
 <p>Scope is decided and every gating row is closed.</p>
 <ol>
