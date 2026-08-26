@@ -63,7 +63,8 @@ The decline is permanent for *ARC's mechanism*, and that part is not a schedulin
 It is not permanent for pod-per-step execution as a capability, which C could still deliver.
 
 **The cost of declining is a named population, not a rounding error.** Kata's nested-virtualization prerequisite is hardware ARC does not require.
-A team on GKE Autopilot, on AMD or Arm node families, or on most AWS fleets cannot run Kata at all, and for them the supported answer degrades to a platform-granted privileged `ClusterRunnerTemplate` where their ARC setup needed no privilege.
+A team on GKE Autopilot, on AMD or Arm node families, or on most AWS fleets cannot run Kata at all, and for them the supported answer degrades to a platform-granted privileged `ClusterRunnerTemplate` where their ARC setup needed no *pod* privilege.
+The cost is real and it is a trade, not a straight loss: ARC's unprivileged pod is bought with the namespace-wide API grant above, which needs no exploit to use.
 [release-1.6.md](release-1.6.md#the-gating-row-q727-decided-as-a-documented-decline) required that population be named rather than left for a reader to discover; it is named on every comparison surface that claims the gap, and in [D.15](../design/appendix-d-alternatives-considered.md#d15-pod-per-step-container-execution-arcs-containermode-kubernetes).
 
 This is why C is deferred with a demand trigger rather than declined.

@@ -454,7 +454,10 @@ GAG's own CI runs this way, building a `kind` cluster inside a worker pod with z
 
 **Who that answer does not serve.** Kata boots a KVM guest, so it needs nested virtualization, and that is a hardware prerequisite ARC does not impose.
 Measured 2026-08-02 against the GCP API and 2026-08-12 against AWS's guide: GKE Autopilot does not allow nested virtualization at all, GKE Standard excludes E2, C2D, and N2D, and on EC2 every supporting family is Intel, with no AMD, no Graviton, and no P or G GPU family, so those need `.metal` or nothing.
-A team on Autopilot, on AMD or Arm nodes, or on most AWS fleets has no Kata available, and for them the answer is a platform-granted privileged `ClusterRunnerTemplate` where their ARC setup needed no privilege.
+A team on Autopilot, on AMD or Arm nodes, or on most AWS fleets has no Kata available, and for them the answer is a platform-granted privileged `ClusterRunnerTemplate`.
+State that as the trade it is rather than as a straight loss.
+ARC needs no *pod* privilege for this workload because it holds a namespace-wide API grant instead, and the two fail differently: the grant is standing authorized access that a job simply uses, while a privileged container has to be escaped first.
+Severity runs the other way, since an escaped privileged container on plain `runc` reaches the node rather than one namespace, which is why Kata is the recommendation wherever it is available and why the honest summary is lower-probability-higher-severity against no-exploit-required.
 That population is the honest cost of this decline and is named on the comparison surfaces rather than left for a reader to discover.
 
 **What would reopen it.** Demand from an adopter who cannot run Kata, recorded against the deferred row that carries the broker-mediated design.

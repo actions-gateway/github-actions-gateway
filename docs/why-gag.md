@@ -231,7 +231,8 @@ Two we do not plan to match: the support entitlement, and `containerMode: kubern
 - **`containerMode: kubernetes`**, which runs `container:` and `services:` steps as separate pods with a provisioned volume.
   GAG runs one worker pod per job, so that path is Docker-in-Docker (under Kata, unprivileged) rather than a non-privileged pod-per-step model.
   **This one is a permanent decline, decided 2026-08-25**, because ARC's mechanism needs a pod-`create` grant that Kubernetes RBAC cannot scope below a namespace, in a namespace that also holds other runner sets' registration credentials ([why, and what it would open](design/appendix-d-alternatives-considered.md#d15-pod-per-step-container-execution-arcs-containermode-kubernetes)).
-  Kata needs nested virtualization, so if you are on GKE Autopilot, on AMD or Arm nodes, or on an AWS family outside the supported Intel list, the honest answer is that you would need a platform-granted privileged template where ARC needed no privilege.
+  Kata needs nested virtualization, so if you are on GKE Autopilot, on AMD or Arm nodes, or on an AWS family outside the supported Intel list, the honest answer is that you would need a platform-granted privileged template.
+  That is a real cost, and it is a trade rather than a straight loss: ARC needs no *pod* privilege there because it takes a namespace-wide Kubernetes API grant instead, which needs no exploit to use and reaches the other runner sets in that namespace.
 - **GHES that is actually tested.** GAG serves GHES gateways and marks both of its GHES features untested against a real appliance.
 
 The maturity gap is real too: ARC is GA and widely deployed, while GAG's v2 API has only just reached beta (`v2beta1`, its first stability contract).

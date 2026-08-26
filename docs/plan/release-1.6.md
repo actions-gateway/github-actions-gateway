@@ -63,7 +63,8 @@ The two paths that were not chosen, and why, are in the plan doc's options table
 **The fact the decline turns on.** A decline is honest exactly where Kata is available, and Kata needs nested virtualization.
 Measured against the GCP API on 2026-08-02 and recorded in [kata-dind-workloads.md § Prerequisite](../operations/kata-dind-workloads.md#prerequisite--nested-virtualization-nodes), GKE Standard takes the flag on A2, A3, C2, C3, C4, C4D, C4N, G2, H3, H4D, N1, N2, N4, N4D, Z3 and M4, which includes the GPU families; E2, C2D and N2D are absent, and Autopilot does not allow it at all.
 On AWS it is a per-instance opt-in confined to selected Intel families, so an AMD, Graviton or GPU instance means `.metal` or nothing ([runner-template-library.md](../operations/runner-template-library.md)).
-A team on Autopilot, on AMD or Arm nodes, or on most AWS fleets therefore has no Kata, and a decline hands them `privileged-dind` where their ARC setup needed no privilege at all.
+A team on Autopilot, on AMD or Arm nodes, or on most AWS fleets therefore has no Kata, and a decline hands them `privileged-dind` where their ARC setup needed no *pod* privilege.
+That comparison flatters ARC if it stops there: ARC buys the unprivileged pod with a namespace-wide API grant that needs no exploit to use, so the choice is between two privileges rather than between privilege and none.
 That population is named as the decline's cost, on every comparison surface that claims the gap and in [D.15](../design/appendix-d-alternatives-considered.md#d15-pod-per-step-container-execution-arcs-containermode-kubernetes).
 
 ## Where the ARC parity definition of done stands
