@@ -125,6 +125,7 @@ Each cell there carries the chart version and the date it was read at, so read t
     - Live-validated on GKE, 2026-07-13
     - [Stable IP needs a gateway or cloud NAT under it](design/network-architecture.md#per-tenant-egress-ip-the-source-ip-mechanism)
     - [Share a pool across namespaces, by consent](operations/security-operations.md#sharing-an-egress-proxy-across-namespaces)
+    - [Per-connection audit record, opt-in](operations/observability-logging.md#proxy-egress-audit-record)
     - v2: proxy optional
 
 -   :material-feather:{ .lg .middle } __Lower listener overhead__
@@ -146,6 +147,7 @@ Each cell there carries the chart version and the date it was read at, so read t
     - Prometheus per tenant + group
     - Grafana dashboards + alerts, as code
     - Job counts in `kubectl get`
+    - Why intake is throttled, in `kubectl describe`
     - K8s Events on job transitions
     - Cross-tenant fleet rollups for platform admins
 
