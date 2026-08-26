@@ -128,8 +128,8 @@
         <aside class="md-banner">
           <div class="md-banner__inner md-grid md-typeset">
             
-            <strong>v1.5.0 is here.</strong>
-      <a href="https://github.com/actions-gateway/github-actions-gateway/releases/tag/v1.5.0">Read the release notes.</a>
+            <strong>v1.6.0 is here.</strong>
+      The ARC migration checklist finished, a runner set that can say why it is not being offered jobs, and the runner version a worker pod actually ran.
           </div>
           
         </aside>
@@ -2760,7 +2760,7 @@ A plan with only deferred residuals is ✅, not ⚠️ — see <a href="../devel
 <tr>
 <td><a href="release-1.6/">release-1.6.md</a></td>
 <td>The 1.6 release gate: the last <a href="arc-parity/">ARC parity</a> row a scheduled release can close (Q727, the non-privileged <code>container:</code> path), the nine merged changes the release already carries, and why untrusted-PR CI moved to 1.7</td>
-<td>❌ Open, but every gating row is closed. Scope decided 2026-08-25. <code>semver-floor.sh v1.5.0</code> already reports MINOR off merged work, so the bump is not in question. Q727 closed 2026-08-25 as a permanent decline of ARC's <code>containerMode: kubernetes</code> mechanism, costed in <a href="q727-container-steps/">q727-container-steps.md</a>, which makes 1.6's parity content a docs change on top of nine merged features; Q719 closed 2026-08-24 and settled the storage half. Criterion 4 needs no work: <a href="../queue/Q765/">Q765</a>'s appliance trigger has not fired and the untested markers that satisfy its fallback are intact. What remains is the docs sweep, the API surface review, and release mechanics</td>
+<td>✅ Shipped as <code>v1.6.0</code> on 2026-08-26, validated on <code>rc.2</code>. Q727 closed 2026-08-25 as a permanent decline of ARC's <code>containerMode: kubernetes</code> mechanism, costed in <a href="q727-container-steps/">q727-container-steps.md</a>, so 1.6's parity content is a docs change on top of nine merged features; Q719 closed 2026-08-24 and settled the storage half. Criterion 4 needed no work: <a href="../queue/Q765/">Q765</a>'s appliance trigger has not fired and the untested markers that satisfy its fallback are intact. <code>rc.1</code> was superseded before it was ever validated, when three dependency bumps moved 11 files of the released surface and <code>check-artifact-unchanged.sh</code> caught it; <code>rc.2</code> passed the dogfood gate at 75 passed, 0 failed and 13 skipped, with both sizing profiles Active and the signed v2 CRD artifact verifying</td>
 </tr>
 <tr>
 <td><a href="v2-ga/">v2-ga.md</a></td>
