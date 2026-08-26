@@ -2686,6 +2686,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#v160-rc2-tagged-at-24d8b0d5f" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        v1.6.0-rc.2, tagged at 24d8b0d5f
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#two-claims-the-notes-review-should-have-caught" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2936,6 +2947,24 @@ Re-run against a wrong signer workflow it exits 1, so the pass discriminates rat
 The gate was stopped in pre-flight, before it scaled a node, when the decision was taken to merge the open dependency bumps first.</p>
 <p><strong>Superseded 2026-08-26.</strong> #1725, #1726 and #1674 merged, and <code>check-artifact-unchanged.sh v1.6.0-rc.1 origin/main</code> exits 1 on 11 files of the released surface, all <code>go.mod</code>/<code>go.sum</code> across <code>broker</code>, <code>cmd/agc</code>, <code>cmd/proxy</code>, <code>cmd/worker</code>, <code>githubapp</code> and <code>scaleset</code>.
 The tag stays published and immutable; the next candidate is <code>rc.2</code>.</p>
+<h3 id="v160-rc2-tagged-at-24d8b0d5f"><code>v1.6.0-rc.2</code>, tagged at <code>24d8b0d5f</code><a class="headerlink" href="#v160-rc2-tagged-at-24d8b0d5f" title="Permanent link">&para;</a></h3>
+<p>Cut 2026-08-26 from <code>origin/main</code>, with the tag's commit compared against the target before the push rather than after it.</p>
+<p><strong><code>main</code> green.</strong> <code>check-gates-green.sh</code> reports 0 gates not green and 7 path-skipped.
+The verdict relies on <strong><code>f174e70ae</code></strong>, where <code>e2e-test</code>, <code>e2e-calico</code>, <code>integration-test</code>, <code>license-notices</code>, <code>manifest-validate</code>, <code>plan-hygiene</code> and <code>security-scan</code> ran in full alongside <code>unit-test</code>, <code>lint</code>, <code>coverage</code>, <code>tidy-check</code> and <code>vendor-check</code>.
+That is the commit that last moved the released surface, and <code>check-artifact-unchanged.sh f174e70ae 24d8b0d5f</code> exits 0 across the 4 files merged since, so nothing this tag ships is unvalidated.
+<code>make check</code> is green on a branch cut from the target.</p>
+<p><strong>Version.</strong> <code>semver-floor.sh v1.5.0</code> reports <strong>FLOOR: MINOR</strong> over 165 commits, 14 of them touching the released surface.</p>
+<p><strong>API surface review: ship as-is</strong>, carried over from <code>rc.1</code> after re-derivation rather than assumed.
+The dependency bumps moved <code>api/go.mod</code> and <code>api/go.sum</code> and no wire declaration, so <code>api-surface-since.sh v1.5.0</code> reports the same six fields, four condition reasons and one Event reason.</p>
+<p><strong>Publish verified by content</strong>, not by green jobs: <code>draft: false</code>, <code>prerelease: true</code>, <code>immutable: true</code>, 9 assets, and all 8 signatures verified.
+The discriminating check is the provenance, whose signer URI ends <code>publish.yml@refs/tags/v1.6.0-rc.2</code> and whose <code>sourceRepositoryDigest</code> equals <code>24d8b0d5f</code>.
+Re-run against a wrong signer workflow it exits 1, so the pass discriminates rather than merely exiting 0.</p>
+<p><strong>Dogfood validation: PASSED</strong>, 2026-08-26, on the tag itself.
+The e2e matrix is green at 75 passed, 0 failed and 13 skipped (run <code>33018548757</code>), covering cross-tenant network isolation, worker preemption and recovery, a drained worker that must trigger no rerun, a ceiling-held job cancelled rather than redelivered, the v1 to v2 migration dry run, and Vault workload identity with no PEM Secret.
+Both sizing profiles actuated on real workers: <code>NodeShare</code> on <code>ci-e2e</code> and <code>Throughput</code> on <code>ci</code> each report <code>sizingProfileState=Active</code>, the latter at <code>sampleCounts=[211]</code>.
+The signed v2 CRD artifact verifies and applies, with all five CRDs established.
+Cluster preflight passed with two warnings that are properties of the dogfood cluster rather than the candidate: no cert-manager and no metrics-server.
+The cluster returned to 0 nodes, confirmed by asking it after the <code>e2e</code> pool's autoscale lag rather than by reading the teardown's own line.</p>
 <h3 id="two-claims-the-notes-review-should-have-caught">Two claims the notes review should have caught<a class="headerlink" href="#two-claims-the-notes-review-should-have-caught" title="Permanent link">&para;</a></h3>
 <p>Both were taken from this document's own table rather than measured, which is the failure mode CLAUDE.md names for a row's asserted mechanism.</p>
 <p><code>Q344</code> was described as "new operator tooling in a published image".
