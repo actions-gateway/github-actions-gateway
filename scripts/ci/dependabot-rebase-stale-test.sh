@@ -1,11 +1,17 @@
 #!/usr/bin/env bash
 #
-# Unit tests for scripts/ci/dependabot-rebase-stale.sh (Q427). Covers the pure half
-# of the script - bump extraction from a pair of go.mod files, which is what
-# decides *which* version each module is replayed at, and therefore the only
-# place a wrong answer could downgrade a dependency. The impure half (mergeable
-# polling, `go get`, the force-push) needs a live PR and is exercised by the
-# workflow's own dry run.
+# Unit tests for scripts/ci/dependabot-rebase-stale.sh (Q427). Covers the pure
+# half of the script: bump extraction from a pair of go.mod files, which decides
+# *which* version each module is replayed at and is therefore the only place a
+# wrong answer could downgrade a dependency, plus candidate selection from
+# recorded `gh pr list` output. The rest (mergeable polling, `go get`, the
+# force-push) needs a live PR.
+#
+# Selection was untested until it broke: the author filter matched one of the
+# two spellings gh uses and the run exited 0 having selected nothing, so neither
+# the workflow nor its dry run could go red. A fixture cannot notice gh changing
+# that spelling again - only `--list` against the real repo can - but it does
+# keep both known spellings matched.
 #
 # Runs under `make check` (via `make scripts-test`) and the CI shellcheck job.
 set -euo pipefail
@@ -161,6 +167,50 @@ EMPTY_B="$(gomod empty-b 'module example.com/m
 
 go 1.26')"
 expect_bumps no-requires "$EMPTY_A" "$EMPTY_B" ''
+
+# --- candidate selection ---------------------------------------------------
+#
+# The selection filter reads `gh pr list --json number,headRefName,author`. gh
+# spells a GitHub App author `app/dependabot` there while the REST user object
+# says `dependabot[bot]`, and matching only the latter is what left this
+# workflow reporting "No open Dependabot Go-module PRs" on every run while
+# exiting 0. Both spellings are fixtures below so a filter narrowed back to one
+# of them fails here instead of silently selecting nothing.
+
+# expect_select NAME JSON WANT - assert --select prints WANT for JSON on stdin.
+expect_select() {
+	local name="$1" json="$2" want="$3" got
+	got="$(printf '%s' "$json" | "$SCRIPT" --select | LC_ALL=C sort | tr '\n' ';')"
+	want="$(printf '%s' "$want" | tr ' ' '\n' | LC_ALL=C sort | tr '\n' ';')"
+	if [[ "$got" == "$want" ]]; then
+		printf 'ok   %-28s %s\n' "$name" "$got"
+	else
+		printf 'FAIL %-28s want [%s] got [%s]\n' "$name" "$want" "$got" >&2
+		fails=$((fails + 1))
+	fi
+}
+
+expect_select select-app-slug '[
+	{"number":1726,"headRefName":"dependabot/go_modules/cmd/gmc/go-deps-38d","author":{"login":"app/dependabot"}}
+]' '1726'
+
+expect_select select-bracket-login '[
+	{"number":1726,"headRefName":"dependabot/go_modules/cmd/gmc/go-deps-38d","author":{"login":"dependabot[bot]"}}
+]' '1726'
+
+# A human's PR on a lookalike branch, and Dependabot's own non-gomod ecosystems,
+# are both out of scope: the replay only knows how to redo go.mod bumps.
+expect_select select-skips-human '[
+	{"number":10,"headRefName":"dependabot/go_modules/api/x","author":{"login":"karlkfi"}},
+	{"number":11,"headRefName":"claude/dependabot/go_modules/api/x","author":{"login":"app/dependabot"}}
+]' ''
+
+expect_select select-skips-other-ecosystems '[
+	{"number":12,"headRefName":"dependabot/github_actions/actions-a8b","author":{"login":"app/dependabot"}},
+	{"number":13,"headRefName":"dependabot/docker/base-image-c3f","author":{"login":"dependabot[bot]"}}
+]' ''
+
+expect_select select-empty-list '[]' ''
 
 # --bumps with a missing operand fails rather than silently comparing nothing.
 if "$SCRIPT" --bumps "$BASE" >/dev/null 2>&1; then
