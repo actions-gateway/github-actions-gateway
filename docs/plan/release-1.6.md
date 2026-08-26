@@ -1,8 +1,9 @@
 # Release 1.6 Milestone Definition
 
 > **Status: scope decided 2026-08-25.** 1.6 is the [ARC parity](arc-parity.md) release the [ladder](release-ladder.md) assigned it, narrowed to one gating row.
-> Q719 closed 2026-08-24, leaving its reference architecture behind in [worker-shared-storage.md](../operations/worker-shared-storage.md), so [Q727](../queue/Q727.md) is the only `1.6-gate` row left.
-> Q727 resolves through a plan doc before it resolves through code, and that plan doc is what decides whether the parity criterion closes as a build or as a documented decline.
+> Q719 closed 2026-08-24, leaving its reference architecture behind in [worker-shared-storage.md](../operations/worker-shared-storage.md), and Q727 — the last `1.6-gate` row — closed 2026-08-25.
+> Its plan doc ([q727-container-steps.md](q727-container-steps.md)) costed the build against the decline and chose the decline, so 1.6's parity content is a docs change on top of nine merged features.
+> Every gating row is now closed; what remains is the docs sweep, the API surface review, and release mechanics.
 > The bump is not in question: `semver-floor.sh v1.5.0` already reports **MINOR** off work that merged before this scope was written.
 > Untrusted-PR CI on Kata was weighed for this release and moved to 1.7 on 2026-08-25.
 
@@ -41,26 +42,29 @@ It is the first of the four proxy-hardening items [release-1.4.md](release-1.4.m
 Its demand arrived as [Q725](../queue/Q725.md), the ladder recorded the revive on 2026-08-13, and it shipped.
 The remaining three ([Q565](../queue/Q565.md), [Q566](../queue/Q566.md), [Q567](../queue/Q567.md)) stay parked, which is the trigger list working rather than the theme dissolving.
 
-## The gating row: Q727, and why the decision comes after the plan doc
+## The gating row: Q727, decided as a documented decline
 
-[Q727](../queue/Q727.md) is the last open row on the [ARC parity](arc-parity.md) short list that a scheduled release can close.
+**Resolved 2026-08-25.** Q727 was the last open row on the [ARC parity](arc-parity.md) short list that a scheduled release could close.
 ARC's `containerMode: kubernetes` runs `container:` and `services:` steps as separate pods on a provisioned volume.
 GAG runs one worker pod per job, so that path is Docker-in-Docker under Kata rather than a non-privileged pod-per-step model.
 
 The storage half is settled.
 Q719 validated a `ReadWriteMany` volume mounted into the pod the provisioner really builds, across two nodes against a live class, and wrote [worker-shared-storage.md](../operations/worker-shared-storage.md).
-What Q727 has left is the pod-per-step model itself.
+What Q727 had left was the pod-per-step model itself.
 
-**The parity criterion admits two answers and the choice is not pre-made.** [Criterion 3](arc-parity.md#definition-of-done) closes either by the steps running without privilege, or by the docs stating plainly and permanently that Docker-in-Docker under Kata is the supported answer and why.
-Q727 is size `L` and has never had a plan doc, so neither answer has been costed.
-Committing to the build now would commit the release to an uncosted `L` and to a second execution model maintained beside the Kata one; committing to the decline now would foreclose without looking.
-So the first deliverable is the phased plan doc the backlog conventions already require of an `L`, and the scope line below stays open until it lands.
+**The criterion admitted two answers, and the costing chose the second.** [Criterion 3](arc-parity.md#definition-of-done) closes either by the steps running without privilege, or by the docs stating plainly and permanently that Docker-in-Docker under Kata is the supported answer and why.
+The plan doc landed first as this section required, and [q727-container-steps.md](q727-container-steps.md) records what it found: ARC's mechanism needs a Kubernetes API token inside the pod the workflow's own code runs in, and GAG refuses that token at `RunnerTemplate` admission and again when the provisioner overwrites the tenant template.
+Because a per-job Secret holding a job's `jitconfig` and payload sits in the tenant namespace, a pod-`create` right there would let one job take another job's credentials — an escalation between jobs of one tenant, not the tenant boundary namespaces already defend.
+The mechanism is therefore declined permanently rather than deferred; the durable rationale is [D.15](../design/appendix-d-alternatives-considered.md#d15-pod-per-step-container-execution-arcs-containermode-kubernetes).
+
+**Pod-per-step as a capability is deferred, not declined.** A broker-mediated design that keeps the token invariant — a GAG hooks implementation asking the AGC for step pods — was costed and is [Q998](../queue/Q998.md), behind a demand trigger.
+The two paths that were not chosen, and why, are in the plan doc's options table.
 
 **The fact the decline turns on.** A decline is honest exactly where Kata is available, and Kata needs nested virtualization.
 Measured against the GCP API on 2026-08-02 and recorded in [kata-dind-workloads.md § Prerequisite](../operations/kata-dind-workloads.md#prerequisite--nested-virtualization-nodes), GKE Standard takes the flag on A2, A3, C2, C3, C4, C4D, C4N, G2, H3, H4D, N1, N2, N4, N4D, Z3 and M4, which includes the GPU families; E2, C2D and N2D are absent, and Autopilot does not allow it at all.
 On AWS it is a per-instance opt-in confined to selected Intel families, so an AMD, Graviton or GPU instance means `.metal` or nothing ([runner-template-library.md](../operations/runner-template-library.md)).
 A team on Autopilot, on AMD or Arm nodes, or on most AWS fleets therefore has no Kata, and a decline hands them `privileged-dind` where their ARC setup needed no privilege at all.
-Whatever the plan doc concludes, that population has to be named rather than left to a reader to discover.
+That population is named as the decline's cost, on every comparison surface that claims the gap and in [D.15](../design/appendix-d-alternatives-considered.md#d15-pod-per-step-container-execution-arcs-containermode-kubernetes).
 
 ## Where the ARC parity definition of done stands
 
@@ -70,7 +74,7 @@ All four criteria are in [arc-parity.md](arc-parity.md#definition-of-done); two 
 |---|---|
 | 1. A workflow moves with no `.github/workflows` edit | ✅ Closed by Q726, 2026-08-11 |
 | 2. Repository-scoped targeting is expressible | ✅ Closed by Q712, 2026-08-11 |
-| 3. `container:` and `services:` run without privilege, or a permanent documented decline | ❌ [Q727](../queue/Q727.md), this release |
+| 3. `container:` and `services:` run without privilege, or a permanent documented decline | ✅ Closed by Q727, 2026-08-25, in its decline form |
 | 4. The GHES claims carry evidence | ✅ Satisfied in fallback: the untested markers hold |
 
 **Criterion 4 needs no work and [Q765](../queue/Q765.md) stays deferred.** Its revive trigger is an Event, a real GHES appliance becoming reachable, and that has not fired.
@@ -115,9 +119,9 @@ Both positions are defensible and they cannot both stand as written.
 
 ## Definition of done
 
-1. **Q727 resolved**, by a merged pod-per-step implementation or by a merged documented decline that names the no-Kata population.
-   The plan doc lands first and the choice is recorded in it.
-2. **`arc-parity.md` criterion 3 flipped**, and its row in [docs/plan/README.md](README.md) with it.
+1. **Q727 resolved.** ✅ 2026-08-25, by a merged documented decline naming the no-Kata population ([q727-container-steps.md](q727-container-steps.md), [D.15](../design/appendix-d-alternatives-considered.md#d15-pod-per-step-container-execution-arcs-containermode-kubernetes)).
+   The residual capability is deferred as [Q998](../queue/Q998.md).
+2. **`arc-parity.md` criterion 3 flipped**, and its row in [docs/plan/README.md](README.md) with it. ✅ 2026-08-25, in the same change.
 3. **The docs sweep.** Nine user-facing changes merged before any gating row, and [release.md § Pre-flight](../operations/release.md#1-pre-flight) question 1 exists to catch a feature that reaches `features.md` and stops there.
    Q564 in particular adds an operator-visible field and a log format.
 4. **The API surface review**, from `scripts/release/api-surface-since.sh` over `v1.5.0..<rc commit>`.
@@ -126,13 +130,12 @@ Both positions are defensible and they cannot both stand as written.
 
 ## Critical path
 
-Q727's plan doc is the only thing between here and a decided scope.
-Everything else in the release is merged.
+Scope is decided and every gating row is closed.
 
-1. Q727 plan doc: cost the pod-per-step build against the decline, and record the choice.
-2. Q727 executed, whichever way that went.
+1. ~~Q727 plan doc: cost the pod-per-step build against the decline, and record the choice.~~ ✅ 2026-08-25.
+2. ~~Q727 executed.~~ ✅ 2026-08-25, as the decline.
 3. Docs sweep and the pre-flight questions.
 4. Candidate, validation, tag.
 
-Step 1 is the one that can change this document.
-If it concludes in a decline, 1.6's parity content is a docs change on top of nine merged features, which is a real minor and a thin theme, and that is worth saying out loud at the tag rather than discovering in the notes.
+The decline is what it concluded, so 1.6's parity content is a docs change on top of nine merged features.
+That is a real minor and a thin theme, and it is worth saying out loud at the tag rather than discovering in the notes.

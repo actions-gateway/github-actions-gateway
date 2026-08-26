@@ -16,7 +16,7 @@ That is a page telling adopters nine things are in progress when they are waitin
 |---|---|---|
 | **1.4** | Shipped scope: cross-namespace proxy sharing, the runner template library, v2 capacity gauges, the v1alpha1 apiserver warning, and the abandoned-run recovery | [release-1.4.md](release-1.4.md) |
 | **1.5** | Q712 runner-group binding, Q713 default-tier latency series, and Q726 multi-label runner sets, all shipped, plus the marketing reconciliation | [release-1.5.md](release-1.5.md) |
-| **1.6** | The ARC-parity ports: Q719's RWX storage validation, shipped 2026-08-24 ([worker-shared-storage.md](../operations/worker-shared-storage.md)), then [Q727](../queue/Q727.md) the non-privileged `container:` path | [release-1.6.md](release-1.6.md) |
+| **1.6** | The ARC-parity ports: Q719's RWX storage validation, shipped 2026-08-24 ([worker-shared-storage.md](../operations/worker-shared-storage.md)), then Q727, which closed 2026-08-25 as a documented decline rather than a build | [release-1.6.md](release-1.6.md) |
 | **1.7** | Untrusted-PR CI on Kata: [Q408](../queue/Q408.md) Phases 2 to 5, the in-cluster registry pull-through mirror and the tight egress policy that let the docs stop saying "trusted CI only" ([secure-multi-tenant-oss-ci.md](secure-multi-tenant-oss-ci.md)) | release-1.7.md, written when 1.6 tags |
 | **2.0** | v2 GA graduation and the three coupled removals: `v1alpha1`, `v2alpha1`, and classic acquisition | [v2-ga.md](v2-ga.md) |
 
@@ -27,8 +27,8 @@ The surviving one was Q726, where `v1alpha1` put no ceiling on `runnerLabels` wh
 Closed 2026-08-11: `v2beta1` registers every label, so the escape hatch is no longer load-bearing.
 
 So 1.6 is not the pre-2.0 repair slot any more.
-What justifies it is Q719 and [Q727](../queue/Q727.md), which are the last two [ARC parity](arc-parity.md) gaps and cannot compress into 1.5: Q727 is `L` and strictly depends on Q719's `ReadWriteMany` validation, and 1.5 already carries three `M` items plus a marketing body of work.
-Q719 closed on 2026-08-24, which settles the dependency and leaves 1.6 resting on Q727 alone.
+What justifies it is Q719 and Q727, which are the last two [ARC parity](arc-parity.md) gaps and cannot compress into 1.5: Q727 is `L` and strictly depends on Q719's `ReadWriteMany` validation, and 1.5 already carries three `M` items plus a marketing body of work.
+Q719 closed on 2026-08-24, which settled the dependency and left 1.6 resting on Q727 alone; Q727 then closed on 2026-08-25 as a permanent decline of ARC's mechanism ([q727-container-steps.md](q727-container-steps.md)).
 
 The soak argument is unchanged and still favours a separate minor.
 `v2-ga.md` Phase 1 requires no incompatible `v2beta1` shape change across at least two minors of real use; 1.4 and 1.5 are those two, so 1.6 lands the ports without restarting the clock.
@@ -37,7 +37,7 @@ Q719 has landed, so the rung now has contents.
 
 **Settled 2026-08-25, when 1.5 had tagged and the call came due.** The question this section framed, whether a rung resting on one item is worth cutting, turned out not to be the question.
 `semver-floor.sh v1.5.0` reports the floor at MINOR off nine merged changes that alter the shipped artifact, so 1.6 is forced whatever Q727 does, and the ladder's worry about a thin minor was about a release that no longer exists.
-What Q727 decides is the release's *theme*, not whether there is one.
+What Q727 decided was the release's *theme*, not whether there was one — and it decided it as a decline, so 1.6's parity content is a docs change riding on those nine merged features.
 [release-1.6.md](release-1.6.md) carries the measurement and the scope.
 
 ## What is punted past `v2.0.0`
@@ -79,7 +79,7 @@ Deferred is not a graveyard here, it is a trigger list, and every row in it name
 
 ## What this does not decide
 
-**Applied 2026-08-09.** The seven punted items moved to Deferred with the triggers this page names (five of them still are), and Q719 and [Q727](../queue/Q727.md) took the `1.6-gate` label, which is what publishes the commitment where an adopter reads it.
+**Applied 2026-08-09.** The seven punted items moved to Deferred with the triggers this page names (five of them still are), and Q719 and Q727 took the `1.6-gate` label, which is what publishes the commitment where an adopter reads it.
 
 That does not make 1.6 a decided release.
 The labels encode the target, and the reading above still governs: if both items slip on demand, the labels come off rather than an empty tag being cut.

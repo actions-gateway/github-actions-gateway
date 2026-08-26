@@ -79,7 +79,7 @@ Here is where GAG loses, and to whom.
 |---|---|---|
 | Install base | ARC 6,430 stars, ForgeMT 211, GAG 3 (2026-08-12) | see below |
 | Commercial support | ARC, and every managed service | none planned, by design |
-| `container:`/`services:` without privilege | ARC, via `containerMode: kubernetes` | Q727 |
+| `container:`/`services:` without privilege | ARC, via `containerMode: kubernetes` | [declined 2026-08-25](design/appendix-d-alternatives-considered.md#d15-pod-per-step-container-execution-arcs-containermode-kubernetes); Kata DinD is the answer, and needs nested virtualization |
 | In-cluster cache | GitLab Runner, managed services. **Not ARC** | [worker cache backend](roadmap.md) |
 | GHES tested on a real appliance | ARC | [flagged untested](features.md); needs an operator with one |
 

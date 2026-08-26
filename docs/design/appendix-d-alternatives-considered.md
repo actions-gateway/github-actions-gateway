@@ -80,6 +80,9 @@ It is the most mature and widely-deployed alternative and the most relevant comp
 * Integrates with Kubernetes-native autoscaling.
   The `RunnerScaleSet` controller publishes a custom metric that KEDA or the built-in autoscaler can act on.
 * Broad adoption means community-tested Helm charts, pre-built container images, and an established set of known operational issues.
+* **`containerMode: kubernetes`** runs a job's `container:` and `services:` steps as separate unprivileged pods sharing a `ReadWriteMany` volume.
+  GAG has no equivalent and will not adopt this mechanism: it requires a Kubernetes API token inside the pod the workflow's own code runs in.
+  The supported GAG answer is Docker-in-Docker under Kata, and the reasoning, the alternatives, and the population that answer does not serve are in [D.15](#d15-pod-per-step-container-execution-arcs-containermode-kubernetes).
 
 **Disadvantages**
 
@@ -403,6 +406,47 @@ If yes, because of compliance, data residency, an IP allow-list, an air-gapped n
 
 **Verdict:** a different market.
 Comparisons that place them on one axis mislead in both directions.
+
+## D.15. Pod-per-Step Container Execution (ARC's `containerMode: kubernetes`)
+
+The one ARC capability with no GAG equivalent, declined on 2026-08-25 under [Q727](../plan/q727-container-steps.md) rather than left as unbuilt work.
+This section records why the mechanism cannot be adopted; the costing of the alternatives is in [q727-container-steps.md](../plan/q727-container-steps.md).
+
+**How ARC does it.** The runner pod is issued a Kubernetes service-account token carrying pod `create`, `exec`, and `log` rights in its own namespace, and `ACTIONS_RUNNER_CONTAINER_HOOKS` points the runner at [`runner-container-hooks`](https://github.com/actions/runner-container-hooks).
+The runner invokes that hook at job boundaries and at each container step; the hook creates one pod per job container, service container, and container action, all sharing a `ReadWriteMany` volume mounted at the workspace path.
+No pod needs `privileged: true`, which is the property that makes it worth wanting.
+The capability is measured against ARC `gha-runner-scale-set` 0.14.2 on 2026-08-06 ([arc-parity.md](../plan/arc-parity.md)); the hook's verb set is read from the upstream repository and has not been exercised against a running ARC here.
+
+**The mechanism requires the one credential GAG never issues.** The hook is an ordinary process inside the runner pod, the same pod the workflow's own code runs in, so its token is reachable by the job.
+GAG sets `automountServiceAccountToken: false` on every worker pod and enforces it in two places: `RunnerTemplate` admission rejects `automountServiceAccountToken` and `serviceAccountName` as reserved fields, and the provisioner overwrites both after the tenant `PodTemplate` merges ([`pod.go`](../../cmd/agc/internal/provisioner/pod.go), *Overwrite reserved fields (controller-enforced invariants)*).
+Both layers are pinned by tests, and [§5](05-security.md) rates the control Critical: worker pods hold "no API server entry at all".
+Adopting ARC's mechanism means reversing that Critical control for every worker pod in the system, not relaxing it for the jobs that ask.
+
+**The escalation it would open is between jobs, not only between tenants.** This is the part that does not generalize from ARC's own threat model.
+GAG stages one Secret per job in the tenant's namespace, holding that job's `jitconfig`, its runner registration credential, and its acquired payload, which carries the job-scoped auth token.
+A pod-`create` right in that namespace is therefore enough for one job to mount another job's Secret and act as it.
+The blast radius is every concurrent job of the same tenant, not the tenant boundary that namespace separation already defends.
+
+**Translating the job's containers at provisioning time is not a substitute.** GitHub sends `jobContainer` and `jobServiceContainers` as top-level fields of the `AcquireJob` response, visible in the committed capture at [`testdata/job_payload.json`](../../testdata/job_payload.json) and null there only because the probe workflow declares neither, so on the classic acquisition path the AGC does hold the job's container definitions before it builds the pod, and could fold them into the pod spec as a container and sidecars.
+That path is not the one this gap is about.
+On the scale-set path, which is the ARC-migration path because an ARC scale set becomes a `RunnerSet`, `ProvisionScaleSetWorker` stages only the JIT config: there is no acquired payload, because the runner pulls its own job after the pod is running.
+The pod is therefore built before its job is known, and no provisioning-time rewrite can reach it.
+
+**What stays buildable, and what it would cost.** A pod-per-step path that preserves the invariant is possible: ship a GAG implementation of the container-hooks protocol in the worker, and have it request step pods from the AGC instead of from the Kubernetes API, so the AGC remains the only component that creates pods and applies the same invariants to a step pod as to a worker.
+That is coherent with the architecture rather than a bolt-on, and it is not cheap.
+It needs an authenticated worker-to-AGC endpoint that does not exist today, reachable from untrusted job code through a NetworkPolicy that currently restricts a workload pod's egress to its per-tenant proxy alone, plus step-pod lifecycle, quota accounting, and `fsGroup` propagation to every created pod.
+It trades a token in the pod for a control-plane endpoint the job can call, which is a narrower grant than ARC's and not a free one.
+
+**The supported answer is Docker-in-Docker, unprivileged under Kata.** A job that needs `container:`, `services:`, or a container action runs an inner Docker daemon inside a Kata micro-VM, where the capabilities it needs act on a guest kernel rather than the node's ([kata-dind-workloads.md](../operations/kata-dind-workloads.md)).
+GAG's own CI runs this way, building a `kind` cluster inside a worker pod with zero `privileged: true`.
+
+**Who that answer does not serve.** Kata boots a KVM guest, so it needs nested virtualization, and that is a hardware prerequisite ARC does not impose.
+Measured 2026-08-02 against the GCP API and 2026-08-12 against AWS's guide: GKE Autopilot does not allow nested virtualization at all, GKE Standard excludes E2, C2D, and N2D, and on EC2 every supporting family is Intel, with no AMD, no Graviton, and no P or G GPU family, so those need `.metal` or nothing.
+A team on Autopilot, on AMD or Arm nodes, or on most AWS fleets has no Kata available, and for them the answer is a platform-granted privileged `ClusterRunnerTemplate` where their ARC setup needed no privilege.
+That population is the honest cost of this decline and is named on the comparison surfaces rather than left for a reader to discover.
+
+**What would reopen it.** Demand from an adopter who cannot run Kata, recorded against the deferred row that carries the broker-mediated design.
+The decline is permanent for ARC's mechanism, which no future release can adopt without reversing the token invariant; it is not permanent for pod-per-step execution as a capability.
 
 ---
 
