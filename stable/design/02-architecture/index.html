@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/1.5.0/design/02-architecture/">
+        <link rel="canonical" href="https://actions-gateway.com/1.6.0/design/02-architecture/">
       
       
         <link rel="prev" href="../01-executive-summary/">
@@ -63,15 +63,15 @@
   <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/IBMPlexSans-Bold.woff2">
   <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/MonaspaceNeon-Medium.woff2">
   
-  <meta property="og:image" content="https://actions-gateway.com/1.5.0assets/social-preview.png">
+  <meta property="og:image" content="https://actions-gateway.com/1.6.0assets/social-preview.png">
   <meta property="og:image:width" content="1280">
   <meta property="og:image:height" content="640">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:image" content="https://actions-gateway.com/1.5.0assets/social-preview.png">
+  <meta name="twitter:image" content="https://actions-gateway.com/1.6.0assets/social-preview.png">
   
-  <link rel="apple-touch-icon" href="https://actions-gateway.com/1.5.0assets/apple-touch-icon.png">
-  <link rel="alternate icon" href="https://actions-gateway.com/1.5.0assets/favicon.ico">
-  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/1.5.0assets/icon-512.png">
+  <link rel="apple-touch-icon" href="https://actions-gateway.com/1.6.0assets/apple-touch-icon.png">
+  <link rel="alternate icon" href="https://actions-gateway.com/1.6.0assets/favicon.ico">
+  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/1.6.0assets/icon-512.png">
   
   <script type="application/ld+json">
   {
@@ -79,14 +79,14 @@
     "@type": "SoftwareSourceCode",
     "name": "GitHub Actions Gateway",
     "description": "An Actions Runner Controller (ARC) alternative for self-hosted GitHub Actions runners on multi-tenant Kubernetes \u2014 oversubscribe a shared quota, recover evicted jobs automatically, and isolate every tenant\u0027s GitHub egress.",
-    "url": "https://actions-gateway.com/1.5.0",
+    "url": "https://actions-gateway.com/1.6.0",
     "codeRepository": "https://github.com/actions-gateway/github-actions-gateway",
     "programmingLanguage": "Go",
     "license": "https://www.apache.org/licenses/LICENSE-2.0",
     "author": {
       "@type": "Organization",
       "name": "GitHub Actions Gateway",
-      "url": "https://actions-gateway.com/1.5.0"
+      "url": "https://actions-gateway.com/1.6.0"
     }
   }
   </script>
@@ -95,8 +95,8 @@
     "@context": "https://schema.org",
     "@type": "Organization",
     "name": "GitHub Actions Gateway",
-    "url": "https://actions-gateway.com/1.5.0",
-    "logo": "https://actions-gateway.com/1.5.0assets/icon-512.png",
+    "url": "https://actions-gateway.com/1.6.0",
+    "logo": "https://actions-gateway.com/1.6.0assets/icon-512.png",
     "sameAs": ["https://github.com/actions-gateway/github-actions-gateway"]
   }
   </script>
@@ -132,8 +132,8 @@
         <aside class="md-banner">
           <div class="md-banner__inner md-grid md-typeset">
             
-            <strong>v1.5.0 is here.</strong>
-      A per-tenant GitHub runner group boundary, multi-label runner sets that migrate a <code>runs-on</code> array unedited, and job duration and latency metrics on the acquisition tier every new tenant runs.
+            <strong>v1.6.0 is here.</strong>
+      The ARC migration checklist finished, a runner set that can say why it is not being offered jobs, and the runner version a worker pod actually ran.
           </div>
           
         </aside>
@@ -145,7 +145,7 @@
           <aside class="md-banner md-banner--warning">
             <div class="md-banner__inner md-grid md-typeset">
               You're not viewing the latest release.
-  <a href="https://actions-gateway.com/1.5.0"><strong>Go to the current docs.</strong></a>
+  <a href="https://actions-gateway.com/1.6.0"><strong>Go to the current docs.</strong></a>
 
             </div>
             <script>var el=document.querySelector("[data-md-component=outdated]"),base=new URL("../.."),outdated=__md_get("__outdated",sessionStorage,base);!0===outdated&&el&&(el.hidden=!1)</script>
@@ -1579,6 +1579,8 @@
       
         
       
+        
+      
     
     
     
@@ -1948,6 +1950,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../../operations/worker-shared-storage/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Shared worker storage (RWX)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../../operations/in-runner-image-builds/" class="md-nav__link">
         
   
@@ -2087,10 +2117,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9_17" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9_18" >
         
           
-          <label class="md-nav__link" for="__nav_9_17" id="__nav_9_17_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_9_18" id="__nav_9_18_label" tabindex="0">
             
   
   
@@ -2108,8 +2138,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_9_17_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_9_17">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_9_18_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9_18">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -3027,7 +3057,7 @@ It runs with RBAC permissions limited to its own namespace and manages the lifec
 <p><strong>Agent pool.</strong> GitHub enforces one active session per registered runner agent (HTTP 409 on duplicate).
   The AGC therefore maintains a pool of pre-registered runner agents per RunnerGroup — one agent registered per <code>maxListeners</code> slot — at RunnerGroup provisioning time.
   Each listener goroutine is assigned an agent from the pool for the duration of its session; no two goroutines share an agent concurrently.
-  Agent registrations persist across idle periods and AGC restarts, but <strong>not across jobs</strong>: JIT-registered runners are single-use — GitHub deletes the runner record once it acquires a job (live-confirmed 2026-06-12, <a href="../../plan/milestone-4/#12-live-multi-tenant-validation-evidence-2026-06-1112">M4 §12</a>) — so the pool re-registers each agent under its stable <code>&lt;group&gt;-&lt;index&gt;</code> name after every job (Q114, see the self-heal paragraph below).</p>
+  Agent registrations persist across idle periods and AGC restarts, but <strong>not across jobs</strong>: JIT-registered runners are single-use — GitHub deletes the runner record once it acquires a job (live-confirmed 2026-06-12, <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.6.0/docs/plan/milestone-4.md#12-live-multi-tenant-validation-evidence-2026-06-1112">M4 §12</a>) — so the pool re-registers each agent under its stable <code>&lt;group&gt;-&lt;index&gt;</code> name after every job (Q114, see the self-heal paragraph below).</p>
 <p><strong>Registration scope.</strong> Agents may be registered at either organization scope (<code>https://github.com/{org}</code>) or repository scope (<code>https://github.com/{owner}/{repo}</code>); the registrar selects the appropriate REST API endpoints — <code>/orgs/{org}/actions/runners/...</code> or <code>/repos/{owner}/{repo}/actions/runners/...</code> — from the shape of the configured GitHub URL.
   Runner groups are an organization-level concept on GitHub's side, so the <code>group_id</code> field is included on the register payload only for org-scoped registration and is omitted for repo-scoped registration.
   Both hosted github.com and GitHub Enterprise Server (GHES) endpoints are supported under the same selection logic.</p>
@@ -3067,9 +3097,9 @@ It runs with RBAC permissions limited to its own namespace and manages the lifec
   Under burst load the session count climbs toward <code>maxListeners</code>, then drains back to one as the queue empties.
   See <a href="../appendix-e-capacity-planning/">Appendix E</a> for rate-limit implications and sizing guidance.</p>
 <blockquote>
-<p><strong>Milestone 1 protocol findings</strong> (see <a href="../../plan/milestone-1/#8-investigation-findings">docs/plan/milestone-1.md §8</a>):</p>
+<p><strong>Milestone 1 protocol findings</strong> (see <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.6.0/docs/plan/milestone-1.md#8-investigation-findings">docs/plan/milestone-1.md §8</a>):</p>
 <p><em>Session reuse confirmed</em> (Investigation C) — <strong>since invalidated for JIT-registered agents.</strong> The M1 probe (a <code>config.sh</code>-registered runner) could call <code>GET /message</code> on the same <code>sessionId</code> immediately after <code>acquirejob</code> returned.
-The M4 live run showed this does <strong>not</strong> hold for the JIT-registered agents the AGC actually uses: GitHub deletes a JIT runner record at job acquisition, killing the session (<a href="../../plan/milestone-4/#12-live-multi-tenant-validation-evidence-2026-06-1112">M4 §12</a>, Q114).
+The M4 live run showed this does <strong>not</strong> hold for the JIT-registered agents the AGC actually uses: GitHub deletes a JIT runner record at job acquisition, killing the session (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.6.0/docs/plan/milestone-4.md#12-live-multi-tenant-validation-evidence-2026-06-1112">M4 §12</a>, Q114).
 The listener re-registers and opens a fresh session after every job — see the self-heal paragraph above.</p>
 <p><em>One active session per registered runner agent enforced</em> (Investigation D).
 <code>POST /sessions</code> returns <code>409 Conflict</code> if the supplied <code>agentId</code> already has an active session.
@@ -3122,10 +3152,14 @@ No warm standby pool is needed.
   And it acts only on zero: a positive count says how many assignments are live, never which, so the unambiguous case is the only one it can resolve — which is precisely the draining set this exists to unwedge.
   An abandoned job id is remembered, because a re-created session polls from cursor 0 and would otherwise replay the very assignment the check just acted on; abandoning it also releases its queue message for deletion, so the give-up survives the process rather than only the session (Q583) — and the release is followed straight away by the delete that makes it durable, because the two used to be separated by a full round of re-offers (Q603).
   Each loss is a workflow run that will not run, so it is reported as such: an <code>AssignmentAbandoned</code> Warning Event and <code>actions_gateway_scaleset_jobs_abandoned_total</code>, distinct from the deferred gauge it clears.</p>
+<p><strong>The same statistics carry the tier's only demand signal (Q720).</strong> Every other scale-set series begins at assignment, so a set that is advertising no capacity reads idle on all of them while jobs pile up at GitHub; <code>statistics.totalAvailableJobs</code> is the count of what GitHub holds queued and has assigned to nobody, and <code>actions_gateway_scaleset_jobs_available</code> publishes it.
+  It is a last-reading gauge rather than a per-poll one, for the reason the abandonment check already turns on: statistics ride on session responses and queue messages, and a 202 carries none.
+  The readings are therefore every session open, the first and the re-create after a 404 alike (which is why the listener takes one there, so a set with nothing to deliver still publishes a baseline), every delivered message, and the once-a-minute assignment check while jobs are held.
+  A set advertising <code>0</code> gets only the first of those, so the series holds that reading for as long as the withholding lasts; closing that gap costs a <code>RefreshSession</code> per interval per set and is ranked separately (Q960).</p>
 <p><strong>Acking is cursor advance plus a delete, and the delete waits (Q583).</strong> The cursor stops a message being redelivered within a session, but it is session-scoped at the backend while the queue log is scale-set-scoped — so a cursor-only ack left every message a listener had ever handled to replay to the <em>next</em> session.
   Nothing pruned that queue, so the replay was not a recent window but the scale set's whole history, and a restarted AGC met it with empty <code>provisioned</code>/<code>completed</code>/<code>abandoned</code> guards: it provisioned a worker for every job the set had ever run.
   A dogfood reconnect recorded exactly that on 2026-07-05, briefly building seven workers for a previous pass's jobs.
-  The fix issues the second half of the ack, <code>DeleteMessage</code>, whose wire shape had been source-derived but never exercised until <a href="../../plan/archive/q583-restart-replay/">Investigation G</a> measured it answering 204 and confirmed that deleting prunes the log.
+  The fix issues the second half of the ack, <code>DeleteMessage</code>, whose wire shape had been source-derived but never exercised until <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.6.0/docs/plan/archive/q583-restart-replay.md">Investigation G</a> measured it answering 204 and confirmed that deleting prunes the log.
   What makes it safe is <em>when</em>: a message is deleted only once <strong>every job it names has concluded</strong> — completed with its Secret reclaimed, or abandoned — because replay is the recovery path for everything still in flight.
   A job provisioned but still running, a Q551 deferred job the previous process never provisioned, and a completion whose Secret reclaim failed all hold their message in the queue, so a restart still re-reads them.
   A failed delete is retried on the next poll cycle rather than dropped, since the cursor has already moved past the message and nothing else would bring it back.
@@ -3243,10 +3277,10 @@ No warm standby pool is needed.
   The stuck-Pending case is the important one — a pod that can never start (unpullable <code>workerImage</code>, unschedulable <code>podTemplate</code> constraints) would otherwise hold one of the group's concurrency-ceiling slots forever, since the ceiling counts Pending pods.
   Deleting the pod resolves its waiting session goroutine (the shared Pod-informer handler treats deletion as completion), which releases the listener and the slot, and emits a <code>WorkerPodStuckPending</code> Warning Event on the RunnerGroup plus the <code>actions_gateway_worker_pods_reaped_total</code> counter.
   The reaper lives in the reconciler rather than the session goroutine so cleanup is restart-safe: it also reaps pods orphaned by an AGC crash — every orphan whose deadline is derivable from durable pod state (terminal phase, <code>Pending</code> age, or a completion stamp written before the crash) is reclaimed by a fresh AGC with no operator action, measured in Q435.
-  The one orphan the reconcile path cannot reclaim on its own is a <code>Running</code> worker whose job ended <em>while the AGC was down</em>, because nothing stamped it; that pod is reclaimed if GitHub redelivers its terminal <code>JobCompleted</code> to the restarted AGC's new session, which does stamp it (also measured — and GitHub does redeliver across a real multi-hour gap: a live probe observed an unacknowledged <code>JobCompleted</code> returned to a session created <strong>13 h</strong> after the scale set's last session was deleted, which outlasts the 12 h <code>maxWorkerLifetime</code> past which the kubelet has already killed the worker anyway, so the two mechanisms overlap rather than leaving a window between them — <a href="../../plan/archive/q468-jobcompleted-retention/">Q468</a>, observed 2026-07-29, a lower bound rather than a published contract).
+  The one orphan the reconcile path cannot reclaim on its own is a <code>Running</code> worker whose job ended <em>while the AGC was down</em>, because nothing stamped it; that pod is reclaimed if GitHub redelivers its terminal <code>JobCompleted</code> to the restarted AGC's new session, which does stamp it (also measured — and GitHub does redeliver across a real multi-hour gap: a live probe observed an unacknowledged <code>JobCompleted</code> returned to a session created <strong>13 h</strong> after the scale set's last session was deleted, which outlasts the 12 h <code>maxWorkerLifetime</code> past which the kubelet has already killed the worker anyway, so the two mechanisms overlap rather than leaving a window between them — <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.6.0/docs/plan/archive/q468-jobcompleted-retention.md">Q468</a>, observed 2026-07-29, a lower bound rather than a published contract).
   It is bounded unconditionally by <code>maxWorkerLifetime</code> (default 12h), stamped on every worker pod at provision time as its <code>activeDeadlineSeconds</code> and enforced by the <strong>kubelet</strong> — the mechanism deliberately does not depend on the AGC, because in the incident that motivated it the AGC was down for the whole 16 hours, so a reaper-side deadline would not have bounded it either.
   A pod the kubelet kills this way lands in <code>Failed</code>/<code>DeadlineExceeded</code> and is reaped under <code>reason="lifetime_exceeded"</code> with a <code>WorkerPodLifetimeExceeded</code> Warning Event, rather than under the generic <code>completed_ttl</code>, so an operator debugging a killed long job sees the cap as the cause.
-  See <a href="../../plan/archive/q435-restart-orphan-reclaim/">Q435</a> for the measurement and <a href="../../plan/archive/q438-worker-lifetime-deadline/">Q438</a> for why the cap is a fixed default rather than derived from the job's own <code>timeout-minutes</code> (that timeout is not on the wire — measured).
+  See <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.6.0/docs/plan/archive/q435-restart-orphan-reclaim.md">Q435</a> for the measurement and <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.6.0/docs/plan/archive/q438-worker-lifetime-deadline.md">Q438</a> for why the cap is a fixed default rather than derived from the job's own <code>timeout-minutes</code> (that timeout is not on the wire — measured).
   Time-based expiry between pod events is driven by the reconciler's <code>RequeueAfter</code> — the only carrier a reap deadline has, since a pod sitting <code>Pending</code> raises no further watch event and controller-runtime drops <code>RequeueAfter</code> from any reconcile that also returns an error.
   Both reconcilers therefore cap their work queue's retry backoff at 30s (client-go's default escalates to 1000s), so a run of reconcile errors — an optimistic-lock conflict on the owner's status is the routine one — delays a reap by at most that cap instead of stranding it.
   As a final backstop, every worker pod and job Secret carries a controller <code>OwnerReference</code> to its RunnerGroup, so deleting the RunnerGroup — directly or via tenant teardown — cascade-deletes everything the provisioner ever staged.
@@ -3263,7 +3297,7 @@ No warm standby pool is needed.
 <li>
 <p><strong>Worker Usage Sampler (Q359):</strong> A background loop (default 15s, <code>WORKER_USAGE_SAMPLE_INTERVAL</code>; <code>0</code>/<code>off</code> disables) that lists <code>metrics.k8s.io</code> <code>PodMetrics</code> for the worker pods of the v2 <code>RunnerSet</code>s this AGC reconciles, keeps the running CPU/memory peak per pod × container, and folds each finished pod's peaks into per-RunnerSet Prometheus series (<code>actions_gateway_worker_usage_*</code> — one worker pod is one job, so per-pod peaks are per-job peaks) plus in-memory per-container peak histograms.
   From those histograms the <code>RunnerSet</code> reconciler surfaces a measured recommendation in <code>status.sizingRecommendation</code> (requests ≈ p95 of per-job peaks, memory limit ≈ observed max × headroom, sample count and window for confidence) and the advisory <code>SizingDrift</code> condition when the resolved template's ask deviates materially (≥2× waste, or a memory limit below the observed peak — OOM risk); the status field doubles as the aggregate store the sampler re-seeds from on restart, so the observation window survives rollouts with no separate store (see <a href="../appendix-h-v2-api-decomposition/#h7-reference-integrity--runtime-conditions-not-admission">Appendix H §H.7</a>).
-  This is the measure-and-recommend half of the worker right-sizing loop (<a href="../../plan/runner-sizing-profiles/">plan</a>); stock VerticalPodAutoscaler cannot fill this role because <code>RunnerSet</code> has no <code>/scale</code> subresource for its <code>targetRef</code> and evict-and-resize actuation is useless on minutes-lived pods — the full alternatives analysis (VPA variants, GitOps recommender, standalone webhook tool) is <a href="../appendix-d-alternatives-considered/#d7-worker-right-sizing-why-built-in-not-bolted-on">Appendix D §D.7</a>.
+  This is the measure-and-recommend half of the worker right-sizing loop (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.6.0/docs/plan/runner-sizing-profiles.md">plan</a>); stock VerticalPodAutoscaler cannot fill this role because <code>RunnerSet</code> has no <code>/scale</code> subresource for its <code>targetRef</code> and evict-and-resize actuation is useless on minutes-lived pods — the full alternatives analysis (VPA variants, GitOps recommender, standalone webhook tool) is <a href="../appendix-d-alternatives-considered/#d7-worker-right-sizing-why-built-in-not-bolted-on">Appendix D §D.7</a>.
   Degrades gracefully: without metrics-server the AGC runs normally and counts throttled poll errors.
   Jobs shorter than one sampling interval finish unsampled and are counted separately, so the operator can judge coverage.
   Multi-gateway safe: candidate pods are matched against the (namespace- and gateway-scoped) RunnerSet cache, so co-located AGCs never double-count each other's workers.
@@ -3351,14 +3385,14 @@ The alternatives and their tradeoffs:</p>
 </table>
 <p>The chosen path makes the per-tenant egress-IP property hold for <em>all</em> GitHub-bound traffic, which is what enables GitHub-side IP allowlisting and per-tenant audit attribution to be coherent claims.
 The cost is that the proxy pool must be sized to carry worker data-plane bandwidth (multi-GB image pulls and artifact uploads under heavy load); CONNECT-only TCP forwarding without TLS termination keeps the per-byte CPU cost low, and the HPA absorbs burst load.</p>
-<p>See <a href="../../plan/worker-egress-proxy/">docs/plan/worker-egress-proxy.md</a> for the full rationale, capacity-sizing model, and the implementation gap that currently lets workers bypass this path.</p>
+<p>See <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.6.0/docs/plan/worker-egress-proxy.md">docs/plan/worker-egress-proxy.md</a> for the full rationale, capacity-sizing model, and the implementation gap that currently lets workers bypass this path.</p>
 <hr />
 <h2 id="24-tier-4--ephemeral-worker-pod">2.4. Tier 4 — Ephemeral Worker Pod<a class="headerlink" href="#24-tier-4--ephemeral-worker-pod" title="Permanent link">&para;</a></h2>
 <p>A highly secure, short-lived pod optimized to do exactly one thing: execute a single allocated workflow job.
 Runs inside the tenant namespace alongside the AGC.</p>
 <ul>
 <li><strong>Entrypoint Wrapper:</strong> A lightweight utility acting as a dummy parent process.
-  It reads the job payload from a mounted Kubernetes Secret, writes it into local anonymous pipes (inherited file descriptors, not named FIFOs — see <a href="../../plan/milestone-3/#11a--named-pipe-protocol">§11.A</a> for the protocol details), and initializes the execution engine.
+  It reads the job payload from a mounted Kubernetes Secret, writes it into local anonymous pipes (inherited file descriptors, not named FIFOs — see <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.6.0/docs/plan/milestone-3.md#11a--named-pipe-protocol">§11.A</a> for the protocol details), and initializes the execution engine.
   Before exec'ing <code>Runner.Worker</code>, the wrapper also installs the per-tenant egress-proxy CA cert into a combined trust bundle and exports <code>SSL_CERT_FILE</code> so the runner's .NET HttpClient accepts the proxy's TLS handshake — without this, every outbound HTTPS call through <code>HTTPS_PROXY</code> fails the outer handshake with <code>UntrustedRoot</code> and the runner exits before the workflow can complete.
   The CA path is signalled to the wrapper via <code>PROXY_CA_CERT_PATH</code> set by the AGC's pod provisioner; the wrapper tolerates the env being empty (no per-tenant proxy configured) as a no-op.
   The wrapper is also PID 1 of the worker container, so it owns the pod's shutdown signal: Kubernetes delivers SIGTERM to PID 1 only, and the wrapper forwards it (and SIGINT) to its child — <code>Runner.Worker</code> in the classic mode, <code>run.sh</code> in the ScaleSet mode — then waits for the child to exit.
@@ -3664,7 +3698,7 @@ Each <code>Reason</code> mirrors the corresponding metric name so the two correl
 </table>
 <p>These follow the established reaper precedent (<code>WorkerPodStuckPending</code>): they record on the owner an operator would <code>kubectl describe</code>, fire on a transition/terminal outcome (never per reconcile, so no spam), and where a status condition already captures the state the Event complements it rather than duplicating it.
 A listener/provisioner goroutine that detects the transition does not hold the live owner object, so it routes the Event back to the reconciler over a buffered channel — mirroring the existing condition-update channel — which records it on the next reconcile.
-See <a href="../../development/kubernetes-conventions/#kubernetes-events-for-lifecycle-transitions">kubernetes-conventions</a> for the convention and <a href="../../operations/troubleshooting/#job-lifecycle-events-on-a-runnergroup--runnerset">troubleshooting</a> for the operator catalogue.</p>
+See <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.6.0/docs/development/kubernetes-conventions.md#kubernetes-events-for-lifecycle-transitions">kubernetes-conventions</a> for the convention and <a href="../../operations/troubleshooting/#job-lifecycle-events-on-a-runnergroup--runnerset">troubleshooting</a> for the operator catalogue.</p>
 <h3 id="distributed-tracing">Distributed tracing<a class="headerlink" href="#distributed-tracing" title="Permanent link">&para;</a></h3>
 <p>Beyond metrics, the AGC emits <strong>OpenTelemetry traces</strong> for the reconcile path (<code>RunnerGroup.Reconcile</code>) and the job-to-pod path (<code>Provisioner.provision</code>, with child spans for secret staging, pod-count, pod creation, and the wait for completion).
 Tracing is opt-in and off by default: with no OTLP endpoint configured the global provider stays the no-op default, so the spans cost effectively nothing.</p>
@@ -3701,6 +3735,17 @@ Two versions are in play and they answer different questions.
 <code>agent.version</code>, sent at session creation, is the AGC's own listener protocol version, and stays pinned to the version GAG implements: the AGC is the registered agent on the classic path, whatever image a worker pod runs.
 The worker image's runner version is what will execute the job, and is the one this condition reports.
 The injected wrapper logs it from the runner's own dependency manifest at worker startup, which is the only reading that holds for an image whose tag says nothing.</p>
+<p>The two producers therefore report different facts through one condition type, keyed by reason, and only the clear is arbitrated.
+A healthy image reading does not refute a live session rejection, so it defers to a <code>True</code> carrying <code>VersionTooOld</code>.
+That deference is not reciprocated: a session-sourced <code>True</code> writes over an image verdict, because an observed rejection outranks a prediction.
+That leaves the clear.
+The classic listener publishes <code>False</code>/<code>VersionAccepted</code> as its session-start baseline: <code>agent.version</code> is the AGC's own compile-time pin, so the operator's fix for a rejection is a gateway upgrade, and that restarts the process while the condition survives in status with nothing else to clear it.
+The reconciler drops that baseline when a live condition stands whose reason is not one of the listener's own two.
+With no condition of the type at all there is nothing to defer to, so the baseline lands.
+Enumerating the session half rather than the <code>WorkerImage*</code> half is what makes a reason added later fail safe: an unrecognized one counts as the reconciler's, so the clear is dropped and the condition merely stays stale.
+It drops it at the drain rather than relying on the image reading to overwrite it, and drops a retained copy the image reading has already superseded.
+A reconcile that reaches the image reading overwrites a merged clear in memory before writing status, so it never surfaces; the reconcile paths that write status earlier do surface it, and one of those is the unresolved-references branch a tenant reaches by deleting a <code>RunnerTemplate</code>, where the clear would replace the image verdict.
+The second drop is what makes that bounded: the reconciler's retry for an unpersisted listener push assumes a condition it never re-derives, and this one it re-derives every reconcile, so a push merged before the set's first image reading would otherwise be re-applied for the set's lifetime.</p>
 <hr />
 <p>← <a href="../01-executive-summary/">Executive Summary</a> | <a href="../">Back to index</a> | Next: <a href="../03-api-contracts/">API &amp; Data Contracts →</a></p>
 

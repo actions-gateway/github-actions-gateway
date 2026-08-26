@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/1.5.0/design/appendix-h-v2-api-decomposition/">
+        <link rel="canonical" href="https://actions-gateway.com/1.6.0/design/appendix-h-v2-api-decomposition/">
       
       
         <link rel="prev" href="../appendix-g-future-enhancements/">
@@ -63,15 +63,15 @@
   <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/IBMPlexSans-Bold.woff2">
   <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/MonaspaceNeon-Medium.woff2">
   
-  <meta property="og:image" content="https://actions-gateway.com/1.5.0assets/social-preview.png">
+  <meta property="og:image" content="https://actions-gateway.com/1.6.0assets/social-preview.png">
   <meta property="og:image:width" content="1280">
   <meta property="og:image:height" content="640">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:image" content="https://actions-gateway.com/1.5.0assets/social-preview.png">
+  <meta name="twitter:image" content="https://actions-gateway.com/1.6.0assets/social-preview.png">
   
-  <link rel="apple-touch-icon" href="https://actions-gateway.com/1.5.0assets/apple-touch-icon.png">
-  <link rel="alternate icon" href="https://actions-gateway.com/1.5.0assets/favicon.ico">
-  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/1.5.0assets/icon-512.png">
+  <link rel="apple-touch-icon" href="https://actions-gateway.com/1.6.0assets/apple-touch-icon.png">
+  <link rel="alternate icon" href="https://actions-gateway.com/1.6.0assets/favicon.ico">
+  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/1.6.0assets/icon-512.png">
   
   <script type="application/ld+json">
   {
@@ -79,14 +79,14 @@
     "@type": "SoftwareSourceCode",
     "name": "GitHub Actions Gateway",
     "description": "An Actions Runner Controller (ARC) alternative for self-hosted GitHub Actions runners on multi-tenant Kubernetes \u2014 oversubscribe a shared quota, recover evicted jobs automatically, and isolate every tenant\u0027s GitHub egress.",
-    "url": "https://actions-gateway.com/1.5.0",
+    "url": "https://actions-gateway.com/1.6.0",
     "codeRepository": "https://github.com/actions-gateway/github-actions-gateway",
     "programmingLanguage": "Go",
     "license": "https://www.apache.org/licenses/LICENSE-2.0",
     "author": {
       "@type": "Organization",
       "name": "GitHub Actions Gateway",
-      "url": "https://actions-gateway.com/1.5.0"
+      "url": "https://actions-gateway.com/1.6.0"
     }
   }
   </script>
@@ -95,8 +95,8 @@
     "@context": "https://schema.org",
     "@type": "Organization",
     "name": "GitHub Actions Gateway",
-    "url": "https://actions-gateway.com/1.5.0",
-    "logo": "https://actions-gateway.com/1.5.0assets/icon-512.png",
+    "url": "https://actions-gateway.com/1.6.0",
+    "logo": "https://actions-gateway.com/1.6.0assets/icon-512.png",
     "sameAs": ["https://github.com/actions-gateway/github-actions-gateway"]
   }
   </script>
@@ -132,8 +132,8 @@
         <aside class="md-banner">
           <div class="md-banner__inner md-grid md-typeset">
             
-            <strong>v1.5.0 is here.</strong>
-      A per-tenant GitHub runner group boundary, multi-label runner sets that migrate a <code>runs-on</code> array unedited, and job duration and latency metrics on the acquisition tier every new tenant runs.
+            <strong>v1.6.0 is here.</strong>
+      The ARC migration checklist finished, a runner set that can say why it is not being offered jobs, and the runner version a worker pod actually ran.
           </div>
           
         </aside>
@@ -145,7 +145,7 @@
           <aside class="md-banner md-banner--warning">
             <div class="md-banner__inner md-grid md-typeset">
               You're not viewing the latest release.
-  <a href="https://actions-gateway.com/1.5.0"><strong>Go to the current docs.</strong></a>
+  <a href="https://actions-gateway.com/1.6.0"><strong>Go to the current docs.</strong></a>
 
             </div>
             <script>var el=document.querySelector("[data-md-component=outdated]"),base=new URL("../.."),outdated=__md_get("__outdated",sessionStorage,base);!0===outdated&&el&&(el.hidden=!1)</script>
@@ -1890,6 +1890,8 @@
       
         
       
+        
+      
     
     
     
@@ -2259,6 +2261,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../../operations/worker-shared-storage/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Shared worker storage (RWX)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../../operations/in-runner-image-builds/" class="md-nav__link">
         
   
@@ -2398,10 +2428,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9_17" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9_18" >
         
           
-          <label class="md-nav__link" for="__nav_9_17" id="__nav_9_17_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_9_18" id="__nav_9_18_label" tabindex="0">
             
   
   
@@ -2419,8 +2449,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_9_17_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_9_17">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_9_18_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9_18">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -3517,7 +3547,7 @@
 <p><strong>Status: shipped — <code>v2alpha1</code>, served beside <code>v1alpha1</code>.</strong> This appendix is the design source of truth for the <code>v2alpha1</code> API (<code>actions-gateway.com</code> group) that replaces the monolithic <code>ActionsGateway</code> + <code>RunnerGroup</code> model.
 <strong>All milestones M1–M5 have landed</strong>: the five kinds, their GMC/AGC reconcilers, multiple gateways per namespace, the namespace-scoped security profile, and the one-shot v1→v2 migration tool are all built.
 <code>v2alpha1</code> is an <strong>alpha</strong> API served side by side with <code>v1alpha1</code> during the coexistence window — nothing in the shipped <code>v1alpha1</code> API changes, and tenants migrate on their own schedule via the migration tool, a deliberate tool-assisted fan-out (see <a href="#h11-migration-v2-tool-assisted">§H.11</a>).
-Milestone sequencing and the itemized task record are in the <a href="../../plan/v2-api/">v2 API plan</a>.</p>
+Milestone sequencing and the itemized task record are in the <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.6.0/docs/plan/v2-api.md">v2 API plan</a>.</p>
 </blockquote>
 <hr />
 <h2 id="h1-why-decompose">H.1. Why decompose<a class="headerlink" href="#h1-why-decompose" title="Permanent link">&para;</a></h2>
@@ -3612,21 +3642,21 @@ The GMC (cluster-scoped) provisions the per-tenant control plane; the AGC (one p
 <div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="c1">// ActionsGateway — GitHub identity + AGC control plane only.</span>
 <a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="c1">// Now permitted 1..N per namespace.</span>
 <a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="kd">type</span><span class="w"> </span><span class="nx">ActionsGatewaySpec</span><span class="w"> </span><span class="kd">struct</span><span class="w"> </span><span class="p">{</span>
-<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="w">    </span><span class="nx">Credentials</span><span class="w">        </span><span class="nx">GitHubCredentials</span><span class="w">    </span><span class="s">`json:&quot;credentials&quot;`</span><span class="w">        </span><span class="c1">// discriminated union: githubApp today, workloadIdentity additive (Q196/Q197, §H.15)</span>
-<a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="w">    </span><span class="nx">GitHubURL</span><span class="w">          </span><span class="kt">string</span><span class="w">               </span><span class="s">`json:&quot;githubURL&quot;`</span><span class="w">          </span><span class="c1">// immutable (CEL oldSelf)</span>
+<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="w">    </span><span class="nx">Credentials</span><span class="w">        </span><span class="nx">GitHubCredentials</span><span class="w">    </span><span class="s">`json:"credentials"`</span><span class="w">        </span><span class="c1">// discriminated union: githubApp today, workloadIdentity additive (Q196/Q197, §H.15)</span>
+<a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="w">    </span><span class="nx">GitHubURL</span><span class="w">          </span><span class="kt">string</span><span class="w">               </span><span class="s">`json:"githubURL"`</span><span class="w">          </span><span class="c1">// immutable (CEL oldSelf)</span>
 <a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a>
 <a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="w">    </span><span class="c1">// GitHubCABundleRef names a ConfigMap in this namespace carrying, under</span>
-<a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a><span class="w">    </span><span class="c1">// &quot;ca.crt&quot;, an extra PEM bundle to trust when reaching githubURL — the private</span>
+<a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a><span class="w">    </span><span class="c1">// "ca.crt", an extra PEM bundle to trust when reaching githubURL — the private</span>
 <a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a><span class="w">    </span><span class="c1">// CA fronting a GHES appliance (Q536). Additive to the system roots, never a</span>
-<a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a><span class="w">    </span><span class="c1">// replacement, and mounted on both the AGC and this gateway&#39;s worker pods.</span>
+<a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a><span class="w">    </span><span class="c1">// replacement, and mounted on both the AGC and this gateway's worker pods.</span>
 <a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a><span class="w">    </span><span class="c1">// Optional; unset ⇒ system roots only. A ConfigMap rather than a Secret because</span>
 <a id="__codelineno-2-12" name="__codelineno-2-12" href="#__codelineno-2-12"></a><span class="w">    </span><span class="c1">// a certificate is public material. Resolved at runtime per §H.7: a missing or</span>
 <a id="__codelineno-2-13" name="__codelineno-2-13" href="#__codelineno-2-13"></a><span class="w">    </span><span class="c1">// unparseable referent degrades the gateway (CABundleNotFound/CABundleInvalid)</span>
 <a id="__codelineno-2-14" name="__codelineno-2-14" href="#__codelineno-2-14"></a><span class="w">    </span><span class="c1">// rather than provisioning an AGC whose pod cannot start.</span>
-<a id="__codelineno-2-15" name="__codelineno-2-15" href="#__codelineno-2-15"></a><span class="w">    </span><span class="nx">GitHubCABundleRef</span><span class="w"> </span><span class="o">*</span><span class="nx">LocalConfigMapReference</span><span class="w"> </span><span class="s">`json:&quot;githubCABundleRef,omitempty&quot;`</span>
-<a id="__codelineno-2-16" name="__codelineno-2-16" href="#__codelineno-2-16"></a><span class="w">    </span><span class="nx">DefaultTemplateRef</span><span class="w"> </span><span class="o">*</span><span class="nx">ObjectRef</span><span class="w">           </span><span class="s">`json:&quot;defaultTemplateRef&quot;`</span><span class="w"> </span><span class="c1">// optional (Q172): inherited by RunnerSets with no templateRef</span>
-<a id="__codelineno-2-17" name="__codelineno-2-17" href="#__codelineno-2-17"></a><span class="w">    </span><span class="nx">DefaultRunnerGroup</span><span class="w"> </span><span class="kt">string</span><span class="w">               </span><span class="s">`json:&quot;defaultRunnerGroup&quot;`</span><span class="w"> </span><span class="c1">// optional (Q712): GitHub runner group inherited by RunnerSets with no runnerGroup</span>
-<a id="__codelineno-2-18" name="__codelineno-2-18" href="#__codelineno-2-18"></a><span class="w">    </span><span class="nx">Tracing</span><span class="w">            </span><span class="nx">TracingConfig</span><span class="w">        </span><span class="s">`json:&quot;tracing&quot;`</span><span class="w">            </span><span class="c1">// unchanged</span>
+<a id="__codelineno-2-15" name="__codelineno-2-15" href="#__codelineno-2-15"></a><span class="w">    </span><span class="nx">GitHubCABundleRef</span><span class="w"> </span><span class="o">*</span><span class="nx">LocalConfigMapReference</span><span class="w"> </span><span class="s">`json:"githubCABundleRef,omitempty"`</span>
+<a id="__codelineno-2-16" name="__codelineno-2-16" href="#__codelineno-2-16"></a><span class="w">    </span><span class="nx">DefaultTemplateRef</span><span class="w"> </span><span class="o">*</span><span class="nx">ObjectRef</span><span class="w">           </span><span class="s">`json:"defaultTemplateRef"`</span><span class="w"> </span><span class="c1">// optional (Q172): inherited by RunnerSets with no templateRef</span>
+<a id="__codelineno-2-17" name="__codelineno-2-17" href="#__codelineno-2-17"></a><span class="w">    </span><span class="nx">DefaultRunnerGroup</span><span class="w"> </span><span class="kt">string</span><span class="w">               </span><span class="s">`json:"defaultRunnerGroup"`</span><span class="w"> </span><span class="c1">// optional (Q712): GitHub runner group inherited by RunnerSets with no runnerGroup</span>
+<a id="__codelineno-2-18" name="__codelineno-2-18" href="#__codelineno-2-18"></a><span class="w">    </span><span class="nx">Tracing</span><span class="w">            </span><span class="nx">TracingConfig</span><span class="w">        </span><span class="s">`json:"tracing"`</span><span class="w">            </span><span class="c1">// unchanged</span>
 <a id="__codelineno-2-19" name="__codelineno-2-19" href="#__codelineno-2-19"></a>
 <a id="__codelineno-2-20" name="__codelineno-2-20" href="#__codelineno-2-20"></a><span class="w">    </span><span class="c1">// REMOVED vs v1alpha1: SecurityProfile string → PSA is namespace-scoped, so it</span>
 <a id="__codelineno-2-21" name="__codelineno-2-21" href="#__codelineno-2-21"></a><span class="w">    </span><span class="c1">// is owned at the namespace (GMC-guarded), not per gateway. See §H.16 #7.</span>
@@ -3637,19 +3667,19 @@ The GMC (cluster-scoped) provisions the per-tenant control plane; the AGC (one p
 <a id="__codelineno-2-26" name="__codelineno-2-26" href="#__codelineno-2-26"></a><span class="w">    </span><span class="c1">// inherited by RunnerSets that do not set their own proxyRef. Optional:</span>
 <a id="__codelineno-2-27" name="__codelineno-2-27" href="#__codelineno-2-27"></a><span class="w">    </span><span class="c1">// unset means the control plane egresses directly (subject to NetworkPolicy).</span>
 <a id="__codelineno-2-28" name="__codelineno-2-28" href="#__codelineno-2-28"></a><span class="w">    </span><span class="c1">// Same-namespace unless the target EgressProxy grants cross-namespace use.</span>
-<a id="__codelineno-2-29" name="__codelineno-2-29" href="#__codelineno-2-29"></a><span class="w">    </span><span class="nx">DefaultProxyRef</span><span class="w"> </span><span class="o">*</span><span class="nx">ObjectRef</span><span class="w"> </span><span class="s">`json:&quot;defaultProxyRef,omitempty&quot;`</span>
+<a id="__codelineno-2-29" name="__codelineno-2-29" href="#__codelineno-2-29"></a><span class="w">    </span><span class="nx">DefaultProxyRef</span><span class="w"> </span><span class="o">*</span><span class="nx">ObjectRef</span><span class="w"> </span><span class="s">`json:"defaultProxyRef,omitempty"`</span>
 <a id="__codelineno-2-30" name="__codelineno-2-30" href="#__codelineno-2-30"></a>
 <a id="__codelineno-2-31" name="__codelineno-2-31" href="#__codelineno-2-31"></a><span class="w">    </span><span class="c1">// AGCResources optionally tunes the per-gateway AGC container CPU/memory</span>
 <a id="__codelineno-2-32" name="__codelineno-2-32" href="#__codelineno-2-32"></a><span class="w">    </span><span class="c1">// requests/limits (Q171). Additive, per-key overlay of the platform default</span>
 <a id="__codelineno-2-33" name="__codelineno-2-33" href="#__codelineno-2-33"></a><span class="w">    </span><span class="c1">// (requests cpu:500m/mem:2Gi, limits cpu:2/mem:4Gi — the Appendix A sizing);</span>
 <a id="__codelineno-2-34" name="__codelineno-2-34" href="#__codelineno-2-34"></a><span class="w">    </span><span class="c1">// unset ⇒ that default unchanged. See §H.4 note below.</span>
-<a id="__codelineno-2-35" name="__codelineno-2-35" href="#__codelineno-2-35"></a><span class="w">    </span><span class="nx">AGCResources</span><span class="w"> </span><span class="o">*</span><span class="nx">corev1</span><span class="p">.</span><span class="nx">ResourceRequirements</span><span class="w"> </span><span class="s">`json:&quot;agcResources,omitempty&quot;`</span>
+<a id="__codelineno-2-35" name="__codelineno-2-35" href="#__codelineno-2-35"></a><span class="w">    </span><span class="nx">AGCResources</span><span class="w"> </span><span class="o">*</span><span class="nx">corev1</span><span class="p">.</span><span class="nx">ResourceRequirements</span><span class="w"> </span><span class="s">`json:"agcResources,omitempty"`</span>
 <a id="__codelineno-2-36" name="__codelineno-2-36" href="#__codelineno-2-36"></a>
-<a id="__codelineno-2-37" name="__codelineno-2-37" href="#__codelineno-2-37"></a><span class="w">    </span><span class="c1">// AGCAutoscaling optionally opts this gateway&#39;s AGC into managed vertical</span>
+<a id="__codelineno-2-37" name="__codelineno-2-37" href="#__codelineno-2-37"></a><span class="w">    </span><span class="c1">// AGCAutoscaling optionally opts this gateway's AGC into managed vertical</span>
 <a id="__codelineno-2-38" name="__codelineno-2-38" href="#__codelineno-2-38"></a><span class="w">    </span><span class="c1">// right-sizing (Q360): the GMC stamps a VerticalPodAutoscaler next to the AGC</span>
 <a id="__codelineno-2-39" name="__codelineno-2-39" href="#__codelineno-2-39"></a><span class="w">    </span><span class="c1">// Deployment. Presence is the opt-in; mode is Off (recommend-only, default),</span>
 <a id="__codelineno-2-40" name="__codelineno-2-40" href="#__codelineno-2-40"></a><span class="w">    </span><span class="c1">// Initial, or Recreate. Composes with agcResources — see §H.4 note below.</span>
-<a id="__codelineno-2-41" name="__codelineno-2-41" href="#__codelineno-2-41"></a><span class="w">    </span><span class="nx">AGCAutoscaling</span><span class="w"> </span><span class="o">*</span><span class="nx">AGCVerticalAutoscaling</span><span class="w"> </span><span class="s">`json:&quot;agcAutoscaling,omitempty&quot;`</span>
+<a id="__codelineno-2-41" name="__codelineno-2-41" href="#__codelineno-2-41"></a><span class="w">    </span><span class="nx">AGCAutoscaling</span><span class="w"> </span><span class="o">*</span><span class="nx">AGCVerticalAutoscaling</span><span class="w"> </span><span class="s">`json:"agcAutoscaling,omitempty"`</span>
 <a id="__codelineno-2-42" name="__codelineno-2-42" href="#__codelineno-2-42"></a>
 <a id="__codelineno-2-43" name="__codelineno-2-43" href="#__codelineno-2-43"></a><span class="w">    </span><span class="c1">// REMOVED vs v1alpha1: Proxy ProxyConfig         → standalone EgressProxy</span>
 <a id="__codelineno-2-44" name="__codelineno-2-44" href="#__codelineno-2-44"></a><span class="w">    </span><span class="c1">// REMOVED vs v1alpha1: RunnerGroups []RunnerGroupSpec → explicit RunnerSet objects</span>
@@ -3662,15 +3692,15 @@ The GMC (cluster-scoped) provisions the per-tenant control plane; the AGC (one p
 <a id="__codelineno-2-51" name="__codelineno-2-51" href="#__codelineno-2-51"></a>
 <a id="__codelineno-2-52" name="__codelineno-2-52" href="#__codelineno-2-52"></a><span class="w">    </span><span class="c1">// ManagedAutoscaling (default true) is the bring-your-own-autoscaler opt-out</span>
 <a id="__codelineno-2-53" name="__codelineno-2-53" href="#__codelineno-2-53"></a><span class="w">    </span><span class="c1">// (Q173), mirroring managedNetworkPolicy: false ⇒ the GMC provisions no HPA —</span>
-<a id="__codelineno-2-54" name="__codelineno-2-54" href="#__codelineno-2-54"></a><span class="w">    </span><span class="c1">// only the stable &quot;&lt;name&gt;-proxy&quot; Deployment, whose .spec.replicas the operator&#39;s</span>
+<a id="__codelineno-2-54" name="__codelineno-2-54" href="#__codelineno-2-54"></a><span class="w">    </span><span class="c1">// only the stable "&lt;name&gt;-proxy" Deployment, whose .spec.replicas the operator's</span>
 <a id="__codelineno-2-55" name="__codelineno-2-55" href="#__codelineno-2-55"></a><span class="w">    </span><span class="c1">// scaler (KEDA, VPA, a custom HPA) then owns outright, an external scale-to-zero</span>
 <a id="__codelineno-2-56" name="__codelineno-2-56" href="#__codelineno-2-56"></a><span class="w">    </span><span class="c1">// included. While false: maxReplicas/targetCPUUtilizationPercentage are inert,</span>
 <a id="__codelineno-2-57" name="__codelineno-2-57" href="#__codelineno-2-57"></a><span class="w">    </span><span class="c1">// minReplicas seeds only the initial replica count, Ready compares ready pods to</span>
-<a id="__codelineno-2-58" name="__codelineno-2-58" href="#__codelineno-2-58"></a><span class="w">    </span><span class="c1">// the Deployment&#39;s own desired count, and ProxyQuotaPressure measures headroom</span>
+<a id="__codelineno-2-58" name="__codelineno-2-58" href="#__codelineno-2-58"></a><span class="w">    </span><span class="c1">// the Deployment's own desired count, and ProxyQuotaPressure measures headroom</span>
 <a id="__codelineno-2-59" name="__codelineno-2-59" href="#__codelineno-2-59"></a><span class="w">    </span><span class="c1">// to that desired count instead of maxReplicas. Ownership shift only — no</span>
 <a id="__codelineno-2-60" name="__codelineno-2-60" href="#__codelineno-2-60"></a><span class="w">    </span><span class="c1">// security property changes.</span>
 <a id="__codelineno-2-61" name="__codelineno-2-61" href="#__codelineno-2-61"></a><span class="w">    </span><span class="c1">// +kubebuilder:default=true</span>
-<a id="__codelineno-2-62" name="__codelineno-2-62" href="#__codelineno-2-62"></a><span class="w">    </span><span class="nx">ManagedAutoscaling</span><span class="w"> </span><span class="o">*</span><span class="kt">bool</span><span class="w"> </span><span class="s">`json:&quot;managedAutoscaling,omitempty&quot;`</span>
+<a id="__codelineno-2-62" name="__codelineno-2-62" href="#__codelineno-2-62"></a><span class="w">    </span><span class="nx">ManagedAutoscaling</span><span class="w"> </span><span class="o">*</span><span class="kt">bool</span><span class="w"> </span><span class="s">`json:"managedAutoscaling,omitempty"`</span>
 <a id="__codelineno-2-63" name="__codelineno-2-63" href="#__codelineno-2-63"></a>
 <a id="__codelineno-2-64" name="__codelineno-2-64" href="#__codelineno-2-64"></a><span class="w">    </span><span class="nx">Resources</span><span class="w">                      </span><span class="nx">corev1</span><span class="p">.</span><span class="nx">ResourceRequirements</span>
 <a id="__codelineno-2-65" name="__codelineno-2-65" href="#__codelineno-2-65"></a><span class="w">    </span><span class="nx">NoProxyCIDRs</span><span class="w">                   </span><span class="p">[]</span><span class="kt">string</span>
@@ -3683,59 +3713,73 @@ The GMC (cluster-scoped) provisions the per-tenant control plane; the AGC (one p
 <a id="__codelineno-2-72" name="__codelineno-2-72" href="#__codelineno-2-72"></a><span class="w">    </span><span class="c1">// own (ActionsGateway.spec.logLevel for the AGC, this field for the pool).</span>
 <a id="__codelineno-2-73" name="__codelineno-2-73" href="#__codelineno-2-73"></a><span class="w">    </span><span class="c1">// +kubebuilder:validation:Enum=info;debug</span>
 <a id="__codelineno-2-74" name="__codelineno-2-74" href="#__codelineno-2-74"></a><span class="w">    </span><span class="c1">// +kubebuilder:default=info</span>
-<a id="__codelineno-2-75" name="__codelineno-2-75" href="#__codelineno-2-75"></a><span class="w">    </span><span class="nx">LogLevel</span><span class="w"> </span><span class="kt">string</span><span class="w"> </span><span class="s">`json:&quot;logLevel,omitempty&quot;`</span>
+<a id="__codelineno-2-75" name="__codelineno-2-75" href="#__codelineno-2-75"></a><span class="w">    </span><span class="nx">LogLevel</span><span class="w"> </span><span class="kt">string</span><span class="w"> </span><span class="s">`json:"logLevel,omitempty"`</span>
 <a id="__codelineno-2-76" name="__codelineno-2-76" href="#__codelineno-2-76"></a>
-<a id="__codelineno-2-77" name="__codelineno-2-77" href="#__codelineno-2-77"></a><span class="w">    </span><span class="c1">// EgressPolicyMode is TENANT INTENT for how the GMC expresses the GitHub egress</span>
-<a id="__codelineno-2-78" name="__codelineno-2-78" href="#__codelineno-2-78"></a><span class="w">    </span><span class="c1">// allowlist: CIDR (default; standard NetworkPolicy + 24h IPRangeReconcile, works on</span>
-<a id="__codelineno-2-79" name="__codelineno-2-79" href="#__codelineno-2-79"></a><span class="w">    </span><span class="c1">// every CNI) or FQDN (by hostname, via a CNI-native DNS-aware policy). For FQDN</span>
-<a id="__codelineno-2-80" name="__codelineno-2-80" href="#__codelineno-2-80"></a><span class="w">    </span><span class="c1">// intent the OPERATOR picks the mechanism with the GMC --fqdn-policy-backend flag</span>
-<a id="__codelineno-2-81" name="__codelineno-2-81" href="#__codelineno-2-81"></a><span class="w">    </span><span class="c1">// (none|cilium|calico|gke) — none (default) rejects FQDN intent at admission. The</span>
-<a id="__codelineno-2-82" name="__codelineno-2-82" href="#__codelineno-2-82"></a><span class="w">    </span><span class="c1">// deprecated CiliumFQDN/CalicoFQDN values pin their namesake backend (Q245) and are</span>
-<a id="__codelineno-2-83" name="__codelineno-2-83" href="#__codelineno-2-83"></a><span class="w">    </span><span class="c1">// removable no earlier than v3.0.0, being members of the served beta version (Q428). FQDN</span>
-<a id="__codelineno-2-84" name="__codelineno-2-84" href="#__codelineno-2-84"></a><span class="w">    </span><span class="c1">// modes are fail-closed: the standard NetworkPolicy still default-denies GitHub</span>
-<a id="__codelineno-2-85" name="__codelineno-2-85" href="#__codelineno-2-85"></a><span class="w">    </span><span class="c1">// egress, so an unenforced FQDN policy keeps egress denied rather than opening it</span>
-<a id="__codelineno-2-86" name="__codelineno-2-86" href="#__codelineno-2-86"></a><span class="w">    </span><span class="c1">// (Q208). No effect when ManagedNetworkPolicy is false.</span>
-<a id="__codelineno-2-87" name="__codelineno-2-87" href="#__codelineno-2-87"></a><span class="w">    </span><span class="c1">// +kubebuilder:validation:Enum=CIDR;FQDN;CiliumFQDN;CalicoFQDN</span>
-<a id="__codelineno-2-88" name="__codelineno-2-88" href="#__codelineno-2-88"></a><span class="w">    </span><span class="c1">// +kubebuilder:default=CIDR</span>
-<a id="__codelineno-2-89" name="__codelineno-2-89" href="#__codelineno-2-89"></a><span class="w">    </span><span class="nx">EgressPolicyMode</span><span class="w"> </span><span class="nx">EgressPolicyMode</span><span class="w"> </span><span class="s">`json:&quot;egressPolicyMode,omitempty&quot;`</span>
+<a id="__codelineno-2-77" name="__codelineno-2-77" href="#__codelineno-2-77"></a><span class="w">    </span><span class="c1">// AuditLogging is the per-pool egress audit record (Q564, appendix G.3):</span>
+<a id="__codelineno-2-78" name="__codelineno-2-78" href="#__codelineno-2-78"></a><span class="w">    </span><span class="c1">// Off (default) writes none; Connections writes one structured line per</span>
+<a id="__codelineno-2-79" name="__codelineno-2-79" href="#__codelineno-2-79"></a><span class="w">    </span><span class="c1">// ACCEPTED CONNECT at tunnel close (namespace, destination host and port,</span>
+<a id="__codelineno-2-80" name="__codelineno-2-80" href="#__codelineno-2-80"></a><span class="w">    </span><span class="c1">// bytes each way, duration), and nothing from the request headers or the</span>
+<a id="__codelineno-2-81" name="__codelineno-2-81" href="#__codelineno-2-81"></a><span class="w">    </span><span class="c1">// tunneled bytes. Off by default is the security requirement, not a</span>
+<a id="__codelineno-2-82" name="__codelineno-2-82" href="#__codelineno-2-82"></a><span class="w">    </span><span class="c1">// convenience: the record is data about a tenant's egress. An enum rather</span>
+<a id="__codelineno-2-83" name="__codelineno-2-83" href="#__codelineno-2-83"></a><span class="w">    </span><span class="c1">// than a bool because what gets recorded is a policy that can grow a kind of</span>
+<a id="__codelineno-2-84" name="__codelineno-2-84" href="#__codelineno-2-84"></a><span class="w">    </span><span class="c1">// record that is not per-connection. Threaded as PROXY_AUDIT_LOGGING plus a</span>
+<a id="__codelineno-2-85" name="__codelineno-2-85" href="#__codelineno-2-85"></a><span class="w">    </span><span class="c1">// downward-API POD_NAMESPACE, injected only when non-Off so an unopted pool's</span>
+<a id="__codelineno-2-86" name="__codelineno-2-86" href="#__codelineno-2-86"></a><span class="w">    </span><span class="c1">// pod template is unchanged; changing it rolls the pool.</span>
+<a id="__codelineno-2-87" name="__codelineno-2-87" href="#__codelineno-2-87"></a><span class="w">    </span><span class="c1">// +kubebuilder:validation:Enum=Off;Connections</span>
+<a id="__codelineno-2-88" name="__codelineno-2-88" href="#__codelineno-2-88"></a><span class="w">    </span><span class="c1">// +kubebuilder:default=Off</span>
+<a id="__codelineno-2-89" name="__codelineno-2-89" href="#__codelineno-2-89"></a><span class="w">    </span><span class="nx">AuditLogging</span><span class="w"> </span><span class="kt">string</span><span class="w"> </span><span class="s">`json:"auditLogging,omitempty"`</span>
 <a id="__codelineno-2-90" name="__codelineno-2-90" href="#__codelineno-2-90"></a>
-<a id="__codelineno-2-91" name="__codelineno-2-91" href="#__codelineno-2-91"></a><span class="w">    </span><span class="c1">// Sharing controls cross-namespace reference. nil ⇒ same-namespace only</span>
-<a id="__codelineno-2-92" name="__codelineno-2-92" href="#__codelineno-2-92"></a><span class="w">    </span><span class="c1">// (default, secure). Consent lives on the provider (proxy owner) side.</span>
-<a id="__codelineno-2-93" name="__codelineno-2-93" href="#__codelineno-2-93"></a><span class="w">    </span><span class="nx">Sharing</span><span class="w"> </span><span class="o">*</span><span class="nx">ProxySharing</span><span class="w"> </span><span class="s">`json:&quot;sharing,omitempty&quot;`</span>
-<a id="__codelineno-2-94" name="__codelineno-2-94" href="#__codelineno-2-94"></a><span class="p">}</span>
-<a id="__codelineno-2-95" name="__codelineno-2-95" href="#__codelineno-2-95"></a>
-<a id="__codelineno-2-96" name="__codelineno-2-96" href="#__codelineno-2-96"></a><span class="kd">type</span><span class="w"> </span><span class="nx">ProxySharing</span><span class="w"> </span><span class="kd">struct</span><span class="w"> </span><span class="p">{</span>
-<a id="__codelineno-2-97" name="__codelineno-2-97" href="#__codelineno-2-97"></a><span class="w">    </span><span class="c1">// AllowedNamespaces lists namespaces permitted to reference this proxy.</span>
-<a id="__codelineno-2-98" name="__codelineno-2-98" href="#__codelineno-2-98"></a><span class="w">    </span><span class="c1">// Alternatively a NamespaceSelector may be offered.</span>
-<a id="__codelineno-2-99" name="__codelineno-2-99" href="#__codelineno-2-99"></a><span class="w">    </span><span class="nx">AllowedNamespaces</span><span class="w"> </span><span class="p">[]</span><span class="kt">string</span><span class="w"> </span><span class="s">`json:&quot;allowedNamespaces,omitempty&quot;`</span>
-<a id="__codelineno-2-100" name="__codelineno-2-100" href="#__codelineno-2-100"></a><span class="p">}</span>
-<a id="__codelineno-2-101" name="__codelineno-2-101" href="#__codelineno-2-101"></a>
-<a id="__codelineno-2-102" name="__codelineno-2-102" href="#__codelineno-2-102"></a><span class="c1">// RunnerTemplate (namespaced) and ClusterRunnerTemplate (cluster-scoped, identical</span>
-<a id="__codelineno-2-103" name="__codelineno-2-103" href="#__codelineno-2-103"></a><span class="c1">// spec) — the only object permitted to be large. Isolated so it never co-bloats</span>
-<a id="__codelineno-2-104" name="__codelineno-2-104" href="#__codelineno-2-104"></a><span class="c1">// a controller object, and reusable across many RunnerSets. The cluster-scoped</span>
-<a id="__codelineno-2-105" name="__codelineno-2-105" href="#__codelineno-2-105"></a><span class="c1">// variant lets the platform own golden privileged templates (DinD/sysbox) once.</span>
-<a id="__codelineno-2-106" name="__codelineno-2-106" href="#__codelineno-2-106"></a><span class="kd">type</span><span class="w"> </span><span class="nx">RunnerTemplateSpec</span><span class="w"> </span><span class="kd">struct</span><span class="w"> </span><span class="p">{</span>
-<a id="__codelineno-2-107" name="__codelineno-2-107" href="#__codelineno-2-107"></a><span class="w">    </span><span class="nx">PodTemplate</span><span class="w"> </span><span class="nx">corev1</span><span class="p">.</span><span class="nx">PodTemplateSpec</span><span class="w"> </span><span class="c1">// the big field</span>
-<a id="__codelineno-2-108" name="__codelineno-2-108" href="#__codelineno-2-108"></a><span class="w">    </span><span class="nx">WorkerImage</span><span class="w"> </span><span class="kt">string</span>
+<a id="__codelineno-2-91" name="__codelineno-2-91" href="#__codelineno-2-91"></a><span class="w">    </span><span class="c1">// EgressPolicyMode is TENANT INTENT for how the GMC expresses the GitHub egress</span>
+<a id="__codelineno-2-92" name="__codelineno-2-92" href="#__codelineno-2-92"></a><span class="w">    </span><span class="c1">// allowlist: CIDR (default; standard NetworkPolicy + 24h IPRangeReconcile, works on</span>
+<a id="__codelineno-2-93" name="__codelineno-2-93" href="#__codelineno-2-93"></a><span class="w">    </span><span class="c1">// every CNI) or FQDN (by hostname, via a CNI-native DNS-aware policy). For FQDN</span>
+<a id="__codelineno-2-94" name="__codelineno-2-94" href="#__codelineno-2-94"></a><span class="w">    </span><span class="c1">// intent the OPERATOR picks the mechanism with the GMC --fqdn-policy-backend flag</span>
+<a id="__codelineno-2-95" name="__codelineno-2-95" href="#__codelineno-2-95"></a><span class="w">    </span><span class="c1">// (none|cilium|calico|gke) — none (default) rejects FQDN intent at admission. The</span>
+<a id="__codelineno-2-96" name="__codelineno-2-96" href="#__codelineno-2-96"></a><span class="w">    </span><span class="c1">// deprecated CiliumFQDN/CalicoFQDN values pin their namesake backend (Q245) and are</span>
+<a id="__codelineno-2-97" name="__codelineno-2-97" href="#__codelineno-2-97"></a><span class="w">    </span><span class="c1">// removable no earlier than v3.0.0, being members of the served beta version (Q428). FQDN</span>
+<a id="__codelineno-2-98" name="__codelineno-2-98" href="#__codelineno-2-98"></a><span class="w">    </span><span class="c1">// modes are fail-closed: the standard NetworkPolicy still default-denies GitHub</span>
+<a id="__codelineno-2-99" name="__codelineno-2-99" href="#__codelineno-2-99"></a><span class="w">    </span><span class="c1">// egress, so an unenforced FQDN policy keeps egress denied rather than opening it</span>
+<a id="__codelineno-2-100" name="__codelineno-2-100" href="#__codelineno-2-100"></a><span class="w">    </span><span class="c1">// (Q208). No effect when ManagedNetworkPolicy is false.</span>
+<a id="__codelineno-2-101" name="__codelineno-2-101" href="#__codelineno-2-101"></a><span class="w">    </span><span class="c1">// +kubebuilder:validation:Enum=CIDR;FQDN;CiliumFQDN;CalicoFQDN</span>
+<a id="__codelineno-2-102" name="__codelineno-2-102" href="#__codelineno-2-102"></a><span class="w">    </span><span class="c1">// +kubebuilder:default=CIDR</span>
+<a id="__codelineno-2-103" name="__codelineno-2-103" href="#__codelineno-2-103"></a><span class="w">    </span><span class="nx">EgressPolicyMode</span><span class="w"> </span><span class="nx">EgressPolicyMode</span><span class="w"> </span><span class="s">`json:"egressPolicyMode,omitempty"`</span>
+<a id="__codelineno-2-104" name="__codelineno-2-104" href="#__codelineno-2-104"></a>
+<a id="__codelineno-2-105" name="__codelineno-2-105" href="#__codelineno-2-105"></a><span class="w">    </span><span class="c1">// Sharing controls cross-namespace reference. nil ⇒ same-namespace only</span>
+<a id="__codelineno-2-106" name="__codelineno-2-106" href="#__codelineno-2-106"></a><span class="w">    </span><span class="c1">// (default, secure). Consent lives on the provider (proxy owner) side.</span>
+<a id="__codelineno-2-107" name="__codelineno-2-107" href="#__codelineno-2-107"></a><span class="w">    </span><span class="nx">Sharing</span><span class="w"> </span><span class="o">*</span><span class="nx">ProxySharing</span><span class="w"> </span><span class="s">`json:"sharing,omitempty"`</span>
+<a id="__codelineno-2-108" name="__codelineno-2-108" href="#__codelineno-2-108"></a><span class="p">}</span>
 <a id="__codelineno-2-109" name="__codelineno-2-109" href="#__codelineno-2-109"></a>
-<a id="__codelineno-2-110" name="__codelineno-2-110" href="#__codelineno-2-110"></a><span class="w">    </span><span class="c1">// Reserved-pod-field rejection (serviceAccountName, hostPID/hostNetwork/hostIPC,</span>
-<a id="__codelineno-2-111" name="__codelineno-2-111" href="#__codelineno-2-111"></a><span class="w">    </span><span class="c1">// automountServiceAccountToken, proxy env vars) moves to THIS object&#39;s webhook.</span>
-<a id="__codelineno-2-112" name="__codelineno-2-112" href="#__codelineno-2-112"></a><span class="p">}</span>
-<a id="__codelineno-2-113" name="__codelineno-2-113" href="#__codelineno-2-113"></a>
-<a id="__codelineno-2-114" name="__codelineno-2-114" href="#__codelineno-2-114"></a><span class="c1">// RunnerSet — small scheduling/quota binder (was RunnerGroup; podTemplate removed,</span>
-<a id="__codelineno-2-115" name="__codelineno-2-115" href="#__codelineno-2-115"></a><span class="c1">// references added). See H.6 for the rename rationale.</span>
-<a id="__codelineno-2-116" name="__codelineno-2-116" href="#__codelineno-2-116"></a><span class="kd">type</span><span class="w"> </span><span class="nx">RunnerSetSpec</span><span class="w"> </span><span class="kd">struct</span><span class="w"> </span><span class="p">{</span>
-<a id="__codelineno-2-117" name="__codelineno-2-117" href="#__codelineno-2-117"></a><span class="w">    </span><span class="nx">GatewayRef</span><span class="w">  </span><span class="nx">ObjectRef</span><span class="w">  </span><span class="c1">// which GitHub connection (was implicit via namespace)</span>
-<a id="__codelineno-2-118" name="__codelineno-2-118" href="#__codelineno-2-118"></a><span class="w">    </span><span class="nx">TemplateRef</span><span class="w"> </span><span class="o">*</span><span class="nx">ObjectRef</span><span class="w"> </span><span class="c1">// RunnerTemplate | ClusterRunnerTemplate; optional (Q172): unset ⇒ gateway.defaultTemplateRef ⇒ the single cluster-default ClusterRunnerTemplate ⇒ TemplateNotFound</span>
-<a id="__codelineno-2-119" name="__codelineno-2-119" href="#__codelineno-2-119"></a><span class="w">    </span><span class="nx">ProxyRef</span><span class="w">    </span><span class="o">*</span><span class="nx">ObjectRef</span><span class="w"> </span><span class="c1">// EgressProxy; nil ⇒ gateway.defaultProxyRef; both nil ⇒ direct egress</span>
-<a id="__codelineno-2-120" name="__codelineno-2-120" href="#__codelineno-2-120"></a>
-<a id="__codelineno-2-121" name="__codelineno-2-121" href="#__codelineno-2-121"></a><span class="w">    </span><span class="nx">RunnerLabels</span><span class="w">  </span><span class="p">[]</span><span class="kt">string</span>
-<a id="__codelineno-2-122" name="__codelineno-2-122" href="#__codelineno-2-122"></a><span class="w">    </span><span class="nx">RunnerGroup</span><span class="w">   </span><span class="kt">string</span><span class="w">     </span><span class="c1">// GitHub runner group; &quot;&quot; ⇒ gateway.defaultRunnerGroup; both &quot;&quot; ⇒ GitHub&#39;s default group (Q712)</span>
-<a id="__codelineno-2-123" name="__codelineno-2-123" href="#__codelineno-2-123"></a><span class="w">    </span><span class="nx">MaxListeners</span><span class="w">  </span><span class="kt">int32</span>
-<a id="__codelineno-2-124" name="__codelineno-2-124" href="#__codelineno-2-124"></a><span class="w">    </span><span class="nx">MaxWorkers</span><span class="w">    </span><span class="o">*</span><span class="kt">int32</span>
-<a id="__codelineno-2-125" name="__codelineno-2-125" href="#__codelineno-2-125"></a><span class="w">    </span><span class="nx">PriorityTiers</span><span class="w"> </span><span class="p">[]</span><span class="nx">PriorityTier</span>
-<a id="__codelineno-2-126" name="__codelineno-2-126" href="#__codelineno-2-126"></a><span class="w">    </span><span class="c1">// lifecycle tunables (eviction/quota retries, TTLs, deadlines) — unchanged from RunnerGroup</span>
-<a id="__codelineno-2-127" name="__codelineno-2-127" href="#__codelineno-2-127"></a><span class="p">}</span>
+<a id="__codelineno-2-110" name="__codelineno-2-110" href="#__codelineno-2-110"></a><span class="kd">type</span><span class="w"> </span><span class="nx">ProxySharing</span><span class="w"> </span><span class="kd">struct</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-2-111" name="__codelineno-2-111" href="#__codelineno-2-111"></a><span class="w">    </span><span class="c1">// AllowedNamespaces lists namespaces permitted to reference this proxy.</span>
+<a id="__codelineno-2-112" name="__codelineno-2-112" href="#__codelineno-2-112"></a><span class="w">    </span><span class="c1">// Alternatively a NamespaceSelector may be offered.</span>
+<a id="__codelineno-2-113" name="__codelineno-2-113" href="#__codelineno-2-113"></a><span class="w">    </span><span class="nx">AllowedNamespaces</span><span class="w"> </span><span class="p">[]</span><span class="kt">string</span><span class="w"> </span><span class="s">`json:"allowedNamespaces,omitempty"`</span>
+<a id="__codelineno-2-114" name="__codelineno-2-114" href="#__codelineno-2-114"></a><span class="p">}</span>
+<a id="__codelineno-2-115" name="__codelineno-2-115" href="#__codelineno-2-115"></a>
+<a id="__codelineno-2-116" name="__codelineno-2-116" href="#__codelineno-2-116"></a><span class="c1">// RunnerTemplate (namespaced) and ClusterRunnerTemplate (cluster-scoped, identical</span>
+<a id="__codelineno-2-117" name="__codelineno-2-117" href="#__codelineno-2-117"></a><span class="c1">// spec) — the only object permitted to be large. Isolated so it never co-bloats</span>
+<a id="__codelineno-2-118" name="__codelineno-2-118" href="#__codelineno-2-118"></a><span class="c1">// a controller object, and reusable across many RunnerSets. The cluster-scoped</span>
+<a id="__codelineno-2-119" name="__codelineno-2-119" href="#__codelineno-2-119"></a><span class="c1">// variant lets the platform own golden privileged templates (DinD/sysbox) once.</span>
+<a id="__codelineno-2-120" name="__codelineno-2-120" href="#__codelineno-2-120"></a><span class="kd">type</span><span class="w"> </span><span class="nx">RunnerTemplateSpec</span><span class="w"> </span><span class="kd">struct</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-2-121" name="__codelineno-2-121" href="#__codelineno-2-121"></a><span class="w">    </span><span class="nx">PodTemplate</span><span class="w"> </span><span class="nx">corev1</span><span class="p">.</span><span class="nx">PodTemplateSpec</span><span class="w"> </span><span class="c1">// the big field</span>
+<a id="__codelineno-2-122" name="__codelineno-2-122" href="#__codelineno-2-122"></a><span class="w">    </span><span class="nx">WorkerImage</span><span class="w"> </span><span class="kt">string</span>
+<a id="__codelineno-2-123" name="__codelineno-2-123" href="#__codelineno-2-123"></a>
+<a id="__codelineno-2-124" name="__codelineno-2-124" href="#__codelineno-2-124"></a><span class="w">    </span><span class="c1">// Reserved-pod-field rejection (serviceAccountName, hostPID/hostNetwork/hostIPC,</span>
+<a id="__codelineno-2-125" name="__codelineno-2-125" href="#__codelineno-2-125"></a><span class="w">    </span><span class="c1">// automountServiceAccountToken, proxy env vars) moves to THIS object's webhook.</span>
+<a id="__codelineno-2-126" name="__codelineno-2-126" href="#__codelineno-2-126"></a><span class="p">}</span>
+<a id="__codelineno-2-127" name="__codelineno-2-127" href="#__codelineno-2-127"></a>
+<a id="__codelineno-2-128" name="__codelineno-2-128" href="#__codelineno-2-128"></a><span class="c1">// RunnerSet — small scheduling/quota binder (was RunnerGroup; podTemplate removed,</span>
+<a id="__codelineno-2-129" name="__codelineno-2-129" href="#__codelineno-2-129"></a><span class="c1">// references added). See H.6 for the rename rationale.</span>
+<a id="__codelineno-2-130" name="__codelineno-2-130" href="#__codelineno-2-130"></a><span class="kd">type</span><span class="w"> </span><span class="nx">RunnerSetSpec</span><span class="w"> </span><span class="kd">struct</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-2-131" name="__codelineno-2-131" href="#__codelineno-2-131"></a><span class="w">    </span><span class="nx">GatewayRef</span><span class="w">  </span><span class="nx">ObjectRef</span><span class="w">  </span><span class="c1">// which GitHub connection (was implicit via namespace)</span>
+<a id="__codelineno-2-132" name="__codelineno-2-132" href="#__codelineno-2-132"></a><span class="w">    </span><span class="nx">TemplateRef</span><span class="w"> </span><span class="o">*</span><span class="nx">ObjectRef</span><span class="w"> </span><span class="c1">// RunnerTemplate | ClusterRunnerTemplate; optional (Q172): unset ⇒ gateway.defaultTemplateRef ⇒ the single cluster-default ClusterRunnerTemplate ⇒ TemplateNotFound</span>
+<a id="__codelineno-2-133" name="__codelineno-2-133" href="#__codelineno-2-133"></a><span class="w">    </span><span class="nx">ProxyRef</span><span class="w">    </span><span class="o">*</span><span class="nx">ObjectRef</span><span class="w"> </span><span class="c1">// EgressProxy; nil ⇒ gateway.defaultProxyRef; both nil ⇒ direct egress</span>
+<a id="__codelineno-2-134" name="__codelineno-2-134" href="#__codelineno-2-134"></a>
+<a id="__codelineno-2-135" name="__codelineno-2-135" href="#__codelineno-2-135"></a><span class="w">    </span><span class="nx">RunnerLabels</span><span class="w">  </span><span class="p">[]</span><span class="kt">string</span>
+<a id="__codelineno-2-136" name="__codelineno-2-136" href="#__codelineno-2-136"></a><span class="w">    </span><span class="nx">RunnerGroup</span><span class="w">   </span><span class="kt">string</span><span class="w">     </span><span class="c1">// GitHub runner group; "" ⇒ gateway.defaultRunnerGroup; both "" ⇒ GitHub's default group (Q712)</span>
+<a id="__codelineno-2-137" name="__codelineno-2-137" href="#__codelineno-2-137"></a><span class="w">    </span><span class="nx">MaxListeners</span><span class="w">  </span><span class="kt">int32</span>
+<a id="__codelineno-2-138" name="__codelineno-2-138" href="#__codelineno-2-138"></a><span class="w">    </span><span class="nx">MaxWorkers</span><span class="w">    </span><span class="o">*</span><span class="kt">int32</span>
+<a id="__codelineno-2-139" name="__codelineno-2-139" href="#__codelineno-2-139"></a><span class="w">    </span><span class="nx">PriorityTiers</span><span class="w"> </span><span class="p">[]</span><span class="nx">PriorityTier</span>
+<a id="__codelineno-2-140" name="__codelineno-2-140" href="#__codelineno-2-140"></a><span class="w">    </span><span class="c1">// lifecycle tunables (eviction/quota retries, TTLs, deadlines) — unchanged from RunnerGroup</span>
+<a id="__codelineno-2-141" name="__codelineno-2-141" href="#__codelineno-2-141"></a><span class="p">}</span>
 </code></pre></div>
 <p><strong>Why <code>templateRef</code> and <code>proxyRef</code> are both optional — but resolve differently.</strong> They look parallel but the <em>fallback</em> differs.
 An unset <code>proxyRef</code> has a well-defined <em>behavior</em> — direct egress, still NetworkPolicy-restricted — so the dependency can simply be dropped (Q168, <strong>shipped</strong>): both <code>proxyRef</code> and <code>defaultProxyRef</code> unset resolves to direct egress, with <code>proxyMode: Direct</code> + an <code>EgressUnattributed</code> condition in status.
@@ -3819,7 +3863,7 @@ Full rules in <a href="../appendix-e-capacity-planning/#e11-managed-vertical-rig
 <a id="__codelineno-3-16" name="__codelineno-3-16" href="#__codelineno-3-16"></a><span class="w">    </span><span class="nt">spec</span><span class="p">:</span>
 <a id="__codelineno-3-17" name="__codelineno-3-17" href="#__codelineno-3-17"></a><span class="w">      </span><span class="nt">containers</span><span class="p">:</span>
 <a id="__codelineno-3-18" name="__codelineno-3-18" href="#__codelineno-3-18"></a><span class="w">        </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">runner</span>
-<a id="__codelineno-3-19" name="__codelineno-3-19" href="#__codelineno-3-19"></a><span class="w">          </span><span class="nt">resources</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> requests</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> cpu</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;1&quot;</span><span class="p p-Indicator">,</span><span class="nt"> memory</span><span class="p">:</span><span class="w"> </span><span class="nv">2Gi</span><span class="w"> </span><span class="p p-Indicator">}</span><span class="w"> </span><span class="p p-Indicator">}</span>
+<a id="__codelineno-3-19" name="__codelineno-3-19" href="#__codelineno-3-19"></a><span class="w">          </span><span class="nt">resources</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> requests</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> cpu</span><span class="p">:</span><span class="w"> </span><span class="s">"1"</span><span class="p p-Indicator">,</span><span class="nt"> memory</span><span class="p">:</span><span class="w"> </span><span class="nv">2Gi</span><span class="w"> </span><span class="p p-Indicator">}</span><span class="w"> </span><span class="p p-Indicator">}</span>
 <a id="__codelineno-3-20" name="__codelineno-3-20" href="#__codelineno-3-20"></a><span class="nn">---</span>
 <a id="__codelineno-3-21" name="__codelineno-3-21" href="#__codelineno-3-21"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">actions-gateway.com/v2alpha1</span>
 <a id="__codelineno-3-22" name="__codelineno-3-22" href="#__codelineno-3-22"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">RunnerSet</span>
@@ -3920,7 +3964,7 @@ These CR names become both selector label values <em>and</em> <code>&lt;name&gt;
 <p><strong>Shipped, and the v1 gap this closed.</strong> The 52-char cap is enforced by CEL on every v2 CR name, so v2 derivations are bounded at the input.
 <code>v1alpha1</code> has no equivalent — an <code>ActionsGateway</code> name may be 253 characters — and its derived <code>&lt;gateway&gt;-&lt;runner-label&gt;</code> <code>RunnerGroup</code> name was never bounded at the output either.
 Past 63 characters that name is a legal object name and an <strong>illegal label value</strong>, so the <code>RunnerGroup</code> reconciled while every worker pod carrying it as <code>actions-gateway/runner-group</code> was rejected: the tenant ran no jobs and GitHub reported only that the runner had lost communication (Q473). v1 therefore applies the bound where the name is derived, through the shared <code>api/apinames</code> helpers that also own the worker-pod budget (Q467).
-The rule generalises: <strong>budget against the tightest consumer of a name (63), not the limit of the object being created (253)</strong> — see <a href="../../development/kubernetes-conventions/#derive-every-name-through-apiapinames-q467-q473">kubernetes-conventions.md</a>.</p>
+The rule generalises: <strong>budget against the tightest consumer of a name (63), not the limit of the object being created (253)</strong> — see <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.6.0/docs/development/kubernetes-conventions.md#derive-every-name-through-apiapinames-q467-q473">kubernetes-conventions.md</a>.</p>
 <h3 id="field-naming-freezes-at-ga--do-the-pass-now">Field naming freezes at GA — do the pass now<a class="headerlink" href="#field-naming-freezes-at-ga--do-the-pass-now" title="Permanent link">&para;</a></h3>
 <p>JSON field names are part of the API contract and become permanent at <code>v2</code>.
 Do the naming pass during M1 while names are still cheap to change under <code>v2alpha1</code>:</p>
@@ -3981,7 +4025,7 @@ So responsibilities split by what admission is actually good at:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>RunnerSet status:
 <a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>  Ready: False
 <a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>  Reason: TemplateNotFound        # or ProxyNotFound; ProxyShareNotGranted arrives with M4 (§H.9)
-<a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a>  Message: &quot;RunnerTemplate &#39;dind-large&#39; not found in namespace &#39;team-a&#39;&quot;
+<a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a>  Message: "RunnerTemplate 'dind-large' not found in namespace 'team-a'"
 </code></pre></div>
 <p>Wire it with a watch + enqueue mapper (template/proxy/grant → referencing <code>RunnerSet</code>s) so the set flips to <code>Ready</code> the moment the missing object syncs.</p>
 <p>This stays <strong>fail-closed</strong>: the controller only creates wiring (worker pods, the cross-namespace NetworkPolicy egress, the proxy CA mount) once both the reference <em>and</em> any required grant resolve.
@@ -4005,6 +4049,27 @@ The advisory conditions (<code>RateLimited</code>, the <code>WorkerQuota</code> 
 The set serves every job targeting the labels that did register, and the ones that did not are a configuration mismatch for the tenant to fix.
 Like the v1 rollup it is advisory — it does <strong>not</strong> gate <code>Ready</code>, since the gateway's own AGC control plane can be healthy while one tenant's set is impaired.
 The GMC watches bound <code>RunnerSet</code>s (predicated on a change to a set's impaired signature, dropping high-frequency <code>activeSessions</code>/ <code>pendingJobs</code> churn) so a child's health change refreshes the parent promptly.</p>
+<p><strong>Observed runner version on the <code>RunnerSet</code> (Q792).</strong> Q715 judges the worker image <em>reference</em> against GitHub's enforced minimum, so a digest-only or custom tag reports <code>WorkerImageVersionUnknown</code>: the reference declares no version and the AGC asks GitHub nothing.
+The injected wrapper has always read the real version from the runner's own dependency manifest, and only logged it.
+It now hands that back on the pod's termination message, and the reconciler publishes the last one it saw as <code>status.observedRunnerVersion</code>.</p>
+<p>The harvest hangs off the reap walk, which already lists exactly the set's worker pods and already switches on terminal phases, so it costs no extra <code>List</code>.
+It fires for every terminal pod the walk sees, reaped that pass or not, so the observation does not depend on reap timing.
+Newest wins, because a set whose <code>workerImage</code> changed has pods of both versions retained at once; and the field is sticky, because once every terminal pod has aged past <code>completedPodTTL</code> the walk sees no reports at all and clearing would flap the field on the reap cycle for an answer that is a property of the image rather than of which pods are retained.</p>
+<p><strong>It is a self-report and deliberately not verdict-bearing</strong>, which is the whole design question rather than a caveat on it.
+The runner container runs the tenant's image and the job's own steps run inside it, so anything there can rewrite the report before the container terminates and kubelet reads whatever is last.
+Nothing inside the container can do better: a shared <code>emptyDir</code>, the manifest file itself, and a <code>shareProcessNamespace</code> sidecar reading <code>/proc/&lt;pid&gt;/root</code> are all tenant-writable, and an init container cannot see the runner image at all.
+So <code>RunnerVersionTooOld</code> keeps reporting <code>WorkerImageVersionUnknown</code> rather than turning a tenant-controlled value into a verdict, on the same argument that already makes <code>Unknown</code> not <code>False</code>: reporting "current" for an image nothing has checked would be worse than saying so.
+The attestable form reads the image from the registry before the container runs, which also covers the digest-only case and needs no pod; it is <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.6.0/docs/queue/Q988.md">Q988</a>, and it is a registry-integration feature rather than a status field.</p>
+<p><strong>Advertised capacity on the <code>RunnerSet</code> (Q721).</strong> The scale-set tier states its whole admission ladder as one integer per long-poll (<code>X-ScaleSetMaxCapacity</code>, <a href="../04-operational-flows/#the-ladder-as-an-integer-scale-set-tier-q443">operational flows</a>), and until Q721 that number and its per-rung breakdown reached Prometheus alone.
+That makes the answer to "why is my intake throttled?" available to whoever can query metrics, which is the platform operator, and not to the tenant who owns the <code>RunnerSet</code>: the party whose <code>maxWorkers</code> or workflow shape is usually the thing to change.
+So the reconciler publishes the same accounting on <code>status.advertisedCapacity</code> and <code>status.withheldCapacity</code>, readable with <code>kubectl describe</code>.</p>
+<p><code>advertisedCapacity</code> is a <strong>pointer</strong> because zero is a real advertisement, intake fully withheld, and has to be distinguishable from "nothing advertised yet", which is what a classic-tier set and a listener that has not polled both report.
+<code>withheldCapacity</code> is a <code>listType=map</code> keyed on <code>reason</code>, carrying every rung the poll <em>evaluated</em> including the ones withholding nothing, so an absent reason means not-evaluated rather than not-binding: the same explicit-zero contract the withheld gauge carries, for the same reason (the two are indistinguishable in an absent series and one of them is a bug).
+Its <code>reason</code> is deliberately <strong>not</strong> a CRD enum.
+The ladder is designed to grow a rung at a time and every rung must land in both acquisition tiers at once, so a closed enum would couple each new rung to a CRD change; the field is controller-written status a tenant cannot author, so validation buys nothing against anybody.</p>
+<p>Two properties keep it from costing what high-frequency status usually costs.
+The value is recomputed per poll but published per reconcile, on a status write that already happens unconditionally, so it adds no API writes and lags the live number by at most one reconcile.
+And the GMC's rollup watch is unaffected: <code>runnerSetImpairmentChanged</code> derives its signature from <code>status.conditions</code> alone, an allowlist rather than a list of fields to ignore, so an update carrying only a new advertisement is dropped without anyone having to remember to exclude it.</p>
 <p><strong>Measured sizing recommendation on the <code>RunnerSet</code> (Q359 Phase 2).</strong> The AGC's usage sampler aggregates per-job CPU/memory peaks per worker container (Phase 1's metrics), and the <code>RunnerSet</code> reconciler surfaces the derived per-container recommendation in <code>status.sizingRecommendation</code>: recommended <code>requests</code> (p95 of per-job peaks), a recommended memory <code>limit</code> (observed max × headroom, never a CPU limit), the observed p95/max, a <code>sampleCount</code> confidence signal, and the window start.
 The field is <strong>advisory and doubly load-bearing as the aggregate store</strong>: the sampler re-seeds its in-memory histograms from it on AGC restart (95% of the persisted mass at the p95, the rest at the max — exactly preserving the two statistics the recommendation uses), so the observation window survives control-plane rollouts with no separate backing store.
 The reconciler never overwrites the field with an empty snapshot (a warming-up sampler must not wipe the store).
@@ -4025,7 +4090,7 @@ Instead the AGC marks each profile-derived pod (<code>actions-gateway.com/sizing
 Worker pods are already granted, listed, and watched, so this needs <strong>no new RBAC, no LimitRange informer, and no polling</strong> — and the existing worker-pod watch makes it event-driven for free: the pod event carrying the injected limit is itself what re-reconciles the set.
 The trade is that the signal is post-hoc — it arrives with the first pod the profile builds, since a pod is what it reads.
 While a profile is <code>Active</code>, <code>SizingDrift</code> reports <code>False/SizingProfileActive</code> (the template ask is not what pods run with).</p>
-<p><strong>Why <code>profile</code> bundles two mechanisms deliberately (Q481).</strong> The 1.3 <a href="../../development/api-review/">pre-release API review</a> asked of <code>sizing.profile</code> the question Q470 asked of <code>capacityGate.mode</code> — <em>does this enum answer exactly one question?</em> — and mechanically it does not.
+<p><strong>Why <code>profile</code> bundles two mechanisms deliberately (Q481).</strong> The 1.3 <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.6.0/docs/development/api-review.md">pre-release API review</a> asked of <code>sizing.profile</code> the question Q470 asked of <code>capacityGate.mode</code> — <em>does this enum answer exactly one question?</em> — and mechanically it does not.
 Two axes run through it: where the request comes from (the template, the usage history, a declared node envelope) and what limits follow (the template's, <code>requests == limits</code>, or no CPU limit plus a memory headroom).
 The tell the review names is present twice over: <code>nodeShare</code> is only meaningful under <code>NodeShare</code>, <code>limitHeadroomPercent</code> only under <code>Throughput</code>.
 Two cells of the cross-product have no profile of their own and are plausible wants — a <strong>Guaranteed node share</strong> (the GPU case, where predictable packing is the whole point) and <strong>history-derived requests under hand-set limits</strong>.
@@ -4098,7 +4163,7 @@ Three properties make the read safe rather than merely correct:</p>
   An unattributable event does not clear that bar.</li>
 <li><strong>The verdict is the newest relevant event, not merely the existence of a declination.</strong> An autoscaler that declined on one loop and scaled up on the next is rescuing the tenant, and a stale declination must not gate against that.
   Recency is asymmetric, because one loop can emit both verdicts for one pod: a scale-up supersedes a declination immediately, while a declination supersedes a scale-up only from more than a second later — inside that window the pair is one loop's own output, and resolves open.
-  Measured, not assumed: cluster-autoscaler v1.36.1 emitted <code>TriggeredScaleUp</code> and then <code>NotTriggerScaleUp</code> for the same pod 4ms apart (<a href="../../plan/capacity-aware-intake/#9c-the-live-autoscaler-harness-and-what-it-measured-q474">plan §9c</a>).
+  Measured, not assumed: cluster-autoscaler v1.36.1 emitted <code>TriggeredScaleUp</code> and then <code>NotTriggerScaleUp</code> for the same pod 4ms apart (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.6.0/docs/plan/capacity-aware-intake.md#9c-the-live-autoscaler-harness-and-what-it-measured-q474">plan §9c</a>).
   The window is what makes that read a property of the autoscaler's behavior rather than of its recorder's resolution, which is the difference between the two generations in the field.</li>
 <li><strong>Reads are uncached and doubly scoped</strong> — field-selected to one pod, and only for pods the <code>WorkersUnschedulable</code> evaluation already found stuck past the scheduling grace, bounded per reconcile.
   There is no Event informer: Events are the highest-churn object in a cluster, and caching them would tax every AGC to serve a mode most sets never enable.
@@ -4108,7 +4173,8 @@ Three properties make the read safe rather than merely correct:</p>
 That asymmetry is the safety argument: a missed match costs nothing, a wrong match starves a tenant, so the matcher stays deliberately narrow and broad coverage is explicitly not a goal.
 If a specific proprietary autoscaler is ever asked for, the extension point is data rather than code — an operator-settable list of extra <code>(reason, reportingController)</code> pairs, following the <code>--allowed-infra-priority-classes</code> allowlist pattern.</p>
 <p>The decision is published as <code>WorkerCapacityDeclined</code> and the rung reads that condition back rather than re-deriving the verdict, so <code>kubectl describe</code> and the AGC's intake behavior cannot disagree.
-Its <code>reason</code> names the signal that decided — <code>PodsUnschedulable</code>, <code>ScaleUpDeclined</code>, the latched <code>AwaitingProbe</code> (the declined pods were reaped and the decline is retained until a probe resolves it, Q512), or the <code>False</code> reasons <code>CapacityAvailable</code> and <code>GateModeUnsupported</code> — so an operator can tell which rung stopped their jobs and on what evidence.
+Its <code>reason</code> names the signal that decided — <code>PodsUnschedulable</code>, <code>ScaleUpDeclined</code>, <code>PodsNotStarting</code> (the kubelet's verdict on a pod that bound and never started, Q714), the latched <code>AwaitingProbe</code> (the declined pods were reaped and the decline is retained until a probe resolves it, Q512), or the <code>False</code> reasons <code>CapacityAvailable</code> and <code>GateModeUnsupported</code> — so an operator can tell which rung stopped their jobs and on what evidence.
+The first two are selected by <code>clusterCapacity.nodeAutoscaling</code>; the third is not selected by anything, because a pod that is already placed is not waiting on an autoscaler and no node changes whether its image pulls.
 It is a <strong>separate</strong> condition from <code>WorkersUnschedulable</code> even though the fixed-size-cluster signal shares its source: it means something different to an operator ("intake is being refused" versus "pods are stuck"), it stays stable while the signal underneath it changes — the autoscaler-declination source (Q406) is exactly that, a new source under an unchanged condition, rung, and metric label — and <code>WorkersUnschedulable</code> is already an impairing rollup input — so <code>WorkerCapacityDeclined</code> is deliberately <strong>excluded</strong> from <code>ImpairingConditionTypes()</code>, which would otherwise double-count one stall into the gateway's <code>RunnerSetsDegraded</code> summary.
 A set that did not opt in carries no such condition at all.</p>
 <p>Two properties bound what the gate is worth.
@@ -4240,11 +4306,11 @@ The transport-error signatures are kept identical to the e2e helper's (Q392) so 
 </code></pre></div>
 <p>A conversion webhook can't create those sibling objects — which is exactly why the migration is a tool, not a webhook.</p>
 <p>The v1→v2 fan-out is one-time.
-Once on <code>v2alpha1</code>, the API graduates <strong>in place</strong> <code>v2alpha1 → v2beta1 → v2</code> via a conversion webhook (a thing a conversion webhook <em>can</em> do, since the kinds no longer change shape) — see the <a href="../../plan/v2-api/#api-maturity--graduation-v2alpha1--v2beta1--v2">graduation path</a> in the implementation plan for the per-hop mechanics.
+Once on <code>v2alpha1</code>, the API graduates <strong>in place</strong> <code>v2alpha1 → v2beta1 → v2</code> via a conversion webhook (a thing a conversion webhook <em>can</em> do, since the kinds no longer change shape) — see the <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.6.0/docs/plan/v2-api.md#api-maturity--graduation-v2alpha1--v2beta1--v2">graduation path</a> in the implementation plan for the per-hop mechanics.
 The superseded versions do not linger indefinitely: <code>v2alpha1</code> is dropped at <strong><code>v2.0.0</code></strong>, the same release that removes <code>v1alpha1</code> and the classic acquisition machinery, announced one release ahead in <code>v1.3.0</code>.
-That coupling and the operator-facing contract are the <a href="../../operations/v1alpha1-deprecation/">deprecation and removal notice</a>; the release sequencing is <a href="../../plan/v2-ga/">v2-ga.md</a>.</p>
+That coupling and the operator-facing contract are the <a href="../../operations/v1alpha1-deprecation/">deprecation and removal notice</a>; the release sequencing is <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.6.0/docs/plan/v2-ga.md">v2-ga.md</a>.</p>
 <h2 id="h12-folding-in-the-grandfathered-label-value-alignment-q147">H.12. Folding in the grandfathered label-value alignment (Q147)<a class="headerlink" href="#h12-folding-in-the-grandfathered-label-value-alignment-q147" title="Permanent link">&para;</a></h2>
-<p>Two shipped keys still carry boolean-looking <code>"true"</code> values that predate the <a href="../../development/kubernetes-conventions/">no-boolean label convention</a> and are grandfathered only because changing them is breaking:</p>
+<p>Two shipped keys still carry boolean-looking <code>"true"</code> values that predate the <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.6.0/docs/development/kubernetes-conventions.md">no-boolean label convention</a> and are grandfathered only because changing them is breaking:</p>
 <ul>
 <li><code>actions-gateway.github.com/tenant: "true"</code> — the managed-tenant marker, matched as <code>== 'true'</code> by the <code>namespace-psa-guard</code> and <code>tenant-resource-guard</code> <code>ValidatingAdmissionPolicy</code> objects, the onboarding scripts, and operator runbooks.</li>
 <li><code>actions-gateway.github.com/allow-profile-downgrade: "true"</code> — the downgrade opt-in annotation, matched by the GMC validating webhook.</li>
@@ -4279,7 +4345,7 @@ Non-exhaustive impact list, to be turned into plan-doc scope when scheduled:</p>
 <li><strong>API:</strong> new <code>v2alpha1</code> group <code>actions-gateway.com</code> with five CRD kinds (<code>ActionsGateway</code>, <code>RunnerSet</code>, <code>RunnerTemplate</code>, <code>ClusterRunnerTemplate</code>, <code>EgressProxy</code>) + generated CRDs/deepcopy/RBAC.</li>
 <li><strong>GMC:</strong> multi-gateway-per-namespace requires every derived resource to be keyed by gateway name (not the namespace-singleton assumption today); the <code>gmc-tenant-resource-guard</code> policy must still confine writes; new <code>EgressProxy</code> reconciler; cross-namespace CA distribution.</li>
 <li><strong>AGC:</strong> <code>RunnerSet</code> reconciler resolves <code>templateRef</code>/<code>proxyRef</code> at runtime with watches; reserved-field webhook moves to <code>RunnerTemplate</code>.</li>
-<li><strong>Docs:</strong> <a href="../03-api-contracts/#31-kubernetes-crd-schemas">§3.1 CRD schemas</a>, <a href="../appendix-e-capacity-planning/">Appendix E (RunnerGroup design)</a>, and the operator-facing docs per the <a href="../../development/doc-update-matrix/">doc-update matrix</a>.</li>
+<li><strong>Docs:</strong> <a href="../03-api-contracts/#31-kubernetes-crd-schemas">§3.1 CRD schemas</a>, <a href="../appendix-e-capacity-planning/">Appendix E (RunnerGroup design)</a>, and the operator-facing docs per the <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.6.0/docs/development/doc-update-matrix.md">doc-update matrix</a>.</li>
 <li><strong>Migration tool</strong> + its tests.</li>
 <li><strong>Label keys + values (Q147 + group rename):</strong> both the domain <em>prefix</em> (<code>actions-gateway.github.com/*</code> → <code>actions-gateway.com/*</code>, plus finalizer names) and the grandfathered <code>tenant</code>/<code>allow-profile-downgrade</code> <code>"true"</code> <em>values</em> migrate during the cutover (<a href="#h12-folding-in-the-grandfathered-label-value-alignment-q147">§H.12</a>) — VAP CEL, onboarding scripts, runbooks, and the convention doc's "grandfathered" note all update, and one dual-read window covers both, riding the v1alpha1 serving window.</li>
 </ul>
@@ -4493,7 +4559,7 @@ A few small changes are only <em>possible</em> at a major break, or are awkward 
   <strong><code>workloadIdentity</code> (Q197) shipped as the second member</strong>: an external signer signs the App JWT so the App private key never enters the cluster (MVP = HashiCorp Vault transit + Vault Kubernetes auth, behind a <code>githubapp.Signer</code> interface so cloud KMS providers add without another breaking change).
   Adding it validated the shape against a real second consumer, the whole point of fixing the shape before the freeze.
   See <a href="../05-security/#57-workload-identity-the-no-pem-delegation-model">05-security.md §5.7</a> for the trust model.
-  Plan + schema sketch: <a href="../../plan/v2beta1/">v2beta1.md</a>.</p>
+  Plan + schema sketch: <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.6.0/docs/plan/v2beta1.md">v2beta1.md</a>.</p>
 </li>
 </ul>
 <p><strong>Explicitly NOT now (shape for additive later, do not build):</strong></p>
@@ -4531,7 +4597,7 @@ A few small changes are only <em>possible</em> at a major break, or are awkward 
    Pod Security Admission is a <strong>namespace-scoped</strong> control in Kubernetes, and v1 hung it on a <em>sub-namespace</em> object (<code>ActionsGateway.spec.securityProfile</code>) — so under multi-gateway (#1) two <code>ActionsGateway</code>s in one namespace fight over the single namespace PSA label.
    The fix <strong>deletes the question instead of answering it: <code>securityProfile</code> becomes a namespace-scoped concern, not a per-gateway field.</strong> Drop <code>SecurityProfile</code> from <code>ActionsGatewaySpec</code> (a cheap follow-up to the just-merged M1 <code>v2alpha1</code> types — alpha, no compatibility guarantee) and let the namespace own its Pod Security level, GMC-guarded exactly as today: the downgrade-protection and <code>privileged</code>-eligibility machinery (<code>securityProfileRank</code>, <code>validateSecurityProfileTransition</code>, the <code>allow-profile-downgrade</code> keyword) stays, now keyed <strong>once per namespace</strong> instead of per gateway.
    Co-located gateways therefore always share one posture; tenants that need <em>different</em> postures use <em>different</em> namespaces — the natural PSA isolation boundary anyway.
-   Land the field-home change no later than <strong>M3a (<a href="../../STATUS/#queue">Q164</a>)</strong>, where <code>ActionsGateway</code> is first reconciled, so M3a reads the profile from its new home rather than building per-gateway logic that M3b would rip out.
+   Land the field-home change no later than <strong>M3a (Q164)</strong>, where <code>ActionsGateway</code> is first reconciled, so M3a reads the profile from its new home rather than building per-gateway logic that M3b would rip out.
    Migration is unaffected (one v1 namespace → one gateway → one profile).</p>
 <p><strong>Implemented mechanism (M3a, Q175).</strong> The namespace-side selector is the label <code>actions-gateway.com/security-profile: baseline|restricted|privileged</code> (<code>SecurityProfileLabel</code>); absent on a managed tenant namespace ⇒ <code>baseline</code> (secure default).
    Two GMC-side pieces realize the guarantee, and the relocation makes the guard <em>simpler</em> than v1, not just relocated:
@@ -4558,7 +4624,7 @@ A few small changes are only <em>possible</em> at a major break, or are awkward 
 <h2 id="h17-migration-correctness--the-fan-outs-untested-invariants">H.17. Migration correctness — the fan-out's untested invariants<a class="headerlink" href="#h17-migration-correctness--the-fan-outs-untested-invariants" title="Permanent link">&para;</a></h2>
 <p>The migration (<a href="#h11-migration-v2-tool-assisted">§H.11</a>) is the first and only place two invariants this design <em>asserts</em> are tested against real v1 data.
 Both are stated confidently above; neither has been exercised.
-They are acceptance criteria the M5 tool (<a href="../../STATUS/#queue">Q165</a>) must meet — and, because they are pure data-shape questions, they can be validated <strong>before</strong> M5 by a mapping over representative v1 fixtures, surfacing any v2 schema gap at alpha-rewrite cost instead of post-adoption cost.
+They are acceptance criteria the M5 tool (Q165) must meet — and, because they are pure data-shape questions, they can be validated <strong>before</strong> M5 by a mapping over representative v1 fixtures, surfacing any v2 schema gap at alpha-rewrite cost instead of post-adoption cost.
 (The <code>v2alpha1</code> types do not exist yet, so this is a fixtures-and-asserted-output exercise, not runnable tool code, until M1 lands.)</p>
 <h3 id="invariant-1--no-behavior-change-the-non-goal-most-at-risk">Invariant 1 — "no behavior change" (the non-goal most at risk)<a class="headerlink" href="#invariant-1--no-behavior-change-the-non-goal-most-at-risk" title="Permanent link">&para;</a></h3>
 <p>The fan-out changes field <em>defaults</em> and <em>optionality</em>, so "v2 tracks v1 behavior" is false unless the mapping actively compensates:</p>

@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/1.5.0/operations/migration-from-arc/">
+        <link rel="canonical" href="https://actions-gateway.com/1.6.0/operations/migration-from-arc/">
       
       
         <link rel="prev" href="../upgrade/">
@@ -63,15 +63,15 @@
   <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/IBMPlexSans-Bold.woff2">
   <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/MonaspaceNeon-Medium.woff2">
   
-  <meta property="og:image" content="https://actions-gateway.com/1.5.0assets/social-preview.png">
+  <meta property="og:image" content="https://actions-gateway.com/1.6.0assets/social-preview.png">
   <meta property="og:image:width" content="1280">
   <meta property="og:image:height" content="640">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:image" content="https://actions-gateway.com/1.5.0assets/social-preview.png">
+  <meta name="twitter:image" content="https://actions-gateway.com/1.6.0assets/social-preview.png">
   
-  <link rel="apple-touch-icon" href="https://actions-gateway.com/1.5.0assets/apple-touch-icon.png">
-  <link rel="alternate icon" href="https://actions-gateway.com/1.5.0assets/favicon.ico">
-  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/1.5.0assets/icon-512.png">
+  <link rel="apple-touch-icon" href="https://actions-gateway.com/1.6.0assets/apple-touch-icon.png">
+  <link rel="alternate icon" href="https://actions-gateway.com/1.6.0assets/favicon.ico">
+  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/1.6.0assets/icon-512.png">
   
   <script type="application/ld+json">
   {
@@ -79,14 +79,14 @@
     "@type": "SoftwareSourceCode",
     "name": "GitHub Actions Gateway",
     "description": "An Actions Runner Controller (ARC) alternative for self-hosted GitHub Actions runners on multi-tenant Kubernetes \u2014 oversubscribe a shared quota, recover evicted jobs automatically, and isolate every tenant\u0027s GitHub egress.",
-    "url": "https://actions-gateway.com/1.5.0",
+    "url": "https://actions-gateway.com/1.6.0",
     "codeRepository": "https://github.com/actions-gateway/github-actions-gateway",
     "programmingLanguage": "Go",
     "license": "https://www.apache.org/licenses/LICENSE-2.0",
     "author": {
       "@type": "Organization",
       "name": "GitHub Actions Gateway",
-      "url": "https://actions-gateway.com/1.5.0"
+      "url": "https://actions-gateway.com/1.6.0"
     }
   }
   </script>
@@ -95,8 +95,8 @@
     "@context": "https://schema.org",
     "@type": "Organization",
     "name": "GitHub Actions Gateway",
-    "url": "https://actions-gateway.com/1.5.0",
-    "logo": "https://actions-gateway.com/1.5.0assets/icon-512.png",
+    "url": "https://actions-gateway.com/1.6.0",
+    "logo": "https://actions-gateway.com/1.6.0assets/icon-512.png",
     "sameAs": ["https://github.com/actions-gateway/github-actions-gateway"]
   }
   </script>
@@ -132,8 +132,8 @@
         <aside class="md-banner">
           <div class="md-banner__inner md-grid md-typeset">
             
-            <strong>v1.5.0 is here.</strong>
-      A per-tenant GitHub runner group boundary, multi-label runner sets that migrate a <code>runs-on</code> array unedited, and job duration and latency metrics on the acquisition tier every new tenant runs.
+            <strong>v1.6.0 is here.</strong>
+      The ARC migration checklist finished, a runner set that can say why it is not being offered jobs, and the runner version a worker pod actually ran.
           </div>
           
         </aside>
@@ -145,7 +145,7 @@
           <aside class="md-banner md-banner--warning">
             <div class="md-banner__inner md-grid md-typeset">
               You're not viewing the latest release.
-  <a href="https://actions-gateway.com/1.5.0"><strong>Go to the current docs.</strong></a>
+  <a href="https://actions-gateway.com/1.6.0"><strong>Go to the current docs.</strong></a>
 
             </div>
             <script>var el=document.querySelector("[data-md-component=outdated]"),base=new URL("../.."),outdated=__md_get("__outdated",sessionStorage,base);!0===outdated&&el&&(el.hidden=!1)</script>
@@ -1401,6 +1401,8 @@
       
         
       
+        
+      
     
     
     
@@ -2025,6 +2027,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../worker-shared-storage/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Shared worker storage (RWX)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../in-runner-image-builds/" class="md-nav__link">
         
   
@@ -2167,10 +2197,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9_17" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9_18" >
         
           
-          <label class="md-nav__link" for="__nav_9_17" id="__nav_9_17_label" tabindex="">
+          <label class="md-nav__link" for="__nav_9_18" id="__nav_9_18_label" tabindex="">
             
   
   
@@ -2188,8 +2218,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_9_17_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_9_17">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_9_18_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9_18">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -3070,12 +3100,12 @@ The platform installs the Gateway Manager Controller (GMC) <strong>once</strong>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>ARC (scale-set mode)                    GAG (v2 API)
 <a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>─────────────────────                   ─────────────────────────────
 <a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>namespace: team-a                       namespace: team-a
-<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>  AutoscalingRunnerSet &quot;cpu&quot;              ActionsGateway &quot;team-a-gateway&quot;
-<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>    └─ listener pod (always-on)           EgressProxy   &quot;team-a-egress&quot;
-<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>  AutoscalingRunnerSet &quot;gpu&quot;              RunnerTemplate &quot;default&quot; (shared shape)
-<a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>    └─ listener pod (always-on)           RunnerSet &quot;cpu&quot;  (goroutine listener)
-<a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>  AutoscalingRunnerSet &quot;arm&quot;              RunnerSet &quot;gpu&quot;  (goroutine listener)
-<a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>    └─ listener pod (always-on)           RunnerSet &quot;arm&quot;  (goroutine listener)
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>  AutoscalingRunnerSet "cpu"              ActionsGateway "team-a-gateway"
+<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>    └─ listener pod (always-on)           EgressProxy   "team-a-egress"
+<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>  AutoscalingRunnerSet "gpu"              RunnerTemplate "default" (shared shape)
+<a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>    └─ listener pod (always-on)           RunnerSet "cpu"  (goroutine listener)
+<a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>  AutoscalingRunnerSet "arm"              RunnerSet "gpu"  (goroutine listener)
+<a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>    └─ listener pod (always-on)           RunnerSet "arm"  (goroutine listener)
 <a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>  (shared cluster egress)                 └─ one AGC pod multiplexes all three
 <a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a>                                          └─ per-tenant egress proxy pool
 </code></pre></div>
@@ -3159,7 +3189,7 @@ The platform installs the Gateway Manager Controller (GMC) <strong>once</strong>
 <tr>
 <td><code>containerMode: kubernetes</code> / <code>dind</code></td>
 <td>a template choice + the namespace security profile</td>
-<td>GAG always runs one worker pod per job. Docker-in-Docker needs a platform-owned <code>ClusterRunnerTemplate</code> plus a privileged-eligible namespace; see <a href="#security-profiles">Security profiles</a>.</td>
+<td><strong>Read this one before migrating.</strong> GAG always runs one worker pod per job, and <code>containerMode: kubernetes</code> has no equivalent: it is <a href="../../design/appendix-d-alternatives-considered/#d15-pod-per-step-container-execution-arcs-containermode-kubernetes">permanently declined</a>, because its hook needs a pod-<code>create</code> grant that Kubernetes RBAC cannot scope below a namespace, reaching every other runner set's registration Secret there. Docker-in-Docker is the answer, and it is unprivileged only under Kata, which needs nested-virtualization nodes (<a href="../kata-dind-workloads/#prerequisite--nested-virtualization-nodes">prerequisites</a>). Without Kata it needs a platform-owned <code>ClusterRunnerTemplate</code> plus a privileged-eligible namespace; see <a href="#security-profiles">Security profiles</a>.</td>
 </tr>
 <tr>
 <td>Per-scale-set scaling math (<code>minRunners</code>/<code>maxRunners</code>)</td>
@@ -3202,7 +3232,7 @@ So both ARC shapes carry across unchanged:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="c1"># ARC:  runs-on: gpu-large        →   GAG: runs-on: gpu-large        (no edit)</span>
 <a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="c1"># ARC:  runs-on: [linux, gpu]     →   GAG: runs-on: [linux, gpu]     (no edit)</span>
 <a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="nt">spec</span><span class="p">:</span>
-<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="w">  </span><span class="nt">runnerLabels</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="s">&quot;gpu-large&quot;</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="s">&quot;linux&quot;</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="s">&quot;gpu&quot;</span><span class="p p-Indicator">]</span><span class="w">   </span><span class="c1"># ARC&#39;s scale-set name, then its scaleSetLabels</span>
+<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="w">  </span><span class="nt">runnerLabels</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="s">"gpu-large"</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="s">"linux"</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="s">"gpu"</span><span class="p p-Indicator">]</span><span class="w">   </span><span class="c1"># ARC's scale-set name, then its scaleSetLabels</span>
 </code></pre></div>
 <p>Rules worth knowing:</p>
 <ul>
@@ -3398,10 +3428,10 @@ Never copy a private key through an environment variable or shell history.</p>
 <a id="__codelineno-2-19" name="__codelineno-2-19" href="#__codelineno-2-19"></a><span class="w">        </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">runner</span>
 <a id="__codelineno-2-20" name="__codelineno-2-20" href="#__codelineno-2-20"></a><span class="w">          </span><span class="nt">resources</span><span class="p">:</span>
 <a id="__codelineno-2-21" name="__codelineno-2-21" href="#__codelineno-2-21"></a><span class="w">            </span><span class="nt">requests</span><span class="p">:</span>
-<a id="__codelineno-2-22" name="__codelineno-2-22" href="#__codelineno-2-22"></a><span class="w">              </span><span class="nt">cpu</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;4&quot;</span>
-<a id="__codelineno-2-23" name="__codelineno-2-23" href="#__codelineno-2-23"></a><span class="w">              </span><span class="nt">memory</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;16Gi&quot;</span>
+<a id="__codelineno-2-22" name="__codelineno-2-22" href="#__codelineno-2-22"></a><span class="w">              </span><span class="nt">cpu</span><span class="p">:</span><span class="w"> </span><span class="s">"4"</span>
+<a id="__codelineno-2-23" name="__codelineno-2-23" href="#__codelineno-2-23"></a><span class="w">              </span><span class="nt">memory</span><span class="p">:</span><span class="w"> </span><span class="s">"16Gi"</span>
 <a id="__codelineno-2-24" name="__codelineno-2-24" href="#__codelineno-2-24"></a><span class="w">            </span><span class="nt">limits</span><span class="p">:</span>
-<a id="__codelineno-2-25" name="__codelineno-2-25" href="#__codelineno-2-25"></a><span class="w">              </span><span class="nt">nvidia.com/gpu</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;1&quot;</span>
+<a id="__codelineno-2-25" name="__codelineno-2-25" href="#__codelineno-2-25"></a><span class="w">              </span><span class="nt">nvidia.com/gpu</span><span class="p">:</span><span class="w"> </span><span class="s">"1"</span>
 <a id="__codelineno-2-26" name="__codelineno-2-26" href="#__codelineno-2-26"></a><span class="nn">---</span>
 <a id="__codelineno-2-27" name="__codelineno-2-27" href="#__codelineno-2-27"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">actions-gateway.com/v2beta1</span>
 <a id="__codelineno-2-28" name="__codelineno-2-28" href="#__codelineno-2-28"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ActionsGateway</span>
@@ -3413,7 +3443,7 @@ Never copy a private key through an environment variable or shell history.</p>
 <a id="__codelineno-2-34" name="__codelineno-2-34" href="#__codelineno-2-34"></a><span class="w">    </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">GitHubApp</span>
 <a id="__codelineno-2-35" name="__codelineno-2-35" href="#__codelineno-2-35"></a><span class="w">    </span><span class="nt">githubApp</span><span class="p">:</span>
 <a id="__codelineno-2-36" name="__codelineno-2-36" href="#__codelineno-2-36"></a><span class="w">      </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">github-app-v2</span><span class="w">      </span><span class="c1"># name-only Secret ref in this namespace</span>
-<a id="__codelineno-2-37" name="__codelineno-2-37" href="#__codelineno-2-37"></a><span class="w">  </span><span class="nt">githubURL</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">https://github.com/team-a-org</span><span class="w">   </span><span class="c1"># was ARC&#39;s githubConfigUrl (immutable)</span>
+<a id="__codelineno-2-37" name="__codelineno-2-37" href="#__codelineno-2-37"></a><span class="w">  </span><span class="nt">githubURL</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">https://github.com/team-a-org</span><span class="w">   </span><span class="c1"># was ARC's githubConfigUrl (immutable)</span>
 <a id="__codelineno-2-38" name="__codelineno-2-38" href="#__codelineno-2-38"></a><span class="w">  </span><span class="nt">defaultProxyRef</span><span class="p">:</span>
 <a id="__codelineno-2-39" name="__codelineno-2-39" href="#__codelineno-2-39"></a><span class="w">    </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">team-a-egress</span><span class="w">        </span><span class="c1"># every RunnerSet below inherits this</span>
 <a id="__codelineno-2-40" name="__codelineno-2-40" href="#__codelineno-2-40"></a><span class="w">  </span><span class="c1"># No securityProfile field: the Pod Security level is a namespace label in v2.</span>
@@ -3426,8 +3456,8 @@ Never copy a private key through an environment variable or shell history.</p>
 <a id="__codelineno-2-47" name="__codelineno-2-47" href="#__codelineno-2-47"></a><span class="nt">spec</span><span class="p">:</span>
 <a id="__codelineno-2-48" name="__codelineno-2-48" href="#__codelineno-2-48"></a><span class="w">  </span><span class="nt">gatewayRef</span><span class="p">:</span><span class="w">  </span><span class="p p-Indicator">{</span><span class="nt"> name</span><span class="p">:</span><span class="w"> </span><span class="nv">team-a-gateway</span><span class="w"> </span><span class="p p-Indicator">}</span>
 <a id="__codelineno-2-49" name="__codelineno-2-49" href="#__codelineno-2-49"></a><span class="w">  </span><span class="nt">templateRef</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> name</span><span class="p">:</span><span class="w"> </span><span class="nv">gpu</span><span class="w"> </span><span class="p p-Indicator">}</span>
-<a id="__codelineno-2-50" name="__codelineno-2-50" href="#__codelineno-2-50"></a><span class="w">  </span><span class="nt">runnerLabels</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="s">&quot;gpu-large&quot;</span><span class="p p-Indicator">]</span><span class="w">  </span><span class="c1"># the ARC scale-set name: runs-on: gpu-large still routes</span>
-<a id="__codelineno-2-51" name="__codelineno-2-51" href="#__codelineno-2-51"></a><span class="w">  </span><span class="nt">maxWorkers</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">20</span><span class="w">               </span><span class="c1"># was ARC&#39;s maxRunners (real cap is the namespace quota)</span>
+<a id="__codelineno-2-50" name="__codelineno-2-50" href="#__codelineno-2-50"></a><span class="w">  </span><span class="nt">runnerLabels</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="s">"gpu-large"</span><span class="p p-Indicator">]</span><span class="w">  </span><span class="c1"># the ARC scale-set name: runs-on: gpu-large still routes</span>
+<a id="__codelineno-2-51" name="__codelineno-2-51" href="#__codelineno-2-51"></a><span class="w">  </span><span class="nt">maxWorkers</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">20</span><span class="w">               </span><span class="c1"># was ARC's maxRunners (real cap is the namespace quota)</span>
 <a id="__codelineno-2-52" name="__codelineno-2-52" href="#__codelineno-2-52"></a><span class="w">  </span><span class="c1"># No minRunners: GAG scales to zero with no cold-start penalty.</span>
 </code></pre></div>
 <p>Add one <code>RunnerSet</code> per ARC scale set you are migrating in this namespace — they all point at the same <code>ActionsGateway</code>, and share a <code>RunnerTemplate</code> wherever the pod shapes match.

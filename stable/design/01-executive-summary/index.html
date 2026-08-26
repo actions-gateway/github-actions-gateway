@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/1.5.0/design/01-executive-summary/">
+        <link rel="canonical" href="https://actions-gateway.com/1.6.0/design/01-executive-summary/">
       
       
         <link rel="prev" href="../">
@@ -63,15 +63,15 @@
   <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/IBMPlexSans-Bold.woff2">
   <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/MonaspaceNeon-Medium.woff2">
   
-  <meta property="og:image" content="https://actions-gateway.com/1.5.0assets/social-preview.png">
+  <meta property="og:image" content="https://actions-gateway.com/1.6.0assets/social-preview.png">
   <meta property="og:image:width" content="1280">
   <meta property="og:image:height" content="640">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:image" content="https://actions-gateway.com/1.5.0assets/social-preview.png">
+  <meta name="twitter:image" content="https://actions-gateway.com/1.6.0assets/social-preview.png">
   
-  <link rel="apple-touch-icon" href="https://actions-gateway.com/1.5.0assets/apple-touch-icon.png">
-  <link rel="alternate icon" href="https://actions-gateway.com/1.5.0assets/favicon.ico">
-  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/1.5.0assets/icon-512.png">
+  <link rel="apple-touch-icon" href="https://actions-gateway.com/1.6.0assets/apple-touch-icon.png">
+  <link rel="alternate icon" href="https://actions-gateway.com/1.6.0assets/favicon.ico">
+  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/1.6.0assets/icon-512.png">
   
   <script type="application/ld+json">
   {
@@ -79,14 +79,14 @@
     "@type": "SoftwareSourceCode",
     "name": "GitHub Actions Gateway",
     "description": "An Actions Runner Controller (ARC) alternative for self-hosted GitHub Actions runners on multi-tenant Kubernetes \u2014 oversubscribe a shared quota, recover evicted jobs automatically, and isolate every tenant\u0027s GitHub egress.",
-    "url": "https://actions-gateway.com/1.5.0",
+    "url": "https://actions-gateway.com/1.6.0",
     "codeRepository": "https://github.com/actions-gateway/github-actions-gateway",
     "programmingLanguage": "Go",
     "license": "https://www.apache.org/licenses/LICENSE-2.0",
     "author": {
       "@type": "Organization",
       "name": "GitHub Actions Gateway",
-      "url": "https://actions-gateway.com/1.5.0"
+      "url": "https://actions-gateway.com/1.6.0"
     }
   }
   </script>
@@ -95,8 +95,8 @@
     "@context": "https://schema.org",
     "@type": "Organization",
     "name": "GitHub Actions Gateway",
-    "url": "https://actions-gateway.com/1.5.0",
-    "logo": "https://actions-gateway.com/1.5.0assets/icon-512.png",
+    "url": "https://actions-gateway.com/1.6.0",
+    "logo": "https://actions-gateway.com/1.6.0assets/icon-512.png",
     "sameAs": ["https://github.com/actions-gateway/github-actions-gateway"]
   }
   </script>
@@ -132,8 +132,8 @@
         <aside class="md-banner">
           <div class="md-banner__inner md-grid md-typeset">
             
-            <strong>v1.5.0 is here.</strong>
-      A per-tenant GitHub runner group boundary, multi-label runner sets that migrate a <code>runs-on</code> array unedited, and job duration and latency metrics on the acquisition tier every new tenant runs.
+            <strong>v1.6.0 is here.</strong>
+      The ARC migration checklist finished, a runner set that can say why it is not being offered jobs, and the runner version a worker pod actually ran.
           </div>
           
         </aside>
@@ -145,7 +145,7 @@
           <aside class="md-banner md-banner--warning">
             <div class="md-banner__inner md-grid md-typeset">
               You're not viewing the latest release.
-  <a href="https://actions-gateway.com/1.5.0"><strong>Go to the current docs.</strong></a>
+  <a href="https://actions-gateway.com/1.6.0"><strong>Go to the current docs.</strong></a>
 
             </div>
             <script>var el=document.querySelector("[data-md-component=outdated]"),base=new URL("../.."),outdated=__md_get("__outdated",sessionStorage,base);!0===outdated&&el&&(el.hidden=!1)</script>
@@ -1584,6 +1584,8 @@
       
         
       
+        
+      
     
     
     
@@ -1953,6 +1955,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../../operations/worker-shared-storage/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Shared worker storage (RWX)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../../operations/in-runner-image-builds/" class="md-nav__link">
         
   
@@ -2092,10 +2122,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9_17" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9_18" >
         
           
-          <label class="md-nav__link" for="__nav_9_17" id="__nav_9_17_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_9_18" id="__nav_9_18_label" tabindex="0">
             
   
   
@@ -2113,8 +2143,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_9_17_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_9_17">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_9_18_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9_18">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -3027,10 +3057,10 @@ A configurable retry budget, shared across both tiers <em>and</em> both causes p
 Jobs that exhaust their retry budget surface via a dedicated metric rather than silently disappearing.</p>
 <p><strong>What about a drain?</strong> An operator's <code>kubectl drain</code> or <code>kubectl delete pod</code> leaves the same graceful-termination path a preemption does — the Q385 SIGTERM relay gives the runner its grace period to abort and report, so the job concludes on GitHub promptly rather than hanging — and since Q502 it is <strong>also re-run automatically</strong>, keyed on the pod's <code>deletionTimestamp</code> at the moment its terminal phase publishes.
 That mark was measured (2026-07-29) to be absent on a human-cancelled run and on a genuine failure, which is what made it safe to act on; the AGC's own deletions (the reaper's, and the Q501 reclaim of an abandoned job's worker) are excluded by a stamp written before each delete, and a deleted worker whose container never ran stays unrecovered (no reportable failure exists to re-run).
-Detail: <a href="../04-operational-flows/#which-disruptions-are-recovered-and-which-are-not">§4.2</a> and <a href="../../plan/eviction-oversubscription-validation/#result-measured-2026-07-29-preemption-is-not-eviction">the experiment</a>.</p>
+Detail: <a href="../04-operational-flows/#which-disruptions-are-recovered-and-which-are-not">§4.2</a> and <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.6.0/docs/plan/eviction-oversubscription-validation.md#result-measured-2026-07-29-preemption-is-not-eviction">the experiment</a>.</p>
 <p>This recovery runs on <strong>both acquisition tiers</strong>.
 It was classic-only until Q417, because the <code>ScaleSet</code> protocol provisions its worker fire-and-forget and so never observed the pod's terminal phase — which mattered, since <code>ScaleSet</code> is the default and the only protocol <code>v2beta1</code> exposes.
-The port records the workflow run on the worker pod and moves detection to the owning reconciler, so the capability survives the <code>v2.0.0</code> removal of classic (<a href="../../plan/scaleset-eviction-recovery/">plan</a>, <a href="../04-operational-flows/#on-the-scale-set-tier-q417">§4</a>).</p>
+The port records the workflow run on the worker pod and moves detection to the owning reconciler, so the capability survives the <code>v2.0.0</code> removal of classic (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.6.0/docs/plan/scaleset-eviction-recovery.md">plan</a>, <a href="../04-operational-flows/#on-the-scale-set-tier-q417">§4</a>).</p>
 <h3 id="gpu-node-utilization">GPU Node Utilization<a class="headerlink" href="#gpu-node-utilization" title="Permanent link">&para;</a></h3>
 <p>For teams running GPU-accelerated workflows, runner pod lifecycle is a direct driver of hardware utilization.
 Where GAG provides headroom over ARC depends on how ARC is configured:</p>
@@ -3076,7 +3106,7 @@ Each pod's long-poll connection also generates sustained polling noise through n
    No cluster-admin involvement is required after initial GMC installation.</li>
 <li><strong>Replaceable managed defaults — good-enough by default, opt-out to specialist tools.</strong> For each managed concern, the platform provisions an opinionated default so a tenant onboards with zero tuning — but every such concern exposes an opt-out (a <code>managed…: false</code> toggle or a <code>…Ref</code> to operator-supplied material) that disables the default and lets an operator substitute a more capable tool.
    Today: <code>managedNetworkPolicy: false</code> → bring Cilium/Calico FQDN policies; <code>managedAutoscaling: false</code> (v2 <code>EgressProxy</code>) → bring KEDA/VPA/a custom HPA for the proxy pool.
-   Planned, behind triggers: an operator-supplied proxy TLS certificate → external PKI/Vault (<a href="../../STATUS/#deferred">Q174</a>).
+   Planned, behind triggers: an operator-supplied proxy TLS certificate → external PKI/Vault (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.6.0/docs/queue/Q174.md">Q174</a>).
    The opt-out shifts <em>ownership</em>, never a security invariant: a replacement must still satisfy the property the default guaranteed — e.g. <code>managedNetworkPolicy: false</code> still requires equivalent egress restriction.
    This keeps the common path simple and the advanced path unblocked, and pairs with <a href="../05-security/">secure-by-default</a>: the managed default is the safe one, the opt-out is explicit.
    Not every managed component gets an opt-out — safety invariants (PodDisruptionBudget, pod security context), architectural constraints (single-replica AGC, fixed proxy ports), and non-tenant-facing plumbing (Services, RBAC) stay managed.</li>

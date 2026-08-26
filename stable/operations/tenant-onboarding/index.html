@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/1.5.0/operations/tenant-onboarding/">
+        <link rel="canonical" href="https://actions-gateway.com/1.6.0/operations/tenant-onboarding/">
       
       
         <link rel="prev" href="../v1alpha1-deprecation/">
@@ -63,15 +63,15 @@
   <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/IBMPlexSans-Bold.woff2">
   <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/MonaspaceNeon-Medium.woff2">
   
-  <meta property="og:image" content="https://actions-gateway.com/1.5.0assets/social-preview.png">
+  <meta property="og:image" content="https://actions-gateway.com/1.6.0assets/social-preview.png">
   <meta property="og:image:width" content="1280">
   <meta property="og:image:height" content="640">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:image" content="https://actions-gateway.com/1.5.0assets/social-preview.png">
+  <meta name="twitter:image" content="https://actions-gateway.com/1.6.0assets/social-preview.png">
   
-  <link rel="apple-touch-icon" href="https://actions-gateway.com/1.5.0assets/apple-touch-icon.png">
-  <link rel="alternate icon" href="https://actions-gateway.com/1.5.0assets/favicon.ico">
-  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/1.5.0assets/icon-512.png">
+  <link rel="apple-touch-icon" href="https://actions-gateway.com/1.6.0assets/apple-touch-icon.png">
+  <link rel="alternate icon" href="https://actions-gateway.com/1.6.0assets/favicon.ico">
+  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/1.6.0assets/icon-512.png">
   
   <script type="application/ld+json">
   {
@@ -79,14 +79,14 @@
     "@type": "SoftwareSourceCode",
     "name": "GitHub Actions Gateway",
     "description": "An Actions Runner Controller (ARC) alternative for self-hosted GitHub Actions runners on multi-tenant Kubernetes \u2014 oversubscribe a shared quota, recover evicted jobs automatically, and isolate every tenant\u0027s GitHub egress.",
-    "url": "https://actions-gateway.com/1.5.0",
+    "url": "https://actions-gateway.com/1.6.0",
     "codeRepository": "https://github.com/actions-gateway/github-actions-gateway",
     "programmingLanguage": "Go",
     "license": "https://www.apache.org/licenses/LICENSE-2.0",
     "author": {
       "@type": "Organization",
       "name": "GitHub Actions Gateway",
-      "url": "https://actions-gateway.com/1.5.0"
+      "url": "https://actions-gateway.com/1.6.0"
     }
   }
   </script>
@@ -95,8 +95,8 @@
     "@context": "https://schema.org",
     "@type": "Organization",
     "name": "GitHub Actions Gateway",
-    "url": "https://actions-gateway.com/1.5.0",
-    "logo": "https://actions-gateway.com/1.5.0assets/icon-512.png",
+    "url": "https://actions-gateway.com/1.6.0",
+    "logo": "https://actions-gateway.com/1.6.0assets/icon-512.png",
     "sameAs": ["https://github.com/actions-gateway/github-actions-gateway"]
   }
   </script>
@@ -132,8 +132,8 @@
         <aside class="md-banner">
           <div class="md-banner__inner md-grid md-typeset">
             
-            <strong>v1.5.0 is here.</strong>
-      A per-tenant GitHub runner group boundary, multi-label runner sets that migrate a <code>runs-on</code> array unedited, and job duration and latency metrics on the acquisition tier every new tenant runs.
+            <strong>v1.6.0 is here.</strong>
+      The ARC migration checklist finished, a runner set that can say why it is not being offered jobs, and the runner version a worker pod actually ran.
           </div>
           
         </aside>
@@ -145,7 +145,7 @@
           <aside class="md-banner md-banner--warning">
             <div class="md-banner__inner md-grid md-typeset">
               You're not viewing the latest release.
-  <a href="https://actions-gateway.com/1.5.0"><strong>Go to the current docs.</strong></a>
+  <a href="https://actions-gateway.com/1.6.0"><strong>Go to the current docs.</strong></a>
 
             </div>
             <script>var el=document.querySelector("[data-md-component=outdated]"),base=new URL("../.."),outdated=__md_get("__outdated",sessionStorage,base);!0===outdated&&el&&(el.hidden=!1)</script>
@@ -1401,6 +1401,8 @@
       
         
       
+        
+      
     
     
     
@@ -2032,6 +2034,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#per-pool-egress-audit-record" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Per-pool egress audit record
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#workload-identity-credentials-external-signer" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2110,6 +2123,34 @@
     
   
     Runner template library
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../worker-shared-storage/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Shared worker storage (RWX)
   
 
     
@@ -2272,10 +2313,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9_17" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9_18" >
         
           
-          <label class="md-nav__link" for="__nav_9_17" id="__nav_9_17_label" tabindex="">
+          <label class="md-nav__link" for="__nav_9_18" id="__nav_9_18_label" tabindex="">
             
   
   
@@ -2293,8 +2334,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_9_17_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_9_17">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_9_18_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9_18">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -3209,6 +3250,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#per-pool-egress-audit-record" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Per-pool egress audit record
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#workload-identity-credentials-external-signer" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3290,7 +3342,7 @@ The single-CR <code>v1alpha1</code> flow in <a href="#step-2-create-the-actionsg
   The supported posture is to opt the GAG tenant namespace out of the mesh; if mesh membership is mandatory, use native sidecars or an ambient/sidecar-less data plane plus egress exclusions.
   Decide this before provisioning — see <a href="../service-mesh-coexistence/">Running GAG Alongside a Service Mesh</a>.</li>
 <li>[ ] <strong>GMC is running.</strong> The Gateway Manager Controller (GMC) is deployed and healthy: <code>kubectl get deploy -n gmc-system gmc-controller-manager</code>.
-  Install it with the <a href="../../charts/actions-gateway/README.md"><code>actions-gateway</code> Helm chart</a> (<code>helm install gag charts/actions-gateway -n gmc-system --create-namespace …</code>).</li>
+  Install it with the <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.6.0/charts/actions-gateway/README.md"><code>actions-gateway</code> Helm chart</a> (<code>helm install gag charts/actions-gateway -n gmc-system --create-namespace …</code>).</li>
 <li>[ ] <strong>CRDs are installed.</strong> <code>kubectl get crd actionsgateways.actions-gateway.github.com &amp;&amp; kubectl get crd runnergroups.actions-gateway.github.com</code>.</li>
 <li>[ ] <strong>GitHub App is registered.</strong> The GitHub App is registered in the target GitHub organization with at least <code>Actions: Read</code> and <code>Administration: Read</code> permissions.
   The platform team has the <code>appId</code>, <code>installationId</code>, and private key <code>.pem</code> file.
@@ -3397,7 +3449,7 @@ The web-UI URL above is the reliable path; the <code>gh api /app/installations</
 <h3 id="0d-generate-and-download-the-private-key-pem">0d. Generate and download the private key (<code>.pem</code>)<a class="headerlink" href="#0d-generate-and-download-the-private-key-pem" title="Permanent link">&para;</a></h3>
 <p>On the App's <strong>General</strong> page → <strong>Private keys</strong> → <strong>Generate a private key</strong>.
 The browser downloads a <code>.pem</code> file <strong>once</strong> — GitHub never shows it again, so store it safely and treat it as a high-value secret.</p>
-<p><strong>The exact PEM format the controller expects.</strong> The AGC parses the key with Go's standard library and accepts exactly two PEM block types (<a href="../../githubapp/auth.go"><code>githubapp/auth.go</code></a>):</p>
+<p><strong>The exact PEM format the controller expects.</strong> The AGC parses the key with Go's standard library and accepts exactly two PEM block types (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.6.0/githubapp/auth.go"><code>githubapp/auth.go</code></a>):</p>
 <table>
 <thead>
 <tr>
@@ -3450,8 +3502,8 @@ Delete the file as soon as the Secret exists:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="c1"># app.pem is the file downloaded in Step 0d — never echo, cat, or paste its contents.</span>
 <a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>kubectl<span class="w"> </span>create<span class="w"> </span>secret<span class="w"> </span>generic<span class="w"> </span>github-app-v1<span class="w"> </span><span class="se">\</span>
 <a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="w">  </span>--namespace<span class="w"> </span>&lt;tenant-namespace&gt;<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="w">  </span>--from-literal<span class="o">=</span><span class="nv">appId</span><span class="o">=</span><span class="s1">&#39;&lt;GitHub App ID&gt;&#39;</span><span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="w">  </span>--from-literal<span class="o">=</span><span class="nv">installationId</span><span class="o">=</span><span class="s1">&#39;&lt;Installation ID&gt;&#39;</span><span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="w">  </span>--from-literal<span class="o">=</span><span class="nv">appId</span><span class="o">=</span><span class="s1">'&lt;GitHub App ID&gt;'</span><span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="w">  </span>--from-literal<span class="o">=</span><span class="nv">installationId</span><span class="o">=</span><span class="s1">'&lt;Installation ID&gt;'</span><span class="w"> </span><span class="se">\</span>
 <a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a><span class="w">  </span>--from-file<span class="o">=</span><span class="nv">privateKey</span><span class="o">=</span>app.pem
 <a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a>
 <a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a><span class="c1"># Remove the private key from disk now that it lives only in the Secret.</span>
@@ -3471,8 +3523,8 @@ GitOps), keep the manifest out of version control or supply the <code>privateKey
 <a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a><span class="w">  </span><span class="nt">namespace</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">&lt;tenant-namespace&gt;</span>
 <a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Opaque</span>
 <a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a><span class="nt">stringData</span><span class="p">:</span>
-<a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a><span class="w">  </span><span class="nt">appId</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;&lt;GitHub</span><span class="nv"> </span><span class="s">App</span><span class="nv"> </span><span class="s">ID&gt;&quot;</span>
-<a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a><span class="w">  </span><span class="nt">installationId</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;&lt;Installation</span><span class="nv"> </span><span class="s">ID&gt;&quot;</span>
+<a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a><span class="w">  </span><span class="nt">appId</span><span class="p">:</span><span class="w"> </span><span class="s">"&lt;GitHub</span><span class="nv"> </span><span class="s">App</span><span class="nv"> </span><span class="s">ID&gt;"</span>
+<a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a><span class="w">  </span><span class="nt">installationId</span><span class="p">:</span><span class="w"> </span><span class="s">"&lt;Installation</span><span class="nv"> </span><span class="s">ID&gt;"</span>
 <a id="__codelineno-4-10" name="__codelineno-4-10" href="#__codelineno-4-10"></a><span class="w">  </span><span class="nt">privateKey</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">|</span>
 <a id="__codelineno-4-11" name="__codelineno-4-11" href="#__codelineno-4-11"></a><span class="w">    </span><span class="no">-----BEGIN RSA PRIVATE KEY-----</span>
 <a id="__codelineno-4-12" name="__codelineno-4-12" href="#__codelineno-4-12"></a><span class="w">    </span><span class="no">&lt;contents of the .pem file&gt;</span>
@@ -3484,7 +3536,7 @@ GitOps), keep the manifest out of version control or supply the <code>privateKey
 <p><strong>Verify:</strong>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>kubectl<span class="w"> </span>get<span class="w"> </span>secret<span class="w"> </span>github-app-v1<span class="w"> </span>-n<span class="w"> </span>&lt;tenant-namespace&gt;
 <a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>kubectl<span class="w"> </span>get<span class="w"> </span>secret<span class="w"> </span>github-app-v1<span class="w"> </span>-n<span class="w"> </span>&lt;tenant-namespace&gt;<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="w">  </span>-o<span class="w"> </span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">&#39;{.data.privateKey}&#39;</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>base64<span class="w"> </span>-d<span class="w"> </span><span class="p">|</span><span class="w"> </span>head<span class="w"> </span>-1
+<a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="w">  </span>-o<span class="w"> </span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">'{.data.privateKey}'</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>base64<span class="w"> </span>-d<span class="w"> </span><span class="p">|</span><span class="w"> </span>head<span class="w"> </span>-1
 <a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="c1"># Expected: -----BEGIN RSA PRIVATE KEY----- (PKCS#1)</span>
 <a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a><span class="c1">#      or: -----BEGIN PRIVATE KEY----- (PKCS#8, RSA or Ed25519)</span>
 </code></pre></div></p>
@@ -3502,9 +3554,9 @@ Apply it with a trusted (administrator) identity:</p>
 <a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a><span class="w">  </span><span class="nt">namespace</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">&lt;tenant-namespace&gt;</span>
 <a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a><span class="nt">spec</span><span class="p">:</span>
 <a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a><span class="w">  </span><span class="nt">hard</span><span class="p">:</span>
-<a id="__codelineno-7-8" name="__codelineno-7-8" href="#__codelineno-7-8"></a><span class="w">    </span><span class="nt">requests.cpu</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;20&quot;</span>
-<a id="__codelineno-7-9" name="__codelineno-7-9" href="#__codelineno-7-9"></a><span class="w">    </span><span class="nt">requests.memory</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;40Gi&quot;</span>
-<a id="__codelineno-7-10" name="__codelineno-7-10" href="#__codelineno-7-10"></a><span class="w">    </span><span class="nt">pods</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;50&quot;</span>
+<a id="__codelineno-7-8" name="__codelineno-7-8" href="#__codelineno-7-8"></a><span class="w">    </span><span class="nt">requests.cpu</span><span class="p">:</span><span class="w"> </span><span class="s">"20"</span>
+<a id="__codelineno-7-9" name="__codelineno-7-9" href="#__codelineno-7-9"></a><span class="w">    </span><span class="nt">requests.memory</span><span class="p">:</span><span class="w"> </span><span class="s">"40Gi"</span>
+<a id="__codelineno-7-10" name="__codelineno-7-10" href="#__codelineno-7-10"></a><span class="w">    </span><span class="nt">pods</span><span class="p">:</span><span class="w"> </span><span class="s">"50"</span>
 </code></pre></div>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>kubectl<span class="w"> </span>apply<span class="w"> </span>-f<span class="w"> </span>resourcequota.yaml
 </code></pre></div>
@@ -3547,44 +3599,44 @@ See <a href="../troubleshooting/#second-actionsgateway-in-a-namespace-rejected-s
 <a id="__codelineno-9-13" name="__codelineno-9-13" href="#__codelineno-9-13"></a><span class="w">  </span><span class="c1"># gitHubAppRef must be installed on this same org/enterprise.</span>
 <a id="__codelineno-9-14" name="__codelineno-9-14" href="#__codelineno-9-14"></a><span class="w">  </span><span class="nt">gitHubURL</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">https://github.com/my-org</span>
 <a id="__codelineno-9-15" name="__codelineno-9-15" href="#__codelineno-9-15"></a><span class="w">  </span><span class="c1"># Default: blocks privileged containers, host namespaces, hostPath, dangerous caps.</span>
-<a id="__codelineno-9-16" name="__codelineno-9-16" href="#__codelineno-9-16"></a><span class="w">  </span><span class="c1"># Set to &quot;restricted&quot; for stricter isolation, or &quot;privileged&quot; only if the workload</span>
+<a id="__codelineno-9-16" name="__codelineno-9-16" href="#__codelineno-9-16"></a><span class="w">  </span><span class="c1"># Set to "restricted" for stricter isolation, or "privileged" only if the workload</span>
 <a id="__codelineno-9-17" name="__codelineno-9-17" href="#__codelineno-9-17"></a><span class="w">  </span><span class="c1"># genuinely needs an unrestricted PodSpec (DinD, Buildah without sandbox, kernel modules).</span>
-<a id="__codelineno-9-18" name="__codelineno-9-18" href="#__codelineno-9-18"></a><span class="w">  </span><span class="c1"># &quot;privileged&quot; requires the namespace to be eligible: a platform admin must label it</span>
+<a id="__codelineno-9-18" name="__codelineno-9-18" href="#__codelineno-9-18"></a><span class="w">  </span><span class="c1"># "privileged" requires the namespace to be eligible: a platform admin must label it</span>
 <a id="__codelineno-9-19" name="__codelineno-9-19" href="#__codelineno-9-19"></a><span class="w">  </span><span class="c1"># actions-gateway.github.com/privileged-profile=allowed (see Pre-Conditions), else the webhook</span>
 <a id="__codelineno-9-20" name="__codelineno-9-20" href="#__codelineno-9-20"></a><span class="w">  </span><span class="c1"># rejects the CR at create/update. It is deliberately not tenant-settable.</span>
 <a id="__codelineno-9-21" name="__codelineno-9-21" href="#__codelineno-9-21"></a><span class="w">  </span><span class="c1"># A privileged worker container (securityContext.privileged: true in a podTemplate)</span>
 <a id="__codelineno-9-22" name="__codelineno-9-22" href="#__codelineno-9-22"></a><span class="w">  </span><span class="c1"># is ONLY admitted under securityProfile: privileged — under baseline/restricted the</span>
 <a id="__codelineno-9-23" name="__codelineno-9-23" href="#__codelineno-9-23"></a><span class="w">  </span><span class="c1"># webhook rejects it. See troubleshooting: privileged worker container rejected.</span>
 <a id="__codelineno-9-24" name="__codelineno-9-24" href="#__codelineno-9-24"></a><span class="w">  </span><span class="nt">securityProfile</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">baseline</span>
-<a id="__codelineno-9-25" name="__codelineno-9-25" href="#__codelineno-9-25"></a><span class="w">  </span><span class="c1"># Log verbosity for this tenant&#39;s AGC and egress proxy: info (default) or debug.</span>
-<a id="__codelineno-9-26" name="__codelineno-9-26" href="#__codelineno-9-26"></a><span class="w">  </span><span class="c1"># Leave at info; flip to debug only for a bug repro (see &quot;Per-tenant log level&quot;</span>
+<a id="__codelineno-9-25" name="__codelineno-9-25" href="#__codelineno-9-25"></a><span class="w">  </span><span class="c1"># Log verbosity for this tenant's AGC and egress proxy: info (default) or debug.</span>
+<a id="__codelineno-9-26" name="__codelineno-9-26" href="#__codelineno-9-26"></a><span class="w">  </span><span class="c1"># Leave at info; flip to debug only for a bug repro (see "Per-tenant log level"</span>
 <a id="__codelineno-9-27" name="__codelineno-9-27" href="#__codelineno-9-27"></a><span class="w">  </span><span class="c1"># below). Changing it is a rolling restart of the AGC and proxy, not a hot reload.</span>
 <a id="__codelineno-9-28" name="__codelineno-9-28" href="#__codelineno-9-28"></a><span class="w">  </span><span class="nt">logLevel</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">info</span>
 <a id="__codelineno-9-29" name="__codelineno-9-29" href="#__codelineno-9-29"></a><span class="w">  </span><span class="nt">proxy</span><span class="p">:</span>
 <a id="__codelineno-9-30" name="__codelineno-9-30" href="#__codelineno-9-30"></a><span class="w">    </span><span class="c1"># minReplicas is a floor, not a replica count: the GMC applies it when the pool</span>
-<a id="__codelineno-9-31" name="__codelineno-9-31" href="#__codelineno-9-31"></a><span class="w">    </span><span class="c1"># is first created (or has been scaled to zero) and passes it to the pool&#39;s HPA.</span>
+<a id="__codelineno-9-31" name="__codelineno-9-31" href="#__codelineno-9-31"></a><span class="w">    </span><span class="c1"># is first created (or has been scaled to zero) and passes it to the pool's HPA.</span>
 <a id="__codelineno-9-32" name="__codelineno-9-32" href="#__codelineno-9-32"></a><span class="w">    </span><span class="c1"># Above the floor, .spec.replicas belongs to the HPA — raising minReplicas on a</span>
 <a id="__codelineno-9-33" name="__codelineno-9-33" href="#__codelineno-9-33"></a><span class="w">    </span><span class="c1"># running pool takes effect through the HPA, which needs a healthy metrics-server.</span>
-<a id="__codelineno-9-34" name="__codelineno-9-34" href="#__codelineno-9-34"></a><span class="w">    </span><span class="c1"># See troubleshooting: &quot;Proxy Pool Never Scales Out&quot;.</span>
+<a id="__codelineno-9-34" name="__codelineno-9-34" href="#__codelineno-9-34"></a><span class="w">    </span><span class="c1"># See troubleshooting: "Proxy Pool Never Scales Out".</span>
 <a id="__codelineno-9-35" name="__codelineno-9-35" href="#__codelineno-9-35"></a><span class="w">    </span><span class="nt">minReplicas</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">2</span>
 <a id="__codelineno-9-36" name="__codelineno-9-36" href="#__codelineno-9-36"></a><span class="w">    </span><span class="nt">maxReplicas</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">10</span>
 <a id="__codelineno-9-37" name="__codelineno-9-37" href="#__codelineno-9-37"></a><span class="w">    </span><span class="c1"># Optional: noProxyCIDRs excludes internal destinations from the egress proxy.</span>
 <a id="__codelineno-9-38" name="__codelineno-9-38" href="#__codelineno-9-38"></a><span class="w">    </span><span class="c1"># Entries may be CIDRs (10.0.0.0/8), bare IPs, or NO_PROXY domain suffixes</span>
 <a id="__codelineno-9-39" name="__codelineno-9-39" href="#__codelineno-9-39"></a><span class="w">    </span><span class="c1"># (svc.cluster.local, internal.example.com). Admission rejects any entry that</span>
-<a id="__codelineno-9-40" name="__codelineno-9-40" href="#__codelineno-9-40"></a><span class="w">    </span><span class="c1"># would route this tenant&#39;s GitHub traffic around the proxy — a hostname</span>
+<a id="__codelineno-9-40" name="__codelineno-9-40" href="#__codelineno-9-40"></a><span class="w">    </span><span class="c1"># would route this tenant's GitHub traffic around the proxy — a hostname</span>
 <a id="__codelineno-9-41" name="__codelineno-9-41" href="#__codelineno-9-41"></a><span class="w">    </span><span class="c1"># matching the gitHubURL host or the public GitHub domains (github.com,</span>
 <a id="__codelineno-9-42" name="__codelineno-9-42" href="#__codelineno-9-42"></a><span class="w">    </span><span class="c1"># githubusercontent.com, ghcr.io) — since that breaks egress-IP attribution.</span>
 <a id="__codelineno-9-43" name="__codelineno-9-43" href="#__codelineno-9-43"></a><span class="w">    </span><span class="c1"># Never list GitHub here. The cluster-internal exemptions are appended</span>
 <a id="__codelineno-9-44" name="__codelineno-9-44" href="#__codelineno-9-44"></a><span class="w">    </span><span class="c1"># automatically — svc.cluster.local, kubernetes.default.svc, localhost,</span>
-<a id="__codelineno-9-45" name="__codelineno-9-45" href="#__codelineno-9-45"></a><span class="w">    </span><span class="c1"># 127.0.0.1, and this cluster&#39;s API server ClusterIP — so neither the API</span>
+<a id="__codelineno-9-45" name="__codelineno-9-45" href="#__codelineno-9-45"></a><span class="w">    </span><span class="c1"># 127.0.0.1, and this cluster's API server ClusterIP — so neither the API</span>
 <a id="__codelineno-9-46" name="__codelineno-9-46" href="#__codelineno-9-46"></a><span class="w">    </span><span class="c1"># server nor the service CIDR belongs here on any distribution.</span>
-<a id="__codelineno-9-47" name="__codelineno-9-47" href="#__codelineno-9-47"></a><span class="w">    </span><span class="c1"># noProxyCIDRs: [&quot;10.0.0.0/8&quot;]</span>
+<a id="__codelineno-9-47" name="__codelineno-9-47" href="#__codelineno-9-47"></a><span class="w">    </span><span class="c1"># noProxyCIDRs: ["10.0.0.0/8"]</span>
 <a id="__codelineno-9-48" name="__codelineno-9-48" href="#__codelineno-9-48"></a><span class="w">  </span><span class="c1"># The namespace ResourceQuota is platform-owned and set on the namespace in</span>
 <a id="__codelineno-9-49" name="__codelineno-9-49" href="#__codelineno-9-49"></a><span class="w">  </span><span class="c1"># Step 1b — it is not a field on this CR.</span>
 <a id="__codelineno-9-50" name="__codelineno-9-50" href="#__codelineno-9-50"></a><span class="w">  </span><span class="c1"># A runner group has no `name` field — the RunnerGroup CR name is derived from</span>
-<a id="__codelineno-9-51" name="__codelineno-9-51" href="#__codelineno-9-51"></a><span class="w">  </span><span class="c1"># the gateway name + the group&#39;s first runnerLabel (here &quot;linux&quot;).</span>
+<a id="__codelineno-9-51" name="__codelineno-9-51" href="#__codelineno-9-51"></a><span class="w">  </span><span class="c1"># the gateway name + the group's first runnerLabel (here "linux").</span>
 <a id="__codelineno-9-52" name="__codelineno-9-52" href="#__codelineno-9-52"></a><span class="w">  </span><span class="nt">runnerGroups</span><span class="p">:</span>
-<a id="__codelineno-9-53" name="__codelineno-9-53" href="#__codelineno-9-53"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">runnerLabels</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="s">&quot;linux&quot;</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="s">&quot;self-hosted&quot;</span><span class="p p-Indicator">]</span>
+<a id="__codelineno-9-53" name="__codelineno-9-53" href="#__codelineno-9-53"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">runnerLabels</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="s">"linux"</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="s">"self-hosted"</span><span class="p p-Indicator">]</span>
 <a id="__codelineno-9-54" name="__codelineno-9-54" href="#__codelineno-9-54"></a><span class="w">      </span><span class="nt">maxListeners</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">10</span>
 <a id="__codelineno-9-55" name="__codelineno-9-55" href="#__codelineno-9-55"></a><span class="w">      </span><span class="nt">maxWorkers</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">20</span>
 <a id="__codelineno-9-56" name="__codelineno-9-56" href="#__codelineno-9-56"></a><span class="w">      </span><span class="nt">podTemplate</span><span class="p">:</span>
@@ -3593,8 +3645,8 @@ See <a href="../troubleshooting/#second-actionsgateway-in-a-namespace-rejected-s
 <a id="__codelineno-9-59" name="__codelineno-9-59" href="#__codelineno-9-59"></a><span class="w">            </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">runner</span>
 <a id="__codelineno-9-60" name="__codelineno-9-60" href="#__codelineno-9-60"></a><span class="w">              </span><span class="nt">resources</span><span class="p">:</span>
 <a id="__codelineno-9-61" name="__codelineno-9-61" href="#__codelineno-9-61"></a><span class="w">                </span><span class="nt">requests</span><span class="p">:</span>
-<a id="__codelineno-9-62" name="__codelineno-9-62" href="#__codelineno-9-62"></a><span class="w">                  </span><span class="nt">cpu</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;1&quot;</span>
-<a id="__codelineno-9-63" name="__codelineno-9-63" href="#__codelineno-9-63"></a><span class="w">                  </span><span class="nt">memory</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;2Gi&quot;</span>
+<a id="__codelineno-9-62" name="__codelineno-9-62" href="#__codelineno-9-62"></a><span class="w">                  </span><span class="nt">cpu</span><span class="p">:</span><span class="w"> </span><span class="s">"1"</span>
+<a id="__codelineno-9-63" name="__codelineno-9-63" href="#__codelineno-9-63"></a><span class="w">                  </span><span class="nt">memory</span><span class="p">:</span><span class="w"> </span><span class="s">"2Gi"</span>
 </code></pre></div>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a>kubectl<span class="w"> </span>apply<span class="w"> </span>-f<span class="w"> </span>actionsgateway.yaml
 </code></pre></div>
@@ -3602,9 +3654,9 @@ See <a href="../troubleshooting/#second-actionsgateway-in-a-namespace-rejected-s
 <code>completedPodTTL</code> (default <code>5m</code>) is how long a finished worker pod (Succeeded/Failed) is kept before the AGC deletes it — the retention window is your chance to <code>kubectl logs</code>/<code>describe</code> a failed pod; <code>"0s"</code> deletes pods immediately on completion.
 <code>pendingPodDeadline</code> (default <code>10m</code>, minimum <code>1s</code>) is how long a worker pod may sit Pending (unpullable image, unschedulable constraints) before the AGC deletes it and frees the concurrency slot it was holding — raise it above your worst-case node-autoscaling time for GPU pools, e.g.:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="w">  </span><span class="nt">runnerGroups</span><span class="p">:</span>
-<a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">runnerLabels</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="s">&quot;self-hosted&quot;</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="s">&quot;gpu&quot;</span><span class="p p-Indicator">]</span>
-<a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a><span class="w">      </span><span class="nt">completedPodTTL</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;30m&quot;</span><span class="w">      </span><span class="c1"># longer debugging window for failed jobs</span>
-<a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a><span class="w">      </span><span class="nt">pendingPodDeadline</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;30m&quot;</span><span class="w">   </span><span class="c1"># GPU node provisioning can exceed the 10m default</span>
+<a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">runnerLabels</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="s">"self-hosted"</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="s">"gpu"</span><span class="p p-Indicator">]</span>
+<a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a><span class="w">      </span><span class="nt">completedPodTTL</span><span class="p">:</span><span class="w"> </span><span class="s">"30m"</span><span class="w">      </span><span class="c1"># longer debugging window for failed jobs</span>
+<a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a><span class="w">      </span><span class="nt">pendingPodDeadline</span><span class="p">:</span><span class="w"> </span><span class="s">"30m"</span><span class="w">   </span><span class="c1"># GPU node provisioning can exceed the 10m default</span>
 </code></pre></div>
 <p>A third cleanup arm has no knob: on the ScaleSet protocol, a worker pod still <code>Running</code> five minutes after GitHub reports its job terminal is deleted, because it is a worker that never received its job (or one held open by a container that outlived the runner) and it is holding a slot for nothing.
 It emits a <code>WorkerPodOrphanedRunning</code> Warning Event — see the <a href="../troubleshooting/#worker-pod-reaped-while-running-workerpodorphanedrunning">runbook</a>.
@@ -3620,9 +3672,9 @@ It is bounded by in-flight work, owner-ref'd to its RunnerSet so it is garbage-c
 It is <strong>off by default</strong> — omit it and provisioning stays immediate (GAG's zero-idle default).
 It is <strong>not</strong> the same as <code>maxWorkers</code>: <code>maxWorkers</code> caps how <em>many</em> worker pods run at once (a ceiling), while <code>scaleUp</code> caps how <em>fast</em> they start (a ramp).
 Reach for it only when a burst of simultaneously-acquired jobs stampedes a shared, rate-sensitive <strong>egress</strong> path — a NAT/SNAT gateway, a stateful firewall's connection-tracking table, or a site-to-site VPN — where the <em>onset</em> of connections (not the steady-state count) is what causes damage.
-It deliberately delays already-claimed jobs, trading time-to-pickup for a gentler ramp.</p>
+It deliberately defers work, trading time-to-pickup for a gentler ramp.</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="w">  </span><span class="nt">runnerGroups</span><span class="p">:</span>
-<a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">runnerLabels</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="s">&quot;self-hosted&quot;</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="s">&quot;linux&quot;</span><span class="p p-Indicator">]</span>
+<a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">runnerLabels</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="s">"self-hosted"</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="s">"linux"</span><span class="p p-Indicator">]</span>
 <a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a><span class="w">      </span><span class="nt">maxWorkers</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">200</span><span class="w">            </span><span class="c1"># ceiling: at most 200 concurrent worker pods</span>
 <a id="__codelineno-12-4" name="__codelineno-12-4" href="#__codelineno-12-4"></a><span class="w">      </span><span class="nt">scaleUp</span><span class="p">:</span>
 <a id="__codelineno-12-5" name="__codelineno-12-5" href="#__codelineno-12-5"></a><span class="w">        </span><span class="nt">maxPerSecond</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">10</span><span class="w">         </span><span class="c1"># ramp: sustained ≤10 new worker pods/second…</span>
@@ -3632,9 +3684,10 @@ It deliberately delays already-claimed jobs, trading time-to-pickup for a gentle
 <li><code>maxPerSecond</code> (required, ≥1): the sustained pod-creation rate once the burst is spent.</li>
 <li><code>burst</code> (optional, ≥1): the largest instantaneous batch before throttling engages; <strong>defaults to <code>maxPerSecond</code></strong> (one second's worth) when omitted.</li>
 </ul>
-<p>When the bucket is empty an acquired job <strong>waits</strong> for a token before its pod is created — holding its GitHub job lock (renewed in the background), so it composes with the namespace-quota retry backoff rather than dropping the job.
-Each throttled creation increments <code>actions_gateway_worker_scaleup_throttled_total{namespace, runner_group}</code>; a sustained non-zero rate means the ramp is actively smoothing a burst (see <a href="../observability/">observability: metrics</a>).
-Set <code>maxPerSecond</code> low enough to protect the shared resource but high enough that already-claimed jobs are not held long — a very low rate against a large burst can hold locks for the ramp's full duration.</p>
+<p>When the bucket is empty the AGC <strong>withholds intake</strong> rather than delaying a job it has already taken on: it declines to claim the next job, leaving it queued at GitHub for redelivery, and no job ever waits for a token while holding a GitHub job lock (Q717).
+That is what makes a low <code>maxPerSecond</code> safe against a large burst — the ramp defers <em>unclaimed</em> jobs, so nothing sits on a lock for the ramp's duration and no job is cancelled by a lock lapsing part-way through.
+Each withheld job increments <code>actions_gateway_worker_scaleup_throttled_total{namespace, runner_group}</code>; a sustained non-zero rate means the ramp is actively smoothing a burst (see <a href="../observability/">observability: metrics</a>).
+Set <code>maxPerSecond</code> high enough that jobs are picked up promptly once the burst passes: the cost of a low rate is now time-to-pickup rather than a held lock.</p>
 <p><strong>Pick the right tool for the stampede.</strong> A scale-up rate limit is the wrong fix for some bursts:</p>
 <table>
 <thead>
@@ -3664,7 +3717,8 @@ Set <code>maxPerSecond</code> low enough to protect the shared resource but high
 </table>
 <p>It coexists with the cluster autoscaler / Karpenter: bounding pod-admission rate eases the node-scale-up burst they react to, and they keep their own independent rate controls.</p>
 <blockquote>
-<p><strong>v2 (<code>RunnerSet</code>)</strong> carries the same <code>spec.scaleUp</code> field with identical semantics.</p>
+<p><strong>v2 (<code>RunnerSet</code>)</strong> carries the same <code>spec.scaleUp</code> field with identical semantics.
+A <code>ScaleSet</code>-protocol set expresses it as a smaller advertised capacity per long-poll rather than as a per-job refusal, so GitHub never assigns the jobs in the first place; the ramp is the same and the accounting appears as <code>actions_gateway_scaleset_capacity_withheld{reason="scaleup"}</code>.</p>
 </blockquote>
 <p><strong>Optional — refuse jobs the cluster can't place (<code>capacityGate</code>, v2 only, opt-in, default-off).</strong> A <code>RunnerSet</code> accepts an optional <code>spec.capacityGate</code> that adds a <em>placeability</em> rung to the pre-claim admission gate.
 Without it, a set whose worker shape has become unplaceable — a drained node pool, a changed taint, spot capacity gone — keeps taking on jobs, and each one spends a single-use runner registration, holds the GitHub job lock until <code>pendingPodDeadline</code>, and ends as a <strong>cancelled</strong> workflow run.
@@ -3764,8 +3818,8 @@ Because the AGC injects the wrapper on top of <strong>any</strong> base, your im
 <a id="__codelineno-15-5" name="__codelineno-15-5" href="#__codelineno-15-5"></a><span class="w">    </span><span class="o">&amp;&amp;</span><span class="w"> </span>rm<span class="w"> </span>-rf<span class="w"> </span>/var/lib/apt/lists/*
 <a id="__codelineno-15-6" name="__codelineno-15-6" href="#__codelineno-15-6"></a><span class="k">USER</span><span class="w"> </span><span class="s">runner   # keep the non-root UID 1001 the AGC expects</span>
 </code></pre></div>
-<p>A working reference you can copy and extend lives at <a href="../../scripts/dogfood/runner/Dockerfile"><code>scripts/dogfood/runner/Dockerfile</code></a> (built by <a href="../../scripts/dogfood/runner-build.sh"><code>scripts/dogfood/runner-build.sh</code></a>); it adds just enough to run a <code>make</code>-based Go CI.
-<strong>It is a reference example, not an officially supported image</strong> — GAG signs and CVE-scans only its five first-party images, so a runner image you ship (or copy from the example) is yours to pin by digest and scan.
+<p>A working reference you can copy and extend lives at <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.6.0/scripts/dogfood/runner/Dockerfile"><code>scripts/dogfood/runner/Dockerfile</code></a> (built by <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.6.0/scripts/dogfood/runner-build.sh"><code>scripts/dogfood/runner-build.sh</code></a>); it adds just enough to run a <code>make</code>-based Go CI.
+<strong>It is a reference example, not an officially supported image</strong> — GAG signs and CVE-scans only its six first-party images, so a runner image you ship (or copy from the example) is yours to pin by digest and scan.
 Keep the runner version in step with the default the AGC would otherwise inject.
 GitHub refuses to register a runner below its enforced minimum, currently <code>2.329.0</code>, and separately requires each new runner release be installed within 30 days of publication to keep executing jobs.</p>
 <p><strong>Tag your image with the runner version it ships.</strong> The AGC reads the runner version off the <code>workerImage</code> reference and reports the verdict as the <code>RunnerVersionTooOld</code> condition on the <code>RunnerGroup</code>/<code>RunnerSet</code>:</p>
@@ -3798,7 +3852,7 @@ GitHub refuses to register a runner below its enforced minimum, currently <code>
 <p>A digest-only or custom tag is not a failure, just an unchecked one.
 The pinned-digest advice above still stands, and <code>myrepo/runner:2.335.1@sha256:…</code> satisfies both.</p>
 <p><strong>Reading the version a running worker actually shipped.</strong> Whatever the tag says, the wrapper logs the runner version it found inside the image once per worker pod:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a>kubectl<span class="w"> </span>logs<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>&lt;worker-pod&gt;<span class="w"> </span>-c<span class="w"> </span>runner<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span><span class="s2">&quot;runner version&quot;</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a>kubectl<span class="w"> </span>logs<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>&lt;worker-pod&gt;<span class="w"> </span>-c<span class="w"> </span>runner<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span><span class="s2">"runner version"</span>
 </code></pre></div>
 <p><code>runner version detected version=2.335.1</code> is the real answer for a custom image; <code>runner version not detected</code> means the image is not <code>actions/runner</code>-derived in the expected layout.</p>
 <p><strong>Optional — distributed tracing.</strong> To send the AGC's OpenTelemetry traces to a collector, add a <code>spec.tracing</code> block.
@@ -3808,7 +3862,7 @@ Setting <code>endpoint</code> is what turns tracing on; leave the block out to k
 <a id="__codelineno-17-2" name="__codelineno-17-2" href="#__codelineno-17-2"></a><span class="w">  </span><span class="nt">tracing</span><span class="p">:</span>
 <a id="__codelineno-17-3" name="__codelineno-17-3" href="#__codelineno-17-3"></a><span class="w">    </span><span class="nt">endpoint</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">https://otel-collector.observability:4317</span>
 <a id="__codelineno-17-4" name="__codelineno-17-4" href="#__codelineno-17-4"></a><span class="w">    </span><span class="nt">sampler</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">parentbased_traceidratio</span><span class="w">   </span><span class="c1"># optional</span>
-<a id="__codelineno-17-5" name="__codelineno-17-5" href="#__codelineno-17-5"></a><span class="w">    </span><span class="nt">samplerArg</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;0.1&quot;</span><span class="w">                    </span><span class="c1"># optional — sample 10% of traces</span>
+<a id="__codelineno-17-5" name="__codelineno-17-5" href="#__codelineno-17-5"></a><span class="w">    </span><span class="nt">samplerArg</span><span class="p">:</span><span class="w"> </span><span class="s">"0.1"</span><span class="w">                    </span><span class="c1"># optional — sample 10% of traces</span>
 <a id="__codelineno-17-6" name="__codelineno-17-6" href="#__codelineno-17-6"></a><span class="w">    </span><span class="nt">resourceAttributes</span><span class="p">:</span><span class="w">                  </span><span class="c1"># optional</span>
 <a id="__codelineno-17-7" name="__codelineno-17-7" href="#__codelineno-17-7"></a><span class="w">      </span><span class="nt">deployment.environment</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">prod</span>
 <a id="__codelineno-17-8" name="__codelineno-17-8" href="#__codelineno-17-8"></a><span class="w">    </span><span class="c1"># insecure: true   # only for a plaintext in-cluster collector; TLS is the default</span>
@@ -3818,10 +3872,10 @@ See <a href="../observability-logging/#enabling-tracing-on-gmc-managed-agcs">obs
 <p><a id="per-tenant-log-level"></a> <strong>Optional — per-tenant log level.</strong> <code>spec.logLevel</code> sets the log verbosity of this tenant's AGC and egress proxy: <code>info</code> (the default) or <code>debug</code>.
 The GMC threads it to both workloads as the <code>LOG_LEVEL</code> environment variable, so you can crank one gateway to <code>debug</code> for a bug repro without redeploying the GMC or touching any other tenant:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a>kubectl<span class="w"> </span>patch<span class="w"> </span>actionsgateway<span class="w"> </span>-n<span class="w"> </span>&lt;tenant-namespace&gt;<span class="w"> </span>&lt;name&gt;<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-18-2" name="__codelineno-18-2" href="#__codelineno-18-2"></a><span class="w">  </span>--type<span class="w"> </span>merge<span class="w"> </span>-p<span class="w"> </span><span class="s1">&#39;{&quot;spec&quot;:{&quot;logLevel&quot;:&quot;debug&quot;}}&#39;</span>
+<a id="__codelineno-18-2" name="__codelineno-18-2" href="#__codelineno-18-2"></a><span class="w">  </span>--type<span class="w"> </span>merge<span class="w"> </span>-p<span class="w"> </span><span class="s1">'{"spec":{"logLevel":"debug"}}'</span>
 <a id="__codelineno-18-3" name="__codelineno-18-3" href="#__codelineno-18-3"></a><span class="c1"># ...reproduce the issue, read the debug logs, then revert:</span>
 <a id="__codelineno-18-4" name="__codelineno-18-4" href="#__codelineno-18-4"></a>kubectl<span class="w"> </span>patch<span class="w"> </span>actionsgateway<span class="w"> </span>-n<span class="w"> </span>&lt;tenant-namespace&gt;<span class="w"> </span>&lt;name&gt;<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-18-5" name="__codelineno-18-5" href="#__codelineno-18-5"></a><span class="w">  </span>--type<span class="w"> </span>merge<span class="w"> </span>-p<span class="w"> </span><span class="s1">&#39;{&quot;spec&quot;:{&quot;logLevel&quot;:&quot;info&quot;}}&#39;</span>
+<a id="__codelineno-18-5" name="__codelineno-18-5" href="#__codelineno-18-5"></a><span class="w">  </span>--type<span class="w"> </span>merge<span class="w"> </span>-p<span class="w"> </span><span class="s1">'{"spec":{"logLevel":"info"}}'</span>
 </code></pre></div>
 <ul>
 <li><strong>The default is <code>info</code>, never <code>debug</code>.</strong> A CR that omits the field — or sets it back to <code>info</code> — runs at <code>info</code>.
@@ -3834,20 +3888,20 @@ The GMC threads it to both workloads as the <code>LOG_LEVEL</code> environment v
 <li><strong>v2 splits the knob per kind.</strong> On the v2 (<code>actions-gateway.com</code>) API, <code>ActionsGateway.spec.logLevel</code> covers the AGC only; a proxy pool carries its own <code>EgressProxy.spec.logLevel</code> (same <code>info</code> | <code>debug</code> values and default, same rolling-restart semantics), so a shared pool can be flipped to <code>debug</code> without touching any gateway:</li>
 </ul>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a>kubectl<span class="w"> </span>patch<span class="w"> </span>egressproxy<span class="w"> </span>-n<span class="w"> </span>&lt;tenant-namespace&gt;<span class="w"> </span>&lt;name&gt;<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-19-2" name="__codelineno-19-2" href="#__codelineno-19-2"></a><span class="w">  </span>--type<span class="w"> </span>merge<span class="w"> </span>-p<span class="w"> </span><span class="s1">&#39;{&quot;spec&quot;:{&quot;logLevel&quot;:&quot;debug&quot;}}&#39;</span>
+<a id="__codelineno-19-2" name="__codelineno-19-2" href="#__codelineno-19-2"></a><span class="w">  </span>--type<span class="w"> </span>merge<span class="w"> </span>-p<span class="w"> </span><span class="s1">'{"spec":{"logLevel":"debug"}}'</span>
 </code></pre></div>
 <hr />
 <h2 id="step-3-validate-provisioning">Step 3: Validate Provisioning<a class="headerlink" href="#step-3-validate-provisioning" title="Permanent link">&para;</a></h2>
 <p>The GMC provisions all tenant resources within ~30 seconds of CR creation.</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a><span class="c1"># Check the ActionsGateway conditions</span>
 <a id="__codelineno-20-2" name="__codelineno-20-2" href="#__codelineno-20-2"></a>kubectl<span class="w"> </span>get<span class="w"> </span>actionsgateway<span class="w"> </span>-n<span class="w"> </span>&lt;tenant-namespace&gt;<span class="w"> </span>&lt;name&gt;<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-20-3" name="__codelineno-20-3" href="#__codelineno-20-3"></a><span class="w">  </span>-o<span class="w"> </span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">&#39;{.status.conditions}&#39;</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>jq<span class="w"> </span>.
+<a id="__codelineno-20-3" name="__codelineno-20-3" href="#__codelineno-20-3"></a><span class="w">  </span>-o<span class="w"> </span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">'{.status.conditions}'</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>jq<span class="w"> </span>.
 <a id="__codelineno-20-4" name="__codelineno-20-4" href="#__codelineno-20-4"></a>
 <a id="__codelineno-20-5" name="__codelineno-20-5" href="#__codelineno-20-5"></a><span class="c1"># Expected conditions:</span>
 <a id="__codelineno-20-6" name="__codelineno-20-6" href="#__codelineno-20-6"></a><span class="c1">#   Ready=True</span>
 <a id="__codelineno-20-7" name="__codelineno-20-7" href="#__codelineno-20-7"></a><span class="c1">#   AGCAvailable=True</span>
 <a id="__codelineno-20-8" name="__codelineno-20-8" href="#__codelineno-20-8"></a><span class="c1">#   ProxyAvailable=True</span>
-<a id="__codelineno-20-9" name="__codelineno-20-9" href="#__codelineno-20-9"></a><span class="c1">#   ProxyQuotaPressure=False  (True warns the proxy can&#39;t scale to maxReplicas within the ResourceQuota)</span>
+<a id="__codelineno-20-9" name="__codelineno-20-9" href="#__codelineno-20-9"></a><span class="c1">#   ProxyQuotaPressure=False  (True warns the proxy can't scale to maxReplicas within the ResourceQuota)</span>
 <a id="__codelineno-20-10" name="__codelineno-20-10" href="#__codelineno-20-10"></a><span class="c1">#   ProxyQuotaExceeded=False  (True means proxy replica creates are being rejected by the ResourceQuota)</span>
 </code></pre></div>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-21-1" name="__codelineno-21-1" href="#__codelineno-21-1"></a><span class="c1"># Confirm the AGC Deployment is running</span>
@@ -3873,7 +3927,7 @@ The GMC threads it to both workloads as the <code>LOG_LEVEL</code> environment v
 <a id="__codelineno-21-21" name="__codelineno-21-21" href="#__codelineno-21-21"></a>
 <a id="__codelineno-21-22" name="__codelineno-21-22" href="#__codelineno-21-22"></a><span class="c1"># Confirm the Pod Security Admission label matches the chosen securityProfile</span>
 <a id="__codelineno-21-23" name="__codelineno-21-23" href="#__codelineno-21-23"></a>kubectl<span class="w"> </span>get<span class="w"> </span>namespace<span class="w"> </span>&lt;tenant-namespace&gt;<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-21-24" name="__codelineno-21-24" href="#__codelineno-21-24"></a><span class="w">  </span>-o<span class="w"> </span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">&#39;{.metadata.labels.pod-security\.kubernetes\.io/enforce}{&quot;\n&quot;}&#39;</span>
+<a id="__codelineno-21-24" name="__codelineno-21-24" href="#__codelineno-21-24"></a><span class="w">  </span>-o<span class="w"> </span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">'{.metadata.labels.pod-security\.kubernetes\.io/enforce}{"\n"}'</span>
 <a id="__codelineno-21-25" name="__codelineno-21-25" href="#__codelineno-21-25"></a><span class="c1"># Expected: baseline (default), or restricted / privileged if explicitly chosen</span>
 </code></pre></div>
 <p><strong>If <code>TARGETS: &lt;unknown&gt;</code> on the HPA:</strong> <code>resources.requests.cpu</code> is not set on proxy pods.
@@ -3884,10 +3938,10 @@ See <a href="../troubleshooting/#proxy-pool-not-scaling">Troubleshooting — Pro
 <p>The AGC should begin polling GitHub within seconds of starting.</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-22-1" name="__codelineno-22-1" href="#__codelineno-22-1"></a><span class="c1"># Check AGC logs for session registration</span>
 <a id="__codelineno-22-2" name="__codelineno-22-2" href="#__codelineno-22-2"></a>kubectl<span class="w"> </span>logs<span class="w"> </span>-n<span class="w"> </span>&lt;tenant-namespace&gt;<span class="w"> </span>deploy/actions-gateway-controller<span class="w"> </span>--tail<span class="o">=</span><span class="m">30</span>
-<a id="__codelineno-22-3" name="__codelineno-22-3" href="#__codelineno-22-3"></a><span class="c1"># Look for: &quot;session registered&quot; or &quot;starting listener goroutine&quot;</span>
+<a id="__codelineno-22-3" name="__codelineno-22-3" href="#__codelineno-22-3"></a><span class="c1"># Look for: "session registered" or "starting listener goroutine"</span>
 <a id="__codelineno-22-4" name="__codelineno-22-4" href="#__codelineno-22-4"></a>
 <a id="__codelineno-22-5" name="__codelineno-22-5" href="#__codelineno-22-5"></a><span class="c1"># Check the active sessions metric</span>
-<a id="__codelineno-22-6" name="__codelineno-22-6" href="#__codelineno-22-6"></a><span class="c1"># Metric: actions_gateway_active_sessions{namespace=&quot;&lt;tenant-namespace&gt;&quot;}</span>
+<a id="__codelineno-22-6" name="__codelineno-22-6" href="#__codelineno-22-6"></a><span class="c1"># Metric: actions_gateway_active_sessions{namespace="&lt;tenant-namespace&gt;"}</span>
 <a id="__codelineno-22-7" name="__codelineno-22-7" href="#__codelineno-22-7"></a><span class="c1"># Expected: 1 per RunnerGroup (e.g. 1 if one RunnerGroup is defined)</span>
 </code></pre></div>
 <p>If sessions are not appearing:
@@ -3903,17 +3957,17 @@ See <a href="../troubleshooting/#proxy-pool-not-scaling">Troubleshooting — Pro
 <a id="__codelineno-23-4" name="__codelineno-23-4" href="#__codelineno-23-4"></a><span class="w">  </span><span class="nt">test</span><span class="p">:</span>
 <a id="__codelineno-23-5" name="__codelineno-23-5" href="#__codelineno-23-5"></a><span class="w">    </span><span class="nt">runs-on</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">self-hosted</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">linux</span><span class="p p-Indicator">]</span>
 <a id="__codelineno-23-6" name="__codelineno-23-6" href="#__codelineno-23-6"></a><span class="w">    </span><span class="nt">steps</span><span class="p">:</span>
-<a id="__codelineno-23-7" name="__codelineno-23-7" href="#__codelineno-23-7"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">run</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">echo &quot;Runner is healthy. Host $(hostname)&quot;</span>
+<a id="__codelineno-23-7" name="__codelineno-23-7" href="#__codelineno-23-7"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">run</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">echo "Runner is healthy. Host $(hostname)"</span>
 </code></pre></div></p>
 <p>Trigger from the GitHub Actions UI or:
-<div class="highlight"><pre><span></span><code><a id="__codelineno-24-1" name="__codelineno-24-1" href="#__codelineno-24-1"></a>gh<span class="w"> </span>workflow<span class="w"> </span>run<span class="w"> </span><span class="s2">&quot;Runner connectivity test&quot;</span><span class="w"> </span>--repo<span class="w"> </span>&lt;org&gt;/&lt;repo&gt;
+<div class="highlight"><pre><span></span><code><a id="__codelineno-24-1" name="__codelineno-24-1" href="#__codelineno-24-1"></a>gh<span class="w"> </span>workflow<span class="w"> </span>run<span class="w"> </span><span class="s2">"Runner connectivity test"</span><span class="w"> </span>--repo<span class="w"> </span>&lt;org&gt;/&lt;repo&gt;
 </code></pre></div></p>
 <p>Watch for the job to be acquired and a worker pod to appear:
 <div class="highlight"><pre><span></span><code><a id="__codelineno-25-1" name="__codelineno-25-1" href="#__codelineno-25-1"></a><span class="c1"># Watch for worker pod creation</span>
 <a id="__codelineno-25-2" name="__codelineno-25-2" href="#__codelineno-25-2"></a>kubectl<span class="w"> </span>get<span class="w"> </span>pods<span class="w"> </span>-n<span class="w"> </span>&lt;tenant-namespace&gt;<span class="w"> </span>-w
 <a id="__codelineno-25-3" name="__codelineno-25-3" href="#__codelineno-25-3"></a>
 <a id="__codelineno-25-4" name="__codelineno-25-4" href="#__codelineno-25-4"></a><span class="c1"># Check jobs acquired metric</span>
-<a id="__codelineno-25-5" name="__codelineno-25-5" href="#__codelineno-25-5"></a><span class="c1"># Metric: actions_gateway_jobs_acquired_total{namespace=&quot;&lt;tenant-namespace&gt;&quot;}</span>
+<a id="__codelineno-25-5" name="__codelineno-25-5" href="#__codelineno-25-5"></a><span class="c1"># Metric: actions_gateway_jobs_acquired_total{namespace="&lt;tenant-namespace&gt;"}</span>
 <a id="__codelineno-25-6" name="__codelineno-25-6" href="#__codelineno-25-6"></a><span class="c1"># Expected: increments by 1</span>
 <a id="__codelineno-25-7" name="__codelineno-25-7" href="#__codelineno-25-7"></a>
 <a id="__codelineno-25-8" name="__codelineno-25-8" href="#__codelineno-25-8"></a><span class="c1"># Check pod creation latency</span>
@@ -4037,7 +4091,7 @@ A gateway with no <code>spec.defaultProxyRef</code> and a <code>RunnerSet</code>
 <a id="__codelineno-26-8" name="__codelineno-26-8" href="#__codelineno-26-8"></a><span class="w">  </span><span class="nt">githubURL</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">https://github.com/acme</span>
 <a id="__codelineno-26-9" name="__codelineno-26-9" href="#__codelineno-26-9"></a><span class="w">  </span><span class="c1"># GHES behind a private CA: name a ConfigMap in this namespace holding the CA</span>
 <a id="__codelineno-26-10" name="__codelineno-26-10" href="#__codelineno-26-10"></a><span class="w">  </span><span class="c1"># bundle under ca.crt. Additive — the system roots stay trusted — and mounted on</span>
-<a id="__codelineno-26-11" name="__codelineno-26-11" href="#__codelineno-26-11"></a><span class="w">  </span><span class="c1"># both the AGC and this gateway&#39;s worker pods. Omit on public GitHub.</span>
+<a id="__codelineno-26-11" name="__codelineno-26-11" href="#__codelineno-26-11"></a><span class="w">  </span><span class="c1"># both the AGC and this gateway's worker pods. Omit on public GitHub.</span>
 <a id="__codelineno-26-12" name="__codelineno-26-12" href="#__codelineno-26-12"></a><span class="w">  </span><span class="c1"># githubCABundleRef: { name: ghes-ca }</span>
 <a id="__codelineno-26-13" name="__codelineno-26-13" href="#__codelineno-26-13"></a><span class="w">  </span><span class="c1"># no defaultProxyRef ⇒ direct egress</span>
 <a id="__codelineno-26-14" name="__codelineno-26-14" href="#__codelineno-26-14"></a><span class="nn">---</span>
@@ -4049,7 +4103,7 @@ A gateway with no <code>spec.defaultProxyRef</code> and a <code>RunnerSet</code>
 <a id="__codelineno-26-20" name="__codelineno-26-20" href="#__codelineno-26-20"></a><span class="w">    </span><span class="nt">spec</span><span class="p">:</span>
 <a id="__codelineno-26-21" name="__codelineno-26-21" href="#__codelineno-26-21"></a><span class="w">      </span><span class="nt">containers</span><span class="p">:</span>
 <a id="__codelineno-26-22" name="__codelineno-26-22" href="#__codelineno-26-22"></a><span class="w">        </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">runner</span>
-<a id="__codelineno-26-23" name="__codelineno-26-23" href="#__codelineno-26-23"></a><span class="w">          </span><span class="nt">resources</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> requests</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> cpu</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;1&quot;</span><span class="p p-Indicator">,</span><span class="nt"> memory</span><span class="p">:</span><span class="w"> </span><span class="nv">2Gi</span><span class="w"> </span><span class="p p-Indicator">}</span><span class="w"> </span><span class="p p-Indicator">}</span>
+<a id="__codelineno-26-23" name="__codelineno-26-23" href="#__codelineno-26-23"></a><span class="w">          </span><span class="nt">resources</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> requests</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> cpu</span><span class="p">:</span><span class="w"> </span><span class="s">"1"</span><span class="p p-Indicator">,</span><span class="nt"> memory</span><span class="p">:</span><span class="w"> </span><span class="nv">2Gi</span><span class="w"> </span><span class="p p-Indicator">}</span><span class="w"> </span><span class="p p-Indicator">}</span>
 <a id="__codelineno-26-24" name="__codelineno-26-24" href="#__codelineno-26-24"></a><span class="nn">---</span>
 <a id="__codelineno-26-25" name="__codelineno-26-25" href="#__codelineno-26-25"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">actions-gateway.com/v2beta1</span>
 <a id="__codelineno-26-26" name="__codelineno-26-26" href="#__codelineno-26-26"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">RunnerSet</span>
@@ -4057,7 +4111,7 @@ A gateway with no <code>spec.defaultProxyRef</code> and a <code>RunnerSet</code>
 <a id="__codelineno-26-28" name="__codelineno-26-28" href="#__codelineno-26-28"></a><span class="nt">spec</span><span class="p">:</span>
 <a id="__codelineno-26-29" name="__codelineno-26-29" href="#__codelineno-26-29"></a><span class="w">  </span><span class="nt">gatewayRef</span><span class="p">:</span><span class="w">  </span><span class="p p-Indicator">{</span><span class="nt"> name</span><span class="p">:</span><span class="w"> </span><span class="nv">acme</span><span class="w"> </span><span class="p p-Indicator">}</span>
 <a id="__codelineno-26-30" name="__codelineno-26-30" href="#__codelineno-26-30"></a><span class="w">  </span><span class="nt">templateRef</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> name</span><span class="p">:</span><span class="w"> </span><span class="nv">default</span><span class="w"> </span><span class="p p-Indicator">}</span>
-<a id="__codelineno-26-31" name="__codelineno-26-31" href="#__codelineno-26-31"></a><span class="w">  </span><span class="nt">runnerLabels</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">gag-linux</span><span class="p p-Indicator">]</span><span class="w">   </span><span class="c1"># the first label is this set&#39;s scale-set name and runs-on target</span>
+<a id="__codelineno-26-31" name="__codelineno-26-31" href="#__codelineno-26-31"></a><span class="w">  </span><span class="nt">runnerLabels</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">gag-linux</span><span class="p p-Indicator">]</span><span class="w">   </span><span class="c1"># the first label is this set's scale-set name and runs-on target</span>
 <a id="__codelineno-26-32" name="__codelineno-26-32" href="#__codelineno-26-32"></a><span class="w">  </span><span class="nt">maxWorkers</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">50</span>
 <a id="__codelineno-26-33" name="__codelineno-26-33" href="#__codelineno-26-33"></a><span class="w">  </span><span class="c1"># no proxyRef / defaultProxyRef ⇒ direct egress</span>
 </code></pre></div>
@@ -4088,7 +4142,8 @@ It is the only protocol the graduated version serves, because it removes a many-
 <li><strong>The first label is unique per GitHub org, enterprise, or repo.</strong> Two sets claiming the same <code>runnerLabels[0]</code> would register the same scale-set name at GitHub; the second is rejected.
   The boundary is the <code>githubURL</code> the set's gateway names, <strong>not the namespace</strong>: two sets in different namespaces whose gateways point at the same org still collide, so a shard of one org across namespaces needs distinct first labels per shard.
   Later labels may overlap freely.</li>
-<li><strong>Declare the full list up front.</strong> Labels are registered when the scale set is created and are not reconciled afterwards, so a label added to a live set never reaches GitHub — the set reports <a href="../troubleshooting/#jobs-targeting-one-of-a-runner-sets-labels-never-start-runnerlabelsincomplete"><code>RunnerLabelsIncomplete</code></a> rather than failing silently.
+<li><strong>Declare the full list up front.</strong> A scale set's labels are fixed when it is created and cannot be changed afterwards, so a label added to a live set never reaches GitHub — the set reports <a href="../troubleshooting/#jobs-targeting-one-of-a-runner-sets-labels-never-start-runnerlabelsincomplete"><code>RunnerLabelsIncomplete</code></a> rather than failing silently.
+  Adding one later means replacing the scale set, which costs the jobs queued against it.
   On GitHub Enterprise Server below 3.21 the same condition covers an appliance that dropped the extra labels because <code>DistributedTask.AllowRunnerScaleSetCustomLabels</code> is off.</li>
 </ul>
 <p>This is the same routing ARC scale sets use, so workflows migrating from ARC carry their <code>runs-on</code> lines across unedited — see <a href="../migration-from-arc/#job-routing-a-11-map">Migrating from ARC</a>.</p>
@@ -4136,7 +4191,7 @@ The worker pod is still isolated exactly as this page describes; what is unbound
 <a id="__codelineno-29-4" name="__codelineno-29-4" href="#__codelineno-29-4"></a><span class="nt">spec</span><span class="p">:</span>
 <a id="__codelineno-29-5" name="__codelineno-29-5" href="#__codelineno-29-5"></a><span class="w">  </span><span class="nt">gatewayRef</span><span class="p">:</span><span class="w">  </span><span class="p p-Indicator">{</span><span class="nt"> name</span><span class="p">:</span><span class="w"> </span><span class="nv">acme</span><span class="w"> </span><span class="p p-Indicator">}</span>
 <a id="__codelineno-29-6" name="__codelineno-29-6" href="#__codelineno-29-6"></a><span class="w">  </span><span class="nt">runnerLabels</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">team-a-gpu</span><span class="p p-Indicator">]</span>
-<a id="__codelineno-29-7" name="__codelineno-29-7" href="#__codelineno-29-7"></a><span class="w">  </span><span class="nt">runnerGroup</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">team-a-gpu</span><span class="w">             </span><span class="c1"># wins over the gateway&#39;s defaultRunnerGroup</span>
+<a id="__codelineno-29-7" name="__codelineno-29-7" href="#__codelineno-29-7"></a><span class="w">  </span><span class="nt">runnerGroup</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">team-a-gpu</span><span class="w">             </span><span class="c1"># wins over the gateway's defaultRunnerGroup</span>
 </code></pre></div>
 <p><strong>What the platform admin still owns, at GitHub.</strong> GAG never creates a runner group and never edits one's repository access.
 Before onboarding a tenant, create the group in the organization's Actions settings and scope its repository access to that tenant's repositories.
@@ -4282,6 +4337,29 @@ Setting the field without it does <strong>not</strong> break the gateway — see
 Check the resolution any time with <code>kubectl get vpa &lt;gateway&gt;-agc -o yaml</code>; the GMC also emits a Normal Event naming the derived bounds when the autoscaler is first created.</p>
 <p><strong>Checking it took effect.</strong> <code>kubectl describe actionsgateway &lt;gateway&gt;</code> shows an <code>AGCAutoscalingUnavailable</code> condition: <code>False</code>/<code>AGCAutoscalingActive</code> when the autoscaler is in place, <code>False</code>/<code>AGCAutoscalingDisabled</code> when you have not opted in, <code>True</code>/<code>VPACRDNotInstalled</code> when the prerequisite is missing.</p>
 <p>The GMC's own control plane has the same opt-in at the chart level — the <code>vpa.enabled</code> value in <a href="../install/#key-values-an-operator-sets">install.md</a>.</p>
+<h3 id="per-pool-egress-audit-record">Per-pool egress audit record<a class="headerlink" href="#per-pool-egress-audit-record" title="Permanent link">&para;</a></h3>
+<p>A proxy pool can record one structured line per accepted CONNECT: which destination a tenant's workers reached, when, and how many bytes moved each way.
+It is <strong>off by default</strong> and turned on per pool:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-33-1" name="__codelineno-33-1" href="#__codelineno-33-1"></a>kubectl<span class="w"> </span>patch<span class="w"> </span>egressproxy<span class="w"> </span>-n<span class="w"> </span>&lt;tenant-namespace&gt;<span class="w"> </span>&lt;name&gt;<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-33-2" name="__codelineno-33-2" href="#__codelineno-33-2"></a><span class="w">  </span>--type<span class="w"> </span>merge<span class="w"> </span>-p<span class="w"> </span><span class="s1">'{"spec":{"auditLogging":"Connections"}}'</span>
+</code></pre></div>
+<p>Only <code>Off</code> (the default) and <code>Connections</code> are accepted; admission rejects anything else.</p>
+<p><strong>It records; it does not enforce.</strong> Neither value changes what the proxy forwards.
+If you know <code>audit</code> from Pod Security Admission, where it means <em>evaluate the policy but admit anyway</em>, that sense does not apply here: enabling this does not put the destination allowlist into report-only, and it relaxes nothing.
+Destination enforcement is <code>destinationFQDNs</code>/<code>destinationCIDRs</code> plus the pod-egress NetworkPolicy, unchanged either way.</p>
+<p><strong>Quote <code>Off</code> in a YAML manifest.</strong> YAML reads a bare <code>Off</code> as the boolean false, so <code>kubectl apply</code> of <code>auditLogging: Off</code> sends a boolean and the apiserver rejects it as the wrong type for a string field, naming a value you never typed.
+Write <code>auditLogging: "Off"</code>, or leave the field out, which means the same thing.
+The <code>kubectl patch</code> above is JSON and is unaffected.</p>
+<p><strong>A shared pool attributes per pool, not per tenant.</strong> If this pool is referenced from other namespaces via <code>spec.sharing.allowedNamespaces</code>, the record's <code>namespace</code> names the pool, not whichever consumer sent the request: a CONNECT carries no namespace and nothing else in the line identifies the caller.
+Give a tenant whose audit trail has to name them their own unshared pool.</p>
+<p><strong>Off is the default deliberately, and turning it on is a decision with two costs.</strong> The record says where a tenant's traffic went, so retaining it is a choice about what the platform keeps and for how long.
+Agree that with the tenant rather than switching it on across a cluster.
+And it is one line per connection: under real CI load it becomes the pool's dominant log volume, so size the collector and its retention before flipping it.</p>
+<p><strong>It is a rolling restart, not a hot reload.</strong> The value is part of the pod template, so records begin once the pool's new pods are up.
+In-flight tunnels finish on the old pods within the termination grace period and produce no record, a gap of at most one drain that is worth knowing if you turn it on mid-incident.</p>
+<p>Turn it on when you need egress evidence the counters cannot give: an incident where "which endpoint did this pool reach at 14:02" is the question, or a compliance ask for per-tenant egress attribution, which an unshared pool satisfies and a shared one does not.
+Reach for it <em>before</em> the incident if the answer has to exist afterwards: it records forward, never backward.</p>
+<p>The record shape, the field meanings, and how to select the audit stream in a log pipeline are in <a href="../observability-logging/#proxy-egress-audit-record">logging: proxy egress audit record</a>; what a line deliberately never carries is in the <a href="../../design/05-security/#proxy-egress-audit-record">security design</a>.</p>
 <h3 id="workload-identity-credentials-external-signer">Workload-identity credentials (external signer)<a class="headerlink" href="#workload-identity-credentials-external-signer" title="Permanent link">&para;</a></h3>
 <p><code>spec.credentials</code> is a discriminated union (keyed by <code>credentials.type</code>) with two members.
 The default, <code>GitHubApp</code> (every example above), is the <strong>possession model</strong>: the App's RSA private key lives in a namespace <code>Secret</code> (<a href="#step-1-create-the-github-app-secret">Step 1</a>) and the AGC signs the App JWT in-process.
@@ -4290,36 +4368,36 @@ Use it when policy forbids a long-lived signing key at rest in the cluster and y
 See <a href="../../design/05-security/#57-workload-identity-the-no-pem-delegation-model">security §5.7</a> for the trust model.</p>
 <p>There is <strong>no <code>githubApp</code> Secret</strong> for this method — you do not run <a href="#step-1-create-the-github-app-secret">Step 1</a>.
 Instead you put the non-secret App identity (<code>appId</code>/<code>installationId</code>) inline and reference a Vault transit key:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-33-1" name="__codelineno-33-1" href="#__codelineno-33-1"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">actions-gateway.com/v2beta1</span>
-<a id="__codelineno-33-2" name="__codelineno-33-2" href="#__codelineno-33-2"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ActionsGateway</span>
-<a id="__codelineno-33-3" name="__codelineno-33-3" href="#__codelineno-33-3"></a><span class="nt">metadata</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> name</span><span class="p">:</span><span class="w"> </span><span class="nv">acme</span><span class="p p-Indicator">,</span><span class="nt"> namespace</span><span class="p">:</span><span class="w"> </span><span class="nv">team-a</span><span class="w"> </span><span class="p p-Indicator">}</span>
-<a id="__codelineno-33-4" name="__codelineno-33-4" href="#__codelineno-33-4"></a><span class="nt">spec</span><span class="p">:</span>
-<a id="__codelineno-33-5" name="__codelineno-33-5" href="#__codelineno-33-5"></a><span class="w">  </span><span class="nt">credentials</span><span class="p">:</span>
-<a id="__codelineno-33-6" name="__codelineno-33-6" href="#__codelineno-33-6"></a><span class="w">    </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">WorkloadIdentity</span><span class="w">          </span><span class="c1"># the no-PEM delegation member</span>
-<a id="__codelineno-33-7" name="__codelineno-33-7" href="#__codelineno-33-7"></a><span class="w">    </span><span class="nt">workloadIdentity</span><span class="p">:</span>
-<a id="__codelineno-33-8" name="__codelineno-33-8" href="#__codelineno-33-8"></a><span class="w">      </span><span class="nt">appId</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">12345</span><span class="w">                  </span><span class="c1"># non-secret; the JWT issuer</span>
-<a id="__codelineno-33-9" name="__codelineno-33-9" href="#__codelineno-33-9"></a><span class="w">      </span><span class="nt">installationId</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">67890</span><span class="w">         </span><span class="c1"># non-secret</span>
-<a id="__codelineno-33-10" name="__codelineno-33-10" href="#__codelineno-33-10"></a><span class="w">      </span><span class="nt">signer</span><span class="p">:</span>
-<a id="__codelineno-33-11" name="__codelineno-33-11" href="#__codelineno-33-11"></a><span class="w">        </span><span class="nt">provider</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Vault</span><span class="w">             </span><span class="c1"># HashiCorp Vault transit (cloud KMS providers follow)</span>
-<a id="__codelineno-33-12" name="__codelineno-33-12" href="#__codelineno-33-12"></a><span class="w">        </span><span class="nt">vault</span><span class="p">:</span>
-<a id="__codelineno-33-13" name="__codelineno-33-13" href="#__codelineno-33-13"></a><span class="w">          </span><span class="nt">address</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">https://vault.vault.svc:8200</span><span class="w">   </span><span class="c1"># HTTPS required (dev/test plaintext is an explicit AGC opt-in)</span>
-<a id="__codelineno-33-14" name="__codelineno-33-14" href="#__codelineno-33-14"></a><span class="w">          </span><span class="nt">keyName</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">github-app</span><span class="w">       </span><span class="c1"># the RSA transit key Vault signs with (signed as RS256)</span>
-<a id="__codelineno-33-15" name="__codelineno-33-15" href="#__codelineno-33-15"></a><span class="w">          </span><span class="nt">transitMount</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">transit</span><span class="w">     </span><span class="c1"># optional; defaults to &quot;transit&quot;</span>
-<a id="__codelineno-33-16" name="__codelineno-33-16" href="#__codelineno-33-16"></a><span class="w">          </span><span class="nt">auth</span><span class="p">:</span>
-<a id="__codelineno-33-17" name="__codelineno-33-17" href="#__codelineno-33-17"></a><span class="w">            </span><span class="nt">role</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">agc-acme</span><span class="w">          </span><span class="c1"># the Vault Kubernetes-auth role bound to this gateway&#39;s AGC ServiceAccount</span>
-<a id="__codelineno-33-18" name="__codelineno-33-18" href="#__codelineno-33-18"></a><span class="w">            </span><span class="nt">mount</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">kubernetes</span><span class="w">       </span><span class="c1"># optional; defaults to &quot;kubernetes&quot;</span>
-<a id="__codelineno-33-19" name="__codelineno-33-19" href="#__codelineno-33-19"></a><span class="w">          </span><span class="c1"># Optional (Q202): on a policy-enforcing CNI, identify Vault as a NetworkPolicy</span>
-<a id="__codelineno-33-20" name="__codelineno-33-20" href="#__codelineno-33-20"></a><span class="w">          </span><span class="c1"># egress peer so the GMC opens a scoped AGC→Vault egress rule automatically.</span>
-<a id="__codelineno-33-21" name="__codelineno-33-21" href="#__codelineno-33-21"></a><span class="w">          </span><span class="c1"># Set exactly one form — a pod/namespace selector (in-cluster Vault) OR a cidr</span>
-<a id="__codelineno-33-22" name="__codelineno-33-22" href="#__codelineno-33-22"></a><span class="w">          </span><span class="c1"># (external Vault). Omit on a non-enforcing CNI (kindnet) or to manage it by hand.</span>
-<a id="__codelineno-33-23" name="__codelineno-33-23" href="#__codelineno-33-23"></a><span class="w">          </span><span class="nt">networkPolicy</span><span class="p">:</span>
-<a id="__codelineno-33-24" name="__codelineno-33-24" href="#__codelineno-33-24"></a><span class="w">            </span><span class="nt">namespaceSelector</span><span class="p">:</span>
-<a id="__codelineno-33-25" name="__codelineno-33-25" href="#__codelineno-33-25"></a><span class="w">              </span><span class="nt">matchLabels</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> kubernetes.io/metadata.name</span><span class="p">:</span><span class="w"> </span><span class="nv">vault</span><span class="w"> </span><span class="p p-Indicator">}</span>
-<a id="__codelineno-33-26" name="__codelineno-33-26" href="#__codelineno-33-26"></a><span class="w">            </span><span class="nt">podSelector</span><span class="p">:</span>
-<a id="__codelineno-33-27" name="__codelineno-33-27" href="#__codelineno-33-27"></a><span class="w">              </span><span class="nt">matchLabels</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> app.kubernetes.io/name</span><span class="p">:</span><span class="w"> </span><span class="nv">vault</span><span class="w"> </span><span class="p p-Indicator">}</span>
-<a id="__codelineno-33-28" name="__codelineno-33-28" href="#__codelineno-33-28"></a><span class="w">            </span><span class="c1"># external Vault instead: cidr: 10.0.5.7/32</span>
-<a id="__codelineno-33-29" name="__codelineno-33-29" href="#__codelineno-33-29"></a><span class="w">            </span><span class="c1"># port: 8200            # optional override; default is the port from `address`</span>
-<a id="__codelineno-33-30" name="__codelineno-33-30" href="#__codelineno-33-30"></a><span class="w">  </span><span class="nt">githubURL</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">https://github.com/acme</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-34-1" name="__codelineno-34-1" href="#__codelineno-34-1"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">actions-gateway.com/v2beta1</span>
+<a id="__codelineno-34-2" name="__codelineno-34-2" href="#__codelineno-34-2"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ActionsGateway</span>
+<a id="__codelineno-34-3" name="__codelineno-34-3" href="#__codelineno-34-3"></a><span class="nt">metadata</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> name</span><span class="p">:</span><span class="w"> </span><span class="nv">acme</span><span class="p p-Indicator">,</span><span class="nt"> namespace</span><span class="p">:</span><span class="w"> </span><span class="nv">team-a</span><span class="w"> </span><span class="p p-Indicator">}</span>
+<a id="__codelineno-34-4" name="__codelineno-34-4" href="#__codelineno-34-4"></a><span class="nt">spec</span><span class="p">:</span>
+<a id="__codelineno-34-5" name="__codelineno-34-5" href="#__codelineno-34-5"></a><span class="w">  </span><span class="nt">credentials</span><span class="p">:</span>
+<a id="__codelineno-34-6" name="__codelineno-34-6" href="#__codelineno-34-6"></a><span class="w">    </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">WorkloadIdentity</span><span class="w">          </span><span class="c1"># the no-PEM delegation member</span>
+<a id="__codelineno-34-7" name="__codelineno-34-7" href="#__codelineno-34-7"></a><span class="w">    </span><span class="nt">workloadIdentity</span><span class="p">:</span>
+<a id="__codelineno-34-8" name="__codelineno-34-8" href="#__codelineno-34-8"></a><span class="w">      </span><span class="nt">appId</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">12345</span><span class="w">                  </span><span class="c1"># non-secret; the JWT issuer</span>
+<a id="__codelineno-34-9" name="__codelineno-34-9" href="#__codelineno-34-9"></a><span class="w">      </span><span class="nt">installationId</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">67890</span><span class="w">         </span><span class="c1"># non-secret</span>
+<a id="__codelineno-34-10" name="__codelineno-34-10" href="#__codelineno-34-10"></a><span class="w">      </span><span class="nt">signer</span><span class="p">:</span>
+<a id="__codelineno-34-11" name="__codelineno-34-11" href="#__codelineno-34-11"></a><span class="w">        </span><span class="nt">provider</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Vault</span><span class="w">             </span><span class="c1"># HashiCorp Vault transit (cloud KMS providers follow)</span>
+<a id="__codelineno-34-12" name="__codelineno-34-12" href="#__codelineno-34-12"></a><span class="w">        </span><span class="nt">vault</span><span class="p">:</span>
+<a id="__codelineno-34-13" name="__codelineno-34-13" href="#__codelineno-34-13"></a><span class="w">          </span><span class="nt">address</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">https://vault.vault.svc:8200</span><span class="w">   </span><span class="c1"># HTTPS required (dev/test plaintext is an explicit AGC opt-in)</span>
+<a id="__codelineno-34-14" name="__codelineno-34-14" href="#__codelineno-34-14"></a><span class="w">          </span><span class="nt">keyName</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">github-app</span><span class="w">       </span><span class="c1"># the RSA transit key Vault signs with (signed as RS256)</span>
+<a id="__codelineno-34-15" name="__codelineno-34-15" href="#__codelineno-34-15"></a><span class="w">          </span><span class="nt">transitMount</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">transit</span><span class="w">     </span><span class="c1"># optional; defaults to "transit"</span>
+<a id="__codelineno-34-16" name="__codelineno-34-16" href="#__codelineno-34-16"></a><span class="w">          </span><span class="nt">auth</span><span class="p">:</span>
+<a id="__codelineno-34-17" name="__codelineno-34-17" href="#__codelineno-34-17"></a><span class="w">            </span><span class="nt">role</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">agc-acme</span><span class="w">          </span><span class="c1"># the Vault Kubernetes-auth role bound to this gateway's AGC ServiceAccount</span>
+<a id="__codelineno-34-18" name="__codelineno-34-18" href="#__codelineno-34-18"></a><span class="w">            </span><span class="nt">mount</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">kubernetes</span><span class="w">       </span><span class="c1"># optional; defaults to "kubernetes"</span>
+<a id="__codelineno-34-19" name="__codelineno-34-19" href="#__codelineno-34-19"></a><span class="w">          </span><span class="c1"># Optional (Q202): on a policy-enforcing CNI, identify Vault as a NetworkPolicy</span>
+<a id="__codelineno-34-20" name="__codelineno-34-20" href="#__codelineno-34-20"></a><span class="w">          </span><span class="c1"># egress peer so the GMC opens a scoped AGC→Vault egress rule automatically.</span>
+<a id="__codelineno-34-21" name="__codelineno-34-21" href="#__codelineno-34-21"></a><span class="w">          </span><span class="c1"># Set exactly one form — a pod/namespace selector (in-cluster Vault) OR a cidr</span>
+<a id="__codelineno-34-22" name="__codelineno-34-22" href="#__codelineno-34-22"></a><span class="w">          </span><span class="c1"># (external Vault). Omit on a non-enforcing CNI (kindnet) or to manage it by hand.</span>
+<a id="__codelineno-34-23" name="__codelineno-34-23" href="#__codelineno-34-23"></a><span class="w">          </span><span class="nt">networkPolicy</span><span class="p">:</span>
+<a id="__codelineno-34-24" name="__codelineno-34-24" href="#__codelineno-34-24"></a><span class="w">            </span><span class="nt">namespaceSelector</span><span class="p">:</span>
+<a id="__codelineno-34-25" name="__codelineno-34-25" href="#__codelineno-34-25"></a><span class="w">              </span><span class="nt">matchLabels</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> kubernetes.io/metadata.name</span><span class="p">:</span><span class="w"> </span><span class="nv">vault</span><span class="w"> </span><span class="p p-Indicator">}</span>
+<a id="__codelineno-34-26" name="__codelineno-34-26" href="#__codelineno-34-26"></a><span class="w">            </span><span class="nt">podSelector</span><span class="p">:</span>
+<a id="__codelineno-34-27" name="__codelineno-34-27" href="#__codelineno-34-27"></a><span class="w">              </span><span class="nt">matchLabels</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> app.kubernetes.io/name</span><span class="p">:</span><span class="w"> </span><span class="nv">vault</span><span class="w"> </span><span class="p p-Indicator">}</span>
+<a id="__codelineno-34-28" name="__codelineno-34-28" href="#__codelineno-34-28"></a><span class="w">            </span><span class="c1"># external Vault instead: cidr: 10.0.5.7/32</span>
+<a id="__codelineno-34-29" name="__codelineno-34-29" href="#__codelineno-34-29"></a><span class="w">            </span><span class="c1"># port: 8200            # optional override; default is the port from `address`</span>
+<a id="__codelineno-34-30" name="__codelineno-34-30" href="#__codelineno-34-30"></a><span class="w">  </span><span class="nt">githubURL</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">https://github.com/acme</span>
 </code></pre></div>
 <p>Operator prerequisites in Vault (configured out of band, once per gateway):</p>
 <ul>

@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/1.5.0/design/06-implementation-phases/">
+        <link rel="canonical" href="https://actions-gateway.com/1.6.0/design/06-implementation-phases/">
       
       
         <link rel="prev" href="../05-security/">
@@ -63,15 +63,15 @@
   <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/IBMPlexSans-Bold.woff2">
   <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/MonaspaceNeon-Medium.woff2">
   
-  <meta property="og:image" content="https://actions-gateway.com/1.5.0assets/social-preview.png">
+  <meta property="og:image" content="https://actions-gateway.com/1.6.0assets/social-preview.png">
   <meta property="og:image:width" content="1280">
   <meta property="og:image:height" content="640">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:image" content="https://actions-gateway.com/1.5.0assets/social-preview.png">
+  <meta name="twitter:image" content="https://actions-gateway.com/1.6.0assets/social-preview.png">
   
-  <link rel="apple-touch-icon" href="https://actions-gateway.com/1.5.0assets/apple-touch-icon.png">
-  <link rel="alternate icon" href="https://actions-gateway.com/1.5.0assets/favicon.ico">
-  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/1.5.0assets/icon-512.png">
+  <link rel="apple-touch-icon" href="https://actions-gateway.com/1.6.0assets/apple-touch-icon.png">
+  <link rel="alternate icon" href="https://actions-gateway.com/1.6.0assets/favicon.ico">
+  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/1.6.0assets/icon-512.png">
   
   <script type="application/ld+json">
   {
@@ -79,14 +79,14 @@
     "@type": "SoftwareSourceCode",
     "name": "GitHub Actions Gateway",
     "description": "An Actions Runner Controller (ARC) alternative for self-hosted GitHub Actions runners on multi-tenant Kubernetes \u2014 oversubscribe a shared quota, recover evicted jobs automatically, and isolate every tenant\u0027s GitHub egress.",
-    "url": "https://actions-gateway.com/1.5.0",
+    "url": "https://actions-gateway.com/1.6.0",
     "codeRepository": "https://github.com/actions-gateway/github-actions-gateway",
     "programmingLanguage": "Go",
     "license": "https://www.apache.org/licenses/LICENSE-2.0",
     "author": {
       "@type": "Organization",
       "name": "GitHub Actions Gateway",
-      "url": "https://actions-gateway.com/1.5.0"
+      "url": "https://actions-gateway.com/1.6.0"
     }
   }
   </script>
@@ -95,8 +95,8 @@
     "@context": "https://schema.org",
     "@type": "Organization",
     "name": "GitHub Actions Gateway",
-    "url": "https://actions-gateway.com/1.5.0",
-    "logo": "https://actions-gateway.com/1.5.0assets/icon-512.png",
+    "url": "https://actions-gateway.com/1.6.0",
+    "logo": "https://actions-gateway.com/1.6.0assets/icon-512.png",
     "sameAs": ["https://github.com/actions-gateway/github-actions-gateway"]
   }
   </script>
@@ -132,8 +132,8 @@
         <aside class="md-banner">
           <div class="md-banner__inner md-grid md-typeset">
             
-            <strong>v1.5.0 is here.</strong>
-      A per-tenant GitHub runner group boundary, multi-label runner sets that migrate a <code>runs-on</code> array unedited, and job duration and latency metrics on the acquisition tier every new tenant runs.
+            <strong>v1.6.0 is here.</strong>
+      The ARC migration checklist finished, a runner set that can say why it is not being offered jobs, and the runner version a worker pod actually ran.
           </div>
           
         </aside>
@@ -145,7 +145,7 @@
           <aside class="md-banner md-banner--warning">
             <div class="md-banner__inner md-grid md-typeset">
               You're not viewing the latest release.
-  <a href="https://actions-gateway.com/1.5.0"><strong>Go to the current docs.</strong></a>
+  <a href="https://actions-gateway.com/1.6.0"><strong>Go to the current docs.</strong></a>
 
             </div>
             <script>var el=document.querySelector("[data-md-component=outdated]"),base=new URL("../.."),outdated=__md_get("__outdated",sessionStorage,base);!0===outdated&&el&&(el.hidden=!1)</script>
@@ -1506,6 +1506,8 @@
       
         
       
+        
+      
     
     
     
@@ -1875,6 +1877,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../../operations/worker-shared-storage/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Shared worker storage (RWX)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../../operations/in-runner-image-builds/" class="md-nav__link">
         
   
@@ -2014,10 +2044,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9_17" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9_18" >
         
           
-          <label class="md-nav__link" for="__nav_9_17" id="__nav_9_17_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_9_18" id="__nav_9_18_label" tabindex="0">
             
   
   
@@ -2035,8 +2065,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_9_17_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_9_17">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_9_18_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9_18">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -2786,7 +2816,7 @@ Operators who prefer AI-assisted implementation can consult <a href="../appendix
 </table>
 <hr />
 <h2 id="milestone-1-wire-protocol-probe-days-14">Milestone 1: Wire Protocol Probe (Days 1–4)<a class="headerlink" href="#milestone-1-wire-protocol-probe-days-14" title="Permanent link">&para;</a></h2>
-<p>See <a href="../../plan/milestone-1/">docs/plan/milestone-1.md</a> for the implementation plan and current status.</p>
+<p>See <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.6.0/docs/plan/milestone-1.md">docs/plan/milestone-1.md</a> for the implementation plan and current status.</p>
 <ul>
 <li><strong>Deliverable:</strong> A standalone Go binary under <code>cmd/probe/</code> that runs the full pre-execution sequence: authenticate via GitHub App credentials → <code>POST /sessions</code> → long-poll <code>GET /message</code> → <code>POST /acquirejob</code> on the <code>run_service_url</code> extracted from the message body → start a <code>renewjob</code> loop every 60 seconds.
   The probe prints the decrypted job payload to stdout and continues renewing until cancelled.
@@ -2819,7 +2849,7 @@ Operators who prefer AI-assisted implementation can consult <a href="../appendix
 </ul>
 <hr />
 <h2 id="milestone-2-agc-controller--reconciler-days-510">Milestone 2: AGC Controller &amp; Reconciler (Days 5–10)<a class="headerlink" href="#milestone-2-agc-controller--reconciler-days-510" title="Permanent link">&para;</a></h2>
-<p>See <a href="../../plan/milestone-2/">docs/plan/milestone-2.md</a> for the implementation plan and current status.</p>
+<p>See <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.6.0/docs/plan/milestone-2.md">docs/plan/milestone-2.md</a> for the implementation plan and current status.</p>
 <ul>
 <li><strong>Deliverable:</strong> A deployable AGC scaffolded with <code>controller-runtime</code>/<code>kubebuilder</code> that reconciles <code>RunnerGroup</code> CRs into adaptive listener goroutine pools: one permanent goroutine at rest, spawning additional goroutines on demand up to <code>maxListeners</code> during bursts, with idle goroutines shutting down once the queue drains.
   Includes the Token Manager (mutex-protected installation token with T-5min proactive refresh), the per-job RenewJob loop, the <code>maxWorkers</code> simple pod-count ceiling (enforced without PriorityClass when <code>priorityTiers</code> is absent), and the polling implementation lifted from the Milestone 1 probe.
@@ -2830,7 +2860,7 @@ Operators who prefer AI-assisted implementation can consult <a href="../appendix
 </ul>
 <hr />
 <h2 id="milestone-3-worker-pod--pipe-handoff-days-1116">Milestone 3: Worker Pod &amp; Pipe Handoff (Days 11–16)<a class="headerlink" href="#milestone-3-worker-pod--pipe-handoff-days-1116" title="Permanent link">&para;</a></h2>
-<p>See <a href="../../plan/milestone-3/">docs/plan/milestone-3.md</a> for the implementation plan and current status.</p>
+<p>See <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.6.0/docs/plan/milestone-3.md">docs/plan/milestone-3.md</a> for the implementation plan and current status.</p>
 <ul>
 <li><strong>Deliverable:</strong> A worker container image plus the pod-provisioning logic in the AGC: Dockerfile, entrypoint wrapper (Go binary that reads the mounted payload Secret and writes to Named Pipes), Secret mount logic, and the <code>AcquireJob</code> → pod-create handoff sequence.
   The Named Pipe handoff is the underdocumented part of this milestone — start by validating the wrapper with the static decrypted payload from Milestone 1 before wiring it into pod creation, so the pipe semantics can be debugged without a live GitHub trigger in the loop.</li>
@@ -2839,7 +2869,7 @@ Operators who prefer AI-assisted implementation can consult <a href="../appendix
 </ul>
 <hr />
 <h2 id="milestone-4-gateway-manager-controller--proxy-days-1722">Milestone 4: Gateway Manager Controller + Proxy (Days 17–22)<a class="headerlink" href="#milestone-4-gateway-manager-controller--proxy-days-1722" title="Permanent link">&para;</a></h2>
-<p>See <a href="../../plan/milestone-4/">docs/plan/milestone-4.md</a> for the implementation plan and current status.</p>
+<p>See <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.6.0/docs/plan/milestone-4.md">docs/plan/milestone-4.md</a> for the implementation plan and current status.</p>
 <ul>
 <li><strong>Deliverable:</strong> A second operator (<code>cmd/gmc/</code>) sharing the repo with the AGC, reconciling <code>ActionsGateway</code> CRs into the full tenant resource set: ServiceAccount, Role, RoleBinding, NetworkPolicy, proxy Deployment, proxy Service, PodDisruptionBudget, HPA, AGC Deployment, and bootstrap RunnerGroups.
   (The namespace <code>ResourceQuota</code> is platform-owned — the GMC operates within it but never creates or mutates it; see Q130.)
@@ -2851,7 +2881,7 @@ Operators who prefer AI-assisted implementation can consult <a href="../appendix
 </ul>
 <hr />
 <h2 id="milestone-5-hardening--load-testing-days-2326">Milestone 5: Hardening &amp; Load Testing (Days 23–26)<a class="headerlink" href="#milestone-5-hardening--load-testing-days-2326" title="Permanent link">&para;</a></h2>
-<p>See <a href="../../plan/milestone-5/">docs/plan/milestone-5.md</a> for the implementation plan and current status.</p>
+<p>See <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.6.0/docs/plan/milestone-5.md">docs/plan/milestone-5.md</a> for the implementation plan and current status.</p>
 <ul>
 <li><strong>Deliverable:</strong> Production Helm chart or Kustomize overlays with locked-down Pod Security Standards, optional gVisor <code>RuntimeClass</code> configuration (see <a href="../appendix-b-worker-isolation/">Appendix B</a>), hardened proxy pod specs (read-only root filesystem, no capabilities), and a multi-tenant load harness under <code>test/load/</code> that simulates multiple tenants in parallel against a staging cluster with the full GMC+AGC stack running.
   (The per-tenant namespace <code>ResourceQuota</code> is provisioned out-of-band by the platform admin — the GAG chart does not ship it; the GMC operates within it but never creates or mutates it.

@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/1.5.0/operations/observability-dashboards/">
+        <link rel="canonical" href="https://actions-gateway.com/1.6.0/operations/observability-dashboards/">
       
       
         <link rel="prev" href="../observability-alerting/">
@@ -63,15 +63,15 @@
   <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/IBMPlexSans-Bold.woff2">
   <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/MonaspaceNeon-Medium.woff2">
   
-  <meta property="og:image" content="https://actions-gateway.com/1.5.0assets/social-preview.png">
+  <meta property="og:image" content="https://actions-gateway.com/1.6.0assets/social-preview.png">
   <meta property="og:image:width" content="1280">
   <meta property="og:image:height" content="640">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:image" content="https://actions-gateway.com/1.5.0assets/social-preview.png">
+  <meta name="twitter:image" content="https://actions-gateway.com/1.6.0assets/social-preview.png">
   
-  <link rel="apple-touch-icon" href="https://actions-gateway.com/1.5.0assets/apple-touch-icon.png">
-  <link rel="alternate icon" href="https://actions-gateway.com/1.5.0assets/favicon.ico">
-  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/1.5.0assets/icon-512.png">
+  <link rel="apple-touch-icon" href="https://actions-gateway.com/1.6.0assets/apple-touch-icon.png">
+  <link rel="alternate icon" href="https://actions-gateway.com/1.6.0assets/favicon.ico">
+  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/1.6.0assets/icon-512.png">
   
   <script type="application/ld+json">
   {
@@ -79,14 +79,14 @@
     "@type": "SoftwareSourceCode",
     "name": "GitHub Actions Gateway",
     "description": "An Actions Runner Controller (ARC) alternative for self-hosted GitHub Actions runners on multi-tenant Kubernetes \u2014 oversubscribe a shared quota, recover evicted jobs automatically, and isolate every tenant\u0027s GitHub egress.",
-    "url": "https://actions-gateway.com/1.5.0",
+    "url": "https://actions-gateway.com/1.6.0",
     "codeRepository": "https://github.com/actions-gateway/github-actions-gateway",
     "programmingLanguage": "Go",
     "license": "https://www.apache.org/licenses/LICENSE-2.0",
     "author": {
       "@type": "Organization",
       "name": "GitHub Actions Gateway",
-      "url": "https://actions-gateway.com/1.5.0"
+      "url": "https://actions-gateway.com/1.6.0"
     }
   }
   </script>
@@ -95,8 +95,8 @@
     "@context": "https://schema.org",
     "@type": "Organization",
     "name": "GitHub Actions Gateway",
-    "url": "https://actions-gateway.com/1.5.0",
-    "logo": "https://actions-gateway.com/1.5.0assets/icon-512.png",
+    "url": "https://actions-gateway.com/1.6.0",
+    "logo": "https://actions-gateway.com/1.6.0assets/icon-512.png",
     "sameAs": ["https://github.com/actions-gateway/github-actions-gateway"]
   }
   </script>
@@ -132,8 +132,8 @@
         <aside class="md-banner">
           <div class="md-banner__inner md-grid md-typeset">
             
-            <strong>v1.5.0 is here.</strong>
-      A per-tenant GitHub runner group boundary, multi-label runner sets that migrate a <code>runs-on</code> array unedited, and job duration and latency metrics on the acquisition tier every new tenant runs.
+            <strong>v1.6.0 is here.</strong>
+      The ARC migration checklist finished, a runner set that can say why it is not being offered jobs, and the runner version a worker pod actually ran.
           </div>
           
         </aside>
@@ -145,7 +145,7 @@
           <aside class="md-banner md-banner--warning">
             <div class="md-banner__inner md-grid md-typeset">
               You're not viewing the latest release.
-  <a href="https://actions-gateway.com/1.5.0"><strong>Go to the current docs.</strong></a>
+  <a href="https://actions-gateway.com/1.6.0"><strong>Go to the current docs.</strong></a>
 
             </div>
             <script>var el=document.querySelector("[data-md-component=outdated]"),base=new URL("../.."),outdated=__md_get("__outdated",sessionStorage,base);!0===outdated&&el&&(el.hidden=!1)</script>
@@ -1401,6 +1401,8 @@
       
         
       
+        
+      
     
     
     
@@ -1773,6 +1775,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../worker-shared-storage/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Shared worker storage (RWX)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../in-runner-image-builds/" class="md-nav__link">
         
   
@@ -1917,10 +1947,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9_17" checked>
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9_18" checked>
         
           
-          <label class="md-nav__link" for="__nav_9_17" id="__nav_9_17_label" tabindex="">
+          <label class="md-nav__link" for="__nav_9_18" id="__nav_9_18_label" tabindex="">
             
   
   
@@ -1938,8 +1968,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_9_17_label" aria-expanded="true">
-          <label class="md-nav__title" for="__nav_9_17">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_9_18_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_9_18">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -2143,6 +2173,17 @@
     <span class="md-ellipsis">
       
         Platform dashboard
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#budget-dashboard" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Budget dashboard
       
     </span>
   </a>
@@ -2673,6 +2714,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#budget-dashboard" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Budget dashboard
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#dashboard-variables" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2705,13 +2757,13 @@
 
 <h1 id="grafana-dashboards">Grafana Dashboards<a class="headerlink" href="#grafana-dashboards" title="Permanent link">&para;</a></h1>
 <blockquote>
-<p><strong>Audience:</strong> Platform engineer, Tenant operator</p>
+<p><strong>Audience:</strong> Platform engineer, Tenant operator, Budget owner</p>
 </blockquote>
 <p>Part of the <a href="../observability/">Observability</a> guide.
 The panels below query the <a href="../observability-metrics/">Metrics reference</a> and the <a href="../observability-alerting/#slo-recording-rules">SLO recording rules</a>; the scrape wiring they depend on is in <a href="../observability-metrics-access/">Accessing metrics</a>.</p>
 <blockquote>
-<p><strong>Import as code.</strong> Two reference dashboards ship under <a href="../../deploy/monitoring/README.md"><code>deploy/monitoring/</code></a>: import them into Grafana (<strong>Dashboards → New → Import</strong>) or provision them, rather than rebuilding the panels by hand.
-They split along the scrape boundary each reads from; the layouts below document what each contains.</p>
+<p><strong>Import as code.</strong> Three reference dashboards ship under <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.6.0/deploy/monitoring/README.md"><code>deploy/monitoring/</code></a>: import them into Grafana (<strong>Dashboards → New → Import</strong>) or provision them, rather than rebuilding the panels by hand.
+The layouts below document what each contains.</p>
 </blockquote>
 <table>
 <thead>
@@ -2723,20 +2775,27 @@ They split along the scrape boundary each reads from; the layouts below document
 </thead>
 <tbody>
 <tr>
-<td><a href="../../deploy/monitoring/grafana-dashboard-tenant.json"><code>grafana-dashboard-tenant.json</code></a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.6.0/deploy/monitoring/grafana-dashboard-tenant.json"><code>grafana-dashboard-tenant.json</code></a></td>
 <td>a tenant's AGC + egress proxy (per-tenant mTLS)</td>
 <td>operator of one tenant's runners</td>
 </tr>
 <tr>
-<td><a href="../../deploy/monitoring/grafana-dashboard-platform.json"><code>grafana-dashboard-platform.json</code></a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.6.0/deploy/monitoring/grafana-dashboard-platform.json"><code>grafana-dashboard-platform.json</code></a></td>
 <td>the GMC manager (one cluster-wide TLS scrape)</td>
 <td>Platform engineer running the GMC / the fleet</td>
 </tr>
+<tr>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.6.0/deploy/monitoring/grafana-dashboard-budget.json"><code>grafana-dashboard-budget.json</code></a></td>
+<td>a tenant's AGC (per-tenant mTLS)</td>
+<td>Budget owner paying for the fleet</td>
+</tr>
 </tbody>
 </table>
-<p>The split mirrors how the metrics are exposed (see <a href="../observability-metrics-access/#how-to-access-metrics">Accessing metrics</a>): a platform operator scrapes the single GMC endpoint and cannot necessarily reach every tenant's mTLS metrics port, so the fleet rollups the GMC exports (<code>managed_gateways</code>, <code>runnergroups_degraded</code>, <code>egress_rules_stale</code>, the proxy-quota gauges) get their own dashboard.</p>
+<p>The first two split along the scrape boundary each reads from, which mirrors how the metrics are exposed (see <a href="../observability-metrics-access/#how-to-access-metrics">Accessing metrics</a>): a platform operator scrapes the single GMC endpoint and cannot necessarily reach every tenant's mTLS metrics port, so the fleet rollups the GMC exports (<code>managed_gateways</code>, <code>runnergroups_degraded</code>, <code>egress_rules_stale</code>, the proxy-quota gauges) get their own dashboard.</p>
+<p>The <strong>budget</strong> dashboard splits on a different axis: it reads the same tenant scrape as the tenant dashboard, and exists because the question is different rather than the data.
+A budget owner is asking what each tenant consumed and what it cost, which is one metric read across every namespace at once, not the health of any one of them.</p>
 <blockquote>
-<p>The screenshots below are rendered against a real Prometheus with synthetic data by the reproducible harness in <a href="../../deploy/monitoring/preview/README.md"><code>deploy/monitoring/preview/</code></a>; regenerate them there whenever a dashboard changes.</p>
+<p>The screenshots below are rendered against a real Prometheus with synthetic data by the reproducible harness in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.6.0/deploy/monitoring/preview/README.md"><code>deploy/monitoring/preview/</code></a>; regenerate them there whenever a dashboard changes.</p>
 </blockquote>
 <h2 id="tenant-dashboard">Tenant dashboard<a class="headerlink" href="#tenant-dashboard" title="Permanent link">&para;</a></h2>
 <p><img alt="The per-tenant Grafana dashboard rendered against a live Prometheus: gateway-health, pod-creation-latency SLO, job-throughput, scale-set-acquisition-tier, tenant-health-conditions, egress-proxy, and kube-state-metrics proxy/quota rows." src="../../assets/grafana-dashboard-tenant.png" /></p>
@@ -2894,6 +2953,7 @@ Labelled by <code>runner_set</code> (not <code>runner_group</code>), so the <cod
 </tbody>
 </table>
 <p><strong>Row 5 — Tenant Health Conditions</strong></p>
+<p>Panel titles here drop the <code>Worker</code>/<code>Workers</code> prefix the row header already supplies: six panels share the 24-column row, and a 4-wide panel ellipsis-truncates anything longer in the rendered screenshot.</p>
 <table>
 <thead>
 <tr>
@@ -2904,37 +2964,42 @@ Labelled by <code>runner_set</code> (not <code>runner_group</code>), so the <cod
 </thead>
 <tbody>
 <tr>
-<td>Worker quota exceeded</td>
+<td>Quota exceeded</td>
 <td><code>max(actions_gateway_worker_quota_exceeded or actions_gateway_runnerset_worker_quota_exceeded)</code></td>
 <td>Stat (1 = red)</td>
 </tr>
 <tr>
-<td>Workers unschedulable</td>
+<td>Unschedulable</td>
 <td><code>max(actions_gateway_workers_unschedulable or actions_gateway_runnerset_workers_unschedulable)</code></td>
 <td>Stat (1 = red)</td>
 </tr>
 <tr>
-<td>Worker quota pressure</td>
+<td>Not starting</td>
+<td><code>max(actions_gateway_runnerset_workers_not_starting)</code></td>
+<td>Stat (1 = red)</td>
+</tr>
+<tr>
+<td>Quota pressure</td>
 <td><code>max(actions_gateway_worker_quota_pressure or actions_gateway_runnerset_worker_quota_pressure)</code></td>
 <td>Stat (1 = yellow)</td>
 </tr>
 <tr>
-<td>Worker capacity declined</td>
+<td>Capacity declined</td>
 <td><code>max by (reason) (actions_gateway_runnerset_worker_capacity_declined)</code></td>
 <td>Stat (1 = orange), reason shown beside the value</td>
 </tr>
 <tr>
-<td>Agent recycle errors</td>
+<td>Recycle errors</td>
 <td><code>rate(actions_gateway_agent_recycle_errors_total[5m])</code></td>
 <td>Time series</td>
 </tr>
 </tbody>
 </table>
 <blockquote>
-<p>The first three capacity panels union the v1 <code>RunnerGroup</code> family with its <code>actions_gateway_runnerset_*</code> v2 twin (Q319).
+<p>The quota and unschedulable panels union the v1 <code>RunnerGroup</code> family with its <code>actions_gateway_runnerset_*</code> v2 twin (Q319); <code>Not starting</code> and <code>Capacity declined</code> are v2-only and have no v1 family to union.
 The two families key on different labels — <code>runner_group</code> and <code>runner_set</code> — so <code>or</code> unions rather than overlaps them, and a panel that named only the v1 family would read a flat <code>0</code> on a v2-only deploy.
 To break either out per owner, replace <code>max(...)</code> with <code>max by (namespace, runner_set) (actions_gateway_runnerset_...)</code>.</p>
-<p><strong>Worker capacity declined has no v1 twin, and <code>No data</code> is a normal reading</strong> (Q643, Q658).
+<p><strong><code>Capacity declined</code> has no v1 twin, and <code>No data</code> is a normal reading</strong> (Q643, Q658).
 The <a href="../observability-metrics/">gauge</a> is emitted only for a <code>RunnerSet</code> that set <code>spec.capacityGate.mode</code>, so an empty panel means no set opted in, not that the query is broken.
 It groups by <code>reason</code> rather than reducing to a bare <code>0</code>/<code>1</code> because the value alone cannot separate a live decline from the latched <code>AwaitingProbe</code> state, and those call for different actions; exactly one series exists per gated set, so <code>max by (reason)</code> cannot double-count.
 The <code>1</code> is orange rather than red on purpose: a latched gate is <a href="../troubleshooting/#runnerset-reports-workercapacitydeclined-the-gateway-stopped-claiming-jobs">throttling intake, not failing</a>, and it can sit <code>True</code> indefinitely on an idle set whose shape stays unplaceable.</p>
@@ -3193,16 +3258,163 @@ The <code>1</code> is orange rather than red on purpose: a latched gate is <a hr
 <p>The fleet's version spread during a staggered upgrade, and the answer to which tenants have crossed a semantics change: <code>job_duration_seconds</code> changed span at v1.5.0 without a rename (<a href="../upgrade/#non-breaking-job_duration_seconds-now-measures-worker-pod-lifetime-the-classic-tier-span-shrinks">upgrade note</a>).
 The GMC comes from this dashboard's own scrape; <code>agc</code> and <code>proxy</code> need the per-tenant scrapes, so a platform-only Prometheus shows one bar.
 <code>actions_gateway_build_info</code> carries no <code>namespace</code> label, so <code>$namespace</code> does not filter this row. | Pod creation p99 by namespace | <code>actions_gateway:pod_creation_latency_seconds:p99</code> | Time series, both acquisition tiers |</p>
+<h2 id="budget-dashboard">Budget dashboard<a class="headerlink" href="#budget-dashboard" title="Permanent link">&para;</a></h2>
+<p><img alt="The budget-owner Grafana dashboard rendered against a live Prometheus: a spend-summary stat row, spend-by-tenant bars and burn rate, pod-hours and job counts by runner shape, and the zero-idle-compute row contrasting worker consumption with the always-on proxy floor." src="../../assets/grafana-dashboard-budget.png" /></p>
+<p>For the <a href="../personas/#budget-owner">budget owner</a>, who owns the spend and usually cannot read the cluster at all.
+Filtered by <code>$namespace</code> and <code>$runner_group</code>, and priced by a <code>$rate</code> textbox.
+It ships with auto-refresh <strong>off</strong>, where the other two use <code>30s</code>: the default window is seven days, and a spend figure over that range does not change meaningfully between two thirty-second polls.</p>
+<p>Every panel reads one metric: <code>actions_gateway_job_duration_seconds</code>.
+That series is worker pod wall time (creation to the last container finishing) on <strong>both</strong> acquisition tiers, which is the span <a href="../../design/appendix-f-cost-model/#worker-pod-dominant-cost">Appendix F §F.1</a> bills against.
+A pod that never started a container is not observed, because it occupied no node time.</p>
+<p><strong>The rate is the operator's, not ours.</strong> Appendix F's formula is <code>(job_duration_seconds / 3600) × hourly_node_rate × resource_fraction</code>, and <code>$rate</code> is that trailing pair collapsed into one number: the effective hourly cost of <strong>one worker slot</strong>. The shipped default, <code>0.096</code>, is §F.1's own CPU example: an <code>m6i.4xlarge</code> at $0.768/hr with the pod requesting an eighth of it.
+Its GPU example works out at $4.10/hr, so the two differ by more than 40×.</p>
+<p>That spread is why the shape-level panels stay in pod-hours: one currency figure spanning a tenant's GPU and CPU shapes is an average of two rates that are nothing like each other.
+To read one shape's spend, pin <code>$runner_group</code> and set <code>$rate</code> to that shape's slot rate.
+For per-tenant currency computed from a real node price book rather than a typed constant, use <a href="../cost-attribution/">Cost attribution</a>; this dashboard is the GAG-native cross-check for it, not a replacement.</p>
+<p><strong>Row 1 — Spend Summary (selected time range)</strong></p>
+<p>Every panel here uses <code>$__range</code>, so the time picker <em>is</em> the billing window: switch it to 30 days and the numbers are a month's.</p>
+<table>
+<thead>
+<tr>
+<th>Panel</th>
+<th>Query</th>
+<th>Visualization</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Estimated spend</td>
+<td><code>sum(increase(actions_gateway_job_duration_seconds_sum[$__range])) / 3600 * $rate</code></td>
+<td>Stat. Currency only as far as <code>$rate</code> is right for the selection</td>
+</tr>
+<tr>
+<td>Worker pod-hours</td>
+<td><code>sum(increase(actions_gateway_job_duration_seconds_sum[$__range])) / 3600</code></td>
+<td>Stat, the measured quantity with no rate applied. This is the number to reconcile against a cost tool's own pod-hours</td>
+</tr>
+<tr>
+<td>Jobs completed</td>
+<td><code>sum(increase(actions_gateway_job_duration_seconds_count[$__range]))</code></td>
+<td>Stat</td>
+</tr>
+<tr>
+<td>Mean job duration</td>
+<td>pod-hours ÷ jobs</td>
+<td>Stat. <code>No data</code> when the range holds no completed job, since the divisor is zero</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Row 2 — Spend by Tenant</strong></p>
+<blockquote>
+<p><strong>The comparison panels run instant queries</strong>, which is where this dashboard departs from its two neighbours.
+They are both panels in this row, both bar charts in Row 3, and the bar gauge in Row 4: each reduces the whole range to one number per tenant or per resource, so a range query would plot one bar per scrape and the comparison the panel exists to make would be unreadable.
+The time-series panels stay range queries, because a trend is what they are for.</p>
+</blockquote>
+<table>
+<thead>
+<tr>
+<th>Panel</th>
+<th>Query</th>
+<th>Visualization</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Estimated spend by tenant</td>
+<td><code>sum by (namespace) (increase(actions_gateway_job_duration_seconds_sum[$__range])) / 3600 * $rate</code></td>
+<td>Bar chart, <strong>instant</strong>. Namespace is tenant, which is why this lines up with an <code>aggregate=namespace</code> allocation report with no extra wiring</td>
+</tr>
+<tr>
+<td>Spend rate per hour by tenant</td>
+<td><code>sum by (namespace) (rate(actions_gateway_job_duration_seconds_sum[5m])) * $rate</code></td>
+<td>Time series. Pod-seconds per second is pod-hours per hour, so this is a live burn rate. The histogram attributes a pod's whole lifetime at completion, so the series is a trailing average and is lumpy over windows near the job duration itself</td>
+</tr>
+<tr>
+<td>Share of fleet worker pod-hours</td>
+<td>tenant pod-hours ÷ <code>scalar(...)</code> of the unfiltered total</td>
+<td>Bar gauge, <code>percent</code>. The denominator is deliberately <strong>unfiltered</strong>, so filtering to one tenant shows its share of everything rather than 100% of itself. Rate-free</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Row 3 — Spend by Runner Shape</strong></p>
+<p>Split by <code>runner_group</code>, which on the scale-set tier carries the <strong><code>RunnerSet</code></strong> name rather than a <code>RunnerGroup</code> one: the pod-side reading takes whichever owner label the pod carries, so one label key covers both tiers (Q713).
+A shape here is therefore whatever provisioned the worker, on either protocol.</p>
+<table>
+<thead>
+<tr>
+<th>Panel</th>
+<th>Query</th>
+<th>Visualization</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Worker pod-hours by shape</td>
+<td><code>sum by (namespace, runner_group) (increase(actions_gateway_job_duration_seconds_sum[$__range])) / 3600</code></td>
+<td>Bar chart, <strong>instant</strong>. Hours rather than currency, per the rate spread above</td>
+</tr>
+<tr>
+<td>Jobs completed by shape</td>
+<td>the <code>…_count</code> counterpart</td>
+<td>Bar chart, <strong>instant</strong>. Beside the pod-hours bars it separates the two ways a shape's spend grows: more jobs, or slower jobs</td>
+</tr>
+<tr>
+<td>Mean job duration by shape</td>
+<td><code>rate(…_sum[5m]) / rate(…_count[5m])</code>, both <code>sum by (namespace, runner_group)</code></td>
+<td>Time series. A shape drifting upward buys less for the same money; a large divergence from a cost tool's pod-hours for that shape usually means oversized resource requests (<a href="../../design/appendix-f-cost-model/#worker-resource-right-sizing">right-sizing</a>)</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Row 4 — Zero Idle Compute (the always-on floor)</strong></p>
+<p>The row that answers "what am I paying for when nobody is running CI?".</p>
+<table>
+<thead>
+<tr>
+<th>Panel</th>
+<th>Query</th>
+<th>Visualization</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Worker consumption vs. the always-on floor</td>
+<td><code>sum by (namespace) (rate(actions_gateway_job_duration_seconds_sum[5m]))</code> against <code>kube_deployment_status_replicas_ready{deployment="actions-gateway-proxy"}</code></td>
+<td>Time series, two series on one panel deliberately. Over a quiet weekend the worker line collapses toward zero while the proxy line stays flat, and that flat line is the entire idle floor. An Actions Runner Controller (ARC) scale set holding <code>minRunners &gt; 0</code> would show a worker line that never reaches zero. The worker series comes from the duration histogram, which attributes a pod's whole lifetime at completion, so it is a trailing average over the rate window rather than a live pod count: it will not equal the pod count behind the quota panel beside it. Needs kube-state-metrics</td>
+</tr>
+<tr>
+<td>Jobs completed per hour</td>
+<td><code>sum by (namespace) (rate(actions_gateway_job_duration_seconds_count[5m])) * 3600</code></td>
+<td>Time series showing the volume that drives the worker line beside it</td>
+</tr>
+<tr>
+<td>ResourceQuota headroom</td>
+<td><code>100 * kube_resourcequota{type="used"} / ignoring(type) kube_resourcequota{type="hard"}</code></td>
+<td>Bar gauge, <code>percent</code>, one bar per quota object and resource. A tenant sitting near 100% is one whose spend is held down by the cap rather than by demand, which is a budget conversation rather than an incident. The join is <code>ignoring(type)</code> rather than <code>on(namespace, resource)</code>, which errors on a namespace holding two <code>ResourceQuota</code> objects; it also keeps the <code>resourcequota</code> label, which is why the legend names it. A quota lowered below current usage makes the query return above 100%, measured at 200% on two pods under a one-pod quota; <code>max</code> is 100, so the bar cannot extend past full. Needs kube-state-metrics</td>
+</tr>
+</tbody>
+</table>
 <h2 id="dashboard-variables">Dashboard Variables<a class="headerlink" href="#dashboard-variables" title="Permanent link">&para;</a></h2>
 <p>The dashboards ship with these template variables already wired:</p>
 <ul>
-<li><code>$namespace</code> — <code>label_values({__name__=~"actions_gateway_active_sessions|actions_gateway_scaleset_jobs_assigned_total"}, namespace)</code> — filters to a single tenant (both dashboards).
+<li><code>$namespace</code> (<code>label_values({__name__=~"actions_gateway_active_sessions|actions_gateway_scaleset_jobs_assigned_total"}, namespace)</code>) filters to a single tenant, on the tenant and platform dashboards.
   The union of the classic and scale-set series is deliberate: a scale-set-only deploy emits no <code>active_sessions</code>, so keying the variable on that alone would leave the dashboard blank.</li>
-<li><code>$runner_group</code> — <code>label_values(actions_gateway_active_sessions{namespace="$namespace"}, runner_group)</code> — filters to a specific RunnerGroup on the classic-tier panels (tenant dashboard).
+<li><code>$runner_group</code> (<code>label_values(actions_gateway_active_sessions{namespace="$namespace"}, runner_group)</code>) filters to a specific RunnerGroup on the classic-tier panels of the tenant dashboard.
   The <code>runner_set</code>-labelled panels are not filtered by it; <code>$runner_set</code> is their variable.</li>
-<li><code>$runner_set</code> — <code>label_values(actions_gateway_runnerset_worker_quota_pressure{namespace="$namespace"}, runner_set)</code> — filters to a specific <code>RunnerSet</code> on the scale-set and v2 capacity panels (tenant dashboard).
+<li><code>$runner_set</code> (<code>label_values(actions_gateway_runnerset_worker_quota_pressure{namespace="$namespace"}, runner_set)</code>) filters to a specific <code>RunnerSet</code> on the scale-set and v2 capacity panels of the tenant dashboard.
   It reads its label values from the Q319 capacity gauges rather than the <code>scaleset_*</code> series on purpose: those gauges are emitted for <strong>every</strong> <code>RunnerSet</code>, while <code>scaleset_*</code> exists only for <code>ScaleSet</code>-protocol sets, so keying on the latter would hide a <code>Classic</code> set from the dropdown entirely.</li>
 </ul>
+<p>The budget dashboard declares its own set, because it reads a different metric from every panel and its dropdowns have to match that metric exactly:</p>
+<ul>
+<li><code>$namespace</code> (<code>label_values(actions_gateway_job_duration_seconds_count, namespace)</code>) is keyed on the series the panels actually read, so the dropdown cannot offer a tenant with no cost data or hide one that has some.
+  It needs no classic/scale-set union: the duration series is emitted from the pod informer and covers both tiers already.</li>
+<li><code>$runner_group</code> (<code>label_values(actions_gateway_job_duration_seconds_count{namespace=~"$namespace"}, runner_group)</code>) is the runner shape, listing <code>RunnerGroup</code> and <code>RunnerSet</code> names together for the reason the Row 3 note gives.</li>
+<li><code>$rate</code> is a <strong>textbox</strong>, not a query: the effective hourly cost of one worker slot, which is a fact about your contract and not something the cluster knows.
+  Only the currency panels read it, so leaving the default in place still leaves every pod-hour and job count correct.</li>
+</ul>
+<blockquote>
+<p><strong>A textbox variable in a panel query needs the PromQL gate to know about it.</strong> <code>make promql-check</code> parses every panel expression, and a Grafana variable in syntactic position (<code>[$__range]</code>, <code>* $rate</code>) is not valid PromQL.
+The checker substitutes from the dashboard's own <code>templating.list</code> before parsing, so a variable the dashboard never declares is reported by name rather than passing as a parse error nobody reads.</p>
+</blockquote>
 <hr />
 <p>← Back to <a href="../observability/">Observability</a></p>
 
