@@ -54,13 +54,20 @@ MAX_PRS="${MAX_PRS:-3}"
 # gomod bumps land on dependabot/go_modules/* - NOT the 'gomod' key used in
 # .github/dependabot.yml. Same gotcha as dependabot-go-sync.yml.
 readonly BRANCH_PREFIX='dependabot/go_modules/'
+# gh spells a GitHub App actor two ways and the PR author is the field that
+# changed: `gh pr list`/`gh pr view --json author` return the `app/dependabot`
+# slug, while the REST user object and every commit author keep
+# `dependabot[bot]`. Compare against both, or selection silently matches nothing
+# and the workflow reports "No open Dependabot Go-module PRs" while exiting 0.
 readonly DEPENDABOT_LOGIN='dependabot[bot]'
+readonly DEPENDABOT_APP_LOGIN='app/dependabot'
 
 usage() {
 	cat <<'EOF'
 Usage: scripts/ci/dependabot-rebase-stale.sh [--dry-run] [PR_NUMBER ...]
        scripts/ci/dependabot-rebase-stale.sh --list
        scripts/ci/dependabot-rebase-stale.sh --bumps BASE_GO_MOD TIP_GO_MOD
+       scripts/ci/dependabot-rebase-stale.sh --select < GH_PR_LIST_JSON
 
 Rebase every conflicted Dependabot Go-module PR onto the base branch by
 replaying its version bumps there, then regenerating the vendor trees and
@@ -70,6 +77,7 @@ notices. See the header of this script for why it replays instead of merging.
   --dry-run        analyse and rebase locally, push and comment nothing
   --list           print the eligible PR numbers, one per line, and exit
   --bumps          print the bumps between two go.mod files, then exit
+  --select         filter `gh pr list` JSON on stdin to candidate PR numbers
 
 Env: BASE_BRANCH (default main), REMOTE (default origin), MAX_PRS (default 3 -
      each replay runs a full vendor-sync, so a run is capped and names what it
@@ -167,6 +175,13 @@ mergeable_state() {
 	printf 'UNKNOWN\n'
 }
 
+# is_dependabot_author LOGIN - true when LOGIN is either spelling gh uses for
+# the Dependabot app. Only for a PR *author*; a commit author is always the
+# bracket form, which is what keeps the tip-author check below honest.
+is_dependabot_author() {
+	[[ "$1" == "$DEPENDABOT_LOGIN" || "$1" == "$DEPENDABOT_APP_LOGIN" ]]
+}
+
 # eligible PR_JSON - true when the PR is a Dependabot Go-module PR this script
 # may rebase; otherwise print why it is skipped and return 1. Four gates:
 #
@@ -184,7 +199,7 @@ eligible() {
 	author="$(jq -r .author.login <<<"$json")"
 	head_ref="$(jq -r .headRefName <<<"$json")"
 
-	if [[ "$author" != "$DEPENDABOT_LOGIN" ]]; then
+	if ! is_dependabot_author "$author"; then
 		echo "  PR #$number: skip - not authored by $DEPENDABOT_LOGIN ($author)" >&2
 		return 1
 	fi
@@ -213,10 +228,23 @@ eligible() {
 # look like a Dependabot Go-module bump. Cheap pre-filter; eligible() does the
 # real work, including the mergeability poll.
 list_candidate_prs() {
-	gh pr list --state open --limit 100 --json number,headRefName,author \
-		--jq ".[] | select(.author.login == \"$DEPENDABOT_LOGIN\")
-		          | select(.headRefName | startswith(\"$BRANCH_PREFIX\"))
-		          | .number"
+	gh pr list --state open --limit 100 --json number,headRefName,author |
+		select_candidates
+}
+
+# select_candidates - read `gh pr list --json number,headRefName,author` output
+# on stdin and print the number of every PR that looks like a Dependabot
+# Go-module bump. Split out of list_candidate_prs so the filter can be tested
+# against recorded gh output, which is the only half of the selection a unit
+# test can reach: whether gh still spells the author the way this expects is a
+# live question, and --list against the real repo is what answers it.
+select_candidates() {
+	jq -r --arg bot "$DEPENDABOT_LOGIN" --arg app "$DEPENDABOT_APP_LOGIN" \
+		--arg prefix "$BRANCH_PREFIX" '
+		.[]
+		| select(.author.login == $bot or .author.login == $app)
+		| select(.headRefName | startswith($prefix))
+		| .number'
 }
 
 # ---------------------------------------------------------------------------
@@ -383,6 +411,11 @@ while (($#)); do
 		require_cmd go https://go.dev/dl/
 		require_cmd jq https://jqlang.github.io/jq/download/
 		bumps_between "$2" "$3"
+		exit 0
+		;;
+	--select)
+		require_cmd jq https://jqlang.github.io/jq/download/
+		select_candidates
 		exit 0
 		;;
 	-h | --help)
