@@ -39,7 +39,7 @@ The examples below add the controller-native guardrails anyway (`Prune=false`, `
 ## Argo CD
 
 The chart is an OCI artifact, so the Argo CD `Application` points its Helm source at the GHCR registry path.
-Copy the four image digests from the [release notes](https://github.com/actions-gateway/github-actions-gateway/releases/tag/v1.5.0) — the chart ships **no** baked-in digests (an unconfigured render is rejected, fail-closed).
+Copy the four image digests from the [release notes](https://github.com/actions-gateway/github-actions-gateway/releases/tag/v1.6.0) — the chart ships **no** baked-in digests (an unconfigured render is rejected, fail-closed).
 
 ```yaml
 apiVersion: argoproj.io/v1alpha1
@@ -57,7 +57,7 @@ spec:
   source:
     repoURL: ghcr.io/actions-gateway/charts   # OCI registry path, NOT the chart
     chart: actions-gateway
-    targetRevision: 1.5.0                      # chart version = release tag minus the leading "v"
+    targetRevision: 1.6.0                      # chart version = release tag minus the leading "v"
     helm:
       parameters:
         - name: gmc.image.digest
@@ -111,7 +111,7 @@ spec:
   interval: 30m
   url: oci://ghcr.io/actions-gateway/charts/actions-gateway
   ref:
-    tag: "1.5.0"   # chart version = release tag minus the leading "v"
+    tag: "1.6.0"   # chart version = release tag minus the leading "v"
   # Verify the chart's keyless cosign signature before pulling (Flux >= 2.0):
   verify:
     provider: cosign
@@ -173,7 +173,7 @@ spec:
   chart:
     spec:
       chart: actions-gateway
-      version: "1.5.0"
+      version: "1.6.0"
       sourceRef:
         kind: HelmRepository
         name: actions-gateway
