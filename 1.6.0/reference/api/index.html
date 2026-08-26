@@ -1,0 +1,5770 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="An Actions Runner Controller (ARC) alternative for self-hosted GitHub Actions runners on multi-tenant Kubernetes — oversubscribe a shared quota, recover evicted jobs automatically, and isolate every tenant's GitHub egress.">
+      
+      
+      
+        <link rel="canonical" href="https://actions-gateway.com/1.6.0/reference/api/">
+      
+      
+        <link rel="prev" href="../">
+      
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../assets/favicon.svg">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
+    
+    
+      
+        <title>API reference (v2beta1) - GitHub Actions Gateway</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.484c7ddc.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+    
+    
+      <link rel="stylesheet" href="../../stylesheets/extra.css">
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+  
+
+
+    
+    
+  
+  
+  <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/IBMPlexSans-Regular.woff2">
+  <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/IBMPlexSans-Bold.woff2">
+  <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/MonaspaceNeon-Medium.woff2">
+  
+  <meta property="og:image" content="https://actions-gateway.com/1.6.0assets/social-preview.png">
+  <meta property="og:image:width" content="1280">
+  <meta property="og:image:height" content="640">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:image" content="https://actions-gateway.com/1.6.0assets/social-preview.png">
+  
+  <link rel="apple-touch-icon" href="https://actions-gateway.com/1.6.0assets/apple-touch-icon.png">
+  <link rel="alternate icon" href="https://actions-gateway.com/1.6.0assets/favicon.ico">
+  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/1.6.0assets/icon-512.png">
+  
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "SoftwareSourceCode",
+    "name": "GitHub Actions Gateway",
+    "description": "An Actions Runner Controller (ARC) alternative for self-hosted GitHub Actions runners on multi-tenant Kubernetes \u2014 oversubscribe a shared quota, recover evicted jobs automatically, and isolate every tenant\u0027s GitHub egress.",
+    "url": "https://actions-gateway.com/1.6.0",
+    "codeRepository": "https://github.com/actions-gateway/github-actions-gateway",
+    "programmingLanguage": "Go",
+    "license": "https://www.apache.org/licenses/LICENSE-2.0",
+    "author": {
+      "@type": "Organization",
+      "name": "GitHub Actions Gateway",
+      "url": "https://actions-gateway.com/1.6.0"
+    }
+  }
+  </script>
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "Organization",
+    "name": "GitHub Actions Gateway",
+    "url": "https://actions-gateway.com/1.6.0",
+    "logo": "https://actions-gateway.com/1.6.0assets/icon-512.png",
+    "sameAs": ["https://github.com/actions-gateway/github-actions-gateway"]
+  }
+  </script>
+  
+  
+
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="black" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#api-reference" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+        <aside class="md-banner">
+          <div class="md-banner__inner md-grid md-typeset">
+            
+            <strong>v1.6.0 is here.</strong>
+      The ARC migration checklist finished, a runner set that can say why it is not being offered jobs, and the runner version a worker pod actually ran.
+          </div>
+          
+        </aside>
+      
+    </div>
+    
+      <div data-md-color-scheme="default" data-md-component="outdated" hidden>
+        
+          <aside class="md-banner md-banner--warning">
+            <div class="md-banner__inner md-grid md-typeset">
+              You're not viewing the latest release.
+  <a href="https://actions-gateway.com/1.6.0"><strong>Go to the current docs.</strong></a>
+
+            </div>
+            <script>var el=document.querySelector("[data-md-component=outdated]"),base=new URL("../.."),outdated=__md_get("__outdated",sessionStorage,base);!0===outdated&&el&&(el.hidden=!1)</script>
+          </aside>
+        
+      </div>
+    
+    
+      
+
+<header class="md-header" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="GitHub Actions Gateway" class="md-header__button md-logo" aria-label="GitHub Actions Gateway" data-md-component="logo">
+      
+  <img src="../../assets/logo.svg" alt="logo">
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            GitHub Actions Gateway
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              API reference (v2beta1)
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="black" data-md-color-accent="indigo"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m17.75 4.09-2.53 1.94.91 3.06-2.63-1.81-2.63 1.81.91-3.06-2.53-1.94L12.44 4l1.06-3 1.06 3zm3.5 6.91-1.64 1.25.59 1.98-1.7-1.17-1.7 1.17.59-1.98L15.75 11l2.06-.05L18.5 9l.69 1.95zm-2.28 4.95c.83-.08 1.72 1.1 1.19 1.85-.32.45-.66.87-1.08 1.27C15.17 23 8.84 23 4.94 19.07c-3.91-3.9-3.91-10.24 0-14.14.4-.4.82-.76 1.27-1.08.75-.53 1.93.36 1.85 1.19-.27 2.86.69 5.83 2.89 8.02a9.96 9.96 0 0 0 8.02 2.89m-1.64 2.02a12.08 12.08 0 0 1-7.8-3.47c-2.17-2.19-3.33-5-3.49-7.82-2.81 3.14-2.7 7.96.31 10.98 3.02 3.01 7.84 3.12 10.98.31"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="black" data-md-color-accent="indigo"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 7a5 5 0 0 1 5 5 5 5 0 0 1-5 5 5 5 0 0 1-5-5 5 5 0 0 1 5-5m0 2a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3m0-7 2.39 3.42C13.65 5.15 12.84 5 12 5s-1.65.15-2.39.42zM3.34 7l4.16-.35A7.2 7.2 0 0 0 5.94 8.5c-.44.74-.69 1.5-.83 2.29zm.02 10 1.76-3.77a7.131 7.131 0 0 0 2.38 4.14zM20.65 7l-1.77 3.79a7.02 7.02 0 0 0-2.38-4.15zm-.01 10-4.14.36c.59-.51 1.12-1.14 1.54-1.86.42-.73.69-1.5.83-2.29zM12 22l-2.41-3.44c.74.27 1.55.44 2.41.44.82 0 1.63-.17 2.37-.44z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/actions-gateway/github-actions-gateway" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    actions-gateway/github-actions-gateway
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+            
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../.." class="md-tabs__link">
+        
+  
+  
+    
+  
+  Home
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../why-gag/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Why GAG
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../alternatives/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Alternatives
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../features/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Features
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../demo/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Demo
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../getting-started/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Get started
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../roadmap/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Roadmap
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../design/" class="md-tabs__link">
+          
+  
+  
+    
+  
+  Design
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../operations/" class="md-tabs__link">
+          
+  
+  
+    
+  
+  Operations
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+    
+  
+  
+    
+    
+      <li class="md-tabs__item md-tabs__item--active">
+        <a href="../" class="md-tabs__link">
+          
+  
+  
+    
+  
+  Reference
+
+        </a>
+      </li>
+    
+  
+
+      
+    </ul>
+  </div>
+</nav>
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+<nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="GitHub Actions Gateway" class="md-nav__button md-logo" aria-label="GitHub Actions Gateway" data-md-component="logo">
+      
+  <img src="../../assets/logo.svg" alt="logo">
+
+    </a>
+    GitHub Actions Gateway
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/actions-gateway/github-actions-gateway" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    actions-gateway/github-actions-gateway
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../why-gag/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Why GAG
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../alternatives/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Alternatives
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Features
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../demo/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Demo
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting-started/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Get started
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../roadmap/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Roadmap
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+          
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" >
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../../design/" class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Design
+  
+
+    
+  </span>
+  
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_8" id="__nav_8_label" tabindex="0">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_8">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Design
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/01-executive-summary/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Executive summary
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/02-architecture/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/network-architecture/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Network architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/03-api-contracts/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API & data contracts
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/04-operational-flows/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Operational flows
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/05-security/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Security
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/06-implementation-phases/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Implementation phases
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/07-test-plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Test plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/08-glossary/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Glossary
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/appendix-a-capacity-slos/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Appendix A — Capacity & SLOs
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/appendix-b-worker-isolation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Appendix B — Worker isolation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/appendix-c-ai-implementation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Appendix C — AI-assisted implementation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/appendix-d-alternatives-considered/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Appendix D — Alternatives considered
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/appendix-e-capacity-planning/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Appendix E — Capacity planning
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/appendix-f-cost-model/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Appendix F — Cost model
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/appendix-g-future-enhancements/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Appendix G — Future enhancements
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/appendix-h-v2-api-decomposition/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Appendix H — v2 API decomposition
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/github-protocol-dependencies/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    GitHub protocol dependencies
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+          
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9" >
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../../operations/" class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Operations
+  
+
+    
+  </span>
+  
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_9" id="__nav_9_label" tabindex="0">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_9_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Operations
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/personas/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Personas: who owns what
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/install/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Install
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/air-gapped-install/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Air-gapped install
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/gitops/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    GitOps install (Argo CD / Flux)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/upgrade/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Upgrade
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/migration-from-arc/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Migrate from ARC
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/migration-v1-to-v2/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Migrate v1 → v2
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/v1alpha1-deprecation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Deprecations & the v2.0.0 removal
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/tenant-onboarding/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tenant onboarding
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/resourcequota-sizing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ResourceQuota sizing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/runner-template-library/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Runner template library
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/worker-shared-storage/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Shared worker storage (RWX)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/in-runner-image-builds/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    In-runner image builds
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/kata-dind-workloads/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Kata DinD / image-build workloads
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/p2p-image-distribution/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    P2P image distribution
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/service-mesh-coexistence/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Service mesh coexistence
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9_18" >
+        
+          
+          <label class="md-nav__link" for="__nav_9_18" id="__nav_9_18_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Observability
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_9_18_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9_18">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Observability
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/observability/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/observability-metrics/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Metrics reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/observability-metrics-access/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Accessing metrics (scraping)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/observability-alerting/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Alerting & SLOs
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/observability-dashboards/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Grafana dashboards
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/observability-logging/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Logging & tracing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/cost-attribution/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cost attribution
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/worker-rightsizing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Worker right-sizing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/node-shutdown-budgets/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Node shutdown budgets
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/runbook/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Runbook
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/backup-restore/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Backup & restore
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/velero-backup-restore/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Velero backup & restore
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/troubleshooting/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Troubleshooting
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/security-operations/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Security operations
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/admission-policies/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Admission policies (Kyverno / Gatekeeper)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/release/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Release
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/kata-ci-spike-runbook/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Kata-on-GKE spike runbook
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+      
+        
+          
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_10" checked>
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../" class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference
+  
+
+    
+  </span>
+  
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_10" id="__nav_10_label" tabindex="">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_10_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_10">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API reference (v2beta1)
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API reference (v2beta1)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#packages" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Packages
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#actions-gatewaycomv2beta1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        actions-gateway.com/v2beta1
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="actions-gateway.com/v2beta1">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#resource-types" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Resource Types
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Resource Types">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#agcverticalautoscaling" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        AGCVerticalAutoscaling
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#actionsgateway" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ActionsGateway
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#actionsgatewayspec" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ActionsGatewaySpec
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#actionsgatewaystatus" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ActionsGatewayStatus
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#capacitygate" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CapacityGate
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#clustercapacity" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ClusterCapacity
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#clusterrunnertemplate" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ClusterRunnerTemplate
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#containersizingrecommendation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ContainerSizingRecommendation
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#credentialtype" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CredentialType
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#egresspeer" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        EgressPeer
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#egresspolicymode" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        EgressPolicyMode
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#egressproxy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        EgressProxy
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#egressproxyspec" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        EgressProxySpec
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#egressproxystatus" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        EgressProxyStatus
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#externalsigner" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ExternalSigner
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#githubcredentials" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GitHubCredentials
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#localconfigmapreference" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        LocalConfigMapReference
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#localsecretreference" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        LocalSecretReference
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#nodesharesizing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        NodeShareSizing
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#objectref" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ObjectRef
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#podscheduling" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        PodScheduling
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#priorityclassallowlist" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        PriorityClassAllowlist
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#priorityclassallowlistspec" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        PriorityClassAllowlistSpec
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#prioritytier" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        PriorityTier
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#proxyobjectref" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ProxyObjectRef
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#proxysharing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ProxySharing
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#runnerset" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        RunnerSet
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#runnersetspec" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        RunnerSetSpec
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#runnersetstatus" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        RunnerSetStatus
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#runnertemplate" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        RunnerTemplate
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#runnertemplatespec" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        RunnerTemplateSpec
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#runnertemplatestatus" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        RunnerTemplateStatus
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scaleupratelimit" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ScaleUpRateLimit
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#signerprovider" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        SignerProvider
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tracingconfig" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        TracingConfig
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#vpaupdatemode" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        VPAUpdateMode
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#vaultkubernetesauth" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        VaultKubernetesAuth
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#vaultsigner" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        VaultSigner
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#withheldcapacity" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        WithheldCapacity
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#workersizing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        WorkerSizing
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#workloadidentity" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        WorkloadIdentity
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#packages" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Packages
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#actions-gatewaycomv2beta1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        actions-gateway.com/v2beta1
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="actions-gateway.com/v2beta1">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#resource-types" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Resource Types
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Resource Types">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#agcverticalautoscaling" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        AGCVerticalAutoscaling
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#actionsgateway" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ActionsGateway
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#actionsgatewayspec" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ActionsGatewaySpec
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#actionsgatewaystatus" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ActionsGatewayStatus
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#capacitygate" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CapacityGate
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#clustercapacity" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ClusterCapacity
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#clusterrunnertemplate" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ClusterRunnerTemplate
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#containersizingrecommendation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ContainerSizingRecommendation
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#credentialtype" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CredentialType
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#egresspeer" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        EgressPeer
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#egresspolicymode" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        EgressPolicyMode
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#egressproxy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        EgressProxy
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#egressproxyspec" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        EgressProxySpec
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#egressproxystatus" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        EgressProxyStatus
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#externalsigner" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ExternalSigner
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#githubcredentials" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GitHubCredentials
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#localconfigmapreference" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        LocalConfigMapReference
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#localsecretreference" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        LocalSecretReference
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#nodesharesizing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        NodeShareSizing
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#objectref" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ObjectRef
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#podscheduling" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        PodScheduling
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#priorityclassallowlist" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        PriorityClassAllowlist
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#priorityclassallowlistspec" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        PriorityClassAllowlistSpec
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#prioritytier" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        PriorityTier
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#proxyobjectref" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ProxyObjectRef
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#proxysharing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ProxySharing
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#runnerset" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        RunnerSet
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#runnersetspec" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        RunnerSetSpec
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#runnersetstatus" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        RunnerSetStatus
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#runnertemplate" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        RunnerTemplate
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#runnertemplatespec" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        RunnerTemplateSpec
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#runnertemplatestatus" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        RunnerTemplateStatus
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scaleupratelimit" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ScaleUpRateLimit
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#signerprovider" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        SignerProvider
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tracingconfig" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        TracingConfig
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#vpaupdatemode" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        VPAUpdateMode
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#vaultkubernetesauth" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        VaultKubernetesAuth
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#vaultsigner" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        VaultSigner
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#withheldcapacity" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        WithheldCapacity
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#workersizing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        WorkerSizing
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#workloadidentity" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        WorkloadIdentity
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<!-- GENERATED by crd-ref-docs from the kubebuilder markers in api/v2beta1; regenerate with `make api-reference`. Do not edit by hand. -->
+<h1 id="api-reference">API reference<a class="headerlink" href="#api-reference" title="Permanent link">&para;</a></h1>
+<p>Every field of every <code>actions-gateway.com/v2beta1</code> kind, generated from the Go
+types the CRD schemas are generated from. For what the kinds are and how they fit
+together, start at the <a href="../">reference overview</a>; for the deprecated
+<code>v1alpha1</code> and <code>v2alpha1</code> versions, see <a href="../../operations/v1alpha1-deprecation/">Deprecations &amp; the v2.0.0
+removal</a>.</p>
+<h2 id="packages">Packages<a class="headerlink" href="#packages" title="Permanent link">&para;</a></h2>
+<ul>
+<li><a href="#actions-gatewaycomv2beta1">actions-gateway.com/v2beta1</a></li>
+</ul>
+<h2 id="actions-gatewaycomv2beta1">actions-gateway.com/v2beta1<a class="headerlink" href="#actions-gatewaycomv2beta1" title="Permanent link">&para;</a></h2>
+<p>Package v2beta1 contains the API Schema definitions for the
+actions-gateway.com v2beta1 API group: all five v2 kinds — the GMC-reconciled
+ActionsGateway (control) and EgressProxy (data) kinds, and the AGC-reconciled
+RunnerSet (control) and RunnerTemplate / ClusterRunnerTemplate (data) kinds —
+plus their shared types.</p>
+<p>v2beta1 is the graduation of the v2alpha1 API (Q74). It is the storage version
+and the conversion <strong>hub</strong>: the five kinds implement conversion.Hub here, while
+v2alpha1 implements conversion.Convertible (ConvertTo/ConvertFrom) as the spoke.
+v2beta1 is served beside v2alpha1 during the coexistence window so a tenant can
+roll forward at its own pace (and the gag-migrate Classic on-ramp keeps landing on
+v2alpha1); the two versions round-trip losslessly through the conversion webhook.</p>
+<p>The shape is identical to v2alpha1 with one deliberate exception: v2beta1 is
+ScaleSet-only, so RunnerSet drops the transitional acquisitionProtocol selector
+and the classic-only maxListeners knob (Q264 §5a-U7/U8). Those two v2alpha1-only
+fields survive a v2alpha1→v2beta1→v2alpha1 round-trip via an annotation carried on
+the v2beta1 object (see api/v2alpha1/conversion.go), so a coexistence-era Classic
+or ScaleSet set is never silently re-protocol'd.</p>
+<p>These kinds live in a single neutral module
+(github.com/actions-gateway/github-actions-gateway/api) that both the GMC and
+AGC controller modules import. The AGC's RunnerSet reconciler must read the
+GMC-group ActionsGateway (gatewayRef) and EgressProxy (proxyRef), but the GMC
+module already imports the AGC module to build RunnerSet CRs; co-locating the v2
+kinds here breaks that would-be module dependency cycle without either
+controller module importing the other's API package (the neutral api/ module
+resolves the GMC↔AGC cycle; see docs/development/go-workspaces.md).</p>
+<h3 id="resource-types">Resource Types<a class="headerlink" href="#resource-types" title="Permanent link">&para;</a></h3>
+<ul>
+<li><a href="#actionsgateway">ActionsGateway</a></li>
+<li><a href="#clusterrunnertemplate">ClusterRunnerTemplate</a></li>
+<li><a href="#egressproxy">EgressProxy</a></li>
+<li><a href="#priorityclassallowlist">PriorityClassAllowlist</a></li>
+<li><a href="#runnerset">RunnerSet</a></li>
+<li><a href="#runnertemplate">RunnerTemplate</a></li>
+</ul>
+<h4 id="agcverticalautoscaling">AGCVerticalAutoscaling<a class="headerlink" href="#agcverticalautoscaling" title="Permanent link">&para;</a></h4>
+<p>AGCVerticalAutoscaling configures the managed VerticalPodAutoscaler the GMC stamps
+next to this gateway's AGC Deployment (Q360). Its presence is the opt-in; there is
+no enabled flag, so removing the block removes the autoscaler.</p>
+<p><strong>Precedence over agcResources</strong></p>
+<p>Both this block and agcResources influence the AGC container's resources, so the
+division is fixed and explicit rather than "last writer wins" (resolved at
+reconcile, not rejected at admission — the combination is coherent, not
+contradictory):</p>
+<ul>
+<li>agcResources alone decides what the GMC stamps on the Deployment. That is
+    unchanged by this block, and it is the sizing actually in effect whenever the
+    autoscaler is not actuating: mode Off, the VPA components absent or down, or
+    before the first recommendation is produced.</li>
+<li>The managed VerticalPodAutoscaler is pinned to controlledValues:
+    RequestsOnly, so the autoscaler adjusts <em>requests</em> only. The limits from
+    agcResources (or the platform default) are never raised or lowered by it — the
+    memory limit stays the hard OOM ceiling the operator chose for a single-pod
+    control plane.</li>
+<li>A request the tenant explicitly set in agcResources becomes the autoscaler's
+    minAllowed for that resource: an explicit floor is honored as a floor rather
+    than silently overwritten. Leave agcResources.requests unset to let the
+    autoscaler size the AGC all the way down to its own global floor — that is the
+    configuration where right-sizing has the most to win.</li>
+<li>The effective limits become maxAllowed. This is a correctness requirement, not
+    a preference: a container whose request exceeds its own limit is rejected by
+    the apiserver, so the autoscaler must never recommend above the stamped limit.</li>
+</ul>
+<p><strong>When the VerticalPodAutoscaler CRD is not installed</strong></p>
+<p>The autoscaling.k8s.io CRDs are not part of core Kubernetes. If they are absent the
+GMC does not fail the gateway: the AGC is provisioned normally with its agcResources
+sizing, Ready is unaffected, and the advisory AGCAutoscalingUnavailable condition
+goes True (reason VPACRDNotInstalled) with a matching Warning Event. The gateway is
+re-probed on a slow bounded requeue, so installing the VPA controllers later
+converges without an operator edit and without a hot reconcile loop.</p>
+<p><em>Appears in:</em>
+- <a href="#actionsgatewayspec">ActionsGatewaySpec</a></p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+<th>Default</th>
+<th>Validation</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>mode</code> <em><a href="#vpaupdatemode">VPAUpdateMode</a></em></td>
+<td>Mode is the managed VerticalPodAutoscaler's updateMode. Defaults to Off — recommendation-only, so opting in never restarts the AGC by itself. Set Recreate to let the autoscaler actuate by evicting the AGC pod, or Initial to apply the recommendation only at the next restart.</td>
+<td>Off</td>
+<td>Enum: [Off Initial Recreate]<br />Optional: {}</td>
+</tr>
+</tbody>
+</table>
+<h4 id="actionsgateway">ActionsGateway<a class="headerlink" href="#actionsgateway" title="Permanent link">&para;</a></h4>
+<p>ActionsGateway is a namespace-scoped CRD reconciled by the GMC: it binds a GitHub
+identity and provisions the per-tenant AGC control plane. v2 permits multiple per
+namespace (multi-gateway support lands in M3b).</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+<th>Default</th>
+<th>Validation</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>apiVersion</code> <em>string</em></td>
+<td><code>actions-gateway.com/v2beta1</code></td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td><code>kind</code> <em>string</em></td>
+<td><code>ActionsGateway</code></td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td><code>metadata</code> <em><a href="https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.36/#objectmeta-v1-meta">ObjectMeta</a></em></td>
+<td>Refer to Kubernetes API documentation for fields of <code>metadata</code>.</td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td><code>spec</code> <em><a href="#actionsgatewayspec">ActionsGatewaySpec</a></em></td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td><code>status</code> <em><a href="#actionsgatewaystatus">ActionsGatewayStatus</a></em></td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+</tbody>
+</table>
+<h4 id="actionsgatewayspec">ActionsGatewaySpec<a class="headerlink" href="#actionsgatewayspec" title="Permanent link">&para;</a></h4>
+<p>ActionsGatewaySpec is the desired state of a v2 ActionsGateway: the GitHub
+identity plus the AGC control plane only. v2 decomposes the v1alpha1 monolith —
+the inline proxy moves to a standalone EgressProxy and the bootstrap runner
+groups become explicit RunnerSet objects, both removed from this spec (§H.4).
+Multiple ActionsGateways are permitted per namespace in v2 (the singleton rule is
+dropped); the multi-gateway controller behavior lands in M3b.</p>
+<p>The Pod Security Admission level is NOT a field here. v1alpha1 hung securityProfile
+on this per-gateway object, but Pod Security Admission is a namespace-scoped control
+in Kubernetes, so under multi-gateway two gateways in one namespace would fight over
+the single namespace PSA label. v2 moves the profile to the namespace itself — the
+operator sets the actions-gateway.com/security-profile label on the tenant namespace
+and the GMC stamps the PSA labels from it (GMC-guarded, §H.16 #7). See
+docs/operations/security-operations.md.</p>
+<p><em>Appears in:</em>
+- <a href="#actionsgateway">ActionsGateway</a></p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+<th>Default</th>
+<th>Validation</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>credentials</code> <em><a href="#githubcredentials">GitHubCredentials</a></em></td>
+<td>Credentials configures how this gateway authenticates to GitHub. It is a discriminated union keyed by credentials.type: exactly the member the discriminator names is set (GitHubApp today; workload identity joins as an additive second member, Q197). v2 nests the credential under this explicit-discriminator parent before the v2beta1 freeze so adding an auth method never reshapes the spec again (§H.15).</td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td><code>githubURL</code> <em>string</em></td>
+<td>GitHubURL is the GitHub organization, enterprise, or repository URL this gateway's runners register against (e.g. "https://github.com/my-org"). It is immutable: rebinding a running gateway's GitHub org is a footgun, so v2 freezes it via a CEL transition rule (§H.15). Casing follows the v2 convention — "github" is one lowercased word, the trailing initialism stays uppercase.</td>
+<td></td>
+<td>MaxLength: 2048<br />MinLength: 1<br />Pattern: <code>^https://</code></td>
+</tr>
+<tr>
+<td><code>githubCABundleRef</code> <em><a href="#localconfigmapreference">LocalConfigMapReference</a></em></td>
+<td>GitHubCABundleRef names a ConfigMap in this namespace holding, under the key "ca.crt", a PEM certificate bundle to trust when reaching githubURL. Set it when a GitHub Enterprise Server appliance is fronted by a private or internal certificate authority: the AGC and its worker pods otherwise trust the system roots (plus the egress proxy's own CA) and the TLS handshake fails.<br />The bundle is additive — the system roots stay trusted — so a gateway that also reaches public hosts is unaffected. Certificates are public material, which is why the carrier is a ConfigMap rather than a Secret.<br />Resolved at runtime, not at admission (§H.7): a ref naming a ConfigMap that is missing, or whose ca.crt holds no parseable certificate, fails the gateway closed (Degraded, reason CABundleNotFound / CABundleInvalid) until it resolves.<br />Unset (the default) trusts the system roots only. It does not affect egress reachability — a GHES appliance's address space must still be allowed by the egress policy (see the GitHubEgressIncomplete condition).</td>
+<td></td>
+<td>Optional: {}</td>
+</tr>
+<tr>
+<td><code>defaultProxyRef</code> <em><a href="#proxyobjectref">ProxyObjectRef</a></em></td>
+<td>DefaultProxyRef names an EgressProxy used for AGC control-plane egress and inherited by RunnerSets under this gateway that do not set their own proxyRef. Optional: unset means the control plane egresses directly (subject to NetworkPolicy). Same-namespace unless the target EgressProxy grants cross-namespace use (§H.4, §H.9).</td>
+<td></td>
+<td>Optional: {}</td>
+</tr>
+<tr>
+<td><code>defaultTemplateRef</code> <em><a href="#objectref">ObjectRef</a></em></td>
+<td>DefaultTemplateRef names a RunnerTemplate (default) or ClusterRunnerTemplate (set kind: ClusterRunnerTemplate) inherited as the worker pod shape by RunnerSets under this gateway that set no spec.templateRef of their own (Q172). Optional: it is the second rung of the template-resolution chain — an unset RunnerSet templateRef resolves rs.templateRef → this defaultTemplateRef → the single cluster-default ClusterRunnerTemplate → fail-closed TemplateNotFound (§H.4). Resolved at runtime in the gateway's own namespace (for a RunnerTemplate); a ClusterRunnerTemplate referent is cluster-scoped. A defaultTemplateRef that names a <em>missing</em> template fails the inheriting set closed (TemplateNotFound), exactly like an explicit templateRef.</td>
+<td></td>
+<td>Optional: {}</td>
+</tr>
+<tr>
+<td><code>defaultRunnerGroup</code> <em>string</em></td>
+<td>DefaultRunnerGroup names the GitHub runner group inherited by RunnerSets under this gateway that set no spec.runnerGroup of their own. This is GitHub's own grouping, not the deprecated v1alpha1 RunnerGroup CR. Optional: unset on both objects leaves the scale set in GitHub's default group.<br />This is where a tenant's GitHub-side boundary is declared once. The runner group decides which repositories may target the tenant's runners, so a gateway whose sets all land in the default group is reachable by every repository that group admits, typically the whole organization. Resolved at runtime and fail-closed per set, exactly like an explicit spec.runnerGroup.<br />GAG does not create runner groups or manage their repository access: the platform admin pre-creates the group at GitHub and scopes it to the tenant's repositories. See docs/operations/tenant-onboarding.md.</td>
+<td></td>
+<td>MaxLength: 255<br />MinLength: 1<br />Optional: {}</td>
+</tr>
+<tr>
+<td><code>agcResources</code> <em><a href="https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.36/#resourcerequirements-v1-core">ResourceRequirements</a></em></td>
+<td>AGCResources tunes the CPU/memory requests and limits stamped on this gateway's AGC control-plane container (Q171). It is an additive, per-key override of the platform default — the documented Appendix A sizing of requests {cpu: 500m, memory: 2Gi}, limits {cpu: 2, memory: 4Gi}. The GMC starts from that default and overlays only the request/limit keys set here, so a value that sets just one knob keeps the sensible default for the others. Unset ⇒ the platform default unchanged. Changing it is a rolling restart of the AGC, not a hot reload.<br />Tune cautiously: the AGC is a single pod holding all listener-goroutine state in memory. A memory limit below the AGC's working set OOMKills the control plane, and a request larger than any node (or the namespace ResourceQuota) leaves the AGC pod unschedulable (Pending). See docs/operations/tenant-onboarding.md and docs/design/appendix-e-capacity-planning.md for sizing guidance and the recommended floor.</td>
+<td></td>
+<td>Optional: {}</td>
+</tr>
+<tr>
+<td><code>agcAutoscaling</code> <em><a href="#agcverticalautoscaling">AGCVerticalAutoscaling</a></em></td>
+<td>AGCAutoscaling opts this gateway's AGC control-plane pod into managed vertical right-sizing (Q360): the GMC stamps a VerticalPodAutoscaler next to the AGC Deployment so the autoscaler observes actual usage and sizes the container's resource <em>requests</em> for it. Unset (the default) ⇒ no VerticalPodAutoscaler is created and any one the GMC previously stamped is deleted, so the opt-in is off by default and fully reversible.<br />It composes with — it does not replace — agcResources. See AGCVerticalAutoscaling for the precedence rules and the behavior when the VerticalPodAutoscaler CRD is not installed in the cluster.</td>
+<td></td>
+<td>Optional: {}</td>
+</tr>
+<tr>
+<td><code>logLevel</code> <em>string</em></td>
+<td>LogLevel controls the log verbosity of this tenant's AGC. Allowed values: info (default), debug. Changing it is a rolling restart of the AGC, not a hot reload. Use debug only for a bug repro.</td>
+<td>info</td>
+<td>Enum: [info debug]<br />Optional: {}</td>
+</tr>
+<tr>
+<td><code>tracing</code> <em><a href="#tracingconfig">TracingConfig</a></em></td>
+<td>Tracing configures opt-in OpenTelemetry distributed tracing for this tenant's AGC. Tracing stays off unless tracing.endpoint is set.</td>
+<td></td>
+<td>Optional: {}</td>
+</tr>
+<tr>
+<td><code>scheduling</code> <em><a href="#podscheduling">PodScheduling</a></em></td>
+<td>Scheduling places this gateway's AGC control-plane pod on specific nodes — for example onto the same tenant node pool as the proxy pool, or onto a control-plane pool distinct from where workers run (Q282). Unlike the EgressProxy, the AGC pod carries no built-in affinity, so the block applies verbatim. See PodScheduling.</td>
+<td></td>
+<td>Optional: {}</td>
+</tr>
+<tr>
+<td><code>clusterCapacity</code> <em><a href="#clustercapacity">ClusterCapacity</a></em></td>
+<td>ClusterCapacity states facts about the cluster this gateway runs in that the AGC cannot safely determine for itself (Q470). It is platform-operator knowledge, not tenant knowledge, which is why it lives here rather than on the RunnerSets that consume it.</td>
+<td></td>
+<td>Optional: {}</td>
+</tr>
+</tbody>
+</table>
+<h4 id="actionsgatewaystatus">ActionsGatewayStatus<a class="headerlink" href="#actionsgatewaystatus" title="Permanent link">&para;</a></h4>
+<p>ActionsGatewayStatus is the observed state of an ActionsGateway, following the
+uniform v2 status/condition contract (§H.7).</p>
+<p><em>Appears in:</em>
+- <a href="#actionsgateway">ActionsGateway</a></p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+<th>Default</th>
+<th>Validation</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>conditions</code> <em><a href="https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.36/#condition-v1-meta">Condition</a> array</em></td>
+<td>Conditions are the observed conditions of the gateway. Known types: Ready, AGCAvailable, CredentialUnavailable, Degraded, EgressUnattributed, RunnerSetsDegraded.</td>
+<td></td>
+<td>Optional: {}</td>
+</tr>
+<tr>
+<td><code>proxyMode</code> <em>string</em></td>
+<td>ProxyMode records how this gateway's AGC control-plane egress reaches GitHub: "Proxied" (through the EgressProxy named by defaultProxyRef, with stable per-tenant egress IPs) or "Direct" (no defaultProxyRef, still NetworkPolicy- restricted to GitHub + DNS + kube API but without per-tenant IP attribution). Explicit so "no proxy" is an auditable state, not an inferred absence (§H.10).</td>
+<td></td>
+<td>Enum: [Proxied Direct]<br />Optional: {}</td>
+</tr>
+<tr>
+<td><code>observedGeneration</code> <em>integer</em></td>
+<td>ObservedGeneration is the .metadata.generation the most recent reconcile acted on.</td>
+<td></td>
+<td>Optional: {}</td>
+</tr>
+</tbody>
+</table>
+<h4 id="capacitygate">CapacityGate<a class="headerlink" href="#capacitygate" title="Permanent link">&para;</a></h4>
+<p>CapacityGate configures the placeability rung of the admission ladder (Q405).</p>
+<p>Without it, a runner set whose worker shape has become unplaceable — a drained
+GPU pool, a changed taint, spot capacity gone — keeps claiming jobs, and each
+claim spends a single-use JIT runner record, holds a GitHub job lock until
+pendingPodDeadline, and ends in a reaped pod plus a CANCELLED workflow run. The
+gate does not eliminate the first wasted claim (the signal is derived from a
+stuck pod, so one has to exist); it bounds the RATE, turning a burst of N wasted
+claims into roughly one per pendingPodDeadline window.</p>
+<p>That derivation is also what makes the gate self-clearing: the reaper deletes the
+stuck pod at the deadline, the condition clears, one job is claimed, and if
+capacity is still absent the new pod trips it again.</p>
+<p>Fail-open by contract at every step — an unreadable set, an unresolved template
+chain, an unreadable pod list all leave intake exactly as it is today. The gate
+may under-gate freely; it must never over-gate, because over-gating starves a
+tenant.</p>
+<p><em>Appears in:</em>
+- <a href="#runnersetspec">RunnerSetSpec</a></p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+<th>Default</th>
+<th>Validation</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>mode</code> <em>string</em></td>
+<td>Mode selects how hard this set tries not to claim work it cannot run, by naming how the AGC learns the cluster cannot place a worker; see the CapacityGateMode* constants. Off is the default and is today's behavior. Observe gates on evidence an already-stuck pod produced — it is not a report-only tier.<br />It does NOT select the signal. Which signal is sound depends on whether the cluster can grow, which is stated once by the platform operator on ActionsGateway.spec.clusterCapacity.nodeAutoscaling — so a tenant enabling the gate cannot pick a signal that is wrong for the cluster they are running in.</td>
+<td>Off</td>
+<td>Enum: [Off Observe]<br />Optional: {}</td>
+</tr>
+</tbody>
+</table>
+<h4 id="clustercapacity">ClusterCapacity<a class="headerlink" href="#clustercapacity" title="Permanent link">&para;</a></h4>
+<p>ClusterCapacity carries the cluster-level facts a capacity decision depends on
+(Q470). Today that is one fact — whether a node autoscaler runs — with room for
+the ProvisioningRequest API's availability to join it when that mode ships (Q407).</p>
+<p>The block exists because these are properties of the CLUSTER, identical for every
+RunnerSet in it, and known to whoever owns the nodes. Asking each RunnerSet to
+assert them would ask tenants to speak for infrastructure they may not own, and
+would let two sets in one cluster disagree about a fact that has one answer.</p>
+<p><em>Appears in:</em>
+- <a href="#actionsgatewayspec">ActionsGatewaySpec</a></p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+<th>Default</th>
+<th>Validation</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>nodeAutoscaling</code> <em>string</em></td>
+<td>NodeAutoscaling states whether anything in this cluster adds nodes in response to unschedulable pods; see the NodeAutoscaling* constants. It selects which signal an opted-in RunnerSet capacity gate may trust, because an unschedulable pod means opposite things depending on the answer: where a node may still arrive, that pod is a REQUEST and only the autoscaler's own declination proves nothing is coming; where none can, the pod is pure waste and the scheduler's verdict is enough.</td>
+<td>Present</td>
+<td>Enum: [Present Absent]<br />Optional: {}</td>
+</tr>
+</tbody>
+</table>
+<h4 id="clusterrunnertemplate">ClusterRunnerTemplate<a class="headerlink" href="#clusterrunnertemplate" title="Permanent link">&para;</a></h4>
+<p>ClusterRunnerTemplate is the cluster-scoped sibling of RunnerTemplate, with an
+identical spec. It lets the platform own golden privileged templates (DinD,
+sysbox) once cluster-wide; a RunnerSet selects it with templateRef.kind:
+ClusterRunnerTemplate (§H.4). Pure data: nothing owns it and it owns nothing.</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+<th>Default</th>
+<th>Validation</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>apiVersion</code> <em>string</em></td>
+<td><code>actions-gateway.com/v2beta1</code></td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td><code>kind</code> <em>string</em></td>
+<td><code>ClusterRunnerTemplate</code></td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td><code>metadata</code> <em><a href="https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.36/#objectmeta-v1-meta">ObjectMeta</a></em></td>
+<td>Refer to Kubernetes API documentation for fields of <code>metadata</code>.</td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td><code>spec</code> <em><a href="#runnertemplatespec">RunnerTemplateSpec</a></em></td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td><code>status</code> <em><a href="#runnertemplatestatus">RunnerTemplateStatus</a></em></td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+</tbody>
+</table>
+<h4 id="containersizingrecommendation">ContainerSizingRecommendation<a class="headerlink" href="#containersizingrecommendation" title="Permanent link">&para;</a></h4>
+<p>ContainerSizingRecommendation is the measured-usage-derived resource
+recommendation for one container of a runner set's worker pods (Q359 Phase 2).
+Derivation follows the worker right-sizing model
+(docs/operations/worker-rightsizing.md): requests from the p95 of per-job
+usage peaks, a memory limit with OOM headroom above the observed maximum, and
+deliberately no CPU limit (CPU is compressible — a limit only throttles bursty
+jobs for no packing benefit).</p>
+<p><em>Appears in:</em>
+- <a href="#runnersetstatus">RunnerSetStatus</a></p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+<th>Default</th>
+<th>Validation</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>container</code> <em>string</em></td>
+<td>Container is the container name in the worker pod template this recommendation applies to.</td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td><code>requests</code> <em><a href="https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.36/#resourcelist-v1-core">ResourceList</a></em></td>
+<td>Requests are the recommended resource requests (cpu, memory), derived from the p95 of observed per-job usage peaks and rounded up to coarse increments (sizing is bucket-granular, not exact).</td>
+<td></td>
+<td>Optional: {}</td>
+</tr>
+<tr>
+<td><code>limits</code> <em><a href="https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.36/#resourcelist-v1-core">ResourceList</a></em></td>
+<td>Limits are the recommended resource limits. Memory only, at the observed maximum peak plus OOM headroom; no CPU limit is ever recommended.</td>
+<td></td>
+<td>Optional: {}</td>
+</tr>
+<tr>
+<td><code>observedPeak</code> <em><a href="https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.36/#resourcelist-v1-core">ResourceList</a></em></td>
+<td>ObservedPeak is the highest per-job usage peak (cpu, memory) observed in the window — the input to the recommended memory limit.</td>
+<td></td>
+<td>Optional: {}</td>
+</tr>
+<tr>
+<td><code>observedP95</code> <em><a href="https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.36/#resourcelist-v1-core">ResourceList</a></em></td>
+<td>ObservedP95 is the 95th percentile of per-job usage peaks (cpu, memory), bucket-interpolated — the input to the recommended requests.</td>
+<td></td>
+<td>Optional: {}</td>
+</tr>
+<tr>
+<td><code>sampleCount</code> <em>integer</em></td>
+<td>SampleCount is the number of finished jobs whose usage peaks fed this recommendation — the operator's confidence signal. Jobs shorter than one sampling interval are not counted (see the worker usage metrics).</td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td><code>windowStartTime</code> <em><a href="https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.36/#time-v1-meta">Time</a></em></td>
+<td>WindowStartTime is when this container's observation window began (first sampled job, surviving AGC restarts via the re-seed).</td>
+<td></td>
+<td>Optional: {}</td>
+</tr>
+</tbody>
+</table>
+<h4 id="credentialtype">CredentialType<a class="headerlink" href="#credentialtype" title="Permanent link">&para;</a></h4>
+<p><em>Underlying type:</em> <em>string</em></p>
+<p>CredentialType is the discriminator of the GitHubCredentials union: it names which
+authentication method a gateway uses. The member matching this value must be set and
+every other member absent. GitHubApp is the possession model (the App key lives in a
+namespace Secret); WorkloadIdentity is the delegation model (Q197) — no key in the
+cluster, an external signer signs the App JWT. WorkloadIdentity joined by extending
+this enum and adding a union member, a non-breaking addition — the whole reason the
+discriminated-union shape was fixed before the v2beta1 cut (§H.15).</p>
+<p><em>Validation:</em>
+- Enum: [GitHubApp WorkloadIdentity]</p>
+<p><em>Appears in:</em>
+- <a href="#githubcredentials">GitHubCredentials</a></p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>GitHubApp</code></td>
+<td>CredentialTypeGitHubApp selects GitHub App authentication (the possession model): the gateway holds the App's RSA private key in a namespace Secret named by GitHubCredentials.GitHubApp.</td>
+</tr>
+<tr>
+<td><code>WorkloadIdentity</code></td>
+<td>CredentialTypeWorkloadIdentity selects workload-identity authentication (the delegation model, Q197): no App private key is held in the cluster. The AGC proves its pod identity to an external trust anchor (Vault Kubernetes auth in the MVP) and the anchor signs the App JWT via an external signer. Configured by GitHubCredentials.WorkloadIdentity.</td>
+</tr>
+</tbody>
+</table>
+<h4 id="egresspeer">EgressPeer<a class="headerlink" href="#egresspeer" title="Permanent link">&para;</a></h4>
+<p>EgressPeer identifies a single destination the GMC may open in an otherwise default-deny
+per-tenant NetworkPolicy: a pod/namespace selector for an in-cluster peer, or a CIDR for an
+external one. Exactly one peer form must be given — a CIDR cannot carry a selector and vice
+versa — so the rule the GMC emits is always scoped to one peer, never a broaden-to-all-egress.</p>
+<p>This is the shared egress-peer descriptor that current and future NetworkPolicy egress holes
+reference, so the v2 API freezes one consistent shape rather than a per-feature near-duplicate
+(Q204). Today the Vault signer (VaultSigner.NetworkPolicy) is its only consumer; foreseen
+future consumers — cloud KMS signers, AGC telemetry endpoints — reuse it additively. See
+docs/design/appendix-g-future-enhancements.md §G.9.</p>
+<p><em>Appears in:</em>
+- <a href="#vaultsigner">VaultSigner</a></p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+<th>Default</th>
+<th>Validation</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>podSelector</code> <em><a href="https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.36/#labelselector-v1-meta">LabelSelector</a></em></td>
+<td>PodSelector selects the in-cluster peer pods the AGC may reach (e.g. {app.kubernetes.io/name: vault}). Combined with NamespaceSelector when both are set, matching NetworkPolicy peer semantics. Mutually exclusive with CIDR.</td>
+<td></td>
+<td>Optional: {}</td>
+</tr>
+<tr>
+<td><code>namespaceSelector</code> <em><a href="https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.36/#labelselector-v1-meta">LabelSelector</a></em></td>
+<td>NamespaceSelector selects the namespace(s) the in-cluster peer runs in (e.g. {kubernetes.io/metadata.name: vault}). Combined with PodSelector when both are set. Mutually exclusive with CIDR.</td>
+<td></td>
+<td>Optional: {}</td>
+</tr>
+<tr>
+<td><code>cidr</code> <em>string</em></td>
+<td>CIDR is the IP block of an external (out-of-cluster) peer, e.g. "10.0.5.7/32". Mutually exclusive with the pod/namespace selectors.</td>
+<td></td>
+<td>MaxLength: 43<br />Pattern: <code>^([0-9]\{1,3\}\.)\{3\}[0-9]\{1,3\}/[0-9]\{1,2\}$\|^([0-9a-fA-F:]+)/[0-9]\{1,3\}$</code><br />Optional: {}</td>
+</tr>
+<tr>
+<td><code>port</code> <em>integer</em></td>
+<td>Port optionally pins the destination port (1–65535) the egress rule permits. Leave it unset for a peer whose port is derivable elsewhere — the Vault signer derives it from VaultSigner.Address, so an unset Port preserves that behavior. Set it for peers whose port is not otherwise derivable, or to override the derived port.</td>
+<td></td>
+<td>Maximum: 65535<br />Minimum: 1<br />Optional: {}</td>
+</tr>
+</tbody>
+</table>
+<h4 id="egresspolicymode">EgressPolicyMode<a class="headerlink" href="#egresspolicymode" title="Permanent link">&para;</a></h4>
+<p><em>Underlying type:</em> <em>string</em></p>
+<p>EgressPolicyMode selects how the GMC expresses the proxy pool's GitHub egress
+allowlist. It is TENANT INTENT: the tenant says how egress should be expressed (by
+CIDR or by hostname); when hostname (FQDN) intent is chosen the platform operator —
+not the tenant — selects the enforcement mechanism via the GMC --fqdn-policy-backend
+flag (cilium, calico, or gke). This split keeps the tenant API stable as CNI/platform
+FQDN mechanisms proliferate (Q245).</p>
+<ul>
+<li>CIDR (the default) emits a standard Kubernetes NetworkPolicy whose egress
+    allowlist is the GitHub IP ranges, refreshed from api.github.com/meta every
+    24h by the GMC's IPRangeReconciler. It works on every NetworkPolicy-enforcing
+    CNI and requires no DNS awareness or operator backend.</li>
+<li>FQDN expresses the GitHub (and any Q242 destinationFQDNs) allowlist by hostname.
+    The GMC emits a CNI-native, DNS-aware egress policy whose kind is chosen by the
+    operator's --fqdn-policy-backend. FQDN intent is REJECTED at admission when the
+    cluster declares no backend (--fqdn-policy-backend=none, the default) — fail-
+    closed and loud, never a silent runtime Degraded.</li>
+<li>CiliumFQDN / CalicoFQDN are DEPRECATED aliases retained for backward
+    compatibility. Each pins its namesake mechanism (a CiliumNetworkPolicy with
+    toFQDNs, or a Calico NetworkPolicy with destination domains) regardless of the
+    operator backend. Prefer FQDN + --fqdn-policy-backend; these values still work,
+    and the earliest release that may remove them is v3.0.0 — NOT the v2.0.0 that
+    removes v1alpha1, v2alpha1, and classic acquisition. They are enum members of
+    the served beta version v2beta1, which v2.0.0 keeps serving; an API element is
+    removable only by incrementing the version, so the aliases live exactly as long
+    as v2beta1 does, and v3.0.0 is the earliest major tag that can retire it. See
+    docs/operations/v1alpha1-deprecation.md.</li>
+</ul>
+<p>All FQDN-family modes are fail-closed: the standard NetworkPolicy still
+default-denies GitHub egress (it drops the GitHub-CIDR rule but keeps a DNS-only
+allow), so if the CNI cannot enforce the native policy — or the additive-allow GKE
+FQDNNetworkPolicy is absent — GitHub egress stays denied rather than opening wide.
+Selecting an FQDN mode therefore never silently weakens the default.</p>
+<p><em>Validation:</em>
+- Enum: [CIDR FQDN CiliumFQDN CalicoFQDN]</p>
+<p><em>Appears in:</em>
+- <a href="#egressproxyspec">EgressProxySpec</a></p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>CIDR</code></td>
+<td>EgressPolicyModeCIDR is the default: a standard NetworkPolicy with the GitHub IP-range allowlist, refreshed every 24h. Works on every CNI.</td>
+</tr>
+<tr>
+<td><code>FQDN</code></td>
+<td>EgressPolicyModeFQDN expresses the GitHub egress allowlist by hostname. The concrete CNI-native policy kind is chosen by the operator's --fqdn-policy-backend (cilium/calico/gke); FQDN intent with no backend is rejected at admission.</td>
+</tr>
+<tr>
+<td><code>CiliumFQDN</code></td>
+<td>EgressPolicyModeCiliumFQDN is a DEPRECATED alias for FQDN that pins the Cilium backend (a CiliumNetworkPolicy with toFQDNs) regardless of --fqdn-policy-backend. Prefer FQDN + --fqdn-policy-backend=cilium. Removable no earlier than v3.0.0; see the EgressPolicyMode doc comment for why v2.0.0 cannot remove it.</td>
+</tr>
+<tr>
+<td><code>CalicoFQDN</code></td>
+<td>EgressPolicyModeCalicoFQDN is a DEPRECATED alias for FQDN that pins the Calico backend (a projectcalico.org/v3 NetworkPolicy with destination domains) regardless of --fqdn-policy-backend. Prefer FQDN + --fqdn-policy-backend=calico. Removable no earlier than v3.0.0; see the EgressPolicyMode doc comment for why v2.0.0 cannot remove it.</td>
+</tr>
+</tbody>
+</table>
+<h4 id="egressproxy">EgressProxy<a class="headerlink" href="#egressproxy" title="Permanent link">&para;</a></h4>
+<p>EgressProxy is a namespace-scoped CRD reconciled by the GMC into a shared egress
+proxy pool. It is referenced by RunnerSets (proxyRef) and ActionsGateways
+(defaultProxyRef) by name; referrers never own it (§H.8).</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+<th>Default</th>
+<th>Validation</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>apiVersion</code> <em>string</em></td>
+<td><code>actions-gateway.com/v2beta1</code></td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td><code>kind</code> <em>string</em></td>
+<td><code>EgressProxy</code></td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td><code>metadata</code> <em><a href="https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.36/#objectmeta-v1-meta">ObjectMeta</a></em></td>
+<td>Refer to Kubernetes API documentation for fields of <code>metadata</code>.</td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td><code>spec</code> <em><a href="#egressproxyspec">EgressProxySpec</a></em></td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td><code>status</code> <em><a href="#egressproxystatus">EgressProxyStatus</a></em></td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+</tbody>
+</table>
+<h4 id="egressproxyspec">EgressProxySpec<a class="headerlink" href="#egressproxyspec" title="Permanent link">&para;</a></h4>
+<p>EgressProxySpec is the desired state of a standalone, optionally shared egress
+proxy pool — v1alpha1's inline ActionsGateway.spec.proxy promoted to its own kind
+so any number of RunnerSets can point at one pool (§H.4, §H.5). Reconciled by the
+GMC, which owns the proxy Deployment/Service/HPA/PDB (the reconciler lands in M2).</p>
+<p><em>Appears in:</em>
+- <a href="#egressproxy">EgressProxy</a></p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+<th>Default</th>
+<th>Validation</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>minReplicas</code> <em>integer</em></td>
+<td>MinReplicas is the floor of the proxy pool's HPA.</td>
+<td>2</td>
+<td>Minimum: 1<br />Optional: {}</td>
+</tr>
+<tr>
+<td><code>maxReplicas</code> <em>integer</em></td>
+<td>MaxReplicas is the ceiling of the proxy pool's HPA.</td>
+<td>10</td>
+<td>Maximum: 100<br />Minimum: 1<br />Optional: {}</td>
+</tr>
+<tr>
+<td><code>targetCPUUtilizationPercentage</code> <em>integer</em></td>
+<td>TargetCPUUtilizationPercentage is the proxy HPA's target CPU utilization. This is the managed-default knob; set managedAutoscaling: false to bring your own autoscaler instead.</td>
+<td>60</td>
+<td>Optional: {}</td>
+</tr>
+<tr>
+<td><code>managedAutoscaling</code> <em>boolean</em></td>
+<td>ManagedAutoscaling controls whether the GMC manages this proxy pool's HorizontalPodAutoscaler (Q173). Defaults to true: the GMC provisions an HPA scaling the pool on CPU between minReplicas and maxReplicas. Set to false to bring your own autoscaler — the GMC then creates only the proxy Deployment (stable "<name>-proxy" name and labels, replicas left to the external scaler) and deletes any HPA it previously managed, so KEDA, VPA, or a custom HPA can target the Deployment without fighting the managed one. While false: maxReplicas and targetCPUUtilizationPercentage are inert; minReplicas seeds only the Deployment's initial replica count; the Ready condition compares ready pods against the Deployment's own desired replicas (an intentional external scale-to-zero is Ready, not a wedge); and the managed "<name>-proxy" HPA name stays reserved. Mirrors the managedNetworkPolicy opt-out pattern; it shifts autoscaling ownership only and relaxes no security property.</td>
+<td>true</td>
+<td>Optional: {}</td>
+</tr>
+<tr>
+<td><code>resources</code> <em><a href="https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.36/#resourcerequirements-v1-core">ResourceRequirements</a></em></td>
+<td>Resources are the proxy container's resource requirements.</td>
+<td></td>
+<td>Optional: {}</td>
+</tr>
+<tr>
+<td><code>logLevel</code> <em>string</em></td>
+<td>LogLevel controls the log verbosity of this proxy pool. Allowed values: info (default), debug. The GMC threads it to the proxy container as the LOG_LEVEL environment variable; changing it is a rolling restart of the proxy pool (not a hot reload), so the new level takes effect once the pods roll. Use debug only for a bug repro — per-CONNECT debug lines dominate log volume under load. The default is info so a pool never silently runs at debug verbosity.</td>
+<td>info</td>
+<td>Enum: [info debug]<br />Optional: {}</td>
+</tr>
+<tr>
+<td><code>auditLogging</code> <em>string</em></td>
+<td>AuditLogging selects the per-connection egress audit record this proxy pool writes to its log stream. Off (the default) writes none. Connections writes one structured line per ACCEPTED CONNECT, at tunnel close, carrying the pool's namespace, the destination host and port, the bytes transferred each way, and the tunnel duration. It carries nothing from the request headers or the tunneled bytes, which the proxy never inspects. On a pool shared via spec.sharing the namespace is the pool's, not the consumer's, so attribution there is per pool rather than per tenant.<br />It is opt-in per pool because the record is data about a tenant's egress: which destination their workers reached and when. Turning it on is a deliberate decision to retain that, and to size the log pipeline for one line per connection. Off is what an unset field, an unrecognized value, and a proxy image older than this field all resolve to.<br />It is a logging setting only. No value changes what the proxy forwards: destination enforcement is destinationFQDNs/destinationCIDRs plus the pod-egress NetworkPolicy, and enabling this relaxes none of it. "audit" here does NOT carry the report-only-instead-of-enforce sense it has in Pod Security Admission and Gatekeeper.<br />Changing it is a rolling restart of the pool, not a hot reload, the same as logLevel. Design appendix G.3 / Q564.</td>
+<td>Off</td>
+<td>Enum: [Off Connections]<br />Optional: {}</td>
+</tr>
+<tr>
+<td><code>noProxyCIDRs</code> <em>string array</em></td>
+<td>NoProxyCIDRs lists destinations excluded from the per-tenant egress proxy (appended to NO_PROXY). Entries may be CIDR prefixes, bare IPs, or NO_PROXY domain suffixes for internal destinations. Never list GitHub here — an entry that routes GitHub traffic around the proxy defeats per-tenant egress-IP attribution and is rejected by the GMC admission path. The admission check covers the public GitHub hosts plus the gitHubURL host — a GitHub Enterprise Server host included — of every ActionsGateway or RunnerSet that references this proxy, on both the proxy write and the referrer write.<br />The cluster-internal destinations are appended automatically and need not be listed: svc.cluster.local, localhost and 127.0.0.1 for both the AGC and its workers, plus kubernetes.default.svc and this cluster's API server ClusterIP (read from KUBERNETES_SERVICE_HOST) for the AGC, which dials the API server by IP. Every entry added here bypasses the proxy and so escapes the per-tenant egress-IP attribution: exempt specific internal destinations, never a broad range.</td>
+<td></td>
+<td>Optional: {}</td>
+</tr>
+<tr>
+<td><code>managedNetworkPolicy</code> <em>boolean</em></td>
+<td>ManagedNetworkPolicy controls whether the GMC manages this proxy's egress NetworkPolicy. Defaults to true (secure default).</td>
+<td>true</td>
+<td>Optional: {}</td>
+</tr>
+<tr>
+<td><code>egressPolicyMode</code> <em><a href="#egresspolicymode">EgressPolicyMode</a></em></td>
+<td>EgressPolicyMode selects how the GMC expresses the proxy pool's GitHub egress allowlist: the default CIDR mode (standard NetworkPolicy + 24h IP-range reconcile, works on every CNI) or an FQDN intent (a CNI-native DNS-aware policy whose mechanism the operator picks via --fqdn-policy-backend). The deprecated CiliumFQDN/CalicoFQDN aliases pin their namesake backend and stay accepted until v3.0.0 at the earliest. It has no effect when managedNetworkPolicy is false. See the EgressPolicyMode docs for the secure-by-default (fail-closed) guarantee.</td>
+<td>CIDR</td>
+<td>Enum: [CIDR FQDN CiliumFQDN CalicoFQDN]<br />Optional: {}</td>
+</tr>
+<tr>
+<td><code>destinationFQDNs</code> <em>string array</em></td>
+<td>DestinationFQDNs lists EXTRA, non-GitHub DNS host suffixes the proxy may forward worker CONNECT traffic to (e.g. proxy.golang.org). GitHub is always allowed and need not be listed; empty (the default) means GitHub-only. Host-suffix entries REQUIRE an FQDN egressPolicyMode (FQDN, or the deprecated CiliumFQDN/CalicoFQDN), since the pod-egress layer expresses them as toFQDNs rules. Opening egress beyond GitHub is an admin decision: the GMC rejects any entry not on its --allowed-egress-fqdns platform allowlist (empty allowlist denies all). G.1 / Q242; see design Appendix G.1 (Proxy-Enforced Destination Allowlist).</td>
+<td></td>
+<td>MaxItems: 64<br />Optional: {}</td>
+</tr>
+<tr>
+<td><code>destinationCIDRs</code> <em>string array</em></td>
+<td>DestinationCIDRs lists EXTRA, non-GitHub IP ranges the proxy may forward to (e.g. an internal 10.x subnet with no DNS, or a cloud private-API range). CIDR entries work in ANY egressPolicyMode — they become ipBlock egress peers (CIDR mode) or toCIDR peers (FQDN mode). The GMC rejects any entry not contained in its --allowed-egress-cidrs platform allowlist (empty denies all).</td>
+<td></td>
+<td>MaxItems: 64<br />Optional: {}</td>
+</tr>
+<tr>
+<td><code>sharing</code> <em><a href="#proxysharing">ProxySharing</a></em></td>
+<td>Sharing controls cross-namespace reference to this proxy. nil means same-namespace only (the default, secure). Consent lives on the provider (proxy owner) side: a consumer-side name alone never authorizes the reference (§H.9). v2 ships the inline allowlist only.</td>
+<td></td>
+<td>Optional: {}</td>
+</tr>
+<tr>
+<td><code>scheduling</code> <em><a href="#podscheduling">PodScheduling</a></em></td>
+<td>Scheduling pins this proxy pool's pods to specific nodes — the mechanism that binds a tenant to a per-tenant egress IP (Q243/Q282), since the pod's node determines which cloud NAT / egress path its traffic leaves by. A podAntiAffinity set here replaces the built-in required cross-node spread; see PodScheduling for the full precedence rules and the tenant-settable-by-design rationale.</td>
+<td></td>
+<td>Optional: {}</td>
+</tr>
+</tbody>
+</table>
+<h4 id="egressproxystatus">EgressProxyStatus<a class="headerlink" href="#egressproxystatus" title="Permanent link">&para;</a></h4>
+<p>EgressProxyStatus is the observed state of an EgressProxy, following the uniform
+v2 status/condition contract (§H.7). Nothing owns an EgressProxy and it owns its
+own children; deletion degrades referrers rather than blocking, so it carries no
+finalizer (§H.8).</p>
+<p><em>Appears in:</em>
+- <a href="#egressproxy">EgressProxy</a></p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+<th>Default</th>
+<th>Validation</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>conditions</code> <em><a href="https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.36/#condition-v1-meta">Condition</a> array</em></td>
+<td>Conditions are the observed conditions of the proxy pool. Known types: Ready, Degraded, ProxyQuotaPressure, ProxyQuotaExceeded, EgressRulesStale (Q320).</td>
+<td></td>
+<td>Optional: {}</td>
+</tr>
+<tr>
+<td><code>readyReplicas</code> <em>integer</em></td>
+<td>ReadyReplicas is the number of ready proxy pods.</td>
+<td></td>
+<td>Optional: {}</td>
+</tr>
+<tr>
+<td><code>observedGeneration</code> <em>integer</em></td>
+<td>ObservedGeneration is the .metadata.generation the most recent reconcile acted on.</td>
+<td></td>
+<td>Optional: {}</td>
+</tr>
+</tbody>
+</table>
+<h4 id="externalsigner">ExternalSigner<a class="headerlink" href="#externalsigner" title="Permanent link">&para;</a></h4>
+<p>ExternalSigner is the discriminated union of external signing backends. Provider is the
+explicit discriminator: exactly the member it names is set. The union exists so cloud
+KMS providers add as members without reshaping the spec — the same additive contract as
+the GitHubCredentials union above. The "exactly the named member is set" invariant is
+enforced by a per-provider CEL iff rule that each new provider extends.</p>
+<p><em>Appears in:</em>
+- <a href="#workloadidentity">WorkloadIdentity</a></p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+<th>Default</th>
+<th>Validation</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>provider</code> <em><a href="#signerprovider">SignerProvider</a></em></td>
+<td>Provider selects the active signer backend (the union discriminator). The member it names must be set and all others absent.</td>
+<td></td>
+<td>Enum: [Vault]<br />Required: {}</td>
+</tr>
+<tr>
+<td><code>vault</code> <em><a href="#vaultsigner">VaultSigner</a></em></td>
+<td>Vault configures the HashiCorp Vault transit signer. Set iff Provider is Vault.</td>
+<td></td>
+<td>Optional: {}</td>
+</tr>
+</tbody>
+</table>
+<h4 id="githubcredentials">GitHubCredentials<a class="headerlink" href="#githubcredentials" title="Permanent link">&para;</a></h4>
+<p>GitHubCredentials is the discriminated union of the ways a gateway authenticates to
+GitHub. Type is the explicit discriminator (k8s union convention): exactly the member
+it names is set. Today the only member is GitHubApp; workload identity joins as a
+second member without a breaking change (Q197) — the union shape exists so adding an
+auth method never reshapes the spec again after the v2beta1 freeze (§H.15).
+The "exactly the named member is set" invariant is enforced by
+CEL (the apiserver does not enforce native union semantics on CRDs): one per-member
+iff rule that each new member extends, never an N-way "exactly one of" that grows with
+the union.</p>
+<p><em>Appears in:</em>
+- <a href="#actionsgatewayspec">ActionsGatewaySpec</a></p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+<th>Default</th>
+<th>Validation</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>type</code> <em><a href="#credentialtype">CredentialType</a></em></td>
+<td>Type selects the active credential member (the union discriminator). The member it names must be set and all others absent. It is required and explicit — an absent or implicit discriminator would have to become required later, itself a breaking change, so v2 fixes it before beta.</td>
+<td></td>
+<td>Enum: [GitHubApp WorkloadIdentity]<br />Required: {}</td>
+</tr>
+<tr>
+<td><code>githubApp</code> <em><a href="#localsecretreference">LocalSecretReference</a></em></td>
+<td>GitHubApp configures GitHub App authentication: a name-only reference to the Secret in this gateway's own namespace holding the App credentials ({appId, installationId, privateKey}). Set iff Type is GitHubApp. The reference name is deliberately mutable — changing it is the supported credential-rotation path.</td>
+<td></td>
+<td>Optional: {}</td>
+</tr>
+<tr>
+<td><code>workloadIdentity</code> <em><a href="#workloadidentity">WorkloadIdentity</a></em></td>
+<td>WorkloadIdentity configures workload-identity authentication (Q197): the App JWT is signed by an external signer the AGC reaches by proving its pod identity, so no App private key is ever held in the cluster (the delegation model). Set iff Type is WorkloadIdentity. This is the on-strategy, no-PEM credential method; GitHubApp remains the secure-by-default in-cluster option.</td>
+<td></td>
+<td>Optional: {}</td>
+</tr>
+</tbody>
+</table>
+<h4 id="localconfigmapreference">LocalConfigMapReference<a class="headerlink" href="#localconfigmapreference" title="Permanent link">&para;</a></h4>
+<p>LocalConfigMapReference is a name-only reference to a Kubernetes ConfigMap in the
+same namespace. It is distinct from LocalObjectRef because the referent is a core
+object, not a v2 one: its name budget is the full 253-character DNS subdomain
+rather than the 52-character v2 object budget (§H.6).</p>
+<p><em>Appears in:</em>
+- <a href="#actionsgatewayspec">ActionsGatewaySpec</a></p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+<th>Default</th>
+<th>Validation</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>name</code> <em>string</em></td>
+<td>Name of the referenced ConfigMap in the same namespace.</td>
+<td></td>
+<td>MaxLength: 253<br />MinLength: 1</td>
+</tr>
+</tbody>
+</table>
+<h4 id="localsecretreference">LocalSecretReference<a class="headerlink" href="#localsecretreference" title="Permanent link">&para;</a></h4>
+<p>LocalSecretReference is a name-only reference to a Kubernetes Secret in the same
+namespace. v2 drops v1alpha1's SecretReference.namespace field: it was
+reserved-but-validated-empty and read like a cross-namespace reference that does
+not exist — a confused-deputy footgun. The referenced Secret must reside in the
+referrer's own namespace (§H.15).</p>
+<p><em>Appears in:</em>
+- <a href="#githubcredentials">GitHubCredentials</a></p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+<th>Default</th>
+<th>Validation</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>name</code> <em>string</em></td>
+<td>Name of the referenced Secret in the same namespace.</td>
+<td></td>
+<td>MaxLength: 253<br />MinLength: 1</td>
+</tr>
+</tbody>
+</table>
+<h4 id="nodesharesizing">NodeShareSizing<a class="headerlink" href="#nodesharesizing" title="Permanent link">&para;</a></h4>
+<p>NodeShareSizing declares the per-node allocatable envelope the NodeShare
+profile divides among workers. The operator declares the envelope rather than
+the AGC reading Node objects: the AGC is deliberately namespace-scoped (no
+cluster-scoped RBAC), and the operator knows which node shape the set's
+scheduling constraints target.</p>
+<p><em>Appears in:</em>
+- <a href="#workersizing">WorkerSizing</a></p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+<th>Default</th>
+<th>Validation</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>allocatable</code> <em><a href="https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.36/#resourcelist-v1-core">ResourceList</a></em></td>
+<td>Allocatable is the node's allocatable cpu/memory to divide (from <code>kubectl describe node</code>, minus any system/sidecar overhead the operator reserves). Keys other than cpu and memory are ignored, so at least one of the two must be present: an envelope carrying neither (empty, or GPUs only) derives nothing while the profile still reports Active (Q484). Declaring just one is legitimate — the other resource keeps the template's ask.</td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td><code>workersPerNode</code> <em>integer</em></td>
+<td>WorkersPerNode is the divisor: the number of worker pods that should pack onto one node (for GPU nodes, typically the GPU count).</td>
+<td></td>
+<td>Maximum: 1000<br />Minimum: 1</td>
+</tr>
+</tbody>
+</table>
+<h4 id="objectref">ObjectRef<a class="headerlink" href="#objectref" title="Permanent link">&para;</a></h4>
+<p>ObjectRef is a name-only reference to another v2 object in the same namespace.</p>
+<p>It backs gatewayRef, templateRef and defaultTemplateRef, whose referents are
+always resolved in the referrer's own namespace. Cross-namespace use of those
+three is deliberately not expressible, since no consent handshake stands behind
+them; the one referent kind that does grant cross-namespace use, EgressProxy,
+has its own ProxyObjectRef (§H.9). Referential integrity is a runtime condition,
+not an admission gate (§H.7), so a ref naming a not-yet-applied object is
+well-formed, and the controller surfaces a NotFound condition until it resolves.</p>
+<p><em>Appears in:</em>
+- <a href="#actionsgatewayspec">ActionsGatewaySpec</a>
+- <a href="#runnersetspec">RunnerSetSpec</a></p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+<th>Default</th>
+<th>Validation</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>name</code> <em>string</em></td>
+<td>Name of the referenced object. Bounded by the same 52-char budget every v2 object name carries (§H.6), so a well-formed ref can always name a valid object.</td>
+<td></td>
+<td>MaxLength: 52<br />MinLength: 1</td>
+</tr>
+<tr>
+<td><code>kind</code> <em>string</em></td>
+<td>Kind optionally selects the referent kind when more than one is valid. It is load-bearing only on templateRef, where it chooses between RunnerTemplate (the namespaced default) and ClusterRunnerTemplate (a platform golden template). gatewayRef and proxyRef each have a single valid kind, so Kind is left empty there.</td>
+<td></td>
+<td>Enum: [RunnerTemplate ClusterRunnerTemplate]<br />Optional: {}</td>
+</tr>
+</tbody>
+</table>
+<h4 id="podscheduling">PodScheduling<a class="headerlink" href="#podscheduling" title="Permanent link">&para;</a></h4>
+<p>PodScheduling is the pod placement pass-through shared by EgressProxy (the proxy
+pool pods) and ActionsGateway (the AGC control-plane pod). It carries the three
+standard Kubernetes placement controls verbatim, so the pods GAG builds on a
+tenant's behalf can be steered exactly like any other pod.</p>
+<p>Why it exists (Q243/Q282). A per-tenant egress IP is realized by pinning a
+tenant's proxy pods to a node pool whose egress path (cloud NAT gateway, dedicated
+subnet, or SNAT-ing gateway node) owns that IP. Without a placement knob on the
+EgressProxy, the proxy pool's replicas spread across whatever pools exist and one
+tenant egresses from several IPs — the gap the Q243 live validation found. Worker
+pods already have the full placement surface via RunnerTemplate.podTemplate; this
+type closes the same gap for the two pods GAG owns directly.</p>
+<p><strong>Placement is tenant-settable by design</strong></p>
+<p>These fields are NOT gated by a platform allowlist, and that is a deliberate,
+reviewed decision rather than an oversight (Q282):</p>
+<ul>
+<li>
+<p>Choosing an egress path is a feature, not an escape. Distinct per-tenant egress
+    IPs exist so tenants do not share a rate-limit or block radius with each other.
+    A tenant electing where its own traffic leaves the cluster is the intended use.</p>
+</li>
+<li>
+<p>The capability is already reachable, though the symmetry is partial — state it
+    precisely. RunnerTemplate.podTemplate is a full PodTemplateSpec whose
+    reserved-field guardrail (§H.4) withholds serviceAccountName,
+    automountServiceAccountToken, hostPID, hostNetwork, and hostIPC — but
+    deliberately not nodeSelector/tolerations/affinity. In DIRECT-egress mode
+    (§H.10, no proxyRef) worker pods reach GitHub without a proxy, so worker
+    placement already selects the egress IP with no gate. In PROXIED mode (the
+    default) it does not: NetworkPolicy forces worker traffic through the proxy, so
+    the proxy pool's placement is what selects the IP. This field therefore does
+    extend the capability to the default posture — it is not purely a symmetry
+    argument, and gating it would still leave the direct-egress path open.</p>
+</li>
+<li>
+<p>Constraining placement is the platform's job, and only the platform has a sound
+    tool. A per-CRD <em>validating</em> allowlist of permitted placement values cannot
+    work: affinity.nodeAffinity supports NotIn/DoesNotExist, so "any pool except my
+    own" is expressible and no key=value allowlist rejects it in general. Pinning
+    nodeSelector by MUTATION is sound — Kubernetes ANDs nodeSelector with
+    nodeAffinity, so affinity can only narrow the candidate nodes, never widen them
+    — and mutation is a policy-engine (Gatekeeper, Kyverno) capability, not a CRD
+    webhook one. See docs/operations/admission-policies.md for ready-to-apply
+    samples covering this type and RunnerTemplate alike.</p>
+</li>
+</ul>
+<p>The property this weakens is <em>attribution</em>, not isolation: if a tenant retargets
+its proxy onto another pool's egress path, traffic from both tenants leaves via one
+IP and per-tenant IP attribution no longer holds. Nothing about namespace
+isolation, RBAC, or the egress choke point changes. See docs/design/05-security.md.</p>
+<p><strong>Why a narrow block rather than a PodTemplateSpec</strong></p>
+<p>Worker pods take placement through the full corev1.PodTemplateSpec on
+RunnerTemplate. This type deliberately does not, for two reasons:</p>
+<ul>
+<li>Size. A PodTemplateSpec generates ~600 KB of OpenAPI. It is why the
+    RunnerTemplate CRDs weigh 1.21 MB each and why the v2 CRDs ship in their own
+    opt-in chart at all (§H.13, Q149 — embedding them pushed the main chart's Helm
+    release Secret past 1 MiB). Two more copies, across two served versions, would
+    put single CRD objects at the apiserver's ~1.5 MiB ceiling.</li>
+<li>Ownership. The proxy and AGC pods' image, container, and securityContext are
+    controller-enforced invariants. A PodTemplateSpec would invite an author to set
+    them and then require a reserved-field CEL guardrail to reject it, which is the
+    complexity RunnerTemplate carries and these kinds do not need.</li>
+</ul>
+<p>The consequence is a real gap: workers can express topologySpreadConstraints,
+priorityClassName, schedulerName, runtimeClassName, and nodeName; these pods cannot.
+The two that matter are topologySpreadConstraints (the modern successor to the
+anti-affinity spread this proxy pool already relies on) and priorityClassName (an
+evicted proxy pod takes that tenant's whole egress path down). Growing this struct
+is purely additive — no conversion work, no breaking change. Tracked as Q284.</p>
+<p><em>Appears in:</em>
+- <a href="#actionsgatewayspec">ActionsGatewaySpec</a>
+- <a href="#egressproxyspec">EgressProxySpec</a></p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+<th>Default</th>
+<th>Validation</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>nodeSelector</code> <em>object (keys:string, values:string)</em></td>
+<td>NodeSelector constrains the pods to nodes carrying all of these labels — the simplest way to pin a proxy pool to a tenant's node pool (and thus to that pool's egress IP). Merged into the pod spec verbatim.</td>
+<td></td>
+<td>Optional: {}</td>
+</tr>
+<tr>
+<td><code>tolerations</code> <em><a href="https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.36/#toleration-v1-core">Toleration</a> array</em></td>
+<td>Tolerations let the pods schedule onto nodes carrying matching taints — the companion to NodeSelector when a tenant's node pool is taint-guarded so that unrelated workloads do not land on it. Applied to the pod spec verbatim.</td>
+<td></td>
+<td>Optional: {}</td>
+</tr>
+<tr>
+<td><code>affinity</code> <em><a href="https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.36/#affinity-v1-core">Affinity</a></em></td>
+<td>Affinity is the standard pod/node affinity and anti-affinity block.<br />Precedence against the built-in anti-affinity (EgressProxy only). The GMC stamps a REQUIRED cross-node podAntiAffinity on every proxy pool so one node failure cannot take the whole pool down. Composition with this field is:<br />- nodeAffinity and podAffinity are applied as given, alongside the built-in anti-affinity, which is preserved.<br />- podAntiAffinity, when set to any non-nil value, REPLACES the built-in term entirely — set it and you own it. An explicit empty value (podAntiAffinity: {}) therefore opts out of cross-node spreading, which is what a single-node tenant pool needs: the required built-in term would otherwise strand every replica after the first in Pending. Lowering minReplicas to 1 is the other way to get there.<br />ActionsGateway has no built-in affinity, so the block applies verbatim there.</td>
+<td></td>
+<td>Optional: {}</td>
+</tr>
+<tr>
+<td><code>topologySpreadConstraints</code> <em><a href="https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.36/#topologyspreadconstraint-v1-core">TopologySpreadConstraint</a> array</em></td>
+<td>TopologySpreadConstraints spreads the pods across failure domains (zones, nodes) — the modern successor to the cross-node podAntiAffinity this proxy pool already relies on. It expresses "spread across zones, tolerate a skew of 1", which anti-affinity cannot. Applied to the pod spec verbatim.<br />Composition with the built-in anti-affinity (EgressProxy only). Unlike Affinity, this field COMPOSES with the built-in required cross-node anti-affinity — it never replaces it. <code>podAntiAffinity: \{\}</code> on Affinity stays the single opt-out for the built-in cross-node spread; this field does not add a second one. That asymmetry is deliberate: Affinity has to be able to displace the built-in term because podAntiAffinity occupies the same field with nowhere else to go, whereas topologySpreadConstraints is a different field with no such collision, so composing is safe (it can only NARROW the candidate node set, like nodeSelector AND-ing with nodeAffinity) and having one author silently lose cross-node spread by asking for zonal spread would be a footgun. Its labelSelector counts only pods in the constraint's own namespace, so one tenant's spread cannot be skewed by another tenant's pods.<br />The Pending trap. An author who asks for a SOFT zonal spread (whenUnsatisfiable: ScheduleAnyway) still inherits the REQUIRED built-in cross-node anti-affinity, so replicas beyond the pinned pool's node count strand in Pending — the same behavior as any proxy pool whose minReplicas exceeds its node count. The escapes are the same: <code>podAntiAffinity: \{\}</code> to opt out of the built-in cross-node spread, or lower minReplicas.<br />Unlike PriorityClassName, this needs no allowlist: it is namespace-scoped and can only narrow placement, so it carries no cross-tenant lever.</td>
+<td></td>
+<td>Optional: {}</td>
+</tr>
+<tr>
+<td><code>priorityClassName</code> <em>string</em></td>
+<td>PriorityClassName names a cluster-scoped PriorityClass for these pods, raising them above best-effort workloads under node pressure. It matters because an evicted proxy pod takes that tenant's ENTIRE egress path down, and an evicted AGC pod takes that tenant's control plane down; without a priority class both are as evictable as any best-effort pod.<br />Gated by a SEPARATE, infra-only allowlist. This field is validated against the GMC --allowed-infra-priority-classes flag, which is DISJOINT by construction from the worker-facing --allowed-priority-classes that gates priorityTiers and RunnerTemplate podTemplate.spec.priorityClassName. The two must not intersect, and the GMC refuses to start if they do.<br />Why a second allowlist rather than reusing the worker one. Infra pods must sit ABOVE workers — that is the whole point of prioritizing them. If the worker allowlist were reused and a high class added so a proxy could name it, that same class would become nameable from a worker pod, and any tenant could lift its WORKERS to infra priority and preempt OTHER tenants' proxy pods. The gate meant to protect the proxy would become the mechanism for evicting it.<br />Why gated at all, when nodeSelector/tolerations/affinity are not. Placement is a choice about the tenant's own traffic; it weakens attribution, not isolation. Priority is a cluster-wide, cross-tenant preemption lever: a pod naming a preempting class can evict OTHER tenants' pods off a node. And <code>system-*</code> PriorityClasses are NOT kube-system-scoped — a pod in any namespace may name system-cluster-critical (value 2000000000, PreemptLowerPriority), with no built-in admission check restricting it (verified against a real apiserver). So an ungated priorityClassName on a tenant-writable CR is a cluster-wide preemption escape, which is why it is the one PodScheduling field behind a gate.<br />The empty string (the default) names no class and is always permitted, so an unset allowlist forbids every NAMED class without forbidding unprioritized pods.</td>
+<td></td>
+<td>Optional: {}</td>
+</tr>
+</tbody>
+</table>
+<h4 id="priorityclassallowlist">PriorityClassAllowlist<a class="headerlink" href="#priorityclassallowlist" title="Permanent link">&para;</a></h4>
+<p>PriorityClassAllowlist is the cluster-scoped, platform-owned allowlist of
+PriorityClass names tenants may reference. It is pure configuration: nothing
+owns it and it owns nothing.</p>
+<p>It exists as a CRD rather than a ConfigMap because it is the <code>paramKind</code> of the
+priorityclass-allowlist-guard ValidatingAdmissionPolicy, and a kube-apiserver
+defect (Q444) permanently kills the param informer for any CORE-type paramKind
+once the set of bindings naming it goes empty for one refresh tick — which a
+<code>helm uninstall</code> does. The apiserver allocates a fresh dynamic informer per
+context for a CRD paramKind, so this kind is structurally immune; the contrast
+is measured by scripts/e2e/vap-param-informer-check.sh. Background:
+docs/design/05-security.md (PriorityClass allowlist).</p>
+<p>Whose fact is it (api-review.md § Ask whose fact it is): the platform's, in
+every sense — only whoever runs the nodes knows which classes exist and what
+preempting one costs, and a cap a tenant could raise is not a cap. Hence
+cluster-scoped, and writable only by a platform admin.</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+<th>Default</th>
+<th>Validation</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>apiVersion</code> <em>string</em></td>
+<td><code>actions-gateway.com/v2beta1</code></td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td><code>kind</code> <em>string</em></td>
+<td><code>PriorityClassAllowlist</code></td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td><code>metadata</code> <em><a href="https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.36/#objectmeta-v1-meta">ObjectMeta</a></em></td>
+<td>Refer to Kubernetes API documentation for fields of <code>metadata</code>.</td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td><code>spec</code> <em><a href="#priorityclassallowlistspec">PriorityClassAllowlistSpec</a></em></td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+</tbody>
+</table>
+<h4 id="priorityclassallowlistspec">PriorityClassAllowlistSpec<a class="headerlink" href="#priorityclassallowlistspec" title="Permanent link">&para;</a></h4>
+<p>PriorityClassAllowlistSpec is the platform allowlist of PriorityClass names a
+tenant may reference. It carries two disjoint sets — one for worker pods, one
+for infra pods — because a class nameable from both surfaces would let a tenant
+lift its workers to infra priority and preempt other tenants' proxy pods.</p>
+<p><em>Appears in:</em>
+- <a href="#priorityclassallowlist">PriorityClassAllowlist</a></p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+<th>Default</th>
+<th>Validation</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>allowedPriorityClasses</code> <em>string array</em></td>
+<td>AllowedPriorityClasses is the set of cluster-scoped PriorityClass names tenants may reference from RunnerSet.spec.priorityTiers[].priorityClassName and RunnerTemplate.spec.podTemplate.spec.priorityClassName (and, while v1alpha1 is served, RunnerGroup.spec.priorityTiers[].priorityClassName).<br />A PriorityClass sets cluster-wide scheduling preemption order, so a tenant naming a high-priority class could evict another tenant's worker pods. The platform admin pre-creates each class (with preemptionPolicy: Never unless a tier is genuinely meant to preempt across tenants) and lists its name here.<br />Unset or empty forbids every named class — the secure default. This list is additive to the GMC's static --allowed-priority-classes flag for the admission webhook, and is the SOLE source for the priorityclass-allowlist-guard ValidatingAdmissionPolicy, which cannot read a controller flag. Keep it a superset of the flag, or direct writes naming a flag-only class are denied by the policy.</td>
+<td></td>
+<td>MaxItems: 128<br />items:MaxLength: 253<br />items:Pattern: <code>^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$</code><br />Optional: {}</td>
+</tr>
+<tr>
+<td><code>allowedInfraPriorityClasses</code> <em>string array</em></td>
+<td>AllowedInfraPriorityClasses is the set of cluster-scoped PriorityClass names a tenant may reference from EgressProxy.spec.scheduling.priorityClassName and ActionsGateway.spec.scheduling.priorityClassName — the INFRA pods, meaning the per-tenant egress proxy pool and the AGC control plane.<br />Infra pods are meant to outrank workers: an evicted proxy takes a tenant's whole egress path down. That is why this is a SEPARATE set, and why it must stay disjoint from AllowedPriorityClasses — a class on both is nameable from a worker pod, so any tenant could lift its workers to infra priority and preempt another tenant's proxy. The spec-level CEL rule rejects an overlap within this object; the GMC additionally refuses an overlap against its static flags.<br />Unset or empty forbids every named class — the secure default. This list is additive to the GMC's static --allowed-infra-priority-classes flag. The priorityclass-allowlist-guard ValidatingAdmissionPolicy does not read it: the infra surfaces are gated by failurePolicy=fail webhooks, not by that policy.</td>
+<td></td>
+<td>MaxItems: 128<br />items:MaxLength: 253<br />items:Pattern: <code>^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$</code><br />Optional: {}</td>
+</tr>
+</tbody>
+</table>
+<h4 id="prioritytier">PriorityTier<a class="headerlink" href="#prioritytier" title="Permanent link">&para;</a></h4>
+<p>PriorityTier maps a Kubernetes PriorityClass to a cumulative pod-count
+threshold. Thresholds must be in strictly ascending order. Unchanged in meaning
+from v1alpha1; carried onto the RunnerSet (was RunnerGroup).</p>
+<p><em>Appears in:</em>
+- <a href="#runnersetspec">RunnerSetSpec</a></p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+<th>Default</th>
+<th>Validation</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>priorityClassName</code> <em>string</em></td>
+<td>PriorityClassName is the name of an existing cluster-scoped PriorityClass. The platform owns which classes a tenant may reference: the GMC admission path rejects any name not on the platform allowlist (--allowed-priority-classes), so a tenant cannot name a high-priority, preempting class and evict other tenants' worker pods. The named class — including its preemptionPolicy — is platform-created; see docs/operations/security-operations.md.</td>
+<td></td>
+<td>MaxLength: 253<br />MinLength: 1</td>
+</tr>
+<tr>
+<td><code>threshold</code> <em>integer</em></td>
+<td>Threshold is the cumulative active-pod count at which this tier is exhausted.</td>
+<td></td>
+<td>Minimum: 1</td>
+</tr>
+</tbody>
+</table>
+<h4 id="proxyobjectref">ProxyObjectRef<a class="headerlink" href="#proxyobjectref" title="Permanent link">&para;</a></h4>
+<p>ProxyObjectRef references an EgressProxy, optionally in another namespace. It is
+deliberately not ObjectRef: that type also backs gatewayRef, templateRef and
+defaultTemplateRef, and a Namespace field on it would make all four
+cross-namespace at once, three of them with no consent handshake behind them
+(§H.9).</p>
+<p><em>Appears in:</em>
+- <a href="#actionsgatewayspec">ActionsGatewaySpec</a>
+- <a href="#runnersetspec">RunnerSetSpec</a></p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+<th>Default</th>
+<th>Validation</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>name</code> <em>string</em></td>
+<td>Name of the referenced EgressProxy. Bounded by the v2 52-char name budget (§H.6).</td>
+<td></td>
+<td>MaxLength: 52<br />MinLength: 1</td>
+</tr>
+<tr>
+<td><code>namespace</code> <em>string</em></td>
+<td>Namespace optionally selects an EgressProxy outside the referrer's own namespace. Empty means the referrer's namespace.<br />A cross-namespace reference resolves only with provider consent: the named proxy must list the referrer's namespace in its spec.sharing.allowedNamespaces. Without that the reference fails closed with ProxyShareNotGranted, and no NetworkPolicy or CA trust is wired. Naming a proxy never authorizes reaching it.<br />A shared proxy is a shared egress identity, so it suits cooperating tenants or a platform-operated central pool rather than mutually-distrusting tenants.</td>
+<td></td>
+<td>MaxLength: 63<br />Optional: {}</td>
+</tr>
+</tbody>
+</table>
+<h4 id="proxysharing">ProxySharing<a class="headerlink" href="#proxysharing" title="Permanent link">&para;</a></h4>
+<p>ProxySharing controls cross-namespace reference to an EgressProxy. Consent is
+always provider-side: the proxy owner publishes which namespaces may reference it
+(§H.9). A nil ProxySharing means same-namespace only (the default, secure). v2
+ships the inline allowlist only; ReferenceGrant support is additive later.</p>
+<p><em>Appears in:</em>
+- <a href="#egressproxyspec">EgressProxySpec</a></p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+<th>Default</th>
+<th>Validation</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>allowedNamespaces</code> <em>string array</em></td>
+<td>AllowedNamespaces lists namespaces permitted to reference this proxy. A consumer-side name alone never authorizes a cross-namespace reference.</td>
+<td></td>
+<td>Optional: {}</td>
+</tr>
+</tbody>
+</table>
+<h4 id="runnerset">RunnerSet<a class="headerlink" href="#runnerset" title="Permanent link">&para;</a></h4>
+<p>RunnerSet is a namespace-scoped CRD reconciled by the AGC. It binds a worker pod
+shape (templateRef) and an optional egress proxy (proxyRef) to a GitHub gateway
+(gatewayRef), and carries the scheduling/quota knobs that were RunnerGroup's in
+v1alpha1. Worker pods are provisioned per acquired job and released on completion.</p>
+<p>The .spec.gatewayRef.name selectable field (KEP-4358, used by the AGC to scope its
+RunnerSet watch server-side) is deliberately declared ONLY on v2alpha1, NOT here.
+The apiserver hoists per-version selectableFields to spec level when they are
+identical across all served versions, but leaves the schema per-version when the
+versions' schemas differ (v2beta1 drops acquisitionProtocol/maxListeners). A
+spec-level selectableFields with a nil spec-level schema is rejected
+("selectableFields may only be set when validations.schema is included"), so
+declaring the field on both versions makes the RunnerSet CRD un-installable. The
+AGC operates on v2alpha1 during coexistence, so v2alpha1 is the version that needs
+the field selector; when v2beta1 becomes the sole served version (the v2alpha1
+removal at the ScaleSet-only cut) the marker moves here and v2alpha1's is dropped —
+so the two are never declared simultaneously. See Q74.</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+<th>Default</th>
+<th>Validation</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>apiVersion</code> <em>string</em></td>
+<td><code>actions-gateway.com/v2beta1</code></td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td><code>kind</code> <em>string</em></td>
+<td><code>RunnerSet</code></td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td><code>metadata</code> <em><a href="https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.36/#objectmeta-v1-meta">ObjectMeta</a></em></td>
+<td>Refer to Kubernetes API documentation for fields of <code>metadata</code>.</td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td><code>spec</code> <em><a href="#runnersetspec">RunnerSetSpec</a></em></td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td><code>status</code> <em><a href="#runnersetstatus">RunnerSetStatus</a></em></td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+</tbody>
+</table>
+<h4 id="runnersetspec">RunnerSetSpec<a class="headerlink" href="#runnersetspec" title="Permanent link">&para;</a></h4>
+<p>RunnerSetSpec is the desired state of a RunnerSet — the small scheduling/quota
+binder that replaces v1alpha1's RunnerGroup. The large PodTemplateSpec no longer
+lives here: it moves to a referenced RunnerTemplate / ClusterRunnerTemplate so a
+runner set stays a fixed-size object and a template is reused across many sets
+(docs/design/appendix-h-v2-api-decomposition.md §H.5). The scheduling and
+lifecycle fields are carried over from RunnerGroup unchanged in meaning.</p>
+<p><em>Appears in:</em>
+- <a href="#runnerset">RunnerSet</a></p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+<th>Default</th>
+<th>Validation</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>gatewayRef</code> <em><a href="#objectref">ObjectRef</a></em></td>
+<td>GatewayRef names the ActionsGateway that supplies this runner set's GitHub binding and control plane. Under multi-gateway-per-namespace each AGC reconciles only the RunnerSets whose gatewayRef targets it — which is why spec.gatewayRef.name is a CRD selectable field (KEP-4358), so that scoping runs server-side (§H.7). Required: a runner set with no gateway has no GitHub connection to register against. Resolved at runtime, not admission.</td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td><code>templateRef</code> <em><a href="#objectref">ObjectRef</a></em></td>
+<td>TemplateRef optionally names the RunnerTemplate (default) or ClusterRunnerTemplate (set kind: ClusterRunnerTemplate) that supplies the worker pod shape. Unset means inherit the gateway's defaultTemplateRef; both unset means the single cluster-default ClusterRunnerTemplate (the one marked IsDefaultTemplateAnnotation). If none of the three resolves the set fails closed Ready=False/TemplateNotFound — the AGC never synthesizes a phantom worker pod without a pod shape (Q172, §H.4). This relaxes the GA-era required templateRef to optional-with-a-default (a backward-compatible required→optional change): a set that sets templateRef behaves exactly as before. The referent is resolved at runtime; a set pointing at a not-yet-applied template sits Ready=False/TemplateNotFound until it syncs (§H.7). status.templateSource reports which rung resolved.</td>
+<td></td>
+<td>Optional: {}</td>
+</tr>
+<tr>
+<td><code>proxyRef</code> <em><a href="#proxyobjectref">ProxyObjectRef</a></em></td>
+<td>ProxyRef optionally names the EgressProxy this runner set's traffic egresses through. Unset means inherit the gateway's defaultProxyRef; both unset means direct egress (still NetworkPolicy-restricted to DNS + GitHub) — a well-defined behavior, so the dependency is simply droppable, which is why proxyRef is optional where templateRef is required (§H.4, §H.10). Direct egress is reflected in status as proxyMode=Direct plus an advisory EgressUnattributed condition; a proxyRef/defaultProxyRef that names a <em>missing</em> proxy still fails closed (ProxyNotFound), not direct egress (Q168).</td>
+<td></td>
+<td>Optional: {}</td>
+</tr>
+<tr>
+<td><code>maxWorkers</code> <em>integer</em></td>
+<td>MaxWorkers caps the number of worker pods this RunnerSet may run concurrently. A soft, in-process ceiling; pair it with a namespace ResourceQuota for a hard, cluster-enforced limit.</td>
+<td></td>
+<td>Minimum: 1<br />Optional: {}</td>
+</tr>
+<tr>
+<td><code>runnerLabels</code> <em>string array</em></td>
+<td>RunnerLabels is the label set matched against workflow runs-on values. Every label is registered on the scale set at GitHub, so a workflow may target the set with a single name (runs-on: linux) or with an array (runs-on: [linux, gpu]); the Actions Service matches a scale set's labels the way it matches a plain self-hosted runner's. Each label must be non-empty and contain no whitespace or commas (comma is the runs-on list separator).<br />The FIRST label is the scale set's name at GitHub, which makes it this set's identity: reordering the list renames the scale set, leaving the old one orphaned at GitHub, so treat runnerLabels[0] as stable and append rather than prepend. It is also the label the GMC's admission webhook holds unique across the runner sets under one gateway; later labels may overlap freely, and which set an ambiguous runs-on reaches is GitHub's decision.<br />A GitHub Enterprise Server appliance below 3.21 accepts only the name label unless a site admin enables DistributedTask.AllowRunnerScaleSetCustomLabels, and it discards the rest without an error. The AGC compares the registered label set against this one and reports any shortfall as the advisory RunnerLabelsIncomplete condition (Q726).</td>
+<td></td>
+<td>MinItems: 1<br />items:MaxLength: 256<br />items:Pattern: <code>^[^,\s]+$</code></td>
+</tr>
+<tr>
+<td><code>runnerGroup</code> <em>string</em></td>
+<td>RunnerGroup names the GitHub runner group this set's scale set is registered into. This is GitHub's own grouping, not the deprecated v1alpha1 RunnerGroup CR. Unset means inherit the gateway's defaultRunnerGroup; both unset means GitHub's default group.<br />The runner group is the GitHub-side authorization point for which repositories may target these runners. A scale set left in the default group is reachable by every repository that group admits, typically the whole organization, so a repository outside the tenant can name this set in runs-on and route work into its namespace, quota, and egress IP. Pod-level isolation is unaffected; what the group bounds is who can cause a job to run here.<br />Resolved at runtime against GitHub, not at admission (§H.7), and fail-closed: a name no runner group matches leaves the set Ready=False/ RunnerGroupNotFound rather than falling back to the default group, and a scale set already registered in a different group is moved into this one. The group's own repository access is configured at GitHub and is not managed by GAG. See docs/operations/tenant-onboarding.md.</td>
+<td></td>
+<td>MaxLength: 255<br />MinLength: 1<br />Optional: {}</td>
+</tr>
+<tr>
+<td><code>priorityTiers</code> <em><a href="#prioritytier">PriorityTier</a> array</em></td>
+<td>PriorityTiers defines PriorityClass assignments and cumulative pod-count thresholds. Tiers must be in strictly ascending threshold order.</td>
+<td></td>
+<td>MaxItems: 10<br />Optional: {}</td>
+</tr>
+<tr>
+<td><code>maxEvictionRetries</code> <em>integer</em></td>
+<td>MaxEvictionRetries controls how many times the AGC automatically re-queues a job whose worker pod was evicted. Set to 0 to disable auto-retry entirely. Defaults to 2 when omitted.<br />Honored on both acquisition tiers as of Q417. On ScaleSet — the only tier this API version offers — the worker is provisioned fire-and-forget, so the eviction is detected by the owning reconciler from the worker pod rather than by a goroutine watching it; the budget itself is shared, keyed by workflow run, so this cap applies per run across both tiers rather than once each.</td>
+<td></td>
+<td>Maximum: 10<br />Minimum: 0<br />Optional: {}</td>
+</tr>
+<tr>
+<td><code>evictionRetryDelay</code> <em><a href="https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.36/#duration-v1-meta">Duration</a></em></td>
+<td>EvictionRetryDelay is the minimum time to wait before re-queuing an evicted job. Must be at least 1s. Defaults to "5s" when omitted.<br />Honored on both acquisition tiers as of Q417, as for MaxEvictionRetries.</td>
+<td></td>
+<td>Optional: {}</td>
+</tr>
+<tr>
+<td><code>maxQuotaRetries</code> <em>integer</em></td>
+<td>MaxQuotaRetries controls how many times the AGC retries pod creation when the namespace ResourceQuota is exhausted. Set to 0 to disable quota retry. Defaults to 5 when omitted.</td>
+<td></td>
+<td>Maximum: 20<br />Minimum: 0<br />Optional: {}</td>
+</tr>
+<tr>
+<td><code>quotaRetryDelay</code> <em><a href="https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.36/#duration-v1-meta">Duration</a></em></td>
+<td>QuotaRetryDelay is the time to wait between pod creation retries when the namespace ResourceQuota is exhausted. Must be at least 1s. Defaults to "30s" when omitted.</td>
+<td></td>
+<td>Optional: {}</td>
+</tr>
+<tr>
+<td><code>completedPodTTL</code> <em><a href="https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.36/#duration-v1-meta">Duration</a></em></td>
+<td>CompletedPodTTL is how long a worker pod that has reached a terminal phase is retained before the AGC deletes it. Set to "0s" to delete immediately on completion. Must not be negative. Defaults to "5m" when omitted.</td>
+<td></td>
+<td>Optional: {}</td>
+</tr>
+<tr>
+<td><code>pendingPodDeadline</code> <em><a href="https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.36/#duration-v1-meta">Duration</a></em></td>
+<td>PendingPodDeadline is the maximum time a worker pod may remain Pending before the AGC deletes it, releasing the concurrency-ceiling slot. Must be at least 1s. Defaults to "10m" when omitted.</td>
+<td></td>
+<td>Optional: {}</td>
+</tr>
+<tr>
+<td><code>maxWorkerLifetime</code> <em><a href="https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.36/#duration-v1-meta">Duration</a></em></td>
+<td>MaxWorkerLifetime is the maximum time a worker pod may be active on its node before the kubelet kills it, applied as the pod's activeDeadlineSeconds. It bounds a worker whose job ended while the AGC was down — a pod nothing the AGC observes later can distinguish from one running a long job (Q438). The kubelet enforces it, so it holds even while the AGC is unavailable.<br />A pod killed this way lands in Failed with reason DeadlineExceeded and is reaped under reason "lifetime_exceeded", with a Warning Event (WorkerPodLifetimeExceeded). Jobs declaring a <code>timeout-minutes</code> above this will be killed mid-run. Set to "0s" to disable. An activeDeadlineSeconds set explicitly on the RunnerTemplate's podTemplate takes precedence. Must not be negative. Defaults to "12h" when omitted.</td>
+<td></td>
+<td>Optional: {}</td>
+</tr>
+<tr>
+<td><code>scaleUp</code> <em><a href="#scaleupratelimit">ScaleUpRateLimit</a></em></td>
+<td>ScaleUp optionally caps the RATE at which the AGC creates new worker pods for this RunnerSet, smoothing cold-start stampedes on a shared, rate-sensitive egress path (NAT/SNAT gateway, stateful-firewall conntrack table, site-to-site VPN) when a burst of jobs is acquired at once. It is a token bucket over pod CREATION and is distinct from maxWorkers (a ceiling on the concurrent pod COUNT): the ceiling bounds how many run, this bounds how fast they start. Omitted ⇒ no rate limit (the default): immediate provisioning, zero added latency. An availability knob for the narrow stampede case; prefer a peer-to-peer image mirror for image-pull storms and workflow-level <code>concurrency:</code> or the maxWorkers ceiling for fairness/sustained load.</td>
+<td></td>
+<td>Optional: {}</td>
+</tr>
+<tr>
+<td><code>sizing</code> <em><a href="#workersizing">WorkerSizing</a></em></td>
+<td>Sizing opts this runner set into measured worker sizing at pod-build time (Q359 Phase 3): the AGC derives the worker containers' CPU/memory requests/limits from the observed per-job usage history (status.sizingRecommendation) — or, for the NodeShare profile, from a declared per-node share — instead of the template's static values. Omitted (or profile Static) keeps today's behavior: the template is authoritative. Extended resources (GPUs) are never modified by any profile: they are job-selected shape identity, and only the cpu/memory keys are ever derived.</td>
+<td></td>
+<td>Optional: {}</td>
+</tr>
+<tr>
+<td><code>capacityGate</code> <em><a href="#capacitygate">CapacityGate</a></em></td>
+<td>CapacityGate opts this runner set into the placeability rung of the admission ladder (Q405): the AGC refuses to take on jobs whose worker pod the cluster cannot currently place, instead of claiming them and stalling. Omitted (or mode Off) keeps today's behavior exactly — no capacity rung.</td>
+<td></td>
+<td>Optional: {}</td>
+</tr>
+</tbody>
+</table>
+<h4 id="runnersetstatus">RunnerSetStatus<a class="headerlink" href="#runnersetstatus" title="Permanent link">&para;</a></h4>
+<p>RunnerSetStatus is the observed state of a RunnerSet. It follows the uniform v2
+status/condition contract (§H.7): a listType=map Conditions slice keyed on type,
+an ObservedGeneration, and a Ready condition with the shared reason vocabulary
+(see conditions.go). Reference-resolution failures surface as Ready=False with a
+specific reason (TemplateNotFound / ProxyNotFound / …) and a message naming the
+missing object.</p>
+<p><em>Appears in:</em>
+- <a href="#runnerset">RunnerSet</a></p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+<th>Default</th>
+<th>Validation</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>conditions</code> <em><a href="https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.36/#condition-v1-meta">Condition</a> array</em></td>
+<td>Conditions are the observed conditions of the runner set. Known types: Ready, Degraded, EgressUnattributed, PossibleReapBlockingSidecar, WorkerQuotaPressure, WorkerQuotaExceeded, WorkersUnschedulable, RateLimited, RunnerVersionTooOld, SizingDrift.</td>
+<td></td>
+<td>Optional: {}</td>
+</tr>
+<tr>
+<td><code>activeSessions</code> <em>integer</em></td>
+<td>ActiveSessions is the number of currently open long-poll sessions.</td>
+<td></td>
+<td>Optional: {}</td>
+</tr>
+<tr>
+<td><code>activeJobs</code> <em>integer</em></td>
+<td>ActiveJobs is the number of worker pods currently in the Running phase (a job is actively executing). Derived from the worker pod phase count during each reconcile; see also PendingJobs.</td>
+<td></td>
+<td>Optional: {}</td>
+</tr>
+<tr>
+<td><code>pendingJobs</code> <em>integer</em></td>
+<td>PendingJobs is the number of worker pods currently in the Pending phase (a job has been acquired and a pod spawned, but the pod is not yet running — waiting on scheduling, image pull, or node readiness). Pods that remain Pending past spec.pendingPodDeadline are deleted by the controller; a sustained non-zero count warrants checking events and scheduling constraints.</td>
+<td></td>
+<td>Optional: {}</td>
+</tr>
+<tr>
+<td><code>advertisedCapacity</code> <em>integer</em></td>
+<td>AdvertisedCapacity is the X-ScaleSetMaxCapacity this set most recently advertised: the total jobs GitHub may keep assigned to it at once, recomputed every long-poll from the admission ladder. Together with WithheldCapacity it answers "why is intake throttled?" from <code>kubectl describe</code> alone: the same accounting previously reachable only through Prometheus, which a tenant without metrics access cannot read (Q721).<br />A pointer because zero is a meaningful advertisement (intake fully withheld) and has to be distinguishable from "no advertisement": nil on a classic-tier set, which decides per delivered job and never states a capacity, and on a scale-set set whose listener has not polled yet.<br />Lags the live value by up to one reconcile, because the advertisement is recomputed per poll and published per reconcile. It is an observation of intake, never an input: setting it does not change what the listener advertises.</td>
+<td></td>
+<td>Optional: {}</td>
+</tr>
+<tr>
+<td><code>withheldCapacity</code> <em><a href="#withheldcapacity">WithheldCapacity</a> array</em></td>
+<td>WithheldCapacity attributes the gap between the declared worker ceiling and AdvertisedCapacity to the rung of the admission ladder that took each slot, so a tenant can tell "my own maxWorkers" from "the namespace ResourceQuota" from "the cluster cannot place my workers" without reading metrics or the AGC's logs (Q721). Every rung the poll evaluated appears, including the ones withholding nothing, so a reason absent from the list was not evaluated rather than not binding. That is the same explicit-zero contract the withheld gauge carries.<br />Empty on a classic-tier set and before the first poll, alongside a nil AdvertisedCapacity.</td>
+<td></td>
+<td>Optional: {}</td>
+</tr>
+<tr>
+<td><code>observedRunnerVersion</code> <em>string</em></td>
+<td>ObservedRunnerVersion is the actions/runner version a worker pod of this set reported actually running, read from the runner's own dependency manifest by the injected wrapper and handed back on the pod's termination message (Q792). It answers what the image ships for a reference the AGC cannot read a version from at all: a digest-only or custom tag, which is the case RunnerVersionTooOld reports as WorkerImageVersionUnknown.<br />It is a SELF-REPORT, not an attestation, and must not be read as a security verdict. The runner container runs the tenant's image and the job's own steps run inside it, so anything in that container can rewrite the report before the container terminates. It is a diagnostic for an operator debugging their own image, and it deliberately does NOT move the RunnerVersionTooOld condition, which keeps saying Unknown rather than trusting a value the tenant controls. Q988 is the attestable form, read from the registry before the container runs.<br />Sticky and newest-wins: the latest report seen from a terminal worker pod survives that pod being reaped, because the answer is a property of the image the set runs rather than of which pods happen to be retained. Empty until a worker pod has terminated and reported, and on any image whose wrapper could not detect a version, where absence is the honest answer.</td>
+<td></td>
+<td>Optional: {}</td>
+</tr>
+<tr>
+<td><code>proxyMode</code> <em>string</em></td>
+<td>ProxyMode records how this runner set's worker egress reaches GitHub: "Proxied" (through the resolved EgressProxy, with stable per-tenant egress IPs) or "Direct" (no proxyRef/defaultProxyRef, still NetworkPolicy-restricted to GitHub + DNS but without per-tenant IP attribution). Explicit so "no proxy" is an auditable state, not an inferred absence (§H.10). Paired with the advisory EgressUnattributed condition when Direct.</td>
+<td></td>
+<td>Enum: [Proxied Direct]<br />Optional: {}</td>
+</tr>
+<tr>
+<td><code>templateSource</code> <em>string</em></td>
+<td>TemplateSource records which rung of the template-resolution chain supplied this runner set's worker pod shape (Q172, §H.4): "TemplateRef" (its own spec.templateRef), "GatewayDefault" (the gateway's spec.defaultTemplateRef, inherited because templateRef was unset), or "ClusterDefault" (the single cluster-default ClusterRunnerTemplate, resolved because neither was set). Explicit so an operator can audit whether a set runs on an explicit template or a default without inspecting the gateway and cluster state. Empty until the references resolve.</td>
+<td></td>
+<td>Enum: [TemplateRef GatewayDefault ClusterDefault]<br />Optional: {}</td>
+</tr>
+<tr>
+<td><code>sizingProfileState</code> <em>string</em></td>
+<td>SizingProfileState reports whether the opt-in sizing profile (spec.sizing.profile) is actuating: "Active" — derived values are applied at pod build; "AwaitingSamples" — a history-based profile (Binpack / Throughput) is selected but not every template container has a confident recommendation yet, so pods provision with the template's static values until the history accumulates (whole-pod fallback, keeping QoS predictable). Empty when no profile (or Static) is selected. Explicit so "is the profile live yet" is auditable status, not something to infer from pod specs (the proxyMode precedent).</td>
+<td></td>
+<td>Enum: [Active AwaitingSamples]<br />Optional: {}</td>
+</tr>
+<tr>
+<td><code>sizingRecommendation</code> <em><a href="#containersizingrecommendation">ContainerSizingRecommendation</a> array</em></td>
+<td>SizingRecommendation is the per-container worker resource recommendation derived from measured per-job usage peaks (Q359 Phase 2), refreshed by the AGC as jobs complete. Advisory only: nothing is applied to worker pods — the operator (or a future opt-in sizing profile) acts on it. It doubles as the persistence for the usage aggregates: the AGC re-seeds its in-memory history from this field on restart, so the observation window survives control-plane rollouts (status is the store; no separate backing store).</td>
+<td></td>
+<td>Optional: {}</td>
+</tr>
+<tr>
+<td><code>observedGeneration</code> <em>integer</em></td>
+<td>ObservedGeneration is the .metadata.generation the most recent reconcile acted on.</td>
+<td></td>
+<td>Optional: {}</td>
+</tr>
+</tbody>
+</table>
+<h4 id="runnertemplate">RunnerTemplate<a class="headerlink" href="#runnertemplate" title="Permanent link">&para;</a></h4>
+<p>RunnerTemplate is a namespace-scoped, reusable worker pod shape referenced by
+RunnerSets via templateRef. Pure data: nothing owns it and it owns nothing (§H.8).</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+<th>Default</th>
+<th>Validation</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>apiVersion</code> <em>string</em></td>
+<td><code>actions-gateway.com/v2beta1</code></td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td><code>kind</code> <em>string</em></td>
+<td><code>RunnerTemplate</code></td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td><code>metadata</code> <em><a href="https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.36/#objectmeta-v1-meta">ObjectMeta</a></em></td>
+<td>Refer to Kubernetes API documentation for fields of <code>metadata</code>.</td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td><code>spec</code> <em><a href="#runnertemplatespec">RunnerTemplateSpec</a></em></td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td><code>status</code> <em><a href="#runnertemplatestatus">RunnerTemplateStatus</a></em></td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+</tbody>
+</table>
+<h4 id="runnertemplatespec">RunnerTemplateSpec<a class="headerlink" href="#runnertemplatespec" title="Permanent link">&para;</a></h4>
+<p>RunnerTemplateSpec is the worker pod shape shared by RunnerTemplate (namespaced)
+and ClusterRunnerTemplate (cluster-scoped). It is the only v2 object permitted to
+be large: isolating the PodTemplateSpec here keeps it out of the controller
+objects it would otherwise co-bloat, and lets one template be referenced by many
+RunnerSets (docs/design/appendix-h-v2-api-decomposition.md §H.2, §H.5).</p>
+<p>Reserved pod-field guardrail (§H.4, §H.7). A worker pod's identity and isolation
+are controller-enforced invariants — in v1 the AGC silently overrode them at pod
+build time. v2 makes them author-time rejections instead, so a template that
+tries to set them fails closed rather than being silently rewritten. The cheap,
+scalar pod-level fields are enforced here via CEL; the per-container checks that
+require iterating an unbounded containers array (privileged containers, proxy
+env vars) exceed the CEL cost budget and move to the RunnerTemplate admission
+webhook in M2 (the milestone that adds the data-kind reconcilers).</p>
+<p><em>Appears in:</em>
+- <a href="#clusterrunnertemplate">ClusterRunnerTemplate</a>
+- <a href="#runnertemplate">RunnerTemplate</a></p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+<th>Default</th>
+<th>Validation</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>podTemplate</code> <em><a href="https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.36/#podtemplatespec-v1-core">PodTemplateSpec</a></em></td>
+<td>PodTemplate is the standard Kubernetes PodTemplateSpec for worker pods — the large field this kind exists to isolate.<br />On the namespaced (tenant-authored) RunnerTemplate, podTemplate.spec.priorityClassName is gated by the GMC validating webhook against the platform PriorityClass allowlist (--allowed-priority-classes; empty forbids every named class). PriorityClass is cluster-scoped and sets the scheduler's preemption order cluster-wide, so it is the platform's to grant, not the tenant's (Q132/Q289). The cluster-scoped ClusterRunnerTemplate is platform-authored and therefore exempt.</td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td><code>workerImage</code> <em>string</em></td>
+<td>WorkerImage is the fully-qualified container image for the runner container.</td>
+<td></td>
+<td>Optional: {}</td>
+</tr>
+</tbody>
+</table>
+<h4 id="runnertemplatestatus">RunnerTemplateStatus<a class="headerlink" href="#runnertemplatestatus" title="Permanent link">&para;</a></h4>
+<p>RunnerTemplateStatus is the observed state of a (Cluster)RunnerTemplate. The
+templates are pure data with no reconciler, so the contract fields are present
+for uniformity across all five v2 kinds (§H.7) rather than being populated —
+no condition type is set on a template today (Q309).</p>
+<p><em>Appears in:</em>
+- <a href="#clusterrunnertemplate">ClusterRunnerTemplate</a>
+- <a href="#runnertemplate">RunnerTemplate</a></p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+<th>Default</th>
+<th>Validation</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>conditions</code> <em><a href="https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.36/#condition-v1-meta">Condition</a> array</em></td>
+<td>Conditions are the observed conditions of the template. No condition types are populated today: the templates are pure data with no reconciler; the field exists for the uniform v2 status contract.</td>
+<td></td>
+<td>Optional: {}</td>
+</tr>
+<tr>
+<td><code>observedGeneration</code> <em>integer</em></td>
+<td>ObservedGeneration is the .metadata.generation the most recent reconcile acted on.</td>
+<td></td>
+<td>Optional: {}</td>
+</tr>
+</tbody>
+</table>
+<h4 id="scaleupratelimit">ScaleUpRateLimit<a class="headerlink" href="#scaleupratelimit" title="Permanent link">&para;</a></h4>
+<p>ScaleUpRateLimit configures the opt-in per-RunnerSet worker-pod creation-rate
+limit (Q223): a token bucket where MaxPerSecond is the sustained refill rate and
+Burst is the bucket depth (the largest instantaneous batch before throttling
+engages). An empty bucket withholds intake rather than delaying an acquired job:
+on the classic acquisition tier the AGC declines to claim the next job, leaving it
+queued at GitHub for redelivery, and on the ScaleSet tier it advertises less
+capacity so GitHub assigns less. A ScaleSet worker can still wait briefly at pod
+creation when an advertisement was stale; the classic tier never waits at all.</p>
+<p><em>Appears in:</em>
+- <a href="#runnersetspec">RunnerSetSpec</a></p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+<th>Default</th>
+<th>Validation</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>maxPerSecond</code> <em>integer</em></td>
+<td>MaxPerSecond is the sustained rate, in worker pods created per second, once the initial burst is spent. Required when scaleUp is set.</td>
+<td></td>
+<td>Maximum: 10000<br />Minimum: 1</td>
+</tr>
+<tr>
+<td><code>burst</code> <em>integer</em></td>
+<td>Burst is the maximum number of worker pods that may be created in an instantaneous batch before the MaxPerSecond rate throttles subsequent creations — the token-bucket depth. Defaults to MaxPerSecond when omitted.</td>
+<td></td>
+<td>Maximum: 100000<br />Minimum: 1<br />Optional: {}</td>
+</tr>
+</tbody>
+</table>
+<h4 id="signerprovider">SignerProvider<a class="headerlink" href="#signerprovider" title="Permanent link">&para;</a></h4>
+<p><em>Underlying type:</em> <em>string</em></p>
+<p>SignerProvider is the discriminator of the ExternalSigner union: it names the external
+signing backend. Vault (HashiCorp Vault transit) is the only provider in the MVP;
+cloud KMS backends (AWS/GCP/Azure) join as additive providers behind the same signer
+interface, by extending this enum and the union — no breaking change.</p>
+<p><em>Validation:</em>
+- Enum: [Vault]</p>
+<p><em>Appears in:</em>
+- <a href="#externalsigner">ExternalSigner</a></p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>Vault</code></td>
+<td>SignerProviderVault selects a HashiCorp Vault transit signer (the MVP). Configured by ExternalSigner.Vault.</td>
+</tr>
+</tbody>
+</table>
+<h4 id="tracingconfig">TracingConfig<a class="headerlink" href="#tracingconfig" title="Permanent link">&para;</a></h4>
+<p>TracingConfig configures opt-in OpenTelemetry distributed tracing for this
+tenant's AGC. Tracing stays off unless Endpoint is set. Unchanged from v1alpha1.</p>
+<p>Authentication headers are intentionally not exposed: they can carry bearer
+tokens, and this project keeps secrets out of environment variables. Authenticate
+the collector at the network layer instead. See docs/operations/observability.md.</p>
+<p><em>Appears in:</em>
+- <a href="#actionsgatewayspec">ActionsGatewaySpec</a></p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+<th>Default</th>
+<th>Validation</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>endpoint</code> <em>string</em></td>
+<td>Endpoint is the OTLP/gRPC collector address. Setting it enables tracing on the AGC; leaving it empty keeps tracing off. Maps to OTEL_EXPORTER_OTLP_TRACES_ENDPOINT.</td>
+<td></td>
+<td>Optional: {}</td>
+</tr>
+<tr>
+<td><code>insecure</code> <em>boolean</em></td>
+<td>Insecure disables TLS for the OTLP/gRPC connection. Defaults to false (TLS required). Maps to OTEL_EXPORTER_OTLP_TRACES_INSECURE.</td>
+<td></td>
+<td>Optional: {}</td>
+</tr>
+<tr>
+<td><code>sampler</code> <em>string</em></td>
+<td>Sampler selects the trace sampler. When empty the SDK default applies. Maps to OTEL_TRACES_SAMPLER.</td>
+<td></td>
+<td>Enum: [always_on always_off traceidratio parentbased_always_on parentbased_always_off parentbased_traceidratio]<br />Optional: {}</td>
+</tr>
+<tr>
+<td><code>samplerArg</code> <em>string</em></td>
+<td>SamplerArg is the argument for the chosen Sampler — for ratio-based samplers the sampling probability in [0,1]. Maps to OTEL_TRACES_SAMPLER_ARG.</td>
+<td></td>
+<td>Optional: {}</td>
+</tr>
+<tr>
+<td><code>resourceAttributes</code> <em>object (keys:string, values:string)</em></td>
+<td>ResourceAttributes are extra OpenTelemetry resource attributes merged onto every AGC span. Maps to OTEL_RESOURCE_ATTRIBUTES.</td>
+<td></td>
+<td>Optional: {}</td>
+</tr>
+</tbody>
+</table>
+<h4 id="vpaupdatemode">VPAUpdateMode<a class="headerlink" href="#vpaupdatemode" title="Permanent link">&para;</a></h4>
+<p><em>Underlying type:</em> <em>string</em></p>
+<p>VPAUpdateMode selects how a managed VerticalPodAutoscaler actuates its
+recommendation. It is the subset of the upstream autoscaling.k8s.io updateMode
+values this API exposes.</p>
+<p>The upstream value Auto is deliberately NOT offered: it is an alias whose actuation
+mechanism is version-dependent (today it evicts like Recreate; in-place resize is
+still alpha upstream), so a gateway pinned to Auto would silently change restart
+behavior on a VPA upgrade. Naming Recreate makes the eviction explicit.</p>
+<p><em>Validation:</em>
+- Enum: [Off Initial Recreate]</p>
+<p><em>Appears in:</em>
+- <a href="#agcverticalautoscaling">AGCVerticalAutoscaling</a></p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>Off</code></td>
+<td>VPAUpdateModeOff is recommendation-only: the VerticalPodAutoscaler observes the AGC and publishes a recommendation in its own status, but never mutates a pod. It is the default for agcAutoscaling so that opting in is observable before it is disruptive — nothing about the running AGC changes.</td>
+</tr>
+<tr>
+<td><code>Initial</code></td>
+<td>VPAUpdateModeInitial applies the recommendation only at pod creation. A running AGC pod is never evicted by the autoscaler; it picks up a new size the next time it restarts for another reason (image change, node drain, spec edit).</td>
+</tr>
+<tr>
+<td><code>Recreate</code></td>
+<td>VPAUpdateModeRecreate lets the autoscaler evict the AGC pod to apply a new recommendation. The AGC tolerates this: on SIGTERM in-flight listener goroutines deregister their sessions and the AGC re-registers them within GitHub's 2-minute redelivery window on restart (docs/design/appendix-e-capacity-planning.md §E.9). It is still a control-plane restart, so it is opt-in rather than the default.</td>
+</tr>
+</tbody>
+</table>
+<h4 id="vaultkubernetesauth">VaultKubernetesAuth<a class="headerlink" href="#vaultkubernetesauth" title="Permanent link">&para;</a></h4>
+<p>VaultKubernetesAuth configures Vault Kubernetes auth: the AGC presents its projected
+ServiceAccount token, Vault verifies it against the cluster's token review API, and
+returns a short-lived Vault client token bound to Role. The pod-to-role binding is
+configured in Vault by the operator, out of band — only its name is named here.</p>
+<p><em>Appears in:</em>
+- <a href="#vaultsigner">VaultSigner</a></p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+<th>Default</th>
+<th>Validation</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>role</code> <em>string</em></td>
+<td>Role is the Vault Kubernetes auth role the AGC logs in as. The operator binds this role to the AGC ServiceAccount and namespace in Vault.</td>
+<td></td>
+<td>MaxLength: 255<br />MinLength: 1</td>
+</tr>
+<tr>
+<td><code>mount</code> <em>string</em></td>
+<td>Mount is the path the Vault Kubernetes auth method is mounted at. Optional; defaults to "kubernetes", Vault's conventional mount path.</td>
+<td>kubernetes</td>
+<td>MaxLength: 255<br />Optional: {}</td>
+</tr>
+</tbody>
+</table>
+<h4 id="vaultsigner">VaultSigner<a class="headerlink" href="#vaultsigner" title="Permanent link">&para;</a></h4>
+<p>VaultSigner configures a HashiCorp Vault transit signer: the AGC authenticates to Vault
+with its pod identity (Vault Kubernetes auth) and asks Vault transit to sign the App
+JWT with a key Vault holds. No key or token is stored in the cluster — the AGC's
+projected ServiceAccount token is its only credential, and it is minted by the kubelet,
+not stored in a Secret.</p>
+<p><em>Appears in:</em>
+- <a href="#externalsigner">ExternalSigner</a></p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+<th>Default</th>
+<th>Validation</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>address</code> <em>string</em></td>
+<td>Address is the Vault API base URL (e.g. https://vault.vault.svc:8200). HTTPS is required for production because the AGC's ServiceAccount token transits this channel at login; a plaintext address is permitted only under an explicit dev/test opt-in in the AGC (mirroring the GitHub token-exchange channel, docs/design/05-security.md).</td>
+<td></td>
+<td>MaxLength: 2048<br />MinLength: 1<br />Pattern: <code>^https?://</code></td>
+</tr>
+<tr>
+<td><code>transitMount</code> <em>string</em></td>
+<td>TransitMount is the path the Vault transit secrets engine is mounted at. Optional; defaults to "transit", Vault's conventional mount path.</td>
+<td>transit</td>
+<td>MaxLength: 255<br />Optional: {}</td>
+</tr>
+<tr>
+<td><code>keyName</code> <em>string</em></td>
+<td>KeyName is the name of the Vault transit key that signs the App JWT. The key must be an RSA key (GitHub App keys are RSA); transit signs it as RS256 (pkcs1v15 + sha2-256).</td>
+<td></td>
+<td>MaxLength: 255<br />MinLength: 1</td>
+</tr>
+<tr>
+<td><code>auth</code> <em><a href="#vaultkubernetesauth">VaultKubernetesAuth</a></em></td>
+<td>Auth configures how the AGC authenticates to Vault (Vault Kubernetes auth in the MVP).</td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td><code>networkPolicy</code> <em><a href="#egresspeer">EgressPeer</a></em></td>
+<td>NetworkPolicy optionally tells the GMC how to reach Vault as a NetworkPolicy egress peer (Q202). On a policy-enforcing CNI the per-tenant AGC NetworkPolicy default-denies egress (DNS + GitHub + the kube API server); Vault is not otherwise expressible as a peer because Address is an opaque URL, so set this and the GMC emits a scoped AGC→Vault egress rule on the Vault API port (parsed from Address). Leave it unset on a non- enforcing CNI (e.g. kindnet) or when the egress rule is managed out of band — the rule is a strict tightening that is only ever added, never a broaden-to-all-egress. Set on a GitHubApp gateway it has no effect (no Vault egress is emitted for the possession model).<br />The value is a shared EgressPeer (Q204): the selector/CIDR peer the GMC scopes the rule to. Its Port is left unset for Vault (the port is derived from Address); set it only to override that derived port.</td>
+<td></td>
+<td>Optional: {}</td>
+</tr>
+</tbody>
+</table>
+<h4 id="withheldcapacity">WithheldCapacity<a class="headerlink" href="#withheldcapacity" title="Permanent link">&para;</a></h4>
+<p>WithheldCapacity is one admission-ladder rung's contribution to the gap between a
+runner set's declared worker ceiling and the capacity it advertises (Q721). The
+entries sum to ceiling - advertisedCapacity, because the rungs compose as a min()
+and each entry is its own marginal contribution.</p>
+<p><em>Appears in:</em>
+- <a href="#runnersetstatus">RunnerSetStatus</a></p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+<th>Default</th>
+<th>Validation</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>reason</code> <em>string</em></td>
+<td>Reason names the rung, matching the <code>reason</code> label on actions_gateway_scaleset_capacity_withheld so the status view and the metric read the same vocabulary: "quota" is namespace-ResourceQuota headroom, "capacity" the opt-in placeability gate, "scaleup" the opt-in creation-rate limit.<br />Deliberately not an enum. The ladder is designed to grow a rung at a time, and every rung must land in both acquisition tiers at once, so a closed enum would couple each new rung to a CRD change for no validation benefit: this field is controller-written status that a tenant cannot author.</td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td><code>slots</code> <em>integer</em></td>
+<td>Slots is the number of worker slots this rung removed from the advertisement. Zero means the rung was evaluated and did not bind, which is a different statement from the reason being absent.</td>
+<td></td>
+<td></td>
+</tr>
+</tbody>
+</table>
+<h4 id="workersizing">WorkerSizing<a class="headerlink" href="#workersizing" title="Permanent link">&para;</a></h4>
+<p>WorkerSizing configures the opt-in measured worker sizing profile (Q359
+Phase 3). Applied by the AGC at pod-build time on every acquired job, so a
+spec edit takes effect on the next job without a restart (Q117).</p>
+<p><em>Appears in:</em>
+- <a href="#runnersetspec">RunnerSetSpec</a></p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+<th>Default</th>
+<th>Validation</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>profile</code> <em>string</em></td>
+<td>Profile selects the sizing behavior; see the SizingProfile* constants.</td>
+<td>Static</td>
+<td>Enum: [Static Binpack Throughput NodeShare]<br />Optional: {}</td>
+</tr>
+<tr>
+<td><code>limitHeadroomPercent</code> <em>integer</em></td>
+<td>LimitHeadroomPercent (Throughput only) scales the observed per-job memory peak into the derived memory limit: limit = peak × percent / 100. Defaults to 150 (the dogfood-validated OOM-headroom band, rounded up for the burst-friendly profile). Memory only — no CPU limit is ever derived.</td>
+<td></td>
+<td>Maximum: 1000<br />Minimum: 100<br />Optional: {}</td>
+</tr>
+<tr>
+<td><code>nodeShare</code> <em><a href="#nodesharesizing">NodeShareSizing</a></em></td>
+<td>NodeShare declares the per-node envelope the NodeShare profile divides. Required when (and only meaningful when) profile is NodeShare.</td>
+<td></td>
+<td>Optional: {}</td>
+</tr>
+<tr>
+<td><code>minRequests</code> <em><a href="https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.36/#resourcelist-v1-core">ResourceList</a></em></td>
+<td>MinRequests / MaxRequests clamp every derived cpu/memory request (and the limits that track them) within an operator-set floor/ceiling, bounding how far a skewed usage history can push the derived values. Keys other than cpu and memory are ignored.</td>
+<td></td>
+<td>Optional: {}</td>
+</tr>
+<tr>
+<td><code>maxRequests</code> <em><a href="https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.36/#resourcelist-v1-core">ResourceList</a></em></td>
+<td></td>
+<td></td>
+<td>Optional: {}</td>
+</tr>
+</tbody>
+</table>
+<h4 id="workloadidentity">WorkloadIdentity<a class="headerlink" href="#workloadidentity" title="Permanent link">&para;</a></h4>
+<p>WorkloadIdentity is the workload-identity credential member: the App's identity
+(appId/installationId, non-secret) plus an external signer that holds the App private
+key outside the cluster and signs the App JWT on the AGC's behalf. There is no
+privateKey field by design — the whole point of this method is that the key never
+enters the cluster (§H.15, docs/design/05-security.md).</p>
+<p><em>Appears in:</em>
+- <a href="#githubcredentials">GitHubCredentials</a></p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+<th>Default</th>
+<th>Validation</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>appId</code> <em>integer</em></td>
+<td>AppID is the GitHub App's numeric ID (the JWT issuer). Non-secret; inline rather than in a Secret because it identifies, not authenticates.</td>
+<td></td>
+<td>Minimum: 1</td>
+</tr>
+<tr>
+<td><code>installationId</code> <em>integer</em></td>
+<td>InstallationID is the GitHub App installation's numeric ID. Non-secret; inline.</td>
+<td></td>
+<td>Minimum: 1</td>
+</tr>
+<tr>
+<td><code>signer</code> <em><a href="#externalsigner">ExternalSigner</a></em></td>
+<td>Signer configures the external signer that signs the App JWT. The signing key lives in the signer's trust anchor (Vault transit in the MVP), never in the cluster.</td>
+<td></td>
+<td></td>
+</tr>
+</tbody>
+</table>
+
+
+
+
+
+
+
+
+
+  
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+    
+      
+      <nav class="md-footer__inner md-grid" aria-label="Footer" >
+        
+          
+          <a href="../" class="md-footer__link md-footer__link--prev" aria-label="Previous: Overview">
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+            </div>
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Previous
+              </span>
+              <div class="md-ellipsis">
+                Overview
+              </div>
+            </div>
+          </a>
+        
+        
+      </nav>
+    
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+    <div class="md-copyright__highlight">
+      Licensed under the Apache License 2.0.
+    </div>
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+        
+<div class="md-social">
+  
+    
+    
+    
+    
+    <a href="https://github.com/actions-gateway/github-actions-gateway" target="_blank" rel="noopener" title="GAG on GitHub" class="md-social__link">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+    </a>
+  
+    
+    
+    
+    
+    <a href="https://github.com/actions-gateway/github-actions-gateway/issues" target="_blank" rel="noopener" title="Questions &amp; issues" class="md-social__link">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2m0 14H5.2L4 17.2V4h16zM12.2 5.5c-.9 0-1.6.2-2.1.5-.6.4-.9 1-.8 1.7h2q0-.45.3-.6c.2-.1.4-.2.7-.2s.6.1.8.3.3.4.3.7-.1.5-.2.7c-.2.2-.4.4-.6.5-.5.3-.9.6-1.1.8-.4.3-.5.6-.5 1.1h2c0-.3.1-.5.1-.7.1-.2.3-.3.5-.5.5-.2.8-.5 1.1-.9s.4-.8.4-1.2c0-.7-.3-1.3-.8-1.7-.4-.3-1.2-.5-2.1-.5M11 12v2h2v-2z"/></svg>
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.tabs", "navigation.sections", "navigation.top", "navigation.tracking", "navigation.indexes", "navigation.footer", "toc.follow", "search.suggest", "search.highlight", "content.code.copy", "content.code.annotate", "content.tooltips"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"default": "stable", "provider": "mike"}}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+        <script src="../../javascripts/extra.js"></script>
+      
+    
+  </body>
+</html>

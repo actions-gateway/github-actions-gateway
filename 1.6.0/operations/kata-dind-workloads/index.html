@@ -1,0 +1,3456 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="An Actions Runner Controller (ARC) alternative for self-hosted GitHub Actions runners on multi-tenant Kubernetes — oversubscribe a shared quota, recover evicted jobs automatically, and isolate every tenant's GitHub egress.">
+      
+      
+      
+        <link rel="canonical" href="https://actions-gateway.com/1.6.0/operations/kata-dind-workloads/">
+      
+      
+        <link rel="prev" href="../in-runner-image-builds/">
+      
+      
+        <link rel="next" href="../p2p-image-distribution/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../assets/favicon.svg">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
+    
+    
+      
+        <title>Kata DinD / image-build workloads - GitHub Actions Gateway</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.484c7ddc.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+    
+    
+      <link rel="stylesheet" href="../../stylesheets/extra.css">
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+  
+
+
+    
+    
+  
+  
+  <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/IBMPlexSans-Regular.woff2">
+  <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/IBMPlexSans-Bold.woff2">
+  <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/MonaspaceNeon-Medium.woff2">
+  
+  <meta property="og:image" content="https://actions-gateway.com/1.6.0assets/social-preview.png">
+  <meta property="og:image:width" content="1280">
+  <meta property="og:image:height" content="640">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:image" content="https://actions-gateway.com/1.6.0assets/social-preview.png">
+  
+  <link rel="apple-touch-icon" href="https://actions-gateway.com/1.6.0assets/apple-touch-icon.png">
+  <link rel="alternate icon" href="https://actions-gateway.com/1.6.0assets/favicon.ico">
+  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/1.6.0assets/icon-512.png">
+  
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "SoftwareSourceCode",
+    "name": "GitHub Actions Gateway",
+    "description": "An Actions Runner Controller (ARC) alternative for self-hosted GitHub Actions runners on multi-tenant Kubernetes \u2014 oversubscribe a shared quota, recover evicted jobs automatically, and isolate every tenant\u0027s GitHub egress.",
+    "url": "https://actions-gateway.com/1.6.0",
+    "codeRepository": "https://github.com/actions-gateway/github-actions-gateway",
+    "programmingLanguage": "Go",
+    "license": "https://www.apache.org/licenses/LICENSE-2.0",
+    "author": {
+      "@type": "Organization",
+      "name": "GitHub Actions Gateway",
+      "url": "https://actions-gateway.com/1.6.0"
+    }
+  }
+  </script>
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "Organization",
+    "name": "GitHub Actions Gateway",
+    "url": "https://actions-gateway.com/1.6.0",
+    "logo": "https://actions-gateway.com/1.6.0assets/icon-512.png",
+    "sameAs": ["https://github.com/actions-gateway/github-actions-gateway"]
+  }
+  </script>
+  
+  
+
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="black" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#running-dind--image-build-workloads-under-kata-containers" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+        <aside class="md-banner">
+          <div class="md-banner__inner md-grid md-typeset">
+            
+            <strong>v1.6.0 is here.</strong>
+      The ARC migration checklist finished, a runner set that can say why it is not being offered jobs, and the runner version a worker pod actually ran.
+          </div>
+          
+        </aside>
+      
+    </div>
+    
+      <div data-md-color-scheme="default" data-md-component="outdated" hidden>
+        
+          <aside class="md-banner md-banner--warning">
+            <div class="md-banner__inner md-grid md-typeset">
+              You're not viewing the latest release.
+  <a href="https://actions-gateway.com/1.6.0"><strong>Go to the current docs.</strong></a>
+
+            </div>
+            <script>var el=document.querySelector("[data-md-component=outdated]"),base=new URL("../.."),outdated=__md_get("__outdated",sessionStorage,base);!0===outdated&&el&&(el.hidden=!1)</script>
+          </aside>
+        
+      </div>
+    
+    
+      
+
+<header class="md-header" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="GitHub Actions Gateway" class="md-header__button md-logo" aria-label="GitHub Actions Gateway" data-md-component="logo">
+      
+  <img src="../../assets/logo.svg" alt="logo">
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            GitHub Actions Gateway
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Kata DinD / image-build workloads
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="black" data-md-color-accent="indigo"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m17.75 4.09-2.53 1.94.91 3.06-2.63-1.81-2.63 1.81.91-3.06-2.53-1.94L12.44 4l1.06-3 1.06 3zm3.5 6.91-1.64 1.25.59 1.98-1.7-1.17-1.7 1.17.59-1.98L15.75 11l2.06-.05L18.5 9l.69 1.95zm-2.28 4.95c.83-.08 1.72 1.1 1.19 1.85-.32.45-.66.87-1.08 1.27C15.17 23 8.84 23 4.94 19.07c-3.91-3.9-3.91-10.24 0-14.14.4-.4.82-.76 1.27-1.08.75-.53 1.93.36 1.85 1.19-.27 2.86.69 5.83 2.89 8.02a9.96 9.96 0 0 0 8.02 2.89m-1.64 2.02a12.08 12.08 0 0 1-7.8-3.47c-2.17-2.19-3.33-5-3.49-7.82-2.81 3.14-2.7 7.96.31 10.98 3.02 3.01 7.84 3.12 10.98.31"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="black" data-md-color-accent="indigo"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 7a5 5 0 0 1 5 5 5 5 0 0 1-5 5 5 5 0 0 1-5-5 5 5 0 0 1 5-5m0 2a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3m0-7 2.39 3.42C13.65 5.15 12.84 5 12 5s-1.65.15-2.39.42zM3.34 7l4.16-.35A7.2 7.2 0 0 0 5.94 8.5c-.44.74-.69 1.5-.83 2.29zm.02 10 1.76-3.77a7.131 7.131 0 0 0 2.38 4.14zM20.65 7l-1.77 3.79a7.02 7.02 0 0 0-2.38-4.15zm-.01 10-4.14.36c.59-.51 1.12-1.14 1.54-1.86.42-.73.69-1.5.83-2.29zM12 22l-2.41-3.44c.74.27 1.55.44 2.41.44.82 0 1.63-.17 2.37-.44z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/actions-gateway/github-actions-gateway" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    actions-gateway/github-actions-gateway
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+            
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../.." class="md-tabs__link">
+        
+  
+  
+    
+  
+  Home
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../why-gag/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Why GAG
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../alternatives/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Alternatives
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../features/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Features
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../demo/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Demo
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../getting-started/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Get started
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../roadmap/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Roadmap
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../design/" class="md-tabs__link">
+          
+  
+  
+    
+  
+  Design
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+    
+  
+  
+    
+    
+      <li class="md-tabs__item md-tabs__item--active">
+        <a href="../" class="md-tabs__link">
+          
+  
+  
+    
+  
+  Operations
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../reference/" class="md-tabs__link">
+          
+  
+  
+    
+  
+  Reference
+
+        </a>
+      </li>
+    
+  
+
+      
+    </ul>
+  </div>
+</nav>
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+<nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="GitHub Actions Gateway" class="md-nav__button md-logo" aria-label="GitHub Actions Gateway" data-md-component="logo">
+      
+  <img src="../../assets/logo.svg" alt="logo">
+
+    </a>
+    GitHub Actions Gateway
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/actions-gateway/github-actions-gateway" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    actions-gateway/github-actions-gateway
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../why-gag/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Why GAG
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../alternatives/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Alternatives
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Features
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../demo/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Demo
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting-started/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Get started
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../roadmap/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Roadmap
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+          
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" >
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../../design/" class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Design
+  
+
+    
+  </span>
+  
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_8" id="__nav_8_label" tabindex="0">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_8">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Design
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/01-executive-summary/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Executive summary
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/02-architecture/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/network-architecture/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Network architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/03-api-contracts/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API & data contracts
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/04-operational-flows/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Operational flows
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/05-security/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Security
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/06-implementation-phases/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Implementation phases
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/07-test-plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Test plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/08-glossary/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Glossary
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/appendix-a-capacity-slos/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Appendix A — Capacity & SLOs
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/appendix-b-worker-isolation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Appendix B — Worker isolation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/appendix-c-ai-implementation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Appendix C — AI-assisted implementation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/appendix-d-alternatives-considered/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Appendix D — Alternatives considered
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/appendix-e-capacity-planning/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Appendix E — Capacity planning
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/appendix-f-cost-model/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Appendix F — Cost model
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/appendix-g-future-enhancements/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Appendix G — Future enhancements
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/appendix-h-v2-api-decomposition/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Appendix H — v2 API decomposition
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/github-protocol-dependencies/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    GitHub protocol dependencies
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+      
+        
+          
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9" checked>
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../" class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Operations
+  
+
+    
+  </span>
+  
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_9" id="__nav_9_label" tabindex="">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_9_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_9">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Operations
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../personas/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Personas: who owns what
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../install/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Install
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../air-gapped-install/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Air-gapped install
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../gitops/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    GitOps install (Argo CD / Flux)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../upgrade/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Upgrade
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../migration-from-arc/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Migrate from ARC
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../migration-v1-to-v2/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Migrate v1 → v2
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../v1alpha1-deprecation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Deprecations & the v2.0.0 removal
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../tenant-onboarding/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tenant onboarding
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../resourcequota-sizing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ResourceQuota sizing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../runner-template-library/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Runner template library
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../worker-shared-storage/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Shared worker storage (RWX)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../in-runner-image-builds/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    In-runner image builds
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Kata DinD / image-build workloads
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Kata DinD / image-build workloads
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#table-of-contents" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Table of Contents
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#why-this-matters-for-gag" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Why this matters for GAG
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#how-it-fits-together" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How it fits together
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#prerequisite--nested-virtualization-nodes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Prerequisite — nested-virtualization nodes
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#cluster-setup--kata-runtime-and-runtimeclass" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Cluster setup — Kata runtime and RuntimeClass
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#configure-the-worker-podtemplate" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Configure the worker podTemplate
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-an-unprivileged-dockerd-actually-needs-inside-the-guest" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What an unprivileged dockerd actually needs inside the guest
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-security-rationale" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The security rationale
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="The security rationale">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#kata-does-not-close-the-metadata-server-path" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Kata does not close the metadata-server path
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#what-kata-does-not-buy-you" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What Kata does not buy you
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#caveats-and-limitations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Caveats and limitations
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#related" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Related
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../p2p-image-distribution/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    P2P image distribution
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../service-mesh-coexistence/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Service mesh coexistence
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+          
+          
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9_18" >
+        
+          
+          <label class="md-nav__link" for="__nav_9_18" id="__nav_9_18_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Observability
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_9_18_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9_18">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Observability
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../observability/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../observability-metrics/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Metrics reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../observability-metrics-access/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Accessing metrics (scraping)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../observability-alerting/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Alerting & SLOs
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../observability-dashboards/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Grafana dashboards
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../observability-logging/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Logging & tracing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../cost-attribution/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cost attribution
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../worker-rightsizing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Worker right-sizing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../node-shutdown-budgets/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Node shutdown budgets
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../runbook/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Runbook
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../backup-restore/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Backup & restore
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../velero-backup-restore/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Velero backup & restore
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../troubleshooting/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Troubleshooting
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../security-operations/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Security operations
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../admission-policies/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Admission policies (Kyverno / Gatekeeper)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../release/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Release
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../kata-ci-spike-runbook/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Kata-on-GKE spike runbook
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+          
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_10" >
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../../reference/" class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference
+  
+
+    
+  </span>
+  
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_10" id="__nav_10_label" tabindex="0">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_10_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_10">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/api/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API reference (v2beta1)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#table-of-contents" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Table of Contents
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#why-this-matters-for-gag" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Why this matters for GAG
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#how-it-fits-together" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How it fits together
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#prerequisite--nested-virtualization-nodes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Prerequisite — nested-virtualization nodes
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#cluster-setup--kata-runtime-and-runtimeclass" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Cluster setup — Kata runtime and RuntimeClass
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#configure-the-worker-podtemplate" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Configure the worker podTemplate
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-an-unprivileged-dockerd-actually-needs-inside-the-guest" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What an unprivileged dockerd actually needs inside the guest
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-security-rationale" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The security rationale
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="The security rationale">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#kata-does-not-close-the-metadata-server-path" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Kata does not close the metadata-server path
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#what-kata-does-not-buy-you" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What Kata does not buy you
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#caveats-and-limitations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Caveats and limitations
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#related" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Related
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="running-dind--image-build-workloads-under-kata-containers">Running DinD / image-build workloads under Kata Containers<a class="headerlink" href="#running-dind--image-build-workloads-under-kata-containers" title="Permanent link">&para;</a></h1>
+<p><strong>Audience:</strong> Platform engineers running a GitHub Actions Gateway (GAG) cluster.
+<strong>Goal:</strong> run a Docker-in-Docker (DinD) or in-runner image-build job under <a href="https://katacontainers.io/">Kata Containers</a> — a Kernel-based Virtual Machine (KVM) micro-VM runtime — with <strong>no</strong> <code>privileged: true</code> container anywhere in the worker pod.</p>
+<p>Kata is the only approach in <a href="../in-runner-image-builds/">In-runner image builds</a> that gives a real machine boundary around an <em>inner Docker daemon</em>.
+Rootless BuildKit and Kaniko avoid the daemon entirely; Sysbox runs the daemon behind a user-namespace; classic privileged DinD runs it on the host kernel.
+Kata runs the whole pod — daemon included — inside a per-pod micro-VM, so a container escape lands in a throwaway guest kernel, not on the node.
+This page is the cluster-side how-to: the node prerequisites, the runtime install, and the worker <code>podTemplate</code> field that selects it.</p>
+<p><strong>You do not have to transcribe the pod shape from this page.</strong> GAG ships it as <code>kata-dind</code> in the <a href="../runner-template-library/">runner template library</a>, applied with a single <code>kubectl apply -k deploy/templates/kata-dind</code>.
+Read this page for the node and runtime prerequisites the template cannot express, and for why each line of it is the way it is; apply the shipped base rather than retyping it.</p>
+<p>It is operator-focused.
+For <em>why</em> GAG chose Kata over Sysbox/rootless and the provider-agnostic design, see <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.6.0/docs/plan/archive/kata-on-gke.md">Kata Containers on GKE</a>; for the executable go/no-go validation steps, see the <a href="../kata-ci-spike-runbook/">Kata-on-GKE spike runbook</a>.</p>
+<h2 id="table-of-contents">Table of Contents<a class="headerlink" href="#table-of-contents" title="Permanent link">&para;</a></h2>
+<ul>
+<li><a href="#why-this-matters-for-gag">Why this matters for GAG</a></li>
+<li><a href="#how-it-fits-together">How it fits together</a></li>
+<li><a href="#prerequisite--nested-virtualization-nodes">Prerequisite — nested-virtualization nodes</a></li>
+<li><a href="#cluster-setup--kata-runtime-and-runtimeclass">Cluster setup — Kata runtime and RuntimeClass</a></li>
+<li><a href="#configure-the-worker-podtemplate">Configure the worker podTemplate</a></li>
+<li><a href="#the-security-rationale">The security rationale</a></li>
+<li><a href="#caveats-and-limitations">Caveats and limitations</a></li>
+<li><a href="#related">Related</a></li>
+</ul>
+<h2 id="why-this-matters-for-gag">Why this matters for GAG<a class="headerlink" href="#why-this-matters-for-gag" title="Permanent link">&para;</a></h2>
+<p>Two GAG-specific constraints rule out privileged DinD and make a micro-VM boundary the right tool:</p>
+<ul>
+<li><strong>The untrusted-PR threat model.</strong> GAG targets public open-source projects, where any contributor opens a pull request and CI runs their code on your infrastructure (the "pwn request" attack class).
+  A privileged DinD pod can write the host node's <code>/proc</code> and <code>/sys</code> and reach node-scoped credentials via the cloud metadata server — a direct path off the runner.
+  Kata confines that code to a guest VM whose kernel is not the node's.</li>
+<li><strong>The dogfood requirement.</strong> GAG's own end-to-end CI runs <code>kind</code> inside a runner pod, which needs a Docker daemon.
+  Shipping a product whose value is secure multi-tenant isolation while running its <em>own</em> CI as privileged DinD would contradict the model.
+  Kata lets that CI runner stay unprivileged.</li>
+</ul>
+<p>Because the isolation is enforced at the hypervisor, the pod itself needs no <code>privileged: true</code> container and no host namespaces.
+One PSA nuance is easy to get wrong, though: the unprivileged <code>dockerd</code> still needs a capability set (<code>SYS_ADMIN</code>, <code>NET_ADMIN</code>, <code>SYS_RESOURCE</code>, <code>SYS_PTRACE</code>, <code>NET_RAW</code> — <a href="#what-an-unprivileged-dockerd-actually-needs-inside-the-guest">see below</a>) that exceeds the PSS <strong>baseline</strong> <code>capabilities.add</code> allowlist, and Pod Security Admission (PSA) is not Kata-aware — it cannot see that these capabilities act on a guest kernel.
+Verified against a real apiserver: <code>enforce=baseline</code> rejects this pod shape as Forbidden.
+So the worker namespace still needs the <a href="../in-runner-image-builds/#how-the-security-profiles-constrain-a-build"><code>privileged</code> profile</a> (platform-granted label) — or, on a self-managed control plane, a <a href="https://kubernetes.io/docs/concepts/security/pod-security-admission/#exemptions">PodSecurity admission exemption</a> for the Kata <code>runtimeClass</code> (managed offerings like GKE do not expose that config).
+What keeps the pod unprivileged is therefore <strong>not</strong> the PSA level but the worker template being platform-owned: author the Kata shape as a cluster-scoped <code>ClusterRunnerTemplate</code>, which tenants cannot edit, exactly as for privileged DinD.</p>
+<h2 id="how-it-fits-together">How it fits together<a class="headerlink" href="#how-it-fits-together" title="Permanent link">&para;</a></h2>
+<p>Kata inserts a micro-VM between the kubelet and the runner container.
+On a managed cloud the node is itself a VM, so the node pool must enable <em>nested</em> virtualization for the guest VM to boot:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>Node (cloud VM, nested-virt enabled)  ── needs /dev/kvm
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>  └── kubelet hands the pod to the Kata containerd shim (runtimeClassName)
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>       └── Kata micro-VM (QEMU)        ── the isolation boundary
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>            └── runner container        ── unprivileged (privileged: false)
+<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>                 └── dockerd            ── a normal daemon, no special flags
+<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>                      └── docker build / kind / nested containers
+</code></pre></div>
+<p>The runner pod never talks to the hypervisor directly — the Kata shim owns the VM lifecycle outside the pod — so the pod needs no privileged context of its own.
+(GKE's nested-virtualization docs mention <code>securityContext.privileged: true</code>; that applies only to pods that launch their <em>own</em> VMs, not to pods that select a Kata <code>RuntimeClass</code>.)</p>
+<h2 id="prerequisite--nested-virtualization-nodes">Prerequisite — nested-virtualization nodes<a class="headerlink" href="#prerequisite--nested-virtualization-nodes" title="Permanent link">&para;</a></h2>
+<p>A Kata pod boots a KVM guest, which needs the <code>/dev/kvm</code> device on the node.
+On bare metal that is present by default.
+On a managed cloud you must run the workload on a node pool with nested virtualization enabled and on a machine family that supports it.</p>
+<p><strong>Google Cloud (GKE).</strong> Nested virtualization is a node-pool setting and is restricted by machine family:</p>
+<table>
+<thead>
+<tr>
+<th>Requirement</th>
+<th>Detail</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Cluster mode</td>
+<td><strong>GKE Standard.</strong> Autopilot does <strong>not</strong> allow nested virtualization.</td>
+</tr>
+<tr>
+<td>Machine family</td>
+<td>Take the list from the API, not from a doc. Measured 2026-08-02, <code>gcloud</code> rejected <code>c2d</code> and named the families that do take the flag: <strong>A2, A3, C2, C3, C4, C4D, C4N, G2, H3, H4D, N1, N2, N4, N4D, Z3, M4</strong>. <strong>E2, C2D, and N2D are absent.</strong> The shipped <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.6.0/scripts/dev/kata-node-pool.sh"><code>scripts/dev/kata-node-pool.sh</code></a> accepts only <code>n2</code>, <code>n2d</code>, <code>c2</code>, <code>c2d</code>, which is a stale subset of that list; provision any other family by hand. <strong>The GPU families A2, A3, and G2 are on the list</strong>, so nested virtualization is <em>not</em> what stops GPU workloads running under Kata on GKE (see <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.6.0/docs/plan/gpu-and-accelerated-ci.md#the-collision-with-the-security-goal">what does</a>). The newer accelerator families are absent from it: A4X is Arm-based, G4 AMD-based. Google's <a href="https://docs.cloud.google.com/compute/docs/instances/nested-virtualization/overview">restriction rules</a> (fetched 2026-08-08) exclude E2, memory-optimized, AMD- and Arm-powered, and H4D VMs, which agrees on the GPU families but not in the margins (it excludes H4D, C4D, and N4D, which the API named). Where they disagree, the API's rejection is current. See <a href="#caveats-and-limitations">Caveats</a>.</td>
+</tr>
+<tr>
+<td>Node image</td>
+<td><strong><code>UBUNTU_CONTAINERD</code></strong>, or <code>COS_CONTAINERD</code> at <code>1.28.4-gke.1083000</code>+.</td>
+</tr>
+<tr>
+<td>Flag</td>
+<td><code>--enable-nested-virtualization</code> (GA). Accepted by <em>both</em> <code>gcloud container node-pools create</code> and <code>gcloud container clusters create</code> — prefer the cluster form so a capacity stockout fails fast instead of wedging the cluster.</td>
+</tr>
+<tr>
+<td>Workload Identity</td>
+<td><code>--workload-pool</code> + <code>--workload-metadata=GKE_METADATA</code>. <strong>Required</strong>, not optional — Kata does not block the metadata server. See <a href="#the-security-rationale">the security rationale</a>.</td>
+</tr>
+<tr>
+<td>Node label</td>
+<td>Label the pool with your <strong>own</strong> label (e.g. <code>gag.dev/kata-ci=true</code>) and use it to scope the Kata installer. Do <strong>not</strong> reuse <code>katacontainers.io/kata-runtime</code> as the <em>installer</em> scope — <code>kata-deploy</code> sets that itself once the runtime is installed, and the <code>RuntimeClass</code> schedules on it.</td>
+</tr>
+<tr>
+<td>Autoscaling from zero</td>
+<td>If the pool autoscales 0→N, <strong>also bake <code>katacontainers.io/kata-runtime=true</code> into the pool's <code>--node-labels</code></strong> (found live under Q286): the cluster autoscaler simulates scheduling against the pool's <em>configured</em> labels only, so a label that kata-deploy applies post-install can never trigger the scale-up and Kata pods stay Pending forever. The window where a pod binds before kata-deploy finishes resolves via kubelet sandbox-create retries. Fixed-size pools should keep the two labels separate.</td>
+</tr>
+<tr>
+<td>Taints</td>
+<td>If the pool is tainted, give the kata-deploy chart a matching <code>tolerations:</code> value (the chart ships none) — otherwise the installer can never reach the only nodes it targets (found live under Q286).</td>
+</tr>
+</tbody>
+</table>
+<p>The repo ships a parameterized provisioning script — <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.6.0/scripts/dev/kata-node-pool.sh"><code>scripts/dev/kata-node-pool.sh</code></a> — that wraps the <code>gcloud container node-pools create</code> call with these flags.
+Preview it with <code>DRY_RUN=1</code> before spending cloud time; see <a href="../kata-ci-spike-runbook/#step-1--create-a-nested-virt-cluster">runbook step 1</a>.</p>
+<p><strong>Amazon Web Services (EC2).</strong> Bare metal is no longer the only option, and the unit of configuration is the instance rather than the node pool.
+Nested virtualization is a CPU option that is <strong>off by default</strong>: pass <code>--cpu-options "NestedVirtualization=enabled"</code> to <code>run-instances</code>, or run <code>aws ec2 modify-instance-cpu-options --nested-virtualization enabled</code> against a stopped instance.</p>
+<table>
+<thead>
+<tr>
+<th>Requirement</th>
+<th>Detail</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Instance family</td>
+<td>AWS's <a href="https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/amazon-ec2-nested-virtualization.html">nested virtualization guide</a> (fetched 2026-08-12) lists <strong>C8i, M8i, R8i, C8id, R8id, M8id, C8i-flex, R8i-flex, M8i-flex, X8i, C7i, R7i, M7i, C7i-flex, M7i-flex, and I7i</strong>. Every one is Intel; no AMD or Graviton family is on it, and <strong>no P or G family is either</strong>, so on EC2 nested virtualization <em>is</em> what stops GPU workloads under Kata, unlike GKE, where A2, A3, and G2 carry it. It shipped in two steps: C8i/M8i/R8i on 2026-02-16, the rest plus GovCloud (US) on 2026-06-18.</td>
+</tr>
+<tr>
+<td>Hypervisor</td>
+<td>KVM and Hyper-V are the supported L1 hypervisors, so Kata's QEMU path is in scope.</td>
+</tr>
+<tr>
+<td>Performance</td>
+<td>AWS recommends bare metal for hardware-virtualization workloads that are performance-sensitive or latency-bound. Kata boots a guest per pod, so treat a virtual family as the cheaper tier rather than a like-for-like substitute, and measure pod-<code>Ready</code> latency before committing a build fleet to it.</td>
+</tr>
+</tbody>
+</table>
+<p>Azure exposes nested virtualization on <code>Dv3</code>/<code>Ev3</code> and later.
+On owned hardware none is needed at all.</p>
+<p><strong>Verify <code>/dev/kvm</code> is present</strong> on a labelled node before going further — if it is missing, nested virtualization is not actually enabled and the guest VM cannot boot:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="nv">NODE</span><span class="o">=</span><span class="k">$(</span>kubectl<span class="w"> </span>get<span class="w"> </span>nodes<span class="w"> </span>-l<span class="w"> </span>katacontainers.io/kata-runtime<span class="o">=</span><span class="nb">true</span><span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="w">  </span>-o<span class="w"> </span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">'{.items[0].metadata.name}'</span><span class="k">)</span>
+<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>kubectl<span class="w"> </span>debug<span class="w"> </span>node/<span class="s2">"</span><span class="nv">$NODE</span><span class="s2">"</span><span class="w"> </span>-it<span class="w"> </span>--image<span class="o">=</span>busybox<span class="w"> </span>--<span class="w"> </span>ls<span class="w"> </span>-l<span class="w"> </span>/host/dev/kvm
+</code></pre></div>
+<p>Expect a character device.</p>
+<h2 id="cluster-setup--kata-runtime-and-runtimeclass">Cluster setup — Kata runtime and RuntimeClass<a class="headerlink" href="#cluster-setup--kata-runtime-and-runtimeclass" title="Permanent link">&para;</a></h2>
+<p>Installing a runtime handler and creating a <code>RuntimeClass</code> is a <strong>cluster-admin</strong> operation.
+As with the gVisor/Kata sandbox runtimes in <a href="../../design/appendix-b-worker-isolation/">Appendix B — Worker isolation</a>, GAG's controllers never install runtime handlers or <code>RuntimeClass</code> objects; the Gateway Manager Controller (GMC) and Actions Gateway Controllers (AGCs) only <em>honour</em> a <code>runtimeClassName</code> a tenant sets.
+Two steps:</p>
+<ol>
+<li><strong>Install the Kata runtime on the labelled nodes.</strong> Kata Containers no longer ships raw <code>kata-deploy.yaml</code> / <code>kata-rbac.yaml</code> manifests — those release-asset URLs now return 404.
+   The canonical installer is an OCI Helm chart.
+   It drops the Kata binaries, the QEMU hypervisor, the guest kernel/image, and the containerd runtime handler onto each node it lands on:</li>
+</ol>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>helm<span class="w"> </span>install<span class="w"> </span>kata-deploy<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="w">  </span>oci://quay.io/kata-containers/kata-deploy-charts/kata-deploy<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="w">  </span>--version<span class="w"> </span><span class="m">3</span>.32.0<span class="w"> </span>-n<span class="w"> </span>kube-system<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="w">  </span>-f<span class="w"> </span>deploy/kata-ci/kata-values.yaml<span class="w"> </span>--wait
+</code></pre></div>
+<blockquote>
+<p><strong>Do not scope the installer with <code>katacontainers.io/kata-runtime</code>.</strong> That is the label <code>kata-deploy</code> <em>sets</em> on a node once the runtime is in place, and it is what the <code>RuntimeClass</code> schedules on.
+Select the installer with the <strong>node pool's own</strong> label (the shipped values use <code>gag.dev/kata-ci=true</code>).
+Using one label for both creates a race in which a Kata pod can be scheduled onto a node whose runtime does not exist yet.</p>
+</blockquote>
+<p>The DaemonSet itself runs <code>privileged: true</code> — installing a node-level container runtime means writing <code>/opt/kata</code>, <code>/usr/local/bin</code> and <code>/etc/containerd</code>.
+   That privilege is confined to the trusted, operator-run installer; the <em>workload</em> pod stays unprivileged.
+   That asymmetry is the Kata model.</p>
+<ol>
+<li><strong>Register the <code>RuntimeClass</code>.</strong> The chart already creates <code>kata-qemu</code> (with the correct pod <code>overhead</code>).
+   The repo ships only a stable <code>kata</code> alias, so the hypervisor can be retargeted later without editing every pod spec — see <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.6.0/deploy/kata-ci/runtimeclass.yaml"><code>deploy/kata-ci/runtimeclass.yaml</code></a>:</li>
+</ol>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">node.k8s.io/v1</span>
+<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">RuntimeClass</span>
+<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="nt">metadata</span><span class="p">:</span>
+<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">kata</span>
+<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="nt">handler</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">kata-qemu</span><span class="w">            </span><span class="c1"># must match the kata-deploy handler</span>
+<a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a><span class="nt">overhead</span><span class="p">:</span>
+<a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a><span class="w">  </span><span class="nt">podFixed</span><span class="p">:</span>
+<a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a><span class="w">    </span><span class="nt">memory</span><span class="p">:</span><span class="w"> </span><span class="s">"160Mi"</span><span class="w">           </span><span class="c1"># the micro-VM's footprint; size nodes for it</span>
+<a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a><span class="w">    </span><span class="nt">cpu</span><span class="p">:</span><span class="w"> </span><span class="s">"250m"</span>
+<a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a><span class="nt">scheduling</span><span class="p">:</span>
+<a id="__codelineno-3-11" name="__codelineno-3-11" href="#__codelineno-3-11"></a><span class="w">  </span><span class="nt">nodeSelector</span><span class="p">:</span>
+<a id="__codelineno-3-12" name="__codelineno-3-12" href="#__codelineno-3-12"></a><span class="w">    </span><span class="nt">katacontainers.io/kata-runtime</span><span class="p">:</span><span class="w"> </span><span class="s">"true"</span><span class="w">   </span><span class="c1"># set BY kata-deploy, post-install</span>
+</code></pre></div>
+<p>Confirm the classes exist before configuring workers.
+Note GKE preinstalls <code>gvisor</code> and <code>confidential-linked-runner</code> classes that have nothing to do with Kata — a non-empty listing does not mean Kata is installed:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>kubectl<span class="w"> </span>get<span class="w"> </span>runtimeclass<span class="w"> </span>kata<span class="w"> </span>kata-qemu
+<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>kubectl<span class="w"> </span>get<span class="w"> </span>nodes<span class="w"> </span>-l<span class="w"> </span>katacontainers.io/kata-runtime<span class="o">=</span><span class="nb">true</span><span class="w">   </span><span class="c1"># kata-deploy labelled them</span>
+</code></pre></div>
+<h2 id="configure-the-worker-podtemplate">Configure the worker podTemplate<a class="headerlink" href="#configure-the-worker-podtemplate" title="Permanent link">&para;</a></h2>
+<p>The shipped <code>kata-dind</code> library entry is this section, complete and CI-exercised:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>kubectl<span class="w"> </span>apply<span class="w"> </span>-k<span class="w"> </span>deploy/templates/kata-dind
+</code></pre></div>
+<p>Then point a <code>RunnerSet</code> at it with <code>templateRef.kind: ClusterRunnerTemplate</code>.
+It runs jobs as applied: the template leaves <code>spec.workerImage</code> unset, and the AGC's digest-pinned default runner image already carries a Docker CLI and buildx, which is the client the dind sidecar is the daemon for.
+Set <code>spec.workerImage</code> only if your jobs need <code>docker compose</code> (<code>ghcr.io/actions-gateway/build-runner</code>, pinned by digest from the release notes) or a toolchain of your own.
+If the image you set will not pull, the worker pod shows <code>ImagePullBackOff</code> within seconds and the <code>RunnerSet</code> reports <code>WorkersNotStarting</code>/<code>PodsNotStarting</code> in the same window, gate or no gate; a set that opted into <code>spec.capacityGate</code> additionally reports <code>WorkerCapacityDeclined</code> and stops claiming jobs.
+The <a href="../runner-template-library/">runner template library</a> covers both, the supported way to patch the base, and <a href="../runner-template-library/#kata-dind-and-privileged-dind">what to watch when the placeholder is left in place</a>.</p>
+<p>The rest of this section is what that template contains and why, for reading rather than retyping.</p>
+<p>Kata is selected by <code>runtimeClassName</code> on the worker <code>podTemplate</code>.
+It is a platform-owned, cluster-scoped <code>ClusterRunnerTemplate</code>: the capability set below exceeds what a tenant should be able to self-author, and platform ownership is what enforces the "no privileged container" property (the namespace PSA level cannot; see <a href="#why-this-matters-for-gag">Why this matters for GAG</a>).</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">actions-gateway.com/v2beta1</span>
+<a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ClusterRunnerTemplate</span><span class="w">            </span><span class="c1"># platform-owned golden template</span>
+<a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="nt">metadata</span><span class="p">:</span>
+<a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">kata-dind</span>
+<a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a><span class="nt">spec</span><span class="p">:</span>
+<a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a><span class="w">  </span><span class="nt">podTemplate</span><span class="p">:</span>
+<a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a><span class="w">    </span><span class="nt">spec</span><span class="p">:</span>
+<a id="__codelineno-6-8" name="__codelineno-6-8" href="#__codelineno-6-8"></a><span class="w">      </span><span class="nt">runtimeClassName</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">kata</span><span class="w">           </span><span class="c1"># the alias RuntimeClass above</span>
+<a id="__codelineno-6-9" name="__codelineno-6-9" href="#__codelineno-6-9"></a><span class="w">      </span><span class="nt">automountServiceAccountToken</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">false</span>
+<a id="__codelineno-6-10" name="__codelineno-6-10" href="#__codelineno-6-10"></a><span class="w">      </span><span class="c1"># dockerd as a NATIVE sidecar (restartPolicy: Always init container);</span>
+<a id="__codelineno-6-11" name="__codelineno-6-11" href="#__codelineno-6-11"></a><span class="w">      </span><span class="c1"># the runner container reaches it via DOCKER_HOST=tcp://localhost:2375.</span>
+<a id="__codelineno-6-12" name="__codelineno-6-12" href="#__codelineno-6-12"></a><span class="w">      </span><span class="nt">initContainers</span><span class="p">:</span>
+<a id="__codelineno-6-13" name="__codelineno-6-13" href="#__codelineno-6-13"></a><span class="w">        </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">dind</span>
+<a id="__codelineno-6-14" name="__codelineno-6-14" href="#__codelineno-6-14"></a><span class="w">          </span><span class="nt">image</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">docker:28-dind</span>
+<a id="__codelineno-6-15" name="__codelineno-6-15" href="#__codelineno-6-15"></a><span class="w">          </span><span class="nt">restartPolicy</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Always</span>
+<a id="__codelineno-6-16" name="__codelineno-6-16" href="#__codelineno-6-16"></a><span class="w">          </span><span class="c1"># Replace the image entrypoint with the six Kata setup steps —</span>
+<a id="__codelineno-6-17" name="__codelineno-6-17" href="#__codelineno-6-17"></a><span class="w">          </span><span class="c1"># see the next section and the reference implementation below.</span>
+<a id="__codelineno-6-18" name="__codelineno-6-18" href="#__codelineno-6-18"></a><span class="w">          </span><span class="nt">securityContext</span><span class="p">:</span>
+<a id="__codelineno-6-19" name="__codelineno-6-19" href="#__codelineno-6-19"></a><span class="w">            </span><span class="nt">privileged</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">false</span><span class="w">          </span><span class="c1"># THE point of this architecture</span>
+<a id="__codelineno-6-20" name="__codelineno-6-20" href="#__codelineno-6-20"></a><span class="w">            </span><span class="nt">allowPrivilegeEscalation</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">false</span>
+<a id="__codelineno-6-21" name="__codelineno-6-21" href="#__codelineno-6-21"></a><span class="w">            </span><span class="nt">capabilities</span><span class="p">:</span>
+<a id="__codelineno-6-22" name="__codelineno-6-22" href="#__codelineno-6-22"></a><span class="w">              </span><span class="nt">drop</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">ALL</span><span class="p p-Indicator">]</span>
+<a id="__codelineno-6-23" name="__codelineno-6-23" href="#__codelineno-6-23"></a><span class="w">              </span><span class="nt">add</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="w"> </span><span class="nv">...</span><span class="w"> </span><span class="p p-Indicator">]</span><span class="w">             </span><span class="c1"># the validated set — next section</span>
+<a id="__codelineno-6-24" name="__codelineno-6-24" href="#__codelineno-6-24"></a><span class="w">      </span><span class="nt">containers</span><span class="p">:</span>
+<a id="__codelineno-6-25" name="__codelineno-6-25" href="#__codelineno-6-25"></a><span class="w">        </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">runner</span>
+<a id="__codelineno-6-26" name="__codelineno-6-26" href="#__codelineno-6-26"></a><span class="w">          </span><span class="nt">env</span><span class="p">:</span>
+<a id="__codelineno-6-27" name="__codelineno-6-27" href="#__codelineno-6-27"></a><span class="w">            </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">DOCKER_HOST</span>
+<a id="__codelineno-6-28" name="__codelineno-6-28" href="#__codelineno-6-28"></a><span class="w">              </span><span class="nt">value</span><span class="p">:</span><span class="w"> </span><span class="s">"tcp://localhost:2375"</span>
+</code></pre></div>
+<p>The complete form (the raw block volume for <code>/var/lib/docker</code>, the six-step entrypoint, the validated capability set, the dockerd startup probe, and measured resource sizing) is the shipped library entry <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.6.0/deploy/templates/kata-dind/template.yaml"><code>deploy/templates/kata-dind/template.yaml</code></a>.
+GAG's own e2e tenant consumes that same base and patches only its cluster specifics (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.6.0/deploy/dogfood-e2e/README.md"><code>deploy/dogfood-e2e/overlays/kata/</code></a>), so what you apply is what CI runs jobs on.
+The single-pod (non-GAG) reference the spike validated is <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.6.0/deploy/kata-ci/runner-pod.yaml"><code>deploy/kata-ci/runner-pod.yaml</code></a>.</p>
+<p>The AGC honours a template-set <code>runtimeClassName</code> and applies no override that strips it.
+If <code>dockerd</code> still fails inside the guest, add one Linux capability at a time to the container's <code>securityContext.capabilities.add</code> and re-test — <strong>never</strong> reach for <code>privileged: true</code>.
+Record the final minimal capability set for your runbook.</p>
+<h2 id="what-an-unprivileged-dockerd-actually-needs-inside-the-guest">What an unprivileged <code>dockerd</code> actually needs inside the guest<a class="headerlink" href="#what-an-unprivileged-dockerd-actually-needs-inside-the-guest" title="Permanent link">&para;</a></h2>
+<p>Dropping <code>privileged: true</code> does not come free — six things must be arranged that a privileged container gets implicitly.
+All were validated live; the reference implementation is the <code>args:</code> block of <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.6.0/deploy/kata-ci/runner-pod.yaml"><code>deploy/kata-ci/runner-pod.yaml</code></a>.</p>
+<ol>
+<li><strong><code>/var/lib/docker</code> must be a raw block volume, not an <code>emptyDir</code>.</strong> Kata surfaces an <code>emptyDir</code> as <strong>virtiofs</strong>, and Docker cannot run <code>overlay2</code> on it — it silently falls back to <code>vfs</code>.
+   <code>kind</code> then switches its node snapshotter to <code>fuse-overlayfs</code>, which needs <code>/dev/fuse</code> (absent from the guest), and the inner kubelet never becomes healthy.
+   Use a PVC with <code>volumeMode: Block</code> + <code>volumeDevices</code>, then <code>mkfs.ext4</code> it inside the guest.
+   Beware: the <code>docker:dind</code> image declares <code>VOLUME /var/lib/docker</code> and Kata pre-mounts virtiofs there, so a "is it mounted?" check passes and silently skips your ext4 mount — test for the <strong>device</strong>.
+   Also do <strong>not</strong> gate the <code>mkfs</code> on <code>blkid</code> (root-caused live under Q286): <code>docker:dind</code>'s <code>blkid</code> is <strong>busybox</strong> blkid, which exits 0 even on a blank device, so <code>blkid || mkfs</code> skips the format on every fresh volume and the mount fails <code>EINVAL</code>.
+   Mount-first and <code>mkfs</code> on failure instead — the device is a disposable per-pod cache, so reformatting on any mount failure is safe.</li>
+<li><strong><code>/dev/kmsg</code> does not exist in the Kata guest</strong>, and a nested kubelet requires it.
+   <code>mknod /dev/kmsg c 1 11</code> (needs <code>CAP_MKNOD</code>).</li>
+<li><strong><code>/sys/fs/cgroup</code> is read-only</strong> for a non-privileged container, so <code>runc</code> cannot create the nested container's cgroup.
+   <code>mount -o remount,rw /sys/fs/cgroup</code> works with <code>CAP_SYS_ADMIN</code>.
+   Under Kata that hierarchy is the <strong>guest</strong> kernel's — the remount grants nothing on the host.
+   Under plain <code>runc</code> the same tree is the host's, which is exactly why classic DinD demands <code>privileged: true</code>.</li>
+<li><strong><code>/proc/sys</code> is read-only</strong> likewise; Docker writes per-veth <code>net.ipv6.conf.&lt;iface&gt;.disable_ipv6</code>.
+   Same remount, same reasoning.</li>
+<li><strong>cgroup v2 nesting.</strong> cgroup v2 forbids a cgroup from holding processes <em>and</em> delegating controllers to children, so systemd in a nested container cannot create <code>/init.scope</code> (<code>Structure needs cleaning</code>).
+   Move the cgroup-namespace root's processes into a leaf, then populate <code>cgroup.subtree_control</code>.
+   <code>docker:dind</code>'s own entrypoint does this — you only need it if you override <code>command:</code>.</li>
+<li><strong>IPv6 is disabled in the guest</strong>, yet <code>kind</code> creates its Docker network with <code>--ipv6</code>.
+   Pre-create an IPv4-only bridge network named <code>kind</code>.</li>
+</ol>
+<p>The validated capability set — <code>drop: [ALL]</code> plus:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>CHOWN DAC_OVERRIDE FSETID FOWNER MKNOD NET_RAW SETGID SETUID
+<a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>SETFCAP SETPCAP NET_BIND_SERVICE SYS_CHROOT KILL AUDIT_WRITE   # Docker's defaults
+<a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a>SYS_ADMIN NET_ADMIN SYS_RESOURCE SYS_PTRACE                    # rootful dockerd + runc
+</code></pre></div>
+<p>One more rule, found live under Q286: a container <strong>inside</strong> the nested kind cluster can only gain capabilities present in this bounding set — nested <code>runc</code> fails with <code>unable to apply caps: operation not permitted</code> otherwise.
+When a CI workload trips this, prefer <strong>tightening the workload</strong> (drop the cap it requests) over widening the set above, so the worker's capability floor stays as small as possible.
+GAG's e2e suite hit it once: a dev-mode test Vault requested <code>IPC_LOCK</code>, which was dropped from the Vault pod (with <code>SKIP_SETCAP=true</code>) rather than added here — a dev-mode Vault never mlocks.
+Only widen the bounding set for a workload that genuinely cannot drop the cap.</p>
+<p>Two are easy to miss: <strong><code>FOWNER</code></strong> (image layer unpack <code>chmod</code>s files it does not own) and <strong><code>SYS_CHROOT</code></strong> (<code>runc</code> <code>setns()</code> into the container mount namespace).</p>
+<h2 id="the-security-rationale">The security rationale<a class="headerlink" href="#the-security-rationale" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Property</th>
+<th>Privileged DinD</th>
+<th>DinD under Kata</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>securityProfile</code> required</td>
+<td><code>privileged</code> (platform-granted namespace label)</td>
+<td><code>privileged</code> label still (PSS baseline forbids the capability adds; PSA is not Kata-aware) — but <strong>no privileged container</strong> behind it</td>
+</tr>
+<tr>
+<td><code>privileged: true</code> container</td>
+<td>Yes</td>
+<td>No</td>
+</tr>
+<tr>
+<td>Escape blast radius</td>
+<td>The host node and, from there, other tenants</td>
+<td>A throwaway guest VM kernel</td>
+</tr>
+<tr>
+<td>Node <code>/proc</code>, <code>/sys</code>, devices, kernel</td>
+<td>Exposed</td>
+<td>Behind the VM boundary</td>
+</tr>
+<tr>
+<td>Node metadata server (<code>169.254.169.254</code>)</td>
+<td>Exposed</td>
+<td><strong>Still exposed</strong> — see below</td>
+</tr>
+</tbody>
+</table>
+<blockquote>
+<h3 id="kata-does-not-close-the-metadata-server-path">Kata does not close the metadata-server path<a class="headerlink" href="#kata-does-not-close-the-metadata-server-path" title="Permanent link">&para;</a></h3>
+<p>Kata isolates the <strong>kernel</strong>, not the <strong>pod network</strong>.
+Measured from inside a Kata micro-VM on GKE: <code>169.254.169.254</code> stayed reachable and <code>computeMetadata/v1/instance/service-accounts/default/token</code> returned <strong>HTTP 200</strong> — the node's GCE service-account token.
+A micro-VM around an untrusted CI runner that can still mint node credentials is not a boundary.</p>
+<p><strong>Enable Workload Identity.
+It is a prerequisite, not an enhancement.</strong></p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>gcloud<span class="w"> </span>container<span class="w"> </span>clusters<span class="w"> </span>update<span class="w"> </span>&lt;cluster&gt;<span class="w"> </span>--workload-pool<span class="o">=</span>&lt;project&gt;.svc.id.goog
+<a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a>gcloud<span class="w"> </span>container<span class="w"> </span>node-pools<span class="w"> </span>update<span class="w"> </span>&lt;pool&gt;<span class="w"> </span>--cluster<span class="o">=</span>&lt;cluster&gt;<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="w">  </span>--workload-metadata<span class="o">=</span>GKE_METADATA<span class="w">        </span><span class="c1"># recreates the nodes</span>
+</code></pre></div>
+<p>Re-probed with it on, the metadata server serves the workload-pool identity (<code>&lt;project&gt;.svc.id.goog</code>) instead of the node's service account.
+Also set <code>automountServiceAccountToken: false</code> on the runner pod so it carries no Kubernetes API token, and consider a NetworkPolicy denying egress to <code>169.254.169.254/32</code> as defence in depth.</p>
+<p>On a cluster whose CNI enforces egress NetworkPolicy, the tenant policies this system generates already close that path, so the defence-in-depth leg is one you inherit rather than one you write.
+It does not work by naming the address: NetworkPolicy is allowlist-only, and the metadata address sits inside the link-local block <code>169.254.0.0/16</code> the DNS rule has to admit for NodeLocal DNSCache.
+What keeps it unreachable is that the rule only admits port 53, and the metadata service does not answer there.
+Two consequences for an operator: on a CNI that does <strong>not</strong> enforce egress (kindnet, and any cluster without a policy plugin) you get none of this and Workload Identity is doing all the work, and if you edit the generated policies to widen the link-local rule beyond port 53 you reopen the path.</p>
+<p>On other clouds the equivalent controls are IMDSv2 with a hop limit of 1 plus a restrictive instance profile (AWS), or Azure AD Workload Identity with the IMDS endpoint blocked.</p>
+</blockquote>
+<p>Kata advances GAG's <a href="../../design/05-security/#53-security-profiles-and-the-privileged-opt-in">secure-by-default principle</a> on the axis that matters: the workload that historically demanded a <code>privileged: true</code> container now runs without one, converting a kernel escape from node compromise into a discarded guest.
+The namespace's PSA <em>label</em> stays <code>privileged</code> (the capability set exceeds PSS baseline and PSA cannot see the VM boundary), so the platform-owned <code>ClusterRunnerTemplate</code> — not the PSA level — is what pins the pod shape.
+Privileged DinD remains documented as a last resort — and even then it should be <em>paired</em> with a sandbox runtime, which is the same mechanism described here applied on top of <code>privileged</code>; see <a href="../in-runner-image-builds/#approach-4--plain-privileged-dind-avoid-where-possible">In-runner image builds — privileged DinD</a>.</p>
+<h3 id="what-kata-does-not-buy-you">What Kata does not buy you<a class="headerlink" href="#what-kata-does-not-buy-you" title="Permanent link">&para;</a></h3>
+<p>Kata is one layer, not a security posture.
+Four limits worth stating plainly before you conclude "Kata, therefore safe":</p>
+<ul>
+<li><strong>The capability set is close to privileged-equivalent.</strong> An unprivileged Kata DinD runner still needs <code>SYS_ADMIN</code>, <code>NET_ADMIN</code>, <code>SYS_PTRACE</code>, <code>SYS_CHROOT</code>, and read-write remounts of <code>/sys/fs/cgroup</code> and <code>/proc/sys</code>.
+  On an ordinary <code>runc</code> container that list is nearly <code>privileged: true</code>.
+  It is safe here <em>only</em> because those capabilities act on the guest kernel.
+  There is no defence in depth from the capability set — the entire argument rests on the VM boundary holding.</li>
+<li><strong>You trade one CVE class for another.</strong> The Linux syscall interface is a large, well-trodden attack surface (<code>CVE-2019-5736</code> runc, <code>CVE-2022-0847</code> Dirty Pipe, the io_uring family).
+  QEMU's device emulation is a much smaller and more exotic one, but it is not empty (<code>CVE-2019-14378</code>, the VENOM class).
+  Kata makes escape <em>much harder</em>, not impossible.
+  On GKE the hypervisor is itself running inside a GCE VM (nested virtualisation), so the stack is deeper and less exercised in production than Kata on bare metal.</li>
+<li><strong>Kata <em>without</em> Workload Identity can be worse than privileged DinD <em>with</em> compensating controls.</strong> Both configurations let a compromised runner mint the node's service-account token over the pod network.
+  The Kata one <em>feels</em> safe, so the metadata control is more likely to be skipped.
+  Do not deploy this architecture without the Workload Identity step above.</li>
+<li><strong>GAG has proven the boundary exists, not that it is unbreakable.</strong> Q226 verified the guest kernel differs from the node kernel and that the pod holds no host privilege.
+  No breakout was attempted.
+  Treat the containment claim as "designed and structurally sound", not "empirically tested against an exploit".</li>
+</ul>
+<p>The honest recommendation: <strong>prefer Kata over privileged DinD for untrusted code</strong> — it is the only option here that puts a machine boundary around an inner Docker daemon, and it converts a kernel escape from node compromise into a discarded guest.
+But deploy it <em>with</em> Workload Identity, <code>automountServiceAccountToken: false</code>, and ideally a NetworkPolicy denying egress to <code>169.254.169.254/32</code>.
+Kata alone is not the control.</p>
+<h2 id="caveats-and-limitations">Caveats and limitations<a class="headerlink" href="#caveats-and-limitations" title="Permanent link">&para;</a></h2>
+<ul>
+<li><strong>Startup overhead is small — but the <code>overhead</code> accounting is not.</strong> Measured on <code>c2-standard-4</code>: a Kata pod reached <code>Ready</code> in ~3 s vs ~1 s for <code>runc</code>, and <code>kind create cluster</code> took 58 s from a cold image cache (43 s warm) against a ~6 min ceiling.
+  The bigger planning cost is the <code>RuntimeClass</code> <code>overhead</code> (160Mi / 250m <strong>per pod</strong>), which the scheduler reserves on top of the container's own requests — size nodes <em>and</em> the namespace <code>ResourceQuota</code> for it.
+  The gateway charges it too: the AGC reads the <code>RuntimeClass</code> to fold <code>overhead.podFixed</code> into the worker footprint behind the <code>WorkerQuota</code> conditions and the pre-claim quota gate, so a Kata tenant can report quota pressure a <code>runc</code> tenant of the same container shape would not.
+  That read needs the cluster-scoped <code>runtimeclasses</code> grant the chart ships; it is fail-open, so an AGC without it silently omits the overhead term.
+  See <a href="../resourcequota-sizing/#pod-overhead-needs-a-cluster-scoped-read">sizing the platform-owned <code>ResourceQuota</code></a>.</li>
+<li><strong>The per-worker block device is quota-charged too, and it fails quietly.</strong> The reference shape's <code>/var/lib/docker</code> device is a generic ephemeral volume, so Kubernetes creates one real PVC per worker pod — charged against <code>persistentvolumeclaims</code>, <code>requests.storage</code>, and the <code>&lt;class&gt;.storageclass.storage.k8s.io/…</code> keys.
+  At <code>maxWorkers: 4</code> that is <code>4</code> claims and <code>400Gi</code>.
+  Unlike a CPU or memory shortfall, an exhausted storage quota does <strong>not</strong> reject the pod: the PVC is created after the pod is admitted, so the worker sits <code>Pending</code> on an unbound volume holding a job already claimed from GitHub.
+  The AGC counts these keys in the worker footprint to refuse before claiming — see <a href="../resourcequota-sizing/#step-3--the-storage-keys">the storage keys</a>.</li>
+<li><strong>Nested-virt capacity can be scarce.</strong> During validation, <code>n2-standard-4</code> and <code>n2d-standard-4</code> were both <code>ZONE_RESOURCE_POOL_EXHAUSTED</code> in <code>us-central1-a</code> while CPU quota sat at 0/200 — a stockout, not a quota problem (a plain non-nested-virt <code>n2</code> failed too, so nested virt itself does not narrow the pool).
+  <code>c2</code>/<code>c2d</code> worked.
+  Check the <strong>per-family</strong> regional quota: <code>C2_CPUS</code> defaults to 8 on a fresh project, which is one node of an 8-vCPU shape; <code>N2_CPUS</code> defaults to 200.</li>
+</ul>
+<p><strong><code>c2d</code> no longer takes <code>--enable-nested-virtualization</code>.</strong> As of 2026-08-02 GCP rejects the create and names the families that can, which is the list in <a href="#prerequisite--nested-virtualization-nodes">the machine-family row</a>: no <code>C2D</code>, no <code>N2D</code>.
+  Whether support was withdrawn or the observation above was of a pool created without the flag is unresolved; take the API's rejection as current.
+- <strong>A node-pool stockout wedges the cluster.</strong> A failing <code>CREATE_NODE_POOL</code> operation holds a cluster-level lock (<code>Cluster is running incompatible operation</code>) that blocks even deleting the pool, for tens of minutes.
+  Prefer creating the nested-virt pool as the cluster's <em>initial</em> pool (<code>gcloud container clusters create --enable-nested-virtualization</code>).
+- <strong><code>kata-deploy</code> is a DaemonSet, so it self-heals.</strong> Recreating the node pool (for example to flip <code>--workload-metadata</code>) reinstalls Kata automatically and the <code>RuntimeClass</code> survives.
+- <strong>Not all kernel features pass through.</strong> Workloads needing host kernel modules, specific <code>/dev</code> devices, or GPU passthrough need extra Kata configuration.
+  GPU passthrough in particular still wants bare metal or dedicated instances, but <em>not</em> because the cloud GPU families lack nested virtualization (A2, A3, and G2 have it).
+  It is because NVIDIA's Kata path needs BIOS-level ACS and IOMMU, no NVIDIA driver bound on the host, and a whole GPU per guest.
+  See <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.6.0/docs/plan/gpu-and-accelerated-ci.md#the-collision-with-the-security-goal">GPU and accelerated CI</a>.
+- <strong>Run <code>dockerd</code> inside the runner container, not as a regular sidecar.</strong> The pattern above keeps the daemon a nested process of the single <code>runner</code> container, so the pod reaps cleanly when the job ends.
+  If you instead split the daemon into a separate sidecar container, declare it as a <strong>native sidecar</strong> (<code>restartPolicy: Always</code> init container) — a regular sidecar runs forever and keeps the worker pod from reaping, stranding the runner slot.
+  See <a href="../in-runner-image-builds/#sidecar-containers-must-be-native-sidecars-q249">In-runner image builds § Sidecar containers must be native sidecars</a>.
+- <strong>Validated as an architecture, and GAG's own CI runs on it.</strong> The unprivileged <code>dockerd</code> + <code>kind</code> path was proven end-to-end on GKE (<code>1.35.5-gke.1241004</code>, Ubuntu 24.04, <code>c2-standard-4</code> nested-virt, Kata 3.32.0/QEMU) — see <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.6.0/docs/plan/archive/kata-on-gke.md">Kata Containers on GKE</a> for the evidence.
+  GAG's dogfood e2e ships the Kata worker shape as <a href="https://github.com/actions-gateway/github-actions-gateway/tree/v1.6.0/deploy/dogfood-e2e/overlays/kata"><code>deploy/dogfood-e2e/overlays/kata</code></a> and selects it <strong>by default</strong>; <code>E2E_VARIANT=dind scripts/dogfood/e2e-start.sh</code> is the explicit fallback.
+  No bundled all-in-one runner image is needed: the daemon is a stock <code>docker:28-dind</code> native sidecar with a six-step entrypoint, and the toolchain rides the regular runner container.
+  A full <code>make e2e</code> run is green through that overlay.
+  Confirm the steps on your own cluster before cutting over privileged workloads.
+- <strong>The validated posture is <em>trusted</em> CI, not untrusted pull requests.</strong> Kata bounds the guest kernel, but it does not narrow egress, and GAG's own e2e tenant runs a permissive egress policy because its jobs pull from CDN-fronted public registries: a CIDR allowlist rots, and fully-qualified-domain-name policy is not enforceable on GKE Dataplane V2.
+  Running an external contributor's pull request on this shape safely needs an in-cluster pull-through registry mirror, so workers need no direct registry egress, plus an egress policy scoped to that mirror, GitHub, and DNS.
+  Until you have both, treat Kata isolation as protection against a kernel escape, not as a licence to run untrusted code.
+  See <a href="../../design/appendix-g-future-enhancements/#g14-kata-e2e-untrusted-pr-posture--tight-egress--in-cluster-pull-through-mirror">Appendix G.14</a>.</p>
+<h2 id="related">Related<a class="headerlink" href="#related" title="Permanent link">&para;</a></h2>
+<ul>
+<li><a href="../runner-template-library/">Runner template library</a>: the shipped <code>kata-dind</code> entry this page describes, plus its two siblings and how to fork one.</li>
+<li><a href="../in-runner-image-builds/">In-runner image builds</a> — pick a build approach (BuildKit rootless, Kaniko, Sysbox, Kata, privileged DinD) and the <code>securityProfile</code> each needs.</li>
+<li><a href="../kata-ci-spike-runbook/">Kata-on-GKE spike runbook</a> — executable go/no-go steps for the unprivileged <code>dockerd</code> + <code>kind</code> runner.</li>
+<li><a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.6.0/docs/plan/archive/kata-on-gke.md">Kata Containers on GKE</a> — design rationale, the options rejected (Sysbox, rootless, kindbox), and the provider-agnostic reference architecture.</li>
+<li><a href="../../design/appendix-b-worker-isolation/">Appendix B — Worker isolation</a> — <code>runc</code> vs gVisor vs Kata sandbox-runtime trade-offs.</li>
+<li><a href="../../design/05-security/#53-security-profiles-and-the-privileged-opt-in">Security § 5.3</a> — the authoritative <code>securityProfile</code> model. </content> </invoke></li>
+</ul>
+
+
+
+
+
+
+
+
+
+  
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+    
+      
+      <nav class="md-footer__inner md-grid" aria-label="Footer" >
+        
+          
+          <a href="../in-runner-image-builds/" class="md-footer__link md-footer__link--prev" aria-label="Previous: In-runner image builds">
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+            </div>
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Previous
+              </span>
+              <div class="md-ellipsis">
+                In-runner image builds
+              </div>
+            </div>
+          </a>
+        
+        
+          
+          <a href="../p2p-image-distribution/" class="md-footer__link md-footer__link--next" aria-label="Next: P2P image distribution">
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Next
+              </span>
+              <div class="md-ellipsis">
+                P2P image distribution
+              </div>
+            </div>
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M4 11v2h12l-5.5 5.5 1.42 1.42L19.84 12l-7.92-7.92L10.5 5.5 16 11z"/></svg>
+            </div>
+          </a>
+        
+      </nav>
+    
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+    <div class="md-copyright__highlight">
+      Licensed under the Apache License 2.0.
+    </div>
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+        
+<div class="md-social">
+  
+    
+    
+    
+    
+    <a href="https://github.com/actions-gateway/github-actions-gateway" target="_blank" rel="noopener" title="GAG on GitHub" class="md-social__link">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+    </a>
+  
+    
+    
+    
+    
+    <a href="https://github.com/actions-gateway/github-actions-gateway/issues" target="_blank" rel="noopener" title="Questions &amp; issues" class="md-social__link">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2m0 14H5.2L4 17.2V4h16zM12.2 5.5c-.9 0-1.6.2-2.1.5-.6.4-.9 1-.8 1.7h2q0-.45.3-.6c.2-.1.4-.2.7-.2s.6.1.8.3.3.4.3.7-.1.5-.2.7c-.2.2-.4.4-.6.5-.5.3-.9.6-1.1.8-.4.3-.5.6-.5 1.1h2c0-.3.1-.5.1-.7.1-.2.3-.3.5-.5.5-.2.8-.5 1.1-.9s.4-.8.4-1.2c0-.7-.3-1.3-.8-1.7-.4-.3-1.2-.5-2.1-.5M11 12v2h2v-2z"/></svg>
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.tabs", "navigation.sections", "navigation.top", "navigation.tracking", "navigation.indexes", "navigation.footer", "toc.follow", "search.suggest", "search.highlight", "content.code.copy", "content.code.annotate", "content.tooltips"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"default": "stable", "provider": "mike"}}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+        <script src="../../javascripts/extra.js"></script>
+      
+    
+  </body>
+</html>
