@@ -230,7 +230,7 @@ Two we do not plan to match: the support entitlement, and `containerMode: kubern
   Read the scope exclusions before relying on it: Kubernetes orchestration, policy application, and template customization are explicitly out of scope, which is much of what a multi-tenant platform team actually pages about.
 - **`containerMode: kubernetes`**, which runs `container:` and `services:` steps as separate pods with a provisioned volume.
   GAG runs one worker pod per job, so that path is Docker-in-Docker (under Kata, unprivileged) rather than a non-privileged pod-per-step model.
-  **This one is a permanent decline, decided 2026-08-25**, because ARC's mechanism needs a Kubernetes API token inside the pod your workflow's own code runs in ([why, and what it would open](design/appendix-d-alternatives-considered.md#d15-pod-per-step-container-execution-arcs-containermode-kubernetes)).
+  **This one is a permanent decline, decided 2026-08-25**, because ARC's mechanism needs a pod-`create` grant that Kubernetes RBAC cannot scope below a namespace, in a namespace that also holds other runner sets' registration credentials ([why, and what it would open](design/appendix-d-alternatives-considered.md#d15-pod-per-step-container-execution-arcs-containermode-kubernetes)).
   Kata needs nested virtualization, so if you are on GKE Autopilot, on AMD or Arm nodes, or on an AWS family outside the supported Intel list, the honest answer is that you would need a platform-granted privileged template where ARC needed no privilege.
 - **GHES that is actually tested.** GAG serves GHES gateways and marks both of its GHES features untested against a real appliance.
 

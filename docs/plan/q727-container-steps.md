@@ -18,7 +18,8 @@ Taken 2026-08-25 against `main` at `f300f2a0b`.
 
 | Finding | Where |
 |---|---|
-| ARC's mechanism needs a Kubernetes API token *inside the runner pod*: the container hook is a process there, and the workflow's own code runs in the same pod | upstream `runner-container-hooks`; ARC capability measured 0.14.2, 2026-08-06 |
+| ARC's mechanism needs a pod-`create` grant for the runner's service account, and RBAC cannot scope `create` below a namespace: `resourceNames` does not restrict it | Kubernetes RBAC semantics; ARC capability measured 0.14.2, 2026-08-06 |
+| ARC runs many scale sets per namespace, so that grant reaches sibling sets' runner pods and JIT registration Secrets. Its own mitigation is that steps run in step pods rather than the runner pod, which GAG has no split to inherit | [migration-from-arc.md](../operations/migration-from-arc.md) comparison table |
 | GAG refuses that token twice: `RunnerTemplate` admission rejects `automountServiceAccountToken` and `serviceAccountName` as reserved, and the provisioner overwrites both after the tenant template merges | [`pod.go`](../../cmd/agc/internal/provisioner/pod.go), [`v2alpha1_crd_test.go`](../../cmd/agc/internal/controller/integration/v2alpha1_crd_test.go), [`pod_provisioning_test.go`](../../cmd/agc/internal/controller/integration/pod_provisioning_test.go) |
 | The control is rated Critical, and worker pods are described as holding no API server entry at all | [05-security.md](../design/05-security.md) |
 | A per-job Secret holding that job's `jitconfig` and acquired payload lives in the **tenant namespace**, so pod-`create` there lets one job mount another job's credentials | [`pod.go`](../../cmd/agc/internal/provisioner/pod.go) `buildSecret` |
@@ -33,8 +34,10 @@ The ARC-migration path *is* the scale-set path, because an ARC scale set becomes
 
 **A.
 Adopt ARC's mechanism.** Mount a pod-`create` token into the worker and point `ACTIONS_RUNNER_CONTAINER_HOOKS` at the upstream hooks.
-Smallest build of the three and the only one that is not open to being chosen: it reverses a Critical control for every worker in the system, and the per-job Secret layout turns it into a credential-theft path *between jobs of one tenant*, which namespace separation does not defend.
-Rejected on the security principle that a default may not trade away a security property, and no opt-in framing rescues it, because the token would have to exist wherever the capability is used, which is where untrusted code is.
+Smallest build of the three and the only one that is not open to being chosen.
+The grant cannot be narrowed, because RBAC has no sub-namespace `create` scope, and GAG puts many runner shapes plus every job's registration Secret in the one tenant namespace, so it is a credential-theft path *between jobs of one tenant* that namespace separation does not defend.
+ARC mitigates by running steps in step pods rather than the runner pod; GAG has one worker pod per job and so no split to inherit, which is option C rather than something adopting the hooks supplies.
+Rejected on the security principle that a default may not trade away a security property, and no opt-in framing rescues it, because the grant would have to exist wherever the capability is used.
 
 **B.
 Translate the job's containers at provisioning time.** Parse `jobContainer` and `jobServiceContainers` from the acquired payload, fold them into the worker pod as its container and sidecars, and strip them from the payload forwarded to the runner.
@@ -75,5 +78,10 @@ The gap is real for that population, and the trigger is an adopter reporting it,
 
 ## What this doc does not claim
 
-The hook protocol's verb set is read from the upstream repository and has not been exercised against a running ARC here, so C's cost is a design estimate rather than a measured one.
-Nothing in the decision turns on it: A was rejected on a credential requirement that holds however the hook is shaped, and B on an acquisition-path fact measured in this repo.
+The hook protocol's verb set, and the placement of step execution in step pods rather than the runner pod, are both read from the upstream repository and have not been exercised against a running ARC here.
+So C's cost is a design estimate rather than a measured one.
+Nothing in the decision turns on either: A was rejected on an RBAC property that holds however the hook is shaped, and B on an acquisition-path fact measured in this repo.
+
+**One correction is worth recording, because the first draft of this decision got it wrong.** It argued that ARC's token sits in the same pod the workflow's own code runs in.
+That is false for `containerMode: kubernetes` with a job container, which is the mode under discussion: the steps run in the step pods the hook creates.
+The argument that survives is narrower and stronger, and it is the one above: the grant is namespace-wide because RBAC offers nothing smaller, and both projects run many runner shapes per namespace.

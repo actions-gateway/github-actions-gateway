@@ -53,7 +53,7 @@ Q719 validated a `ReadWriteMany` volume mounted into the pod the provisioner rea
 What Q727 had left was the pod-per-step model itself.
 
 **The criterion admitted two answers, and the costing chose the second.** [Criterion 3](arc-parity.md#definition-of-done) closes either by the steps running without privilege, or by the docs stating plainly and permanently that Docker-in-Docker under Kata is the supported answer and why.
-The plan doc landed first as this section required, and [q727-container-steps.md](q727-container-steps.md) records what it found: ARC's mechanism needs a Kubernetes API token inside the pod the workflow's own code runs in, and GAG refuses that token at `RunnerTemplate` admission and again when the provisioner overwrites the tenant template.
+The plan doc landed first as this section required, and [q727-container-steps.md](q727-container-steps.md) records what it found: ARC's mechanism needs a pod-`create` grant that RBAC cannot scope below a namespace, and GAG refuses that token at `RunnerTemplate` admission and again when the provisioner overwrites the tenant template.
 Because a per-job Secret holding a job's `jitconfig` and payload sits in the tenant namespace, a pod-`create` right there would let one job take another job's credentials — an escalation between jobs of one tenant, not the tenant boundary namespaces already defend.
 The mechanism is therefore declined permanently rather than deferred; the durable rationale is [D.15](../design/appendix-d-alternatives-considered.md#d15-pod-per-step-container-execution-arcs-containermode-kubernetes).
 

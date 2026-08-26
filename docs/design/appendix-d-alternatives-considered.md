@@ -81,7 +81,7 @@ It is the most mature and widely-deployed alternative and the most relevant comp
   The `RunnerScaleSet` controller publishes a custom metric that KEDA or the built-in autoscaler can act on.
 * Broad adoption means community-tested Helm charts, pre-built container images, and an established set of known operational issues.
 * **`containerMode: kubernetes`** runs a job's `container:` and `services:` steps as separate unprivileged pods sharing a `ReadWriteMany` volume.
-  GAG has no equivalent and will not adopt this mechanism: it requires a Kubernetes API token inside the pod the workflow's own code runs in.
+  GAG has no equivalent and will not adopt this mechanism: it requires a namespace-wide pod-`create` grant in a namespace that holds other runner sets' registration credentials.
   The supported GAG answer is Docker-in-Docker under Kata, and the reasoning, the alternatives, and the population that answer does not serve are in [D.15](#d15-pod-per-step-container-execution-arcs-containermode-kubernetes).
 
 **Disadvantages**
@@ -417,15 +417,27 @@ The runner invokes that hook at job boundaries and at each container step; the h
 No pod needs `privileged: true`, which is the property that makes it worth wanting.
 The capability is measured against ARC `gha-runner-scale-set` 0.14.2 on 2026-08-06 ([arc-parity.md](../plan/arc-parity.md)); the hook's verb set is read from the upstream repository and has not been exercised against a running ARC here.
 
-**The mechanism requires the one credential GAG never issues.** The hook is an ordinary process inside the runner pod, the same pod the workflow's own code runs in, so its token is reachable by the job.
-GAG sets `automountServiceAccountToken: false` on every worker pod and enforces it in two places: `RunnerTemplate` admission rejects `automountServiceAccountToken` and `serviceAccountName` as reserved fields, and the provisioner overwrites both after the tenant `PodTemplate` merges ([`pod.go`](../../cmd/agc/internal/provisioner/pod.go), *Overwrite reserved fields (controller-enforced invariants)*).
+**The grant is namespace-wide, and Kubernetes offers no narrower one.** RBAC cannot scope `create` below a namespace: `resourceNames` does not restrict it, because the authorizer has no object name to match against at admission time.
+So "pod-`create` in the runner's own namespace" necessarily means "pod-`create` over everything in that namespace".
+ARC did not choose a loose grant; it is the only shape the primitive offers, which is why this section treats the property as structural rather than as a defect in ARC's implementation.
+
+**The assumption that makes it safe is one ordinary usage breaks.** The grant is defensible while a namespace holds a single trust domain.
+In practice a team runs several scale sets in one namespace because different CI checks need differently shaped runners, and GAG's own [migration table](../operations/migration-from-arc.md) records ARC's shape as many scale sets per namespace.
+Every runner pod in such a namespace can then create pods alongside the other sets' runner pods and their JIT registration Secrets, so a job on one shape can reach the registration credential of a shape serving a different repository.
+No configuration closes that, short of a namespace per runner shape, which removes the reason the sets were grouped.
+
+**ARC's own mitigation does not transfer.** Under `containerMode: kubernetes` the job's steps run in the step pods the hook creates rather than in the runner pod, so the token does not sit beside ordinary `run:` execution.
+That is a real property of the mode and worth stating plainly.
+GAG has no job-container split to inherit it from: one worker pod per job *is* where the steps run, so a token placed there would sit with the job's own code.
+Building the split is the deferred design ([Q998](../queue/Q998.md)), not something adopting the hooks would come with.
+
+**GAG's layout makes the same grant sharper.** GAG stages one Secret per job in the tenant's namespace, holding that job's `jitconfig`, its runner registration credential, and its acquired payload, which carries the job-scoped auth token.
+It also institutionalizes many shapes per namespace: one `RunnerTemplate` is referenced by many `RunnerSet`s, all in the tenant namespace.
+The condition ARC's model needs is therefore false by construction here, and the blast radius is every concurrent job of the same tenant rather than the tenant boundary namespace separation already defends.
+
+**Which is why the invariant holds.** GAG sets `automountServiceAccountToken: false` on every worker pod and enforces it in two places: `RunnerTemplate` admission rejects `automountServiceAccountToken` and `serviceAccountName` as reserved fields, and the provisioner overwrites both after the tenant `PodTemplate` merges ([`pod.go`](../../cmd/agc/internal/provisioner/pod.go), *Overwrite reserved fields (controller-enforced invariants)*).
 Both layers are pinned by tests, and [§5](05-security.md) rates the control Critical: worker pods hold "no API server entry at all".
 Adopting ARC's mechanism means reversing that Critical control for every worker pod in the system, not relaxing it for the jobs that ask.
-
-**The escalation it would open is between jobs, not only between tenants.** This is the part that does not generalize from ARC's own threat model.
-GAG stages one Secret per job in the tenant's namespace, holding that job's `jitconfig`, its runner registration credential, and its acquired payload, which carries the job-scoped auth token.
-A pod-`create` right in that namespace is therefore enough for one job to mount another job's Secret and act as it.
-The blast radius is every concurrent job of the same tenant, not the tenant boundary that namespace separation already defends.
 
 **Translating the job's containers at provisioning time is not a substitute.** GitHub sends `jobContainer` and `jobServiceContainers` as top-level fields of the `AcquireJob` response, visible in the committed capture at [`testdata/job_payload.json`](../../testdata/job_payload.json) and null there only because the probe workflow declares neither, so on the classic acquisition path the AGC does hold the job's container definitions before it builds the pod, and could fold them into the pod spec as a container and sidecars.
 That path is not the one this gap is about.

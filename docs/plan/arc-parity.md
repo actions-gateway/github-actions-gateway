@@ -24,7 +24,7 @@ Measured against ARC `gha-runner-scale-set` 0.14.2 (released 2026-05-22) and the
 
 | Gap | Why it blocks a migration | Row | Release |
 |---|---|---|---|
-| **`containerMode: kubernetes`** | Runs `container:` and `services:` steps as separate pods on a provisioned volume. ✅ **Resolved 2026-08-25 as a permanent decline** (Q727): ARC's mechanism needs a Kubernetes API token inside the pod the workflow's code runs in, which GAG never issues. Docker-in-Docker under Kata is the supported answer; the population that cannot run Kata is named in [D.15](../design/appendix-d-alternatives-considered.md#d15-pod-per-step-container-execution-arcs-containermode-kubernetes), and the costing is in [q727-container-steps.md](q727-container-steps.md) | [Q998](../queue/Q998.md), deferred | 1.6 |
+| **`containerMode: kubernetes`** | Runs `container:` and `services:` steps as separate pods on a provisioned volume. ✅ **Resolved 2026-08-25 as a permanent decline** (Q727): ARC's mechanism needs a pod-`create` grant RBAC cannot scope below a namespace, and GAG puts many runner shapes plus every job's registration Secret in that namespace. Docker-in-Docker under Kata is the supported answer; the population that cannot run Kata is named in [D.15](../design/appendix-d-alternatives-considered.md#d15-pod-per-step-container-execution-arcs-containermode-kubernetes), and the costing is in [q727-container-steps.md](q727-container-steps.md) | [Q998](../queue/Q998.md), deferred | 1.6 |
 | **GHES validated on a real appliance** | GAG serves GitHub Enterprise Server (GHES) gateways and marks both of its GHES capabilities untested against real hardware, so an enterprise evaluator has no evidence either way | [Q765](../queue/Q765.md) | unscheduled, needs an appliance |
 
 ## What is deliberately not parity
@@ -45,7 +45,7 @@ Until Q719 nothing validated an RWX volume mounted into a worker, so the stance 
 That substrate now exists: [worker-shared-storage.md](../operations/worker-shared-storage.md) is the reference architecture, and `make test-rwx-storage` runs the pod the provisioner really builds across two nodes against a live class ([testing.md § The shared worker storage validation](../development/testing.md#the-shared-worker-storage-validation)).
 Q727 was decided against it on 2026-08-25, and the storage half turned out not to be what settled the question.
 
-**What the sequencing exposed is that the blocker was never storage.** With the volume validated, the remaining obstacle was the credential ARC's mechanism needs — a Kubernetes API token inside the pod the workflow's own code runs in — which GAG refuses at admission and again at pod creation.
+**What the sequencing exposed is that the blocker was never storage.** With the volume validated, the remaining obstacle was the credential ARC's mechanism needs: a pod-`create` grant RBAC cannot scope below a namespace, which GAG refuses at admission and again at pod creation.
 The two properties the RWX validation established still bind any future pod-per-step path: the volume half is an ordinary namespaced claim a tenant already controls, and the runner's write depends on `fsGroup` matching the gap-filled UID, so every created pod has to carry that field.
 They are recorded against [Q998](../queue/Q998.md), which carries the deferred design ([q727-container-steps.md](q727-container-steps.md) has the costing).
 
