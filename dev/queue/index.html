@@ -2770,14 +2770,6 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/ci/run-parallel-test.sh"><code>run-parallel-test.sh:184</code></a> asserts <code>^\[run-parallel\] +[01]s +quick$</code>, and line 180 sets the …</td>
 </tr>
 <tr>
-<td><a href="Q727/">Q727</a></td>
-<td><a href="../plan/arc-parity/#the-collision-the-individual-rows-do-not-state">A non-privileged path for <code>container:</code> and <code>services:</code> steps</a></td>
-<td><code>feature</code> <code>1.6-gate</code></td>
-<td>🔲</td>
-<td>L</td>
-<td>ARC's <code>containerMode: kubernetes</code> runs them as separate pods with a provisioned volume.</td>
-</tr>
-<tr>
 <td><a href="Q972/">Q972</a></td>
 <td>Refund the scale-up token when a deduped listener loses the race</td>
 <td><code>debt</code></td>
@@ -3744,6 +3736,14 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>🔲</td>
 <td>S</td>
 <td>Measured 2026-08-18: <code>make docs-gates</code> runs neither <code>queue-lint</code> nor <code>queue-rules-check</code> (zero "queue" in its output), so a session that …</td>
+</tr>
+<tr>
+<td><a href="Q998/">Q998</a></td>
+<td><a href="../plan/q727-container-steps/">Broker-mediated pod-per-step <code>container:</code> and <code>services:</code> execution</a></td>
+<td><code>feature</code> <code>security</code></td>
+<td>💤</td>
+<td>L</td>
+<td><strong>Demand:</strong> an adopter who cannot run Kata reports the gap.</td>
 </tr>
 <tr>
 <td><a href="Q947/">Q947</a></td>

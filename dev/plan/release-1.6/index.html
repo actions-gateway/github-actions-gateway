@@ -2608,10 +2608,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#the-gating-row-q727-and-why-the-decision-comes-after-the-plan-doc" class="md-nav__link">
+  <a href="#the-gating-row-q727-decided-as-a-documented-decline" class="md-nav__link">
     <span class="md-ellipsis">
       
-        The gating row: Q727, and why the decision comes after the plan doc
+        The gating row: Q727, decided as a documented decline
       
     </span>
   </a>
@@ -2696,8 +2696,9 @@
 <h1 id="release-16-milestone-definition">Release 1.6 Milestone Definition<a class="headerlink" href="#release-16-milestone-definition" title="Permanent link">&para;</a></h1>
 <blockquote>
 <p><strong>Status: scope decided 2026-08-25.</strong> 1.6 is the <a href="../arc-parity/">ARC parity</a> release the <a href="../release-ladder/">ladder</a> assigned it, narrowed to one gating row.
-Q719 closed 2026-08-24, leaving its reference architecture behind in <a href="../../operations/worker-shared-storage/">worker-shared-storage.md</a>, so <a href="../../queue/Q727/">Q727</a> is the only <code>1.6-gate</code> row left.
-Q727 resolves through a plan doc before it resolves through code, and that plan doc is what decides whether the parity criterion closes as a build or as a documented decline.
+Q719 closed 2026-08-24, leaving its reference architecture behind in <a href="../../operations/worker-shared-storage/">worker-shared-storage.md</a>, and Q727 — the last <code>1.6-gate</code> row — closed 2026-08-25.
+Its plan doc (<a href="../q727-container-steps/">q727-container-steps.md</a>) costed the build against the decline and chose the decline, so 1.6's parity content is a docs change on top of nine merged features.
+Every gating row is now closed; what remains is the docs sweep, the API surface review, and release mechanics.
 The bump is not in question: <code>semver-floor.sh v1.5.0</code> already reports <strong>MINOR</strong> off work that merged before this scope was written.
 Untrusted-PR CI on Kata was weighed for this release and moved to 1.7 on 2026-08-25.</p>
 </blockquote>
@@ -2783,22 +2784,25 @@ This is what the release contains today, with no gating row closed.</p>
 It is the first of the four proxy-hardening items <a href="../release-1.4/#deferred-out-of-14-and-why">release-1.4.md</a> shelved as a coherent theme with no demand recorded against any of them.
 Its demand arrived as <a href="../../queue/Q725/">Q725</a>, the ladder recorded the revive on 2026-08-13, and it shipped.
 The remaining three (<a href="../../queue/Q565/">Q565</a>, <a href="../../queue/Q566/">Q566</a>, <a href="../../queue/Q567/">Q567</a>) stay parked, which is the trigger list working rather than the theme dissolving.</p>
-<h2 id="the-gating-row-q727-and-why-the-decision-comes-after-the-plan-doc">The gating row: Q727, and why the decision comes after the plan doc<a class="headerlink" href="#the-gating-row-q727-and-why-the-decision-comes-after-the-plan-doc" title="Permanent link">&para;</a></h2>
-<p><a href="../../queue/Q727/">Q727</a> is the last open row on the <a href="../arc-parity/">ARC parity</a> short list that a scheduled release can close.
+<h2 id="the-gating-row-q727-decided-as-a-documented-decline">The gating row: Q727, decided as a documented decline<a class="headerlink" href="#the-gating-row-q727-decided-as-a-documented-decline" title="Permanent link">&para;</a></h2>
+<p><strong>Resolved 2026-08-25.</strong> Q727 was the last open row on the <a href="../arc-parity/">ARC parity</a> short list that a scheduled release could close.
 ARC's <code>containerMode: kubernetes</code> runs <code>container:</code> and <code>services:</code> steps as separate pods on a provisioned volume.
 GAG runs one worker pod per job, so that path is Docker-in-Docker under Kata rather than a non-privileged pod-per-step model.</p>
 <p>The storage half is settled.
 Q719 validated a <code>ReadWriteMany</code> volume mounted into the pod the provisioner really builds, across two nodes against a live class, and wrote <a href="../../operations/worker-shared-storage/">worker-shared-storage.md</a>.
-What Q727 has left is the pod-per-step model itself.</p>
-<p><strong>The parity criterion admits two answers and the choice is not pre-made.</strong> <a href="../arc-parity/#definition-of-done">Criterion 3</a> closes either by the steps running without privilege, or by the docs stating plainly and permanently that Docker-in-Docker under Kata is the supported answer and why.
-Q727 is size <code>L</code> and has never had a plan doc, so neither answer has been costed.
-Committing to the build now would commit the release to an uncosted <code>L</code> and to a second execution model maintained beside the Kata one; committing to the decline now would foreclose without looking.
-So the first deliverable is the phased plan doc the backlog conventions already require of an <code>L</code>, and the scope line below stays open until it lands.</p>
+What Q727 had left was the pod-per-step model itself.</p>
+<p><strong>The criterion admitted two answers, and the costing chose the second.</strong> <a href="../arc-parity/#definition-of-done">Criterion 3</a> closes either by the steps running without privilege, or by the docs stating plainly and permanently that Docker-in-Docker under Kata is the supported answer and why.
+The plan doc landed first as this section required, and <a href="../q727-container-steps/">q727-container-steps.md</a> records what it found: ARC's mechanism needs a pod-<code>create</code> grant that RBAC cannot scope below a namespace, and GAG refuses that token at <code>RunnerTemplate</code> admission and again when the provisioner overwrites the tenant template.
+Because a per-job Secret holding a job's <code>jitconfig</code> and payload sits in the tenant namespace, a pod-<code>create</code> right there would let one job take another job's credentials — an escalation between jobs of one tenant, not the tenant boundary namespaces already defend.
+The mechanism is therefore declined permanently rather than deferred; the durable rationale is <a href="../../design/appendix-d-alternatives-considered/#d15-pod-per-step-container-execution-arcs-containermode-kubernetes">D.15</a>.</p>
+<p><strong>Pod-per-step as a capability is deferred, not declined.</strong> A broker-mediated design that keeps the token invariant — a GAG hooks implementation asking the AGC for step pods — was costed and is <a href="../../queue/Q998/">Q998</a>, behind a demand trigger.
+The two paths that were not chosen, and why, are in the plan doc's options table.</p>
 <p><strong>The fact the decline turns on.</strong> A decline is honest exactly where Kata is available, and Kata needs nested virtualization.
 Measured against the GCP API on 2026-08-02 and recorded in <a href="../../operations/kata-dind-workloads/#prerequisite--nested-virtualization-nodes">kata-dind-workloads.md § Prerequisite</a>, GKE Standard takes the flag on A2, A3, C2, C3, C4, C4D, C4N, G2, H3, H4D, N1, N2, N4, N4D, Z3 and M4, which includes the GPU families; E2, C2D and N2D are absent, and Autopilot does not allow it at all.
 On AWS it is a per-instance opt-in confined to selected Intel families, so an AMD, Graviton or GPU instance means <code>.metal</code> or nothing (<a href="../../operations/runner-template-library/">runner-template-library.md</a>).
-A team on Autopilot, on AMD or Arm nodes, or on most AWS fleets therefore has no Kata, and a decline hands them <code>privileged-dind</code> where their ARC setup needed no privilege at all.
-Whatever the plan doc concludes, that population has to be named rather than left to a reader to discover.</p>
+A team on Autopilot, on AMD or Arm nodes, or on most AWS fleets therefore has no Kata, and a decline hands them <code>privileged-dind</code> where their ARC setup needed no <em>pod</em> privilege.
+That comparison flatters ARC if it stops there: ARC buys the unprivileged pod with a namespace-wide API grant that needs no exploit to use, so the choice is between two privileges rather than between privilege and none.
+That population is named as the decline's cost, on every comparison surface that claims the gap and in <a href="../../design/appendix-d-alternatives-considered/#d15-pod-per-step-container-execution-arcs-containermode-kubernetes">D.15</a>.</p>
 <h2 id="where-the-arc-parity-definition-of-done-stands">Where the ARC parity definition of done stands<a class="headerlink" href="#where-the-arc-parity-definition-of-done-stands" title="Permanent link">&para;</a></h2>
 <p>All four criteria are in <a href="../arc-parity/#definition-of-done">arc-parity.md</a>; two closed in 1.5 and one is satisfied in its declared fallback form.</p>
 <table>
@@ -2819,7 +2823,7 @@ Whatever the plan doc concludes, that population has to be named rather than lef
 </tr>
 <tr>
 <td>3. <code>container:</code> and <code>services:</code> run without privilege, or a permanent documented decline</td>
-<td>❌ <a href="../../queue/Q727/">Q727</a>, this release</td>
+<td>✅ Closed by Q727, 2026-08-25, in its decline form</td>
 </tr>
 <tr>
 <td>4. The GHES claims carry evidence</td>
@@ -2863,9 +2867,9 @@ Both positions are defensible and they cannot both stand as written.</p>
 </ul>
 <h2 id="definition-of-done">Definition of done<a class="headerlink" href="#definition-of-done" title="Permanent link">&para;</a></h2>
 <ol>
-<li><strong>Q727 resolved</strong>, by a merged pod-per-step implementation or by a merged documented decline that names the no-Kata population.
-   The plan doc lands first and the choice is recorded in it.</li>
-<li><strong><code>arc-parity.md</code> criterion 3 flipped</strong>, and its row in <a href="../">docs/plan/README.md</a> with it.</li>
+<li><strong>Q727 resolved.</strong> ✅ 2026-08-25, by a merged documented decline naming the no-Kata population (<a href="../q727-container-steps/">q727-container-steps.md</a>, <a href="../../design/appendix-d-alternatives-considered/#d15-pod-per-step-container-execution-arcs-containermode-kubernetes">D.15</a>).
+   The residual capability is deferred as <a href="../../queue/Q998/">Q998</a>.</li>
+<li><strong><code>arc-parity.md</code> criterion 3 flipped</strong>, and its row in <a href="../">docs/plan/README.md</a> with it. ✅ 2026-08-25, in the same change.</li>
 <li><strong>The docs sweep.</strong> Nine user-facing changes merged before any gating row, and <a href="../../operations/release/#1-pre-flight">release.md § Pre-flight</a> question 1 exists to catch a feature that reaches <code>features.md</code> and stops there.
    Q564 in particular adds an operator-visible field and a log format.</li>
 <li><strong>The API surface review</strong>, from <code>scripts/release/api-surface-since.sh</code> over <code>v1.5.0..&lt;rc commit&gt;</code>.
@@ -2873,16 +2877,15 @@ Both positions are defensible and they cannot both stand as written.</p>
 <li><strong>Release mechanics</strong>: a candidate tagged, artifacts verified, and the dogfood validation in <a href="../../operations/release/">release.md</a> passing on the candidate that becomes the tag.</li>
 </ol>
 <h2 id="critical-path">Critical path<a class="headerlink" href="#critical-path" title="Permanent link">&para;</a></h2>
-<p>Q727's plan doc is the only thing between here and a decided scope.
-Everything else in the release is merged.</p>
+<p>Scope is decided and every gating row is closed.</p>
 <ol>
-<li>Q727 plan doc: cost the pod-per-step build against the decline, and record the choice.</li>
-<li>Q727 executed, whichever way that went.</li>
+<li>~~Q727 plan doc: cost the pod-per-step build against the decline, and record the choice.~~ ✅ 2026-08-25.</li>
+<li>~~Q727 executed.~~ ✅ 2026-08-25, as the decline.</li>
 <li>Docs sweep and the pre-flight questions.</li>
 <li>Candidate, validation, tag.</li>
 </ol>
-<p>Step 1 is the one that can change this document.
-If it concludes in a decline, 1.6's parity content is a docs change on top of nine merged features, which is a real minor and a thin theme, and that is worth saying out loud at the tag rather than discovering in the notes.</p>
+<p>The decline is what it concluded, so 1.6's parity content is a docs change on top of nine merged features.
+That is a real minor and a thin theme, and it is worth saying out loud at the tag rather than discovering in the notes.</p>
 
 
 

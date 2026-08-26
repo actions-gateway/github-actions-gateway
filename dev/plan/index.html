@@ -2760,7 +2760,7 @@ A plan with only deferred residuals is ✅, not ⚠️ — see <a href="../devel
 <tr>
 <td><a href="release-1.6/">release-1.6.md</a></td>
 <td>The 1.6 release gate: the last <a href="arc-parity/">ARC parity</a> row a scheduled release can close (Q727, the non-privileged <code>container:</code> path), the nine merged changes the release already carries, and why untrusted-PR CI moved to 1.7</td>
-<td>❌ Open. Scope decided 2026-08-25. <code>semver-floor.sh v1.5.0</code> already reports MINOR off merged work, so the bump is not in question. <a href="../queue/Q727/">Q727</a> is the sole <code>1.6-gate</code> row and resolves through a plan doc first, which decides whether parity criterion 3 closes as a build or as a documented decline; Q719 closed 2026-08-24 and settled the storage half. Criterion 4 needs no work: <a href="../queue/Q765/">Q765</a>'s appliance trigger has not fired and the untested markers that satisfy its fallback are intact</td>
+<td>❌ Open, but every gating row is closed. Scope decided 2026-08-25. <code>semver-floor.sh v1.5.0</code> already reports MINOR off merged work, so the bump is not in question. Q727 closed 2026-08-25 as a permanent decline of ARC's <code>containerMode: kubernetes</code> mechanism, costed in <a href="q727-container-steps/">q727-container-steps.md</a>, which makes 1.6's parity content a docs change on top of nine merged features; Q719 closed 2026-08-24 and settled the storage half. Criterion 4 needs no work: <a href="../queue/Q765/">Q765</a>'s appliance trigger has not fired and the untested markers that satisfy its fallback are intact. What remains is the docs sweep, the API surface review, and release mechanics</td>
 </tr>
 <tr>
 <td><a href="v2-ga/">v2-ga.md</a></td>
@@ -2832,12 +2832,17 @@ A plan with only deferred residuals is ✅, not ⚠️ — see <a href="../devel
 <tr>
 <td><a href="release-ladder/">release-ladder.md</a></td>
 <td>The map between the individual release plans: how many releases stand between here and <code>v2.0.0</code>, what each carries, why 1.6 exists rather than folding into 1.5, and what is deliberately punted past 2.0 with the signal each waits on</td>
-<td>ⓘ Ongoing goal doc. Shape decided 2026-08-09 as 1.5 → 1.6 → 2.0, and re-themed 2026-08-25 to 1.5 → 1.6 → 1.7 → 2.0 when untrusted-PR CI moved off the 1.6 rung (<a href="release-1.6/">release-1.6.md</a>). Establishes what the roadmap's near-term section means, applied 2026-08-09 (seven items parked to Deferred, Q719 and <a href="../queue/Q727/">Q727</a> gated to 1.6; Q719 closed 2026-08-24) and narrowed 2026-08-18 to "not waiting on an outside signal" once two revive triggers fired</td>
+<td>ⓘ Ongoing goal doc. Shape decided 2026-08-09 as 1.5 → 1.6 → 2.0, and re-themed 2026-08-25 to 1.5 → 1.6 → 1.7 → 2.0 when untrusted-PR CI moved off the 1.6 rung (<a href="release-1.6/">release-1.6.md</a>). Establishes what the roadmap's near-term section means, applied 2026-08-09 (seven items parked to Deferred, Q719 and Q727 gated to 1.6; Q719 closed 2026-08-24) and narrowed 2026-08-18 to "not waiting on an outside signal" once two revive triggers fired</td>
 </tr>
 <tr>
 <td><a href="arc-parity/">arc-parity.md</a></td>
 <td>The umbrella goal for the short list where a team on ARC cannot migrate without editing workflows or losing a capability: the measured gap inventory, what is deliberately never parity, and why <code>containerMode</code> waited on RWX storage</td>
-<td>ⓘ Ongoing goal doc. Q712 and Q726 closed 2026-08-11 and Q719 closed 2026-08-24, unblocking <a href="../queue/Q727/">Q727</a>; <a href="../queue/Q765/">Q765</a> needs an appliance</td>
+<td>ⓘ Ongoing goal doc. All four criteria are now closed: two by build in 1.5 (Q712, Q726, 2026-08-11) and two by decision. Q719 closed 2026-08-24 and Q727 closed 2026-08-25 as a permanent decline (<a href="q727-container-steps/">q727-container-steps.md</a>); the sequencing exposed that the blocker was never storage but the API token ARC's hook needs inside the worker. <a href="../queue/Q765/">Q765</a> needs an appliance and <a href="../queue/Q998/">Q998</a> carries the deferred pod-per-step design</td>
+</tr>
+<tr>
+<td><a href="q727-container-steps/">q727-container-steps.md</a></td>
+<td>The Q727 decision record: why ARC's <code>containerMode: kubernetes</code> mechanism cannot be adopted, the four options costed against it, and what the decline costs the population that cannot run Kata</td>
+<td>✅ Decided 2026-08-25 as a permanent decline of the mechanism, with Docker-in-Docker under Kata as the supported answer. The durable rationale is promoted to <a href="../design/appendix-d-alternatives-considered/#d15-pod-per-step-container-execution-arcs-containermode-kubernetes">D.15</a>. Not archived: <a href="../queue/Q998/">Q998</a> carries the deferred broker-mediated design and still references it</td>
 </tr>
 <tr>
 <td><a href="q408-untrusted-pr-egress/">q408-untrusted-pr-egress.md</a></td>

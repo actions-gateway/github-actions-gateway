@@ -3167,13 +3167,17 @@ The loop only closes inside the controller that builds the pods.
 <h2 id="where-arc-is-ahead">Where ARC is ahead<a class="headerlink" href="#where-arc-is-ahead" title="Permanent link">&para;</a></h2>
 <p>Some of it is capability, not only maturity.
 Measured 2026-08-06.
-Each gap below is tracked, and what closes it and when is on the <a href="../roadmap/">public roadmap</a>; the support entitlement is the one we do not plan to match.</p>
+Each gap below is tracked, and what closes it and when is on the <a href="../roadmap/">public roadmap</a>.
+Two we do not plan to match: the support entitlement, and <code>containerMode: kubernetes</code>, whose mechanism is declined for the reason given below.</p>
 <ul>
 <li><strong>A GitHub Support entitlement</strong>, covering ARC installed via the official Helm charts, GitHub Enterprise Server 3.9 and later.
   GAG has none.
   Read the scope exclusions before relying on it: Kubernetes orchestration, policy application, and template customization are explicitly out of scope, which is much of what a multi-tenant platform team actually pages about.</li>
 <li><strong><code>containerMode: kubernetes</code></strong>, which runs <code>container:</code> and <code>services:</code> steps as separate pods with a provisioned volume.
-  GAG runs one worker pod per job, so that path is Docker-in-Docker (under Kata, unprivileged) rather than a non-privileged pod-per-step model.</li>
+  GAG runs one worker pod per job, so that path is Docker-in-Docker (under Kata, unprivileged) rather than a non-privileged pod-per-step model.
+  <strong>This one is a permanent decline, decided 2026-08-25</strong>, because ARC's mechanism needs a pod-<code>create</code> grant that Kubernetes RBAC cannot scope below a namespace, in a namespace that also holds other runner sets' registration credentials (<a href="../design/appendix-d-alternatives-considered/#d15-pod-per-step-container-execution-arcs-containermode-kubernetes">why, and what it would open</a>).
+  Kata needs nested virtualization, so if you are on GKE Autopilot, on AMD or Arm nodes, or on an AWS family outside the supported Intel list, the honest answer is that you would need a platform-granted privileged template.
+  That is a real cost, and it is a trade rather than a straight loss: ARC needs no <em>pod</em> privilege there because it takes a namespace-wide Kubernetes API grant instead, which needs no exploit to use and reaches the other runner sets in that namespace.</li>
 <li><strong>GHES that is actually tested.</strong> GAG serves GHES gateways and marks both of its GHES features untested against a real appliance.</li>
 </ul>
 <p>The maturity gap is real too: ARC is GA and widely deployed, while GAG's v2 API has only just reached beta (<code>v2beta1</code>, its first stability contract).

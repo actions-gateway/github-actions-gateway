@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q727/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q998/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>A non-privileged path for container: and services: steps - GitHub Actions Gateway</title>
+        <title>Broker-mediated pod-per-step container: and services: execution - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#a-non-privileged-path-for-container-and-services-steps" class="md-skip">
+        <a href="#broker-mediated-pod-per-step-container-and-services-execution" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              A non-privileged path for container: and services: steps
+              Broker-mediated pod-per-step container: and services: execution
             
           </span>
         </div>
@@ -2597,10 +2597,14 @@
   
 
 
-<h1 id="a-non-privileged-path-for-container-and-services-steps">A non-privileged path for <code>container:</code> and <code>services:</code> steps<a class="headerlink" href="#a-non-privileged-path-for-container-and-services-steps" title="Permanent link">&para;</a></h1>
-<p>ARC's <code>containerMode: kubernetes</code> runs them as separate pods with a provisioned volume.
-GAG runs one worker pod per job, so the path is DinD, unprivileged only under Kata.
-Unblocked 2026-08-24: Q719 validated RWX and wrote <a href="../../operations/worker-shared-storage/">worker-shared-storage.md</a>, so the volume half is settled and this is the pod-per-step model alone.</p>
+<h1 id="broker-mediated-pod-per-step-container-and-services-execution">Broker-mediated pod-per-step <code>container:</code> and <code>services:</code> execution<a class="headerlink" href="#broker-mediated-pod-per-step-container-and-services-execution" title="Permanent link">&para;</a></h1>
+<p><strong>Demand:</strong> an adopter who cannot run Kata reports the gap.
+Q727 declined ARC's <code>containerMode: kubernetes</code> permanently on 2026-08-25: its hook needs a pod-<code>create</code> grant RBAC cannot scope below a namespace, and GAG puts many runner shapes plus every job's registration Secret in that one namespace, so the grant is a credential-theft path between jobs.
+Docker-in-Docker under Kata is the supported answer, and it needs nested virtualization, which GKE Autopilot, GKE E2/C2D/N2D, and every AMD, Graviton, or GPU EC2 family cannot provide.
+That population gets a platform-granted privileged template where ARC needed no <em>pod</em> privilege, having taken a namespace-wide API grant instead, and closing that trade is what this row is for.
+The design keeps the token invariant: a GAG container-hooks implementation in the worker requests step pods from the AGC, so the AGC stays the only component that creates pods.
+Costed in the plan doc: it needs an authenticated worker-to-AGC endpoint reachable from untrusted job code through a NetworkPolicy that today allows the per-tenant proxy alone, plus step-pod lifecycle, quota accounting, and <code>fsGroup</code> propagation.
+Serves both acquisition paths, unlike a provisioning-time translation, because the hook runs at job time.</p>
 
 
 

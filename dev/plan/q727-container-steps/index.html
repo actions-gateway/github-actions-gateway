@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/plan/arc-parity/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/plan/q727-container-steps/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>ARC Feature Parity - GitHub Actions Gateway</title>
+        <title>Q727: A Non-Privileged Path for container: and services: Steps - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#arc-feature-parity" class="md-skip">
+        <a href="#q727-a-non-privileged-path-for-container-and-services-steps" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              ARC Feature Parity
+              Q727: A Non-Privileged Path for container: and services: Steps
             
           </span>
         </div>
@@ -2586,10 +2586,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#why-this-is-a-goal-and-why-parity-is-the-wrong-word-for-most-of-it" class="md-nav__link">
+  <a href="#the-question" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Why this is a goal, and why "parity" is the wrong word for most of it
+        The question
       
     </span>
   </a>
@@ -2597,10 +2597,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#where-arc-is-actually-ahead" class="md-nav__link">
+  <a href="#what-was-measured" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Where ARC is actually ahead
+        What was measured
       
     </span>
   </a>
@@ -2608,10 +2608,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#what-is-deliberately-not-parity" class="md-nav__link">
+  <a href="#the-options-costed" class="md-nav__link">
     <span class="md-ellipsis">
       
-        What is deliberately not parity
+        The options, costed
       
     </span>
   </a>
@@ -2619,10 +2619,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#the-collision-the-individual-rows-do-not-state" class="md-nav__link">
+  <a href="#the-decision" class="md-nav__link">
     <span class="md-ellipsis">
       
-        The collision the individual rows do not state
+        The decision
       
     </span>
   </a>
@@ -2630,10 +2630,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#definition-of-done" class="md-nav__link">
+  <a href="#what-shipped" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Definition of done
+        What shipped
       
     </span>
   </a>
@@ -2641,32 +2641,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#explicitly-out-of-scope" class="md-nav__link">
+  <a href="#what-this-doc-does-not-claim" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Explicitly out of scope
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#what-the-site-may-claim-today" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        What the site may claim today
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#keeping-this-current" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Keeping this current
+        What this doc does not claim
       
     </span>
   </a>
@@ -2693,99 +2671,107 @@
   
 
 
-<h1 id="arc-feature-parity">ARC Feature Parity<a class="headerlink" href="#arc-feature-parity" title="Permanent link">&para;</a></h1>
+<h1 id="q727-a-non-privileged-path-for-container-and-services-steps">Q727: A Non-Privileged Path for <code>container:</code> and <code>services:</code> Steps<a class="headerlink" href="#q727-a-non-privileged-path-for-container-and-services-steps" title="Permanent link">&para;</a></h1>
 <blockquote>
-<p><strong>Status: goal stated 2026-08-09; all four criteria are now closed — two by build in 1.5, two by decision.</strong> This is a map and a definition of done, not a design.
-Q727, the <a href="../release-1.6/">1.6 gate</a>, closed on 2026-08-25 as a permanent decline of ARC's <code>containerMode: kubernetes</code> mechanism (<a href="../q727-container-steps/">q727-container-steps.md</a>).
-No row remains that a scheduled release can close: the residual capability is <a href="../../queue/Q998/">Q998</a> behind a demand trigger, and <a href="../../queue/Q765/">Q765</a> waits on hardware.
-The inventory below is only as good as its last measurement against a real ARC release, which is why every row carries a version and a date.</p>
+<p><strong>Status: decided 2026-08-25.
+ARC's mechanism is declined permanently; Docker-in-Docker under Kata is the supported answer.</strong> The residual, a broker-mediated pod-per-step path that would serve adopters who cannot run Kata, is deferred as <a href="../../queue/Q998/">Q998</a> with a demand trigger.
+The durable rationale is promoted to <a href="../../design/appendix-d-alternatives-considered/#d15-pod-per-step-container-execution-arcs-containermode-kubernetes">appendix-d-alternatives-considered.md § D.15</a>; this doc records the costing that produced the decision.</p>
 </blockquote>
-<h2 id="why-this-is-a-goal-and-why-parity-is-the-wrong-word-for-most-of-it">Why this is a goal, and why "parity" is the wrong word for most of it<a class="headerlink" href="#why-this-is-a-goal-and-why-parity-is-the-wrong-word-for-most-of-it" title="Permanent link">&para;</a></h2>
-<p>GitHub Actions Gateway (GAG) is positioned as an Actions Runner Controller (ARC) alternative, so every capability ARC has and GAG does not is a migration blocker for somebody.
-That is a narrower claim than "catch up with ARC".
-Most of the ARC surface is already at parity or a GAG superset, recorded per capability in <a href="../../why-gag/">why-gag.md</a>; the decomposed v2 API deliberately diverges from ARC's single-CR shape, and that divergence is the product.</p>
-<p>What matters is the short list where a team running ARC today cannot move without changing their workflows or losing a capability.
-This plan owns that list, keeps it measured, and sequences it across releases.</p>
-<p>It exists because the list had no owner.
-The 2026-08-06 competitive review found 11 rows in <code>why-gag.md</code> asserting an ARC gap with no version and no measurement date, and two of them had gone false at datable upstream releases without anyone noticing.
-The corrections shipped; the <em>forward</em> half, deciding which gaps GAG closes and when, was never written down.</p>
-<h2 id="where-arc-is-actually-ahead">Where ARC is actually ahead<a class="headerlink" href="#where-arc-is-actually-ahead" title="Permanent link">&para;</a></h2>
-<p>Measured against ARC <code>gha-runner-scale-set</code> 0.14.2 (released 2026-05-22) and the <code>master</code> branch, on 2026-08-06.</p>
+<h2 id="the-question">The question<a class="headerlink" href="#the-question" title="Permanent link">&para;</a></h2>
+<p><a href="../arc-parity/#definition-of-done">arc-parity.md criterion 3</a> closes two ways: <code>container:</code> and <code>services:</code> steps run without privilege, or the docs state plainly and permanently that Docker-in-Docker under Kata is the supported answer and why.
+Q727 was filed as a decision rather than a design, and <a href="../release-1.6/#the-gating-row-q727-decided-as-a-documented-decline">release-1.6.md</a> made this doc the first deliverable so the choice would be an output of a costing rather than an input to one.</p>
+<p>Q719 settled the storage half on 2026-08-24 with a <code>ReadWriteMany</code> volume mounted into the pod the provisioner really builds, validated across two nodes against a live class (<a href="../../operations/worker-shared-storage/">worker-shared-storage.md</a>).
+What was left is the pod-per-step execution model itself.</p>
+<h2 id="what-was-measured">What was measured<a class="headerlink" href="#what-was-measured" title="Permanent link">&para;</a></h2>
+<p>Taken 2026-08-25 against <code>main</code> at <code>f300f2a0b</code>.</p>
 <table>
 <thead>
 <tr>
-<th>Gap</th>
-<th>Why it blocks a migration</th>
-<th>Row</th>
-<th>Release</th>
+<th>Finding</th>
+<th>Where</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<td><strong><code>containerMode: kubernetes</code></strong></td>
-<td>Runs <code>container:</code> and <code>services:</code> steps as separate pods on a provisioned volume. ✅ <strong>Resolved 2026-08-25 as a permanent decline</strong> (Q727): ARC's mechanism needs a pod-<code>create</code> grant RBAC cannot scope below a namespace, and GAG puts many runner shapes plus every job's registration Secret in that namespace. Docker-in-Docker under Kata is the supported answer; the population that cannot run Kata is named in <a href="../../design/appendix-d-alternatives-considered/#d15-pod-per-step-container-execution-arcs-containermode-kubernetes">D.15</a>, and the costing is in <a href="../q727-container-steps/">q727-container-steps.md</a></td>
-<td><a href="../../queue/Q998/">Q998</a>, deferred</td>
-<td>1.6</td>
+<td>ARC's mechanism needs a pod-<code>create</code> grant for the runner's service account, and RBAC cannot scope <code>create</code> below a namespace: <code>resourceNames</code> does not restrict it</td>
+<td>Kubernetes RBAC semantics; ARC capability measured 0.14.2, 2026-08-06</td>
 </tr>
 <tr>
-<td><strong>GHES validated on a real appliance</strong></td>
-<td>GAG serves GitHub Enterprise Server (GHES) gateways and marks both of its GHES capabilities untested against real hardware, so an enterprise evaluator has no evidence either way</td>
-<td><a href="../../queue/Q765/">Q765</a></td>
-<td>unscheduled, needs an appliance</td>
+<td>ARC runs many scale sets per namespace, so that grant reaches sibling sets' runner pods and JIT registration Secrets. Its own mitigation is that steps run in step pods rather than the runner pod, which GAG has no split to inherit</td>
+<td><a href="../../operations/migration-from-arc/">migration-from-arc.md</a> comparison table</td>
+</tr>
+<tr>
+<td>GAG refuses that token twice: <code>RunnerTemplate</code> admission rejects <code>automountServiceAccountToken</code> and <code>serviceAccountName</code> as reserved, and the provisioner overwrites both after the tenant template merges</td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/provisioner/pod.go"><code>pod.go</code></a>, <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/controller/integration/v2alpha1_crd_test.go"><code>v2alpha1_crd_test.go</code></a>, <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/controller/integration/pod_provisioning_test.go"><code>pod_provisioning_test.go</code></a></td>
+</tr>
+<tr>
+<td>The control is rated Critical, and worker pods are described as holding no API server entry at all</td>
+<td><a href="../../design/05-security/">05-security.md</a></td>
+</tr>
+<tr>
+<td>A per-job Secret holding that job's <code>jitconfig</code> and acquired payload lives in the <strong>tenant namespace</strong>, so pod-<code>create</code> there lets one job mount another job's credentials</td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/provisioner/pod.go"><code>pod.go</code></a> <code>buildSecret</code></td>
+</tr>
+<tr>
+<td>GitHub does send <code>jobContainer</code> and <code>jobServiceContainers</code> as top-level <code>AcquireJob</code> fields, so the classic path could translate them at provisioning time</td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/testdata/job_payload.json"><code>testdata/job_payload.json</code></a> (both null: the probe workflow declares neither)</td>
+</tr>
+<tr>
+<td>The scale-set path stages only a JIT config ("there is no acquired payload, the runner pulls its own job"), so its pod is built before its job is known</td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/provisioner/provisioner.go"><code>provisioner.go</code></a> <code>ProvisionScaleSetWorker</code></td>
+</tr>
+<tr>
+<td>Kata needs nested virtualization: GKE Autopilot allows none, GKE Standard excludes E2/C2D/N2D, and every supporting EC2 family is Intel, with no AMD, Graviton, or GPU family</td>
+<td><a href="../../operations/kata-dind-workloads/#prerequisite--nested-virtualization-nodes">kata-dind-workloads.md § Prerequisite</a>, measured 2026-08-02 (GCP) and 2026-08-12 (AWS)</td>
 </tr>
 </tbody>
 </table>
-<h2 id="what-is-deliberately-not-parity">What is deliberately not parity<a class="headerlink" href="#what-is-deliberately-not-parity" title="Permanent link">&para;</a></h2>
-<p><strong>A GitHub Support entitlement.</strong> ARC installed via the official Helm charts is covered on GHES 3.9 and later.
-GAG has none and none is planned: there is no paid tier and no commercial roadmap, which is stated on the <a href="../../roadmap/">roadmap</a>.
-Worth reading the scope exclusions before treating it as decisive, since Kubernetes orchestration, policy application, and template customization are explicitly outside it, and that is much of what a multi-tenant platform team actually pages about.
-This row belongs in the comparison as a permanent concession, not on a backlog.</p>
-<p><strong>Install base and maturity.</strong> ARC is General Availability and widely deployed; GAG's v2 API has only just reached its first stability contract.
-That closes with adoption and time, not with a deliverable.</p>
-<h2 id="the-collision-the-individual-rows-do-not-state">The collision the individual rows do not state<a class="headerlink" href="#the-collision-the-individual-rows-do-not-state" title="Permanent link">&para;</a></h2>
-<p><strong>Q727 could not start before Q719, and Q719 closed on 2026-08-24.</strong> ARC's <code>containerMode: kubernetes</code> depends on a <code>ReadWriteMany</code> volume, and GAG's workers are storage-less by design.
-Until Q719 nothing validated an RWX volume mounted into a worker, so the stance on persistent worker storage was undocumented rather than decided and Q727 would have been designing on top of an unvalidated substrate.</p>
-<p>That substrate now exists: <a href="../../operations/worker-shared-storage/">worker-shared-storage.md</a> is the reference architecture, and <code>make test-rwx-storage</code> runs the pod the provisioner really builds across two nodes against a live class (<a href="../../development/testing/#the-shared-worker-storage-validation">testing.md § The shared worker storage validation</a>).
-Q727 was decided against it on 2026-08-25, and the storage half turned out not to be what settled the question.</p>
-<p><strong>What the sequencing exposed is that the blocker was never storage.</strong> With the volume validated, the remaining obstacle was the credential ARC's mechanism needs: a pod-<code>create</code> grant RBAC cannot scope below a namespace, which GAG refuses at admission and again at pod creation.
-The two properties the RWX validation established still bind any future pod-per-step path: the volume half is an ordinary namespaced claim a tenant already controls, and the runner's write depends on <code>fsGroup</code> matching the gap-filled UID, so every created pod has to carry that field.
-They are recorded against <a href="../../queue/Q998/">Q998</a>, which carries the deferred design (<a href="../q727-container-steps/">q727-container-steps.md</a> has the costing).</p>
-<h2 id="definition-of-done">Definition of done<a class="headerlink" href="#definition-of-done" title="Permanent link">&para;</a></h2>
-<p>ARC parity is done when all of the following hold:</p>
-<ol>
-<li><strong>A workflow moves with no <code>.github/workflows</code> edit.</strong> ✅ Closed by Q726 (2026-08-11): a runner set registers every <code>runnerLabel</code> on its scale set, so a single-name <code>runs-on</code> and an array both carry over unchanged.
-   The first label names the scale set, which is the ARC scale-set name carried across.</li>
-<li><strong>Repository-scoped targeting is expressible.</strong> ✅ Closed by Q712 (2026-08-11): <code>RunnerSet.spec.runnerGroup</code>, inheriting <code>ActionsGateway.spec.defaultRunnerGroup</code>, binds a set to a named GitHub runner group rather than the installation default, and fails the set closed rather than falling back to it.</li>
-<li><strong><code>container:</code> and <code>services:</code> steps run without privilege</strong>, or the docs state plainly and permanently that Docker-in-Docker under Kata is the supported answer and why. ✅ Closed by Q727 (2026-08-25) in its second form: the decline is recorded in <a href="../../design/appendix-d-alternatives-considered/#d15-pod-per-step-container-execution-arcs-containermode-kubernetes">D.15</a> with the no-Kata population named, and costed in <a href="../q727-container-steps/">q727-container-steps.md</a>.
-   ARC's mechanism is declined permanently; pod-per-step as a capability is deferred as <a href="../../queue/Q998/">Q998</a> behind a demand trigger.
-   The population with no Kata available is named as the decline's cost: GKE Autopilot, AMD and Arm node families, and AWS fleets outside the selected Intel families, where the answer is <code>privileged-dind</code> for a workload ARC ran with no <em>pod</em> privilege, having taken a namespace-wide API grant instead.</li>
-<li><strong>The GHES claims carry evidence.</strong> Either a real-appliance validation, or the two capabilities keep their untested marker and the comparison says so (Q765). ✅ Satisfied in the fallback form, verified 2026-08-25: <a href="../../features/">features.md</a> marks both capabilities untested against real hardware, <a href="../../why-gag/">why-gag.md</a> repeats it, and <a href="../../alternatives/">alternatives.md</a> awards the row to ARC.
-   Q765 stays deferred because its trigger is an appliance becoming reachable, which no release can decide.</li>
-</ol>
-<p>Criteria 3 and 4 can both be satisfied by a decision rather than a build.
-That is deliberate: parity is about removing surprises for a migrating team, and a documented "we do not do this, here is the alternative" removes the surprise as well as a feature does.</p>
-<h2 id="explicitly-out-of-scope">Explicitly out of scope<a class="headerlink" href="#explicitly-out-of-scope" title="Permanent link">&para;</a></h2>
+<p>The fifth and sixth rows are the pair that decided it.
+The ARC-migration path <em>is</em> the scale-set path, because an ARC scale set becomes a <code>RunnerSet</code>, and that is precisely the path where the AGC never sees the job's container definitions.</p>
+<h2 id="the-options-costed">The options, costed<a class="headerlink" href="#the-options-costed" title="Permanent link">&para;</a></h2>
+<p><strong>A.
+Adopt ARC's mechanism.</strong> Mount a pod-<code>create</code> token into the worker and point <code>ACTIONS_RUNNER_CONTAINER_HOOKS</code> at the upstream hooks.
+Smallest build of the three and the only one that is not open to being chosen.
+The grant cannot be narrowed, because RBAC has no sub-namespace <code>create</code> scope, and GAG puts many runner shapes plus every job's registration Secret in the one tenant namespace, so it is a credential-theft path <em>between jobs of one tenant</em> that namespace separation does not defend.
+ARC mitigates by running steps in step pods rather than the runner pod; GAG has one worker pod per job and so no split to inherit, which is option C rather than something adopting the hooks supplies.
+Rejected on the security principle that a default may not trade away a security property, and no opt-in framing rescues it, because the grant would have to exist wherever the capability is used.</p>
+<p><strong>B.
+Translate the job's containers at provisioning time.</strong> Parse <code>jobContainer</code> and <code>jobServiceContainers</code> from the acquired payload, fold them into the worker pod as its container and sidecars, and strip them from the payload forwarded to the runner.
+No new privilege, no RWX volume, no new endpoint.
+Rejected because it cannot serve the path the gap is about: the scale-set path has no acquired payload to parse, so the capability would exist on the classic tier and be absent on the tier an ARC migration lands on.
+It also changes runner semantics, because GitHub's container-job model runs the runner outside the job container and execs steps into it, so the translation is not faithful even where it applies.</p>
+<p><strong>C.
+Broker-mediated pod-per-step.</strong> Ship a GAG implementation of the container-hooks protocol in the worker that requests step pods from the AGC rather than from the Kubernetes API, keeping the AGC the only component that creates pods and applying the same invariants to a step pod as to a worker.
+Architecturally coherent, preserves the token invariant, and serves both acquisition paths because the hook runs at job time rather than at provisioning time.
+Not chosen for 1.6 on cost and on surface: it needs an authenticated worker-to-AGC endpoint that does not exist, reachable from untrusted job code through a NetworkPolicy that today restricts a workload pod to its per-tenant proxy alone, plus step-pod lifecycle, quota accounting, and <code>fsGroup</code> propagation to every created pod.
+It trades a token in the pod for a control-plane endpoint the job can call, which is a narrower grant than A and not a free one.</p>
+<p><strong>D.
+Decline, and document the supported answer.</strong> Docker-in-Docker inside a Kata micro-VM, where the capabilities an inner daemon needs act on a guest kernel rather than the node's.
+Already shipped and already dogfooded: GAG's own CI builds a <code>kind</code> cluster in a worker pod with zero <code>privileged: true</code>.</p>
+<h2 id="the-decision">The decision<a class="headerlink" href="#the-decision" title="Permanent link">&para;</a></h2>
+<p><strong>D, with C deferred rather than closed.</strong></p>
+<p>The decline is permanent for <em>ARC's mechanism</em>, and that part is not a scheduling judgement: no future release can adopt it without reversing the token invariant, so it will never become cheap enough to reconsider.
+It is not permanent for pod-per-step execution as a capability, which C could still deliver.</p>
+<p><strong>The cost of declining is a named population, not a rounding error.</strong> Kata's nested-virtualization prerequisite is hardware ARC does not require.
+A team on GKE Autopilot, on AMD or Arm node families, or on most AWS fleets cannot run Kata at all, and for them the supported answer degrades to a platform-granted privileged <code>ClusterRunnerTemplate</code> where their ARC setup needed no <em>pod</em> privilege.
+The cost is real and it is a trade, not a straight loss: ARC's unprivileged pod is bought with the namespace-wide API grant above, which needs no exploit to use.
+<a href="../release-1.6/#the-gating-row-q727-decided-as-a-documented-decline">release-1.6.md</a> required that population be named rather than left for a reader to discover; it is named on every comparison surface that claims the gap, and in <a href="../../design/appendix-d-alternatives-considered/#d15-pod-per-step-container-execution-arcs-containermode-kubernetes">D.15</a>.</p>
+<p>This is why C is deferred with a demand trigger rather than declined.
+The gap is real for that population, and the trigger is an adopter reporting it, the same pattern the proxy-hardening cluster used, where <a href="../../queue/Q725/">Q725</a> revived Q564 and the other three stayed parked.</p>
+<h2 id="what-shipped">What shipped<a class="headerlink" href="#what-shipped" title="Permanent link">&para;</a></h2>
 <ul>
-<li><strong>Matching ARC's API shape.</strong> The v2 decomposition into <code>ActionsGateway</code>, <code>EgressProxy</code>, <code>RunnerSet</code>, and <code>RunnerTemplate</code> is the product, not an accident to be reconciled.
-  The intentional v1 to v2 differences are recorded in <a href="../v2-api-gap-analysis/">v2-api-gap-analysis.md</a>.</li>
-<li><strong>Commercial support.</strong> See above.</li>
-<li><strong>In-cluster cache.</strong> It appears on the comparison table as something GAG lacks, but ARC lacks it too (<a href="../../queue/Q215/">Q215</a> tracks it against managed services and GitLab Runner, not ARC).</li>
+<li><a href="../../design/appendix-d-alternatives-considered/#d15-pod-per-step-container-execution-arcs-containermode-kubernetes">D.15</a>, the durable rationale, plus the <code>containerMode</code> bullet D.3's ARC advantages had been missing.</li>
+<li>The comparison surfaces re-stated as a decline rather than a pending gap: <a href="../../why-gag/">why-gag.md</a>, <a href="../../alternatives/">alternatives.md</a>, <a href="../../roadmap/">roadmap.md</a>, and the <code>containerMode</code> row in <a href="../../operations/migration-from-arc/">migration-from-arc.md</a>.</li>
+<li><a href="../arc-parity/#definition-of-done">arc-parity.md</a> criterion 3 flipped, and its gap row closed.</li>
+<li><a href="../../queue/Q998/">Q998</a> filed for C, deferred with the demand trigger.</li>
 </ul>
-<h2 id="what-the-site-may-claim-today">What the site may claim today<a class="headerlink" href="#what-the-site-may-claim-today" title="Permanent link">&para;</a></h2>
-<p>The comparison surfaces may say GAG is an ARC alternative for shared, multi-tenant clusters, and that a single-name <code>runs-on</code> carries over unchanged.</p>
-<p>The zero-edit claim is now unqualified for <code>runs-on</code> shape, closed by Q726; on GitHub Enterprise Server below 3.21 it is still conditional on the <code>DistributedTask.AllowRunnerScaleSetCustomLabels</code> appliance flag, which <a href="../../operations/migration-from-arc/">migration-from-arc.md</a> names.
-They may not claim GHES support is validated while Q765 is open; <a href="../../features/">features.md</a> carries the untested marker on both GHES capabilities and it stays until an appliance run exists.</p>
-<h2 id="keeping-this-current">Keeping this current<a class="headerlink" href="#keeping-this-current" title="Permanent link">&para;</a></h2>
-<p>The inventory rots the same way the comparison table did, and for the same reason: ARC ships, and an undated claim silently becomes false rather than becoming visibly stale.
-Two habits hold it:</p>
-<ul>
-<li>Every row above carries the ARC version and the date it was measured.
-  A row without both is not evidence.</li>
-<li><a href="../../operations/release/#1-pre-flight">release.md § Pre-flight</a> question 3 asks whether every claim about an alternative still holds, before every tag.
-  This page is what that question reads and updates.</li>
-</ul>
-<p>The failure mode to watch for is the pleasant one: a gap closing upstream because ARC added something, which grows this list without any commit landing in this repo.
-Both 2026-08 corrections were of exactly that kind.</p>
+<h2 id="what-this-doc-does-not-claim">What this doc does not claim<a class="headerlink" href="#what-this-doc-does-not-claim" title="Permanent link">&para;</a></h2>
+<p>The hook protocol's verb set, and the placement of step execution in step pods rather than the runner pod, are both read from the upstream repository and have not been exercised against a running ARC here.
+So C's cost is a design estimate rather than a measured one.
+Nothing in the decision turns on either: A was rejected on an RBAC property that holds however the hook is shaped, and B on an acquisition-path fact measured in this repo.</p>
+<p><strong>One correction is worth recording, because the first draft of this decision got it wrong.</strong> It argued that ARC's token sits in the same pod the workflow's own code runs in.
+That is false for <code>containerMode: kubernetes</code> with a job container, which is the mode under discussion: the steps run in the step pods the hook creates.
+The argument that survives is narrower and stronger, and it is the one above: the grant is namespace-wide because RBAC offers nothing smaller, and both projects run many runner shapes per namespace.</p>
 
 
 

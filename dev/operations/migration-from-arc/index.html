@@ -3190,7 +3190,7 @@ The platform installs the Gateway Manager Controller (GMC) <strong>once</strong>
 <tr>
 <td><code>containerMode: kubernetes</code> / <code>dind</code></td>
 <td>a template choice + the namespace security profile</td>
-<td>GAG always runs one worker pod per job. Docker-in-Docker needs a platform-owned <code>ClusterRunnerTemplate</code> plus a privileged-eligible namespace; see <a href="#security-profiles">Security profiles</a>.</td>
+<td><strong>Read this one before migrating.</strong> GAG always runs one worker pod per job, and <code>containerMode: kubernetes</code> has no equivalent: it is <a href="../../design/appendix-d-alternatives-considered/#d15-pod-per-step-container-execution-arcs-containermode-kubernetes">permanently declined</a>, because its hook needs a pod-<code>create</code> grant that Kubernetes RBAC cannot scope below a namespace, reaching every other runner set's registration Secret there. Docker-in-Docker is the answer, and it is unprivileged only under Kata, which needs nested-virtualization nodes (<a href="../kata-dind-workloads/#prerequisite--nested-virtualization-nodes">prerequisites</a>). Without Kata it needs a platform-owned <code>ClusterRunnerTemplate</code> plus a privileged-eligible namespace; see <a href="#security-profiles">Security profiles</a>.</td>
 </tr>
 <tr>
 <td>Per-scale-set scaling math (<code>minRunners</code>/<code>maxRunners</code>)</td>
