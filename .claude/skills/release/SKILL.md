@@ -26,7 +26,7 @@ At a stable tag they publish, so run each and record the verdict in the release 
   `make comparison-stamps-check` gates the last one's stamps, not their truth.
 - **Operator caveats**: `scripts/release/operator-caveats-since.sh <last-tag>`.
   Read the **new sections** rather than the bullet count, and confirm each is in the notes.
-- **Roadmap and `features.md`** against `docs/STATUS.md`: `make roadmap-check`.
+- **Roadmap and `features.md`** against `docs/queue/`: `make roadmap-check`.
   Work that shipped this cycle needs a `features.md` line.
 - **Announce bar**: `overrides/main.html`'s `highlight_for` names this version.
   `publish.yml` fails the release if the rendered banner does not.
