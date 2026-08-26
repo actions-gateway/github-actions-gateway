@@ -125,9 +125,36 @@ Both positions are defensible and they cannot both stand as written.
 2. **`arc-parity.md` criterion 3 flipped**, and its row in [docs/plan/README.md](README.md) with it. ✅ 2026-08-25, in the same change.
 3. **The docs sweep.** Nine user-facing changes merged before any gating row, and [release.md § Pre-flight](../operations/release.md#1-pre-flight) question 1 exists to catch a feature that reaches `features.md` and stops there.
    Q564 in particular adds an operator-visible field and a log format.
-4. **The API surface review**, from `scripts/release/api-surface-since.sh` over `v1.5.0..<rc commit>`.
-   The window already carries additions to `RunnerSet`, `EgressProxy` and the shared condition set, and the review binds at the candidate, not here.
+4. **The API surface review**, from `scripts/release/api-surface-since.sh` over `v1.5.0..<rc commit>`. ✅ 2026-08-25, measured at `fe06ec682` and recorded below.
 5. **Release mechanics**: a candidate tagged, artifacts verified, and the dogfood validation in [release.md](../operations/release.md) passing on the candidate that becomes the tag.
+
+## Candidate record
+
+### `v1.6.0-rc.1`, tagged at `fe06ec682`
+
+Cut 2026-08-25 from `origin/main`, with the tag's commit compared against the target before the push rather than after it.
+
+**`main` green.** `check-gates-green.sh` reports 0 gates not green and 7 path-skipped, which is the ordinary shape of a docs-only tip.
+The verdict relies on **`190a5f081`**, where `e2e-test`, `integration-test`, `security-scan`, `plan-hygiene` and `status-lint` all ran in full, and `check-artifact-unchanged.sh 190a5f081 origin/main` exits 0 across the 23 files merged since.
+`make check` is green on a branch cut from the target.
+
+**Version.** `semver-floor.sh v1.5.0` reports **FLOOR: MINOR** over 158 commits, 14 of them touching the released surface.
+No breaking marker, and the published CRDs took **zero deleted lines** across the window, so the surface is purely additive.
+
+**API surface review: ship as-is.** Six wire fields, four condition reasons and one Event reason publish for the first time.
+`auditLogging` names its method rather than an `On` state, is a string enum rather than a bool, and defaults to `Off`, which is the safe direction for a record of a tenant's egress.
+`advertisedCapacity` is a pointer because zero is a real advertisement and has to differ from "never advertised".
+`withheldCapacity` carries `listType=map` on `reason`, and that key is deliberately open rather than an enum, because the ladder grows a rung at a time and the field is controller-written status a tenant cannot author.
+`observedRunnerVersion` is documented as a self-report rather than an attestation and deliberately does not move `RunnerVersionTooOld`.
+
+One item is flagged rather than blocking: `auditLogging` borrows a word that means *report-only instead of enforce* in Pod Security Admission and Gatekeeper.
+The godoc disclaims that reading explicitly, so the collision is handled in prose rather than avoided in the name.
+
+**Publish verified by content**, not by green jobs: `draft: false`, `immutable: true`, 9 assets, and all 8 signatures verified.
+The discriminating check is the provenance, whose signer URI ends `publish.yml@refs/tags/v1.6.0-rc.1` and whose `sourceRepositoryDigest` equals `fe06ec682`.
+Re-run against a wrong signer workflow it exits 1, so the pass discriminates rather than merely exiting 0.
+
+**Dogfood validation:** not yet run.
 
 ## Critical path
 
