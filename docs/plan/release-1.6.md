@@ -154,7 +154,22 @@ The godoc disclaims that reading explicitly, so the collision is handled in pros
 The discriminating check is the provenance, whose signer URI ends `publish.yml@refs/tags/v1.6.0-rc.1` and whose `sourceRepositoryDigest` equals `fe06ec682`.
 Re-run against a wrong signer workflow it exits 1, so the pass discriminates rather than merely exiting 0.
 
-**Dogfood validation:** not yet run.
+**Dogfood validation:** never run.
+The gate was stopped in pre-flight, before it scaled a node, when the decision was taken to merge the open dependency bumps first.
+
+**Superseded 2026-08-26.** #1725, #1726 and #1674 merged, and `check-artifact-unchanged.sh v1.6.0-rc.1 origin/main` exits 1 on 11 files of the released surface, all `go.mod`/`go.sum` across `broker`, `cmd/agc`, `cmd/proxy`, `cmd/worker`, `githubapp` and `scaleset`.
+The tag stays published and immutable; the next candidate is `rc.2`.
+
+### Two claims the notes review should have caught
+
+Both were taken from this document's own table rather than measured, which is the failure mode CLAUDE.md names for a row's asserted mechanism.
+
+`Q344` was described as "new operator tooling in a published image".
+Its only caller is `cmd/probe`, which the publish matrix (`gmc agc proxy worker wrapper build-runner`) does not build and no release asset carries; it runs from a source checkout.
+It is a maintainer diagnostic, and the notes no longer list it as a feature.
+
+`Q793` was described by its investigation half, the probe that measured the labels `PATCH`.
+Its operator-facing half is the AGC message telling an operator that a scale set's labels are fixed at creation, which is what the notes now say.
 
 ## Critical path
 
