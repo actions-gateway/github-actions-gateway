@@ -2663,6 +2663,34 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#candidate-record" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Candidate record
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Candidate record">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#v160-rc1-tagged-at-fe06ec682" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        v1.6.0-rc.1, tagged at fe06ec682
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#critical-path" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2872,10 +2900,28 @@ Both positions are defensible and they cannot both stand as written.</p>
 <li><strong><code>arc-parity.md</code> criterion 3 flipped</strong>, and its row in <a href="../">docs/plan/README.md</a> with it. ✅ 2026-08-25, in the same change.</li>
 <li><strong>The docs sweep.</strong> Nine user-facing changes merged before any gating row, and <a href="../../operations/release/#1-pre-flight">release.md § Pre-flight</a> question 1 exists to catch a feature that reaches <code>features.md</code> and stops there.
    Q564 in particular adds an operator-visible field and a log format.</li>
-<li><strong>The API surface review</strong>, from <code>scripts/release/api-surface-since.sh</code> over <code>v1.5.0..&lt;rc commit&gt;</code>.
-   The window already carries additions to <code>RunnerSet</code>, <code>EgressProxy</code> and the shared condition set, and the review binds at the candidate, not here.</li>
+<li><strong>The API surface review</strong>, from <code>scripts/release/api-surface-since.sh</code> over <code>v1.5.0..&lt;rc commit&gt;</code>. ✅ 2026-08-25, measured at <code>fe06ec682</code> and recorded below.</li>
 <li><strong>Release mechanics</strong>: a candidate tagged, artifacts verified, and the dogfood validation in <a href="../../operations/release/">release.md</a> passing on the candidate that becomes the tag.</li>
 </ol>
+<h2 id="candidate-record">Candidate record<a class="headerlink" href="#candidate-record" title="Permanent link">&para;</a></h2>
+<h3 id="v160-rc1-tagged-at-fe06ec682"><code>v1.6.0-rc.1</code>, tagged at <code>fe06ec682</code><a class="headerlink" href="#v160-rc1-tagged-at-fe06ec682" title="Permanent link">&para;</a></h3>
+<p>Cut 2026-08-25 from <code>origin/main</code>, with the tag's commit compared against the target before the push rather than after it.</p>
+<p><strong><code>main</code> green.</strong> <code>check-gates-green.sh</code> reports 0 gates not green and 7 path-skipped, which is the ordinary shape of a docs-only tip.
+The verdict relies on <strong><code>190a5f081</code></strong>, where <code>e2e-test</code>, <code>integration-test</code>, <code>security-scan</code>, <code>plan-hygiene</code> and <code>status-lint</code> all ran in full, and <code>check-artifact-unchanged.sh 190a5f081 origin/main</code> exits 0 across the 23 files merged since.
+<code>make check</code> is green on a branch cut from the target.</p>
+<p><strong>Version.</strong> <code>semver-floor.sh v1.5.0</code> reports <strong>FLOOR: MINOR</strong> over 158 commits, 14 of them touching the released surface.
+No breaking marker, and the published CRDs took <strong>zero deleted lines</strong> across the window, so the surface is purely additive.</p>
+<p><strong>API surface review: ship as-is.</strong> Six wire fields, four condition reasons and one Event reason publish for the first time.
+<code>auditLogging</code> names its method rather than an <code>On</code> state, is a string enum rather than a bool, and defaults to <code>Off</code>, which is the safe direction for a record of a tenant's egress.
+<code>advertisedCapacity</code> is a pointer because zero is a real advertisement and has to differ from "never advertised".
+<code>withheldCapacity</code> carries <code>listType=map</code> on <code>reason</code>, and that key is deliberately open rather than an enum, because the ladder grows a rung at a time and the field is controller-written status a tenant cannot author.
+<code>observedRunnerVersion</code> is documented as a self-report rather than an attestation and deliberately does not move <code>RunnerVersionTooOld</code>.</p>
+<p>One item is flagged rather than blocking: <code>auditLogging</code> borrows a word that means <em>report-only instead of enforce</em> in Pod Security Admission and Gatekeeper.
+The godoc disclaims that reading explicitly, so the collision is handled in prose rather than avoided in the name.</p>
+<p><strong>Publish verified by content</strong>, not by green jobs: <code>draft: false</code>, <code>immutable: true</code>, 9 assets, and all 8 signatures verified.
+The discriminating check is the provenance, whose signer URI ends <code>publish.yml@refs/tags/v1.6.0-rc.1</code> and whose <code>sourceRepositoryDigest</code> equals <code>fe06ec682</code>.
+Re-run against a wrong signer workflow it exits 1, so the pass discriminates rather than merely exiting 0.</p>
+<p><strong>Dogfood validation:</strong> not yet run.</p>
 <h2 id="critical-path">Critical path<a class="headerlink" href="#critical-path" title="Permanent link">&para;</a></h2>
 <p>Scope is decided and every gating row is closed.</p>
 <ol>
