@@ -7,9 +7,6 @@ require (
 	go.uber.org/goleak v1.3.0
 )
 
-require (
-	github.com/golang-jwt/jwt/v5 v5.3.1 // indirect
-	github.com/stretchr/testify v1.12.1 // indirect
-)
+require github.com/golang-jwt/jwt/v5 v5.3.1 // indirect
 
 replace github.com/actions-gateway/github-actions-gateway/githubapp => ../githubapp
