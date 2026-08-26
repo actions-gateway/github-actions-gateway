@@ -26,10 +26,6 @@ The pill is read from the backlog rather than typed here, so it cannot outlive t
 No pill means the item is on the near-term plan with no release decided for it yet.
 
 
-- **[A non-privileged path for `container:` and `services:` steps](plan/arc-parity.md#the-collision-the-individual-rows-do-not-state)** <!-- q:Q727 --> ARC runs these as separate pods on a shared volume under `containerMode: kubernetes`.
-  One worker pod per job means the path here is Docker-in-Docker, unprivileged only under Kata.
-  Its `ReadWriteMany` dependency is closed: [shared worker storage](operations/worker-shared-storage.md) is validated and documented. Documenting Kata Docker-in-Docker as the permanent answer is still a valid outcome.
-
 - **[CI for untrusted pull requests on Kata workers](plan/q408-untrusted-pr-egress.md)** <!-- q:Q408 --> [Kata workers](operations/kata-dind-workloads.md) are validated for *trusted* CI only: the micro-VM bounds the guest kernel, the runner's egress stays permissive.
   Untrusted PRs need an in-cluster pull-through registry mirror plus egress scoped to it, GitHub, and DNS.
   Phase 1 gates hosted-only egress; a measurement grades the posture before Phase 2 builds the mirrors.
@@ -47,6 +43,10 @@ The first entry is the exception: a firm commitment, waiting only on the release
 - **[Validate GHES against a real appliance](plan/arc-parity.md#where-arc-is-actually-ahead)** <!-- q:Q765 --> Both GitHub Enterprise Server (GHES) capabilities ship marked untested against real hardware: the appliance-addressing path and the private-CA bundle.
   They are believed correct and unproven, which is not the same thing.
   Waits on access to an appliance.
+
+- **[Pod-per-step `container:` and `services:` without Kata](design/appendix-d-alternatives-considered.md#d15-pod-per-step-container-execution-arcs-containermode-kubernetes)** <!-- q:Q998 --> Docker-in-Docker under Kata is the answer today, and Kata needs nested virtualization that GKE Autopilot and most AMD, Arm and GPU instances cannot provide.
+  ARC's own mechanism is declined permanently: it needs a Kubernetes API token inside the pod running your workflow.
+  A broker-mediated design keeps that invariant, and waits on demand.
 
 - **[Opt-in auto-retry for flaky jobs](design/appendix-g-future-enhancements.md#g17-opt-in-auto-retry-for-flaky-jobs-beyond-disruptions)** <!-- q:Q555 --> A job the cluster disrupts already [re-runs itself](operations/troubleshooting.md#which-disruptions-auto-re-run-a-job-and-which-never-do); a flaky failure does not.
   Same machinery, opted in per runner set with its own budget so a broken test cannot loop.

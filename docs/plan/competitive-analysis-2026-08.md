@@ -106,7 +106,7 @@ All were generated as moat candidates and killed on review:
 - **A signed per-job isolation record**: category-creating in theory, zero demand.
 - **A time-boxed debug hold**: regresses a security property that `CLAUDE.md` makes non-negotiable.
 - **Brokering `container:`/`services:` step pods through the AGC**: invents a bespoke protocol to reach parity with a capability ARC already ships.
-  Kept as [Q727](../queue/Q727.md) framed as a *decision* rather than that design.
+  Kept as Q727 framed as a *decision* rather than that design.
 
 ## Why the marketing drifted, and the fix
 
