@@ -2682,6 +2682,14 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 </thead>
 <tbody>
 <tr>
+<td><a href="Q999/">Q999</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/controller/integration/v2_runnerset_sharing_test.go#L90">Cross-namespace proxy revoke has no event source, so its test races</a></td>
+<td><code>flake</code> <code>tests</code> <code>security</code></td>
+<td>🔲</td>
+<td>M</td>
+<td><code>TestV2_RunnerSet_GrantedCrossNamespaceProxy_ResolvesAndRevokes</code> failed the revoke leg on PR 1726 (2026-08-26): after the projection is …</td>
+</tr>
+<tr>
 <td><a href="Q912/">Q912</a></td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/test/fakegithub/main.go">endpoint-parity startup: the inherited-pipe mechanism is not this one</a></td>
 <td><code>ci</code> <code>flake</code> <code>debt</code></td>
