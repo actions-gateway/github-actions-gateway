@@ -21,6 +21,9 @@ No tier badge means both tiers, and a gate removes the badge when the gap closes
 - **[Capacity gate for unplaceable workers](operations/troubleshooting.md#runnerset-reports-workercapacitydeclined-the-gateway-stopped-claiming-jobs)**: opt-in.
   Stop claiming jobs while the cluster cannot place the worker shape, instead of claiming and cancelling them.
   Off by default.
+- **[Gate for workers that bind and never start](operations/troubleshooting.md#the-reason-is-podsnotstarting-the-image-will-not-pull)** <span class="gag-v2-badge">v2</span> <span class="gag-new-badge">new in 1.6</span>: opt-in.
+  Stop claiming jobs while bound workers never reach running, so an image that will not pull cannot quietly absorb the set's capacity.
+  Reported whether or not the gate is on.
 - **[Fast, honest ending for an abandoned run](design/04-operational-flows.md)**: a run whose worker is removed before it started is force-cancelled in about a second, measured live, then re-run automatically once capacity returns.
 - **[Priority tiers per runner set](design/02-architecture.md)**: reserve a guaranteed floor of slots for expensive runner types so cheap CPU jobs cannot starve critical GPU work.
 - **[Worker scale-up rate limiting](operations/tenant-onboarding.md#step-2-create-the-actionsgateway-resource)**: opt-in token bucket capping how *fast* workers start, distinct from the count ceiling, to smooth cold-start stampedes on shared egress.
@@ -84,6 +87,8 @@ No tier badge means both tiers, and a gate removes the badge when the gap closes
 - **[Scraping setup](operations/observability-metrics-access.md)**: wiring the mutual-TLS metrics endpoints into your Prometheus.
 - **[Alerting and SLOs](operations/observability-alerting.md)**: ready-to-apply alert rules as code.
 - **[Grafana dashboards](operations/observability-dashboards.md)**: a tenant dashboard and a platform dashboard, both as code.
+- **[Why a set is not being offered jobs](operations/troubleshooting.md#why-is-my-runnerset-not-being-offered-jobs)** <span class="gag-v2-badge">v2</span> <span class="gag-new-badge">new in 1.6</span>: `RunnerSet` status carries the capacity advertised to GitHub and the ladder rung that withheld each slot.
+  Readable from `kubectl describe`, so answering it no longer needs metrics access.
 - **[Logging and tracing](operations/observability-logging.md)**: structured logs and OpenTelemetry tracing across the four tiers.
 - **[Per-pool egress audit record](operations/observability-logging.md#proxy-egress-audit-record)** <span class="gag-v2-badge">v2</span> <span class="gag-maturity-badge">beta</span> <span class="gag-new-badge">new in 1.6</span>: one structured line per accepted CONNECT (namespace, destination, bytes each way, duration), off by default, since retaining where a tenant went is a decision.
 
@@ -96,6 +101,8 @@ No tier badge means both tiers, and a gate removes the badge when the gap closes
 - **[Upgrade and rollback](operations/upgrade.md)**: versioned upgrade procedures and the rollback path for each release.
 - **[Stale-CRD startup check](operations/troubleshooting.md#gmc-exits-at-startup-an-installed-crd-schema-is-older-than-the-gmc)** <span class="gag-new-badge">new in 1.5</span>: the manager refuses to start when an installed CRD no longer declares a field that bounds tenant access, so a skipped CRD apply cannot leave `runnerGroup` accepted and silently pruned.
 - **[Runner-version drift warning](operations/troubleshooting.md#worker-image-runner-version)** <span class="gag-new-badge">new in 1.5</span>: a worker image below GitHub's enforced minimum is reported before GitHub enforces it, and an image whose reference names no version says so rather than passing.
+- **[Observed runner version](operations/troubleshooting.md#worker-image-runner-version)** <span class="gag-v2-badge">v2</span> <span class="gag-new-badge">new in 1.6</span>: the runner version a worker pod actually ran, for images whose tag the gateway cannot read a version from.
+  A self-report from the tenant's own container, not an attestation.
 - **[Backup and restore](operations/backup-restore.md)**: backup posture and a recovery runbook, with a [Velero-specific how-to](operations/velero-backup-restore.md).
 - **[Troubleshooting](operations/troubleshooting.md)**: symptom to diagnosis to remediation, organised by observable failure mode.
 - **[Production runbook](operations/runbook.md)**: the operational procedures the platform team needs on call.
