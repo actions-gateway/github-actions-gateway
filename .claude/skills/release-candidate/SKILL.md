@@ -49,11 +49,16 @@ That one blocks the tag.
 Then confirm no gating row remains, and run the local gate **from a tree that matches the target**, a branch cut from `origin/main`, since a worktree cannot check out `main`:
 
 ```bash
-git show origin/main:docs/STATUS.md | grep '^| <a id=' | grep -c '<X.Y>-gate'   # want 0
+grep -rlE '^[[:space:]]*-[[:space:]]*<X\.Y>-gate[[:space:]]*$' docs/queue/Q*.md   # want no output
 make check > tmp/check-rc.log 2>&1; echo "EXIT=$?"
 ```
 
 Running `make check` on a stale branch validates the wrong tree and tells you nothing.
+
+**The gating-row check names the item files explicitly, and that is the point.** A gate label is a frontmatter list entry on a row, so anchoring to that line keeps `docs/queue/README.md`'s label glossary from matching every release at once.
+Naming `docs/queue/Q*.md` also makes a wrong path fail loudly instead of quietly: this check used to read `docs/STATUS.md`, which the item-store migration removed, and `git show` then exited 128 while a `grep -c` over its error text printed `0`.
+Zero is the reassuring answer here, so the check confirmed a clean release from a file that no longer existed.
+Confirm it can still find one before trusting a clean result, e.g. `1.7-gate` matches `Q408.md` today.
 
 ## 2. Re-run any pre-flight verdict whose scope has moved
 
