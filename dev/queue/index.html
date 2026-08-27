@@ -2738,6 +2738,22 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td><strong>Event:</strong> <code>version-cmds-answer</code> or <code>installed-floors-report-a-version</code> fails on <code>main</code> again.</td>
 </tr>
 <tr>
+<td><a href="Q1000/">Q1000</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/pages.yml">A green pages run published no docs for the tag</a></td>
+<td><code>ci</code> <code>docs</code> <code>retro</code></td>
+<td>🔲</td>
+<td>M</td>
+<td>Cutting <code>v1.6.0</code> on 2026-08-26, the tag's <code>pages.yml</code> run finished with every step green, including <code>Deploy to GitHub Pages</code>, and the site …</td>
+</tr>
+<tr>
+<td><a href="Q1001/">Q1001</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/release/check-artifact-unchanged.sh">Nothing warns when shipped code merges during a candidate window</a></td>
+<td><code>ci</code> <code>docs</code> <code>retro</code></td>
+<td>🔲</td>
+<td>M</td>
+<td><code>v1.6.0-rc.1</code> was tagged 2026-08-25 and never validated: #1725, #1726 and #1674 merged on top of it, and `check-artifact-unchanged.sh …</td>
+</tr>
+<tr>
 <td><a href="Q408/">Q408</a></td>
 <td><a href="../plan/q408-untrusted-pr-egress/">Untrusted-PR egress posture for Kata workers</a></td>
 <td><code>security</code> <code>1.7-gate</code></td>
@@ -4064,6 +4080,14 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>🔲</td>
 <td>S</td>
 <td>An insertion falsifies neighbouring prose asserting a property of the set <strong>without touching that prose</strong>.</td>
+</tr>
+<tr>
+<td><a href="Q1002/">Q1002</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/release/check-release-notes.sh">The release notes' commit count is hand-written and goes stale</a></td>
+<td><code>docs</code> <code>retro</code></td>
+<td>🔲</td>
+<td>S</td>
+<td><code>docs/releases/v1.6.0.md</code> opens its "Everything since" section with a commit count that no tool derives.</td>
 </tr>
 </tbody>
 </table>
