@@ -2598,18 +2598,24 @@
 
 
 <h1 id="endpoint-parity-startup-the-inherited-pipe-mechanism-is-not-this-one">endpoint-parity startup: the inherited-pipe mechanism is not this one<a class="headerlink" href="#endpoint-parity-startup-the-inherited-pipe-mechanism-is-not-this-one" title="Permanent link">&para;</a></h1>
-<p>The trigger fired 2026-08-24 under <code>make check</code> on an unrelated branch, so this row is ready with evidence rather than deferred waiting for it.
+<p><strong>Event:</strong> recurs on main after the fix. → top of Queue, escalated.</p>
+<p>The trigger fired 2026-08-24 under <code>make check</code> on an unrelated branch.
 Both instances went red in one run: <code>endpoint-parity-check</code> at the top level of the fan-out, and <code>check-endpoint-parity-test</code> inside <code>scripts-test</code>.
 The top-level one reported <code>fakegithub was still running after 30s and never accepted on http://127.0.0.1:56220</code>.</p>
 <p>Two findings, neither resting on what the fake did or did not write.
-The recurrence is <strong>after</strong> the pipe-to-file change this row credits: <code>cmd.Stdout = logFile</code> landed 2026-08-18 in #1627 and the row was filed from that PR's retro, so the child's fds have been a private <code>*os.File</code> throughout, and an inherited-pipe write is not this occurrence's mechanism.
-And the top-level gate is not under <code>scripts-test</code>, so the 85-suite nested fan-out this row blames was not in play for it either.
+The recurrence is <strong>after</strong> the pipe-to-file change this row originally credited: <code>cmd.Stdout = logFile</code> landed 2026-08-18 in #1627 and the row was filed from that PR's retro, so the child's fds have been a private <code>*os.File</code> throughout, and an inherited-pipe write is not this occurrence's mechanism.
+And the top-level gate is not under <code>scripts-test</code>, so the 85-suite nested fan-out this row blamed was not in play for it either.
 What is left is contention past the 30s bound: 45 gates and 90 suites concurrent on one host.
 A second worker hit the same failure independently in the same window on a different port (55916 against 56220), with concurrent envtest also running on that host, which is a confound worth recording because it makes starvation more plausible and is unrecoverable once a session ends.</p>
-<p>The failure also printed <code>(the fake wrote nothing, so it had not reached its first log line)</code>, and that clause <strong>cannot</strong> carry its own conclusion — a blocked write and a write that never happened look identical from outside.
-That wording is <code>childLog</code>'s, in <code>devtools/e2e/endpointparity/probe.go</code>, so every future reader of this failure inherits the same over-claim; correcting it to state the observation rather than the inference is the cheapest part of this row.
-Raising <code>readyTimeout</code> again is a bound rather than a fix; establish whether the child is scheduled at all before it binds.
-The suite instance reported only <code>expected rc=0, got rc=2</code> because its shipped-tree case drops the checker's stderr, which is why only one of the two yielded any diagnosis.</p>
+<p>Parked with the diagnosis fixed and the cause still open.
+<code>readyTimeout</code> was deliberately not raised, because a bound is not a fix, so a recurrence is expected to look the same on the socket and different in the report.
+What the timeout branch now carries: when the poll first observed the child's log non-empty, and a best-effort <code>ps</code> reading of the child's scheduling state and accumulated CPU time.
+Neither settles whether the child was starved, and the row would over-claim if it said so.
+Read <code>state=</code> first: R is runnable and waiting for CPU, S is blocked on something else, and one sample of it is evidence rather than proof.
+The CPU time is a floor: procps-ng 4.0.4 on <code>ubuntu-latest</code> prints whole seconds, so a child that burned 200ms and one that burned none both read <code>00:00:00</code> (measured 2026-08-27 against <code>ubuntu:24.04</code>; macOS <code>ps</code> prints hundredths), and the sub-second reading a starvation verdict would need is not available from <code>ps</code> there.
+A finer Linux figure means <code>/proc/&lt;pid&gt;/stat</code> fields 14 and 15, which does not port to darwin; that is the trade to weigh if the next occurrence is still ambiguous.
+<code>childLog</code>'s <code>(the fake wrote nothing, so it had not reached its first log line)</code> was the over-claim that made the first occurrence unanswerable, and it now states the observation alone.
+The suite instance yielded only <code>expected rc=0, got rc=2</code> because <code>expect_rc</code> discarded the checker's output; it now prints it on a status mismatch.</p>
 
 
 
