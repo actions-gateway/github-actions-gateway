@@ -30,7 +30,7 @@ What this scope adds is the release's read of them.
 | 4. Enforcement | ❌ | The swap plus the negative probes; this is where the posture becomes real |
 | 5. Docs and close-out | ❌ | The caveat flips to a how-to; G.14 marked shipped; the roadmap entry leaves "exploring" |
 
-**Phases 3 and 4 need live dogfood sessions**, which are prod-guarded and operator-driven.
+**Phases 2, 3 and 4 need live dogfood sessions**, which are prod-guarded and operator-driven.
 That is the schedule risk in this release and it is not reducible by planning: a phase whose validation is a booked cluster run cannot be compressed the way a code change can.
 
 **Phase 3 must run with the image caches cold**, so the `quay.io` and `registry.k8s.io` prepulls are exercised rather than skipped.
@@ -102,5 +102,5 @@ If that distinction holds, both survive with the goal doc's criterion re-worded 
 ## Critical path
 
 Phase 2 → Phase 3 → Phase 4 → Phase 5, strictly, because each phase's validation is the next one's precondition: manifests must serve before wiring can be proven to ride them, and wiring must be proven before enforcement can be distinguished from breakage.
-Phases 3 and 4 book dogfood sessions.
+Phases 2, 3 and 4 book dogfood sessions.
 Nothing else in the release is on that path: Q986 runs beside it, and the docs decision resolves inside Phase 5.
