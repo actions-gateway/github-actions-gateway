@@ -113,6 +113,22 @@ fail() {
 	fails=$((fails + 1))
 }
 
+# contains ITEM ELEMENT... — true when ITEM equals one of the remaining args.
+# Deliberately not `printf '%s\n' "${arr[@]}" | grep -qx`: `grep -q` exits on the
+# match, the writer takes SIGPIPE, and under `set -o pipefail` the dead pipeline
+# reads as no-match — falsifying a value that IS present once the list outgrows
+# the 64 KiB pipe buffer, and only then (Q982). Deliberately literal equality
+# too, where `-x` anchored a regex: an entry name is a directory name, so a `.`
+# in one was never meant to match any character.
+contains() {
+	local item="$1" element
+	shift
+	for element in "$@"; do
+		[[ "$element" == "$item" ]] && return 0
+	done
+	return 1
+}
+
 # The `kind:` of a manifest's single document, and the metadata.name under it.
 # Anchored at column 0 / two spaces so a `kind:` inside a comment, a patch body
 # or a nested podTemplate cannot be mistaken for the document's own.
@@ -331,11 +347,11 @@ for overlay in "${overlays[@]}"; do
 	fi
 
 	for name in "${consumed[@]}"; do
-		if ! printf '%s\n' "${entries[@]}" | grep -qx -- "$name"; then
+		if ! contains "$name" "${entries[@]}"; then
 			fail "overlay '$overlay' bases on '$name', which is not an entry under $TEMPLATES_DIR"
 			continue
 		fi
-		if printf '%s\n' "$selectable" | grep -qx -- "$overlay"; then
+		if grep -qx -- "$overlay" <<<"$selectable"; then
 			exercised+=("$name")
 		fi
 	done
@@ -369,9 +385,9 @@ if [[ -n "$unexercised" ]]; then
 fi
 
 for inert in "${INERT_ENTRIES[@]}"; do
-	if ! printf '%s\n' "${entries[@]}" | grep -qx -- "$inert"; then
+	if ! contains "$inert" "${entries[@]}"; then
 		fail "INERT_ENTRIES names '$inert', which is not an entry under $TEMPLATES_DIR"
-	elif printf '%s\n' "$have_exercised" | grep -qx -- "$inert"; then
+	elif grep -qx -- "$inert" <<<"$have_exercised"; then
 		fail "'$inert' is declared inert but an overlay exercises it; drop it from INERT_ENTRIES rather than keeping an exemption that no longer applies"
 	fi
 done
