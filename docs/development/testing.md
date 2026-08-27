@@ -1625,12 +1625,14 @@ Three causes, all seen here, and only one of them is the directive's fault:
   The sharpest is that both runs logged a hit on the *primary* analyzer-cache key and the same 8,856,940-byte archive, so a `restore-keys` fallback carrying a foreign cache is not what happened.
 
 **The surface is every directive, not the ones a past failure named.** Measured 2026-08-24 over the first-party tree and re-derived 2026-08-27: 117 directive sites, 104 of them naming `gosec` and 5 `staticcheck`, the rest `revive`, `dupl`, `errcheck`, `noctx` and `forbidigo`.
-**The unused check is agnostic to both the linter and the cause of its silence**, which is what carries the class from the first cause to the third.
-That is measured, not read off the source: renaming `ConditionCredentialUnavailable` at `api/apiconditions/conditions.go:40` so G101's identifier pattern stops matching, with `.golangci.yml` byte-identical and the directive untouched, takes that package from `0 issues` to a `nolintlint` red naming it, and restoring the name takes it back.
+**The unused check is agnostic to the linter**, and that half is measured: renaming `ConditionCredentialUnavailable` at `api/apiconditions/conditions.go:40` so G101's identifier pattern stops matching, with `.golangci.yml` byte-identical and the directive untouched, takes that package from `0 issues` to a `nolintlint` red naming it, and restoring the name takes it back.
 The same happens to staticcheck when `-ST1001` is added to `linters.settings.staticcheck.checks`, which silences it without an exclusion rule and without disabling it.
-`nolint_filter.go` explains why the route cannot matter: the filter keeps `matchedIssueFromLinter map[string]bool` keyed on `issue.FromLinter` and answers an `//nolint:X` with that map's lookup for `X`, so it has no per-linter branch and no input describing *why* an issue is absent.
+Both of those routes are deterministic, so what carries the class from the first cause to the third is the source rather than the runs: `nolint_filter.go` keeps `matchedIssueFromLinter map[string]bool` keyed on `issue.FromLinter` and answers an `//nolint:X` with that map's lookup for `X`, so it has no per-linter branch and no input describing *why* an issue is absent.
+Note which instrument closes which step, because the first cause above is the other way round.
 
-**A `nolintlint` red under-reports its own extent.** `.golangci.yml` sets no `issues:` block, so golangci-lint's `max-same-issues: 3` and `max-issues-per-linter: 50` defaults truncate the report silently: five identical unused-directive reds print as three, summarised as `nolintlint: 3`.
+**A `nolintlint` red under-reports its own extent.** `.golangci.yml` sets no `issues:` block, so golangci-lint's own defaults apply and truncate the report silently.
+`max-same-issues: 3` is the one measured here: five identical unused-directive reds print as three, summarised as `nolintlint: 3`.
+`max-issues-per-linter: 50` is the other cap the missing block leaves at its default, and five issues never approached it.
 Read the count as a floor until Q1003 lifts the caps, and re-run with `--max-same-issues=0` before concluding you have fixed them all.
 Truncation cannot *cause* the red: `MaxSameIssues` and `MaxFromLinter` are registered after `NewNolintFilter` in `pkg/lint/runner.go`.
 
