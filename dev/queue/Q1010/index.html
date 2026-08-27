@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q941/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1010/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>session-worker's contract has seven gaps workers hit independently - GitHub Actions Gateway</title>
+        <title>A dispatcher's error reaches further than its correction - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#session-workers-contract-has-seven-gaps-workers-hit-independently" class="md-skip">
+        <a href="#a-dispatchers-error-reaches-further-than-its-correction" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              session-worker's contract has seven gaps workers hit independently
+              A dispatcher's error reaches further than its correction
             
           </span>
         </div>
@@ -2597,24 +2597,22 @@
   
 
 
-<h1 id="session-workers-contract-has-seven-gaps-workers-hit-independently"><code>session-worker</code>'s contract has seven gaps workers hit independently<a class="headerlink" href="#session-workers-contract-has-seven-gaps-workers-hit-independently" title="Permanent link">&para;</a></h1>
-<p>Reported by workers during the 2026-08-18 batch, each quoting the copy loaded into its own context.
-Four gaps: §4 says a per-item store commits the row with the code, contradicting CLAUDE.md's split-when-code-is-touched (Q889), and four workers hit this one independently and all followed the repo; §6 covers the post-<code>ready</code> window only "with no dispatcher", so a dispatcher awaiting a wake from an already-exited watcher is unhandled; nothing covers closing a second pre-existing row naming the same defect; nothing covers changing a shared script's output format, which no path-based sweep can see and the consuming side cannot detect either.
-A fifth surfaced later: nothing says to check a pinned dependency's changelog when a row's asserted cause could have been retired by a version bump the repo already took, which is what settled Q835.
-Two more surfaced in the 2026-08-19 release-harness batch, and the first gap took its fifth and sixth sightings there.
-Sixth gap: nothing says whether a worker may add repo-wide verification machinery for an in-scope change.
-Q899's worker added <code>publish-digest-check</code> because <code>publish.yml</code> runs only on a <code>v*</code> tag, so no PR exercises it and a bad edit surfaces during a release; the dispatcher accepted it on the <code>check-cosign-pin.sh</code>/Q903 precedent.
-Seventh: nothing covers a change whose verification needs the network and cannot be gated locally.
-Q927's worker had to verify cosign's release signature live, and filed <a href="../Q944/">Q944</a> for the tooling gap it found doing so.
-An eighth surfaced in the 2026-08-27 dispatch batch, and it is the only one so far that let a worker damage another worker's PR.
-The takeover route is written for a branch whose worker has exited, but its precondition check is <code>gh pr view &lt;n&gt; --json state,mergedAt</code>, which reads <em>PR</em> liveness and never <em>author</em> liveness.
-So a dispatcher that wrongly reads a session as gone hands a takeover a premise nothing downstream can refute.
-Two takeovers adopted live authors' branches that morning; one ran <code>gh pr ready --undo</code> on a PR whose author was still working, and because <code>gh</code> authenticates as the same account for every session here, the timeline recorded the maintainer drafting it.
-The three reads that settle ownership come from the remote rather than from <code>ListAgents</code>: <code>git rev-parse origin/&lt;branch&gt;</code> matching <code>headRefOid</code>, <code>git rev-parse --abbrev-ref @{u}</code>, and <code>git reflog --format=%H</code> containing the head.
-<code>--format=%H</code> is load-bearing on the third, because the default abbreviates and a grep for a 40-character SHA returns 0 for a commit the session made itself.
-Filed upstream 2026-08-27 with the two other gaps that run found.</p>
-<p>The skill lives in <code>karlkfi/claude-skills</code>, so this needs a human to file upstream.
-The repo-side halves are documented in <a href="../../development/parallel-dispatch/">parallel-dispatch.md</a>.</p>
+<h1 id="a-dispatchers-error-reaches-further-than-its-correction">A dispatcher's error reaches further than its correction<a class="headerlink" href="#a-dispatchers-error-reaches-further-than-its-correction" title="Permanent link">&para;</a></h1>
+<p>A framing written into a spawn brief propagates to every artifact the worker touches, while the correction that follows reaches the one sentence its author is looking at.
+The two travel at different rates and nothing in the playbook says so, which leaves a corrected claim looking closed while its copies stand.</p>
+<p>Measured 2026-08-27 on <a href="https://github.com/actions-gateway/github-actions-gateway/pull/1753">#1753</a>.
+A dispatcher brief asserted that Phase 2's validation batched onto Phase 3's dogfood session.
+That was wrong, and it reached three files: the plan doc's status header, the plan index's row, and a <code>deploy/</code> README the worker wrote <em>from</em> the brief.
+The worker corrected the framing where it had been raised and reported the class closed, in good faith.
+Re-reading the remote head found all three original sites still wrong, and the eventual census came to six once two artifacts no tree walk reaches were counted: the backlog row, and the commit message.</p>
+<p>The worker's own sweep then missed the same <code>deploy/</code> README a second time, because a plus-or-minus-2-line context window narrowed the population before the count, so a clean result confirmed nothing.
+That failure is <a href="../Q918/">Q918</a>'s class and is filed there.
+What belongs here is the propagation asymmetry that made the sweep necessary at all.</p>
+<p>Two rules the playbook can state.
+A dispatcher that finds an error in its own brief owns the census, not the worker, because the dispatcher is the only party that knows every place the brief was sent.
+And a census over a repository is a floor rather than a total: a commit message and a backlog row are artifacts a brief reaches and <code>grep</code> over the worktree does not.</p>
+<p>The same shape recurred twice more in the run on <a href="https://github.com/actions-gateway/github-actions-gateway/pull/1754">#1754</a>, where a PR body's overstated sweep claim ("three sites") had also reached the backlog row and an architecture doc, and where a fabricated attribution in that body was found by a stood-down takeover rather than by the author or the reviewer.
+A PR body is the artifact class no gate in this repository reads.</p>
 
 
 
