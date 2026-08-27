@@ -892,7 +892,14 @@ If you ever see that shape, treat it as a defect and report it.
 
 Remove the namespace from `allowedNamespaces`.
 The GMC deletes the projected ConfigMap and drops the ingress peer, and the consumer's references go `ProxyShareNotGranted`.
-Revocation is immediate in the control plane; in-flight connections through the proxy end when their pods do, so drain the consumer's RunnerSets first if you need a clean cut.
+
+**Enforcement is immediate; one of the three status signals is bounded rather than instant.** The GMC watches the `EgressProxy`, so the projection and the provider's ingress peer both go on the reconcile that follows your edit.
+From that moment no new connection from the consumer's workers is admitted, whatever their CRs still say.
+An `ActionsGateway`'s `defaultProxyRef` reports `Degraded`/`ProxyShareNotGranted` on the same reconcile, because the GMC owns that resolution.
+A `RunnerSet`'s `proxyRef` is resolved by the AGC instead, which may read the projection but not watch it (its Role grants `get` on ConfigMaps and not `list`/`watch`), so its `Ready` condition follows within **one minute**, on a re-check cadence rather than a watch.
+Until it does the set keeps acquiring jobs, and their worker pods fail to reach the proxy rather than reaching it without a grant.
+
+In-flight connections through the proxy end when their pods do, so drain the consumer's RunnerSets first if you need a clean cut.
 
 ---
 

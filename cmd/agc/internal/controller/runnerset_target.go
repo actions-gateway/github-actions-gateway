@@ -442,6 +442,14 @@ type resolvedRefs struct {
 	templateAnnotations map[string]string
 }
 
+// resolvedThroughShare reports whether the set's egress wiring came from a
+// GMC-projected share ConfigMap rather than a colocated EgressProxy. That is the
+// AGC's one unwatchable referent (§H.9), so it is the one resolution the reconciler
+// has to keep re-checking rather than wait for an event on.
+func (refs *resolvedRefs) resolvedThroughShare() bool {
+	return refs != nil && refs.proxy != nil && refs.proxy.caConfigMapName != ""
+}
+
 // refResolution is the outcome of resolving a RunnerSet's references: either a
 // non-nil err (an unexpected API error to retry with backoff) or a reason/message
 // naming the missing referent (a fail-closed runtime condition, §H.7), or — when
