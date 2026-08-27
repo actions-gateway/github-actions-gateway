@@ -140,26 +140,51 @@ else
 		"got: $(tr '\n' ' ' < "$FIXTURE_DIR/out.log")"
 fi
 
-# The check must not be satisfied by a single read, and must not re-read one URL.
+unset STUB_FLIP_AFTER
+
+# --- propagation that arrives late is a pass, not a red run ---
+#
+# The request-count assertions live HERE rather than on the timeout case above,
+# and both halves of that matter.
+#
+# Deterministic: the stub serves the stale tree for the first two requests
+# whatever the clock does, so reaching success REQUIRES at least three. Counting
+# on the timeout case instead made the assertion a race against the budget —
+# under a loaded `make scripts-test` (99 suites in parallel) a single attempt
+# consumed the whole 4s, the loop broke after one request, and the suite failed
+# for a reason that was never about the code.
+#
+# And with one request the distinctness check passed VACUOUSLY: one query string
+# is trivially all-distinct. So the floor below is what gives that assertion
+# anything to prove, rather than a tidier way to state it.
+#
+# The budget is generous because this case must SUCCEED, and success exits the
+# loop as soon as the site is right. A large timeout costs nothing on that path
+# and removes the clock from the assertion entirely.
+export STUB_FLIP_AFTER=2
+: > "$STUB_QUERY_LOG"
+expect "a site that goes correct on a later attempt passes" 0 \
+	--version 1.6.0 --alias stable --base http://site --timeout 60 --interval 1
+
 attempts="$(grep -c . "$STUB_QUERY_LOG")"
-if ((attempts >= 2)); then
+if ((attempts >= 3)); then
 	pass "the check polls rather than sampling once ($attempts requests)"
 else
 	fail "the check polls rather than sampling once" "made $attempts request(s)"
 fi
+# Per ATTEMPT, not per request. The two fetches inside one attempt share a
+# token by design and may: they are different URLs, so they are already
+# different cache keys. What must never repeat is the token across attempts,
+# which is what a stale edge copy would otherwise be re-read through. Asserting
+# one-per-request looked stricter and was simply wrong -- it only ever passed
+# because the timeout case makes exactly one request per attempt.
 distinct="$(sort -u "$STUB_QUERY_LOG" | grep -c .)"
-if ((distinct == attempts)); then
-	pass "every request carries its own cache-busting query ($distinct distinct)"
+if ((distinct >= 3)); then
+	pass "each attempt carries its own cache-busting query ($distinct distinct over $attempts request(s))"
 else
-	fail "every request carries its own cache-busting query" \
+	fail "each attempt carries its own cache-busting query" \
 		"$attempts request(s) used only $distinct distinct query string(s)"
 fi
-unset STUB_FLIP_AFTER
-
-# --- propagation that arrives late is a pass, not a red run ---
-export STUB_FLIP_AFTER=2
-expect "a site that goes correct on a later attempt passes" 0 \
-	--version 1.6.0 --alias stable --base http://site --timeout 8 --interval 1
 unset STUB_FLIP_AFTER
 
 # --- the alias half, which the version check alone cannot see ---
