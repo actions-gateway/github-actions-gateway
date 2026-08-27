@@ -186,6 +186,13 @@ ln -s 1.6.0 "$root/stable"
 expect "a symlinked alias is not a failure, because the upload dereferences" 0 \
 	--site "$root" --version 1.6.0 --alias stable --stable-tag
 
+# ...and a symlink pointing at nothing is still a 404, so the green above is a
+# property of resolution rather than of symlinks being waved through.
+root="$(site alias-dangling "$CORRECT" dev 1.6.0 1.5.0)"
+ln -s 9.9.9 "$root/stable"
+expect "a dangling alias symlink still fails" 1 \
+	--site "$root" --version 1.6.0 --alias stable --stable-tag
+
 # A tree with no release versions at all has nothing to rank, and must not fail.
 DEVONLY='[{"version":"dev","title":"dev (main)","aliases":[]}]'
 root="$(site dev-only "$DEVONLY" dev)"

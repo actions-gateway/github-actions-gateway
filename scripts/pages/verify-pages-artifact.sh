@@ -112,6 +112,8 @@ else
 		# here: actions/upload-pages-artifact tars with `--dereference
 		# --hard-dereference` (measured at the pinned fc324d35, v5.0.0), so a
 		# symlink is materialised into the artifact rather than shipped as one.
+		# It is not a hole: `-f` is false on a DANGLING symlink, so an alias
+		# pointing at a version that is not in the tree still fails here.
 		if [[ ! -f "$SITE/$ALIAS/index.html" ]]; then
 			err "artifact has no $ALIAS/index.html, so /$ALIAS/ would 404."
 		fi

@@ -323,8 +323,18 @@ jobs:
           DOCS_REF: ${{ github.event.inputs.docs_ref }}
         # mike commits each version into a subdir of gh-pages; the branch is pushed
         # once at the end. --alias-type=copy makes an alias (e.g. `stable`) a real
-        # directory, not a symlink: GitHub Pages artifact deploys don't follow
-        # symlinks, so a symlinked `stable/` would 404 on deep links.
+        # directory rather than a symlink, so the tree is correct independent of
+        # how the upload archives it.
+        #
+        # That is robustness, not a requirement. This comment used to say a
+        # symlinked alias would 404 because Pages artifact deploys don't follow
+        # symlinks; that was never true of any released upload-pages-artifact —
+        # v1.0.0, v2.0.0, v3.0.1 and the pinned v5.0.0 all tar with
+        # `--dereference --hard-dereference` (measured 2026-08-27), so a symlink
+        # is materialised into the artifact. Keep the flag anyway: it holds if
+        # the action ever drops those flags. scripts/pages/verify-pages-artifact.sh
+        # asserts the alias serves a page, and deliberately passes a symlinked
+        # one for the same reason.
         #
         # `stable` + the default root redirect only move to a release tag when it is
         # the HIGHEST released version, so a backport patch to an older supported
