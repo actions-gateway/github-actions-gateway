@@ -1,0 +1,81 @@
+# The two halves of the mirror's network posture. Both are additive: a
+# NetworkPolicy can only ever add an allowed path, so neither weakens the
+# GMC-managed default-deny that governs worker egress.
+#
+# NEITHER POLICY ADMITS AN UPSTREAM REGISTRY. That is the point of Q408: a
+# worker's only registry path is the mirror, and the mirror's own `remoteurl`
+# fixes what it will fetch. A rule here that allowed a worker to fall back to
+# the upstream on a miss would defeat the Phase 4 enforcement before it ships,
+# so this file must stay host-free.
+---
+# Worker side. Workload pods in the e2e tenant may reach mirror pods on 5000 and
+# nothing else. `namespaceSelector` and `podSelector` are keys of ONE peer here,
+# which ANDs them. Split across two list elements they would OR instead, and the
+# result is wider in both directions: any pod in the mirror namespace on 5000,
+# whatever it is, plus any pod in the tenant's own namespace that carries the
+# label, since a bare `podSelector` peer means the policy's own namespace.
+#
+# The tenant namespace is named twice across this file: here as
+# `metadata.namespace`, and below as the mirror-side policy's
+# `kubernetes.io/metadata.name` peer. See ../README.md before retargeting.
+#
+# Applying this while the Kata overlay's allow-all `e2e-open-egress` is still in
+# place is a no-op — union with allow-all. That is deliberate: it makes Q408
+# Phase 4 a pure deletion of `e2e-open-egress` rather than a swap.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: e2e-mirror-egress
+  namespace: gag-dogfood-e2e
+spec:
+  podSelector:
+    matchLabels:
+      actions-gateway/component: workload
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: gag-registry-mirror
+          podSelector:
+            matchLabels:
+              app: registry-mirror
+      ports:
+        - protocol: TCP
+          port: 5000
+---
+# Mirror side. Selecting the mirror pods for Ingress makes this policy their
+# whole accepted set: only the worker namespace, only 5000. deployment.yaml
+# unbinds the :5001 debug listener the upstream image's bundled config carries,
+# so this is the second of two on that port rather than the only one.
+#
+# The readiness/liveness probes are unaffected: the kubelet reaches a pod from
+# the node, outside pod-to-pod policy on GKE Dataplane V2. The managed AGC policy
+# already relies on this — it declares PolicyTypeIngress and admits only
+# monitoring scrapes of 8443, while the kubelet probes /healthz on 8081.
+#
+# Egress is deliberately NOT restricted. The mirror pods carry no
+# `actions-gateway/component=workload` label, so the managed default-deny does
+# not select them and they keep the free egress a pull-through cache needs.
+# Bounding that by network is not available here: the upstreams are CDN-fronted,
+# GKE DPv2 enforces no FQDN policy on this cluster, and a CIDR allowlist rots
+# (Q408 plan §5). What bounds it instead is `proxy.remoteurl` — one upstream per
+# instance, in the pod spec, which is content control rather than host control.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: registry-mirror-worker-access
+  namespace: gag-registry-mirror
+spec:
+  podSelector:
+    matchLabels:
+      app: registry-mirror
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: gag-dogfood-e2e
+      ports:
+        - protocol: TCP
+          port: 5000

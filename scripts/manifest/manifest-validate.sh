@@ -70,7 +70,13 @@ kubeconform_flags="-strict -summary -kubernetes-version $MANIFEST_K8S_VERSION -i
 # preview/ is deliberately excluded: it is a throwaway kind-cluster harness for
 # screenshotting the dashboards, "not part of the chart or any install path" per
 # its own README, and its fixtures use flow mappings this config rejects.
-yamllint_paths="charts/actions-gateway charts/actions-gateway-crds-v2 cmd/agc/config cmd/gmc/config deploy/kata-ci deploy/templates deploy/monitoring/prometheusrule.yaml"
+# deploy/registry-mirror is the Q408 untrusted-PR pull-through cache: hand-authored
+# YAML an operator applies with `kubectl apply -k`, same class as deploy/templates
+# above, and a security surface (its NetworkPolicies are the workers' only
+# registry path). Its base manifests are plain native kinds, so kubeconform covers
+# them too via standalone_manifests below; the kustomization.yaml files are not
+# Kubernetes manifests and are yamllint-only, as deploy/kata-ci/kata-values.yaml is.
+yamllint_paths="charts/actions-gateway charts/actions-gateway-crds-v2 cmd/agc/config cmd/gmc/config deploy/kata-ci deploy/registry-mirror deploy/templates deploy/monitoring/prometheusrule.yaml"
 
 # The shipped Grafana dashboards. Nothing parsed them before Q827, so a stray
 # comma survived to whoever imported the file. jq is required-tier already.
@@ -107,7 +113,12 @@ cmd/gmc/config/admission-policy/namespace-security-profile-guard.yaml
 cmd/gmc/config/admission-policy/tenant-resource-guard.yaml
 cmd/gmc/config/admission-policy/priorityclass-allowlist-guard.yaml
 deploy/kata-ci/runtimeclass.yaml
-deploy/kata-ci/runner-pod.yaml"
+deploy/kata-ci/runner-pod.yaml
+deploy/registry-mirror/base/namespace.yaml
+deploy/registry-mirror/base/deployment.yaml
+deploy/registry-mirror/base/service.yaml
+deploy/registry-mirror/base/networkpolicy.yaml
+deploy/registry-mirror/overlays/persistent/pvc.yaml"
 
 echo "==> yamllint (static manifests + chart metadata)"
 # shellcheck disable=SC2086  # path and flag lists word-split intentionally

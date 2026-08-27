@@ -90,6 +90,11 @@ jobs:
               # the reference PrometheusRule and the two Grafana dashboards
               # reached operators with nothing in CI having parsed them.
               - 'deploy/monitoring/**'
+              # The Q408 registry pull-through cache: yamllint'd and
+              # kubeconform'd by this gate as hand-authored operator YAML, and
+              # a security surface — its NetworkPolicies are the untrusted-PR
+              # workers' only registry path.
+              - 'deploy/registry-mirror/**'
               - '.yamllint.yaml'
               - 'Makefile'
               # scripts/manifest/ is exactly this gate's backends — the validator

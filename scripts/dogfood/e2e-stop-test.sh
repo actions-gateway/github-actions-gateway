@@ -63,6 +63,7 @@ CALL_LOG="${WORKDIR}/calls.log"
 PODS_FILE="${WORKDIR}/pods"
 RUNS_FILE="${WORKDIR}/runs"
 GATEWAYS_FILE="${WORKDIR}/gateways"
+MIRRORS_FILE="${WORKDIR}/mirrors"
 POD_READ_OK=1
 QUEUED_PER_RUN=0
 GH_RUN_LIST_OK=1
@@ -77,6 +78,7 @@ kubectl() {
 		cat "${PODS_FILE}"
 		;;
 	get\ actionsgateways*) cat "${GATEWAYS_FILE}" ;;
+	get\ deployment*) cat "${MIRRORS_FILE}" ;;
 	esac
 	return 0
 }
@@ -108,6 +110,7 @@ reset_stubs() {
 	: >"${CALL_LOG}"
 	: >"${PODS_FILE}"
 	: >"${RUNS_FILE}"
+	: >"${MIRRORS_FILE}"
 	POD_READ_OK=1
 	QUEUED_PER_RUN=0
 	GH_RUN_LIST_OK=1
@@ -120,6 +123,13 @@ reset_stubs() {
 queue_busy() {
 	echo 4242 >"${RUNS_FILE}"
 	QUEUED_PER_RUN=1
+}
+
+# mirror_deployed — arm the cluster with the five registry-mirror Deployments,
+# the shape `kubectl get deployment -o name` returns.
+mirror_deployed() {
+	printf 'deployment.apps/mirror-%s\n' \
+		docker-io ghcr-io quay-io registry-k8s-io gcr-io >"${MIRRORS_FILE}"
 }
 
 # workers_busy — arm the cluster with two e2e worker pods that never get reaped.
@@ -367,6 +377,31 @@ reset_stubs gag-dogfood gag-dogfood-ci
 SYSTEM_POOL_AT_REST_NODES=4
 run_main
 check "honors an explicitly pinned restore size" 4 "$(resize_nodes)"
+
+# --- the registry pull-through cache is scaled down with the tenant (Q408) ---
+
+reset_stubs gag-dogfood gag-dogfood-ci
+mirror_deployed
+run_main
+scale_call="$(call_line 'kubectl scale')"
+check_contains "scales the mirror deployments to zero" \
+	"--replicas=0" "${scale_call}"
+check_contains "scopes the scale-down to the mirror namespace" \
+	"--namespace gag-registry-mirror" "${scale_call}"
+check_contains "selects the mirror deployments by label" \
+	"-l app=registry-mirror" "${scale_call}"
+# Scaling is not deleting: the namespace, the NetworkPolicies and any PVC-backed
+# layer cache have to survive the window for the next one to start warm.
+check_not_contains "never deletes the mirror namespace" \
+	"delete namespace" "$(cat "${CALL_LOG}")"
+
+# `kubectl scale` has no --ignore-not-found, so a cluster set up before Q408 has
+# to be read first — an unguarded scale would abort the whole teardown there.
+reset_stubs gag-dogfood gag-dogfood-ci
+run_main
+check "a cluster with no mirror still tears down cleanly" 0 "${MAIN_RC}"
+check_not_contains "never scales a mirror that is not deployed" \
+	"kubectl scale" "$(cat "${CALL_LOG}")"
 
 # --- a mismatched context aborts before anything is deleted ------------------
 

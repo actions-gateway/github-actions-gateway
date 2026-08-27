@@ -1,0 +1,73 @@
+# One PVC per instance — each Distribution instance owns its own cache and the
+# GKE default class is ReadWriteOnce, so they cannot share.
+#
+# 10Gi uniformly because that is the GCE PD floor, not because each upstream
+# needs it: `kindest/node` alone is ~1 GiB on the docker.io instance, while the
+# gcr.io instance holds only `distroless/static` metadata. An adopter who wants
+# to pay for less can render this overlay for docker.io and quay.io and leave
+# the other three on the base's emptyDir.
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: mirror-docker-io-storage
+  namespace: gag-registry-mirror
+spec:
+  accessModes: [ReadWriteOnce]
+  resources:
+    requests:
+      storage: 10Gi
+  # GKE default: standard-rwo (Balanced PD, ReadWriteOnce).
+  storageClassName: standard-rwo
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: mirror-ghcr-io-storage
+  namespace: gag-registry-mirror
+spec:
+  accessModes: [ReadWriteOnce]
+  resources:
+    requests:
+      storage: 10Gi
+  # GKE default: standard-rwo (Balanced PD, ReadWriteOnce).
+  storageClassName: standard-rwo
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: mirror-quay-io-storage
+  namespace: gag-registry-mirror
+spec:
+  accessModes: [ReadWriteOnce]
+  resources:
+    requests:
+      storage: 10Gi
+  # GKE default: standard-rwo (Balanced PD, ReadWriteOnce).
+  storageClassName: standard-rwo
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: mirror-registry-k8s-io-storage
+  namespace: gag-registry-mirror
+spec:
+  accessModes: [ReadWriteOnce]
+  resources:
+    requests:
+      storage: 10Gi
+  # GKE default: standard-rwo (Balanced PD, ReadWriteOnce).
+  storageClassName: standard-rwo
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: mirror-gcr-io-storage
+  namespace: gag-registry-mirror
+spec:
+  accessModes: [ReadWriteOnce]
+  resources:
+    requests:
+      storage: 10Gi
+  # GKE default: standard-rwo (Balanced PD, ReadWriteOnce).
+  storageClassName: standard-rwo

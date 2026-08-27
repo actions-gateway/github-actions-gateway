@@ -1,0 +1,97 @@
+# One ClusterIP per instance. The DNS name a client is pointed at in Q408 Phase 3
+# is <name>.gag-registry-mirror.svc.cluster.local:5000, over plain HTTP — the
+# standard in-cluster mirror transport (Q408 plan §3.1). Image identity survives it:
+# schema-2/OCI digests are content addresses over bytes that carry no registry
+# host, so a digest-pinned pull re-verifies client-side.
+#
+# On the `mirror-` name prefix, which is not cosmetic, see deployment.yaml.
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mirror-docker-io
+  namespace: gag-registry-mirror
+  labels:
+    app: registry-mirror
+    upstream: docker-io
+spec:
+  selector:
+    app: registry-mirror
+    upstream: docker-io
+  ports:
+    - name: registry
+      port: 5000
+      targetPort: 5000
+  type: ClusterIP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mirror-ghcr-io
+  namespace: gag-registry-mirror
+  labels:
+    app: registry-mirror
+    upstream: ghcr-io
+spec:
+  selector:
+    app: registry-mirror
+    upstream: ghcr-io
+  ports:
+    - name: registry
+      port: 5000
+      targetPort: 5000
+  type: ClusterIP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mirror-quay-io
+  namespace: gag-registry-mirror
+  labels:
+    app: registry-mirror
+    upstream: quay-io
+spec:
+  selector:
+    app: registry-mirror
+    upstream: quay-io
+  ports:
+    - name: registry
+      port: 5000
+      targetPort: 5000
+  type: ClusterIP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mirror-registry-k8s-io
+  namespace: gag-registry-mirror
+  labels:
+    app: registry-mirror
+    upstream: registry-k8s-io
+spec:
+  selector:
+    app: registry-mirror
+    upstream: registry-k8s-io
+  ports:
+    - name: registry
+      port: 5000
+      targetPort: 5000
+  type: ClusterIP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mirror-gcr-io
+  namespace: gag-registry-mirror
+  labels:
+    app: registry-mirror
+    upstream: gcr-io
+spec:
+  selector:
+    app: registry-mirror
+    upstream: gcr-io
+  ports:
+    - name: registry
+      port: 5000
+      targetPort: 5000
+  type: ClusterIP

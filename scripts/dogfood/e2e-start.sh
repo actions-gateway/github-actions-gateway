@@ -34,6 +34,11 @@
 #   E2E_ROUTE_VAR=1  Set vars.GAG_E2E_RUNNER to the scale set (repo-wide routing
 #                window; e2e-stop.sh resets it). Default: leave routing alone
 #                and print the run-scoped dispatch command instead.
+#   REGISTRY_MIRROR_PERSISTENT=1
+#                Render the PVC-backed registry-mirror overlay, keeping the
+#                pull-through layer caches warm across e2e windows at the cost of
+#                five continuously-billed disks. Default: ephemeral emptyDir
+#                caches. See deploy/registry-mirror/README.md.
 #   E2E_VARIANT  Worker-isolation overlay: "kata" (unprivileged kind in a Kata
 #                micro-VM — the default, live-validated green under Q286) or
 #                "dind" (privileged DinD — explicit opt-in fallback for
@@ -60,6 +65,35 @@ E2E_VARIANT="${E2E_VARIANT:-kata}"
 # with a third always-on tenant this resize cannot evict a tenant AGC.
 SYSTEM_POOL="${SYSTEM_POOL:-default-pool}"
 E2E_SYSTEM_NODES="${E2E_SYSTEM_NODES:-2}"
+
+# The in-cluster registry pull-through cache (Q408) — one Distribution instance
+# per upstream registry, plus the additive NetworkPolicy that gives workload pods
+# their only registry path. Applied here rather than in e2e-setup.sh so it shares
+# the tenant's on-demand lifecycle: five standing pods on the contended system
+# pool is exactly the cost Q231 keeps the e2e AGC off it to avoid. e2e-stop.sh
+# scales them back to zero.
+#
+# Idempotent server-side apply, and safe to run before the mirror is wired to any
+# client: until Q408 Phase 3 points dockerd/buildkit/helm at it, nothing pulls
+# through it, and its additive policy is a no-op while the Kata overlay's
+# allow-all e2e-open-egress is still in place.
+apply_registry_mirror() {
+	# Ephemeral caches by default (emptyDir — $0 at rest, cold on the first pull
+	# of each e2e window). Set REGISTRY_MIRROR_PERSISTENT=1 to render the
+	# PVC-backed overlay, which keeps the layer caches warm across windows at the
+	# cost of five continuously-billed disks. See deploy/registry-mirror/README.md.
+	local overlay="${REPO_ROOT}/deploy/registry-mirror"
+	if [[ "${REGISTRY_MIRROR_PERSISTENT:-0}" == "1" || "${REGISTRY_MIRROR_PERSISTENT:-0}" == "true" ]]; then
+		overlay="${REPO_ROOT}/deploy/registry-mirror/overlays/persistent"
+		echo "Applying the in-cluster registry pull-through cache (persistent PVCs)..."
+	else
+		echo "Applying the in-cluster registry pull-through cache (ephemeral)..."
+	fi
+	kubectl apply -k "${overlay}"
+	echo "  Waiting for the mirror instances to be ready..."
+	kubectl wait --namespace gag-registry-mirror \
+		--for=condition=Available deployment -l app=registry-mirror --timeout=180s
+}
 
 main() {
 	: "${PROJECT:?PROJECT must be set}"
@@ -114,6 +148,11 @@ main() {
 	echo "Waiting for the e2e gateway's AGC to become Ready..."
 	kubectl wait --namespace gag-dogfood-e2e \
 		--for=condition=Ready actionsgateway/dogfood-e2e --timeout=3m
+
+	# After the AGC wait, which is the bring-up's verdict and should not queue
+	# behind five image pulls, and before the routing block below, which is the
+	# first point at which a job can reach this tenant.
+	apply_registry_mirror
 
 	# ScaleSet routing (Q231): the v2beta1 RunnerSet declares exactly one
 	# runnerLabel (gag-ci-e2e), which is both the runs-on target and the

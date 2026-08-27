@@ -1,0 +1,461 @@
+# One CNCF Distribution instance per upstream registry, each in pull-through
+# cache mode. Proxy mode takes exactly one `proxy.remoteurl`, so the upstream set
+# is the instance set — five, per the measured e2e job-time inventory
+# (the Q408 plan, §2.2/§2.5).
+#
+# NAMING: a Service here must never be named `registry-*`. Kubernetes injects
+# <SVCNAME>_SERVICE_HOST/_PORT into every pod in the namespace, and Distribution
+# reads REGISTRY_-prefixed env vars as configuration. Measured on 3.1.1: an
+# unrecognised REGISTRY_* var is logged as "Ignoring unrecognized environment
+# variable" and skipped, but a name that maps onto a real config key
+# (REGISTRY_HTTP_HOST, REGISTRY_HTTP_SECRET) would be applied silently. The
+# `mirror-` prefix keeps every injected var outside that namespace. This is the
+# same class of footgun that renamed the Athens Service to go-module-proxy.
+#
+# THE IMAGE SHIPS THE UPSTREAM *DEVELOPMENT* CONFIG at /etc/distribution/config.yml
+# — `log.level: debug`, a debug listener on :5001 serving pprof and /metrics, and
+# `storage.delete.enabled: true`. The env overrides below replace all three.
+# Measured on 3.1.1: proxy mode answers DELETE with 405 even with delete enabled,
+# so REGISTRY_STORAGE_DELETE_ENABLED=false removes this posture's dependence on
+# that internal behaviour rather than being the only thing closing the endpoint.
+#
+# The image runs as root by default and its /var/lib/registry is root-owned, so
+# `fsGroup` is load-bearing: without it a non-root registry answers every pull
+# with 500 `mkdir /var/lib/registry/docker: permission denied`.
+#
+# No toleration for dedicated=e2e, so these land on the system node pool and stay
+# reachable while the e2e pool is scaled to zero — the Athens placement rule.
+---
+# docker.io — the v2 API host is registry-1.docker.io, not docker.io
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mirror-docker-io
+  namespace: gag-registry-mirror
+  labels:
+    app: registry-mirror
+    upstream: docker-io
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: registry-mirror
+      upstream: docker-io
+  template:
+    metadata:
+      labels:
+        app: registry-mirror
+        upstream: docker-io
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        fsGroup: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: registry
+          image: registry:3.1.1@sha256:1be55279f18a2fe1a74edf2664cac61c1bea305b7b4642dab412e7affdcb3e33
+          ports:
+            - containerPort: 5000
+          env:
+            - name: REGISTRY_PROXY_REMOTEURL
+              value: https://registry-1.docker.io
+            - name: REGISTRY_STORAGE_FILESYSTEM_ROOTDIRECTORY
+              value: /var/lib/registry
+            - name: REGISTRY_STORAGE_DELETE_ENABLED
+              value: "false"
+            - name: REGISTRY_LOG_LEVEL
+              value: info
+            # The access log is this posture's single audit point for what an
+            # untrusted job asked the mirror to fetch (Q408 plan §3.4).
+            - name: REGISTRY_LOG_ACCESSLOG_DISABLED
+              value: "false"
+            # Empty unbinds the bundled config's :5001 pprof + /metrics
+            # listener. That also gives up /debug/health, the only endpoint that
+            # reflects the storage-driver check — see the probe note below.
+            - name: REGISTRY_HTTP_DEBUG_ADDR
+              value: ""
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+          volumeMounts:
+            - name: storage
+              mountPath: /var/lib/registry
+          resources:
+            requests:
+              cpu: "25m"
+              memory: "64Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
+          # /v2/ answers 200 from the API layer alone: measured, a registry
+          # whose storage root is unwritable serves 200 here and 500 for every
+          # pull. So this proves the process is up, not that the cache works.
+          # What closes that gap is fsGroup above, not the probe.
+          readinessProbe:
+            httpGet:
+              path: /v2/
+              port: 5000
+            initialDelaySeconds: 3
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /v2/
+              port: 5000
+            initialDelaySeconds: 10
+            periodSeconds: 20
+      volumes:
+        # Ephemeral by default: $0 at rest, cold on the next e2e window. The
+        # persistent overlay swaps this for a PVC — see ../README.md.
+        - name: storage
+          emptyDir:
+            sizeLimit: 10Gi
+---
+# ghcr.io — also serves helm's OCI chart pulls (Q408 plan §2.3 item 2)
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mirror-ghcr-io
+  namespace: gag-registry-mirror
+  labels:
+    app: registry-mirror
+    upstream: ghcr-io
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: registry-mirror
+      upstream: ghcr-io
+  template:
+    metadata:
+      labels:
+        app: registry-mirror
+        upstream: ghcr-io
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        fsGroup: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: registry
+          image: registry:3.1.1@sha256:1be55279f18a2fe1a74edf2664cac61c1bea305b7b4642dab412e7affdcb3e33
+          ports:
+            - containerPort: 5000
+          env:
+            - name: REGISTRY_PROXY_REMOTEURL
+              value: https://ghcr.io
+            - name: REGISTRY_STORAGE_FILESYSTEM_ROOTDIRECTORY
+              value: /var/lib/registry
+            - name: REGISTRY_STORAGE_DELETE_ENABLED
+              value: "false"
+            - name: REGISTRY_LOG_LEVEL
+              value: info
+            # The access log is this posture's single audit point for what an
+            # untrusted job asked the mirror to fetch (Q408 plan §3.4).
+            - name: REGISTRY_LOG_ACCESSLOG_DISABLED
+              value: "false"
+            # Empty unbinds the bundled config's :5001 pprof + /metrics
+            # listener. That also gives up /debug/health, the only endpoint that
+            # reflects the storage-driver check — see the probe note below.
+            - name: REGISTRY_HTTP_DEBUG_ADDR
+              value: ""
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+          volumeMounts:
+            - name: storage
+              mountPath: /var/lib/registry
+          resources:
+            requests:
+              cpu: "25m"
+              memory: "64Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
+          readinessProbe:
+            httpGet:
+              path: /v2/
+              port: 5000
+            initialDelaySeconds: 3
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /v2/
+              port: 5000
+            initialDelaySeconds: 10
+            periodSeconds: 20
+      volumes:
+        # Ephemeral by default: $0 at rest, cold on the next e2e window. The
+        # persistent overlay swaps this for a PVC — see ../README.md.
+        - name: storage
+          emptyDir:
+            sizeLimit: 10Gi
+---
+# quay.io — cert-manager, and calico on that lane
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mirror-quay-io
+  namespace: gag-registry-mirror
+  labels:
+    app: registry-mirror
+    upstream: quay-io
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: registry-mirror
+      upstream: quay-io
+  template:
+    metadata:
+      labels:
+        app: registry-mirror
+        upstream: quay-io
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        fsGroup: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: registry
+          image: registry:3.1.1@sha256:1be55279f18a2fe1a74edf2664cac61c1bea305b7b4642dab412e7affdcb3e33
+          ports:
+            - containerPort: 5000
+          env:
+            - name: REGISTRY_PROXY_REMOTEURL
+              value: https://quay.io
+            - name: REGISTRY_STORAGE_FILESYSTEM_ROOTDIRECTORY
+              value: /var/lib/registry
+            - name: REGISTRY_STORAGE_DELETE_ENABLED
+              value: "false"
+            - name: REGISTRY_LOG_LEVEL
+              value: info
+            # The access log is this posture's single audit point for what an
+            # untrusted job asked the mirror to fetch (Q408 plan §3.4).
+            - name: REGISTRY_LOG_ACCESSLOG_DISABLED
+              value: "false"
+            # Empty unbinds the bundled config's :5001 pprof + /metrics
+            # listener. That also gives up /debug/health, the only endpoint that
+            # reflects the storage-driver check — see the probe note below.
+            - name: REGISTRY_HTTP_DEBUG_ADDR
+              value: ""
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+          volumeMounts:
+            - name: storage
+              mountPath: /var/lib/registry
+          resources:
+            requests:
+              cpu: "25m"
+              memory: "64Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
+          readinessProbe:
+            httpGet:
+              path: /v2/
+              port: 5000
+            initialDelaySeconds: 3
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /v2/
+              port: 5000
+            initialDelaySeconds: 10
+            periodSeconds: 20
+      volumes:
+        # Ephemeral by default: $0 at rest, cold on the next e2e window. The
+        # persistent overlay swaps this for a PVC — see ../README.md.
+        - name: storage
+          emptyDir:
+            sizeLimit: 10Gi
+---
+# registry.k8s.io — metrics-server
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mirror-registry-k8s-io
+  namespace: gag-registry-mirror
+  labels:
+    app: registry-mirror
+    upstream: registry-k8s-io
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: registry-mirror
+      upstream: registry-k8s-io
+  template:
+    metadata:
+      labels:
+        app: registry-mirror
+        upstream: registry-k8s-io
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        fsGroup: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: registry
+          image: registry:3.1.1@sha256:1be55279f18a2fe1a74edf2664cac61c1bea305b7b4642dab412e7affdcb3e33
+          ports:
+            - containerPort: 5000
+          env:
+            - name: REGISTRY_PROXY_REMOTEURL
+              value: https://registry.k8s.io
+            - name: REGISTRY_STORAGE_FILESYSTEM_ROOTDIRECTORY
+              value: /var/lib/registry
+            - name: REGISTRY_STORAGE_DELETE_ENABLED
+              value: "false"
+            - name: REGISTRY_LOG_LEVEL
+              value: info
+            # The access log is this posture's single audit point for what an
+            # untrusted job asked the mirror to fetch (Q408 plan §3.4).
+            - name: REGISTRY_LOG_ACCESSLOG_DISABLED
+              value: "false"
+            # Empty unbinds the bundled config's :5001 pprof + /metrics
+            # listener. That also gives up /debug/health, the only endpoint that
+            # reflects the storage-driver check — see the probe note below.
+            - name: REGISTRY_HTTP_DEBUG_ADDR
+              value: ""
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+          volumeMounts:
+            - name: storage
+              mountPath: /var/lib/registry
+          resources:
+            requests:
+              cpu: "25m"
+              memory: "64Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
+          readinessProbe:
+            httpGet:
+              path: /v2/
+              port: 5000
+            initialDelaySeconds: 3
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /v2/
+              port: 5000
+            initialDelaySeconds: 10
+            periodSeconds: 20
+      volumes:
+        # Ephemeral by default: $0 at rest, cold on the next e2e window. The
+        # persistent overlay swaps this for a PVC — see ../README.md.
+        - name: storage
+          emptyDir:
+            sizeLimit: 10Gi
+---
+# gcr.io — buildkit resolves distroless/static here; metadata only, no layer transfer (Q408 plan §2.5)
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mirror-gcr-io
+  namespace: gag-registry-mirror
+  labels:
+    app: registry-mirror
+    upstream: gcr-io
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: registry-mirror
+      upstream: gcr-io
+  template:
+    metadata:
+      labels:
+        app: registry-mirror
+        upstream: gcr-io
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        fsGroup: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: registry
+          image: registry:3.1.1@sha256:1be55279f18a2fe1a74edf2664cac61c1bea305b7b4642dab412e7affdcb3e33
+          ports:
+            - containerPort: 5000
+          env:
+            - name: REGISTRY_PROXY_REMOTEURL
+              value: https://gcr.io
+            - name: REGISTRY_STORAGE_FILESYSTEM_ROOTDIRECTORY
+              value: /var/lib/registry
+            - name: REGISTRY_STORAGE_DELETE_ENABLED
+              value: "false"
+            - name: REGISTRY_LOG_LEVEL
+              value: info
+            # The access log is this posture's single audit point for what an
+            # untrusted job asked the mirror to fetch (Q408 plan §3.4).
+            - name: REGISTRY_LOG_ACCESSLOG_DISABLED
+              value: "false"
+            # Empty unbinds the bundled config's :5001 pprof + /metrics
+            # listener. That also gives up /debug/health, the only endpoint that
+            # reflects the storage-driver check — see the probe note below.
+            - name: REGISTRY_HTTP_DEBUG_ADDR
+              value: ""
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+          volumeMounts:
+            - name: storage
+              mountPath: /var/lib/registry
+          resources:
+            requests:
+              cpu: "25m"
+              memory: "64Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
+          readinessProbe:
+            httpGet:
+              path: /v2/
+              port: 5000
+            initialDelaySeconds: 3
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /v2/
+              port: 5000
+            initialDelaySeconds: 10
+            periodSeconds: 20
+      volumes:
+        # Ephemeral by default: $0 at rest, cold on the next e2e window. The
+        # persistent overlay swaps this for a PVC — see ../README.md.
+        - name: storage
+          emptyDir:
+            sizeLimit: 10Gi

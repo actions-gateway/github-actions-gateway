@@ -1,0 +1,16 @@
+# The mirror runs in its own namespace, not the tenant's, for two reasons that
+# both bite: the e2e tenant's ResourceQuota caps it at 6 pods against a 2-worker
+# RunnerSet, and the mirror is tenant-independent infrastructure that outlives
+# any one worker-isolation overlay.
+#
+# PSA `restricted` is the enforced level: every pod here is restricted-compliant
+# (non-root, no capabilities, seccomp RuntimeDefault), unlike the tenant
+# namespace, which needs `privileged` for the Kata worker's guest-scoped
+# capability adds.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: gag-registry-mirror
+  labels:
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/enforce-version: latest

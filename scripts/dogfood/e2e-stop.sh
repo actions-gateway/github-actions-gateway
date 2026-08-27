@@ -122,6 +122,24 @@ main() {
 	kubectl delete actionsgateway dogfood-e2e \
 		--namespace "${E2E_TENANT_NAMESPACE}" --ignore-not-found
 
+	# Same argument for the registry pull-through cache (Q408): five idle pods
+	# would sit on the system pool that Q231 keeps the e2e AGC off. Scale rather
+	# than delete, so the namespace, the NetworkPolicies and any PVC-backed layer
+	# cache survive the window — e2e-start.sh's apply restores replicas to 1.
+	# `kubectl scale` has no --ignore-not-found, and a cluster set up before Q408
+	# has no such namespace, so the presence read is what keeps this teardown from
+	# aborting there; skipping it only leaves pods running.
+	local mirrors
+	mirrors="$(kubectl get deployment --namespace gag-registry-mirror \
+		-l app=registry-mirror -o name 2>/dev/null || true)"
+	if [[ -n "${mirrors}" ]]; then
+		echo "Scaling the registry pull-through cache back to zero..."
+		kubectl scale deployment --namespace gag-registry-mirror \
+			-l app=registry-mirror --replicas=0
+	else
+		echo "No registry pull-through cache deployed — nothing to scale down."
+	fi
+
 	# Restore the system pool to the running size now the e2e window is over
 	# (Q335/Q357) — derived from the deployed always-on ActionsGateways unless
 	# pinned. The e2e gateway was deleted above (and its namespace is excluded
