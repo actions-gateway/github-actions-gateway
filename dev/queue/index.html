@@ -2730,14 +2730,6 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td><strong>Event:</strong> <code>version-cmds-answer</code> or <code>installed-floors-report-a-version</code> fails on <code>main</code> again.</td>
 </tr>
 <tr>
-<td><a href="Q1001/">Q1001</a></td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/release/check-artifact-unchanged.sh">Nothing warns when shipped code merges during a candidate window</a></td>
-<td><code>ci</code> <code>docs</code> <code>retro</code></td>
-<td>🔲</td>
-<td>M</td>
-<td><code>v1.6.0-rc.1</code> was tagged 2026-08-25 and never validated: #1725, #1726 and #1674 merged on top of it, and `check-artifact-unchanged.sh …</td>
-</tr>
-<tr>
 <td><a href="Q408/">Q408</a></td>
 <td><a href="../plan/q408-untrusted-pr-egress/">Untrusted-PR egress posture for Kata workers</a></td>
 <td><code>security</code> <code>1.7-gate</code></td>
@@ -3072,6 +3064,14 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>🔲</td>
 <td>S</td>
 <td><code>.golangci.yml</code> declares no <code>issues:</code> block, so golangci-lint's own defaults apply: <code>max-same-issues: 3</code> and <code>max-issues-per-linter: 50</code> …</td>
+</tr>
+<tr>
+<td><a href="Q1006/">Q1006</a></td>
+<td><a href="../development/testing/">Nothing executes a workflow <code>run:</code> body before it reaches main</a></td>
+<td><code>ci</code> <code>debt</code></td>
+<td>🔲</td>
+<td>S</td>
+<td><code>make check</code> runs targets over the tree, and no target enters a workflow step's shell, so a <code>run:</code> body is first executed by the runner on …</td>
 </tr>
 <tr>
 <td><a href="Q637/">Q637</a></td>

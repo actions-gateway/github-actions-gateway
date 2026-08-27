@@ -3918,7 +3918,12 @@ Check rather than classify:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-21-1" name="__codelineno-21-1" href="#__codelineno-21-1"></a>scripts/release/check-artifact-unchanged.sh<span class="w"> </span>&lt;validated-candidate-sha&gt;<span class="w"> </span>origin/main
 </code></pre></div>
 <p>Exit 1 means the stable tag would ship something no candidate validated.
-Revert it, or cut and validate a new candidate.</p>
+Revert it, or cut and validate a new candidate.
+Exit 2 is different and is never a finding about the release: the check itself could not run, so nothing has been measured and the window is still an open question.</p>
+<p><strong>You should already know, because the watch says so at the merge.</strong> <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/release-freeze-watch.yml"><code>release-freeze-watch.yml</code></a> runs this same question after every push to <code>main</code>, and opens an issue labelled <code>release-freeze</code> naming the candidate the window invalidated.
+It closes that issue when a newer candidate covers <code>main</code> again, so an open one means a freeze is broken right now and the check above is about to exit 1.
+Until Q1001 nothing said so: <code>v1.6.0-rc.1</code> was tagged, three Dependabot pull requests merged on top of it, and the first anybody heard was this pre-flight the next morning.
+The watch never blocks a merge, because the merge is not the problem: those bumps were good changes and the answer was a new candidate.</p>
 <p><strong>Land <a href="#7-bump-the-pinned-release-in-the-docs">step 7</a>'s pin bump on <code>main</code> before you tag a stable release</strong>, and confirm the gate names the version you are about to cut:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-22-1" name="__codelineno-22-1" href="#__codelineno-22-1"></a>make<span class="w"> </span>release-pins-check
 </code></pre></div>
