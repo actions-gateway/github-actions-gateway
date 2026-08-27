@@ -73,6 +73,33 @@ That suite is a gate, not a convention: `make claude-usage-test` runs it as part
 It is stdlib-only, so it needs no venv — the `requirements.txt` install in Quick start above is for the charts alone.
 The same target byte-compiles every `.py` here, which is the only check [`make_charts.py`](make_charts.py) gets: it has no tests and importing it needs matplotlib, so compiling is what catches a syntax error in it.
 
+## Refreshing the snapshot
+
+Three rules, then the inventory.
+
+**Run the scripts last.** The git series is recomputed from the tree on every run, so each rebase moves it and every figure already written has to be re-derived.
+Rebase onto the base you mean to publish from, then run `compute_metrics.py` and `make_charts.py`, then write the prose.
+
+**Re-derive each figure; never scale the last one.** The 2026-08-27 refresh re-derived all of them and found four that had turned rather than moved: the busiest era was no longer the one fixing most, an "on every one of the N days" claim had picked up an exception, the prompt predicate's effect was 6.5% rather than the doubling the text claimed, and a dispatcher opening shape described as retired was the more recent of the two.
+A figure that only moves is safe to update; one that turns invalidates the sentence around it, and scaling hides exactly that case.
+
+**Label the snapshot with the last date in `git_metrics.csv`.** It is the newest date the *tree* was measured at, and it can be a day ahead of the last commit you made: the series buckets by author date, so a rebase onto commits authored later than yours puts the final row at a rev that is your own commit's ancestor.
+That is also why the head snapshot and the series can disagree by a few lines.
+
+| What the prose quotes | Where it comes from |
+|---|---|
+| Headline tokens, the measured / estimated split, cache reads, reuse ratio | `summary.json` → `totals` |
+| Commits, tests, lines of Go / Markdown / hand-written YAML | `summary.json` → `head_snapshot`, which is the working tree with vendor and symlinks excluded |
+| Scripts & web, words authored, the band table | the last row of `git_metrics.csv` |
+| Tokens per word | combined headline ÷ that row's `words` |
+| Model mix | `summary.json` → `by_model`, as shares of the headline sum |
+| Concurrency, wall-clock and session hours, attended time | `summary.json` → `sessions` |
+| Prompt and authored-prompt counts | the `compute_metrics.py` run's own summary line; character shares need a transcript walk, since no CSV carries them |
+| Churn by era | `fix` ÷ `feat` **summed** over each era, not a mean of the rolling ratio; the two disagree by ~0.2 and mixing them across one sentence is how the previous snapshot read wrong |
+| Pull-request percentiles | `pr_metrics.csv`, bucketed pre-Max-20x / Max 20x / `mac-2` |
+| Session-kind shares, and the dispatch day count | `session_kinds.csv`, with the 7-day centered window the chart uses |
+| Bucket-width and presence-model sensitivity | re-run `session_series` with `SESSION_BUCKET_MIN` changed; nothing persists these |
+
 ## Results
 
 Latest snapshot **2026-08-27** (project day 104; first commit 2026-05-16).
@@ -521,7 +548,7 @@ The charts take percentiles from `pr_metrics.csv` instead, which holds every req
 ### `summary.json`
 The `head_snapshot` block counts the **working tree**, and the daily series counts a **revision**, so the two answer slightly different questions and can disagree.
 Both exclude vendor and both exclude symlinks: `git grep` skips a symlink, so the series counts a linked file once under its real path, and `tracked_files` drops the same paths for the same reason.
-Counting them would credit the target twice, which put 623 Markdown lines into every snapshot before 2026-08-27 — `AGENTS.md` pointing at `CLAUDE.md`, and two `testdata/` doc links.
+Counting them would credit the target twice, which put 623 Markdown lines into every snapshot before 2026-08-27: `AGENTS.md` points at `CLAUDE.md`, and two `testdata/` doc links do the same.
 
 Totals split into `measured` / `estimated` / `combined` (summed from the persisted rows, so archival-safe), an `estimation` block documenting the per-commit method, a `sessions` block (bucket width, span, session-days, mean and peak concurrency, hours using Claude, session-hours, parallel share), per-model and per-machine (`by_host`) splits, an accurate HEAD working-tree snapshot (including `band_files`, the per-band file census the `band_*` series are cut from, `go_generated`, and the `vendor_files` / `authored_files` pair), and full provenance — including which machine took the snapshot, which machines are on record, and the dates that break a series (the two plan upgrades and the docs reflow).
 
