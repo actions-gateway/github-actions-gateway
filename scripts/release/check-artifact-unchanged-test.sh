@@ -78,5 +78,29 @@ if [[ -n "$doc_commit" ]] && has_parent "$doc_commit"; then
 	fi
 fi
 
+# A tool that could not run is exit 2, never 1. Exit 1 means "the released surface
+# moved" and callers act on it — the freeze watch retires the candidate it names —
+# so a crash reported as a finding would retire one nothing ever measured. Posed
+# with a clone that has no working tree, where semverfloor cannot read publish.yml.
+# The clone is `--shared`, so it costs no object copy; a shallow CI clone may
+# refuse it, which is a skip rather than a failure.
+# The window must be non-empty: an empty diff never reaches the tool, so it would
+# pass for the wrong reason.
+nowt="$(mktemp -d)/nowt"
+if has_parent "$head_sha" &&
+	git clone --shared --quiet --no-checkout --no-tags "$REPO_ROOT" "$nowt" 2>/dev/null; then
+	git -C "$nowt" config maintenance.auto false
+	nowt_rc=0
+	(cd "$nowt" && "$SUBJECT" "${head_sha}^" "$head_sha" >/dev/null 2>&1) || nowt_rc=$?
+	if [[ "$nowt_rc" -eq 2 ]]; then
+		ok "a semverfloor that cannot run is exit 2, not a finding"
+	else
+		bad "a semverfloor that cannot run is exit 2, not a finding (got exit $nowt_rc)"
+	fi
+	rm -rf "$(dirname "$nowt")"
+else
+	printf '[check-artifact-unchanged-test] SKIP tool-failure case (shallow clone: no parent, or clone refused)\n'
+fi
+
 printf '[check-artifact-unchanged-test] %d passed, %d failed\n' "$pass" "$fail"
 [[ "$fail" -eq 0 ]]
