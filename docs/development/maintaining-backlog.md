@@ -310,6 +310,17 @@ It fired again at the cutover, on `page-density-check` against all 178 store pag
 Closing an item routinely [cascades](#what-parking-a-row-obliges-elsewhere) into a plan doc, `plan/README.md`, or a roadmap bullet, which puts the diff outside this section's narrowness.
 Author the change first, then pick the gate by what the diff actually touches.
 
+### Two gate behaviours a failure message does not explain
+
+Both hit two sessions independently on 2026-08-27, and neither is inferable from what the gate prints.
+
+**`queue-lint` keys on the bare `name.go:NNN` text wherever it appears, link label included.** A row citing a source line is asked to re-point or drop it, and the obvious remedy does *not* clear the note: turning the citation into a proper Markdown link leaves the pattern matching inside the label.
+Only moving the number out of the pattern works: write "at line 457 of [`pod_provisioning_test.go`](../../cmd/agc/internal/controller/integration/pod_provisioning_test.go)" rather than linking the `file:line` string itself.
+
+**`mdreflow` silently collapses a header-less table onto one line, and the gate then passes.** `md-reflow-check` is sentence-per-line, so a Markdown table written without its `|---|` separator row is not a table to the parser; it is prose, and the formatter joins its rows.
+Running the formatter to satisfy the gate therefore turns two rows into one unreadable line **and exits 0**, so nothing downstream reports it.
+Confirm the file after formatting rather than reading the gate's status, per [the status-is-a-claim rule](testing.md#the-status-you-report-is-a-claim-too): a file change is verified by reading the file, never by the exit code of the call that wrote it.
+
 ### A moved row defeated conflict detection, and one file per item ends it
 
 Under the single table, priority was a line position, so a branch that **relocated** a row while `main` **deleted** it produced no conflict at all: git applied the delete at the old position and the re-add at the new one, and a completed row silently came back.
