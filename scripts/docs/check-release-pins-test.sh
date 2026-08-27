@@ -220,6 +220,19 @@ else
     fails=$((fails + 1))
 fi
 
+# The summary names what the pins NAME, not what they were compared against. The
+# two differ for exactly one window -- a candidate tagged, the bump landed, the
+# stable tag not yet cut -- and that window is when a release engineer reads the
+# line to confirm the bump. Printing the current tag there reported a v1.4.0 tree
+# as correct after a correct bump to 1.5.0, so the line could not distinguish a
+# bumped tree from an unbumped one.
+if [[ "$output" == *'all naming v1.5.0, prepared'* ]]; then
+    printf 'ok   %s\n' 'the summary names the prepared version the pins actually name'
+else
+    printf 'FAIL %s: summary should name v1.5.0, got:\n%s\n' 'summary names the pinned version' "$output" >&2
+    fails=$((fails + 1))
+fi
+
 # The permissiveness is bounded: only the prepared version, not any version.
 # shellcheck disable=SC2016 # literal backticks: the pin shape is markdown, and double quotes would run them
 printf '> Pin `--version 1.3.0` here.\n' >"$prep/stale.md"
