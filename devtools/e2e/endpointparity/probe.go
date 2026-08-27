@@ -30,6 +30,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -104,7 +105,7 @@ func startFake(bin, workDir string, client *http.Client) (string, func(), error)
 		<-done
 	}
 	base := "http://" + addr
-	if err := waitReady(base, client, exited, logPath); err != nil {
+	if err := waitReady(base, client, exited, logPath, cmd.Process.Pid); err != nil {
 		stop()
 		return "", nil, err
 	}
@@ -138,18 +139,32 @@ func freePorts(n int) ([]int, func(), error) {
 // Readiness is any HTTP response at all: the root path is not served, so a reply
 // carrying the unserved marker is exactly the proof that dispatch is running.
 //
-// The three ways this ends want three different next steps, and ten seconds of
-// silence looks identical from outside, so the failure says which it was: the
-// child exited, or it is still alive and never bound. Its own output is quoted
-// either way, since that is where a bind error lands.
-func waitReady(base string, client *http.Client, exited <-chan error, logPath string) error {
-	deadline := time.Now().Add(readyTimeout)
+// The three ways this ends want three different next steps, and silence looks
+// identical from outside, so the failure says which it was: the child exited, or
+// it is still alive and never bound. Its own output is quoted either way, since
+// that is where a bind error lands.
+//
+// A child still alive at the deadline is the ambiguous one, so two further
+// readings are taken for it: when it first wrote anything, and what the OS makes
+// of it now. Together those separate a process that was never scheduled from one
+// that ran and then stalled — a distinction the log alone cannot carry, and the
+// one this gate's timeouts under a loaded host turn on (Q912).
+func waitReady(base string, client *http.Client, exited <-chan error, logPath string, pid int) error {
+	start := time.Now()
+	deadline := start.Add(readyTimeout)
 	var last error
+	var firstWrite time.Duration
+	wrote := false
 	for time.Now().Before(deadline) {
 		select {
 		case err := <-exited:
 			return fmt.Errorf("fakegithub exited before serving %s: %w%s", base, err, childLog(logPath))
 		default:
+		}
+		if !wrote {
+			if fi, err := os.Stat(logPath); err == nil && fi.Size() > 0 {
+				wrote, firstWrite = true, time.Since(start)
+			}
 		}
 		resp, err := get(client, base+"/")
 		if err == nil {
@@ -166,25 +181,60 @@ func waitReady(base string, client *http.Client, exited <-chan error, logPath st
 		return fmt.Errorf("fakegithub exited before serving %s: %w%s", base, err, childLog(logPath))
 	default:
 	}
-	return fmt.Errorf("fakegithub was still running after %s and never accepted on %s (%v)%s",
-		readyTimeout, base, last, childLog(logPath))
+	return fmt.Errorf("fakegithub was still running after %s and never accepted on %s (%v)%s%s%s",
+		readyTimeout, base, last, firstWriteAt(wrote, firstWrite), childProc(pid), childLog(logPath))
 }
 
 // readyTimeout bounds the wait for the fake to accept. It is generous because
 // the gate runs alongside thirty others and the cost of a high bound is only
-// paid when something is already wrong.
-const readyTimeout = 30 * time.Second
+// paid when something is already wrong. A var so the startup path can be
+// exercised without spending the bound.
+var readyTimeout = 30 * time.Second
+
+// firstWriteAt reports when the child's log first became non-empty, polled
+// alongside the readiness probe. It states the timing and nothing else: what a
+// first write implies about how far startup got is a property of the binary this
+// gate was handed. Silence is left to childLog rather than reported twice.
+func firstWriteAt(wrote bool, d time.Duration) string {
+	if !wrote {
+		return ""
+	}
+	return fmt.Sprintf("\n  (the child's log first became non-empty %s after start)", d.Round(time.Millisecond))
+}
+
+// childProc reports the OS's view of the child — its scheduling state and the
+// CPU time it has accumulated — which is the one reading that distinguishes a
+// process that never ran from one that ran and stalled. Best effort: ps is a
+// diagnostic here rather than a dependency of the gate, so a reading that could
+// not be taken says so instead of being asserted either way.
+func childProc(pid int) string {
+	out, err := exec.Command("ps", "-o", "state=,time=", "-p", strconv.Itoa(pid)).Output() //nolint:gosec // G204: the only argument is this process's own child pid
+	if err != nil {
+		return fmt.Sprintf("\n  (could not read pid %d's process state: %v)", pid, err)
+	}
+	state := strings.Join(strings.Fields(string(out)), " ")
+	if state == "" {
+		return fmt.Sprintf("\n  (ps reported no state for pid %d)", pid)
+	}
+	return fmt.Sprintf("\n  (ps reports pid %d as %q)", pid, state)
+}
 
 // childLog quotes whatever the fake wrote, which is where a bind failure lands.
 // It reports the read failing rather than returning nothing, so an empty log and
 // an unreadable one do not look the same.
+//
+// The empty case states the observation and stops there. What an empty log
+// implies about how far the child got depends on whether that binary writes
+// before it binds, which is a property of the binary rather than something a
+// reader of the log can see; firstWriteAt and childProc carry what this gate
+// does know (Q912).
 func childLog(path string) string {
 	b, err := os.ReadFile(path)
 	switch {
 	case err != nil:
 		return fmt.Sprintf("\n  (could not read the fake's output at %s: %v)", path, err)
 	case len(b) == 0:
-		return "\n  (the fake wrote nothing, so it had not reached its first log line)"
+		return fmt.Sprintf("\n  (the fake's output at %s is empty)", path)
 	default:
 		return "\n  fakegithub said:\n" + indent(string(b))
 	}

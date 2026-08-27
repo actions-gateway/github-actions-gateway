@@ -32,14 +32,21 @@ fail() {
 }
 
 # expect_rc NAME EXPECTED_RC -- command...
+#
+# The command's output is captured rather than discarded, and printed when the
+# status is not the wanted one. Discarding it left the shipped-tree case
+# reporting a bare "expected rc=0, got rc=2" — the one case whose whole
+# diagnosis is the checker's stderr, and the reason a red run here yielded
+# nothing to act on (Q912).
 expect_rc() {
-    local name="$1" want="$2" rc=0
+    local name="$1" want="$2" rc=0 out
     shift 3
-    "$@" >/dev/null 2>&1 || rc=$?
+    out="$("$@" 2>&1)" || rc=$?
     if ((rc == want)); then
         ok "$name (rc=$rc)"
     else
         fail "$name: expected rc=$want, got rc=$rc"
+        printf '%s\n' "$out" | awk '{ print "     | " $0 }' >&2
     fi
 }
 
