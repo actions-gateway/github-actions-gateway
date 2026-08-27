@@ -38,16 +38,19 @@ import (
 // startRunnerSetReconciler wires and starts a RunnerSetReconciler against the
 // shared envtest apiserver with a real Provisioner attached. It returns the
 // reconciler so tests can drive its test-only hooks (e.g. SetConditionForTest).
-func startRunnerSetReconciler(t *testing.T) *controller.RunnerSetReconciler {
+func startRunnerSetReconciler(t *testing.T, tweaks ...func(*controller.RunnerSetReconciler)) *controller.RunnerSetReconciler {
 	t.Helper()
-	return startRunnerSetReconcilerWithRegistrar(t, nil)
+	return startRunnerSetReconcilerWithRegistrar(t, nil, tweaks...)
 }
 
 // startRunnerSetReconcilerWithRegistrar is startRunnerSetReconciler with an optional
 // Registrar override (nil selects the default brokerRegistrar). A failing registrar
 // drives agentpool.EnsureAgents to error so the reconciler's Ready=False provisioning
 // path can be asserted against the real apiserver (Q308).
-func startRunnerSetReconcilerWithRegistrar(t *testing.T, registrar agentpool.Registrar) *controller.RunnerSetReconciler {
+//
+// tweaks run against the assembled reconciler before SetupWithManager, so a test may
+// pull a production cadence in without racing the started manager.
+func startRunnerSetReconcilerWithRegistrar(t *testing.T, registrar agentpool.Registrar, tweaks ...func(*controller.RunnerSetReconciler)) *controller.RunnerSetReconciler {
 	t.Helper()
 	mgrCtx, mgrCancel := context.WithCancel(ctx)
 
@@ -104,6 +107,9 @@ func startRunnerSetReconcilerWithRegistrar(t *testing.T, registrar agentpool.Reg
 			IdleThreshold:    500,
 			RenewJobInterval: 50 * time.Millisecond,
 		},
+	}
+	for _, tweak := range tweaks {
+		tweak(r)
 	}
 	require.NoError(t, r.SetupWithManager(mgr))
 

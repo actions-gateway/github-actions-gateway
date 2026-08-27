@@ -118,6 +118,11 @@ type RunnerSetReconciler struct {
 	// defaultBaselineRecheckInterval.
 	BaselineRecheckInterval time.Duration
 
+	// ProxyShareRecheckInterval is the cadence at which a RunnerSet whose egress
+	// wiring turns on a projected proxy share is requeued, in either direction of the
+	// grant. Zero selects defaultProxyShareRecheckInterval.
+	ProxyShareRecheckInterval time.Duration
+
 	multiplexersMu sync.Mutex
 	multiplexers   map[types.NamespacedName]*listener.Multiplexer
 	poolsMu        sync.Mutex
@@ -381,6 +386,15 @@ func (r *RunnerSetReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		if err := r.Status().Update(ctx, &rs); err != nil && !apierrors.IsConflict(err) {
 			return ctrl.Result{}, err
 		}
+		// Every other fail-closed reason names a watched referent, so its appearance
+		// re-enqueues the set (§H.7). A projected proxy share is the exception: the AGC
+		// may get that ConfigMap but not watch it (§H.9), so a grant arriving after the
+		// reference produces no event and the set would sit here until the informer
+		// resync. Poll it instead — the alternative is list/watch over every ConfigMap
+		// in the tenant namespace, which RBAC cannot narrow to the labelled ones.
+		if reason == v2alpha1.ReasonProxyShareNotGranted {
+			return ctrl.Result{RequeueAfter: r.proxyShareRecheckInterval()}, nil
+		}
 		return ctrl.Result{}, nil
 	}
 
@@ -461,7 +475,8 @@ func (r *RunnerSetReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	// live. Classic (deprecated; the default is ScaleSet as of P5) and an unset field
 	// both fall through to the unchanged classic path below.
 	if rs.Spec.AcquisitionProtocol == v2alpha1.AcquisitionProtocolScaleSet {
-		return r.reconcileScaleSetListener(ctx, log, &rs, refs, reapAfter, podCounts, observed)
+		res, err := r.reconcileScaleSetListener(ctx, log, &rs, refs, reapAfter, podCounts, observed)
+		return r.withProxyShareRecheck(res, refs), err
 	}
 
 	// 4. Installation token for agent management. Process-wide (one GitHub App per
@@ -546,7 +561,10 @@ func (r *RunnerSetReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 			requeueAfter = interval
 		}
 	}
-	return ctrl.Result{RequeueAfter: requeueAfter}, nil
+	// A resolved share stays resolved only until the provider withdraws it, and the
+	// withdrawal deletes a ConfigMap nothing here watches. This poll is what bounds
+	// how long the set keeps acquiring jobs onto egress it is no longer entitled to.
+	return r.withProxyShareRecheck(ctrl.Result{RequeueAfter: requeueAfter}, refs), nil
 }
 
 func (r *RunnerSetReconciler) baselineRecheckInterval() time.Duration {
@@ -554,6 +572,39 @@ func (r *RunnerSetReconciler) baselineRecheckInterval() time.Duration {
 		return r.BaselineRecheckInterval
 	}
 	return defaultBaselineRecheckInterval
+}
+
+// defaultProxyShareRecheckInterval is how often a RunnerSet re-reads a projected
+// proxy share ConfigMap. The AGC's Role grants get on ConfigMaps and not list/watch
+// (§H.9), so this is the only thing that bounds either direction of a grant: how
+// long a withdrawn grant keeps a set Ready and acquiring, and how long a set sits
+// ProxyShareNotGranted after the provider consents. Kubernetes RBAC has no label
+// selector, so the watch the alternative needs cannot be scoped to the labelled
+// share ConfigMaps — it would be list/watch over every ConfigMap in the tenant
+// namespace. One minute matches the GMC's githubCABundleReprobeInterval, which polls
+// a tenant ConfigMap it cannot watch for the same reason.
+const defaultProxyShareRecheckInterval = time.Minute
+
+// proxyShareRecheckInterval returns the configured share re-check cadence, or the
+// default when unset.
+func (r *RunnerSetReconciler) proxyShareRecheckInterval() time.Duration {
+	if r.ProxyShareRecheckInterval > 0 {
+		return r.ProxyShareRecheckInterval
+	}
+	return defaultProxyShareRecheckInterval
+}
+
+// withProxyShareRecheck folds the bounded share re-check into res for a set whose
+// proxy resolved through a projection, taking whichever deadline is sooner. A no-op
+// for a colocated proxy, which the EgressProxy watch already covers.
+func (r *RunnerSetReconciler) withProxyShareRecheck(res ctrl.Result, refs *resolvedRefs) ctrl.Result {
+	if !refs.resolvedThroughShare() {
+		return res
+	}
+	if interval := r.proxyShareRecheckInterval(); res.RequeueAfter <= 0 || interval < res.RequeueAfter {
+		res.RequeueAfter = interval
+	}
+	return res
 }
 
 // reconcileDelete stops goroutines, deletes agent Secrets, and removes the finalizer.

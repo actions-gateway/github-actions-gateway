@@ -690,6 +690,13 @@ That is one mechanism doing two jobs rather than a second mechanism invented for
 One consequence worth stating: the GMC reads these projections through its **uncached** API reader.
 Its ConfigMap informer is pinned to a single name in its own namespace, so a cached label-selected list would return nothing and the prune that revokes a withdrawn grant would silently find nothing to delete.
 
+**Losing the watch costs an event source in both directions, so the contract is a bounded re-check (Q999).** The AGC's Role grants `get` on ConfigMaps and not `list`/`watch`, which makes the projection the one referent the [§H.7](#h7-reference-integrity--runtime-conditions-not-admission) referent→referrer watch cannot cover.
+Writing it does not resolve a `RunnerSet` sitting `ProxyShareNotGranted`, and deleting it does not fail a resolved one closed; each waits for whatever unrelated trigger reconciles the set next, and a set that has never resolved has none (no listeners running, no worker pods, no spec change), so it waits out the informer resync, ten hours by default.
+Widening the Role is not the alternative it looks like.
+Kubernetes RBAC has no label selector, so a watch cannot be scoped to the labelled share ConfigMaps: the grant would be `list`/`watch` over every ConfigMap in the tenant namespace, reversing the least-privilege decision above to buy a watch on one object.
+A set whose egress wiring came from a projection therefore re-checks it every minute, in both directions, and that cadence is what bounds revocation latency.
+The GMC answers the same question the same way for the same reason: `githubCABundleReprobeInterval` polls a tenant ConfigMap its own pinned informer cannot see.
+
 ## H.10. The egress proxy becomes optional
 
 The proxy earns its keep for **stable per-tenant egress IPs** (GitHub IP-allowlisting, common with Enterprise Managed Users), **egress attribution / incident containment**, and **avoiding shared-NAT throttling** when many tenants reach GitHub from one IP.
