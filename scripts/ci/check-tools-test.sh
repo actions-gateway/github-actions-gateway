@@ -67,7 +67,12 @@ tool_reports_version() {
 	# shellcheck disable=SC2086  # the field is a literal argument list
 	probe_out="$("$tool" $args 2>"$CMD_ERR")" || probe_rc=$?
 	probe_err="$(cat "$CMD_ERR")"
-	printf '%s\n' "$probe_out" | grep -qE '[0-9]+(\.[0-9]+)+'
+	# Herestring, not a pipe: this line IS the function's verdict, and a pipeline
+	# into `grep -q` reports no-match for a banner that DOES carry a version once
+	# it outgrows the 64 KiB pipe buffer (grep exits on the match, the writer
+	# takes SIGPIPE, pipefail reports the corpse). A `--version` banner is far
+	# under that today; swept with the two live sites (Q982).
+	grep -qE -- '[0-9]+(\.[0-9]+)+' <<<"$probe_out"
 }
 
 # --- the declared bash floor ------------------------------------------------

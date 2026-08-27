@@ -381,7 +381,11 @@ resolve_prepared_release() {
 	[[ -n "$newest_pre" ]] || return 0
 	stable="${newest_pre%%-*}"
 	# Already released: the candidate is spent and the stable tag is the answer.
-	printf '%s\n' "$tags" | grep -qxF "$stable" && return 0
+	# Herestring, not a pipe: `grep -q` exits on the match, the writer takes
+	# SIGPIPE, and under `set -o pipefail` the dead pipeline reads as no-match —
+	# so a pipeline falsifies a tag that IS present once the list outgrows the
+	# 64 KiB pipe buffer, and only then (Q982).
+	grep -qxF -- "$stable" <<<"$tags" && return 0
 	printf '%s\n' "$stable"
 }
 

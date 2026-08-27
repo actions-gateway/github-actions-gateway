@@ -257,6 +257,38 @@ else
     fails=$((fails + 1))
 fi
 
+# Same spent-candidate case, but with a tag list that outgrows the 64 KiB pipe
+# buffer. resolve_prepared_release asked "is the stable tag already cut?" through
+# `printf | grep -q`, and `grep -q` exits on the match: the writer then takes
+# SIGPIPE and `set -o pipefail` reports the dead pipeline as no-match. So a tag
+# that IS present reads as absent, the spent candidate looks live, and the gate
+# waves through a version that shipped weeks ago. Only a PRESENT value is
+# falsified and only past the buffer, which is why every small fixture above
+# passes either way -- the padding is what makes this case able to fail (Q982).
+pad_tags() {
+    local dir="$1" sha i
+    sha="$(git -C "$dir" rev-parse HEAD)"
+    # `vz-` so the padding sorts after the real tags in refname order (the match
+    # must land early, with the writer still holding a buffer's worth to write),
+    # and no `-` after a version triple so it is not read as a prerelease.
+    for i in $(seq 1 400); do
+        printf 'create refs/tags/vz-pad-%s-%0200d %s\n' "$i" "$i" "$sha"
+    done | git -C "$dir" update-ref --stdin
+}
+
+padded="$(prepared_repo c v1.4.0 v1.5.0-rc.3 v1.5.0)"
+pad_tags "$padded"
+# shellcheck disable=SC2016 # literal backticks: the pin shape is markdown, and double quotes would run them
+printf '> Pin `--version 1.5.0` here.\n' >"$padded/doc.md"
+run_in "$padded" "$padded/doc.md"
+if (( status == 1 )) && [[ "$output" == *"1.5.0"* ]]; then
+    printf 'ok   %s\n' 'a spent candidate stays spent when the tag list outgrows the pipe buffer'
+else
+    printf 'FAIL %s: expected exit 1 naming 1.5.0, got %d:\n%s\n' \
+        'spent candidate past the pipe buffer' "$status" "$output" >&2
+    fails=$((fails + 1))
+fi
+
 if (( fails > 0 )); then
     printf '\n%d check-release-pins assertion(s) failed\n' "$fails" >&2
     exit 1
