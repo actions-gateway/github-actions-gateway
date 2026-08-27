@@ -3144,7 +3144,7 @@ Triggering on every PR and gating internally means the `gate` context always rep
 
 **The same pattern serves the merge queue's `merge_group` event.** The nine workflows behind required checks also trigger on `merge_group`, so their gate contexts report on the queue's candidate merge commit.
 `doc-links.yml` is the tenth: Q743 gave it the trigger and the `doc-links-gate` job, so the docs-content gates now run on the candidate merge.
-Q942 added the trigger to the four remaining workflows behind a `make check` gate — `conflict-markers.yml`, `metric-tiers.yml`, `reason-tiers.yml` and `endpoint-parity.yml` — bringing the count to 14 of 28, and `gate-lists-check` now fails a new gate that lands outside that set.
+Q942 added the trigger to the four remaining workflows behind a `make check` gate — `conflict-markers.yml`, `metric-tiers.yml`, `reason-tiers.yml` and `endpoint-parity.yml` — bringing the count to 14 of 29, and `gate-lists-check` now fails a new gate that lands outside that set.
 Those four carry no `changes` job: `merge_group` takes no path filter, so each runs on every candidate rather than on the path subset its PR leg uses, which is the conservative side of a job that is a checkout plus one script.
 They do not yet **block** it — the queue arbitrates on the ruleset's required checks alone, and registering `doc-links-gate` is a repo-settings change that can only follow the workflow onto `main`, for the ordering reason [merge-queue.md](../plan/merge-queue.md) gives.
 Until it is registered a red docs gate on a candidate merge is visible and not binding.

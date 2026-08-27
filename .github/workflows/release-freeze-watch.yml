@@ -1,0 +1,143 @@
+name: release-freeze-watch
+
+# Reports when an outstanding release candidate stops covering `main` (Q1001).
+#
+# The freeze between a validated candidate and its stable tag is documented in
+# docs/operations/release.md, but it was only ever evaluated by hand, by whoever
+# promotes, after the fact. `v1.6.0-rc.1` died that way: tagged 2026-08-25, three
+# Dependabot pull requests merged on top of it, and nothing said so until the
+# promote-time pre-flight ran the next morning.
+#
+# WHY THIS IS POST-MERGE AND NOT A PULL-REQUEST CHECK.
+# Measured over the 21 candidate windows from `v1.0.0-rc.1` to `v1.6.0`: 497 pull
+# requests merged inside one and 112 touched the released surface, against 16
+# candidates actually invalidated. A pull-request check therefore speaks about
+# seven times per thing worth saying, and 96 of those 112 would report a candidate
+# already dead. The only correct response — cut a new candidate — is the release
+# engineer's either way, so that volume lands on people who cannot act on it.
+# Windows cover 39% of the repository's tagged lifetime, so it would not be an
+# occasional interruption.
+#
+# Tag creation also fires no `pull_request` event, so a check on that trigger is
+# blind to a candidate cut after a branch last moved: of the 29 firing pull
+# requests since `v1.3.0-rc.1`, 2 had heads predating the tag they went on to
+# invalidate. Post-merge both halves of the question are facts. Same reasoning as
+# autoscaler-drift.yml: the trigger is the event that flips the answer.
+#
+# It never blocks. The bumps that killed rc.1 were good changes and the right
+# answer was a new candidate, not a held merge, so this reports and gets out of
+# the way. It is deliberately author-blind — it reads what landed, so Dependabot's
+# merges are indistinguishable from anyone's, which is the case that filed the row.
+on:
+  push:
+    branches: [main]
+  # For re-asking after cutting a candidate, without waiting for the next merge.
+  workflow_dispatch:
+
+# One run at a time: two pushes in quick succession would otherwise race to
+# create the same issue. Not cancel-in-progress — the newer push's answer is the
+# one that matters, but losing the older run's issue update is worse than waiting.
+concurrency:
+  group: ${{ github.workflow }}
+
+permissions:
+  contents: read
+
+jobs:
+  watch:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      # The report is an issue, so that it persists until somebody resolves it. A
+      # failed run scrolls out of the Actions list; a red `main` would be worse,
+      # because this fires as the ordinary consequence of a good merge and other
+      # sessions would try to "fix" it.
+      issues: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # Tags for resolving the outstanding candidate, and history back to it
+          # for the diff. The default depth-1, tagless checkout can answer neither.
+          fetch-depth: 0
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.work
+
+      - name: does the outstanding candidate still cover main?
+        id: check
+        run: |
+          rc=0
+          scripts/release/check-candidate-covers-main.sh HEAD \
+            > "${RUNNER_TEMP}/freeze.log" 2>&1 || rc=$?
+          cat "${RUNNER_TEMP}/freeze.log"
+          echo "rc=${rc}" >> "${GITHUB_OUTPUT}"
+          # Exit 2 is "could not measure", and anything above it is the delegate
+          # crashing (126 not executable, 137 killed) rather than exiting. Both
+          # are defects in the check rather than findings about the release, so
+          # they fail the job loudly instead of reaching the report step, which
+          # reads every non-zero code as a spent candidate.
+          if [ "${rc}" -ge 2 ]; then
+            echo "::error::release-freeze-watch could not measure the released surface"
+            exit 1
+          fi
+          {
+            echo 'log<<FREEZE_EOF'
+            cat "${RUNNER_TEMP}/freeze.log"
+            echo 'FREEZE_EOF'
+          } >> "${GITHUB_OUTPUT}"
+
+      - name: report
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RC: ${{ steps.check.outputs.rc }}
+          LOG: ${{ steps.check.outputs.log }}
+          SHA: ${{ github.sha }}
+        run: |
+          # The label is the lookup key, so it has to exist before the first
+          # finding rather than being repo state somebody set up by hand. `--force`
+          # updates an existing one, so this is idempotent and a fork works too.
+          gh label create release-freeze --force \
+            --color BFD4F2 \
+            --description "An outstanding release candidate no longer covers main"
+
+          # One open issue at a time, found by label rather than by title, so the
+          # title can name the candidate without becoming the lookup key.
+          existing="$(gh issue list --label release-freeze --state open \
+            --json number,title --jq '.[0].number // empty')"
+          if [ "${RC}" -eq 0 ]; then
+            if [ -n "${existing}" ]; then
+              gh issue comment "${existing}" --body \
+                "Resolved at ${SHA}: the outstanding candidate covers \`main\` again."
+              gh issue close "${existing}"
+            fi
+            exit 0
+          fi
+          # The candidate the finding names. Re-reported only when it changes, so
+          # a freeze that stays broken for a dozen merges stays one notification.
+          candidate="$(printf '%s\n' "${LOG}" | sed -n 's/.*\(v[0-9][0-9.]*-rc\.[0-9][0-9]*\).*/\1/p' | head -1)"
+          title="Release freeze: ${candidate:-the outstanding candidate} no longer covers main"
+          # Via a file rather than an argument: the body is multi-line and carries a
+          # fenced block, which no amount of quoting survives on a command line.
+          # The heredoc body is written flush against the `run:` block's own
+          # indentation, which the YAML block scalar strips before bash sees it.
+          cat >"${RUNNER_TEMP}/body.md" <<EOF
+          Detected at ${SHA} by \`.github/workflows/release-freeze-watch.yml\`.
+
+          \`\`\`
+          ${LOG}
+          \`\`\`
+
+          Nothing here needs reverting: the merge was fine and the candidate is spent.
+          Cut and validate a new one, per \`docs/operations/release.md\` § Tag and push.
+          EOF
+          if [ -n "${existing}" ]; then
+            current="$(gh issue view "${existing}" --json title --jq .title)"
+            if [ "${current}" = "${title}" ]; then
+              echo "already reported on issue #${existing}"
+              exit 0
+            fi
+            gh issue comment "${existing}" --body "Superseded: ${title}"
+            gh issue close "${existing}"
+          fi
+          gh issue create --label release-freeze --title "${title}" \
+            --body-file "${RUNNER_TEMP}/body.md"

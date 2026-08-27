@@ -61,15 +61,32 @@ for ref in "$from" "$to"; do
 done
 
 # Build the tool from the vendored module, the same way semver-floor.sh does.
+#
+# A failure to build it, or to run it, is exit 2 and never 1. Exit 1 means "the
+# released surface moved" and a caller acts on it — the freeze watcher opens an
+# issue naming a spent candidate — so a crash reported as a finding would retire a
+# candidate nothing ever measured. Under `set -e` alone both come out as the
+# tool's own 1: measured 2026-08-27 against a clone with no working tree, where
+# semverfloor cannot read publish.yml and this script exited 1 with no file list.
 bin="$(mktemp -d)/semverfloor"
 trap 'rm -rf "$(dirname "$bin")"' EXIT
-(cd "$DEVTOOLS_DIR" && GOWORK=off go build -o "$bin" ./release/semverfloor)
+build_rc=0
+(cd "$DEVTOOLS_DIR" && GOWORK=off go build -o "$bin" ./release/semverfloor) || build_rc=$?
+if [[ "$build_rc" -ne 0 ]]; then
+	echo "check-artifact-unchanged: could not build semverfloor (exit ${build_rc})" >&2
+	exit 2
+fi
 
 changed="$(git diff --name-only "${from}..${to}")"
 shipped=""
 if [[ -n "$changed" ]]; then
 	# The tool decides; this script never pattern-matches a path itself.
-	shipped="$(printf '%s\n' "$changed" | "$bin" -ships)"
+	ships_rc=0
+	shipped="$(printf '%s\n' "$changed" | "$bin" -ships)" || ships_rc=$?
+	if [[ "$ships_rc" -ne 0 ]]; then
+		echo "check-artifact-unchanged: semverfloor -ships failed (exit ${ships_rc})" >&2
+		exit 2
+	fi
 fi
 
 from_short="$(git rev-parse --short "${from}^{commit}")"

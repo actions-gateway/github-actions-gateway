@@ -258,6 +258,7 @@ SCRIPTS_TESTS := agent/claude-go-throttle-hook-test agent/local-throttle-test \
                  release/download-cosign-test release/release-delta-test \
                  release/verify-release-test release/verify-published-docs-test \
                  release/check-artifact-unchanged-test release/check-gates-green-test \
+                 release/check-candidate-covers-main-test \
                  release/render-release-body-test release/check-release-notes-test \
                  release/check-release-digests-test \
                  updatecli/latest-cluster-autoscaler-patch-test \
