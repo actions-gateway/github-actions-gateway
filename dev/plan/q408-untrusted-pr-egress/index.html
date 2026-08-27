@@ -3214,7 +3214,10 @@ Nothing else, including the metadata server on its service ports.</p>
 <p>Distribution's proxy mode satisfies all four <strong>by construction</strong>, which is why it is the reference implementation.
 Any backend meeting the same four tests can substitute — Dragonfly is the scheduled candidate (<a href="#6-follow-on-validations-q539-q540">§6</a>).</p>
 <h2 id="4-phases">4. Phases<a class="headerlink" href="#4-phases" title="Permanent link">&para;</a></h2>
-<p>Each phase is a separate PR; 1, 3 and 4 need live dogfood sessions (prod-guarded: deliberate, operator-driven runs).</p>
+<p>Each phase is a separate PR; 0 to 4 need live dogfood evidence.
+Needing it is not the same as booking a session (prod-guarded: a deliberate, operator-driven run): Phases 0 and 1 read theirs off runs that had already happened, so only 2, 3 and 4 book one.
+Phase 2 cannot read its evidence off a prior run, because none applied manifests that did not yet exist.
+No off-cluster gate stands in either, whatever <code>deploy/registry-mirror/</code> ends up linted by: schema and syntax checks cannot tell whether an instance serves, which is what Phase 2's validation turns on.</p>
 <ul>
 <li><strong>Phase 0 — measured egress inventory. ✅ Done (2026-08-03).</strong> Read off a green Kata dogfood run that had already happened rather than booking a new one; <a href="#2-the-gap--what-an-e2e-job-actually-fetches-at-job-time-phase-0">§2</a> is the deliverable, and <a href="#23-what-the-measurement-changes">§2.3</a> is what it cost the design.</li>
 <li><strong>Phase 1 — shrink the non-registry residual to GitHub. ✅ Done (implemented 2026-08-05, validated 2026-08-24).</strong> New phase, forced by Phase 0.
