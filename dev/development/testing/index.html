@@ -5310,6 +5310,16 @@ Each is a claim about state, and each has a cheap way of being wrong:</p>
   Nothing was absent in either case, so "check more" would not have helped, and the Q828 reading was hedged carefully on the inference drawn <em>from</em> the probe while the error sat upstream in the probe itself.</p>
 </li>
 <li>
+<p><strong>Four instruments in this repo answer a narrower question than the one they get asked, and all four are silent about it.</strong> Instances of the rule above, from one 2026-08-27 dispatch run; each is cheap to avoid once named.
+  <code>grep</code> here is a shell function dispatching to <strong>ugrep</strong>, whose flag and regex dialects differ: an unescaped <code>+</code> or a <code>-t</code> is <em>rejected</em>, printing usage to stderr and matching nothing, so a redirected count reports <code>0</code> from a pattern that never ran.
+  It also reads files concurrently, so multi-file output arrives in no fixed order and a line cannot be paired to its file by position.
+  Prefer the Grep tool or <code>python3</code> wherever a zero or a pairing is about to mean something, and give any count a positive control.
+  <code>gh run list --json conclusion</code> reports <strong>run</strong> level, so a workflow whose real jobs were skipped and whose <code>if: always()</code> gate concluded <code>success</code> reads as "the suite ran"; only <code>gh run view &lt;id&gt; --json jobs</code> can see it, which is the mechanism behind <a href="#path-gated-workflows-verify-the-heavy-gates-actually-ran">the path-gated rule</a>.
+  That same field is an <strong>empty string</strong> while a run is in flight rather than absent, so <code>--jq '.conclusion // .status'</code> prints a blank line and reads as missing data; ask for both explicitly.
+  And <code>actor.login</code> names the <strong>credential</strong>, not the person: every agent session here authenticates as the same account, and <code>performed_via_github_app</code> is null for <code>gh</code>, so no timeline event distinguishes a human's click from a session's call.
+  The session transcripts under <code>~/.claude/projects/</code> do resolve it, but only when the match is anchored on the <strong>tool-use record</strong>; a bare string search matches every <em>mention</em> of a command, and a run that relays instructions mentions them constantly.</p>
+</li>
+<li>
 <p><strong>A gate that fails on your branch is not yours until it fails on the base too.</strong> Q166 spent two wrong hypotheses on this.
   A red envtest suite was blamed first on the session's own concurrent test runs, then on a cluster-wide List the branch had added, which was narrowed on that theory for no improvement; <code>origin/main</code> alone then measured 324.5s against a 5m timeout with none of the branch's code, and the failing test's name had moved between runs because what was actually failing was the suite's wall clock (Q741).
   When a gate does fail on the base, the fix is not yours to carry either: it gets its own PR, searched for before it is written (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/CONTRIBUTING.md#when-main-is-broken">CONTRIBUTING.md § When <code>main</code> is broken</a>).</p>
