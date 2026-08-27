@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -33,7 +34,7 @@ func TestWaitReadyTimeoutReportsWhetherTheChildWrote(t *testing.T) {
 	readyTimeout = 200 * time.Millisecond
 	t.Cleanup(func() { readyTimeout = restore })
 
-	const clause = "first became non-empty"
+	const clause = "first observed non-empty"
 	for _, tc := range []struct {
 		name    string
 		log     string
@@ -50,11 +51,17 @@ func TestWaitReadyTimeoutReportsWhetherTheChildWrote(t *testing.T) {
 			if got := strings.Contains(err.Error(), clause); got != tc.wantHas {
 				t.Errorf("timing clause present = %v, want %v; report was:\n%s", got, tc.wantHas, err)
 			}
-			// The OS reading is what answers "scheduled at all" when the log is
-			// silent, so it must be attempted either way. This process is alive,
-			// so a failure to read it is a failure of the reading itself.
-			if !strings.Contains(err.Error(), fmt.Sprintf("pid %d", os.Getpid())) {
-				t.Errorf("report does not name the child pid:\n%s", err)
+			// The OS reading is what bears on "scheduled at all" when the log is
+			// silent, so it must be attempted either way. Assert the taken form
+			// rather than the pid: every childProc branch names the pid, so a
+			// pid-only check passes on a host where ps never ran. That makes this
+			// one assertion depend on ps, which the gate itself does not, so it
+			// is skipped rather than inferred where ps is absent.
+			if _, lookErr := exec.LookPath("ps"); lookErr != nil {
+				t.Skipf("ps is not on PATH, so childProc's reading cannot be exercised: %v", lookErr)
+			}
+			if !strings.Contains(err.Error(), fmt.Sprintf("ps reports pid %d", os.Getpid())) {
+				t.Errorf("report carries no ps reading for the child:\n%s", err)
 			}
 		})
 	}
@@ -81,5 +88,26 @@ func TestChildLogStatesTheObservation(t *testing.T) {
 	}
 	if !strings.Contains(wrote, "address already in use") {
 		t.Errorf("childLog dropped what the child said: %s", wrote)
+	}
+}
+
+// A pid ps cannot find is a reading that succeeded, and saying so is what keeps
+// a definite negative distinguishable from ps being absent (Q912). ps exits 1
+// with empty output for a reaped pid, so the naive read is an error.
+func TestChildProcReportsAMissingPid(t *testing.T) {
+	if _, err := exec.LookPath("ps"); err != nil {
+		t.Skipf("ps is not on PATH: %v", err)
+	}
+	c := exec.Command("true")
+	if err := c.Start(); err != nil {
+		t.Fatalf("start: %v", err)
+	}
+	pid := c.Process.Pid
+	if err := c.Wait(); err != nil {
+		t.Fatalf("wait: %v", err)
+	}
+	got := childProc(pid)
+	if !strings.Contains(got, fmt.Sprintf("ps found no process with pid %d", pid)) {
+		t.Errorf("childProc reported a reaped pid as a failed reading: %s", got)
 	}
 }

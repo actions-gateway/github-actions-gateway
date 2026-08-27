@@ -145,10 +145,11 @@ func freePorts(n int) ([]int, func(), error) {
 // that is where a bind error lands.
 //
 // A child still alive at the deadline is the ambiguous one, so two further
-// readings are taken for it: when it first wrote anything, and what the OS makes
-// of it now. Together those separate a process that was never scheduled from one
-// that ran and then stalled — a distinction the log alone cannot carry, and the
-// one this gate's timeouts under a loaded host turn on (Q912).
+// readings are taken for it: when its output was first observed, and what the OS
+// makes of it now. Neither settles whether the child was starved, but both bear
+// on it, which the log alone does not — that is what this gate's timeouts under a
+// loaded host turn on (Q912). What each reading can and cannot carry is stated at
+// firstWriteAt and childProc rather than claimed here.
 func waitReady(base string, client *http.Client, exited <-chan error, logPath string, pid int) error {
 	start := time.Now()
 	deadline := start.Add(readyTimeout)
@@ -191,30 +192,43 @@ func waitReady(base string, client *http.Client, exited <-chan error, logPath st
 // exercised without spending the bound.
 var readyTimeout = 30 * time.Second
 
-// firstWriteAt reports when the child's log first became non-empty, polled
-// alongside the readiness probe. It states the timing and nothing else: what a
-// first write implies about how far startup got is a property of the binary this
-// gate was handed. Silence is left to childLog rather than reported twice.
+// firstWriteAt reports when the poll first observed the child's log non-empty,
+// which is not when the child wrote: the reading lags the write by up to one
+// iteration of waitReady's loop, and that loop is starved by the same contention
+// this branch exists to diagnose, so the skew is widest exactly when the figure
+// matters. The elapsed time is measured from the start of the wait, not from
+// process start. Silence is left to childLog rather than reported twice.
 func firstWriteAt(wrote bool, d time.Duration) string {
 	if !wrote {
 		return ""
 	}
-	return fmt.Sprintf("\n  (the child's log first became non-empty %s after start)", d.Round(time.Millisecond))
+	return fmt.Sprintf("\n  (the child's log was first observed non-empty %s after the wait began)", d.Round(time.Millisecond))
 }
 
-// childProc reports the OS's view of the child — its scheduling state and the
-// CPU time it has accumulated — which is the one reading that distinguishes a
-// process that never ran from one that ran and stalled. Best effort: ps is a
-// diagnostic here rather than a dependency of the gate, so a reading that could
-// not be taken says so instead of being asserted either way.
+// childProc reports the OS's view of the child at the deadline. State is the
+// half that bears on scheduling — R is runnable and waiting for CPU, S is blocked
+// on something else — and one sample of it is evidence rather than proof.
+//
+// The CPU time is a floor, not a verdict, and coarsest on the platform this gate
+// runs on: procps-ng 4.0.4 prints whole seconds, so on ubuntu-latest a child that
+// burned 200ms and one that burned none both read 00:00:00 (measured 2026-08-27
+// against ubuntu:24.04; macOS ps prints hundredths). Do not read 00:00:00 as
+// never having run.
+//
+// Best effort: ps is a diagnostic here rather than a dependency of the gate, so a
+// reading that could not be taken says so instead of being asserted either way.
+// A pid ps cannot find is a reading that succeeded, and is reported as one.
 func childProc(pid int) string {
 	out, err := exec.Command("ps", "-o", "state=,time=", "-p", strconv.Itoa(pid)).Output() //nolint:gosec // G204: the only argument is this process's own child pid
-	if err != nil {
-		return fmt.Sprintf("\n  (could not read pid %d's process state: %v)", pid, err)
-	}
 	state := strings.Join(strings.Fields(string(out)), " ")
-	if state == "" {
-		return fmt.Sprintf("\n  (ps reported no state for pid %d)", pid)
+	var exitErr *exec.ExitError
+	switch {
+	case errors.As(err, &exitErr) && state == "":
+		return fmt.Sprintf("\n  (ps found no process with pid %d)", pid)
+	case err != nil:
+		return fmt.Sprintf("\n  (could not read pid %d's process state: %v)", pid, err)
+	case state == "":
+		return fmt.Sprintf("\n  (ps exited cleanly but reported no state for pid %d)", pid)
 	}
 	return fmt.Sprintf("\n  (ps reports pid %d as %q)", pid, state)
 }
