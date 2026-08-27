@@ -1621,11 +1621,20 @@ Three causes, all seen here, and only one of them is the directive's fault:
 - **A stale analysis cache.** Q516: an entry keyed on a deleted worktree path reported `G204` *and* `directive //nolint:gosec … is unused` on the same two lines.
   [Build and lint caches across worktrees](#build-and-lint-caches-across-worktrees) has the mechanism and the one-line recovery.
 - **The linter stopped emitting, with nothing else changing.** Q929: one commit, two CI verdicts, same Go, cache key and scope.
-  Undiagnosed.
+  Still undiagnosed as to *why* the linter went quiet, but four candidate explanations are refuted and recorded in the row, so start from there rather than re-spending them.
+  The sharpest is that both runs logged a hit on the *primary* analyzer-cache key and the same 8,856,940-byte archive, so a `restore-keys` fallback carrying a foreign cache is not what happened.
 
-**The surface is every directive, not the ones a past failure named.** Measured 2026-08-24 over the first-party tree: 117 directive sites, 104 of them naming `gosec` and 5 `staticcheck`, the rest `revive`, `dupl`, `errcheck`, `noctx` and `forbidigo`.
-That the class reaches `gosec` is a measurement rather than an inference, for the class as a whole; it establishes the first cause above, and carries to the third only by `nolintlint`'s unused check being linter-agnostic.
-Adding a `G101` exclusion at `api/apiconditions/conditions.go:40` takes that package from `0 issues` to a `nolintlint` red naming the directive on that line, and removing it takes it back.
+**The surface is every directive, not the ones a past failure named.** Measured 2026-08-24 over the first-party tree and re-derived 2026-08-27: 117 directive sites, 104 of them naming `gosec` and 5 `staticcheck`, the rest `revive`, `dupl`, `errcheck`, `noctx` and `forbidigo`.
+**The unused check is agnostic to the linter**, and that half is measured: renaming `ConditionCredentialUnavailable` at `api/apiconditions/conditions.go:40` so G101's identifier pattern stops matching, with `.golangci.yml` byte-identical and the directive untouched, takes that package from `0 issues` to a `nolintlint` red naming it, and restoring the name takes it back.
+The same happens to staticcheck when `-ST1001` is added to `linters.settings.staticcheck.checks`, which silences it without an exclusion rule and without disabling it.
+Both of those routes are deterministic, so what carries the class from the first cause to the third is the source rather than the runs: `nolint_filter.go` keeps `matchedIssueFromLinter map[string]bool` keyed on `issue.FromLinter` and answers an `//nolint:X` with that map's lookup for `X`, so it has no per-linter branch and no input describing *why* an issue is absent.
+Note which instrument closes which step, because the first cause above is the other way round.
+
+**A `nolintlint` red under-reports its own extent.** `.golangci.yml` sets no `issues:` block, so golangci-lint's own defaults apply and truncate the report silently.
+`max-same-issues: 3` is the one measured here: five identical unused-directive reds print as three, summarised as `nolintlint: 3`.
+`max-issues-per-linter: 50` is the other cap the missing block leaves at its default, and five issues never approached it.
+Read the count as a floor until Q1003 lifts the caps, and re-run with `--max-same-issues=0` before concluding you have fixed them all.
+Truncation cannot *cause* the red: `MaxSameIssues` and `MaxFromLinter` are registered after `NewNolintFilter` in `pkg/lint/runner.go`.
 
 **A directive naming a disabled linter is inert, not an error**, because the nolint filter drops the candidate outright when the named linter is not in the enable list (golangci-lint 2.12.2, `pkg/result/processors/nolint_filter.go`).
 `cmd/gmc/test/utils/` measures it in one command: the package carries two `//nolint:revive` and five `//nolint:revive,staticcheck`, `revive` appears nowhere in `.golangci.yml`, and the package lints `0 issues`.
