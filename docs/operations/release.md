@@ -507,8 +507,9 @@ scripts/release/check-artifact-unchanged.sh <validated-candidate-sha> origin/mai
 
 Exit 1 means the stable tag would ship something no candidate validated.
 Revert it, or cut and validate a new candidate.
+Exit 2 is different and is never a finding about the release: the check itself could not run, so nothing has been measured and the window is still an open question.
 
-**You should already know, because the watch says so at the merge.** [`release-freeze-watch.yml`](https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/release-freeze-watch.yml) runs this same question after every push to `main`, and opens an issue labelled `release-freeze` naming the candidate the window invalidated.
+**You should already know, because the watch says so at the merge.** [`release-freeze-watch.yml`](../../.github/workflows/release-freeze-watch.yml) runs this same question after every push to `main`, and opens an issue labelled `release-freeze` naming the candidate the window invalidated.
 It closes that issue when a newer candidate covers `main` again, so an open one means a freeze is broken right now and the check above is about to exit 1.
 Until Q1001 nothing said so: `v1.6.0-rc.1` was tagged, three Dependabot pull requests merged on top of it, and the first anybody heard was this pre-flight the next morning.
 The watch never blocks a merge, because the merge is not the problem: those bumps were good changes and the answer was a new candidate.

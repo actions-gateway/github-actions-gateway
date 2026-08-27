@@ -71,9 +71,12 @@ jobs:
             > "${RUNNER_TEMP}/freeze.log" 2>&1 || rc=$?
           cat "${RUNNER_TEMP}/freeze.log"
           echo "rc=${rc}" >> "${GITHUB_OUTPUT}"
-          # Exit 2 is "could not measure", which is a real defect in the check
-          # rather than a finding about the release, so it fails the job loudly.
-          if [ "${rc}" -eq 2 ]; then
+          # Exit 2 is "could not measure", and anything above it is the delegate
+          # crashing (126 not executable, 137 killed) rather than exiting. Both
+          # are defects in the check rather than findings about the release, so
+          # they fail the job loudly instead of reaching the report step, which
+          # reads every non-zero code as a spent candidate.
+          if [ "${rc}" -ge 2 ]; then
             echo "::error::release-freeze-watch could not measure the released surface"
             exit 1
           fi
