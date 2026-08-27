@@ -150,6 +150,29 @@ A theme change that renames or drops `<article>` therefore fails it rather than 
 Pages source stays **"GitHub Actions"**: `mike` maintains the tree on `gh-pages`, and the `publish` job serves that whole tree as the Pages artifact.
 `--alias-type=copy` makes `stable/` a real directory — GitHub Pages artifact deploys don't follow symlinks, so a symlinked alias would 404 on deep links.
 
+### What the publish job verifies, and why it takes two checks
+
+A deploy can go wrong on either side of the upload, and the two failures look identical from outside: the site keeps serving the previous release while the run reports success.
+So the job checks both sides (Q1000).
+
+**Before the upload**, [`verify-pages-artifact.sh`](../../scripts/pages/verify-pages-artifact.sh) asserts the assembled `_site` carries the version this run built: an `X.Y.Z/index.html`, a `versions.json` listing it, and the alias `mike` actually claimed sitting on that version.
+Until then the step asserted only that `_site/index.html` and `_site/CNAME` existed.
+Both are true of a stale version tree, so a run that archived the wrong commit would have passed its own verification.
+The alias half is a separate assertion because `mike` writes the version and the alias in two commits, so a run genuinely passes through a tree that lists the new version with `stable` still on the previous one.
+
+**After the deploy**, [`verify-pages-live.sh`](../../scripts/pages/verify-pages-live.sh) reads the site and polls for up to five minutes until it serves the version.
+No assertion over `_site` can stand in for this, and `v1.6.0` is the proof.
+Every tree-side signal in that run was correct: `mike` pushed the right commit, `git archive` picked it up, the uploaded artifact carried `1.6.0` with the `stable` alias, and the Pages deployment reported success and became the active one.
+The site served `1.5.0` for roughly 25 minutes regardless, until a manual republish.
+Re-reading the retained artifact afterwards is what settled it, so the failure was on the serving side and nothing the run could assert about its own tree would have caught it.
+Each poll uses a fresh query string, because Pages caches on the full URL and re-reading one URL reports whatever the edge already holds.
+
+`dev` is excluded from the live check.
+Its version id is in `versions.json` before the run starts, so there is no assertion there that could go red, and a check that cannot fail on every push to `main` is worse than no check.
+
+This is not `make verify-published-docs`, which reads the version *pins inside* the published pages.
+A stable tag's own tree carries the previous release's pins by design, so that gate is expected to fail until the [step 7](../operations/release.md#the-bump-on-main-does-not-reach-the-published-release) republish and cannot run inside the tag's own publish job.
+
 ### Seeding already-released versions
 
 `mike` only knows the versions it has deployed, so releases cut **before** this workflow landed aren't in the tree yet, and **the site root has nothing to redirect to until some version claims the default**: the apex domain 404s while every push still reports success.

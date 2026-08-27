@@ -248,6 +248,7 @@ SCRIPTS_TESTS := agent/claude-go-throttle-hook-test agent/local-throttle-test \
                  e2e/progress-watch-test e2e/validate-cluster-test \
                  fetch/download-verified-test fetch/pull-image-with-retry-test \
                  manifest/check-promql-test \
+                 pages/verify-pages-artifact-test pages/verify-pages-live-test \
                  go/check-codegen-drift-test go/check-v2-api-sync-test \
                  go/check-test-cache-inputs-test \
                  go/coverage-test go/go-lint-scope-test go/go-test-run-filter-test \

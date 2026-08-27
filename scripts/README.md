@@ -201,6 +201,17 @@ Every heavy tier calls at least one, which is why `scripts/fetch/**` appears in 
 | [sync-chart-rbac.sh](manifest/sync-chart-rbac.sh) | Regenerate (or `--check`) the chart's RBAC from the controller markers. Backs `make chart-rbac`/`chart-rbac-check`. |
 | [sync-chart-webhook.sh](manifest/sync-chart-webhook.sh) | Regenerate (or `--check`) the chart's webhook configuration from the controller markers. Backs `make chart-webhook`/`chart-webhook-check`. |
 
+## `pages/` — the versioned docs deploy
+
+Both back steps in [pages.yml](../.github/workflows/pages.yml)'s `publish` job, and they split by what they can see.
+One reads the assembled tree, the other reads the site.
+Cutting `v1.6.0` proved the split is not redundant: the tree was right and the site was wrong, so no assertion over `_site` could have caught it.
+
+| Script | Purpose |
+|---|---|
+| [verify-pages-artifact.sh](pages/verify-pages-artifact.sh) | Fail when the assembled Pages artifact does not carry the version the run is deploying: the `X.Y.Z/` tree, a `versions.json` listing it, and the alias mike actually claimed, on the version it claimed it on (Q1000). Until this step it asserted only that `_site/index.html` and `_site/CNAME` existed, and both are true of a stale version tree, so a deploy that published the previous release passed its own verification and reported green. The alias half is not hypothetical either: mike writes the version and the alias in two commits, so a run genuinely passes through a tree listing `1.6.0` with `stable` still on `1.5.0`. Reads the assembled directory, never the site. The alias is taken from the mike step's own output rather than re-derived, so the backport rule (`stable` moves only to the highest release) is not copied twice. Asserted against the real `gh-pages` trees from the incident, and against fixtures, by `verify-pages-artifact-test.sh` under `make scripts-test`. |
+| [verify-pages-live.sh](pages/verify-pages-live.sh) | Fail when the live site is still not serving the version the run just deployed, polling for up to five minutes (Q1000). This is the half no tree assertion covers. At `v1.6.0` every signal GitHub produces was green: mike pushed the correct commit, `git archive` picked it up, the uploaded artifact carried `1.6.0` with the `stable` alias, and the Pages deployment reported success and went active. The site served `1.5.0` for roughly 25 minutes anyway, and only a manual republish fixed it. Each attempt gets a fresh query string, because Pages caches on the full URL and a poll that re-reads one URL reports whatever the edge holds. Skipped for `dev`, whose version id is in `versions.json` before the run starts, so nothing there could go red. Distinct from [release/verify-published-docs.sh](release/verify-published-docs.sh), which reads the *pins inside* the published pages: a stable tag's own tree carries the previous release's pins by design, so that gate is expected to fail until the [release.md step 7](../docs/operations/release.md#the-bump-on-main-does-not-reach-the-published-release) republish and cannot run here. Asserted behind a stub `curl` by `verify-pages-live-test.sh` under `make scripts-test`. |
+
 ## `release/` — publish, sign, report
 
 | Script | Purpose |
