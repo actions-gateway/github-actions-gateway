@@ -48,13 +48,13 @@
   },
   "totals": {
     "measured": {
-      "input": 8489566,
-      "output": 108074841,
-      "cache_creation": 562191485,
-      "cache_read": 34044075188,
-      "assistant_msgs": 154421,
-      "user_msgs": 170793,
-      "headline_input_output_cachecreation": 678755892
+      "input": 8489626,
+      "output": 108096317,
+      "cache_creation": 562227938,
+      "cache_read": 34053828785,
+      "assistant_msgs": 154451,
+      "user_msgs": 170824,
+      "headline_input_output_cachecreation": 678813881
     },
     "estimated": {
       "input": 6559,
@@ -66,15 +66,15 @@
       "headline_input_output_cachecreation": 2494920
     },
     "combined": {
-      "input": 8496125,
-      "output": 108553777,
-      "cache_creation": 564200910,
-      "cache_read": 34111594031,
-      "assistant_msgs": 155163,
-      "user_msgs": 171654,
-      "headline_input_output_cachecreation": 681250812,
-      "grand_total_incl_cache_read": 34792844843,
-      "cache_reuse_ratio": 60.46
+      "input": 8496185,
+      "output": 108575253,
+      "cache_creation": 564237363,
+      "cache_read": 34121347628,
+      "assistant_msgs": 155193,
+      "user_msgs": 171685,
+      "headline_input_output_cachecreation": 681308801,
+      "grand_total_incl_cache_read": 34802656429,
+      "cache_reuse_ratio": 60.47
     }
   },
   "by_model": {
@@ -109,9 +109,9 @@
       "messages": 8356
     },
     "Opus 5": {
-      "headline": 375153327,
-      "output": 55880449,
-      "messages": 88486
+      "headline": 375211316,
+      "output": 55901925,
+      "messages": 88516
     }
   },
   "by_host": {
@@ -134,13 +134,13 @@
       "headline_input_output_cachecreation": 300762526
     },
     "mac-2": {
-      "input": 425544,
-      "output": 56112678,
-      "cache_creation": 321455144,
-      "cache_read": 22907683903,
-      "assistant_msgs": 87830,
-      "user_msgs": 96490,
-      "headline_input_output_cachecreation": 377993366
+      "input": 425604,
+      "output": 56134154,
+      "cache_creation": 321491597,
+      "cache_read": 22917437500,
+      "assistant_msgs": 87860,
+      "user_msgs": 96521,
+      "headline_input_output_cachecreation": 378051355
     }
   },
   "sessions": {
@@ -150,8 +150,8 @@
     "session_days": 670,
     "peak_concurrent": 20,
     "mean_concurrent": 3.06,
-    "hours_using_claude": 285.0,
-    "session_hours": 873.2,
+    "hours_using_claude": 285.5,
+    "session_hours": 873.7,
     "parallel_share_pct": 63,
     "attended_hours": 128.3,
     "attended_share_pct": 45,
@@ -163,18 +163,18 @@
     "go_code": 119357,
     "go_comments": 43628,
     "go_generated": 2246,
-    "markdown_nonblank": 58967,
+    "markdown_nonblank": 58344,
     "yaml_handwritten": 13569,
     "yaml_generated": 132003,
     "tests": 2323,
-    "authored_files": 1713,
+    "authored_files": 1697,
     "vendor_files": 13294,
     "band_files": {
-      "product": 765,
+      "product": 750,
       "machinery": 407,
       "project_mgmt": 387,
       "product_docs": 123,
-      "machinery_docs": 27,
+      "machinery_docs": 26,
       "residual": 4
     },
     "commits": 2167

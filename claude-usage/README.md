@@ -73,16 +73,43 @@ That suite is a gate, not a convention: `make claude-usage-test` runs it as part
 It is stdlib-only, so it needs no venv — the `requirements.txt` install in Quick start above is for the charts alone.
 The same target byte-compiles every `.py` here, which is the only check [`make_charts.py`](make_charts.py) gets: it has no tests and importing it needs matplotlib, so compiling is what catches a syntax error in it.
 
+## Refreshing the snapshot
+
+Three rules, then the inventory.
+
+**Run the scripts last.** The git series is recomputed from the tree on every run, so each rebase moves it and every figure already written has to be re-derived.
+Rebase onto the base you mean to publish from, then run `compute_metrics.py` and `make_charts.py`, then write the prose.
+
+**Re-derive each figure; never scale the last one.** The 2026-08-27 refresh re-derived all of them and found four that had turned rather than moved: the busiest era was no longer the one fixing most, an "on every one of the N days" claim had picked up an exception, the prompt predicate's effect was 6.5% rather than the doubling the text claimed, and a dispatcher opening shape described as retired was the more recent of the two.
+A figure that only moves is safe to update; one that turns invalidates the sentence around it, and scaling hides exactly that case.
+
+**Label the snapshot with the last date in `git_metrics.csv`.** It is the newest date the *tree* was measured at, and it can be a day ahead of the last commit you made: the series buckets by author date, so a rebase onto commits authored later than yours puts the final row at a rev that is your own commit's ancestor.
+That is also why the head snapshot and the series can disagree by a few lines.
+
+| What the prose quotes | Where it comes from |
+|---|---|
+| Headline tokens, the measured / estimated split, cache reads, reuse ratio | `summary.json` → `totals` |
+| Commits, tests, lines of Go / Markdown / hand-written YAML | `summary.json` → `head_snapshot`, which is the working tree with vendor and symlinks excluded |
+| Scripts & web, words authored, the band table | the last row of `git_metrics.csv` |
+| Tokens per word | combined headline ÷ that row's `words` |
+| Model mix | `summary.json` → `by_model`, as shares of the headline sum |
+| Concurrency, wall-clock and session hours, attended time | `summary.json` → `sessions` |
+| Prompt and authored-prompt counts | the `compute_metrics.py` run's own summary line; character shares need a transcript walk, since no CSV carries them |
+| Churn by era | `fix` ÷ `feat` **summed** over each era, not a mean of the rolling ratio; the two disagree by ~0.2 and mixing them across one sentence is how the previous snapshot read wrong |
+| Pull-request percentiles | `pr_metrics.csv`, bucketed pre-Max-20x / Max 20x / `mac-2` |
+| Session-kind shares, and the dispatch day count | `session_kinds.csv`, with the 7-day centered window the chart uses |
+| Bucket-width and presence-model sensitivity | re-run `session_series` with `SESSION_BUCKET_MIN` changed; nothing persists these |
+
 ## Results
 
-Latest snapshot **2026-08-26** (project day 103; first commit 2026-05-16).
-"Day 7" is the [original day-7 Bluesky post][post1]'s published figures; "Day 22" is the [day-22 follow-up][post2]; "Day 103" is the current snapshot the charts here back.
+Latest snapshot **2026-08-27** (project day 104; first commit 2026-05-16).
+"Day 7" is the [original day-7 Bluesky post][post1]'s published figures; "Day 22" is the [day-22 follow-up][post2]; "Day 104" is the current snapshot the charts here back.
 The snapshots are announced as a quote-post chain (each post quotes the previous one): [day 7][post1] → [day 22][post2] → [day 35][post3] → [day 48][post4] → [day 70][post5].
 
-> **Frozen snapshot.** The committed CSVs, `summary.json`, and charts are the 2026-08-26 snapshot.
+> **Frozen snapshot.** The committed CSVs, `summary.json`, and charts are the 2026-08-27 snapshot.
 > Re-running `compute_metrics.py` advances the token/message series as new sessions accrue (the merge rule only ever revises upward); leave it un-run to keep these figures, or re-run and refresh the charts to roll forward to a new dated snapshot.
 
-| Metric | Day 7 | Day 22 | Day 103 | Source |
+| Metric | Day 7 | Day 22 | Day 104 | Source |
 |---|--:|--:|--:|---|
 | Tokens (input + output + cache-creation) | ~10M | 56.2M | **681.3M** | transcripts + est. |
 | └ measured only | — | 53.7M | 678.8M | transcripts |
@@ -93,14 +120,14 @@ The snapshots are announced as a quote-post chain (each post quotes the previous
 | Tests (`func Test*`) | 269 | 393 | **2,323** | git |
 | Lines of Go (code) | 15.5k | 20.9k | **119.4k** | git |
 | Lines of Go (comments) | 2.3k | 4.2k | **43.6k** | git |
-| Markdown (non-blank) | 14.3k | 14.0k | **59.0k** | git |
+| Markdown (non-blank) | 14.3k | 14.0k | **58.3k** | git |
 | YAML (hand-written) | 1.5k | 2.3k | **13.6k** | git |
 | Scripts & web (shell/Python/Make/Docker/CSS/JS) | — | — | **58.0k** | git |
 | **Words authored** (Go + docs + hand-written YAML + scripts) | — | — | **2.35M** | git |
 | **Tokens per word** | — | — | **290** | both |
 | Model mix | mostly Sonnet 4.6 | Sonnet 43% / Opus 57% | **Opus 5 55% / Opus 4.8 32% / Fable 6% / Sonnet 4% / Opus 4.7 3%** | transcripts |
 | Mean concurrent sessions | — | — | **3.1** (peak 20) | transcripts, since Jul 26 |
-| Hours using Claude (wall-clock) | — | — | **285.0h** → 873.2h session-time | transcripts, since Jul 26 |
+| Hours using Claude (wall-clock) | — | — | **285.5h** → 873.7h session-time | transcripts, since Jul 26 |
 | Prompts submitted by a person | — | — | **1,586** | transcripts, since Jul 26 |
 | └ of those, authored rather than machine-composed | — | — | **1,432** | transcripts, since Jul 26 |
 | └ time at the keyboard | — | — | **~128h** (45%), width-dependent | transcripts, since Jul 26 |
@@ -109,8 +136,8 @@ The headline tokens figure **includes the ~2.5M estimated backfill** for the arc
 Live totals (with the measured / estimated split) are always in [`data/summary.json`](data/summary.json).
 
 Markdown is the count to read carefully, because it is a snapshot of the tree rather than a running total of lines ever written, and a reformat moves it.
-The daily series runs 66.6k non-blank lines on 08-08, 49.0k the next day, and 58.3k by 08-26: [#1357](https://github.com/actions-gateway/github-actions-gateway/pull/1357) reflowed every tracked doc to one sentence per line on 2026-08-09, which unwraps hard-wrapped paragraphs without removing a word.
-Eleven days after the last snapshot the series has recovered 4.9k of those lines and is still 8.3k short of its pre-reflow height, while the docs corpus in words has grown throughout.
+The daily series runs 66.6k non-blank lines on 08-08, 49.0k the next day, and 58.3k by 08-27: [#1357](https://github.com/actions-gateway/github-actions-gateway/pull/1357) reflowed every tracked doc to one sentence per line on 2026-08-09, which unwraps hard-wrapped paragraphs without removing a word.
+Twelve days after the last snapshot the series has recovered 4.9k of those lines and is still 8.3k short of its pre-reflow height, while the docs corpus in words has grown throughout.
 The reflow date carries a grey dotted marker on the three lines-and-ratio charts, and `provenance.docs_reflow_date` in `summary.json`, so the step is never mistaken for lost docs.
 
 The Max 20x weekly token allowance also hit **100% for the first time**, in the seven-day window that ended when it reset on the morning of Monday 2026-08-10.
@@ -118,7 +145,7 @@ That ceiling is not visible in anything here, and it is not this project's headl
 The week that followed the reset is this project's own largest at 103.7M, and the two since ran 39.6M and 33.0M.
 
 This snapshot spans a machine handover.
-`mac-1` measured everything through 2026-07-26 and has since been **retired**; `mac-2` replaced it, taking over mid-morning that day and measuring through 2026-08-26.
+`mac-1` measured everything through 2026-07-26 and has since been **retired**; `mac-2` replaced it, taking over mid-morning that day and measuring through 2026-08-27.
 They overlap on 2026-07-26 alone, and the overlap is clean rather than double-counted: mac-1 recorded that morning, and every mac-2 record for the day starts at 10:26 local — the minute the replacement cloned the repo — so the day's total is their sum with no session counted on both.
 
 Because mac-1 is gone, its rows are final and 2026-07-27 onward is mac-2 only and **complete**, not a day awaiting a second reporter.
@@ -293,7 +320,7 @@ The peak is the dramatic number, up to 20, but it lasts a single bucket; the **m
 The gap between the two bands *is* the mean concurrency: **285h elapsed produced 873h of session-time** over the window, a 3.1× multiplier.
 63% of active time had two or more sessions running, on 1–58 sessions a day.
 
-The innermost band is time someone spent at the keyboard: **~128h against 285.0h**, or 45%.
+The innermost band is time someone spent at the keyboard: **~128h against 285.5h**, or 45%.
 A 10-minute bucket counts as attended when a person actually typed in it, which is the only unambiguous presence signal the transcripts carry.
 Everything else here, every assistant record and every tool result, is produced whether or not anyone is watching.
 
@@ -371,7 +398,7 @@ A quiet day has no share to average, and feeding it in as 0% would read as "disp
 
 Two clocks, deliberately: a session is counted on the day it **started**, since it has one opening and therefore one kind, while its tokens land on the day they were **spent**, so a session running past midnight doesn't move spend onto the wrong day.
 
-**Coverage is about half the project.** This needs session-level transcripts, so it starts 2026-07-26 like the concurrency chart, and covers 378.0M of the 678.8M measured total.
+**Coverage is about half the project.** This needs session-level transcripts, so it starts 2026-07-26 like the concurrency chart, and covers 378.1M of the 678.8M measured total.
 Within its own window it accounts for 98.0% of measured spend; the missing 2.0% is days whose token rows were merge-preserved from sessions whose transcripts have since gone.
 
 **A session's kind is read from its opening prompt, which is a convention rather than a marker.** That convention has already changed once mid-window without notice — see the prompt section above — and the classifier had to be corrected after it did.
@@ -410,7 +437,7 @@ Each has a `_words` twin (`band_product_words` and the rest) which sums to `word
 Both units are carried for the reason the language bands carry both: a rewrap moves a line count and leaves a word count alone, and a word is the unit closest to a token, so only the word bands can be put against spend.
 They are not the line bands converted: the line bands subtract line comments and the word bands count comment text, the same way `go_code` and `go_words` differ.
 
-**The two units rank the bands differently, which is the point of keeping both.** At the 2026-08-26 snapshot the split is:
+**The two units rank the bands differently, which is the point of keeping both.** At the 2026-08-27 snapshot the split is:
 
 | Band | Lines | Words | Words per line |
 |---|--:|--:|--:|
@@ -437,7 +464,7 @@ Read the word column when comparing a band against token spend, and the line col
 The tool is authored and tokens were spent on it, so excluding it would understate the total by exactly the part it can measure best.
 
 Vendored dependencies are in no band at all.
-They cost no tokens to produce, and at 13,294 of 15,007 tracked files they would erase every other band on a shared axis.
+They cost no tokens to produce, and at 13,294 of 14,991 tracked files they would erase every other band on a shared axis.
 The one number for them is `vendor_files` in `summary.json`.
 
 Also cumulative: `prs` (commits whose subject ends in `(#N)`, this repo's squash-merge signature) and `queue_closed` / `queue_filed` (backlog rows leaving and entering, counted on a row's *first* removal so a re-filed id can't book the same work twice; a work proxy rather than a completion ledger, since it catches a declined or pruned row too).
@@ -519,6 +546,10 @@ Merge-preserved because the hourly resolution exists only in the transcripts and
 The charts take percentiles from `pr_metrics.csv` instead, which holds every request individually.
 
 ### `summary.json`
+The `head_snapshot` block counts the **working tree**, and the daily series counts a **revision**, so the two answer slightly different questions and can disagree.
+Both exclude vendor and both exclude symlinks: `git grep` skips a symlink, so the series counts a linked file once under its real path, and `tracked_files` drops the same paths for the same reason.
+Counting them would credit the target twice, which put 623 Markdown lines into every snapshot before 2026-08-27: `AGENTS.md` points at `CLAUDE.md`, and two `testdata/` doc links do the same.
+
 Totals split into `measured` / `estimated` / `combined` (summed from the persisted rows, so archival-safe), an `estimation` block documenting the per-commit method, a `sessions` block (bucket width, span, session-days, mean and peak concurrency, hours using Claude, session-hours, parallel share), per-model and per-machine (`by_host`) splits, an accurate HEAD working-tree snapshot (including `band_files`, the per-band file census the `band_*` series are cut from, `go_generated`, and the `vendor_files` / `authored_files` pair), and full provenance — including which machine took the snapshot, which machines are on record, and the dates that break a series (the two plan upgrades and the docs reflow).
 
 ## Methodology & caveats

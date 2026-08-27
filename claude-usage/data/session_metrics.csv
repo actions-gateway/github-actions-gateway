@@ -29,4 +29,4 @@ date,host,sessions,peak_concurrent,active_buckets,parallel_buckets,session_bucke
 2026-08-24,mac-2,1,1,7,0,7,1
 2026-08-25,mac-2,58,20,64,50,519,25
 2026-08-26,mac-2,7,3,37,11,52,13
-2026-08-27,mac-2,2,2,3,2,5,0
+2026-08-27,mac-2,2,2,6,2,8,0

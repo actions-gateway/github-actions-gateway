@@ -984,6 +984,27 @@ def go_split(path):
     return (code, comment, blank)
 
 
+# `git ls-files -s` mode for a symlink. The daily series greps, and `git grep`
+# skips a symlink, so a linked file is counted once there, under its real path.
+SYMLINK_MODE = "120000"
+
+
+def tracked_files():
+    """Tracked paths with symlinks dropped, so a linked file is counted once.
+
+    Opening every path from ``git ls-files`` follows the link and counts the
+    target a second time: `AGENTS.md` -> `CLAUDE.md` and two `testdata/` doc
+    links put 623 Markdown lines into the head snapshot that the series never
+    had, which is most of the gap between the two counts.
+    """
+    paths = []
+    for ln in git("ls-files", "-s").splitlines():
+        meta, _, path = ln.partition("\t")
+        if path and not meta.startswith(SYMLINK_MODE):
+            paths.append(path)
+    return paths
+
+
 def head_snapshot():
     """Accurate line/test counts for the current working tree (excludes vendor).
 
@@ -992,7 +1013,7 @@ def head_snapshot():
     number for vendor is the whole of its representation here: it costs no tokens
     to produce, and on a shared axis it is 89% of the tracked tree.
     """
-    tracked = [f for f in git("ls-files").splitlines() if f]
+    tracked = tracked_files()
     authored = [f for f in tracked if not is_vendor(f)]
     band_files = defaultdict(int)
     for f in authored:
