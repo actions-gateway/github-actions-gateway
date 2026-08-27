@@ -736,6 +736,9 @@ For **remote third-party dependencies** (Go modules, npm, PyPI, crates, containe
 - **Better behavior** — caching cuts repeat fetches, survives upstream outages, and gives a single audit point.
 
 Per-ecosystem mirrors: **Athens** (Go module proxy), **Verdaccio** (npm), a registry **pull-through cache** (container images).
+Two of those are built here as reference manifests: [`deploy/athens/`](../../deploy/athens/README.md) for Go modules, and [`deploy/registry-mirror/`](../../deploy/registry-mirror/README.md) for container images.
+The registry mirror is one [CNCF Distribution](https://github.com/distribution/distribution) instance per upstream, shipped with the NetworkPolicies that make it a worker's only registry path.
+Both are dogfood-shaped; each README names the handful of cluster-specific values to retarget.
 Reserve the destination allowlist for what a mirror genuinely cannot proxy: a *specific* live cloud-provider API (`kms.<region>.amazonaws.com`, a Private-Google-Access CIDR like `199.36.153.8/30`), internal services reachable only by IP, and one-off stable endpoints.
 **Never** a wildcard like `*.googleapis.com` (it covers `storage.googleapis.com/<any-bucket>` and reopens broad exfil), and **not** the metadata/IMDS endpoint.
 

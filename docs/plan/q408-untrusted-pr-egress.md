@@ -1,7 +1,7 @@
 # Untrusted-PR Egress Posture for Kata Workers — Q408
 
-> **Status (2026-08-24): Phase 1 validated: the non-registry residual is measured gone.
-> Phase 2 (mirror manifests) is next.** Phase 0 (2026-08-03) measured the job-time egress inventory ([§2](#2-the-gap--what-an-e2e-job-actually-fetches-at-job-time-phase-0)) and re-sequenced Phases 1–4.
+> **Status (2026-08-27): Phase 2 manifests authored and wired into the e2e setup path; their cluster-side validation is outstanding, and books a dogfood session of its own ahead of Phase 3 rather than riding Phase 3's.** Phase 1 was validated 2026-08-24: the non-registry residual is measured gone.
+> Phase 0 (2026-08-03) measured the job-time egress inventory ([§2](#2-the-gap--what-an-e2e-job-actually-fetches-at-job-time-phase-0)) and re-sequenced Phases 1–4.
 > Phase 1's workflow change gates `azure/setup-helm` (`get.helm.sh`), every `actions/cache` step, and the bake's `GHA_CACHE` to the hosted lane, per the resolved [§2.4](#24-phase-1-decisions-resolved-2026-08-05) decisions.
 > [§2.5](#25-phase-1-validation-graded-2026-08-24) grades four green self-hosted runs against it: no non-GitHub, non-registry host is fetched, and the graded inventory adds a **fifth** registry upstream, `gcr.io`, that Phase 0's host extraction was structurally unable to see.
 
@@ -274,6 +274,39 @@ What the posture actually requires is not "CNCF Distribution" but an endpoint wi
 Distribution's proxy mode satisfies all four **by construction**, which is why it is the reference implementation.
 Any backend meeting the same four tests can substitute — Dragonfly is the scheduled candidate ([§6](#6-follow-on-validations-q539-q540)).
 
+### 3.6 Phase 2 build notes (measured 2026-08-27)
+
+What the manifests pin, and the readings behind each pin.
+All of it was taken against the image locally with `docker`, so it is a measurement of the **image**, not of the Deployment: nothing cluster-side (scheduling, probes, the policies, volume permissions) is covered, and that half is still owed a booked session.
+
+**Image.** `registry:3.1.1@sha256:1be55279f18a2fe1a74edf2664cac61c1bea305b7b4642dab412e7affdcb3e33`, resolved from the Hub manifest index on 2026-08-27.
+The floating `3` and `3.1` tags both resolved to that digest; `3.0` did not, so the pin names 3.1.1 rather than the series.
+
+**The image ships the upstream *development* config** at `/etc/distribution/config.yml`: `log.level: debug`, a debug listener on `:5001` serving pprof and `/metrics`, and `storage.delete.enabled: true`.
+All three are overridden by env in the pod spec.
+The delete override is defence in depth rather than the only closure: proxy mode answered `POST /v2/<name>/blobs/uploads/`, `PUT .../manifests/<tag>` and `DELETE .../manifests/<digest>` with **405** whether `delete.enabled` was true or false, which is [§3.1](#31-the-mirror--one-pull-through-cache-per-upstream)'s read-only property measured rather than argued.
+Setting `REGISTRY_HTTP_DEBUG_ADDR` to the empty string unbinds `:5001`, leaving `:5000` as the only listener.
+
+**Non-root needs `fsGroup`, and the failure is loud but misleading.** The image declares no `User` and its `/var/lib/registry` is root-owned, so a container run as uid 65532 with no writable volume at that path answers **every** pull with `500 filesystem: mkdir /var/lib/registry/docker: permission denied` while `GET /v2/` still returns 200.
+A readiness probe on `/v2/` would call that pod healthy.
+`fsGroup: 65532` is what makes the volume writable, for the `emptyDir` base and the PVC overlay alike.
+`readOnlyRootFilesystem: true` is safe alongside it: with the storage volume mounted, `/v2/`, a manifest fetch and a blob fetch all returned 200 with no error lines.
+
+**Anonymous pull-through works against all five upstreams.** One ref from the [§2.2](#22-the-inventory) inventory through each instance, all 200: `library/alpine` and the four of `distroless/static`, `actions-gateway/gmc`, `metrics-server/metrics-server` and `jetstack/cert-manager-controller`.
+The ghcr instance also returned 200 for `actions-gateway/charts/actions-gateway:1.2.0`, the OCI **chart** manifest helm pulls, matching a direct-upstream control on the same ref.
+That closes the reachability half of [§2.3](#23-what-the-measurement-changes) item 2 at the mirror; pointing helm at it is still Phase 3's.
+
+**Three build decisions the design left open.**
+
+1. **The mirror has its own namespace, `gag-registry-mirror`.** The e2e tenant's `ResourceQuota` caps it at 6 pods against a 2-worker `RunnerSet`, so five instances do not fit beside the workers; a separate namespace also gives [§3.1](#31-the-mirror--one-pull-through-cache-per-upstream)'s "its own ingress rule admits only the worker namespace" something to name.
+2. **`e2e-start.sh` applies it, not `e2e-setup.sh`.** [§3.1](#31-the-mirror--one-pull-through-cache-per-upstream) says "the e2e setup script", and the one-time script is the wrong lifecycle: five idle pods would stand on the same contended system pool that Q231 keeps the on-demand e2e AGC off.
+   `e2e-stop.sh` scales them to zero and leaves the namespace, the policies and any PVC standing.
+3. **`e2e-mirror-egress` ships now rather than in Phase 4.** Applied while the Kata overlay's allow-all `e2e-open-egress` is still present it is a no-op, union with allow-all, which makes Phase 4 a pure deletion instead of a swap.
+
+**Gated, but only as far as a linter reaches.** `deploy/registry-mirror/` joins `make manifest-validate`: yamllint over the tree, and kubeconform over the base manifests plus the overlay's PVCs, which are all native kinds.
+That is schema and syntax, and it says nothing about whether the instances serve, so it narrows what is unchecked off the cluster without closing it.
+`deploy/kata-ci/` is in the same script's `standalone_manifests` list and in no workflow path filter, so an edit to it alone runs neither check; that gap is filed as [Q1004](../queue/Q1004.md) and is not this phase's.
+
 ## 4. Phases
 
 Each phase is a separate PR; 0 to 4 need live dogfood evidence.
@@ -286,12 +319,17 @@ No off-cluster gate stands in either, whatever `deploy/registry-mirror/` ends up
   The [§2.4](#24-phase-1-decisions-resolved-2026-08-05) decisions are resolved: `e2e-reusable.yml` gates `azure/setup-helm`, every `actions/cache` step, and `GHA_CACHE` to `runner.environment == 'github-hosted'`.
   Validated by grading four green self-hosted Kata runs against a Phase 0 control ([§2.5](#25-phase-1-validation-graded-2026-08-24)), and no dogfood session was booked because the qualifying runs had already happened.
   The grading also corrected the upstream set from four to five.
-- **Phase 2 — mirror manifests.** `deploy/registry-mirror/` (Athens-shaped: base, persistent overlay, README, NetworkPolicies), one instance per upstream (`docker.io`, `ghcr.io`, `quay.io`, `registry.k8s.io`, `gcr.io`, the fifth added by [§2.5](#25-phase-1-validation-graded-2026-08-24)), applied from the e2e setup path.
+- **Phase 2 — mirror manifests, authored 2026-08-27 with cluster-side validation outstanding.** `deploy/registry-mirror/` (Athens-shaped: base, persistent overlay, README, NetworkPolicies), one instance per upstream (`docker.io`, `ghcr.io`, `quay.io`, `registry.k8s.io`, `gcr.io`, the fifth added by [§2.5](#25-phase-1-validation-graded-2026-08-24)), applied by `scripts/dogfood/e2e-start.sh` and scaled back to zero by `e2e-stop.sh`.
+  What is pinned, and what was measured to pin it, is [§3.6](#36-phase-2-build-notes-measured-2026-08-27).
   Validation: apply to the dogfood cluster; `curl` the mirror's `/v2/` and pull one image through each instance from a debug pod.
+  That half is outstanding rather than skipped, and it is a **precondition** of Phase 3's run rather than something that run can establish: [release-1.7.md](release-1.7.md) line 104 sequences the phases strictly, "manifests must serve before wiring can be proven to ride them".
+  It books a dogfood session of its own, per this section's header.
 - **Phase 3 — wiring.** dockerd `--registry-mirror` in the Kata overlay; non-Hub docker-client refs rewritten; helm's OCI ref pointed at the ghcr mirror.
   Validation: a green Kata e2e run **with open egress still present**, with the mirror access logs proving the pulls rode the mirror (hit counts > 0 per instance) — wiring proven before enforcement changes.
   Run it once with the image caches cold, so the `quay.io` / `registry.k8s.io` prepulls are exercised rather than skipped.
-- **Phase 4 — enforcement.** Swap `e2e-open-egress` → `e2e-mirror-egress` in the Kata overlay.
+- **Phase 4 — enforcement.** Delete `e2e-open-egress` from the Kata overlay.
+  A deletion rather than a swap: Phase 2 shipped `e2e-mirror-egress`, where it is a no-op under the allow-all policy ([§3.6](#36-phase-2-build-notes-measured-2026-08-27), decision 3).
+  The overlay's own comment on that policy names Phase 3 as the replacing phase, which is wrong and needs no separate fix: that file holds this one object, so the deletion takes the comment with it.
   Validation on dogfood: (a) a green Kata e2e run under the tight policy; (b) negatives from inside a job — `docker pull` of a host with no mirror instance fails, `curl https://example.com` times out, a push to the mirror is refused; (c) kind-side pull of a non-local-registry image succeeds via the mirror.
 - **Phase 5 — docs + close-out.** [kata-dind-workloads.md](../operations/kata-dind-workloads.md) caveat "validated posture is trusted CI" flips to the how-to; [security-operations.md](../operations/security-operations.md) mirror section links the concrete manifests; [in-runner image builds](../operations/in-runner-image-builds.md) and [network-architecture.md](../design/network-architecture.md) cross-refs; G.14 marked shipped; [roadmap.md](../roadmap.md) entry moves out of "exploring"; Q408 row deleted.
 

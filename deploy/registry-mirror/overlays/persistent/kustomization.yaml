@@ -1,0 +1,88 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+# Opt-in persistence overlay for the registry mirrors — see ../../README.md.
+#
+# The base (../../base) mounts an ephemeral emptyDir per instance: $0 at rest, but
+# every e2e window starts on a cold cache, re-pulling from upstream. This overlay
+# swaps each for a PVC-backed Balanced PD so the caches survive the window.
+# The disks bill continuously while the PVCs exist, so delete them during long
+# idle stretches to stop paying.
+#
+# Each patch swaps one Deployment's `storage` volume source. Strategic merge
+# matches the list element by its `name` key; `emptyDir: null` deletes the base's
+# source so no leftover survives the merge (a volume must declare exactly one
+# source), and persistentVolumeClaim takes its place.
+resources:
+  - ../../base
+  - pvc.yaml
+patches:
+  - patch: |
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: mirror-docker-io
+        namespace: gag-registry-mirror
+      spec:
+        template:
+          spec:
+            volumes:
+              - name: storage
+                emptyDir: null
+                persistentVolumeClaim:
+                  claimName: mirror-docker-io-storage
+  - patch: |
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: mirror-ghcr-io
+        namespace: gag-registry-mirror
+      spec:
+        template:
+          spec:
+            volumes:
+              - name: storage
+                emptyDir: null
+                persistentVolumeClaim:
+                  claimName: mirror-ghcr-io-storage
+  - patch: |
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: mirror-quay-io
+        namespace: gag-registry-mirror
+      spec:
+        template:
+          spec:
+            volumes:
+              - name: storage
+                emptyDir: null
+                persistentVolumeClaim:
+                  claimName: mirror-quay-io-storage
+  - patch: |
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: mirror-registry-k8s-io
+        namespace: gag-registry-mirror
+      spec:
+        template:
+          spec:
+            volumes:
+              - name: storage
+                emptyDir: null
+                persistentVolumeClaim:
+                  claimName: mirror-registry-k8s-io-storage
+  - patch: |
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: mirror-gcr-io
+        namespace: gag-registry-mirror
+      spec:
+        template:
+          spec:
+            volumes:
+              - name: storage
+                emptyDir: null
+                persistentVolumeClaim:
+                  claimName: mirror-gcr-io-storage

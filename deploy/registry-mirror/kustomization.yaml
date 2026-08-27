@@ -1,0 +1,10 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+# Default registry-mirror deployment: ephemeral (emptyDir) caches — $0 at rest.
+# This is what `kubectl apply -k deploy/registry-mirror` renders, and what
+# scripts/dogfood/e2e-start.sh applies. For caches that survive an e2e window (at
+# the cost of five continuously-billed PVCs), render the persistent overlay
+# instead: `kubectl apply -k deploy/registry-mirror/overlays/persistent`.
+# See README.md.
+resources:
+  - base

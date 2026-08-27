@@ -73,6 +73,7 @@ reset_stubs() {
 	E2E_VARIANT=kata
 	E2E_SYSTEM_NODES=2
 	unset E2E_ROUTE_VAR
+	unset REGISTRY_MIRROR_PERSISTENT
 }
 
 # run_main — run main() in a subshell and record its status in MAIN_RC and its
@@ -174,7 +175,9 @@ echo "scripts/dogfood/e2e-start-test.sh"
 reset_stubs gag-dogfood gag-dogfood-ci
 run_main
 check "a healthy bring-up succeeds" 0 "${MAIN_RC}"
-wait_call="$(call_line 'kubectl wait')"
+# Needle the namespace too: e2e-start.sh makes a second `kubectl wait`, for the
+# registry mirror, and call_line returns the first match.
+wait_call="$(call_line 'kubectl wait --namespace gag-dogfood-e2e')"
 check_contains "waits on the tenant gateway's Ready condition" \
 	"--for=condition=Ready actionsgateway/dogfood-e2e" "${wait_call}"
 check_contains "scopes the wait to the e2e tenant namespace" \
@@ -262,6 +265,37 @@ check_contains "routes to the scale set as a single JSON string" \
 	'--body "gag-ci-e2e"' "${route_call}"
 check_before "flips routing only after the tenant is Ready" \
 	"kubectl wait" "variable set"
+
+# --- the registry pull-through cache comes up with the tenant (Q408) ---------
+
+reset_stubs gag-dogfood gag-dogfood-ci
+run_main
+mirror_apply="$(call_line 'deploy/registry-mirror')"
+check_contains "applies the registry pull-through cache" \
+	"apply -k" "${mirror_apply}"
+check_not_contains "renders the ephemeral base by default" \
+	"registry-mirror/overlays/persistent" "${mirror_apply}"
+check_contains "waits on the mirror deployments by label" \
+	"-l app=registry-mirror" \
+	"$(call_line 'kubectl wait --namespace gag-registry-mirror')"
+# Five image pulls must not queue in front of the bring-up's own verdict.
+check_before "waits for the AGC before applying the mirror" \
+	"actionsgateway/dogfood-e2e" "deploy/registry-mirror"
+
+reset_stubs gag-dogfood gag-dogfood-ci
+REGISTRY_MIRROR_PERSISTENT=1
+run_main
+check_contains "renders the persistent overlay on opt-in" \
+	"deploy/registry-mirror/overlays/persistent" \
+	"$(call_line 'deploy/registry-mirror')"
+
+# Routing is the first point at which a job can reach this tenant, so the mirror
+# has to be up before it flips — otherwise the first routed job races the cache.
+reset_stubs gag-dogfood gag-dogfood-ci
+E2E_ROUTE_VAR=1
+run_main
+check_before "brings the mirror up before routing sends a job" \
+	"gag-registry-mirror" "variable set"
 
 # --- the isolation variant selects its overlay, and is validated first -------
 
