@@ -2682,6 +2682,14 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 </thead>
 <tbody>
 <tr>
+<td><a href="Q1008/">Q1008</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/controller/integration/pod_provisioning_test.go"><code>MaxWorkersCeiling</code> breaches its 20s wait on main, cause unmeasured</a></td>
+<td><code>flake</code> <code>tests</code></td>
+<td>🔲</td>
+<td>M</td>
+<td><strong>Top of queue per the <a href="../development/maintaining-backlog/#flake-fixes-go-first">flakes-first rule</a>.</strong> …</td>
+</tr>
+<tr>
 <td><a href="Q999/">Q999</a></td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/controller/integration/v2_runnerset_sharing_test.go">Cross-namespace proxy revoke has no event source, so its test races</a></td>
 <td><code>flake</code> <code>tests</code> <code>security</code></td>
@@ -3799,7 +3807,7 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td><code>flake</code> <code>tests</code></td>
 <td>💤</td>
 <td>S</td>
-<td><strong>Event:</strong> any of the three fails on <code>main</code>.</td>
+<td><strong>Event:</strong> delegated to <a href="Q1007/">Q1007</a>, whose class-wide trigger covers these three; a sighting fires that row and escalates this one …</td>
 </tr>
 <tr>
 <td><a href="Q747/">Q747</a></td>
@@ -3808,6 +3816,14 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>💤</td>
 <td>S</td>
 <td><strong>Event:</strong> it fails on <code>main</code> with the CNI enforcer fingerprint <em>unchanged</em> across the probe, which the failure message states outright: a …</td>
+</tr>
+<tr>
+<td><a href="Q1007/">Q1007</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/controller/integration/v2_actionsgateway_test.go">A fourth GMC integration test breaches its 15s wait, cause unmeasured</a></td>
+<td><code>flake</code> <code>tests</code></td>
+<td>💤</td>
+<td>M</td>
+<td><strong>Event:</strong> any 15 s <code>require.Eventually</code> in the GMC integration suite breaches on <code>main</code>.</td>
 </tr>
 <tr>
 <td><a href="Q549/">Q549</a></td>

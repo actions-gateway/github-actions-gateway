@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q797/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1007/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>Three GMC provisioning integration tests time out under the race run - GitHub Actions Gateway</title>
+        <title>A fourth GMC integration test breaches its 15s wait, cause unmeasured - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#three-gmc-provisioning-integration-tests-time-out-under-the-race-run" class="md-skip">
+        <a href="#a-fourth-gmc-integration-test-breaches-its-15s-wait-cause-unmeasured" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Three GMC provisioning integration tests time out under the race run
+              A fourth GMC integration test breaches its 15s wait, cause unmeasured
             
           </span>
         </div>
@@ -2597,13 +2597,64 @@
   
 
 
-<h1 id="three-gmc-provisioning-integration-tests-time-out-under-the-race-run">Three GMC provisioning integration tests time out under the race run<a class="headerlink" href="#three-gmc-provisioning-integration-tests-time-out-under-the-race-run" title="Permanent link">&para;</a></h1>
-<p><strong>Event:</strong> delegated to <a href="../Q1007/">Q1007</a>, whose class-wide trigger covers these three; a sighting fires that row and escalates this one with it.
-First sighting 2026-08-11 (Q726 branch): all three timed out at 15s under <code>make test-integration</code>, then passed in isolation and on a package re-run.
-No mitigation shipped.
-This row holds the first sighting; Q1007 holds the class signal and the measurement.</p>
-<p>Q1007 is a fourth test of this class in the same suite, sighted 2026-08-27, and holds the measurement that machine load reproduces this suite's slowdown without reproducing the failure.
-No second failure of these three has surfaced: a sweep of 1,432 local session transcripts on 2026-08-27 found none, and neither red in <code>integration-test</code>'s last 25 <code>main</code> runs is one of them.</p>
+<h1 id="a-fourth-gmc-integration-test-breaches-its-15s-wait-cause-unmeasured">A fourth GMC integration test breaches its 15s wait, cause unmeasured<a class="headerlink" href="#a-fourth-gmc-integration-test-breaches-its-15s-wait-cause-unmeasured" title="Permanent link">&para;</a></h1>
+<p><strong>Event:</strong> any 15 s <code>require.Eventually</code> in the GMC integration suite breaches on <code>main</code>.
+This subsumes <a href="../Q797/">Q797</a>'s narrower trigger, so that row delegates to this one: a failure of its three fires this Event, and both rows escalate together.
+This row owns the class signal and the measurement.</p>
+<p>Sighted once, 2026-08-27 07:52 PDT, on a local <code>make test-integration</code>: <code>TestV2_ActionsGateway_ProvisionsAGCControlPlane</code> failed after 15.52 s at line 151 of <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/controller/integration/v2_actionsgateway_test.go">v2_actionsgateway_test.go</a>, <code>Condition never satisfied</code>, on the wait for the AGC Deployment to appear.
+The observing session's diff touched no <code>cmd/gmc</code> file, and <code>cmd/agc</code> is a separately compiled module, so for this suite the tree it ran was <code>origin/main</code>.</p>
+<p><strong>Load is present and is not sufficient</strong>, which is the finding.
+Measured 2026-08-27 on the same machine at <code>d36b09c</code>, every run <code>-race</code> through <code>make -C cmd/gmc test-integration</code>:</p>
+<table>
+<thead>
+<tr>
+<th>Condition</th>
+<th>Load avg</th>
+<th>Package</th>
+<th>The test</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Isolated, 6 runs</td>
+<td>7 to 14</td>
+<td>n/a</td>
+<td>1.19 to 1.39 s</td>
+</tr>
+<tr>
+<td>Full suite, 2 runs</td>
+<td>2 to 6</td>
+<td>231.5 s, 231.7 s</td>
+<td>1.35 s, 1.36 s</td>
+</tr>
+<tr>
+<td>Full suite under 18 unniced CPU burners plus disk churn, 3 runs</td>
+<td>36 to 39</td>
+<td>285.1 to 286.8 s</td>
+<td>1.49 to 1.89 s</td>
+</tr>
+<tr>
+<td>The sighting</td>
+<td>~20.5</td>
+<td>278.2 s</td>
+<td>failed at 15.52 s</td>
+</tr>
+</tbody>
+</table>
+<p>The sighting's 278.2 s sits on the loaded curve, at 1.20x the quiet baseline where deliberate load gives 1.23x, so that session's window really was slow and the suite slowdown reproduces.
+The failure does not.
+At nearly double the sighting's load average the assertion costs 1.89 s, and breaching 15 s needs 11x.
+Whatever held that one reconcile past 15 s is an outlier rather than a proportional slowdown, and nothing measured here names it.</p>
+<p><strong>The clean runs barely bound the rate.</strong> Zero failures in five in-suite runs puts the 95 % upper bound on the per-run rate near 60 % by the rule of three, so the absent repro is close to no evidence of rarity.</p>
+<p>The window is not tight by the suite's own standard: 15 s is its modal <code>Eventually</code> budget and the measured cost leaves 11x headroom, so raising the number moves the threshold instead of fixing anything.
+The test client is <code>client.New</code> (uncached), so the delay sits on the reconciler side: manager cache sync, the reconcile itself, or a starved envtest apiserver.
+One candidate, <strong>unverified</strong>: the suite runs under <code>nice -n 10 taskpolicy -d throttle</code> (<code>scripts/agent/local-throttle.sh</code>), which deprioritises its etcd on CPU <em>and</em> disk while unniced peer sessions compete at normal priority.</p>
+<p>Same class as <a href="../Q797/">Q797</a>, which holds the first sighting (three <code>TestGMC_TenantProvisioning_*</code> at the same 15 s, 2026-08-11) and whose own Event has not fired.
+A sweep of 1,432 local session transcripts finds no second failure of its three, and <code>integration-test</code> on <code>main</code> is 23/25 over its last 25 runs with neither red being one of them.
+<a href="../Q968/">Q968</a> is the same shape in <code>cmd/agc</code>, and its own investigation traced that breach to a shutdown defect rather than to load (<a href="https://github.com/actions-gateway/github-actions-gateway/pull/1754">#1754</a>, merged 2026-08-27 as <code>17de0762f</code>).
+It refuted its load reading the way this row refutes its own, and then found a product cause underneath, which is the nearest evidence that a breach in this family can be a defect rather than an environment.
+<a href="../Q1008/">Q1008</a> is the sighting that <em>did</em> land on <code>main</code>.
+This row owns the load measurement, so cite it by ID rather than restating the figures.</p>
 
 
 

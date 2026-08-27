@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q797/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1008/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>Three GMC provisioning integration tests time out under the race run - GitHub Actions Gateway</title>
+        <title>MaxWorkersCeiling breaches its 20s wait on main, cause unmeasured - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#three-gmc-provisioning-integration-tests-time-out-under-the-race-run" class="md-skip">
+        <a href="#maxworkersceiling-breaches-its-20s-wait-on-main-cause-unmeasured" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Three GMC provisioning integration tests time out under the race run
+              MaxWorkersCeiling breaches its 20s wait on main, cause unmeasured
             
           </span>
         </div>
@@ -2597,13 +2597,18 @@
   
 
 
-<h1 id="three-gmc-provisioning-integration-tests-time-out-under-the-race-run">Three GMC provisioning integration tests time out under the race run<a class="headerlink" href="#three-gmc-provisioning-integration-tests-time-out-under-the-race-run" title="Permanent link">&para;</a></h1>
-<p><strong>Event:</strong> delegated to <a href="../Q1007/">Q1007</a>, whose class-wide trigger covers these three; a sighting fires that row and escalates this one with it.
-First sighting 2026-08-11 (Q726 branch): all three timed out at 15s under <code>make test-integration</code>, then passed in isolation and on a package re-run.
-No mitigation shipped.
-This row holds the first sighting; Q1007 holds the class signal and the measurement.</p>
-<p>Q1007 is a fourth test of this class in the same suite, sighted 2026-08-27, and holds the measurement that machine load reproduces this suite's slowdown without reproducing the failure.
-No second failure of these three has surfaced: a sweep of 1,432 local session transcripts on 2026-08-27 found none, and neither red in <code>integration-test</code>'s last 25 <code>main</code> runs is one of them.</p>
+<h1 id="maxworkersceiling-breaches-its-20s-wait-on-main-cause-unmeasured"><code>MaxWorkersCeiling</code> breaches its 20s wait on main, cause unmeasured<a class="headerlink" href="#maxworkersceiling-breaches-its-20s-wait-on-main-cause-unmeasured" title="Permanent link">&para;</a></h1>
+<p><strong>Top of queue per the <a href="../../development/maintaining-backlog/#flake-fixes-go-first">flakes-first rule</a>.</strong></p>
+<p><code>TestAGC_PodProvisioning_MaxWorkersCeiling</code> failed on <code>main</code> in <a href="https://github.com/actions-gateway/github-actions-gateway/actions/runs/32934660757">integration-test run 32934660757</a>, 2026-08-26 05:39 UTC on <code>ubuntu-latest</code>: <code>Condition never satisfied</code> after 20.38 s at line 457 of <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/controller/integration/pod_provisioning_test.go">pod_provisioning_test.go</a>, on "a runner pod should be created once the maxWorkers ceiling is lifted".
+No code change intervened and the suite has been green on <code>main</code> since, so it fits the flake definition.
+This is the only genuine test failure in <code>integration-test</code>'s last 25 <code>main</code> runs; the other red is a run whose two module jobs concluded failure with no failed step, which is a cancellation rather than a verdict.</p>
+<p><strong>A candidate the log offers, and it is unverified.</strong> The assertion waits on a <em>second</em> job being acquired after the ceiling lifts: the test advances <code>preexisting-worker-0</code> to <code>Succeeded</code>, enqueues a fresh job, and expects a runner pod.
+The run log shows the first job dropped at 05:39:03 with <code>provisioner: concurrency ceiling reached (2 active pods)</code>, and then no further <code>AcquireJob</code> for <code>ceiling-rg</code> in the 20 s window.
+Whether the listener simply had not polled again, whether the ceiling-lift has no event source to wake the reconciler, or whether the CI runner was starved, is not established by the log alone.
+Settle which before changing the wait, because a budget raise is the remedy that fits none of the three.</p>
+<p>Reproduce against the full <code>cmd/agc</code> suite rather than alone: <a href="../Q968/">Q968</a> is the same suite and the same <code>Eventually</code> shape, and it reproduced only in-suite, at 1 red in 4 runs on one unchanged tree.
+Its investigation traced that breach to a shutdown defect rather than to load (<a href="https://github.com/actions-gateway/github-actions-gateway/pull/1754">#1754</a>, merged 2026-08-27 as <code>17de0762f</code>), so treat a product cause here as live too.
+<a href="../Q1007/">Q1007</a> is the GMC-side sibling and owns the measurement showing that machine load reproduces the <em>suite slowdown</em> in this class without reproducing the <em>failure</em>, so do not assume load here without measuring it.</p>
 
 
 
