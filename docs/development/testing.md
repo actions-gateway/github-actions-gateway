@@ -1404,6 +1404,15 @@ Each is a claim about state, and each has a cheap way of being wrong:
   A `git merge-tree --write-tree` probe exited 0 for a branch the merge queue then rejected, because a local clone has this repo's merge drivers installed and GitHub runs none; the driver announced itself in the very output being quoted as a clean merge (Q828).
   Nothing was absent in either case, so "check more" would not have helped, and the Q828 reading was hedged carefully on the inference drawn *from* the probe while the error sat upstream in the probe itself.
 
+- **Four instruments in this repo answer a narrower question than the one they get asked, and all four are silent about it.** Instances of the rule above, from one 2026-08-27 dispatch run; each is cheap to avoid once named.
+  `grep` here is a shell function dispatching to **ugrep**, whose flag and regex dialects differ: an unescaped `+` or a `-t` is *rejected*, printing usage to stderr and matching nothing, so a redirected count reports `0` from a pattern that never ran.
+  It also reads files concurrently, so multi-file output arrives in no fixed order and a line cannot be paired to its file by position.
+  Prefer the Grep tool or `python3` wherever a zero or a pairing is about to mean something, and give any count a positive control.
+  `gh run list --json conclusion` reports **run** level, so a workflow whose real jobs were skipped and whose `if: always()` gate concluded `success` reads as "the suite ran"; only `gh run view <id> --json jobs` can see it, which is the mechanism behind [the path-gated rule](#path-gated-workflows-verify-the-heavy-gates-actually-ran).
+  That same field is an **empty string** while a run is in flight rather than absent, so `--jq '.conclusion // .status'` prints a blank line and reads as missing data; ask for both explicitly.
+  And `actor.login` names the **credential**, not the person: every agent session here authenticates as the same account, and `performed_via_github_app` is null for `gh`, so no timeline event distinguishes a human's click from a session's call.
+  The session transcripts under `~/.claude/projects/` do resolve it, but only when the match is anchored on the **tool-use record**; a bare string search matches every *mention* of a command, and a run that relays instructions mentions them constantly.
+
 - **A gate that fails on your branch is not yours until it fails on the base too.** Q166 spent two wrong hypotheses on this.
   A red envtest suite was blamed first on the session's own concurrent test runs, then on a cluster-wide List the branch had added, which was narrowed on that theory for no improvement; `origin/main` alone then measured 324.5s against a 5m timeout with none of the branch's code, and the failing test's name had moved between runs because what was actually failing was the suite's wall clock (Q741).
   When a gate does fail on the base, the fix is not yours to carry either: it gets its own PR, searched for before it is written ([CONTRIBUTING.md § When `main` is broken](../../CONTRIBUTING.md#when-main-is-broken)).
