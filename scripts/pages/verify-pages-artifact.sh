@@ -107,8 +107,11 @@ else
 			'any(.[]; .version == $v and ((.aliases // []) | index($a) != null))' "$versions" > /dev/null; then
 			err "artifact versions.json does not put the '$ALIAS' alias on $VERSION, so /$ALIAS/ would keep serving the previous release. Alias currently on: $(jq -r --arg a "$ALIAS" '[.[] | select((.aliases // []) | index($a) != null) | .version] | join(", ") | if . == "" then "<no version>" else . end' "$versions")"
 		fi
-		# --alias-type=copy makes an alias a real directory: Pages artifact
-		# deploys do not follow symlinks, so a symlinked alias deep-links to 404.
+		# An alias with no page behind it is a 404 on every deep link. `-f`
+		# resolves a symlinked alias rather than rejecting it, which is correct
+		# here: actions/upload-pages-artifact tars with `--dereference
+		# --hard-dereference` (measured at the pinned fc324d35, v5.0.0), so a
+		# symlink is materialised into the artifact rather than shipped as one.
 		if [[ ! -f "$SITE/$ALIAS/index.html" ]]; then
 			err "artifact has no $ALIAS/index.html, so /$ALIAS/ would 404."
 		fi
@@ -137,6 +140,13 @@ if ((stable_tag)) && [[ -f "$versions" ]] && jq -e . "$versions" > /dev/null 2>&
 			'any(.[]; .version == $v and ((.aliases // []) | index("stable") != null))' \
 			"$versions" > /dev/null; then
 			err "$VERSION is the highest release in this artifact but does not carry the 'stable' alias, so /stable/ would keep serving the previous release. The mike step reported claiming '${ALIAS:-<none>}'; check its 'mike list' step 3 output for a swallowed failure."
+		fi
+		# The claim-driven branch checks the alias directory too, but only when a
+		# claim arrived — so in the degraded path this block exists for, nothing
+		# had looked at it. Guarded on the claim rather than on rc so the two
+		# cannot both report the same missing directory.
+		if [[ "$ALIAS" != "stable" && ! -f "$SITE/stable/index.html" ]]; then
+			err "$VERSION is the highest release in this artifact but there is no stable/index.html, so /stable/ would 404."
 		fi
 	fi
 fi

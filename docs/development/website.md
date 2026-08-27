@@ -163,10 +163,11 @@ The alias half is a separate assertion because `mike` writes the version and the
 On a stable tag it does not stop at the claim.
 Which alias the run claimed is reported by the same step the check audits, and that step decides it from `mike list`: a `mike list` that fails or changes shape leaves `highest` empty, so it takes its backport branch, never moves `stable`, and reports an empty claim.
 An assertion that keys on the claim is switched *off* by that rather than failed by it, and the run goes green with `/stable/` on the previous release.
-So when the ref says this is a stable tag, the check ranks the artifact's own `versions.json` and requires the alias on the highest release itself.
+So when the ref says this is a stable tag, the check ranks the artifact's own `versions.json` and requires the alias on the highest release itself, along with a page behind it.
 The two inputs it uses, the git ref and the `.version` fields, share no derivation with the step's.
 
-**After the deploy**, [`verify-pages-live.sh`](../../scripts/pages/verify-pages-live.sh) reads the site and polls for up to five minutes until it serves the version.
+**After the deploy**, [`verify-pages-live.sh`](../../scripts/pages/verify-pages-live.sh) reads the site and polls until it serves the version, on a five-minute budget.
+The budget bounds when the last attempt may *start*, not when the step ends, so a request already in flight can carry the run a little past it.
 No assertion over `_site` can stand in for this, and `v1.6.0` is the proof.
 Every tree-side signal in that run was correct: `mike` pushed the right commit, `git archive` picked it up, the uploaded artifact carried `1.6.0` with the `stable` alias, and the Pages deployment reported success and became the active one.
 The site served `1.5.0` for roughly 25 minutes regardless, until a manual republish.

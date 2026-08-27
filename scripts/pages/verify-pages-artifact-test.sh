@@ -159,6 +159,33 @@ root="$(site semver "$SEMVER" dev 1.10.0 1.9.0 stable)"
 expect "1.10.0 outranks 1.9.0 when deciding which must carry stable" 1 \
 	--site "$root" --version 1.10.0 --alias "" --stable-tag
 
+# The metadata can name the alias while nothing serves it. The claim-driven
+# branch covers that only when a claim arrived, so the degraded path -- the one
+# the block above exists for -- had nothing looking at the directory.
+root="$(site alias-nodir "$CORRECT" dev 1.6.0 1.5.0 stable)"
+rm -rf "${root:?}/stable"
+expect "--stable-tag catches an alias with no page behind it" 1 \
+	--site "$root" --version 1.6.0 --alias "" --stable-tag
+expect "the claimed path catches the same tree" 1 \
+	--site "$root" --version 1.6.0 --alias stable --stable-tag
+reported="$(grep -c 'stable/index.html' "$FIXTURE_DIR/out.log")"
+if ((reported == 1)); then
+	pass "a missing alias directory is reported once, not by both branches"
+else
+	fail "a missing alias directory is reported once, not by both branches" \
+		"reported $reported time(s)"
+fi
+
+# Deliberately asserts GREEN, between two cases asserting red: this is not a
+# typo. A symlinked alias is materialised into the artifact, because
+# actions/upload-pages-artifact tars with `--dereference --hard-dereference`
+# (measured at the pinned fc324d35, v5.0.0), so failing it here would reject a
+# tree that publishes correctly.
+root="$(site alias-symlink "$CORRECT" dev 1.6.0 1.5.0)"
+ln -s 1.6.0 "$root/stable"
+expect "a symlinked alias is not a failure, because the upload dereferences" 0 \
+	--site "$root" --version 1.6.0 --alias stable --stable-tag
+
 # A tree with no release versions at all has nothing to rank, and must not fail.
 DEVONLY='[{"version":"dev","title":"dev (main)","aliases":[]}]'
 root="$(site dev-only "$DEVONLY" dev)"
