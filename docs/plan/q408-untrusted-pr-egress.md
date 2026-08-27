@@ -276,10 +276,10 @@ Any backend meeting the same four tests can substitute — Dragonfly is the sche
 
 ## 4. Phases
 
-Each phase is a separate PR; 0 to 4 need live dogfood evidence (prod-guarded: deliberate, operator-driven runs).
-Needing it is not the same as booking a session: Phases 0 and 1 read theirs off runs that had already happened, so only 2, 3 and 4 book one.
+Each phase is a separate PR; 0 to 4 need live dogfood evidence.
+Needing it is not the same as booking a session (prod-guarded: a deliberate, operator-driven run): Phases 0 and 1 read theirs off runs that had already happened, so only 2, 3 and 4 book one.
 Phase 2 cannot read its evidence off a prior run, because none applied manifests that did not yet exist.
-No off-cluster gate stands in either, whatever `deploy/registry-mirror/` ends up linted by: schema and syntax checks cannot tell whether an instance serves, which is the whole of what Phase 2's validation asserts.
+No off-cluster gate stands in either, whatever `deploy/registry-mirror/` ends up linted by: schema and syntax checks cannot tell whether an instance serves, which is what Phase 2's validation turns on.
 
 - **Phase 0 — measured egress inventory. ✅ Done (2026-08-03).** Read off a green Kata dogfood run that had already happened rather than booking a new one; [§2](#2-the-gap--what-an-e2e-job-actually-fetches-at-job-time-phase-0) is the deliverable, and [§2.3](#23-what-the-measurement-changes) is what it cost the design.
 - **Phase 1 — shrink the non-registry residual to GitHub. ✅ Done (implemented 2026-08-05, validated 2026-08-24).** New phase, forced by Phase 0.
