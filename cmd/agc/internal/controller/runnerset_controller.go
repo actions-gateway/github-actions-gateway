@@ -476,7 +476,13 @@ func (r *RunnerSetReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	// both fall through to the unchanged classic path below.
 	if rs.Spec.AcquisitionProtocol == v2alpha1.AcquisitionProtocolScaleSet {
 		res, err := r.reconcileScaleSetListener(ctx, log, &rs, refs, reapAfter, podCounts, observed)
-		return r.withProxyShareRecheck(res, refs), err
+		if err != nil {
+			// controller-runtime discards a Result returned beside an error and warns
+			// that the reconciler returned both; the error path already requeues with
+			// backoff, so there is nothing to fold in.
+			return ctrl.Result{}, err
+		}
+		return r.withProxyShareRecheck(res, refs), nil
 	}
 
 	// 4. Installation token for agent management. Process-wide (one GitHub App per
