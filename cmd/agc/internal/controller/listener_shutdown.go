@@ -43,7 +43,11 @@ func (s *listenerShutdown) Start(ctx context.Context) error {
 	<-ctx.Done()
 	s.log.Info("draining listener goroutines before shutdown", "owner", s.owner)
 	<-s.stop()
-	s.log.Info("listener goroutines drained; all broker sessions deleted", "owner", s.owner)
+	// The claim is now the guard's to keep rather than the drain's to hope for: the
+	// stopped flag is set before this returns, so nothing reopens a session behind it.
+	// It also covers both tiers on a RunnerSet, where "broker" named only the classic
+	// one while the scale-set session was the one that could leak (Q968).
+	s.log.Info("listener goroutines drained; every session they held is deleted", "owner", s.owner)
 	return nil
 }
 
@@ -92,10 +96,20 @@ func snapshotMultiplexers(mu *sync.Mutex, m map[types.NamespacedName]*listener.M
 	return muxes
 }
 
+// A drain is one-way: both stopListeners below set the reconciler's stopped flag
+// before draining, and every listener start path refuses once it is set. Without that
+// the drain is only advisory — the reconciler keeps serving queued reconciles while
+// the manager shuts down, and one of them starting a listener opens a session this
+// process will never delete, because the drain that would have deleted it has already
+// run. On the scale-set tier that leaks the scale set's single session and locks the
+// successor AGC out; on the classic tier it leaks the broker sessions this file's own
+// shutdown log line claims are gone (Q968, and the property Q222 exists to hold).
+
 // stopListeners drains every listener goroutine this RunnerGroup reconciler owns.
 // It returns a done channel closed once they have all exited (and so have all
 // deleted their broker sessions), per the repo's async convention.
 func (r *RunnerGroupReconciler) stopListeners() <-chan struct{} {
+	r.stopped.Store(true)
 	return stopMultiplexers(snapshotMultiplexers(&r.multiplexersMu, r.multiplexers))
 }
 
@@ -111,6 +125,7 @@ func (r *RunnerGroupReconciler) stopListeners() <-chan struct{} {
 // The two tiers drain concurrently: both helpers spawn before either is awaited, so
 // shutdown costs the slower tier rather than their sum.
 func (r *RunnerSetReconciler) stopListeners() <-chan struct{} {
+	r.stopped.Store(true)
 	classic := stopMultiplexers(snapshotMultiplexers(&r.multiplexersMu, r.multiplexers))
 	scaleSet := stopScaleSetHandles(snapshotScaleSetListeners(&r.scaleSetListenersMu, r.scaleSetListeners))
 	done := make(chan struct{})

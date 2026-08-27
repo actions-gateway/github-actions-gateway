@@ -53,6 +53,12 @@ const scaleSetSessionRetry = 2 * time.Second
 // scaleSetSessionHeld reports whether err is the 409 CreateSession answers while another
 // session exists for the scale set. One session per scale set is a protocol invariant,
 // so an overlapping AGC — every rolling update — meets this on the way up.
+// errReconcilerStopped is returned by a listener start path asked to run after the
+// shutdown drain. It is not a fault: the reconcile simply has nothing left to do, so
+// callers exit quietly rather than surfacing a condition or taking backoff on a
+// process that is going away.
+var errReconcilerStopped = errors.New("reconciler has drained its listeners")
+
 func scaleSetSessionHeld(err error) bool {
 	var conflict *scaleset.SessionConflictError
 	return errors.As(err, &conflict)
@@ -169,6 +175,9 @@ func (r *RunnerSetReconciler) reconcileScaleSetListener(ctx context.Context, log
 	key := types.NamespacedName{Namespace: rs.Namespace, Name: rs.Name}
 
 	handle, err := r.ensureScaleSetListener(ctx, log, key, rs, refs)
+	if errors.Is(err, errReconcilerStopped) {
+		return ctrl.Result{}, nil
+	}
 	if scaleSetSessionHeld(err) {
 		// A predecessor still holds the scale set's single session — the ordinary shape
 		// of a rollout, where the outgoing AGC is finishing the teardown Q222 bounds
@@ -249,6 +258,14 @@ func (r *RunnerSetReconciler) reconcileScaleSetListener(ctx context.Context, log
 // deleted (stopScaleSetListener) or the manager shuts down (ctx cancel) — mirroring the
 // classic multiplexer's lifecycle.
 func (r *RunnerSetReconciler) ensureScaleSetListener(ctx context.Context, log *slog.Logger, key types.NamespacedName, rs *v2alpha1.RunnerSet, refs *resolvedRefs) (*scaleSetListenerHandle, error) {
+	// The drain has run: this process deletes no more sessions, so it must open no
+	// more. Measured (Q968) — without this a reconcile queued before shutdown opens
+	// the scale set's single session on its way out, and since GitHub holds a session
+	// until its owner deletes it, the successor AGC can never open its own.
+	if r.stopped.Load() {
+		return nil, errReconcilerStopped
+	}
+
 	runnerGroup := resolveRunnerGroupName(rs, refs.gateway)
 
 	// The scale set's group is settled at registration, so re-registering it under a

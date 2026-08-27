@@ -4,12 +4,14 @@ package integration_test
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/provisioner"
 	v2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
 	"github.com/actions-gateway/github-actions-gateway/scaleset/scalesettest"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -227,6 +229,16 @@ func TestV2_RunnerSet_ScaleSet_RestartReclaimsWorkerOrphanedWhileDown(t *testing
 
 	stopFirst()
 
+	// Q222's contract, asserted where it is decided rather than 30s downstream: a
+	// drained AGC leaves no session behind, because the scale set admits exactly one
+	// and the successor cannot open its own until this is gone. Checked here because
+	// the failure it catches is otherwise indistinguishable from a slow completion —
+	// the stub expires nothing, so a session still held at this line means the wait
+	// at the end of this test cannot ever be satisfied, and it burns its whole budget
+	// before saying so (Q968).
+	require.False(t, srv.HasActiveSession(ssID),
+		"a drained AGC must leave no scale-set session behind; one held here locks the successor out permanently")
+
 	// --- The job goes terminal at GitHub with no AGC listening. This is the window
 	// the dogfood incident sat in for 16 hours: nobody is left to stamp the pod.
 
@@ -237,7 +249,11 @@ func TestV2_RunnerSet_ScaleSet_RestartReclaimsWorkerOrphanedWhileDown(t *testing
 
 	startRunnerSetReconcilerWithScaleSet(t, srv)
 
-	require.Eventually(t, func() bool {
+	// The wait is against live state, so it keeps its subject's output: a bare
+	// "Condition never satisfied" cannot say whether the completion was never
+	// delivered or the restarted listener never got a session to receive it on, and
+	// on a flake the run that could have answered is gone (Q968).
+	if !assert.Eventually(t, func() bool {
 		var got corev1.Pod
 		if err := k8sClient.Get(ctx,
 			types.NamespacedName{Namespace: ns, Name: orphan.Name}, &got); err != nil {
@@ -246,7 +262,27 @@ func TestV2_RunnerSet_ScaleSet_RestartReclaimsWorkerOrphanedWhileDown(t *testing
 		_, ok := got.Annotations[provisioner.AnnotationJobCompletedAt]
 		return ok
 	}, 30*time.Second, 100*time.Millisecond,
-		"a completion delivered to the restarted AGC's session must stamp the orphaned worker, giving it a reap deadline")
+		"a completion delivered to the restarted AGC's session must stamp the orphaned worker, giving it a reap deadline") {
+		t.Logf("scale set %d still holds a session: %v", ssID, srv.HasActiveSession(ssID))
+		t.Logf("session calls in order: %v", sessionCalls(srv))
+		if c := readySetCondition(t, ns, setName); c != nil {
+			t.Logf("RunnerSet Ready=%s/%s: %s", c.Status, c.Reason, c.Message)
+		}
+		t.FailNow()
+	}
+}
+
+// sessionCalls filters the stub's call log to the session lifecycle, which is what
+// separates "the predecessor never deleted its session" from "the predecessor
+// created a fresh one on its way out". Order is the whole signal, so it is kept.
+func sessionCalls(srv *scalesettest.Server) []string {
+	var out []string
+	for _, c := range srv.Calls() {
+		if strings.Contains(c, "-session ") {
+			out = append(out, c)
+		}
+	}
+	return out
 }
 
 // waitForSoleWorkerPod waits until setName has exactly one worker pod and returns it.
