@@ -158,7 +158,13 @@ So the job checks both sides (Q1000).
 **Before the upload**, [`verify-pages-artifact.sh`](../../scripts/pages/verify-pages-artifact.sh) asserts the assembled `_site` carries the version this run built: an `X.Y.Z/index.html`, a `versions.json` listing it, and the alias `mike` actually claimed sitting on that version.
 Until then the step asserted only that `_site/index.html` and `_site/CNAME` existed.
 Both are true of a stale version tree, so a run that archived the wrong commit would have passed its own verification.
-The alias half is a separate assertion because `mike` writes the version and the alias in two commits, so a run genuinely passes through a tree that lists the new version with `stable` still on the previous one.
+The alias half is a separate assertion because `mike` writes the version and the alias in two commits, so a run genuinely passes through a tree that lists the new version with `stable` still on the previous one (`gh-pages` `5f8cd7940` is that state, from the `v1.6.0` run).
+
+On a stable tag it does not stop at the claim.
+Which alias the run claimed is reported by the same step the check audits, and that step decides it from `mike list`: a `mike list` that fails or changes shape leaves `highest` empty, so it takes its backport branch, never moves `stable`, and reports an empty claim.
+An assertion that keys on the claim is switched *off* by that rather than failed by it, and the run goes green with `/stable/` on the previous release.
+So when the ref says this is a stable tag, the check ranks the artifact's own `versions.json` and requires the alias on the highest release itself.
+The two inputs it uses, the git ref and the `.version` fields, share no derivation with the step's.
 
 **After the deploy**, [`verify-pages-live.sh`](../../scripts/pages/verify-pages-live.sh) reads the site and polls for up to five minutes until it serves the version.
 No assertion over `_site` can stand in for this, and `v1.6.0` is the proof.

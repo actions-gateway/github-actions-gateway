@@ -123,6 +123,48 @@ expect "a dev deploy asserts its own tree" 0 --site "$root" --version dev --alia
 rm -rf "${root:?}/dev"
 expect "a dev deploy with no dev tree fails" 1 --site "$root" --version dev --alias ""
 
+# --- --stable-tag: the alias assertion must not depend on the claim ---
+#
+# HALF is the shape gh-pages 5f8cd7940 really had, between mike's two commits:
+# 1.6.0 deployed, stable still on 1.5.0. If `mike list` fails, the step takes
+# its backport branch, never moves stable, and reports an EMPTY claim -- which
+# switched the alias assertion off rather than failing it. The first two cases
+# are that pair, and the first must pass for the second to mean anything.
+root="$(site fail-open "$HALF" dev 1.6.0 1.5.0 stable)"
+expect "an empty claim alone leaves the stale alias unasserted" 0 \
+	--site "$root" --version 1.6.0 --alias ""
+expect "--stable-tag catches it from the artifact instead" 1 \
+	--site "$root" --version 1.6.0 --alias "" --stable-tag
+if grep -q "highest release in this artifact but does not carry the 'stable' alias" "$FIXTURE_DIR/out.log"; then
+	pass "the independent alias failure says what it derived"
+else
+	fail "the independent alias failure says what it derived" \
+		"got: $(tr '\n' ' ' < "$FIXTURE_DIR/out.log")"
+fi
+
+root="$(site stable-ok "$CORRECT" dev 1.6.0 1.5.0 stable)"
+expect "--stable-tag passes when the alias did move" 0 \
+	--site "$root" --version 1.6.0 --alias "" --stable-tag
+
+# A backport legitimately claims nothing, so the rule must not fire for it.
+expect "--stable-tag does not require the alias on a non-highest release" 0 \
+	--site "$root" --version 1.5.0 --alias "" --stable-tag
+
+# The comparison is semver, not lexical. Were it lexical, 1.9.0 would read as
+# the highest and this tree would pass while /stable/ served the older release.
+SEMVER='[{"version":"dev","title":"dev (main)","aliases":[]},
+{"version":"1.10.0","title":"1.10.0","aliases":[]},
+{"version":"1.9.0","title":"1.9.0","aliases":["stable"]}]'
+root="$(site semver "$SEMVER" dev 1.10.0 1.9.0 stable)"
+expect "1.10.0 outranks 1.9.0 when deciding which must carry stable" 1 \
+	--site "$root" --version 1.10.0 --alias "" --stable-tag
+
+# A tree with no release versions at all has nothing to rank, and must not fail.
+DEVONLY='[{"version":"dev","title":"dev (main)","aliases":[]}]'
+root="$(site dev-only "$DEVONLY" dev)"
+expect "--stable-tag is inert when the artifact holds no release" 0 \
+	--site "$root" --version dev --alias "" --stable-tag
+
 # --- the two assertions this check inherited ---
 root="$(site no-root "$CORRECT" dev 1.6.0 1.5.0 stable)"
 rm "$root/index.html"

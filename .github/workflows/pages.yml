@@ -140,8 +140,10 @@ jobs:
   publish:
     if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
-    # The live-site check below polls for up to five minutes on a release
-    # publish, on top of the build, the mike deploy and the Pages rollout.
+    # The live-site check below polls on a release publish, on top of the
+    # build, the mike deploy and the Pages rollout. Its 300s budget bounds when
+    # the LAST attempt may start, not when the run ends: an attempt already in
+    # flight spends its own curl budget, so the worst case is nearer 6 minutes.
     timeout-minutes: 20
     permissions:
       contents: write   # push the gh-pages version tree
@@ -426,14 +428,25 @@ jobs:
         env:
           VERSION: ${{ steps.resolve.outputs.version }}
           CLAIMED_ALIAS: ${{ steps.mike.outputs.claimed_alias }}
+          STABLE_TAG: ${{ steps.resolve.outputs.stable_tag }}
         # A stale archive still has a root index.html and a CNAME, which is all
         # this step asserted until Q1000: a deploy of the previous tree passed
         # its own verification and reported green. Assert the version tree and
         # the alias mike actually claimed as well.
+        #
+        # STABLE_TAG comes from `resolve`, which reads the git ref, so the check
+        # can re-derive the highest-release rule for itself rather than trusting
+        # the mike step's report of the alias it claimed. Without that the
+        # assertion is fail-open exactly where it matters: a `mike list` that
+        # fails leaves stable unmoved AND the claim empty, which switches the
+        # alias check off instead of failing it.
         run: |
           set -euo pipefail
-          scripts/pages/verify-pages-artifact.sh \
-            --site _site --version "${VERSION}" --alias "${CLAIMED_ALIAS}"
+          args=(--site _site --version "${VERSION}" --alias "${CLAIMED_ALIAS}")
+          if [[ "${STABLE_TAG}" == "true" ]]; then
+            args+=(--stable-tag)
+          fi
+          scripts/pages/verify-pages-artifact.sh "${args[@]}"
 
       - name: Upload Pages artifact
         if: steps.resolve.outputs.deploy == 'true'

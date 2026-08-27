@@ -143,8 +143,12 @@ while :; do
 	sleep "$INTERVAL"
 done
 
-printf '::error::verify-pages-live: %s did not serve %s within %ds: %s\n' \
-	"$BASE_URL" "$VERSION" "$TIMEOUT" "$reason" >&2
+# Report the elapsed time rather than the budget. The loop stops STARTING
+# attempts at TIMEOUT, so one already in flight runs to its own curl deadline
+# and the run legitimately overshoots; printing the budget here reads as a
+# precision the check does not have.
+printf '::error::verify-pages-live: %s did not serve %s after %ds (%ds budget, %d attempt(s)): %s\n' \
+	"$BASE_URL" "$VERSION" "$SECONDS" "$TIMEOUT" "$attempt" "$reason" >&2
 printf '::error::verify-pages-live: the deploy reported success, so the artifact reached Pages and the site did not. Re-run this workflow (Actions -> pages -> Run workflow) with version=%s%s to republish, then confirm with: make verify-published-docs VERSION=v%s\n' \
 	"$VERSION" "${ALIAS:+ alias=$ALIAS set_default=true}" "$VERSION" >&2
 exit 1

@@ -21,6 +21,8 @@
 #   --alias A    Alias this run claimed (e.g. stable). Blank = none claimed,
 #                which is a backport that is not the highest release, and every
 #                `dev` deploy.
+#   --stable-tag This run is a stable release tag push. Resolved from the git
+#                ref alone, so it shares no derivation with the alias above.
 #
 # Assertions: verify-pages-artifact-test.sh, under `make scripts-test`.
 set -euo pipefail
@@ -29,6 +31,7 @@ shopt -s inherit_errexit
 SITE=""
 VERSION=""
 ALIAS=""
+stable_tag=0
 
 while (($# > 0)); do
 	case "$1" in
@@ -43,6 +46,9 @@ while (($# > 0)); do
 	--alias)
 		ALIAS="${2:-}"
 		shift
+		;;
+	--stable-tag)
+		stable_tag=1
 		;;
 	*)
 		printf 'verify-pages-artifact: unknown argument: %s\n' "$1" >&2
@@ -105,6 +111,32 @@ else
 		# deploys do not follow symlinks, so a symlinked alias deep-links to 404.
 		if [[ ! -f "$SITE/$ALIAS/index.html" ]]; then
 			err "artifact has no $ALIAS/index.html, so /$ALIAS/ would 404."
+		fi
+	fi
+fi
+
+# The alias assertion above compares against what the mike step REPORTED it
+# claimed, and that report comes from the same `mike list` comparison the check
+# exists to audit. Taking it at face value is fail-open in the one property that
+# matters: a `mike list` that errors or changes shape leaves `highest` empty, so
+# the step takes its backport branch, `stable` is never moved, and the claim
+# arrives empty — which switches the assertion off rather than failing it. The
+# run then goes green with /stable/ on the previous release, which is the
+# user-visible symptom of the incident this check was written for, reached by a
+# different cause.
+#
+# So derive the rule again here, from the artifact's own versions.json, and
+# require the alias independently. `--stable-tag` comes from the ref, and the
+# version list is read as `.version` fields rather than scraped as text, so
+# neither input can fail the way the step's does.
+if ((stable_tag)) && [[ -f "$versions" ]] && jq -e . "$versions" > /dev/null 2>&1; then
+	highest="$(jq -r '.[].version' "$versions" |
+		grep -E '^[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -1 || true)"
+	if [[ -n "$highest" && "$highest" == "$VERSION" ]]; then
+		if ! jq -e --arg v "$VERSION" \
+			'any(.[]; .version == $v and ((.aliases // []) | index("stable") != null))' \
+			"$versions" > /dev/null; then
+			err "$VERSION is the highest release in this artifact but does not carry the 'stable' alias, so /stable/ would keep serving the previous release. The mike step reported claiming '${ALIAS:-<none>}'; check its 'mike list' step 3 output for a swallowed failure."
 		fi
 	fi
 fi
