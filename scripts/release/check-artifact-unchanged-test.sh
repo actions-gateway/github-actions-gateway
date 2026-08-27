@@ -106,28 +106,32 @@ else
 fi
 
 # The other exit-2 branch: the tool never builds at all. Posed with a `go` on
-# PATH that refuses, which is the only half of the pair a no-working-tree clone
-# cannot reach — there the build succeeds from the real checkout and it is
-# `-ships` that fails. Asserted on the message, not the code, because both
-# branches exit 2 and only the message says which one ran.
-if has_parent "$head_sha"; then
-	stub_bin="$(mktemp -d)/bin"
-	mkdir -p "$stub_bin"
-	printf '#!/usr/bin/env bash\nexit 1\n' >"$stub_bin/go"
-	chmod +x "$stub_bin/go"
-	build_case_rc=0
-	build_case_out="$( (cd "$REPO_ROOT" && PATH="$stub_bin:$PATH" \
-		"$SUBJECT" "${head_sha}^" "$head_sha" 2>&1) )" || build_case_rc=$?
-	if [[ "$build_case_rc" -eq 2 && "$build_case_out" == *"could not build semverfloor"* ]]; then
-		ok "a semverfloor that cannot build is exit 2, not a finding"
-	else
-		bad "a semverfloor that cannot build is exit 2, not a finding (got exit $build_case_rc)"
-		printf '       %s\n' "$build_case_out" >&2
-	fi
-	rm -rf "$(dirname "$stub_bin")"
+# PATH that refuses, which is the half a no-working-tree clone cannot reach —
+# there the build succeeds from the real checkout and it is `-ships` that fails.
+# Asserted on the message, not the code, because both branches exit 2 and only
+# the message says which one ran.
+#
+# Deliberately unguarded, and an empty window on purpose. The build runs before
+# the diff is taken, so it is reached whatever the window holds; the `-ships`
+# case above needs a real two-commit window only because an empty diff never
+# reaches the tool at all. Guarding this one on `has_parent` as well — the
+# obvious move, since it sits next to a case that needs it — skips it on CI's
+# depth-1 clone, which is the checkout where the exit-2 class most needs a
+# verdict and the one where a caller acts on the answer.
+stub_bin="$(mktemp -d)/bin"
+mkdir -p "$stub_bin"
+printf '#!/usr/bin/env bash\nexit 1\n' >"$stub_bin/go"
+chmod +x "$stub_bin/go"
+build_case_rc=0
+build_case_out="$( (cd "$REPO_ROOT" && PATH="$stub_bin:$PATH" \
+	"$SUBJECT" "$head_sha" "$head_sha" 2>&1) )" || build_case_rc=$?
+if [[ "$build_case_rc" -eq 2 && "$build_case_out" == *"could not build semverfloor"* ]]; then
+	ok "a semverfloor that cannot build is exit 2, not a finding"
 else
-	printf '[check-artifact-unchanged-test] SKIP build-failure case (no parent — shallow clone)\n'
+	bad "a semverfloor that cannot build is exit 2, not a finding (got exit $build_case_rc)"
+	printf '       %s\n' "$build_case_out" >&2
 fi
+rm -rf "$(dirname "$stub_bin")"
 
 printf '[check-artifact-unchanged-test] %d passed, %d failed\n' "$pass" "$fail"
 [[ "$fail" -eq 0 ]]
