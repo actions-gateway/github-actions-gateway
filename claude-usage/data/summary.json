@@ -1,8 +1,8 @@
 {
   "provenance": {
-    "snapshot_date": "2026-08-16",
+    "snapshot_date": "2026-08-26",
     "projects_glob": "/Users/karl/.claude/projects/*github-actions-gateway*",
-    "transcript_files_read": 432,
+    "transcript_files_read": 560,
     "snapshot_host": "mac-2",
     "hosts": [
       "mac-1",
@@ -14,7 +14,7 @@
     "token_dedup": "(message.id, requestId)",
     "message_dedup": "record uuid (user) / (message.id, requestId) (assistant)",
     "first_measured_date": "2026-05-19",
-    "last_measured_date": "2026-08-16",
+    "last_measured_date": "2026-08-27",
     "first_project_date": "2026-05-16",
     "growth_chart_baseline": {
       "tokens": 10000000,
@@ -48,13 +48,13 @@
   },
   "totals": {
     "measured": {
-      "input": 8418768,
-      "output": 92945894,
-      "cache_creation": 500106341,
-      "cache_read": 28087353815,
-      "assistant_msgs": 134037,
-      "user_msgs": 149238,
-      "headline_input_output_cachecreation": 601471003
+      "input": 8489566,
+      "output": 108074841,
+      "cache_creation": 562191485,
+      "cache_read": 34044075188,
+      "assistant_msgs": 154421,
+      "user_msgs": 170793,
+      "headline_input_output_cachecreation": 678755892
     },
     "estimated": {
       "input": 6559,
@@ -66,15 +66,15 @@
       "headline_input_output_cachecreation": 2494920
     },
     "combined": {
-      "input": 8425327,
-      "output": 93424830,
-      "cache_creation": 502115766,
-      "cache_read": 28154872658,
-      "assistant_msgs": 134779,
-      "user_msgs": 150099,
-      "headline_input_output_cachecreation": 603965923,
-      "grand_total_incl_cache_read": 28758838581,
-      "cache_reuse_ratio": 56.07
+      "input": 8496125,
+      "output": 108553777,
+      "cache_creation": 564200910,
+      "cache_read": 34111594031,
+      "assistant_msgs": 155163,
+      "user_msgs": 171654,
+      "headline_input_output_cachecreation": 681250812,
+      "grand_total_incl_cache_read": 34792844843,
+      "cache_reuse_ratio": 60.46
     }
   },
   "by_model": {
@@ -86,7 +86,7 @@
     "Other": {
       "headline": 0,
       "output": 0,
-      "messages": 192
+      "messages": 199
     },
     "Opus 4.7": {
       "headline": 16947491,
@@ -109,9 +109,9 @@
       "messages": 8356
     },
     "Opus 5": {
-      "headline": 297868438,
-      "output": 40751502,
-      "messages": 68109
+      "headline": 375153327,
+      "output": 55880449,
+      "messages": 88486
     }
   },
   "by_host": {
@@ -134,38 +134,49 @@
       "headline_input_output_cachecreation": 300762526
     },
     "mac-2": {
-      "input": 354746,
-      "output": 40983731,
-      "cache_creation": 259370000,
-      "cache_read": 16950962530,
-      "assistant_msgs": 67446,
-      "user_msgs": 74935,
-      "headline_input_output_cachecreation": 300708477
+      "input": 425544,
+      "output": 56112678,
+      "cache_creation": 321455144,
+      "cache_read": 22907683903,
+      "assistant_msgs": 87830,
+      "user_msgs": 96490,
+      "headline_input_output_cachecreation": 377993366
     }
   },
   "sessions": {
     "bucket_minutes": 10,
     "first_date": "2026-07-26",
-    "last_date": "2026-08-16",
-    "session_days": 523,
-    "peak_concurrent": 16,
-    "mean_concurrent": 3.0,
-    "hours_using_claude": 222.7,
-    "session_hours": 667.0,
-    "parallel_share_pct": 67,
-    "attended_hours": 105.2,
-    "attended_share_pct": 47,
+    "last_date": "2026-08-27",
+    "session_days": 670,
+    "peak_concurrent": 20,
+    "mean_concurrent": 3.06,
+    "hours_using_claude": 285.0,
+    "session_hours": 873.2,
+    "parallel_share_pct": 63,
+    "attended_hours": 128.3,
+    "attended_share_pct": 45,
     "attended_first_date": "2026-07-26",
     "prompts_note": "attended_hours scales with bucket_minutes and is a scale rather than a measurement; prompt_minutes.csv holds the parameter-free record, from which any bucket width or idle threshold is derivable",
     "note": "Concurrency needs session-level transcripts, which no earlier CSV preserved, so the series starts at the first day whose transcripts survive rather than at the first project day. It is never estimated."
   },
   "head_snapshot": {
-    "go_code": 117768,
-    "go_comments": 41575,
-    "markdown_nonblank": 54024,
-    "yaml_handwritten": 12504,
-    "yaml_generated": 131488,
-    "tests": 2218,
-    "commits": 2032
+    "go_code": 119357,
+    "go_comments": 43628,
+    "go_generated": 2246,
+    "markdown_nonblank": 58967,
+    "yaml_handwritten": 13569,
+    "yaml_generated": 132003,
+    "tests": 2323,
+    "authored_files": 1713,
+    "vendor_files": 13294,
+    "band_files": {
+      "product": 765,
+      "machinery": 407,
+      "project_mgmt": 387,
+      "product_docs": 123,
+      "machinery_docs": 27,
+      "residual": 4
+    },
+    "commits": 2167
   }
 }
