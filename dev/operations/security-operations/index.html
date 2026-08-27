@@ -4820,8 +4820,13 @@ Two separate entries would mean "any pod in that namespace, or any workload pod 
 If you ever see that shape, treat it as a defect and report it.</p>
 <h3 id="revoking">Revoking<a class="headerlink" href="#revoking" title="Permanent link">&para;</a></h3>
 <p>Remove the namespace from <code>allowedNamespaces</code>.
-The GMC deletes the projected ConfigMap and drops the ingress peer, and the consumer's references go <code>ProxyShareNotGranted</code>.
-Revocation is immediate in the control plane; in-flight connections through the proxy end when their pods do, so drain the consumer's RunnerSets first if you need a clean cut.</p>
+The GMC deletes the projected ConfigMap and drops the ingress peer, and the consumer's references go <code>ProxyShareNotGranted</code>.</p>
+<p><strong>Enforcement is immediate; one of the three status signals is bounded rather than instant.</strong> The GMC watches the <code>EgressProxy</code>, so the projection and the provider's ingress peer both go on the reconcile that follows your edit.
+From that moment no new connection from the consumer's workers is admitted, whatever their CRs still say.
+An <code>ActionsGateway</code>'s <code>defaultProxyRef</code> reports <code>Degraded</code>/<code>ProxyShareNotGranted</code> on the same reconcile, because the GMC owns that resolution.
+A <code>RunnerSet</code>'s <code>proxyRef</code> is resolved by the AGC instead, which may read the projection but not watch it (its Role grants <code>get</code> on ConfigMaps and not <code>list</code>/<code>watch</code>), so its <code>Ready</code> condition follows within <strong>one minute</strong>, on a re-check cadence rather than a watch.
+Until it does the set keeps acquiring jobs, and their worker pods fail to reach the proxy rather than reaching it without a grant.</p>
+<p>In-flight connections through the proxy end when their pods do, so drain the consumer's RunnerSets first if you need a clean cut.</p>
 <hr />
 <h2 id="tightening-agc-apiserver-egress-the-apiserver-cidrs-allowlist">Tightening AGC apiserver egress: the <code>apiserver-cidrs</code> allowlist<a class="headerlink" href="#tightening-agc-apiserver-egress-the-apiserver-cidrs-allowlist" title="Permanent link">&para;</a></h2>
 <p>The AGC pod holds the tenant's GitHub App private key and is the only workload that needs the Kubernetes API server.

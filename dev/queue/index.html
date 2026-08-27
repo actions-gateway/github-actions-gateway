@@ -2683,11 +2683,11 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <tbody>
 <tr>
 <td><a href="Q999/">Q999</a></td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/controller/integration/v2_runnerset_sharing_test.go#L90">Cross-namespace proxy revoke has no event source, so its test races</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/controller/integration/v2_runnerset_sharing_test.go">Cross-namespace proxy revoke has no event source, so its test races</a></td>
 <td><code>flake</code> <code>tests</code> <code>security</code></td>
-<td>🔲</td>
+<td>💤</td>
 <td>M</td>
-<td><code>TestV2_RunnerSet_GrantedCrossNamespaceProxy_ResolvesAndRevokes</code> failed the revoke leg on PR 1726 (2026-08-26): after the projection is …</td>
+<td><strong>Event:</strong> <code>TestV2_RunnerSet_GrantedCrossNamespaceProxy_ResolvesAndRevokes</code> or …</td>
 </tr>
 <tr>
 <td><a href="Q912/">Q912</a></td>
@@ -2704,14 +2704,6 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>🔲</td>
 <td>M</td>
 <td><strong>Top of queue per the <a href="../development/maintaining-backlog/#flake-fixes-go-first">flakes-first rule</a>.</strong> Measured 2026-08-24 on a local …</td>
-</tr>
-<tr>
-<td><a href="Q982/">Q982</a></td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/lib/common.sh">printf into grep -q under pipefail falsifies a value that is present</a></td>
-<td><code>flake</code> <code>tests</code></td>
-<td>🔲</td>
-<td>S</td>
-<td>grep exits on the match and closes the pipe, printf takes SIGPIPE, and the dead pipeline reads as no-match, so only a PRESENT value is …</td>
 </tr>
 <tr>
 <td><a href="Q929/">Q929</a></td>
@@ -2736,14 +2728,6 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>💤</td>
 <td>S</td>
 <td><strong>Event:</strong> <code>version-cmds-answer</code> or <code>installed-floors-report-a-version</code> fails on <code>main</code> again.</td>
-</tr>
-<tr>
-<td><a href="Q1000/">Q1000</a></td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/pages.yml">A green pages run published no docs for the tag</a></td>
-<td><code>ci</code> <code>docs</code> <code>retro</code></td>
-<td>🔲</td>
-<td>M</td>
-<td>Cutting <code>v1.6.0</code> on 2026-08-26, the tag's <code>pages.yml</code> run finished with every step green, including <code>Deploy to GitHub Pages</code>, and the site …</td>
 </tr>
 <tr>
 <td><a href="Q1001/">Q1001</a></td>

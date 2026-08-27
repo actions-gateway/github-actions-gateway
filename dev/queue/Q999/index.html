@@ -2598,15 +2598,15 @@
 
 
 <h1 id="cross-namespace-proxy-revoke-has-no-event-source-so-its-test-races">Cross-namespace proxy revoke has no event source, so its test races<a class="headerlink" href="#cross-namespace-proxy-revoke-has-no-event-source-so-its-test-races" title="Permanent link">&para;</a></h1>
-<p><code>TestV2_RunnerSet_GrantedCrossNamespaceProxy_ResolvesAndRevokes</code> failed the revoke leg on PR 1726 (2026-08-26): after the projection is deleted, the 20-second <code>require.Eventually</code> at <code>v2_runnerset_sharing_test.go:90</code> never saw <code>Ready=False/ProxyShareNotGranted</code>.
-A rerun of the same job on the identical head SHA <code>da096e442</code>, no code change, passed in 6m40s, and <code>main</code> at <code>811c670d5</code> passed the same suite, so the bump under test is not implicated.</p>
-<p>The mechanism is read from source and <strong>not yet confirmed end-to-end</strong>: the projection is a ConfigMap (<code>newProjectedShare</code>), and <code>resolveRunnerSetRefs</code> reads it through the <em>uncached</em> reader on purpose, because the AGC Role grants <code>get</code> on ConfigMaps but not <code>list</code>/<code>watch</code> and a cached read would try to start an informer it has no permission to run (<code>runnerset_target.go:470</code>).
-<code>SetupWithManager</code> registers no ConfigMap watch, and cannot.
-So deleting the projection generates no reconcile event for the RunnerSet, and the assertion passes only when some unrelated trigger happens to land inside the 20-second window: a worker-pod event, a <code>wakeCh</code> push from the active listener, or a rate-limited requeue.
-Confirm by deleting those triggers and requiring red before changing anything.</p>
-<p>Worth more than a timeout bump: the test's own comment says the revocation leg is the one that matters, because a grant that cannot be taken back is not a grant.
-If revocation is only observed incidentally, the operator-visible latency is unbounded in the quiet case, which is a security property rather than a test-timing one.
-Decide whether the AGC should get <code>list</code>/<code>watch</code> on the labelled share ConfigMaps (<code>actions-gateway/proxy-share: "true"</code>) so revocation has a real event source, or whether a bounded requeue is the intended contract, then make the test assert whichever it is.</p>
+<p><strong>Event:</strong> <code>TestV2_RunnerSet_GrantedCrossNamespaceProxy_ResolvesAndRevokes</code> or <code>TestV2_RunnerSet_CrossNamespaceProxy_GrantArrivingLaterResolves</code> fails on <code>main</code>.</p>
+<p>The projection is a ConfigMap the AGC may <code>get</code> but not <code>watch</code>: its Role grants no <code>list</code>/<code>watch</code>, and <code>SetupWithManager</code> registers no ConfigMap watch, so neither writing nor deleting one produces a reconcile event for a <code>RunnerSet</code> that resolves through it.
+The revoke leg passed only when an unrelated trigger happened to land inside the 20-second <code>require.Eventually</code>, and failed on PR 1726 (2026-08-26) when none did.</p>
+<p>Measured 2026-08-27 as a controlled pair on <code>main</code> at 18e5f8b9a, before any change: a new test creating the projection <em>after</em> the reference failed at the full 20.42 s budget with <code>Condition never satisfied</code>, while <code>TestV2_RunnerSet_FailsClosedUntilRefsResolve</code> (the same wait, the same helper, three referents that <em>are</em> watched, created after the fact) passed in 0.76 s.
+That rules out the <code>Eventually</code> budget and the harness both.
+The grant direction was the worse half and unfiled: a set sitting <code>ProxyShareNotGranted</code> has both listeners stopped, owns no worker pods and returns no requeue, so it had no incidental trigger at all and waited out the informer resync (10 h ± 10%).</p>
+<p>Mitigation is a bounded re-check on both directions rather than <code>list</code>/<code>watch</code> RBAC: Kubernetes RBAC has no label selector, so a watch could not be narrowed to the labelled share ConfigMaps and the grant would cover every ConfigMap in the tenant namespace, reversing §H.9's least-privilege decision to buy a watch on one object.
+The GMC already polls a tenant ConfigMap it cannot watch for the same reason (<code>githubCABundleReprobeInterval</code>).
+Enforcement was never the lagging half, since the provider's ingress peer drops on the GMC's <code>EgressProxy</code> watch, so what the cadence bounds is reporting and how long the set keeps acquiring jobs its workers can no longer route.</p>
 
 
 

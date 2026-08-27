@@ -2597,10 +2597,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#what-is-established-and-what-is-not" class="md-nav__link">
+  <a href="#why-the-artifact-was-correct-and-the-site-did-not-serve-it" class="md-nav__link">
     <span class="md-ellipsis">
       
-        What is established, and what is not
+        Why: the artifact was correct, and the site did not serve it
       
     </span>
   </a>
@@ -2677,34 +2677,49 @@ The next step in the same job assembled the Pages artifact at 23:25:05.557Z:</p>
 Meanwhile <code>gh-pages</code> itself was correct throughout: its <code>versions.json</code> carried <code>1.6.0</code> with <code>aliases: ["stable"]</code>, and a <code>1.6.0</code> directory existed.</p>
 <p><code>make verify-published-docs VERSION=v1.6.0</code> found it, exiting 1 with <code>the published docs for 1.6.0 do not advertise 1.6.0</code>.
 A manual <code>workflow_dispatch</code> of <code>pages.yml</code> (<code>version=1.6.0 alias=stable set_default=true docs_ref=v1.6.0</code>) republished, after which the same gate exited 0 and <code>/stable/</code> resolved to <code>/1.6.0/</code>.</p>
-<h2 id="what-is-established-and-what-is-not">What is established, and what is not<a class="headerlink" href="#what-is-established-and-what-is-not" title="Permanent link">&para;</a></h2>
-<p>Established: <code>gh-pages</code> held the correct tree immediately after the run; the artifact that deployed did not; every step of the run reported success.</p>
-<p><strong>Not established: why.</strong> Two hypotheses survive and this document does not pick one.</p>
-<ol>
-<li><code>git archive gh-pages</code> resolved a ref that was not the one <code>mike</code> had just written.
-   The step runs after the push, in the same workspace, so this requires the local <code>refs/heads/gh-pages</code> to differ from what was pushed.</li>
-<li>Propagation took unusually long, and the manual republish merely coincided with it resolving.</li>
-</ol>
-<p>One thing was ruled out: the two <code>pages.yml</code> runs in the window did not overlap.
-The <code>main</code> run finished at 23:23:14Z and the tag run started at 23:24:12Z, so they did not race the shared <code>gh-pages</code> branch, and the tag run's deployment was the last to become active.</p>
+<h2 id="why-the-artifact-was-correct-and-the-site-did-not-serve-it">Why: the artifact was correct, and the site did not serve it<a class="headerlink" href="#why-the-artifact-was-correct-and-the-site-did-not-serve-it" title="Permanent link">&para;</a></h2>
+<p>Settled 2026-08-27 (Q1000), against the artifact the failing run uploaded.
+<code>actions/upload-pages-artifact</code> keeps it, and it had not expired:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>gh<span class="w"> </span>api<span class="w"> </span>/repos/actions-gateway/github-actions-gateway/actions/runs/33023216267/artifacts
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>gh<span class="w"> </span>run<span class="w"> </span>download<span class="w"> </span><span class="m">33023216267</span><span class="w"> </span>-n<span class="w"> </span>github-pages<span class="w"> </span>-D<span class="w"> </span>./artifact
+<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>tar<span class="w"> </span>-xOf<span class="w"> </span>./artifact/artifact.tar<span class="w"> </span>./versions.json
+</code></pre></div>
+<p>That artifact carries a <code>./1.6.0</code> directory, and its <code>versions.json</code> lists <code>1.6.0</code> with <code>aliases: ["stable"]</code>.
+So <code>git archive gh-pages</code> resolved the ref <code>mike</code> had just written, and the first hypothesis is refuted: nothing in the workflow assembled a stale tree.
+The deployment side agrees.
+Deployment <code>6113682780</code> went <code>success</code> at 23:25:21Z and marked the previous one <code>inactive</code> a second later, so the correct artifact was the active deployment for the whole window the site was serving the old one.</p>
+<p>What the site served during that window matches <code>898d30bb6</code> exactly, the <code>gh-pages</code> commit from <em>before</em> the tag run's <code>mike</code> step.
+That is the previous deployment's content, not a partial or intermediate one: the run also passed through <code>5f8cd7940</code>, which lists <code>1.6.0</code> with <code>stable</code> still on <code>1.5.0</code>, and the site never showed that.</p>
+<p>So the failure was on the serving side, between an accepted deployment and what the CDN returned.
+This document does not claim to know which layer, because nothing outside GitHub can see it.
+What it does establish is where the failure was <strong>not</strong>: every step the repository controls produced the right bytes.</p>
 <p>An early reading called this a race between the push and the assembly.
 The timestamps refute it: they are sequential steps in one job, 7 milliseconds apart, push first.
-The correction is recorded here because the wrong mechanism was stated confidently before it was measured.</p>
+The correction is recorded here because the wrong mechanism was stated confidently before it was measured, and the artifact that settles it was one API call away the whole time.</p>
 <h2 id="contributing-factors">Contributing factors<a class="headerlink" href="#contributing-factors" title="Permanent link">&para;</a></h2>
-<p><strong>The run's own verification cannot fail on this failure.</strong> The <code>Verify the artifact serves a reachable root</code> step asserts <code>_site/index.html</code> and <code>_site/CNAME</code> exist.
-Both are true of a stale version tree, so a deploy that publishes the wrong content passes its own check and reports green.</p>
+<p><strong>The run's own verification cannot fail on a stale tree.</strong> The <code>Verify the artifact serves a reachable root</code> step asserted <code>_site/index.html</code> and <code>_site/CNAME</code> exist.
+Both are true of a stale version tree, so a deploy that published the wrong content would have passed its own check and reported green.
+That gap was real and is now closed, and it is worth being explicit that it is not this incident's cause: the artifact here was correct, so the assertion added for it passes on this run.
+Reading the two as one thing is what the measurement above exists to prevent.</p>
 <p><strong>The only check that reads the live site is manual and post-hoc.</strong> <code>verify-published-docs</code> is what caught this, and it runs when a release engineer chooses to run it.
 Nothing in CI compares what was deployed against what was meant to be deployed.</p>
 <p><strong>A green pipeline is the strongest available signal, and it was wrong.</strong> Every automated indicator agreed the release had published.
 The disagreement only appeared by asking the site.</p>
 <h2 id="action-items">Action items<a class="headerlink" href="#action-items" title="Permanent link">&para;</a></h2>
 <p><strong>Mitigative</strong> — done: the version was republished and verified.</p>
-<p><strong>Preventative</strong> — <a href="../../queue/Q1000/">Q1000</a>: establish which hypothesis holds, then make the publish job assert its own artifact contains the version being deployed, and that <code>_site/versions.json</code> lists it with the resolved alias.
-A deploy that publishes the wrong tree should fail its own run rather than wait for someone to read the live site.</p>
+<p><strong>Preventative</strong> — done, Q1000.
+The publish job now runs two checks instead of one.
+<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/pages/verify-pages-artifact.sh"><code>verify-pages-artifact.sh</code></a> asserts, before the upload, that <code>_site</code> carries the version being deployed and that <code>versions.json</code> lists it with the alias the run claimed.
+<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/pages/verify-pages-live.sh"><code>verify-pages-live.sh</code></a> then reads the site after the deploy and polls for up to five minutes, failing the run with the republish command when it never arrives.
+The second is what covers this incident.
+The first covers the tree-side failure this was mistaken for, which nothing had ever checked.
+Neither replaces <code>verify-published-docs</code>, which reads the version pins inside the pages and cannot run at tag time (see <a href="../../operations/release/#the-bump-on-main-does-not-reach-the-published-release">release.md step 7</a>).</p>
 <h2 id="what-this-is-a-case-of">What this is a case of<a class="headerlink" href="#what-this-is-a-case-of" title="Permanent link">&para;</a></h2>
 <p>The repo already records that three of the four releases before 1.5.0 published the previous version's install command as their landing page, and that no working-tree gate saw it.
 <code>verify-published-docs</code> exists because of that, and it worked here.
-The gap that remains is that it is the <em>last</em> line of defence rather than a gate, so the failure is caught by a human remembering to look, at whatever point they look.</p>
+The gap was that it was the <em>last</em> line of defence rather than a gate, so the failure was caught by a human remembering to look, at whatever point they looked.
+That is what <code>verify-pages-live.sh</code> closes: the same question, asked by the run that caused it, within five minutes rather than whenever someone thinks to check.
+<code>verify-published-docs</code> keeps its own job, which is the pins, and stays a hand step because a tag cannot pass it.</p>
 
 
 

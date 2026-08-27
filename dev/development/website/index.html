@@ -2670,6 +2670,17 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
+  <a href="#what-the-publish-job-verifies-and-why-it-takes-two-checks" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What the publish job verifies, and why it takes two checks
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#seeding-already-released-versions" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3203,6 +3214,29 @@ The procedure is <a href="../../operations/release/#the-bump-on-main-does-not-re
 A theme change that renames or drops <code>&lt;article&gt;</code> therefore fails it rather than quietly reducing it to scanning nothing.</p>
 <p>Pages source stays <strong>"GitHub Actions"</strong>: <code>mike</code> maintains the tree on <code>gh-pages</code>, and the <code>publish</code> job serves that whole tree as the Pages artifact.
 <code>--alias-type=copy</code> makes <code>stable/</code> a real directory — GitHub Pages artifact deploys don't follow symlinks, so a symlinked alias would 404 on deep links.</p>
+<h3 id="what-the-publish-job-verifies-and-why-it-takes-two-checks">What the publish job verifies, and why it takes two checks<a class="headerlink" href="#what-the-publish-job-verifies-and-why-it-takes-two-checks" title="Permanent link">&para;</a></h3>
+<p>A deploy can go wrong on either side of the upload, and the two failures look identical from outside: the site keeps serving the previous release while the run reports success.
+So the job checks both sides (Q1000).</p>
+<p><strong>Before the upload</strong>, <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/pages/verify-pages-artifact.sh"><code>verify-pages-artifact.sh</code></a> asserts the assembled <code>_site</code> carries the version this run built: an <code>X.Y.Z/index.html</code>, a <code>versions.json</code> listing it, and the alias <code>mike</code> actually claimed sitting on that version.
+Until then the step asserted only that <code>_site/index.html</code> and <code>_site/CNAME</code> existed.
+Both are true of a stale version tree, so a run that archived the wrong commit would have passed its own verification.
+The alias half is a separate assertion because <code>mike</code> writes the version and the alias in two commits, so a run genuinely passes through a tree that lists the new version with <code>stable</code> still on the previous one (<code>gh-pages</code> <code>5f8cd7940</code> is that state, from the <code>v1.6.0</code> run).</p>
+<p>On a stable tag it does not stop at the claim.
+Which alias the run claimed is reported by the same step the check audits, and that step decides it from <code>mike list</code>: a <code>mike list</code> that fails or changes shape leaves <code>highest</code> empty, so it takes its backport branch, never moves <code>stable</code>, and reports an empty claim.
+An assertion that keys on the claim is switched <em>off</em> by that rather than failed by it, and the run goes green with <code>/stable/</code> on the previous release.
+So when the ref says this is a stable tag, the check ranks the artifact's own <code>versions.json</code> and requires the alias on the highest release itself, along with a page behind it.
+The two inputs it uses, the git ref and the <code>.version</code> fields, share no derivation with the step's.</p>
+<p><strong>After the deploy</strong>, <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/pages/verify-pages-live.sh"><code>verify-pages-live.sh</code></a> reads the site and polls until it serves the version, on a five-minute budget.
+The budget bounds when the last attempt may <em>start</em>, not when the step ends, so a request already in flight can carry the run a little past it.
+No assertion over <code>_site</code> can stand in for this, and <code>v1.6.0</code> is the proof.
+Every tree-side signal in that run was correct: <code>mike</code> pushed the right commit, <code>git archive</code> picked it up, the uploaded artifact carried <code>1.6.0</code> with the <code>stable</code> alias, and the Pages deployment reported success and became the active one.
+The site served <code>1.5.0</code> for roughly 25 minutes regardless, until a manual republish.
+Re-reading the retained artifact afterwards is what settled it, so the failure was on the serving side and nothing the run could assert about its own tree would have caught it.
+Each poll uses a fresh query string, because Pages caches on the full URL and re-reading one URL reports whatever the edge already holds.</p>
+<p><code>dev</code> is excluded from the live check.
+Its version id is in <code>versions.json</code> before the run starts, so there is no assertion there that could go red, and a check that cannot fail on every push to <code>main</code> is worse than no check.</p>
+<p>This is not <code>make verify-published-docs</code>, which reads the version <em>pins inside</em> the published pages.
+A stable tag's own tree carries the previous release's pins by design, so that gate is expected to fail until the <a href="../../operations/release/#the-bump-on-main-does-not-reach-the-published-release">step 7</a> republish and cannot run inside the tag's own publish job.</p>
 <h3 id="seeding-already-released-versions">Seeding already-released versions<a class="headerlink" href="#seeding-already-released-versions" title="Permanent link">&para;</a></h3>
 <p><code>mike</code> only knows the versions it has deployed, so releases cut <strong>before</strong> this workflow landed aren't in the tree yet, and <strong>the site root has nothing to redirect to until some version claims the default</strong>: the apex domain 404s while every push still reports success.
 That was the state from the Q238 cutover until the first seed, because <code>mike set-default</code> runs only for a stable tag push or an explicit dispatch, and the last release predated the cutover by four days.
