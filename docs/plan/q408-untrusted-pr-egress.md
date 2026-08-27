@@ -276,7 +276,9 @@ Any backend meeting the same four tests can substitute — Dragonfly is the sche
 
 ## 4. Phases
 
-Each phase is a separate PR; 1, 3 and 4 need live dogfood sessions (prod-guarded: deliberate, operator-driven runs).
+Each phase is a separate PR; 1 to 4 need live dogfood sessions (prod-guarded: deliberate, operator-driven runs).
+Needing one is not the same as booking one: Phase 1's evidence came from runs that had already happened, and Phase 2's cannot, because no prior run applied manifests that did not yet exist.
+Nothing off the cluster can stand in for it either: no gate covers `deploy/athens/`, Phase 2's stated template, or would cover `deploy/registry-mirror/` (the gated subtrees are `deploy/templates/`, `deploy/monitoring/` and `deploy/dogfood-e2e/`), and Athens itself was validated only on the live cluster.
 
 - **Phase 0 — measured egress inventory. ✅ Done (2026-08-03).** Read off a green Kata dogfood run that had already happened rather than booking a new one; [§2](#2-the-gap--what-an-e2e-job-actually-fetches-at-job-time-phase-0) is the deliverable, and [§2.3](#23-what-the-measurement-changes) is what it cost the design.
 - **Phase 1 — shrink the non-registry residual to GitHub. ✅ Done (implemented 2026-08-05, validated 2026-08-24).** New phase, forced by Phase 0.
