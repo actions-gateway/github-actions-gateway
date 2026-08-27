@@ -2600,7 +2600,7 @@
 <h1 id="nothing-asserts-a-path-filter-covers-the-inputs-its-gated-jobs-read">Nothing asserts a path filter covers the inputs its gated jobs read<a class="headerlink" href="#nothing-asserts-a-path-filter-covers-the-inputs-its-gated-jobs-read" title="Permanent link">&para;</a></h1>
 <p>Every assertion runs pattern → repo: the registry is complete, workspace filters cover <code>go.work</code>, patterns pin live paths, duplicated lists agree, globstars expand.
 None runs the reverse, so an input a gated job reads and no pattern matches is invisible — the gate then goes green by skipping, which the file's own header calls the most expensive false negative.
-Two instances so far, both found by hand: Q881 (a tree, <code>docs/plan/*.md</code> against a filter naming two files in it) and <a href="../Q947/">Q947</a> (two scripts a job runs).
+Three instances so far, all found by hand: Q881 (a tree, <code>docs/plan/*.md</code> against a filter naming two files in it), <a href="../Q947/">Q947</a> (two scripts a job runs), and <a href="../Q1004/">Q1004</a> (a directory <code>manifest-validate</code> lints that its own filter never names).
 The tree case needs a hand-kept script → tree map, so the design decision is how to keep that map from going stale the way the lists it guards do.</p>
 
 

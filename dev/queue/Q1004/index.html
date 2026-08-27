@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q408/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1004/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>Untrusted-PR egress posture for Kata workers - GitHub Actions Gateway</title>
+        <title>manifest-validate never triggers on a deploy/kata-ci change - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#untrusted-pr-egress-posture-for-kata-workers" class="md-skip">
+        <a href="#manifest-validate-never-triggers-on-a-deploykata-ci-change" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Untrusted-PR egress posture for Kata workers
+              manifest-validate never triggers on a deploy/kata-ci change
             
           </span>
         </div>
@@ -2597,11 +2597,11 @@
   
 
 
-<h1 id="untrusted-pr-egress-posture-for-kata-workers">Untrusted-PR egress posture for Kata workers<a class="headerlink" href="#untrusted-pr-egress-posture-for-kata-workers" title="Permanent link">&para;</a></h1>
-<p>Phase 1 validated 2026-08-24: four green self-hosted Kata runs name no non-GitHub non-registry host, graded against a Phase 0 control that fires on both.
-Phase 2's mirror manifests are authored, over five upstreams rather than four: the grading added <code>gcr.io</code>.
-Next is Phase 2's cluster-side validation, which books a dogfood session of its own ahead of Phase 3's wiring.
-<strong>Unblocks <a href="../Q539/">Q539</a>.</strong></p>
+<h1 id="manifest-validate-never-triggers-on-a-deploykata-ci-change"><code>manifest-validate</code> never triggers on a <code>deploy/kata-ci</code> change<a class="headerlink" href="#manifest-validate-never-triggers-on-a-deploykata-ci-change" title="Permanent link">&para;</a></h1>
+<p><code>scripts/manifest/manifest-validate.sh</code> yamllints <code>deploy/kata-ci</code> and kubeconforms two of its files by name, but <code>deploy/kata-ci</code> appears nowhere in <code>.github/workflows/</code>, so a PR changing only those files runs neither check and goes green by skipping.
+Measured 2026-08-27: a recursive search for <code>kata-ci</code> under <code>.github/</code> returns nothing, against the same search for <code>deploy/templates</code> returning three filter entries.
+The fix is one entry in the <code>manifests</code> filter beside <code>deploy/templates/**</code> and <code>deploy/monitoring/**</code>, which are on that list for exactly this reason.
+A third instance of <a href="../Q948/">Q948</a>'s class and separable from it: Q948 wants the reverse assertion that would have found this, and this row is the entry that assertion would demand.</p>
 
 
 

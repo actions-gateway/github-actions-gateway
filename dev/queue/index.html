@@ -3778,6 +3778,14 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>Every assertion runs pattern → repo: the registry is complete, workspace filters cover <code>go.work</code>, patterns pin live paths, duplicated lists …</td>
 </tr>
 <tr>
+<td><a href="Q1004/">Q1004</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/manifest-validate.yml"><code>manifest-validate</code> never triggers on a <code>deploy/kata-ci</code> change</a></td>
+<td><code>ci</code> <code>debt</code></td>
+<td>🔲</td>
+<td>S</td>
+<td><code>scripts/manifest/manifest-validate.sh</code> yamllints <code>deploy/kata-ci</code> and kubeconforms two of its files by name, but <code>deploy/kata-ci</code> appears …</td>
+</tr>
+<tr>
 <td><a href="Q797/">Q797</a></td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/controller/integration/provisioning_test.go">Three GMC provisioning integration tests time out under the race run</a></td>
 <td><code>flake</code> <code>tests</code></td>

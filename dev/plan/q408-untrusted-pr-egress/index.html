@@ -2735,6 +2735,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#36-phase-2-build-notes-measured-2026-08-27" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3.6 Phase 2 build notes (measured 2026-08-27)
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -2806,8 +2817,8 @@
 
 <h1 id="untrusted-pr-egress-posture-for-kata-workers--q408">Untrusted-PR Egress Posture for Kata Workers — Q408<a class="headerlink" href="#untrusted-pr-egress-posture-for-kata-workers--q408" title="Permanent link">&para;</a></h1>
 <blockquote>
-<p><strong>Status (2026-08-24): Phase 1 validated: the non-registry residual is measured gone.
-Phase 2 (mirror manifests) is next.</strong> Phase 0 (2026-08-03) measured the job-time egress inventory (<a href="#2-the-gap--what-an-e2e-job-actually-fetches-at-job-time-phase-0">§2</a>) and re-sequenced Phases 1–4.
+<p><strong>Status (2026-08-27): Phase 2 manifests authored and wired into the e2e setup path; their cluster-side validation is outstanding, and books a dogfood session of its own ahead of Phase 3 rather than riding Phase 3's.</strong> Phase 1 was validated 2026-08-24: the non-registry residual is measured gone.
+Phase 0 (2026-08-03) measured the job-time egress inventory (<a href="#2-the-gap--what-an-e2e-job-actually-fetches-at-job-time-phase-0">§2</a>) and re-sequenced Phases 1–4.
 Phase 1's workflow change gates <code>azure/setup-helm</code> (<code>get.helm.sh</code>), every <code>actions/cache</code> step, and the bake's <code>GHA_CACHE</code> to the hosted lane, per the resolved <a href="#24-phase-1-decisions-resolved-2026-08-05">§2.4</a> decisions.
 <a href="#25-phase-1-validation-graded-2026-08-24">§2.5</a> grades four green self-hosted runs against it: no non-GitHub, non-registry host is fetched, and the graded inventory adds a <strong>fifth</strong> registry upstream, <code>gcr.io</code>, that Phase 0's host extraction was structurally unable to see.</p>
 </blockquote>
@@ -3213,6 +3224,32 @@ Nothing else, including the metadata server on its service ports.</p>
 </ol>
 <p>Distribution's proxy mode satisfies all four <strong>by construction</strong>, which is why it is the reference implementation.
 Any backend meeting the same four tests can substitute — Dragonfly is the scheduled candidate (<a href="#6-follow-on-validations-q539-q540">§6</a>).</p>
+<h3 id="36-phase-2-build-notes-measured-2026-08-27">3.6 Phase 2 build notes (measured 2026-08-27)<a class="headerlink" href="#36-phase-2-build-notes-measured-2026-08-27" title="Permanent link">&para;</a></h3>
+<p>What the manifests pin, and the readings behind each pin.
+All of it was taken against the image locally with <code>docker</code>, so it is a measurement of the <strong>image</strong>, not of the Deployment: nothing cluster-side (scheduling, probes, the policies, volume permissions) is covered, and that half is still owed a booked session.</p>
+<p><strong>Image.</strong> <code>registry:3.1.1@sha256:1be55279f18a2fe1a74edf2664cac61c1bea305b7b4642dab412e7affdcb3e33</code>, resolved from the Hub manifest index on 2026-08-27.
+The floating <code>3</code> and <code>3.1</code> tags both resolved to that digest; <code>3.0</code> did not, so the pin names 3.1.1 rather than the series.</p>
+<p><strong>The image ships the upstream <em>development</em> config</strong> at <code>/etc/distribution/config.yml</code>: <code>log.level: debug</code>, a debug listener on <code>:5001</code> serving pprof and <code>/metrics</code>, and <code>storage.delete.enabled: true</code>.
+All three are overridden by env in the pod spec.
+The delete override is defence in depth rather than the only closure: proxy mode answered <code>POST /v2/&lt;name&gt;/blobs/uploads/</code>, <code>PUT .../manifests/&lt;tag&gt;</code> and <code>DELETE .../manifests/&lt;digest&gt;</code> with <strong>405</strong> whether <code>delete.enabled</code> was true or false, which is <a href="#31-the-mirror--one-pull-through-cache-per-upstream">§3.1</a>'s read-only property measured rather than argued.
+Setting <code>REGISTRY_HTTP_DEBUG_ADDR</code> to the empty string unbinds <code>:5001</code>, leaving <code>:5000</code> as the only listener.</p>
+<p><strong>Non-root needs <code>fsGroup</code>, and the failure is loud but misleading.</strong> The image declares no <code>User</code> and its <code>/var/lib/registry</code> is root-owned, so a container run as uid 65532 with no writable volume at that path answers <strong>every</strong> pull with <code>500 filesystem: mkdir /var/lib/registry/docker: permission denied</code> while <code>GET /v2/</code> still returns 200.
+A readiness probe on <code>/v2/</code> would call that pod healthy.
+<code>fsGroup: 65532</code> is what makes the volume writable, for the <code>emptyDir</code> base and the PVC overlay alike.
+<code>readOnlyRootFilesystem: true</code> is safe alongside it: with the storage volume mounted, <code>/v2/</code>, a manifest fetch and a blob fetch all returned 200 with no error lines.</p>
+<p><strong>Anonymous pull-through works against all five upstreams.</strong> One ref from the <a href="#22-the-inventory">§2.2</a> inventory through each instance, all 200: <code>library/alpine</code> and the four of <code>distroless/static</code>, <code>actions-gateway/gmc</code>, <code>metrics-server/metrics-server</code> and <code>jetstack/cert-manager-controller</code>.
+The ghcr instance also returned 200 for <code>actions-gateway/charts/actions-gateway:1.2.0</code>, the OCI <strong>chart</strong> manifest helm pulls, matching a direct-upstream control on the same ref.
+That closes the reachability half of <a href="#23-what-the-measurement-changes">§2.3</a> item 2 at the mirror; pointing helm at it is still Phase 3's.</p>
+<p><strong>Three build decisions the design left open.</strong></p>
+<ol>
+<li><strong>The mirror has its own namespace, <code>gag-registry-mirror</code>.</strong> The e2e tenant's <code>ResourceQuota</code> caps it at 6 pods against a 2-worker <code>RunnerSet</code>, so five instances do not fit beside the workers; a separate namespace also gives <a href="#31-the-mirror--one-pull-through-cache-per-upstream">§3.1</a>'s "its own ingress rule admits only the worker namespace" something to name.</li>
+<li><strong><code>e2e-start.sh</code> applies it, not <code>e2e-setup.sh</code>.</strong> <a href="#31-the-mirror--one-pull-through-cache-per-upstream">§3.1</a> says "the e2e setup script", and the one-time script is the wrong lifecycle: five idle pods would stand on the same contended system pool that Q231 keeps the on-demand e2e AGC off.
+   <code>e2e-stop.sh</code> scales them to zero and leaves the namespace, the policies and any PVC standing.</li>
+<li><strong><code>e2e-mirror-egress</code> ships now rather than in Phase 4.</strong> Applied while the Kata overlay's allow-all <code>e2e-open-egress</code> is still present it is a no-op, union with allow-all, which makes Phase 4 a pure deletion instead of a swap.</li>
+</ol>
+<p><strong>Gated, but only as far as a linter reaches.</strong> <code>deploy/registry-mirror/</code> joins <code>make manifest-validate</code>: yamllint over the tree, and kubeconform over the base manifests plus the overlay's PVCs, which are all native kinds.
+That is schema and syntax, and it says nothing about whether the instances serve, so it narrows what is unchecked off the cluster without closing it.
+<code>deploy/kata-ci/</code> is in the same script's <code>standalone_manifests</code> list and in no workflow path filter, so an edit to it alone runs neither check; that gap is filed as <a href="../../queue/Q1004/">Q1004</a> and is not this phase's.</p>
 <h2 id="4-phases">4. Phases<a class="headerlink" href="#4-phases" title="Permanent link">&para;</a></h2>
 <p>Each phase is a separate PR; 0 to 4 need live dogfood evidence.
 Needing it is not the same as booking a session (prod-guarded: a deliberate, operator-driven run): Phases 0 and 1 read theirs off runs that had already happened, so only 2, 3 and 4 book one.
@@ -3224,12 +3261,17 @@ No off-cluster gate stands in either, whatever <code>deploy/registry-mirror/</co
   The <a href="#24-phase-1-decisions-resolved-2026-08-05">§2.4</a> decisions are resolved: <code>e2e-reusable.yml</code> gates <code>azure/setup-helm</code>, every <code>actions/cache</code> step, and <code>GHA_CACHE</code> to <code>runner.environment == 'github-hosted'</code>.
   Validated by grading four green self-hosted Kata runs against a Phase 0 control (<a href="#25-phase-1-validation-graded-2026-08-24">§2.5</a>), and no dogfood session was booked because the qualifying runs had already happened.
   The grading also corrected the upstream set from four to five.</li>
-<li><strong>Phase 2 — mirror manifests.</strong> <code>deploy/registry-mirror/</code> (Athens-shaped: base, persistent overlay, README, NetworkPolicies), one instance per upstream (<code>docker.io</code>, <code>ghcr.io</code>, <code>quay.io</code>, <code>registry.k8s.io</code>, <code>gcr.io</code>, the fifth added by <a href="#25-phase-1-validation-graded-2026-08-24">§2.5</a>), applied from the e2e setup path.
-  Validation: apply to the dogfood cluster; <code>curl</code> the mirror's <code>/v2/</code> and pull one image through each instance from a debug pod.</li>
+<li><strong>Phase 2 — mirror manifests, authored 2026-08-27 with cluster-side validation outstanding.</strong> <code>deploy/registry-mirror/</code> (Athens-shaped: base, persistent overlay, README, NetworkPolicies), one instance per upstream (<code>docker.io</code>, <code>ghcr.io</code>, <code>quay.io</code>, <code>registry.k8s.io</code>, <code>gcr.io</code>, the fifth added by <a href="#25-phase-1-validation-graded-2026-08-24">§2.5</a>), applied by <code>scripts/dogfood/e2e-start.sh</code> and scaled back to zero by <code>e2e-stop.sh</code>.
+  What is pinned, and what was measured to pin it, is <a href="#36-phase-2-build-notes-measured-2026-08-27">§3.6</a>.
+  Validation: apply to the dogfood cluster; <code>curl</code> the mirror's <code>/v2/</code> and pull one image through each instance from a debug pod.
+  That half is outstanding rather than skipped, and it is a <strong>precondition</strong> of Phase 3's run rather than something that run can establish: <a href="../release-1.7/">release-1.7.md</a> line 104 sequences the phases strictly, "manifests must serve before wiring can be proven to ride them".
+  It books a dogfood session of its own, per this section's header.</li>
 <li><strong>Phase 3 — wiring.</strong> dockerd <code>--registry-mirror</code> in the Kata overlay; non-Hub docker-client refs rewritten; helm's OCI ref pointed at the ghcr mirror.
   Validation: a green Kata e2e run <strong>with open egress still present</strong>, with the mirror access logs proving the pulls rode the mirror (hit counts &gt; 0 per instance) — wiring proven before enforcement changes.
   Run it once with the image caches cold, so the <code>quay.io</code> / <code>registry.k8s.io</code> prepulls are exercised rather than skipped.</li>
-<li><strong>Phase 4 — enforcement.</strong> Swap <code>e2e-open-egress</code> → <code>e2e-mirror-egress</code> in the Kata overlay.
+<li><strong>Phase 4 — enforcement.</strong> Delete <code>e2e-open-egress</code> from the Kata overlay.
+  A deletion rather than a swap: Phase 2 shipped <code>e2e-mirror-egress</code>, where it is a no-op under the allow-all policy (<a href="#36-phase-2-build-notes-measured-2026-08-27">§3.6</a>, decision 3).
+  The overlay's own comment on that policy names Phase 3 as the replacing phase, which is wrong and needs no separate fix: that file holds this one object, so the deletion takes the comment with it.
   Validation on dogfood: (a) a green Kata e2e run under the tight policy; (b) negatives from inside a job — <code>docker pull</code> of a host with no mirror instance fails, <code>curl https://example.com</code> times out, a push to the mirror is refused; (c) kind-side pull of a non-local-registry image succeeds via the mirror.</li>
 <li><strong>Phase 5 — docs + close-out.</strong> <a href="../../operations/kata-dind-workloads/">kata-dind-workloads.md</a> caveat "validated posture is trusted CI" flips to the how-to; <a href="../../operations/security-operations/">security-operations.md</a> mirror section links the concrete manifests; <a href="../../operations/in-runner-image-builds/">in-runner image builds</a> and <a href="../../design/network-architecture/">network-architecture.md</a> cross-refs; G.14 marked shipped; <a href="../../roadmap/">roadmap.md</a> entry moves out of "exploring"; Q408 row deleted.</li>
 </ul>
