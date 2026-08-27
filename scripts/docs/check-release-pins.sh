@@ -116,6 +116,12 @@ fi
 
 fail=0
 total=0
+# Counted separately so the summary can report the version the pins NAME rather
+# than the tag they were compared against: both are accepted while a candidate is
+# outstanding, so "all naming <current>" was printed unchanged by a correct bump
+# to the prepared release, which is the one moment the line is read.
+n_current=0
+n_prepared=0
 
 for f in "${pin_files[@]}"; do
     rel="${f#"$repo_root"/}"
@@ -128,14 +134,26 @@ for f in "${pin_files[@]}"; do
         found=$((found + 1))
         if [[ "$kind" == "patchline" ]]; then
             want="${release_minor}.z"
-            [[ "${tok#v}" == "$want" ]] && continue
-            [[ -n "$prepared_tag" && "${tok#v}" == "${prepared_minor}.z" ]] && continue
+            if [[ "${tok#v}" == "$want" ]]; then
+                n_current=$((n_current + 1))
+                continue
+            fi
+            if [[ -n "$prepared_tag" && "${tok#v}" == "${prepared_minor}.z" ]]; then
+                n_prepared=$((n_prepared + 1))
+                continue
+            fi
             printf "check-release-pins: %s:%s: patch-line hint \`%s\` names an old release; the current line is \`%s\`%s\n" \
                 "$rel" "$line_no" "$tok" "$want" \
                 "${prepared_tag:+ (or \`${prepared_minor}.z\` for the prepared ${prepared_tag})}" >&2
         else
-            [[ "${tok#v}" == "$release_version" ]] && continue
-            [[ -n "$prepared_tag" && "${tok#v}" == "$prepared_version" ]] && continue
+            if [[ "${tok#v}" == "$release_version" ]]; then
+                n_current=$((n_current + 1))
+                continue
+            fi
+            if [[ -n "$prepared_tag" && "${tok#v}" == "$prepared_version" ]]; then
+                n_prepared=$((n_prepared + 1))
+                continue
+            fi
             printf 'check-release-pins: %s:%s: pins %s, but the current release is %s%s\n' \
                 "$rel" "$line_no" "$tok" "$release_tag" \
                 "${prepared_tag:+ (or ${prepared_tag}, prepared)}" >&2
@@ -164,5 +182,13 @@ if (( fail )); then
     exit 1
 fi
 
-printf 'check-release-pins: ok (%d pin(s) across %d page(s), all naming %s)\n' \
-    "$total" "${#pin_files[@]}" "$release_tag"
+if (( n_prepared == 0 )); then
+    printf 'check-release-pins: ok (%d pin(s) across %d page(s), all naming %s)\n' \
+        "$total" "${#pin_files[@]}" "$release_tag"
+elif (( n_current == 0 )); then
+    printf 'check-release-pins: ok (%d pin(s) across %d page(s), all naming %s, prepared)\n' \
+        "$total" "${#pin_files[@]}" "$prepared_tag"
+else
+    printf 'check-release-pins: ok (%d pin(s) across %d page(s), %d naming %s and %d naming %s, prepared)\n' \
+        "$total" "${#pin_files[@]}" "$n_current" "$release_tag" "$n_prepared" "$prepared_tag"
+fi
