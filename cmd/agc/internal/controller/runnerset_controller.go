@@ -123,6 +123,12 @@ type RunnerSetReconciler struct {
 	// grant. Zero selects defaultProxyShareRecheckInterval.
 	ProxyShareRecheckInterval time.Duration
 
+	// stopped is set by stopListeners when the manager's shutdown drain begins, and
+	// is never cleared: a reconciler that has drained does not come back. Every
+	// listener start path reads it, because a session opened after the drain is one
+	// nothing will delete (Q968).
+	stopped atomic.Bool
+
 	multiplexersMu sync.Mutex
 	multiplexers   map[types.NamespacedName]*listener.Multiplexer
 	poolsMu        sync.Mutex
@@ -526,7 +532,10 @@ func (r *RunnerSetReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	mux := r.getOrCreateMultiplexer(ctx, req.NamespacedName, rs.DeepCopy(), pool)
 	mux.SetMaxListeners(rs.Spec.MaxListeners)
 	var startErr error
-	if mux.ActiveCount() == 0 && rs.Spec.MaxListeners > 0 {
+	// Not measured, unlike the scale-set twin: the same missing guard, at the classic
+	// tier's own start path (Q968). A multiplexer started after the drain opens broker
+	// sessions this process will not delete.
+	if mux.ActiveCount() == 0 && rs.Spec.MaxListeners > 0 && !r.stopped.Load() {
 		if startErr = mux.Start(ctx); startErr != nil {
 			log.Warn("multiplexer restart failed", "error", startErr)
 			r.recordEvent(&rs, corev1.EventTypeWarning, "ListenerStartFailed", "StartMultiplexer",
@@ -786,6 +795,16 @@ func (r *RunnerSetReconciler) getOrCreateMultiplexer(ctx context.Context, key ty
 	// rather than colliding on the lingering Completed pod (Q260 redelivery
 	// residual). Mirrors the RunnerGroup controller.
 	mux.ClaimLinger = provisioner.CompletedPodTTLOrDefault(rs.Spec.CompletedPodTTL)
+	// The drain has run; starting here would open broker sessions nothing deletes
+	// (Q968). The v2 twin of the RunnerGroup guard: this function creates AND starts,
+	// and Reconcile reaches it before the restart branch's own check, so a multiplexer
+	// created fresh after the drain would start regardless of that one. Cached
+	// unstarted, so the caller's ActiveCount reads zero and it reports no listeners
+	// rather than failing.
+	if r.stopped.Load() {
+		r.multiplexers[key] = mux
+		return mux
+	}
 	if err := mux.Start(ctx); err != nil {
 		r.Log.Error("failed to start multiplexer", "error", err)
 	}

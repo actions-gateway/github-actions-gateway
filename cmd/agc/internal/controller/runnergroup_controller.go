@@ -91,6 +91,11 @@ type RunnerGroupReconciler struct {
 	// tests inject a fixed clock to exercise TTL/deadline expiry.
 	Now func() time.Time
 
+	// stopped is set by stopListeners when the manager's shutdown drain begins, and is
+	// never cleared. The classic tier's twin of the RunnerSet flag (Q968): a
+	// multiplexer started after the drain leaks the broker sessions it opens.
+	stopped atomic.Bool
+
 	// BaselineRecheckInterval is the cadence at which a RunnerGroup is requeued
 	// while its multiplexer is below the desired listener count, so the permanent
 	// baseline is revived promptly after a non-retriable listener exit (Q137).
@@ -382,7 +387,8 @@ func (r *RunnerGroupReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 	// ActiveCount is 0 only because a crashed baseline is waiting out its
 	// restart backoff, this call is a no-op rather than stacking a second
 	// permanent baseline (Q100).
-	if mux.ActiveCount() == 0 && rg.Spec.MaxListeners > 0 {
+	// Not measured, unlike the v2 scale-set twin: the same missing guard (Q968).
+	if mux.ActiveCount() == 0 && rg.Spec.MaxListeners > 0 && !r.stopped.Load() {
 		if startErr := mux.Start(ctx); startErr != nil {
 			log.Warn("multiplexer restart failed", "error", startErr)
 			r.recordEvent(&rg, corev1.EventTypeWarning, "ListenerStartFailed", "StartMultiplexer",
@@ -607,6 +613,12 @@ func (r *RunnerGroupReconciler) getOrCreateMultiplexer(ctx context.Context, key 
 	// residual). Zero completedPodTTL (pods reaped synchronously) leaves the
 	// original delete-on-completion behavior.
 	mux.ClaimLinger = provisioner.EffectiveCompletedPodTTL(rg)
+	// The drain has run; starting here would open broker sessions nothing deletes
+	// (Q968). The multiplexer is still returned and cached, unstarted, so the caller's
+	// ActiveCount reads zero and it reports no listeners rather than failing.
+	if r.stopped.Load() {
+		return mux
+	}
 	if err := mux.Start(ctx); err != nil {
 		r.Log.Error("failed to start multiplexer", "error", err)
 	}

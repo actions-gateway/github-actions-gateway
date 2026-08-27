@@ -443,6 +443,13 @@ The barrier covers both acquisition tiers, which it did not originally: scale-se
 That tier's exit path carries more than a session DELETE: it reads the conclusions the queue is still holding (Q689) and deletes the messages those conclusions release (Q603), so skipping it left a concluded job's assignment in the queue for the next AGC to build a worker for.
 The two tiers drain concurrently, so the wait is the slower tier's rather than their sum (Q689).
 
+**The drain is one-way, because a barrier alone is not enough (Q968).** The reconciler keeps serving queued reconciles while the manager shuts down, and every listener start path is reached from one.
+So a reconcile landing after the drain used to start a fresh listener and open a session behind it, which the drain had already finished deleting and nothing else ever would.
+On the scale-set tier that is the sharp case: a scale set admits exactly one session and GitHub holds it until its owner deletes it, so one opened on the way out locks the successor AGC out of its own scale set rather than merely leaking.
+`stopListeners` therefore sets a `stopped` flag before it drains, and every start path refuses once it is set: a reconciler that has drained does not come back.
+Measured on the scale-set tier, where a reconcile after the drain reopened the session deterministically; the other start paths carry the same guard by symmetry.
+There are four of them across five sites, and `getOrCreateMultiplexer` is the one to notice: it creates *and* starts, and `Reconcile` reaches it before the restart branch that also checks the flag, so guarding only that branch leaves a freshly-created multiplexer starting after the drain.
+
 ---
 
 ## 2.3. Tier 3 — Egress Proxy Pool
