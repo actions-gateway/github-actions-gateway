@@ -871,6 +871,39 @@ class BandTotals(unittest.TestCase):
         self.assertEqual(got["product"], 0)
 
 
+class TrackedFiles(unittest.TestCase):
+    """A symlink is a pointer, not a file, and counting it duplicates its target.
+
+    The daily series greps and `git grep` skips symlinks, so the head snapshot has
+    to skip them too or the two counts disagree by whatever the links point at.
+    """
+
+    def setUp(self):
+        self._git = cm.git
+
+    def tearDown(self):
+        cm.git = self._git
+
+    def feed(self, stream):
+        cm.git = lambda *a, **k: stream
+        return cm.tracked_files()
+
+    def test_a_symlink_is_dropped_and_a_regular_file_is_kept(self):
+        got = self.feed("100644 abc 0\tCLAUDE.md\n120000 def 0\tAGENTS.md\n")
+        self.assertEqual(got, ["CLAUDE.md"])
+
+    def test_an_executable_file_is_kept(self):
+        """Mode is read for the symlink bit alone: 100755 is a script, not a link."""
+        got = self.feed("100755 abc 0\tscripts/ci/gate.sh\n")
+        self.assertEqual(got, ["scripts/ci/gate.sh"])
+
+    def test_a_path_with_a_space_survives_the_split(self):
+        """The metadata is tab-separated from the path, so a spaced filename is
+        only intact if the split is on the tab."""
+        got = self.feed("100644 abc 0\tdocs/a file.md\n")
+        self.assertEqual(got, ["docs/a file.md"])
+
+
 class BandUnits(unittest.TestCase):
     """The bands exist in both units, and the two are not each other converted.
 
