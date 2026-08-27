@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q968/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1005/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>An AGC shutdown can leak a scale-set session and lock its successor out - GitHub Actions Gateway</title>
+        <title>PublishesAvailableJobsFromDelivery asserts past what its wait covers - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#an-agc-shutdown-can-leak-a-scale-set-session-and-lock-its-successor-out" class="md-skip">
+        <a href="#publishesavailablejobsfromdelivery-asserts-past-what-its-wait-covers" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              An AGC shutdown can leak a scale-set session and lock its successor out
+              PublishesAvailableJobsFromDelivery asserts past what its wait covers
             
           </span>
         </div>
@@ -2597,22 +2597,16 @@
   
 
 
-<h1 id="an-agc-shutdown-can-leak-a-scale-set-session-and-lock-its-successor-out">An AGC shutdown can leak a scale-set session and lock its successor out<a class="headerlink" href="#an-agc-shutdown-can-leak-a-scale-set-session-and-lock-its-successor-out" title="Permanent link">&para;</a></h1>
-<p><strong>Event:</strong> <code>TestV2_RunnerSet_ScaleSet_RestartReclaimsWorkerOrphanedWhileDown</code> or <code>TestStopListeners_ThenEnsure_DoesNotLeaveASessionBehind</code> fails on <code>main</code>.</p>
-<p>Filed as a flake in <code>RestartReclaimsWorkerOrphanedWhileDown</code>; the flake was the symptom and the defect is in shutdown.
-The reconciler keeps serving queued reconciles while the manager drains, and no listener start path checked whether the drain had run.
-A reconcile landing after it started a fresh listener and opened a session the drain would have deleted had it still been running, so the process exited holding one.
-A scale set admits a single session and GitHub keeps it until its owner deletes it, so the successor AGC could never open its own: an operator-visible rollout stall, and the property <a href="../../design/appendix-h-v2-api-decomposition/">Q222</a> exists to hold.</p>
-<p>Measured 2026-08-27, <code>make test-integration</code> over the full <code>cmd/agc</code> suite, 1 red in 4 runs on one unchanged tree: the failure at 31.81 s against the 30 s <code>require.Eventually</code>, preceded by 16 consecutive <code>scaleset: session already exists (HTTP 409)</code> at the 2 s <code>scaleSetSessionRetry</code> cadence, all in the failing test's own namespace <code>v2-rs-ss-restart</code>.
-The row's original guess that a neighbouring <code>v2-rs-ss-lifetime</code> session was interfering was wrong: that test owns a private <code>scalesettest</code> server and starts one manager it never restarts.
-Both readings the row offered are refuted rather than unproven, because the stub expires no session: once one is held, no <code>Eventually</code> budget could ever have covered it.</p>
-<p>Root cause proven deterministically in 0.09 s with no load, as a three-step sequence whose middle step is the control: start a listener (session present), drain (session gone, which is what makes the third step mean anything), then start again and find a session present that nothing will delete.</p>
-<p>Mitigation: the drain is one-way.
-<code>stopListeners</code> sets a <code>stopped</code> flag before draining and every start path refuses once it is set.
-The census is four start paths across five sites, derived from the tree rather than recalled: the scale-set listener, both <code>getOrCreateMultiplexer</code> bodies, and the two restart branches.
-An earlier revision of this fix claimed three and guarded four of the five, missing the classic RunnerSet <code>getOrCreateMultiplexer</code>; that function creates <em>and</em> starts, and <code>Reconcile</code> reaches it before the restart branch's own check, so the classic tier's guard covered only the restart case.
-Only the scale-set path is measured.
-The other four are fixed by symmetry, which is an argument rather than a measurement, and the classic tier is deprecated (ScaleSet is the default as of Q264 P5), so wiring broker scaffolding into a unit test to pin it is cost against a shrinking surface.</p>
+<h1 id="publishesavailablejobsfromdelivery-asserts-past-what-its-wait-covers"><code>PublishesAvailableJobsFromDelivery</code> asserts past what its wait covers<a class="headerlink" href="#publishesavailablejobsfromdelivery-asserts-past-what-its-wait-covers" title="Permanent link">&para;</a></h1>
+<p><strong>Top of queue per the <a href="../../development/maintaining-backlog/#flake-fixes-go-first">flakes-first rule</a>.</strong></p>
+<p>Measured 2026-08-27 under <code>make test-integration</code> over the full <code>cmd/agc</code> suite, run 2 of 4 on one unchanged tree (runs 1, 3 and 4 green, so it is load-dependent): <code>TestListener_PublishesAvailableJobsFromDelivery</code> failed at <code>cmd/agc/internal/scalesetlistener/q720_available_jobs_test.go:61</code>, <code>expected: 1  actual: 0</code>, on "capacity of one must not provision the whole queue".</p>
+<p>The <code>require.Eventually</code> above it had already passed, so the assertion did not fail for want of a delivery.
+That wait is satisfied by the availableJobs gauge reaching <code>queued-1</code>, and the gauge is published by <code>setLastStats</code> on every statistics arrival (<code>cmd/agc/internal/scalesetlistener/listener.go:703</code>), which rides on the delivered message.
+The provisioner call for the job that message assigned happens after that publication, so <code>prov.count()</code> is asserted on a signal the wait does not cover: the gauge says a message arrived, not that its job was provisioned.
+On an idle box the gap closes before the next line runs, which is why this holds until the box is busy.</p>
+<p>Fix is to wait on the signal being asserted, <code>prov.count()</code>, rather than on the gauge that precedes it.
+Confirm it can still fail: a capacity of one must keep provisioning to one, so the fix must not weaken the assertion into a bound that a queue-wide provision would also satisfy.</p>
+<p>Found while reproducing Q968 under the full suite; unrelated mechanism, filed rather than fixed.</p>
 
 
 

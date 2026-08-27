@@ -6089,7 +6089,15 @@ A transient apiserver error in the same event message needs no action at all; th
 <p><strong>Not this event: a session still held by the outgoing AGC during a rollout.</strong> One session per scale set is a protocol invariant, so while the previous AGC finishes its exit teardown the new one cannot open a session.
 That is a wait, not a fault, and since Q689 it records no Event at all — the reconciler logs <code>scale-set session still held by a predecessor; retrying shortly</code> at Info and re-attempts every couple of seconds until the predecessor's session delete lands.
 Nothing to do.
-If that line repeats for longer than the outgoing pod's termination grace period, the previous AGC is not completing its teardown: look at <em>its</em> logs for a stuck message delete or session delete rather than at the new pod.</p>
+If that line repeats for longer than the outgoing pod's termination grace period, look at the <em>previous</em> AGC's logs rather than the new pod's.
+Two causes, and they need different reads.</p>
+<p>The teardown never finished: its logs stop before <code>listener goroutines drained</code>, and the stuck message delete or session delete is in them.</p>
+<p>Or the teardown finished and something reopened a session behind it.
+On an AGC before the Q968 fix, the reconciler kept serving queued reconciles while the manager shut down, and one landing after the drain started a fresh listener whose session nothing would ever delete.
+The tell is that the predecessor's logs look <strong>healthy</strong>: the drain line is there and reports success, with a listener start after it.
+That is the case the guidance above sends you hunting a stuck delete that does not exist.
+There is no in-cluster remedy, because the session is held at GitHub by a process that no longer exists and no AGC owns it to delete: the successor stays locked out until GitHub expires the session on its own.
+Upgrade past the fix, which makes the drain one-way so a reconciler that has drained cannot start another listener.</p>
 <hr />
 <h2 id="agc-exits-at-startup-gateway_name-set-but-the-v2-runnerset-crd-is-missing">AGC Exits at Startup: GATEWAY_NAME Set but the v2 RunnerSet CRD Is Missing<a class="headerlink" href="#agc-exits-at-startup-gateway_name-set-but-the-v2-runnerset-crd-is-missing" title="Permanent link">&para;</a></h2>
 <p><strong>Symptoms.</strong> A per-gateway AGC (<code>&lt;gateway&gt;-agc</code>) never becomes Ready, and its logs end at:</p>
